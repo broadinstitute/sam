@@ -59,13 +59,13 @@ class SamRoutes(resourceService: ResourceService)(implicit val system: ActorSyst
     DebuggingDirectives.logRequestResult(LoggingMagnet(log => myLoggingFunction(log)))(route)
   }
 
-  val resourceRouter = new ResourceRoutes(resourceService)
+  val resourceRoutes = new ResourceRoutes(resourceService)
 
 
-  def routes: server.Route =
+  def route: server.Route =
     logRequestResult {
       handleExceptions(myExceptionHandler) {
-        resourceRouter.routes
+        resourceRoutes.route
       }
     }
 

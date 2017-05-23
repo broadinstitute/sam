@@ -25,12 +25,12 @@ object Boot extends App with LazyLogging {
 
     val conf = ConfigFactory.load()
 
-    val acessManagementDAO = new AccessManagementDAO(conf.getConfig("openam").getString("server"))
+    val accessManagementDAO = new AccessManagementDAO(conf.getConfig("openam").getString("server"))
     val directoryDAO = new DirectoryDAO(conf.getConfig("opendj").getString("server"))
 
-    val resourceService = new ResourceService(acessManagementDAO, directoryDAO)
+    val resourceService = new ResourceService(accessManagementDAO, directoryDAO)
 
-    Http().bindAndHandle(new SamRoutes(resourceService).routes, "localhost", 8080)
+    Http().bindAndHandle(new SamRoutes(resourceService).route, "localhost", 8080)
   }
 
   startup()

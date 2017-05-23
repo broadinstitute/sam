@@ -13,10 +13,15 @@ import scala.concurrent.ExecutionContext
   */
 class ResourceRoutes(val resourceService: ResourceService)(implicit val executionContext: ExecutionContext) {
 
-  def routes: server.Route =
-    post {
-      path("resource" / Segment / Segment ) { (resourceType, resourceId) =>
+  def route: server.Route =
+    path("resource" / Segment / Segment ) { (resourceType, resourceId) =>
+      post {
         complete(resourceService.createResource(resourceType, resourceId))
+      } ~
+      path(Segment) { action =>
+        get {
+          complete(resourceService.hasPermission(resourceType, resourceId, action))
+        }
       }
     }
 
