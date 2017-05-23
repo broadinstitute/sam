@@ -15,15 +15,15 @@ import akka.stream.scaladsl.Sink
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.sam.WorkbenchExceptionWithErrorReport
 import org.broadinstitute.dsde.workbench.sam.model.ErrorReport
-
 import SprayJsonSupport._
+import org.broadinstitute.dsde.workbench.sam.service.ResourceService
 
 import scala.concurrent.{ExecutionContext, Future}
 
 /**
   * Created by dvoet on 5/17/17.
   */
-class SamRoutes(implicit val system: ActorSystem, val materializer: Materializer, val executionContext: ExecutionContext) extends LazyLogging {
+class SamRoutes(resourceService: ResourceService)(implicit val system: ActorSystem, val materializer: Materializer, val executionContext: ExecutionContext) extends LazyLogging {
   private val myExceptionHandler = {
     import org.broadinstitute.dsde.workbench.sam.model.ErrorReportJsonSupport._
 
@@ -59,15 +59,13 @@ class SamRoutes(implicit val system: ActorSystem, val materializer: Materializer
     DebuggingDirectives.logRequestResult(LoggingMagnet(log => myLoggingFunction(log)))(route)
   }
 
+  val resourceRouter = new ResourceRoutes(resourceService)
 
-  def route: server.Route =
+
+  def routes: server.Route =
     logRequestResult {
       handleExceptions(myExceptionHandler) {
-        pathSingleSlash {
-          get {
-            complete(Future("hello"))
-          }
-        }
+        resourceRouter.routes
       }
     }
 
