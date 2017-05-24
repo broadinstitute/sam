@@ -60,8 +60,7 @@ class SamRoutes(resourceService: ResourceService)(implicit val system: ActorSyst
   }
 
   val resourceRoutes = new ResourceRoutes(resourceService)
-
-
+  
   def route: server.Route =
     logRequestResult {
       handleExceptions(myExceptionHandler) {
@@ -72,4 +71,3 @@ class SamRoutes(resourceService: ResourceService)(implicit val system: ActorSyst
   def statusCodeCreated[T](response: T): (StatusCode, T) = (StatusCodes.Created, response)
 
 }
-

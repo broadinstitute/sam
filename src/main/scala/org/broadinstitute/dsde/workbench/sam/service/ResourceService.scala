@@ -12,17 +12,16 @@ class ResourceService(val accessManagementDAO: AccessManagementDAO, val director
 
   def createResource(resourceType: String, resourceId: String): Future[(StatusCode, String)] = {
     for {
-      x <- accessManagementDAO.createResource(resourceType, resourceId)
+      resource <- accessManagementDAO.createResource(resourceType, resourceId)
       //create policies
       //create groups
       //add caller to owner role
-    } yield StatusCodes.Created -> x
+    } yield StatusCodes.Created -> resource
   }
 
   def hasPermission(resourceType: String, resourceId: String, action: String): Future[(StatusCode, String)] = {
     accessManagementDAO.hasPermission(resourceType, resourceId, action) map { hasPermission =>
-      if(hasPermission) StatusCodes.OK ->  s"$resourceType:$resourceId:$action"
-      else StatusCodes.Forbidden ->  s"$resourceType:$resourceId:$action"
+      StatusCodes.OK -> hasPermission.toString
     }
   }
 
