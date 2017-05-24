@@ -21,10 +21,12 @@ class ResourceRoutes(val resourceService: ResourceService)(implicit val executio
             complete(resourceService.createResource(resourceType, resourceId))
           }
         } ~
-        pathPrefix(Segment) { action =>
-          pathEndOrSingleSlash {
-            get {
-              complete(resourceService.hasPermission(resourceType, resourceId, action))
+        pathPrefix("action") {
+          pathPrefix(Segment) { action =>
+            pathEndOrSingleSlash {
+              get {
+                complete(resourceService.hasPermission(resourceType, resourceId, action))
+              }
             }
           }
         }
