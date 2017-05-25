@@ -7,15 +7,15 @@ import scala.concurrent.Future
   */
 class AccessManagementDAO(serverUrl: String) {
 
+  def createResource(resourceType: String, resourceId: String): Future[Boolean] = {
+    Future.successful(true)
+  }
+
   def hasPermission(resourceType: String, resourceId: String, action: String): Future[Boolean] = {
     Future.successful(true)
   }
 
   def createPolicy(): Future[Boolean] = {
-    Future.successful(true)
-  }
-
-  def createGroup(): Future[Boolean] = {
     Future.successful(true)
   }
 

@@ -12,10 +12,10 @@ class ResourceService(val accessManagementDAO: AccessManagementDAO, val director
 
   def createResource(resourceType: String, resourceId: String): Future[StatusCode] = {
     for {
-      resource <- directoryDAO.createResource(resourceType, resourceId) // Create resource
-      policies <- accessManagementDAO.createPolicy()                    // Create policies
-      groups   <- accessManagementDAO.createGroup()                     // Create groups
-                                                                        // Add caller to OWNER role
+      resource <- accessManagementDAO.createResource(resourceType, resourceId) // Create resource
+      policies <- accessManagementDAO.createPolicy()                           // Create policies
+      groups   <- directoryDAO.createGroup()                                   // Create groups
+                                                                               // Add caller to OWNER role
     } yield StatusCodes.NoContent
   }
 
