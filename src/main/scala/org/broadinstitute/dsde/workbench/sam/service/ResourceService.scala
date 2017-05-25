@@ -10,20 +10,18 @@ import scala.concurrent.{ExecutionContext, Future}
   */
 class ResourceService(val accessManagementDAO: AccessManagementDAO, val directoryDAO: DirectoryDAO)(implicit val executionContext: ExecutionContext) {
 
-  def createResource(resourceType: String, resourceId: String): Future[(StatusCode, String)] = {
+  def createResource(resourceType: String, resourceId: String): Future[StatusCode] = {
     for {
-      resource <- directoryDAO.createResource(resourceType, resourceId)
-      policies <- accessManagementDAO.createPolicy()
-      groups   <- accessManagementDAO.createGroup()
-      //create policies
-      //create groups
-      //add caller to owner role
-    } yield StatusCodes.Created -> resource
+      resource <- directoryDAO.createResource(resourceType, resourceId) // Create resource
+      policies <- accessManagementDAO.createPolicy()                    // Create policies
+      groups   <- accessManagementDAO.createGroup()                     // Create groups
+                                                                        // Add caller to OWNER role
+    } yield StatusCodes.NoContent
   }
 
-  def hasPermission(resourceType: String, resourceId: String, action: String): Future[(StatusCode, String)] = {
+  def hasPermission(resourceType: String, resourceId: String, action: String): Future[StatusCode] = {
     accessManagementDAO.hasPermission(resourceType, resourceId, action) map { hasPermission =>
-      StatusCodes.OK -> hasPermission.toString
+      StatusCodes.NoContent
     }
   }
 

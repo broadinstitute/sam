@@ -7,8 +7,8 @@ import scala.concurrent.Future
   */
 class DirectoryDAO(serverUrl: String) {
 
-  def createResource(resourceType: String, resourceId: String): Future[String] = {
-    Future.successful(s"$resourceType:$resourceId")
+  def createResource(resourceType: String, resourceId: String): Future[Boolean] = {
+    Future.successful(true)
   }
 
 }
