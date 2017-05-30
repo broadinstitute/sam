@@ -10,14 +10,12 @@ import org.broadinstitute.dsde.workbench.sam.api.SamRoutes
 import net.ceedubs.ficus.Ficus._
 import directory._
 import org.broadinstitute.dsde.workbench.sam.dataaccess.{AccessManagementDAO, DirectoryDAO}
+import org.broadinstitute.dsde.workbench.sam.model.SamModels._
 import org.broadinstitute.dsde.workbench.sam.service.ResourceService
 
-object Boot extends App with LazyLogging {
+import scala.concurrent.Future
 
-  //TODO: This is here now for convenience, will move to appropriate place soon
-  case class Action(actionName: String)
-  case class Role(roleName: String, actions: Set[Action])
-  case class Resource(resourceType: String, roles: Set[Role])
+object Boot extends App with LazyLogging {
 
   private def startup(): Unit = {
 
@@ -37,12 +35,11 @@ object Boot extends App with LazyLogging {
 
     val resourceService = new ResourceService(accessManagementDAO, directoryDAO)
 
-    //TODO: There are some promising Scala wrappers for Typesafe Config (see https://github.com/kxbmap/configs)
-    //If this looks too unmaintainable or messy, explore using a wrapper instead of hacking our own
+    //TODO: Look into Scala friendly wrappers for Typesafe Config (like https://github.com/kxbmap/configs)
     val resources: Set[Resource] = {
-      val resourcesConfigs = ConfigFactory.load("resources.conf").getConfig("resources")
+      val resourcesConfig = ConfigFactory.load("resources.conf").getConfig("resources")
 
-      resourcesConfigs.root.asScala.map { case (resourceType, resourceConfigObj: ConfigObject) =>
+      resourcesConfig.root.asScala.map { case (resourceType, resourceConfigObj: ConfigObject) =>
         val resourceConfig = resourceConfigObj.toConfig
         val roles = resourceConfig.getConfig("roles").root().asScala.map { case (roleName, roleConfigObj: ConfigObject) =>
           val roleConfig = roleConfigObj.toConfig
@@ -54,13 +51,15 @@ object Boot extends App with LazyLogging {
       }
     }.toSet
 
-    def syncResources(resources: Set[Resource]): Unit = {
-      //TODO: This is where we'd sync the resources from config
-      logger.debug("Syncing resources...")
+    def syncResourceTypes(resources: Set[Resource]): Unit = {
+      logger.warn("Syncing resources...")
+      Future.traverse(resources) { case resource =>
+        resourceService.createResourceType(resource)
+      }
     }
 
-    //We want to make sure that OpenAM is in sync with the resources that we have defined in config. Do that before booting
-    syncResources(resources)
+    //Before booting, sync resource types in config with OpenAM
+    syncResourceTypes(resources)
 
     Http().bindAndHandle(new SamRoutes(resourceService).route, "localhost", 8080)
   }
