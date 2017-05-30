@@ -29,8 +29,4 @@ class AccessManagementDAO(serverUrl: String) {
     Future.successful(true)
   }
 
-  def listRoleGroups(): Future[Boolean] = {
-    Future.successful(true)
-  }
-
 }
