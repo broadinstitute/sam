@@ -5,8 +5,8 @@ package org.broadinstitute.dsde.workbench.sam.model
   */
 object SamModels {
 
-  case class Action(actionName: String)
-  case class Role(roleName: String, actions: Set[Action])
-  case class Resource(resourceType: String, roles: Set[Role])
+  case class ResourceAction(actionName: String)
+  case class ResourceRole(roleName: String, actions: Set[ResourceAction])
+  case class Resource(resourceType: String, roles: Set[ResourceRole])
 
 }

@@ -43,8 +43,8 @@ object Boot extends App with LazyLogging {
         val resourceConfig = resourceConfigObj.toConfig
         val roles = resourceConfig.getConfig("roles").root().asScala.map { case (roleName, roleConfigObj: ConfigObject) =>
           val roleConfig = roleConfigObj.toConfig
-          val actions = roleConfig.getStringList("actions").asScala.map(Action).toSet
-          Role(roleName, actions)
+          val actions = roleConfig.getStringList("actions").asScala.map(ResourceAction).toSet
+          ResourceRole(roleName, actions)
         }.toSet
 
         Resource(resourceType, roles)
