@@ -9,7 +9,7 @@ import com.typesafe.config.{ConfigFactory, ConfigObject}
 import org.broadinstitute.dsde.workbench.sam.api.SamRoutes
 import net.ceedubs.ficus.Ficus._
 import directory._
-import org.broadinstitute.dsde.workbench.sam.dataaccess.{AccessManagementDAO, DirectoryDAO}
+import org.broadinstitute.dsde.workbench.sam.dataaccess.{OpenAmDAO, DirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model.SamModels._
 import org.broadinstitute.dsde.workbench.sam.service.ResourceService
 
@@ -30,7 +30,7 @@ object Boot extends App with LazyLogging {
 
     val conf = ConfigFactory.load()
 
-    val accessManagementDAO = new AccessManagementDAO(conf.getConfig("openam").getString("server"))
+    val accessManagementDAO = new OpenAmDAO(conf.getConfig("openam").getString("server"))
     val directoryDAO = new DirectoryDAO(conf.getConfig("opendj").getString("server"))
 
     val resourceService = new ResourceService(accessManagementDAO, directoryDAO)
