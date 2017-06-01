@@ -63,9 +63,9 @@ class SamRoutes(implicit val system: ActorSystem, val materializer: Materializer
   def route: server.Route =
     logRequestResult {
       handleExceptions(myExceptionHandler) {
-        get {
-          pathSingleSlash {
-            complete("hello")
+        pathSingleSlash {
+          get {
+            complete(Future("hello"))
           }
         }
       }

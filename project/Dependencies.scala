@@ -23,7 +23,8 @@ object Dependencies {
     "com.typesafe.akka"   %%  "akka-http" % akkaHttpV,
     "com.typesafe.akka"   %%  "akka-http-testkit" % akkaHttpV % "test",
     "com.typesafe.akka"   %%  "akka-http-spray-json" % akkaHttpV,
-//    "com.typesafe.akka"   %%  "akka-http-jackson" % akkaHttpV,
+    "com.iheart"          %%  "ficus" % "1.4.0",
+      //    "com.typesafe.akka"   %%  "akka-http-jackson" % akkaHttpV,
     "org.scalatest"       %%  "scalatest"     % "3.0.1"   % "test"
   )
 }
