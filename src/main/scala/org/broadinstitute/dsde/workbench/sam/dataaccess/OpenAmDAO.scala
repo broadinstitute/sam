@@ -1,6 +1,6 @@
 package org.broadinstitute.dsde.workbench.sam.dataaccess
 
-import akka.actor.ActorSystem
+import akka.actor.{ ActorSystem, Actor, ActorLogging }
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.{HttpHeader, HttpMethods, HttpRequest, HttpResponse}
 import akka.stream.Materializer
@@ -20,11 +20,10 @@ class OpenAmDAO(serverUrl: String)(implicit val system: ActorSystem, val materia
     val responseFuture: Future[HttpResponse] =
       Http().singleRequest(HttpRequest(uri = "https://openam101.dsde-dev.broadinstitute.org/openam/"))
 
-
-    val thing: Flow[HttpRequest, HttpResponse, Any] = Http().outgoingConnection(host = url)
-
-    thing.flatMap { z =>
+    responseFuture.map { z =>
+      println("start")
       println(z)
+      println("finish")
       true
     }
   }
