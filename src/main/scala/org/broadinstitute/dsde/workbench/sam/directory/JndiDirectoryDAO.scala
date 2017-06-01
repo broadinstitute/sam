@@ -122,7 +122,7 @@ class JndiDirectoryDAO(directoryConfig: DirectoryConfig)(implicit executionConte
       val uid = getAttribute[String](attributes, Attr.uid).getOrElse(throw new WorkbenchException(s"${Attr.uid} attribute missing: $userId"))
       val emailOption = getAttribute[String](attributes, Attr.email)
       val firstName = getAttribute[String](attributes, Attr.givenName).getOrElse(throw new WorkbenchException(s"${Attr.givenName} attribute missing: $userId"))
-      val lastName = getAttribute[String](attributes, "sn").getOrElse(throw new WorkbenchException(s"sn attribute missing: $userId"))
+      val lastName = getAttribute[String](attributes, Attr.sn).getOrElse(throw new WorkbenchException(s"${Attr.sn} attribute missing: $userId"))
 
       Option(SamUser(SamUserId(uid), firstName, lastName, emailOption.map(SamUserEmail)))
 
