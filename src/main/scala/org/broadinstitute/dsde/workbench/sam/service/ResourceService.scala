@@ -3,7 +3,7 @@ package org.broadinstitute.dsde.workbench.sam.service
 import akka.http.scaladsl.model.{StatusCode, StatusCodes}
 import org.broadinstitute.dsde.workbench.sam.openam.OpenAmDAO
 import org.broadinstitute.dsde.workbench.sam.directory.JndiDirectoryDAO
-import org.broadinstitute.dsde.workbench.sam.model.{Resource, ResourceRole}
+import org.broadinstitute.dsde.workbench.sam.model.{ResourceType, ResourceRole}
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -12,7 +12,7 @@ import scala.concurrent.{ExecutionContext, Future}
   */
 class ResourceService(val openAmDAO: OpenAmDAO, val directoryDAO: JndiDirectoryDAO)(implicit val executionContext: ExecutionContext) {
 
-  def createResourceType(resource: Resource): Future[Boolean] = {
+  def createResourceType(resource: ResourceType): Future[Boolean] = {
     println(s"Creating resource: $resource")
 
 //    //Create the resource type if it doesn't exist
@@ -24,7 +24,7 @@ class ResourceService(val openAmDAO: OpenAmDAO, val directoryDAO: JndiDirectoryD
 
     for {
       _ <- openAmDAO.createResourceType(resource)
-      _ <- Future.traverse(resource.roles) { createResourceRole(resource.resourceType, _) }
+      _ <- Future.traverse(resource.roles) { createResourceRole(resource.resourceTypeName, _) }
     } yield true
   }
 

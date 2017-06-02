@@ -1,10 +1,13 @@
 package org.broadinstitute.dsde.workbench.sam.openam
 
-import akka.actor.{ ActorSystem, Actor, ActorLogging }
+import akka.actor.{Actor, ActorLogging, ActorSystem}
 import akka.http.scaladsl.Http
-import akka.http.scaladsl.model.{HttpHeader, HttpMethods, HttpRequest, HttpResponse}
+import akka.http.scaladsl.marshalling.Marshal
+import akka.http.scaladsl.model._
+import akka.http.scaladsl.unmarshalling.Unmarshal
 import akka.stream.Materializer
-import org.broadinstitute.dsde.workbench.sam.model.Resource
+import akka.util.ByteString
+import org.broadinstitute.dsde.workbench.sam.model.{ResourceType, ResourceRole}
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -13,18 +16,22 @@ import scala.concurrent.{ExecutionContext, Future}
   */
 class OpenAmDAO(serverUrl: String)(implicit val system: ActorSystem, val materializer: Materializer, val executionContext: ExecutionContext) {
 
-  def createResourceType(resource: Resource): Future[Boolean] = {
-    val url = serverUrl + "/json/resourcetypes"
+  def listResourceTypes(): Future[Boolean] = {
+    val resourceTypesUrl = serverUrl + "/json/resourceTypes?_queryFilter=true"
 
-    val responseFuture: Future[HttpResponse] =
-      Http().singleRequest(HttpRequest(uri = "https://openam101.dsde-dev.broadinstitute.org/openam/"))
+    Http().singleRequest(HttpRequest(method = HttpMethods.GET, uri = resourceTypesUrl))
 
-    responseFuture.map { response =>
-      println("start")
-      println(response)
-      println("finish")
-      true
-    }
+    Future.successful(true)
+  }
+
+  def createResourceType(resource: ResourceType): Future[Boolean] = {
+    val action = "create"
+    val resourceTypesUrl = serverUrl + s"/json/resourcetypes/?_action=$action"
+    val payload = resource.asOpenAm
+
+    Http().singleRequest(HttpRequest(method = HttpMethods.POST, uri = resourceTypesUrl))
+
+    Future.successful(true)
   }
 
   def createResource(resourceType: String, resourceId: String): Future[Boolean] = {
@@ -35,11 +42,13 @@ class OpenAmDAO(serverUrl: String)(implicit val system: ActorSystem, val materia
     Future.successful(true)
   }
 
-  def createPolicy(): Future[Boolean] = {
-    Future.successful(true)
-  }
+  def createResourcePolicy(resourceType: String, resourceRole: ResourceRole): Future[Boolean] = {
+    val policiesUrl = serverUrl + "/json/policies"
+    val policyName = s"$resourceType-${resourceRole.roleName}"
+    val policyActions = resourceRole.actions
 
-  def addUserToRole(): Future[Boolean] = {
+    Http().singleRequest(HttpRequest(method = HttpMethods.POST, uri = policiesUrl))
+
     Future.successful(true)
   }
 

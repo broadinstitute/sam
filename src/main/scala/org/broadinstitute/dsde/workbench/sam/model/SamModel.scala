@@ -13,4 +13,9 @@ case class SamGroup(name: SamGroupName, members: Set[SamSubject])
 
 case class ResourceAction(actionName: String)
 case class ResourceRole(roleName: String, actions: Set[ResourceAction])
-case class Resource(resourceType: String, roles: Set[ResourceRole])
+
+case class OpenAmResourceType(name: String, actions: Map[String, Boolean], patterns: Seq[String])
+case class ResourceType(resourceTypeName: String, roles: Set[ResourceRole]) {
+  def actions: Map[String, Boolean] = roles.map(_.actions).flatMap(x => x.map(_.actionName -> true)).toMap
+  def asOpenAm: OpenAmResourceType = OpenAmResourceType(this.resourceTypeName, this.actions, Seq.empty)
+}
