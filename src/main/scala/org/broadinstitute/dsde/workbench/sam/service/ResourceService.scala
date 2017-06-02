@@ -1,7 +1,8 @@
 package org.broadinstitute.dsde.workbench.sam.service
 
 import akka.http.scaladsl.model.{StatusCode, StatusCodes}
-import org.broadinstitute.dsde.workbench.sam.dataaccess.{OpenAmDAO, DirectoryDAO}
+import org.broadinstitute.dsde.workbench.sam.openam.OpenAmDAO
+import org.broadinstitute.dsde.workbench.sam.directory.JndiDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model.SamModels._
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -9,7 +10,7 @@ import scala.concurrent.{ExecutionContext, Future}
 /**
   * Created by mbemis on 5/22/17.
   */
-class ResourceService(val openAmDAO: OpenAmDAO, val directoryDAO: DirectoryDAO)(implicit val executionContext: ExecutionContext) {
+class ResourceService(val openAmDAO: OpenAmDAO, val directoryDAO: JndiDirectoryDAO)(implicit val executionContext: ExecutionContext) {
 
   def createResourceType(resource: Resource): Future[Boolean] = {
     println(s"Creating resource: $resource")

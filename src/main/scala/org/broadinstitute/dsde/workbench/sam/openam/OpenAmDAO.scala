@@ -1,4 +1,4 @@
-package org.broadinstitute.dsde.workbench.sam.dataaccess
+package org.broadinstitute.dsde.workbench.sam.openam
 
 import akka.actor.{ ActorSystem, Actor, ActorLogging }
 import akka.http.scaladsl.Http
