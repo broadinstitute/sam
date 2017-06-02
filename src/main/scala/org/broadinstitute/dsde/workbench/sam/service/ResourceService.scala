@@ -3,7 +3,7 @@ package org.broadinstitute.dsde.workbench.sam.service
 import akka.http.scaladsl.model.{StatusCode, StatusCodes}
 import org.broadinstitute.dsde.workbench.sam.openam.OpenAmDAO
 import org.broadinstitute.dsde.workbench.sam.directory.JndiDirectoryDAO
-import org.broadinstitute.dsde.workbench.sam.model.SamModels._
+import org.broadinstitute.dsde.workbench.sam.model.{Resource, ResourceRole}
 
 import scala.concurrent.{ExecutionContext, Future}
 

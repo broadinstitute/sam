@@ -4,8 +4,7 @@ import akka.actor.{ ActorSystem, Actor, ActorLogging }
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.{HttpHeader, HttpMethods, HttpRequest, HttpResponse}
 import akka.stream.Materializer
-import akka.stream.scaladsl.Flow
-import org.broadinstitute.dsde.workbench.sam.model.SamModels._
+import org.broadinstitute.dsde.workbench.sam.model.Resource
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -15,14 +14,14 @@ import scala.concurrent.{ExecutionContext, Future}
 class OpenAmDAO(serverUrl: String)(implicit val system: ActorSystem, val materializer: Materializer, val executionContext: ExecutionContext) {
 
   def createResourceType(resource: Resource): Future[Boolean] = {
-    val url = serverUrl + "/json/resourcetypes?_queryFilter=true"
+    val url = serverUrl + "/json/resourcetypes"
 
     val responseFuture: Future[HttpResponse] =
       Http().singleRequest(HttpRequest(uri = "https://openam101.dsde-dev.broadinstitute.org/openam/"))
 
-    responseFuture.map { z =>
+    responseFuture.map { response =>
       println("start")
-      println(z)
+      println(response)
       println("finish")
       true
     }

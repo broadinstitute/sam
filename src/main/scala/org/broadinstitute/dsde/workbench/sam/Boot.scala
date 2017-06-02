@@ -8,7 +8,7 @@ import com.typesafe.scalalogging.LazyLogging
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.sam.api.SamRoutes
 import org.broadinstitute.dsde.workbench.sam.directory._
-import org.broadinstitute.dsde.workbench.sam.model.SamModels._
+import org.broadinstitute.dsde.workbench.sam.model.Resource
 import org.broadinstitute.dsde.workbench.sam.openam.{OpenAmDAO, _}
 import org.broadinstitute.dsde.workbench.sam.service.ResourceService
 
@@ -29,13 +29,13 @@ object Boot extends App with LazyLogging {
 
     val conf = ConfigFactory.load()
 
-    val accessManagementDAO = new OpenAmDAO(conf.getConfig("openam").getString("server"))
+    val accessManagementDAO = new OpenAmDAO(conf.getConfig("openam").getString("url"))
     val directoryDAO = new JndiDirectoryDAO(directoryConfig)
 
     val resourceService = new ResourceService(accessManagementDAO, directoryDAO)
 
     def syncResourceTypes(resources: Set[Resource]): Unit = {
-      logger.warn("Syncing resources...")
+      logger.warn("Syncing resource types...")
       Future.traverse(resources) {
         resourceService.createResourceType
       }

@@ -10,3 +10,7 @@ case class SamUser(id: SamUserId, firstName: String, lastName: String, email: Op
 
 case class SamGroupName(value: String) extends SamSubject
 case class SamGroup(name: SamGroupName, members: Set[SamSubject])
+
+case class ResourceAction(actionName: String)
+case class ResourceRole(roleName: String, actions: Set[ResourceAction])
+case class Resource(resourceType: String, roles: Set[ResourceRole])
