@@ -19,7 +19,8 @@ package object openam {
   implicit val resourceReader: ValueReader[ResourceType] = ValueReader.relative { config =>
     ResourceType(
       config.getString("name"),
-      config.as[Set[ResourceRole]]("roles")
+      config.as[Set[ResourceRole]]("roles"),
+      config.as[Set[String]]("patterns")
     )
   }
 }

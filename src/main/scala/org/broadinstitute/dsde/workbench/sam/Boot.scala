@@ -35,10 +35,11 @@ object Boot extends App with LazyLogging {
     val resourceService = new ResourceService(accessManagementDAO, directoryDAO)
 
     def syncResourceTypes(resources: Set[ResourceType]): Unit = {
-      logger.warn("Syncing resource types...")
+      logger.info("Syncing resource types...")
       Future.traverse(resources) {
         resourceService.createResourceType
       }
+      logger.info("Resource types synced.")
     }
 
     //Before booting, sync resource types in config with OpenAM
