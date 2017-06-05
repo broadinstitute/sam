@@ -6,7 +6,7 @@ import akka.stream.ActorMaterializer
 import com.typesafe.config.ConfigFactory
 import com.typesafe.scalalogging.LazyLogging
 import net.ceedubs.ficus.Ficus._
-import org.broadinstitute.dsde.workbench.sam.api.SamRoutes
+import org.broadinstitute.dsde.workbench.sam.api.{SamRoutes, StandardUserInfoDirectives}
 import org.broadinstitute.dsde.workbench.sam.directory._
 import org.broadinstitute.dsde.workbench.sam.model.ResourceType
 import org.broadinstitute.dsde.workbench.sam.openam.{OpenAmDAO, _}
@@ -34,8 +34,8 @@ object Boot extends App with LazyLogging {
 
     val resourceService = new ResourceService(accessManagementDAO, directoryDAO)
 
-    def syncResourceTypes(resources: Set[ResourceType]): Unit = {
-      logger.warn("Syncing resource types...")
+    def syncResourceTypes(resources: Set[ResourceType]) = {
+      logger.info("Syncing resource types...")
       Future.traverse(resources) {
         resourceService.createResourceType
       }
@@ -43,9 +43,13 @@ object Boot extends App with LazyLogging {
 
     //Before booting, sync resource types in config with OpenAM
     val resourceTypes = config.as[Set[ResourceType]]("resourceTypes")
-    syncResourceTypes(resourceTypes)
+    syncResourceTypes(resourceTypes).recover {
+      case t: Throwable => logger.error("failure syncing resource types", t)
+    }
 
-    Http().bindAndHandle(new SamRoutes(resourceService).route, "localhost", 8080)
+    val samRoutes = new SamRoutes(resourceService) with StandardUserInfoDirectives
+
+    Http().bindAndHandle(samRoutes.route, "localhost", 8080)
   }
 
   startup()
