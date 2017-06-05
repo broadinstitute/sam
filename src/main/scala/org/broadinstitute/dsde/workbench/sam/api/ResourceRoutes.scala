@@ -11,26 +11,29 @@ import scala.concurrent.ExecutionContext
 /**
   * Created by mbemis on 5/22/17.
   */
-class ResourceRoutes(val resourceService: ResourceService)(implicit val executionContext: ExecutionContext) {
+trait ResourceRoutes extends UserInfoDirectives {
+  implicit val executionContext: ExecutionContext
+  val resourceService: ResourceService
 
-  def route: server.Route =
+  def resourceRoutes: server.Route =
     pathPrefix("resource") {
-      pathPrefix(Segment / Segment) { (resourceType, resourceId) =>
-        pathEndOrSingleSlash {
-          post {
-            complete(resourceService.createResource(resourceType, resourceId))
-          }
-        } ~
-        pathPrefix("action") {
-          pathPrefix(Segment) { action =>
-            pathEndOrSingleSlash {
-              get {
-                complete(resourceService.hasPermission(resourceType, resourceId, action))
+      requireUserInfo { userInfo =>
+        pathPrefix(Segment / Segment) { (resourceType, resourceId) =>
+          pathEndOrSingleSlash {
+            post {
+              complete(resourceService.createResource(resourceType, resourceId))
+            }
+          } ~
+            pathPrefix("action") {
+              pathPrefix(Segment) { action =>
+                pathEndOrSingleSlash {
+                  get {
+                    complete(resourceService.hasPermission(resourceType, resourceId, action))
+                  }
+                }
               }
             }
-          }
         }
       }
     }
-
 }
