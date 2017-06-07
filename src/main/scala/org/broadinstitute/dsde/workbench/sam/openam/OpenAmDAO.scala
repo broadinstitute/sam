@@ -26,7 +26,7 @@ class OpenAmDAO(openAmConfig: OpenAmConfig, protected val directoryConfig: Direc
   private def authorizationHeader(userInfo: UserInfo) = headers.RawHeader("iPlanetDirectoryPro", userInfo.accessToken)
   private val jsonContentTypeHeader = headers.`Content-Type`(ContentTypes.`application/json`)
 
-  def getAdminAuthToken(): Future[String] = getAuthToken(openAmConfig.user, openAmConfig.password).map(_.tokenId)
+  def getAdminUserInfo(): Future[UserInfo] = getAuthToken(openAmConfig.user, openAmConfig.password).map(response => UserInfo(response.tokenId, SamUserId(openAmConfig.user)))
 
   def getAuthToken(username: String, password: String): Future[AuthenticateResponse] = {
     val authenticationUrl = openAmConfig.url + s"/json/authenticate"

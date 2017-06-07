@@ -15,7 +15,7 @@ case class ResourceAction(actionName: String)
 case class ResourceRole(roleName: String, actions: Set[ResourceAction])
 
 case class OpenAmResourceType(name: String, actions: Map[String, Boolean], patterns: Set[String])
-case class ResourceType(resourceTypeName: String, roles: Set[ResourceRole], patterns: Set[String]) {
+case class ResourceType(resourceTypeName: String, roles: Set[ResourceRole], patterns: Set[String], uuid: Option[String] = None, ownerRoleName: String = "owner") {
   def actions: Map[String, Boolean] = roles.map(_.actions).flatMap(x => x.map(_.actionName -> false)).toMap
   def asOpenAm: OpenAmResourceType = OpenAmResourceType(this.resourceTypeName, this.actions, this.patterns)
 }
