@@ -1,9 +1,10 @@
 package org.broadinstitute.dsde.workbench.sam.service
 
 import akka.http.scaladsl.model.{StatusCode, StatusCodes}
-import org.broadinstitute.dsde.workbench.sam.openam.OpenAmDAO
+import org.broadinstitute.dsde.workbench.sam.WorkbenchException
+import org.broadinstitute.dsde.workbench.sam.openam.{OpenAmDAO, OpenAmPolicy}
 import org.broadinstitute.dsde.workbench.sam.directory.JndiDirectoryDAO
-import org.broadinstitute.dsde.workbench.sam.model.{ResourceRole, ResourceType, UserInfo}
+import org.broadinstitute.dsde.workbench.sam.model._
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -28,28 +29,40 @@ class ResourceService(val openAmDAO: OpenAmDAO, val directoryDAO: JndiDirectoryD
     Future.successful(true)
   }
 
-  def createResource(resourceType: String, resourceId: String, userInfo: UserInfo): Future[StatusCode] = {
-    //Ensure resource type exists
-    //TODO
-
-    //Create groups
-    //TODO
-
-    //Add caller to Owner role
-    //TODO
-
-    Future.successful(StatusCodes.NoContent)
+  def createResource(resourceType: ResourceType, resourceId: String, userInfo: UserInfo): Future[Set[OpenAmPolicy]] = {
+    Future.traverse(resourceType.roles) { role =>
+      val roleMembers: Set[SamSubject] = role.roleName match {
+        case resourceType.resourceTypeName => Set(userInfo.userId)
+        case _ => Set.empty
+      }
+      for {
+        group <- directoryDAO.createGroup(SamGroup(SamGroupName(s"${resourceType.resourceTypeName}-${resourceId}-${role.roleName}"), roleMembers))
+        policy <- openAmDAO.createPolicy(
+          group.name.value,
+          s"policy for ${group.name.value}",
+          role.actions.map(_.actionName).toSeq,
+          Seq(resourceUrn(resourceType, resourceId)),
+          Seq(group.name),
+          resourceType.uuid.getOrElse(throw new WorkbenchException("resource type uuid not set")),
+          userInfo
+        )
+      } yield policy
+    }
   }
 
-  def hasPermission(resourceType: String, resourceId: String, action: String, userInfo: UserInfo): Future[StatusCode] = {
+  private def resourceUrn(resourceType: ResourceType, resourceId: String) = {
+    s"${resourceType.resourceTypeName}://$resourceId"
+  }
+
+  def hasPermission(resourceType: ResourceType, resourceId: String, action: String, userInfo: UserInfo): Future[StatusCode] = {
     //Query OpenAM to see if caller has permission to perform  action on resourceId
     //TODO
 
     Future.successful(StatusCodes.NoContent)
   }
 
-  def getOpenAmAdminAccessToken(): Future[String] = {
-    openAmDAO.getAdminAuthToken()
+  def getOpenAmAdminUserInfo(): Future[UserInfo] = {
+    openAmDAO.getAdminUserInfo()
   }
 
 }

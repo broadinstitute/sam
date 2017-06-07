@@ -8,7 +8,7 @@ import com.typesafe.scalalogging.LazyLogging
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.sam.api.{SamRoutes, StandardUserInfoDirectives}
 import org.broadinstitute.dsde.workbench.sam.directory._
-import org.broadinstitute.dsde.workbench.sam.model.{ResourceType, UserInfo}
+import org.broadinstitute.dsde.workbench.sam.model.{ResourceType, SamUserId, UserInfo}
 import org.broadinstitute.dsde.workbench.sam.openam.{OpenAmDAO, _}
 import org.broadinstitute.dsde.workbench.sam.service.ResourceService
 
@@ -37,22 +37,31 @@ object Boot extends App with LazyLogging {
     //Before booting, sync resource types in config with OpenAM
     val resourceTypes = config.as[Set[ResourceType]]("resourceTypes")
     syncResourceTypes(resourceTypes, resourceService).recover {
-      case t: Throwable => logger.error("failure syncing resource types", t)
+      case t: Throwable =>
+        logger.error("FATAL - failure syncing resource types", t)
+        throw t
+    } flatMap { resourceTypesWithUuids =>
+      val samRoutes = new SamRoutes(resourceService) with StandardUserInfoDirectives {
+        override val resourceTypes: Map[String, ResourceType] = resourceTypesWithUuids.map(rt => rt.resourceTypeName -> rt).toMap
+      }
+
+      Http().bindAndHandle(samRoutes.route, "localhost", 8080)
+    } recover {
+      case t: Throwable =>
+        logger.error("FATAL - failure starting http server", t)
+        throw t
     }
 
-    val samRoutes = new SamRoutes(resourceService) with StandardUserInfoDirectives
-
-    Http().bindAndHandle(samRoutes.route, "localhost", 8080)
   }
 
-  private def syncResourceTypes(resources: Set[ResourceType], resourceService: ResourceService)(implicit executionContext: ExecutionContext): Future[Map[String, ResourceType]] = {
+  private def syncResourceTypes(resources: Set[ResourceType], resourceService: ResourceService)(implicit executionContext: ExecutionContext): Future[Set[ResourceType]] = {
     logger.info("Syncing resource types...")
     for {
-      authToken <- resourceService.getOpenAmAdminAccessToken()
-      uuidAndResourceType <- Future.traverse(resources) { resourceType =>
-        resourceService.createResourceType(resourceType, UserInfo(authToken)).map(_ -> resourceType)
+      adminUserInfo <- resourceService.getOpenAmAdminUserInfo()
+      resourceTypesWithUuid <- Future.traverse(resources) { resourceType =>
+        resourceService.createResourceType(resourceType, adminUserInfo).map(uuid => resourceType.copy(uuid = Option(uuid)))
       }
-    } yield uuidAndResourceType.toMap
+    } yield resourceTypesWithUuid
   }
 
   startup()
