@@ -26,7 +26,7 @@ trait ResourceRoutes extends UserInfoDirectives {
 
           pathEndOrSingleSlash {
             post {
-              complete(resourceService.createResource(resourceType, resourceId, userInfo).map(_ => StatusCodes.Created))
+              complete(resourceService.createResource(resourceType, resourceId, userInfo).map(_ => StatusCodes.NoContent))
             }
           } ~
             pathPrefix("action") {
