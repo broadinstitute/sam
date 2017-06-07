@@ -21,14 +21,14 @@ trait ResourceRoutes extends UserInfoDirectives {
         pathPrefix(Segment / Segment) { (resourceType, resourceId) =>
           pathEndOrSingleSlash {
             post {
-              complete(resourceService.createResource(resourceType, resourceId))
+              complete(resourceService.createResource(resourceType, resourceId, userInfo))
             }
           } ~
             pathPrefix("action") {
               pathPrefix(Segment) { action =>
                 pathEndOrSingleSlash {
                   get {
-                    complete(resourceService.hasPermission(resourceType, resourceId, action))
+                    complete(resourceService.hasPermission(resourceType, resourceId, action, userInfo))
                   }
                 }
               }

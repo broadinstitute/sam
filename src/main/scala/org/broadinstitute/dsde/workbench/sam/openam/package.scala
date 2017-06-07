@@ -23,4 +23,12 @@ package object openam {
       config.as[Set[String]]("patterns")
     )
   }
+
+  implicit val openAmConfigReader: ValueReader[OpenAmConfig] = ValueReader.relative { config =>
+    OpenAmConfig(
+      config.getString("url"),
+      config.getString("user"),
+      config.getString("password")
+    )
+  }
 }
