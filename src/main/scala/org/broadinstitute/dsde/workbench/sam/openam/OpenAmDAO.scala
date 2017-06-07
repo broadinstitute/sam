@@ -15,7 +15,9 @@ import scala.concurrent.{Await, ExecutionContext, Future}
 
 // TODO: Move out
 trait JsonSupport extends SprayJsonSupport with DefaultJsonProtocol {
-  implicit val openAmResourceTypeFormat = jsonFormat3(OpenAmResourceType)
+  implicit val resourceTypeFormat = jsonFormat4(ResourceType)
+  implicit val openAmResourceTypeFormat = jsonFormat6(OpenAmResourceType)
+  implicit val openAmResourceTypesResponseFormat = jsonFormat1(OpenAmResourceTypesResponse)
   implicit val openAmPolicySetFormat = jsonFormat6(OpenAmPolicySet)
 }
 
@@ -24,77 +26,59 @@ trait JsonSupport extends SprayJsonSupport with DefaultJsonProtocol {
   */
 class OpenAmDAO(serverUrl: String)(implicit val system: ActorSystem, val materializer: Materializer, val executionContext: ExecutionContext) extends JsonSupport {
 
-  val authorizationHeader = headers.RawHeader("iPlanetDirectoryPro", "...")
+  val authorizationHeader = headers.RawHeader("iPlanetDirectoryPro", "AQIC5wM2LY4SfcxH25hHd87ov8f0sf2nvX5ujL1mUdNEHT0.*AAJTSQACMDEAAlNLABQtNzMxNzYwMjQxMjMxOTU3MzY2MQACUzEAAA..*")
   val jsonHeader = headers.`Content-Type`(ContentTypes.`application/json`)
 
-//  def getAdminToken(): String = {
-//    val authenticationUrl = serverUrl + s"/json/authenticate"
-//    val usernameHeader = headers.RawHeader("X-OpenAM-Username", "removed")
-//    val passwordHeader = headers.RawHeader("X-OpenAM-Password", "removed")
-//
-//    val request = for {
-//      requestEntity <- Marshal("{}").to[RequestEntity]
-//      response <- Http().singleRequest(HttpRequest(method = HttpMethods.POST, uri = authenticationUrl, headers = List(usernameHeader, passwordHeader, jsonHeader), entity = requestEntity))
-//      responseEntity <- Unmarshal(response.entity).to[String]
-//    } yield responseEntity
-//
-//    Await.result(request.map { response =>
-//      println("Response: " + response)
-//      response
-//      //response("tokenId")
-//    }, Duration.Inf)
-//  }
-
-  def listResourceTypes(): Future[Boolean] = {
+  def listResourceTypes(): Future[Set[OpenAmResourceType]] = {
     val resourceTypesUrl = serverUrl + "/json/resourcetypes?_queryFilter=true"
 
-    val request = for {
+    for {
       response <- Http().singleRequest(HttpRequest(method = HttpMethods.GET, uri = resourceTypesUrl, headers = List(authorizationHeader)))
-      responseEntity <- Unmarshal(response.entity).to[String]
-    } yield responseEntity
-
-    request.map { response =>
-      println("Response: " + response)
-      true
-    }
+      responseEntity <- Unmarshal(response.entity).to[OpenAmResourceTypesResponse]
+    } yield responseEntity.result
   }
 
-  def createResourceType(resource: ResourceType): Future[Option[String]] = {
+  def createResourceType(resource: ResourceType): Future[Option[OpenAmResourceType]] = {
     val action = "create"
     val resourceTypesUrl = serverUrl + s"/json/resourcetypes/?_action=$action"
-    val payload = resource.asOpenAm
+    val payload = resource
 
     val request = for {
       requestEntity <- Marshal(payload).to[RequestEntity]
       response <- Http().singleRequest(HttpRequest(method = HttpMethods.POST, uri = resourceTypesUrl, headers = List(authorizationHeader), entity = requestEntity))
-      responseEntity <- Unmarshal(response.entity).to[JsObject] //TODO: define an object to unmarshal this to
+      responseEntity <- Unmarshal(response.entity).to[OpenAmResourceType] //TODO: define an object to unmarshal this to
     } yield (response.status, responseEntity)
 
     request.map { case (statusCode, response) =>
       if(statusCode.isSuccess) {
-        println(response)
-        Option(response.fields("uuid").convertTo[String])
+        Option(response)
       } else None
     }
   }
 
-  def createResource(resourceType: String, resourceId: String): Future[Boolean] = {
-    Future.successful(true)
+  def updateResourceType(resourceType: OpenAmResourceType): Future[Boolean] = {
+    val resourceTypesUrl = serverUrl + s"/json/resourcetypes/${resourceType.uuid}"
+    val payload = resourceType.asPayload
+
+    println(resourceType + "xxxxxx")
+
+    val request = for {
+      requestEntity <- Marshal(payload).to[RequestEntity]
+      response <- Http().singleRequest(HttpRequest(method = HttpMethods.PUT, uri = resourceTypesUrl, headers = List(authorizationHeader), entity = requestEntity))
+      responseEntity <- Unmarshal(response.entity).to[JsObject] //TODO: unmarshal this to a real object
+    } yield (response.status, responseEntity)
+
+    request.map { case (statusCode, response) =>
+      println(s"Updated resource type: $response")
+      statusCode.isSuccess
+    }
   }
 
-  def hasPermission(resourceType: String, resourceId: String, action: String): Future[Boolean] = {
-    Future.successful(true)
-  }
-
-  def createResourceTypePolicySet(uuid: String, resourceType: ResourceType): Future[Boolean] = {
+  def createResourceTypePolicySet(resourceType: OpenAmResourceType): Future[Boolean] = {
     val action = "create"
     val policiesUrl = serverUrl + s"json/applications/?_action=$action"
     val policyName = s"$resourceType-policies"
-
-    println(policyName)
-    println(policiesUrl)
-
-    val payload = PolicySet(policyName, Set.empty, Set(uuid)).asOpenAm
+    val payload = PolicySet(policyName, Set.empty, Set(resourceType.uuid)).asOpenAm
 
     val request = for {
       requestEntity <- Marshal(payload).to[RequestEntity]
@@ -103,9 +87,13 @@ class OpenAmDAO(serverUrl: String)(implicit val system: ActorSystem, val materia
     } yield (response.status, responseEntity)
 
     request.map { case (statusCode, response) =>
-      println(response)
+      println(s"Created policy set: $response")
       statusCode.isSuccess()
     }
+  }
+
+  def hasPermission(resourceType: String, resourceId: String, action: String): Future[Boolean] = {
+    Future.successful(true)
   }
 
 }

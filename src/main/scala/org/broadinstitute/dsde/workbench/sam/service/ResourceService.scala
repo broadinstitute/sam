@@ -3,7 +3,7 @@ package org.broadinstitute.dsde.workbench.sam.service
 import akka.http.scaladsl.model.{StatusCode, StatusCodes}
 import org.broadinstitute.dsde.workbench.sam.openam.OpenAmDAO
 import org.broadinstitute.dsde.workbench.sam.directory.JndiDirectoryDAO
-import org.broadinstitute.dsde.workbench.sam.model.{ResourceType, ResourceRole}
+import org.broadinstitute.dsde.workbench.sam.model.{OpenAmResourceType, ResourceRole, ResourceType}
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -12,12 +12,35 @@ import scala.concurrent.{ExecutionContext, Future}
   */
 class ResourceService(val openAmDAO: OpenAmDAO, val directoryDAO: JndiDirectoryDAO)(implicit val executionContext: ExecutionContext) {
 
+  def syncResourceTypes(resourceTypes: Set[ResourceType]): Future[Boolean] = {
+    openAmDAO.listResourceTypes().flatMap { existingTypesResponse =>
+      // Pull out new types, create them
+      // Pull out changed types, update them
+      // Ignore all other types
+      val newTypes = resourceTypes.filter(t => existingTypesResponse.map(_.name).contains(t.name)) //TODO
+      val existingTypesAsSam = existingTypesResponse.map(x => ResourceType(x.name, x.description, x.patterns, x.actions))
+      val updatedTypes = existingTypesResponse.filter(x => resourceTypes.contains(x.asPayload))
+
+      println(newTypes)
+      println(updatedTypes)
+
+      for {
+        createResults <- Future.traverse(newTypes)(createResourceType)
+        updateResults <- Future.traverse(updatedTypes)(t => openAmDAO.updateResourceType(t))
+      } yield (updateResults ++ createResults).forall(_ == true)
+    }
+  }
+
+  def listResourceTypes(): Future[Set[OpenAmResourceType]] = {
+    openAmDAO.listResourceTypes()
+  }
+
   def createResourceType(resourceType: ResourceType): Future[Boolean] = {
     for {
       //Create the resource type if it doesn't exist
-      uuid <- openAmDAO.createResourceType(resourceType)
+      openAmResourceType <- openAmDAO.createResourceType(resourceType)
       //Create the policy set
-      result <- openAmDAO.createResourceTypePolicySet(uuid.get, resourceType)
+      result <- if(openAmResourceType.isDefined) openAmDAO.createResourceTypePolicySet(openAmResourceType.get) else Future.successful(false)
     } yield result
   }
 
@@ -30,9 +53,6 @@ class ResourceService(val openAmDAO: OpenAmDAO, val directoryDAO: JndiDirectoryD
 
   def createResource(resourceType: String, resourceId: String): Future[StatusCode] = {
     //Ensure resource type exists
-    //TODO
-
-    //Create resource
     //TODO
 
     //Create policies
