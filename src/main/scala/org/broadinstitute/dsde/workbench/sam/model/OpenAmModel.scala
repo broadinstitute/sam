@@ -1,18 +1,21 @@
-package org.broadinstitute.dsde.workbench.sam.openam
+package org.broadinstitute.dsde.workbench.sam.model
 
-import org.broadinstitute.dsde.workbench.sam.model.{OpenAmPolicySet, OpenAmResourceType}
+import spray.json.DefaultJsonProtocol
 
 /**
   * Created by dvoet on 6/5/17.
   */
-object OpenAmJsonSupport {
-  import spray.json.DefaultJsonProtocol._
+object OpenAmJsonSupport extends DefaultJsonProtocol {
 
   implicit val OpenAmPolicySubjectFormat = jsonFormat2(OpenAmPolicySubject)
+
   implicit val OpenAmPolicyFormat = jsonFormat8(OpenAmPolicy)
 
-  implicit val openAmResourceTypeFormat = jsonFormat3(OpenAmResourceType)
-  implicit val openAmPolicySetFormat = jsonFormat6(OpenAmPolicySet)
+  implicit val OpenAmResourceTypeFormat = jsonFormat4(OpenAmResourceType)
+
+  implicit val OpenAmResourceTypePayloadFormat = jsonFormat3(OpenAmResourceTypePayload)
+
+  implicit val OpenAmResourceTypeListFormat = jsonFormat1(OpenAmResourceTypeList)
 
   implicit val AuthenticateResponseFormat = jsonFormat1(AuthenticateResponse)
 }
@@ -35,5 +38,10 @@ case class OpenAmPolicy(
   *               but we will almost always use Identity
   */
 case class OpenAmPolicySubject(subjectValues: Seq[String], `type`: String = "Identity")
+
+case class OpenAmResourceTypePayload(name: String, actions: Map[String, Boolean], patterns: Set[String])
+case class OpenAmResourceType(name: String, actions: Map[String, Boolean], patterns: Set[String], uuid: String)
+
+case class OpenAmResourceTypeList(result: Set[OpenAmResourceType])
 
 case class AuthenticateResponse(tokenId: String)
