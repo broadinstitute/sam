@@ -30,7 +30,6 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
 
     Get("/resourceTypes") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
-      println(responseAs[Set[ResourceType]])
     }
   }
 }
