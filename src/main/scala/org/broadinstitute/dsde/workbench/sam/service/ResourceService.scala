@@ -33,11 +33,14 @@ class ResourceService(val openAmDAO: OpenAmDAO, val directoryDAO: JndiDirectoryD
       val openamActionsByName: Map[String, Set[String]] = existingResourceTypes.result.map(rt => rt.name -> rt.actions.keySet).toMap
 
       val diff = (configActionsByName.toSet diff openamActionsByName.toSet).toMap
-      val newOnes = diff -- openamActionsByName.keySet
-      val updatedOnes = diff -- newOnes.keySet
+      val newTypes = diff -- openamActionsByName.keySet
+      val updatedTypes = diff -- newTypes.keySet
 
-      val newResourceTypes = configResourceTypes.filter(rt => newOnes.keySet.contains(rt.name))
-      val updatedResourceTypes = existingResourceTypes.result.filter(rt => updatedOnes.keySet.contains(rt.name)).map(x => x.copy(actions = configActionsByName(x.name).map(_ -> false).toMap))
+      val orphanTypes = (openamActionsByName.toSet diff configActionsByName.toSet).map(_._1)
+      logger.warn(s"WARNING: the following types exist in OpenAM but were not specified in config: ${orphanTypes.mkString}")
+
+      val newResourceTypes = configResourceTypes.filter(rt => newTypes.keySet.contains(rt.name))
+      val updatedResourceTypes = existingResourceTypes.result.filter(rt => updatedTypes.keySet.contains(rt.name)).map(x => x.copy(actions = configActionsByName(x.name).map(_ -> false).toMap))
 
       for {
         _ <- Future.traverse(newResourceTypes)(createResourceType(_, userInfo))
