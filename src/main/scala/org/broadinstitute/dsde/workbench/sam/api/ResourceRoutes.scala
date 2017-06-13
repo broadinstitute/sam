@@ -24,33 +24,33 @@ trait ResourceRoutes extends UserInfoDirectives {
       requireUserInfo { userInfo =>
         pathEndOrSingleSlash {
           get {
-            complete{
+            complete {
               StatusCodes.OK -> resourceTypes.values.toSet
             }
           }
         }
       }
     } ~
-    pathPrefix("resource") {
-      requireUserInfo { userInfo =>
-        pathPrefix(Segment / Segment) { (resourceTypeName, resourceId) =>
-          val resourceType = resourceTypes.getOrElse(resourceTypeName, throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"resource type $resourceTypeName not found")))
+      pathPrefix("resource") {
+        requireUserInfo { userInfo =>
+          pathPrefix(Segment / Segment) { (resourceTypeName, resourceId) =>
+            val resourceType = resourceTypes.getOrElse(resourceTypeName, throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"resource type $resourceTypeName not found")))
 
-          pathEndOrSingleSlash {
-            post {
-              complete(resourceService.createResource(resourceType, resourceId, userInfo).map(_ => StatusCodes.NoContent))
-            }
-          } ~
-            pathPrefix("action") {
-              pathPrefix(Segment) { action =>
-                pathEndOrSingleSlash {
-                  get {
-                    complete(resourceService.hasPermission(resourceType, resourceId, action, userInfo))
+            pathEndOrSingleSlash {
+              post {
+                complete(resourceService.createResource(resourceType, resourceId, userInfo).map(_ => StatusCodes.NoContent))
+              }
+            } ~
+              pathPrefix("action") {
+                pathPrefix(Segment) { action =>
+                  pathEndOrSingleSlash {
+                    get {
+                      complete(resourceService.hasPermission(resourceType, resourceId, action, userInfo))
+                    }
                   }
                 }
               }
-            }
+          }
         }
       }
-    }
 }

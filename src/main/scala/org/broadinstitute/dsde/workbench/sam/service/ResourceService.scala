@@ -37,23 +37,19 @@ class ResourceService(val openAmDAO: OpenAmDAO, val directoryDAO: JndiDirectoryD
       val updatedTypes = diff -- newTypes.keySet
 
       val orphanTypes = (openamActionsByName.toSet diff configActionsByName.toSet).map(_._1)
-      logger.warn(s"WARNING: the following types exist in OpenAM but were not specified in config: ${orphanTypes.mkString}")
+      logger.warn(s"WARNING: the following types exist in OpenAM but were not specified in config: ${orphanTypes.mkString(", ")}")
 
       val newResourceTypes = configResourceTypes.filter(rt => newTypes.keySet.contains(rt.name))
       val updatedResourceTypes = existingResourceTypes.result.filter(rt => updatedTypes.keySet.contains(rt.name)).map(x => x.copy(actions = configActionsByName(x.name).map(_ -> false).toMap))
 
       for {
-        _ <- Future.traverse(newResourceTypes)(createResourceType(_, userInfo))
+        created <- Future.traverse(newResourceTypes)(createResourceType(_, userInfo))
         _ <- Future.traverse(updatedResourceTypes)(updateResourceType(_, userInfo))
-      } yield configResourceTypes
+      } yield {
+        val uuidByName = (existingResourceTypes.result ++ created).map(rt => rt.name -> rt.uuid).toMap
+        configResourceTypes.map(rt => rt.copy(uuid = Option(uuidByName(rt.name))))
+      }
     }
-  }
-
-  def createResourceRole(resourceType: String, role: ResourceRole, userInfo: UserInfo): Future[Boolean] = {
-    //Set the actions for the role
-    //TODO
-
-    Future.successful(true)
   }
 
   def createResource(resourceType: ResourceType, resourceId: String, userInfo: UserInfo): Future[Set[OpenAmPolicy]] = {
