@@ -14,7 +14,7 @@ import scala.concurrent.{ExecutionContext, Future}
   */
 class ResourceService(val openAmDAO: OpenAmDAO, val directoryDAO: JndiDirectoryDAO)(implicit val executionContext: ExecutionContext) extends LazyLogging {
 
-  def listResourceTypes(userInfo: UserInfo): Future[OpenAmResourceTypeList] = {
+  def listResourceTypes(userInfo: UserInfo): Future[Set[OpenAmResourceType]] = {
     openAmDAO.listResourceTypes(userInfo)
   }
 
@@ -27,26 +27,36 @@ class ResourceService(val openAmDAO: OpenAmDAO, val directoryDAO: JndiDirectoryD
     openAmDAO.updateResourceType(updatedResourceType, userInfo)
   }
 
+  def getDefaultPolicySet(userInfo: UserInfo): Future[OpenAmPolicySet] = {
+    openAmDAO.getDefaultPolicySet(userInfo)
+  }
+
+  def updateDefaultPolicySet(updatedPolicySet: OpenAmPolicySet, userInfo: UserInfo): Future[OpenAmPolicySet] = {
+    openAmDAO.updateDefaultPolicySet(updatedPolicySet, userInfo)
+  }
+
   def syncResourceTypes(configResourceTypes: Set[ResourceType], userInfo: UserInfo): Future[Set[ResourceType]] = {
     listResourceTypes(userInfo).flatMap { existingResourceTypes =>
       val configActionsByName: Map[String, Set[String]] = configResourceTypes.map(rt => rt.name -> rt.actions).toMap
-      val openamActionsByName: Map[String, Set[String]] = existingResourceTypes.result.map(rt => rt.name -> rt.actions.keySet).toMap
+      val openamActionsByName: Map[String, Set[String]] = existingResourceTypes.map(rt => rt.name -> rt.actions.keySet).toMap
 
       val diff = (configActionsByName.toSet diff openamActionsByName.toSet).toMap
       val newTypes = diff -- openamActionsByName.keySet
       val updatedTypes = diff -- newTypes.keySet
-
       val orphanTypes = (openamActionsByName.toSet diff configActionsByName.toSet).map(_._1)
+
       logger.warn(s"WARNING: the following types exist in OpenAM but were not specified in config: ${orphanTypes.mkString(", ")}")
 
       val newResourceTypes = configResourceTypes.filter(rt => newTypes.keySet.contains(rt.name))
-      val updatedResourceTypes = existingResourceTypes.result.filter(rt => updatedTypes.keySet.contains(rt.name)).map(x => x.copy(actions = configActionsByName(x.name).map(_ -> false).toMap))
+      val updatedResourceTypes = existingResourceTypes.filter(rt => updatedTypes.keySet.contains(rt.name)).map(x => x.copy(actions = configActionsByName(x.name).map(_ -> false).toMap))
 
       for {
         created <- Future.traverse(newResourceTypes)(createResourceType(_, userInfo))
         _ <- Future.traverse(updatedResourceTypes)(updateResourceType(_, userInfo))
+        defaultPolicySet <- getDefaultPolicySet(userInfo)
+        _ <- updateDefaultPolicySet(defaultPolicySet.copy(resourceTypeUuids = (existingResourceTypes ++ created).map(_.uuid)), userInfo)
       } yield {
-        val uuidByName = (existingResourceTypes.result ++ created).map(rt => rt.name -> rt.uuid).toMap
+        val uuidByName = (existingResourceTypes ++ created).map(rt => rt.name -> rt.uuid).toMap
         configResourceTypes.map(rt => rt.copy(uuid = Option(uuidByName(rt.name))))
       }
     }
