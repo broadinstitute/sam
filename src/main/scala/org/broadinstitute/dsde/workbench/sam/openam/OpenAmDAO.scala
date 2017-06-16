@@ -29,13 +29,13 @@ class OpenAmDAO(openAmConfig: OpenAmConfig, protected val directoryConfig: Direc
     val usernameHeader = headers.RawHeader("X-OpenAM-Username", username)
     val passwordHeader = headers.RawHeader("X-OpenAM-Password", password)
 
-    httpPayloadRequest[String, AuthenticateResponse](authenticationUrl, "{}", HttpMethods.POST, List(usernameHeader, passwordHeader))
+    httpRequest[String, AuthenticateResponse](authenticationUrl, Option("{}"), HttpMethods.POST, List(usernameHeader, passwordHeader))
   }
 
   def listResourceTypes(userInfo: UserInfo): Future[Set[OpenAmResourceType]] = {
     val resourceTypesUrl = openAmConfig.url + "/json/resourcetypes?_queryFilter=true"
 
-    httpGetRequest[OpenAmResourceTypeList](resourceTypesUrl, List(authorizationHeader(userInfo))).map(_.result)
+    httpRequest[String, OpenAmResourceTypeList](resourceTypesUrl, None, HttpMethods.GET, List(authorizationHeader(userInfo))).map(_.result)
   }
 
   def createResourceType(resourceType: ResourceType, pattern: String, userInfo: UserInfo): Future[OpenAmResourceType] = {
@@ -43,56 +43,48 @@ class OpenAmDAO(openAmConfig: OpenAmConfig, protected val directoryConfig: Direc
     val resourceTypesUrl = openAmConfig.url + s"/json/resourcetypes/?_action=$action"
     val payload = OpenAmResourceTypePayload(resourceType.name, resourceType.actions.map(_ -> false).toMap, Set(pattern))
 
-    httpPayloadRequest[OpenAmResourceTypePayload, OpenAmResourceType](resourceTypesUrl, payload, HttpMethods.POST, List(authorizationHeader(userInfo)))
+    httpRequest[OpenAmResourceTypePayload, OpenAmResourceType](resourceTypesUrl, Option(payload), HttpMethods.POST, List(authorizationHeader(userInfo)))
   }
 
   def updateResourceType(updatedResourceType: OpenAmResourceType, userInfo: UserInfo): Future[OpenAmResourceType] = {
     val resourceTypesUrl = openAmConfig.url + s"/json/resourcetypes/${updatedResourceType.uuid}"
 
-    httpPayloadRequest[OpenAmResourceType, OpenAmResourceType](resourceTypesUrl, updatedResourceType, HttpMethods.PUT, List(authorizationHeader(userInfo)))
+    httpRequest[OpenAmResourceType, OpenAmResourceType](resourceTypesUrl, Option(updatedResourceType), HttpMethods.PUT, List(authorizationHeader(userInfo)))
   }
 
   def getDefaultPolicySet(userInfo: UserInfo): Future[OpenAmPolicySet] = {
     val policySetsUrl = openAmConfig.url + s"/json/applications/iPlanetAMWebAgentService"
 
-    httpGetRequest[OpenAmPolicySet](policySetsUrl, List(authorizationHeader(userInfo)))
+    httpRequest[String, OpenAmPolicySet](policySetsUrl, None, HttpMethods.GET, List(authorizationHeader(userInfo)))
   }
 
   def updateDefaultPolicySet(updatedPolicySet: OpenAmPolicySet, userInfo: UserInfo): Future[OpenAmPolicySet] = {
     val policySetsUrl = openAmConfig.url + s"/json/applications/iPlanetAMWebAgentService"
 
-    httpPayloadRequest[OpenAmPolicySet, OpenAmPolicySet](policySetsUrl, updatedPolicySet, HttpMethods.PUT, List(authorizationHeader(userInfo)))
+    httpRequest[OpenAmPolicySet, OpenAmPolicySet](policySetsUrl, Option(updatedPolicySet), HttpMethods.PUT, List(authorizationHeader(userInfo)))
   }
 
   def createPolicy(name: String, description: String, actions: Seq[String], resources: Seq[String], subjects: Seq[SamSubject], resourceType: String, userInfo: UserInfo): Future[OpenAmPolicy] = {
     val action = "create"
     val policiesUrl = openAmConfig.url + s"/json/policies/?_action=$action"
-
     val openAmPolicySubject = OpenAmPolicySubject(subjects.map(subjectDn))
     val openAmPolicy = OpenAmPolicy(name, true, description, "iPlanetAMWebAgentService", actions.map(_ -> true).toMap, resources, openAmPolicySubject, resourceType)
 
-    httpPayloadRequest[OpenAmPolicy, OpenAmPolicy](policiesUrl, openAmPolicy, HttpMethods.POST, List(authorizationHeader(userInfo)))
+    httpRequest[OpenAmPolicy, OpenAmPolicy](policiesUrl, Option(openAmPolicy), HttpMethods.POST, List(authorizationHeader(userInfo)))
   }
 
-  def evaluatePolicy(urn: String, userInfo: UserInfo): Future[List[OpenAmPolicyEvaluation]] = {
+  def evaluatePolicy(urns: Set[String], userInfo: UserInfo): Future[List[OpenAmPolicyEvaluation]] = {
     val action = "evaluate"
     val policyUrl = openAmConfig.url + s"/json/policies?_action=$action"
-    val payload = OpenAmResourceSet(Set(urn))
+    val urnSet = OpenAmResourceSet(urns)
 
-    httpPayloadRequest[OpenAmResourceSet, List[OpenAmPolicyEvaluation]](policyUrl, payload, HttpMethods.POST, List(authorizationHeader(userInfo)))
+    httpRequest[OpenAmResourceSet, List[OpenAmPolicyEvaluation]](policyUrl, Option(urnSet), HttpMethods.POST, List(authorizationHeader(userInfo)))
   }
 
-  def httpPayloadRequest[A, B](uri: Uri, entity: A, method: HttpMethod = HttpMethods.GET, headers: scala.collection.immutable.Seq[HttpHeader] = Nil)(implicit marshaller: Marshaller[A, RequestEntity], unmarshaller: Unmarshaller[ResponseEntity, B], errorReportSource: ErrorReportSource): Future[B] = {
+  def httpRequest[A, B](uri: Uri, entity: Option[A], method: HttpMethod = HttpMethods.GET, headers: scala.collection.immutable.Seq[HttpHeader] = Nil)(implicit marshaller: Marshaller[A, RequestEntity], unmarshaller: Unmarshaller[ResponseEntity, B], errorReportSource: ErrorReportSource): Future[B] = {
     for {
-      requestEntity <- Marshal(entity).to[RequestEntity]
-      response <- Http().singleRequest(HttpRequest(method = method, uri = uri, headers = headers, entity = requestEntity.withContentType(ContentTypes.`application/json`)))
-      responseEntity <- unmarshalResponseOrError(response)
-    } yield responseEntity
-  }
-
-  def httpGetRequest[B](uri: Uri, headers: scala.collection.immutable.Seq[HttpHeader] = Nil)(implicit unmarshaller: Unmarshaller[ResponseEntity, B], errorReportSource: ErrorReportSource): Future[B] = {
-    for {
-      response <- Http().singleRequest(HttpRequest(method = HttpMethods.GET, uri = uri, headers = headers))
+      entity <- entity.map(e => Marshal(e).to[RequestEntity]).getOrElse(Future.successful(HttpEntity.Empty))
+      response <- Http().singleRequest(HttpRequest(method = method, uri = uri, headers = headers, entity = entity.withContentType(ContentTypes.`application/json`)))
       responseEntity <- unmarshalResponseOrError(response)
     } yield responseEntity
   }

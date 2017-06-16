@@ -36,9 +36,10 @@ class ResourceService(val openAmDAO: OpenAmDAO, val directoryDAO: JndiDirectoryD
   }
 
   def hasPermission(resourceType: ResourceType, resourceId: String, action: String, userInfo: UserInfo): Future[Boolean] = {
-    openAmDAO.evaluatePolicy(resourceUrn(resourceType, resourceId), userInfo).map { policyEval =>
-      val actionsMap = policyEval.map(x => x.resource -> x.actions).toMap
-      actionsMap.getOrElse(resourceId, throw new WorkbenchException("Resource not found")).getOrElse(action, false)
+    val urn = resourceUrn(resourceType, resourceId)
+    openAmDAO.evaluatePolicy(Set(urn), userInfo).map { policyEval =>
+      val actionsMap = policyEval.map(p => p.resource -> p.actions).toMap
+      actionsMap.getOrElse(urn, throw new WorkbenchException(s"resource ${resourceUrn(resourceType, resourceId)} not found")).getOrElse(action, false)
     }
   }
 
