@@ -19,6 +19,10 @@ object OpenAmJsonSupport extends DefaultJsonProtocol {
 
   implicit val OpenAmPolicySetFormat = jsonFormat7(OpenAmPolicySet)
 
+  implicit val OpenAmResourceSetFormat = jsonFormat1(OpenAmResourceSet)
+
+  implicit val OpenAmPolicyEvaluationFormat = jsonFormat2(OpenAmPolicyEvaluation)
+
   implicit val AuthenticateResponseFormat = jsonFormat1(AuthenticateResponse)
 }
 
@@ -47,5 +51,9 @@ case class OpenAmResourceType(name: String, actions: Map[String, Boolean], patte
 case class OpenAmResourceTypeList(result: Set[OpenAmResourceType])
 
 case class OpenAmPolicySet(name: String, description: String, conditions: Set[String], subjects: Set[String], applicationType: String, entitlementCombiner: String, resourceTypeUuids: Set[String])
+
+case class OpenAmResourceSet(resources: Set[String])
+
+case class OpenAmPolicyEvaluation(resource: String, actions: Map[String, Boolean])
 
 case class AuthenticateResponse(tokenId: String)

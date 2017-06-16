@@ -35,6 +35,34 @@ class ResourceService(val openAmDAO: OpenAmDAO, val directoryDAO: JndiDirectoryD
     openAmDAO.updateDefaultPolicySet(updatedPolicySet, userInfo)
   }
 
+  def hasPermission(resourceType: ResourceType, resourceId: String, action: String, userInfo: UserInfo): Future[Boolean] = {
+    openAmDAO.evaluatePolicy(resourceUrn(resourceType, resourceId), userInfo).map { policyEval =>
+      val actionsMap = policyEval.map(x => x.resource -> x.actions).toMap
+      actionsMap.getOrElse(resourceId, throw new WorkbenchException("Resource not found")).getOrElse(action, false)
+    }
+  }
+
+  def createResource(resourceType: ResourceType, resourceId: String, userInfo: UserInfo): Future[Set[OpenAmPolicy]] = {
+    Future.traverse(resourceType.roles) { role =>
+      val roleMembers: Set[SamSubject] = role.roleName match {
+        case resourceType.name => Set(userInfo.userId)
+        case _ => Set.empty
+      }
+      for {
+        group <- directoryDAO.createGroup(SamGroup(SamGroupName(s"${resourceType.name}-${resourceId}-${role.roleName}"), roleMembers))
+        policy <- openAmDAO.createPolicy(
+          group.name.value,
+          s"policy for ${group.name.value}",
+          role.actions.map(_.actionName).toSeq,
+          Seq(resourceUrn(resourceType, resourceId)),
+          Seq(group.name),
+          resourceType.uuid.getOrElse(throw new WorkbenchException("resource type uuid not set")),
+          userInfo
+        )
+      } yield policy
+    }
+  }
+
   def syncResourceTypes(configResourceTypes: Set[ResourceType], userInfo: UserInfo): Future[Set[ResourceType]] = {
     listResourceTypes(userInfo).flatMap { existingResourceTypes =>
       val configActionsByName: Map[String, Set[String]] = configResourceTypes.map(rt => rt.name -> rt.actions).toMap
@@ -62,36 +90,8 @@ class ResourceService(val openAmDAO: OpenAmDAO, val directoryDAO: JndiDirectoryD
     }
   }
 
-  def createResource(resourceType: ResourceType, resourceId: String, userInfo: UserInfo): Future[Set[OpenAmPolicy]] = {
-    Future.traverse(resourceType.roles) { role =>
-      val roleMembers: Set[SamSubject] = role.roleName match {
-        case resourceType.name => Set(userInfo.userId)
-        case _ => Set.empty
-      }
-      for {
-        group <- directoryDAO.createGroup(SamGroup(SamGroupName(s"${resourceType.name}-${resourceId}-${role.roleName}"), roleMembers))
-        policy <- openAmDAO.createPolicy(
-          group.name.value,
-          s"policy for ${group.name.value}",
-          role.actions.map(_.actionName).toSeq,
-          Seq(resourceUrn(resourceType, resourceId)),
-          Seq(group.name),
-          resourceType.uuid.getOrElse(throw new WorkbenchException("resource type uuid not set")),
-          userInfo
-        )
-      } yield policy
-    }
-  }
-
   private def resourceUrn(resourceType: ResourceType, resourceId: String) = {
     s"${resourceType.name}://$resourceId"
-  }
-
-  def hasPermission(resourceType: ResourceType, resourceId: String, action: String, userInfo: UserInfo): Future[StatusCode] = {
-    //Query OpenAM to see if caller has permission to perform  action on resourceId
-    //TODO
-
-    Future.successful(StatusCodes.NoContent)
   }
 
   def getOpenAmAdminUserInfo: Future[UserInfo] = {

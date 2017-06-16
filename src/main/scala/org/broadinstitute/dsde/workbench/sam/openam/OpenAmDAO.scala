@@ -74,15 +74,12 @@ class OpenAmDAO(openAmConfig: OpenAmConfig, protected val directoryConfig: Direc
     httpPayloadRequest[OpenAmPolicy, OpenAmPolicy](policiesUrl, openAmPolicy, HttpMethods.POST, List(authorizationHeader(userInfo)))
   }
 
-  def evaluatePolicy(resourceTypeName: String, action: ResourceAction, userInfo: UserInfo): Future[Boolean] = {
+  def evaluatePolicy(urn: String, userInfo: UserInfo): Future[List[OpenAmPolicyEvaluation]] = {
     val action = "evaluate"
-    val policyUrl = s"/json/policies?_action=$action"
-    val payload = Set(resourceTypeName)
+    val policyUrl = openAmConfig.url + s"/json/policies?_action=$action"
+    val payload = OpenAmResourceSet(Set(urn))
 
-    httpPayloadRequest[Set[String], String](policyUrl, payload, HttpMethods.POST, List(authorizationHeader(userInfo))).map { x =>
-      println(x)
-      true
-    }
+    httpPayloadRequest[OpenAmResourceSet, List[OpenAmPolicyEvaluation]](policyUrl, payload, HttpMethods.POST, List(authorizationHeader(userInfo)))
   }
 
   def httpPayloadRequest[A, B](uri: Uri, entity: A, method: HttpMethod = HttpMethods.GET, headers: scala.collection.immutable.Seq[HttpHeader] = Nil)(implicit marshaller: Marshaller[A, RequestEntity], unmarshaller: Unmarshaller[ResponseEntity, B], errorReportSource: ErrorReportSource): Future[B] = {

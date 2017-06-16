@@ -45,7 +45,10 @@ trait ResourceRoutes extends UserInfoDirectives {
                 pathPrefix(Segment) { action =>
                   pathEndOrSingleSlash {
                     get {
-                      complete(resourceService.hasPermission(resourceType, resourceId, action, userInfo))
+                      complete(resourceService.hasPermission(resourceType, resourceId, action, userInfo).map { hasPermission =>
+                        if(hasPermission) StatusCodes.NoContent
+                        else StatusCodes.Forbidden
+                      })
                     }
                   }
                 }
