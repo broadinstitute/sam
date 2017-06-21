@@ -42,7 +42,7 @@ object Boot extends App with LazyLogging {
         throw t
     } flatMap { resourceTypesWithUuids =>
       val samRoutes = new SamRoutes(resourceService) with StandardUserInfoDirectives {
-        override val resourceTypes: Map[String, ResourceType] = resourceTypesWithUuids.map(rt => rt.resourceTypeName -> rt).toMap
+        override val resourceTypes: Map[String, ResourceType] = resourceTypesWithUuids.map(rt => rt.name -> rt).toMap
       }
 
       Http().bindAndHandle(samRoutes.route, "localhost", 8080)
@@ -57,10 +57,8 @@ object Boot extends App with LazyLogging {
   private def syncResourceTypes(resources: Set[ResourceType], resourceService: ResourceService)(implicit executionContext: ExecutionContext): Future[Set[ResourceType]] = {
     logger.info("Syncing resource types...")
     for {
-      adminUserInfo <- resourceService.getOpenAmAdminUserInfo()
-      resourceTypesWithUuid <- Future.traverse(resources) { resourceType =>
-        resourceService.createResourceType(resourceType, adminUserInfo).map(uuid => resourceType.copy(uuid = Option(uuid)))
-      }
+      adminUserInfo <- resourceService.getOpenAmAdminUserInfo
+      resourceTypesWithUuid <- resourceService.syncResourceTypes(resources, adminUserInfo)
     } yield resourceTypesWithUuid
   }
 

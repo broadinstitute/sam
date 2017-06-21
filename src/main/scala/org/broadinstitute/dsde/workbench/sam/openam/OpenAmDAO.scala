@@ -2,20 +2,16 @@ package org.broadinstitute.dsde.workbench.sam.openam
 
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
-import akka.http.scaladsl.marshalling.Marshal
+import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport.{sprayJsValueUnmarshaller => _, _}
+import akka.http.scaladsl.marshalling.{Marshal, Marshaller}
 import akka.http.scaladsl.model._
-import akka.http.scaladsl.unmarshalling.Unmarshal
+import akka.http.scaladsl.unmarshalling.{Unmarshal, Unmarshaller}
 import akka.stream.Materializer
-import org.broadinstitute.dsde.workbench.sam.model._
-import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
-import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryConfig, DirectorySubjectNameSupport}
-import spray.json._
-import SprayJsonSupport._
-import DefaultJsonProtocol._
-import akka.http.scaladsl.marshalling.Marshaller
-import akka.http.scaladsl.unmarshalling.Unmarshaller
 import org.broadinstitute.dsde.workbench.sam.WorkbenchExceptionWithErrorReport
-import org.broadinstitute.dsde.workbench.sam.openam.OpenAmJsonSupport._
+import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryConfig, DirectorySubjectNameSupport}
+import org.broadinstitute.dsde.workbench.sam.model.OpenAmJsonSupport._
+import org.broadinstitute.dsde.workbench.sam.model._
+
 import scala.concurrent.{ExecutionContext, Future}
 
 /**
@@ -26,89 +22,69 @@ class OpenAmDAO(openAmConfig: OpenAmConfig, protected val directoryConfig: Direc
   private def authorizationHeader(userInfo: UserInfo) = headers.RawHeader("iPlanetDirectoryPro", userInfo.accessToken)
   private val jsonContentTypeHeader = headers.`Content-Type`(ContentTypes.`application/json`)
 
-  def getAdminUserInfo(): Future[UserInfo] = getAuthToken(openAmConfig.user, openAmConfig.password).map(response => UserInfo(response.tokenId, SamUserId(openAmConfig.user)))
+  def getAdminUserInfo: Future[UserInfo] = getAuthToken(openAmConfig.user, openAmConfig.password).map(response => UserInfo(response.tokenId, SamUserId(openAmConfig.user)))
 
   def getAuthToken(username: String, password: String): Future[AuthenticateResponse] = {
-    val authenticationUrl = openAmConfig.url + s"/json/authenticate"
+    val authenticationUrl = openAmConfig.url + "/json/authenticate"
     val usernameHeader = headers.RawHeader("X-OpenAM-Username", username)
     val passwordHeader = headers.RawHeader("X-OpenAM-Password", password)
 
-    httpRequest[String, AuthenticateResponse](authenticationUrl, "{}", HttpMethods.POST, List(usernameHeader, passwordHeader, jsonContentTypeHeader))
+    httpRequest[String, AuthenticateResponse](authenticationUrl, Option("{}"), HttpMethods.POST, List(usernameHeader, passwordHeader))
   }
 
-  def listResourceTypes(userInfo: UserInfo): Future[Boolean] = {
+  def listResourceTypes(userInfo: UserInfo): Future[Set[OpenAmResourceType]] = {
     val resourceTypesUrl = openAmConfig.url + "/json/resourcetypes?_queryFilter=true"
 
-    val request = for {
-      response <- Http().singleRequest(HttpRequest(method = HttpMethods.GET, uri = resourceTypesUrl, headers = List(authorizationHeader(userInfo))))
-      responseEntity <- Unmarshal(response.entity).to[String]
-    } yield responseEntity
-
-    request.map { response =>
-      println("Response: " + response)
-      true
-    }
+    httpRequest[String, OpenAmResourceTypeList](resourceTypesUrl, None, HttpMethods.GET, List(authorizationHeader(userInfo))).map(_.result)
   }
 
-  def createResourceType(resource: ResourceType, userInfo: UserInfo): Future[Option[String]] = {
+  def createResourceType(resourceType: ResourceType, pattern: String, userInfo: UserInfo): Future[OpenAmResourceType] = {
     val action = "create"
     val resourceTypesUrl = openAmConfig.url + s"/json/resourcetypes/?_action=$action"
-    val payload = resource.asOpenAm
+    val payload = OpenAmResourceTypePayload(resourceType.name, resourceType.actions.map(_ -> false).toMap, Set(pattern))
 
-    val request = for {
-      requestEntity <- Marshal(payload).to[RequestEntity]
-      response <- Http().singleRequest(HttpRequest(method = HttpMethods.POST, uri = resourceTypesUrl, headers = List(authorizationHeader(userInfo)), entity = requestEntity))
-      responseEntity <- Unmarshal(response.entity).to[JsObject] //TODO: define an object to unmarshal this to
-    } yield (response.status, responseEntity)
-
-    request.map { case (statusCode, response) =>
-      if(statusCode.isSuccess) {
-        println(response)
-        Option(response.fields("uuid").convertTo[String])
-      } else None
-    }
+    httpRequest[OpenAmResourceTypePayload, OpenAmResourceType](resourceTypesUrl, Option(payload), HttpMethods.POST, List(authorizationHeader(userInfo)))
   }
 
-  def hasPermission(resourceType: String, resourceId: String, action: String): Future[Boolean] = {
-    Future.successful(true)
+  def updateResourceType(updatedResourceType: OpenAmResourceType, userInfo: UserInfo): Future[OpenAmResourceType] = {
+    val resourceTypesUrl = openAmConfig.url + s"/json/resourcetypes/${updatedResourceType.uuid}"
+
+    httpRequest[OpenAmResourceType, OpenAmResourceType](resourceTypesUrl, Option(updatedResourceType), HttpMethods.PUT, List(authorizationHeader(userInfo)))
   }
 
-  def createResourceTypePolicySet(uuid: String, resourceType: ResourceType, userInfo: UserInfo): Future[Boolean] = {
-    val action = "create"
-    val policiesUrl = openAmConfig.url + s"json/applications/?_action=$action"
-    val policyName = s"$resourceType-policies"
+  def getDefaultPolicySet(userInfo: UserInfo): Future[OpenAmPolicySet] = {
+    val policySetsUrl = openAmConfig.url + s"/json/applications/iPlanetAMWebAgentService"
 
-    println(policyName)
-    println(policiesUrl)
+    httpRequest[String, OpenAmPolicySet](policySetsUrl, None, HttpMethods.GET, List(authorizationHeader(userInfo)))
+  }
 
-    val payload = PolicySet(policyName, Set.empty, Set(uuid)).asOpenAm
+  def updateDefaultPolicySet(updatedPolicySet: OpenAmPolicySet, userInfo: UserInfo): Future[OpenAmPolicySet] = {
+    val policySetsUrl = openAmConfig.url + s"/json/applications/iPlanetAMWebAgentService"
 
-    val request = for {
-      requestEntity <- Marshal(payload).to[RequestEntity]
-      response <- Http().singleRequest(HttpRequest(method = HttpMethods.POST, uri = policiesUrl, headers = List(authorizationHeader(userInfo)), entity = requestEntity))
-      responseEntity <- Unmarshal(response.entity).to[JsObject]
-    } yield (response.status, responseEntity)
-
-    request.map { case (statusCode, response) =>
-      println(response)
-      statusCode.isSuccess()
-    }
+    httpRequest[OpenAmPolicySet, OpenAmPolicySet](policySetsUrl, Option(updatedPolicySet), HttpMethods.PUT, List(authorizationHeader(userInfo)))
   }
 
   def createPolicy(name: String, description: String, actions: Seq[String], resources: Seq[String], subjects: Seq[SamSubject], resourceType: String, userInfo: UserInfo): Future[OpenAmPolicy] = {
     val action = "create"
-    val policiesUrl = openAmConfig.url + s"json/policies/?_action=$action"
-
+    val policiesUrl = openAmConfig.url + s"/json/policies/?_action=$action"
     val openAmPolicySubject = OpenAmPolicySubject(subjects.map(subjectDn))
     val openAmPolicy = OpenAmPolicy(name, true, description, "iPlanetAMWebAgentService", actions.map(_ -> true).toMap, resources, openAmPolicySubject, resourceType)
 
-    httpRequest[OpenAmPolicy, OpenAmPolicy](policiesUrl, openAmPolicy, HttpMethods.POST, List(authorizationHeader(userInfo), jsonContentTypeHeader))
+    httpRequest[OpenAmPolicy, OpenAmPolicy](policiesUrl, Option(openAmPolicy), HttpMethods.POST, List(authorizationHeader(userInfo)))
   }
 
-  def httpRequest[A, B](uri: Uri, entity: A, method: HttpMethod = HttpMethods.GET, headers: scala.collection.immutable.Seq[HttpHeader] = Nil)(implicit marshaller: Marshaller[A, RequestEntity], unmarshaller: Unmarshaller[ResponseEntity, B], errorReportSource: ErrorReportSource): Future[B] = {
+  def evaluatePolicy(urns: Set[String], userInfo: UserInfo): Future[List[OpenAmPolicyEvaluation]] = {
+    val action = "evaluate"
+    val policyUrl = openAmConfig.url + s"/json/policies?_action=$action"
+    val urnSet = OpenAmResourceSet(urns)
+
+    httpRequest[OpenAmResourceSet, List[OpenAmPolicyEvaluation]](policyUrl, Option(urnSet), HttpMethods.POST, List(authorizationHeader(userInfo)))
+  }
+
+  def httpRequest[A, B](uri: Uri, entity: Option[A], method: HttpMethod = HttpMethods.GET, headers: scala.collection.immutable.Seq[HttpHeader] = Nil)(implicit marshaller: Marshaller[A, RequestEntity], unmarshaller: Unmarshaller[ResponseEntity, B], errorReportSource: ErrorReportSource): Future[B] = {
     for {
-      requestEntity <- Marshal(entity).to[RequestEntity]
-      response <- Http().singleRequest(HttpRequest(method = method, uri = uri, headers = headers, entity = requestEntity))
+      entity <- entity.map(e => Marshal(e).to[RequestEntity]).getOrElse(Future.successful(HttpEntity.Empty))
+      response <- Http().singleRequest(HttpRequest(method = method, uri = uri, headers = headers, entity = entity.withContentType(ContentTypes.`application/json`)))
       responseEntity <- unmarshalResponseOrError(response)
     } yield responseEntity
   }
