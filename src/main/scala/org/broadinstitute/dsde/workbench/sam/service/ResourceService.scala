@@ -74,7 +74,9 @@ class ResourceService(val openAmDAO: OpenAmDAO, val directoryDAO: JndiDirectoryD
       val updatedTypes = diff -- newTypes.keySet
       val orphanTypes = (openamActionsByName.toSet diff configActionsByName.toSet).map(_._1)
 
-      logger.warn(s"WARNING: the following types exist in OpenAM but were not specified in config: ${orphanTypes.mkString(", ")}")
+      if(orphanTypes.nonEmpty) {
+        logger.warn(s"WARNING: the following types exist in OpenAM but were not specified in config: ${orphanTypes.mkString(", ")}")
+      }
 
       val newResourceTypes = configResourceTypes.filter(rt => newTypes.keySet.contains(rt.name))
       val updatedResourceTypes = existingResourceTypes.filter(rt => updatedTypes.keySet.contains(rt.name)).map(x => x.copy(actions = configActionsByName(x.name).map(_ -> false).toMap))

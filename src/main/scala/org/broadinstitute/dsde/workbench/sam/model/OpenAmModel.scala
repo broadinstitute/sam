@@ -46,6 +46,7 @@ case class OpenAmPolicy(
 case class OpenAmPolicySubject(subjectValues: Seq[String], `type`: String = "Identity")
 
 case class OpenAmResourceTypePayload(name: String, actions: Map[String, Boolean], patterns: Set[String])
+
 case class OpenAmResourceType(name: String, actions: Map[String, Boolean], patterns: Set[String], uuid: String)
 
 case class OpenAmResourceTypeList(result: Set[OpenAmResourceType])
