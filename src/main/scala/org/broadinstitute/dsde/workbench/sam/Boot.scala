@@ -45,7 +45,7 @@ object Boot extends App with LazyLogging {
         override val resourceTypes: Map[String, ResourceType] = resourceTypesWithUuids.map(rt => rt.name -> rt).toMap
       }
 
-      Http().bindAndHandle(samRoutes.route, "localhost", 8080)
+      Http().bindAndHandle(samRoutes.route, "0.0.0.0", 8080)
     } recover {
       case t: Throwable =>
         logger.error("FATAL - failure starting http server", t)
