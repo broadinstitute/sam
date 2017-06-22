@@ -46,11 +46,12 @@ class ResourceService(val openAmDAO: OpenAmDAO, val directoryDAO: JndiDirectoryD
   def createResource(resourceType: ResourceType, resourceId: String, userInfo: UserInfo): Future[Set[OpenAmPolicy]] = {
     Future.traverse(resourceType.roles) { role =>
       val roleMembers: Set[SamSubject] = role.roleName match {
-        case resourceType.name => Set(userInfo.userId)
+        case resourceType.ownerRoleName => Set(userInfo.userId)
         case _ => Set.empty
       }
       for {
         group <- directoryDAO.createGroup(SamGroup(SamGroupName(s"${resourceType.name}-${resourceId}-${role.roleName}"), roleMembers))
+        adminUserInfo <- getOpenAmAdminUserInfo
         policy <- openAmDAO.createPolicy(
           group.name.value,
           s"policy for ${group.name.value}",
@@ -58,7 +59,7 @@ class ResourceService(val openAmDAO: OpenAmDAO, val directoryDAO: JndiDirectoryD
           Seq(resourceUrn(resourceType, resourceId)),
           Seq(group.name),
           resourceType.uuid.getOrElse(throw new WorkbenchException("resource type uuid not set")),
-          userInfo
+          adminUserInfo
         )
       } yield policy
     }
