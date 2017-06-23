@@ -5,14 +5,14 @@ import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.sam.WorkbenchException
 import org.broadinstitute.dsde.workbench.sam.directory.JndiDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.openam.OpenAmDAO
+import org.broadinstitute.dsde.workbench.sam.openam.HttpOpenAmDAO
 
 import scala.concurrent.{ExecutionContext, Future}
 
 /**
   * Created by mbemis on 5/22/17.
   */
-class ResourceService(val openAmDAO: OpenAmDAO, val directoryDAO: JndiDirectoryDAO)(implicit val executionContext: ExecutionContext) extends LazyLogging {
+class ResourceService(val openAmDAO: HttpOpenAmDAO, val directoryDAO: JndiDirectoryDAO)(implicit val executionContext: ExecutionContext) extends LazyLogging {
 
   def listResourceTypes(userInfo: UserInfo): Future[Set[OpenAmResourceType]] = {
     openAmDAO.listResourceTypes(userInfo)

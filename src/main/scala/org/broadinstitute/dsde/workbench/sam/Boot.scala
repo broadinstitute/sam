@@ -9,7 +9,7 @@ import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.sam.api.{SamRoutes, StandardUserInfoDirectives}
 import org.broadinstitute.dsde.workbench.sam.directory._
 import org.broadinstitute.dsde.workbench.sam.model.{ResourceType, SamUserId, UserInfo}
-import org.broadinstitute.dsde.workbench.sam.openam.{OpenAmDAO, _}
+import org.broadinstitute.dsde.workbench.sam.openam.{HttpOpenAmDAO, _}
 import org.broadinstitute.dsde.workbench.sam.service.ResourceService
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -29,7 +29,7 @@ object Boot extends App with LazyLogging {
 
     val openAmConfig = config.as[OpenAmConfig]("openam")
 
-    val accessManagementDAO = new OpenAmDAO(openAmConfig, directoryConfig)
+    val accessManagementDAO = new HttpOpenAmDAO(openAmConfig, directoryConfig)
     val directoryDAO = new JndiDirectoryDAO(directoryConfig)
 
     val resourceService = new ResourceService(accessManagementDAO, directoryDAO)
