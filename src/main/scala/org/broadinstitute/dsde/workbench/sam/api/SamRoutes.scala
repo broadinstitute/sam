@@ -7,23 +7,30 @@ import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directives._
-import akka.http.scaladsl.server.{ExceptionHandler, Route}
+import akka.http.scaladsl.server.{Directive0, Directive1, ExceptionHandler, Route}
 import akka.http.scaladsl.server.RouteResult.Complete
 import akka.http.scaladsl.server.directives.{DebuggingDirectives, LogEntry, LoggingMagnet}
 import akka.stream.Materializer
 import akka.stream.scaladsl.Sink
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.sam.WorkbenchExceptionWithErrorReport
-import org.broadinstitute.dsde.workbench.sam.model.ErrorReport
-
+import org.broadinstitute.dsde.workbench.sam.model.{ErrorReport, UserInfo}
 import SprayJsonSupport._
+import org.broadinstitute.dsde.workbench.sam.service.ResourceService
 
 import scala.concurrent.{ExecutionContext, Future}
 
 /**
   * Created by dvoet on 5/17/17.
   */
-class SamRoutes(implicit val system: ActorSystem, val materializer: Materializer, val executionContext: ExecutionContext) extends LazyLogging {
+abstract class SamRoutes(val resourceService: ResourceService)(implicit val system: ActorSystem, val materializer: Materializer, val executionContext: ExecutionContext)
+  extends LazyLogging
+  with ResourceRoutes {
+
+  def route: server.Route = (logRequestResult & handleExceptions(myExceptionHandler)) {
+    resourceRoutes
+  }
+
   private val myExceptionHandler = {
     import org.broadinstitute.dsde.workbench.sam.model.ErrorReportJsonSupport._
 
@@ -35,8 +42,8 @@ class SamRoutes(implicit val system: ActorSystem, val materializer: Materializer
     }
   }
 
-  // basis for this lifted from http://stackoverflow.com/questions/32475471/how-does-one-log-akka-http-client-requests
-  private def logRequestResult(route: => Route) = {
+  // basis for logRequestResult lifted from http://stackoverflow.com/questions/32475471/how-does-one-log-akka-http-client-requests
+  private def logRequestResult: Directive0 = {
     def entityAsString(entity: HttpEntity): Future[String] = {
       entity.dataBytes
         .map(_.decodeString(entity.contentType.charsetOption.getOrElse(HttpCharsets.`UTF-8`).value))
@@ -56,20 +63,9 @@ class SamRoutes(implicit val system: ActorSystem, val materializer: Materializer
       }
       entry.map(_.logTo(logger))
     }
-    DebuggingDirectives.logRequestResult(LoggingMagnet(log => myLoggingFunction(log)))(route)
+
+    DebuggingDirectives.logRequestResult(LoggingMagnet(log => myLoggingFunction(log)))
   }
-
-
-  def route: server.Route =
-    logRequestResult {
-      handleExceptions(myExceptionHandler) {
-        pathSingleSlash {
-          get {
-            complete(Future("hello"))
-          }
-        }
-      }
-    }
 
   def statusCodeCreated[T](response: T): (StatusCode, T) = (StatusCodes.Created, response)
 

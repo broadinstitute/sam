@@ -16,5 +16,5 @@ Revolver.enableDebugging(port = 5051, suspend = false)
 // for some reason using ++= causes revolver not to find the main class so do the stupid map below
 //javaOptions in reStart ++= sys.env.getOrElse("JAVA_OPTS", "").split(" ").toSeq
 sys.env.getOrElse("JAVA_OPTS", "").split(" ").toSeq.map { opt =>
-  javacOptions in reStart += opt
+  javaOptions in reStart += opt
 }

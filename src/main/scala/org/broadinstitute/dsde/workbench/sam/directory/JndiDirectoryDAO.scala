@@ -15,7 +15,7 @@ import scala.collection.JavaConverters._
 /**
  * Created by dvoet on 11/5/15.
  */
-class JndiDirectoryDAO(directoryConfig: DirectoryConfig)(implicit executionContext: ExecutionContext) extends DirectoryDAO {
+class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit executionContext: ExecutionContext) extends DirectoryDAO with DirectorySubjectNameSupport {
 
   /** a bunch of attributes used in directory entries */
   private object Attr {
@@ -172,29 +172,6 @@ class JndiDirectoryDAO(directoryConfig: DirectoryConfig)(implicit executionConte
     ctx.close()
     t.get
   }
-
-  private def groupDn(groupName: SamGroupName) = s"cn=${groupName.value},ou=groups,${directoryConfig.baseDn}"
-  private def userDn(samUserId: SamUserId) = s"uid=${samUserId.value},ou=people,${directoryConfig.baseDn}"
-  private def subjectDn(subject: SamSubject) = subject match {
-    case g: SamGroupName => groupDn(g)
-    case u: SamUserId => userDn(u)
-  }
-
-  private def dnToSubject(dn: String): SamSubject = {
-    dn.split(",").toList match {
-      case name :: "ou=groups" :: tail => SamGroupName(name.stripPrefix("cn="))
-      case name :: "ou=people" :: tail => SamUserId(name.stripPrefix("uid="))
-      case _ => throw new WorkbenchException(s"unexpected dn [$dn]")
-    }
-  }
-
-  private def dnToGroupName(dn:String): SamGroupName = {
-    dnToSubject(dn) match {
-      case gn: SamGroupName => gn
-      case _ => throw new WorkbenchException(s"not a group dn [$dn]")
-    }
-  }
-
 }
 
 
