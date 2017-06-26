@@ -46,8 +46,7 @@ trait ResourceRoutes extends UserInfoDirectives {
                   pathEndOrSingleSlash {
                     get {
                       complete(resourceService.hasPermission(resourceType, resourceId, action, userInfo).map { hasPermission =>
-                        if(hasPermission) StatusCodes.NoContent
-                        else StatusCodes.Forbidden
+                        StatusCodes.OK -> hasPermission.toString
                       })
                     }
                   }

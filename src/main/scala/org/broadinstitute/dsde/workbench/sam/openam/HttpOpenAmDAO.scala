@@ -67,7 +67,7 @@ class HttpOpenAmDAO(openAmConfig: OpenAmConfig, protected val directoryConfig: D
   def createPolicy(name: String, description: String, actions: Seq[String], resources: Seq[String], subjects: Seq[SamSubject], resourceType: String, userInfo: UserInfo): Future[OpenAmPolicy] = {
     val action = "create"
     val policiesUrl = openAmConfig.url + s"/json/policies/?_action=$action"
-    val openAmPolicySubject = OpenAmPolicySubject(subjects.map(subjectDn))
+    val openAmPolicySubject = OpenAmPolicySubject(subjects.map(policySubjectDn))
     val openAmPolicy = OpenAmPolicy(name, true, description, "iPlanetAMWebAgentService", actions.map(_ -> true).toMap, resources, openAmPolicySubject, resourceType)
 
     httpRequest[OpenAmPolicy, OpenAmPolicy](policiesUrl, Option(openAmPolicy), HttpMethods.POST, List(authorizationHeader(userInfo)))
