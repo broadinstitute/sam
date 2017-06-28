@@ -5,20 +5,17 @@ import java.util.UUID
 import com.typesafe.config.ConfigFactory
 import org.scalatest.{FlatSpec, Matchers}
 import net.ceedubs.ficus.Ficus._
+import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.model._
 
-import scala.concurrent.{Await, Awaitable}
-import scala.concurrent.duration.Duration
 import scala.concurrent.ExecutionContext.Implicits.global
 
 /**
   * Created by dvoet on 5/30/17.
   */
-class JndiDirectoryDAOSpec extends FlatSpec with Matchers {
+class JndiDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport {
   val directoryConfig = ConfigFactory.load().as[DirectoryConfig]("directory")
   val dao = new JndiDirectoryDAO(directoryConfig)
-
-  private def runAndWait[T](f: Awaitable[T]): T = Await.result(f, Duration.Inf)
 
   "JndiGroupDirectoryDAO" should "create, read, delete groups" in {
     val groupName = SamGroupName(UUID.randomUUID().toString)
