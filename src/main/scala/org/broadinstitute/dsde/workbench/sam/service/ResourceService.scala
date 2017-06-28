@@ -41,15 +41,40 @@ class ResourceService(val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: Jn
         case _ => Set.empty
       }
       for {
-        group <- directoryDAO.createGroup(SamGroup(SamGroupName(s"${resourceType.name}-${resourceName.value}-${role.roleName}"), roleMembers))
+        group <- directoryDAO.createGroup(SamGroup(roleGroupName(resourceType, resourceName, role), roleMembers))
         policy <- accessPolicyDAO.createPolicy(AccessPolicy(
           AccessPolicyId(UUID.randomUUID().toString),
           role.actions,
           resourceType.name,
           resourceName,
-          group.name
+          group.name,
+          Option(role.roleName)
         ))
       } yield policy
+    }
+  }
+
+  private def roleGroupName(resourceType: ResourceType, resourceName: ResourceName, role: ResourceRole) = {
+    SamGroupName(s"${resourceType.name}-${resourceName.value}-${role.roleName.value}")
+  }
+
+  /**
+    * Removes all policies and role groups for a resource
+    *
+    * @param resourceType
+    * @param resourceName
+    * @return the number of policies removed
+    */
+  def deleteResource(resourceType: ResourceType, resourceName: ResourceName): Future[Int] = {
+    accessPolicyDAO.listAccessPolicies(resourceType.name, resourceName).flatMap { policies =>
+      Future.traverse(policies) { policy =>
+        accessPolicyDAO.deletePolicy(policy.id) flatMap { _ =>
+          policy.subject match {
+            case group: SamGroupName if policy.role.isDefined => directoryDAO.deleteGroup(group)
+            case _ => Future.successful(())
+          }
+        }
+      }.map(_.size)
     }
   }
 }

@@ -24,6 +24,15 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
     val subject = "subject"
     val action = "action"
     val policyId = "policyId"
+    val role = "role"
+  }
+
+  def init(): Future[Unit] = {
+    for {
+      _ <- removePolicySchema()
+      _ <- createPolicySchema()
+      _ <- createPoliciesOrgUnit()
+    } yield ()
   }
 
   def removePolicySchema(): Future[Unit] = withContext { ctx =>
@@ -35,6 +44,7 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
     Try { schema.destroySubcontext("AttributeDefinition/" + Attr.subject) }
     Try { schema.destroySubcontext("AttributeDefinition/" + Attr.action) }
     Try { schema.destroySubcontext("AttributeDefinition/" + Attr.policyId) }
+    Try { schema.destroySubcontext("AttributeDefinition/" + Attr.role) }
   }
 
   def createPolicySchema(): Future[Unit] = withContext { ctx =>
@@ -45,6 +55,7 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
     createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.3", Attr.subject, "subject applicable to a policy", true)
     createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.4", Attr.action, "actions applicable to a policy", false)
     createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.5", Attr.policyId, "id of a policy", true)
+    createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.6", Attr.role, "role for the policy if it is for a role", true)
 
     val attrs = new BasicAttributes(true) // Ignore case
     attrs.put("NUMERICOID", "1.3.6.1.4.1.18060.0.4.3.2.0")
@@ -61,7 +72,9 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
     must.add(Attr.policyId)
     attrs.put(must)
 
-    val may = new BasicAttribute("MAY", Attr.action)
+    val may = new BasicAttribute("MAY")
+    may.add(Attr.action)
+    may.add(Attr.role)
     attrs.put(may)
 
 
@@ -119,6 +132,7 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
           myAttrs.put(Attr.resource, policy.resource.value)
           myAttrs.put(Attr.subject, subjectDn(policy.subject))
           myAttrs.put(Attr.policyId, policy.id.value)
+          policy.role.foreach(role => myAttrs.put(Attr.role, role.value))
 
           myAttrs
         }
@@ -148,7 +162,8 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
         searchResult.getAttributes.get(Attr.action).getAll.asScala.map(a => ResourceAction(a.toString)).toSet,
         ResourceTypeName(searchResult.getAttributes.get(Attr.resourceType).get().toString),
         ResourceName(searchResult.getAttributes.get(Attr.resource).get().toString),
-        dnToSubject(searchResult.getAttributes.get(Attr.subject).get().toString)
+        dnToSubject(searchResult.getAttributes.get(Attr.subject).get().toString),
+        Option(searchResult.getAttributes.get(Attr.role)).map(attr => ResourceRoleName(attr.get().toString))
       )
     }
 
