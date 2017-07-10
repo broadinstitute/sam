@@ -113,38 +113,32 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
   }
 
   override def createPolicy(policy: AccessPolicy): Future[AccessPolicy] = withContext { ctx =>
-    try {
-      val policyContext = new BaseDirContext {
-        override def getAttributes(name: String): Attributes = {
-          val myAttrs = new BasicAttributes(true)  // Case ignore
+    val policyContext = new BaseDirContext {
+      override def getAttributes(name: String): Attributes = {
+        val myAttrs = new BasicAttributes(true)  // Case ignore
 
-          val oc = new BasicAttribute("objectclass")
-          Seq("top", "policy").foreach(oc.add)
-          myAttrs.put(oc)
+        val oc = new BasicAttribute("objectclass")
+        Seq("top", "policy").foreach(oc.add)
+        myAttrs.put(oc)
 
-          if (policy.actions.nonEmpty) {
-            val actions = new BasicAttribute(Attr.action)
-            policy.actions.foreach(action => actions.add(action.value))
-            myAttrs.put(actions)
-          }
-
-          myAttrs.put(Attr.resourceType, policy.resourceType.value)
-          myAttrs.put(Attr.resource, policy.resource.value)
-          myAttrs.put(Attr.subject, subjectDn(policy.subject))
-          myAttrs.put(Attr.policyId, policy.id.value)
-          policy.role.foreach(role => myAttrs.put(Attr.role, role.value))
-
-          myAttrs
+        if (policy.actions.nonEmpty) {
+          val actions = new BasicAttribute(Attr.action)
+          policy.actions.foreach(action => actions.add(action.value))
+          myAttrs.put(actions)
         }
+
+        myAttrs.put(Attr.resourceType, policy.resourceType.value)
+        myAttrs.put(Attr.resource, policy.resource.value)
+        myAttrs.put(Attr.subject, subjectDn(policy.subject))
+        myAttrs.put(Attr.policyId, policy.id.value)
+        policy.role.foreach(role => myAttrs.put(Attr.role, role.value))
+
+        myAttrs
       }
-
-      ctx.bind(policyDn(policy), policyContext)
-      policy
-
-    } catch {
-      case e: NameAlreadyBoundException =>
-        throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, e.getMessage))
     }
+
+    ctx.bind(policyDn(policy), policyContext)
+    policy
   }
 
   private val policiesOu = s"ou=policies,${directoryConfig.baseDn}"

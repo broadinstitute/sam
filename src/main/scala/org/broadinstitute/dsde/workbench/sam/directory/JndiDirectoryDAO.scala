@@ -54,7 +54,7 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
 
     } catch {
       case e: NameAlreadyBoundException =>
-        throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, e.getMessage))
+        throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"group name ${group.name.value} already exists"))
     }
   }
 
@@ -112,7 +112,7 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
       user
     } catch {
       case e: NameAlreadyBoundException =>
-        throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, e.getMessage))
+        throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"user with id ${user.id.value} already exists"))
     }
   }
 

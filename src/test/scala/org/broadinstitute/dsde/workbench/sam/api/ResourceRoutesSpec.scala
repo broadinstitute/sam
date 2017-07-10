@@ -17,7 +17,7 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     extends SamRoutes(resourceService) with MockUserInfoDirectives
 
   "ResourceRoutes" should "404 for unknown resource type" in {
-    val samRoutes = new TestSamRoutes(Map.empty, null, UserInfo("", SamUserId("")))
+    val samRoutes = new TestSamRoutes(Map.empty, null, UserInfo("", SamUserId(""), SamUserEmail(""), 0))
 
     Get("/resource/foo/bar/action") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
@@ -26,7 +26,7 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
   }
 
   it should "list all resource types" in {
-    val samRoutes = new TestSamRoutes(Map.empty, null, UserInfo("", SamUserId("")))
+    val samRoutes = new TestSamRoutes(Map.empty, null, UserInfo("", SamUserId(""), SamUserEmail(""), 0))
 
     Get("/resourceTypes") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK

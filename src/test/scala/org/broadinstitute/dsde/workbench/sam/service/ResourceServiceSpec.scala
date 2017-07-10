@@ -35,7 +35,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     val policies = runAndWait(service.createResource(
       resourceType,
       resourceName,
-      UserInfo("token", SamUserId("userid"))
+      UserInfo("token", SamUserId("userid"), SamUserEmail("user@company.com"), 0)
     ))
 
     val ownerGroupName = SamGroupName(s"${resourceType.name}-${resourceName.value}-owner")
@@ -80,7 +80,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     val resourceName1 = ResourceName("resource1")
     val resourceName2 = ResourceName("resource2")
 
-    val userInfo = UserInfo("token", SamUserId(UUID.randomUUID().toString))
+    val userInfo = UserInfo("token", SamUserId(UUID.randomUUID().toString), SamUserEmail("user@company.com"), 0)
     runAndWait(dirDAO.createUser(SamUser(userInfo.userId, "first", "last", None)))
 
     runAndWait(service.createResource(

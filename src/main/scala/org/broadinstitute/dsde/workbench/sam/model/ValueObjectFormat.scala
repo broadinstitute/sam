@@ -7,6 +7,8 @@ import spray.json.{DeserializationException, JsString, JsValue, RootJsonFormat}
   */
 trait ValueObject {
   val value: String
+
+  override def toString: String = value
 }
 
 case class ValueObjectFormat[T <: ValueObject](create: String => T) extends RootJsonFormat[T] {
