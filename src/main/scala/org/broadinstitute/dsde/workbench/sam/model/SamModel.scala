@@ -8,23 +8,33 @@ import spray.json.DefaultJsonProtocol
   */
 
 object SamJsonSupport extends DefaultJsonProtocol {
-  implicit def ResourceActionFormat = jsonFormat1(ResourceAction)
+  implicit val ResourceActionFormat = ValueObjectFormat(ResourceAction)
+
+  implicit val ResourceRoleNameFormat = ValueObjectFormat(ResourceRoleName)
 
   implicit val ResourceRoleFormat = jsonFormat2(ResourceRole)
 
-  implicit val ResourceTypeFormat = jsonFormat5(ResourceType)
+  implicit val ResourceTypeNameFormat = ValueObjectFormat(ResourceTypeName)
+
+  implicit val ResourceTypeFormat = jsonFormat4(ResourceType)
 }
 
 sealed trait SamSubject
-case class SamUserId(value: String) extends SamSubject
+case class SamUserId(value: String) extends SamSubject with ValueObject
 case class SamUserEmail(value: String)
 case class SamUser(id: SamUserId, firstName: String, lastName: String, email: Option[SamUserEmail])
 
-case class SamGroupName(value: String) extends SamSubject
+case class SamGroupName(value: String) extends SamSubject with ValueObject
 case class SamGroup(name: SamGroupName, members: Set[SamSubject])
 
-case class ResourceAction(actionName: String)
+case class ResourceAction(value: String) extends ValueObject
+case class ResourceRoleName(value: String) extends ValueObject
+case class ResourceRole(roleName: ResourceRoleName, actions: Set[ResourceAction])
 
-case class ResourceRole(roleName: String, actions: Set[ResourceAction])
+case class ResourceTypeName(value: String) extends ValueObject
 
-case class ResourceType(name: String, actions: Set[String], roles: Set[ResourceRole], ownerRoleName: String, uuid: Option[String] = None)
+case class ResourceType(name: ResourceTypeName, actions: Set[ResourceAction], roles: Set[ResourceRole], ownerRoleName: ResourceRoleName)
+
+case class ResourceName(value: String) extends ValueObject
+case class AccessPolicyId(value: String) extends ValueObject
+case class AccessPolicy(id: AccessPolicyId, actions: Set[ResourceAction], resourceType: ResourceTypeName, resource: ResourceName, subject: SamSubject, role: Option[ResourceRoleName])

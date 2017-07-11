@@ -6,7 +6,7 @@ import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directives._
 import org.broadinstitute.dsde.workbench.sam.WorkbenchExceptionWithErrorReport
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
-import org.broadinstitute.dsde.workbench.sam.model.{ErrorReport, ResourceType}
+import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.ResourceService
 
 import scala.concurrent.ExecutionContext
@@ -17,7 +17,7 @@ import scala.concurrent.ExecutionContext
 trait ResourceRoutes extends UserInfoDirectives {
   implicit val executionContext: ExecutionContext
   val resourceService: ResourceService
-  val resourceTypes: Map[String, ResourceType]
+  val resourceTypes: Map[ResourceTypeName, ResourceType]
 
   def resourceRoutes: server.Route =
     pathPrefix("resourceTypes") {
@@ -34,18 +34,18 @@ trait ResourceRoutes extends UserInfoDirectives {
       pathPrefix("resource") {
         requireUserInfo { userInfo =>
           pathPrefix(Segment / Segment) { (resourceTypeName, resourceId) =>
-            val resourceType = resourceTypes.getOrElse(resourceTypeName, throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"resource type $resourceTypeName not found")))
+            val resourceType = resourceTypes.getOrElse(ResourceTypeName(resourceTypeName), throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"resource type $resourceTypeName not found")))
 
             pathEndOrSingleSlash {
               post {
-                complete(resourceService.createResource(resourceType, resourceId, userInfo).map(_ => StatusCodes.NoContent))
+                complete(resourceService.createResource(resourceType, ResourceName(resourceId), userInfo).map(_ => StatusCodes.NoContent))
               }
             } ~
               pathPrefix("action") {
                 pathPrefix(Segment) { action =>
                   pathEndOrSingleSlash {
                     get {
-                      complete(resourceService.hasPermission(resourceType, resourceId, action, userInfo).map { hasPermission =>
+                      complete(resourceService.hasPermission(resourceType, ResourceName(resourceId), ResourceAction(action), userInfo).map { hasPermission =>
                         StatusCodes.OK -> hasPermission.toString
                       })
                     }
