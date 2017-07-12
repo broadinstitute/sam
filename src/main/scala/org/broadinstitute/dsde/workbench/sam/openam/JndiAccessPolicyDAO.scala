@@ -29,87 +29,8 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
 
   def init(): Future[Unit] = {
     for {
-      _ <- removePolicySchema()
-      _ <- createPolicySchema()
-      _ <- createPoliciesOrgUnit()
+      _ <- withContext { createOrgUnit(_, policiesOu) }
     } yield ()
-  }
-
-  def removePolicySchema(): Future[Unit] = withContext { ctx =>
-    val schema = ctx.getSchema("")
-
-    Try { schema.destroySubcontext("ClassDefinition/policy") }
-    Try { schema.destroySubcontext("AttributeDefinition/" + Attr.resourceType) }
-    Try { schema.destroySubcontext("AttributeDefinition/" + Attr.resource) }
-    Try { schema.destroySubcontext("AttributeDefinition/" + Attr.subject) }
-    Try { schema.destroySubcontext("AttributeDefinition/" + Attr.action) }
-    Try { schema.destroySubcontext("AttributeDefinition/" + Attr.policyId) }
-    Try { schema.destroySubcontext("AttributeDefinition/" + Attr.role) }
-  }
-
-  def createPolicySchema(): Future[Unit] = withContext { ctx =>
-    val schema = ctx.getSchema("")
-
-    createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.1", Attr.resourceType, "type of a resource", true)
-    createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.2", Attr.resource, "name of a resource", true)
-    createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.3", Attr.subject, "subject applicable to a policy", true)
-    createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.4", Attr.action, "actions applicable to a policy", false)
-    createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.5", Attr.policyId, "id of a policy", true)
-    createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.6", Attr.role, "role for the policy if it is for a role", true)
-
-    val attrs = new BasicAttributes(true) // Ignore case
-    attrs.put("NUMERICOID", "1.3.6.1.4.1.18060.0.4.3.2.0")
-    attrs.put("NAME", "policy")
-    attrs.put("DESC", "list actions for a subject on a resource")
-    attrs.put("SUP", "top")
-    attrs.put("STRUCTURAL", "true")
-
-    val must = new BasicAttribute("MUST")
-    must.add("objectclass")
-    must.add(Attr.resourceType)
-    must.add(Attr.resource)
-    must.add(Attr.subject)
-    must.add(Attr.policyId)
-    attrs.put(must)
-
-    val may = new BasicAttribute("MAY")
-    may.add(Attr.action)
-    may.add(Attr.role)
-    attrs.put(may)
-
-
-    // Add the new schema object for "fooObjectClass"
-    schema.createSubcontext("ClassDefinition/policy", attrs)
-  }
-
-  def createPoliciesOrgUnit(): Future[Unit] = withContext { ctx =>
-    try {
-      val policiesContext = new BaseDirContext {
-        override def getAttributes(name: String): Attributes = {
-          val myAttrs = new BasicAttributes(true)  // Case ignore
-
-          val oc = new BasicAttribute("objectclass")
-          Seq("top", "organizationalUnit").foreach(oc.add)
-          myAttrs.put(oc)
-
-          myAttrs
-        }
-      }
-
-      ctx.bind(policiesOu, policiesContext)
-
-    } catch {
-      case e: NameAlreadyBoundException => // ignore
-    }
-  }
-
-  private def createAttributeDefinition(schema: DirContext, numericOID: String, name: String, description: String, singleValue: Boolean) = {
-    val attributes = new BasicAttributes(true)
-    attributes.put("NUMERICOID", numericOID)
-    attributes.put("NAME", name)
-    attributes.put("DESC", description)
-    if (singleValue) attributes.put("SINGLE-VALUE", singleValue.toString) // note absence of this attribute means multi-value and presence means single, value does not matter
-    schema.createSubcontext(s"AttributeDefinition/$name", attributes)
   }
 
   override def createPolicy(policy: AccessPolicy): Future[AccessPolicy] = withContext { ctx =>

@@ -22,7 +22,7 @@ object SamJsonSupport extends DefaultJsonProtocol {
 sealed trait SamSubject
 case class SamUserId(value: String) extends SamSubject with ValueObject
 case class SamUserEmail(value: String)
-case class SamUser(id: SamUserId, firstName: String, lastName: String, email: Option[SamUserEmail])
+case class SamUser(id: SamUserId, email: Option[SamUserEmail])
 
 case class SamGroupName(value: String) extends SamSubject with ValueObject
 case class SamGroup(name: SamGroupName, members: Set[SamSubject])

@@ -3,7 +3,7 @@ package org.broadinstitute.dsde.workbench.sam.directory
 import java.util.UUID
 
 import com.typesafe.config.ConfigFactory
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.{BeforeAndAfterAll, FlatSpec, Matchers}
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.model._
@@ -13,9 +13,13 @@ import scala.concurrent.ExecutionContext.Implicits.global
 /**
   * Created by dvoet on 5/30/17.
   */
-class JndiDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport {
+class JndiDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with BeforeAndAfterAll {
   val directoryConfig = ConfigFactory.load().as[DirectoryConfig]("directory")
   val dao = new JndiDirectoryDAO(directoryConfig)
+
+  override protected def beforeAll(): Unit = {
+    runAndWait(dao.init())
+  }
 
   "JndiGroupDirectoryDAO" should "create, read, delete groups" in {
     val groupName = SamGroupName(UUID.randomUUID().toString)
@@ -42,7 +46,7 @@ class JndiDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport {
 
   it should "create, read, delete users" in {
     val userId = SamUserId(UUID.randomUUID().toString)
-    val user = SamUser(userId, "first", "last", Option(SamUserEmail("foo@bar.com")))
+    val user = SamUser(userId, Option(SamUserEmail("foo@bar.com")))
 
     assertResult(None) {
       runAndWait(dao.loadUser(user.id))
@@ -65,7 +69,7 @@ class JndiDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport {
 
   it should "list groups" in {
     val userId = SamUserId(UUID.randomUUID().toString)
-    val user = SamUser(userId, "first", "last", Option(SamUserEmail("foo@bar.com")))
+    val user = SamUser(userId, Option(SamUserEmail("foo@bar.com")))
 
     val groupName1 = SamGroupName(UUID.randomUUID().toString)
     val group1 = SamGroup(groupName1, Set(userId))
@@ -77,6 +81,8 @@ class JndiDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport {
     runAndWait(dao.createGroup(group1))
     runAndWait(dao.createGroup(group2))
 
+    println(s"group1: $groupName1")
+    println(s"group2: $groupName2")
     try {
       assertResult(Set(groupName1, groupName2)) {
         runAndWait(dao.listUsersGroups(userId))
@@ -90,7 +96,7 @@ class JndiDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport {
 
   it should "add/remove groups" in {
     val userId = SamUserId(UUID.randomUUID().toString)
-    val user = SamUser(userId, "first", "last", Option(SamUserEmail("foo@bar.com")))
+    val user = SamUser(userId, Option(SamUserEmail("foo@bar.com")))
 
     val groupName1 = SamGroupName(UUID.randomUUID().toString)
     val group1 = SamGroup(groupName1, Set.empty)

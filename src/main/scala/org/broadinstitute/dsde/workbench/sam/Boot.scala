@@ -37,18 +37,25 @@ object Boot extends App with LazyLogging {
       override val resourceTypes: Map[ResourceTypeName, ResourceType] = configResourceTypes.map(rt => rt.name -> rt).toMap
     }
 
-    accessPolicyDAO.init() recover {
-      case t: Throwable =>
-        logger.error("FATAL - could not init access policy dao", t)
-        throw t
-    } flatMap { _ =>
-      Http().bindAndHandle(samRoutes.route, "0.0.0.0", 8080)
-    } recover {
-      case t: Throwable =>
-        logger.error("FATAL - failure starting http server", t)
-        throw t
-    }
+    for {
+      _ <- accessPolicyDAO.init() recover {
+        case t: Throwable =>
+          logger.error("FATAL - could not init access policy dao", t)
+          throw t
+      }
 
+      _ <- directoryDAO.init() recover {
+        case t: Throwable =>
+          logger.error("FATAL - could not init directory dao", t)
+          throw t
+      }
+
+      _ <- Http().bindAndHandle(samRoutes.route, "0.0.0.0", 8080) recover {
+        case t: Throwable =>
+          logger.error("FATAL - failure starting http server", t)
+          throw t
+      }
+    } yield ()
   }
 
   startup()

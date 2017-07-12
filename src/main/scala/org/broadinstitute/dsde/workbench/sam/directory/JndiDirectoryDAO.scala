@@ -20,13 +20,18 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
 
   /** a bunch of attributes used in directory entries */
   private object Attr {
-    val member = "uniqueMember"
-    val memberOf = "isMemberOf"
+    val member = "member"
+    val memberOf = "memberof"
     val email = "mail"
-    val givenName = "givenName"
     val sn = "sn"
     val cn = "cn"
-    val uid = "uid"
+  }
+
+  def init(): Future[Unit] = {
+    for {
+      _ <- withContext { createOrgUnit(_, groupsOu) }
+      _ <- withContext { createOrgUnit(_, peopleOu) }
+    } yield ()
   }
 
   override def createGroup(group: SamGroup): Future[SamGroup] = withContext { ctx =>
@@ -36,14 +41,13 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
           val myAttrs = new BasicAttributes(true)  // Case ignore
 
           val oc = new BasicAttribute("objectclass")
-          Seq("top", "groupofuniquenames").foreach(oc.add)
+          Seq("top", "groupofnames").foreach(oc.add)
           myAttrs.put(oc)
 
-          if (!group.members.isEmpty) {
-            val members = new BasicAttribute(Attr.member)
-            group.members.foreach(subject => members.add(subjectDn(subject)))
-            myAttrs.put(members)
-          }
+          val members = new BasicAttribute(Attr.member)
+          members.add("") // it is required by the ldap schema to always have 1 member
+          group.members.foreach(subject => members.add(subjectDn(subject)))
+          myAttrs.put(members)
 
           myAttrs
         }
@@ -75,7 +79,7 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
       val attributes = ctx.getAttributes(groupDn(groupName), Array(Attr.cn, Attr.member))
 
       val cn = getAttribute[String](attributes, Attr.cn).getOrElse(throw new WorkbenchException(s"${Attr.cn} attribute missing: $groupName"))
-      val memberDns = getAttributes[String](attributes, Attr.member).getOrElse(Set.empty).toSet
+      val memberDns = getAttributes[String](attributes, Attr.member).getOrElse(Set.empty).toSet - "" // remove the empty member that the schema makes us put in
 
       Option(SamGroup(SamGroupName(cn), memberDns.map(dnToSubject)))
 
@@ -100,9 +104,8 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
             myAttrs.put(new BasicAttribute(Attr.email, email.value))
           }
 
-          myAttrs.put(new BasicAttribute(Attr.sn, user.lastName))
-          myAttrs.put(new BasicAttribute(Attr.givenName, user.firstName))
-          myAttrs.put(new BasicAttribute(Attr.cn, s"${user.firstName} ${user.lastName}"))
+          myAttrs.put(new BasicAttribute(Attr.sn, user.id.value))
+          myAttrs.put(new BasicAttribute(Attr.cn, user.id.value))
 
           myAttrs
         }
@@ -120,12 +123,10 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     Try {
       val attributes = ctx.getAttributes(userDn(userId))
 
-      val uid = getAttribute[String](attributes, Attr.uid).getOrElse(throw new WorkbenchException(s"${Attr.uid} attribute missing: $userId"))
+      val cn = getAttribute[String](attributes, Attr.cn).getOrElse(throw new WorkbenchException(s"${Attr.cn} attribute missing: $userId"))
       val emailOption = getAttribute[String](attributes, Attr.email)
-      val firstName = getAttribute[String](attributes, Attr.givenName).getOrElse(throw new WorkbenchException(s"${Attr.givenName} attribute missing: $userId"))
-      val lastName = getAttribute[String](attributes, Attr.sn).getOrElse(throw new WorkbenchException(s"${Attr.sn} attribute missing: $userId"))
 
-      Option(SamUser(SamUserId(uid), firstName, lastName, emailOption.map(SamUserEmail)))
+      Option(SamUser(SamUserId(cn), emailOption.map(SamUserEmail)))
 
     }.recover {
       case e: NameNotFoundException => None

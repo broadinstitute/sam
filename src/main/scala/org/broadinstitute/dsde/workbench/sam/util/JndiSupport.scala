@@ -27,6 +27,28 @@ trait JndiSupport {
     ctx.close()
     t.get
   }
+
+  protected def createOrgUnit(ctx: DirContext, ou: String): Unit = {
+    try {
+      val ouContext = new BaseDirContext {
+        override def getAttributes(name: String): Attributes = {
+          val myAttrs = new BasicAttributes(true)  // Case ignore
+
+          val oc = new BasicAttribute("objectclass")
+          Seq("top", "organizationalUnit").foreach(oc.add)
+          myAttrs.put(oc)
+
+          myAttrs
+        }
+      }
+
+      ctx.bind(ou, ouContext)
+
+    } catch {
+      case e: NameAlreadyBoundException => // ignore
+    }
+  }
+
 }
 
 /**

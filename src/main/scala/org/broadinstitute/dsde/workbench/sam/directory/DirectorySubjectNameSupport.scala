@@ -9,18 +9,14 @@ import org.broadinstitute.dsde.workbench.sam.model.{SamGroupName, SamSubject, Sa
 trait DirectorySubjectNameSupport {
   protected val directoryConfig: DirectoryConfig
 
-  protected def groupDn(groupName: SamGroupName) = s"cn=${groupName.value},ou=groups,${directoryConfig.baseDn}"
-  //TODO: Is this seriously what we have to do to make policies work?
-  protected def policyGroupDn(groupName: SamGroupName) = s"id=${groupName.value},ou=group,${directoryConfig.baseDn}"
-  protected def userDn(samUserId: SamUserId) = s"uid=${samUserId.value},ou=people,${directoryConfig.baseDn}"
+  protected val groupsOu = s"ou=groups,${directoryConfig.baseDn}"
+  protected val peopleOu = s"ou=people,${directoryConfig.baseDn}"
+
+  protected def groupDn(groupName: SamGroupName) = s"cn=${groupName.value},$groupsOu"
+  protected def userDn(samUserId: SamUserId) = s"cn=${samUserId.value},$peopleOu"
 
   protected def subjectDn(subject: SamSubject) = subject match {
     case g: SamGroupName => groupDn(g)
-    case u: SamUserId => userDn(u)
-  }
-
-  protected def policySubjectDn(subject: SamSubject) = subject match {
-    case g: SamGroupName => policyGroupDn(g)
     case u: SamUserId => userDn(u)
   }
 
