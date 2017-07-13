@@ -19,7 +19,7 @@ function make_jar()
 #    bash ./docker/run-ldap.sh
     
     # Get the last commit hash of the model directory and set it as an environment variable
-    GIT_MODEL_HASH=$(git log -n 1 --pretty=format:%h model)
+    GIT_MODEL_HASH=$(git log -n 1 --pretty=format:%h)
     
     # make jar.  cache sbt dependencies.
     docker run --rm -e DIRECTORY_URL=$DIRECTORY_URL -e GIT_MODEL_HASH=$GIT_MODEL_HASH -e DIRECTORY_PASSWORD=$DIRECTORY_PASSWORD -v $PWD:/working -v jar-cache:/root/.ivy -v jar-cache:/root/.ivy2 broadinstitute/scala-baseimage /working/docker/install.sh /working
