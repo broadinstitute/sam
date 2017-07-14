@@ -3,10 +3,10 @@ package org.broadinstitute.dsde.workbench.sam.directory
 import java.util.UUID
 
 import com.typesafe.config.ConfigFactory
-import org.scalatest.{FlatSpec, Matchers}
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.scalatest.{FlatSpec, Matchers}
 
 import scala.concurrent.ExecutionContext.Implicits.global
 
@@ -42,7 +42,7 @@ class JndiDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport {
 
   it should "create, read, delete users" in {
     val userId = SamUserId(UUID.randomUUID().toString)
-    val user = SamUser(userId, "first", "last", Option(SamUserEmail("foo@bar.com")))
+    val user = SamUser(userId, Option(SamUserEmail("foo@bar.com")))
 
     assertResult(None) {
       runAndWait(dao.loadUser(user.id))
@@ -65,7 +65,7 @@ class JndiDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport {
 
   it should "list groups" in {
     val userId = SamUserId(UUID.randomUUID().toString)
-    val user = SamUser(userId, "first", "last", Option(SamUserEmail("foo@bar.com")))
+    val user = SamUser(userId, Option(SamUserEmail("foo@bar.com")))
 
     val groupName1 = SamGroupName(UUID.randomUUID().toString)
     val group1 = SamGroup(groupName1, Set(userId))
@@ -90,7 +90,7 @@ class JndiDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport {
 
   it should "add/remove groups" in {
     val userId = SamUserId(UUID.randomUUID().toString)
-    val user = SamUser(userId, "first", "last", Option(SamUserEmail("foo@bar.com")))
+    val user = SamUser(userId, Option(SamUserEmail("foo@bar.com")))
 
     val groupName1 = SamGroupName(UUID.randomUUID().toString)
     val group1 = SamGroup(groupName1, Set.empty)

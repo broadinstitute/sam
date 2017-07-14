@@ -16,19 +16,20 @@ import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.sam.WorkbenchExceptionWithErrorReport
 import org.broadinstitute.dsde.workbench.sam.model.{ErrorReport, UserInfo}
 import SprayJsonSupport._
-import org.broadinstitute.dsde.workbench.sam.service.ResourceService
+import org.broadinstitute.dsde.workbench.sam.service.{ResourceService, UserService}
 
 import scala.concurrent.{ExecutionContext, Future}
 
 /**
   * Created by dvoet on 5/17/17.
   */
-abstract class SamRoutes(val resourceService: ResourceService)(implicit val system: ActorSystem, val materializer: Materializer, val executionContext: ExecutionContext)
+abstract class SamRoutes(val resourceService: ResourceService, val userService: UserService)(implicit val system: ActorSystem, val materializer: Materializer, val executionContext: ExecutionContext)
   extends LazyLogging
-  with ResourceRoutes {
+  with ResourceRoutes with UserRoutes {
 
   def route: server.Route = (logRequestResult & handleExceptions(myExceptionHandler)) {
-    resourceRoutes
+    userRoutes ~
+    pathPrefix("api") { resourceRoutes }
   }
 
   private val myExceptionHandler = {
