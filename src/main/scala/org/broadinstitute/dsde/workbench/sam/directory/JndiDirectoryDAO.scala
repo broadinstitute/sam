@@ -93,16 +93,16 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
           val myAttrs = new BasicAttributes(true)  // Case ignore
 
           val oc = new BasicAttribute("objectclass")
-          Seq("top", "inetorgperson").foreach(oc.add)
+          Seq("top", "inetOrgPerson").foreach(oc.add)
           myAttrs.put(oc)
 
           user.email.foreach { email =>
             myAttrs.put(new BasicAttribute(Attr.email, email.value))
           }
 
-          myAttrs.put(new BasicAttribute(Attr.sn, user.lastName))
-          myAttrs.put(new BasicAttribute(Attr.givenName, user.firstName))
-          myAttrs.put(new BasicAttribute(Attr.cn, s"${user.firstName} ${user.lastName}"))
+          myAttrs.put(new BasicAttribute(Attr.sn, user.id.value))
+          myAttrs.put(new BasicAttribute(Attr.cn, user.id.value))
+          myAttrs.put(new BasicAttribute(Attr.uid, user.id.value))
 
           myAttrs
         }
@@ -122,10 +122,8 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
 
       val uid = getAttribute[String](attributes, Attr.uid).getOrElse(throw new WorkbenchException(s"${Attr.uid} attribute missing: $userId"))
       val emailOption = getAttribute[String](attributes, Attr.email)
-      val firstName = getAttribute[String](attributes, Attr.givenName).getOrElse(throw new WorkbenchException(s"${Attr.givenName} attribute missing: $userId"))
-      val lastName = getAttribute[String](attributes, Attr.sn).getOrElse(throw new WorkbenchException(s"${Attr.sn} attribute missing: $userId"))
 
-      Option(SamUser(SamUserId(uid), firstName, lastName, emailOption.map(SamUserEmail)))
+      Option(SamUser(SamUserId(uid), emailOption.map(SamUserEmail)))
 
     }.recover {
       case e: NameNotFoundException => None

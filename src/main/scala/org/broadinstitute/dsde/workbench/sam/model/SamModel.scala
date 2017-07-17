@@ -7,7 +7,9 @@ import spray.json.DefaultJsonProtocol
   * Created by dvoet on 5/26/17.
   */
 
-object SamJsonSupport extends DefaultJsonProtocol {
+object SamJsonSupport {
+  import DefaultJsonProtocol._
+
   implicit val ResourceActionFormat = ValueObjectFormat(ResourceAction)
 
   implicit val ResourceRoleNameFormat = ValueObjectFormat(ResourceRoleName)
@@ -17,12 +19,18 @@ object SamJsonSupport extends DefaultJsonProtocol {
   implicit val ResourceTypeNameFormat = ValueObjectFormat(ResourceTypeName)
 
   implicit val ResourceTypeFormat = jsonFormat4(ResourceType)
+
+  implicit val SamUserIdFormat = ValueObjectFormat(SamUserId)
+
+  implicit val SamUserEmailFormat = ValueObjectFormat(SamUserEmail)
+
+  implicit val SamUserFormat = jsonFormat2(SamUser)
 }
 
 sealed trait SamSubject
 case class SamUserId(value: String) extends SamSubject with ValueObject
-case class SamUserEmail(value: String)
-case class SamUser(id: SamUserId, firstName: String, lastName: String, email: Option[SamUserEmail])
+case class SamUserEmail(value: String) extends ValueObject
+case class SamUser(id: SamUserId, email: Option[SamUserEmail])
 
 case class SamGroupName(value: String) extends SamSubject with ValueObject
 case class SamGroup(name: SamGroupName, members: Set[SamSubject])

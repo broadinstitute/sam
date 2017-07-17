@@ -7,6 +7,7 @@ import akka.http.scaladsl.server.Directives._
 import org.broadinstitute.dsde.workbench.sam.WorkbenchExceptionWithErrorReport
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
+import spray.json.DefaultJsonProtocol._
 import org.broadinstitute.dsde.workbench.sam.service.ResourceService
 
 import scala.concurrent.ExecutionContext
