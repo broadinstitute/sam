@@ -2,6 +2,27 @@ import sbt.Keys._
 import sbt._
 
 object Testing {
+  val validDirectoryUrl = taskKey[Unit]("Determine if directory.url is provided.")
+  val validDirectoryPassword = taskKey[Unit]("Determine if directory.password is provided.")
+
+  val validDirectoryUrlSetting = validDirectoryUrl := {
+    val setting = sys.props.getOrElse("directory.url", "")
+    println(setting)
+    if (setting.length == 0) {
+      val log = streams.value.log
+      log.error("directory.url not set")
+      sys.exit()
+    }
+  }
+
+  val validDirectoryPasswordSetting = validDirectoryPassword := {
+    val setting = sys.props.getOrElse("directory.password", "")
+    if (setting.length == 0) {
+      val log = streams.value.log
+      log.error("directory.password not set")
+      sys.exit()
+    }
+  }
 
   def isIntegrationTest(name: String) = name contains "integrationtest"
 
@@ -36,7 +57,14 @@ object Testing {
     testOptions in Test ++= Seq(Tests.Filter(s => !isIntegrationTest(s))),
     testOptions in IntegrationTest := Seq(Tests.Filter(s => isIntegrationTest(s))),
 
-    parallelExecution in Test := false
+    validDirectoryUrlSetting,
+    validDirectoryPasswordSetting,
+
+    parallelExecution in Test := false,
+	
+    (test in Test) <<= (test in Test) dependsOn(validDirectoryUrl, validDirectoryPassword),
+    (testOnly in Test) <<= (testOnly in Test) dependsOn(validDirectoryUrl, validDirectoryPassword)
+
   )
 
   implicit class ProjectTestSettings(val project: Project) extends AnyVal {
