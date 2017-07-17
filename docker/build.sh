@@ -13,10 +13,11 @@
 set -ex
 PROJECT=SAM
 
+
 function make_jar()
 {
     echo "building jar..."
-#    bash ./docker/run-ldap.sh
+    bash ./docker/run-opendj.sh
     
     # Get the last commit hash of the model directory and set it as an environment variable
     GIT_MODEL_HASH=$(git log -n 1 --pretty=format:%h)
