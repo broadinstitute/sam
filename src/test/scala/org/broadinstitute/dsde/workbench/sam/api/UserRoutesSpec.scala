@@ -19,12 +19,12 @@ class UserRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest {
     val userEmail = SamUserEmail("newuser@new.com")
     val samRoutes = new TestSamRoutes(Map.empty, null, new UserService(new MockDirectoryDAO()), UserInfo("", userId, userEmail, 0))
 
-    Post("/user") ~> samRoutes.route ~> check {
+    Post("/register/user") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
       responseAs[SamUser] shouldEqual SamUser(userId, Option(userEmail))
     }
 
-    Post("/user") ~> samRoutes.route ~> check {
+    Post("/register/user") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Conflict
     }
   }

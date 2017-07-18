@@ -1,0 +1,263 @@
+swagger: '2.0'
+
+info:
+  title: Sam
+  description: |
+    Workbench identity and access management.
+  version: "0.1"
+  license:
+    name: BSD
+    url: http://opensource.org/licenses/BSD-3-Clause
+  termsOfService: https://github.com/broadinstitute/sam
+
+basePath: /
+
+produces:
+  - application/json
+
+security:
+  - googleoauth:
+      - openid
+      - email
+      - profile
+
+securityDefinitions:
+  googleoauth:
+    type: oauth2
+    authorizationUrl: 'https://accounts.google.com/o/oauth2/auth'
+    flow: implicit
+    scopes:
+      openid: open id authorization
+      email: email authorization
+      profile: profile authorization
+
+##########################################################################################
+## PATHS
+##########################################################################################
+paths:
+
+  /api/resource/{resourceTypeName}/{resourceId}:
+    post:
+      summary: Create a new resource
+      responses:
+        204:
+          description: Successfully created resource
+        409:
+          description: Resource already exists
+          schema:
+            $ref: '#/definitions/ErrorReport'
+        500:
+          description: Internal Error
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      parameters:
+        - in: path
+          description: Type of resource to create
+          name: resourceTypeName
+          required: true
+          type: string
+        - in: path
+          description: Id of resource to create, must be unique for all resources of given type
+          name: resourceId
+          required: true
+          type: string
+      operationId: createResource
+      tags:
+        - Resources
+      security:
+        - googleoauth:
+            - openid
+            - email
+            - profile
+
+  /api/resource/{resourceTypeName}/{resourceId}/action/{action}:
+    get:
+      summary: Query if requesting user may perform the action
+      responses:
+        200:
+          description: true if the user may perform the action, false if they may not or the resource does not exist
+          schema:
+            type: boolean
+        500:
+          description: Internal Error
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      parameters:
+        - in: path
+          description: Type of resource to query
+          name: resourceTypeName
+          required: true
+          type: string
+        - in: path
+          description: Id of resource to query
+          name: resourceId
+          required: true
+          type: string
+        - in: path
+          description: Action to perform
+          name: action
+          required: true
+          type: string
+      operationId: resourceAction
+      tags:
+        - Resources
+      security:
+        - googleoauth:
+            - openid
+            - email
+            - profile
+
+  /api/resourceTypes:
+    get:
+      responses:
+        200:
+          description: Success
+          schema:
+            type: array
+            items:
+              $ref: '#/definitions/ResourceType'
+        500:
+          description: Internal Error
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      summary: Lists available resource types
+      operationId: listResourceTypes
+      tags:
+        - Resources
+      security:
+        - googleoauth:
+            - openid
+            - email
+            - profile
+
+  /register/user:
+    post:
+      summary: create current user in the system using login credentials
+      responses:
+        201:
+          description: 'user successfully creates'
+          schema:
+            $ref: '#/definitions/User'
+        409:
+          description: user already exists
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      operationId: createUser
+      tags:
+        - Users
+      security:
+        - googleoauth:
+            - openid
+            - email
+            - profile
+
+##########################################################################################
+## DEFINITIONS
+##########################################################################################
+definitions:
+
+  ErrorReport:
+    description: ''
+    required:
+      - source
+      - message
+      - causes
+      - stackTrace
+    properties:
+      source:
+        type: string
+        description: service causing error
+      message:
+        type: string
+        description: what went wrong
+      exceptionClass:
+        type: string
+        description: class of exception thrown
+      statusCode:
+        type: integer
+        description: HTTP status code
+      causes:
+        type: array
+        description: errors triggering this one
+        items:
+          $ref: '#/definitions/ErrorReport'
+      stackTrace:
+        type: array
+        description: stack trace
+        items:
+          $ref: '#/definitions/StackTraceElement'
+
+  ResourceRole:
+    type: object
+    description: 'specification of a role for a resource'
+    required:
+      - roleName
+      - actions
+    properties:
+      roleName:
+        type: string
+        description: The name of the role
+      actions:
+        type: array
+        items:
+          type: string
+        description: List of actions that can be performed by members of this role
+
+  ResourceType:
+    type: object
+    description: 'specification of a type of resource'
+    required:
+      - name
+      - actions
+      - roles
+      - ownerRoleName
+    properties:
+      name:
+        type: string
+        description: The name of the resource type
+      actions:
+        type: array
+        items:
+          type: string
+        description: List of actions that can be performed on a resource of this type
+      roles:
+        type: array
+        description: List of roles that may exist on a resource of this type
+        items:
+          $ref: '#/definitions/ResourceRole'
+      ownerRoleName:
+        type: string
+        description: The name of the role that can perform administrative functions on a resource of this type
+
+  StackTraceElement:
+    description: ''
+    required:
+      - className
+      - methodName
+      - fileName
+      - lineNumber
+    properties:
+      className:
+        type: string
+        description: class name
+      methodName:
+        type: string
+        description: method name
+      fileName:
+        type: string
+        description: source file name
+      lineNumber:
+        type: integer
+        description: line number
+
+  User:
+    description: ''
+    required:
+      - id
+    properties:
+      id:
+        type: string
+        description: user id
+      email:
+        type: string
+        description: user email

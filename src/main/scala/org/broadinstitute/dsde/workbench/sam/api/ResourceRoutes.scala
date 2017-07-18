@@ -9,6 +9,7 @@ import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import spray.json.DefaultJsonProtocol._
 import org.broadinstitute.dsde.workbench.sam.service.ResourceService
+import spray.json.JsBoolean
 
 import scala.concurrent.ExecutionContext
 
@@ -47,7 +48,7 @@ trait ResourceRoutes extends UserInfoDirectives {
                   pathEndOrSingleSlash {
                     get {
                       complete(resourceService.hasPermission(resourceType, ResourceName(resourceId), ResourceAction(action), userInfo).map { hasPermission =>
-                        StatusCodes.OK -> hasPermission.toString
+                        StatusCodes.OK -> JsBoolean(hasPermission)
                       })
                     }
                   }

@@ -7,6 +7,7 @@ import com.typesafe.config.ConfigFactory
 import com.typesafe.scalalogging.LazyLogging
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.sam.api.{SamRoutes, StandardUserInfoDirectives}
+import org.broadinstitute.dsde.workbench.sam.config._
 import org.broadinstitute.dsde.workbench.sam.directory._
 import org.broadinstitute.dsde.workbench.sam.model.{ResourceType, ResourceTypeName, SamUserId, UserInfo}
 import org.broadinstitute.dsde.workbench.sam.openam._
@@ -34,7 +35,7 @@ object Boot extends App with LazyLogging {
     val userService = new UserService(directoryDAO)
 
     val configResourceTypes = config.as[Set[ResourceType]]("resourceTypes")
-    val samRoutes = new SamRoutes(resourceService, userService) with StandardUserInfoDirectives {
+    val samRoutes = new SamRoutes(resourceService, userService, config.as[SwaggerConfig]("swagger")) with StandardUserInfoDirectives {
       override val resourceTypes: Map[ResourceTypeName, ResourceType] = configResourceTypes.map(rt => rt.name -> rt).toMap
     }
 

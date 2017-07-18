@@ -2,8 +2,10 @@ package org.broadinstitute.dsde.workbench.sam.service
 
 import java.util.UUID
 
+import akka.http.scaladsl.model.StatusCodes
 import com.typesafe.scalalogging.LazyLogging
-import org.broadinstitute.dsde.workbench.sam.directory.JndiDirectoryDAO
+import org.broadinstitute.dsde.workbench.sam.WorkbenchExceptionWithErrorReport
+import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.AccessPolicyDAO
 
@@ -12,7 +14,7 @@ import scala.concurrent.{ExecutionContext, Future}
 /**
   * Created by mbemis on 5/22/17.
   */
-class ResourceService(val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: JndiDirectoryDAO)(implicit val executionContext: ExecutionContext) extends LazyLogging {
+class ResourceService(val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: DirectoryDAO)(implicit val executionContext: ExecutionContext) extends LazyLogging {
 
   def hasPermission(resourceType: ResourceType, resourceName: ResourceName, action: ResourceAction, userInfo: UserInfo): Future[Boolean] = {
     listUserResourceActions(resourceType, resourceName, userInfo).map { _.contains(action) }
@@ -35,22 +37,28 @@ class ResourceService(val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: Jn
   }
 
   def createResource(resourceType: ResourceType, resourceName: ResourceName, userInfo: UserInfo): Future[Set[AccessPolicy]] = {
-    Future.traverse(resourceType.roles) { role =>
-      val roleMembers: Set[SamSubject] = role.roleName match {
-        case resourceType.ownerRoleName => Set(userInfo.userId)
-        case _ => Set.empty
+    accessPolicyDAO.listAccessPolicies(resourceType.name, resourceName) flatMap { policies =>
+      if (policies.isEmpty) {
+        Future.traverse(resourceType.roles) { role =>
+          val roleMembers: Set[SamSubject] = role.roleName match {
+            case resourceType.ownerRoleName => Set(userInfo.userId)
+            case _ => Set.empty
+          }
+          for {
+            group <- directoryDAO.createGroup(SamGroup(roleGroupName(resourceType, resourceName, role), roleMembers))
+            policy <- accessPolicyDAO.createPolicy(AccessPolicy(
+              AccessPolicyId(UUID.randomUUID().toString),
+              role.actions,
+              resourceType.name,
+              resourceName,
+              group.name,
+              Option(role.roleName)
+            ))
+          } yield policy
+        }
+      } else {
+        Future.failed(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"${resourceType.name} $resourceName already exists.")))
       }
-      for {
-        group <- directoryDAO.createGroup(SamGroup(roleGroupName(resourceType, resourceName, role), roleMembers))
-        policy <- accessPolicyDAO.createPolicy(AccessPolicy(
-          AccessPolicyId(UUID.randomUUID().toString),
-          role.actions,
-          resourceType.name,
-          resourceName,
-          group.name,
-          Option(role.roleName)
-        ))
-      } yield policy
     }
   }
 

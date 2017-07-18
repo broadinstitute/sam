@@ -1,6 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.directory
 
 import org.broadinstitute.dsde.workbench.sam.WorkbenchException
+import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
 import org.broadinstitute.dsde.workbench.sam.model.{SamGroupName, SamSubject, SamUserId}
 
 /**
