@@ -1,0 +1,22 @@
+jdk:
+  - oraclejdk8
+
+language: scala
+
+scala:
+  - 2.12.2
+
+sudo: required
+
+services:
+  - docker
+
+before_install:
+  - docker/run-opendj.sh
+
+script:
+  - SBT_OPTS=-Xmx3g sbt clean coverage test -Denv.type=test -Ddirectory.url=ldap://localhost -Ddirectory.password=testtesttest
+
+after_success:
+  - SBT_OPTS=-Xmx3g sbt coveralls
+  - docker rm -f opendj
