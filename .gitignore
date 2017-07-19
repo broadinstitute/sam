@@ -1,7 +1,7 @@
 *.class
 *.log
 configure.rb
-config/
+/config/
 
 # sbt specific
 .sbtopts
