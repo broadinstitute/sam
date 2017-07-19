@@ -1,13 +1,20 @@
 package org.broadinstitute.dsde.workbench.sam
 
-import net.ceedubs.ficus.Ficus._
 import net.ceedubs.ficus.readers.ValueReader
 import org.broadinstitute.dsde.workbench.sam.model._
+import net.ceedubs.ficus.Ficus._
+import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
 
 /**
-  * Created by mbemis on 6/2/17.
+  * Created by dvoet on 7/18/17.
   */
-package object openam {
+package object config {
+  implicit val swaggerReader: ValueReader[SwaggerConfig] = ValueReader.relative { config =>
+    SwaggerConfig(
+      config.getString("googleClientId"),
+      config.getString("realm")
+    )
+  }
 
   implicit val resourceRoleReader: ValueReader[ResourceRole] = ValueReader.relative { config =>
     ResourceRole(
@@ -25,4 +32,12 @@ package object openam {
     )
   }
 
+  implicit val directoryConfigReader: ValueReader[DirectoryConfig] = ValueReader.relative { config =>
+    DirectoryConfig(
+      config.getString("url"),
+      config.getString("user"),
+      config.getString("password"),
+      config.getString("baseDn")
+    )
+  }
 }

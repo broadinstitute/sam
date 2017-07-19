@@ -1,4 +1,4 @@
-package org.broadinstitute.dsde.workbench.sam.directory
+package org.broadinstitute.dsde.workbench.sam.config
 
 /**
   * Created by dvoet on 5/26/17.

@@ -3,11 +3,12 @@ package org.broadinstitute.dsde.workbench.sam.openam
 import java.util.UUID
 
 import com.typesafe.config.ConfigFactory
-import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryConfig, JndiDirectoryDAO}
+import org.broadinstitute.dsde.workbench.sam.directory.JndiDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.scalatest.{BeforeAndAfterAll, FlatSpec, Matchers}
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
+import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
 import org.broadinstitute.dsde.workbench.sam.directory._
 
 import scala.concurrent.ExecutionContext.Implicits.global
