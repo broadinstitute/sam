@@ -9,9 +9,11 @@ import org.broadinstitute.dsde.workbench.sam.model.{SamGroupName, SamSubject, Sa
   */
 trait DirectorySubjectNameSupport {
   protected val directoryConfig: DirectoryConfig
+  val peopleOu = s"ou=people,${directoryConfig.baseDn}"
+  val groupsOu = s"ou=groups,${directoryConfig.baseDn}"
 
-  protected def groupDn(groupName: SamGroupName) = s"cn=${groupName.value},ou=groups,${directoryConfig.baseDn}"
-  protected def userDn(samUserId: SamUserId) = s"uid=${samUserId.value},ou=people,${directoryConfig.baseDn}"
+  protected def groupDn(groupName: SamGroupName) = s"cn=${groupName.value},$groupsOu"
+  protected def userDn(samUserId: SamUserId) = s"uid=${samUserId.value},$peopleOu"
 
   protected def subjectDn(subject: SamSubject) = subject match {
     case g: SamGroupName => groupDn(g)

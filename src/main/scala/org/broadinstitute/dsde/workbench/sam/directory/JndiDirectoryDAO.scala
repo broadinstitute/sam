@@ -121,15 +121,19 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     Try {
       val attributes = ctx.getAttributes(userDn(userId))
 
-      val uid = getAttribute[String](attributes, Attr.uid).getOrElse(throw new WorkbenchException(s"${Attr.uid} attribute missing: $userId"))
-      val emailOption = getAttribute[String](attributes, Attr.email)
-
-      Option(SamUser(SamUserId(uid), emailOption.map(SamUserEmail)))
+      Option(unmarshalUser(attributes))
 
     }.recover {
       case e: NameNotFoundException => None
 
     }.get
+  }
+
+  private def unmarshalUser(attributes: Attributes): SamUser = {
+    val uid = getAttribute[String](attributes, Attr.uid).getOrElse(throw new WorkbenchException(s"${Attr.uid} attribute missing"))
+    val emailOption = getAttribute[String](attributes, Attr.email)
+
+    SamUser(SamUserId(uid), emailOption.map(SamUserEmail))
   }
 
   private def getAttribute[T](attributes: Attributes, key: String): Option[T] = {
@@ -151,6 +155,12 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     ) yield dnToGroupName(attrE.asInstanceOf[String])
 
     groups.toSet
+  }
+
+  override def listFlattenedGroupUsers(groupName: SamGroupName): Future[Set[SamUserId]] = withContext { ctx =>
+    ctx.search(peopleOu, new BasicAttributes(Attr.memberOf, groupDn(groupName), true)).asScala.map { result =>
+      unmarshalUser(result.getAttributes).id
+    }.toSet
   }
 
   private def withContext[T](op: InitialDirContext => T): Future[T] = withContext(directoryConfig.directoryUrl, directoryConfig.user, directoryConfig.password)(op)

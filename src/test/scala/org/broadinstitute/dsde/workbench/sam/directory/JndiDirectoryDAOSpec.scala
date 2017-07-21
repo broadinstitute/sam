@@ -89,6 +89,80 @@ class JndiDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport {
     }
   }
 
+  it should "list flattened group users" in {
+    val userId1 = SamUserId(UUID.randomUUID().toString)
+    val user1 = SamUser(userId1, Option(SamUserEmail("foo@bar.com")))
+    val userId2 = SamUserId(UUID.randomUUID().toString)
+    val user2 = SamUser(userId2, Option(SamUserEmail("foo@bar.com")))
+    val userId3 = SamUserId(UUID.randomUUID().toString)
+    val user3 = SamUser(userId3, Option(SamUserEmail("foo@bar.com")))
+
+    val groupName1 = SamGroupName(UUID.randomUUID().toString)
+    val group1 = SamGroup(groupName1, Set(userId1))
+
+    val groupName2 = SamGroupName(UUID.randomUUID().toString)
+    val group2 = SamGroup(groupName2, Set(userId2, groupName1))
+
+    val groupName3 = SamGroupName(UUID.randomUUID().toString)
+    val group3 = SamGroup(groupName3, Set(userId3, groupName2))
+
+    runAndWait(dao.createUser(user1))
+    runAndWait(dao.createUser(user2))
+    runAndWait(dao.createUser(user3))
+    runAndWait(dao.createGroup(group1))
+    runAndWait(dao.createGroup(group2))
+    runAndWait(dao.createGroup(group3))
+
+    try {
+      assertResult(Set(userId1, userId2, userId3)) {
+        runAndWait(dao.listFlattenedGroupUsers(groupName3))
+      }
+    } finally {
+      runAndWait(dao.deleteUser(userId1))
+      runAndWait(dao.deleteUser(userId2))
+      runAndWait(dao.deleteUser(userId3))
+      runAndWait(dao.deleteGroup(groupName1))
+      runAndWait(dao.deleteGroup(groupName2))
+      runAndWait(dao.deleteGroup(groupName3))
+    }
+  }
+
+  it should "handle circular groups" in {
+    val userId = SamUserId(UUID.randomUUID().toString)
+    val user = SamUser(userId, Option(SamUserEmail("foo@bar.com")))
+
+    val groupName1 = SamGroupName(UUID.randomUUID().toString)
+    val group1 = SamGroup(groupName1, Set(userId))
+
+    val groupName2 = SamGroupName(UUID.randomUUID().toString)
+    val group2 = SamGroup(groupName2, Set(groupName1))
+
+    val groupName3 = SamGroupName(UUID.randomUUID().toString)
+    val group3 = SamGroup(groupName3, Set(groupName2))
+
+    runAndWait(dao.createUser(user))
+    runAndWait(dao.createGroup(group1))
+    runAndWait(dao.createGroup(group2))
+    runAndWait(dao.createGroup(group3))
+
+    runAndWait(dao.addGroupMember(groupName1, groupName3))
+
+    try {
+      assertResult(Set(userId)) {
+        runAndWait(dao.listFlattenedGroupUsers(groupName3))
+      }
+
+      assertResult(Set(groupName1, groupName2, groupName3)) {
+        runAndWait(dao.listUsersGroups(userId))
+      }
+    } finally {
+      runAndWait(dao.deleteUser(userId))
+      runAndWait(dao.deleteGroup(groupName1))
+      runAndWait(dao.deleteGroup(groupName2))
+      runAndWait(dao.deleteGroup(groupName3))
+    }
+  }
+
   it should "add/remove groups" in {
     val userId = SamUserId(UUID.randomUUID().toString)
     val user = SamUser(userId, Option(SamUserEmail("foo@bar.com")))
