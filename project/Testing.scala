@@ -7,7 +7,6 @@ object Testing {
 
   val validDirectoryUrlSetting = validDirectoryUrl := {
     val setting = sys.props.getOrElse("directory.url", "")
-    println(setting)
     if (setting.length == 0) {
       val log = streams.value.log
       log.error("directory.url not set")

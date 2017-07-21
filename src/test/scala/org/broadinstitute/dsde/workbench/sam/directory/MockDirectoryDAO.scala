@@ -62,7 +62,7 @@ class MockDirectoryDAO extends DirectoryDAO {
     listSubjectsGroups(userId, Set.empty).map(_.name)
   }
 
-  def listSubjectsGroups(subject: SamSubject, accumulatedGroups: Set[SamGroup]): Set[SamGroup] = {
+  private def listSubjectsGroups(subject: SamSubject, accumulatedGroups: Set[SamGroup]): Set[SamGroup] = {
     val immediateGroups = groups.values.toSet.filter { group => group.members.contains(subject) }
 
     val unvisitedGroups = immediateGroups -- accumulatedGroups
@@ -72,6 +72,23 @@ class MockDirectoryDAO extends DirectoryDAO {
       unvisitedGroups.flatMap { group =>
         listSubjectsGroups(group.name, accumulatedGroups ++ immediateGroups)
       }
+    }
+  }
+
+  override def listFlattenedGroupUsers(groupName: SamGroupName): Future[Set[SamUserId]] = Future {
+    listGroupUsers(groupName, Set.empty)
+  }
+
+  private def listGroupUsers(groupName: SamGroupName, visitedGroups: Set[SamGroupName]): Set[SamUserId] = {
+    if (!visitedGroups.contains(groupName)) {
+      val members = groups.getOrElse(groupName, SamGroup(null, Set.empty)).members
+
+      members.flatMap {
+        case userId: SamUserId => Set(userId)
+        case groupName: SamGroupName => listGroupUsers(groupName, visitedGroups + groupName)
+      }
+    } else {
+      Set.empty
     }
   }
 }
