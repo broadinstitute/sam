@@ -163,6 +163,15 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     }.toSet
   }
 
+  override def listAncestorGroups(groupName: SamGroupName): Future[Set[SamGroupName]] = withContext { ctx =>
+    val groups = for (
+      attr <- ctx.getAttributes(groupDn(groupName), Array(Attr.memberOf)).getAll.asScala;
+      attrE <- attr.getAll.asScala
+    ) yield dnToGroupName(attrE.asInstanceOf[String])
+
+    groups.toSet
+  }
+
   private def withContext[T](op: InitialDirContext => T): Future[T] = withContext(directoryConfig.directoryUrl, directoryConfig.user, directoryConfig.password)(op)
 }
 
