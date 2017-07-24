@@ -91,4 +91,8 @@ class MockDirectoryDAO extends DirectoryDAO {
       Set.empty
     }
   }
+
+  override def listAncestorGroups(groupName: SamGroupName): Future[Set[SamGroupName]] = Future {
+    listSubjectsGroups(groupName, Set.empty).map(_.name)
+  }
 }

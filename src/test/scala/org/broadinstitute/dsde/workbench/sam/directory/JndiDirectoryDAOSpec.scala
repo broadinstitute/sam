@@ -127,6 +127,31 @@ class JndiDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport {
     }
   }
 
+  it should "list group ancestors" in {
+    val groupName1 = SamGroupName(UUID.randomUUID().toString)
+    val group1 = SamGroup(groupName1, Set())
+
+    val groupName2 = SamGroupName(UUID.randomUUID().toString)
+    val group2 = SamGroup(groupName2, Set(groupName1))
+
+    val groupName3 = SamGroupName(UUID.randomUUID().toString)
+    val group3 = SamGroup(groupName3, Set(groupName2))
+
+    runAndWait(dao.createGroup(group1))
+    runAndWait(dao.createGroup(group2))
+    runAndWait(dao.createGroup(group3))
+
+    try {
+      assertResult(Set(groupName2, groupName3)) {
+        runAndWait(dao.listAncestorGroups(groupName1))
+      }
+    } finally {
+      runAndWait(dao.deleteGroup(groupName1))
+      runAndWait(dao.deleteGroup(groupName2))
+      runAndWait(dao.deleteGroup(groupName3))
+    }
+  }
+
   it should "handle circular groups" in {
     val userId = SamUserId(UUID.randomUUID().toString)
     val user = SamUser(userId, Option(SamUserEmail("foo@bar.com")))
@@ -154,6 +179,10 @@ class JndiDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport {
 
       assertResult(Set(groupName1, groupName2, groupName3)) {
         runAndWait(dao.listUsersGroups(userId))
+      }
+
+      assertResult(Set(groupName1, groupName2, groupName3)) {
+        runAndWait(dao.listAncestorGroups(groupName3))
       }
     } finally {
       runAndWait(dao.deleteUser(userId))
