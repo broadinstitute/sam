@@ -22,7 +22,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
   val dirDAO = new JndiDirectoryDAO(directoryConfig)
   val policyDAO = new JndiAccessPolicyDAO(directoryConfig)
 
-  val service = new ResourceService(policyDAO, dirDAO)
+  val service = new ResourceService(policyDAO, dirDAO, "example.com")
 
   override protected def beforeAll(): Unit = {
     runAndWait(policyDAO.init())
@@ -52,10 +52,10 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
       policies.map(_.copy(id = null))
     }
 
-    assertResult(Some(SamGroup(ownerGroupName, Set[SamSubject](SamUserId("userid"))))) {
+    assertResult(Some(SamGroup(ownerGroupName, Set[SamSubject](SamUserId("userid")), service.toGoogleGroupName(ownerGroupName)))) {
       runAndWait(dirDAO.loadGroup(ownerGroupName))
     }
-    assertResult(Some(SamGroup(otherGroupName, Set.empty[SamSubject]))) {
+    assertResult(Some(SamGroup(otherGroupName, Set.empty[SamSubject], service.toGoogleGroupName(otherGroupName)))) {
       runAndWait(dirDAO.loadGroup(otherGroupName))
     }
 
@@ -85,7 +85,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     val resourceName2 = ResourceName("resource2")
 
     val userInfo = UserInfo("token", SamUserId(UUID.randomUUID().toString), SamUserEmail("user@company.com"), 0)
-    runAndWait(dirDAO.createUser(SamUser(userInfo.userId, None)))
+    runAndWait(dirDAO.createUser(SamUser(userInfo.userId, SamUserEmail("user@company.com"))))
 
     runAndWait(service.createResource(
       resourceType,

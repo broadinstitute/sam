@@ -104,15 +104,6 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
     }
   }
 
-  private def createAttributeDefinition(schema: DirContext, numericOID: String, name: String, description: String, singleValue: Boolean) = {
-    val attributes = new BasicAttributes(true)
-    attributes.put("NUMERICOID", numericOID)
-    attributes.put("NAME", name)
-    attributes.put("DESC", description)
-    if (singleValue) attributes.put("SINGLE-VALUE", singleValue.toString) // note absence of this attribute means multi-value and presence means single, value does not matter
-    schema.createSubcontext(s"AttributeDefinition/$name", attributes)
-  }
-
   override def createPolicy(policy: AccessPolicy): Future[AccessPolicy] = withContext { ctx =>
     val policyContext = new BaseDirContext {
       override def getAttributes(name: String): Attributes = {

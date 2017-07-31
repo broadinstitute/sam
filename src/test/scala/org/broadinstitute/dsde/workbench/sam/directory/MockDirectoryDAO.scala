@@ -81,7 +81,7 @@ class MockDirectoryDAO extends DirectoryDAO {
 
   private def listGroupUsers(groupName: SamGroupName, visitedGroups: Set[SamGroupName]): Set[SamUserId] = {
     if (!visitedGroups.contains(groupName)) {
-      val members = groups.getOrElse(groupName, SamGroup(null, Set.empty)).members
+      val members = groups.getOrElse(groupName, SamGroup(null, Set.empty, SamGroupEmail("g1@example.com"))).members
 
       members.flatMap {
         case userId: SamUserId => Set(userId)

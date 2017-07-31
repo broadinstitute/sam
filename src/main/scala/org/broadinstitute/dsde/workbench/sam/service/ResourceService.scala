@@ -14,7 +14,7 @@ import scala.concurrent.{ExecutionContext, Future}
 /**
   * Created by mbemis on 5/22/17.
   */
-class ResourceService(val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: DirectoryDAO)(implicit val executionContext: ExecutionContext) extends LazyLogging {
+class ResourceService(val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: DirectoryDAO, val googleDomain: String)(implicit val executionContext: ExecutionContext) extends LazyLogging {
 
   def hasPermission(resourceType: ResourceType, resourceName: ResourceName, action: ResourceAction, userInfo: UserInfo): Future[Boolean] = {
     listUserResourceActions(resourceType, resourceName, userInfo).map { _.contains(action) }
@@ -36,6 +36,8 @@ class ResourceService(val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: Di
     }
   }
 
+  def toGoogleGroupName(groupName: SamGroupName) = SamGroupEmail(s"GROUP_${groupName.value}@${googleDomain}")
+
   def createResource(resourceType: ResourceType, resourceName: ResourceName, userInfo: UserInfo): Future[Set[AccessPolicy]] = {
     accessPolicyDAO.listAccessPolicies(resourceType.name, resourceName) flatMap { policies =>
       if (policies.isEmpty) {
@@ -44,8 +46,9 @@ class ResourceService(val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: Di
             case resourceType.ownerRoleName => Set(userInfo.userId)
             case _ => Set.empty
           }
+          val groupName = roleGroupName(resourceType, resourceName, role)
           for {
-            group <- directoryDAO.createGroup(SamGroup(roleGroupName(resourceType, resourceName, role), roleMembers))
+            group <- directoryDAO.createGroup(SamGroup(groupName, roleMembers, toGoogleGroupName(groupName)))
             policy <- accessPolicyDAO.createPolicy(AccessPolicy(
               AccessPolicyId(UUID.randomUUID().toString),
               role.actions,

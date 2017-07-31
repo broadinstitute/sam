@@ -28,6 +28,50 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     val sn = "sn"
     val cn = "cn"
     val uid = "uid"
+    val groupUpdatedTimestamp = "groupUpdatedTimestamp"
+    val groupSynchronizedTimestamp = "groupSynchronizedTimestamp"
+  }
+
+  def init(): Future[Unit] = {
+    for {
+      _ <- removeWorkbenchGroupSchema()
+      _ <- createWorkbenchGroupSchema()
+    } yield ()
+  }
+
+  def removeWorkbenchGroupSchema(): Future[Unit] = withContext { ctx =>
+    val schema = ctx.getSchema("")
+
+    Try { schema.destroySubcontext("ClassDefinition/workbenchGroup") }
+    Try { schema.destroySubcontext("AttributeDefinition/" + Attr.groupSynchronizedTimestamp) }
+    Try { schema.destroySubcontext("AttributeDefinition/" + Attr.groupUpdatedTimestamp) }
+  }
+
+  def createWorkbenchGroupSchema(): Future[Unit] = withContext { ctx =>
+    val schema = ctx.getSchema("")
+
+    createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.200", Attr.groupUpdatedTimestamp, "time when group was updated", true, Option("generalizedTimeMatch"), Option("generalizedTimeOrderingMatch"), Option("1.3.6.1.4.1.1466.115.121.1.24"))
+    createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.201", Attr.groupSynchronizedTimestamp, "time when group was synchronized", true, Option("generalizedTimeMatch"), Option("generalizedTimeOrderingMatch"), Option("1.3.6.1.4.1.1466.115.121.1.24"))
+
+    val attrs = new BasicAttributes(true) // Ignore case
+    attrs.put("NUMERICOID", "1.3.6.1.4.1.18060.0.4.3.2.100")
+    attrs.put("NAME", "workbenchGroup")
+    attrs.put("SUP", "groupofuniquenames")
+    attrs.put("STRUCTURAL", "true")
+
+    val must = new BasicAttribute("MUST")
+    must.add("objectclass")
+    must.add(Attr.email)
+    attrs.put(must)
+
+    val may = new BasicAttribute("MAY")
+    may.add(Attr.groupUpdatedTimestamp)
+    may.add(Attr.groupSynchronizedTimestamp)
+    attrs.put(may)
+
+
+    // Add the new schema object for "fooObjectClass"
+    schema.createSubcontext("ClassDefinition/workbenchGroup", attrs)
   }
 
   override def createGroup(group: SamGroup): Future[SamGroup] = withContext { ctx =>
@@ -37,8 +81,10 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
           val myAttrs = new BasicAttributes(true)  // Case ignore
 
           val oc = new BasicAttribute("objectclass")
-          Seq("top", "groupofuniquenames").foreach(oc.add)
+          Seq("top", "workbenchGroup").foreach(oc.add)
           myAttrs.put(oc)
+
+          myAttrs.put(new BasicAttribute(Attr.email, group.email.value))
 
           if (!group.members.isEmpty) {
             val members = new BasicAttribute(Attr.member)
@@ -73,12 +119,13 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
 
   override def loadGroup(groupName: SamGroupName): Future[Option[SamGroup]] = withContext { ctx =>
     Try {
-      val attributes = ctx.getAttributes(groupDn(groupName), Array(Attr.cn, Attr.member))
+      val attributes = ctx.getAttributes(groupDn(groupName))
 
       val cn = getAttribute[String](attributes, Attr.cn).getOrElse(throw new WorkbenchException(s"${Attr.cn} attribute missing: $groupName"))
+      val email = getAttribute[String](attributes, Attr.email).getOrElse(throw new WorkbenchException(s"${Attr.email} attribute missing: $groupName"))
       val memberDns = getAttributes[String](attributes, Attr.member).getOrElse(Set.empty).toSet
 
-      Option(SamGroup(SamGroupName(cn), memberDns.map(dnToSubject)))
+      Option(SamGroup(SamGroupName(cn), memberDns.map(dnToSubject), SamGroupEmail(email)))
 
     }.recover {
       case e: NameNotFoundException => None
@@ -97,10 +144,7 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
           Seq("top", "inetOrgPerson").foreach(oc.add)
           myAttrs.put(oc)
 
-          user.email.foreach { email =>
-            myAttrs.put(new BasicAttribute(Attr.email, email.value))
-          }
-
+          myAttrs.put(new BasicAttribute(Attr.email, user.email.value))
           myAttrs.put(new BasicAttribute(Attr.sn, user.id.value))
           myAttrs.put(new BasicAttribute(Attr.cn, user.id.value))
           myAttrs.put(new BasicAttribute(Attr.uid, user.id.value))
@@ -131,9 +175,9 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
 
   private def unmarshalUser(attributes: Attributes): SamUser = {
     val uid = getAttribute[String](attributes, Attr.uid).getOrElse(throw new WorkbenchException(s"${Attr.uid} attribute missing"))
-    val emailOption = getAttribute[String](attributes, Attr.email)
+    val email = getAttribute[String](attributes, Attr.email).getOrElse(throw new WorkbenchException(s"${Attr.email} attribute missing"))
 
-    SamUser(SamUserId(uid), emailOption.map(SamUserEmail))
+    SamUser(SamUserId(uid), SamUserEmail(email))
   }
 
   private def getAttribute[T](attributes: Attributes, key: String): Option[T] = {
