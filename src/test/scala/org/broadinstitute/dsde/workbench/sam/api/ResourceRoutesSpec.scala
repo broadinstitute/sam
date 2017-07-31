@@ -17,7 +17,7 @@ import spray.json.{JsBoolean, JsValue}
 class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest {
 
   private def createSamRoutes(resourceTypes: Map[ResourceTypeName, ResourceType]) = {
-    val mockResourceService = new ResourceService(new MockAccessPolicyDAO(), new MockDirectoryDAO())
+    val mockResourceService = new ResourceService(new MockAccessPolicyDAO(), new MockDirectoryDAO(), "example.com")
     val mockUserService = new UserService(new MockDirectoryDAO())
 
     new TestSamRoutes(resourceTypes, mockResourceService, mockUserService, UserInfo("", SamUserId(""), SamUserEmail(""), 0))

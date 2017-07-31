@@ -27,6 +27,19 @@ trait JndiSupport {
     ctx.close()
     t.get
   }
+
+  protected def createAttributeDefinition(schema: DirContext, numericOID: String, name: String, description: String, singleValue: Boolean, equality: Option[String] = None, ordering: Option[String] = None, syntax: Option[String] = None) = {
+    val attributes = new BasicAttributes(true)
+    attributes.put("NUMERICOID", numericOID)
+    attributes.put("NAME", name)
+    attributes.put("DESC", description)
+    equality.foreach(attributes.put("EQUALITY", _))
+    ordering.foreach(attributes.put("ORDERING", _))
+    syntax.foreach(attributes.put("SYNTAX", _))
+    if (singleValue) attributes.put("SINGLE-VALUE", singleValue.toString) // note absence of this attribute means multi-value and presence means single, value does not matter
+    schema.createSubcontext(s"AttributeDefinition/$name", attributes)
+  }
+
 }
 
 /**

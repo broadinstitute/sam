@@ -30,10 +30,11 @@ object SamJsonSupport {
 sealed trait SamSubject
 case class SamUserId(value: String) extends SamSubject with ValueObject
 case class SamUserEmail(value: String) extends ValueObject
-case class SamUser(id: SamUserId, email: Option[SamUserEmail])
+case class SamUser(id: SamUserId, email: SamUserEmail)
 
 case class SamGroupName(value: String) extends SamSubject with ValueObject
-case class SamGroup(name: SamGroupName, members: Set[SamSubject])
+case class SamGroupEmail(value: String) extends ValueObject
+case class SamGroup(name: SamGroupName, members: Set[SamSubject], email: SamGroupEmail)
 
 case class ResourceAction(value: String) extends ValueObject
 case class ResourceRoleName(value: String) extends ValueObject
