@@ -48,7 +48,7 @@ trait UserRoutes extends UserInfoDirectives {
               pathEndOrSingleSlash {
                 put {
                   complete {
-                    userService.enableUser(SamUserId(userId)).map { statusOption =>
+                    userService.enableUser(SamUserId(userId), userInfo).map { statusOption =>
                       statusOption.map { status =>
                         StatusCodes.OK -> Option(status)
                       }.getOrElse(StatusCodes.NotFound -> None)
@@ -61,7 +61,7 @@ trait UserRoutes extends UserInfoDirectives {
               pathEndOrSingleSlash {
                 put {
                   complete {
-                    userService.disableUser(SamUserId(userId)).map { statusOption =>
+                    userService.disableUser(SamUserId(userId), userInfo).map { statusOption =>
                       statusOption.map { status =>
                         StatusCodes.OK -> Option(status)
                       }.getOrElse(StatusCodes.NotFound -> None)
