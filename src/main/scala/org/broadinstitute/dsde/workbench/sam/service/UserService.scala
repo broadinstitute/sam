@@ -16,13 +16,14 @@ class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Google
 
   private val allUsersGroupName = SamGroupName("All_Users")
 
-  def createUser(user: SamUser): Future[SamUser] = {
+  def createUser(user: SamUser): Future[Option[SamUserStatus]] = {
     for {
       _ <- directoryDAO.createUser(user)
       _ <- googleDirectoryDAO.createGroup(user.email.value, toProxyFromUser(user.id.value))
       _ <- googleDirectoryDAO.addUserToGroup(toProxyFromUser(user.id.value), user.email.value)
       _ <- directoryDAO.addGroupMember(allUsersGroupName, user.id)
-    } yield user
+      userStatus <- getUserStatus(user)
+    } yield userStatus
   }
 
   //TODO: admin only

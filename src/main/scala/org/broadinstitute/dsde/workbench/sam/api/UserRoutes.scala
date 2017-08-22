@@ -23,7 +23,7 @@ trait UserRoutes extends UserInfoDirectives {
         pathEndOrSingleSlash {
           post {
             complete {
-              userService.createUser(SamUser(userInfo.userId, userInfo.userEmail)).map(user => StatusCodes.Created -> user)
+              userService.createUser(SamUser(userInfo.userId, userInfo.userEmail)).map(userStatus => StatusCodes.Created -> userStatus)
             }
           } ~
           get {
