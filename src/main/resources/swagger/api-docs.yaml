@@ -131,6 +131,15 @@ paths:
             - profile
 
   /register/user:
+    get:
+      summary: gets the registration status of the logged in user
+      tags:
+        - Users
+      security:
+        - googleoauth:
+          - openid
+          - email
+          - profile
     post:
       summary: create current user in the system using login credentials
       responses:

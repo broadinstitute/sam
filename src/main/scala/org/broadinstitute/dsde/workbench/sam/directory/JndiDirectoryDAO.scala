@@ -201,6 +201,13 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     groups.toSet
   }
 
+  override def isGroupMember(groupName: SamGroupName, member: SamSubject): Future[Boolean] = withContext { ctx =>
+    val attributes = ctx.getAttributes(groupDn(groupName))
+    val memberDns = getAttributes[String](attributes, Attr.member).getOrElse(Set.empty).toSet
+
+    memberDns.map(dnToSubject).contains(member)
+  }
+
   override def listFlattenedGroupUsers(groupName: SamGroupName): Future[Set[SamUserId]] = withContext { ctx =>
     ctx.search(peopleOu, new BasicAttributes(Attr.memberOf, groupDn(groupName), true)).asScala.map { result =>
       unmarshalUser(result.getAttributes).id

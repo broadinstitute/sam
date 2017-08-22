@@ -5,7 +5,6 @@ import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directives._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.UserService
-
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import spray.json.DefaultJsonProtocol._
@@ -26,6 +25,15 @@ trait UserRoutes extends UserInfoDirectives {
           post {
             complete {
               userService.createUser(SamUser(userInfo.userId, userInfo.userEmail)).map(user => StatusCodes.Created -> user)
+            }
+          } ~
+          get {
+            complete {
+              userService.getUserStatus(SamUser(userInfo.userId, userInfo.userEmail)).map { statusOption =>
+                statusOption.map { status =>
+                  StatusCodes.OK -> Option(status)
+                }.getOrElse(StatusCodes.NotFound -> None)
+              }
             }
           }
         }

@@ -13,6 +13,7 @@ trait DirectoryDAO {
   def deleteGroup(groupName: SamGroupName): Future[Unit]
   def addGroupMember(groupName: SamGroupName, addMember: SamSubject): Future[Unit]
   def removeGroupMember(groupName: SamGroupName, removeMember: SamSubject): Future[Unit]
+  def isGroupMember(groupName: SamGroupName, member: SamSubject): Future[Boolean]
 
   def createUser(user: SamUser): Future[SamUser]
   def loadUser(userId: SamUserId): Future[Option[SamUser]]

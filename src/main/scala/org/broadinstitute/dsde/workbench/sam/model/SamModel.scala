@@ -25,12 +25,16 @@ object SamJsonSupport {
   implicit val SamUserEmailFormat = ValueObjectFormat(SamUserEmail)
 
   implicit val SamUserFormat = jsonFormat2(SamUser)
+
+  implicit val SamUserStatusFormat = jsonFormat2(SamUserStatus)
 }
 
 sealed trait SamSubject
 case class SamUserId(value: String) extends SamSubject with ValueObject
 case class SamUserEmail(value: String) extends ValueObject
 case class SamUser(id: SamUserId, email: SamUserEmail)
+
+case class SamUserStatus(userInfo: SamUser, enabled: Map[String, Boolean])
 
 case class SamGroupName(value: String) extends SamSubject with ValueObject
 case class SamGroupEmail(value: String) extends ValueObject

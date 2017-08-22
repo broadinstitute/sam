@@ -6,6 +6,7 @@ import akka.stream.ActorMaterializer
 import com.typesafe.config.ConfigFactory
 import com.typesafe.scalalogging.LazyLogging
 import net.ceedubs.ficus.Ficus._
+import org.broadinstitute.dsde.workbench.google.HttpGoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.api.{SamRoutes, StandardUserInfoDirectives}
 import org.broadinstitute.dsde.workbench.sam.config._
 import org.broadinstitute.dsde.workbench.sam.directory._
@@ -22,6 +23,7 @@ object Boot extends App with LazyLogging {
     val config = ConfigFactory.load()
 
     val directoryConfig = config.as[DirectoryConfig]("directory")
+    val googleDirectoryConfig = config.as[GoogleDirectoryConfig]("googleDirectory")
 
     // we need an ActorSystem to host our application in
     implicit val system = ActorSystem("sam")
@@ -30,9 +32,10 @@ object Boot extends App with LazyLogging {
 
     val accessPolicyDAO = new JndiAccessPolicyDAO(directoryConfig)
     val directoryDAO = new JndiDirectoryDAO(directoryConfig)
+    val googleDirectoryDAO = new HttpGoogleDirectoryDAO(googleDirectoryConfig.clientSecrets, googleDirectoryConfig.pemFile, googleDirectoryConfig.appsDomain, googleDirectoryConfig.appName, googleDirectoryConfig.serviceProject, "google")
 
     val resourceService = new ResourceService(accessPolicyDAO, directoryDAO, config.getString("google.appsDomain"))
-    val userService = new UserService(directoryDAO)
+    val userService = new UserService(directoryDAO, googleDirectoryDAO)
 
     val configResourceTypes = config.as[Set[ResourceType]]("resourceTypes")
     val samRoutes = new SamRoutes(resourceService, userService, config.as[SwaggerConfig]("swagger")) with StandardUserInfoDirectives {
