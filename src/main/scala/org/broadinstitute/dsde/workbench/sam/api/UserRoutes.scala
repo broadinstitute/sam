@@ -1,13 +1,12 @@
 package org.broadinstitute.dsde.workbench.sam.api
 
+import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directives._
+import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.UserService
-import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
-import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
-import spray.json.DefaultJsonProtocol._
 
 import scala.concurrent.ExecutionContext
 
@@ -39,4 +38,41 @@ trait UserRoutes extends UserInfoDirectives {
         }
       }
     }
+
+  def adminUserRoutes: server.Route =
+    pathPrefix("admin") {
+      pathPrefix("user") {
+        requireUserInfo { userInfo =>
+          pathPrefix(Segment) { userId =>
+            pathPrefix("enable") {
+              pathEndOrSingleSlash {
+                put {
+                  complete {
+                    userService.enableUser(SamUserId(userId)).map { statusOption =>
+                      statusOption.map { status =>
+                        StatusCodes.OK -> Option(status)
+                      }.getOrElse(StatusCodes.NotFound -> None)
+                    }
+                  }
+                }
+              }
+            } ~
+            pathPrefix("disable") {
+              pathEndOrSingleSlash {
+                put {
+                  complete {
+                    userService.disableUser(SamUserId(userId)).map { statusOption =>
+                      statusOption.map { status =>
+                        StatusCodes.OK -> Option(status)
+                      }.getOrElse(StatusCodes.NotFound -> None)
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
 }

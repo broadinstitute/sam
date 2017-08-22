@@ -35,7 +35,7 @@ object Boot extends App with LazyLogging {
     val googleDirectoryDAO = new HttpGoogleDirectoryDAO(googleDirectoryConfig.clientSecrets, googleDirectoryConfig.pemFile, googleDirectoryConfig.appsDomain, googleDirectoryConfig.appName, googleDirectoryConfig.serviceProject, "google")
 
     val resourceService = new ResourceService(accessPolicyDAO, directoryDAO, config.getString("google.appsDomain"))
-    val userService = new UserService(directoryDAO, googleDirectoryDAO)
+    val userService = new UserService(directoryDAO, googleDirectoryDAO, googleDirectoryConfig.appsDomain)
 
     val configResourceTypes = config.as[Set[ResourceType]]("resourceTypes")
     val samRoutes = new SamRoutes(resourceService, userService, config.as[SwaggerConfig]("swagger")) with StandardUserInfoDirectives {

@@ -133,6 +133,7 @@ paths:
   /register/user:
     get:
       summary: gets the registration status of the logged in user
+      operationId: getUserStatus
       tags:
         - Users
       security:
@@ -154,6 +155,42 @@ paths:
       operationId: createUser
       tags:
         - Users
+      security:
+        - googleoauth:
+            - openid
+            - email
+            - profile
+
+  /api/admin/user/{userId}/enable:
+    put:
+      summary: enables the specified user
+      parameters:
+        - in: path
+          description: User ID to disable
+          name: userId
+          required: true
+          type: string
+      operationId: enableUser
+      tags:
+        - Admin
+      security:
+        - googleoauth:
+          - openid
+          - email
+          - profile
+
+  /api/admin/user/{userId}/disable:
+    put:
+      summary: disables the specified user
+      parameters:
+        - in: path
+          description: User ID to disable
+          name: userId
+          required: true
+          type: string
+      operationId: disableUser
+      tags:
+        - Admin
       security:
         - googleoauth:
             - openid
