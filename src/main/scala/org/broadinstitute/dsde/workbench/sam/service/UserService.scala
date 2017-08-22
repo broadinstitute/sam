@@ -21,6 +21,7 @@ class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Google
       _ <- googleDirectoryDAO.createGroup(user.email.value, toProxyFromUser(user.id.value))
       _ <- googleDirectoryDAO.addUserToGroup(toProxyFromUser(user.id.value), user.email.value)
       _ <- directoryDAO.addGroupMember(allUsersGroupName, user.id)
+      _ <- googleDirectoryDAO.addUserToGroup(toGoogleGroupName(allUsersGroupName.value), toProxyFromUser(user.id.value)) //TODO: this is temporary until group sync is in sam (Phase II)
       userStatus <- getUserStatus(user)
     } yield userStatus
   }
@@ -64,6 +65,7 @@ class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Google
   }
 
   private def toProxyFromUser(subjectId: String): String = s"PROXY_$subjectId@$googleDomain"
+  private def toGoogleGroupName(groupName: String): String = s"GROUP_$groupName@$googleDomain"
 
   //TODO: move these to role support in some shared library
   def tryIsWorkbenchAdmin(userEmail: String): Future[Boolean] = {
