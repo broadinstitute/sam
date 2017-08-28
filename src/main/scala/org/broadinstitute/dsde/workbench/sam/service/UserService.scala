@@ -37,7 +37,8 @@ class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Google
       directoryDAO.loadUser(userId).flatMap {
         case Some(user) =>
           for {
-            _ <- googleDirectoryDAO.addMemberToGroup(WorkbenchGroupEmail(toProxyFromUser(user.id.value)), WorkbenchUserEmail(user.email.value))
+          //_ <- directoryDAO.enableUser(user.id)
+          _ <- googleDirectoryDAO.addMemberToGroup(WorkbenchGroupEmail(toProxyFromUser(user.id.value)), WorkbenchUserEmail(user.email.value))
             userStatus <- getUserStatus(user)
           } yield userStatus
         case None => Future.successful(None)
@@ -50,6 +51,7 @@ class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Google
       directoryDAO.loadUser(userId).flatMap {
         case Some(user) =>
           for {
+            //_ <- directoryDAO.disableUser(user.id)
             _ <- googleDirectoryDAO.removeMemberFromGroup(WorkbenchGroupEmail(toProxyFromUser(user.id.value)), WorkbenchGroupEmail(user.email.value))
             userStatus <- getUserStatus(user)
           } yield userStatus
