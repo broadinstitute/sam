@@ -79,6 +79,10 @@ class MockDirectoryDAO extends DirectoryDAO {
     listGroupUsers(groupName, Set.empty)
   }
 
+  override def isGroupMember(groupName: SamGroupName, member: SamSubject): Future[Boolean] = Future {
+    groups.getOrElse(groupName, SamGroup(null, Set.empty, SamGroupEmail("g1@example.com"))).members.contains(member)
+  }
+
   private def listGroupUsers(groupName: SamGroupName, visitedGroups: Set[SamGroupName]): Set[SamUserId] = {
     if (!visitedGroups.contains(groupName)) {
       val members = groups.getOrElse(groupName, SamGroup(null, Set.empty, SamGroupEmail("g1@example.com"))).members

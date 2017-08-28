@@ -10,7 +10,7 @@ import org.broadinstitute.dsde.workbench.google.HttpGoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.api.{SamRoutes, StandardUserInfoDirectives}
 import org.broadinstitute.dsde.workbench.sam.config._
 import org.broadinstitute.dsde.workbench.sam.directory._
-import org.broadinstitute.dsde.workbench.sam.model.{ResourceType, ResourceTypeName, SamUserId, UserInfo}
+import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam._
 import org.broadinstitute.dsde.workbench.sam.service.{ResourceService, UserService}
 
