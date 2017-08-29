@@ -11,7 +11,7 @@
 #   ./docker/build.sh jar publish -d push
 
 set -ex
-PROJECT=SAM
+PROJECT=sam
 
 
 function make_jar()
