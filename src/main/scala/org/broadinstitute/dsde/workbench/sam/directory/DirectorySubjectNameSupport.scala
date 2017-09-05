@@ -21,10 +21,15 @@ trait DirectorySubjectNameSupport {
   }
 
   protected def dnToSubject(dn: String): SamSubject = {
-    dn.split(",").toList.map(_.toLowerCase) match { //todo: are there any other ramifications of lower-casing all parts?
-      case name :: "ou=groups" :: tail => SamGroupName(name.stripPrefix("cn="))
-      case name :: "ou=people" :: tail => SamUserId(name.stripPrefix("uid="))
-      case _ => throw new WorkbenchException(s"unexpected dn [$dn]")
+    val splitDn = dn.split(",")
+
+    splitDn.lift(1) match {
+      case Some(ou) => {
+        if(ou.equalsIgnoreCase("ou=groups")) SamGroupName(splitDn(0).stripPrefix("cn="))
+        else if(ou.equalsIgnoreCase("ou=people")) SamUserId(splitDn(0).stripPrefix("uid="))
+        else throw new WorkbenchException(s"unexpected dn [$dn]")
+      }
+      case None => throw new WorkbenchException(s"unexpected dn [$dn]")
     }
   }
 
