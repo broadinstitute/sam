@@ -26,7 +26,7 @@ class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Google
       _ <- directoryDAO.enableUser(user.id)
       _ <- createAllUsersGroup
       _ <- directoryDAO.addGroupMember(allUsersGroupName, user.id)
-      _ <- googleDirectoryDAO.addMemberToGroup(WorkbenchGroupEmail(toGoogleGroupName(allUsersGroupName.value)), WorkbenchUserEmail(toProxyFromUser(user.id.value))) //TODO: Do a manual add to the All_Users Google group (undo in Phase II)
+      _ <- googleDirectoryDAO.addMemberToGroup(WorkbenchGroupEmail(toGoogleGroupName(allUsersGroupName.value)), WorkbenchUserEmail(toProxyFromUser(user.id.value))) //TODO: For now, do a manual add to the All_Users Google group (undo this in Phase II)
       userStatus <- getUserStatus(user)
     } yield {
       userStatus
@@ -38,8 +38,8 @@ class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Google
       directoryDAO.loadUser(userId).flatMap {
         case Some(user) =>
           for {
-          _ <- directoryDAO.enableUser(user.id)
-          _ <- googleDirectoryDAO.addMemberToGroup(WorkbenchGroupEmail(toProxyFromUser(user.id.value)), WorkbenchUserEmail(user.email.value))
+            _ <- directoryDAO.enableUser(user.id)
+            _ <- googleDirectoryDAO.addMemberToGroup(WorkbenchGroupEmail(toProxyFromUser(user.id.value)), WorkbenchUserEmail(user.email.value))
             userStatus <- getUserStatus(user)
           } yield userStatus
         case None => Future.successful(None)
