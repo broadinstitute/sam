@@ -223,6 +223,21 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     groups.toSet
   }
 
+  override def enableUser(userId: SamUserId): Future[Unit] = withContext { ctx =>
+    ctx.modifyAttributes(directoryConfig.enabledUsersGroupDn, DirContext.ADD_ATTRIBUTE, new BasicAttributes(Attr.member, userDn(userId)))
+  }
+
+  override def disableUser(userId: SamUserId): Future[Unit] = withContext { ctx =>
+    ctx.modifyAttributes(directoryConfig.enabledUsersGroupDn, DirContext.REMOVE_ATTRIBUTE, new BasicAttributes(Attr.member, userDn(userId)))
+  }
+
+  override def isEnabled(userId: SamUserId): Future[Boolean] = withContext { ctx =>
+    val attributes = ctx.getAttributes(directoryConfig.enabledUsersGroupDn)
+    val memberDns = getAttributes[String](attributes, Attr.member).getOrElse(Set.empty).toSet
+
+    memberDns.map(dnToSubject).contains(userId)
+  }
+
   private def withContext[T](op: InitialDirContext => T): Future[T] = withContext(directoryConfig.directoryUrl, directoryConfig.user, directoryConfig.password)(op)
 }
 

@@ -99,4 +99,17 @@ class MockDirectoryDAO extends DirectoryDAO {
   override def listAncestorGroups(groupName: SamGroupName): Future[Set[SamGroupName]] = Future {
     listSubjectsGroups(groupName, Set.empty).map(_.name)
   }
+
+  override def enableUser(userId: SamUserId): Future[Unit] = {
+    Future.successful(())
+  }
+
+  override def disableUser(userId: SamUserId): Future[Unit] = {
+    Future.successful(())
+  }
+
+  override def isEnabled(userId: SamUserId): Future[Boolean] = {
+    Future.successful(true)
+  }
+
 }

@@ -22,4 +22,8 @@ trait DirectoryDAO {
   def listUsersGroups(userId: SamUserId): Future[Set[SamGroupName]]
   def listFlattenedGroupUsers(groupName: SamGroupName): Future[Set[SamUserId]]
   def listAncestorGroups(groupName: SamGroupName): Future[Set[SamGroupName]]
+
+  def enableUser(userId: SamUserId): Future[Unit]
+  def disableUser(userId: SamUserId): Future[Unit]
+  def isEnabled(userId: SamUserId): Future[Boolean]
 }

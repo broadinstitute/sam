@@ -41,7 +41,8 @@ package object config {
       config.getString("url"),
       config.getString("user"),
       config.getString("password"),
-      config.getString("baseDn")
+      config.getString("baseDn"),
+      config.getString("enabledUsersGroupDn")
     )
   }
 

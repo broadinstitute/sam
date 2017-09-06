@@ -23,6 +23,7 @@ class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Google
       _ <- directoryDAO.createUser(user)
       _ <- googleDirectoryDAO.createGroup(WorkbenchGroupName(user.email.value), WorkbenchGroupEmail(toProxyFromUser(user.id.value)))
       _ <- googleDirectoryDAO.addMemberToGroup(WorkbenchGroupEmail(toProxyFromUser(user.id.value)), WorkbenchUserEmail(user.email.value))
+      _ <- directoryDAO.enableUser(user.id)
       _ <- createAllUsersGroup
       _ <- directoryDAO.addGroupMember(allUsersGroupName, user.id)
       _ <- googleDirectoryDAO.addMemberToGroup(WorkbenchGroupEmail(toGoogleGroupName(allUsersGroupName.value)), WorkbenchUserEmail(toProxyFromUser(user.id.value))) //TODO: Do a manual add to the All_Users Google group (undo in Phase II)
@@ -37,7 +38,7 @@ class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Google
       directoryDAO.loadUser(userId).flatMap {
         case Some(user) =>
           for {
-          //_ <- directoryDAO.enableUser(user.id)
+          _ <- directoryDAO.enableUser(user.id)
           _ <- googleDirectoryDAO.addMemberToGroup(WorkbenchGroupEmail(toProxyFromUser(user.id.value)), WorkbenchUserEmail(user.email.value))
             userStatus <- getUserStatus(user)
           } yield userStatus
@@ -51,7 +52,7 @@ class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Google
       directoryDAO.loadUser(userId).flatMap {
         case Some(user) =>
           for {
-            //_ <- directoryDAO.disableUser(user.id)
+            _ <- directoryDAO.disableUser(user.id)
             _ <- googleDirectoryDAO.removeMemberFromGroup(WorkbenchGroupEmail(toProxyFromUser(user.id.value)), WorkbenchGroupEmail(user.email.value))
             userStatus <- getUserStatus(user)
           } yield userStatus
@@ -65,10 +66,10 @@ class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Google
       loadedUser <- directoryDAO.loadUser(user.id)
       googleStatus <- googleDirectoryDAO.isGroupMember(WorkbenchGroupEmail(toProxyFromUser(user.id.value)), WorkbenchGroupEmail(user.email.value))
       allUsersStatus <- directoryDAO.isGroupMember(allUsersGroupName, user.id)
-      //ldapStatus <- directoryDAO.isEnabled(user.id)
+      ldapStatus <- directoryDAO.isEnabled(user.id)
     } yield {
       loadedUser.map { user =>
-        Option(SamUserStatus(user, Map("allUsersGroup" -> allUsersStatus, "google" -> googleStatus))) //TODO: Add LDAP status back in
+        Option(SamUserStatus(user, Map("ldap" -> ldapStatus, "allUsersGroup" -> allUsersStatus, "google" -> googleStatus)))
       }.getOrElse(None)
     }
   }
@@ -84,7 +85,7 @@ class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Google
   private def toProxyFromUser(subjectId: String): String = s"PROXY_$subjectId@$googleDomain"
   private def toGoogleGroupName(groupName: String): String = s"GROUP_$groupName@$googleDomain"
 
-  //TODO: Move these to RoleSupport.scala in some shared library
+  //TODO: Move these to RoleSupport.scala (or something) in some shared library
   def tryIsWorkbenchAdmin(memberEmail: WorkbenchEmail): Future[Boolean] = {
     googleDirectoryDAO.isGroupMember(WorkbenchGroupEmail(s"fc-admins@$googleDomain"), memberEmail) recoverWith { case t => throw new WorkbenchException("Unable to query for admin status.", t) }
   }
