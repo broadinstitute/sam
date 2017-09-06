@@ -22,7 +22,7 @@ class UserRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest {
 
     Post("/register/user") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
-      responseAs[SamUserStatus] shouldEqual SamUserStatus(SamUser(userId, userEmail), Map("allUsersGroup" -> true, "google" -> true))
+      responseAs[SamUserStatus] shouldEqual SamUserStatus(SamUser(userId, userEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
     }
 
     Post("/register/user") ~> samRoutes.route ~> check {
