@@ -1,5 +1,5 @@
-
- pipefail
+#!/usr/bin/env bash
+set -euo pipefail
 IFS=$'\n\t'
 
 ./.git/hooks/apply-git-secrets.sh
