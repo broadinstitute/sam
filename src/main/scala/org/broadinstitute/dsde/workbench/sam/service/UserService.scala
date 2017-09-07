@@ -33,6 +33,19 @@ class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Google
     }
   }
 
+  def getUserStatus(user: SamUser): Future[Option[SamUserStatus]] = {
+    for {
+      loadedUser <- directoryDAO.loadUser(user.id)
+      googleStatus <- googleDirectoryDAO.isGroupMember(WorkbenchGroupEmail(toProxyFromUser(user.id.value)), WorkbenchGroupEmail(user.email.value))
+      allUsersStatus <- directoryDAO.isGroupMember(allUsersGroupName, user.id)
+      ldapStatus <- directoryDAO.isEnabled(user.id)
+    } yield {
+      loadedUser.map { user =>
+        Option(SamUserStatus(user, Map("ldap" -> ldapStatus, "allUsersGroup" -> allUsersStatus, "google" -> googleStatus)))
+      }.getOrElse(None)
+    }
+  }
+
   def enableUser(userId: SamUserId, userInfo: UserInfo): Future[Option[SamUserStatus]] = {
     asWorkbenchAdmin(userInfo) {
       directoryDAO.loadUser(userId).flatMap {
@@ -61,16 +74,12 @@ class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Google
     }
   }
 
-  def getUserStatus(user: SamUser): Future[Option[SamUserStatus]] = {
-    for {
-      loadedUser <- directoryDAO.loadUser(user.id)
-      googleStatus <- googleDirectoryDAO.isGroupMember(WorkbenchGroupEmail(toProxyFromUser(user.id.value)), WorkbenchGroupEmail(user.email.value))
-      allUsersStatus <- directoryDAO.isGroupMember(allUsersGroupName, user.id)
-      ldapStatus <- directoryDAO.isEnabled(user.id)
-    } yield {
-      loadedUser.map { user =>
-        Option(SamUserStatus(user, Map("ldap" -> ldapStatus, "allUsersGroup" -> allUsersStatus, "google" -> googleStatus)))
-      }.getOrElse(None)
+  def deleteUser(userId: SamUserId, userInfo: UserInfo): Future[Unit] = {
+    asWorkbenchAdmin(userInfo) {
+      for {
+        _ <- googleDirectoryDAO.deleteGroup(WorkbenchGroupEmail(toProxyFromUser(userId.value)))
+        deleteResult <- directoryDAO.deleteUser(userId)
+      } yield deleteResult
     }
   }
 

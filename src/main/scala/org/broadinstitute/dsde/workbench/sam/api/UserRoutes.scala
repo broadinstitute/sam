@@ -44,6 +44,13 @@ trait UserRoutes extends UserInfoDirectives {
       pathPrefix("user") {
         requireUserInfo { userInfo =>
           pathPrefix(Segment) { userId =>
+            pathEnd {
+              delete {
+                complete {
+                  userService.deleteUser(SamUserId(userId), userInfo).map(_ => StatusCodes.OK)
+                }
+              }
+            } ~
             pathPrefix("enable") {
               pathEndOrSingleSlash {
                 put {
