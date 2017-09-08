@@ -46,6 +46,15 @@ class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Google
     }
   }
 
+  def adminGetUserStatus(userId: SamUserId, userInfo: UserInfo): Future[Option[SamUserStatus]] = {
+    asWorkbenchAdmin(userInfo) {
+      directoryDAO.loadUser(userId).flatMap {
+        case Some(user) => getUserStatus(user)
+        case None => Future.successful(None)
+      }
+    }
+  }
+
   def enableUser(userId: SamUserId, userInfo: UserInfo): Future[Option[SamUserStatus]] = {
     asWorkbenchAdmin(userInfo) {
       directoryDAO.loadUser(userId).flatMap {

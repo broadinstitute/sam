@@ -49,6 +49,15 @@ trait UserRoutes extends UserInfoDirectives {
                 complete {
                   userService.deleteUser(SamUserId(userId), userInfo).map(_ => StatusCodes.OK)
                 }
+              } ~
+              get {
+                complete {
+                  userService.adminGetUserStatus(SamUserId(userId), userInfo).map { statusOption =>
+                    statusOption.map {status =>
+                      StatusCodes.OK -> Option(status)
+                    }.getOrElse(StatusCodes.NotFound -> None)
+                  }
+                }
               }
             } ~
             pathPrefix("enable") {

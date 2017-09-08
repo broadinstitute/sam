@@ -36,6 +36,60 @@ securityDefinitions:
 ##########################################################################################
 paths:
 
+  /api/admin/user/{userId}:
+    get:
+      summary: gets the registration status of the specified user
+      parameters:
+        - in: path
+          description: User ID to check the status of
+          name: userId
+          required: true
+          type: string
+      operationId: adminGetUserStatus
+      tags:
+        - Admin
+      security:
+        - googleoauth:
+          - openid
+          - email
+          - profile
+
+  /api/admin/user/{userId}/disable:
+    put:
+      summary: disables the specified user
+      parameters:
+        - in: path
+          description: User ID to disable
+          name: userId
+          required: true
+          type: string
+      operationId: disableUser
+      tags:
+        - Admin
+      security:
+        - googleoauth:
+            - openid
+            - email
+            - profile
+
+  /api/admin/user/{userId}/enable:
+    put:
+      summary: enables the specified user
+      parameters:
+        - in: path
+          description: User ID to enable
+          name: userId
+          required: true
+          type: string
+      operationId: enableUser
+      tags:
+        - Admin
+      security:
+        - googleoauth:
+          - openid
+          - email
+          - profile
+
   /api/resource/{resourceTypeName}/{resourceId}:
     post:
       summary: Create a new resource
@@ -155,42 +209,6 @@ paths:
       operationId: createUser
       tags:
         - Users
-      security:
-        - googleoauth:
-            - openid
-            - email
-            - profile
-
-  /api/admin/user/{userId}/enable:
-    put:
-      summary: enables the specified user
-      parameters:
-        - in: path
-          description: User ID to disable
-          name: userId
-          required: true
-          type: string
-      operationId: enableUser
-      tags:
-        - Admin
-      security:
-        - googleoauth:
-          - openid
-          - email
-          - profile
-
-  /api/admin/user/{userId}/disable:
-    put:
-      summary: disables the specified user
-      parameters:
-        - in: path
-          description: User ID to disable
-          name: userId
-          required: true
-          type: string
-      operationId: disableUser
-      tags:
-        - Admin
       security:
         - googleoauth:
             - openid
