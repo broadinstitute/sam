@@ -13,6 +13,7 @@ import scala.concurrent.ExecutionContext.Implicits.global
 class MockDirectoryDAO extends DirectoryDAO {
   private val groups: mutable.Map[SamGroupName, SamGroup] = new TrieMap()
   private val users: mutable.Map[SamUserId, SamUser] = new TrieMap()
+  private val enabledUsers: mutable.Map[SamUserId, Unit] = new TrieMap()
 
   override def createGroup(group: SamGroup): Future[SamGroup] = Future {
     if (groups.keySet.contains(group.name)) {
@@ -100,16 +101,16 @@ class MockDirectoryDAO extends DirectoryDAO {
     listSubjectsGroups(groupName, Set.empty).map(_.name)
   }
 
-  override def enableUser(userId: SamUserId): Future[Unit] = {
-    Future.successful(())
+  override def enableUser(userId: SamUserId): Future[Unit] = Future {
+    enabledUsers += (userId -> ())
   }
 
-  override def disableUser(userId: SamUserId): Future[Unit] = {
-    Future.successful(())
+  override def disableUser(userId: SamUserId): Future[Unit] = Future {
+    enabledUsers -= userId
   }
 
-  override def isEnabled(userId: SamUserId): Future[Boolean] = {
-    Future.successful(true)
+  override def isEnabled(userId: SamUserId): Future[Boolean] = Future {
+    enabledUsers.contains(userId)
   }
 
 }
