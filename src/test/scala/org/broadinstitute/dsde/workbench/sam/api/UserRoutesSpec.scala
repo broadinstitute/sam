@@ -29,5 +29,21 @@ class UserRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest {
       status shouldEqual StatusCodes.Conflict
     }
   }
+
+  it should "get the user status of an enabled user" in {
+    val userId = SamUserId("newuser")
+    val userEmail = SamUserEmail("newuser@new.com")
+    val samRoutes = new TestSamRoutes(Map.empty, null, new UserService(new MockDirectoryDAO(), new MockGoogleDirectoryDAO(), "dev.test.firecloud.org"), UserInfo("", userId, userEmail, 0))
+
+    Post("/register/user") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Created
+      responseAs[SamUserStatus] shouldEqual SamUserStatus(SamUser(userId, userEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
+    }
+
+    Get("/register/user") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[SamUserStatus] shouldEqual SamUserStatus(SamUser(userId, userEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
+    }
+  }
 }
 
