@@ -75,7 +75,7 @@ class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Google
         case Some(user) =>
           for {
             _ <- directoryDAO.disableUser(user.id)
-            _ <- googleDirectoryDAO.removeMemberFromGroup(WorkbenchGroupEmail(toProxyFromUser(user.id.value)), WorkbenchGroupEmail(user.email.value))
+            _ <- googleDirectoryDAO.removeMemberFromGroup(WorkbenchGroupEmail(toProxyFromUser(user.id.value)), WorkbenchUserEmail(user.email.value))
             userStatus <- getUserStatus(user)
           } yield userStatus
         case None => Future.successful(None)
