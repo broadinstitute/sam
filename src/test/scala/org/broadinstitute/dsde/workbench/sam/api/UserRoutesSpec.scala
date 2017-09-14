@@ -112,4 +112,27 @@ class UserRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest {
       status shouldEqual StatusCodes.NotFound
     }
   }
+
+  it should "not allow a non-admin to enable or disable a user" in withAdminRoutes { (samRoutes, _) =>
+    Put(s"/api/admin/user/$defaultUserId/disable") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Forbidden
+    }
+
+    Put(s"/api/admin/user/$defaultUserId/enable") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Forbidden
+    }
+  }
+
+  it should "not allow a non-admin to delete a user" in withAdminRoutes { (samRoutes, _) =>
+    Delete(s"/api/admin/user/$defaultUserId") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Forbidden
+    }
+  }
+
+  it should "not allow a non-admin to get the status of another user" in withAdminRoutes { (samRoutes, _) =>
+    Get(s"/api/admin/user/$defaultUserId") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Forbidden
+    }
+  }
+
 }
