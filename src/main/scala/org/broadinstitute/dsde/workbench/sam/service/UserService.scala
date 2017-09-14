@@ -1,6 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.service
 
 import akka.http.scaladsl.model.StatusCodes
+import com.google.api.client.googleapis.json.GoogleJsonResponseException
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.google.GoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.model._
@@ -9,7 +10,6 @@ import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model._
 
 import scala.concurrent.{ExecutionContext, Future}
-import scala.util.{Failure, Success, Try}
 
 /**
   * Created by dvoet on 7/14/17.
@@ -93,11 +93,10 @@ class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Google
   }
 
   private def createAllUsersGroup: Future[Unit] = {
-    directoryDAO.createGroup(SamGroup(allUsersGroupName, Set.empty, SamGroupEmail(toGoogleGroupName(allUsersGroupName.value)))) flatMap { _ =>
-      googleDirectoryDAO.createGroup(WorkbenchGroupName(allUsersGroupName.value), WorkbenchGroupEmail(toGoogleGroupName(allUsersGroupName.value)))
-    } recover {
-      case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode == Option(StatusCodes.Conflict) => ()
-    }
+    for {
+      _ <- directoryDAO.createGroup(SamGroup(allUsersGroupName, Set.empty, SamGroupEmail(toGoogleGroupName(allUsersGroupName.value)))) recover { case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode == Option(StatusCodes.Conflict) => () }
+      _ <- googleDirectoryDAO.createGroup(WorkbenchGroupName(allUsersGroupName.value), WorkbenchGroupEmail(toGoogleGroupName(allUsersGroupName.value))) recover { case e: GoogleJsonResponseException if e.getDetails.getCode == StatusCodes.Conflict.intValue => () }
+    } yield ()
   }
 
   private def toProxyFromUser(subjectId: String): String = s"PROXY_$subjectId@$googleDomain"
@@ -110,7 +109,7 @@ class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Google
 
   def asWorkbenchAdmin[T](userInfo: UserInfo)(op: => Future[T]): Future[T] = {
     tryIsWorkbenchAdmin(WorkbenchUserEmail(userInfo.userEmail.value)) flatMap { isAdmin =>
-      if (isAdmin) op else Future.failed(new WorkbenchException("You must be an admin."))
+      if (isAdmin) op else Future.failed(new WorkbenchExceptionWithErrorReport(org.broadinstitute.dsde.workbench.sam.model.ErrorReport(StatusCodes.Forbidden, "You must be an admin.")))
     }
   }
 
