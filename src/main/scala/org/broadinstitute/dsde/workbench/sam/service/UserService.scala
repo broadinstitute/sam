@@ -41,7 +41,7 @@ class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Google
       ldapStatus <- directoryDAO.isEnabled(user.id)
     } yield {
       loadedUser.map { user =>
-        Option(SamUserStatus(user, Map("ldap" -> ldapStatus, "allUsersGroup" -> allUsersStatus, "google" -> googleStatus)))
+        Option(SamUserStatus(SamUserInfo(user.id, user.email), Map("ldap" -> ldapStatus, "allUsersGroup" -> allUsersStatus, "google" -> googleStatus)))
       }.getOrElse(None)
     }
   }

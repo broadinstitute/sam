@@ -33,8 +33,9 @@ sealed trait SamSubject
 case class SamUserId(value: String) extends SamSubject with ValueObject
 case class SamUserEmail(value: String) extends ValueObject
 case class SamUser(id: SamUserId, email: SamUserEmail)
+case class SamUserInfo(userSubjectId: SamUserId, userEmail: SamUserEmail) //for backwards compatibility to old API
 
-case class SamUserStatus(userInfo: SamUser, enabled: Map[String, Boolean])
+case class SamUserStatus(userInfo: SamUserInfo, enabled: Map[String, Boolean])
 
 case class SamGroupName(value: String) extends SamSubject with ValueObject
 case class SamGroupEmail(value: String) extends ValueObject
