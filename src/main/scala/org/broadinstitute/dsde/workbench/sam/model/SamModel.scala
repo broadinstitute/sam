@@ -26,6 +26,8 @@ object SamJsonSupport {
 
   implicit val SamUserFormat = jsonFormat2(SamUser)
 
+  implicit val SamUserInfoFormat = jsonFormat2(SamUserInfo)
+
   implicit val SamUserStatusFormat = jsonFormat2(SamUserStatus)
 }
 
