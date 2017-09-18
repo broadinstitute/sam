@@ -1,5 +1,8 @@
 package org.broadinstitute.dsde.workbench.sam.service
 
+import javax.naming.NameNotFoundException
+import javax.naming.directory.AttributeInUseException
+
 import akka.http.scaladsl.model.StatusCodes
 import com.google.api.client.googleapis.json.GoogleJsonResponseException
 import com.typesafe.scalalogging.LazyLogging
@@ -37,8 +40,8 @@ class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Google
     for {
       loadedUser <- directoryDAO.loadUser(user.id)
       googleStatus <- googleDirectoryDAO.isGroupMember(WorkbenchGroupEmail(toProxyFromUser(user.id.value)), WorkbenchGroupEmail(user.email.value))
-      allUsersStatus <- directoryDAO.isGroupMember(allUsersGroupName, user.id)
-      ldapStatus <- directoryDAO.isEnabled(user.id)
+      allUsersStatus <- directoryDAO.isGroupMember(allUsersGroupName, user.id) recover { case e: NameNotFoundException => false }
+      ldapStatus <- directoryDAO.isEnabled(user.id) recover { case e: NameNotFoundException => false }
     } yield {
       loadedUser.map { user =>
         Option(SamUserStatus(SamUserInfo(user.id, user.email), Map("ldap" -> ldapStatus, "allUsersGroup" -> allUsersStatus, "google" -> googleStatus)))
