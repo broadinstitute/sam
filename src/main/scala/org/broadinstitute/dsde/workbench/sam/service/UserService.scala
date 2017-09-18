@@ -1,7 +1,6 @@
 package org.broadinstitute.dsde.workbench.sam.service
 
 import javax.naming.NameNotFoundException
-import javax.naming.directory.AttributeInUseException
 
 import akka.http.scaladsl.model.StatusCodes
 import com.google.api.client.googleapis.json.GoogleJsonResponseException
