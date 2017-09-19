@@ -8,6 +8,8 @@ import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Try
 
 trait JndiSupport {
+  val stringSyntax = "1.3.6.1.4.1.1466.115.121.1.15"
+
   protected def getContext(url: String, user: String, password: String): InitialDirContext = {
     val env = new util.Hashtable[String, String]()
     env.put(Context.INITIAL_CONTEXT_FACTORY, "com.sun.jndi.ldap.LdapCtxFactory")
@@ -35,7 +37,7 @@ trait JndiSupport {
     attributes.put("DESC", description)
     equality.foreach(attributes.put("EQUALITY", _))
     ordering.foreach(attributes.put("ORDERING", _))
-    attributes.put("SYNTAX", syntax.getOrElse("1.3.6.1.4.1.1466.115.121.1.15")) // default is String
+    attributes.put("SYNTAX", syntax.getOrElse(stringSyntax))
     if (singleValue) attributes.put("SINGLE-VALUE", singleValue.toString) // note absence of this attribute means multi-value and presence means single, value does not matter
     schema.createSubcontext(s"AttributeDefinition/$name", attributes)
   }
