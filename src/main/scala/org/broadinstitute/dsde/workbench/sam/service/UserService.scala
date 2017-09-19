@@ -41,8 +41,8 @@ class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Google
     for {
       loadedUser <- directoryDAO.loadUser(user.id)
       googleStatus <- googleDirectoryDAO.isGroupMember(WorkbenchGroupEmail(toProxyFromUser(user.id.value)), WorkbenchGroupEmail(user.email.value))
-      allUsersStatus <- directoryDAO.isGroupMember(allUsersGroupName, user.id) recover { case e: NameNotFoundException => false }
-      ldapStatus <- directoryDAO.isEnabled(user.id) recover { case e: NameNotFoundException => false }
+      allUsersStatus <- directoryDAO.isGroupMember(allUsersGroupName, user.id)
+      ldapStatus <- directoryDAO.isEnabled(user.id)
     } yield {
       loadedUser.map { user =>
         Option(SamUserStatus(SamUserInfo(user.id, user.email), Map("ldap" -> ldapStatus, "allUsersGroup" -> allUsersStatus, "google" -> googleStatus)))
