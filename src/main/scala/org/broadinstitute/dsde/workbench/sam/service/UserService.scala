@@ -90,6 +90,7 @@ class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Google
   def deleteUser(userId: SamUserId, userInfo: UserInfo): Future[Unit] = {
     asWorkbenchAdmin(userInfo) {
       for {
+        _ <- directoryDAO.removeGroupMember(allUsersGroupName, userId)
         _ <- googleDirectoryDAO.deleteGroup(WorkbenchGroupEmail(toProxyFromUser(userId.value)))
         deleteResult <- directoryDAO.deleteUser(userId)
       } yield deleteResult
