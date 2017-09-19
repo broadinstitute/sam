@@ -22,7 +22,7 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
   /** a bunch of attributes used in directory entries */
   private object Attr {
     val member = "uniqueMember"
-    val memberOf = "isMemberOf"
+    val memberOf = "memberOf"
     val email = "mail"
     val givenName = "givenName"
     val sn = "sn"
