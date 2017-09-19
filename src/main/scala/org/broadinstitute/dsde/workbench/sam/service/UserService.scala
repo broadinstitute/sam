@@ -23,7 +23,9 @@ class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Google
   def createUser(user: SamUser): Future[Option[SamUserStatus]] = {
     for {
       _ <- directoryDAO.createUser(user)
-      _ <- googleDirectoryDAO.createGroup(WorkbenchGroupName(user.email.value), WorkbenchGroupEmail(toProxyFromUser(user.id.value)))
+      _ <- googleDirectoryDAO.createGroup(WorkbenchGroupName(user.email.value), WorkbenchGroupEmail(toProxyFromUser(user.id.value))) recover {
+        case e:GoogleJsonResponseException if e.getDetails.getCode == StatusCodes.Conflict.intValue => ()
+      }
       _ <- googleDirectoryDAO.addMemberToGroup(WorkbenchGroupEmail(toProxyFromUser(user.id.value)), WorkbenchUserEmail(user.email.value))
       _ <- directoryDAO.enableUser(user.id)
       _ <- createAllUsersGroup
