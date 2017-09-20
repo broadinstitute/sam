@@ -81,6 +81,7 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
 
     val attrs = new BasicAttributes(true) // Ignore case
     attrs.put("NUMERICOID", "1.3.6.1.4.1.18060.0.4.3.2.300")
+    attrs.put("SUP", "top")
     attrs.put("NAME", "workbenchObject")
     attrs.put("AUXILIARY", "true")
 
@@ -95,7 +96,7 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
           val myAttrs = new BasicAttributes(true)  // Case ignore
 
           val oc = new BasicAttribute("objectclass")
-          Seq("top", "workbenchGroup", "workbenchObject").foreach(oc.add)
+          Seq("top", "workbenchGroup", "extensibleObject").foreach(oc.add)
           myAttrs.put(oc)
 
           myAttrs.put(new BasicAttribute(Attr.email, group.email.value))
@@ -155,7 +156,7 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
           val myAttrs = new BasicAttributes(true)  // Case ignore
 
           val oc = new BasicAttribute("objectclass")
-          Seq("top", "inetOrgPerson", "workbenchObject").foreach(oc.add)
+          Seq("top", "inetOrgPerson", "extensibleObject").foreach(oc.add)
           myAttrs.put(oc)
 
           myAttrs.put(new BasicAttribute(Attr.email, user.email.value))
