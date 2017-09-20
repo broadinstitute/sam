@@ -21,7 +21,7 @@ trait DirectorySubjectNameSupport {
   }
 
   protected def dnToSubject(dn: String): SamSubject = {
-    dn.split(",").toList match {
+    dn.toLowerCase.split(",").toList match {
       case name :: "ou=groups" :: tail => SamGroupName(name.stripPrefix("cn="))
       case name :: "ou=people" :: tail => SamUserId(name.stripPrefix("uid="))
       case _ => throw new WorkbenchException(s"unexpected dn [$dn]")
