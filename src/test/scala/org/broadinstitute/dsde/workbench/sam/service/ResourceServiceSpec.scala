@@ -26,6 +26,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
 
   override protected def beforeAll(): Unit = {
     runAndWait(policyDAO.init())
+    runAndWait(dirDAO.init())
   }
 
   private val dummyUserInfo = UserInfo("token", SamUserId("userid"), SamUserEmail("user@company.com"), 0)

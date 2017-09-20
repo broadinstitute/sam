@@ -36,12 +36,14 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     for {
       _ <- removeWorkbenchGroupSchema()
       _ <- createWorkbenchGroupSchema()
+      _ <- createWorkbenchObjectSchema()
     } yield ()
   }
 
   def removeWorkbenchGroupSchema(): Future[Unit] = withContext { ctx =>
     val schema = ctx.getSchema("")
 
+    Try { schema.destroySubcontext("ClassDefinition/workbenchObject") }
     Try { schema.destroySubcontext("ClassDefinition/workbenchGroup") }
     Try { schema.destroySubcontext("AttributeDefinition/" + Attr.groupSynchronizedTimestamp) }
     Try { schema.destroySubcontext("AttributeDefinition/" + Attr.groupUpdatedTimestamp) }
@@ -74,6 +76,18 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     schema.createSubcontext("ClassDefinition/workbenchGroup", attrs)
   }
 
+  def createWorkbenchObjectSchema(): Future[Unit] = withContext { ctx =>
+    val schema = ctx.getSchema("")
+
+    val attrs = new BasicAttributes(true) // Ignore case
+    attrs.put("NUMERICOID", "1.3.6.1.4.1.18060.0.4.3.2.300")
+    attrs.put("NAME", "workbenchObject")
+    attrs.put("AUXILIARY", "true")
+
+    // Add the new schema object for "fooObjectClass"
+    schema.createSubcontext("ClassDefinition/workbenchObject", attrs)
+  }
+
   override def createGroup(group: SamGroup): Future[SamGroup] = withContext { ctx =>
     try {
       val groupContext = new BaseDirContext {
@@ -81,7 +95,7 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
           val myAttrs = new BasicAttributes(true)  // Case ignore
 
           val oc = new BasicAttribute("objectclass")
-          Seq("top", "workbenchGroup").foreach(oc.add)
+          Seq("top", "workbenchGroup", "workbenchObject").foreach(oc.add)
           myAttrs.put(oc)
 
           myAttrs.put(new BasicAttribute(Attr.email, group.email.value))
@@ -141,7 +155,7 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
           val myAttrs = new BasicAttributes(true)  // Case ignore
 
           val oc = new BasicAttribute("objectclass")
-          Seq("top", "inetOrgPerson").foreach(oc.add)
+          Seq("top", "inetOrgPerson", "workbenchObject").foreach(oc.add)
           myAttrs.put(oc)
 
           myAttrs.put(new BasicAttribute(Attr.email, user.email.value))
