@@ -247,7 +247,7 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     val memberDns = getAttributes[String](attributes, Attr.member).getOrElse(Set.empty).toSet
 
     memberDns.map(dnToSubject).contains(userId)
-  }
+  } recover { case e: NameNotFoundException => false }
 
   private def withContext[T](op: InitialDirContext => T): Future[T] = withContext(directoryConfig.directoryUrl, directoryConfig.user, directoryConfig.password)(op)
 }

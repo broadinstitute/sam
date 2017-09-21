@@ -22,7 +22,7 @@ class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Google
 
   def createUser(user: SamUser): Future[Option[SamUserStatus]] = {
     for {
-      _ <- directoryDAO.createUser(user)
+      createdUser <- directoryDAO.createUser(user)
       _ <- googleDirectoryDAO.createGroup(WorkbenchGroupName(user.email.value), WorkbenchGroupEmail(toProxyFromUser(user.id.value))) recover {
         case e:GoogleJsonResponseException if e.getDetails.getCode == StatusCodes.Conflict.intValue => ()
       }
@@ -31,7 +31,7 @@ class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Google
       _ <- createAllUsersGroup
       _ <- directoryDAO.addGroupMember(allUsersGroupName, user.id)
       _ <- googleDirectoryDAO.addMemberToGroup(WorkbenchGroupEmail(toGoogleGroupName(allUsersGroupName.value)), WorkbenchUserEmail(toProxyFromUser(user.id.value))) //TODO: For now, do a manual add to the All_Users Google group (undo this in Phase II)
-      userStatus <- getUserStatus(user)
+      userStatus <- getUserStatus(createdUser)
     } yield {
       userStatus
     }
@@ -40,8 +40,8 @@ class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Google
   def getUserStatus(user: SamUser): Future[Option[SamUserStatus]] = {
     for {
       loadedUser <- directoryDAO.loadUser(user.id)
-      googleStatus <- googleDirectoryDAO.isGroupMember(WorkbenchGroupEmail(toProxyFromUser(user.id.value)), WorkbenchGroupEmail(user.email.value))
-      allUsersStatus <- directoryDAO.isGroupMember(allUsersGroupName, user.id)
+      googleStatus <- googleDirectoryDAO.isGroupMember(WorkbenchGroupEmail(toProxyFromUser(user.id.value)), WorkbenchGroupEmail(user.email.value)) recover { case e: NameNotFoundException => false }
+      allUsersStatus <- directoryDAO.isGroupMember(allUsersGroupName, user.id) recover { case e: NameNotFoundException => false }
       ldapStatus <- directoryDAO.isEnabled(user.id)
     } yield {
       loadedUser.map { user =>
