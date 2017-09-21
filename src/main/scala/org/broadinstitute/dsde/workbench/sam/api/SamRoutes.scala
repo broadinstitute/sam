@@ -31,7 +31,7 @@ abstract class SamRoutes(val resourceService: ResourceService, val userService: 
   def route: server.Route = (logRequestResult & handleExceptions(myExceptionHandler)) {
     swaggerRoutes ~
     pathPrefix("register") { userRoutes } ~
-    pathPrefix("api") { resourceRoutes }
+    pathPrefix("api") { resourceRoutes ~ adminUserRoutes }
   }
 
   private val myExceptionHandler = {

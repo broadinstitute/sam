@@ -13,6 +13,7 @@ trait DirectoryDAO {
   def deleteGroup(groupName: SamGroupName): Future[Unit]
   def addGroupMember(groupName: SamGroupName, addMember: SamSubject): Future[Unit]
   def removeGroupMember(groupName: SamGroupName, removeMember: SamSubject): Future[Unit]
+  def isGroupMember(groupName: SamGroupName, member: SamSubject): Future[Boolean]
 
   def createUser(user: SamUser): Future[SamUser]
   def loadUser(userId: SamUserId): Future[Option[SamUser]]
@@ -21,4 +22,8 @@ trait DirectoryDAO {
   def listUsersGroups(userId: SamUserId): Future[Set[SamGroupName]]
   def listFlattenedGroupUsers(groupName: SamGroupName): Future[Set[SamUserId]]
   def listAncestorGroups(groupName: SamGroupName): Future[Set[SamGroupName]]
+
+  def enableUser(userId: SamUserId): Future[Unit]
+  def disableUser(userId: SamUserId): Future[Unit]
+  def isEnabled(userId: SamUserId): Future[Boolean]
 }

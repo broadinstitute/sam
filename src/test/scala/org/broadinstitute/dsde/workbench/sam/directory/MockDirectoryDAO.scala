@@ -13,6 +13,7 @@ import scala.concurrent.ExecutionContext.Implicits.global
 class MockDirectoryDAO extends DirectoryDAO {
   private val groups: mutable.Map[SamGroupName, SamGroup] = new TrieMap()
   private val users: mutable.Map[SamUserId, SamUser] = new TrieMap()
+  private val enabledUsers: mutable.Map[SamUserId, Unit] = new TrieMap()
 
   override def createGroup(group: SamGroup): Future[SamGroup] = Future {
     if (groups.keySet.contains(group.name)) {
@@ -79,6 +80,10 @@ class MockDirectoryDAO extends DirectoryDAO {
     listGroupUsers(groupName, Set.empty)
   }
 
+  override def isGroupMember(groupName: SamGroupName, member: SamSubject): Future[Boolean] = Future {
+    groups.getOrElse(groupName, SamGroup(null, Set.empty, SamGroupEmail("g1@example.com"))).members.contains(member)
+  }
+
   private def listGroupUsers(groupName: SamGroupName, visitedGroups: Set[SamGroupName]): Set[SamUserId] = {
     if (!visitedGroups.contains(groupName)) {
       val members = groups.getOrElse(groupName, SamGroup(null, Set.empty, SamGroupEmail("g1@example.com"))).members
@@ -95,4 +100,17 @@ class MockDirectoryDAO extends DirectoryDAO {
   override def listAncestorGroups(groupName: SamGroupName): Future[Set[SamGroupName]] = Future {
     listSubjectsGroups(groupName, Set.empty).map(_.name)
   }
+
+  override def enableUser(userId: SamUserId): Future[Unit] = Future {
+    enabledUsers += (userId -> ())
+  }
+
+  override def disableUser(userId: SamUserId): Future[Unit] = Future {
+    enabledUsers -= userId
+  }
+
+  override def isEnabled(userId: SamUserId): Future[Boolean] = Future {
+    enabledUsers.contains(userId)
+  }
+
 }

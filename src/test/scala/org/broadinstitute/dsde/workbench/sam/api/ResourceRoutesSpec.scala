@@ -6,6 +6,7 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.{ResourceService, UserService}
 import org.scalatest.{FlatSpec, Matchers}
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
+import org.broadinstitute.dsde.workbench.google.mock.MockGoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.directory.MockDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model.ErrorReportJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.openam.MockAccessPolicyDAO
@@ -18,7 +19,7 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
 
   private def createSamRoutes(resourceTypes: Map[ResourceTypeName, ResourceType]) = {
     val mockResourceService = new ResourceService(new MockAccessPolicyDAO(), new MockDirectoryDAO(), "example.com")
-    val mockUserService = new UserService(new MockDirectoryDAO())
+    val mockUserService = new UserService(new MockDirectoryDAO(), new MockGoogleDirectoryDAO(), "dev.test.firecloud.org")
 
     new TestSamRoutes(resourceTypes, mockResourceService, mockUserService, UserInfo("", SamUserId(""), SamUserEmail(""), 0))
   }

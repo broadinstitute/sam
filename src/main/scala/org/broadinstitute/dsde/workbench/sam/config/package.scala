@@ -1,5 +1,9 @@
 package org.broadinstitute.dsde.workbench.sam
 
+import java.io.StringReader
+
+import com.google.api.client.googleapis.auth.oauth2.GoogleClientSecrets
+import com.google.api.client.json.jackson2.JacksonFactory
 import net.ceedubs.ficus.readers.ValueReader
 import org.broadinstitute.dsde.workbench.sam.model._
 import net.ceedubs.ficus.Ficus._
@@ -37,7 +41,20 @@ package object config {
       config.getString("url"),
       config.getString("user"),
       config.getString("password"),
-      config.getString("baseDn")
+      config.getString("baseDn"),
+      config.getString("enabledUsersGroupDn")
+    )
+  }
+
+  val jsonFactory = JacksonFactory.getDefaultInstance
+
+  implicit val googleDirectoryConfigReader: ValueReader[GoogleDirectoryConfig] = ValueReader.relative { config =>
+    GoogleDirectoryConfig(
+      GoogleClientSecrets.load(jsonFactory, new StringReader(config.getString("secrets"))),
+      config.getString("pathToPem"),
+      config.getString("appsDomain"),
+      config.getString("appName"),
+      config.getString("serviceProject")
     )
   }
 }

@@ -36,6 +36,60 @@ securityDefinitions:
 ##########################################################################################
 paths:
 
+  /api/admin/user/{userId}:
+    get:
+      summary: gets the registration status of the specified user
+      parameters:
+        - in: path
+          description: User ID to check the status of
+          name: userId
+          required: true
+          type: string
+      operationId: adminGetUserStatus
+      tags:
+        - Admin
+      security:
+        - googleoauth:
+          - openid
+          - email
+          - profile
+
+  /api/admin/user/{userId}/disable:
+    put:
+      summary: disables the specified user
+      parameters:
+        - in: path
+          description: User ID to disable
+          name: userId
+          required: true
+          type: string
+      operationId: disableUser
+      tags:
+        - Admin
+      security:
+        - googleoauth:
+            - openid
+            - email
+            - profile
+
+  /api/admin/user/{userId}/enable:
+    put:
+      summary: enables the specified user
+      parameters:
+        - in: path
+          description: User ID to enable
+          name: userId
+          required: true
+          type: string
+      operationId: enableUser
+      tags:
+        - Admin
+      security:
+        - googleoauth:
+          - openid
+          - email
+          - profile
+
   /api/resource/{resourceTypeName}/{resourceId}:
     post:
       summary: Create a new resource
@@ -131,13 +185,32 @@ paths:
             - profile
 
   /register/user:
+    get:
+      summary: gets the registration status of the logged in user
+      responses:
+        200:
+          description: 'user exists'
+          schema:
+            $ref: '#/definitions/UserStatus'
+        404:
+          description: user not found
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      operationId: getUserStatus
+      tags:
+        - Users
+      security:
+        - googleoauth:
+          - openid
+          - email
+          - profile
     post:
       summary: create current user in the system using login credentials
       responses:
         201:
-          description: 'user successfully creates'
+          description: 'user successfully created'
           schema:
-            $ref: '#/definitions/User'
+            $ref: '#/definitions/UserStatus'
         409:
           description: user already exists
           schema:
@@ -155,6 +228,23 @@ paths:
 ## DEFINITIONS
 ##########################################################################################
 definitions:
+
+  Enabled:
+    description: ''
+    required:
+      - ldap
+      - allUsersGroup
+      - google
+    properties:
+      ldap:
+        type: boolean
+        description: true if the user is enabled in ldap
+      allUsersGroup:
+        type: boolean
+        description: true if the user is in the all users group
+      google:
+        type: boolean
+        description: true if the user is in their proxy group
 
   ErrorReport:
     description: ''
@@ -250,10 +340,11 @@ definitions:
         type: integer
         description: line number
 
-  User:
+  UserInfo:
     description: ''
     required:
       - id
+      - email
     properties:
       id:
         type: string
@@ -261,3 +352,15 @@ definitions:
       email:
         type: string
         description: user email
+
+  UserStatus:
+    description: ''
+    required:
+      - id
+    properties:
+      userInfo:
+        $ref: '#/definitions/UserInfo'
+        description: the user's details
+      enabled:
+        $ref: '#/definitions/Enabled'
+        description: the status of the user's account

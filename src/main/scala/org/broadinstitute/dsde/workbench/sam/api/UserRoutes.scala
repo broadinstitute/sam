@@ -1,14 +1,12 @@
 package org.broadinstitute.dsde.workbench.sam.api
 
+import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directives._
+import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.UserService
-
-import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
-import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
-import spray.json.DefaultJsonProtocol._
 
 import scala.concurrent.ExecutionContext
 
@@ -25,10 +23,72 @@ trait UserRoutes extends UserInfoDirectives {
         pathEndOrSingleSlash {
           post {
             complete {
-              userService.createUser(SamUser(userInfo.userId, userInfo.userEmail)).map(user => StatusCodes.Created -> user)
+              userService.createUser(SamUser(userInfo.userId, userInfo.userEmail)).map(userStatus => StatusCodes.Created -> userStatus)
+            }
+          } ~
+          get {
+            complete {
+              userService.getUserStatus(SamUser(userInfo.userId, userInfo.userEmail)).map { statusOption =>
+                statusOption.map { status =>
+                  StatusCodes.OK -> Option(status)
+                }.getOrElse(StatusCodes.NotFound -> None)
+              }
             }
           }
         }
       }
     }
+
+  def adminUserRoutes: server.Route =
+    pathPrefix("admin") {
+      pathPrefix("user") {
+        requireUserInfo { userInfo =>
+          pathPrefix(Segment) { userId =>
+            pathEnd {
+              delete {
+                complete {
+                  userService.deleteUser(SamUserId(userId), userInfo).map(_ => StatusCodes.OK)
+                }
+              } ~
+              get {
+                complete {
+                  userService.adminGetUserStatus(SamUserId(userId), userInfo).map { statusOption =>
+                    statusOption.map {status =>
+                      StatusCodes.OK -> Option(status)
+                    }.getOrElse(StatusCodes.NotFound -> None)
+                  }
+                }
+              }
+            } ~
+            pathPrefix("enable") {
+              pathEndOrSingleSlash {
+                put {
+                  complete {
+                    userService.enableUser(SamUserId(userId), userInfo).map { statusOption =>
+                      statusOption.map { status =>
+                        StatusCodes.OK -> Option(status)
+                      }.getOrElse(StatusCodes.NotFound -> None)
+                    }
+                  }
+                }
+              }
+            } ~
+            pathPrefix("disable") {
+              pathEndOrSingleSlash {
+                put {
+                  complete {
+                    userService.disableUser(SamUserId(userId), userInfo).map { statusOption =>
+                      statusOption.map { status =>
+                        StatusCodes.OK -> Option(status)
+                      }.getOrElse(StatusCodes.NotFound -> None)
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
 }

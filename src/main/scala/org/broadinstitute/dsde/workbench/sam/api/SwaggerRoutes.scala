@@ -7,6 +7,8 @@ import akka.stream.scaladsl.Flow
 import akka.util.ByteString
 import org.broadinstitute.dsde.workbench.sam.config.SwaggerConfig
 
+import scala.language.postfixOps
+
 /**
   * Created by dvoet on 7/18/17.
   */
