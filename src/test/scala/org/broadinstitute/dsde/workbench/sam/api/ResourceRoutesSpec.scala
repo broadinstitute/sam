@@ -11,6 +11,7 @@ import org.broadinstitute.dsde.workbench.sam.directory.MockDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model.ErrorReportJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.openam.MockAccessPolicyDAO
 import spray.json.{JsBoolean, JsValue}
+import spray.json.DefaultJsonProtocol._
 
 /**
   * Created by dvoet on 6/7/17.
@@ -55,5 +56,39 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     }
 
   }
+
+  it should "200 on list resource roles" in {
+    val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceAction("run")), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("run")))), ResourceRoleName("owner"))
+    val samRoutes = createSamRoutes(Map(resourceType.name -> resourceType))
+
+    Post(s"/api/resource/${resourceType.name}/foo") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+    }
+
+    Get(s"/api/resource/${resourceType.name}/foo/roles") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[Set[String]] shouldEqual Set("owner")
+    }
+  }
+
+  it should "404 on list resource roles when resource type doesnt exist" in {
+    val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceAction("run")), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("run")))), ResourceRoleName("owner"))
+    val samRoutes = createSamRoutes(Map(resourceType.name -> resourceType))
+
+    Get(s"/api/resource/doesntexist/foo/roles") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
+    }
+  }
+
+  it should "200 and return an empty list on list resource roles" in {
+    val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceAction("run")), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("run")))), ResourceRoleName("owner"))
+    val samRoutes = createSamRoutes(Map(resourceType.name -> resourceType))
+
+    Get(s"/api/resource/${resourceType.name}/foo/roles") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[Set[String]] shouldEqual Set.empty
+    }
+  }
+
 }
 

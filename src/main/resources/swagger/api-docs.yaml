@@ -129,7 +129,7 @@ paths:
       summary: Query for the list of roles that the requesting user has on the resource
       responses:
         200:
-          description: The list of roles that the requesting user has on the resource. Empty if resource does not exist or user has no permissions.
+          description: The list of roles that the requesting user has on the resource. Empty if resource does not exist or user has no role on that resource.
           schema:
             type: array
             items:
