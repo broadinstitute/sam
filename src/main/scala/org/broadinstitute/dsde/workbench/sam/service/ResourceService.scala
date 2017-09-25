@@ -21,18 +21,28 @@ class ResourceService(val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: Di
   }
 
   def listUserResourceActions(resourceType: ResourceType, resourceName: ResourceName, userInfo: UserInfo): Future[Set[ResourceAction]] = {
+    listResourceAccessPoliciesForUser(resourceType, resourceName, userInfo).map { matchingPolicies =>
+      matchingPolicies.flatMap(_.actions)
+    }
+  }
+
+  def listUserResourceRoles(resourceType: ResourceType, resourceName: ResourceName, userInfo: UserInfo): Future[Set[ResourceRoleName]] = {
+    listResourceAccessPoliciesForUser(resourceType, resourceName, userInfo).map { matchingPolicies =>
+      matchingPolicies.flatMap(_.role)
+    }
+  }
+
+  private def listResourceAccessPoliciesForUser(resourceType: ResourceType, resourceName: ResourceName, userInfo: UserInfo): Future[Set[AccessPolicy]] = {
     for {
       policies <- accessPolicyDAO.listAccessPolicies(resourceType.name, resourceName)
       groups <- directoryDAO.listUsersGroups(userInfo.userId)
     } yield {
-      val matchingPolicies = policies.filter { policy =>
+      policies.filter { policy =>
         policy.subject match {
           case user: SamUserId => userInfo.userId == user
           case group: SamGroupName => groups.contains(group)
         }
-      }
-
-      matchingPolicies.flatMap(_.actions).toSet
+      }.toSet
     }
   }
 

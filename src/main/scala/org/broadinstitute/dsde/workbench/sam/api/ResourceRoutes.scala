@@ -53,6 +53,15 @@ trait ResourceRoutes extends UserInfoDirectives {
                     }
                   }
                 }
+              } ~
+              pathPrefix("roles") {
+                pathEndOrSingleSlash {
+                  get {
+                    complete(resourceService.listUserResourceRoles(resourceType, ResourceName(resourceId), userInfo).map { roles =>
+                      StatusCodes.OK -> roles
+                    })
+                  }
+                }
               }
           }
         }
