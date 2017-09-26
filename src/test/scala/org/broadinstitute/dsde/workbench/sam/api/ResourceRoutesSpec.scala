@@ -67,7 +67,7 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
 
     Get(s"/api/resource/${resourceType.name}/foo/roles") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
-      responseAs[Set[String]] shouldEqual Set("owner")
+      responseAs[Set[String]]
     }
   }
 
@@ -86,7 +86,7 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
 
     Get(s"/api/resource/${resourceType.name}/foo/roles") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
-      responseAs[Set[String]] shouldEqual Set.empty
+      responseAs[Set[String]]
     }
   }
 

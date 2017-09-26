@@ -143,4 +143,49 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     //cleanup
     runAndWait(service.deleteResource(resourceType, resourceName))
   }
+
+  it should "listUserResourceRoles when they have at least one role" in {
+    val ownerRoleName = ResourceRoleName("owner")
+    val resourceType = ResourceType(ResourceTypeName(UUID.randomUUID().toString), Set(ResourceAction("a1"), ResourceAction("a2"), ResourceAction("a3")), Set(ResourceRole(ownerRoleName, Set(ResourceAction("a1"), ResourceAction("a2")))), ownerRoleName)
+    val resourceName = ResourceName("resource")
+
+
+    runAndWait(service.directoryDAO.createUser(SamUser(dummyUserInfo.userId, dummyUserInfo.userEmail)))
+
+    runAndWait(service.createResource(
+      resourceType,
+      resourceName,
+      dummyUserInfo
+    ))
+
+    val roles = runAndWait(service.listUserResourceRoles(
+      resourceType,
+      resourceName,
+      dummyUserInfo
+    ))
+
+    roles shouldEqual Set(ResourceRoleName("owner"))
+
+    runAndWait(service.deleteResource(resourceType, resourceName))
+    runAndWait(service.directoryDAO.deleteUser(dummyUserInfo.userId))
+  }
+
+  it should "listUserResourceRoles when the resource doesn't exist" in {
+    val ownerRoleName = ResourceRoleName("owner")
+    val resourceType = ResourceType(ResourceTypeName(UUID.randomUUID().toString), Set(ResourceAction("a1"), ResourceAction("a2"), ResourceAction("a3")), Set(ResourceRole(ownerRoleName, Set(ResourceAction("a1"), ResourceAction("a2")))), ownerRoleName)
+    val resourceName = ResourceName("resource")
+
+
+    runAndWait(service.directoryDAO.createUser(SamUser(dummyUserInfo.userId, dummyUserInfo.userEmail)))
+
+    val roles = runAndWait(service.listUserResourceRoles(
+      resourceType,
+      resourceName,
+      dummyUserInfo
+    ))
+
+    roles shouldEqual Set.empty
+
+    runAndWait(service.directoryDAO.deleteUser(dummyUserInfo.userId))
+  }
 }
