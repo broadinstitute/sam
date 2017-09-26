@@ -13,9 +13,9 @@ import akka.http.scaladsl.server.directives.{DebuggingDirectives, LogEntry, Logg
 import akka.stream.Materializer
 import akka.stream.scaladsl.Sink
 import com.typesafe.scalalogging.LazyLogging
-import org.broadinstitute.dsde.workbench.sam.WorkbenchExceptionWithErrorReport
-import org.broadinstitute.dsde.workbench.sam.model.{ErrorReport, UserInfo}
+import org.broadinstitute.dsde.workbench.sam._
 import SprayJsonSupport._
+import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchExceptionWithErrorReport}
 import org.broadinstitute.dsde.workbench.sam.config.SwaggerConfig
 import org.broadinstitute.dsde.workbench.sam.service.{ResourceService, UserService}
 
@@ -35,7 +35,7 @@ abstract class SamRoutes(val resourceService: ResourceService, val userService: 
   }
 
   private val myExceptionHandler = {
-    import org.broadinstitute.dsde.workbench.sam.model.ErrorReportJsonSupport._
+    import org.broadinstitute.dsde.workbench.model.ErrorReportJsonSupport._
 
     ExceptionHandler {
       case withErrorReport: WorkbenchExceptionWithErrorReport =>

@@ -3,8 +3,6 @@ package org.broadinstitute.dsde.workbench.sam.openam
 import javax.naming.NameAlreadyBoundException
 import javax.naming.directory._
 
-import akka.http.scaladsl.model.StatusCodes
-import org.broadinstitute.dsde.workbench.sam.WorkbenchExceptionWithErrorReport
 import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
 import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryDAO, DirectorySubjectNameSupport}
 import org.broadinstitute.dsde.workbench.sam.model._

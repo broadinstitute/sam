@@ -1,6 +1,6 @@
 package org.broadinstitute.dsde.workbench
 
-import org.broadinstitute.dsde.workbench.sam.model.ErrorReportSource
+import org.broadinstitute.dsde.workbench.model.ErrorReportSource
 
 /**
   * Created by dvoet on 5/18/17.

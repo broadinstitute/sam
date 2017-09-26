@@ -1,13 +1,12 @@
 package org.broadinstitute.dsde.workbench.sam.directory
 
-import java.util
 import javax.naming._
 import javax.naming.directory._
 
 import akka.http.scaladsl.model.StatusCodes
+import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
-import org.broadinstitute.dsde.workbench.sam.{WorkbenchException, WorkbenchExceptionWithErrorReport}
-import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.util.{BaseDirContext, JndiSupport}
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -75,7 +74,7 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     schema.createSubcontext("ClassDefinition/workbenchGroup", attrs)
   }
 
-  override def createGroup(group: SamGroup): Future[SamGroup] = withContext { ctx =>
+  override def createGroup(group: WorkbenchGroup): Future[WorkbenchGroup] = withContext { ctx =>
     try {
       val groupContext = new BaseDirContext {
         override def getAttributes(name: String): Attributes = {
@@ -106,19 +105,19 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     }
   }
 
-  override def deleteGroup(groupName: SamGroupName): Future[Unit] = withContext { ctx =>
+  override def deleteGroup(groupName: WorkbenchGroupName): Future[Unit] = withContext { ctx =>
     ctx.unbind(groupDn(groupName))
   }
 
-  override def removeGroupMember(groupName: SamGroupName, removeMember: SamSubject): Future[Unit] = withContext { ctx =>
+  override def removeGroupMember(groupName: WorkbenchGroupName, removeMember: WorkbenchSubject): Future[Unit] = withContext { ctx =>
     ctx.modifyAttributes(groupDn(groupName), DirContext.REMOVE_ATTRIBUTE, new BasicAttributes(Attr.uniqueMember, subjectDn(removeMember)))
   }
 
-  override def addGroupMember(groupName: SamGroupName, addMember: SamSubject): Future[Unit] = withContext { ctx =>
+  override def addGroupMember(groupName: WorkbenchGroupName, addMember: WorkbenchSubject): Future[Unit] = withContext { ctx =>
     ctx.modifyAttributes(groupDn(groupName), DirContext.ADD_ATTRIBUTE, new BasicAttributes(Attr.uniqueMember, subjectDn(addMember)))
   }
 
-  override def loadGroup(groupName: SamGroupName): Future[Option[SamGroup]] = withContext { ctx =>
+  override def loadGroup(groupName: WorkbenchGroupName): Future[Option[WorkbenchGroup]] = withContext { ctx =>
     Try {
       val attributes = ctx.getAttributes(groupDn(groupName))
 
@@ -126,7 +125,7 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
       val email = getAttribute[String](attributes, Attr.email).getOrElse(throw new WorkbenchException(s"${Attr.email} attribute missing: $groupName"))
       val memberDns = getAttributes[String](attributes, Attr.uniqueMember).getOrElse(Set.empty).toSet
 
-      Option(SamGroup(SamGroupName(cn), memberDns.map(dnToSubject), SamGroupEmail(email)))
+      Option(WorkbenchGroup(WorkbenchGroupName(cn), memberDns.map(dnToSubject), WorkbenchGroupEmail(email)))
 
     }.recover {
       case e: NameNotFoundException => None
@@ -135,7 +134,7 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
   }
 
 
-  override def createUser(user: SamUser): Future[SamUser] = withContext { ctx =>
+  override def createUser(user: WorkbenchUser): Future[WorkbenchUser] = withContext { ctx =>
     try {
       val userContext = new BaseDirContext {
         override def getAttributes(name: String): Attributes = {
@@ -162,7 +161,7 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     }
   }
 
-  override def loadUser(userId: SamUserId): Future[Option[SamUser]] = withContext { ctx =>
+  override def loadUser(userId: WorkbenchUserId): Future[Option[WorkbenchUser]] = withContext { ctx =>
     Try {
       val attributes = ctx.getAttributes(userDn(userId))
 
@@ -174,11 +173,11 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     }.get
   }
 
-  private def unmarshalUser(attributes: Attributes): SamUser = {
+  private def unmarshalUser(attributes: Attributes): WorkbenchUser = {
     val uid = getAttribute[String](attributes, Attr.uid).getOrElse(throw new WorkbenchException(s"${Attr.uid} attribute missing"))
     val email = getAttribute[String](attributes, Attr.email).getOrElse(throw new WorkbenchException(s"${Attr.email} attribute missing"))
 
-    SamUser(SamUserId(uid), SamUserEmail(email))
+    WorkbenchUser(WorkbenchUserId(uid), WorkbenchUserEmail(email))
   }
 
   private def getAttribute[T](attributes: Attributes, key: String): Option[T] = {
@@ -189,11 +188,11 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     Option(attributes.get(key)).map(_.getAll.asScala.map(_.asInstanceOf[T]))
   }
 
-  override def deleteUser(userId: SamUserId): Future[Unit] = withContext { ctx =>
+  override def deleteUser(userId: WorkbenchUserId): Future[Unit] = withContext { ctx =>
     ctx.unbind(userDn(userId))
   }
 
-  override def listUsersGroups(userId: SamUserId): Future[Set[SamGroupName]] = withContext { ctx =>
+  override def listUsersGroups(userId: WorkbenchUserId): Future[Set[WorkbenchGroupName]] = withContext { ctx =>
     val groups = for (
       attr <- ctx.getAttributes(userDn(userId), Array(Attr.memberOf)).getAll.asScala;
       attrE <- attr.getAll.asScala
@@ -202,7 +201,7 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     groups.toSet
   }
 
-  override def isGroupMember(groupName: SamGroupName, member: SamSubject): Future[Boolean] = withContext { ctx =>
+  override def isGroupMember(groupName: WorkbenchGroupName, member: WorkbenchSubject): Future[Boolean] = withContext { ctx =>
     val groups = for (
       attr <- ctx.getAttributes(subjectDn(member), Array(Attr.memberOf)).getAll.asScala;
       attrE <- attr.getAll.asScala
@@ -211,13 +210,13 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     groups.toSet.contains(groupName)
   }
 
-  override def listFlattenedGroupUsers(groupName: SamGroupName): Future[Set[SamUserId]] = withContext { ctx =>
+  override def listFlattenedGroupUsers(groupName: WorkbenchGroupName): Future[Set[WorkbenchUserId]] = withContext { ctx =>
     ctx.search(peopleOu, new BasicAttributes(Attr.memberOf, groupDn(groupName), true)).asScala.map { result =>
       unmarshalUser(result.getAttributes).id
     }.toSet
   }
 
-  override def listAncestorGroups(groupName: SamGroupName): Future[Set[SamGroupName]] = withContext { ctx =>
+  override def listAncestorGroups(groupName: WorkbenchGroupName): Future[Set[WorkbenchGroupName]] = withContext { ctx =>
     val groups = for (
       attr <- ctx.getAttributes(groupDn(groupName), Array(Attr.memberOf)).getAll.asScala;
       attrE <- attr.getAll.asScala
@@ -226,7 +225,7 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     groups.toSet
   }
 
-  override def enableUser(userId: SamUserId): Future[Unit] = withContext { ctx =>
+  override def enableUser(userId: WorkbenchUserId): Future[Unit] = withContext { ctx =>
     Try {
       ctx.modifyAttributes(directoryConfig.enabledUsersGroupDn, DirContext.ADD_ATTRIBUTE, new BasicAttributes(Attr.member, userDn(userId)))
     }.recover {
@@ -234,7 +233,7 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     }
   }
 
-  override def disableUser(userId: SamUserId): Future[Unit] = withContext { ctx =>
+  override def disableUser(userId: WorkbenchUserId): Future[Unit] = withContext { ctx =>
     Try {
       ctx.modifyAttributes(directoryConfig.enabledUsersGroupDn, DirContext.REMOVE_ATTRIBUTE, new BasicAttributes(Attr.member, userDn(userId)))
     }.recover {
@@ -242,7 +241,7 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     }
   }
 
-  override def isEnabled(userId: SamUserId): Future[Boolean] = withContext { ctx =>
+  override def isEnabled(userId: WorkbenchUserId): Future[Boolean] = withContext { ctx =>
     val attributes = ctx.getAttributes(directoryConfig.enabledUsersGroupDn)
     val memberDns = getAttributes[String](attributes, Attr.member).getOrElse(Set.empty).toSet
 

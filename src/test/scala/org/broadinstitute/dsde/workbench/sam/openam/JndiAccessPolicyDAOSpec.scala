@@ -7,6 +7,7 @@ import org.broadinstitute.dsde.workbench.sam.directory.JndiDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.scalatest.{BeforeAndAfterAll, FlatSpec, Matchers}
 import net.ceedubs.ficus.Ficus._
+import org.broadinstitute.dsde.workbench.model.WorkbenchUserId
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
 import org.broadinstitute.dsde.workbench.sam.directory._
@@ -27,9 +28,9 @@ class JndiAccessPolicyDAOSpec extends FlatSpec with Matchers with TestSupport wi
   "JndiAccessPolicyDAO" should "create, list, delete policies" in {
     val typeName1 = ResourceTypeName(UUID.randomUUID().toString)
     val typeName2 = ResourceTypeName(UUID.randomUUID().toString)
-    val policy1 = AccessPolicy(AccessPolicyId(UUID.randomUUID().toString), Set(ResourceAction("action1"), ResourceAction("action2")), typeName1, ResourceName("resource"), SamUserId("foo"), None)
-    val policy2 = AccessPolicy(AccessPolicyId(UUID.randomUUID().toString), Set(ResourceAction("action3"), ResourceAction("action4")), typeName1, ResourceName("resource"), SamUserId("foo2"), None)
-    val policy3 = AccessPolicy(AccessPolicyId(UUID.randomUUID().toString), Set(ResourceAction("action1"), ResourceAction("action2")), typeName2, ResourceName("resource"), SamUserId("foo"), None)
+    val policy1 = AccessPolicy(AccessPolicyId(UUID.randomUUID().toString), Set(ResourceAction("action1"), ResourceAction("action2")), typeName1, ResourceName("resource"), WorkbenchUserId("foo"), None)
+    val policy2 = AccessPolicy(AccessPolicyId(UUID.randomUUID().toString), Set(ResourceAction("action3"), ResourceAction("action4")), typeName1, ResourceName("resource"), WorkbenchUserId("foo2"), None)
+    val policy3 = AccessPolicy(AccessPolicyId(UUID.randomUUID().toString), Set(ResourceAction("action1"), ResourceAction("action2")), typeName2, ResourceName("resource"), WorkbenchUserId("foo"), None)
 
     assertResult(Seq.empty) {
       runAndWait(dao.listAccessPolicies(policy1.resourceType, policy1.resource)).toSeq

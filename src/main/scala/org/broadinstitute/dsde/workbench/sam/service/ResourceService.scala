@@ -4,10 +4,11 @@ import java.util.UUID
 
 import akka.http.scaladsl.model.StatusCodes
 import com.typesafe.scalalogging.LazyLogging
-import org.broadinstitute.dsde.workbench.sam.WorkbenchExceptionWithErrorReport
+import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.AccessPolicyDAO
+import org.broadinstitute.dsde.workbench.sam._
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -27,8 +28,8 @@ class ResourceService(val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: Di
     } yield {
       val matchingPolicies = policies.filter { policy =>
         policy.subject match {
-          case user: SamUserId => userInfo.userId == user
-          case group: SamGroupName => groups.contains(group)
+          case user: WorkbenchUserId => userInfo.userId == user
+          case group: WorkbenchGroupName => groups.contains(group)
         }
       }
 
@@ -36,19 +37,19 @@ class ResourceService(val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: Di
     }
   }
 
-  def toGoogleGroupName(groupName: SamGroupName) = SamGroupEmail(s"GROUP_${groupName.value}@${googleDomain}")
+  def toGoogleGroupName(groupName: WorkbenchGroupName) = WorkbenchGroupEmail(s"GROUP_${groupName.value}@${googleDomain}")
 
   def createResource(resourceType: ResourceType, resourceName: ResourceName, userInfo: UserInfo): Future[Set[AccessPolicy]] = {
     accessPolicyDAO.listAccessPolicies(resourceType.name, resourceName) flatMap { policies =>
       if (policies.isEmpty) {
         Future.traverse(resourceType.roles) { role =>
-          val roleMembers: Set[SamSubject] = role.roleName match {
+          val roleMembers: Set[WorkbenchSubject] = role.roleName match {
             case resourceType.ownerRoleName => Set(userInfo.userId)
             case _ => Set.empty
           }
           val groupName = roleGroupName(resourceType, resourceName, role)
           for {
-            group <- directoryDAO.createGroup(SamGroup(groupName, roleMembers, toGoogleGroupName(groupName)))
+            group <- directoryDAO.createGroup(WorkbenchGroup(groupName, roleMembers, toGoogleGroupName(groupName)))
             policy <- accessPolicyDAO.createPolicy(AccessPolicy(
               AccessPolicyId(UUID.randomUUID().toString),
               role.actions,
@@ -66,7 +67,7 @@ class ResourceService(val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: Di
   }
 
   private def roleGroupName(resourceType: ResourceType, resourceName: ResourceName, role: ResourceRole) = {
-    SamGroupName(s"${resourceType.name}-${resourceName.value}-${role.roleName.value}")
+    WorkbenchGroupName(s"${resourceType.name}-${resourceName.value}-${role.roleName.value}")
   }
 
   /**
@@ -81,7 +82,7 @@ class ResourceService(val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: Di
       Future.traverse(policies) { policy =>
         accessPolicyDAO.deletePolicy(policy.id) flatMap { _ =>
           policy.subject match {
-            case group: SamGroupName if policy.role.isDefined => directoryDAO.deleteGroup(group)
+            case group: WorkbenchGroupName if policy.role.isDefined => directoryDAO.deleteGroup(group)
             case _ => Future.successful(())
           }
         }

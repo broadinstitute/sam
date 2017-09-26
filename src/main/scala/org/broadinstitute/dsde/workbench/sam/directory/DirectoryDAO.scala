@@ -1,6 +1,6 @@
 package org.broadinstitute.dsde.workbench.sam.directory
 
-import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.model._
 
 import scala.concurrent.Future
 
@@ -8,22 +8,22 @@ import scala.concurrent.Future
   * Created by dvoet on 5/26/17.
   */
 trait DirectoryDAO {
-  def createGroup(group: SamGroup): Future[SamGroup]
-  def loadGroup(groupName: SamGroupName): Future[Option[SamGroup]]
-  def deleteGroup(groupName: SamGroupName): Future[Unit]
-  def addGroupMember(groupName: SamGroupName, addMember: SamSubject): Future[Unit]
-  def removeGroupMember(groupName: SamGroupName, removeMember: SamSubject): Future[Unit]
-  def isGroupMember(groupName: SamGroupName, member: SamSubject): Future[Boolean]
+  def createGroup(group: WorkbenchGroup): Future[WorkbenchGroup]
+  def loadGroup(groupName: WorkbenchGroupName): Future[Option[WorkbenchGroup]]
+  def deleteGroup(groupName: WorkbenchGroupName): Future[Unit]
+  def addGroupMember(groupName: WorkbenchGroupName, addMember: WorkbenchSubject): Future[Unit]
+  def removeGroupMember(groupName: WorkbenchGroupName, removeMember: WorkbenchSubject): Future[Unit]
+  def isGroupMember(groupName: WorkbenchGroupName, member: WorkbenchSubject): Future[Boolean]
 
-  def createUser(user: SamUser): Future[SamUser]
-  def loadUser(userId: SamUserId): Future[Option[SamUser]]
-  def deleteUser(userId: SamUserId): Future[Unit]
+  def createUser(user: WorkbenchUser): Future[WorkbenchUser]
+  def loadUser(userId: WorkbenchUserId): Future[Option[WorkbenchUser]]
+  def deleteUser(userId: WorkbenchUserId): Future[Unit]
 
-  def listUsersGroups(userId: SamUserId): Future[Set[SamGroupName]]
-  def listFlattenedGroupUsers(groupName: SamGroupName): Future[Set[SamUserId]]
-  def listAncestorGroups(groupName: SamGroupName): Future[Set[SamGroupName]]
+  def listUsersGroups(userId: WorkbenchUserId): Future[Set[WorkbenchGroupName]]
+  def listFlattenedGroupUsers(groupName: WorkbenchGroupName): Future[Set[WorkbenchUserId]]
+  def listAncestorGroups(groupName: WorkbenchGroupName): Future[Set[WorkbenchGroupName]]
 
-  def enableUser(userId: SamUserId): Future[Unit]
-  def disableUser(userId: SamUserId): Future[Unit]
-  def isEnabled(userId: SamUserId): Future[Boolean]
+  def enableUser(userId: WorkbenchUserId): Future[Unit]
+  def disableUser(userId: WorkbenchUserId): Future[Unit]
+  def isEnabled(userId: WorkbenchUserId): Future[Boolean]
 }
