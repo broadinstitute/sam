@@ -5,7 +5,7 @@ import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.testkit.ScalatestRouteTest
 import org.broadinstitute.dsde.workbench.google.mock.MockGoogleDirectoryDAO
-import org.broadinstitute.dsde.workbench.model.{WorkbenchGroupEmail, WorkbenchGroupName, WorkbenchUserEmail}
+import org.broadinstitute.dsde.workbench.model.{WorkbenchGroupEmail, WorkbenchGroupName, WorkbenchUserEmail, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.directory.MockDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.UserService
@@ -15,10 +15,10 @@ import org.scalatest.{FlatSpec, Matchers}
   * Created by dvoet on 6/7/17.
   */
 class UserRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest {
-  val defaultUserId = SamUserId("newuser")
-  val defaultUserEmail = SamUserEmail("newuser@new.com")
-  val adminUserId = SamUserId("adminuser")
-  val adminUserEmail = SamUserEmail("adminuser@new.com")
+  val defaultUserId = WorkbenchUserId("newuser")
+  val defaultUserEmail = WorkbenchUserEmail("newuser@new.com")
+  val adminUserId = WorkbenchUserId("adminuser")
+  val adminUserEmail = WorkbenchUserEmail("adminuser@new.com")
 
   def withDefaultRoutes[T](testCode: TestSamRoutes => T): T = {
     val googleDirectoryDAO = new MockGoogleDirectoryDAO()
@@ -49,7 +49,7 @@ class UserRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest {
   "UserRoutes" should "create user" in withDefaultRoutes { samRoutes =>
     Post("/register/user") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
-      responseAs[SamUserStatus] shouldEqual SamUserStatus(SamUserInfo(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
+      responseAs[UserStatus] shouldEqual UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
     }
 
     Post("/register/user") ~> samRoutes.route ~> check {
@@ -60,48 +60,48 @@ class UserRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest {
   it should "get the status of an enabled user" in withDefaultRoutes { samRoutes =>
     Post("/register/user") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
-      responseAs[SamUserStatus] shouldEqual SamUserStatus(SamUserInfo(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
+      responseAs[UserStatus] shouldEqual UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
     }
 
     Get("/register/user") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
-      responseAs[SamUserStatus] shouldEqual SamUserStatus(SamUserInfo(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
+      responseAs[UserStatus] shouldEqual UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
     }
   }
 
   it should "get the user status of a user (as an admin)" in withAdminRoutes { (samRoutes, adminRoutes) =>
     Post("/register/user") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
-      responseAs[SamUserStatus] shouldEqual SamUserStatus(SamUserInfo(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
+      responseAs[UserStatus] shouldEqual UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
     }
 
     Get(s"/api/admin/user/$defaultUserId") ~> adminRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
-      responseAs[SamUserStatus] shouldEqual SamUserStatus(SamUserInfo(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
+      responseAs[UserStatus] shouldEqual UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
     }
   }
 
   it should "disable and then re-enable a user (as an admin)" in withAdminRoutes { (samRoutes, adminRoutes) =>
     Post("/register/user") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
-      responseAs[SamUserStatus] shouldEqual SamUserStatus(SamUserInfo(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
+      responseAs[UserStatus] shouldEqual UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
     }
 
     Put(s"/api/admin/user/$defaultUserId/disable") ~> adminRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
-      responseAs[SamUserStatus] shouldEqual SamUserStatus(SamUserInfo(defaultUserId, defaultUserEmail), Map("ldap" -> false, "allUsersGroup" -> true, "google" -> false))
+      responseAs[UserStatus] shouldEqual UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> false, "allUsersGroup" -> true, "google" -> false))
     }
 
     Put(s"/api/admin/user/$defaultUserId/enable") ~> adminRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
-      responseAs[SamUserStatus] shouldEqual SamUserStatus(SamUserInfo(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
+      responseAs[UserStatus] shouldEqual UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
     }
   }
 
   it should "delete a user (as an admin)" in withAdminRoutes { (samRoutes, adminRoutes) =>
     Post("/register/user") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
-      responseAs[SamUserStatus] shouldEqual SamUserStatus(SamUserInfo(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
+      responseAs[UserStatus] shouldEqual UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
     }
 
     Delete(s"/api/admin/user/$defaultUserId") ~> adminRoutes.route ~> check {

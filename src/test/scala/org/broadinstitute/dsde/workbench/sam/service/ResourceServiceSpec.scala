@@ -4,10 +4,11 @@ import java.util.UUID
 
 import akka.http.scaladsl.model.StatusCodes
 import com.typesafe.config.ConfigFactory
-import org.broadinstitute.dsde.workbench.sam.{TestSupport, WorkbenchExceptionWithErrorReport}
+import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.directory.JndiDirectoryDAO
 import org.scalatest.{BeforeAndAfterAll, FlatSpec, Matchers}
 import net.ceedubs.ficus.Ficus._
+import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.JndiAccessPolicyDAO
@@ -28,7 +29,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     runAndWait(policyDAO.init())
   }
 
-  private val dummyUserInfo = UserInfo("token", SamUserId("userid"), SamUserEmail("user@company.com"), 0)
+  private val dummyUserInfo = UserInfo("token", WorkbenchUserId("userid"), WorkbenchUserEmail("user@company.com"), 0)
 
   "ResourceService" should "create and delete resource" in {
     val ownerRoleName = ResourceRoleName("owner")
@@ -42,8 +43,8 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
       dummyUserInfo
     ))
 
-    val ownerGroupName = SamGroupName(s"${resourceType.name}-${resourceName.value}-owner")
-    val otherGroupName = SamGroupName(s"${resourceType.name}-${resourceName.value}-other")
+    val ownerGroupName = WorkbenchGroupName(s"${resourceType.name}-${resourceName.value}-owner")
+    val otherGroupName = WorkbenchGroupName(s"${resourceType.name}-${resourceName.value}-other")
 
     assertResult(Set(
       AccessPolicy(null, Set(ResourceAction("a1"), ResourceAction("a2")), resourceType.name, resourceName, ownerGroupName, Option(ownerRoleName)),
@@ -52,10 +53,10 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
       policies.map(_.copy(id = null))
     }
 
-    assertResult(Some(SamGroup(ownerGroupName, Set[SamSubject](SamUserId("userid")), service.toGoogleGroupName(ownerGroupName)))) {
+    assertResult(Some(WorkbenchGroup(ownerGroupName, Set[WorkbenchSubject](WorkbenchUserId("userid")), service.toGoogleGroupName(ownerGroupName)))) {
       runAndWait(dirDAO.loadGroup(ownerGroupName))
     }
-    assertResult(Some(SamGroup(otherGroupName, Set.empty[SamSubject], service.toGoogleGroupName(otherGroupName)))) {
+    assertResult(Some(WorkbenchGroup(otherGroupName, Set.empty[WorkbenchSubject], service.toGoogleGroupName(otherGroupName)))) {
       runAndWait(dirDAO.loadGroup(otherGroupName))
     }
 
@@ -84,8 +85,8 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     val resourceName1 = ResourceName("resource1")
     val resourceName2 = ResourceName("resource2")
 
-    val userInfo = UserInfo("token", SamUserId(UUID.randomUUID().toString), SamUserEmail("user@company.com"), 0)
-    runAndWait(dirDAO.createUser(SamUser(userInfo.userId, SamUserEmail("user@company.com"))))
+    val userInfo = UserInfo("token", WorkbenchUserId(UUID.randomUUID().toString), WorkbenchUserEmail("user@company.com"), 0)
+    runAndWait(dirDAO.createUser(WorkbenchUser(userInfo.userId, WorkbenchUserEmail("user@company.com"))))
 
     runAndWait(service.createResource(
       resourceType,
@@ -99,7 +100,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     ))
 
     policies2.filter(_.role.contains(otherRoleName)).foreach { otherPolicy =>
-      runAndWait(dirDAO.addGroupMember(otherPolicy.subject.asInstanceOf[SamGroupName], userInfo.userId))
+      runAndWait(dirDAO.addGroupMember(otherPolicy.subject.asInstanceOf[WorkbenchGroupName], userInfo.userId))
     }
 
     assertResult(Set(ResourceAction("a1"), ResourceAction("a2"))) {

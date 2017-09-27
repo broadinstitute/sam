@@ -8,5 +8,6 @@ import org.broadinstitute.dsde.workbench.sam.model.UserInfo
   */
 trait MockUserInfoDirectives extends UserInfoDirectives {
   val userInfo: UserInfo
+
   override def requireUserInfo: Directive1[UserInfo] = provide(userInfo)
 }
