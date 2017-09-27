@@ -28,7 +28,7 @@ trait UserRoutes extends UserInfoDirectives {
           } ~
           get {
             complete {
-              userService.getUserStatus(WorkbenchUser(userInfo.userId, userInfo.userEmail)).map { statusOption =>
+              userService.getUserStatus(userInfo.userId).map { statusOption =>
                 statusOption.map { status =>
                   StatusCodes.OK -> Option(status)
                 }.getOrElse(StatusCodes.NotFound -> None)
@@ -53,7 +53,7 @@ trait UserRoutes extends UserInfoDirectives {
                 } ~
                   get {
                     complete {
-                      userService.adminGetUserStatus(WorkbenchUserId(userId), userInfo).map { statusOption =>
+                      userService.getUserStatus(WorkbenchUserId(userId)).map { statusOption =>
                         statusOption.map { status =>
                           StatusCodes.OK -> Option(status)
                         }.getOrElse(StatusCodes.NotFound -> None)

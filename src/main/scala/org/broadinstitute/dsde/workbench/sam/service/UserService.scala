@@ -31,28 +31,23 @@ class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Google
       _ <- createAllUsersGroup
       _ <- directoryDAO.addGroupMember(allUsersGroupName, user.id)
       _ <- googleDirectoryDAO.addMemberToGroup(WorkbenchGroupEmail(toGoogleGroupName(allUsersGroupName.value)), WorkbenchUserEmail(toProxyFromUser(user.id.value))) //TODO: For now, do a manual add to the All_Users Google group (undo this in Phase II)
-      userStatus <- getUserStatus(createdUser)
+      userStatus <- getUserStatus(createdUser.id)
     } yield {
       userStatus
     }
   }
 
-  def getUserStatus(user: WorkbenchUser): Future[Option[UserStatus]] = {
-    for {
-      loadedUser <- directoryDAO.loadUser(user.id)
-      googleStatus <- googleDirectoryDAO.isGroupMember(WorkbenchGroupEmail(toProxyFromUser(user.id.value)), WorkbenchGroupEmail(user.email.value)) recover { case e: NameNotFoundException => false }
-      allUsersStatus <- directoryDAO.isGroupMember(allUsersGroupName, user.id) recover { case e: NameNotFoundException => false }
-      ldapStatus <- directoryDAO.isEnabled(user.id)
-    } yield {
-      loadedUser.map { user =>
-        Option(UserStatus(UserStatusDetails(user.id, user.email), Map("ldap" -> ldapStatus, "allUsersGroup" -> allUsersStatus, "google" -> googleStatus)))
-      }.getOrElse(None)
-    }
-  }
-
-  def adminGetUserStatus(userId: WorkbenchUserId, userInfo: UserInfo): Future[Option[UserStatus]] = {
+  def getUserStatus(userId: WorkbenchUserId): Future[Option[UserStatus]] = {
     directoryDAO.loadUser(userId).flatMap {
-      case Some(user) => getUserStatus(user)
+      case Some(user) =>
+        for {
+          googleStatus <- googleDirectoryDAO.isGroupMember(WorkbenchGroupEmail(toProxyFromUser(user.id.value)), WorkbenchGroupEmail(user.email.value)) recover { case e: NameNotFoundException => false }
+          allUsersStatus <- directoryDAO.isGroupMember(allUsersGroupName, user.id) recover { case e: NameNotFoundException => false }
+          ldapStatus <- directoryDAO.isEnabled(user.id)
+        } yield {
+          Option(UserStatus(UserStatusDetails(user.id, user.email), Map("ldap" -> ldapStatus, "allUsersGroup" -> allUsersStatus, "google" -> googleStatus)))
+        }
+
       case None => Future.successful(None)
     }
   }
@@ -63,7 +58,7 @@ class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Google
         for {
           _ <- directoryDAO.enableUser(user.id)
           _ <- googleDirectoryDAO.addMemberToGroup(WorkbenchGroupEmail(toProxyFromUser(user.id.value)), WorkbenchUserEmail(user.email.value))
-          userStatus <- getUserStatus(user)
+          userStatus <- getUserStatus(userId)
         } yield userStatus
       case None => Future.successful(None)
     }
@@ -75,7 +70,7 @@ class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Google
         for {
           _ <- directoryDAO.disableUser(user.id)
           _ <- googleDirectoryDAO.removeMemberFromGroup(WorkbenchGroupEmail(toProxyFromUser(user.id.value)), WorkbenchUserEmail(user.email.value))
-          userStatus <- getUserStatus(user)
+          userStatus <- getUserStatus(user.id)
         } yield userStatus
       case None => Future.successful(None)
     }
