@@ -346,10 +346,10 @@ definitions:
       - id
       - email
     properties:
-      id:
+      userSubjectId:
         type: string
         description: user id
-      email:
+      userEmail:
         type: string
         description: user email
 
