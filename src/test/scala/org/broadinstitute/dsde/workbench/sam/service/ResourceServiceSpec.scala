@@ -151,7 +151,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     val resourceName = ResourceName("resource")
 
 
-    runAndWait(service.directoryDAO.createUser(SamUser(dummyUserInfo.userId, dummyUserInfo.userEmail)))
+    runAndWait(service.directoryDAO.createUser(WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)))
 
     runAndWait(service.createResource(
       resourceType,
@@ -177,7 +177,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     val resourceName = ResourceName("resource")
 
 
-    runAndWait(service.directoryDAO.createUser(SamUser(dummyUserInfo.userId, dummyUserInfo.userEmail)))
+    runAndWait(service.directoryDAO.createUser(WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)))
 
     val roles = runAndWait(service.listUserResourceRoles(
       resourceType.name,
