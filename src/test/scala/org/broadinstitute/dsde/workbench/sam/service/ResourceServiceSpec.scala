@@ -103,16 +103,16 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     }
 
     assertResult(Set(ResourceAction("a1"), ResourceAction("a2"))) {
-      runAndWait(service.listUserResourceActions(resourceType, resourceName1, userInfo))
+      runAndWait(service.listUserResourceActions(resourceType.name, resourceName1, userInfo))
     }
 
     assertResult(Set(ResourceAction("a1"), ResourceAction("a2"), ResourceAction("a3"))) {
-      runAndWait(service.listUserResourceActions(resourceType, resourceName2, userInfo))
+      runAndWait(service.listUserResourceActions(resourceType.name, resourceName2, userInfo))
     }
 
-    assert(!runAndWait(service.hasPermission(resourceType, resourceName1, ResourceAction("a3"), userInfo)))
-    assert(runAndWait(service.hasPermission(resourceType, resourceName2, ResourceAction("a3"), userInfo)))
-    assert(!runAndWait(service.hasPermission(resourceType, ResourceName("doesnotexist"), ResourceAction("a3"), userInfo)))
+    assert(!runAndWait(service.hasPermission(resourceType.name, resourceName1, ResourceAction("a3"), userInfo)))
+    assert(runAndWait(service.hasPermission(resourceType.name, resourceName2, ResourceAction("a3"), userInfo)))
+    assert(!runAndWait(service.hasPermission(resourceType.name, ResourceName("doesnotexist"), ResourceAction("a3"), userInfo)))
 
     runAndWait(service.deleteResource(resourceType, resourceName1))
     runAndWait(service.deleteResource(resourceType, resourceName2))
@@ -146,7 +146,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
 
   it should "listUserResourceRoles when they have at least one role" in {
     val ownerRoleName = ResourceRoleName("owner")
-    val resourceType = ResourceType(ResourceTypeName(UUID.randomUUID().toString), Set(ResourceAction("a1"), ResourceAction("a2"), ResourceAction("a3")), Set(ResourceRole(ownerRoleName, Set(ResourceAction("a1"), ResourceAction("a2")))), ownerRoleName)
+    val resourceType = ResourceType(ResourceTypeName(UUID.randomUUID().toString), Set(ResourceAction("a1")), Set(ResourceRole(ownerRoleName, Set(ResourceAction("a1")))), ownerRoleName)
     val resourceName = ResourceName("resource")
 
 
@@ -159,7 +159,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     ))
 
     val roles = runAndWait(service.listUserResourceRoles(
-      resourceType,
+      resourceType.name,
       resourceName,
       dummyUserInfo
     ))
@@ -170,16 +170,16 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     runAndWait(service.directoryDAO.deleteUser(dummyUserInfo.userId))
   }
 
-  it should "listUserResourceRoles when the resource doesn't exist" in {
+  it should "return an empty set from listUserResourceRoles when the resource doesn't exist" in {
     val ownerRoleName = ResourceRoleName("owner")
-    val resourceType = ResourceType(ResourceTypeName(UUID.randomUUID().toString), Set(ResourceAction("a1"), ResourceAction("a2"), ResourceAction("a3")), Set(ResourceRole(ownerRoleName, Set(ResourceAction("a1"), ResourceAction("a2")))), ownerRoleName)
+    val resourceType = ResourceType(ResourceTypeName(UUID.randomUUID().toString), Set(ResourceAction("a1")), Set(ResourceRole(ownerRoleName, Set(ResourceAction("a1")))), ownerRoleName)
     val resourceName = ResourceName("resource")
 
 
     runAndWait(service.directoryDAO.createUser(SamUser(dummyUserInfo.userId, dummyUserInfo.userEmail)))
 
     val roles = runAndWait(service.listUserResourceRoles(
-      resourceType,
+      resourceType.name,
       resourceName,
       dummyUserInfo
     ))

@@ -80,15 +80,5 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     }
   }
 
-  it should "200 and return an empty list on list resource roles" in {
-    val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceAction("run")), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("run")))), ResourceRoleName("owner"))
-    val samRoutes = createSamRoutes(Map(resourceType.name -> resourceType))
-
-    Get(s"/api/resource/${resourceType.name}/foo/roles") ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.OK
-      responseAs[Set[String]]
-    }
-  }
-
 }
 

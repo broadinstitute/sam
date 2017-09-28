@@ -16,25 +16,25 @@ import scala.concurrent.{ExecutionContext, Future}
   */
 class ResourceService(val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: DirectoryDAO, val googleDomain: String)(implicit val executionContext: ExecutionContext) extends LazyLogging {
 
-  def hasPermission(resourceType: ResourceType, resourceName: ResourceName, action: ResourceAction, userInfo: UserInfo): Future[Boolean] = {
-    listUserResourceActions(resourceType, resourceName, userInfo).map { _.contains(action) }
+  def hasPermission(resourceTypeName: ResourceTypeName, resourceName: ResourceName, action: ResourceAction, userInfo: UserInfo): Future[Boolean] = {
+    listUserResourceActions(resourceTypeName, resourceName, userInfo).map { _.contains(action) }
   }
 
-  def listUserResourceActions(resourceType: ResourceType, resourceName: ResourceName, userInfo: UserInfo): Future[Set[ResourceAction]] = {
-    listResourceAccessPoliciesForUser(resourceType, resourceName, userInfo).map { matchingPolicies =>
+  def listUserResourceActions(resourceTypeName: ResourceTypeName, resourceName: ResourceName, userInfo: UserInfo): Future[Set[ResourceAction]] = {
+    listResourceAccessPoliciesForUser(resourceTypeName, resourceName, userInfo).map { matchingPolicies =>
       matchingPolicies.flatMap(_.actions)
     }
   }
 
-  def listUserResourceRoles(resourceType: ResourceType, resourceName: ResourceName, userInfo: UserInfo): Future[Set[ResourceRoleName]] = {
-    listResourceAccessPoliciesForUser(resourceType, resourceName, userInfo).map { matchingPolicies =>
+  def listUserResourceRoles(resourceTypeName: ResourceTypeName, resourceName: ResourceName, userInfo: UserInfo): Future[Set[ResourceRoleName]] = {
+    listResourceAccessPoliciesForUser(resourceTypeName, resourceName, userInfo).map { matchingPolicies =>
       matchingPolicies.flatMap(_.role)
     }
   }
 
-  private def listResourceAccessPoliciesForUser(resourceType: ResourceType, resourceName: ResourceName, userInfo: UserInfo): Future[Set[AccessPolicy]] = {
+  private def listResourceAccessPoliciesForUser(resourceTypeName: ResourceTypeName, resourceName: ResourceName, userInfo: UserInfo): Future[Set[AccessPolicy]] = {
     for {
-      policies <- accessPolicyDAO.listAccessPolicies(resourceType.name, resourceName)
+      policies <- accessPolicyDAO.listAccessPolicies(resourceTypeName, resourceName)
       groups <- directoryDAO.listUsersGroups(userInfo.userId)
     } yield {
       policies.filter { policy =>

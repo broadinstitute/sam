@@ -47,7 +47,7 @@ trait ResourceRoutes extends UserInfoDirectives {
                 pathPrefix(Segment) { action =>
                   pathEndOrSingleSlash {
                     get {
-                      complete(resourceService.hasPermission(resourceType, ResourceName(resourceId), ResourceAction(action), userInfo).map { hasPermission =>
+                      complete(resourceService.hasPermission(resourceType.name, ResourceName(resourceId), ResourceAction(action), userInfo).map { hasPermission =>
                         StatusCodes.OK -> JsBoolean(hasPermission)
                       })
                     }
@@ -57,7 +57,7 @@ trait ResourceRoutes extends UserInfoDirectives {
               pathPrefix("roles") {
                 pathEndOrSingleSlash {
                   get {
-                    complete(resourceService.listUserResourceRoles(resourceType, ResourceName(resourceId), userInfo).map { roles =>
+                    complete(resourceService.listUserResourceRoles(resourceType.name, ResourceName(resourceId), userInfo).map { roles =>
                       StatusCodes.OK -> roles
                     })
                   }
