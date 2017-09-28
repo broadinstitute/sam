@@ -7,11 +7,12 @@ import org.broadinstitute.dsde.workbench.sam.service.{ResourceService, UserServi
 import org.scalatest.{FlatSpec, Matchers}
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import org.broadinstitute.dsde.workbench.google.mock.MockGoogleDirectoryDAO
+import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchUserEmail, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.directory.MockDirectoryDAO
-import org.broadinstitute.dsde.workbench.sam.model.ErrorReportJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.openam.MockAccessPolicyDAO
 import spray.json.{JsBoolean, JsValue}
 import spray.json.DefaultJsonProtocol._
+import org.broadinstitute.dsde.workbench.model.ErrorReportJsonSupport._
 
 /**
   * Created by dvoet on 6/7/17.
@@ -22,7 +23,7 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     val mockResourceService = new ResourceService(new MockAccessPolicyDAO(), new MockDirectoryDAO(), "example.com")
     val mockUserService = new UserService(new MockDirectoryDAO(), new MockGoogleDirectoryDAO(), "dev.test.firecloud.org")
 
-    new TestSamRoutes(resourceTypes, mockResourceService, mockUserService, UserInfo("", SamUserId(""), SamUserEmail(""), 0))
+    new TestSamRoutes(resourceTypes, mockResourceService, mockUserService, UserInfo("", WorkbenchUserId(""), WorkbenchUserEmail(""), 0))
   }
 
   "ResourceRoutes" should "404 for unknown resource type" in {

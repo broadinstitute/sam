@@ -4,6 +4,7 @@ import java.util.UUID
 
 import com.typesafe.config.ConfigFactory
 import net.ceedubs.ficus.Ficus._
+import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
 import org.broadinstitute.dsde.workbench.sam.model._
@@ -23,8 +24,8 @@ class JndiDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
   }
 
   "JndiGroupDirectoryDAO" should "create, read, delete groups" in {
-    val groupName = SamGroupName(UUID.randomUUID().toString)
-    val group = SamGroup(groupName, Set.empty, SamGroupEmail("john@doe.org"))
+    val groupName = WorkbenchGroupName(UUID.randomUUID().toString)
+    val group = WorkbenchGroup(groupName, Set.empty, WorkbenchGroupEmail("john@doe.org"))
 
     assertResult(None) {
       runAndWait(dao.loadGroup(group.name))
@@ -46,8 +47,8 @@ class JndiDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
   }
 
   it should "create, read, delete users" in {
-    val userId = SamUserId(UUID.randomUUID().toString)
-    val user = SamUser(userId, SamUserEmail("foo@bar.com"))
+    val userId = WorkbenchUserId(UUID.randomUUID().toString)
+    val user = WorkbenchUser(userId, WorkbenchUserEmail("foo@bar.com"))
 
     assertResult(None) {
       runAndWait(dao.loadUser(user.id))
@@ -69,14 +70,14 @@ class JndiDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
   }
 
   it should "list groups" in {
-    val userId = SamUserId(UUID.randomUUID().toString)
-    val user = SamUser(userId, SamUserEmail("foo@bar.com"))
+    val userId = WorkbenchUserId(UUID.randomUUID().toString)
+    val user = WorkbenchUser(userId, WorkbenchUserEmail("foo@bar.com"))
 
-    val groupName1 = SamGroupName(UUID.randomUUID().toString)
-    val group1 = SamGroup(groupName1, Set(userId), SamGroupEmail("g1@example.com"))
+    val groupName1 = WorkbenchGroupName(UUID.randomUUID().toString)
+    val group1 = WorkbenchGroup(groupName1, Set(userId), WorkbenchGroupEmail("g1@example.com"))
 
-    val groupName2 = SamGroupName(UUID.randomUUID().toString)
-    val group2 = SamGroup(groupName2, Set(groupName1), SamGroupEmail("g2@example.com"))
+    val groupName2 = WorkbenchGroupName(UUID.randomUUID().toString)
+    val group2 = WorkbenchGroup(groupName2, Set(groupName1), WorkbenchGroupEmail("g2@example.com"))
 
     runAndWait(dao.createUser(user))
     runAndWait(dao.createGroup(group1))
@@ -94,21 +95,21 @@ class JndiDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
   }
 
   it should "list flattened group users" in {
-    val userId1 = SamUserId(UUID.randomUUID().toString)
-    val user1 = SamUser(userId1, SamUserEmail("foo@bar.com"))
-    val userId2 = SamUserId(UUID.randomUUID().toString)
-    val user2 = SamUser(userId2, SamUserEmail("foo@bar.com"))
-    val userId3 = SamUserId(UUID.randomUUID().toString)
-    val user3 = SamUser(userId3, SamUserEmail("foo@bar.com"))
+    val userId1 = WorkbenchUserId(UUID.randomUUID().toString)
+    val user1 = WorkbenchUser(userId1, WorkbenchUserEmail("foo@bar.com"))
+    val userId2 = WorkbenchUserId(UUID.randomUUID().toString)
+    val user2 = WorkbenchUser(userId2, WorkbenchUserEmail("foo@bar.com"))
+    val userId3 = WorkbenchUserId(UUID.randomUUID().toString)
+    val user3 = WorkbenchUser(userId3, WorkbenchUserEmail("foo@bar.com"))
 
-    val groupName1 = SamGroupName(UUID.randomUUID().toString)
-    val group1 = SamGroup(groupName1, Set(userId1), SamGroupEmail("g1@example.com"))
+    val groupName1 = WorkbenchGroupName(UUID.randomUUID().toString)
+    val group1 = WorkbenchGroup(groupName1, Set(userId1), WorkbenchGroupEmail("g1@example.com"))
 
-    val groupName2 = SamGroupName(UUID.randomUUID().toString)
-    val group2 = SamGroup(groupName2, Set(userId2, groupName1), SamGroupEmail("g2@example.com"))
+    val groupName2 = WorkbenchGroupName(UUID.randomUUID().toString)
+    val group2 = WorkbenchGroup(groupName2, Set(userId2, groupName1), WorkbenchGroupEmail("g2@example.com"))
 
-    val groupName3 = SamGroupName(UUID.randomUUID().toString)
-    val group3 = SamGroup(groupName3, Set(userId3, groupName2), SamGroupEmail("g3@example.com"))
+    val groupName3 = WorkbenchGroupName(UUID.randomUUID().toString)
+    val group3 = WorkbenchGroup(groupName3, Set(userId3, groupName2), WorkbenchGroupEmail("g3@example.com"))
 
     runAndWait(dao.createUser(user1))
     runAndWait(dao.createUser(user2))
@@ -132,14 +133,14 @@ class JndiDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
   }
 
   it should "list group ancestors" in {
-    val groupName1 = SamGroupName(UUID.randomUUID().toString)
-    val group1 = SamGroup(groupName1, Set(), SamGroupEmail("g1@example.com"))
+    val groupName1 = WorkbenchGroupName(UUID.randomUUID().toString)
+    val group1 = WorkbenchGroup(groupName1, Set(), WorkbenchGroupEmail("g1@example.com"))
 
-    val groupName2 = SamGroupName(UUID.randomUUID().toString)
-    val group2 = SamGroup(groupName2, Set(groupName1), SamGroupEmail("g2@example.com"))
+    val groupName2 = WorkbenchGroupName(UUID.randomUUID().toString)
+    val group2 = WorkbenchGroup(groupName2, Set(groupName1), WorkbenchGroupEmail("g2@example.com"))
 
-    val groupName3 = SamGroupName(UUID.randomUUID().toString)
-    val group3 = SamGroup(groupName3, Set(groupName2), SamGroupEmail("g3@example.com"))
+    val groupName3 = WorkbenchGroupName(UUID.randomUUID().toString)
+    val group3 = WorkbenchGroup(groupName3, Set(groupName2), WorkbenchGroupEmail("g3@example.com"))
 
     runAndWait(dao.createGroup(group1))
     runAndWait(dao.createGroup(group2))
@@ -157,17 +158,17 @@ class JndiDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
   }
 
   it should "handle circular groups" in {
-    val userId = SamUserId(UUID.randomUUID().toString)
-    val user = SamUser(userId, SamUserEmail("foo@bar.com"))
+    val userId = WorkbenchUserId(UUID.randomUUID().toString)
+    val user = WorkbenchUser(userId, WorkbenchUserEmail("foo@bar.com"))
 
-    val groupName1 = SamGroupName(UUID.randomUUID().toString)
-    val group1 = SamGroup(groupName1, Set(userId), SamGroupEmail("g1@example.com"))
+    val groupName1 = WorkbenchGroupName(UUID.randomUUID().toString)
+    val group1 = WorkbenchGroup(groupName1, Set(userId), WorkbenchGroupEmail("g1@example.com"))
 
-    val groupName2 = SamGroupName(UUID.randomUUID().toString)
-    val group2 = SamGroup(groupName2, Set(groupName1), SamGroupEmail("g2@example.com"))
+    val groupName2 = WorkbenchGroupName(UUID.randomUUID().toString)
+    val group2 = WorkbenchGroup(groupName2, Set(groupName1), WorkbenchGroupEmail("g2@example.com"))
 
-    val groupName3 = SamGroupName(UUID.randomUUID().toString)
-    val group3 = SamGroup(groupName3, Set(groupName2), SamGroupEmail("g3@example.com"))
+    val groupName3 = WorkbenchGroupName(UUID.randomUUID().toString)
+    val group3 = WorkbenchGroup(groupName3, Set(groupName2), WorkbenchGroupEmail("g3@example.com"))
 
     runAndWait(dao.createUser(user))
     runAndWait(dao.createGroup(group1))
@@ -197,14 +198,14 @@ class JndiDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
   }
 
   it should "add/remove groups" in {
-    val userId = SamUserId(UUID.randomUUID().toString)
-    val user = SamUser(userId, SamUserEmail("foo@bar.com"))
+    val userId = WorkbenchUserId(UUID.randomUUID().toString)
+    val user = WorkbenchUser(userId, WorkbenchUserEmail("foo@bar.com"))
 
-    val groupName1 = SamGroupName(UUID.randomUUID().toString)
-    val group1 = SamGroup(groupName1, Set.empty, SamGroupEmail("g1@example.com"))
+    val groupName1 = WorkbenchGroupName(UUID.randomUUID().toString)
+    val group1 = WorkbenchGroup(groupName1, Set.empty, WorkbenchGroupEmail("g1@example.com"))
 
-    val groupName2 = SamGroupName(UUID.randomUUID().toString)
-    val group2 = SamGroup(groupName2, Set.empty, SamGroupEmail("g2@example.com"))
+    val groupName2 = WorkbenchGroupName(UUID.randomUUID().toString)
+    val group2 = WorkbenchGroup(groupName2, Set.empty, WorkbenchGroupEmail("g2@example.com"))
 
     runAndWait(dao.createUser(user))
     runAndWait(dao.createGroup(group1))

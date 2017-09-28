@@ -1,6 +1,6 @@
 package org.broadinstitute.dsde.workbench.sam.model
 
-import org.broadinstitute.dsde.workbench.sam.WorkbenchException
+import org.broadinstitute.dsde.workbench.model.{WorkbenchSubject, WorkbenchUserEmail, WorkbenchUserId}
 import spray.json.DefaultJsonProtocol
 
 /**
@@ -9,6 +9,7 @@ import spray.json.DefaultJsonProtocol
 
 object SamJsonSupport {
   import DefaultJsonProtocol._
+  import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 
   implicit val ResourceActionFormat = ValueObjectFormat(ResourceAction)
 
@@ -20,28 +21,13 @@ object SamJsonSupport {
 
   implicit val ResourceTypeFormat = jsonFormat4(ResourceType)
 
-  implicit val SamUserIdFormat = ValueObjectFormat(SamUserId)
+  implicit val UserStatusDetailsFormat = jsonFormat2(UserStatusDetails)
 
-  implicit val SamUserEmailFormat = ValueObjectFormat(SamUserEmail)
-
-  implicit val SamUserFormat = jsonFormat2(SamUser)
-
-  implicit val SamUserInfoFormat = jsonFormat2(SamUserInfo)
-
-  implicit val SamUserStatusFormat = jsonFormat2(SamUserStatus)
+  implicit val UserStatusFormat = jsonFormat2(UserStatus)
 }
 
-sealed trait SamSubject
-case class SamUserId(value: String) extends SamSubject with ValueObject
-case class SamUserEmail(value: String) extends ValueObject
-case class SamUser(id: SamUserId, email: SamUserEmail)
-case class SamUserInfo(userSubjectId: SamUserId, userEmail: SamUserEmail) //for backwards compatibility to old API
-
-case class SamUserStatus(userInfo: SamUserInfo, enabled: Map[String, Boolean])
-
-case class SamGroupName(value: String) extends SamSubject with ValueObject
-case class SamGroupEmail(value: String) extends ValueObject
-case class SamGroup(name: SamGroupName, members: Set[SamSubject], email: SamGroupEmail)
+case class UserStatusDetails(userSubjectId: WorkbenchUserId, userEmail: WorkbenchUserEmail) //for backwards compatibility to old API
+case class UserStatus(userInfo: UserStatusDetails, enabled: Map[String, Boolean])
 
 case class ResourceAction(value: String) extends ValueObject
 case class ResourceRoleName(value: String) extends ValueObject
@@ -53,4 +39,4 @@ case class ResourceType(name: ResourceTypeName, actions: Set[ResourceAction], ro
 
 case class ResourceName(value: String) extends ValueObject
 case class AccessPolicyId(value: String) extends ValueObject
-case class AccessPolicy(id: AccessPolicyId, actions: Set[ResourceAction], resourceType: ResourceTypeName, resource: ResourceName, subject: SamSubject, role: Option[ResourceRoleName])
+case class AccessPolicy(id: AccessPolicyId, actions: Set[ResourceAction], resourceType: ResourceTypeName, resource: ResourceName, subject: WorkbenchSubject, role: Option[ResourceRoleName])

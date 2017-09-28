@@ -7,9 +7,9 @@ import com.google.api.client.googleapis.json.GoogleJsonResponseException
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.google.GoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.{WorkbenchException, WorkbenchExceptionWithErrorReport}
 import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam._
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -18,9 +18,9 @@ import scala.concurrent.{ExecutionContext, Future}
   */
 class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: GoogleDirectoryDAO, val googleDomain: String)(implicit val executionContext: ExecutionContext) extends LazyLogging {
 
-  private val allUsersGroupName = SamGroupName("All_Users")
+  private val allUsersGroupName = WorkbenchGroupName("All_Users")
 
-  def createUser(user: SamUser): Future[Option[SamUserStatus]] = {
+  def createUser(user: WorkbenchUser): Future[Option[UserStatus]] = {
     for {
       createdUser <- directoryDAO.createUser(user)
       _ <- googleDirectoryDAO.createGroup(WorkbenchGroupName(user.email.value), WorkbenchGroupEmail(toProxyFromUser(user.id.value))) recover {
@@ -31,75 +31,62 @@ class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Google
       _ <- createAllUsersGroup
       _ <- directoryDAO.addGroupMember(allUsersGroupName, user.id)
       _ <- googleDirectoryDAO.addMemberToGroup(WorkbenchGroupEmail(toGoogleGroupName(allUsersGroupName.value)), WorkbenchUserEmail(toProxyFromUser(user.id.value))) //TODO: For now, do a manual add to the All_Users Google group (undo this in Phase II)
-      userStatus <- getUserStatus(createdUser)
+      userStatus <- getUserStatus(createdUser.id)
     } yield {
       userStatus
     }
   }
 
-  def getUserStatus(user: SamUser): Future[Option[SamUserStatus]] = {
+  def getUserStatus(userId: WorkbenchUserId): Future[Option[UserStatus]] = {
+    directoryDAO.loadUser(userId).flatMap {
+      case Some(user) =>
+        for {
+          googleStatus <- googleDirectoryDAO.isGroupMember(WorkbenchGroupEmail(toProxyFromUser(user.id.value)), WorkbenchGroupEmail(user.email.value)) recover { case e: NameNotFoundException => false }
+          allUsersStatus <- directoryDAO.isGroupMember(allUsersGroupName, user.id) recover { case e: NameNotFoundException => false }
+          ldapStatus <- directoryDAO.isEnabled(user.id)
+        } yield {
+          Option(UserStatus(UserStatusDetails(user.id, user.email), Map("ldap" -> ldapStatus, "allUsersGroup" -> allUsersStatus, "google" -> googleStatus)))
+        }
+
+      case None => Future.successful(None)
+    }
+  }
+
+  def enableUser(userId: WorkbenchUserId, userInfo: UserInfo): Future[Option[UserStatus]] = {
+    directoryDAO.loadUser(userId).flatMap {
+      case Some(user) =>
+        for {
+          _ <- directoryDAO.enableUser(user.id)
+          _ <- googleDirectoryDAO.addMemberToGroup(WorkbenchGroupEmail(toProxyFromUser(user.id.value)), WorkbenchUserEmail(user.email.value))
+          userStatus <- getUserStatus(userId)
+        } yield userStatus
+      case None => Future.successful(None)
+    }
+  }
+
+  def disableUser(userId: WorkbenchUserId, userInfo: UserInfo): Future[Option[UserStatus]] = {
+    directoryDAO.loadUser(userId).flatMap {
+      case Some(user) =>
+        for {
+          _ <- directoryDAO.disableUser(user.id)
+          _ <- googleDirectoryDAO.removeMemberFromGroup(WorkbenchGroupEmail(toProxyFromUser(user.id.value)), WorkbenchUserEmail(user.email.value))
+          userStatus <- getUserStatus(user.id)
+        } yield userStatus
+      case None => Future.successful(None)
+    }
+  }
+
+  def deleteUser(userId: WorkbenchUserId, userInfo: UserInfo): Future[Unit] = {
     for {
-      loadedUser <- directoryDAO.loadUser(user.id)
-      googleStatus <- googleDirectoryDAO.isGroupMember(WorkbenchGroupEmail(toProxyFromUser(user.id.value)), WorkbenchGroupEmail(user.email.value)) recover { case e: NameNotFoundException => false }
-      allUsersStatus <- directoryDAO.isGroupMember(allUsersGroupName, user.id) recover { case e: NameNotFoundException => false }
-      ldapStatus <- directoryDAO.isEnabled(user.id)
-    } yield {
-      loadedUser.map { user =>
-        Option(SamUserStatus(SamUserInfo(user.id, user.email), Map("ldap" -> ldapStatus, "allUsersGroup" -> allUsersStatus, "google" -> googleStatus)))
-      }.getOrElse(None)
-    }
-  }
-
-  def adminGetUserStatus(userId: SamUserId, userInfo: UserInfo): Future[Option[SamUserStatus]] = {
-    asWorkbenchAdmin(userInfo) {
-      directoryDAO.loadUser(userId).flatMap {
-        case Some(user) => getUserStatus(user)
-        case None => Future.successful(None)
-      }
-    }
-  }
-
-  def enableUser(userId: SamUserId, userInfo: UserInfo): Future[Option[SamUserStatus]] = {
-    asWorkbenchAdmin(userInfo) {
-      directoryDAO.loadUser(userId).flatMap {
-        case Some(user) =>
-          for {
-            _ <- directoryDAO.enableUser(user.id)
-            _ <- googleDirectoryDAO.addMemberToGroup(WorkbenchGroupEmail(toProxyFromUser(user.id.value)), WorkbenchUserEmail(user.email.value))
-            userStatus <- getUserStatus(user)
-          } yield userStatus
-        case None => Future.successful(None)
-      }
-    }
-  }
-
-  def disableUser(userId: SamUserId, userInfo: UserInfo): Future[Option[SamUserStatus]] = {
-    asWorkbenchAdmin(userInfo) {
-      directoryDAO.loadUser(userId).flatMap {
-        case Some(user) =>
-          for {
-            _ <- directoryDAO.disableUser(user.id)
-            _ <- googleDirectoryDAO.removeMemberFromGroup(WorkbenchGroupEmail(toProxyFromUser(user.id.value)), WorkbenchUserEmail(user.email.value))
-            userStatus <- getUserStatus(user)
-          } yield userStatus
-        case None => Future.successful(None)
-      }
-    }
-  }
-
-  def deleteUser(userId: SamUserId, userInfo: UserInfo): Future[Unit] = {
-    asWorkbenchAdmin(userInfo) {
-      for {
-        _ <- directoryDAO.removeGroupMember(allUsersGroupName, userId)
-        _ <- googleDirectoryDAO.deleteGroup(WorkbenchGroupEmail(toProxyFromUser(userId.value)))
-        deleteResult <- directoryDAO.deleteUser(userId)
-      } yield deleteResult
-    }
+      _ <- directoryDAO.removeGroupMember(allUsersGroupName, userId)
+      _ <- googleDirectoryDAO.deleteGroup(WorkbenchGroupEmail(toProxyFromUser(userId.value)))
+      deleteResult <- directoryDAO.deleteUser(userId)
+    } yield deleteResult
   }
 
   private def createAllUsersGroup: Future[Unit] = {
     for {
-      _ <- directoryDAO.createGroup(SamGroup(allUsersGroupName, Set.empty, SamGroupEmail(toGoogleGroupName(allUsersGroupName.value)))) recover { case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode == Option(StatusCodes.Conflict) => () }
+      _ <- directoryDAO.createGroup(WorkbenchGroup(allUsersGroupName, Set.empty, WorkbenchGroupEmail(toGoogleGroupName(allUsersGroupName.value)))) recover { case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode == Option(StatusCodes.Conflict) => () }
       _ <- googleDirectoryDAO.createGroup(WorkbenchGroupName(allUsersGroupName.value), WorkbenchGroupEmail(toGoogleGroupName(allUsersGroupName.value))) recover { case e: GoogleJsonResponseException if e.getDetails.getCode == StatusCodes.Conflict.intValue => () }
     } yield ()
   }
@@ -111,11 +98,4 @@ class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Google
   def tryIsWorkbenchAdmin(memberEmail: WorkbenchEmail): Future[Boolean] = {
     googleDirectoryDAO.isGroupMember(WorkbenchGroupEmail(s"fc-admins@$googleDomain"), memberEmail) recoverWith { case t => throw new WorkbenchException("Unable to query for admin status.", t) }
   }
-
-  def asWorkbenchAdmin[T](userInfo: UserInfo)(op: => Future[T]): Future[T] = {
-    tryIsWorkbenchAdmin(WorkbenchUserEmail(userInfo.userEmail.value)) flatMap { isAdmin =>
-      if (isAdmin) op else Future.failed(new WorkbenchExceptionWithErrorReport(org.broadinstitute.dsde.workbench.sam.model.ErrorReport(StatusCodes.Forbidden, "You must be an admin.")))
-    }
-  }
-
 }

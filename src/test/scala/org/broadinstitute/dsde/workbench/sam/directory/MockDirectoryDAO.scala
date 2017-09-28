@@ -1,21 +1,22 @@
 package org.broadinstitute.dsde.workbench.sam.directory
 import akka.http.scaladsl.model.StatusCodes
-import org.broadinstitute.dsde.workbench.sam.WorkbenchExceptionWithErrorReport
-import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.model._
 
 import scala.collection.concurrent.TrieMap
 import scala.collection.mutable
 import scala.concurrent.Future
 import scala.concurrent.ExecutionContext.Implicits.global
+import org.broadinstitute.dsde.workbench.sam._
+
 /**
   * Created by mbemis on 6/23/17.
   */
 class MockDirectoryDAO extends DirectoryDAO {
-  private val groups: mutable.Map[SamGroupName, SamGroup] = new TrieMap()
-  private val users: mutable.Map[SamUserId, SamUser] = new TrieMap()
-  private val enabledUsers: mutable.Map[SamUserId, Unit] = new TrieMap()
+  private val groups: mutable.Map[WorkbenchGroupName, WorkbenchGroup] = new TrieMap()
+  private val users: mutable.Map[WorkbenchUserId, WorkbenchUser] = new TrieMap()
+  private val enabledUsers: mutable.Map[WorkbenchUserId, Unit] = new TrieMap()
 
-  override def createGroup(group: SamGroup): Future[SamGroup] = Future {
+  override def createGroup(group: WorkbenchGroup): Future[WorkbenchGroup] = Future {
     if (groups.keySet.contains(group.name)) {
       throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"group ${group.name} already exists"))
     }
@@ -23,27 +24,27 @@ class MockDirectoryDAO extends DirectoryDAO {
     group
   }
 
-  override def loadGroup(groupName: SamGroupName): Future[Option[SamGroup]] = Future {
+  override def loadGroup(groupName: WorkbenchGroupName): Future[Option[WorkbenchGroup]] = Future {
     groups.get(groupName)
   }
 
-  override def deleteGroup(groupName: SamGroupName): Future[Unit] = Future {
+  override def deleteGroup(groupName: WorkbenchGroupName): Future[Unit] = Future {
     groups -= groupName
   }
 
-  override def addGroupMember(groupName: SamGroupName, addMember: SamSubject): Future[Unit] = Future {
+  override def addGroupMember(groupName: WorkbenchGroupName, addMember: WorkbenchSubject): Future[Unit] = Future {
     val group = groups(groupName)
     val updatedGroup = group.copy(members = group.members + addMember)
     groups += groupName -> updatedGroup
   }
 
-  override def removeGroupMember(groupName: SamGroupName, removeMember: SamSubject): Future[Unit] = Future {
+  override def removeGroupMember(groupName: WorkbenchGroupName, removeMember: WorkbenchSubject): Future[Unit] = Future {
     val group = groups(groupName)
     val updatedGroup = group.copy(members = group.members - removeMember)
     groups += groupName -> updatedGroup
   }
 
-  override def createUser(user: SamUser): Future[SamUser] = Future {
+  override def createUser(user: WorkbenchUser): Future[WorkbenchUser] = Future {
     if (users.keySet.contains(user.id)) {
       throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"user ${user.id} already exists"))
     }
@@ -51,19 +52,19 @@ class MockDirectoryDAO extends DirectoryDAO {
     user
   }
 
-  override def loadUser(userId: SamUserId): Future[Option[SamUser]] = Future {
+  override def loadUser(userId: WorkbenchUserId): Future[Option[WorkbenchUser]] = Future {
     users.get(userId)
   }
 
-  override def deleteUser(userId: SamUserId): Future[Unit] = Future {
+  override def deleteUser(userId: WorkbenchUserId): Future[Unit] = Future {
     users -= userId
   }
 
-  override def listUsersGroups(userId: SamUserId): Future[Set[SamGroupName]] = Future {
+  override def listUsersGroups(userId: WorkbenchUserId): Future[Set[WorkbenchGroupName]] = Future {
     listSubjectsGroups(userId, Set.empty).map(_.name)
   }
 
-  private def listSubjectsGroups(subject: SamSubject, accumulatedGroups: Set[SamGroup]): Set[SamGroup] = {
+  private def listSubjectsGroups(subject: WorkbenchSubject, accumulatedGroups: Set[WorkbenchGroup]): Set[WorkbenchGroup] = {
     val immediateGroups = groups.values.toSet.filter { group => group.members.contains(subject) }
 
     val unvisitedGroups = immediateGroups -- accumulatedGroups
@@ -76,40 +77,40 @@ class MockDirectoryDAO extends DirectoryDAO {
     }
   }
 
-  override def listFlattenedGroupUsers(groupName: SamGroupName): Future[Set[SamUserId]] = Future {
+  override def listFlattenedGroupUsers(groupName: WorkbenchGroupName): Future[Set[WorkbenchUserId]] = Future {
     listGroupUsers(groupName, Set.empty)
   }
 
-  override def isGroupMember(groupName: SamGroupName, member: SamSubject): Future[Boolean] = Future {
-    groups.getOrElse(groupName, SamGroup(null, Set.empty, SamGroupEmail("g1@example.com"))).members.contains(member)
+  override def isGroupMember(groupName: WorkbenchGroupName, member: WorkbenchSubject): Future[Boolean] = Future {
+    groups.getOrElse(groupName, WorkbenchGroup(null, Set.empty, WorkbenchGroupEmail("g1@example.com"))).members.contains(member)
   }
 
-  private def listGroupUsers(groupName: SamGroupName, visitedGroups: Set[SamGroupName]): Set[SamUserId] = {
+  private def listGroupUsers(groupName: WorkbenchGroupName, visitedGroups: Set[WorkbenchGroupName]): Set[WorkbenchUserId] = {
     if (!visitedGroups.contains(groupName)) {
-      val members = groups.getOrElse(groupName, SamGroup(null, Set.empty, SamGroupEmail("g1@example.com"))).members
+      val members = groups.getOrElse(groupName, WorkbenchGroup(null, Set.empty, WorkbenchGroupEmail("g1@example.com"))).members
 
       members.flatMap {
-        case userId: SamUserId => Set(userId)
-        case groupName: SamGroupName => listGroupUsers(groupName, visitedGroups + groupName)
+        case userId: WorkbenchUserId => Set(userId)
+        case groupName: WorkbenchGroupName => listGroupUsers(groupName, visitedGroups + groupName)
       }
     } else {
       Set.empty
     }
   }
 
-  override def listAncestorGroups(groupName: SamGroupName): Future[Set[SamGroupName]] = Future {
+  override def listAncestorGroups(groupName: WorkbenchGroupName): Future[Set[WorkbenchGroupName]] = Future {
     listSubjectsGroups(groupName, Set.empty).map(_.name)
   }
 
-  override def enableUser(userId: SamUserId): Future[Unit] = Future {
+  override def enableUser(userId: WorkbenchUserId): Future[Unit] = Future {
     enabledUsers += (userId -> ())
   }
 
-  override def disableUser(userId: SamUserId): Future[Unit] = Future {
+  override def disableUser(userId: WorkbenchUserId): Future[Unit] = Future {
     enabledUsers -= userId
   }
 
-  override def isEnabled(userId: SamUserId): Future[Boolean] = Future {
+  override def isEnabled(userId: WorkbenchUserId): Future[Boolean] = Future {
     enabledUsers.contains(userId)
   }
 
