@@ -124,6 +124,42 @@ paths:
             - email
             - profile
 
+  /api/resource/{resourceTypeName}/{resourceId}/roles:
+    get:
+      summary: Query for the list of roles that the requesting user has on the resource
+      responses:
+        200:
+          description: The list of roles that the requesting user has on the resource. Empty if resource does not exist or user has no role on that resource.
+          schema:
+            type: array
+            items:
+              type: string
+        404:
+          description: Resource type does not exist
+        500:
+          description: Internal Error
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      parameters:
+        - in: path
+          description: Type of resource to query
+          name: resourceTypeName
+          required: true
+          type: string
+        - in: path
+          description: Id of resource to query
+          name: resourceId
+          required: true
+          type: string
+      operationId: resourceRoles
+      tags:
+        - Resources
+      security:
+        - googleoauth:
+            - openid
+            - email
+            - profile
+
   /api/resource/{resourceTypeName}/{resourceId}/action/{action}:
     get:
       summary: Query if requesting user may perform the action

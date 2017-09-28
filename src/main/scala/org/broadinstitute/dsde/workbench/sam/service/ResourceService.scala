@@ -17,23 +17,33 @@ import scala.concurrent.{ExecutionContext, Future}
   */
 class ResourceService(val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: DirectoryDAO, val googleDomain: String)(implicit val executionContext: ExecutionContext) extends LazyLogging {
 
-  def hasPermission(resourceType: ResourceType, resourceName: ResourceName, action: ResourceAction, userInfo: UserInfo): Future[Boolean] = {
-    listUserResourceActions(resourceType, resourceName, userInfo).map { _.contains(action) }
+  def hasPermission(resourceTypeName: ResourceTypeName, resourceName: ResourceName, action: ResourceAction, userInfo: UserInfo): Future[Boolean] = {
+    listUserResourceActions(resourceTypeName, resourceName, userInfo).map { _.contains(action) }
   }
 
-  def listUserResourceActions(resourceType: ResourceType, resourceName: ResourceName, userInfo: UserInfo): Future[Set[ResourceAction]] = {
+  def listUserResourceActions(resourceTypeName: ResourceTypeName, resourceName: ResourceName, userInfo: UserInfo): Future[Set[ResourceAction]] = {
+    listResourceAccessPoliciesForUser(resourceTypeName, resourceName, userInfo).map { matchingPolicies =>
+      matchingPolicies.flatMap(_.actions)
+    }
+  }
+
+  def listUserResourceRoles(resourceTypeName: ResourceTypeName, resourceName: ResourceName, userInfo: UserInfo): Future[Set[ResourceRoleName]] = {
+    listResourceAccessPoliciesForUser(resourceTypeName, resourceName, userInfo).map { matchingPolicies =>
+      matchingPolicies.flatMap(_.role)
+    }
+  }
+
+  private def listResourceAccessPoliciesForUser(resourceTypeName: ResourceTypeName, resourceName: ResourceName, userInfo: UserInfo): Future[Set[AccessPolicy]] = {
     for {
-      policies <- accessPolicyDAO.listAccessPolicies(resourceType.name, resourceName)
+      policies <- accessPolicyDAO.listAccessPolicies(resourceTypeName, resourceName)
       groups <- directoryDAO.listUsersGroups(userInfo.userId)
     } yield {
-      val matchingPolicies = policies.filter { policy =>
+      policies.filter { policy =>
         policy.subject match {
           case user: WorkbenchUserId => userInfo.userId == user
           case group: WorkbenchGroupName => groups.contains(group)
         }
-      }
-
-      matchingPolicies.flatMap(_.actions).toSet
+      }.toSet
     }
   }
 

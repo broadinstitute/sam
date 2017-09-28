@@ -11,6 +11,7 @@ import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchUserEmail,
 import org.broadinstitute.dsde.workbench.sam.directory.MockDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.openam.MockAccessPolicyDAO
 import spray.json.{JsBoolean, JsValue}
+import spray.json.DefaultJsonProtocol._
 import org.broadinstitute.dsde.workbench.model.ErrorReportJsonSupport._
 
 /**
@@ -56,5 +57,29 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     }
 
   }
+
+  it should "200 on list resource roles" in {
+    val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceAction("run")), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("run")))), ResourceRoleName("owner"))
+    val samRoutes = createSamRoutes(Map(resourceType.name -> resourceType))
+
+    Post(s"/api/resource/${resourceType.name}/foo") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+    }
+
+    Get(s"/api/resource/${resourceType.name}/foo/roles") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[Set[String]]
+    }
+  }
+
+  it should "404 on list resource roles when resource type doesnt exist" in {
+    val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceAction("run")), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("run")))), ResourceRoleName("owner"))
+    val samRoutes = createSamRoutes(Map(resourceType.name -> resourceType))
+
+    Get(s"/api/resource/doesntexist/foo/roles") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
+    }
+  }
+
 }
 
