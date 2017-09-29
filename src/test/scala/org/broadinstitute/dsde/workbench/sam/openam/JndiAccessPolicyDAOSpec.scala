@@ -28,34 +28,36 @@ class JndiAccessPolicyDAOSpec extends FlatSpec with Matchers with TestSupport wi
   "JndiAccessPolicyDAO" should "create, list, delete policies" in {
     val typeName1 = ResourceTypeName(UUID.randomUUID().toString)
     val typeName2 = ResourceTypeName(UUID.randomUUID().toString)
-    val policy1 = AccessPolicy(AccessPolicyId(UUID.randomUUID().toString), Set(ResourceAction("action1"), ResourceAction("action2")), typeName1, ResourceName("resource"), WorkbenchUserId("foo"), None)
-    val policy2 = AccessPolicy(AccessPolicyId(UUID.randomUUID().toString), Set(ResourceAction("action3"), ResourceAction("action4")), typeName1, ResourceName("resource"), WorkbenchUserId("foo2"), None)
-    val policy3 = AccessPolicy(AccessPolicyId(UUID.randomUUID().toString), Set(ResourceAction("action1"), ResourceAction("action2")), typeName2, ResourceName("resource"), WorkbenchUserId("foo"), None)
+    val policy1 = AccessPolicy("foo", Resource(typeName1, ResourceName("resource")), Set(WorkbenchUserId("foo")), None, Set(ResourceAction("action1"), ResourceAction("action2")))
+    val policy2 = AccessPolicy("foo2", Resource(typeName1, ResourceName("resource")), Set(WorkbenchUserId("foo")), None, Set(ResourceAction("action3"), ResourceAction("action4")))
+    //    val policy3 = AccessPolicy("foo", Resource(typeName2, ResourceName("resource")), Set(WorkbenchUserId("foo")), None, Set(ResourceAction("action1"), ResourceAction("action2")))
 
     assertResult(Seq.empty) {
-      runAndWait(dao.listAccessPolicies(policy1.resourceType, policy1.resource)).toSeq
+      runAndWait(dao.listAccessPolicies(policy1.resource)).toSeq
+      runAndWait(dao.listAccessPolicies(policy2.resource)).toSeq
+      //      runAndWait(dao.listAccessPolicies(policy3.resource)).toSeq
     }
 
     runAndWait(dao.createPolicy(policy1))
     runAndWait(dao.createPolicy(policy2))
-    runAndWait(dao.createPolicy(policy3))
+    //    runAndWait(dao.createPolicy(policy3))
 
     assertResult(Seq(policy1, policy2)) {
-      runAndWait(dao.listAccessPolicies(policy1.resourceType, policy1.resource)).toSeq
+      runAndWait(dao.listAccessPolicies(policy1.resource)).toSeq
     }
 
-    runAndWait(dao.deletePolicy(policy1.id))
+    runAndWait(dao.deletePolicy(policy1))
 
     assertResult(Seq(policy2)) {
-      runAndWait(dao.listAccessPolicies(policy1.resourceType, policy1.resource)).toSeq
+      runAndWait(dao.listAccessPolicies(policy1.resource)).toSeq
     }
 
-    runAndWait(dao.deletePolicy(policy2.id))
+    runAndWait(dao.deletePolicy(policy2))
 
     assertResult(Seq.empty) {
-      runAndWait(dao.listAccessPolicies(policy1.resourceType, policy1.resource)).toSeq
+      runAndWait(dao.listAccessPolicies(policy1.resource)).toSeq
     }
 
-    runAndWait(dao.deletePolicy(policy3.id))
+    //    runAndWait(dao.deletePolicy(policy3.id))
   }
 }

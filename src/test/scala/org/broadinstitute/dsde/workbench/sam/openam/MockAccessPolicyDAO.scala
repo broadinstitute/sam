@@ -1,5 +1,5 @@
 package org.broadinstitute.dsde.workbench.sam.openam
-import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicy, AccessPolicyId, ResourceName, ResourceTypeName}
+import org.broadinstitute.dsde.workbench.sam.model._
 
 import scala.collection.concurrent.TrieMap
 import scala.collection.mutable
@@ -11,18 +11,31 @@ import scala.concurrent.ExecutionContext.Implicits.global
   * Created by dvoet on 7/17/17.
   */
 class MockAccessPolicyDAO extends AccessPolicyDAO {
-  private val policies: mutable.Map[AccessPolicyId, AccessPolicy] = new TrieMap()
+  private val policies: mutable.Map[Resource, Set[AccessPolicy]] = new TrieMap()
 
   override def createPolicy(policy: AccessPolicy): Future[AccessPolicy] = Future {
-    policies += policy.id -> policy
+    listAccessPolicies(policy.resource) map { existingPolicies =>
+      policies += (policy.resource -> (existingPolicies.toSet + policy))
+    }
     policy
   }
 
-  override def listAccessPolicies(resourceType: ResourceTypeName, resourceName: ResourceName): Future[TraversableOnce[AccessPolicy]] = Future {
-    policies.values.filter { policy => policy.resourceType == resourceType && policy.resource == resourceName }
+  override def deletePolicy(policy: AccessPolicy): Future[Unit] = Future {
+    listAccessPolicies(policy.resource) map { existingPolicies =>
+      policies += (policy.resource -> (existingPolicies.toSet - policy))
+    }
   }
 
-  override def deletePolicy(policyId: AccessPolicyId): Future[Unit] = Future {
-    policies -= policyId
+  override def listAccessPolicies(resource: Resource): Future[TraversableOnce[AccessPolicy]] = Future {
+    policies.getOrElse(resource, Set.empty)
+  }
+
+  override def deleteResource(resource: Resource): Future[Unit] = Future {
+    policies -= resource
+  }
+
+  override def createResource(resource: Resource): Future[Resource] = Future {
+    policies += resource -> Set.empty
+    resource
   }
 }

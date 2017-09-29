@@ -35,8 +35,9 @@ case class ResourceRole(roleName: ResourceRoleName, actions: Set[ResourceAction]
 
 case class ResourceTypeName(value: String) extends ValueObject
 
+case class Resource(resourceTypeName: ResourceTypeName, resourceName: ResourceName)
 case class ResourceType(name: ResourceTypeName, actions: Set[ResourceAction], roles: Set[ResourceRole], ownerRoleName: ResourceRoleName)
 
 case class ResourceName(value: String) extends ValueObject
 case class AccessPolicyId(value: String) extends ValueObject
-case class AccessPolicy(id: AccessPolicyId, actions: Set[ResourceAction], resourceType: ResourceTypeName, resource: ResourceName, subject: WorkbenchSubject, role: Option[ResourceRoleName])
+case class AccessPolicy(name: String, resource: Resource, members: Set[WorkbenchSubject], role: Option[ResourceRoleName], actions: Set[ResourceAction])

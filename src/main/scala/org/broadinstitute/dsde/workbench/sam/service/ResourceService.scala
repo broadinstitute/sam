@@ -22,27 +22,24 @@ class ResourceService(val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: Di
   }
 
   def listUserResourceActions(resourceTypeName: ResourceTypeName, resourceName: ResourceName, userInfo: UserInfo): Future[Set[ResourceAction]] = {
-    listResourceAccessPoliciesForUser(resourceTypeName, resourceName, userInfo).map { matchingPolicies =>
+    listResourceAccessPoliciesForUser(Resource(resourceTypeName, resourceName), userInfo).map { matchingPolicies =>
       matchingPolicies.flatMap(_.actions)
     }
   }
 
   def listUserResourceRoles(resourceTypeName: ResourceTypeName, resourceName: ResourceName, userInfo: UserInfo): Future[Set[ResourceRoleName]] = {
-    listResourceAccessPoliciesForUser(resourceTypeName, resourceName, userInfo).map { matchingPolicies =>
+    listResourceAccessPoliciesForUser(Resource(resourceTypeName, resourceName), userInfo).map { matchingPolicies =>
       matchingPolicies.flatMap(_.role)
     }
   }
 
-  private def listResourceAccessPoliciesForUser(resourceTypeName: ResourceTypeName, resourceName: ResourceName, userInfo: UserInfo): Future[Set[AccessPolicy]] = {
+  private def listResourceAccessPoliciesForUser(resource: Resource, userInfo: UserInfo): Future[Set[AccessPolicy]] = {
     for {
-      policies <- accessPolicyDAO.listAccessPolicies(resourceTypeName, resourceName)
+      policies <- accessPolicyDAO.listAccessPolicies(resource)
       groups <- directoryDAO.listUsersGroups(userInfo.userId)
     } yield {
       policies.filter { policy =>
-        policy.subject match {
-          case user: WorkbenchUserId => userInfo.userId == user
-          case group: WorkbenchGroupName => groups.contains(group)
-        }
+        policy.members.contains(userInfo.userId)
       }.toSet
     }
   }
@@ -50,28 +47,23 @@ class ResourceService(val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: Di
   def toGoogleGroupName(groupName: WorkbenchGroupName) = WorkbenchGroupEmail(s"GROUP_${groupName.value}@${googleDomain}")
 
   def createResource(resourceType: ResourceType, resourceName: ResourceName, userInfo: UserInfo): Future[Set[AccessPolicy]] = {
-    accessPolicyDAO.listAccessPolicies(resourceType.name, resourceName) flatMap { policies =>
-      if (policies.isEmpty) {
-        Future.traverse(resourceType.roles) { role =>
-          val roleMembers: Set[WorkbenchSubject] = role.roleName match {
-            case resourceType.ownerRoleName => Set(userInfo.userId)
-            case _ => Set.empty
-          }
-          val groupName = roleGroupName(resourceType, resourceName, role)
-          for {
-            group <- directoryDAO.createGroup(WorkbenchGroup(groupName, roleMembers, toGoogleGroupName(groupName)))
-            policy <- accessPolicyDAO.createPolicy(AccessPolicy(
-              AccessPolicyId(UUID.randomUUID().toString),
-              role.actions,
-              resourceType.name,
-              resourceName,
-              group.name,
-              Option(role.roleName)
-            ))
-          } yield policy
+    accessPolicyDAO.createResource(Resource(resourceType.name, resourceName)) flatMap { resource =>
+      Future.traverse(resourceType.roles) { role =>
+        val roleMembers: Set[WorkbenchSubject] = role.roleName match {
+          case resourceType.ownerRoleName => Set(userInfo.userId)
+          case _ => Set.empty
         }
-      } else {
-        Future.failed(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"${resourceType.name} $resourceName already exists.")))
+        val groupName = roleGroupName(resourceType, resourceName, role)
+        for {
+          group <- directoryDAO.createGroup(WorkbenchGroup(groupName, roleMembers, toGoogleGroupName(groupName)))
+          policy <- accessPolicyDAO.createPolicy(AccessPolicy(
+            role.roleName.value,
+            resource,
+            roleMembers,
+            Option(role.roleName),
+            role.actions
+          ))
+        } yield policy
       }
     }
   }
@@ -80,23 +72,7 @@ class ResourceService(val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: Di
     WorkbenchGroupName(s"${resourceType.name}-${resourceName.value}-${role.roleName.value}")
   }
 
-  /**
-    * Removes all policies and role groups for a resource
-    *
-    * @param resourceType
-    * @param resourceName
-    * @return the number of policies removed
-    */
-  def deleteResource(resourceType: ResourceType, resourceName: ResourceName): Future[Int] = {
-    accessPolicyDAO.listAccessPolicies(resourceType.name, resourceName).flatMap { policies =>
-      Future.traverse(policies) { policy =>
-        accessPolicyDAO.deletePolicy(policy.id) flatMap { _ =>
-          policy.subject match {
-            case group: WorkbenchGroupName if policy.role.isDefined => directoryDAO.deleteGroup(group)
-            case _ => Future.successful(())
-          }
-        }
-      }.map(_.size)
-    }
+  def deleteResource(resource: Resource): Future[Unit] = {
+    accessPolicyDAO.deleteResource(resource)
   }
 }
