@@ -1,5 +1,6 @@
 package org.broadinstitute.dsde.workbench.sam.openam
 
+import org.broadinstitute.dsde.workbench.model.{WorkbenchSubject, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.model._
 
 import scala.concurrent.Future
@@ -13,5 +14,7 @@ trait AccessPolicyDAO {
   def createResourceType(resourceTypeName: ResourceTypeName): Future[ResourceTypeName]
   def deleteResource(resource: Resource): Future[Unit]
   def listAccessPolicies(resource: Resource): Future[TraversableOnce[AccessPolicy]]
+  def listAccessPoliciesForUser(resource: Resource, user: WorkbenchUserId): Future[Set[AccessPolicy]]
   def deletePolicy(policy: AccessPolicy): Future[Unit]
+  def addMemberToPolicy(policy: AccessPolicy, member: WorkbenchSubject): Future[Unit]
 }

@@ -32,6 +32,9 @@ class JndiAccessPolicyDAOSpec extends FlatSpec with Matchers with TestSupport wi
     val policy2 = AccessPolicy("foo2", Resource(typeName1, ResourceName("resource")), Set(WorkbenchUserId("foo")), None, Set(ResourceAction("action3"), ResourceAction("action4")))
     val policy3 = AccessPolicy("foo", Resource(typeName2, ResourceName("resource")), Set(WorkbenchUserId("foo")), None, Set(ResourceAction("action1"), ResourceAction("action2")))
 
+    dao.createResourceType(typeName1)
+    dao.createResourceType(typeName2)
+
     assertResult(Seq.empty) {
       runAndWait(dao.listAccessPolicies(policy1.resource)).toSeq
       runAndWait(dao.listAccessPolicies(policy2.resource)).toSeq

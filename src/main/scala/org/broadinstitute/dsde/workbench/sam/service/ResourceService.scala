@@ -34,14 +34,7 @@ class ResourceService(val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: Di
   }
 
   private def listResourceAccessPoliciesForUser(resource: Resource, userInfo: UserInfo): Future[Set[AccessPolicy]] = {
-    for {
-      policies <- accessPolicyDAO.listAccessPolicies(resource)
-      groups <- directoryDAO.listUsersGroups(userInfo.userId)
-    } yield {
-      policies.filter { policy =>
-        policy.members.contains(userInfo.userId)
-      }.toSet
-    }
+    accessPolicyDAO.listAccessPoliciesForUser(resource, userInfo.userId)
   }
 
   def toGoogleGroupName(groupName: WorkbenchGroupName) = WorkbenchGroupEmail(s"GROUP_${groupName.value}@${googleDomain}")
@@ -57,7 +50,6 @@ class ResourceService(val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: Di
           case resourceType.ownerRoleName => Set(userInfo.userId)
           case _ => Set.empty
         }
-        val groupName = roleGroupName(resourceType, resourceName, role)
         for {
           policy <- accessPolicyDAO.createPolicy(AccessPolicy(
             role.roleName.value,
@@ -76,6 +68,10 @@ class ResourceService(val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: Di
   }
 
   def deleteResource(resource: Resource): Future[Unit] = {
-    accessPolicyDAO.deleteResource(resource)
+    for {
+      policiesToDelete <- accessPolicyDAO.listAccessPolicies(resource)
+      _ <- Future.traverse(policiesToDelete){accessPolicyDAO.deletePolicy}
+//      _ <- accessPolicyDAO.deleteResource(resource) why does it work even if we don't delete this level?
+    } yield ()
   }
 }

@@ -1,10 +1,10 @@
 package org.broadinstitute.dsde.workbench.sam.openam
+import org.broadinstitute.dsde.workbench.model.{WorkbenchSubject, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.model._
 
 import scala.collection.concurrent.TrieMap
 import scala.collection.mutable
 import scala.concurrent.Future
-
 import scala.concurrent.ExecutionContext.Implicits.global
 
 /**
@@ -30,6 +30,10 @@ class MockAccessPolicyDAO extends AccessPolicyDAO {
     policies.getOrElse(resource, Set.empty)
   }
 
+  override def listAccessPoliciesForUser(resource: Resource, user: WorkbenchUserId): Future[Set[AccessPolicy]] = Future {
+    policies.getOrElse(resource, Set.empty).filter(_.members.contains(user))
+  }
+
   override def deleteResource(resource: Resource): Future[Unit] = Future {
     policies -= resource
   }
@@ -43,4 +47,6 @@ class MockAccessPolicyDAO extends AccessPolicyDAO {
     println("hey your method isn't implemented yet!")
     Future.successful(resourceTypeName) //todo
   }
+
+  override def addMemberToPolicy(policy: AccessPolicy, member: WorkbenchSubject): Future[Unit] = ???
 }

@@ -1,10 +1,10 @@
 package org.broadinstitute.dsde.workbench.sam.openam
 
-import javax.naming.NameAlreadyBoundException
+import javax.naming.{NameAlreadyBoundException, NameNotFoundException}
 import javax.naming.directory._
 
 import akka.http.scaladsl.model.StatusCodes
-import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchException, WorkbenchExceptionWithErrorReport}
+import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
 import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryDAO, DirectorySubjectNameSupport}
 import org.broadinstitute.dsde.workbench.sam.model._
@@ -27,6 +27,8 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
     val action = "action"
     val role = "role"
     val mail = "mail"
+    val ou = "ou"
+    val cn = "cn"
     val policy = "policy"
     val uniqueMember = "uniqueMember"
   }
@@ -50,6 +52,7 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
     Try { schema.destroySubcontext("AttributeDefinition/" + Attr.resource) }
     Try { schema.destroySubcontext("AttributeDefinition/" + Attr.action) }
     Try { schema.destroySubcontext("AttributeDefinition/" + Attr.role) }
+    Try { schema.destroySubcontext("AttributeDefinition/" + Attr.policy) }
   }
 
 
@@ -60,6 +63,7 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
     createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.2", Attr.resource, "name of a resource", true)
     createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.4", Attr.action, "actions applicable to a policy", false)
     createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.6", Attr.role, "role for the policy if it is for a role", true)
+    createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.7", Attr.policy, "the policy", true)
 
     val policyAttrs = new BasicAttributes(true) // Ignore case
     policyAttrs.put("NUMERICOID", "1.3.6.1.4.1.18060.0.4.3.2.0")
@@ -72,12 +76,14 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
     policyMust.add("objectclass")
     policyMust.add(Attr.resourceType)
     policyMust.add(Attr.resource)
-    policyMust.add(Attr.uniqueMember)
+    policyMust.add(Attr.cn)
+    policyMust.add(Attr.policy)
     policyAttrs.put(policyMust)
 
     val policyMay = new BasicAttribute("MAY")
     policyMay.add(Attr.action)
     policyMay.add(Attr.role)
+    policyMay.add(Attr.uniqueMember)
     policyAttrs.put(policyMay)
 
     val resourceTypeAttrs = new BasicAttributes(true) // Ignore case
@@ -90,6 +96,7 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
     val resourceTypeMust = new BasicAttribute("MUST")
     resourceTypeMust.add("objectclass")
     resourceTypeMust.add(Attr.resourceType)
+    resourceTypeMust.add(Attr.ou)
     resourceTypeAttrs.put(resourceTypeMust)
 
     val resourceAttrs = new BasicAttributes(true) // Ignore case
@@ -102,6 +109,7 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
     val resourceMust = new BasicAttribute("MUST")
     resourceMust.add("objectclass")
     resourceMust.add(Attr.resource)
+    resourceMust.add(Attr.resourceType)
     resourceAttrs.put(resourceMust)
 
     // Add the new schema object for "fooObjectClass"
@@ -138,8 +146,9 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
           val myAttrs = new BasicAttributes(true) // Case ignore
 
           val oc = new BasicAttribute("objectclass")
-          Seq("top", "organizationalUnit").foreach(oc.add)
+          Seq("top", "resource").foreach(oc.add)
           myAttrs.put(oc)
+          myAttrs.put(Attr.resourceType, resource.resourceTypeName.value)
 
           myAttrs
         }
@@ -159,20 +168,18 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
           val myAttrs = new BasicAttributes(true) // Case ignore
 
           val oc = new BasicAttribute("objectclass")
-          Seq("top", "organizationalUnit").foreach(oc.add)
+          Seq("top", "resourceType").foreach(oc.add)
           myAttrs.put(oc)
+          myAttrs.put(Attr.ou, "resources")
 
           myAttrs
         }
       }
 
-      println(resourceTypeDn(resourceTypeName))
-
-
       ctx.bind(resourceTypeDn(resourceTypeName), resourceContext)
       resourceTypeName
     } catch {
-      case _: NameAlreadyBoundException => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, "A resource of this type and name already exists"))
+      case _: NameAlreadyBoundException => resourceTypeName //resource type has already been created, this is OK
     }
   }
 
@@ -185,6 +192,7 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
           val oc = new BasicAttribute("objectclass")
           Seq("top", "policy").foreach(oc.add)
           myAttrs.put(oc)
+          myAttrs.put(Attr.cn, policy.name)
 
           if (policy.actions.nonEmpty) {
             val actions = new BasicAttribute(Attr.action)
@@ -197,6 +205,19 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
             myAttrs.put(role)
           }
 
+          if(policy.members.nonEmpty) {
+            val members = new BasicAttribute(Attr.uniqueMember)
+
+            val foo = policy.members.map {
+              case x: WorkbenchGroupName => groupDn(x)
+              case y: WorkbenchUserId => userDn(y)
+            }
+
+            foo.foreach(members.add)
+
+            myAttrs.put(members)
+          }
+
           myAttrs.put(Attr.resourceType, policy.resource.resourceTypeName.value)
           myAttrs.put(Attr.resource, policy.resource.resourceName.value)
           myAttrs
@@ -206,7 +227,7 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
       ctx.bind(policyDn(policy), policyContext)
       policy
     } catch {
-      case _: NameAlreadyBoundException => throw new WorkbenchException("foo bar") //WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, "A policy for this subject already exists for this resource"))
+      case _: NameAlreadyBoundException => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, "A policy for this subject already exists for this resource"))
     }
   }
 
@@ -215,11 +236,15 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
   private def resourceDn(resource: Resource) = s"${Attr.resource}=${resource.resourceName.value},${resourceTypeDn(resource.resourceTypeName)}"
   private def policyDn(policy: AccessPolicy): String = s"${Attr.policy}=${policy.name},${resourceDn(policy.resource)}"
 
+  private def getAttributes[T](attributes: Attributes, key: String): Option[TraversableOnce[T]] = {
+    Option(attributes.get(key)).map(_.getAll.asScala.map(_.asInstanceOf[T]))
+  }
+
   override def listAccessPolicies(resource: Resource): Future[TraversableOnce[AccessPolicy]] = withContext { ctx =>
     val searchAttrs = new BasicAttributes(true)  // Case ignore
 
     val policies = ctx.search(resourceDn(resource), searchAttrs).asScala.map { searchResult =>
-      val members = searchResult.getAttributes.get(Attr.uniqueMember).getAll.asScala.map(_.asInstanceOf[String]).map(dnToSubject).toSet
+      val members = getAttributes[String](searchResult.getAttributes, Attr.uniqueMember).getOrElse(Set.empty).toSet.map(dnToSubject)
 
       AccessPolicy(
         searchResult.getAttributes.get(Attr.policy).get().toString,
@@ -233,7 +258,47 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
       )
     }
 
-    policies
+    val x = policies.toSet
+    println(x)
+    x
+  }
+
+  override def listAccessPoliciesForUser(resource: Resource, user: WorkbenchUserId): Future[Set[AccessPolicy]] = withContext { ctx =>
+    val searchAttrs = new BasicAttributes(true)  // Case ignore
+
+    searchAttrs.put(Attr.uniqueMember, subjectDn(user))
+
+    val policies = try {
+      ctx.search(resourceDn(resource), searchAttrs).asScala.map { searchResult =>
+        val members = getAttributes[String](searchResult.getAttributes, Attr.uniqueMember).getOrElse(Set.empty).toSet.map(dnToSubject)
+
+        AccessPolicy(
+          searchResult.getAttributes.get(Attr.policy).get().toString,
+          Resource(
+            ResourceTypeName(searchResult.getAttributes.get(Attr.resourceType).get().toString),
+            ResourceName(searchResult.getAttributes.get(Attr.resource).get().toString)
+          ),
+          members,
+          Option(ResourceRoleName(searchResult.getAttributes.get(Attr.role).get().toString)),
+          searchResult.getAttributes.get(Attr.action).getAll.asScala.map(a => ResourceAction(a.toString)).toSet
+        )
+      }
+    } catch {
+      case _: NameNotFoundException => Set.empty
+    }
+
+    val x = policies.toSet
+    println(x)
+    x
+  }
+
+  override def addMemberToPolicy(policy: AccessPolicy, member: WorkbenchSubject): Future[Unit] = withContext { ctx =>
+    val myAttrs = new BasicAttributes(true)
+    val dn = subjectDn(member)
+
+    myAttrs.put(new BasicAttribute(Attr.uniqueMember, dn))
+
+    ctx.modifyAttributes(policyDn(policy), DirContext.ADD_ATTRIBUTE, myAttrs)
   }
 
   override def deleteResource(resource: Resource): Future[Unit] = withContext { ctx =>
