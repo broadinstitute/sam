@@ -46,6 +46,10 @@ class ResourceService(val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: Di
 
   def toGoogleGroupName(groupName: WorkbenchGroupName) = WorkbenchGroupEmail(s"GROUP_${groupName.value}@${googleDomain}")
 
+  def createResourceType(resourceType: ResourceType): Future[ResourceTypeName] = {
+    accessPolicyDAO.createResourceType(resourceType.name)
+  }
+
   def createResource(resourceType: ResourceType, resourceName: ResourceName, userInfo: UserInfo): Future[Set[AccessPolicy]] = {
     accessPolicyDAO.createResource(Resource(resourceType.name, resourceName)) flatMap { resource =>
       Future.traverse(resourceType.roles) { role =>
@@ -55,7 +59,6 @@ class ResourceService(val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: Di
         }
         val groupName = roleGroupName(resourceType, resourceName, role)
         for {
-          group <- directoryDAO.createGroup(WorkbenchGroup(groupName, roleMembers, toGoogleGroupName(groupName)))
           policy <- accessPolicyDAO.createPolicy(AccessPolicy(
             role.roleName.value,
             resource,

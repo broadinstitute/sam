@@ -3,11 +3,13 @@ package org.broadinstitute.dsde.workbench.sam.openam
 import javax.naming.NameAlreadyBoundException
 import javax.naming.directory._
 
-import org.broadinstitute.dsde.workbench.model.WorkbenchException
+import akka.http.scaladsl.model.StatusCodes
+import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchException, WorkbenchExceptionWithErrorReport}
 import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
 import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryDAO, DirectorySubjectNameSupport}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.util.{BaseDirContext, JndiSupport}
+import org.broadinstitute.dsde.workbench.sam._
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.collection.JavaConverters._
@@ -34,6 +36,7 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
       _ <- removePolicySchema()
       _ <- createPolicySchema()
       _ <- createResourcesOrgUnit()
+//      _ <- createResourceTypeOrgUnits()
     } yield ()
   }
 
@@ -41,6 +44,8 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
     val schema = ctx.getSchema("")
 
     Try { schema.destroySubcontext("ClassDefinition/policy") }
+    Try { schema.destroySubcontext("ClassDefinition/resourceType") }
+    Try { schema.destroySubcontext("ClassDefinition/resource") }
     Try { schema.destroySubcontext("AttributeDefinition/" + Attr.resourceType) }
     Try { schema.destroySubcontext("AttributeDefinition/" + Attr.resource) }
     Try { schema.destroySubcontext("AttributeDefinition/" + Attr.action) }
@@ -100,9 +105,9 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
     resourceAttrs.put(resourceMust)
 
     // Add the new schema object for "fooObjectClass"
-    schema.createSubcontext("ClassDefinition/policy", policyAttrs)
     schema.createSubcontext("ClassDefinition/resourceType", resourceTypeAttrs)
     schema.createSubcontext("ClassDefinition/resource", resourceAttrs)
+    schema.createSubcontext("ClassDefinition/policy", policyAttrs)
   }
 
   def createResourcesOrgUnit(): Future[Unit] = withContext { ctx =>
@@ -143,7 +148,31 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
       ctx.bind(resourceDn(resource), resourceContext)
       resource
     } catch {
-      case _: NameAlreadyBoundException => throw new WorkbenchException("foo bar")//WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, "A resource of this type and name already exists"))
+      case _: NameAlreadyBoundException => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, "A resource of this type and name already exists"))
+    }
+  }
+
+  override def createResourceType(resourceTypeName: ResourceTypeName): Future[ResourceTypeName] = withContext { ctx =>
+    try {
+      val resourceContext = new BaseDirContext {
+        override def getAttributes(name: String): Attributes = {
+          val myAttrs = new BasicAttributes(true) // Case ignore
+
+          val oc = new BasicAttribute("objectclass")
+          Seq("top", "organizationalUnit").foreach(oc.add)
+          myAttrs.put(oc)
+
+          myAttrs
+        }
+      }
+
+      println(resourceTypeDn(resourceTypeName))
+
+
+      ctx.bind(resourceTypeDn(resourceTypeName), resourceContext)
+      resourceTypeName
+    } catch {
+      case _: NameAlreadyBoundException => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, "A resource of this type and name already exists"))
     }
   }
 
@@ -182,11 +211,8 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
   }
 
   private val resourcesOu = s"ou=resources,${directoryConfig.baseDn}"
-
   private def resourceTypeDn(resourceTypeName: ResourceTypeName) = s"${Attr.resourceType}=${resourceTypeName.value},$resourcesOu"
-
   private def resourceDn(resource: Resource) = s"${Attr.resource}=${resource.resourceName.value},${resourceTypeDn(resource.resourceTypeName)}"
-
   private def policyDn(policy: AccessPolicy): String = s"${Attr.policy}=${policy.name},${resourceDn(policy.resource)}"
 
   override def listAccessPolicies(resource: Resource): Future[TraversableOnce[AccessPolicy]] = withContext { ctx =>

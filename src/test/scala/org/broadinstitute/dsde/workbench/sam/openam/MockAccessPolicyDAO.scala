@@ -38,4 +38,9 @@ class MockAccessPolicyDAO extends AccessPolicyDAO {
     policies += resource -> Set.empty
     resource
   }
+
+  override def createResourceType(resourceTypeName: ResourceTypeName): Future[ResourceTypeName] = {
+    println("hey your method isn't implemented yet!")
+    Future.successful(resourceTypeName) //todo
+  }
 }

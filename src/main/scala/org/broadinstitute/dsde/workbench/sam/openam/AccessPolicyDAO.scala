@@ -10,6 +10,7 @@ import scala.concurrent.Future
 trait AccessPolicyDAO {
   def createPolicy(policy: AccessPolicy): Future[AccessPolicy]
   def createResource(resource: Resource): Future[Resource]
+  def createResourceType(resourceTypeName: ResourceTypeName): Future[ResourceTypeName]
   def deleteResource(resource: Resource): Future[Unit]
   def listAccessPolicies(resource: Resource): Future[TraversableOnce[AccessPolicy]]
   def deletePolicy(policy: AccessPolicy): Future[Unit]
