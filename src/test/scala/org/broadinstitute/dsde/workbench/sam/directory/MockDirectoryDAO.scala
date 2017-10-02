@@ -114,8 +114,5 @@ class MockDirectoryDAO extends DirectoryDAO {
     enabledUsers.contains(userId)
   }
 
-  override def loadGroupByEmail(email: String): scala.concurrent.Future[Option[org.broadinstitute.dsde.workbench.model.WorkbenchGroup]] = ???
   override def loadSubjectFromEmail(email: String): scala.concurrent.Future[Option[org.broadinstitute.dsde.workbench.model.WorkbenchSubject]] = ???
-  override def loadUserByEmail(email: String): scala.concurrent.Future[Option[org.broadinstitute.dsde.workbench.model.WorkbenchUser]] = ???
-
 }

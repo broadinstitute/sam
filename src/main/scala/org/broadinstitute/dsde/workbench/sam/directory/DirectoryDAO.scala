@@ -14,8 +14,6 @@ trait DirectoryDAO {
   def addGroupMember(groupName: WorkbenchGroupName, addMember: WorkbenchSubject): Future[Unit]
   def removeGroupMember(groupName: WorkbenchGroupName, removeMember: WorkbenchSubject): Future[Unit]
   def isGroupMember(groupName: WorkbenchGroupName, member: WorkbenchSubject): Future[Boolean]
-  def loadUserByEmail(email: String): Future[Option[WorkbenchUser]]
-  def loadGroupByEmail(email: String): Future[Option[WorkbenchGroup]]
   def loadSubjectFromEmail(email: String): Future[Option[WorkbenchSubject]]
 
   def createUser(user: WorkbenchUser): Future[WorkbenchUser]

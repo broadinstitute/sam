@@ -69,6 +69,7 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     may.add(Attr.groupSynchronizedTimestamp)
     attrs.put(may)
 
+
     // Add the new schema object for "fooObjectClass"
     schema.createSubcontext("ClassDefinition/workbenchGroup", attrs)
   }
@@ -231,24 +232,6 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     ) yield dnToGroupName(attrE.asInstanceOf[String])
 
     groups.toSet
-  }
-
-  override def loadUserByEmail(email: String): Future[Option[WorkbenchUser]] = withContext { ctx =>
-      val person = ctx.search(peopleOu, new BasicAttributes(Attr.email, email, true)).asScala.toSeq
-      person match {
-        case Seq() => None
-          case Seq(result) => Option(unmarshalUser(result.getAttributes))
-          case _ => throw new WorkbenchException(s"Found more than one user for email $email")
-        }
-    }
-
-  override def loadGroupByEmail(email: String): Future[Option[WorkbenchGroup]] = withContext { ctx =>
-    val group = ctx.search(groupsOu, new BasicAttributes(Attr.email, email, true)).asScala.toSeq
-    group match {
-      case Seq() => None
-        case Seq(result) => Option(unmarshalGroup(result.getAttributes))
-        case _ => throw new WorkbenchException(s"Found more than one group for email $email")
-      }
   }
 
   override def loadSubjectFromEmail(email: String): Future[Option[WorkbenchSubject]] = withContext { ctx =>
