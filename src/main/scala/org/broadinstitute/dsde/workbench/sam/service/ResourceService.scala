@@ -1,14 +1,10 @@
 package org.broadinstitute.dsde.workbench.sam.service
 
-import java.util.UUID
-
-import akka.http.scaladsl.model.StatusCodes
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.AccessPolicyDAO
-import org.broadinstitute.dsde.workbench.sam._
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -23,7 +19,6 @@ class ResourceService(val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: Di
 
   def listUserResourceActions(resourceTypeName: ResourceTypeName, resourceName: ResourceName, userInfo: UserInfo): Future[Set[ResourceAction]] = {
     listResourceAccessPoliciesForUser(Resource(resourceTypeName, resourceName), userInfo).map { matchingPolicies =>
-      println(matchingPolicies)
       matchingPolicies.flatMap(_.actions)
     }
   }
@@ -65,21 +60,19 @@ class ResourceService(val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: Di
   }
 
   def overwritePolicyMembership(policyName: String, resource: Resource, policyMembership: AccessPolicyMembershipExternal) = {
-    println("creating policy")
+    val subjectsFromEmails = Future.traverse(policyMembership.members) { directoryDAO.loadSubjectFromEmail }.map(_.flatten)
 
-
-    val x = Future.traverse(policyMembership.members) { directoryDAO.loadSubjectFromEmail }.map(_.flatten)
-
-    x.map { members =>
+    subjectsFromEmails.map { members =>
       val newPolicy = AccessPolicy(policyName, resource, members, policyMembership.roles.headOption, policyMembership.actions)
 
       for {
         _ <- accessPolicyDAO.createPolicy(newPolicy)
-        x <- accessPolicyDAO.overwritePolicyMembers(newPolicy)
-      } yield x
+        policy <- accessPolicyDAO.overwritePolicyMembers(newPolicy)
+      } yield policy
     }
   }
 
+  //todo: use this for google group sync
   private def roleGroupName(resourceType: ResourceType, resourceName: ResourceName, role: ResourceRole) = {
     WorkbenchGroupName(s"${resourceType.name}-${resourceName.value}-${role.roleName.value}")
   }
@@ -88,7 +81,7 @@ class ResourceService(val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: Di
     for {
       policiesToDelete <- accessPolicyDAO.listAccessPolicies(resource)
       _ <- Future.traverse(policiesToDelete){accessPolicyDAO.deletePolicy}
-//      _ <- accessPolicyDAO.deleteResource(resource) why does it work even if we don't delete this level?
+//      _ <- accessPolicyDAO.deleteResource(resource) //todo: why does it work even if we don't delete this level?
     } yield ()
   }
 }

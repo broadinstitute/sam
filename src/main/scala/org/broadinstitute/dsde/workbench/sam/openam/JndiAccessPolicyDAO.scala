@@ -185,7 +185,6 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
   }
 
   override def createPolicy(policy: AccessPolicy): Future[AccessPolicy] = withContext { ctx =>
-    println(s"creating policy: ${policy}")
     try {
       val policyContext = new BaseDirContext {
         override def getAttributes(name: String): Attributes = {
@@ -211,12 +210,12 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
           if(policy.members.nonEmpty) {
             val members = new BasicAttribute(Attr.uniqueMember)
 
-            val foo = policy.members.map {
-              case x: WorkbenchGroupName => groupDn(x)
-              case y: WorkbenchUserId => userDn(y)
+            val memberDns = policy.members.map {
+              case subject: WorkbenchGroupName => groupDn(subject)
+              case subject: WorkbenchUserId => userDn(subject)
             }
 
-            foo.foreach(members.add)
+            memberDns.foreach(members.add)
 
             myAttrs.put(members)
           }
@@ -227,7 +226,6 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
         }
       }
 
-      println(policyDn(policy))
       ctx.bind(policyDn(policy), policyContext)
       policy
     } catch {
