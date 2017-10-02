@@ -31,4 +31,7 @@ trait DirectoryDAO {
   def enableUser(userId: WorkbenchUserId): Future[Unit]
   def disableUser(userId: WorkbenchUserId): Future[Unit]
   def isEnabled(userId: WorkbenchUserId): Future[Boolean]
+  def getPetServiceAccountForUser(userId: WorkbenchUserId): Future[Option[WorkbenchUserPetServiceAccountEmail]]
+  def addPetServiceAccountToUser(userId: WorkbenchUserId, email: WorkbenchUserPetServiceAccountEmail): Future[WorkbenchUserPetServiceAccountEmail]
+  def removePetServiceAccountFromUser(userId: WorkbenchUserId): Future[Unit]
 }

@@ -17,6 +17,7 @@ class MockDirectoryDAO extends DirectoryDAO {
   private val enabledUsers: mutable.Map[WorkbenchUserId, Unit] = new TrieMap()
   private val usersWithEmails: mutable.Map[WorkbenchUserEmail, WorkbenchUserId] = new TrieMap()
   private val groupsWithEmails: mutable.Map[WorkbenchGroupEmail, WorkbenchGroupName] = new TrieMap()
+  private val petServiceAccounts: mutable.Map[WorkbenchUserId, WorkbenchUserPetServiceAccountEmail] = new TrieMap()
 
   override def createGroup(group: WorkbenchGroup): Future[WorkbenchGroup] = Future {
     if (groups.keySet.contains(group.name)) {
@@ -131,4 +132,18 @@ class MockDirectoryDAO extends DirectoryDAO {
   }
 
   override def loadGroupEmail(groupName: WorkbenchGroupName): Future[Option[WorkbenchGroupEmail]] = loadGroup(groupName).map(_.map(_.email))
+
+  override def getPetServiceAccountForUser(userId: WorkbenchUserId): Future[Option[WorkbenchUserPetServiceAccountEmail]] = Future {
+    petServiceAccounts.get(userId)
+  }
+
+  override def addPetServiceAccountToUser(userId: WorkbenchUserId, email: WorkbenchUserPetServiceAccountEmail): Future[WorkbenchUserPetServiceAccountEmail] = {
+    petServiceAccounts += (userId -> email)
+    Future.successful(email)
+  }
+
+  override def removePetServiceAccountFromUser(userId: WorkbenchUserId): Future[Unit] = {
+    petServiceAccounts -= userId
+    Future.successful(())
+  }
 }

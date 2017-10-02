@@ -5,6 +5,7 @@ import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directives._
 import org.broadinstitute.dsde.workbench.model.{WorkbenchUser, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.service.UserService
 
@@ -87,6 +88,21 @@ trait UserRoutes extends UserInfoDirectives {
                     }
                   }
                 }
+            }
+          }
+        }
+      }
+    }
+
+  def userPetServiceAccountRoutes: server.Route =
+    pathPrefix("user") {
+      requireUserInfo { userInfo =>
+        path("petServiceAccount") {
+          get {
+            complete {
+              userService.createUserPetServiceAccount(WorkbenchUser(userInfo.userId, userInfo.userEmail)).map { petSA =>
+                StatusCodes.OK -> petSA
+              }
             }
           }
         }

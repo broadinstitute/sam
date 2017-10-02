@@ -6,7 +6,7 @@ import akka.stream.ActorMaterializer
 import com.typesafe.config.ConfigFactory
 import com.typesafe.scalalogging.LazyLogging
 import net.ceedubs.ficus.Ficus._
-import org.broadinstitute.dsde.workbench.google.HttpGoogleDirectoryDAO
+import org.broadinstitute.dsde.workbench.google.{HttpGoogleDirectoryDAO, HttpGoogleIamDAO}
 import org.broadinstitute.dsde.workbench.sam.api.{SamRoutes, StandardUserInfoDirectives}
 import org.broadinstitute.dsde.workbench.sam.config._
 import org.broadinstitute.dsde.workbench.sam.directory._
@@ -26,6 +26,7 @@ object Boot extends App with LazyLogging {
 
     val directoryConfig = config.as[DirectoryConfig]("directory")
     val googleDirectoryConfig = config.as[GoogleDirectoryConfig]("googleDirectory")
+    val petServiceAccountConfig = config.as[PetServiceAccountConfig]("petServiceAccount")
 
     // we need an ActorSystem to host our application in
     implicit val system = ActorSystem("sam")
@@ -36,10 +37,11 @@ object Boot extends App with LazyLogging {
     val directoryDAO = new JndiDirectoryDAO(directoryConfig)
     val schemaDAO = new JndiSchemaDAO(directoryConfig)
     val googleDirectoryDAO = new HttpGoogleDirectoryDAO(googleDirectoryConfig.clientSecrets, googleDirectoryConfig.pemFile, googleDirectoryConfig.appsDomain, googleDirectoryConfig.appName, googleDirectoryConfig.serviceProject, "google")
+    val googleIamDAO = new HttpGoogleIamDAO(googleDirectoryConfig.clientSecrets, googleDirectoryConfig.pemFile, googleDirectoryConfig.appName, "google")
 
     val configResourceTypes = config.as[Set[ResourceType]]("resourceTypes")
     val resourceService = new ResourceService(configResourceTypes.map(rt => rt.name -> rt).toMap, accessPolicyDAO, directoryDAO, config.getString("googleDirectory.appsDomain"))
-    val userService = new UserService(directoryDAO, googleDirectoryDAO, googleDirectoryConfig.appsDomain)
+    val userService = new UserService(directoryDAO, googleDirectoryDAO, googleIamDAO, googleDirectoryConfig.appsDomain, petServiceAccountConfig)
     val statusService = new StatusService(directoryDAO, googleDirectoryDAO, 10 seconds)
 
     val samRoutes = new SamRoutes(resourceService, userService, statusService, config.as[SwaggerConfig]("swagger")) with StandardUserInfoDirectives
