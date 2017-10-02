@@ -117,75 +117,76 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     runAndWait(dirDAO.deleteUser(userInfo.userId))
   }
 
-//  it should "detect conflict on create" in {
-//    val ownerRoleName = ResourceRoleName("owner")
-//    val resourceType = ResourceType(ResourceTypeName(UUID.randomUUID().toString), Set(ResourceAction("a1"), ResourceAction("a2"), ResourceAction("a3")), Set(ResourceRole(ownerRoleName, Set(ResourceAction("a1"), ResourceAction("a2")))), ownerRoleName)
-//    val resourceName = ResourceName("resource")
-//
-//    runAndWait(service.createResourceType(resourceType))
-//
-//    runAndWait(service.createResource(
-//      resourceType,
-//      resourceName,
-//      dummyUserInfo
-//    ))
-//
-//    val exception = intercept[WorkbenchExceptionWithErrorReport] {
-//      runAndWait(service.createResource(
-//        resourceType,
-//        resourceName,
-//        dummyUserInfo
-//      ))
-//    }
-//
-//    exception.errorReport.statusCode shouldEqual Option(StatusCodes.Conflict)
-//
-//    //cleanup
-//    runAndWait(service.deleteResource(Resource(resourceType.name, resourceName)))
-//  }
-//
-//  it should "listUserResourceRoles when they have at least one role" in {
-//    val ownerRoleName = ResourceRoleName("owner")
-//    val resourceType = ResourceType(ResourceTypeName(UUID.randomUUID().toString), Set(ResourceAction("a1")), Set(ResourceRole(ownerRoleName, Set(ResourceAction("a1")))), ownerRoleName)
-//    val resourceName = ResourceName("resource")
-//
-//
-//    runAndWait(service.directoryDAO.createUser(WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)))
-//
-//    runAndWait(service.createResource(
-//      resourceType,
-//      resourceName,
-//      dummyUserInfo
-//    ))
-//
-//    val roles = runAndWait(service.listUserResourceRoles(
-//      resourceType.name,
-//      resourceName,
-//      dummyUserInfo
-//    ))
-//
-//    roles shouldEqual Set(ResourceRoleName("owner"))
-//
-//    runAndWait(service.deleteResource(Resource(resourceType.name, resourceName)))
-//    runAndWait(service.directoryDAO.deleteUser(dummyUserInfo.userId))
-//  }
-//
-//  it should "return an empty set from listUserResourceRoles when the resource doesn't exist" in {
-//    val ownerRoleName = ResourceRoleName("owner")
-//    val resourceType = ResourceType(ResourceTypeName(UUID.randomUUID().toString), Set(ResourceAction("a1")), Set(ResourceRole(ownerRoleName, Set(ResourceAction("a1")))), ownerRoleName)
-//    val resourceName = ResourceName("resource")
-//
-//
-//    runAndWait(service.directoryDAO.createUser(WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)))
-//
-//    val roles = runAndWait(service.listUserResourceRoles(
-//      resourceType.name,
-//      resourceName,
-//      dummyUserInfo
-//    ))
-//
-//    roles shouldEqual Set.empty
-//
-//    runAndWait(service.directoryDAO.deleteUser(dummyUserInfo.userId))
-//  }
+  it should "detect conflict on create" in {
+    val ownerRoleName = ResourceRoleName("owner")
+    val resourceType = ResourceType(ResourceTypeName(UUID.randomUUID().toString), Set(ResourceAction("a1"), ResourceAction("a2"), ResourceAction("a3")), Set(ResourceRole(ownerRoleName, Set(ResourceAction("a1"), ResourceAction("a2")))), ownerRoleName)
+    val resourceName = ResourceName("resource")
+
+    runAndWait(service.createResourceType(resourceType))
+
+    runAndWait(service.createResource(
+      resourceType,
+      resourceName,
+      dummyUserInfo
+    ))
+
+    val exception = intercept[WorkbenchExceptionWithErrorReport] {
+      runAndWait(service.createResource(
+        resourceType,
+        resourceName,
+        dummyUserInfo
+      ))
+    }
+
+    exception.errorReport.statusCode shouldEqual Option(StatusCodes.Conflict)
+
+    //cleanup
+    runAndWait(service.deleteResource(Resource(resourceType.name, resourceName)))
+  }
+
+  it should "listUserResourceRoles when they have at least one role" in {
+    val ownerRoleName = ResourceRoleName("owner")
+    val resourceType = ResourceType(ResourceTypeName(UUID.randomUUID().toString), Set(ResourceAction("a1")), Set(ResourceRole(ownerRoleName, Set(ResourceAction("a1")))), ownerRoleName)
+    val resourceName = ResourceName("resource")
+
+    runAndWait(service.createResourceType(resourceType))
+
+    runAndWait(service.directoryDAO.createUser(WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)))
+
+    runAndWait(service.createResource(
+      resourceType,
+      resourceName,
+      dummyUserInfo
+    ))
+
+    val roles = runAndWait(service.listUserResourceRoles(
+      resourceType.name,
+      resourceName,
+      dummyUserInfo
+    ))
+
+    roles shouldEqual Set(ResourceRoleName("owner"))
+
+    runAndWait(service.deleteResource(Resource(resourceType.name, resourceName)))
+    runAndWait(service.directoryDAO.deleteUser(dummyUserInfo.userId))
+  }
+
+  it should "return an empty set from listUserResourceRoles when the resource doesn't exist" in {
+    val ownerRoleName = ResourceRoleName("owner")
+    val resourceType = ResourceType(ResourceTypeName(UUID.randomUUID().toString), Set(ResourceAction("a1")), Set(ResourceRole(ownerRoleName, Set(ResourceAction("a1")))), ownerRoleName)
+    val resourceName = ResourceName("resource")
+
+
+    runAndWait(service.directoryDAO.createUser(WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)))
+
+    val roles = runAndWait(service.listUserResourceRoles(
+      resourceType.name,
+      resourceName,
+      dummyUserInfo
+    ))
+
+    roles shouldEqual Set.empty
+
+    runAndWait(service.directoryDAO.deleteUser(dummyUserInfo.userId))
+  }
 }

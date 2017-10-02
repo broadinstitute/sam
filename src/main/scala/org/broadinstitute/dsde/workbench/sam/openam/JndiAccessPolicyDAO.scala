@@ -162,6 +162,7 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
   }
 
   override def createResourceType(resourceTypeName: ResourceTypeName): Future[ResourceTypeName] = withContext { ctx =>
+    println(s"creating ${resourceTypeName}")
     try {
       val resourceContext = new BaseDirContext {
         override def getAttributes(name: String): Attributes = {
@@ -258,9 +259,7 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
       )
     }
 
-    val x = policies.toSet
-    println(x)
-    x
+    policies.toSet
   }
 
   override def listAccessPoliciesForUser(resource: Resource, user: WorkbenchUserId): Future[Set[AccessPolicy]] = withContext { ctx =>
@@ -287,9 +286,7 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
       case _: NameNotFoundException => Set.empty
     }
 
-    val x = policies.toSet
-    println(x)
-    x
+    policies.toSet
   }
 
   override def addMemberToPolicy(policy: AccessPolicy, member: WorkbenchSubject): Future[Unit] = withContext { ctx =>
