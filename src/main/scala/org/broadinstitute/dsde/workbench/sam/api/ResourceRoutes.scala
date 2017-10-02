@@ -34,37 +34,49 @@ trait ResourceRoutes extends UserInfoDirectives {
         }
       }
     } ~
-      pathPrefix("resource") {
-        requireUserInfo { userInfo =>
-          pathPrefix(Segment / Segment) { (resourceTypeName, resourceId) =>
-            val resourceType = resourceTypes.getOrElse(ResourceTypeName(resourceTypeName), throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"resource type $resourceTypeName not found")))
+    pathPrefix("resource") {
+      requireUserInfo { userInfo =>
+        pathPrefix(Segment / Segment) { (resourceTypeName, resourceId) =>
+          val resourceType = resourceTypes.getOrElse(ResourceTypeName(resourceTypeName), throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"resource type $resourceTypeName not found")))
 
+          pathEndOrSingleSlash {
+            post {
+              complete(resourceService.createResource(resourceType, ResourceName(resourceId), userInfo).map(_ => StatusCodes.NoContent))
+            }
+          } ~
+          pathPrefix("action") {
+            pathPrefix(Segment) { action =>
+              pathEndOrSingleSlash {
+                get {
+                  complete(resourceService.hasPermission(resourceType.name, ResourceName(resourceId), ResourceAction(action), userInfo).map { hasPermission =>
+                    StatusCodes.OK -> JsBoolean(hasPermission)
+                  })
+                }
+              }
+            }
+          } ~
+          pathPrefix("policies") {
+            pathPrefix(Segment) { policyId =>
+              pathEndOrSingleSlash {
+                put {
+                  entity(as[AccessPolicyMembershipExternal]) { membershipUpdate =>
+                    println(membershipUpdate)
+                    complete(resourceService.overwritePolicyMembership(policyId, Resource(resourceType.name, ResourceName(resourceId)), membershipUpdate).map(_ => StatusCodes.Created))
+                  }
+                }
+              }
+            }
+          } ~
+          pathPrefix("roles") {
             pathEndOrSingleSlash {
-              post {
-                complete(resourceService.createResource(resourceType, ResourceName(resourceId), userInfo).map(_ => StatusCodes.NoContent))
+              get {
+                complete(resourceService.listUserResourceRoles(resourceType.name, ResourceName(resourceId), userInfo).map { roles =>
+                  StatusCodes.OK -> roles
+                })
               }
-            } ~
-              pathPrefix("action") {
-                pathPrefix(Segment) { action =>
-                  pathEndOrSingleSlash {
-                    get {
-                      complete(resourceService.hasPermission(resourceType.name, ResourceName(resourceId), ResourceAction(action), userInfo).map { hasPermission =>
-                        StatusCodes.OK -> JsBoolean(hasPermission)
-                      })
-                    }
-                  }
-                }
-              } ~
-              pathPrefix("roles") {
-                pathEndOrSingleSlash {
-                  get {
-                    complete(resourceService.listUserResourceRoles(resourceType.name, ResourceName(resourceId), userInfo).map { roles =>
-                      StatusCodes.OK -> roles
-                    })
-                  }
-                }
-              }
+            }
           }
         }
       }
+    }
 }

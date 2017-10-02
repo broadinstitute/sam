@@ -10,6 +10,7 @@ import org.broadinstitute.dsde.workbench.google.mock.MockGoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchUserEmail, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.directory.MockDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.openam.MockAccessPolicyDAO
+import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import spray.json.{JsBoolean, JsValue}
 import spray.json.DefaultJsonProtocol._
 import org.broadinstitute.dsde.workbench.model.ErrorReportJsonSupport._
@@ -78,6 +79,21 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
 
     Get(s"/api/resource/doesntexist/foo/roles") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
+    }
+  }
+
+  it should "201 on a new policy being created for a resource" in {
+    val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceAction("run")), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("run")))), ResourceRoleName("owner"))
+    val samRoutes = createSamRoutes(Map(resourceType.name -> resourceType))
+
+    Post(s"/api/resource/${resourceType.name}/foo") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+    }
+
+    val members = AccessPolicyMembershipExternal(Set("foo@bar.baz"), Set(ResourceAction("canCompute")), Set.empty)
+
+    Put(s"/api/resource/${resourceType.name}/foo/policies/canCompute", members) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
     }
   }
 

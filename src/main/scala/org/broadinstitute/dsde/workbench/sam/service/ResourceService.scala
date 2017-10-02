@@ -23,6 +23,7 @@ class ResourceService(val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: Di
 
   def listUserResourceActions(resourceTypeName: ResourceTypeName, resourceName: ResourceName, userInfo: UserInfo): Future[Set[ResourceAction]] = {
     listResourceAccessPoliciesForUser(Resource(resourceTypeName, resourceName), userInfo).map { matchingPolicies =>
+      println(matchingPolicies)
       matchingPolicies.flatMap(_.actions)
     }
   }
@@ -60,6 +61,22 @@ class ResourceService(val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: Di
           ))
         } yield policy
       }
+    }
+  }
+
+  def overwritePolicyMembership(policyName: String, resource: Resource, policyMembership: AccessPolicyMembershipExternal) = {
+    println("creating policy")
+
+
+    val x = Future.traverse(policyMembership.members) { directoryDAO.loadSubjectFromEmail }.map(_.flatten)
+
+    x.map { members =>
+      val newPolicy = AccessPolicy(policyName, resource, members, policyMembership.roles.headOption, policyMembership.actions)
+
+      for {
+        _ <- accessPolicyDAO.createPolicy(newPolicy)
+        x <- accessPolicyDAO.overwritePolicyMembers(newPolicy)
+      } yield x
     }
   }
 

@@ -21,6 +21,7 @@ trait DirectorySubjectNameSupport {
   }
 
   protected def dnToSubject(dn: String): WorkbenchSubject = {
+    println(dn)
     val splitDn = dn.split(",")
 
     splitDn.lift(1) match {

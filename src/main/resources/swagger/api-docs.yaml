@@ -124,6 +124,55 @@ paths:
             - email
             - profile
 
+  /api/resource/{resourceTypeName}/{resourceId}/policies/{policyName}:
+    put:
+      summary: Overwrite a policy on a resource
+      responses:
+        200:
+          description: TBD
+          schema:
+            type: array
+            items:
+              type: string
+        403:
+          description: You do not have permission to perform this action on the resource
+        404:
+          description: Resource type does not exist
+        500:
+          description: Internal Error
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      parameters:
+        - in: path
+          description: Type of resource
+          name: resourceTypeName
+          required: true
+          type: string
+        - in: path
+          description: Id of resource
+          name: resourceId
+          required: true
+          type: string
+        - in: path
+          description: Name of policy
+          name: policyName
+          required: true
+          type: string
+        - in: body
+          description: The membership to save for the policy
+          name: membershipJson
+          required: true
+          schema:
+            $ref: '#/definitions/AccessPolicyMembership'
+      operationId: overwritePolicy
+      tags:
+        - Resources
+      security:
+        - googleoauth:
+            - openid
+            - email
+            - profile
+
   /api/resource/{resourceTypeName}/{resourceId}/roles:
     get:
       summary: Query for the list of roles that the requesting user has on the resource
@@ -264,6 +313,26 @@ paths:
 ## DEFINITIONS
 ##########################################################################################
 definitions:
+
+  AccessPolicyMembership:
+    description: ''
+    required:
+      - members
+      - actions
+      - roles
+    properties:
+      members:
+        type: array
+        items:
+          type: string
+      actions:
+        type: array
+        items:
+          type: string
+      roles:
+        type: array
+        items:
+          type: string
 
   Enabled:
     description: ''

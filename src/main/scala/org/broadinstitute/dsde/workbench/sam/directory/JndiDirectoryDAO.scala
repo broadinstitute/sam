@@ -69,7 +69,6 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     may.add(Attr.groupSynchronizedTimestamp)
     attrs.put(may)
 
-
     // Add the new schema object for "fooObjectClass"
     schema.createSubcontext("ClassDefinition/workbenchGroup", attrs)
   }
@@ -180,6 +179,15 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     WorkbenchUser(WorkbenchUserId(uid), WorkbenchUserEmail(email))
   }
 
+  private def unmarshalGroup(attributes: Attributes): WorkbenchGroup = {
+    val cn = getAttribute[String](attributes, Attr.cn).getOrElse(throw new WorkbenchException(s"${Attr.cn} attribute missing"))
+    val email = getAttribute[String](attributes, Attr.email).getOrElse(throw new WorkbenchException(s"${Attr.email} attribute missing"))
+    val memberDns = getAttributes[String](attributes, Attr.member).getOrElse(Set.empty).toSet
+    val members = memberDns.map(dnToSubject)
+
+    WorkbenchGroup(WorkbenchGroupName(cn), members, WorkbenchGroupEmail(email))
+  }
+
   private def getAttribute[T](attributes: Attributes, key: String): Option[T] = {
     Option(attributes.get(key)).map(_.get.asInstanceOf[T])
   }
@@ -223,6 +231,38 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     ) yield dnToGroupName(attrE.asInstanceOf[String])
 
     groups.toSet
+  }
+
+  override def loadUserByEmail(email: String): Future[Option[WorkbenchUser]] = withContext { ctx =>
+      val person = ctx.search(peopleOu, new BasicAttributes(Attr.email, email, true)).asScala.toSeq
+      person match {
+        case Seq() => None
+          case Seq(result) => Option(unmarshalUser(result.getAttributes))
+          case _ => throw new WorkbenchException(s"Found more than one user for email $email")
+        }
+    }
+
+  override def loadGroupByEmail(email: String): Future[Option[WorkbenchGroup]] = withContext { ctx =>
+    val group = ctx.search(groupsOu, new BasicAttributes(Attr.email, email, true)).asScala.toSeq
+    group match {
+      case Seq() => None
+        case Seq(result) => Option(unmarshalGroup(result.getAttributes))
+        case _ => throw new WorkbenchException(s"Found more than one group for email $email")
+      }
+  }
+
+  override def loadSubjectFromEmail(email: String): Future[Option[WorkbenchSubject]] = withContext { ctx =>
+    val subjectResults = ctx.search(directoryConfig.baseDn, s"(${Attr.email}=${email})", new SearchControls(SearchControls.SUBTREE_SCOPE, 0, 0, null, false, false)).asScala.toSeq
+    println(subjectResults)
+    val subjects = subjectResults.map { result =>
+      dnToSubject(result.getNameInNamespace)
+    }
+
+    subjects match {
+      case Seq() => None
+      case Seq(subject) => Option(subject)
+      case _ => throw new WorkbenchException(s"Database error: email $email refers to too many subjects: $subjects")
+    }
   }
 
   override def enableUser(userId: WorkbenchUserId): Future[Unit] = withContext { ctx =>

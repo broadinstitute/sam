@@ -11,42 +11,44 @@ import scala.concurrent.ExecutionContext.Implicits.global
   * Created by dvoet on 7/17/17.
   */
 class MockAccessPolicyDAO extends AccessPolicyDAO {
-  private val policies: mutable.Map[Resource, Set[AccessPolicy]] = new TrieMap()
+  private val policies: mutable.Map[ResourceTypeName, Map[ResourceName, Set[AccessPolicy]]] = new TrieMap()
 
   override def createPolicy(policy: AccessPolicy): Future[AccessPolicy] = Future {
     listAccessPolicies(policy.resource) map { existingPolicies =>
-      policies += (policy.resource -> (existingPolicies.toSet + policy))
+      policies += (policy.resource.resourceTypeName -> Map(policy.resource.resourceName -> (existingPolicies.toSet + policy)))
     }
     policy
   }
 
   override def deletePolicy(policy: AccessPolicy): Future[Unit] = Future {
     listAccessPolicies(policy.resource) map { existingPolicies =>
-      policies += (policy.resource -> (existingPolicies.toSet - policy))
+      policies += (policy.resource.resourceTypeName -> Map(policy.resource.resourceName -> (existingPolicies.toSet - policy)))
     }
   }
 
   override def listAccessPolicies(resource: Resource): Future[TraversableOnce[AccessPolicy]] = Future {
-    policies.getOrElse(resource, Set.empty)
+    policies.getOrElse(resource.resourceTypeName, Map.empty).getOrElse(resource.resourceName, Set.empty)
   }
 
   override def listAccessPoliciesForUser(resource: Resource, user: WorkbenchUserId): Future[Set[AccessPolicy]] = Future {
-    policies.getOrElse(resource, Set.empty).filter(_.members.contains(user))
+    policies.getOrElse(resource.resourceTypeName, Map.empty).getOrElse(resource.resourceName, Set.empty).filter(_.members.contains(user))
   }
 
   override def deleteResource(resource: Resource): Future[Unit] = Future {
-    policies -= resource
+//    policies += resource.resourceTypeName -> Map(policies.get)
   }
 
   override def createResource(resource: Resource): Future[Resource] = Future {
-    policies += resource -> Set.empty
+    policies += resource.resourceTypeName -> Map(resource.resourceName -> Set.empty)
     resource
   }
 
-  override def createResourceType(resourceTypeName: ResourceTypeName): Future[ResourceTypeName] = {
-    println("hey your method isn't implemented yet!")
-    Future.successful(resourceTypeName) //todo
+  override def createResourceType(resourceTypeName: ResourceTypeName): Future[ResourceTypeName] = Future {
+    policies += resourceTypeName -> Map.empty
+    resourceTypeName
   }
 
   override def addMemberToPolicy(policy: AccessPolicy, member: WorkbenchSubject): Future[Unit] = ???
+
+  override def overwritePolicyMembers(newPolicy: AccessPolicy): Future[AccessPolicy] = ???
 }

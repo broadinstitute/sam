@@ -43,15 +43,22 @@ object Boot extends App with LazyLogging {
     }
 
     for {
+      //DirectoryDAO must init before PolicyDAO because it is dependant on workbenchGroup schema
+      _ <- directoryDAO.init() recover {
+        case t: Throwable =>
+          logger.error("FATAL - could not init directory dao", t) //todo: there is a bug that causes workbenchGroup schema to be created twice? or it's not getting removed properly?
+          throw t
+      }
+
       _ <- accessPolicyDAO.init() recover {
         case t: Throwable =>
           logger.error("FATAL - could not init access policy dao", t)
           throw t
       }
 
-      _ <- directoryDAO.init() recover {
+      _ <- Future.traverse(configResourceTypes.map(_.name)) { accessPolicyDAO.createResourceType } recover {
         case t: Throwable =>
-          logger.error("FATAL - could not init directory dao", t)
+          logger.error("FATAL - unable to initialize resource types", t)
           throw t
       }
 

@@ -31,6 +31,8 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
     val cn = "cn"
     val policy = "policy"
     val uniqueMember = "uniqueMember"
+    val groupUpdatedTimestamp = "groupUpdatedTimestamp"
+    val groupSynchronizedTimestamp = "groupSynchronizedTimestamp"
   }
 
   def init(): Future[Unit] = {
@@ -38,7 +40,7 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
       _ <- removePolicySchema()
       _ <- createPolicySchema()
       _ <- createResourcesOrgUnit()
-//      _ <- createResourceTypeOrgUnits()
+
     } yield ()
   }
 
@@ -69,7 +71,7 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
     policyAttrs.put("NUMERICOID", "1.3.6.1.4.1.18060.0.4.3.2.0")
     policyAttrs.put("NAME", "policy")
     policyAttrs.put("DESC", "list subjects for a policy")
-    policyAttrs.put("SUP", "groupofuniquenames")
+    policyAttrs.put("SUP", "workbenchGroup")
     policyAttrs.put("STRUCTURAL", "true")
 
     val policyMust = new BasicAttribute("MUST")
@@ -83,7 +85,6 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
     val policyMay = new BasicAttribute("MAY")
     policyMay.add(Attr.action)
     policyMay.add(Attr.role)
-    policyMay.add(Attr.uniqueMember)
     policyAttrs.put(policyMay)
 
     val resourceTypeAttrs = new BasicAttributes(true) // Ignore case
@@ -162,7 +163,6 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
   }
 
   override def createResourceType(resourceTypeName: ResourceTypeName): Future[ResourceTypeName] = withContext { ctx =>
-    println(s"creating ${resourceTypeName}")
     try {
       val resourceContext = new BaseDirContext {
         override def getAttributes(name: String): Attributes = {
@@ -185,6 +185,7 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
   }
 
   override def createPolicy(policy: AccessPolicy): Future[AccessPolicy] = withContext { ctx =>
+    println(s"creating policy: ${policy}")
     try {
       val policyContext = new BaseDirContext {
         override def getAttributes(name: String): Attributes = {
@@ -194,6 +195,7 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
           Seq("top", "policy").foreach(oc.add)
           myAttrs.put(oc)
           myAttrs.put(Attr.cn, policy.name)
+          myAttrs.put(Attr.mail, "test")
 
           if (policy.actions.nonEmpty) {
             val actions = new BasicAttribute(Attr.action)
@@ -225,11 +227,40 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
         }
       }
 
+      println(policyDn(policy))
       ctx.bind(policyDn(policy), policyContext)
       policy
     } catch {
       case _: NameAlreadyBoundException => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, "A policy for this subject already exists for this resource"))
     }
+  }
+
+  /**
+    * @param emptyValueFn a function called when no members are present
+    ** /
+    */
+
+  private def addMemberAttributes(users: Set[WorkbenchUserId], subGroups: Set[WorkbenchGroupName], myAttrs: BasicAttributes)(emptyValueFn: BasicAttributes => Unit): Any = {
+    val memberDns = users.map(user => userDn(user)) ++ subGroups.map(subGroup => groupDn(subGroup))
+    if (memberDns.nonEmpty) {
+      val members = new BasicAttribute(Attr.uniqueMember)
+      memberDns.foreach(subject => members.add(subject))
+      myAttrs.put(members)
+    } else {
+      emptyValueFn(myAttrs)
+    }
+  }
+
+  override def overwritePolicyMembers(newPolicy: AccessPolicy): Future[AccessPolicy] = withContext { ctx =>
+    val myAttrs = new BasicAttributes(true)
+
+    val users = newPolicy.members.collect { case a: WorkbenchUserId => a }
+    val subGroups = newPolicy.members.collect { case b: WorkbenchGroupName => b }
+
+    addMemberAttributes(users, subGroups, myAttrs) { _.put(new BasicAttribute(Attr.uniqueMember)) } //add attribute with no value when no member present
+
+    ctx.modifyAttributes(policyDn(newPolicy), DirContext.REPLACE_ATTRIBUTE, myAttrs)
+    newPolicy
   }
 
   private val resourcesOu = s"ou=resources,${directoryConfig.baseDn}"
@@ -244,19 +275,23 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
   override def listAccessPolicies(resource: Resource): Future[TraversableOnce[AccessPolicy]] = withContext { ctx =>
     val searchAttrs = new BasicAttributes(true)  // Case ignore
 
-    val policies = ctx.search(resourceDn(resource), searchAttrs).asScala.map { searchResult =>
-      val members = getAttributes[String](searchResult.getAttributes, Attr.uniqueMember).getOrElse(Set.empty).toSet.map(dnToSubject)
+    val policies = try {
+      ctx.search(resourceDn(resource), searchAttrs).asScala.map { searchResult =>
+        val members = getAttributes[String](searchResult.getAttributes, Attr.uniqueMember).getOrElse(Set.empty).toSet.map(dnToSubject)
 
-      AccessPolicy(
-        searchResult.getAttributes.get(Attr.policy).get().toString,
-        Resource(
-          ResourceTypeName(searchResult.getAttributes.get(Attr.resourceType).get().toString),
-          ResourceName(searchResult.getAttributes.get(Attr.resource).get().toString)
-        ),
-        members,
-        Option(ResourceRoleName(searchResult.getAttributes.get(Attr.role).get().toString)),
-        searchResult.getAttributes.get(Attr.action).getAll.asScala.map(a => ResourceAction(a.toString)).toSet
-      )
+        AccessPolicy(
+          searchResult.getAttributes.get(Attr.policy).get().toString,
+          Resource(
+            ResourceTypeName(searchResult.getAttributes.get(Attr.resourceType).get().toString),
+            ResourceName(searchResult.getAttributes.get(Attr.resource).get().toString)
+          ),
+          members,
+          Option(ResourceRoleName(searchResult.getAttributes.get(Attr.role).get().toString)),//todo (gives a null pointer exception) ???
+          searchResult.getAttributes.get(Attr.action).getAll.asScala.map(a => ResourceAction(a.toString)).toSet
+        )
+      }
+    }catch {
+      case _: NameNotFoundException => Set.empty
     }
 
     policies.toSet
@@ -278,7 +313,7 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
             ResourceName(searchResult.getAttributes.get(Attr.resource).get().toString)
           ),
           members,
-          Option(ResourceRoleName(searchResult.getAttributes.get(Attr.role).get().toString)),
+          Option(ResourceRoleName(searchResult.getAttributes.get(Attr.role).get().toString)), //todo (gives a null pointer exception)
           searchResult.getAttributes.get(Attr.action).getAll.asScala.map(a => ResourceAction(a.toString)).toSet
         )
       }
