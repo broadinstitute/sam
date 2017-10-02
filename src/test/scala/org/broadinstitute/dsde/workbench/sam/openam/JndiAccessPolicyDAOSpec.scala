@@ -22,8 +22,8 @@ class JndiAccessPolicyDAOSpec extends FlatSpec with Matchers with TestSupport wi
   val dirDao = new JndiDirectoryDAO(directoryConfig)
 
   override protected def beforeAll(): Unit = {
-//    runAndWait(dirDao.init())
-//    runAndWait(dao.init())
+    runAndWait(dirDao.init())
+    runAndWait(dao.init())
   }
 
   "JndiAccessPolicyDAO" should "create, list, delete policies" in {

@@ -20,7 +20,7 @@ class JndiDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
   val dao = new JndiDirectoryDAO(directoryConfig)
 
   override protected def beforeAll(): Unit = {
-//    runAndWait(dao.init())
+    runAndWait(dao.init())
   }
 
   "JndiGroupDirectoryDAO" should "create, read, delete groups" in {

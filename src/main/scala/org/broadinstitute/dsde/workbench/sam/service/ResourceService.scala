@@ -59,8 +59,8 @@ class ResourceService(val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: Di
     }
   }
 
-  def overwritePolicyMembership(policyName: String, resource: Resource, policyMembership: AccessPolicyMembershipExternal) = {
-    val subjectsFromEmails = Future.traverse(policyMembership.members) { directoryDAO.loadSubjectFromEmail }.map(_.flatten)
+  def overwritePolicyMembership(policyName: String, resource: Resource, policyMembership: AccessPolicyMembership) = {
+    val subjectsFromEmails = Future.traverse(policyMembership.memberEmails) { directoryDAO.loadSubjectFromEmail }.map(_.flatten)
 
     subjectsFromEmails.map { members =>
       val newPolicy = AccessPolicy(policyName, resource, members, policyMembership.roles.headOption, policyMembership.actions)
