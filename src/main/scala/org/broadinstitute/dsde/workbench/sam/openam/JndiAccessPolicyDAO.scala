@@ -44,7 +44,6 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
       _ <- removePolicySchema()
       _ <- createPolicySchema()
       _ <- createResourcesOrgUnit()
-
     } yield ()
   }
 
@@ -60,7 +59,6 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
     Try { schema.destroySubcontext("AttributeDefinition/" + Attr.role) }
     Try { schema.destroySubcontext("AttributeDefinition/" + Attr.policy) }
   }
-
 
   def createPolicySchema(): Future[Unit] = withContext { ctx =>
     val schema = ctx.getSchema("")
@@ -210,11 +208,13 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
         override def getAttributes(name: String): Attributes = {
           val myAttrs = new BasicAttributes(true) // Case ignore
 
+          val email = s"policy-${policy.resource.resourceTypeName.value}-${policy.resource.resourceName.value}-${policy.name}@dev.test.firecloud.org" //TODO: Make sure this is a good/unique naming convention and keep Google length limits in mind
+
           val oc = new BasicAttribute("objectclass")
           Seq("top", "policy").foreach(oc.add)
           myAttrs.put(oc)
           myAttrs.put(Attr.cn, policy.name)
-          myAttrs.put(Attr.mail, "test")
+          myAttrs.put(Attr.mail, email) //TODO make sure the google group is created
 
           if (policy.actions.nonEmpty) {
             val actions = new BasicAttribute(Attr.action)
