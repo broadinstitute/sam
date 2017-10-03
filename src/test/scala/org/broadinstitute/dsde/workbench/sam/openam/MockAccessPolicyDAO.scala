@@ -26,7 +26,7 @@ class MockAccessPolicyDAO extends AccessPolicyDAO {
     }
   }
 
-  override def listAccessPolicies(resource: Resource): Future[TraversableOnce[AccessPolicy]] = Future {
+  override def listAccessPolicies(resource: Resource): Future[Set[AccessPolicy]] = Future {
     policies.getOrElse(resource.resourceTypeName, Map.empty).getOrElse(resource.resourceName, Set.empty)
   }
 
