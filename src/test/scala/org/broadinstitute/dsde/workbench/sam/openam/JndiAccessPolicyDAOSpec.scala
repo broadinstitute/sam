@@ -10,6 +10,7 @@ import org.broadinstitute.dsde.workbench.model.WorkbenchUserId
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
 import org.broadinstitute.dsde.workbench.sam.directory._
+import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 
 import scala.concurrent.ExecutionContext.Implicits.global
 
@@ -20,10 +21,10 @@ class JndiAccessPolicyDAOSpec extends FlatSpec with Matchers with TestSupport wi
   val directoryConfig = ConfigFactory.load().as[DirectoryConfig]("directory")
   val dao = new JndiAccessPolicyDAO(directoryConfig)
   val dirDao = new JndiDirectoryDAO(directoryConfig)
+  val schemaDao = new JndiSchemaDAO(directoryConfig)
 
   override protected def beforeAll(): Unit = {
-    runAndWait(dirDao.init())
-    runAndWait(dao.init())
+    runAndWait(schemaDao.init())
   }
 
   "JndiAccessPolicyDAO" should "create, list, delete policies" in {

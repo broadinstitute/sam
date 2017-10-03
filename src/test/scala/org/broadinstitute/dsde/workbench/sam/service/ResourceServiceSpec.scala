@@ -12,6 +12,7 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.JndiAccessPolicyDAO
+import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 
 import scala.concurrent.ExecutionContext.Implicits.global
 
@@ -22,12 +23,12 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
   val directoryConfig = ConfigFactory.load().as[DirectoryConfig]("directory")
   val dirDAO = new JndiDirectoryDAO(directoryConfig)
   val policyDAO = new JndiAccessPolicyDAO(directoryConfig)
+  val schemaDao = new JndiSchemaDAO(directoryConfig)
 
   val service = new ResourceService(policyDAO, dirDAO, "example.com")
 
   override protected def beforeAll(): Unit = {
-    runAndWait(dirDAO.init())
-    runAndWait(policyDAO.init())
+    runAndWait(schemaDao.init())
   }
 
   private val dummyUserInfo = UserInfo("token", WorkbenchUserId("userid"), WorkbenchUserEmail("user@company.com"), 0)

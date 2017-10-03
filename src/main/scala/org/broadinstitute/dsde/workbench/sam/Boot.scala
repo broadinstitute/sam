@@ -12,6 +12,7 @@ import org.broadinstitute.dsde.workbench.sam.config._
 import org.broadinstitute.dsde.workbench.sam.directory._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam._
+import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.broadinstitute.dsde.workbench.sam.service.{ResourceService, UserService}
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -32,6 +33,7 @@ object Boot extends App with LazyLogging {
 
     val accessPolicyDAO = new JndiAccessPolicyDAO(directoryConfig)
     val directoryDAO = new JndiDirectoryDAO(directoryConfig)
+    val schemaDAO = new JndiSchemaDAO(directoryConfig) //TODO: rename to JndiSchemaDAO?
     val googleDirectoryDAO = new HttpGoogleDirectoryDAO(googleDirectoryConfig.clientSecrets, googleDirectoryConfig.pemFile, googleDirectoryConfig.appsDomain, googleDirectoryConfig.appName, googleDirectoryConfig.serviceProject, "google")
 
     val resourceService = new ResourceService(accessPolicyDAO, directoryDAO, config.getString("googleDirectory.appsDomain"))
@@ -43,16 +45,9 @@ object Boot extends App with LazyLogging {
     }
 
     for {
-      //DirectoryDAO must init before PolicyDAO because it is dependant on workbenchGroup schema
-      _ <- directoryDAO.init() recover {
+      _ <- schemaDAO.init() recover {
         case t: Throwable =>
-          logger.error("FATAL - could not init directory dao", t) //todo: there is a bug that causes workbenchGroup schema to be created twice? or it's not getting removed properly?
-          throw t
-      }
-
-      _ <- accessPolicyDAO.init() recover {
-        case t: Throwable =>
-          logger.error("FATAL - could not init access policy dao", t)
+          logger.error("FATAL - could not init ldap schema", t)
           throw t
       }
 
