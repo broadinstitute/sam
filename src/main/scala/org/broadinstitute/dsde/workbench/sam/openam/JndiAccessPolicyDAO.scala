@@ -34,18 +34,6 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
   }
 
   //
-  // SCHEMA
-  //
-
-//  def init(): Future[Unit] = {
-//    for {
-//      _ <- removePolicySchema()
-//      _ <- createPolicySchema()
-//      _ <- createResourcesOrgUnit()
-//    } yield ()
-//  }
-
-  //
   // RESOURCE TYPES
   //
 

@@ -33,7 +33,7 @@ object Boot extends App with LazyLogging {
 
     val accessPolicyDAO = new JndiAccessPolicyDAO(directoryConfig)
     val directoryDAO = new JndiDirectoryDAO(directoryConfig)
-    val schemaDAO = new JndiSchemaDAO(directoryConfig) //TODO: rename to JndiSchemaDAO?
+    val schemaDAO = new JndiSchemaDAO(directoryConfig)
     val googleDirectoryDAO = new HttpGoogleDirectoryDAO(googleDirectoryConfig.clientSecrets, googleDirectoryConfig.pemFile, googleDirectoryConfig.appsDomain, googleDirectoryConfig.appName, googleDirectoryConfig.serviceProject, "google")
 
     val resourceService = new ResourceService(accessPolicyDAO, directoryDAO, config.getString("googleDirectory.appsDomain"))

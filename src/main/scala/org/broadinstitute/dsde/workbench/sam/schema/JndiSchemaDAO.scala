@@ -51,17 +51,11 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit exe
     } yield ()
   }
 
-  def removeWorkbenchGroupSchema(): Future[Unit] = withContext { ctx =>
-    val schema = ctx.getSchema("")
+  //
+  // workbenchGroup
+  //
 
-    Try { schema.destroySubcontext("ClassDefinition/workbenchGroup") }
-    Try { schema.destroySubcontext("AttributeDefinition/" + Attr.groupSynchronizedTimestamp) }
-    Try { schema.destroySubcontext("AttributeDefinition/" + Attr.groupUpdatedTimestamp) } recover {
-      case e => e.printStackTrace()
-    }
-  }
-
-  def createWorkbenchGroupSchema(): Future[Unit] = withContext { ctx =>
+  private def createWorkbenchGroupSchema(): Future[Unit] = withContext { ctx =>
     val schema = ctx.getSchema("")
 
     createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.200", Attr.groupUpdatedTimestamp, "time when group was updated", true, Option("generalizedTimeMatch"), Option("generalizedTimeOrderingMatch"), Option("1.3.6.1.4.1.1466.115.121.1.24"))
@@ -83,13 +77,25 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit exe
     may.add(Attr.groupSynchronizedTimestamp)
     attrs.put(may)
 
-
     // Add the new schema object for "fooObjectClass"
     schema.createSubcontext("ClassDefinition/workbenchGroup", attrs)
   }
 
+  private def removeWorkbenchGroupSchema(): Future[Unit] = withContext { ctx =>
+    val schema = ctx.getSchema("")
 
-  def createPolicySchema(): Future[Unit] = withContext { ctx =>
+    Try { schema.destroySubcontext("ClassDefinition/workbenchGroup") }
+    Try { schema.destroySubcontext("AttributeDefinition/" + Attr.groupSynchronizedTimestamp) }
+    Try { schema.destroySubcontext("AttributeDefinition/" + Attr.groupUpdatedTimestamp) } recover {
+      case e => e.printStackTrace()
+    }
+  }
+
+  //
+  // policy
+  //
+
+  private def createPolicySchema(): Future[Unit] = withContext { ctx =>
     val schema = ctx.getSchema("")
 
     createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.1", Attr.resourceType, "type of a resource", true)
@@ -150,7 +156,7 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit exe
     schema.createSubcontext("ClassDefinition/policy", policyAttrs)
   }
 
-  def removePolicySchema(): Future[Unit] = withContext { ctx =>
+  private def removePolicySchema(): Future[Unit] = withContext { ctx =>
     val schema = ctx.getSchema("")
 
     Try { schema.destroySubcontext("ClassDefinition/policy") }
@@ -163,7 +169,11 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit exe
     Try { schema.destroySubcontext("AttributeDefinition/" + Attr.policy) }
   }
 
-  def createResourcesOrgUnit(): Future[Unit] = withContext { ctx =>
+  //
+  // Organizational units
+  //
+
+  private def createResourcesOrgUnit(): Future[Unit] = withContext { ctx =>
     try {
       val resourcesContext = new BaseDirContext {
         override def getAttributes(name: String): Attributes = {
@@ -184,10 +194,9 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit exe
     }
   }
 
-
   private val resourcesOu = s"ou=resources,${directoryConfig.baseDn}"
 
-  protected def createAttributeDefinition(schema: DirContext, numericOID: String, name: String, description: String, singleValue: Boolean, equality: Option[String] = None, ordering: Option[String] = None, syntax: Option[String] = None) = {
+  private def createAttributeDefinition(schema: DirContext, numericOID: String, name: String, description: String, singleValue: Boolean, equality: Option[String] = None, ordering: Option[String] = None, syntax: Option[String] = None) = {
     val attributes = new BasicAttributes(true)
     attributes.put("NUMERICOID", numericOID)
     attributes.put("NAME", name)
@@ -199,8 +208,6 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit exe
     schema.createSubcontext(s"AttributeDefinition/$name", attributes)
   }
 
-
   private def withContext[T](op: InitialDirContext => T): Future[T] = withContext(directoryConfig.directoryUrl, directoryConfig.user, directoryConfig.password)(op)
-
 
 }

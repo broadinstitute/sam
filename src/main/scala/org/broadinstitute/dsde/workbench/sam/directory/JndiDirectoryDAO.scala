@@ -32,13 +32,6 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     val groupSynchronizedTimestamp = "groupSynchronizedTimestamp"
   }
 
-//  def init(): Future[Unit] = {
-//    for {
-//      _ <- removeWorkbenchGroupSchema()
-//      _ <- createWorkbenchGroupSchema()
-//    } yield ()
-//  }
-
   override def createGroup(group: WorkbenchGroup): Future[WorkbenchGroup] = withContext { ctx =>
     try {
       val groupContext = new BaseDirContext {
@@ -97,7 +90,6 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
 
     }.get
   }
-
 
   override def createUser(user: WorkbenchUser): Future[WorkbenchUser] = withContext { ctx =>
     try {
