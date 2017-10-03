@@ -13,7 +13,7 @@ trait AccessPolicyDAO {
   def createResource(resource: Resource): Future[Resource]
   def createResourceType(resourceTypeName: ResourceTypeName): Future[ResourceTypeName]
   def deleteResource(resource: Resource): Future[Unit]
-  def listAccessPolicies(resource: Resource): Future[TraversableOnce[AccessPolicy]]
+  def listAccessPolicies(resource: Resource): Future[Set[AccessPolicy]]
   def listAccessPoliciesForUser(resource: Resource, user: WorkbenchUserId): Future[Set[AccessPolicy]]
   def deletePolicy(policy: AccessPolicy): Future[Unit]
   def addMemberToPolicy(policy: AccessPolicy, member: WorkbenchSubject): Future[Unit]
