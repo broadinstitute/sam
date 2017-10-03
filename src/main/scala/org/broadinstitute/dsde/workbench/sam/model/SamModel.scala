@@ -25,7 +25,7 @@ object SamJsonSupport {
 
   implicit val UserStatusFormat = jsonFormat2(UserStatus)
 
-  implicit val AccessPolicyMembershipExternalFormat = jsonFormat3(AccessPolicyMembership)
+  implicit val AccessPolicyMembershipFormat = jsonFormat3(AccessPolicyMembership)
 }
 
 case class UserStatusDetails(userSubjectId: WorkbenchUserId, userEmail: WorkbenchUserEmail) //for backwards compatibility to old API

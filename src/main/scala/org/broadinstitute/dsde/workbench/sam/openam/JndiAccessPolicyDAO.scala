@@ -276,6 +276,7 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
     val policies = try {
       ctx.search(resourceDn(resource), searchAttrs).asScala.map { searchResult =>
         val members = getAttributes[String](searchResult.getAttributes, Attr.uniqueMember).getOrElse(Set.empty).toSet.map(dnToSubject)
+        val role = Option(searchResult.getAttributes.get(Attr.role)).map(_.get.asInstanceOf[String]).map(ResourceRoleName)
 
         AccessPolicy(
           searchResult.getAttributes.get(Attr.policy).get().toString,
@@ -284,7 +285,7 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
             ResourceName(searchResult.getAttributes.get(Attr.resource).get().toString)
           ),
           members,
-          Option(ResourceRoleName(searchResult.getAttributes.get(Attr.role).get().toString)),//todo (gives a null pointer exception) ???
+          role,
           searchResult.getAttributes.get(Attr.action).getAll.asScala.map(a => ResourceAction(a.toString)).toSet
         )
       }
@@ -303,6 +304,7 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
     val policies = try {
       ctx.search(resourceDn(resource), searchAttrs).asScala.map { searchResult =>
         val members = getAttributes[String](searchResult.getAttributes, Attr.uniqueMember).getOrElse(Set.empty).toSet.map(dnToSubject)
+        val role = Option(searchResult.getAttributes.get(Attr.role)).map(_.get.asInstanceOf[String]).map(ResourceRoleName)
 
         AccessPolicy(
           searchResult.getAttributes.get(Attr.policy).get().toString,
@@ -311,7 +313,7 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
             ResourceName(searchResult.getAttributes.get(Attr.resource).get().toString)
           ),
           members,
-          Option(ResourceRoleName(searchResult.getAttributes.get(Attr.role).get().toString)), //todo (gives a null pointer exception)
+          role,
           searchResult.getAttributes.get(Attr.action).getAll.asScala.map(a => ResourceAction(a.toString)).toSet
         )
       }
