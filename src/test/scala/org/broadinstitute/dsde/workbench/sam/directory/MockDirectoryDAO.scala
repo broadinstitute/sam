@@ -15,12 +15,15 @@ class MockDirectoryDAO extends DirectoryDAO {
   private val groups: mutable.Map[WorkbenchGroupName, WorkbenchGroup] = new TrieMap()
   private val users: mutable.Map[WorkbenchUserId, WorkbenchUser] = new TrieMap()
   private val enabledUsers: mutable.Map[WorkbenchUserId, Unit] = new TrieMap()
+  private val usersWithEmails: mutable.Map[WorkbenchUserEmail, WorkbenchUserId] = new TrieMap()
+  private val groupsWithEmails: mutable.Map[WorkbenchGroupEmail, WorkbenchGroupName] = new TrieMap()
 
   override def createGroup(group: WorkbenchGroup): Future[WorkbenchGroup] = Future {
     if (groups.keySet.contains(group.name)) {
       throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"group ${group.name} already exists"))
     }
     groups += group.name -> group
+    groupsWithEmails += group.email -> group.name
     group
   }
 
@@ -49,6 +52,7 @@ class MockDirectoryDAO extends DirectoryDAO {
       throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"user ${user.id} already exists"))
     }
     users += user.id -> user
+    usersWithEmails += user.email -> user.id
     user
   }
 
@@ -114,5 +118,7 @@ class MockDirectoryDAO extends DirectoryDAO {
     enabledUsers.contains(userId)
   }
 
-  override def loadSubjectFromEmail(email: String): scala.concurrent.Future[Option[org.broadinstitute.dsde.workbench.model.WorkbenchSubject]] = ???
+  override def loadSubjectFromEmail(email: String): Future[Option[WorkbenchSubject]] = Future {
+    Option(usersWithEmails.getOrElse(WorkbenchUserEmail(email), groupsWithEmails.getOrElse(WorkbenchGroupEmail(email), null)))
+  }
 }

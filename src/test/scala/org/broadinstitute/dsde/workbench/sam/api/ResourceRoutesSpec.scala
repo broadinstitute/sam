@@ -93,7 +93,7 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     val members = AccessPolicyMembership(Set("foo@bar.baz"), Set(ResourceAction("canCompute")), Set.empty)
 
     Put(s"/api/resource/${resourceType.name}/foo/policies/canCompute", members) ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.NoContent
+      status shouldEqual StatusCodes.Created
     }
   }
 
