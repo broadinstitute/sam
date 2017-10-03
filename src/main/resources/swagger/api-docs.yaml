@@ -128,8 +128,8 @@ paths:
     put:
       summary: Overwrite a policy on a resource
       responses:
-        200:
-          description: TBD
+        201:
+          description: Policy successfully created/updated
           schema:
             type: array
             items:
@@ -154,13 +154,13 @@ paths:
           required: true
           type: string
         - in: path
-          description: Name of policy
+          description: Name of the policy
           name: policyName
           required: true
           type: string
         - in: body
-          description: The membership to save for the policy
-          name: membershipJson
+          description: The details of the policy
+          name: policyCreate
           required: true
           schema:
             $ref: '#/definitions/AccessPolicyMembership'
@@ -317,11 +317,11 @@ definitions:
   AccessPolicyMembership:
     description: ''
     required:
-      - members
+      - memberEmails
       - actions
       - roles
     properties:
-      members:
+      memberEmails:
         type: array
         items:
           type: string
