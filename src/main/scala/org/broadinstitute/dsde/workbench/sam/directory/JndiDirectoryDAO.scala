@@ -86,7 +86,7 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
 
           myAttrs.put(new BasicAttribute(Attr.email, group.email.value))
 
-          if (!group.members.isEmpty) {
+          if (group.members.nonEmpty) {
             val members = new BasicAttribute(Attr.uniqueMember)
             group.members.foreach(subject => members.add(subjectDn(subject)))
             myAttrs.put(members)
@@ -173,20 +173,24 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     }.get
   }
 
+  override def loadSubjectFromEmail(email: String): Future[Option[WorkbenchSubject]] = withContext { ctx =>
+    val subjectResults = ctx.search(directoryConfig.baseDn, s"(${Attr.email}=${email})", new SearchControls(SearchControls.SUBTREE_SCOPE, 0, 0, null, false, false)).asScala.toSeq
+    val subjects = subjectResults.map { result =>
+      dnToSubject(result.getNameInNamespace)
+    }
+
+    subjects match {
+      case Seq() => None
+      case Seq(subject) => Option(subject)
+      case _ => throw new WorkbenchException(s"Database error: email $email refers to too many subjects: $subjects")
+    }
+  }
+
   private def unmarshalUser(attributes: Attributes): WorkbenchUser = {
     val uid = getAttribute[String](attributes, Attr.uid).getOrElse(throw new WorkbenchException(s"${Attr.uid} attribute missing"))
     val email = getAttribute[String](attributes, Attr.email).getOrElse(throw new WorkbenchException(s"${Attr.email} attribute missing"))
 
     WorkbenchUser(WorkbenchUserId(uid), WorkbenchUserEmail(email))
-  }
-
-  private def unmarshalGroup(attributes: Attributes): WorkbenchGroup = {
-    val cn = getAttribute[String](attributes, Attr.cn).getOrElse(throw new WorkbenchException(s"${Attr.cn} attribute missing"))
-    val email = getAttribute[String](attributes, Attr.email).getOrElse(throw new WorkbenchException(s"${Attr.email} attribute missing"))
-    val memberDns = getAttributes[String](attributes, Attr.member).getOrElse(Set.empty).toSet
-    val members = memberDns.map(dnToSubject)
-
-    WorkbenchGroup(WorkbenchGroupName(cn), members, WorkbenchGroupEmail(email))
   }
 
   private def getAttribute[T](attributes: Attributes, key: String): Option[T] = {
@@ -232,19 +236,6 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     ) yield dnToGroupName(attrE.asInstanceOf[String])
 
     groups.toSet
-  }
-
-  override def loadSubjectFromEmail(email: String): Future[Option[WorkbenchSubject]] = withContext { ctx =>
-    val subjectResults = ctx.search(directoryConfig.baseDn, s"(${Attr.email}=${email})", new SearchControls(SearchControls.SUBTREE_SCOPE, 0, 0, null, false, false)).asScala.toSeq
-    val subjects = subjectResults.map { result =>
-      dnToSubject(result.getNameInNamespace)
-    }
-
-    subjects match {
-      case Seq() => None
-      case Seq(subject) => Option(subject)
-      case _ => throw new WorkbenchException(s"Database error: email $email refers to too many subjects: $subjects")
-    }
   }
 
   override def enableUser(userId: WorkbenchUserId): Future[Unit] = withContext { ctx =>
