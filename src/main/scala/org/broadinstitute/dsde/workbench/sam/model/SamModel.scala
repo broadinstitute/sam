@@ -1,6 +1,6 @@
 package org.broadinstitute.dsde.workbench.sam.model
 
-import org.broadinstitute.dsde.workbench.model.{WorkbenchSubject, WorkbenchUserEmail, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.model.{WorkbenchGroup, WorkbenchSubject, WorkbenchUserEmail, WorkbenchUserId}
 import spray.json.DefaultJsonProtocol
 
 /**
@@ -42,5 +42,5 @@ case class ResourceType(name: ResourceTypeName, actions: Set[ResourceAction], ro
 
 case class ResourceName(value: String) extends ValueObject
 
-case class AccessPolicy(name: String, resource: Resource, members: Set[WorkbenchSubject], role: Option[ResourceRoleName], actions: Set[ResourceAction])
+case class AccessPolicy(name: String, resource: Resource, members: WorkbenchGroup, role: Option[ResourceRoleName], actions: Set[ResourceAction])
 case class AccessPolicyMembership(memberEmails: Set[String], actions: Set[ResourceAction], roles: Set[ResourceRoleName])

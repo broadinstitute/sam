@@ -93,13 +93,18 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
   // POLICIES
   //
 
+  //TODO: Make sure this is a good/unique naming convention and keep Google length limits in mind
+  def toEmail(resourceType: String, resourceName: String, policyName: String) = {
+    s"policy-$resourceType-$resourceName-$policyName@dev.test.firecloud.org"
+  }
+
   override def createPolicy(policy: AccessPolicy): Future[AccessPolicy] = withContext { ctx =>
     try {
       val policyContext = new BaseDirContext {
         override def getAttributes(name: String): Attributes = {
           val myAttrs = new BasicAttributes(true) // Case ignore
 
-          val email = s"policy-${policy.resource.resourceTypeName.value}-${policy.resource.resourceName.value}-${policy.name}@dev.test.firecloud.org" //TODO: Make sure this is a good/unique naming convention and keep Google length limits in mind
+          val email = toEmail(policy.resource.resourceTypeName.value, policy.resource.resourceName.value, policy.name)
 
           val oc = new BasicAttribute("objectclass")
           Seq("top", "policy").foreach(oc.add)
@@ -118,10 +123,10 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
             myAttrs.put(role)
           }
 
-          if(policy.members.nonEmpty) {
+          if(policy.members.members.nonEmpty) {
             val members = new BasicAttribute(Attr.uniqueMember)
 
-            val memberDns = policy.members.map {
+            val memberDns = policy.members.members.map {
               case subject: WorkbenchGroupName => groupDn(subject)
               case subject: WorkbenchUserId => userDn(subject)
             }
@@ -140,7 +145,7 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
       ctx.bind(policyDn(policy), policyContext)
       policy
     } catch {
-      case _: NameAlreadyBoundException => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, "A policy for this subject already exists for this resource"))
+      case _: NameAlreadyBoundException => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, "A policy by this name already exists for this resource"))
     }
   }
 
@@ -160,8 +165,8 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
   override def overwritePolicyMembers(newPolicy: AccessPolicy): Future[AccessPolicy] = withContext { ctx =>
     val myAttrs = new BasicAttributes(true)
 
-    val users = newPolicy.members.collect { case userId: WorkbenchUserId => userId }
-    val subGroups = newPolicy.members.collect { case groupName: WorkbenchGroupName => groupName }
+    val users = newPolicy.members.members.collect { case userId: WorkbenchUserId => userId }
+    val subGroups = newPolicy.members.members.collect { case groupName: WorkbenchGroupName => groupName }
 
     addMemberAttributes(users, subGroups, myAttrs) { _.put(new BasicAttribute(Attr.uniqueMember)) } //add attribute with no value when no member present
 
@@ -221,7 +226,12 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
         val role = Option(searchResult.getAttributes.get(Attr.role)).map(_.get.asInstanceOf[String]).map(ResourceRoleName)
         val actions = searchResult.getAttributes.get(Attr.action).getAll.asScala.map(a => ResourceAction(a.toString)).toSet
 
-        AccessPolicy(policyName, resource, members, role, actions)
+        val email = WorkbenchGroupEmail(searchResult.getAttributes.get(Attr.mail).get().toString)
+        val name = WorkbenchGroupName(policyName) //TODO
+
+        val group = WorkbenchGroup(name, members, email)
+
+        AccessPolicy(policyName, resource, group, role, actions)
       }
     }catch {
       case _: NameNotFoundException => Set.empty

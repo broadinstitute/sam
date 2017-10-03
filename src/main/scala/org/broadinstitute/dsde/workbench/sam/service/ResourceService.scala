@@ -46,11 +46,14 @@ class ResourceService(val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: Di
           case resourceType.ownerRoleName => Set(userInfo.userId)
           case _ => Set.empty
         }
+
+        val email = s"policy-${resourceType.name.value}-${resourceName.value}-${role.roleName}@dev.test.firecloud.org" //TODO: Make sure this is a good/unique naming convention and keep Google length limits in mind
+
         for {
           policy <- accessPolicyDAO.createPolicy(AccessPolicy(
             role.roleName.value,
             resource,
-            roleMembers,
+            WorkbenchGroup(WorkbenchGroupName(role.roleName.value), roleMembers, WorkbenchGroupEmail(email)), //todo
             Option(role.roleName),
             role.actions
           ))
@@ -62,8 +65,10 @@ class ResourceService(val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: Di
   def overwritePolicyMembership(policyName: String, resource: Resource, policyMembership: AccessPolicyMembership) = {
     val subjectsFromEmails = Future.traverse(policyMembership.memberEmails) { directoryDAO.loadSubjectFromEmail }.map(_.flatten)
 
+    val email = s"policy-${resource.resourceTypeName.value}-${resource.resourceName.value}-${policyName}@dev.test.firecloud.org" //TODO: Make sure this is a good/unique naming convention and keep Google length limits in mind
+
     subjectsFromEmails.map { members =>
-      val newPolicy = AccessPolicy(policyName, resource, members, policyMembership.roles.headOption, policyMembership.actions)
+      val newPolicy = AccessPolicy(policyName, resource, WorkbenchGroup(WorkbenchGroupName(policyName), members, WorkbenchGroupEmail(email)), policyMembership.roles.headOption, policyMembership.actions)
 
       for {
         _ <- accessPolicyDAO.createPolicy(newPolicy)

@@ -31,7 +31,7 @@ class MockAccessPolicyDAO extends AccessPolicyDAO {
   }
 
   override def listAccessPoliciesForUser(resource: Resource, user: WorkbenchUserId): Future[Set[AccessPolicy]] = Future {
-    policies.getOrElse(resource.resourceTypeName, Map.empty).getOrElse(resource.resourceName, Set.empty).filter(_.members.contains(user))
+    policies.getOrElse(resource.resourceTypeName, Map.empty).getOrElse(resource.resourceName, Set.empty).filter(_.members.members.contains(user))
   }
 
   override def deleteResource(resource: Resource): Future[Unit] = Future {
