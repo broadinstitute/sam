@@ -36,7 +36,7 @@ class ResourceService(val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: Di
   def listResourcePolicies(resource: Resource): Future[Set[AccessPolicyResponseEntry]] = {
     accessPolicyDAO.listAccessPolicies(resource).map { policies =>
       policies.map { policy =>
-        AccessPolicyResponseEntry(policy.name, AccessPolicyMembership(policy.members.members.map(_.value), policy.actions, policy.roles)) //todo
+        AccessPolicyResponseEntry(policy.name, AccessPolicyMembership(policy.members.members.map(_.value), policy.actions, policy.roles)) //todo: return emails instead of subjects
       }
 
     }
@@ -62,7 +62,7 @@ class ResourceService(val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: Di
           policy <- accessPolicyDAO.createPolicy(AccessPolicy(
             role.roleName.value,
             resource,
-            WorkbenchGroup(WorkbenchGroupName(role.roleName.value), roleMembers, WorkbenchGroupEmail(email)), //todo
+            WorkbenchGroup(WorkbenchGroupName(role.roleName.value), roleMembers, WorkbenchGroupEmail(email)),
             Set(role.roleName),
             role.actions
           ))
@@ -71,18 +71,19 @@ class ResourceService(val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: Di
     }
   }
 
-  def overwritePolicyMembership(policyName: String, resource: Resource, policyMembership: AccessPolicyMembership) = {
+  def overwritePolicy(policyName: String, resource: Resource, policyMembership: AccessPolicyMembership): Future[AccessPolicy] = {
     val subjectsFromEmails = Future.traverse(policyMembership.memberEmails) { directoryDAO.loadSubjectFromEmail }.map(_.flatten)
 
     val email = s"policy-${resource.resourceTypeName.value}-${resource.resourceName.value}-${policyName}@dev.test.firecloud.org" //TODO: Make sure this is a good/unique naming convention and keep Google length limits in mind
 
-    subjectsFromEmails.map { members =>
+    subjectsFromEmails.flatMap { members =>
       val newPolicy = AccessPolicy(policyName, resource, WorkbenchGroup(WorkbenchGroupName(policyName), members, WorkbenchGroupEmail(email)), policyMembership.roles, policyMembership.actions)
 
-      for {
-        _ <- accessPolicyDAO.createPolicy(newPolicy)
-        policy <- accessPolicyDAO.overwritePolicyMembers(newPolicy)
-      } yield policy
+      accessPolicyDAO.listAccessPolicies(resource).flatMap { policies =>
+        if(policies.map(_.name).contains(policyName)) {
+          accessPolicyDAO.overwritePolicy(newPolicy)
+        } else accessPolicyDAO.createPolicy(newPolicy)
+      }
     }
   }
 

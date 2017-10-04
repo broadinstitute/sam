@@ -118,7 +118,7 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
             myAttrs.put(actions)
           }
 
-          if (policy.actions.nonEmpty) {
+          if (policy.roles.nonEmpty) {
             val roles = new BasicAttribute(Attr.role)
             policy.roles.foreach(role => roles.add(role.value))
             myAttrs.put(roles)
@@ -163,13 +163,25 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
     ctx.modifyAttributes(policyDn(policy), DirContext.ADD_ATTRIBUTE, myAttrs)
   }
 
-  override def overwritePolicyMembers(newPolicy: AccessPolicy): Future[AccessPolicy] = withContext { ctx =>
+  override def overwritePolicy(newPolicy: AccessPolicy): Future[AccessPolicy] = withContext { ctx =>
     val myAttrs = new BasicAttributes(true)
 
     val users = newPolicy.members.members.collect { case userId: WorkbenchUserId => userId }
     val subGroups = newPolicy.members.members.collect { case groupName: WorkbenchGroupName => groupName }
 
     addMemberAttributes(users, subGroups, myAttrs) { _.put(new BasicAttribute(Attr.uniqueMember)) } //add attribute with no value when no member present
+
+    if (newPolicy.actions.nonEmpty) {
+      val actions = new BasicAttribute(Attr.action)
+      newPolicy.actions.foreach(action => actions.add(action.value))
+      myAttrs.put(actions)
+    }
+
+    if (newPolicy.roles.nonEmpty) {
+      val roles = new BasicAttribute(Attr.role)
+      newPolicy.roles.foreach(role => roles.add(role.value))
+      myAttrs.put(roles)
+    }
 
     ctx.modifyAttributes(policyDn(newPolicy), DirContext.REPLACE_ATTRIBUTE, myAttrs)
     newPolicy
