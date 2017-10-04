@@ -27,13 +27,13 @@ class ResourceService(val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: Di
           case _ => Set.empty
         }
 
-        val email = s"policy-${resourceType.name.value}-${resourceId.value}-${role.roleName}@dev.test.firecloud.org" //TODO: Make sure this is a good/unique naming convention and keep Google length limits in mind
+        val email = toGoogleGroupEmail(role.roleName.value, Resource(resourceType.name, resourceId))
 
         for {
           policy <- accessPolicyDAO.createPolicy(AccessPolicy(
             role.roleName.value,
             resource,
-            WorkbenchGroup(WorkbenchGroupName(role.roleName.value), roleMembers, WorkbenchGroupEmail(email)),
+            WorkbenchGroup(WorkbenchGroupName(role.roleName.value), roleMembers, email),
             Set(role.roleName),
             role.actions
           ))
@@ -77,10 +77,10 @@ class ResourceService(val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: Di
         directoryDAO.loadSubjectFromEmail
       }.map(_.flatten)
 
-      val email = s"policy-${resource.resourceTypeName.value}-${resource.resourceId.value}-${policyName}@dev.test.firecloud.org" //TODO: Make sure this is a good/unique naming convention and keep Google length limits in mind
+      val email = toGoogleGroupEmail(policyName, resource)
 
       subjectsFromEmails.flatMap { members =>
-        val newPolicy = AccessPolicy(policyName, resource, WorkbenchGroup(WorkbenchGroupName(policyName), members, WorkbenchGroupEmail(email)), policyMembership.roles, policyMembership.actions)
+        val newPolicy = AccessPolicy(policyName, resource, WorkbenchGroup(WorkbenchGroupName(policyName), members, email), policyMembership.roles, policyMembership.actions)
 
         accessPolicyDAO.listAccessPolicies(resource).flatMap { policies =>
           if (policies.map(_.name).contains(policyName)) {
@@ -108,7 +108,8 @@ class ResourceService(val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: Di
     }
   }
 
-  def toGoogleGroupName(groupName: WorkbenchGroupName) = WorkbenchGroupEmail(s"GROUP_${groupName.value}@${googleDomain}")
+  def toGoogleGroupEmail(policyName: String, resource: Resource) = WorkbenchGroupEmail(s"policy-${resource.resourceTypeName.value}-${resource.resourceId.value}-$policyName@$googleDomain") //TODO: Make sure this is a good/unique naming convention and keep Google length limits in mind
+  def toGoogleGroupName(groupName: WorkbenchGroupName) = WorkbenchGroupEmail(s"GROUP_${groupName.value}@$googleDomain")
 
   //todo: use this for google group sync
   private def roleGroupName(resourceType: ResourceType, resourceId: ResourceId, role: ResourceRole) = {

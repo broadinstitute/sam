@@ -34,7 +34,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
   private val dummyUserInfo = UserInfo("token", WorkbenchUserId("userid"), WorkbenchUserEmail("user@company.com"), 0)
 
   def toEmail(resourceType: String, resourceName: String, policyName: String) = {
-    WorkbenchGroupEmail(s"policy-$resourceType-$resourceName-$policyName@dev.test.firecloud.org")
+    WorkbenchGroupEmail(s"policy-$resourceType-$resourceName-$policyName@example.com")
   }
 
   "ResourceService" should "create and delete resource" in {
