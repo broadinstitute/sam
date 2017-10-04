@@ -11,7 +11,7 @@ import scala.concurrent.ExecutionContext.Implicits.global
   * Created by dvoet on 7/17/17.
   */
 class MockAccessPolicyDAO extends AccessPolicyDAO {
-  private val policies: mutable.Map[ResourceTypeName, Map[ResourceName, Set[AccessPolicy]]] = new TrieMap()
+  private val policies: mutable.Map[ResourceTypeName, Map[ResourceId, Set[AccessPolicy]]] = new TrieMap()
 
   override def createResourceType(resourceTypeName: ResourceTypeName): Future[ResourceTypeName] = Future {
     policies += resourceTypeName -> Map.empty
@@ -19,7 +19,7 @@ class MockAccessPolicyDAO extends AccessPolicyDAO {
   }
 
   override def createResource(resource: Resource): Future[Resource] = Future {
-    policies += resource.resourceTypeName -> Map(resource.resourceName -> Set.empty)
+    policies += resource.resourceTypeName -> Map(resource.resourceId -> Set.empty)
     resource
   }
 
@@ -29,24 +29,24 @@ class MockAccessPolicyDAO extends AccessPolicyDAO {
 
   override def createPolicy(policy: AccessPolicy): Future[AccessPolicy] = Future {
     listAccessPolicies(policy.resource) map { existingPolicies =>
-      policies += (policy.resource.resourceTypeName -> Map(policy.resource.resourceName -> (existingPolicies + policy)))
+      policies += (policy.resource.resourceTypeName -> Map(policy.resource.resourceId -> (existingPolicies + policy)))
     }
     policy
   }
 
   override def deletePolicy(policy: AccessPolicy): Future[Unit] = Future {
     listAccessPolicies(policy.resource) map { existingPolicies =>
-      policies += (policy.resource.resourceTypeName -> Map(policy.resource.resourceName -> (existingPolicies - policy)))
+      policies += (policy.resource.resourceTypeName -> Map(policy.resource.resourceId -> (existingPolicies - policy)))
     }
   }
 
   override def overwritePolicy(newPolicy: AccessPolicy): Future[AccessPolicy] = Future.successful(newPolicy)
 
   override def listAccessPolicies(resource: Resource): Future[Set[AccessPolicy]] = Future {
-    policies.getOrElse(resource.resourceTypeName, Map.empty).getOrElse(resource.resourceName, Set.empty)
+    policies.getOrElse(resource.resourceTypeName, Map.empty).getOrElse(resource.resourceId, Set.empty)
   }
 
   override def listAccessPoliciesForUser(resource: Resource, user: WorkbenchUserId): Future[Set[AccessPolicy]] = Future {
-    policies.getOrElse(resource.resourceTypeName, Map.empty).getOrElse(resource.resourceName, Set.empty).filter(_.members.members.contains(user))
+    policies.getOrElse(resource.resourceTypeName, Map.empty).getOrElse(resource.resourceId, Set.empty).filter(_.members.members.contains(user))
   }
 }

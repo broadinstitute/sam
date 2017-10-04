@@ -41,14 +41,14 @@ trait ResourceRoutes extends UserInfoDirectives {
 
           pathEndOrSingleSlash {
             post {
-              complete(resourceService.createResource(resourceType, ResourceName(resourceId), userInfo).map(_ => StatusCodes.NoContent))
+              complete(resourceService.createResource(resourceType, ResourceId(resourceId), userInfo).map(_ => StatusCodes.NoContent))
             }
           } ~
           pathPrefix("action") {
             pathPrefix(Segment) { action =>
               pathEndOrSingleSlash {
                 get {
-                  complete(resourceService.hasPermission(Resource(resourceType.name, ResourceName(resourceId)), ResourceAction(action), userInfo).map { hasPermission =>
+                  complete(resourceService.hasPermission(Resource(resourceType.name, ResourceId(resourceId)), ResourceAction(action), userInfo).map { hasPermission =>
                     StatusCodes.OK -> JsBoolean(hasPermission)
                   })
                 }
@@ -58,7 +58,7 @@ trait ResourceRoutes extends UserInfoDirectives {
           pathPrefix("policies") {
             pathEndOrSingleSlash {
               get {
-                complete(resourceService.listResourcePolicies(Resource(resourceType.name, ResourceName(resourceId)), userInfo).map { response =>
+                complete(resourceService.listResourcePolicies(Resource(resourceType.name, ResourceId(resourceId)), userInfo).map { response =>
                   StatusCodes.OK -> response
                 })
               }
@@ -67,7 +67,7 @@ trait ResourceRoutes extends UserInfoDirectives {
               pathEndOrSingleSlash {
                 put {
                   entity(as[AccessPolicyMembership]) { membershipUpdate =>
-                    complete(resourceService.overwritePolicy(policyId, Resource(resourceType.name, ResourceName(resourceId)), membershipUpdate, userInfo).map(_ => StatusCodes.Created))
+                    complete(resourceService.overwritePolicy(policyId, Resource(resourceType.name, ResourceId(resourceId)), membershipUpdate, userInfo).map(_ => StatusCodes.Created))
                   }
                 }
               }
@@ -76,7 +76,7 @@ trait ResourceRoutes extends UserInfoDirectives {
           pathPrefix("roles") {
             pathEndOrSingleSlash {
               get {
-                complete(resourceService.listUserResourceRoles(Resource(resourceType.name, ResourceName(resourceId)), userInfo).map { roles =>
+                complete(resourceService.listUserResourceRoles(Resource(resourceType.name, ResourceId(resourceId)), userInfo).map { roles =>
                   StatusCodes.OK -> roles
                 })
               }

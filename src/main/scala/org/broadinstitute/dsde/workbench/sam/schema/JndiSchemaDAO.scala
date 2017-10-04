@@ -15,7 +15,7 @@ import scala.util.Try
 class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit executionContext: ExecutionContext) extends JndiSupport {
 
   private object Attr {
-    val resource = "resource"
+    val resourceId = "resourceId"
     val resourceType = "resourceType"
     val subject = "subject"
     val action = "action"
@@ -98,10 +98,10 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit exe
   private def createPolicySchema(): Future[Unit] = withContext { ctx =>
     val schema = ctx.getSchema("")
 
-    createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.1", Attr.resourceType, "type of a resource", true)
-    createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.2", Attr.resource, "name of a resource", true)
-    createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.4", Attr.action, "actions applicable to a policy", false)
-    createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.6", Attr.role, "roles for the policy, if any", false)
+    createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.1", Attr.resourceType, "the type of the resource", true)
+    createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.2", Attr.resourceId, "the id of the resource", true)
+    createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.4", Attr.action, "the actions applicable to a policy", false)
+    createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.6", Attr.role, "the roles for the policy, if any", false)
     createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.7", Attr.policy, "the policy name", true)
 
     val policyAttrs = new BasicAttributes(true) // Ignore case
@@ -114,7 +114,7 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit exe
     val policyMust = new BasicAttribute("MUST")
     policyMust.add("objectclass")
     policyMust.add(Attr.resourceType)
-    policyMust.add(Attr.resource)
+    policyMust.add(Attr.resourceId)
     policyMust.add(Attr.cn)
     policyMust.add(Attr.policy)
     policyAttrs.put(policyMust)
@@ -140,13 +140,13 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit exe
     val resourceAttrs = new BasicAttributes(true) // Ignore case
     resourceAttrs.put("NUMERICOID", "1.3.6.1.4.1.18060.0.4.3.2.1001")
     resourceAttrs.put("NAME", "resource")
-    resourceAttrs.put("DESC", "id of the resource")
+    resourceAttrs.put("DESC", "the resource")
     resourceAttrs.put("SUP", "top")
     resourceAttrs.put("STRUCTURAL", "true")
 
     val resourceMust = new BasicAttribute("MUST")
     resourceMust.add("objectclass")
-    resourceMust.add(Attr.resource)
+    resourceMust.add(Attr.resourceId)
     resourceMust.add(Attr.resourceType)
     resourceAttrs.put(resourceMust)
 
@@ -163,7 +163,7 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit exe
     Try { schema.destroySubcontext("ClassDefinition/resourceType") }
     Try { schema.destroySubcontext("ClassDefinition/resource") }
     Try { schema.destroySubcontext("AttributeDefinition/" + Attr.resourceType) }
-    Try { schema.destroySubcontext("AttributeDefinition/" + Attr.resource) }
+    Try { schema.destroySubcontext("AttributeDefinition/" + Attr.resourceId) }
     Try { schema.destroySubcontext("AttributeDefinition/" + Attr.action) }
     Try { schema.destroySubcontext("AttributeDefinition/" + Attr.role) }
     Try { schema.destroySubcontext("AttributeDefinition/" + Attr.policy) }

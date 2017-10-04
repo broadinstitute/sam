@@ -20,7 +20,7 @@ import scala.collection.JavaConverters._
 class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implicit executionContext: ExecutionContext) extends AccessPolicyDAO with DirectorySubjectNameSupport with JndiSupport {
 
   private object Attr {
-    val resource = "resource"
+    val resourceId = "resourceId"
     val resourceType = "resourceType"
     val subject = "subject"
     val action = "action"
@@ -93,8 +93,8 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
   //
 
   //TODO: Make sure this is a good/unique naming convention and keep Google length limits in mind
-  def toEmail(resourceType: String, resourceName: String, policyName: String) = {
-    s"policy-$resourceType-$resourceName-$policyName@dev.test.firecloud.org" //todo: pull appsDomain from conf
+  def toEmail(resourceType: String, resourceId: String, policyName: String) = {
+    s"policy-$resourceType-$resourceId-$policyName@dev.test.firecloud.org" //todo: pull appsDomain from conf
   }
 
   override def createPolicy(policy: AccessPolicy): Future[AccessPolicy] = withContext { ctx =>
@@ -103,7 +103,7 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
         override def getAttributes(name: String): Attributes = {
           val myAttrs = new BasicAttributes(true) // Case ignore
 
-          val email = toEmail(policy.resource.resourceTypeName.value, policy.resource.resourceName.value, policy.name)
+          val email = toEmail(policy.resource.resourceTypeName.value, policy.resource.resourceId.value, policy.name)
 
           val oc = new BasicAttribute("objectclass")
           Seq("top", "policy").foreach(oc.add)
@@ -137,7 +137,7 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
           }
 
           myAttrs.put(Attr.resourceType, policy.resource.resourceTypeName.value)
-          myAttrs.put(Attr.resource, policy.resource.resourceName.value)
+          myAttrs.put(Attr.resourceId, policy.resource.resourceId.value)
           myAttrs
         }
       }
@@ -196,7 +196,7 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
 
   private val resourcesOu = s"ou=resources,${directoryConfig.baseDn}"
   private def resourceTypeDn(resourceTypeName: ResourceTypeName) = s"${Attr.resourceType}=${resourceTypeName.value},$resourcesOu"
-  private def resourceDn(resource: Resource) = s"${Attr.resource}=${resource.resourceName.value},${resourceTypeDn(resource.resourceTypeName)}"
+  private def resourceDn(resource: Resource) = s"${Attr.resourceId}=${resource.resourceId.value},${resourceTypeDn(resource.resourceTypeName)}"
   private def policyDn(policy: AccessPolicy): String = s"${Attr.policy}=${policy.name},${resourceDn(policy.resource)}"
 
   private def getAttributes[T](attributes: Attributes, key: String): Option[TraversableOnce[T]] = {
@@ -223,8 +223,8 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
       ctx.search(resourceDn(resource), searchAttrs).asScala.map { searchResult =>
         val policyName = searchResult.getAttributes.get(Attr.policy).get().toString
         val resourceTypeName = ResourceTypeName(searchResult.getAttributes.get(Attr.resourceType).get().toString)
-        val resourceName = ResourceName(searchResult.getAttributes.get(Attr.resource).get().toString)
-        val resource = Resource(resourceTypeName, resourceName)
+        val resourceId = ResourceId(searchResult.getAttributes.get(Attr.resourceId).get().toString)
+        val resource = Resource(resourceTypeName, resourceId)
         val members = getAttributes[String](searchResult.getAttributes, Attr.uniqueMember).getOrElse(Set.empty).toSet.map(dnToSubject)
         val roles = getAttributes[String](searchResult.getAttributes, Attr.role).getOrElse(Set.empty).toSet.map(r => ResourceRoleName(r))
         val actions = getAttributes[String](searchResult.getAttributes, Attr.action).getOrElse(Set.empty).toSet.map(a => ResourceAction(a))

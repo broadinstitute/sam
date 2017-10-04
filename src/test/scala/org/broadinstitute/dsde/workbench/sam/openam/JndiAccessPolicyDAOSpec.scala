@@ -27,8 +27,8 @@ class JndiAccessPolicyDAOSpec extends FlatSpec with Matchers with TestSupport wi
     runAndWait(schemaDao.init())
   }
 
-  def toEmail(resourceType: String, resourceName: String, policyName: String) = {
-    WorkbenchGroupEmail(s"policy-$resourceType-$resourceName-$policyName@dev.test.firecloud.org")
+  def toEmail(resourceType: String, resourceId: String, policyName: String) = {
+    WorkbenchGroupEmail(s"policy-$resourceType-$resourceId-$policyName@dev.test.firecloud.org")
   }
 
   "JndiAccessPolicyDAO" should "create, list, delete policies" in {
@@ -39,9 +39,9 @@ class JndiAccessPolicyDAOSpec extends FlatSpec with Matchers with TestSupport wi
     val policy2Group = WorkbenchGroup(WorkbenchGroupName("role1-b"), Set(WorkbenchUserId("foo")),toEmail(typeName1.value, "resource", "role1-b"))
     val policy3Group = WorkbenchGroup(WorkbenchGroupName("role1-a"), Set(WorkbenchUserId("foo")), toEmail(typeName2.value, "resource", "role1-a"))
 
-    val policy1 = AccessPolicy("role1-a", Resource(typeName1, ResourceName("resource")), policy1Group, Set(ResourceRoleName("role1")), Set(ResourceAction("action1"), ResourceAction("action2")))
-    val policy2 = AccessPolicy("role1-b", Resource(typeName1, ResourceName("resource")), policy2Group, Set(ResourceRoleName("role1")), Set(ResourceAction("action3"), ResourceAction("action4")))
-    val policy3 = AccessPolicy("role1-a", Resource(typeName2, ResourceName("resource")), policy3Group, Set(ResourceRoleName("role1")), Set(ResourceAction("action1"), ResourceAction("action2")))
+    val policy1 = AccessPolicy("role1-a", Resource(typeName1, ResourceId("resource")), policy1Group, Set(ResourceRoleName("role1")), Set(ResourceAction("action1"), ResourceAction("action2")))
+    val policy2 = AccessPolicy("role1-b", Resource(typeName1, ResourceId("resource")), policy2Group, Set(ResourceRoleName("role1")), Set(ResourceAction("action3"), ResourceAction("action4")))
+    val policy3 = AccessPolicy("role1-a", Resource(typeName2, ResourceId("resource")), policy3Group, Set(ResourceRoleName("role1")), Set(ResourceAction("action1"), ResourceAction("action2")))
 
     runAndWait(dao.createResourceType(typeName1))
     runAndWait(dao.createResourceType(typeName2))

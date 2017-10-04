@@ -41,7 +41,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     val ownerRoleName = ResourceRoleName("owner")
     val otherRoleName = ResourceRoleName("other")
     val resourceType = ResourceType(ResourceTypeName(UUID.randomUUID().toString), Set(ResourceAction("a1"), ResourceAction("a2"), ResourceAction("a3")), Set(ResourceRole(ownerRoleName, Set(ResourceAction("a1"), ResourceAction("a2"))), ResourceRole(otherRoleName, Set(ResourceAction("a3"), ResourceAction("a2")))), ownerRoleName)
-    val resourceName = ResourceName("resource")
+    val resourceName = ResourceId("resource")
 
     runAndWait(service.createResourceType(resourceType))
 
@@ -83,8 +83,8 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     val ownerRoleName = ResourceRoleName("owner")
     val otherRoleName = ResourceRoleName("other")
     val resourceType = ResourceType(ResourceTypeName(UUID.randomUUID().toString), Set(ResourceAction("a1"), ResourceAction("a2"), ResourceAction("a3")), Set(ResourceRole(ownerRoleName, Set(ResourceAction("a1"), ResourceAction("a2"))), ResourceRole(otherRoleName, Set(ResourceAction("a3"), ResourceAction("a2")))), ownerRoleName)
-    val resourceName1 = ResourceName("resource1")
-    val resourceName2 = ResourceName("resource2")
+    val resourceName1 = ResourceId("resource1")
+    val resourceName2 = ResourceId("resource2")
 
     runAndWait(service.createResourceType(resourceType))
 
@@ -117,7 +117,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
 
     assert(!runAndWait(service.hasPermission(Resource(resourceType.name, resourceName1), ResourceAction("a3"), userInfo)))
     assert(runAndWait(service.hasPermission(Resource(resourceType.name, resourceName2), ResourceAction("a3"), userInfo)))
-    assert(!runAndWait(service.hasPermission(Resource(resourceType.name, ResourceName("doesnotexist")), ResourceAction("a3"), userInfo)))
+    assert(!runAndWait(service.hasPermission(Resource(resourceType.name, ResourceId("doesnotexist")), ResourceAction("a3"), userInfo)))
 
     runAndWait(service.deleteResource(Resource(resourceType.name, resourceName1)))
     runAndWait(service.deleteResource(Resource(resourceType.name, resourceName2)))
@@ -127,7 +127,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
   it should "detect conflict on create" in {
     val ownerRoleName = ResourceRoleName("owner")
     val resourceType = ResourceType(ResourceTypeName(UUID.randomUUID().toString), Set(ResourceAction("a1"), ResourceAction("a2"), ResourceAction("a3")), Set(ResourceRole(ownerRoleName, Set(ResourceAction("a1"), ResourceAction("a2")))), ownerRoleName)
-    val resourceName = ResourceName("resource")
+    val resourceName = ResourceId("resource")
 
     runAndWait(service.createResourceType(resourceType))
 
@@ -154,7 +154,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
   it should "listUserResourceRoles when they have at least one role" in {
     val ownerRoleName = ResourceRoleName("owner")
     val resourceType = ResourceType(ResourceTypeName(UUID.randomUUID().toString), Set(ResourceAction("a1")), Set(ResourceRole(ownerRoleName, Set(ResourceAction("a1")))), ownerRoleName)
-    val resourceName = ResourceName("resource")
+    val resourceName = ResourceId("resource")
 
     runAndWait(service.createResourceType(resourceType))
 
@@ -177,7 +177,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
   it should "return an empty set from listUserResourceRoles when the resource doesn't exist" in {
     val ownerRoleName = ResourceRoleName("owner")
     val resourceType = ResourceType(ResourceTypeName(UUID.randomUUID().toString), Set(ResourceAction("a1")), Set(ResourceRole(ownerRoleName, Set(ResourceAction("a1")))), ownerRoleName)
-    val resourceName = ResourceName("resource")
+    val resourceName = ResourceId("resource")
 
 
     runAndWait(service.directoryDAO.createUser(WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)))
