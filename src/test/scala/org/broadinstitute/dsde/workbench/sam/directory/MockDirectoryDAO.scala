@@ -47,6 +47,14 @@ class MockDirectoryDAO extends DirectoryDAO {
     groups += groupName -> updatedGroup
   }
 
+  override def isGroupMember(groupName: WorkbenchGroupName, member: WorkbenchSubject): Future[Boolean] = Future {
+    groups.getOrElse(groupName, WorkbenchGroup(null, Set.empty, WorkbenchGroupEmail("g1@example.com"))).members.contains(member)
+  }
+
+  override def loadSubjectFromEmail(email: String): Future[Option[WorkbenchSubject]] = Future {
+    Option(usersWithEmails.getOrElse(WorkbenchUserEmail(email), groupsWithEmails.getOrElse(WorkbenchGroupEmail(email), null)))
+  }
+
   override def createUser(user: WorkbenchUser): Future[WorkbenchUser] = Future {
     if (users.keySet.contains(user.id)) {
       throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"user ${user.id} already exists"))
@@ -85,10 +93,6 @@ class MockDirectoryDAO extends DirectoryDAO {
     listGroupUsers(groupName, Set.empty)
   }
 
-  override def isGroupMember(groupName: WorkbenchGroupName, member: WorkbenchSubject): Future[Boolean] = Future {
-    groups.getOrElse(groupName, WorkbenchGroup(null, Set.empty, WorkbenchGroupEmail("g1@example.com"))).members.contains(member)
-  }
-
   private def listGroupUsers(groupName: WorkbenchGroupName, visitedGroups: Set[WorkbenchGroupName]): Set[WorkbenchUserId] = {
     if (!visitedGroups.contains(groupName)) {
       val members = groups.getOrElse(groupName, WorkbenchGroup(null, Set.empty, WorkbenchGroupEmail("g1@example.com"))).members
@@ -116,9 +120,5 @@ class MockDirectoryDAO extends DirectoryDAO {
 
   override def isEnabled(userId: WorkbenchUserId): Future[Boolean] = Future {
     enabledUsers.contains(userId)
-  }
-
-  override def loadSubjectFromEmail(email: String): Future[Option[WorkbenchSubject]] = Future {
-    Option(usersWithEmails.getOrElse(WorkbenchUserEmail(email), groupsWithEmails.getOrElse(WorkbenchGroupEmail(email), null)))
   }
 }
