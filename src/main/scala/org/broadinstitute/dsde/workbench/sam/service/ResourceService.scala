@@ -71,8 +71,13 @@ class ResourceService(val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: Di
   }
 
   //Overwrites an existing policy (keyed by resourceType/resourceId/policyName), saves a new one if it doesn't exist yet
-  def overwritePolicy(policyName: String, resource: Resource, policyMembership: AccessPolicyMembership, userInfo: UserInfo): Future[AccessPolicy] = {
+  def overwritePolicy(resourceType: ResourceType, policyName: String, resource: Resource, policyMembership: AccessPolicyMembership, userInfo: UserInfo): Future[AccessPolicy] = {
     requireAction(resource, SamResourceActions.alterPolicies, userInfo) {
+      if(!policyMembership.actions.subsetOf(resourceType.actions))
+        throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"You have specified an invalid action for resource type ${resourceType.name}. Valid actions are: ${resourceType.actions.mkString(", ")}"))
+      if(!policyMembership.roles.subsetOf(resourceType.roles.map(_.roleName)))
+        throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"You have specified an invalid role for resource type ${resourceType.name}. Valid roles are: ${resourceType.roles.map(_.roleName).mkString(", ")}"))
+
       val subjectsFromEmails = Future.traverse(policyMembership.memberEmails) {
         directoryDAO.loadSubjectFromEmail
       }.map(_.flatten)
