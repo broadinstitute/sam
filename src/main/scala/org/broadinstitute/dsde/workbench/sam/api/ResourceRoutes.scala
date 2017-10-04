@@ -58,7 +58,7 @@ trait ResourceRoutes extends UserInfoDirectives {
           pathPrefix("policies") {
             pathEndOrSingleSlash {
               get {
-                complete(resourceService.listResourcePolicies(Resource(resourceType.name, ResourceName(resourceId))).map { response =>
+                complete(resourceService.listResourcePolicies(Resource(resourceType.name, ResourceName(resourceId)), userInfo).map { response =>
                   StatusCodes.OK -> response
                 })
               }
@@ -67,7 +67,7 @@ trait ResourceRoutes extends UserInfoDirectives {
               pathEndOrSingleSlash {
                 put {
                   entity(as[AccessPolicyMembership]) { membershipUpdate =>
-                    complete(resourceService.overwritePolicy(policyId, Resource(resourceType.name, ResourceName(resourceId)), membershipUpdate).map(_ => StatusCodes.Created))
+                    complete(resourceService.overwritePolicy(policyId, Resource(resourceType.name, ResourceName(resourceId)), membershipUpdate, userInfo).map(_ => StatusCodes.Created))
                   }
                 }
               }

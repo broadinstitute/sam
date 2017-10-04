@@ -6,14 +6,13 @@ import javax.naming.directory._
 import akka.http.scaladsl.model.StatusCodes
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
-import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryDAO, DirectorySubjectNameSupport}
+import org.broadinstitute.dsde.workbench.sam.directory.DirectorySubjectNameSupport
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.util.{BaseDirContext, JndiSupport}
 import org.broadinstitute.dsde.workbench.sam._
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.collection.JavaConverters._
-import scala.util.Try
 
 /**
   * Created by dvoet on 6/26/17.
