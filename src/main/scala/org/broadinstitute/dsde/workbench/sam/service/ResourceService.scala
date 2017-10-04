@@ -72,7 +72,7 @@ class ResourceService(val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: Di
 
   //Overwrites an existing policy (keyed by resourceType/resourceId/policyName), saves a new one if it doesn't exist yet
   def overwritePolicy(policyName: String, resource: Resource, policyMembership: AccessPolicyMembership, userInfo: UserInfo): Future[AccessPolicy] = {
-    requireAction(resource, ResourceAction("altermembers"), userInfo) {
+    requireAction(resource, SamResourceActions.alterPolicies, userInfo) {
       val subjectsFromEmails = Future.traverse(policyMembership.memberEmails) {
         directoryDAO.loadSubjectFromEmail
       }.map(_.flatten)
@@ -92,7 +92,7 @@ class ResourceService(val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: Di
   }
 
   def listResourcePolicies(resource: Resource, userInfo: UserInfo): Future[Set[AccessPolicyResponseEntry]] = {
-    requireAction(resource, ResourceAction("listmembers"), userInfo) {
+    requireAction(resource, SamResourceActions.readPolicies, userInfo) {
       accessPolicyDAO.listAccessPolicies(resource).flatMap { policies =>
         //could improve this by making a few changes to listAccessPolicies to return emails. todo for later in the PR process!
         Future.sequence(policies.map { policy =>

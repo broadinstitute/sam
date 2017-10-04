@@ -31,6 +31,11 @@ object SamJsonSupport {
 
 }
 
+object SamResourceActions {
+  val readPolicies = ResourceAction("readpolicies")
+  val alterPolicies = ResourceAction("alterpolicies")
+}
+
 case class UserStatusDetails(userSubjectId: WorkbenchUserId, userEmail: WorkbenchUserEmail) //for backwards compatibility to old API
 case class UserStatus(userInfo: UserStatusDetails, enabled: Map[String, Boolean])
 
