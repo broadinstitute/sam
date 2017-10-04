@@ -15,49 +15,6 @@ import scala.concurrent.{ExecutionContext, Future}
   */
 class ResourceService(val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: DirectoryDAO, val googleDomain: String)(implicit val executionContext: ExecutionContext) extends LazyLogging {
 
-  def hasPermission(resourceTypeName: ResourceTypeName, resourceName: ResourceName, action: ResourceAction, userInfo: UserInfo): Future[Boolean] = {
-    listUserResourceActions(resourceTypeName, resourceName, userInfo).map { _.contains(action) }
-  }
-
-  def listUserResourceActions(resourceTypeName: ResourceTypeName, resourceName: ResourceName, userInfo: UserInfo): Future[Set[ResourceAction]] = {
-    listResourceAccessPoliciesForUser(Resource(resourceTypeName, resourceName), userInfo).map { matchingPolicies =>
-      matchingPolicies.flatMap(_.actions)
-    }
-  }
-
-  def listUserResourceRoles(resourceTypeName: ResourceTypeName, resourceName: ResourceName, userInfo: UserInfo): Future[Set[ResourceRoleName]] = {
-    listResourceAccessPoliciesForUser(Resource(resourceTypeName, resourceName), userInfo).map { matchingPolicies =>
-      matchingPolicies.flatMap(_.roles)
-    }
-  }
-
-  private def listResourceAccessPoliciesForUser(resource: Resource, userInfo: UserInfo): Future[Set[AccessPolicy]] = {
-    accessPolicyDAO.listAccessPoliciesForUser(resource, userInfo.userId)
-  }
-
-  def listResourcePolicies(resource: Resource, userInfo: UserInfo): Future[Set[AccessPolicyResponseEntry]] = {
-    requireAction(resource, ResourceAction("listmembers"), userInfo) {
-      accessPolicyDAO.listAccessPolicies(resource).flatMap { policies =>
-        //could improve this by making a few changes to listAccessPolicies to return emails. todo for later in the PR process!
-        Future.sequence(policies.map { policy =>
-          val users = policy.members.members.collect { case userId: WorkbenchUserId => userId }
-          val groups = policy.members.members.collect { case groupName: WorkbenchGroupName => groupName }
-
-          for {
-            userEmails <- Future.traverse(users) {
-              directoryDAO.loadUser
-            }.map(_.flatten.map(_.email.value))
-            groupEmails <- Future.traverse(groups) {
-              directoryDAO.loadGroup
-            }.map(_.flatten.map(_.email.value))
-          } yield AccessPolicyResponseEntry(policy.name, AccessPolicyMembership(userEmails ++ groupEmails, policy.actions, policy.roles))
-        })
-      }
-    }
-  }
-
-  def toGoogleGroupName(groupName: WorkbenchGroupName) = WorkbenchGroupEmail(s"GROUP_${groupName.value}@${googleDomain}")
-
   def createResourceType(resourceType: ResourceType): Future[ResourceTypeName] = {
     accessPolicyDAO.createResourceType(resourceType.name)
   }
@@ -85,6 +42,34 @@ class ResourceService(val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: Di
     }
   }
 
+  def deleteResource(resource: Resource): Future[Unit] = {
+    for {
+      policiesToDelete <- accessPolicyDAO.listAccessPolicies(resource)
+      _ <- Future.traverse(policiesToDelete){accessPolicyDAO.deletePolicy}
+    //      _ <- accessPolicyDAO.deleteResource(resource) //todo: why does it work even if we don't delete this level?
+    } yield ()
+  }
+
+  def hasPermission(resource: Resource, action: ResourceAction, userInfo: UserInfo): Future[Boolean] = {
+    listUserResourceActions(resource, userInfo).map { _.contains(action) }
+  }
+
+  def listUserResourceActions(resource: Resource, userInfo: UserInfo): Future[Set[ResourceAction]] = {
+    listResourceAccessPoliciesForUser(resource, userInfo).map { matchingPolicies =>
+      matchingPolicies.flatMap(_.actions)
+    }
+  }
+
+  def listUserResourceRoles(resource: Resource, userInfo: UserInfo): Future[Set[ResourceRoleName]] = {
+    listResourceAccessPoliciesForUser(resource, userInfo).map { matchingPolicies =>
+      matchingPolicies.flatMap(_.roles)
+    }
+  }
+
+  private def listResourceAccessPoliciesForUser(resource: Resource, userInfo: UserInfo): Future[Set[AccessPolicy]] = {
+    accessPolicyDAO.listAccessPoliciesForUser(resource, userInfo.userId)
+  }
+
   def overwritePolicy(policyName: String, resource: Resource, policyMembership: AccessPolicyMembership, userInfo: UserInfo): Future[AccessPolicy] = {
     requireAction(resource, ResourceAction("altermembers"), userInfo) {
       val subjectsFromEmails = Future.traverse(policyMembership.memberEmails) {
@@ -105,21 +90,36 @@ class ResourceService(val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: Di
     }
   }
 
+  def listResourcePolicies(resource: Resource, userInfo: UserInfo): Future[Set[AccessPolicyResponseEntry]] = {
+    requireAction(resource, ResourceAction("listmembers"), userInfo) {
+      accessPolicyDAO.listAccessPolicies(resource).flatMap { policies =>
+        //could improve this by making a few changes to listAccessPolicies to return emails. todo for later in the PR process!
+        Future.sequence(policies.map { policy =>
+          val users = policy.members.members.collect { case userId: WorkbenchUserId => userId }
+          val groups = policy.members.members.collect { case groupName: WorkbenchGroupName => groupName }
+
+          for {
+            userEmails <- Future.traverse(users) {
+              directoryDAO.loadUser
+            }.map(_.flatten.map(_.email.value))
+            groupEmails <- Future.traverse(groups) {
+              directoryDAO.loadGroup
+            }.map(_.flatten.map(_.email.value))
+          } yield AccessPolicyResponseEntry(policy.name, AccessPolicyMembership(userEmails ++ groupEmails, policy.actions, policy.roles))
+        })
+      }
+    }
+  }
+
+  def toGoogleGroupName(groupName: WorkbenchGroupName) = WorkbenchGroupEmail(s"GROUP_${groupName.value}@${googleDomain}")
+
   //todo: use this for google group sync
   private def roleGroupName(resourceType: ResourceType, resourceName: ResourceName, role: ResourceRole) = {
     WorkbenchGroupName(s"${resourceType.name}-${resourceName.value}-${role.roleName.value}")
   }
 
-  def deleteResource(resource: Resource): Future[Unit] = {
-    for {
-      policiesToDelete <- accessPolicyDAO.listAccessPolicies(resource)
-      _ <- Future.traverse(policiesToDelete){accessPolicyDAO.deletePolicy}
-//      _ <- accessPolicyDAO.deleteResource(resource) //todo: why does it work even if we don't delete this level?
-    } yield ()
-  }
-
   private def requireAction[T](resource: Resource, action: ResourceAction, userInfo: UserInfo)(op: => Future[T]): Future[T] = {
-    hasPermission(resource.resourceTypeName, resource.resourceName, action, userInfo) flatMap { canAct =>
+    hasPermission(resource, action, userInfo) flatMap { canAct =>
       if(canAct) op
       else Future.failed(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden, s"You may not perform ${action.toString.toUpperCase} on ${resource.resourceTypeName.value}/${resource.resourceName.value}")))
     }

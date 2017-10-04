@@ -108,16 +108,16 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     }
 
     assertResult(Set(ResourceAction("a1"), ResourceAction("a2"))) {
-      runAndWait(service.listUserResourceActions(resourceType.name, resourceName1, userInfo))
+      runAndWait(service.listUserResourceActions(Resource(resourceType.name, resourceName1), userInfo))
     }
 
     assertResult(Set(ResourceAction("a1"), ResourceAction("a2"), ResourceAction("a3"))) {
-      runAndWait(service.listUserResourceActions(resourceType.name, resourceName2, userInfo))
+      runAndWait(service.listUserResourceActions(Resource(resourceType.name, resourceName2), userInfo))
     }
 
-    assert(!runAndWait(service.hasPermission(resourceType.name, resourceName1, ResourceAction("a3"), userInfo)))
-    assert(runAndWait(service.hasPermission(resourceType.name, resourceName2, ResourceAction("a3"), userInfo)))
-    assert(!runAndWait(service.hasPermission(resourceType.name, ResourceName("doesnotexist"), ResourceAction("a3"), userInfo)))
+    assert(!runAndWait(service.hasPermission(Resource(resourceType.name, resourceName1), ResourceAction("a3"), userInfo)))
+    assert(runAndWait(service.hasPermission(Resource(resourceType.name, resourceName2), ResourceAction("a3"), userInfo)))
+    assert(!runAndWait(service.hasPermission(Resource(resourceType.name, ResourceName("doesnotexist")), ResourceAction("a3"), userInfo)))
 
     runAndWait(service.deleteResource(Resource(resourceType.name, resourceName1)))
     runAndWait(service.deleteResource(Resource(resourceType.name, resourceName2)))
@@ -166,11 +166,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
       dummyUserInfo
     ))
 
-    val roles = runAndWait(service.listUserResourceRoles(
-      resourceType.name,
-      resourceName,
-      dummyUserInfo
-    ))
+    val roles = runAndWait(service.listUserResourceRoles(Resource(resourceType.name, resourceName), dummyUserInfo))
 
     roles shouldEqual Set(ResourceRoleName("owner"))
 
@@ -186,11 +182,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
 
     runAndWait(service.directoryDAO.createUser(WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)))
 
-    val roles = runAndWait(service.listUserResourceRoles(
-      resourceType.name,
-      resourceName,
-      dummyUserInfo
-    ))
+    val roles = runAndWait(service.listUserResourceRoles(Resource(resourceType.name, resourceName), dummyUserInfo))
 
     roles shouldEqual Set.empty
 
