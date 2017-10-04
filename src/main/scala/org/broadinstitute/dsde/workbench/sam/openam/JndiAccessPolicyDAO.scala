@@ -95,7 +95,7 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
 
   //TODO: Make sure this is a good/unique naming convention and keep Google length limits in mind
   def toEmail(resourceType: String, resourceName: String, policyName: String) = {
-    s"policy-$resourceType-$resourceName-$policyName@dev.test.firecloud.org"
+    s"policy-$resourceType-$resourceName-$policyName@dev.test.firecloud.org" //todo: pull appsDomain from conf
   }
 
   override def createPolicy(policy: AccessPolicy): Future[AccessPolicy] = withContext { ctx =>
@@ -118,9 +118,10 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
             myAttrs.put(actions)
           }
 
-          if (policy.role.isDefined) {
-            val role = new BasicAttribute(Attr.role, policy.role.get.value)
-            myAttrs.put(role)
+          if (policy.actions.nonEmpty) {
+            val roles = new BasicAttribute(Attr.role)
+            policy.roles.foreach(role => roles.add(role.value))
+            myAttrs.put(roles)
           }
 
           if(policy.members.members.nonEmpty) {
@@ -223,15 +224,15 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
         val resourceName = ResourceName(searchResult.getAttributes.get(Attr.resource).get().toString)
         val resource = Resource(resourceTypeName, resourceName)
         val members = getAttributes[String](searchResult.getAttributes, Attr.uniqueMember).getOrElse(Set.empty).toSet.map(dnToSubject)
-        val role = Option(searchResult.getAttributes.get(Attr.role)).map(_.get.asInstanceOf[String]).map(ResourceRoleName)
-        val actions = searchResult.getAttributes.get(Attr.action).getAll.asScala.map(a => ResourceAction(a.toString)).toSet
+        val roles = getAttributes[String](searchResult.getAttributes, Attr.role).getOrElse(Set.empty).toSet.map(r => ResourceRoleName(r))
+        val actions = getAttributes[String](searchResult.getAttributes, Attr.action).getOrElse(Set.empty).toSet.map(a => ResourceAction(a))
 
         val email = WorkbenchGroupEmail(searchResult.getAttributes.get(Attr.mail).get().toString)
         val name = WorkbenchGroupName(policyName) //TODO
 
         val group = WorkbenchGroup(name, members, email)
 
-        AccessPolicy(policyName, resource, group, role, actions)
+        AccessPolicy(policyName, resource, group, roles, actions)
       }
     }catch {
       case _: NameNotFoundException => Set.empty

@@ -55,8 +55,8 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     val otherGroupName = WorkbenchGroupName(s"${resourceType.name}-${resourceName.value}-other")
 
     assertResult(Set(
-      AccessPolicy(ownerRoleName.value, Resource(resourceType.name, resourceName), WorkbenchGroup(WorkbenchGroupName(ownerRoleName.value), Set(dummyUserInfo.userId), toEmail(resourceType.name.value, resourceName.value, ownerRoleName.value)), Option(ownerRoleName), Set(ResourceAction("a1"), ResourceAction("a2"))),
-      AccessPolicy(otherRoleName.value, Resource(resourceType.name, resourceName), WorkbenchGroup(WorkbenchGroupName(otherRoleName.value), Set.empty, toEmail(resourceType.name.value, resourceName.value, otherRoleName.value)), Option(otherRoleName), Set(ResourceAction("a3"), ResourceAction("a2")))
+      AccessPolicy(ownerRoleName.value, Resource(resourceType.name, resourceName), WorkbenchGroup(WorkbenchGroupName(ownerRoleName.value), Set(dummyUserInfo.userId), toEmail(resourceType.name.value, resourceName.value, ownerRoleName.value)), Set(ownerRoleName), Set(ResourceAction("a1"), ResourceAction("a2"))),
+      AccessPolicy(otherRoleName.value, Resource(resourceType.name, resourceName), WorkbenchGroup(WorkbenchGroupName(otherRoleName.value), Set.empty, toEmail(resourceType.name.value, resourceName.value, otherRoleName.value)), Set(otherRoleName), Set(ResourceAction("a3"), ResourceAction("a2")))
     )) {
       policies
     }
@@ -102,7 +102,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
       userInfo
     ))
 
-    policies2.filter(_.role.contains(otherRoleName)).foreach { otherPolicy =>
+    policies2.filter(_.roles.contains(otherRoleName)).foreach { otherPolicy =>
       runAndWait(service.accessPolicyDAO.addMemberToPolicy(otherPolicy, userInfo.userId))
     }
 

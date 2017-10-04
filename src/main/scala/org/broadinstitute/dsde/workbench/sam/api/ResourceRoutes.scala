@@ -56,6 +56,13 @@ trait ResourceRoutes extends UserInfoDirectives {
             }
           } ~
           pathPrefix("policies") {
+            pathEndOrSingleSlash {
+              get {
+                complete(resourceService.listResourcePolicies(Resource(resourceType.name, ResourceName(resourceId))).map { response =>
+                  StatusCodes.OK -> response
+                })
+              }
+            } ~
             pathPrefix(Segment) { policyId =>
               pathEndOrSingleSlash {
                 put {

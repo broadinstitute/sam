@@ -25,12 +25,21 @@ class ResourceService(val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: Di
 
   def listUserResourceRoles(resourceTypeName: ResourceTypeName, resourceName: ResourceName, userInfo: UserInfo): Future[Set[ResourceRoleName]] = {
     listResourceAccessPoliciesForUser(Resource(resourceTypeName, resourceName), userInfo).map { matchingPolicies =>
-      matchingPolicies.flatMap(_.role)
+      matchingPolicies.flatMap(_.roles)
     }
   }
 
   private def listResourceAccessPoliciesForUser(resource: Resource, userInfo: UserInfo): Future[Set[AccessPolicy]] = {
     accessPolicyDAO.listAccessPoliciesForUser(resource, userInfo.userId)
+  }
+
+  def listResourcePolicies(resource: Resource): Future[Set[AccessPolicyResponseEntry]] = {
+    accessPolicyDAO.listAccessPolicies(resource).map { policies =>
+      policies.map { policy =>
+        AccessPolicyResponseEntry(policy.name, AccessPolicyMembership(policy.members.members.map(_.value), policy.actions, policy.roles)) //todo
+      }
+
+    }
   }
 
   def toGoogleGroupName(groupName: WorkbenchGroupName) = WorkbenchGroupEmail(s"GROUP_${groupName.value}@${googleDomain}")
@@ -54,7 +63,7 @@ class ResourceService(val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: Di
             role.roleName.value,
             resource,
             WorkbenchGroup(WorkbenchGroupName(role.roleName.value), roleMembers, WorkbenchGroupEmail(email)), //todo
-            Option(role.roleName),
+            Set(role.roleName),
             role.actions
           ))
         } yield policy
@@ -68,7 +77,7 @@ class ResourceService(val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: Di
     val email = s"policy-${resource.resourceTypeName.value}-${resource.resourceName.value}-${policyName}@dev.test.firecloud.org" //TODO: Make sure this is a good/unique naming convention and keep Google length limits in mind
 
     subjectsFromEmails.map { members =>
-      val newPolicy = AccessPolicy(policyName, resource, WorkbenchGroup(WorkbenchGroupName(policyName), members, WorkbenchGroupEmail(email)), policyMembership.roles.headOption, policyMembership.actions)
+      val newPolicy = AccessPolicy(policyName, resource, WorkbenchGroup(WorkbenchGroupName(policyName), members, WorkbenchGroupEmail(email)), policyMembership.roles, policyMembership.actions)
 
       for {
         _ <- accessPolicyDAO.createPolicy(newPolicy)

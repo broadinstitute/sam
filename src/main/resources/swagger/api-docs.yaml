@@ -124,6 +124,44 @@ paths:
             - email
             - profile
 
+  /api/resource/{resourceTypeName}/{resourceId}/policies:
+    get:
+      summary: List the policies for a resource
+      responses:
+        200:
+          description: Policies successfully listed
+          schema:
+            type: array
+            items:
+              $ref: '#/definitions/AccessPolicyResponseEntry'
+        403:
+          description: You do not have permission to perform this action on the resource
+        404:
+          description: Resource type does not exist
+        500:
+          description: Internal Error
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      parameters:
+        - in: path
+          description: Type of resource
+          name: resourceTypeName
+          required: true
+          type: string
+        - in: path
+          description: Id of resource
+          name: resourceId
+          required: true
+          type: string
+      operationId: listResourcePolicies
+      tags:
+        - Resources
+      security:
+        - googleoauth:
+            - openid
+            - email
+            - profile
+
   /api/resource/{resourceTypeName}/{resourceId}/policies/{policyName}:
     put:
       summary: Overwrite a policy on a resource
@@ -313,6 +351,17 @@ paths:
 ## DEFINITIONS
 ##########################################################################################
 definitions:
+
+  AccessPolicyResponseEntry:
+    description: ''
+    required:
+      - policyName
+      - policy
+    properties:
+      policyName:
+        type: string
+      policy:
+        $ref: '#/definitions/AccessPolicyMembership'
 
   AccessPolicyMembership:
     description: ''
