@@ -16,6 +16,5 @@ trait AccessPolicyDAO {
   def listAccessPolicies(resource: Resource): Future[Set[AccessPolicy]]
   def listAccessPoliciesForUser(resource: Resource, user: WorkbenchUserId): Future[Set[AccessPolicy]]
   def deletePolicy(policy: AccessPolicy): Future[Unit]
-  def addMemberToPolicy(policy: AccessPolicy, member: WorkbenchSubject): Future[Unit]
   def overwritePolicy(newPolicy: AccessPolicy): Future[AccessPolicy]
 }

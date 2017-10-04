@@ -154,15 +154,6 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
     ctx.unbind(policyDn(policy))
   }
 
-  override def addMemberToPolicy(policy: AccessPolicy, member: WorkbenchSubject): Future[Unit] = withContext { ctx =>
-    val myAttrs = new BasicAttributes(true)
-    val dn = subjectDn(member)
-
-    myAttrs.put(new BasicAttribute(Attr.uniqueMember, dn))
-
-    ctx.modifyAttributes(policyDn(policy), DirContext.ADD_ATTRIBUTE, myAttrs)
-  }
-
   override def overwritePolicy(newPolicy: AccessPolicy): Future[AccessPolicy] = withContext { ctx =>
     val myAttrs = new BasicAttributes(true)
 

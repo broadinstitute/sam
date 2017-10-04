@@ -48,7 +48,5 @@ class MockAccessPolicyDAO extends AccessPolicyDAO {
     resourceTypeName
   }
 
-  override def addMemberToPolicy(policy: AccessPolicy, member: WorkbenchSubject): Future[Unit] = ???
-
   override def overwritePolicy(newPolicy: AccessPolicy): Future[AccessPolicy] = Future.successful(newPolicy)
 }

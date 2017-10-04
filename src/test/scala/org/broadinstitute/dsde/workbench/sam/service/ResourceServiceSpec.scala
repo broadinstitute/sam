@@ -103,7 +103,8 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     ))
 
     policies2.filter(_.roles.contains(otherRoleName)).foreach { otherPolicy =>
-      runAndWait(service.accessPolicyDAO.addMemberToPolicy(otherPolicy, userInfo.userId))
+      val members = otherPolicy.members.copy(members = Set(userInfo.userId))
+      runAndWait(service.accessPolicyDAO.overwritePolicy(otherPolicy.copy(members = members)))
     }
 
     assertResult(Set(ResourceAction("a1"), ResourceAction("a2"))) {
