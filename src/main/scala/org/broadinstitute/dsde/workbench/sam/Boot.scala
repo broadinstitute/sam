@@ -53,7 +53,7 @@ object Boot extends App with LazyLogging {
 
       _ <- Future.traverse(configResourceTypes.map(_.name)) { accessPolicyDAO.createResourceType } recover {
         case t: Throwable =>
-          logger.error("FATAL - unable to initialize resource types", t)
+          logger.error("FATAL - unable to init resource types", t)
           throw t
       }
 
