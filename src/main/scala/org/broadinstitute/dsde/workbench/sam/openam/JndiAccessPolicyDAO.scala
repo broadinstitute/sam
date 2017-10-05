@@ -229,7 +229,7 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
 
         AccessPolicy(policyName, resource, group, roles, actions)
       }
-    }catch {
+    } catch {
       case _: NameNotFoundException => Set.empty
     }
 
