@@ -37,11 +37,22 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     WorkbenchGroupEmail(s"policy-$resourceType-$resourceName-$policyName@example.com")
   }
 
+  private val defaultResourceType = ResourceType(ResourceTypeName(UUID.randomUUID().toString), Set(ResourceAction("a1"), ResourceAction("a2"), ResourceAction("a3")), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("a1"), ResourceAction("a2"))), ResourceRole(ResourceRoleName("other"), Set(ResourceAction("a3"), ResourceAction("a2")))), ResourceRoleName("owner"))
+
+  private def constructExpectedPolicies(resourceType: ResourceType, resource: Resource) = {
+    resourceType.roles.map { role =>
+      val initialMembers = if(role.roleName.equals(resourceType.ownerRoleName)) Set(dummyUserInfo.userId.asInstanceOf[WorkbenchSubject]) else Set[WorkbenchSubject]()
+      val group = WorkbenchGroup(WorkbenchGroupName(role.roleName.value), initialMembers, toEmail(resource.resourceTypeName.value, resource.resourceId.value, role.roleName.value))
+      AccessPolicy(role.roleName.value, resource, group, Set(role.roleName), role.actions)
+    }
+  }
+
   "ResourceService" should "create and delete resource" in {
     val ownerRoleName = ResourceRoleName("owner")
     val otherRoleName = ResourceRoleName("other")
     val resourceType = ResourceType(ResourceTypeName(UUID.randomUUID().toString), Set(ResourceAction("a1"), ResourceAction("a2"), ResourceAction("a3")), Set(ResourceRole(ownerRoleName, Set(ResourceAction("a1"), ResourceAction("a2"))), ResourceRole(otherRoleName, Set(ResourceAction("a3"), ResourceAction("a2")))), ownerRoleName)
     val resourceName = ResourceId("resource")
+    val resource = Resource(resourceType.name, resourceName)
 
     runAndWait(service.createResourceType(resourceType))
 
@@ -54,19 +65,16 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     val ownerGroupName = WorkbenchGroupName(s"${resourceType.name}-${resourceName.value}-owner")
     val otherGroupName = WorkbenchGroupName(s"${resourceType.name}-${resourceName.value}-other")
 
-    assertResult(Set(
-      AccessPolicy(ownerRoleName.value, Resource(resourceType.name, resourceName), WorkbenchGroup(WorkbenchGroupName(ownerRoleName.value), Set(dummyUserInfo.userId), toEmail(resourceType.name.value, resourceName.value, ownerRoleName.value)), Set(ownerRoleName), Set(ResourceAction("a1"), ResourceAction("a2"))),
-      AccessPolicy(otherRoleName.value, Resource(resourceType.name, resourceName), WorkbenchGroup(WorkbenchGroupName(otherRoleName.value), Set.empty, toEmail(resourceType.name.value, resourceName.value, otherRoleName.value)), Set(otherRoleName), Set(ResourceAction("a3"), ResourceAction("a2")))
-    )) {
+    assertResult(constructExpectedPolicies(resourceType, resource)) {
       policies
     }
 
     assertResult(policies) {
-      runAndWait(policyDAO.listAccessPolicies(Resource(resourceType.name, resourceName))).toSet
+      runAndWait(policyDAO.listAccessPolicies(resource))
     }
 
     //cleanup
-    runAndWait(service.deleteResource(Resource(resourceType.name, resourceName)))
+    runAndWait(service.deleteResource(resource))
 
     assertResult(None) {
       runAndWait(dirDAO.loadGroup(ownerGroupName))
@@ -75,7 +83,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
       runAndWait(dirDAO.loadGroup(otherGroupName))
     }
     assertResult(Set.empty) {
-      runAndWait(policyDAO.listAccessPolicies(Resource(resourceType.name, resourceName))).toSet
+      runAndWait(policyDAO.listAccessPolicies(resource))
     }
   }
 
@@ -155,6 +163,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     val ownerRoleName = ResourceRoleName("owner")
     val resourceType = ResourceType(ResourceTypeName(UUID.randomUUID().toString), Set(ResourceAction("a1")), Set(ResourceRole(ownerRoleName, Set(ResourceAction("a1")))), ownerRoleName)
     val resourceName = ResourceId("resource")
+    val resource = Resource(resourceType.name, resourceName)
 
     runAndWait(service.createResourceType(resourceType))
 
@@ -166,11 +175,11 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
       dummyUserInfo
     ))
 
-    val roles = runAndWait(service.listUserResourceRoles(Resource(resourceType.name, resourceName), dummyUserInfo))
+    val roles = runAndWait(service.listUserResourceRoles(resource, dummyUserInfo))
 
     roles shouldEqual Set(ResourceRoleName("owner"))
 
-    runAndWait(service.deleteResource(Resource(resourceType.name, resourceName)))
+    runAndWait(service.deleteResource(resource))
     runAndWait(service.directoryDAO.deleteUser(dummyUserInfo.userId))
   }
 
@@ -178,7 +187,6 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     val ownerRoleName = ResourceRoleName("owner")
     val resourceType = ResourceType(ResourceTypeName(UUID.randomUUID().toString), Set(ResourceAction("a1")), Set(ResourceRole(ownerRoleName, Set(ResourceAction("a1")))), ownerRoleName)
     val resourceName = ResourceId("resource")
-
 
     runAndWait(service.directoryDAO.createUser(WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)))
 
@@ -188,4 +196,32 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
 
     runAndWait(service.directoryDAO.deleteUser(dummyUserInfo.userId))
   }
+
+  it should "listResourcePolicies for a newly created resource" in {
+    val resource = Resource(defaultResourceType.name, ResourceId("my-resource"))
+
+    runAndWait(service.createResourceType(defaultResourceType))
+    runAndWait(service.createResource(defaultResourceType, resource.resourceId, dummyUserInfo))
+
+    val policies = runAndWait(policyDAO.listAccessPolicies(resource))
+
+    constructExpectedPolicies(defaultResourceType, resource) should contain theSameElementsAs(policies)
+  }
+
+  it should "overwritePolicy with a valid request" in {
+
+  }
+
+  it should "overwritePolicy should fail when given an invalid action" in {
+
+  }
+
+  it should "overwritePolicy should fail when given an invalid role" in {
+
+  }
+
+  it should "overwritePolicy should fail when user doesn't have alterpolicies permission" in {
+
+  }
+
 }
