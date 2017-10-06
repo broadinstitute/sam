@@ -122,8 +122,9 @@ class ResourceService(val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: Di
   }
 
   private def requireAction[T](resource: Resource, action: ResourceAction, userInfo: UserInfo)(op: => Future[T]): Future[T] = {
-    hasPermission(resource, action, userInfo) flatMap { canAct =>
-      if(canAct) op
+    listUserResourceActions(resource, userInfo) flatMap { actions =>
+      if(actions.contains(action)) op
+      else if (actions.isEmpty) Future.failed(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Resource ${resource.resourceTypeName.value}/${resource.resourceId.value} not found")))
       else Future.failed(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden, s"You may not perform ${action.toString.toUpperCase} on ${resource.resourceTypeName.value}/${resource.resourceId.value}")))
     }
   }
