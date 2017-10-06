@@ -137,7 +137,7 @@ paths:
         403:
           description: You do not have permission to perform this action on the resource
         404:
-          description: Resource type does not exist
+          description: Resource type does not exist or you are not a member of any policy on the resource
         500:
           description: Internal Error
           schema:
@@ -175,7 +175,7 @@ paths:
         403:
           description: You do not have permission to perform this action on the resource
         404:
-          description: Resource type does not exist
+          description: Resource type does not exist or you are not a member of any policy on the resource
         500:
           description: Internal Error
           schema:
