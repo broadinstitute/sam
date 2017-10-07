@@ -7,9 +7,9 @@ object Dependencies {
   val scalaLoggingV = "3.5.0"
   val scalaTestV    = "3.0.1"
 
-  val workbenchUtilV   = "0.2-d5f64ce-SNAP"
+  val workbenchUtilV   = "0.2-b0ed646-SNAP"
   val workbenchModelV  = "0.2-05a4d0a"
-  val workbenchGoogleV = "0.3-d5f64ce-SNAP"
+  val workbenchGoogleV = "0.3-b0ed646-SNAP"
 
   val excludeAkkaActor =        ExclusionRule(organization = "com.typesafe.akka", name = "akka-actor_2.12")
   val excludeWorkbenchUtil =    ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-util_2.12")
@@ -33,6 +33,8 @@ object Dependencies {
   val akkaHttpSprayJson: ModuleID = "com.typesafe.akka"   %%  "akka-http-spray-json" % akkaHttpV
   val akkaTestKit: ModuleID =       "com.typesafe.akka"   %%  "akka-testkit"         % akkaV     % "test"
   val akkaHttpTestKit: ModuleID =   "com.typesafe.akka"   %%  "akka-http-testkit"    % akkaHttpV % "test"
+
+  val cats: ModuleID =              "org.typelevel"       %% "cats"                  % "0.9.0"
 
   val scalaTest: ModuleID = "org.scalatest" %% "scalatest" % scalaTestV % "test"
 
@@ -63,6 +65,8 @@ object Dependencies {
     akkaHttpSprayJson,
     akkaTestKit,
     akkaHttpTestKit,
+
+    cats,
 
     scalaTest,
 

@@ -133,6 +133,19 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     }.get
   }
 
+  override def loadGroupEmail(groupName: WorkbenchGroupName): Future[Option[WorkbenchGroupEmail]] = withContext { ctx =>
+    Try {
+      val attributes = ctx.getAttributes(groupDn(groupName), Array(Attr.email))
+
+      val email = getAttribute[String](attributes, Attr.email).getOrElse(throw new WorkbenchException(s"${Attr.email} attribute missing: $groupName"))
+
+      Option(WorkbenchGroupEmail(email))
+
+    }.recover {
+      case e: NameNotFoundException => None
+
+    }.get
+  }
 
   override def createUser(user: WorkbenchUser): Future[WorkbenchUser] = withContext { ctx =>
     try {

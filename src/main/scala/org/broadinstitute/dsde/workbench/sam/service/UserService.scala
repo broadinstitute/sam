@@ -16,9 +16,11 @@ import scala.concurrent.{ExecutionContext, Future}
 /**
   * Created by dvoet on 7/14/17.
   */
+object UserService {
+  val allUsersGroupName = WorkbenchGroupName("All_Users")
+}
 class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: GoogleDirectoryDAO, val googleDomain: String)(implicit val executionContext: ExecutionContext) extends LazyLogging {
-
-  private val allUsersGroupName = WorkbenchGroupName("All_Users")
+  import UserService.allUsersGroupName
 
   def createUser(user: WorkbenchUser): Future[Option[UserStatus]] = {
     for {
@@ -84,7 +86,7 @@ class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Google
     } yield deleteResult
   }
 
-  private def createAllUsersGroup: Future[Unit] = {
+  def createAllUsersGroup: Future[Unit] = {
     for {
       _ <- directoryDAO.createGroup(WorkbenchGroup(allUsersGroupName, Set.empty, WorkbenchGroupEmail(toGoogleGroupName(allUsersGroupName.value)))) recover { case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode == Option(StatusCodes.Conflict) => () }
       _ <- googleDirectoryDAO.createGroup(WorkbenchGroupName(allUsersGroupName.value), WorkbenchGroupEmail(toGoogleGroupName(allUsersGroupName.value))) recover { case e: GoogleJsonResponseException if e.getDetails.getCode == StatusCodes.Conflict.intValue => () }

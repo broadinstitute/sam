@@ -10,6 +10,7 @@ import scala.concurrent.Future
 trait DirectoryDAO {
   def createGroup(group: WorkbenchGroup): Future[WorkbenchGroup]
   def loadGroup(groupName: WorkbenchGroupName): Future[Option[WorkbenchGroup]]
+  def loadGroupEmail(groupName: WorkbenchGroupName): Future[Option[WorkbenchGroupEmail]]
   def deleteGroup(groupName: WorkbenchGroupName): Future[Unit]
   def addGroupMember(groupName: WorkbenchGroupName, addMember: WorkbenchSubject): Future[Unit]
   def removeGroupMember(groupName: WorkbenchGroupName, removeMember: WorkbenchSubject): Future[Unit]
