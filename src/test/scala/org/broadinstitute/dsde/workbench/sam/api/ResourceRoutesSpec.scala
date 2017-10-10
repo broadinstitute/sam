@@ -20,11 +20,13 @@ import org.broadinstitute.dsde.workbench.model.ErrorReportJsonSupport._
   */
 class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest {
 
-  private def createSamRoutes(resourceTypes: Map[ResourceTypeName, ResourceType]) = {
+  val defaultUserInfo = UserInfo("accessToken", WorkbenchUserId("user1"), WorkbenchUserEmail("user1@example.com"), 0)
+
+  private def createSamRoutes(resourceTypes: Map[ResourceTypeName, ResourceType], userInfo: UserInfo = defaultUserInfo) = {
     val mockResourceService = new ResourceService(new MockAccessPolicyDAO(), new MockDirectoryDAO(), "example.com")
     val mockUserService = new UserService(new MockDirectoryDAO(), new MockGoogleDirectoryDAO(), "dev.test.firecloud.org")
 
-    new TestSamRoutes(resourceTypes, mockResourceService, mockUserService, UserInfo("", WorkbenchUserId(""), WorkbenchUserEmail(""), 0))
+    new TestSamRoutes(resourceTypes, mockResourceService, mockUserService, userInfo)
   }
 
   "ResourceRoutes" should "404 for unknown resource type" in {
@@ -149,14 +151,14 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
   }
 
   it should "403 when creating a policy on a resource when the user doesn't have alterpolicies permission (but can see the resource)" in {
-    val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceAction("alterpolicies"), ResourceAction("cancompute")), Set(ResourceRole(ResourceRoleName("owner"), Set.empty)), ResourceRoleName("owner"))
+    val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceAction("alterpolicies"), ResourceAction("cancompute")), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("cancompute")))), ResourceRoleName("owner"))
     val samRoutes = createSamRoutes(Map(resourceType.name -> resourceType))
 
     Post(s"/api/resource/${resourceType.name}/foo") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NoContent
     }
 
-    val members = AccessPolicyMembership(Set("foo@bar.baz"), Set(ResourceAction("cancompute")), Set.empty)
+    val members = AccessPolicyMembership(Set("me@me.me"), Set(ResourceAction("cancompute")), Set.empty)
 
     Put(s"/api/resource/${resourceType.name}/foo/policies/canCompute", members) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Forbidden
@@ -173,8 +175,20 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     }
   }
 
-  ignore should "404 when creating a policy on a resource that the user doesnt have permission to see" in {
+  it should "404 when creating a policy on a resource that the user doesnt have permission to see" in {
+    val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceAction("alterpolicies"), ResourceAction("cancompute")), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("alterpolicies")))), ResourceRoleName("owner"))
+    val samRoutes = createSamRoutes(Map(resourceType.name -> resourceType))
+    val otherUserSamRoutes = createSamRoutes(Map(resourceType.name -> resourceType), UserInfo("accessToken", WorkbenchUserId("user2"), WorkbenchUserEmail("user2@example.com"), 0))
 
+    Post(s"/api/resource/${resourceType.name}/foo") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+    }
+
+    val members = AccessPolicyMembership(Set("foo@bar.baz"), Set(ResourceAction("cancompute")), Set.empty)
+
+    Put(s"/api/resource/${resourceType.name}/foo/policies/canCompute", members) ~> otherUserSamRoutes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
+    }
   }
 
   it should "200 when listing policies for a resource and user has readpolicies permission" in {
@@ -211,8 +225,18 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     }
   }
 
-  ignore should "404 when listing policies for a resource and user lacks readpolicies permission (and can't see the resource)" in {
+  it should "404 when listing policies for a resource when user can't see the resource" in {
+    val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceAction("alterpolicies"), ResourceAction("cancompute")), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("alterpolicies")))), ResourceRoleName("owner"))
+    val samRoutes = createSamRoutes(Map(resourceType.name -> resourceType))
+    val otherUserSamRoutes = createSamRoutes(Map(resourceType.name -> resourceType), UserInfo("accessToken", WorkbenchUserId("user2"), WorkbenchUserEmail("user2@example.com"), 0))
 
+    Post(s"/api/resource/${resourceType.name}/foo") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+    }
+
+    Get(s"/api/resource/${resourceType.name}/foo/policies") ~> otherUserSamRoutes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
+    }
   }
 
 }

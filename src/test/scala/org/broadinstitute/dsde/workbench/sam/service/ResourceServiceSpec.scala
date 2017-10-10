@@ -37,7 +37,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     WorkbenchGroupEmail(s"policy-$resourceType-$resourceName-$policyName@example.com")
   }
 
-  private val defaultResourceType = ResourceType(ResourceTypeName(UUID.randomUUID().toString), Set(ResourceAction("a1"), ResourceAction("a2"), ResourceAction("a3")), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("a1"), ResourceAction("a2"))), ResourceRole(ResourceRoleName("other"), Set(ResourceAction("a3"), ResourceAction("a2")))), ResourceRoleName("owner"))
+  private val defaultResourceType = ResourceType(ResourceTypeName(UUID.randomUUID().toString), Set(ResourceAction("alterpolicies"), ResourceAction("a2"), ResourceAction("a3")), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("alterpolicies"), ResourceAction("a2"))), ResourceRole(ResourceRoleName("other"), Set(ResourceAction("a3"), ResourceAction("a2")))), ResourceRoleName("owner"))
 
   private def constructExpectedPolicies(resourceType: ResourceType, resource: Resource) = {
     resourceType.roles.map { role =>
@@ -206,22 +206,88 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     val policies = runAndWait(policyDAO.listAccessPolicies(resource))
 
     constructExpectedPolicies(defaultResourceType, resource) should contain theSameElementsAs(policies)
+
+    runAndWait(service.deleteResource(resource))
   }
 
   it should "overwritePolicy with a valid request" in {
+    val resource = Resource(defaultResourceType.name, ResourceId("my-resource"))
 
+    runAndWait(service.createResourceType(defaultResourceType))
+    runAndWait(service.createResource(defaultResourceType, resource.resourceId, dummyUserInfo))
+
+    val group = WorkbenchGroup(WorkbenchGroupName("foo"), Set.empty, toEmail(resource.resourceTypeName.value, resource.resourceId.value, "foo"))
+    val newPolicy = AccessPolicy("foo", resource, group, Set.empty, Set(ResourceAction("a2")))
+
+    runAndWait(service.overwritePolicy(defaultResourceType, newPolicy.name, newPolicy.resource, AccessPolicyMembership(Set.empty, Set(ResourceAction("a2")), Set.empty), dummyUserInfo))
+
+    val policies = runAndWait(policyDAO.listAccessPolicies(resource))
+
+    assert(policies.contains(newPolicy))
+
+    runAndWait(service.deleteResource(resource))
   }
 
   it should "overwritePolicy should fail when given an invalid action" in {
+    val resource = Resource(defaultResourceType.name, ResourceId("my-resource"))
 
+    runAndWait(service.createResourceType(defaultResourceType))
+    runAndWait(service.createResource(defaultResourceType, resource.resourceId, dummyUserInfo))
+
+    val group = WorkbenchGroup(WorkbenchGroupName("foo"), Set.empty, toEmail(resource.resourceTypeName.value, resource.resourceId.value, "foo"))
+    val newPolicy = AccessPolicy("foo", resource, group, Set.empty, Set(ResourceAction("INVALID_ACTION")))
+
+    intercept[WorkbenchExceptionWithErrorReport] {
+      runAndWait(service.overwritePolicy(defaultResourceType, newPolicy.name, newPolicy.resource, AccessPolicyMembership(Set.empty, Set(ResourceAction("INVALID_ACTION")), Set.empty), dummyUserInfo))
+    }
+
+    val policies = runAndWait(policyDAO.listAccessPolicies(resource))
+
+    assert(!policies.contains(newPolicy))
+
+    runAndWait(service.deleteResource(resource))
   }
 
   it should "overwritePolicy should fail when given an invalid role" in {
+    val resource = Resource(defaultResourceType.name, ResourceId("my-resource"))
 
+    runAndWait(service.createResourceType(defaultResourceType))
+    runAndWait(service.createResource(defaultResourceType, resource.resourceId, dummyUserInfo))
+
+    val group = WorkbenchGroup(WorkbenchGroupName("foo"), Set.empty, toEmail(resource.resourceTypeName.value, resource.resourceId.value, "foo"))
+    val newPolicy = AccessPolicy("foo", resource, group, Set(ResourceRoleName("INVALID_ROLE")), Set.empty)
+
+    intercept[WorkbenchExceptionWithErrorReport] {
+      runAndWait(service.overwritePolicy(defaultResourceType, newPolicy.name, newPolicy.resource, AccessPolicyMembership(Set.empty, Set.empty, Set(ResourceRoleName("INVALID_ROLE"))), dummyUserInfo))
+    }
+
+    val policies = runAndWait(policyDAO.listAccessPolicies(resource))
+
+    assert(!policies.contains(newPolicy))
+
+    runAndWait(service.deleteResource(resource))
   }
 
   it should "overwritePolicy should fail when user doesn't have alterpolicies permission" in {
+    val resourceTypeWithNoAlter = defaultResourceType.copy(roles = Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("a2")))))
 
+    val resource = Resource(resourceTypeWithNoAlter.name, ResourceId("my-resource"))
+
+    runAndWait(service.createResourceType(resourceTypeWithNoAlter))
+    runAndWait(service.createResource(resourceTypeWithNoAlter, resource.resourceId, dummyUserInfo))
+
+    val group = WorkbenchGroup(WorkbenchGroupName("foo"), Set.empty, toEmail(resource.resourceTypeName.value, resource.resourceId.value, "foo"))
+    val newPolicy = AccessPolicy("foo", resource, group, Set(ResourceRoleName("a2")), Set.empty)
+
+    intercept[WorkbenchExceptionWithErrorReport] {
+      runAndWait(service.overwritePolicy(resourceTypeWithNoAlter, newPolicy.name, newPolicy.resource, AccessPolicyMembership(Set.empty, Set.empty, Set.empty), dummyUserInfo))
+    }
+
+    val policies = runAndWait(policyDAO.listAccessPolicies(resource))
+
+    assert(!policies.contains(newPolicy))
+
+    runAndWait(service.deleteResource(resource))
   }
 
 }

@@ -24,7 +24,9 @@ class MockAccessPolicyDAO extends AccessPolicyDAO {
   }
 
   override def deleteResource(resource: Resource): Future[Unit] = Future {
-    //    policies += resource.resourceTypeName -> Map(policies.get)
+    val newResourcesForType = policies(resource.resourceTypeName) - resource.resourceId
+
+    policies += resource.resourceTypeName -> newResourcesForType
   }
 
   override def createPolicy(policy: AccessPolicy): Future[AccessPolicy] = Future {
@@ -40,7 +42,7 @@ class MockAccessPolicyDAO extends AccessPolicyDAO {
     }
   }
 
-  override def overwritePolicy(newPolicy: AccessPolicy): Future[AccessPolicy] = Future.successful(newPolicy)
+  override def overwritePolicy(newPolicy: AccessPolicy): Future[AccessPolicy] = createPolicy(newPolicy)
 
   override def listAccessPolicies(resource: Resource): Future[Set[AccessPolicy]] = Future {
     policies.getOrElse(resource.resourceTypeName, Map.empty).getOrElse(resource.resourceId, Set.empty)

@@ -46,7 +46,7 @@ class ResourceService(val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: Di
     for {
       policiesToDelete <- accessPolicyDAO.listAccessPolicies(resource)
       _ <- Future.traverse(policiesToDelete){accessPolicyDAO.deletePolicy}
-    //      _ <- accessPolicyDAO.deleteResource(resource) //todo: why does it work even if we don't delete this level?
+      _ <- accessPolicyDAO.deleteResource(resource) //todo: why does it work even if we don't delete this level?
     } yield ()
   }
 
