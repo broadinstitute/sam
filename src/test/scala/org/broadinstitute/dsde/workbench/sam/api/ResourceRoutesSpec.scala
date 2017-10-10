@@ -29,7 +29,7 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     new TestSamRoutes(resourceTypes, mockResourceService, mockUserService, userInfo)
   }
 
-  "PUT /api/resources/{resourceType}/{resourceId}/actions/{action}" should "404 for unknown resource type" in {
+  "GET /api/resources/{resourceType}/{resourceId}/actions/{action}" should "404 for unknown resource type" in {
     val samRoutes = createSamRoutes(Map.empty)
 
     Get("/api/resource/foo/bar/action") ~> samRoutes.route ~> check {
@@ -291,6 +291,21 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
 
     //Delete the resource
     Delete(s"/api/resource/INVALID_RESOURCE_TYPE/foo") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
+    }
+  }
+
+  it should "404 when deleting a resource that exists but can't be seen by the user" in {
+    val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceAction("alterpolicies"), ResourceAction("readpolicies")), Set.empty, ResourceRoleName("owner"))
+    val samRoutes = createSamRoutes(Map(resourceType.name -> resourceType))
+
+    //Create the resource
+    Post(s"/api/resource/${resourceType.name}/foo") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+    }
+
+    //Delete the resource
+    Delete(s"/api/resource/${resourceType.name}/foo") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
   }
