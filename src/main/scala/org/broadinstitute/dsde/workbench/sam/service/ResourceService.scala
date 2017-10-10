@@ -99,19 +99,21 @@ class ResourceService(val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: Di
     }
   }
 
+  private def loadAccessPolicy(policy: AccessPolicy): Future[AccessPolicyResponseEntry] = {
+    val users = policy.members.members.collect { case userId: WorkbenchUserId => userId }
+    val groups = policy.members.members.collect { case groupName: WorkbenchGroupName => groupName }
+
+    for {
+      userEmails <- Future.traverse(users) { directoryDAO.loadUser }.map(_.flatten.map(_.email.value))
+      groupEmails <- Future.traverse(groups) { directoryDAO.loadGroup }.map(_.flatten.map(_.email.value))
+    } yield AccessPolicyResponseEntry(policy.name, AccessPolicyMembership(userEmails ++ groupEmails, policy.actions, policy.roles))
+  }
+
   def listResourcePolicies(resource: Resource, userInfo: UserInfo): Future[Set[AccessPolicyResponseEntry]] = {
     requireAction(resource, SamResourceActions.readPolicies, userInfo) {
       accessPolicyDAO.listAccessPolicies(resource).flatMap { policies =>
         //could improve this by making a few changes to listAccessPolicies to return emails. todo for later in the PR process!
-        Future.sequence(policies.map { policy =>
-          val users = policy.members.members.collect { case userId: WorkbenchUserId => userId }
-          val groups = policy.members.members.collect { case groupName: WorkbenchGroupName => groupName }
-
-          for {
-            userEmails <- Future.traverse(users) { directoryDAO.loadUser }.map(_.flatten.map(_.email.value))
-            groupEmails <- Future.traverse(groups) { directoryDAO.loadGroup }.map(_.flatten.map(_.email.value))
-          } yield AccessPolicyResponseEntry(policy.name, AccessPolicyMembership(userEmails ++ groupEmails, policy.actions, policy.roles))
-        })
+        Future.sequence(policies.map(loadAccessPolicy))
       }
     }
   }
