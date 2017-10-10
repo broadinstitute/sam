@@ -74,7 +74,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     }
 
     //cleanup
-    runAndWait(service.deleteResource(resource))
+    runAndWait(service.deleteResource(resource, dummyUserInfo))
 
     assertResult(None) {
       runAndWait(dirDAO.loadGroup(ownerGroupName))
@@ -127,8 +127,8 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     assert(runAndWait(service.hasPermission(Resource(resourceType.name, resourceName2), ResourceAction("a3"), userInfo)))
     assert(!runAndWait(service.hasPermission(Resource(resourceType.name, ResourceId("doesnotexist")), ResourceAction("a3"), userInfo)))
 
-    runAndWait(service.deleteResource(Resource(resourceType.name, resourceName1)))
-    runAndWait(service.deleteResource(Resource(resourceType.name, resourceName2)))
+    runAndWait(service.deleteResource(Resource(resourceType.name, resourceName1), dummyUserInfo))
+    runAndWait(service.deleteResource(Resource(resourceType.name, resourceName2), dummyUserInfo))
     runAndWait(dirDAO.deleteUser(userInfo.userId))
   }
 
@@ -156,7 +156,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     exception.errorReport.statusCode shouldEqual Option(StatusCodes.Conflict)
 
     //cleanup
-    runAndWait(service.deleteResource(Resource(resourceType.name, resourceName)))
+    runAndWait(service.deleteResource(Resource(resourceType.name, resourceName), dummyUserInfo))
   }
 
   it should "listUserResourceRoles when they have at least one role" in {
@@ -179,7 +179,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
 
     roles shouldEqual Set(ResourceRoleName("owner"))
 
-    runAndWait(service.deleteResource(resource))
+    runAndWait(service.deleteResource(resource, dummyUserInfo))
     runAndWait(service.directoryDAO.deleteUser(dummyUserInfo.userId))
   }
 
@@ -207,7 +207,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
 
     constructExpectedPolicies(defaultResourceType, resource) should contain theSameElementsAs(policies)
 
-    runAndWait(service.deleteResource(resource))
+    runAndWait(service.deleteResource(resource, dummyUserInfo))
   }
 
   it should "overwritePolicy with a valid request" in {
@@ -225,7 +225,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
 
     assert(policies.contains(newPolicy))
 
-    runAndWait(service.deleteResource(resource))
+    runAndWait(service.deleteResource(resource, dummyUserInfo))
   }
 
   it should "overwritePolicy should fail when given an invalid action" in {
@@ -245,7 +245,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
 
     assert(!policies.contains(newPolicy))
 
-    runAndWait(service.deleteResource(resource))
+    runAndWait(service.deleteResource(resource, dummyUserInfo))
   }
 
   it should "overwritePolicy should fail when given an invalid role" in {
@@ -265,7 +265,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
 
     assert(!policies.contains(newPolicy))
 
-    runAndWait(service.deleteResource(resource))
+    runAndWait(service.deleteResource(resource, dummyUserInfo))
   }
 
   it should "overwritePolicy should fail when user doesn't have alterpolicies permission" in {
@@ -287,7 +287,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
 
     assert(!policies.contains(newPolicy))
 
-    runAndWait(service.deleteResource(resource))
+    runAndWait(service.deleteResource(resource, dummyUserInfo))
   }
 
 }

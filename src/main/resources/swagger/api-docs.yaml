@@ -91,6 +91,34 @@ paths:
           - profile
 
   /api/resource/{resourceTypeName}/{resourceId}:
+    delete:
+      summary: Delete a resource
+      responses:
+        204:
+          description: Successfully deleted resource
+        403:
+          description: You do not have permission to perform this action on the resource
+        404:
+          description: Resource type does not exist or you are not a member of any policy on the resource
+      parameters:
+        - in: path
+          description: Type of the resource
+          name: resourceTypeName
+          required: true
+          type: string
+        - in: path
+          description: Id of the resource
+          name: resourceId
+          required: true
+          type: string
+      operationId: deleteResource
+      tags:
+        - Resources
+      security:
+        - googleoauth:
+          - openid
+          - email
+          - profile
     post:
       summary: Create a new resource
       responses:

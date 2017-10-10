@@ -42,12 +42,14 @@ class ResourceService(val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: Di
     }
   }
 
-  def deleteResource(resource: Resource): Future[Unit] = {
-    for {
-      policiesToDelete <- accessPolicyDAO.listAccessPolicies(resource)
-      _ <- Future.traverse(policiesToDelete){accessPolicyDAO.deletePolicy}
-      _ <- accessPolicyDAO.deleteResource(resource)
-    } yield ()
+  def deleteResource(resource: Resource, userInfo: UserInfo): Future[Unit] = {
+    requireAction(resource, SamResourceActions.delete, userInfo) {
+      for {
+        policiesToDelete <- accessPolicyDAO.listAccessPolicies(resource)
+        _ <- Future.traverse(policiesToDelete) {accessPolicyDAO.deletePolicy}
+        _ <- accessPolicyDAO.deleteResource(resource)
+      } yield ()
+    }
   }
 
   def hasPermission(resource: Resource, action: ResourceAction, userInfo: UserInfo): Future[Boolean] = {
