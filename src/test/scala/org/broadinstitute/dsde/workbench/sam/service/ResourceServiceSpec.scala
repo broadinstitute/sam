@@ -37,7 +37,8 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     WorkbenchGroupEmail(s"policy-$resourceType-$resourceName-$policyName@example.com")
   }
 
-  private val defaultResourceType = ResourceType(ResourceTypeName(UUID.randomUUID().toString), Set(ResourceAction("alterpolicies"), ResourceAction("a2"), ResourceAction("a3")), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("alterpolicies"), ResourceAction("a2"))), ResourceRole(ResourceRoleName("other"), Set(ResourceAction("a3"), ResourceAction("a2")))), ResourceRoleName("owner"))
+  private val defaultResourceTypeActions = Set(ResourceAction("alterpolicies"), ResourceAction("delete"), ResourceAction("readpolicies"), ResourceAction("view"), ResourceAction("nonowneraction"))
+  private val defaultResourceType = ResourceType(ResourceTypeName(UUID.randomUUID().toString), defaultResourceTypeActions, Set(ResourceRole(ResourceRoleName("owner"), defaultResourceTypeActions - ResourceAction("nonowneraction")), ResourceRole(ResourceRoleName("other"), Set(ResourceAction("view"), ResourceAction("nonowneraction")))), ResourceRoleName("owner"))
 
   private def constructExpectedPolicies(resourceType: ResourceType, resource: Resource) = {
     resourceType.roles.map { role =>
@@ -50,22 +51,21 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
   "ResourceService" should "create and delete resource" in {
     val ownerRoleName = ResourceRoleName("owner")
     val otherRoleName = ResourceRoleName("other")
-    val resourceType = ResourceType(ResourceTypeName(UUID.randomUUID().toString), Set(ResourceAction("a1"), ResourceAction("a2"), ResourceAction("a3")), Set(ResourceRole(ownerRoleName, Set(ResourceAction("a1"), ResourceAction("a2"))), ResourceRole(otherRoleName, Set(ResourceAction("a3"), ResourceAction("a2")))), ownerRoleName)
     val resourceName = ResourceId("resource")
-    val resource = Resource(resourceType.name, resourceName)
+    val resource = Resource(defaultResourceType.name, resourceName)
 
-    runAndWait(service.createResourceType(resourceType))
+    runAndWait(service.createResourceType(defaultResourceType))
 
     val policies = runAndWait(service.createResource(
-      resourceType,
+      defaultResourceType,
       resourceName,
       dummyUserInfo
     ))
 
-    val ownerGroupName = WorkbenchGroupName(s"${resourceType.name}-${resourceName.value}-owner")
-    val otherGroupName = WorkbenchGroupName(s"${resourceType.name}-${resourceName.value}-other")
+    val ownerGroupName = WorkbenchGroupName(s"${defaultResourceType.name}-${resourceName.value}-owner")
+    val otherGroupName = WorkbenchGroupName(s"${defaultResourceType.name}-${resourceName.value}-other")
 
-    assertResult(constructExpectedPolicies(resourceType, resource)) {
+    assertResult(constructExpectedPolicies(defaultResourceType, resource)) {
       policies
     }
 
@@ -90,51 +90,50 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
   it should "listUserResourceActions" in {
     val ownerRoleName = ResourceRoleName("owner")
     val otherRoleName = ResourceRoleName("other")
-    val resourceType = ResourceType(ResourceTypeName(UUID.randomUUID().toString), Set(ResourceAction("a1"), ResourceAction("a2"), ResourceAction("a3")), Set(ResourceRole(ownerRoleName, Set(ResourceAction("a1"), ResourceAction("a2"))), ResourceRole(otherRoleName, Set(ResourceAction("a3"), ResourceAction("a2")))), ownerRoleName)
     val resourceName1 = ResourceId("resource1")
     val resourceName2 = ResourceId("resource2")
 
-    runAndWait(service.createResourceType(resourceType))
+    runAndWait(service.createResourceType(defaultResourceType))
 
-    val userInfo = UserInfo("token", WorkbenchUserId(UUID.randomUUID().toString), WorkbenchUserEmail("user@company.com"), 0)
-    runAndWait(dirDAO.createUser(WorkbenchUser(userInfo.userId, WorkbenchUserEmail("user@company.com"))))
+    runAndWait(dirDAO.deleteUser(dummyUserInfo.userId))
+    runAndWait(dirDAO.createUser(WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)))
 
     runAndWait(service.createResource(
-      resourceType,
+      defaultResourceType,
       resourceName1,
-      userInfo
+      dummyUserInfo
     ))
     val policies2 = runAndWait(service.createResource(
-      resourceType,
+      defaultResourceType,
       resourceName2,
-      userInfo
+      dummyUserInfo
     ))
 
     policies2.filter(_.roles.contains(otherRoleName)).foreach { otherPolicy =>
-      val members = otherPolicy.members.copy(members = Set(userInfo.userId))
+      val members = otherPolicy.members.copy(members = Set(dummyUserInfo.userId))
       runAndWait(service.accessPolicyDAO.overwritePolicy(otherPolicy.copy(members = members)))
     }
 
-    assertResult(Set(ResourceAction("a1"), ResourceAction("a2"))) {
-      runAndWait(service.listUserResourceActions(Resource(resourceType.name, resourceName1), userInfo))
+    assertResult(defaultResourceType.roles.filter(_.roleName.equals(ResourceRoleName("owner"))).head.actions) {
+      runAndWait(service.listUserResourceActions(Resource(defaultResourceType.name, resourceName1), dummyUserInfo))
     }
 
-    assertResult(Set(ResourceAction("a1"), ResourceAction("a2"), ResourceAction("a3"))) {
-      runAndWait(service.listUserResourceActions(Resource(resourceType.name, resourceName2), userInfo))
+    assertResult(defaultResourceTypeActions) {
+      runAndWait(service.listUserResourceActions(Resource(defaultResourceType.name, resourceName2), dummyUserInfo))
     }
 
-    assert(!runAndWait(service.hasPermission(Resource(resourceType.name, resourceName1), ResourceAction("a3"), userInfo)))
-    assert(runAndWait(service.hasPermission(Resource(resourceType.name, resourceName2), ResourceAction("a3"), userInfo)))
-    assert(!runAndWait(service.hasPermission(Resource(resourceType.name, ResourceId("doesnotexist")), ResourceAction("a3"), userInfo)))
+    assert(!runAndWait(service.hasPermission(Resource(defaultResourceType.name, resourceName1), ResourceAction("nonowneraction"), dummyUserInfo)))
+    assert(runAndWait(service.hasPermission(Resource(defaultResourceType.name, resourceName2), ResourceAction("nonowneraction"), dummyUserInfo)))
+    assert(!runAndWait(service.hasPermission(Resource(defaultResourceType.name, ResourceId("doesnotexist")), ResourceAction("view"), dummyUserInfo)))
 
-    runAndWait(service.deleteResource(Resource(resourceType.name, resourceName1), dummyUserInfo))
-    runAndWait(service.deleteResource(Resource(resourceType.name, resourceName2), dummyUserInfo))
-    runAndWait(dirDAO.deleteUser(userInfo.userId))
+    runAndWait(service.deleteResource(Resource(defaultResourceType.name, resourceName1), dummyUserInfo))
+    runAndWait(service.deleteResource(Resource(defaultResourceType.name, resourceName2), dummyUserInfo))
+    runAndWait(dirDAO.deleteUser(dummyUserInfo.userId))
   }
 
   it should "detect conflict on create" in {
     val ownerRoleName = ResourceRoleName("owner")
-    val resourceType = ResourceType(ResourceTypeName(UUID.randomUUID().toString), Set(ResourceAction("a1"), ResourceAction("a2"), ResourceAction("a3")), Set(ResourceRole(ownerRoleName, Set(ResourceAction("a1"), ResourceAction("a2")))), ownerRoleName)
+    val resourceType = ResourceType(ResourceTypeName(UUID.randomUUID().toString), Set(ResourceAction("delete"), ResourceAction("view")), Set(ResourceRole(ownerRoleName, Set(ResourceAction("delete"), ResourceAction("view")))), ownerRoleName)
     val resourceName = ResourceId("resource")
 
     runAndWait(service.createResourceType(resourceType))
@@ -160,17 +159,15 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
   }
 
   it should "listUserResourceRoles when they have at least one role" in {
-    val ownerRoleName = ResourceRoleName("owner")
-    val resourceType = ResourceType(ResourceTypeName(UUID.randomUUID().toString), Set(ResourceAction("a1")), Set(ResourceRole(ownerRoleName, Set(ResourceAction("a1")))), ownerRoleName)
     val resourceName = ResourceId("resource")
-    val resource = Resource(resourceType.name, resourceName)
+    val resource = Resource(defaultResourceType.name, resourceName)
 
-    runAndWait(service.createResourceType(resourceType))
+    runAndWait(service.createResourceType(defaultResourceType))
 
     runAndWait(service.directoryDAO.createUser(WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)))
 
     runAndWait(service.createResource(
-      resourceType,
+      defaultResourceType,
       resourceName,
       dummyUserInfo
     ))
@@ -217,9 +214,9 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     runAndWait(service.createResource(defaultResourceType, resource.resourceId, dummyUserInfo))
 
     val group = WorkbenchGroup(WorkbenchGroupName("foo"), Set.empty, toEmail(resource.resourceTypeName.value, resource.resourceId.value, "foo"))
-    val newPolicy = AccessPolicy("foo", resource, group, Set.empty, Set(ResourceAction("a2")))
+    val newPolicy = AccessPolicy("foo", resource, group, Set.empty, Set(ResourceAction("nonowneraction")))
 
-    runAndWait(service.overwritePolicy(defaultResourceType, newPolicy.name, newPolicy.resource, AccessPolicyMembership(Set.empty, Set(ResourceAction("a2")), Set.empty), dummyUserInfo))
+    runAndWait(service.overwritePolicy(defaultResourceType, newPolicy.name, newPolicy.resource, AccessPolicyMembership(Set.empty, Set(ResourceAction("nonowneraction")), Set.empty), dummyUserInfo))
 
     val policies = runAndWait(policyDAO.listAccessPolicies(resource))
 
@@ -269,7 +266,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
   }
 
   it should "overwritePolicy should fail when user doesn't have alterpolicies permission" in {
-    val resourceTypeWithNoAlter = defaultResourceType.copy(roles = Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("a2")))))
+    val resourceTypeWithNoAlter = defaultResourceType.copy(roles = Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("delete")))))
 
     val resource = Resource(resourceTypeWithNoAlter.name, ResourceId("my-resource"))
 
@@ -277,7 +274,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     runAndWait(service.createResource(resourceTypeWithNoAlter, resource.resourceId, dummyUserInfo))
 
     val group = WorkbenchGroup(WorkbenchGroupName("foo"), Set.empty, toEmail(resource.resourceTypeName.value, resource.resourceId.value, "foo"))
-    val newPolicy = AccessPolicy("foo", resource, group, Set(ResourceRoleName("a2")), Set.empty)
+    val newPolicy = AccessPolicy("foo", resource, group, Set(ResourceRoleName("delete")), Set.empty)
 
     intercept[WorkbenchExceptionWithErrorReport] {
       runAndWait(service.overwritePolicy(resourceTypeWithNoAlter, newPolicy.name, newPolicy.resource, AccessPolicyMembership(Set.empty, Set.empty, Set.empty), dummyUserInfo))
