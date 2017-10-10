@@ -38,7 +38,7 @@ class StatusRouteSpec extends FlatSpec with Matchers with ScalatestRouteTest wit
     val samRoutes = new TestSamRoutes(Map.empty, mockResourceService, mockUserService, mockStatusService, UserInfo("", WorkbenchUserId(""), WorkbenchUserEmail(""), 0))
 
     Get("/status") ~> samRoutes.route ~> check {
-      responseAs[StatusCheckResponse] shouldEqual StatusCheckResponse(false, Map(OpenDJ -> HealthMonitor.failedStatus("could not find group All_Users in opendj"), GoogleGroups -> HealthMonitor.UnknownStatus))
+      responseAs[StatusCheckResponse].ok shouldEqual false
       status shouldEqual StatusCodes.InternalServerError
     }
   }
