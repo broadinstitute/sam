@@ -84,8 +84,11 @@ class ResourceService(val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: Di
 
       val email = toGoogleGroupEmail(policyName, resource)
 
+      val actionsByRole = resourceType.roles.map(r => r.roleName -> r.actions).toMap
+      val impliedActionsFromRoles = policyMembership.roles.flatMap(actionsByRole)
+
       subjectsFromEmails.flatMap { members =>
-        val newPolicy = AccessPolicy(policyName, resource, WorkbenchGroup(WorkbenchGroupName(policyName), members, email), policyMembership.roles, policyMembership.actions)
+        val newPolicy = AccessPolicy(policyName, resource, WorkbenchGroup(WorkbenchGroupName(policyName), members, email), policyMembership.roles, policyMembership.actions ++ impliedActionsFromRoles)
 
         accessPolicyDAO.listAccessPolicies(resource).flatMap { policies =>
           if (policies.map(_.name).contains(policyName)) {
