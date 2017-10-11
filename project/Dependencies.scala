@@ -3,7 +3,7 @@ import sbt._
 object Dependencies {
   val akkaV = "2.5.1"
   val akkaHttpV = "10.0.6"
-  val jacksonV = "2.8.7"
+  val jacksonV = "2.8.10"
   val scalaLoggingV = "3.5.0"
   val scalaTestV    = "3.0.1"
 
@@ -20,7 +20,7 @@ object Dependencies {
   val jacksonDatabind: ModuleID =    "com.fasterxml.jackson.core" % "jackson-databind"    % jacksonV
   val jacksonCore: ModuleID =        "com.fasterxml.jackson.core" % "jackson-core"        % jacksonV
 
-  val logbackClassic: ModuleID = "ch.qos.logback"             %  "logback-classic" % "1.2.1"
+  val logbackClassic: ModuleID = "ch.qos.logback"             %  "logback-classic" % "1.2.2"
   val ravenLogback: ModuleID =   "com.getsentry.raven"        %  "raven-logback"   % "7.8.6"
   val scalaLogging: ModuleID =   "com.typesafe.scala-logging" %% "scala-logging"   % scalaLoggingV
   val swaggerUi: ModuleID =      "org.webjars"                %  "swagger-ui"      % "2.2.5"
