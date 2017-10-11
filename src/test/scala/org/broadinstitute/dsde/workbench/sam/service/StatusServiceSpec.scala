@@ -12,8 +12,9 @@ import org.broadinstitute.dsde.workbench.util.health.Subsystems.{GoogleGroups, O
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
+import org.scalatest.concurrent.Eventually
 
-class StatusServiceSpec extends FreeSpec with Matchers with TestSupport {
+class StatusServiceSpec extends FreeSpec with Matchers with TestSupport with Eventually {
   implicit val system = ActorSystem("StatusServiceSpec")
   val allUsersEmail = WorkbenchGroupEmail("allusers@example.com")
 
@@ -63,8 +64,10 @@ class StatusServiceSpec extends FreeSpec with Matchers with TestSupport {
   "StatusService" - {
     cases.foreach { case (name, service, expected) =>
       s"should have correct status for $name" in {
-        assertResult(expected) {
-          runAndWait(service.getStatus())
+        eventually {
+          assertResult(expected) {
+            runAndWait(service.getStatus())
+          }
         }
       }
     }
