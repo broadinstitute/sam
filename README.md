@@ -29,7 +29,7 @@ sh docker/run-opendj.sh
 
 Make sure your `SBT_OPTS` are set:
 ```
-export SBT_OPTS=-Ddirectory.url=ldap://localhost:3389 -Ddirectory.password=testtesttest
+export SBT_OPTS="-Ddirectory.url=ldap://localhost:3389 -Ddirectory.password=testtesttest"
 ```
 
 Run tests:
