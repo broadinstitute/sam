@@ -99,11 +99,6 @@ paths:
       operationId: deleteResource
       tags:
         - Resources
-      security:
-        - googleoauth:
-          - openid
-          - email
-          - profile
     post:
       summary: Create a new resource
       responses:
@@ -164,11 +159,6 @@ paths:
       operationId: listResourcePolicies
       tags:
         - Resources
-      security:
-        - googleoauth:
-            - openid
-            - email
-            - profile
 
   /api/resource/{resourceTypeName}/{resourceId}/policies/{policyName}:
     put:
@@ -213,11 +203,6 @@ paths:
       operationId: overwritePolicy
       tags:
         - Resources
-      security:
-        - googleoauth:
-            - openid
-            - email
-            - profile
 
   /api/resource/{resourceTypeName}/{resourceId}/roles:
     get:
