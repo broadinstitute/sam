@@ -9,3 +9,4 @@ import scala.concurrent.duration.Duration
 trait TestSupport {
   def runAndWait[T](f: Awaitable[T]): T = Await.result(f, Duration.Inf)
 }
+object TestSupport extends TestSupport

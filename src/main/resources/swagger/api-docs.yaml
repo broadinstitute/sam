@@ -48,11 +48,6 @@ paths:
       operationId: adminGetUserStatus
       tags:
         - Admin
-      security:
-        - googleoauth:
-          - openid
-          - email
-          - profile
 
   /api/admin/user/{userId}/disable:
     put:
@@ -66,11 +61,6 @@ paths:
       operationId: disableUser
       tags:
         - Admin
-      security:
-        - googleoauth:
-            - openid
-            - email
-            - profile
 
   /api/admin/user/{userId}/enable:
     put:
@@ -84,11 +74,6 @@ paths:
       operationId: enableUser
       tags:
         - Admin
-      security:
-        - googleoauth:
-          - openid
-          - email
-          - profile
 
   /api/resource/{resourceTypeName}/{resourceId}:
     post:
@@ -118,11 +103,6 @@ paths:
       operationId: createResource
       tags:
         - Resources
-      security:
-        - googleoauth:
-            - openid
-            - email
-            - profile
 
   /api/resource/{resourceTypeName}/{resourceId}/roles:
     get:
@@ -154,11 +134,6 @@ paths:
       operationId: resourceRoles
       tags:
         - Resources
-      security:
-        - googleoauth:
-            - openid
-            - email
-            - profile
 
   /api/resource/{resourceTypeName}/{resourceId}/action/{action}:
     get:
@@ -191,11 +166,6 @@ paths:
       operationId: resourceAction
       tags:
         - Resources
-      security:
-        - googleoauth:
-            - openid
-            - email
-            - profile
 
   /api/resourceTypes:
     get:
@@ -214,11 +184,6 @@ paths:
       operationId: listResourceTypes
       tags:
         - Resources
-      security:
-        - googleoauth:
-            - openid
-            - email
-            - profile
 
   /register/user:
     get:
@@ -235,11 +200,6 @@ paths:
       operationId: getUserStatus
       tags:
         - Users
-      security:
-        - googleoauth:
-          - openid
-          - email
-          - profile
     post:
       summary: create current user in the system using login credentials
       responses:
@@ -254,11 +214,23 @@ paths:
       operationId: createUser
       tags:
         - Users
-      security:
-        - googleoauth:
-            - openid
-            - email
-            - profile
+
+  /status:
+    get:
+      summary: gets system status
+      responses:
+        200:
+          description: 'system ok'
+          schema:
+            $ref: '#/definitions/SystemStatus'
+        500:
+          description: 'one or more subsystems down'
+          schema:
+            $ref: '#/definitions/SystemStatus'
+      operationId: getSystemStatus
+      tags:
+        - Status
+      security: [] # no security
 
 ##########################################################################################
 ## DEFINITIONS
@@ -375,6 +347,31 @@ definitions:
       lineNumber:
         type: integer
         description: line number
+
+  SubsystemStatus:
+    description: status of a subsystem Sam depends on
+    properties:
+      ok:
+        type: boolean
+        description: whether this system is up or down from Sam's point of view
+      messages:
+        type: array
+        items:
+          type: string
+
+  SystemStatus:
+    description: status of each aubsystem Sam depends on
+    type: object
+    required:
+      - ok
+      - systems
+    properties:
+      ok:
+        type: boolean
+        description: true if everything is ok, false if anything is amiss
+      systems:
+        type: object
+        description: Map[String, SubsystemStatus]
 
   UserInfo:
     description: ''

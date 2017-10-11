@@ -12,9 +12,9 @@ import org.broadinstitute.dsde.workbench.sam.config._
 import org.broadinstitute.dsde.workbench.sam.directory._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam._
-import org.broadinstitute.dsde.workbench.sam.service.{ResourceService, UserService}
+import org.broadinstitute.dsde.workbench.sam.service.{ResourceService, StatusService, UserService}
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.duration._
 
 object Boot extends App with LazyLogging {
 
@@ -36,9 +36,10 @@ object Boot extends App with LazyLogging {
 
     val resourceService = new ResourceService(accessPolicyDAO, directoryDAO, config.getString("googleDirectory.appsDomain"))
     val userService = new UserService(directoryDAO, googleDirectoryDAO, googleDirectoryConfig.appsDomain)
+    val statusService = new StatusService(directoryDAO, googleDirectoryDAO, 10 seconds)
 
     val configResourceTypes = config.as[Set[ResourceType]]("resourceTypes")
-    val samRoutes = new SamRoutes(resourceService, userService, config.as[SwaggerConfig]("swagger")) with StandardUserInfoDirectives {
+    val samRoutes = new SamRoutes(resourceService, userService, statusService, config.as[SwaggerConfig]("swagger")) with StandardUserInfoDirectives {
       override val resourceTypes: Map[ResourceTypeName, ResourceType] = configResourceTypes.map(rt => rt.name -> rt).toMap
     }
 

@@ -114,4 +114,5 @@ class MockDirectoryDAO extends DirectoryDAO {
     enabledUsers.contains(userId)
   }
 
+  override def loadGroupEmail(groupName: WorkbenchGroupName): Future[Option[WorkbenchGroupEmail]] = loadGroup(groupName).map(_.map(_.email))
 }

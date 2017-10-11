@@ -17,19 +17,20 @@ import org.broadinstitute.dsde.workbench.sam._
 import SprayJsonSupport._
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchExceptionWithErrorReport}
 import org.broadinstitute.dsde.workbench.sam.config.SwaggerConfig
-import org.broadinstitute.dsde.workbench.sam.service.{ResourceService, UserService}
+import org.broadinstitute.dsde.workbench.sam.service.{ResourceService, StatusService, UserService}
 
 import scala.concurrent.{ExecutionContext, Future}
 
 /**
   * Created by dvoet on 5/17/17.
   */
-abstract class SamRoutes(val resourceService: ResourceService, val userService: UserService, val swaggerConfig: SwaggerConfig)(implicit val system: ActorSystem, val materializer: Materializer, val executionContext: ExecutionContext)
+abstract class SamRoutes(val resourceService: ResourceService, val userService: UserService, val statusService: StatusService, val swaggerConfig: SwaggerConfig)(implicit val system: ActorSystem, val materializer: Materializer, val executionContext: ExecutionContext)
   extends LazyLogging
-  with ResourceRoutes with UserRoutes with SwaggerRoutes {
+  with ResourceRoutes with UserRoutes with SwaggerRoutes with StatusRoutes {
 
   def route: server.Route = (logRequestResult & handleExceptions(myExceptionHandler)) {
     swaggerRoutes ~
+    statusRoutes ~
     pathPrefix("register") { userRoutes } ~
     pathPrefix("api") { resourceRoutes ~ adminUserRoutes }
   }
