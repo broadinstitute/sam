@@ -9,9 +9,9 @@ import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
 
 import scala.concurrent.{ExecutionContext, Future}
 import com.typesafe.scalalogging.LazyLogging
-import org.broadinstitute.dsde.workbench.health.HealthMonitor.GetCurrentStatus
-import org.broadinstitute.dsde.workbench.health.Subsystems.{GoogleGroups, OpenDJ, Subsystem}
-import org.broadinstitute.dsde.workbench.health.{HealthMonitor, StatusCheckResponse, SubsystemStatus}
+import org.broadinstitute.dsde.workbench.util.health.HealthMonitor.GetCurrentStatus
+import org.broadinstitute.dsde.workbench.util.health.Subsystems.{GoogleGroups, OpenDJ, Subsystem}
+import org.broadinstitute.dsde.workbench.util.health.{HealthMonitor, StatusCheckResponse, SubsystemStatus}
 
 import scala.concurrent.duration._
 
@@ -23,11 +23,11 @@ class StatusService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Goog
 
   def getStatus(): Future[StatusCheckResponse] = (healthMonitor ? GetCurrentStatus).asInstanceOf[Future[StatusCheckResponse]]
 
-  private def checkStatus(): Traversable[(Subsystem, Future[SubsystemStatus])] = {
+  private def checkStatus(): Map[Subsystem, Future[SubsystemStatus]] = {
     val opendjCheck: Future[(SubsystemStatus, Option[WorkbenchGroupEmail])] = checkOpenDJ(UserService.allUsersGroupName)
-    Seq(
-      (OpenDJ, opendjCheck.map(_._1)),
-      (GoogleGroups, checkGoogleGroups(opendjCheck.map(_._2)))
+    Map(
+      OpenDJ -> opendjCheck.map(_._1),
+      GoogleGroups -> checkGoogleGroups(opendjCheck.map(_._2))
     )
   }
 

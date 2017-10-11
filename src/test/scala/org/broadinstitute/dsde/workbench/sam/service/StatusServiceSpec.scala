@@ -7,8 +7,8 @@ import org.broadinstitute.dsde.workbench.sam.directory.MockDirectoryDAO
 import org.scalatest.{FlatSpec, FreeSpec, Matchers}
 import org.broadinstitute.dsde.workbench.google.mock.MockGoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.model.{WorkbenchException, WorkbenchGroup, WorkbenchGroupEmail, WorkbenchGroupName}
-import org.broadinstitute.dsde.workbench.health.{StatusCheckResponse, SubsystemStatus}
-import org.broadinstitute.dsde.workbench.health.Subsystems.{GoogleGroups, OpenDJ}
+import org.broadinstitute.dsde.workbench.util.health.{StatusCheckResponse, SubsystemStatus}
+import org.broadinstitute.dsde.workbench.util.health.Subsystems.{GoogleGroups, OpenDJ}
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
