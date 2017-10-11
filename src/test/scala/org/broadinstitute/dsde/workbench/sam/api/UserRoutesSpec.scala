@@ -46,7 +46,7 @@ class UserRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest {
     testCode(samRoutes, adminRoutes)
   }
 
-  "UserRoutes" should "create user" in withDefaultRoutes { samRoutes =>
+  "POST /register/user" should "create user" in withDefaultRoutes { samRoutes =>
     Post("/register/user") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
       responseAs[UserStatus] shouldEqual UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
@@ -57,7 +57,7 @@ class UserRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest {
     }
   }
 
-  it should "get the status of an enabled user" in withDefaultRoutes { samRoutes =>
+  "GET /register/user" should "get the status of an enabled user" in withDefaultRoutes { samRoutes =>
     Post("/register/user") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
       responseAs[UserStatus] shouldEqual UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
@@ -69,7 +69,7 @@ class UserRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest {
     }
   }
 
-  it should "get the user status of a user (as an admin)" in withAdminRoutes { (samRoutes, adminRoutes) =>
+  "GET /admin/user/{userSubjectId}" should "get the user status of a user (as an admin)" in withAdminRoutes { (samRoutes, adminRoutes) =>
     Post("/register/user") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
       responseAs[UserStatus] shouldEqual UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
@@ -81,7 +81,13 @@ class UserRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest {
     }
   }
 
-  it should "disable and then re-enable a user (as an admin)" in withAdminRoutes { (samRoutes, adminRoutes) =>
+  it should "not allow a non-admin to get the status of another user" in withAdminRoutes { (samRoutes, _) =>
+    Get(s"/api/admin/user/$defaultUserId") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Forbidden
+    }
+  }
+
+  "PUT /admin/user/{userSubjectId}/(re|dis)able" should "disable and then re-enable a user (as an admin)" in withAdminRoutes { (samRoutes, adminRoutes) =>
     Post("/register/user") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
       responseAs[UserStatus] shouldEqual UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
@@ -98,7 +104,17 @@ class UserRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest {
     }
   }
 
-  it should "delete a user (as an admin)" in withAdminRoutes { (samRoutes, adminRoutes) =>
+  it should "not allow a non-admin to enable or disable a user" in withAdminRoutes { (samRoutes, _) =>
+    Put(s"/api/admin/user/$defaultUserId/disable") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Forbidden
+    }
+
+    Put(s"/api/admin/user/$defaultUserId/enable") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Forbidden
+    }
+  }
+
+  "DELETE /admin/user/{userSubjectId}" should "delete a user (as an admin)" in withAdminRoutes { (samRoutes, adminRoutes) =>
     Post("/register/user") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
       responseAs[UserStatus] shouldEqual UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
@@ -113,24 +129,8 @@ class UserRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest {
     }
   }
 
-  it should "not allow a non-admin to enable or disable a user" in withAdminRoutes { (samRoutes, _) =>
-    Put(s"/api/admin/user/$defaultUserId/disable") ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.Forbidden
-    }
-
-    Put(s"/api/admin/user/$defaultUserId/enable") ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.Forbidden
-    }
-  }
-
   it should "not allow a non-admin to delete a user" in withAdminRoutes { (samRoutes, _) =>
     Delete(s"/api/admin/user/$defaultUserId") ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.Forbidden
-    }
-  }
-
-  it should "not allow a non-admin to get the status of another user" in withAdminRoutes { (samRoutes, _) =>
-    Get(s"/api/admin/user/$defaultUserId") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Forbidden
     }
   }

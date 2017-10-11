@@ -32,48 +32,6 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     val groupSynchronizedTimestamp = "groupSynchronizedTimestamp"
   }
 
-  def init(): Future[Unit] = {
-    for {
-      _ <- removeWorkbenchGroupSchema()
-      _ <- createWorkbenchGroupSchema()
-    } yield ()
-  }
-
-  def removeWorkbenchGroupSchema(): Future[Unit] = withContext { ctx =>
-    val schema = ctx.getSchema("")
-
-    Try { schema.destroySubcontext("ClassDefinition/workbenchGroup") }
-    Try { schema.destroySubcontext("AttributeDefinition/" + Attr.groupSynchronizedTimestamp) }
-    Try { schema.destroySubcontext("AttributeDefinition/" + Attr.groupUpdatedTimestamp) }
-  }
-
-  def createWorkbenchGroupSchema(): Future[Unit] = withContext { ctx =>
-    val schema = ctx.getSchema("")
-
-    createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.200", Attr.groupUpdatedTimestamp, "time when group was updated", true, Option("generalizedTimeMatch"), Option("generalizedTimeOrderingMatch"), Option("1.3.6.1.4.1.1466.115.121.1.24"))
-    createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.201", Attr.groupSynchronizedTimestamp, "time when group was synchronized", true, Option("generalizedTimeMatch"), Option("generalizedTimeOrderingMatch"), Option("1.3.6.1.4.1.1466.115.121.1.24"))
-
-    val attrs = new BasicAttributes(true) // Ignore case
-    attrs.put("NUMERICOID", "1.3.6.1.4.1.18060.0.4.3.2.100")
-    attrs.put("NAME", "workbenchGroup")
-    attrs.put("SUP", "groupofuniquenames")
-    attrs.put("STRUCTURAL", "true")
-
-    val must = new BasicAttribute("MUST")
-    must.add("objectclass")
-    must.add(Attr.email)
-    attrs.put(must)
-
-    val may = new BasicAttribute("MAY")
-    may.add(Attr.groupUpdatedTimestamp)
-    may.add(Attr.groupSynchronizedTimestamp)
-    attrs.put(may)
-
-
-    // Add the new schema object for "fooObjectClass"
-    schema.createSubcontext("ClassDefinition/workbenchGroup", attrs)
-  }
-
   override def createGroup(group: WorkbenchGroup): Future[WorkbenchGroup] = withContext { ctx =>
     try {
       val groupContext = new BaseDirContext {
@@ -86,7 +44,7 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
 
           myAttrs.put(new BasicAttribute(Attr.email, group.email.value))
 
-          if (!group.members.isEmpty) {
+          if (group.members.nonEmpty) {
             val members = new BasicAttribute(Attr.uniqueMember)
             group.members.foreach(subject => members.add(subjectDn(subject)))
             myAttrs.put(members)
@@ -147,6 +105,13 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     }.get
   }
 
+  override def loadGroups(groupNames: Set[WorkbenchGroupName]): Future[Seq[WorkbenchGroup]] = batchedLoad(groupNames.toSeq) { batch => { ctx =>
+    val filters = batch.toSet[WorkbenchGroupName].map { ref => s"(${Attr.cn}=${ref.value})" }
+    ctx.search(groupsOu, s"(|${filters.mkString})", new SearchControls()).asScala.map { result =>
+      unmarshalGroup(result.getAttributes)
+    }.toSeq
+  } }
+
   override def createUser(user: WorkbenchUser): Future[WorkbenchUser] = withContext { ctx =>
     try {
       val userContext = new BaseDirContext {
@@ -186,11 +151,40 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     }.get
   }
 
+  def loadUsers(userIds: Set[WorkbenchUserId]): Future[Seq[WorkbenchUser]] = batchedLoad(userIds.toSeq) { batch => { ctx =>
+    val filters = batch.toSet[WorkbenchUserId].map { ref => s"(${Attr.uid}=${ref.value})" }
+    ctx.search(peopleOu, s"(|${filters.mkString})", new SearchControls()).asScala.map { result =>
+      unmarshalUser(result.getAttributes)
+    }.toSeq
+  } }
+
+  override def loadSubjectFromEmail(email: String): Future[Option[WorkbenchSubject]] = withContext { ctx =>
+    val subjectResults = ctx.search(directoryConfig.baseDn, s"(${Attr.email}=${email})", new SearchControls(SearchControls.SUBTREE_SCOPE, 0, 0, null, false, false)).asScala.toSeq
+    val subjects = subjectResults.map { result =>
+      dnToSubject(result.getNameInNamespace)
+    }
+
+    subjects match {
+      case Seq() => None
+      case Seq(subject) => Option(subject)
+      case _ => throw new WorkbenchException(s"Database error: email $email refers to too many subjects: $subjects")
+    }
+  }
+
   private def unmarshalUser(attributes: Attributes): WorkbenchUser = {
     val uid = getAttribute[String](attributes, Attr.uid).getOrElse(throw new WorkbenchException(s"${Attr.uid} attribute missing"))
     val email = getAttribute[String](attributes, Attr.email).getOrElse(throw new WorkbenchException(s"${Attr.email} attribute missing"))
 
     WorkbenchUser(WorkbenchUserId(uid), WorkbenchUserEmail(email))
+  }
+
+  private def unmarshalGroup(attributes: Attributes): WorkbenchGroup = {
+    val cn = getAttribute[String](attributes, Attr.cn).getOrElse(throw new WorkbenchException(s"${Attr.cn} attribute missing"))
+    val email = getAttribute[String](attributes, Attr.email).getOrElse(throw new WorkbenchException(s"${Attr.email} attribute missing"))
+    val memberDns = getAttributes[String](attributes, Attr.member).getOrElse(Set.empty).toSet
+    val members = memberDns.map(dnToSubject)
+
+    WorkbenchGroup(WorkbenchGroupName(cn), members, WorkbenchGroupEmail(email))
   }
 
   private def getAttribute[T](attributes: Attributes, key: String): Option[T] = {
@@ -262,6 +256,5 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
   } recover { case e: NameNotFoundException => false }
 
   private def withContext[T](op: InitialDirContext => T): Future[T] = withContext(directoryConfig.directoryUrl, directoryConfig.user, directoryConfig.password)(op)
+  private def batchedLoad[T, R](input: Seq[T])(op: Seq[T] => InitialDirContext => Seq[R]): Future[Seq[R]] = batchedLoad(directoryConfig.directoryUrl, directoryConfig.user, directoryConfig.password)(input)(op)
 }
-
-

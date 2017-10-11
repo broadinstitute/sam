@@ -1,6 +1,6 @@
 package org.broadinstitute.dsde.workbench.sam.model
 
-import org.broadinstitute.dsde.workbench.model.{WorkbenchSubject, WorkbenchUserEmail, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.model.{WorkbenchGroup, WorkbenchSubject, WorkbenchUserEmail, WorkbenchUserId}
 import spray.json.DefaultJsonProtocol
 
 /**
@@ -24,6 +24,17 @@ object SamJsonSupport {
   implicit val UserStatusDetailsFormat = jsonFormat2(UserStatusDetails)
 
   implicit val UserStatusFormat = jsonFormat2(UserStatus)
+
+  implicit val AccessPolicyMembershipFormat = jsonFormat3(AccessPolicyMembership)
+
+  implicit val AccessPolicyResponseEntryFormat = jsonFormat2(AccessPolicyResponseEntry)
+
+}
+
+object SamResourceActions {
+  val readPolicies = ResourceAction("readpolicies")
+  val alterPolicies = ResourceAction("alterpolicies")
+  val delete = ResourceAction("delete")
 }
 
 case class UserStatusDetails(userSubjectId: WorkbenchUserId, userEmail: WorkbenchUserEmail) //for backwards compatibility to old API
@@ -35,8 +46,11 @@ case class ResourceRole(roleName: ResourceRoleName, actions: Set[ResourceAction]
 
 case class ResourceTypeName(value: String) extends ValueObject
 
+case class Resource(resourceTypeName: ResourceTypeName, resourceId: ResourceId)
 case class ResourceType(name: ResourceTypeName, actions: Set[ResourceAction], roles: Set[ResourceRole], ownerRoleName: ResourceRoleName)
 
-case class ResourceName(value: String) extends ValueObject
-case class AccessPolicyId(value: String) extends ValueObject
-case class AccessPolicy(id: AccessPolicyId, actions: Set[ResourceAction], resourceType: ResourceTypeName, resource: ResourceName, subject: WorkbenchSubject, role: Option[ResourceRoleName])
+case class ResourceId(value: String) extends ValueObject
+
+case class AccessPolicy(name: String, resource: Resource, members: WorkbenchGroup, roles: Set[ResourceRoleName], actions: Set[ResourceAction])
+case class AccessPolicyMembership(memberEmails: Set[String], actions: Set[ResourceAction], roles: Set[ResourceRoleName])
+case class AccessPolicyResponseEntry(policyName: String, policy: AccessPolicyMembership)

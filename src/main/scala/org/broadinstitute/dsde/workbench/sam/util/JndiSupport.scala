@@ -8,6 +8,8 @@ import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Try
 
 trait JndiSupport {
+  private val batchSize = 1000
+
   protected def getContext(url: String, user: String, password: String): InitialDirContext = {
     val env = new util.Hashtable[String, String]()
     env.put(Context.INITIAL_CONTEXT_FACTORY, "com.sun.jndi.ldap.LdapCtxFactory")
@@ -21,23 +23,34 @@ trait JndiSupport {
     new InitialDirContext(env)
   }
 
+  /**
+    * Given a possibly large collection of inputs, splits input into batches and calls op on each batch.
+    * @param url
+    * @param user
+    * @param password
+    * @param input
+    * @param op function of type (Seq[T])(InitialDirContext) => Seq[R], a function that takes a batch which produces a
+    *           function that takes an InitialDirContext that produces the results
+    * @param executionContext
+    * @tparam T type of inputs
+    * @tparam R type of results
+    * @return aggregated results of calling op for each batch
+    */
+  def batchedLoad[T, R](url: String, user: String, password: String)(input: Seq[T])(op: (Seq[T]) => (InitialDirContext) => Seq[R])(implicit executionContext: ExecutionContext): Future[Seq[R]] = {
+    if (input.isEmpty) {
+      Future.successful(Seq.empty)
+    } else {
+      Future.sequence(input.grouped(batchSize).map { batch =>
+        withContext(url, user, password)(op(batch))
+      }).map(_.flatten.toSeq)
+    }
+  }
+
   protected def withContext[T](url: String, user: String, password: String)(op: InitialDirContext => T)(implicit executionContext: ExecutionContext): Future[T] = Future {
     val ctx = getContext(url, user, password)
     val t = Try(op(ctx))
     ctx.close()
     t.get
-  }
-
-  protected def createAttributeDefinition(schema: DirContext, numericOID: String, name: String, description: String, singleValue: Boolean, equality: Option[String] = None, ordering: Option[String] = None, syntax: Option[String] = None) = {
-    val attributes = new BasicAttributes(true)
-    attributes.put("NUMERICOID", numericOID)
-    attributes.put("NAME", name)
-    attributes.put("DESC", description)
-    equality.foreach(attributes.put("EQUALITY", _))
-    ordering.foreach(attributes.put("ORDERING", _))
-    syntax.foreach(attributes.put("SYNTAX", _))
-    if (singleValue) attributes.put("SINGLE-VALUE", singleValue.toString) // note absence of this attribute means multi-value and presence means single, value does not matter
-    schema.createSubcontext(s"AttributeDefinition/$name", attributes)
   }
 
 }

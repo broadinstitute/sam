@@ -20,7 +20,10 @@ class TestSamRoutes(val resourceTypes: Map[ResourceTypeName, ResourceType], reso
   extends SamRoutes(resourceService, userService, statusService, SwaggerConfig("", "")) with MockUserInfoDirectives
 
 object TestSamRoutes {
-  def apply(resourceTypes: Map[ResourceTypeName, ResourceType])(implicit system: ActorSystem, materializer: Materializer, executionContext: ExecutionContext) = {
+
+  val defaultUserInfo = UserInfo("accessToken", WorkbenchUserId("user1"), WorkbenchUserEmail("user1@example.com"), 0)
+
+  def apply(resourceTypes: Map[ResourceTypeName, ResourceType], userInfo: UserInfo = defaultUserInfo)(implicit system: ActorSystem, materializer: Materializer, executionContext: ExecutionContext) = {
     val directoryDAO = new MockDirectoryDAO()
     val googleDirectoryDAO = new MockGoogleDirectoryDAO()
     val policyDAO = new MockAccessPolicyDAO()
@@ -32,6 +35,6 @@ object TestSamRoutes {
 
     val mockStatusService = new StatusService(directoryDAO, googleDirectoryDAO)
 
-    new TestSamRoutes(resourceTypes, mockResourceService, mockUserService, mockStatusService, UserInfo("", WorkbenchUserId(""), WorkbenchUserEmail(""), 0))
+    new TestSamRoutes(resourceTypes, mockResourceService, mockUserService, mockStatusService, userInfo)
   }
 }

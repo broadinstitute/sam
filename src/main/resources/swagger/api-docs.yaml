@@ -76,6 +76,34 @@ paths:
         - Admin
 
   /api/resource/{resourceTypeName}/{resourceId}:
+    delete:
+      summary: Delete a resource
+      responses:
+        204:
+          description: Successfully deleted resource
+        403:
+          description: You do not have permission to perform this action on the resource
+        404:
+          description: Resource type does not exist or you are not a member of any policy on the resource
+      parameters:
+        - in: path
+          description: Type of the resource
+          name: resourceTypeName
+          required: true
+          type: string
+        - in: path
+          description: Id of the resource
+          name: resourceId
+          required: true
+          type: string
+      operationId: deleteResource
+      tags:
+        - Resources
+      security:
+        - googleoauth:
+          - openid
+          - email
+          - profile
     post:
       summary: Create a new resource
       responses:
@@ -103,6 +131,93 @@ paths:
       operationId: createResource
       tags:
         - Resources
+
+  /api/resource/{resourceTypeName}/{resourceId}/policies:
+    get:
+      summary: List the policies for a resource
+      responses:
+        200:
+          description: Policies successfully listed
+          schema:
+            type: array
+            items:
+              $ref: '#/definitions/AccessPolicyResponseEntry'
+        403:
+          description: You do not have permission to perform this action on the resource
+        404:
+          description: Resource type does not exist or you are not a member of any policy on the resource
+        500:
+          description: Internal Error
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      parameters:
+        - in: path
+          description: Type of resource
+          name: resourceTypeName
+          required: true
+          type: string
+        - in: path
+          description: Id of resource
+          name: resourceId
+          required: true
+          type: string
+      operationId: listResourcePolicies
+      tags:
+        - Resources
+      security:
+        - googleoauth:
+            - openid
+            - email
+            - profile
+
+  /api/resource/{resourceTypeName}/{resourceId}/policies/{policyName}:
+    put:
+      summary: Overwrite a policy on a resource
+      responses:
+        201:
+          description: Policy successfully created/updated
+          schema:
+            type: array
+            items:
+              type: string
+        403:
+          description: You do not have permission to perform this action on the resource
+        404:
+          description: Resource type does not exist or you are not a member of any policy on the resource
+        500:
+          description: Internal Error
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      parameters:
+        - in: path
+          description: Type of resource
+          name: resourceTypeName
+          required: true
+          type: string
+        - in: path
+          description: Id of resource
+          name: resourceId
+          required: true
+          type: string
+        - in: path
+          description: Name of the policy
+          name: policyName
+          required: true
+          type: string
+        - in: body
+          description: The details of the policy
+          name: policyCreate
+          required: true
+          schema:
+            $ref: '#/definitions/AccessPolicyMembership'
+      operationId: overwritePolicy
+      tags:
+        - Resources
+      security:
+        - googleoauth:
+            - openid
+            - email
+            - profile
 
   /api/resource/{resourceTypeName}/{resourceId}/roles:
     get:
@@ -236,6 +351,37 @@ paths:
 ## DEFINITIONS
 ##########################################################################################
 definitions:
+
+  AccessPolicyResponseEntry:
+    description: ''
+    required:
+      - policyName
+      - policy
+    properties:
+      policyName:
+        type: string
+      policy:
+        $ref: '#/definitions/AccessPolicyMembership'
+
+  AccessPolicyMembership:
+    description: ''
+    required:
+      - memberEmails
+      - actions
+      - roles
+    properties:
+      memberEmails:
+        type: array
+        items:
+          type: string
+      actions:
+        type: array
+        items:
+          type: string
+      roles:
+        type: array
+        items:
+          type: string
 
   Enabled:
     description: ''

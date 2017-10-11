@@ -12,8 +12,10 @@ import org.broadinstitute.dsde.workbench.sam.config._
 import org.broadinstitute.dsde.workbench.sam.directory._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam._
+import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.broadinstitute.dsde.workbench.sam.service.{ResourceService, StatusService, UserService}
 
+import scala.concurrent.Future
 import scala.concurrent.duration._
 
 object Boot extends App with LazyLogging {
@@ -32,6 +34,7 @@ object Boot extends App with LazyLogging {
 
     val accessPolicyDAO = new JndiAccessPolicyDAO(directoryConfig)
     val directoryDAO = new JndiDirectoryDAO(directoryConfig)
+    val schemaDAO = new JndiSchemaDAO(directoryConfig)
     val googleDirectoryDAO = new HttpGoogleDirectoryDAO(googleDirectoryConfig.clientSecrets, googleDirectoryConfig.pemFile, googleDirectoryConfig.appsDomain, googleDirectoryConfig.appName, googleDirectoryConfig.serviceProject, "google")
 
     val resourceService = new ResourceService(accessPolicyDAO, directoryDAO, config.getString("googleDirectory.appsDomain"))
@@ -44,15 +47,15 @@ object Boot extends App with LazyLogging {
     }
 
     for {
-      _ <- accessPolicyDAO.init() recover {
+      _ <- schemaDAO.init() recover {
         case t: Throwable =>
-          logger.error("FATAL - could not init access policy dao", t)
+          logger.error("FATAL - could not init ldap schema", t)
           throw t
       }
 
-      _ <- directoryDAO.init() recover {
+      _ <- Future.traverse(configResourceTypes.map(_.name)) { accessPolicyDAO.createResourceType } recover {
         case t: Throwable =>
-          logger.error("FATAL - could not init directory dao", t)
+          logger.error("FATAL - unable to init resource types", t)
           throw t
       }
 
