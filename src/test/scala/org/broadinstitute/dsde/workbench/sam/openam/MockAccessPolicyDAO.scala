@@ -1,5 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.openam
-import org.broadinstitute.dsde.workbench.model.{WorkbenchException, WorkbenchUserId}
+import akka.http.scaladsl.model.StatusCodes
+import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchException, WorkbenchExceptionWithErrorReport, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.model._
 
 import scala.collection.concurrent.TrieMap
@@ -19,7 +21,10 @@ class MockAccessPolicyDAO extends AccessPolicyDAO {
   }
 
   override def createResource(resource: Resource): Future[Resource] = Future {
-    policies += resource.resourceTypeName -> Map(resource.resourceId -> Set.empty)
+    if (policies.getOrElse(resource.resourceTypeName, Map.empty[ResourceId, Set[AccessPolicy]]).contains(resource.resourceId)) {
+      throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, "A resource of this type and name already exists"))
+    }
+    policies += resource.resourceTypeName -> (policies.getOrElse(resource.resourceTypeName, Map.empty) ++ Map(resource.resourceId -> Set.empty[AccessPolicy]))
     resource
   }
 
