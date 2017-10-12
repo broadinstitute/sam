@@ -63,6 +63,7 @@ class StatusServiceSpec extends FreeSpec with Matchers with TestSupport with Eve
   "StatusService" - {
     cases.foreach { case (name, service, expected) =>
       s"should have correct status for $name" in {
+        implicit val patienceConfig = PatienceConfig(timeout = 1 second)
         eventually {
           assertResult(expected) {
             runAndWait(service.getStatus())
