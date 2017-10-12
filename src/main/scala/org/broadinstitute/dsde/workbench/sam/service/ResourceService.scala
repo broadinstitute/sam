@@ -1,14 +1,12 @@
 package org.broadinstitute.dsde.workbench.sam.service
 
-import java.util.UUID
-
 import akka.http.scaladsl.model.StatusCodes
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model._
+import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.AccessPolicyDAO
-import org.broadinstitute.dsde.workbench.sam._
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -17,86 +15,123 @@ import scala.concurrent.{ExecutionContext, Future}
   */
 class ResourceService(val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: DirectoryDAO, val googleDomain: String)(implicit val executionContext: ExecutionContext) extends LazyLogging {
 
-  def hasPermission(resourceTypeName: ResourceTypeName, resourceName: ResourceName, action: ResourceAction, userInfo: UserInfo): Future[Boolean] = {
-    listUserResourceActions(resourceTypeName, resourceName, userInfo).map { _.contains(action) }
+  def createResourceType(resourceType: ResourceType): Future[ResourceTypeName] = {
+    accessPolicyDAO.createResourceType(resourceType.name)
   }
 
-  def listUserResourceActions(resourceTypeName: ResourceTypeName, resourceName: ResourceName, userInfo: UserInfo): Future[Set[ResourceAction]] = {
-    listResourceAccessPoliciesForUser(resourceTypeName, resourceName, userInfo).map { matchingPolicies =>
-      matchingPolicies.flatMap(_.actions)
-    }
-  }
-
-  def listUserResourceRoles(resourceTypeName: ResourceTypeName, resourceName: ResourceName, userInfo: UserInfo): Future[Set[ResourceRoleName]] = {
-    listResourceAccessPoliciesForUser(resourceTypeName, resourceName, userInfo).map { matchingPolicies =>
-      matchingPolicies.flatMap(_.role)
-    }
-  }
-
-  private def listResourceAccessPoliciesForUser(resourceTypeName: ResourceTypeName, resourceName: ResourceName, userInfo: UserInfo): Future[Set[AccessPolicy]] = {
-    for {
-      policies <- accessPolicyDAO.listAccessPolicies(resourceTypeName, resourceName)
-      groups <- directoryDAO.listUsersGroups(userInfo.userId)
-    } yield {
-      policies.filter { policy =>
-        policy.subject match {
-          case user: WorkbenchUserId => userInfo.userId == user
-          case group: WorkbenchGroupName => groups.contains(group)
+  def createResource(resourceType: ResourceType, resourceId: ResourceId, userInfo: UserInfo): Future[Set[AccessPolicy]] = {
+    accessPolicyDAO.createResource(Resource(resourceType.name, resourceId)) flatMap { resource =>
+      Future.traverse(resourceType.roles) { role =>
+        val roleMembers: Set[WorkbenchSubject] = role.roleName match {
+          case resourceType.ownerRoleName => Set(userInfo.userId)
+          case _ => Set.empty
         }
-      }.toSet
-    }
-  }
 
-  def toGoogleGroupName(groupName: WorkbenchGroupName) = WorkbenchGroupEmail(s"GROUP_${groupName.value}@${googleDomain}")
+        val email = toGoogleGroupEmail(role.roleName.value, Resource(resourceType.name, resourceId))
 
-  def createResource(resourceType: ResourceType, resourceName: ResourceName, userInfo: UserInfo): Future[Set[AccessPolicy]] = {
-    accessPolicyDAO.listAccessPolicies(resourceType.name, resourceName) flatMap { policies =>
-      if (policies.isEmpty) {
-        Future.traverse(resourceType.roles) { role =>
-          val roleMembers: Set[WorkbenchSubject] = role.roleName match {
-            case resourceType.ownerRoleName => Set(userInfo.userId)
-            case _ => Set.empty
-          }
-          val groupName = roleGroupName(resourceType, resourceName, role)
-          for {
-            group <- directoryDAO.createGroup(WorkbenchGroup(groupName, roleMembers, toGoogleGroupName(groupName)))
-            policy <- accessPolicyDAO.createPolicy(AccessPolicy(
-              AccessPolicyId(UUID.randomUUID().toString),
-              role.actions,
-              resourceType.name,
-              resourceName,
-              group.name,
-              Option(role.roleName)
-            ))
-          } yield policy
-        }
-      } else {
-        Future.failed(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"${resourceType.name} $resourceName already exists.")))
+        for {
+          policy <- accessPolicyDAO.createPolicy(AccessPolicy(
+            role.roleName.value,
+            resource,
+            WorkbenchGroup(WorkbenchGroupName(role.roleName.value), roleMembers, email),
+            Set(role.roleName),
+            role.actions
+          ))
+        } yield policy
       }
     }
   }
 
-  private def roleGroupName(resourceType: ResourceType, resourceName: ResourceName, role: ResourceRole) = {
-    WorkbenchGroupName(s"${resourceType.name}-${resourceName.value}-${role.roleName.value}")
+  def deleteResource(resource: Resource, userInfo: UserInfo): Future[Unit] = {
+    requireAction(resource, SamResourceActions.delete, userInfo) {
+      for {
+        policiesToDelete <- accessPolicyDAO.listAccessPolicies(resource)
+        _ <- Future.traverse(policiesToDelete) {accessPolicyDAO.deletePolicy}
+        _ <- accessPolicyDAO.deleteResource(resource)
+      } yield ()
+    }
   }
 
-  /**
-    * Removes all policies and role groups for a resource
-    *
-    * @param resourceType
-    * @param resourceName
-    * @return the number of policies removed
-    */
-  def deleteResource(resourceType: ResourceType, resourceName: ResourceName): Future[Int] = {
-    accessPolicyDAO.listAccessPolicies(resourceType.name, resourceName).flatMap { policies =>
-      Future.traverse(policies) { policy =>
-        accessPolicyDAO.deletePolicy(policy.id) flatMap { _ =>
-          policy.subject match {
-            case group: WorkbenchGroupName if policy.role.isDefined => directoryDAO.deleteGroup(group)
-            case _ => Future.successful(())
-          }
+  def hasPermission(resource: Resource, action: ResourceAction, userInfo: UserInfo): Future[Boolean] = {
+    listUserResourceActions(resource, userInfo).map { _.contains(action) }
+  }
+
+  def listUserResourceActions(resource: Resource, userInfo: UserInfo): Future[Set[ResourceAction]] = {
+    listResourceAccessPoliciesForUser(resource, userInfo).map { matchingPolicies =>
+      matchingPolicies.flatMap(_.actions)
+    }
+  }
+
+  def listUserResourceRoles(resource: Resource, userInfo: UserInfo): Future[Set[ResourceRoleName]] = {
+    listResourceAccessPoliciesForUser(resource, userInfo).map { matchingPolicies =>
+      matchingPolicies.flatMap(_.roles)
+    }
+  }
+
+  private def listResourceAccessPoliciesForUser(resource: Resource, userInfo: UserInfo): Future[Set[AccessPolicy]] = {
+    accessPolicyDAO.listAccessPoliciesForUser(resource, userInfo.userId)
+  }
+
+  //Overwrites an existing policy (keyed by resourceType/resourceId/policyName), saves a new one if it doesn't exist yet
+  def overwritePolicy(resourceType: ResourceType, policyName: String, resource: Resource, policyMembership: AccessPolicyMembership, userInfo: UserInfo): Future[AccessPolicy] = {
+    requireAction(resource, SamResourceActions.alterPolicies, userInfo) {
+      if(!policyMembership.actions.subsetOf(resourceType.actions))
+        throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"You have specified an invalid action for resource type ${resourceType.name}. Valid actions are: ${resourceType.actions.mkString(", ")}"))
+      if(!policyMembership.roles.subsetOf(resourceType.roles.map(_.roleName)))
+        throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"You have specified an invalid role for resource type ${resourceType.name}. Valid roles are: ${resourceType.roles.map(_.roleName).mkString(", ")}"))
+
+      val subjectsFromEmails = Future.traverse(policyMembership.memberEmails) {
+        directoryDAO.loadSubjectFromEmail
+      }.map(_.flatten)
+
+      val email = toGoogleGroupEmail(policyName, resource)
+
+      val actionsByRole = resourceType.roles.map(r => r.roleName -> r.actions).toMap
+      val impliedActionsFromRoles = policyMembership.roles.flatMap(actionsByRole)
+
+      subjectsFromEmails.flatMap { members =>
+        val newPolicy = AccessPolicy(policyName, resource, WorkbenchGroup(WorkbenchGroupName(policyName), members, email), policyMembership.roles, policyMembership.actions ++ impliedActionsFromRoles)
+
+        accessPolicyDAO.loadPolicy(policyName, resource).flatMap {
+          case None => accessPolicyDAO.createPolicy(newPolicy)
+          case Some(_) => accessPolicyDAO.overwritePolicy(newPolicy)
         }
-      }.map(_.size)
+      }
+    }
+  }
+
+  private def loadAccessPolicyWithEmails(policy: AccessPolicy): Future[AccessPolicyResponseEntry] = {
+    val users = policy.members.members.collect { case userId: WorkbenchUserId => userId }
+    val groups = policy.members.members.collect { case groupName: WorkbenchGroupName => groupName }
+
+    for {
+      userEmails <- directoryDAO.loadUsers(users)
+      groupEmails <- directoryDAO.loadGroups(groups)
+    } yield AccessPolicyResponseEntry(policy.name, AccessPolicyMembership(userEmails.toSet[WorkbenchUser].map(_.email.value) ++ groupEmails.map(_.email.value), policy.actions, policy.roles))
+  }
+
+  def listResourcePolicies(resource: Resource, userInfo: UserInfo): Future[Set[AccessPolicyResponseEntry]] = {
+    requireAction(resource, SamResourceActions.readPolicies, userInfo) {
+      accessPolicyDAO.listAccessPolicies(resource).flatMap { policies =>
+        //could improve this by making a few changes to listAccessPolicies to return emails. todo for later in the PR process!
+        Future.sequence(policies.map(loadAccessPolicyWithEmails))
+      }
+    }
+  }
+
+  def toGoogleGroupEmail(policyName: String, resource: Resource) = WorkbenchGroupEmail(s"policy-${resource.resourceTypeName.value}-${resource.resourceId.value}-$policyName@$googleDomain") //TODO: Make sure this is a good/unique naming convention and keep Google length limits in mind
+  def toGoogleGroupName(groupName: WorkbenchGroupName) = WorkbenchGroupEmail(s"GROUP_${groupName.value}@$googleDomain")
+
+  //todo: use this for google group sync
+  private def roleGroupName(resourceType: ResourceType, resourceId: ResourceId, role: ResourceRole) = {
+    WorkbenchGroupName(s"${resourceType.name}-${resourceId.value}-${role.roleName.value}")
+  }
+
+  private def requireAction[T](resource: Resource, action: ResourceAction, userInfo: UserInfo)(op: => Future[T]): Future[T] = {
+    listUserResourceActions(resource, userInfo) flatMap { actions =>
+      if(actions.contains(action)) op
+      else if (actions.isEmpty) Future.failed(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Resource ${resource.resourceTypeName.value}/${resource.resourceId.value} not found")))
+      else Future.failed(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden, s"You may not perform ${action.toString.toUpperCase} on ${resource.resourceTypeName.value}/${resource.resourceId.value}")))
     }
   }
 }

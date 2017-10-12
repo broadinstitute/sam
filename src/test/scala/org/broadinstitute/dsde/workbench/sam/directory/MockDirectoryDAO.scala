@@ -15,17 +15,24 @@ class MockDirectoryDAO extends DirectoryDAO {
   private val groups: mutable.Map[WorkbenchGroupName, WorkbenchGroup] = new TrieMap()
   private val users: mutable.Map[WorkbenchUserId, WorkbenchUser] = new TrieMap()
   private val enabledUsers: mutable.Map[WorkbenchUserId, Unit] = new TrieMap()
+  private val usersWithEmails: mutable.Map[WorkbenchUserEmail, WorkbenchUserId] = new TrieMap()
+  private val groupsWithEmails: mutable.Map[WorkbenchGroupEmail, WorkbenchGroupName] = new TrieMap()
 
   override def createGroup(group: WorkbenchGroup): Future[WorkbenchGroup] = Future {
     if (groups.keySet.contains(group.name)) {
       throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"group ${group.name} already exists"))
     }
     groups += group.name -> group
+    groupsWithEmails += group.email -> group.name
     group
   }
 
   override def loadGroup(groupName: WorkbenchGroupName): Future[Option[WorkbenchGroup]] = Future {
     groups.get(groupName)
+  }
+
+  override def loadGroups(groupNames: Set[WorkbenchGroupName]): Future[Seq[WorkbenchGroup]] = Future {
+    groups.filterKeys(groupNames).values.toSeq
   }
 
   override def deleteGroup(groupName: WorkbenchGroupName): Future[Unit] = Future {
@@ -44,16 +51,29 @@ class MockDirectoryDAO extends DirectoryDAO {
     groups += groupName -> updatedGroup
   }
 
+  override def isGroupMember(groupName: WorkbenchGroupName, member: WorkbenchSubject): Future[Boolean] = Future {
+    groups.getOrElse(groupName, WorkbenchGroup(null, Set.empty, WorkbenchGroupEmail("g1@example.com"))).members.contains(member)
+  }
+
+  override def loadSubjectFromEmail(email: String): Future[Option[WorkbenchSubject]] = Future {
+    Option(usersWithEmails.getOrElse(WorkbenchUserEmail(email), groupsWithEmails.getOrElse(WorkbenchGroupEmail(email), null)))
+  }
+
   override def createUser(user: WorkbenchUser): Future[WorkbenchUser] = Future {
     if (users.keySet.contains(user.id)) {
       throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"user ${user.id} already exists"))
     }
     users += user.id -> user
+    usersWithEmails += user.email -> user.id
     user
   }
 
   override def loadUser(userId: WorkbenchUserId): Future[Option[WorkbenchUser]] = Future {
     users.get(userId)
+  }
+
+  override def loadUsers(userIds: Set[WorkbenchUserId]): Future[Seq[WorkbenchUser]] = Future {
+    users.filterKeys(userIds).values.toSeq
   }
 
   override def deleteUser(userId: WorkbenchUserId): Future[Unit] = Future {
@@ -79,10 +99,6 @@ class MockDirectoryDAO extends DirectoryDAO {
 
   override def listFlattenedGroupUsers(groupName: WorkbenchGroupName): Future[Set[WorkbenchUserId]] = Future {
     listGroupUsers(groupName, Set.empty)
-  }
-
-  override def isGroupMember(groupName: WorkbenchGroupName, member: WorkbenchSubject): Future[Boolean] = Future {
-    groups.getOrElse(groupName, WorkbenchGroup(null, Set.empty, WorkbenchGroupEmail("g1@example.com"))).members.contains(member)
   }
 
   private def listGroupUsers(groupName: WorkbenchGroupName, visitedGroups: Set[WorkbenchGroupName]): Set[WorkbenchUserId] = {

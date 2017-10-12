@@ -8,6 +8,7 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.scalatest.{BeforeAndAfterAll, FlatSpec, Matchers}
 
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -18,9 +19,10 @@ import scala.concurrent.ExecutionContext.Implicits.global
 class JndiDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with BeforeAndAfterAll {
   val directoryConfig = ConfigFactory.load().as[DirectoryConfig]("directory")
   val dao = new JndiDirectoryDAO(directoryConfig)
+  val schemaDao = new JndiSchemaDAO(directoryConfig)
 
   override protected def beforeAll(): Unit = {
-    runAndWait(dao.init())
+    runAndWait(schemaDao.init())
   }
 
   "JndiGroupDirectoryDAO" should "create, read, delete groups" in {

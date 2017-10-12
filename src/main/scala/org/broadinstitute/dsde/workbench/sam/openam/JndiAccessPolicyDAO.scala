@@ -1,12 +1,15 @@
 package org.broadinstitute.dsde.workbench.sam.openam
 
-import javax.naming.NameAlreadyBoundException
+import javax.naming.{NameAlreadyBoundException, NameNotFoundException}
 import javax.naming.directory._
 
+import akka.http.scaladsl.model.StatusCodes
+import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
-import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryDAO, DirectorySubjectNameSupport}
+import org.broadinstitute.dsde.workbench.sam.directory.DirectorySubjectNameSupport
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.util.{BaseDirContext, JndiSupport}
+import org.broadinstitute.dsde.workbench.sam._
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.collection.JavaConverters._
@@ -18,144 +21,234 @@ import scala.util.Try
 class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implicit executionContext: ExecutionContext) extends AccessPolicyDAO with DirectorySubjectNameSupport with JndiSupport {
 
   private object Attr {
-    val resource = "resource"
+    val resourceId = "resourceId"
     val resourceType = "resourceType"
     val subject = "subject"
     val action = "action"
-    val policyId = "policyId"
     val role = "role"
+    val mail = "mail"
+    val ou = "ou"
+    val cn = "cn"
+    val policy = "policy"
+    val uniqueMember = "uniqueMember"
   }
 
-  def init(): Future[Unit] = {
-    for {
-      _ <- removePolicySchema()
-      _ <- createPolicySchema()
-      _ <- createPoliciesOrgUnit()
-    } yield ()
-  }
+  //
+  // RESOURCE TYPES
+  //
 
-  def removePolicySchema(): Future[Unit] = withContext { ctx =>
-    val schema = ctx.getSchema("")
-
-    Try { schema.destroySubcontext("ClassDefinition/policy") }
-    Try { schema.destroySubcontext("AttributeDefinition/" + Attr.resourceType) }
-    Try { schema.destroySubcontext("AttributeDefinition/" + Attr.resource) }
-    Try { schema.destroySubcontext("AttributeDefinition/" + Attr.subject) }
-    Try { schema.destroySubcontext("AttributeDefinition/" + Attr.action) }
-    Try { schema.destroySubcontext("AttributeDefinition/" + Attr.policyId) }
-    Try { schema.destroySubcontext("AttributeDefinition/" + Attr.role) }
-  }
-
-  def createPolicySchema(): Future[Unit] = withContext { ctx =>
-    val schema = ctx.getSchema("")
-
-    createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.1", Attr.resourceType, "type of a resource", true)
-    createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.2", Attr.resource, "name of a resource", true)
-    createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.3", Attr.subject, "subject applicable to a policy", true)
-    createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.4", Attr.action, "actions applicable to a policy", false)
-    createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.5", Attr.policyId, "id of a policy", true)
-    createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.6", Attr.role, "role for the policy if it is for a role", true)
-
-    val attrs = new BasicAttributes(true) // Ignore case
-    attrs.put("NUMERICOID", "1.3.6.1.4.1.18060.0.4.3.2.0")
-    attrs.put("NAME", "policy")
-    attrs.put("DESC", "list actions for a subject on a resource")
-    attrs.put("SUP", "top")
-    attrs.put("STRUCTURAL", "true")
-
-    val must = new BasicAttribute("MUST")
-    must.add("objectclass")
-    must.add(Attr.resourceType)
-    must.add(Attr.resource)
-    must.add(Attr.subject)
-    must.add(Attr.policyId)
-    attrs.put(must)
-
-    val may = new BasicAttribute("MAY")
-    may.add(Attr.action)
-    may.add(Attr.role)
-    attrs.put(may)
-
-
-    // Add the new schema object for "fooObjectClass"
-    schema.createSubcontext("ClassDefinition/policy", attrs)
-  }
-
-  def createPoliciesOrgUnit(): Future[Unit] = withContext { ctx =>
+  override def createResourceType(resourceTypeName: ResourceTypeName): Future[ResourceTypeName] = withContext { ctx =>
     try {
-      val policiesContext = new BaseDirContext {
+      val resourceContext = new BaseDirContext {
         override def getAttributes(name: String): Attributes = {
-          val myAttrs = new BasicAttributes(true)  // Case ignore
+          val myAttrs = new BasicAttributes(true) // Case ignore
 
           val oc = new BasicAttribute("objectclass")
-          Seq("top", "organizationalUnit").foreach(oc.add)
+          Seq("top", "resourceType").foreach(oc.add)
           myAttrs.put(oc)
+          myAttrs.put(Attr.ou, "resources")
 
           myAttrs
         }
       }
 
-      ctx.bind(policiesOu, policiesContext)
-
+      ctx.bind(resourceTypeDn(resourceTypeName), resourceContext)
+      resourceTypeName
     } catch {
-      case e: NameAlreadyBoundException => // ignore
+      case _: NameAlreadyBoundException => resourceTypeName //resource type has already been created, this is OK
     }
   }
+
+  //
+  // RESOURCES
+  //
+
+  override def createResource(resource: Resource): Future[Resource] = withContext { ctx =>
+    try {
+      val resourceContext = new BaseDirContext {
+        override def getAttributes(name: String): Attributes = {
+          val myAttrs = new BasicAttributes(true) // Case ignore
+
+          val oc = new BasicAttribute("objectclass")
+          Seq("top", "resource").foreach(oc.add)
+          myAttrs.put(oc)
+          myAttrs.put(Attr.resourceType, resource.resourceTypeName.value)
+
+          myAttrs
+        }
+      }
+
+      ctx.bind(resourceDn(resource), resourceContext)
+      resource
+    } catch {
+      case _: NameAlreadyBoundException => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, "A resource of this type and name already exists"))
+    }
+  }
+
+  override def deleteResource(resource: Resource): Future[Unit] = withContext { ctx =>
+    ctx.unbind(resourceDn(resource))
+  }
+
+  //
+  // POLICIES
+  //
 
   override def createPolicy(policy: AccessPolicy): Future[AccessPolicy] = withContext { ctx =>
-    val policyContext = new BaseDirContext {
-      override def getAttributes(name: String): Attributes = {
-        val myAttrs = new BasicAttributes(true)  // Case ignore
+    try {
+      val policyContext = new BaseDirContext {
+        override def getAttributes(name: String): Attributes = {
+          val myAttrs = new BasicAttributes(true) // Case ignore
 
-        val oc = new BasicAttribute("objectclass")
-        Seq("top", "policy").foreach(oc.add)
-        myAttrs.put(oc)
+          val oc = new BasicAttribute("objectclass")
+          Seq("top", "policy").foreach(oc.add)
+          myAttrs.put(oc)
+          myAttrs.put(Attr.cn, policy.name)
+          myAttrs.put(Attr.mail, policy.members.email.value) //TODO make sure the google group is created
 
-        if (policy.actions.nonEmpty) {
-          val actions = new BasicAttribute(Attr.action)
-          policy.actions.foreach(action => actions.add(action.value))
-          myAttrs.put(actions)
+          if (policy.actions.nonEmpty) {
+            val actions = new BasicAttribute(Attr.action)
+            policy.actions.foreach(action => actions.add(action.value))
+            myAttrs.put(actions)
+          }
+
+          if (policy.roles.nonEmpty) {
+            val roles = new BasicAttribute(Attr.role)
+            policy.roles.foreach(role => roles.add(role.value))
+            myAttrs.put(roles)
+          }
+
+          if(policy.members.members.nonEmpty) {
+            val members = new BasicAttribute(Attr.uniqueMember)
+
+            val memberDns = policy.members.members.map {
+              case subject: WorkbenchGroupName => groupDn(subject)
+              case subject: WorkbenchUserId => userDn(subject)
+            }
+
+            memberDns.foreach(members.add)
+
+            myAttrs.put(members)
+          }
+
+          myAttrs.put(Attr.resourceType, policy.resource.resourceTypeName.value)
+          myAttrs.put(Attr.resourceId, policy.resource.resourceId.value)
+          myAttrs
         }
-
-        myAttrs.put(Attr.resourceType, policy.resourceType.value)
-        myAttrs.put(Attr.resource, policy.resource.value)
-        myAttrs.put(Attr.subject, subjectDn(policy.subject))
-        myAttrs.put(Attr.policyId, policy.id.value)
-        policy.role.foreach(role => myAttrs.put(Attr.role, role.value))
-
-        myAttrs
       }
-    }
 
-    ctx.bind(policyDn(policy), policyContext)
-    policy
+      ctx.bind(policyDn(policy), policyContext)
+      policy
+    } catch {
+      case _: NameAlreadyBoundException => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, "A policy by this name already exists for this resource"))
+    }
   }
 
-  private val policiesOu = s"ou=policies,${directoryConfig.baseDn}"
-  private def policyDn(policy: AccessPolicy): String = policyDn(policy.id)
-  private def policyDn(id: AccessPolicyId): String = s"${Attr.policyId}=${id.value},$policiesOu"
+  override def deletePolicy(policy: AccessPolicy): Future[Unit] = withContext { ctx =>
+    ctx.unbind(policyDn(policy))
+  }
 
-  override def listAccessPolicies(resourceType: ResourceTypeName, resourceName: ResourceName): Future[TraversableOnce[AccessPolicy]] = withContext { ctx =>
+  override def overwritePolicy(newPolicy: AccessPolicy): Future[AccessPolicy] = withContext { ctx =>
+    val myAttrs = new BasicAttributes(true)
+
+    val users = newPolicy.members.members.collect { case userId: WorkbenchUserId => userId }
+    val subGroups = newPolicy.members.members.collect { case groupName: WorkbenchGroupName => groupName }
+
+    addMemberAttributes(users, subGroups, myAttrs) { _.put(new BasicAttribute(Attr.uniqueMember)) } //add attribute with no value when no member present
+
+    if (newPolicy.actions.nonEmpty) {
+      val actions = new BasicAttribute(Attr.action)
+      newPolicy.actions.foreach(action => actions.add(action.value))
+      myAttrs.put(actions)
+    }
+
+    if (newPolicy.roles.nonEmpty) {
+      val roles = new BasicAttribute(Attr.role)
+      newPolicy.roles.foreach(role => roles.add(role.value))
+      myAttrs.put(roles)
+    }
+
+    ctx.modifyAttributes(policyDn(newPolicy), DirContext.REPLACE_ATTRIBUTE, myAttrs)
+    newPolicy
+  }
+
+  override def listAccessPolicies(resource: Resource): Future[Set[AccessPolicy]] = {
     val searchAttrs = new BasicAttributes(true)  // Case ignore
-    searchAttrs.put(Attr.resourceType, resourceType.value)
-    searchAttrs.put(Attr.resource, resourceName.value)
 
-    val policies = ctx.search(policiesOu, searchAttrs).asScala.map { searchResult =>
-      AccessPolicy(
-        AccessPolicyId(searchResult.getAttributes.get(Attr.policyId).get().toString),
-        searchResult.getAttributes.get(Attr.action).getAll.asScala.map(a => ResourceAction(a.toString)).toSet,
-        ResourceTypeName(searchResult.getAttributes.get(Attr.resourceType).get().toString),
-        ResourceName(searchResult.getAttributes.get(Attr.resource).get().toString),
-        dnToSubject(searchResult.getAttributes.get(Attr.subject).get().toString),
-        Option(searchResult.getAttributes.get(Attr.role)).map(attr => ResourceRoleName(attr.get().toString))
-      )
-    }
-
-    policies
+    listAccessPolicies(resource, searchAttrs)
   }
 
-  override def deletePolicy(policyId: AccessPolicyId): Future[Unit] = withContext { ctx =>
-    ctx.unbind(policyDn(policyId))
+  override def listAccessPoliciesForUser(resource: Resource, user: WorkbenchUserId): Future[Set[AccessPolicy]] = {
+    val searchAttrs = new BasicAttributes(true)  // Case ignore
+    searchAttrs.put(Attr.uniqueMember, subjectDn(user))
+
+    listAccessPolicies(resource, searchAttrs)
+  }
+
+  override def loadPolicy(policyName: String, resource: Resource): Future[Option[AccessPolicy]] = withContext { ctx =>
+    Try {
+      val attributes = ctx.getAttributes(policyDn(policyName, resource))
+      Option(unmarshalAccessPolicy(attributes))
+    }.recover {
+      case e: NameNotFoundException => None
+    }.get
+  }
+
+  //
+  // SUPPORT
+  //
+
+  private val resourcesOu = s"ou=resources,${directoryConfig.baseDn}"
+  private def resourceTypeDn(resourceTypeName: ResourceTypeName) = s"${Attr.resourceType}=${resourceTypeName.value},$resourcesOu"
+  private def resourceDn(resource: Resource) = s"${Attr.resourceId}=${resource.resourceId.value},${resourceTypeDn(resource.resourceTypeName)}"
+  private def policyDn(policy: AccessPolicy): String = s"${Attr.policy}=${policy.name},${resourceDn(policy.resource)}"
+  private def policyDn(policyName: String, resource: Resource): String = s"${Attr.policy}=${policyName},${resourceDn(resource)}"
+
+  private def getAttributes[T](attributes: Attributes, key: String): Option[TraversableOnce[T]] = {
+    Option(attributes.get(key)).map(_.getAll.asScala.map(_.asInstanceOf[T]))
+  }
+
+  private def unmarshalAccessPolicy(attributes: Attributes): AccessPolicy = {
+    val policyName = attributes.get(Attr.policy).get().toString
+    val resourceTypeName = ResourceTypeName(attributes.get(Attr.resourceType).get().toString)
+    val resourceId = ResourceId(attributes.get(Attr.resourceId).get().toString)
+    val resource = Resource(resourceTypeName, resourceId)
+    val members = getAttributes[String](attributes, Attr.uniqueMember).getOrElse(Set.empty).toSet.map(dnToSubject)
+    val roles = getAttributes[String](attributes, Attr.role).getOrElse(Set.empty).toSet.map(r => ResourceRoleName(r))
+    val actions = getAttributes[String](attributes, Attr.action).getOrElse(Set.empty).toSet.map(a => ResourceAction(a))
+
+    val email = WorkbenchGroupEmail(attributes.get(Attr.mail).get().toString)
+    val name = WorkbenchGroupName(policyName) //TODO
+
+    val group = WorkbenchGroup(name, members, email)
+
+    AccessPolicy(policyName, resource, group, roles, actions)
+  }
+
+  /**
+    * @param emptyValueFn a function called when no members are present
+    ** /
+    */
+  private def addMemberAttributes(users: Set[WorkbenchUserId], subGroups: Set[WorkbenchGroupName], myAttrs: BasicAttributes)(emptyValueFn: BasicAttributes => Unit): Any = {
+    val memberDns = users.map(user => userDn(user)) ++ subGroups.map(subGroup => groupDn(subGroup))
+    if (memberDns.nonEmpty) {
+      val members = new BasicAttribute(Attr.uniqueMember)
+      memberDns.foreach(subject => members.add(subject))
+      myAttrs.put(members)
+    } else {
+      emptyValueFn(myAttrs)
+    }
+  }
+
+  private def listAccessPolicies(resource: Resource, searchAttrs: BasicAttributes): Future[Set[AccessPolicy]] = withContext { ctx =>
+    val policies = try {
+      ctx.search(resourceDn(resource), searchAttrs).asScala.map { searchResult =>
+        unmarshalAccessPolicy(searchResult.getAttributes)
+      }
+    } catch {
+      case _: NameNotFoundException => Set.empty
+    }
+
+    policies.toSet
   }
 
   private def withContext[T](op: InitialDirContext => T): Future[T] = withContext(directoryConfig.directoryUrl, directoryConfig.user, directoryConfig.password)(op)
