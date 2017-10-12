@@ -43,13 +43,11 @@ class ResourceService(val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: Di
   }
 
   def deleteResource(resource: Resource, userInfo: UserInfo): Future[Unit] = {
-    requireAction(resource, SamResourceActions.delete, userInfo) {
-      for {
-        policiesToDelete <- accessPolicyDAO.listAccessPolicies(resource)
-        _ <- Future.traverse(policiesToDelete) {accessPolicyDAO.deletePolicy}
-        _ <- accessPolicyDAO.deleteResource(resource)
-      } yield ()
-    }
+    for {
+      policiesToDelete <- accessPolicyDAO.listAccessPolicies(resource)
+      _ <- Future.traverse(policiesToDelete) {accessPolicyDAO.deletePolicy}
+      _ <- accessPolicyDAO.deleteResource(resource)
+    } yield ()
   }
 
   def hasPermission(resource: Resource, action: ResourceAction, userInfo: UserInfo): Future[Boolean] = {
@@ -74,28 +72,26 @@ class ResourceService(val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: Di
 
   //Overwrites an existing policy (keyed by resourceType/resourceId/policyName), saves a new one if it doesn't exist yet
   def overwritePolicy(resourceType: ResourceType, policyName: String, resource: Resource, policyMembership: AccessPolicyMembership, userInfo: UserInfo): Future[AccessPolicy] = {
-    requireAction(resource, SamResourceActions.alterPolicies, userInfo) {
-      if(!policyMembership.actions.subsetOf(resourceType.actions))
-        throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"You have specified an invalid action for resource type ${resourceType.name}. Valid actions are: ${resourceType.actions.mkString(", ")}"))
-      if(!policyMembership.roles.subsetOf(resourceType.roles.map(_.roleName)))
-        throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"You have specified an invalid role for resource type ${resourceType.name}. Valid roles are: ${resourceType.roles.map(_.roleName).mkString(", ")}"))
+    if(!policyMembership.actions.subsetOf(resourceType.actions))
+      throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"You have specified an invalid action for resource type ${resourceType.name}. Valid actions are: ${resourceType.actions.mkString(", ")}"))
+    if(!policyMembership.roles.subsetOf(resourceType.roles.map(_.roleName)))
+      throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"You have specified an invalid role for resource type ${resourceType.name}. Valid roles are: ${resourceType.roles.map(_.roleName).mkString(", ")}"))
 
-      val subjectsFromEmails = Future.traverse(policyMembership.memberEmails) {
-        directoryDAO.loadSubjectFromEmail
-      }.map(_.flatten)
+    val subjectsFromEmails = Future.traverse(policyMembership.memberEmails) {
+      directoryDAO.loadSubjectFromEmail
+    }.map(_.flatten)
 
-      val email = toGoogleGroupEmail(policyName, resource)
+    val email = toGoogleGroupEmail(policyName, resource)
 
-      val actionsByRole = resourceType.roles.map(r => r.roleName -> r.actions).toMap
-      val impliedActionsFromRoles = policyMembership.roles.flatMap(actionsByRole)
+    val actionsByRole = resourceType.roles.map(r => r.roleName -> r.actions).toMap
+    val impliedActionsFromRoles = policyMembership.roles.flatMap(actionsByRole)
 
-      subjectsFromEmails.flatMap { members =>
-        val newPolicy = AccessPolicy(policyName, resource, WorkbenchGroup(WorkbenchGroupName(policyName), members, email), policyMembership.roles, policyMembership.actions ++ impliedActionsFromRoles)
+    subjectsFromEmails.flatMap { members =>
+      val newPolicy = AccessPolicy(policyName, resource, WorkbenchGroup(WorkbenchGroupName(policyName), members, email), policyMembership.roles, policyMembership.actions ++ impliedActionsFromRoles)
 
-        accessPolicyDAO.loadPolicy(policyName, resource).flatMap {
-          case None => accessPolicyDAO.createPolicy(newPolicy)
-          case Some(_) => accessPolicyDAO.overwritePolicy(newPolicy)
-        }
+      accessPolicyDAO.loadPolicy(policyName, resource).flatMap {
+        case None => accessPolicyDAO.createPolicy(newPolicy)
+        case Some(_) => accessPolicyDAO.overwritePolicy(newPolicy)
       }
     }
   }
@@ -111,11 +107,9 @@ class ResourceService(val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: Di
   }
 
   def listResourcePolicies(resource: Resource, userInfo: UserInfo): Future[Set[AccessPolicyResponseEntry]] = {
-    requireAction(resource, SamResourceActions.readPolicies, userInfo) {
-      accessPolicyDAO.listAccessPolicies(resource).flatMap { policies =>
-        //could improve this by making a few changes to listAccessPolicies to return emails. todo for later in the PR process!
-        Future.sequence(policies.map(loadAccessPolicyWithEmails))
-      }
+    accessPolicyDAO.listAccessPolicies(resource).flatMap { policies =>
+      //could improve this by making a few changes to listAccessPolicies to return emails. todo for later in the PR process!
+      Future.sequence(policies.map(loadAccessPolicyWithEmails))
     }
   }
 
@@ -125,13 +119,5 @@ class ResourceService(val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: Di
   //todo: use this for google group sync
   private def roleGroupName(resourceType: ResourceType, resourceId: ResourceId, role: ResourceRole) = {
     WorkbenchGroupName(s"${resourceType.name}-${resourceId.value}-${role.roleName.value}")
-  }
-
-  private def requireAction[T](resource: Resource, action: ResourceAction, userInfo: UserInfo)(op: => Future[T]): Future[T] = {
-    listUserResourceActions(resource, userInfo) flatMap { actions =>
-      if(actions.contains(action)) op
-      else if (actions.isEmpty) Future.failed(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Resource ${resource.resourceTypeName.value}/${resource.resourceId.value} not found")))
-      else Future.failed(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden, s"You may not perform ${action.toString.toUpperCase} on ${resource.resourceTypeName.value}/${resource.resourceId.value}")))
-    }
   }
 }

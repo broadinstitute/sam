@@ -231,28 +231,6 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     runAndWait(service.deleteResource(resource, dummyUserInfo))
   }
 
-  it should "fail when user doesn't have alterpolicies permission" in {
-    val resourceTypeWithNoAlterPolicies = defaultResourceType.copy(roles = Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("delete")))))
-
-    val resource = Resource(resourceTypeWithNoAlterPolicies.name, ResourceId("my-resource"))
-
-    runAndWait(service.createResourceType(resourceTypeWithNoAlterPolicies))
-    runAndWait(service.createResource(resourceTypeWithNoAlterPolicies, resource.resourceId, dummyUserInfo))
-
-    val group = WorkbenchGroup(WorkbenchGroupName("foo"), Set.empty, toEmail(resource.resourceTypeName.value, resource.resourceId.value, "foo"))
-    val newPolicy = AccessPolicy("foo", resource, group, Set(ResourceRoleName("delete")), Set.empty)
-
-    intercept[WorkbenchExceptionWithErrorReport] {
-      runAndWait(service.overwritePolicy(resourceTypeWithNoAlterPolicies, newPolicy.name, newPolicy.resource, AccessPolicyMembership(Set.empty, Set.empty, Set.empty), dummyUserInfo))
-    }
-
-    val policies = runAndWait(policyDAO.listAccessPolicies(resource))
-
-    assert(!policies.contains(newPolicy))
-
-    runAndWait(service.deleteResource(resource, dummyUserInfo))
-  }
-
   "deleteResource" should "delete the resource" in {
     val resource = Resource(defaultResourceType.name, ResourceId("my-resource"))
 
@@ -265,22 +243,4 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
 
     assert(runAndWait(policyDAO.listAccessPolicies(resource)).isEmpty)
   }
-
-  it should "fail when the user doesn't have delete permission" in {
-    val resourceTypeWithNoDelete = defaultResourceType.copy(roles = Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("alterpolicies")))))
-
-    val resource = Resource(resourceTypeWithNoDelete.name, ResourceId("my-resource"))
-
-    runAndWait(service.createResourceType(resourceTypeWithNoDelete))
-    runAndWait(service.createResource(resourceTypeWithNoDelete, resource.resourceId, dummyUserInfo))
-
-    assert(runAndWait(policyDAO.listAccessPolicies(resource)).nonEmpty)
-
-    intercept[WorkbenchExceptionWithErrorReport] {
-      runAndWait(service.deleteResource(resource, dummyUserInfo))
-    }
-
-    assert(runAndWait(policyDAO.listAccessPolicies(resource)).nonEmpty)
-  }
-
 }
