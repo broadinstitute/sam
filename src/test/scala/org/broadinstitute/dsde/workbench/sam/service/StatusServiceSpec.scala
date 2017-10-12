@@ -12,6 +12,7 @@ import org.broadinstitute.dsde.workbench.util.health.Subsystems.{GoogleGroups, O
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
+import scala.concurrent.duration._
 import org.scalatest.concurrent.Eventually
 
 class StatusServiceSpec extends FreeSpec with Matchers with TestSupport with Eventually {
@@ -19,7 +20,7 @@ class StatusServiceSpec extends FreeSpec with Matchers with TestSupport with Eve
   val allUsersEmail = WorkbenchGroupEmail("allusers@example.com")
 
   def noOpenDJGroups = {
-    new StatusService(new MockDirectoryDAO, new MockGoogleDirectoryDAO)
+    new StatusService(new MockDirectoryDAO, new MockGoogleDirectoryDAO, pollInterval = 10 milliseconds)
   }
 
   def noGoogleGroup = {
@@ -50,15 +51,13 @@ class StatusServiceSpec extends FreeSpec with Matchers with TestSupport with Eve
   }
 
   val cases = {
-    val x = Seq(
+    Seq(
       ("ok", ok, StatusCheckResponse(true, Map(OpenDJ -> SubsystemStatus(true, None), GoogleGroups -> SubsystemStatus(true, None)))),
       ("noOpenDJGroups", noOpenDJGroups, StatusCheckResponse(false, Map(OpenDJ -> SubsystemStatus(false, Option(List(s"could not find group ${UserService.allUsersGroupName} in opendj"))), GoogleGroups -> SubsystemStatus(false, Option(List("Unknown status")))))),
       ("noGoogleGroup", noGoogleGroup, StatusCheckResponse(false, Map(OpenDJ -> SubsystemStatus(true, None), GoogleGroups -> SubsystemStatus(false, Option(List(s"could not find group $allUsersEmail in google")))))),
       ("failingGoogle", failingGoogle, StatusCheckResponse(false, Map(OpenDJ -> SubsystemStatus(true, None), GoogleGroups -> SubsystemStatus(false, Option(List(s"bad google")))))),
       ("failingOpenDJ", failingOpenDJ, StatusCheckResponse(false, Map(OpenDJ -> SubsystemStatus(false, Option(List("bad opendj"))), GoogleGroups -> SubsystemStatus(false, Option(List(s"Unknown status"))))))
     )
-    Thread.sleep(500) // give monitor a chance to run
-    x
   }
 
   "StatusService" - {
