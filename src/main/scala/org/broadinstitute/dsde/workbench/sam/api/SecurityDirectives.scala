@@ -11,7 +11,7 @@ import org.broadinstitute.dsde.workbench.sam.service.ResourceService
 trait SecurityDirectives {
   val resourceService: ResourceService
 
-  def requireAction[T](resource: Resource, action: ResourceAction, userInfo: UserInfo): Directive0 = {
+  def requireAction(resource: Resource, action: ResourceAction, userInfo: UserInfo): Directive0 = {
     Directives.mapInnerRoute { innerRoute =>
       onSuccess(resourceService.listUserResourceActions(resource, userInfo)) { actions =>
         if(actions.contains(action)) innerRoute
