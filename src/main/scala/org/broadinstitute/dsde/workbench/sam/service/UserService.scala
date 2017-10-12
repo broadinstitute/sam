@@ -112,7 +112,7 @@ class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Google
           directoryDAO.removePetServiceAccountFromUser(user.id),
           googleIamDAO.removeServiceAccount(petServiceAccountConfig.googleProject, petSa))
         ).failed.foreach { e =>
-          logger.warn("Error occurred cleaning up pet service account", e)
+          logger.warn(s"Error occurred cleaning up pet service account [$petSa] [$petSaDisplayName]", e)
         }
       }
     }
