@@ -1,7 +1,5 @@
 package org.broadinstitute.dsde.workbench.sam.service
 
-import java.nio.ByteBuffer
-import java.util.UUID
 import javax.naming.NameNotFoundException
 
 import akka.http.scaladsl.model.StatusCodes
@@ -14,6 +12,7 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.config.PetServiceAccountConfig
 
 import scala.concurrent.{ExecutionContext, Future}
+import scala.util.Failure
 
 /**
   * Created by dvoet on 7/14/17.
@@ -89,9 +88,10 @@ class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Google
     } yield deleteResult
   }
 
-  def createUserPetServiceAccount(user: WorkbenchUser): Future[WorkbenchUserPetServiceAccountEmail] = {
+  def createUserPetServiceAccount(user: WorkbenchUser): Future[WorkbenchUserServiceAccountEmail] = {
+    val (petSa, petSaDisplayName) = toPetSAFromUser(user)
+
     def create() = {
-      val (petSa, petSaDisplayName) = toPetSAFromUser(user)
       for {
         petServiceAccount <- googleIamDAO.createServiceAccount(petServiceAccountConfig.googleProject, petSa, petSaDisplayName)
         _ <- googleDirectoryDAO.addMemberToGroup(WorkbenchGroupEmail(toProxyFromUser(user.id.value)), petServiceAccount.email)
@@ -104,7 +104,17 @@ class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Google
 
     directoryDAO.getPetServiceAccountForUser(user.id).flatMap {
       case Some(email) => Future.successful(email)
-      case None => create()
+      case None => create().andThen { case Failure(_) =>
+        // If anything fails with pet service account creation, clean up
+        // any created resources asynchronously, to ensure we don't end
+        // up with orphaned pets.
+        Future.sequence(Seq(
+          directoryDAO.removePetServiceAccountFromUser(user.id),
+          googleIamDAO.removeServiceAccount(petServiceAccountConfig.googleProject, petSa))
+        ).failed.foreach { e =>
+          logger.warn("Error occurred cleaning up pet service account", e)
+        }
+      }
     }
   }
 
@@ -118,20 +128,19 @@ class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Google
   private[service] def toProxyFromUser(subjectId: String): String = s"PROXY_$subjectId@$googleDomain"
   private[service] def toGoogleGroupName(groupName: String): String = s"GROUP_$groupName@$googleDomain"
 
-  private[service] def toPetSAFromUser(user: WorkbenchUser): (WorkbenchUserPetServiceAccountId, WorkbenchUserPetServiceAccountDisplayName) = {
+  private[service] def toPetSAFromUser(user: WorkbenchUser): (WorkbenchUserServiceAccountId, WorkbenchUserServiceAccountDisplayName) = {
     /*
      * Service account IDs must be:
      * 1. between 6 and 30 characters
      * 2. lower case alphanumeric separated by hyphens
      * 3. must start with a lower case letter
      *
-     * UUID.randomUUID() is too many characters, so generate a random 8 byte UUID prefixed with "pet-".
+     * Subject IDs are 22 numeric characters, so "pet-${subjectId}" fulfills these requirements.
      */
-    val randLong = ByteBuffer.wrap(UUID.randomUUID().toString.getBytes()).getLong
-    val serviceAccountId = s"pet-${java.lang.Long.toString(randLong, Character.MAX_RADIX)}"
+    val serviceAccountId = s"pet-${user.id.value}"
     val displayName = s"Pet Service Account for user [${user.email.value}]"
 
-    (WorkbenchUserPetServiceAccountId(serviceAccountId), WorkbenchUserPetServiceAccountDisplayName(displayName))
+    (WorkbenchUserServiceAccountId(serviceAccountId), WorkbenchUserServiceAccountDisplayName(displayName))
   }
 
   //TODO: Move these to RoleSupport.scala (or something) in some shared library

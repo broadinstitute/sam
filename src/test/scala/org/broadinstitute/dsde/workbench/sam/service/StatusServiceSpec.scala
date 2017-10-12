@@ -4,7 +4,7 @@ import akka.actor.ActorSystem
 import com.google.api.services.admin.directory.model.Group
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.directory.MockDirectoryDAO
-import org.scalatest.{FlatSpec, FreeSpec, Matchers}
+import org.scalatest.{BeforeAndAfterAll, FlatSpec, FreeSpec, Matchers}
 import org.broadinstitute.dsde.workbench.google.mock.MockGoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.model.{WorkbenchException, WorkbenchGroup, WorkbenchGroupEmail, WorkbenchGroupName}
 import org.broadinstitute.dsde.workbench.util.health.{StatusCheckResponse, SubsystemStatus}
@@ -15,9 +15,13 @@ import scala.concurrent.Future
 import scala.concurrent.duration._
 import org.scalatest.concurrent.Eventually
 
-class StatusServiceSpec extends FreeSpec with Matchers with TestSupport with Eventually {
+class StatusServiceSpec extends FreeSpec with Matchers with BeforeAndAfterAll with TestSupport with Eventually {
   implicit val system = ActorSystem("StatusServiceSpec")
   val allUsersEmail = WorkbenchGroupEmail("allusers@example.com")
+
+  override def afterAll(): Unit = {
+    system.terminate()
+  }
 
   def noOpenDJGroups = {
     new StatusService(new MockDirectoryDAO, new MockGoogleDirectoryDAO, pollInterval = 10 milliseconds)

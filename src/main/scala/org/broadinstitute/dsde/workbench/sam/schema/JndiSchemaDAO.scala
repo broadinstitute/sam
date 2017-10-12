@@ -199,14 +199,6 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit exe
 
   // Workbench Person
 
-  def removeWorkbenchPersonSchema(): Future[Unit] = withContext { ctx =>
-    val schema = ctx.getSchema("")
-
-    // Intentionally ignores errors
-    Try { schema.destroySubcontext("ClassDefinition/workbenchPerson") }
-    Try { schema.destroySubcontext(s"AttributeDefinition/${Attr.petServiceAccount}") }
-  }
-
   def createWorkbenchPersonSchema(): Future[Unit] = withContext { ctx =>
     val schema = ctx.getSchema("")
 
@@ -220,11 +212,22 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit exe
 
     val must = new BasicAttribute("MUST")
     must.add("objectclass")
-    must.add(Attr.petServiceAccount)
     attrs.put(must)
+
+    val may = new BasicAttribute("MAY")
+    may.add(Attr.petServiceAccount)
+    attrs.put(may)
 
     // Add the new schema object for "workbenchPerson"
     schema.createSubcontext("ClassDefinition/workbenchPerson", attrs)
+  }
+
+  def removeWorkbenchPersonSchema(): Future[Unit] = withContext { ctx =>
+    val schema = ctx.getSchema("")
+
+    // Intentionally ignores errors
+    Try { schema.destroySubcontext("ClassDefinition/workbenchPerson") }
+    Try { schema.destroySubcontext(s"AttributeDefinition/${Attr.petServiceAccount}") }
   }
 
   private val resourcesOu = s"ou=resources,${directoryConfig.baseDn}"

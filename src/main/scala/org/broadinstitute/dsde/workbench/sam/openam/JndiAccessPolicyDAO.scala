@@ -120,9 +120,8 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
           if(policy.members.members.nonEmpty) {
             val members = new BasicAttribute(Attr.uniqueMember)
 
-            val memberDns = policy.members.members.map {
-              case subject: WorkbenchGroupName => groupDn(subject)
-              case subject: WorkbenchUserId => userDn(subject)
+            val memberDns = policy.members.members.map { s =>
+              subjectDn(s)
             }
 
             memberDns.foreach(members.add)

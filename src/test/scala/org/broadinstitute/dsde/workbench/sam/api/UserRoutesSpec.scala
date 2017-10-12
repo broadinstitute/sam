@@ -151,14 +151,14 @@ class UserRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest {
     // create a pet service account
     Get("/api/user/petServiceAccount") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
-      val response = responseAs[WorkbenchUserPetServiceAccountEmail]
+      val response = responseAs[WorkbenchUserServiceAccountEmail]
       response.value should endWith ("@test-project.iam.gserviceaccount.com")
     }
 
     // same result a second time
     Get("/api/user/petServiceAccount") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
-      val response = responseAs[WorkbenchUserPetServiceAccountEmail]
+      val response = responseAs[WorkbenchUserServiceAccountEmail]
       response.value should endWith ("@test-project.iam.gserviceaccount.com")
     }
   }

@@ -140,17 +140,17 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     }
   }
 
-  override def getPetServiceAccountForUser(userId: WorkbenchUserId): Future[Option[WorkbenchUserPetServiceAccountEmail]] = {
+  override def getPetServiceAccountForUser(userId: WorkbenchUserId): Future[Option[WorkbenchUserServiceAccountEmail]] = {
     withContext { ctx =>
       val attributes = ctx.getAttributes(userDn(userId))
       val attr: Option[String] = getAttribute[String](attributes, Attr.petServiceAccount)
-      attr.map(WorkbenchUserPetServiceAccountEmail.apply)
+      attr.map(WorkbenchUserServiceAccountEmail.apply)
     } recover { case _: NameNotFoundException =>
       None
     }
   }
 
-  override def addPetServiceAccountToUser(userId: WorkbenchUserId, email: WorkbenchUserPetServiceAccountEmail): Future[WorkbenchUserPetServiceAccountEmail] = {
+  override def addPetServiceAccountToUser(userId: WorkbenchUserId, email: WorkbenchUserServiceAccountEmail): Future[WorkbenchUserServiceAccountEmail] = {
     withContext { ctx =>
       val myAttrs = new BasicAttributes(true)
       myAttrs.put(new BasicAttribute("objectclass", "workbenchPerson"))
@@ -169,7 +169,6 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
       case Some(email) =>
         withContext { ctx =>
           val myAttrs = new BasicAttributes(true)
-          myAttrs.put(new BasicAttribute("objectclass", "workbenchPerson"))
           myAttrs.put(new BasicAttribute(Attr.petServiceAccount, email.value))
 
           ctx.modifyAttributes(userDn(userId), DirContext.REMOVE_ATTRIBUTE, myAttrs)

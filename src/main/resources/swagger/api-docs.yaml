@@ -347,11 +347,6 @@ paths:
       operationId: getPetServiceAccount
       tags:
         - Users
-      security:
-        - googleoauth:
-            - openid
-            - email
-            - profile
 
 ##########################################################################################
 ## DEFINITIONS
