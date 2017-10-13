@@ -16,7 +16,7 @@ import scala.concurrent.ExecutionContext
 /**
   * Created by dvoet on 7/14/17.
   */
-class TestSamRoutes(val resourceTypes: Map[ResourceTypeName, ResourceType], resourceService: ResourceService, userService: UserService, statusService: StatusService, val userInfo: UserInfo)(implicit override val system: ActorSystem, override val materializer: Materializer, override val executionContext: ExecutionContext)
+class TestSamRoutes(resourceService: ResourceService, userService: UserService, statusService: StatusService, val userInfo: UserInfo)(implicit override val system: ActorSystem, override val materializer: Materializer, override val executionContext: ExecutionContext)
   extends SamRoutes(resourceService, userService, statusService, SwaggerConfig("", "")) with MockUserInfoDirectives
 
 object TestSamRoutes {
@@ -28,13 +28,13 @@ object TestSamRoutes {
     val googleDirectoryDAO = new MockGoogleDirectoryDAO()
     val policyDAO = new MockAccessPolicyDAO()
 
-    val mockResourceService = new ResourceService(policyDAO, directoryDAO, "example.com")
+    val mockResourceService = new ResourceService(resourceTypes, policyDAO, directoryDAO, "example.com")
     val mockUserService = new UserService(directoryDAO, googleDirectoryDAO, "dev.test.firecloud.org")
 
     TestSupport.runAndWait(mockUserService.createAllUsersGroup)
 
     val mockStatusService = new StatusService(directoryDAO, googleDirectoryDAO)
 
-    new TestSamRoutes(resourceTypes, mockResourceService, mockUserService, mockStatusService, userInfo)
+    new TestSamRoutes(mockResourceService, mockUserService, mockStatusService, userInfo)
   }
 }

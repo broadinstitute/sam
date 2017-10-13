@@ -13,32 +13,36 @@ import scala.concurrent.{ExecutionContext, Future}
 /**
   * Created by mbemis on 5/22/17.
   */
-class ResourceService(val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: DirectoryDAO, val googleDomain: String)(implicit val executionContext: ExecutionContext) extends LazyLogging {
+class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceType], val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: DirectoryDAO, val googleDomain: String)(implicit val executionContext: ExecutionContext) extends LazyLogging {
+  def getResourceTypes(): Future[Map[ResourceTypeName, ResourceType]] = {
+    Future.successful(resourceTypes)
+  }
+
+  def getResourceType(name: ResourceTypeName): Future[Option[ResourceType]] = {
+    Future.successful(resourceTypes.get(name))
+  }
 
   def createResourceType(resourceType: ResourceType): Future[ResourceTypeName] = {
     accessPolicyDAO.createResourceType(resourceType.name)
   }
 
-  def createResource(resourceType: ResourceType, resourceId: ResourceId, userInfo: UserInfo): Future[Set[AccessPolicy]] = {
+  def createResource(resourceType: ResourceType, resourceId: ResourceId, userInfo: UserInfo): Future[Resource] = {
     accessPolicyDAO.createResource(Resource(resourceType.name, resourceId)) flatMap { resource =>
-      Future.traverse(resourceType.roles) { role =>
-        val roleMembers: Set[WorkbenchSubject] = role.roleName match {
-          case resourceType.ownerRoleName => Set(userInfo.userId)
-          case _ => Set.empty
-        }
+      val role = resourceType.roles.find(_.roleName == resourceType.ownerRoleName).getOrElse(throw new WorkbenchException(s"owner role ${resourceType.ownerRoleName} does not exist in $resourceType"))
 
-        val email = toGoogleGroupEmail(role.roleName.value, Resource(resourceType.name, resourceId))
+      val roleMembers: Set[WorkbenchSubject] = Set(userInfo.userId)
 
-        for {
-          policy <- accessPolicyDAO.createPolicy(AccessPolicy(
-            role.roleName.value,
-            resource,
-            WorkbenchGroup(WorkbenchGroupName(role.roleName.value), roleMembers, email),
-            Set(role.roleName),
-            role.actions
-          ))
-        } yield policy
-      }
+      val email = toGoogleGroupEmail(role.roleName.value, Resource(resourceType.name, resourceId))
+
+      for {
+        _ <- accessPolicyDAO.createPolicy(AccessPolicy(
+          role.roleName.value,
+          resource,
+          WorkbenchGroup(WorkbenchGroupName(role.roleName.value), roleMembers, email),
+          Set(role.roleName),
+          Set.empty
+        ))
+      } yield Resource(resourceType.name, resourceId)
     }
   }
 
@@ -55,8 +59,21 @@ class ResourceService(val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: Di
   }
 
   def listUserResourceActions(resource: Resource, userInfo: UserInfo): Future[Set[ResourceAction]] = {
-    listResourceAccessPoliciesForUser(resource, userInfo).map { matchingPolicies =>
-      matchingPolicies.flatMap(_.actions)
+    def roleActions(resourceTypeOption: Option[ResourceType], resourceRoleName: ResourceRoleName) = {
+      val maybeActions = for {
+        resourceType <- resourceTypeOption
+        role <- resourceType.roles.find(_.roleName == resourceRoleName)
+      } yield {
+        role.actions
+      }
+      maybeActions.getOrElse(Set.empty)
+    }
+
+    for {
+      resourceType <- getResourceType(resource.resourceTypeName)
+      policies <- listResourceAccessPoliciesForUser(resource, userInfo)
+    } yield {
+      policies.flatMap(policy => policy.actions ++ policy.roles.flatMap(roleActions(resourceType, _)))
     }
   }
 

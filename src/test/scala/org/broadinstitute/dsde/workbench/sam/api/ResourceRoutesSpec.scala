@@ -5,16 +5,35 @@ import akka.http.scaladsl.testkit.ScalatestRouteTest
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.scalatest.{FlatSpec, Matchers}
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
+import org.broadinstitute.dsde.workbench.google.mock.MockGoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchUserEmail, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import spray.json.{JsBoolean, JsValue}
 import spray.json.DefaultJsonProtocol._
 import org.broadinstitute.dsde.workbench.model.ErrorReportJsonSupport._
+import org.broadinstitute.dsde.workbench.sam.TestSupport
+import org.broadinstitute.dsde.workbench.sam.directory.MockDirectoryDAO
+import org.broadinstitute.dsde.workbench.sam.openam.MockAccessPolicyDAO
+import org.broadinstitute.dsde.workbench.sam.service.{ResourceService, StatusService, UserService}
 
 /**
   * Created by dvoet on 6/7/17.
   */
-class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest {
+class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest with TestSupport {
+
+  val defaultUserInfo = UserInfo("accessToken", WorkbenchUserId("user1"), WorkbenchUserEmail("user1@example.com"), 0)
+
+  private def createSamRoutes(resourceTypes: Map[ResourceTypeName, ResourceType], userInfo: UserInfo = defaultUserInfo) = {
+    val accessPolicyDAO = new MockAccessPolicyDAO()
+    val directoryDAO = new MockDirectoryDAO()
+    val googleDirectoryDAO = new MockGoogleDirectoryDAO()
+
+    val mockResourceService = new ResourceService(resourceTypes, accessPolicyDAO, directoryDAO, "example.com")
+    val mockUserService = new UserService(directoryDAO, googleDirectoryDAO, "dev.test.firecloud.org")
+    val mockStatusService = new StatusService(directoryDAO, googleDirectoryDAO)
+
+    new TestSamRoutes(mockResourceService, mockUserService, mockStatusService, userInfo)
+  }
 
   "GET /api/resources/{resourceType}/{resourceId}/actions/{action}" should "404 for unknown resource type" in {
     val samRoutes = TestSamRoutes(Map.empty)
@@ -283,12 +302,15 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
   }
 
   it should "404 when deleting a resource that exists but can't be seen by the user" in {
-    val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceAction("alterpolicies"), ResourceAction("readpolicies")), Set.empty, ResourceRoleName("owner"))
-    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
+    val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceAction("alterpolicies"), ResourceAction("readpolicies")), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("run")))), ResourceRoleName("owner"))
+    val samRoutes = createSamRoutes(Map(resourceType.name -> resourceType))
 
-    //Create the resource
+    runAndWait(samRoutes.resourceService.createResourceType(resourceType))
+    runAndWait(samRoutes.resourceService.accessPolicyDAO.createResource(Resource(resourceType.name, ResourceId("foo"))))
+
+    //Verify resource exists by checking for conflict on recreate
     Post(s"/api/resource/${resourceType.name}/foo") ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.NoContent
+      status shouldEqual StatusCodes.Conflict
     }
 
     //Delete the resource

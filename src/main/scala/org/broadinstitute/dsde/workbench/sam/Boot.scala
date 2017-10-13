@@ -37,14 +37,12 @@ object Boot extends App with LazyLogging {
     val schemaDAO = new JndiSchemaDAO(directoryConfig)
     val googleDirectoryDAO = new HttpGoogleDirectoryDAO(googleDirectoryConfig.clientSecrets, googleDirectoryConfig.pemFile, googleDirectoryConfig.appsDomain, googleDirectoryConfig.appName, googleDirectoryConfig.serviceProject, "google")
 
-    val resourceService = new ResourceService(accessPolicyDAO, directoryDAO, config.getString("googleDirectory.appsDomain"))
+    val configResourceTypes = config.as[Set[ResourceType]]("resourceTypes")
+    val resourceService = new ResourceService(configResourceTypes.map(rt => rt.name -> rt).toMap, accessPolicyDAO, directoryDAO, config.getString("googleDirectory.appsDomain"))
     val userService = new UserService(directoryDAO, googleDirectoryDAO, googleDirectoryConfig.appsDomain)
     val statusService = new StatusService(directoryDAO, googleDirectoryDAO, 10 seconds)
 
-    val configResourceTypes = config.as[Set[ResourceType]]("resourceTypes")
-    val samRoutes = new SamRoutes(resourceService, userService, statusService, config.as[SwaggerConfig]("swagger")) with StandardUserInfoDirectives {
-      override val resourceTypes: Map[ResourceTypeName, ResourceType] = configResourceTypes.map(rt => rt.name -> rt).toMap
-    }
+    val samRoutes = new SamRoutes(resourceService, userService, statusService, config.as[SwaggerConfig]("swagger")) with StandardUserInfoDirectives
 
     for {
       _ <- schemaDAO.init() recover {
