@@ -6,16 +6,17 @@ import org.broadinstitute.dsde.workbench.util.health.{HealthMonitor, StatusCheck
 import org.broadinstitute.dsde.workbench.util.health.Subsystems.{GoogleGroups, OpenDJ}
 import org.scalatest.{FlatSpec, Matchers}
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
-import org.broadinstitute.dsde.workbench.google.mock.MockGoogleDirectoryDAO
+import org.broadinstitute.dsde.workbench.google.mock.{MockGoogleDirectoryDAO, MockGoogleIamDAO}
 import org.broadinstitute.dsde.workbench.util.health.StatusJsonSupport._
 import org.broadinstitute.dsde.workbench.model.{WorkbenchUserEmail, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.TestSupport
+import org.broadinstitute.dsde.workbench.sam.config.PetServiceAccountConfig
 import org.broadinstitute.dsde.workbench.sam.directory.MockDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model.UserInfo
 import org.broadinstitute.dsde.workbench.sam.openam.MockAccessPolicyDAO
 import org.broadinstitute.dsde.workbench.sam.service.{ResourceService, StatusService, UserService}
-
 import org.scalatest.concurrent.Eventually._
+
 import scala.concurrent.duration._
 
 class StatusRouteSpec extends FlatSpec with Matchers with ScalatestRouteTest with TestSupport {

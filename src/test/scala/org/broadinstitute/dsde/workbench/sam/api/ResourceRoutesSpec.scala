@@ -5,13 +5,14 @@ import akka.http.scaladsl.testkit.ScalatestRouteTest
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.scalatest.{FlatSpec, Matchers}
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
-import org.broadinstitute.dsde.workbench.google.mock.MockGoogleDirectoryDAO
+import org.broadinstitute.dsde.workbench.google.mock.{MockGoogleDirectoryDAO, MockGoogleIamDAO}
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchUserEmail, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import spray.json.{JsBoolean, JsValue}
 import spray.json.DefaultJsonProtocol._
 import org.broadinstitute.dsde.workbench.model.ErrorReportJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
+import org.broadinstitute.dsde.workbench.sam.config.PetServiceAccountConfig
 import org.broadinstitute.dsde.workbench.sam.directory.MockDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.openam.MockAccessPolicyDAO
 import org.broadinstitute.dsde.workbench.sam.service.{ResourceService, StatusService, UserService}
@@ -27,9 +28,11 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     val accessPolicyDAO = new MockAccessPolicyDAO()
     val directoryDAO = new MockDirectoryDAO()
     val googleDirectoryDAO = new MockGoogleDirectoryDAO()
+    val googleIamDAO = new MockGoogleIamDAO()
+    val petServiceAccountConfig = PetServiceAccountConfig("test-project", Set(WorkbenchUserEmail("test@test.gserviceaccount.com")))
 
     val mockResourceService = new ResourceService(resourceTypes, accessPolicyDAO, directoryDAO, "example.com")
-    val mockUserService = new UserService(directoryDAO, googleDirectoryDAO, "dev.test.firecloud.org")
+    val mockUserService = new UserService(directoryDAO, googleDirectoryDAO, googleIamDAO, "dev.test.firecloud.org", petServiceAccountConfig)
     val mockStatusService = new StatusService(directoryDAO, googleDirectoryDAO)
 
     new TestSamRoutes(mockResourceService, mockUserService, mockStatusService, userInfo)
