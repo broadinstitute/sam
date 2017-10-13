@@ -332,6 +332,22 @@ paths:
         - Status
       security: [] # no security
 
+  /api/user/petServiceAccount:
+    get:
+      summary: gets the pet service account for the specified user
+      responses:
+        200:
+          description: 'user pet service account'
+          schema:
+            $ref: '#/definitions/UserPetServiceAccount'
+        500:
+          description: Internal Error
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      operationId: getPetServiceAccount
+      tags:
+        - Users
+
 ##########################################################################################
 ## DEFINITIONS
 ##########################################################################################
@@ -528,3 +544,12 @@ definitions:
       enabled:
         $ref: '#/definitions/Enabled'
         description: the status of the user's account
+
+  UserPetServiceAccount:
+    description: ''
+    required:
+      - value
+    properties:
+      value:
+        type: string
+        description: user pet service account email

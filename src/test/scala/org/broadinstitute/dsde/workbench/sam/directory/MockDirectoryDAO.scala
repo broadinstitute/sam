@@ -17,6 +17,7 @@ class MockDirectoryDAO extends DirectoryDAO {
   private val enabledUsers: mutable.Map[WorkbenchUserId, Unit] = new TrieMap()
   private val usersWithEmails: mutable.Map[WorkbenchUserEmail, WorkbenchUserId] = new TrieMap()
   private val groupsWithEmails: mutable.Map[WorkbenchGroupEmail, WorkbenchGroupName] = new TrieMap()
+  private val petServiceAccounts: mutable.Map[WorkbenchUserId, WorkbenchUserServiceAccountEmail] = new TrieMap()
 
   override def createGroup(group: WorkbenchGroup): Future[WorkbenchGroup] = Future {
     if (groups.keySet.contains(group.name)) {
@@ -108,6 +109,7 @@ class MockDirectoryDAO extends DirectoryDAO {
       members.flatMap {
         case userId: WorkbenchUserId => Set(userId)
         case groupName: WorkbenchGroupName => listGroupUsers(groupName, visitedGroups + groupName)
+        case serviceAccountId: WorkbenchUserServiceAccountId => throw new WorkbenchException(s"Unexpected service account $serviceAccountId")
       }
     } else {
       Set.empty
@@ -131,4 +133,18 @@ class MockDirectoryDAO extends DirectoryDAO {
   }
 
   override def loadGroupEmail(groupName: WorkbenchGroupName): Future[Option[WorkbenchGroupEmail]] = loadGroup(groupName).map(_.map(_.email))
+
+  override def getPetServiceAccountForUser(userId: WorkbenchUserId): Future[Option[WorkbenchUserServiceAccountEmail]] = Future {
+    petServiceAccounts.get(userId)
+  }
+
+  override def addPetServiceAccountToUser(userId: WorkbenchUserId, email: WorkbenchUserServiceAccountEmail): Future[WorkbenchUserServiceAccountEmail] = {
+    petServiceAccounts += (userId -> email)
+    Future.successful(email)
+  }
+
+  override def removePetServiceAccountFromUser(userId: WorkbenchUserId): Future[Unit] = {
+    petServiceAccounts -= userId
+    Future.successful(())
+  }
 }

@@ -7,7 +7,6 @@ import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
-import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.scalatest.{BeforeAndAfterAll, FlatSpec, Matchers}
 
@@ -243,6 +242,59 @@ class JndiDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
       runAndWait(dao.deleteUser(userId))
       runAndWait(dao.deleteGroup(groupName1))
       runAndWait(dao.deleteGroup(groupName2))
+    }
+  }
+
+  it should "create, read, delete pet service accounts" in {
+    val userId = WorkbenchUserId(UUID.randomUUID().toString)
+    val user = WorkbenchUser(userId, WorkbenchUserEmail("foo@bar.com"))
+    val email = WorkbenchUserServiceAccountEmail("myPetSa@gmail.com")
+
+    // create a user
+    assertResult(None) {
+      runAndWait(dao.loadUser(user.id))
+    }
+
+    assertResult(user) {
+      runAndWait(dao.createUser(user))
+    }
+
+    assertResult(Some(user)) {
+      runAndWait(dao.loadUser(user.id))
+    }
+
+    // it should initially have no pet service account
+    assertResult(None) {
+      runAndWait(dao.getPetServiceAccountForUser(userId))
+    }
+
+    // add a pet service account
+    assertResult(email) {
+      runAndWait(dao.addPetServiceAccountToUser(userId, email))
+    }
+
+    // get the pet service account
+    assertResult(Some(email)) {
+      runAndWait(dao.getPetServiceAccountForUser(userId))
+    }
+
+    // add the same pet service account, expect an error
+    assertThrows[WorkbenchExceptionWithErrorReport] {
+      runAndWait(dao.addPetServiceAccountToUser(userId, email))
+    }
+
+    // delete the pet service account
+    runAndWait(dao.removePetServiceAccountFromUser(userId))
+
+    assertResult(None) {
+      runAndWait(dao.getPetServiceAccountForUser(userId))
+    }
+
+    // delete the user
+    runAndWait(dao.deleteUser(user.id))
+
+    assertResult(None) {
+      runAndWait(dao.loadUser(user.id))
     }
   }
 

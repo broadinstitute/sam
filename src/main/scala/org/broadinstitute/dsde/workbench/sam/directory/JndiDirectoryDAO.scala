@@ -30,6 +30,7 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     val uid = "uid"
     val groupUpdatedTimestamp = "groupUpdatedTimestamp"
     val groupSynchronizedTimestamp = "groupSynchronizedTimestamp"
+    val petServiceAccount = "petServiceAccount"
   }
 
   override def createGroup(group: WorkbenchGroup): Future[WorkbenchGroup] = withContext { ctx =>
@@ -136,6 +137,42 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     } catch {
       case e: NameAlreadyBoundException =>
         throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"user with id ${user.id.value} already exists"))
+    }
+  }
+
+  override def getPetServiceAccountForUser(userId: WorkbenchUserId): Future[Option[WorkbenchUserServiceAccountEmail]] = {
+    withContext { ctx =>
+      val attributes = ctx.getAttributes(userDn(userId))
+      val attr: Option[String] = getAttribute[String](attributes, Attr.petServiceAccount)
+      attr.map(WorkbenchUserServiceAccountEmail.apply)
+    } recover { case _: NameNotFoundException =>
+      None
+    }
+  }
+
+  override def addPetServiceAccountToUser(userId: WorkbenchUserId, email: WorkbenchUserServiceAccountEmail): Future[WorkbenchUserServiceAccountEmail] = {
+    withContext { ctx =>
+      val myAttrs = new BasicAttributes(true)
+      myAttrs.put(new BasicAttribute("objectclass", "workbenchPerson"))
+      myAttrs.put(new BasicAttribute(Attr.petServiceAccount, email.value))
+
+      ctx.modifyAttributes(userDn(userId), DirContext.ADD_ATTRIBUTE, myAttrs)
+      email
+    } recover { case _: AttributeInUseException =>
+      throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"user with id ${userId.value} already has a pet service account"))
+    }
+  }
+
+  override def removePetServiceAccountFromUser(userId: WorkbenchUserId): Future[Unit] = {
+    getPetServiceAccountForUser(userId).flatMap {
+      case None => Future.successful(())
+      case Some(email) =>
+        withContext { ctx =>
+          val myAttrs = new BasicAttributes(true)
+          myAttrs.put(new BasicAttribute(Attr.petServiceAccount, email.value))
+
+          ctx.modifyAttributes(userDn(userId), DirContext.REMOVE_ATTRIBUTE, myAttrs)
+        }
     }
   }
 

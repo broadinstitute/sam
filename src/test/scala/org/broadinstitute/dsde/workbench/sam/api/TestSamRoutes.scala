@@ -2,10 +2,10 @@ package org.broadinstitute.dsde.workbench.sam.api
 
 import akka.actor.ActorSystem
 import akka.stream.Materializer
-import org.broadinstitute.dsde.workbench.google.mock.MockGoogleDirectoryDAO
+import org.broadinstitute.dsde.workbench.google.mock.{MockGoogleDirectoryDAO, MockGoogleIamDAO}
 import org.broadinstitute.dsde.workbench.model.{WorkbenchUserEmail, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.TestSupport
-import org.broadinstitute.dsde.workbench.sam.config.SwaggerConfig
+import org.broadinstitute.dsde.workbench.sam.config.{PetServiceAccountConfig, SwaggerConfig}
 import org.broadinstitute.dsde.workbench.sam.directory.MockDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model.{ResourceType, ResourceTypeName, UserInfo}
 import org.broadinstitute.dsde.workbench.sam.openam.MockAccessPolicyDAO
@@ -27,9 +27,11 @@ object TestSamRoutes {
     val directoryDAO = new MockDirectoryDAO()
     val googleDirectoryDAO = new MockGoogleDirectoryDAO()
     val policyDAO = new MockAccessPolicyDAO()
+    val googleIamDAO = new MockGoogleIamDAO()
+    val petServiceAccountConfig = PetServiceAccountConfig("test-project", Set(WorkbenchUserEmail("test@test.gserviceaccount.com")))
 
     val mockResourceService = new ResourceService(resourceTypes, policyDAO, directoryDAO, "example.com")
-    val mockUserService = new UserService(directoryDAO, googleDirectoryDAO, "dev.test.firecloud.org")
+    val mockUserService = new UserService(directoryDAO, googleDirectoryDAO, googleIamDAO, "dev.test.firecloud.org", petServiceAccountConfig)
 
     TestSupport.runAndWait(mockUserService.createAllUsersGroup)
 

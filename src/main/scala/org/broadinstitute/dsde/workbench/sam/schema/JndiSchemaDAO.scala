@@ -27,6 +27,7 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit exe
     val uniqueMember = "uniqueMember"
     val groupUpdatedTimestamp = "groupUpdatedTimestamp"
     val groupSynchronizedTimestamp = "groupSynchronizedTimestamp"
+    val petServiceAccount = "petServiceAccount"
   }
 
   def init(): Future[Unit] = {
@@ -41,6 +42,7 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit exe
       _ <- createWorkbenchGroupSchema()
       _ <- createResourcesOrgUnit()
       _ <- createPolicySchema()
+      _ <- createWorkbenchPersonSchema()
     } yield ()
   }
 
@@ -48,6 +50,7 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit exe
     for {
       _ <- removePolicySchema()
       _ <- removeWorkbenchGroupSchema()
+      _ <- removeWorkbenchPersonSchema()
     } yield ()
   }
 
@@ -84,6 +87,7 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit exe
   private def removeWorkbenchGroupSchema(): Future[Unit] = withContext { ctx =>
     val schema = ctx.getSchema("")
 
+    // Intentionally ignores errors
     Try { schema.destroySubcontext("ClassDefinition/workbenchGroup") }
     Try { schema.destroySubcontext("AttributeDefinition/" + Attr.groupSynchronizedTimestamp) }
     Try { schema.destroySubcontext("AttributeDefinition/" + Attr.groupUpdatedTimestamp) }
@@ -157,6 +161,7 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit exe
   private def removePolicySchema(): Future[Unit] = withContext { ctx =>
     val schema = ctx.getSchema("")
 
+    // Intentionally ignores errors
     Try { schema.destroySubcontext("ClassDefinition/policy") }
     Try { schema.destroySubcontext("ClassDefinition/resourceType") }
     Try { schema.destroySubcontext("ClassDefinition/resource") }
@@ -190,6 +195,39 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit exe
     } catch {
       case e: NameAlreadyBoundException => // ignore
     }
+  }
+
+  // Workbench Person
+
+  def createWorkbenchPersonSchema(): Future[Unit] = withContext { ctx =>
+    val schema = ctx.getSchema("")
+
+    createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.400", Attr.petServiceAccount, "pet service account of the user", true)
+
+    val attrs = new BasicAttributes(true) // Ignore case
+    attrs.put("NUMERICOID", "1.3.6.1.4.1.18060.0.4.3.2.300")
+    attrs.put("NAME", "workbenchPerson")
+    attrs.put("SUP", "inetOrgPerson")
+    attrs.put("STRUCTURAL", "true")
+
+    val must = new BasicAttribute("MUST")
+    must.add("objectclass")
+    attrs.put(must)
+
+    val may = new BasicAttribute("MAY")
+    may.add(Attr.petServiceAccount)
+    attrs.put(may)
+
+    // Add the new schema object for "workbenchPerson"
+    schema.createSubcontext("ClassDefinition/workbenchPerson", attrs)
+  }
+
+  def removeWorkbenchPersonSchema(): Future[Unit] = withContext { ctx =>
+    val schema = ctx.getSchema("")
+
+    // Intentionally ignores errors
+    Try { schema.destroySubcontext("ClassDefinition/workbenchPerson") }
+    Try { schema.destroySubcontext(s"AttributeDefinition/${Attr.petServiceAccount}") }
   }
 
   private val resourcesOu = s"ou=resources,${directoryConfig.baseDn}"

@@ -1,6 +1,6 @@
 package org.broadinstitute.dsde.workbench.sam.directory
 
-import org.broadinstitute.dsde.workbench.model.{WorkbenchException, WorkbenchGroupName, WorkbenchSubject, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
 
@@ -18,6 +18,10 @@ trait DirectorySubjectNameSupport {
   protected def subjectDn(subject: WorkbenchSubject) = subject match {
     case g: WorkbenchGroupName => groupDn(g)
     case u: WorkbenchUserId => userDn(u)
+    case s: WorkbenchUserServiceAccountId =>
+      // service accounts are not expected to have dn's themselves;
+      // they are attributes of user dn's.
+      throw new WorkbenchException(s"unexpected subject [$s]")
   }
 
   protected def dnToSubject(dn: String): WorkbenchSubject = {
