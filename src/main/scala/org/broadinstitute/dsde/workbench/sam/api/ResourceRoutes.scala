@@ -55,9 +55,7 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives {
                 }
               } ~
                 post {
-                  requireAction(resource, SamResourceActions.alterPolicies, userInfo) {
-                    complete(resourceService.createResource(resourceType, ResourceId(resourceId), userInfo).map(_ => StatusCodes.NoContent))
-                  }
+                  complete(resourceService.createResource(resourceType, ResourceId(resourceId), userInfo).map(_ => StatusCodes.NoContent))
                 }
             } ~
             pathPrefix("action") {
@@ -81,15 +79,17 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives {
                   }
                 }
               } ~
-                pathPrefix(Segment) { policyName =>
-                  pathEndOrSingleSlash {
-                    put {
+              pathPrefix(Segment) { policyName =>
+                pathEndOrSingleSlash {
+                  put {
+                    requireAction(resource, SamResourceActions.alterPolicies, userInfo) {
                       entity(as[AccessPolicyMembership]) { membershipUpdate =>
                         complete(resourceService.overwritePolicy(resourceType, policyName, Resource(resourceType.name, ResourceId(resourceId)), membershipUpdate, userInfo).map(_ => StatusCodes.Created))
                       }
                     }
                   }
                 }
+              }
             } ~
             pathPrefix("roles") {
               pathEndOrSingleSlash {
