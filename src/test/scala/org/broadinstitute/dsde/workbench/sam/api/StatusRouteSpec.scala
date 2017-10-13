@@ -15,15 +15,20 @@ import org.broadinstitute.dsde.workbench.sam.model.UserInfo
 import org.broadinstitute.dsde.workbench.sam.openam.MockAccessPolicyDAO
 import org.broadinstitute.dsde.workbench.sam.service.{ResourceService, StatusService, UserService}
 
+import org.scalatest.concurrent.Eventually._
+import scala.concurrent.duration._
+
 class StatusRouteSpec extends FlatSpec with Matchers with ScalatestRouteTest with TestSupport {
 
-  "StatusRoute" should "give 200 for ok" in {
+  "GET /status" should "give 200 for ok" in {
     val samRoutes = TestSamRoutes(Map.empty)
-    Get("/status") ~> samRoutes.route ~> check {
-      responseAs[StatusCheckResponse] shouldEqual StatusCheckResponse(true, Map(OpenDJ -> HealthMonitor.OkStatus, GoogleGroups -> HealthMonitor.OkStatus))
-      status shouldEqual StatusCodes.OK
+    implicit val patienceConfig = PatienceConfig(timeout = 1 second)
+    eventually {
+      Get("/status") ~> samRoutes.route ~> check {
+        responseAs[StatusCheckResponse] shouldEqual StatusCheckResponse(true, Map(OpenDJ -> HealthMonitor.OkStatus, GoogleGroups -> HealthMonitor.OkStatus))
+        status shouldEqual StatusCodes.OK
+      }
     }
-
   }
 
   it should "give 500 for not ok" in {
