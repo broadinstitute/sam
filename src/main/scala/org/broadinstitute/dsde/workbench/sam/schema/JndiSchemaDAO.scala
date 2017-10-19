@@ -41,6 +41,7 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit exe
     for {
       _ <- createWorkbenchGroupSchema()
       _ <- createResourcesOrgUnit()
+      _ <- createPetsOrgUnit()
       _ <- createPolicySchema()
       _ <- createWorkbenchPersonSchema()
     } yield ()
@@ -197,6 +198,27 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit exe
     }
   }
 
+  private def createPetsOrgUnit(): Future[Unit] = withContext { ctx =>
+    try {
+      val resourcesContext = new BaseDirContext {
+        override def getAttributes(name: String): Attributes = {
+          val myAttrs = new BasicAttributes(true)  // Case ignore
+
+          val oc = new BasicAttribute("objectclass")
+          Seq("top", "organizationalUnit").foreach(oc.add)
+          myAttrs.put(oc)
+
+          myAttrs
+        }
+      }
+
+      ctx.bind(petsOu, resourcesContext)
+
+    } catch {
+      case e: NameAlreadyBoundException => // ignore
+    }
+  }
+
   // Workbench Person
 
   def createWorkbenchPersonSchema(): Future[Unit] = withContext { ctx =>
@@ -231,6 +253,7 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit exe
   }
 
   private val resourcesOu = s"ou=resources,${directoryConfig.baseDn}"
+  private val petsOu = s"ou=pets,${directoryConfig.baseDn}"
 
   private def createAttributeDefinition(schema: DirContext, numericOID: String, name: String, description: String, singleValue: Boolean, equality: Option[String] = None, ordering: Option[String] = None, syntax: Option[String] = None) = {
     val attributes = new BasicAttributes(true)

@@ -19,18 +19,18 @@ trait DirectoryDAO {
 
   def loadSubjectFromEmail(email: String): Future[Option[WorkbenchSubject]]
 
-  def createUser(user: WorkbenchUser): Future[WorkbenchUser]
-  def loadUser(userId: WorkbenchUserId): Future[Option[WorkbenchUser]]
-  def loadUsers(userIds: Set[WorkbenchUserId]): Future[Seq[WorkbenchUser]]
-  def deleteUser(userId: WorkbenchUserId): Future[Unit]
+  def createUser(user: WorkbenchPerson): Future[WorkbenchPerson]
+  def loadUser(userId: WorkbenchSubject): Future[Option[WorkbenchPerson]]
+  def loadUsers(userIds: Set[WorkbenchSubject]): Future[Seq[WorkbenchPerson]]
+  def deleteUser(userId: WorkbenchSubject): Future[Unit]
 
-  def listUsersGroups(userId: WorkbenchUserId): Future[Set[WorkbenchGroupName]]
-  def listFlattenedGroupUsers(groupName: WorkbenchGroupName): Future[Set[WorkbenchUserId]]
+  def listUsersGroups(userId: WorkbenchSubject): Future[Set[WorkbenchGroupName]]
+  def listFlattenedGroupUsers(groupName: WorkbenchGroupName): Future[Set[WorkbenchSubject]]
   def listAncestorGroups(groupName: WorkbenchGroupName): Future[Set[WorkbenchGroupName]]
 
-  def enableUser(userId: WorkbenchUserId): Future[Unit]
-  def disableUser(userId: WorkbenchUserId): Future[Unit]
-  def isEnabled(userId: WorkbenchUserId): Future[Boolean]
+  def enableUser(userId: WorkbenchSubject): Future[Unit]
+  def disableUser(userId: WorkbenchSubject): Future[Unit]
+  def isEnabled(userId: WorkbenchSubject): Future[Boolean]
   def getPetServiceAccountForUser(userId: WorkbenchUserId): Future[Option[WorkbenchUserServiceAccountEmail]]
   def addPetServiceAccountToUser(userId: WorkbenchUserId, email: WorkbenchUserServiceAccountEmail): Future[WorkbenchUserServiceAccountEmail]
   def removePetServiceAccountFromUser(userId: WorkbenchUserId): Future[Unit]
