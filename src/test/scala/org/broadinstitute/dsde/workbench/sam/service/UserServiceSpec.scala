@@ -24,6 +24,7 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Befor
   override implicit val patienceConfig = PatienceConfig(timeout = scaled(5.seconds))
 
   val defaultUserId = WorkbenchUserId("newuser")
+  val defaultPetUserId = WorkbenchUserServiceAccountId("pet-newuser")
   val defaultUserEmail = WorkbenchUserEmail("newuser@new.com")
   val defaultUser = WorkbenchUser(defaultUserId, defaultUserEmail)
   val userInfo = UserInfo("token", WorkbenchUserId(UUID.randomUUID().toString), WorkbenchUserEmail("user@company.com"), 0)
@@ -52,6 +53,7 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Befor
     // clean up
     dirDAO.removePetServiceAccountFromUser(defaultUserId).futureValue
     dirDAO.deleteUser(defaultUserId).futureValue
+    dirDAO.deleteUser(defaultPetUserId).futureValue
     dirDAO.deleteGroup(UserService.allUsersGroupName).futureValue
   }
 
@@ -142,6 +144,7 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Befor
 
     // verify ldap
     dirDAO.getPetServiceAccountForUser(defaultUserId).futureValue shouldBe Some(emailResponse)
+    dirDAO.loadUser(defaultPetUserId).futureValue shouldBe Some(WorkbenchUser(WorkbenchUserId(defaultPetUserId.value), WorkbenchUserEmail(emailResponse.value)))
 
     // verify google
     val mockGoogleIamDAO = service.googleIamDAO.asInstanceOf[MockGoogleIamDAO]
