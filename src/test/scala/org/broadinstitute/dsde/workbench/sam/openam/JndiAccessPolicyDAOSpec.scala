@@ -27,6 +27,10 @@ class JndiAccessPolicyDAOSpec extends FlatSpec with Matchers with TestSupport wi
     runAndWait(schemaDao.init())
   }
 
+  override protected def afterAll(): Unit = {
+    runAndWait(schemaDao.clearDatabase())
+  }
+
   def toEmail(resourceType: String, resourceId: String, policyName: String) = {
     WorkbenchGroupEmail(s"policy-$resourceType-$resourceId-$policyName@dev.test.firecloud.org")
   }

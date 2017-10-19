@@ -35,6 +35,10 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     runAndWait(schemaDao.init())
   }
 
+  override protected def afterAll(): Unit = {
+    runAndWait(schemaDao.clearDatabase())
+  }
+
   private val dummyUserInfo = UserInfo("token", WorkbenchUserId("userid"), WorkbenchUserEmail("user@company.com"), 0)
 
   def toEmail(resourceType: String, resourceName: String, policyName: String) = {

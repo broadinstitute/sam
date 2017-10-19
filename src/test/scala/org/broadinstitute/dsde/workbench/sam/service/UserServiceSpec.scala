@@ -40,6 +40,10 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Befor
     runAndWait(schemaDao.init())
   }
 
+  override protected def afterAll(): Unit = {
+    runAndWait(schemaDao.clearDatabase())
+  }
+
   before {
     service = new UserService(dirDAO, new MockGoogleDirectoryDAO(), new MockGoogleIamDAO(), "dev.test.firecloud.org", petServiceAccountConfig)
   }

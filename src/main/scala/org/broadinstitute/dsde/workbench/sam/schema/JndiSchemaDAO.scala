@@ -9,6 +9,7 @@ import org.broadinstitute.dsde.workbench.sam.util.{BaseDirContext, JndiSupport}
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Try
 import JndiSchemaDAO._
+import scala.collection.JavaConverters._
 
 /**
   * Created by mbemis on 10/3/17.
@@ -48,7 +49,9 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit exe
   def createSchema(): Future[Unit] = {
     for {
       _ <- createWorkbenchGroupSchema()
-      _ <- createResourcesOrgUnit()
+      _ <- createOrgUnit(peopleOu)
+      _ <- createOrgUnit(groupsOu)
+      _ <- createOrgUnit(resourcesOu)
       _ <- createPolicySchema()
       _ <- createWorkbenchPersonSchema()
     } yield ()
@@ -184,7 +187,7 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit exe
   // Organizational units
   //
 
-  private def createResourcesOrgUnit(): Future[Unit] = withContext { ctx =>
+  private def createOrgUnit(dn: String): Future[Unit] = withContext { ctx =>
     try {
       val resourcesContext = new BaseDirContext {
         override def getAttributes(name: String): Attributes = {
@@ -198,49 +201,7 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit exe
         }
       }
 
-      ctx.bind(resourcesOu, resourcesContext)
-
-    } catch {
-      case e: NameAlreadyBoundException => // ignore
-    }
-  }
-
-  private def createPeopleOrgUnit(): Future[Unit] = withContext { ctx =>
-    try {
-      val resourcesContext = new BaseDirContext {
-        override def getAttributes(name: String): Attributes = {
-          val myAttrs = new BasicAttributes(true)  // Case ignore
-
-          val oc = new BasicAttribute("objectclass")
-          Seq("top", "organizationalUnit").foreach(oc.add)
-          myAttrs.put(oc)
-
-          myAttrs
-        }
-      }
-
-//      ctx.bind(peop, resourcesContext)
-
-    } catch {
-      case e: NameAlreadyBoundException => // ignore
-    }
-  }
-
-  private def createGroupsOrgUnit(): Future[Unit] = withContext { ctx =>
-    try {
-      val resourcesContext = new BaseDirContext {
-        override def getAttributes(name: String): Attributes = {
-          val myAttrs = new BasicAttributes(true)  // Case ignore
-
-          val oc = new BasicAttribute("objectclass")
-          Seq("top", "organizationalUnit").foreach(oc.add)
-          myAttrs.put(oc)
-
-          myAttrs
-        }
-      }
-
-      ctx.bind(resourcesOu, resourcesContext)
+      ctx.bind(dn, resourcesContext)
 
     } catch {
       case e: NameAlreadyBoundException => // ignore
@@ -280,7 +241,9 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit exe
     Try { schema.destroySubcontext(s"AttributeDefinition/${Attr.petServiceAccount}") }
   }
 
-  private val resourcesOu = s"ou=resources,${directoryConfig.baseDn}"
+  val resourcesOu = s"ou=resources,${directoryConfig.baseDn}"
+  val peopleOu = s"ou=people,${directoryConfig.baseDn}"
+  val groupsOu = s"ou=groups,${directoryConfig.baseDn}"
 
   private def createAttributeDefinition(schema: DirContext, numericOID: String, name: String, description: String, singleValue: Boolean, equality: Option[String] = None, ordering: Option[String] = None, syntax: Option[String] = None) = {
     val attributes = new BasicAttributes(true)
@@ -296,4 +259,17 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit exe
 
   private def withContext[T](op: InitialDirContext => T): Future[T] = withContext(directoryConfig.directoryUrl, directoryConfig.user, directoryConfig.password)(op)
 
+  def clearDatabase(): Future[Unit] = withContext { ctx =>
+    clear(ctx, resourcesOu)
+    clear(ctx, groupsOu)
+    clear(ctx, peopleOu)
+  }
+
+  private def clear(ctx: DirContext, dn: String): Unit = {
+    ctx.list(dn).asScala.foreach { nameClassPair =>
+      val fullName = if (nameClassPair.isRelative) s"${nameClassPair.getName},$dn" else nameClassPair.getName
+      clear(ctx, fullName)
+    }
+    ctx.unbind(dn)
+  }
 }

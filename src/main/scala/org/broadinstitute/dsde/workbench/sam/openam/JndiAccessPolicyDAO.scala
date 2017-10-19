@@ -249,12 +249,4 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
   }
 
   private def withContext[T](op: InitialDirContext => T): Future[T] = withContext(directoryConfig.directoryUrl, directoryConfig.user, directoryConfig.password)(op)
-
-  def clear(ctx: DirContext, dn: String): Unit = {
-    ctx.list(dn).asScala.foreach { nameClassPair =>
-      clear(ctx, nameClassPair.getName)
-    }
-    ctx.unbind(dn)
-  }
-
 }
