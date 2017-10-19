@@ -43,60 +43,65 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives {
     } ~
     pathPrefix("resource") {
       requireUserInfo { userInfo =>
-        pathPrefix(Segment / Segment) { (resourceTypeName, resourceId) =>
+        pathPrefix(Segment) { resourceTypeName =>
           withResourceType(ResourceTypeName(resourceTypeName)) { resourceType =>
-
-            val resource = Resource(resourceType.name, ResourceId(resourceId))
-
             pathEndOrSingleSlash {
-              delete {
-                requireAction(resource, SamResourceActions.delete, userInfo) {
-                  complete(resourceService.deleteResource(Resource(resourceType.name, ResourceId(resourceId)), userInfo).map(_ => StatusCodes.NoContent))
-                }
-              } ~
-                post {
-                  complete(resourceService.createResource(resourceType, ResourceId(resourceId), userInfo).map(_ => StatusCodes.NoContent))
-                }
+              complete(resourceService.listUserAccessPolicies(resourceType, userInfo))
             } ~
-            pathPrefix("action") {
-              pathPrefix(Segment) { action =>
-                pathEndOrSingleSlash {
-                  get {
-                    complete(resourceService.hasPermission(Resource(resourceType.name, ResourceId(resourceId)), ResourceAction(action), userInfo).map { hasPermission =>
-                      StatusCodes.OK -> JsBoolean(hasPermission)
-                    })
-                  }
-                }
-              }
-            } ~
-            pathPrefix("policies") {
+            pathPrefix(Segment) { resourceId =>
+
+              val resource = Resource(resourceType.name, ResourceId(resourceId))
+
               pathEndOrSingleSlash {
-                get {
-                  requireAction(resource, SamResourceActions.readPolicies, userInfo) {
-                    complete(resourceService.listResourcePolicies(Resource(resourceType.name, ResourceId(resourceId)), userInfo).map { response =>
-                      StatusCodes.OK -> response
-                    })
+                delete {
+                  requireAction(resource, SamResourceActions.delete, userInfo) {
+                    complete(resourceService.deleteResource(Resource(resourceType.name, ResourceId(resourceId)), userInfo).map(_ => StatusCodes.NoContent))
                   }
-                }
+                } ~
+                  post {
+                    complete(resourceService.createResource(resourceType, ResourceId(resourceId), userInfo).map(_ => StatusCodes.NoContent))
+                  }
               } ~
-              pathPrefix(Segment) { policyName =>
-                pathEndOrSingleSlash {
-                  put {
-                    requireAction(resource, SamResourceActions.alterPolicies, userInfo) {
-                      entity(as[AccessPolicyMembership]) { membershipUpdate =>
-                        complete(resourceService.overwritePolicy(resourceType, policyName, Resource(resourceType.name, ResourceId(resourceId)), membershipUpdate, userInfo).map(_ => StatusCodes.Created))
-                      }
+              pathPrefix("action") {
+                pathPrefix(Segment) { action =>
+                  pathEndOrSingleSlash {
+                    get {
+                      complete(resourceService.hasPermission(Resource(resourceType.name, ResourceId(resourceId)), ResourceAction(action), userInfo).map { hasPermission =>
+                        StatusCodes.OK -> JsBoolean(hasPermission)
+                      })
                     }
                   }
                 }
-              }
-            } ~
-            pathPrefix("roles") {
-              pathEndOrSingleSlash {
-                get {
-                  complete(resourceService.listUserResourceRoles(Resource(resourceType.name, ResourceId(resourceId)), userInfo).map { roles =>
-                    StatusCodes.OK -> roles
-                  })
+              } ~
+              pathPrefix("policies") {
+                pathEndOrSingleSlash {
+                  get {
+                    requireAction(resource, SamResourceActions.readPolicies, userInfo) {
+                      complete(resourceService.listResourcePolicies(Resource(resourceType.name, ResourceId(resourceId)), userInfo).map { response =>
+                        StatusCodes.OK -> response
+                      })
+                    }
+                  }
+                } ~
+                  pathPrefix(Segment) { policyName =>
+                    pathEndOrSingleSlash {
+                      put {
+                        requireAction(resource, SamResourceActions.alterPolicies, userInfo) {
+                          entity(as[AccessPolicyMembership]) { membershipUpdate =>
+                            complete(resourceService.overwritePolicy(resourceType, AccessPolicyName(policyName), Resource(resourceType.name, ResourceId(resourceId)), membershipUpdate, userInfo).map(_ => StatusCodes.Created))
+                          }
+                        }
+                      }
+                    }
+                  }
+              } ~
+              pathPrefix("roles") {
+                pathEndOrSingleSlash {
+                  get {
+                    complete(resourceService.listUserResourceRoles(Resource(resourceType.name, ResourceId(resourceId)), userInfo).map { roles =>
+                      StatusCodes.OK -> roles
+                    })
+                  }
                 }
               }
             }

@@ -8,13 +8,13 @@ import org.broadinstitute.dsde.workbench.sam.util.{BaseDirContext, JndiSupport}
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Try
+import JndiSchemaDAO._
 
 /**
   * Created by mbemis on 10/3/17.
   */
-class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit executionContext: ExecutionContext) extends JndiSupport {
-
-  private object Attr {
+object JndiSchemaDAO {
+  object Attr {
     val resourceId = "resourceId"
     val resourceType = "resourceType"
     val subject = "subject"
@@ -28,7 +28,15 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit exe
     val groupUpdatedTimestamp = "groupUpdatedTimestamp"
     val groupSynchronizedTimestamp = "groupSynchronizedTimestamp"
     val petServiceAccount = "petServiceAccount"
+    val member = "member"
+    val memberOf = "isMemberOf"
+    val givenName = "givenName"
+    val sn = "sn"
+    val uid = "uid"
   }
+}
+
+class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit executionContext: ExecutionContext) extends JndiSupport {
 
   def init(): Future[Unit] = {
     for {
@@ -177,6 +185,48 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit exe
   //
 
   private def createResourcesOrgUnit(): Future[Unit] = withContext { ctx =>
+    try {
+      val resourcesContext = new BaseDirContext {
+        override def getAttributes(name: String): Attributes = {
+          val myAttrs = new BasicAttributes(true)  // Case ignore
+
+          val oc = new BasicAttribute("objectclass")
+          Seq("top", "organizationalUnit").foreach(oc.add)
+          myAttrs.put(oc)
+
+          myAttrs
+        }
+      }
+
+      ctx.bind(resourcesOu, resourcesContext)
+
+    } catch {
+      case e: NameAlreadyBoundException => // ignore
+    }
+  }
+
+  private def createPeopleOrgUnit(): Future[Unit] = withContext { ctx =>
+    try {
+      val resourcesContext = new BaseDirContext {
+        override def getAttributes(name: String): Attributes = {
+          val myAttrs = new BasicAttributes(true)  // Case ignore
+
+          val oc = new BasicAttribute("objectclass")
+          Seq("top", "organizationalUnit").foreach(oc.add)
+          myAttrs.put(oc)
+
+          myAttrs
+        }
+      }
+
+//      ctx.bind(peop, resourcesContext)
+
+    } catch {
+      case e: NameAlreadyBoundException => // ignore
+    }
+  }
+
+  private def createGroupsOrgUnit(): Future[Unit] = withContext { ctx =>
     try {
       val resourcesContext = new BaseDirContext {
         override def getAttributes(name: String): Attributes = {

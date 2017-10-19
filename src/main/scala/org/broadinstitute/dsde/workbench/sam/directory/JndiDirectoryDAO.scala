@@ -12,26 +12,12 @@ import org.broadinstitute.dsde.workbench.sam.util.{BaseDirContext, JndiSupport}
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Try
 import scala.collection.JavaConverters._
+import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO.Attr
 
 /**
  * Created by dvoet on 11/5/15.
  */
 class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit executionContext: ExecutionContext) extends DirectoryDAO with DirectorySubjectNameSupport with JndiSupport {
-
-  /** a bunch of attributes used in directory entries */
-  private object Attr {
-    val uniqueMember = "uniqueMember"
-    val member = "member"
-    val memberOf = "isMemberOf"
-    val email = "mail"
-    val givenName = "givenName"
-    val sn = "sn"
-    val cn = "cn"
-    val uid = "uid"
-    val groupUpdatedTimestamp = "groupUpdatedTimestamp"
-    val groupSynchronizedTimestamp = "groupSynchronizedTimestamp"
-    val petServiceAccount = "petServiceAccount"
-  }
 
   override def createGroup(group: WorkbenchGroup): Future[WorkbenchGroup] = withContext { ctx =>
     try {

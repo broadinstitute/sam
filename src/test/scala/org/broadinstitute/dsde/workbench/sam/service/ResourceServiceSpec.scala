@@ -45,7 +45,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     val role = resourceType.roles.find(_.roleName == resourceType.ownerRoleName).get
     val initialMembers = if(role.roleName.equals(resourceType.ownerRoleName)) Set(dummyUserInfo.userId.asInstanceOf[WorkbenchSubject]) else Set[WorkbenchSubject]()
     val group = WorkbenchGroup(WorkbenchGroupName(role.roleName.value), initialMembers, toEmail(resource.resourceTypeName.value, resource.resourceId.value, role.roleName.value))
-    Set(AccessPolicy(role.roleName.value, resource, group, Set(role.roleName), Set.empty))
+    Set(AccessPolicy(AccessPolicyName(role.roleName.value), resource, group, Set(role.roleName), Set.empty))
   }
 
   "ResourceService" should "create and delete resource" in {
@@ -81,7 +81,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
 
       val policies2 = runAndWait(service.createResource(defaultResourceType, resourceName2, dummyUserInfo))
 
-      runAndWait(service.accessPolicyDAO.createPolicy(AccessPolicy(otherRoleName.value, policies2, WorkbenchGroup(WorkbenchGroupName(otherRoleName.value), Set(dummyUserInfo.userId), WorkbenchGroupEmail("a@b.c")), Set(otherRoleName), Set.empty)))
+      runAndWait(service.accessPolicyDAO.createPolicy(AccessPolicy(AccessPolicyName(otherRoleName.value), policies2, WorkbenchGroup(WorkbenchGroupName(otherRoleName.value), Set(dummyUserInfo.userId), WorkbenchGroupEmail("a@b.c")), Set(otherRoleName), Set.empty)))
 
       assertResult(defaultResourceType.roles.filter(_.roleName.equals(ResourceRoleName("owner"))).head.actions) {
         runAndWait(service.listUserResourceActions(Resource(defaultResourceType.name, resourceName1), dummyUserInfo))
@@ -176,7 +176,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     runAndWait(service.createResource(defaultResourceType, resource.resourceId, dummyUserInfo))
 
     val group = WorkbenchGroup(WorkbenchGroupName("foo"), Set.empty, toEmail(resource.resourceTypeName.value, resource.resourceId.value, "foo"))
-    val newPolicy = AccessPolicy("foo", resource, group, Set.empty, Set(ResourceAction("nonowneraction")))
+    val newPolicy = AccessPolicy(AccessPolicyName("foo"), resource, group, Set.empty, Set(ResourceAction("nonowneraction")))
 
     runAndWait(service.overwritePolicy(defaultResourceType, newPolicy.name, newPolicy.resource, AccessPolicyMembership(Set.empty, Set(ResourceAction("nonowneraction")), Set.empty), dummyUserInfo))
 
@@ -194,7 +194,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     runAndWait(service.createResource(defaultResourceType, resource.resourceId, dummyUserInfo))
 
     val group = WorkbenchGroup(WorkbenchGroupName("foo"), Set.empty, toEmail(resource.resourceTypeName.value, resource.resourceId.value, "foo"))
-    val newPolicy = AccessPolicy("foo", resource, group, Set.empty, Set(ResourceAction("INVALID_ACTION")))
+    val newPolicy = AccessPolicy(AccessPolicyName("foo"), resource, group, Set.empty, Set(ResourceAction("INVALID_ACTION")))
 
     intercept[WorkbenchExceptionWithErrorReport] {
       runAndWait(service.overwritePolicy(defaultResourceType, newPolicy.name, newPolicy.resource, AccessPolicyMembership(Set.empty, Set(ResourceAction("INVALID_ACTION")), Set.empty), dummyUserInfo))
@@ -214,7 +214,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     runAndWait(service.createResource(defaultResourceType, resource.resourceId, dummyUserInfo))
 
     val group = WorkbenchGroup(WorkbenchGroupName("foo"), Set.empty, toEmail(resource.resourceTypeName.value, resource.resourceId.value, "foo"))
-    val newPolicy = AccessPolicy("foo", resource, group, Set(ResourceRoleName("INVALID_ROLE")), Set.empty)
+    val newPolicy = AccessPolicy(AccessPolicyName("foo"), resource, group, Set(ResourceRoleName("INVALID_ROLE")), Set.empty)
 
     intercept[WorkbenchExceptionWithErrorReport] {
       runAndWait(service.overwritePolicy(defaultResourceType, newPolicy.name, newPolicy.resource, AccessPolicyMembership(Set.empty, Set.empty, Set(ResourceRoleName("INVALID_ROLE"))), dummyUserInfo))
