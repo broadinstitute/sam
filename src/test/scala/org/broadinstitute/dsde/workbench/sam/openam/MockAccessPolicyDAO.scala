@@ -48,7 +48,10 @@ class MockAccessPolicyDAO extends AccessPolicyDAO {
     }
   }
 
-  override def listAccessPolicies(resourceTypeName: ResourceTypeName, user: WorkbenchUserId): Future[Set[ResourceIdAndPolicyName]] = ???
+  override def listAccessPolicies(resourceTypeName: ResourceTypeName, user: WorkbenchUserId): Future[Set[ResourceIdAndPolicyName]] = {
+    // note that this is too hard to implement right - currently it is only used to make sure the api routes are right
+    Future.successful(Set.empty)
+  }
 
   override def loadPolicy(policyName: AccessPolicyName, resource: Resource): Future[Option[AccessPolicy]] = {
     listAccessPolicies(resource).map { policies =>
