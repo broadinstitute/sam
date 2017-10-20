@@ -4,6 +4,7 @@ import javax.naming.NameAlreadyBoundException
 import javax.naming.directory._
 
 import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
+import org.broadinstitute.dsde.workbench.sam.directory.DirectorySubjectNameSupport
 import org.broadinstitute.dsde.workbench.sam.util.{BaseDirContext, JndiSupport}
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -12,7 +13,7 @@ import scala.util.Try
 /**
   * Created by mbemis on 10/3/17.
   */
-class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit executionContext: ExecutionContext) extends JndiSupport {
+class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit executionContext: ExecutionContext) extends JndiSupport with DirectorySubjectNameSupport {
 
   private object Attr {
     val resourceId = "resourceId"
@@ -253,7 +254,6 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit exe
   }
 
   private val resourcesOu = s"ou=resources,${directoryConfig.baseDn}"
-  private val petsOu = s"ou=pets,${directoryConfig.baseDn}"
 
   private def createAttributeDefinition(schema: DirContext, numericOID: String, name: String, description: String, singleValue: Boolean, equality: Option[String] = None, ordering: Option[String] = None, syntax: Option[String] = None) = {
     val attributes = new BasicAttributes(true)

@@ -11,13 +11,13 @@ trait DirectorySubjectNameSupport {
   protected val directoryConfig: DirectoryConfig
   val peopleOu = s"ou=people,${directoryConfig.baseDn}"
   val groupsOu = s"ou=groups,${directoryConfig.baseDn}"
-  val petsOu   = s"ou=pets,${directoryConfig.baseDn}"
+  val petsOu   = s"ou=pets,ou=people,${directoryConfig.baseDn}"
 
   protected def groupDn(groupName: WorkbenchGroupName) = s"cn=${groupName.value},$groupsOu"
   protected def userDn(samUserId: WorkbenchUserId) = s"uid=${samUserId.value},$peopleOu"
 
   // TODO this needs to use peopleOu to pass the open_idc check. Look at configuring IDC to allow ou=pets as well.
-  protected def petDn(serviceAccountId: WorkbenchUserServiceAccountId) = s"uid=${serviceAccountId.value},$peopleOu"
+  protected def petDn(serviceAccountId: WorkbenchUserServiceAccountId) = s"uid=${serviceAccountId.value},$petsOu"
 
   protected def subjectDn(subject: WorkbenchSubject) = subject match {
     case g: WorkbenchGroupName => groupDn(g)
