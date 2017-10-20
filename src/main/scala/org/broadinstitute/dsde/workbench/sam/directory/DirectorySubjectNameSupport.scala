@@ -11,12 +11,13 @@ trait DirectorySubjectNameSupport {
   protected val directoryConfig: DirectoryConfig
   val peopleOu = s"ou=people,${directoryConfig.baseDn}"
   val groupsOu = s"ou=groups,${directoryConfig.baseDn}"
-  // TODO people to pass the IDC check. Look at configuring IDC to look for ou=pets as well.
   val petsOu   = s"ou=pets,${directoryConfig.baseDn}"
 
   protected def groupDn(groupName: WorkbenchGroupName) = s"cn=${groupName.value},$groupsOu"
   protected def userDn(samUserId: WorkbenchUserId) = s"uid=${samUserId.value},$peopleOu"
-  protected def petDn(serviceAccountId: WorkbenchUserServiceAccountId) = s"uid=${serviceAccountId.value},$petsOu"
+
+  // TODO this needs to use peopleOu to pass the open_idc check. Look at configuring IDC to allow ou=pets as well.
+  protected def petDn(serviceAccountId: WorkbenchUserServiceAccountId) = s"uid=${serviceAccountId.value},$peopleOu"
 
   protected def subjectDn(subject: WorkbenchSubject) = subject match {
     case g: WorkbenchGroupName => groupDn(g)
@@ -30,7 +31,8 @@ trait DirectorySubjectNameSupport {
     splitDn.lift(1) match {
       case Some(ou) => {
         if(ou.equalsIgnoreCase("ou=groups")) WorkbenchGroupName(splitDn(0).stripPrefix("cn="))
-        else if(ou.equalsIgnoreCase("ou=people") || ou.equalsIgnoreCase("ou=pets")) WorkbenchUserId(splitDn(0).stripPrefix("uid="))
+        else if(ou.equalsIgnoreCase("ou=people")) WorkbenchUserId(splitDn(0).stripPrefix("uid="))
+        else if(ou.equalsIgnoreCase("ou=pets")) WorkbenchUserServiceAccountId(splitDn(0).stripPrefix("uid="))
         else throw new WorkbenchException(s"unexpected dn [$dn]")
       }
       case None => throw new WorkbenchException(s"unexpected dn [$dn]")

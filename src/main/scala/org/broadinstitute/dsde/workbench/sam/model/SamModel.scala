@@ -1,6 +1,6 @@
 package org.broadinstitute.dsde.workbench.sam.model
 
-import org.broadinstitute.dsde.workbench.model._
+import org.broadinstitute.dsde.workbench.model.{WorkbenchGroup, WorkbenchSubject, WorkbenchUserEmail, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import spray.json.DefaultJsonProtocol
 
