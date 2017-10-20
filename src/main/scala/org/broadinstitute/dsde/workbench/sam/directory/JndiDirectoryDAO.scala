@@ -259,8 +259,25 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     Try {
       ctx.modifyAttributes(directoryConfig.enabledUsersGroupDn, DirContext.ADD_ATTRIBUTE, new BasicAttributes(Attr.member, userDn(userId)))
     }.recover {
+      case _: NameNotFoundException =>
+        val groupContext = new BaseDirContext {
+          override def getAttributes(name: String): Attributes = {
+            val myAttrs = new BasicAttributes(true)  // Case ignore
+
+            val oc = new BasicAttribute("objectclass")
+            Seq("top", "groupofnames").foreach(oc.add)
+            myAttrs.put(oc)
+
+            myAttrs.put(new BasicAttribute(Attr.member, userDn(userId)))
+
+            myAttrs
+          }
+        }
+
+        ctx.bind(directoryConfig.enabledUsersGroupDn, groupContext)
+
       case _: AttributeInUseException => ()
-    }
+    }.get
   }
 
   override def disableUser(userId: WorkbenchUserId): Future[Unit] = withContext { ctx =>
@@ -268,7 +285,7 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
       ctx.modifyAttributes(directoryConfig.enabledUsersGroupDn, DirContext.REMOVE_ATTRIBUTE, new BasicAttributes(Attr.member, userDn(userId)))
     }.recover {
       case _: NoSuchAttributeException => ()
-    }
+    }.get
   }
 
   override def isEnabled(userId: WorkbenchUserId): Future[Boolean] = withContext { ctx =>
