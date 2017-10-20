@@ -14,7 +14,7 @@ trait DirectorySubjectNameSupport extends JndiSupport {
   val peopleOu = s"ou=people,${directoryConfig.baseDn}"
   val groupsOu = s"ou=groups,${directoryConfig.baseDn}"
   // TODO people to pass the IDC check. Look at configuring IDC to look for ou=pets as well.
-  val petsOu   = s"ou=people,${directoryConfig.baseDn}"
+  val petsOu   = s"ou=pets,${directoryConfig.baseDn}"
 
   protected def groupDn(groupName: WorkbenchGroupName) = s"cn=${groupName.value},$groupsOu"
   protected def userDn(samUserId: WorkbenchUserId) = s"uid=${samUserId.value},$peopleOu"
