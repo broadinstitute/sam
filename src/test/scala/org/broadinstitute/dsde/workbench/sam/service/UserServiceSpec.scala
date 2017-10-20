@@ -58,7 +58,7 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Befor
   "UserService" should "create a user" in {
     // create a user
     val newUser = service.createUser(defaultUser).futureValue
-    newUser shouldBe Some(UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> false, "allUsersGroup" -> true, "google" -> true)))
+    newUser shouldBe UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
 
     // check ldap
     dirDAO.loadUser(defaultUserId).futureValue shouldBe Some(defaultUser)
@@ -83,15 +83,15 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Befor
 
     // create a user
     val newUser = service.createUser(defaultUser).futureValue
-    newUser shouldBe Some(UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> false, "allUsersGroup" -> true, "google" -> true)))
+    newUser shouldBe UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
 
     // user should exist now
     val status = service.getUserStatus(defaultUserId).futureValue
-    status shouldBe Some(UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> false, "allUsersGroup" -> true, "google" -> true)))
+    status shouldBe Some(UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true)))
   }
 
   // TODO: cn=enabled-users isn't created in the test environment, so this test fails
-  it should "enable/disable user" ignore {
+  it should "enable/disable user" in {
     // create a user
     val newUser = service.createUser(defaultUser).futureValue
     newUser shouldBe UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
@@ -116,7 +116,7 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Befor
   it should "delete a user" in {
     // create a user
     val newUser = service.createUser(defaultUser).futureValue
-    newUser shouldBe Some(UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> false, "allUsersGroup" -> true, "google" -> true)))
+    newUser shouldBe UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
 
     // delete the user
     service.deleteUser(defaultUserId, userInfo).futureValue
@@ -133,7 +133,7 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Befor
   it should "get a pet service account for a user" in {
     // create a user
     val newUser = service.createUser(defaultUser).futureValue
-    newUser shouldBe Some(UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> false, "allUsersGroup" -> true, "google" -> true)))
+    newUser shouldBe UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
 
     // create a pet service account
     val emailResponse = service.createUserPetServiceAccount(defaultUser).futureValue
