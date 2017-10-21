@@ -13,6 +13,7 @@ trait DirectorySubjectNameSupport extends JndiSupport {
   protected val directoryConfig: DirectoryConfig
   val peopleOu = s"ou=people,${directoryConfig.baseDn}"
   val groupsOu = s"ou=groups,${directoryConfig.baseDn}"
+  // Note: the pets ou is 'under' the people ou to ensure that the open_idc ldap checks pass for pet service accounts
   val petsOu   = s"ou=pets,ou=people,${directoryConfig.baseDn}"
 
   protected def groupDn(groupName: WorkbenchGroupName) = s"cn=${groupName.value},$groupsOu"
