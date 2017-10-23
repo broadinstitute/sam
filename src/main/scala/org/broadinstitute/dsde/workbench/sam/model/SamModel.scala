@@ -25,9 +25,17 @@ object SamJsonSupport {
 
   implicit val UserStatusFormat = jsonFormat2(UserStatus)
 
+  implicit val AccessPolicyNameFormat = ValueObjectFormat(AccessPolicyName)
+
+  implicit val ResourceIdFormat = ValueObjectFormat(ResourceId)
+
+  implicit val ResourceFormat = jsonFormat2(Resource)
+
   implicit val AccessPolicyMembershipFormat = jsonFormat3(AccessPolicyMembership)
 
   implicit val AccessPolicyResponseEntryFormat = jsonFormat2(AccessPolicyResponseEntry)
+
+  implicit val ResourceIdAndPolicyNameFormat = jsonFormat2(ResourceIdAndPolicyName)
 
 }
 
@@ -51,6 +59,8 @@ case class ResourceType(name: ResourceTypeName, actions: Set[ResourceAction], ro
 
 case class ResourceId(value: String) extends ValueObject
 
-case class AccessPolicy(name: String, resource: Resource, members: WorkbenchGroup, roles: Set[ResourceRoleName], actions: Set[ResourceAction])
+case class ResourceIdAndPolicyName(resourceId: ResourceId, accessPolicyName: AccessPolicyName)
+case class AccessPolicyName(value: String) extends ValueObject
+case class AccessPolicy(name: AccessPolicyName, resource: Resource, members: WorkbenchGroup, roles: Set[ResourceRoleName], actions: Set[ResourceAction])
 case class AccessPolicyMembership(memberEmails: Set[String], actions: Set[ResourceAction], roles: Set[ResourceRoleName])
-case class AccessPolicyResponseEntry(policyName: String, policy: AccessPolicyMembership)
+case class AccessPolicyResponseEntry(policyName: AccessPolicyName, policy: AccessPolicyMembership)

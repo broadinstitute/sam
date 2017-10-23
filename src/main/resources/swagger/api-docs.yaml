@@ -75,6 +75,26 @@ paths:
       tags:
         - Admin
 
+  /api/resource/{resourceTypeName}:
+    get:
+      summary: List resources and policies for this resource for the caller
+      responses:
+        200:
+          description: Success
+          schema:
+            type: array
+            items:
+              $ref: '#/definitions/ResourceAndAccessPolicy'
+      parameters:
+        - in: path
+          description: Type of the resource
+          name: resourceTypeName
+          required: true
+          type: string
+      operationId: listResourcesAndPolicies
+      tags:
+        - Resources
+
   /api/resource/{resourceTypeName}/{resourceId}:
     delete:
       summary: Delete a resource
@@ -431,6 +451,21 @@ definitions:
         description: stack trace
         items:
           $ref: '#/definitions/StackTraceElement'
+
+  ResourceAndAccessPolicy:
+    type: object
+    description: 'specification of a resource with an access policy'
+    required:
+      - resourceId
+      - accessPolicyName
+    properties:
+      resourceId:
+        type: string
+        description: The id of the resource
+      accessPolicyName:
+        type: string
+        description: User's policy for the resource
+
 
   ResourceRole:
     type: object

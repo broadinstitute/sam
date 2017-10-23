@@ -24,7 +24,7 @@ class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Google
 
   import UserService.allUsersGroupName
 
-  def createUser(user: WorkbenchUser): Future[Option[UserStatus]] = {
+  def createUser(user: WorkbenchUser): Future[UserStatus] = {
     for {
       createdUser <- directoryDAO.createUser(user)
       _ <- googleDirectoryDAO.createGroup(WorkbenchGroupName(user.email.value), WorkbenchGroupEmail(toProxyFromUser(user.id.value))) recover {
@@ -37,7 +37,7 @@ class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Google
       _ <- googleDirectoryDAO.addMemberToGroup(WorkbenchGroupEmail(toGoogleGroupName(allUsersGroupName.value)), WorkbenchUserEmail(toProxyFromUser(user.id.value))) //TODO: For now, do a manual add to the All_Users Google group (undo this in Phase II)
       userStatus <- getUserStatus(createdUser.id)
     } yield {
-      userStatus
+      userStatus.getOrElse(throw new WorkbenchException("getUserStatus returned None after user was created"))
     }
   }
 

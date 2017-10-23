@@ -32,11 +32,11 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
 
       val roleMembers: Set[WorkbenchSubject] = Set(userInfo.userId)
 
-      val email = toGoogleGroupEmail(role.roleName.value, Resource(resourceType.name, resourceId))
+      val email = toGoogleGroupEmail(AccessPolicyName(role.roleName.value), Resource(resourceType.name, resourceId))
 
       for {
         _ <- accessPolicyDAO.createPolicy(AccessPolicy(
-          role.roleName.value,
+          AccessPolicyName(role.roleName.value),
           resource,
           WorkbenchGroup(WorkbenchGroupName(role.roleName.value), roleMembers, email),
           Set(role.roleName),
@@ -44,6 +44,10 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
         ))
       } yield Resource(resourceType.name, resourceId)
     }
+  }
+
+  def listUserAccessPolicies(resourceType: ResourceType, userInfo: UserInfo): Future[Set[ResourceIdAndPolicyName]] = {
+    accessPolicyDAO.listAccessPolicies(resourceType.name, userInfo.userId)
   }
 
   def deleteResource(resource: Resource, userInfo: UserInfo): Future[Unit] = {
@@ -88,7 +92,7 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
   }
 
   //Overwrites an existing policy (keyed by resourceType/resourceId/policyName), saves a new one if it doesn't exist yet
-  def overwritePolicy(resourceType: ResourceType, policyName: String, resource: Resource, policyMembership: AccessPolicyMembership, userInfo: UserInfo): Future[AccessPolicy] = {
+  def overwritePolicy(resourceType: ResourceType, policyName: AccessPolicyName, resource: Resource, policyMembership: AccessPolicyMembership, userInfo: UserInfo): Future[AccessPolicy] = {
     if(!policyMembership.actions.subsetOf(resourceType.actions))
       throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"You have specified an invalid action for resource type ${resourceType.name}. Valid actions are: ${resourceType.actions.mkString(", ")}"))
     if(!policyMembership.roles.subsetOf(resourceType.roles.map(_.roleName)))
@@ -104,7 +108,7 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     val impliedActionsFromRoles = policyMembership.roles.flatMap(actionsByRole)
 
     subjectsFromEmails.flatMap { members =>
-      val newPolicy = AccessPolicy(policyName, resource, WorkbenchGroup(WorkbenchGroupName(policyName), members, email), policyMembership.roles, policyMembership.actions ++ impliedActionsFromRoles)
+      val newPolicy = AccessPolicy(policyName, resource, WorkbenchGroup(WorkbenchGroupName(policyName.value), members, email), policyMembership.roles, policyMembership.actions ++ impliedActionsFromRoles)
 
       accessPolicyDAO.loadPolicy(policyName, resource).flatMap {
         case None => accessPolicyDAO.createPolicy(newPolicy)
@@ -130,7 +134,7 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     }
   }
 
-  def toGoogleGroupEmail(policyName: String, resource: Resource) = WorkbenchGroupEmail(s"policy-${resource.resourceTypeName.value}-${resource.resourceId.value}-$policyName@$googleDomain") //TODO: Make sure this is a good/unique naming convention and keep Google length limits in mind
+  def toGoogleGroupEmail(policyName: AccessPolicyName, resource: Resource) = WorkbenchGroupEmail(s"policy-${resource.resourceTypeName.value}-${resource.resourceId.value}-$policyName@$googleDomain") //TODO: Make sure this is a good/unique naming convention and keep Google length limits in mind
   def toGoogleGroupName(groupName: WorkbenchGroupName) = WorkbenchGroupEmail(s"GROUP_${groupName.value}@$googleDomain")
 
   //todo: use this for google group sync

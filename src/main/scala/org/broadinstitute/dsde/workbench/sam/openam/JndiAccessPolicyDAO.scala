@@ -14,25 +14,12 @@ import org.broadinstitute.dsde.workbench.sam._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.collection.JavaConverters._
 import scala.util.Try
+import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO.Attr
 
 /**
   * Created by dvoet on 6/26/17.
   */
 class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implicit executionContext: ExecutionContext) extends AccessPolicyDAO with DirectorySubjectNameSupport with JndiSupport {
-
-  private object Attr {
-    val resourceId = "resourceId"
-    val resourceType = "resourceType"
-    val subject = "subject"
-    val action = "action"
-    val role = "role"
-    val mail = "mail"
-    val ou = "ou"
-    val cn = "cn"
-    val policy = "policy"
-    val uniqueMember = "uniqueMember"
-  }
-
   //
   // RESOURCE TYPES
   //
@@ -102,8 +89,8 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
           val oc = new BasicAttribute("objectclass")
           Seq("top", "policy").foreach(oc.add)
           myAttrs.put(oc)
-          myAttrs.put(Attr.cn, policy.name)
-          myAttrs.put(Attr.mail, policy.members.email.value) //TODO make sure the google group is created
+          myAttrs.put(Attr.cn, policy.name.value)
+          myAttrs.put(Attr.email, policy.members.email.value) //TODO make sure the google group is created
 
           if (policy.actions.nonEmpty) {
             val actions = new BasicAttribute(Attr.action)
@@ -170,6 +157,17 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
     newPolicy
   }
 
+  override def listAccessPolicies(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId): Future[Set[ResourceIdAndPolicyName]] = withContext { ctx =>
+    val attributes = ctx.getAttributes(userDn(userId), Array(Attr.memberOf))
+    val groupDns = getAttributes[String](attributes, Attr.memberOf).getOrElse(Set.empty).toSet
+
+    val policyDnPattern = dnMatcher(Seq(Attr.policy, Attr.resourceId), resourceTypeDn(resourceTypeName))
+
+    groupDns.collect {
+      case policyDnPattern(policyName, resourceId) => ResourceIdAndPolicyName(ResourceId(resourceId), AccessPolicyName(policyName))
+    }
+  }
+
   override def listAccessPolicies(resource: Resource): Future[Set[AccessPolicy]] = {
     val searchAttrs = new BasicAttributes(true)  // Case ignore
 
@@ -183,7 +181,7 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
     listAccessPolicies(resource, searchAttrs)
   }
 
-  override def loadPolicy(policyName: String, resource: Resource): Future[Option[AccessPolicy]] = withContext { ctx =>
+  override def loadPolicy(policyName: AccessPolicyName, resource: Resource): Future[Option[AccessPolicy]] = withContext { ctx =>
     Try {
       val attributes = ctx.getAttributes(policyDn(policyName, resource))
       Option(unmarshalAccessPolicy(attributes))
@@ -200,7 +198,7 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
   private def resourceTypeDn(resourceTypeName: ResourceTypeName) = s"${Attr.resourceType}=${resourceTypeName.value},$resourcesOu"
   private def resourceDn(resource: Resource) = s"${Attr.resourceId}=${resource.resourceId.value},${resourceTypeDn(resource.resourceTypeName)}"
   private def policyDn(policy: AccessPolicy): String = s"${Attr.policy}=${policy.name},${resourceDn(policy.resource)}"
-  private def policyDn(policyName: String, resource: Resource): String = s"${Attr.policy}=${policyName},${resourceDn(resource)}"
+  private def policyDn(policyName: AccessPolicyName, resource: Resource): String = s"${Attr.policy}=${policyName.value},${resourceDn(resource)}"
 
   private def getAttributes[T](attributes: Attributes, key: String): Option[TraversableOnce[T]] = {
     Option(attributes.get(key)).map(_.getAll.asScala.map(_.asInstanceOf[T]))
@@ -215,12 +213,12 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
     val roles = getAttributes[String](attributes, Attr.role).getOrElse(Set.empty).toSet.map(r => ResourceRoleName(r))
     val actions = getAttributes[String](attributes, Attr.action).getOrElse(Set.empty).toSet.map(a => ResourceAction(a))
 
-    val email = WorkbenchGroupEmail(attributes.get(Attr.mail).get().toString)
+    val email = WorkbenchGroupEmail(attributes.get(Attr.email).get().toString)
     val name = WorkbenchGroupName(policyName) //TODO
 
     val group = WorkbenchGroup(name, members, email)
 
-    AccessPolicy(policyName, resource, group, roles, actions)
+    AccessPolicy(AccessPolicyName(policyName), resource, group, roles, actions)
   }
 
   /**

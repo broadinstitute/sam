@@ -2,6 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.openam
 import akka.http.scaladsl.model.StatusCodes
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchException, WorkbenchExceptionWithErrorReport, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam._
+import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model._
 
 import scala.collection.concurrent.TrieMap
@@ -47,9 +48,14 @@ class MockAccessPolicyDAO extends AccessPolicyDAO {
     }
   }
 
-  override def loadPolicy(policyName: String, resource: Resource): Future[Option[AccessPolicy]] = {
+  override def listAccessPolicies(resourceTypeName: ResourceTypeName, user: WorkbenchUserId): Future[Set[ResourceIdAndPolicyName]] = {
+    // note that this is too hard to implement right - currently it is only used to make sure the api routes are right
+    Future.successful(Set.empty)
+  }
+
+  override def loadPolicy(policyName: AccessPolicyName, resource: Resource): Future[Option[AccessPolicy]] = {
     listAccessPolicies(resource).map { policies =>
-      policies.filter(_.name.equalsIgnoreCase(policyName)).toSeq match {
+      policies.filter(_.name == policyName).toSeq match {
         case Seq() => None
         case Seq(policy) => Option(policy)
         case _ => throw new WorkbenchException(s"More than one policy found for $policyName")

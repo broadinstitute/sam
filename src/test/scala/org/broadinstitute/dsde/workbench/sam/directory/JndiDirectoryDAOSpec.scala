@@ -24,6 +24,11 @@ class JndiDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     runAndWait(schemaDao.init())
   }
 
+
+  override protected def afterAll(): Unit = {
+    runAndWait(schemaDao.clearDatabase())
+  }
+
   "JndiGroupDirectoryDAO" should "create, read, delete groups" in {
     val groupName = WorkbenchGroupName(UUID.randomUUID().toString)
     val group = WorkbenchGroup(groupName, Set.empty, WorkbenchGroupEmail("john@doe.org"))
@@ -297,5 +302,4 @@ class JndiDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
       runAndWait(dao.loadUser(user.id))
     }
   }
-
 }

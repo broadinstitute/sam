@@ -322,5 +322,19 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     }
   }
 
+  "GET /api/resources/{resourceType}" should "200" in {
+    val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceAction("readpolicies"), ResourceAction("cancompute")), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("readpolicies")))), ResourceRoleName("owner"))
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
+
+    //Create a resource
+    Post(s"/api/resource/${resourceType.name}/foo") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+    }
+
+    //Read the policies
+    Get(s"/api/resource/${resourceType.name}") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+    }
+  }
 }
 
