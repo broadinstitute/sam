@@ -71,26 +71,25 @@ class JndiDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
   }
 
   it should "create, read, delete pet service accounts" in {
-    val userId = WorkbenchUserServiceAccountId(UUID.randomUUID().toString)
-    val serviceAccount = WorkbenchUserServiceAccount(userId, WorkbenchUserServiceAccountEmail("foo@bar.com"), WorkbenchUserServiceAccountDisplayName("Foo Bar"))
-    val user = WorkbenchUser(WorkbenchUserId(serviceAccount.id.value), WorkbenchUserEmail(serviceAccount.email.value))
+    val serviceAccountId = WorkbenchUserServiceAccountId(UUID.randomUUID().toString)
+    val serviceAccount = WorkbenchUserServiceAccount(serviceAccountId, WorkbenchUserServiceAccountEmail("foo@bar.com"), WorkbenchUserServiceAccountDisplayName(""))
 
     assertResult(None) {
-      runAndWait(dao.loadUser(serviceAccount.id))
+      runAndWait(dao.loadPetServiceAccount(serviceAccount.id))
     }
 
     assertResult(serviceAccount) {
-      runAndWait(dao.createUser(serviceAccount))
+      runAndWait(dao.createPetServiceAccount(serviceAccount))
     }
 
-    assertResult(Some(user)) {
-      runAndWait(dao.loadUser(serviceAccount.id))
+    assertResult(Some(serviceAccount)) {
+      runAndWait(dao.loadPetServiceAccount(serviceAccount.id))
     }
 
-    runAndWait(dao.deleteUser(serviceAccount.id))
+    runAndWait(dao.deletePetServiceAccount(serviceAccount.id))
 
     assertResult(None) {
-      runAndWait(dao.loadUser(serviceAccount.id))
+      runAndWait(dao.loadPetServiceAccount(serviceAccount.id))
     }
   }
 

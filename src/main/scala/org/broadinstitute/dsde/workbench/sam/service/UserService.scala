@@ -41,9 +41,9 @@ class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Google
     }
   }
 
-  def getUserStatus(userId: WorkbenchSubject): Future[Option[UserStatus]] = {
+  def getUserStatus(userId: WorkbenchUserId): Future[Option[UserStatus]] = {
     directoryDAO.loadUser(userId).flatMap {
-      case Some(user: WorkbenchUser) =>
+      case Some(user) =>
         for {
           googleStatus <- googleDirectoryDAO.isGroupMember(WorkbenchGroupEmail(toProxyFromUser(user.id.value)), WorkbenchGroupEmail(user.email.value)) recover { case e: NameNotFoundException => false }
           allUsersStatus <- directoryDAO.isGroupMember(allUsersGroupName, user.id) recover { case e: NameNotFoundException => false }
@@ -52,7 +52,7 @@ class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Google
           Option(UserStatus(UserStatusDetails(user.id, user.email), Map("ldap" -> ldapStatus, "allUsersGroup" -> allUsersStatus, "google" -> googleStatus)))
         }
 
-      case _ => Future.successful(None)
+      case None => Future.successful(None)
     }
   }
 
@@ -118,16 +118,16 @@ class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Google
       // add the pet service account attribute to the user's LDAP record
       _ <- directoryDAO.addPetServiceAccountToUser(user.id, petServiceAccount.email)
       // create an additional LDAP record for the pet service account itself (in a different organizational unit than the user)
-      _ <- directoryDAO.createUser(petServiceAccount)
+      _ <- directoryDAO.createPetServiceAccount(petServiceAccount)
       // add the pet service account to the 'enabled users' group
-      _ <- directoryDAO.enableUser(petServiceAccount.id)
+      _ <- directoryDAO.enableUser(user.id)
     } yield petServiceAccount.email
   }
 
   private def removePetServiceAccount(user: WorkbenchUser, petServiceAccount: WorkbenchUserServiceAccount): Future[Unit] = {
     for {
       // remove the LDAP record for the pet service account
-      _ <- directoryDAO.deleteUser(petServiceAccount.id)
+      _ <- directoryDAO.deletePetServiceAccount(petServiceAccount.id)
       // remove the pet service account attribute on the user's LDAP record
       _ <- directoryDAO.removePetServiceAccountFromUser(user.id)
       // remove the service account itself in Google
