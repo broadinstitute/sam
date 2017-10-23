@@ -53,7 +53,7 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Befor
     // clean up
     dirDAO.removePetServiceAccountFromUser(defaultUserId).futureValue
     dirDAO.deleteUser(defaultUserId).futureValue
-    dirDAO.deleteUser(defaultPetUserId).futureValue
+    dirDAO.deletePetServiceAccount(defaultPetUserId).futureValue
     dirDAO.deleteGroup(UserService.allUsersGroupName).futureValue
   }
 
@@ -144,7 +144,8 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Befor
 
     // verify ldap
     dirDAO.getPetServiceAccountForUser(defaultUserId).futureValue shouldBe Some(emailResponse)
-    dirDAO.loadUser(defaultPetUserId).futureValue shouldBe Some(WorkbenchUser(WorkbenchUserId(defaultPetUserId.value), WorkbenchUserEmail(emailResponse.value)))
+    dirDAO.loadPetServiceAccount(defaultPetUserId).futureValue shouldBe
+      Some(WorkbenchUserServiceAccount(defaultPetUserId, WorkbenchUserServiceAccountEmail(emailResponse.value), WorkbenchUserServiceAccountDisplayName("")))
 
     // verify google
     val mockGoogleIamDAO = service.googleIamDAO.asInstanceOf[MockGoogleIamDAO]

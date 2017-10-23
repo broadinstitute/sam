@@ -5,6 +5,7 @@ import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.testkit.ScalatestRouteTest
 import org.broadinstitute.dsde.workbench.google.mock.{MockGoogleDirectoryDAO, MockGoogleIamDAO}
+import org.broadinstitute.dsde.workbench.google.model.GoogleProject
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.config.PetServiceAccountConfig
@@ -26,7 +27,7 @@ class UserRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest {
     val googleDirectoryDAO = new MockGoogleDirectoryDAO()
     val directoryDAO = new MockDirectoryDAO()
     val googleIamDAO = new MockGoogleIamDAO()
-    val petServiceAccountConfig = PetServiceAccountConfig("test-project", Set(WorkbenchUserEmail("test@test.gserviceaccount.com")))
+    val petServiceAccountConfig = PetServiceAccountConfig(GoogleProject("test-project"), Set(WorkbenchUserEmail("test@test.gserviceaccount.com")))
 
     val samRoutes = new TestSamRoutes(null, new UserService(directoryDAO, googleDirectoryDAO, googleIamDAO, "dev.test.firecloud.org", petServiceAccountConfig), new StatusService(directoryDAO, googleDirectoryDAO), UserInfo("", defaultUserId, defaultUserEmail, 0))
     testCode(samRoutes)
@@ -43,7 +44,7 @@ class UserRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest {
     val googleDirectoryDAO = new MockGoogleDirectoryDAO()
     val directoryDAO = new MockDirectoryDAO()
     val googleIamDAO = new MockGoogleIamDAO()
-    val petServiceAccountConfig = PetServiceAccountConfig("test-project", Set(WorkbenchUserEmail("test@test.gserviceaccount.com")))
+    val petServiceAccountConfig = PetServiceAccountConfig(GoogleProject("test-project"), Set(WorkbenchUserEmail("test@test.gserviceaccount.com")))
 
     setupAdminsGroup(googleDirectoryDAO)
 

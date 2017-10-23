@@ -99,9 +99,17 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     }.toSeq
   } }
 
-  override def createUser(user: WorkbenchPerson): Future[WorkbenchPerson] = withContext { ctx =>
+  override def createUser(user: WorkbenchUser): Future[WorkbenchUser] = {
+    createIdentityInternal(user.id, user.email).map(_ => user)
+  }
+
+  override def createPetServiceAccount(petServiceAccount: WorkbenchUserServiceAccount): Future[WorkbenchUserServiceAccount] = {
+    createIdentityInternal(petServiceAccount.id, petServiceAccount.email).map(_ => petServiceAccount)
+  }
+
+  private def createIdentityInternal(subject: WorkbenchSubject, email: WorkbenchEmail): Future[Unit] = withContext { ctx =>
     try {
-      val userContext = new BaseDirContext {
+      val identityContext = new BaseDirContext {
         override def getAttributes(name: String): Attributes = {
           val myAttrs = new BasicAttributes(true)  // Case ignore
 
@@ -109,20 +117,19 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
           Seq("top", "inetOrgPerson").foreach(oc.add)
           myAttrs.put(oc)
 
-          myAttrs.put(new BasicAttribute(Attr.email, user.email.value))
-          myAttrs.put(new BasicAttribute(Attr.sn, user.id.value))
-          myAttrs.put(new BasicAttribute(Attr.cn, user.id.value))
-          myAttrs.put(new BasicAttribute(Attr.uid, user.id.value))
+          myAttrs.put(new BasicAttribute(Attr.email, email.value))
+          myAttrs.put(new BasicAttribute(Attr.sn, subject.value))
+          myAttrs.put(new BasicAttribute(Attr.cn, subject.value))
+          myAttrs.put(new BasicAttribute(Attr.uid, subject.value))
 
           myAttrs
         }
       }
 
-      ctx.bind(subjectDn(user.id), userContext)
-      user
+      ctx.bind(subjectDn(subject), identityContext)
     } catch {
-      case e: NameAlreadyBoundException =>
-        throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"user with id ${user.id.value} already exists"))
+      case _: NameAlreadyBoundException =>
+        throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"identity with id ${subject.value} already exists"))
     }
   }
 
@@ -136,14 +143,14 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     }
   }
 
-  override def addPetServiceAccountToUser(userId: WorkbenchUserId, email: WorkbenchUserServiceAccountEmail): Future[WorkbenchUserServiceAccountEmail] = {
+  override def addPetServiceAccountToUser(userId: WorkbenchUserId, petServiceAccountEmail: WorkbenchUserServiceAccountEmail): Future[WorkbenchUserServiceAccountEmail] = {
     withContext { ctx =>
       val myAttrs = new BasicAttributes(true)
       myAttrs.put(new BasicAttribute("objectclass", "workbenchPerson"))
-      myAttrs.put(new BasicAttribute(Attr.petServiceAccount, email.value))
+      myAttrs.put(new BasicAttribute(Attr.petServiceAccount, petServiceAccountEmail.value))
 
       ctx.modifyAttributes(userDn(userId), DirContext.ADD_ATTRIBUTE, myAttrs)
-      email
+      petServiceAccountEmail
     } recover { case _: AttributeInUseException =>
       throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"user with id ${userId.value} already has a pet service account"))
     }
@@ -162,9 +169,9 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     }
   }
 
-  override def loadUser(userId: WorkbenchSubject): Future[Option[WorkbenchPerson]] = withContext { ctx =>
+  override def loadUser(userId: WorkbenchUserId): Future[Option[WorkbenchUser]] = withContext { ctx =>
     Try {
-      val attributes = ctx.getAttributes(subjectDn(userId))
+      val attributes = ctx.getAttributes(userDn(userId))
 
       Option(unmarshalUser(attributes))
 
@@ -174,7 +181,19 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     }.get
   }
 
-  def loadUsers(userIds: Set[WorkbenchSubject]): Future[Seq[WorkbenchPerson]] = batchedLoad(userIds.toSeq) { batch => { ctx =>
+  override def loadPetServiceAccount(petServiceAccountId: WorkbenchUserServiceAccountId): Future[Option[WorkbenchUserServiceAccount]] = withContext { ctx =>
+    Try {
+      val attributes = ctx.getAttributes(petDn(petServiceAccountId))
+
+      Option(unmarshalPetServiceAccount(attributes))
+
+    }.recover {
+      case e: NameNotFoundException => None
+
+    }.get
+  }
+
+  override def loadUsers(userIds: Set[WorkbenchUserId]): Future[Seq[WorkbenchUser]] = batchedLoad(userIds.toSeq) { batch => { ctx =>
     val filters = batch.toSet[WorkbenchSubject].map { ref => s"(${Attr.uid}=${ref.value})" }
     ctx.search(peopleOu, s"(|${filters.mkString})", new SearchControls()).asScala.map { result =>
       unmarshalUser(result.getAttributes)
@@ -201,6 +220,13 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     WorkbenchUser(WorkbenchUserId(uid), WorkbenchUserEmail(email))
   }
 
+  private def unmarshalPetServiceAccount(attributes: Attributes): WorkbenchUserServiceAccount = {
+    val uid = getAttribute[String](attributes, Attr.uid).getOrElse(throw new WorkbenchException(s"${Attr.uid} attribute missing"))
+    val email = getAttribute[String](attributes, Attr.email).getOrElse(throw new WorkbenchException(s"${Attr.email} attribute missing"))
+
+    WorkbenchUserServiceAccount(WorkbenchUserServiceAccountId(uid), WorkbenchUserServiceAccountEmail(email), WorkbenchUserServiceAccountDisplayName(""))
+  }
+
   private def unmarshalGroup(attributes: Attributes): WorkbenchGroup = {
     val cn = getAttribute[String](attributes, Attr.cn).getOrElse(throw new WorkbenchException(s"${Attr.cn} attribute missing"))
     val email = getAttribute[String](attributes, Attr.email).getOrElse(throw new WorkbenchException(s"${Attr.email} attribute missing"))
@@ -218,13 +244,17 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     Option(attributes.get(key)).map(_.getAll.asScala.map(_.asInstanceOf[T]))
   }
 
-  override def deleteUser(userId: WorkbenchSubject): Future[Unit] = withContext { ctx =>
-    ctx.unbind(subjectDn(userId))
+  override def deleteUser(userId: WorkbenchUserId): Future[Unit] = withContext { ctx =>
+    ctx.unbind(userDn(userId))
   }
 
-  override def listUsersGroups(userId: WorkbenchSubject): Future[Set[WorkbenchGroupName]] = withContext { ctx =>
+  override def deletePetServiceAccount(petServiceAccountId: WorkbenchUserServiceAccountId): Future[Unit] = withContext { ctx =>
+    ctx.unbind(petDn(petServiceAccountId))
+  }
+
+  override def listUsersGroups(userId: WorkbenchUserId): Future[Set[WorkbenchGroupName]] = withContext { ctx =>
     val groups = for (
-      attr <- ctx.getAttributes(subjectDn(userId), Array(Attr.memberOf)).getAll.asScala;
+      attr <- ctx.getAttributes(userDn(userId), Array(Attr.memberOf)).getAll.asScala;
       attrE <- attr.getAll.asScala
     ) yield dnToGroupName(attrE.asInstanceOf[String])
 
@@ -240,7 +270,7 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     groups.toSet.contains(groupName)
   }
 
-  override def listFlattenedGroupUsers(groupName: WorkbenchGroupName): Future[Set[WorkbenchSubject]] = withContext { ctx =>
+  override def listFlattenedGroupUsers(groupName: WorkbenchGroupName): Future[Set[WorkbenchUserId]] = withContext { ctx =>
     ctx.search(peopleOu, new BasicAttributes(Attr.memberOf, groupDn(groupName), true)).asScala.map { result =>
       unmarshalUser(result.getAttributes).id
     }.toSet
@@ -255,9 +285,21 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     groups.toSet
   }
 
-  override def enableUser(userId: WorkbenchSubject): Future[Unit] = withContext { ctx =>
+  override def enableUser(userId: WorkbenchUserId): Future[Unit] = {
+    enableIdentity(userId).flatMap { _ =>
+      getPetServiceAccountForUser(userId).flatMap {
+        case Some(petEmail) => loadSubjectFromEmail(petEmail.value).flatMap {
+          case Some(petId) => enableIdentity(petId)
+          case None => Future.successful(())
+        }
+        case None => Future.successful(())
+      }
+    }
+  }
+
+  private def enableIdentity(subject: WorkbenchSubject): Future[Unit] = withContext { ctx =>
     Try {
-      ctx.modifyAttributes(directoryConfig.enabledUsersGroupDn, DirContext.ADD_ATTRIBUTE, new BasicAttributes(Attr.member, subjectDn(userId)))
+      ctx.modifyAttributes(directoryConfig.enabledUsersGroupDn, DirContext.ADD_ATTRIBUTE, new BasicAttributes(Attr.member, subjectDn(subject)))
     }.recover {
       case _: NameNotFoundException =>
         val groupContext = new BaseDirContext {
@@ -280,15 +322,27 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     }.get
   }
 
-  override def disableUser(userId: WorkbenchSubject): Future[Unit] = withContext { ctx =>
+  override def disableUser(userId: WorkbenchUserId): Future[Unit] = withContext { ctx =>
+    disableIdentity(userId).flatMap { _ =>
+      getPetServiceAccountForUser(userId).flatMap {
+        case Some(petEmail) => loadSubjectFromEmail(petEmail.value).flatMap {
+          case Some(petId) => disableIdentity(petId)
+          case None => Future.successful(())
+        }
+        case None => Future.successful(())
+      }
+    }
+  }
+
+  private def disableIdentity(subject: WorkbenchSubject): Future[Unit] = withContext { ctx =>
     Try {
-      ctx.modifyAttributes(directoryConfig.enabledUsersGroupDn, DirContext.REMOVE_ATTRIBUTE, new BasicAttributes(Attr.member, subjectDn(userId)))
+      ctx.modifyAttributes(directoryConfig.enabledUsersGroupDn, DirContext.REMOVE_ATTRIBUTE, new BasicAttributes(Attr.member, subjectDn(subject)))
     }.recover {
       case _: NoSuchAttributeException => ()
     }.get
   }
 
-  override def isEnabled(userId: WorkbenchSubject): Future[Boolean] = withContext { ctx =>
+  override def isEnabled(userId: WorkbenchUserId): Future[Boolean] = withContext { ctx =>
     val attributes = ctx.getAttributes(directoryConfig.enabledUsersGroupDn)
     val memberDns = getAttributes[String](attributes, Attr.member).getOrElse(Set.empty).toSet
 

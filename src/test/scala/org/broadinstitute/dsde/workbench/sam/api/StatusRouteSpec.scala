@@ -7,6 +7,7 @@ import org.broadinstitute.dsde.workbench.util.health.Subsystems.{GoogleGroups, O
 import org.scalatest.{FlatSpec, Matchers}
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import org.broadinstitute.dsde.workbench.google.mock.{MockGoogleDirectoryDAO, MockGoogleIamDAO}
+import org.broadinstitute.dsde.workbench.google.model.GoogleProject
 import org.broadinstitute.dsde.workbench.util.health.StatusJsonSupport._
 import org.broadinstitute.dsde.workbench.model.{WorkbenchUserEmail, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.TestSupport
@@ -37,7 +38,7 @@ class StatusRouteSpec extends FlatSpec with Matchers with ScalatestRouteTest wit
     val googleDirectoryDAO = new MockGoogleDirectoryDAO()
     val policyDAO = new MockAccessPolicyDAO()
     val googleIamDAO = new MockGoogleIamDAO()
-    val petServiceAccountConfig = PetServiceAccountConfig("test-project", Set(WorkbenchUserEmail("test@test.gserviceaccount.com")))
+    val petServiceAccountConfig = PetServiceAccountConfig(GoogleProject("test-project"), Set(WorkbenchUserEmail("test@test.gserviceaccount.com")))
 
     val mockResourceService = new ResourceService(Map.empty, policyDAO, directoryDAO, "example.com")
     val mockUserService = new UserService(directoryDAO, googleDirectoryDAO, googleIamDAO, "dev.test.firecloud.org", petServiceAccountConfig)
