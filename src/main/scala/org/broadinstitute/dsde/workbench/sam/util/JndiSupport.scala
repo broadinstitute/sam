@@ -4,8 +4,11 @@ import java.util
 import javax.naming._
 import javax.naming.directory._
 
+import org.broadinstitute.dsde.workbench.model.WorkbenchException
+
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Try
+import scala.util.matching.Regex
 
 trait JndiSupport {
   private val batchSize = 1000
@@ -53,6 +56,19 @@ trait JndiSupport {
     t.get
   }
 
+  /**
+    * Constructs a regular expression to extract the leading attribute values of a dn. Example: to extract
+    * policy namd an resource id from the dn policy=foo,resourceId=bar,resourceType=splat,ou=resources,dc=x,dc=u,dc=com
+    * matchAttributeNames would be Seq("policy", "resourceId") and baseDn would be "resourceType=splat,ou=resources,dc=x,dc=u,dc=com".
+    * 
+    * @param matchAttributeNames names of attributes in the leading part of the dn that should match and extract values
+    * @param baseDn the trailing part of the dn that should match but we don't care to extract values
+    * @return pattern with capture groups for each member of matchAttributeNames
+    */
+  protected def dnMatcher(matchAttributeNames: Seq[String], baseDn: String): Regex = {
+    val partStrings = matchAttributeNames.map { attrName => s"$attrName=([^,]+)" }
+    partStrings.mkString("(?i)", ",", s",$baseDn").r
+  }
 }
 
 /**

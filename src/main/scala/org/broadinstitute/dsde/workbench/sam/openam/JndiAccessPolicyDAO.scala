@@ -161,10 +161,10 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
     val attributes = ctx.getAttributes(userDn(userId), Array(Attr.memberOf))
     val groupDns = getAttributes[String](attributes, Attr.memberOf).getOrElse(Set.empty).toSet
 
-    val policyDnPattern = s"(?i)${Attr.policy}=([^,]+),${Attr.resourceId}=([^,]+),${Attr.resourceType}=${resourceTypeName.value},$resourcesOu".r
+    val policyDnPattern = dnMatcher(Seq(Attr.policy, Attr.resourceId), resourceTypeDn(resourceTypeName))
 
     groupDns.collect {
-      case policyDnPattern(name, resourceId) => ResourceIdAndPolicyName(ResourceId(resourceId), AccessPolicyName(name))
+      case policyDnPattern(policyName, resourceId) => ResourceIdAndPolicyName(ResourceId(resourceId), AccessPolicyName(policyName))
     }
   }
 
