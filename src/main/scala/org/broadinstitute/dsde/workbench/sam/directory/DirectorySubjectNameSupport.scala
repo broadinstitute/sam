@@ -3,11 +3,13 @@ package org.broadinstitute.dsde.workbench.sam.directory
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
+import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO.Attr
+import org.broadinstitute.dsde.workbench.sam.util.JndiSupport
 
 /**
   * Created by dvoet on 6/6/17.
   */
-trait DirectorySubjectNameSupport {
+trait DirectorySubjectNameSupport extends JndiSupport {
   protected val directoryConfig: DirectoryConfig
   val peopleOu = s"ou=people,${directoryConfig.baseDn}"
   val groupsOu = s"ou=groups,${directoryConfig.baseDn}"
@@ -25,15 +27,13 @@ trait DirectorySubjectNameSupport {
   }
 
   protected def dnToSubject(dn: String): WorkbenchSubject = {
-    val splitDn = dn.split(",")
+    val groupMatcher = dnMatcher(Seq(Attr.cn), groupsOu)
+    val personMatcher = dnMatcher(Seq(Attr.uid), peopleOu)
 
-    splitDn.lift(1) match {
-      case Some(ou) => {
-        if(ou.equalsIgnoreCase("ou=groups")) WorkbenchGroupName(splitDn(0).stripPrefix("cn="))
-        else if(ou.equalsIgnoreCase("ou=people")) WorkbenchUserId(splitDn(0).stripPrefix("uid="))
-        else throw new WorkbenchException(s"unexpected dn [$dn]")
-      }
-      case None => throw new WorkbenchException(s"unexpected dn [$dn]")
+    dn match {
+      case groupMatcher(cn) => WorkbenchGroupName(cn)
+      case personMatcher(uid) => WorkbenchUserId(uid)
+      case _ => throw new WorkbenchException(s"unexpected dn [$dn]")
     }
   }
 
