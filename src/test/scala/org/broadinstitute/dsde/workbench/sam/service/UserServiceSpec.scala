@@ -54,6 +54,7 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Befor
     // clean up
     dirDAO.removePetServiceAccountFromUser(defaultUserId).futureValue
     dirDAO.removeGroupMember(allUsersGroupName, defaultUserId).recover { case _ => () }.futureValue
+    dirDAO.disableUser(defaultUserId).futureValue
     dirDAO.deleteUser(defaultUserId).futureValue
     dirDAO.deletePetServiceAccount(defaultPetUserId).futureValue
     dirDAO.deleteGroup(UserService.allUsersGroupName).futureValue
@@ -66,8 +67,7 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Befor
 
     // check ldap
     dirDAO.loadUser(defaultUserId).futureValue shouldBe Some(defaultUser)
-    // TODO: cn=enabled-users isn't created in the test environment, so this check fails
-    //dirDAO.isEnabled(defaultUserId).futureValue shouldBe true
+    dirDAO.isEnabled(defaultUserId).futureValue shouldBe true
     dirDAO.loadGroup(UserService.allUsersGroupName).futureValue shouldBe
       Some(WorkbenchGroup(UserService.allUsersGroupName, Set(defaultUserId), WorkbenchGroupEmail(service.toGoogleGroupName(UserService.allUsersGroupName.value))))
 
@@ -94,7 +94,6 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Befor
     status shouldBe Some(UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true)))
   }
 
-  // TODO: cn=enabled-users isn't created in the test environment, so this test fails
   it should "enable/disable user" in {
     // create a user
     val newUser = service.createUser(defaultUser).futureValue
