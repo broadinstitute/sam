@@ -52,7 +52,7 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit exe
       _ <- createOrgUnit(peopleOu)
       _ <- createOrgUnit(groupsOu)
       _ <- createOrgUnit(resourcesOu)
-        <- createOrgUnit(petsOu)
+      _ <- createOrgUnit(petsOu)
       _ <- createPolicySchema()
       _ <- createWorkbenchPersonSchema()
     } yield ()
@@ -245,7 +245,7 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit exe
   val resourcesOu = s"ou=resources,${directoryConfig.baseDn}"
   val peopleOu = s"ou=people,${directoryConfig.baseDn}"
   val groupsOu = s"ou=groups,${directoryConfig.baseDn}"
-  val petsOu = s"ou=pets,${directoryConfig.baseDn}"
+  val petsOu = s"ou=pets,ou=people,${directoryConfig.baseDn}"
 
   private def createAttributeDefinition(schema: DirContext, numericOID: String, name: String, description: String, singleValue: Boolean, equality: Option[String] = None, ordering: Option[String] = None, syntax: Option[String] = None) = {
     val attributes = new BasicAttributes(true)
@@ -264,8 +264,8 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit exe
   def clearDatabase(): Future[Unit] = withContext { ctx =>
     clear(ctx, resourcesOu)
     clear(ctx, groupsOu)
-    clear(ctx, peopleOu)
     clear(ctx, petsOu)
+    clear(ctx, peopleOu)
   }
 
   private def clear(ctx: DirContext, dn: String): Unit = {

@@ -29,7 +29,7 @@ trait DirectorySubjectNameSupport extends JndiSupport {
   protected def dnToSubject(dn: String): WorkbenchSubject = {
     val groupMatcher = dnMatcher(Seq(Attr.cn), groupsOu)
     val personMatcher = dnMatcher(Seq(Attr.uid), peopleOu)
-    val petMatcher = dnMatcher(Seq(Attr.uid), petOu)
+    val petMatcher = dnMatcher(Seq(Attr.uid), petsOu)
 
     dn match {
       case groupMatcher(cn) => WorkbenchGroupName(cn)

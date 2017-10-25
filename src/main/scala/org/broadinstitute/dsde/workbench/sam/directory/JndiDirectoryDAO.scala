@@ -310,7 +310,7 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
             Seq("top", "groupofnames").foreach(oc.add)
             myAttrs.put(oc)
 
-            myAttrs.put(new BasicAttribute(Attr.member, userDn(userId)))
+            myAttrs.put(new BasicAttribute(Attr.member, subjectDn(subject)))
 
             myAttrs
           }

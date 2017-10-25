@@ -11,6 +11,7 @@ import org.broadinstitute.dsde.workbench.sam.config.{DirectoryConfig, PetService
 import org.broadinstitute.dsde.workbench.sam.directory.JndiDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model.{UserInfo, UserStatus, UserStatusDetails}
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
+import org.broadinstitute.dsde.workbench.sam.service.UserService.allUsersGroupName
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FlatSpec, Matchers}
 
@@ -52,6 +53,7 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Befor
   after {
     // clean up
     dirDAO.removePetServiceAccountFromUser(defaultUserId).futureValue
+    dirDAO.removeGroupMember(allUsersGroupName, defaultUserId).recover { case _ => () }.futureValue
     dirDAO.deleteUser(defaultUserId).futureValue
     dirDAO.deletePetServiceAccount(defaultPetUserId).futureValue
     dirDAO.deleteGroup(UserService.allUsersGroupName).futureValue
