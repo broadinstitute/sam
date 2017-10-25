@@ -99,9 +99,10 @@ class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Google
           // Set up the service account with the necessary permissions
           setUpServiceAccount(user, petServiceAccount) andThen { case Failure(_) =>
             // If anything fails with setup, clean up any created resources to ensure we don't end up with orphaned pets.
-            removePetServiceAccount(user, petServiceAccount).failed.foreach { e =>
-              logger.warn(s"Error occurred cleaning up pet service account [$petSa] [$petSaDisplayName]", e)
-            }
+            // TODO temporarily disabling cleanup to debug
+//            removePetServiceAccount(user, petServiceAccount).failed.foreach { e =>
+//              logger.warn(s"Error occurred cleaning up pet service account [$petSa] [$petSaDisplayName]", e)
+//            }
         }
       }
     }
