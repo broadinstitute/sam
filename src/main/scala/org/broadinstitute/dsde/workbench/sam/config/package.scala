@@ -63,7 +63,7 @@ package object config {
   implicit val petServiceAccountConfigReader: ValueReader[PetServiceAccountConfig] = ValueReader.relative { config =>
     PetServiceAccountConfig(
       GoogleProject(config.getString("googleProject")),
-      config.as[Set[String]]("serviceAccountActors").map(WorkbenchUserEmail)
+      config.as[Set[String]]("serviceAccountUsers").map(WorkbenchUserEmail)
     )
   }
 }
