@@ -112,7 +112,7 @@ class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Google
       // add the pet service account to the user's proxy group
       _ <- googleDirectoryDAO.addMemberToGroup(WorkbenchGroupEmail(toProxyFromUser(user.id.value)), petServiceAccount.email)
       // add Service Account Actor role to the configured emails so they can assume the identity of the pet service account
-      _ <- Future.traverse(petServiceAccountConfig.serviceAccountActors) { email =>
+      _ <- Future.traverse(petServiceAccountConfig.serviceAccountUsers) { email =>
         googleIamDAO.addServiceAccountUserRoleForUser(petServiceAccountConfig.googleProject, petServiceAccount.email, email)
       }
       // add the pet service account attribute to the user's LDAP record
