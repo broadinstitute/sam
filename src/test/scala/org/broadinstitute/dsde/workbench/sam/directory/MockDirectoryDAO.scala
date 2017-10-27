@@ -15,7 +15,7 @@ import org.broadinstitute.dsde.workbench.sam._
 class MockDirectoryDAO extends DirectoryDAO {
   private val groups: mutable.Map[WorkbenchGroupName, WorkbenchGroup] = new TrieMap()
   private val users: mutable.Map[WorkbenchUserId, WorkbenchUser] = new TrieMap()
-  private val enabledUsers: mutable.Map[WorkbenchUserId, Unit] = new TrieMap()
+  private val enabledUsers: mutable.Map[WorkbenchSubject, Unit] = new TrieMap()
   private val usersWithEmails: mutable.Map[WorkbenchUserEmail, WorkbenchUserId] = new TrieMap()
   private val groupsWithEmails: mutable.Map[WorkbenchGroupEmail, WorkbenchGroupName] = new TrieMap()
   private val petServiceAccounts: mutable.Map[WorkbenchUserServiceAccountId, WorkbenchUserServiceAccount] = new TrieMap()
@@ -122,16 +122,16 @@ class MockDirectoryDAO extends DirectoryDAO {
     listSubjectsGroups(groupName, Set.empty).map(_.name)
   }
 
-  override def enableUser(userId: WorkbenchUserId): Future[Unit] = Future {
-    enabledUsers += (userId -> ())
+  override def enableIdentity(subject: WorkbenchSubject): Future[Unit] = Future {
+    enabledUsers += (subject -> ())
   }
 
-  override def disableUser(userId: WorkbenchUserId): Future[Unit] = Future {
-    enabledUsers -= userId
+  override def disableIdentity(subject: WorkbenchSubject): Future[Unit] = Future {
+    enabledUsers -= subject
   }
 
-  override def isEnabled(userId: WorkbenchUserId): Future[Boolean] = Future {
-    enabledUsers.contains(userId)
+  override def isEnabled(subject: WorkbenchSubject): Future[Boolean] = Future {
+    enabledUsers.contains(subject)
   }
 
   override def loadGroupEmail(groupName: WorkbenchGroupName): Future[Option[WorkbenchGroupEmail]] = loadGroup(groupName).map(_.map(_.email))

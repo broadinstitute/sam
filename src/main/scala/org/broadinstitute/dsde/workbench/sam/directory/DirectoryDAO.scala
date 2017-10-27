@@ -28,9 +28,9 @@ trait DirectoryDAO {
   def listFlattenedGroupUsers(groupName: WorkbenchGroupName): Future[Set[WorkbenchUserId]]
   def listAncestorGroups(groupName: WorkbenchGroupName): Future[Set[WorkbenchGroupName]]
 
-  def enableUser(userId: WorkbenchUserId): Future[Unit]
-  def disableUser(userId: WorkbenchUserId): Future[Unit]
-  def isEnabled(userId: WorkbenchUserId): Future[Boolean]
+  def enableIdentity(subject: WorkbenchSubject): Future[Unit]
+  def disableIdentity(subject: WorkbenchSubject): Future[Unit]
+  def isEnabled(subject: WorkbenchSubject): Future[Boolean]
 
   def createPetServiceAccount(petServiceAccount: WorkbenchUserServiceAccount): Future[WorkbenchUserServiceAccount]
   def loadPetServiceAccount(petServiceAccountId: WorkbenchUserServiceAccountId): Future[Option[WorkbenchUserServiceAccount]]

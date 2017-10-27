@@ -54,7 +54,8 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Befor
     // clean up
     dirDAO.removePetServiceAccountFromUser(defaultUserId).futureValue
     dirDAO.removeGroupMember(allUsersGroupName, defaultUserId).recover { case _ => () }.futureValue
-    dirDAO.disableUser(defaultUserId).futureValue
+    dirDAO.disableIdentity(defaultPetUserId).futureValue
+    dirDAO.disableIdentity(defaultUserId).futureValue
     dirDAO.deleteUser(defaultUserId).futureValue
     dirDAO.deletePetServiceAccount(defaultPetUserId).futureValue
     dirDAO.deleteGroup(UserService.allUsersGroupName).futureValue

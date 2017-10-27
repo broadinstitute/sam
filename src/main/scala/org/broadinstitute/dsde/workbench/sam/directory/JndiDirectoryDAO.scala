@@ -285,19 +285,7 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     groups.toSet
   }
 
-  override def enableUser(userId: WorkbenchUserId): Future[Unit] = {
-    enableIdentity(userId).flatMap { _ =>
-      getPetServiceAccountForUser(userId).flatMap {
-        case Some(petEmail) => loadSubjectFromEmail(petEmail.value).flatMap {
-          case Some(petId) => enableIdentity(petId)
-          case None => Future.successful(())
-        }
-        case None => Future.successful(())
-      }
-    }
-  }
-
-  private def enableIdentity(subject: WorkbenchSubject): Future[Unit] = withContext { ctx =>
+  override def enableIdentity(subject: WorkbenchSubject): Future[Unit] = withContext { ctx =>
     Try {
       ctx.modifyAttributes(directoryConfig.enabledUsersGroupDn, DirContext.ADD_ATTRIBUTE, new BasicAttributes(Attr.member, subjectDn(subject)))
     }.recover {
@@ -322,19 +310,7 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     }.get
   }
 
-  override def disableUser(userId: WorkbenchUserId): Future[Unit] = withContext { ctx =>
-    disableIdentity(userId).flatMap { _ =>
-      getPetServiceAccountForUser(userId).flatMap {
-        case Some(petEmail) => loadSubjectFromEmail(petEmail.value).flatMap {
-          case Some(petId) => disableIdentity(petId)
-          case None => Future.successful(())
-        }
-        case None => Future.successful(())
-      }
-    }
-  }
-
-  private def disableIdentity(subject: WorkbenchSubject): Future[Unit] = withContext { ctx =>
+  override def disableIdentity(subject: WorkbenchSubject): Future[Unit] = withContext { ctx =>
     Try {
       ctx.modifyAttributes(directoryConfig.enabledUsersGroupDn, DirContext.REMOVE_ATTRIBUTE, new BasicAttributes(Attr.member, subjectDn(subject)))
     }.recover {
@@ -342,11 +318,11 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     }.get
   }
 
-  override def isEnabled(userId: WorkbenchUserId): Future[Boolean] = withContext { ctx =>
+  override def isEnabled(subject: WorkbenchSubject): Future[Boolean] = withContext { ctx =>
     val attributes = ctx.getAttributes(directoryConfig.enabledUsersGroupDn)
     val memberDns = getAttributes[String](attributes, Attr.member).getOrElse(Set.empty).toSet
 
-    memberDns.map(dnToSubject).contains(userId)
+    memberDns.map(dnToSubject).contains(subject)
   } recover { case e: NameNotFoundException => false }
 
   private def withContext[T](op: InitialDirContext => T): Future[T] = withContext(directoryConfig.directoryUrl, directoryConfig.user, directoryConfig.password)(op)
