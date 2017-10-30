@@ -21,6 +21,8 @@ class UserRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest {
   val defaultUserEmail = WorkbenchUserEmail("newuser@new.com")
   val adminUserId = WorkbenchUserId("adminuser")
   val adminUserEmail = WorkbenchUserEmail("adminuser@new.com")
+  val petSAUserId = WorkbenchUserId("123")
+  val petSAEmail = WorkbenchUserEmail("pet-newuser@test.gserviceaccount.com")
 
   def withDefaultRoutes[T](testCode: TestSamRoutes => T): T = {
     val googleDirectoryDAO = new MockGoogleDirectoryDAO()
@@ -28,7 +30,7 @@ class UserRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest {
     val googleIamDAO = new MockGoogleIamDAO()
     val petServiceAccountConfig = PetServiceAccountConfig("test-project", Set(WorkbenchUserEmail("test@test.gserviceaccount.com")))
 
-    val samRoutes = new TestSamRoutes(null, new UserService(directoryDAO, googleDirectoryDAO, googleIamDAO, "dev.test.firecloud.org", petServiceAccountConfig), new StatusService(directoryDAO, googleDirectoryDAO), UserInfo("", defaultUserId, defaultUserEmail, 0))
+    val samRoutes = new TestSamRoutes(null, new UserService(directoryDAO, googleDirectoryDAO, googleIamDAO, "dev.test.firecloud.org", petServiceAccountConfig), new StatusService(directoryDAO, googleDirectoryDAO), UserInfo("", defaultUserId, defaultUserEmail, 0), directoryDAO)
     testCode(samRoutes)
   }
 
@@ -47,9 +49,21 @@ class UserRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest {
 
     setupAdminsGroup(googleDirectoryDAO)
 
-    val samRoutes = new TestSamRoutes(null, new UserService(directoryDAO, googleDirectoryDAO, googleIamDAO, "dev.test.firecloud.org", petServiceAccountConfig), new StatusService(directoryDAO, googleDirectoryDAO), UserInfo("", defaultUserId, defaultUserEmail, 0))
-    val adminRoutes = new TestSamRoutes(null, new UserService(directoryDAO, googleDirectoryDAO, googleIamDAO, "dev.test.firecloud.org", petServiceAccountConfig), new StatusService(directoryDAO, googleDirectoryDAO), UserInfo("", adminUserId, adminUserEmail, 0))
+    val samRoutes = new TestSamRoutes(null, new UserService(directoryDAO, googleDirectoryDAO, googleIamDAO, "dev.test.firecloud.org", petServiceAccountConfig), new StatusService(directoryDAO, googleDirectoryDAO), UserInfo("", defaultUserId, defaultUserEmail, 0), directoryDAO)
+    val adminRoutes = new TestSamRoutes(null, new UserService(directoryDAO, googleDirectoryDAO, googleIamDAO, "dev.test.firecloud.org", petServiceAccountConfig), new StatusService(directoryDAO, googleDirectoryDAO), UserInfo("", adminUserId, adminUserEmail, 0), directoryDAO)
     testCode(samRoutes, adminRoutes)
+  }
+
+  def withSARoutes[T](testCode: (TestSamRoutes, TestSamRoutes) => T): T = {
+    val googleDirectoryDAO = new MockGoogleDirectoryDAO()
+    val directoryDAO = new MockDirectoryDAO()
+    val googleIamDAO = new MockGoogleIamDAO()
+    val petServiceAccountConfig = PetServiceAccountConfig("test-project", Set(WorkbenchUserEmail("pet-newuser@test.gserviceaccount.com")))
+    //directoryDAO.createUser(WorkbenchUser(petSAUserId, petSAEmail))
+
+    val samRoutes = new TestSamRoutes(null, new UserService(directoryDAO, googleDirectoryDAO, googleIamDAO, "dev.test.firecloud.org", petServiceAccountConfig), new StatusService(directoryDAO, googleDirectoryDAO), UserInfo("", defaultUserId, defaultUserEmail, 0), directoryDAO)
+    val SARoutes = new TestSamRoutes(null, new UserService(directoryDAO, googleDirectoryDAO, googleIamDAO, "dev.test.firecloud.org", petServiceAccountConfig), new StatusService(directoryDAO, googleDirectoryDAO), UserInfo("", petSAUserId, petSAEmail, 0), directoryDAO)
+    testCode(samRoutes, SARoutes)
   }
 
   "POST /register/user" should "create user" in withDefaultRoutes { samRoutes =>
@@ -73,6 +87,33 @@ class UserRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest {
       status shouldEqual StatusCodes.OK
       responseAs[UserStatus] shouldEqual UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
     }
+  }
+
+
+  "GET /register/user" should "get the status of the user that has the petSA" in withSARoutes{ (samRoutes, SARoutes) =>
+      Post("/register/user") ~> samRoutes.route ~> check {
+        status shouldEqual StatusCodes.Created
+        responseAs[UserStatus] shouldEqual UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
+      }
+
+//    Post("/register/user") ~> SARoutes.route ~> check {
+//      status shouldEqual StatusCodes.Created
+//      responseAs[UserStatus] shouldEqual UserStatus(UserStatusDetails(petSAUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
+//    }
+
+    // create a pet service account
+    Get("/api/user/petServiceAccount") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      val response = responseAs[WorkbenchUserServiceAccountEmail]
+      response.value should endWith ("@test-project.iam.gserviceaccount.com")
+    }
+
+      Get("/register/user") ~> SARoutes.route ~> check {
+        status shouldEqual StatusCodes.OK
+        println(responseAs[UserStatus])
+        println(UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true)))
+        responseAs[UserStatus] shouldEqual UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
+      }
   }
 
   "GET /admin/user/{userSubjectId}" should "get the user status of a user (as an admin)" in withAdminRoutes { (samRoutes, adminRoutes) =>
@@ -162,5 +203,8 @@ class UserRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest {
       response.value should endWith ("@test-project.iam.gserviceaccount.com")
     }
   }
+
+
+
 
 }

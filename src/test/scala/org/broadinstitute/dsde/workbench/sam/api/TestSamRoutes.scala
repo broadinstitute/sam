@@ -16,8 +16,8 @@ import scala.concurrent.ExecutionContext
 /**
   * Created by dvoet on 7/14/17.
   */
-class TestSamRoutes(resourceService: ResourceService, userService: UserService, statusService: StatusService, val userInfo: UserInfo)(implicit override val system: ActorSystem, override val materializer: Materializer, override val executionContext: ExecutionContext)
-  extends SamRoutes(resourceService, userService, statusService, SwaggerConfig("", "")) with MockUserInfoDirectives
+class TestSamRoutes(resourceService: ResourceService, userService: UserService, statusService: StatusService, val userInfo: UserInfo, directoryDAO: MockDirectoryDAO)(implicit override val system: ActorSystem, override val materializer: Materializer, override val executionContext: ExecutionContext)
+  extends SamRoutes(resourceService, userService, statusService, SwaggerConfig("", ""), directoryDAO) with MockUserInfoDirectives
 
 object TestSamRoutes {
 
@@ -37,6 +37,6 @@ object TestSamRoutes {
 
     val mockStatusService = new StatusService(directoryDAO, googleDirectoryDAO)
 
-    new TestSamRoutes(mockResourceService, mockUserService, mockStatusService, userInfo)
+    new TestSamRoutes(mockResourceService, mockUserService, mockStatusService, userInfo, directoryDAO)
   }
 }
