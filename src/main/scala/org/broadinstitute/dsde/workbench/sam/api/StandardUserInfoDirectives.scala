@@ -27,7 +27,6 @@ trait StandardUserInfoDirectives extends UserInfoDirectives {
     }
   }
 
-
   private def isPetSA(email:String) = email.matches(petSAdomain)
 
   private def getWorkbenchUserEmailId(email:String):Future[Option[WorkbenchUser]] = {
