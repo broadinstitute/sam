@@ -7,12 +7,14 @@ import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchExceptionW
 import org.broadinstitute.dsde.workbench.sam.model.UserInfo
 import org.broadinstitute.dsde.workbench.sam.service.UserService
 import org.broadinstitute.dsde.workbench.sam._
+import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
 
 /**
  * Directives to get user information.
  */
 trait UserInfoDirectives {
   val userService: UserService
+  val directoryDAO: DirectoryDAO
   def requireUserInfo: Directive1[UserInfo]
 
   def asWorkbenchAdmin(userInfo: UserInfo): Directive0 = {

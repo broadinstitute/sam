@@ -36,7 +36,7 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     val mockUserService = new UserService(directoryDAO, googleDirectoryDAO, googleIamDAO, "dev.test.firecloud.org", petServiceAccountConfig)
     val mockStatusService = new StatusService(directoryDAO, googleDirectoryDAO)
 
-    new TestSamRoutes(mockResourceService, mockUserService, mockStatusService, userInfo)
+    new TestSamRoutes(mockResourceService, mockUserService, mockStatusService, userInfo, directoryDAO)
   }
 
   "GET /api/resources/{resourceType}/{resourceId}/actions/{action}" should "404 for unknown resource type" in {
