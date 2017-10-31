@@ -11,6 +11,7 @@ import org.broadinstitute.dsde.workbench.sam.config.{DirectoryConfig, PetService
 import org.broadinstitute.dsde.workbench.sam.directory.JndiDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model.{UserInfo, UserStatus, UserStatusDetails}
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
+import org.broadinstitute.dsde.workbench.sam.service.UserService.allUsersGroupName
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FlatSpec, Matchers}
 
@@ -24,6 +25,7 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Befor
   override implicit val patienceConfig = PatienceConfig(timeout = scaled(5.seconds))
 
   val defaultUserId = WorkbenchUserId("newuser")
+  val defaultPetUserId = WorkbenchUserServiceAccountId("pet-newuser")
   val defaultUserEmail = WorkbenchUserEmail("newuser@new.com")
   val defaultUser = WorkbenchUser(defaultUserId, defaultUserEmail)
   val userInfo = UserInfo("token", WorkbenchUserId(UUID.randomUUID().toString), WorkbenchUserEmail("user@company.com"), 0)
@@ -51,7 +53,11 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Befor
   after {
     // clean up
     dirDAO.removePetServiceAccountFromUser(defaultUserId).futureValue
+    dirDAO.removeGroupMember(allUsersGroupName, defaultUserId).recover { case _ => () }.futureValue
+    dirDAO.disableIdentity(defaultPetUserId).futureValue
+    dirDAO.disableIdentity(defaultUserId).futureValue
     dirDAO.deleteUser(defaultUserId).futureValue
+    dirDAO.deletePetServiceAccount(defaultPetUserId).futureValue
     dirDAO.deleteGroup(UserService.allUsersGroupName).futureValue
   }
 
@@ -62,8 +68,7 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Befor
 
     // check ldap
     dirDAO.loadUser(defaultUserId).futureValue shouldBe Some(defaultUser)
-    // TODO: cn=enabled-users isn't created in the test environment, so this check fails
-    //dirDAO.isEnabled(defaultUserId).futureValue shouldBe true
+    dirDAO.isEnabled(defaultUserId).futureValue shouldBe true
     dirDAO.loadGroup(UserService.allUsersGroupName).futureValue shouldBe
       Some(WorkbenchGroup(UserService.allUsersGroupName, Set(defaultUserId), WorkbenchGroupEmail(service.toGoogleGroupName(UserService.allUsersGroupName.value))))
 
@@ -90,7 +95,6 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Befor
     status shouldBe Some(UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true)))
   }
 
-  // TODO: cn=enabled-users isn't created in the test environment, so this test fails
   it should "enable/disable user" in {
     // create a user
     val newUser = service.createUser(defaultUser).futureValue
@@ -142,6 +146,8 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Befor
 
     // verify ldap
     dirDAO.getPetServiceAccountForUser(defaultUserId).futureValue shouldBe Some(emailResponse)
+    dirDAO.loadPetServiceAccount(defaultPetUserId).futureValue shouldBe
+      Some(WorkbenchUserServiceAccount(defaultPetUserId, WorkbenchUserServiceAccountEmail(emailResponse.value), WorkbenchUserServiceAccountDisplayName("")))
 
     // verify google
     val mockGoogleIamDAO = service.googleIamDAO.asInstanceOf[MockGoogleIamDAO]

@@ -6,6 +6,7 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import org.scalatest.{FlatSpec, Matchers}
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import org.broadinstitute.dsde.workbench.google.mock.{MockGoogleDirectoryDAO, MockGoogleIamDAO}
+import org.broadinstitute.dsde.workbench.google.model.GoogleProject
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchUserEmail, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import spray.json.{JsBoolean, JsValue}
@@ -29,7 +30,7 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     val directoryDAO = new MockDirectoryDAO()
     val googleDirectoryDAO = new MockGoogleDirectoryDAO()
     val googleIamDAO = new MockGoogleIamDAO()
-    val petServiceAccountConfig = PetServiceAccountConfig("test-project", Set(WorkbenchUserEmail("test@test.gserviceaccount.com")))
+    val petServiceAccountConfig = PetServiceAccountConfig(GoogleProject("test-project"), Set(WorkbenchUserEmail("test@test.gserviceaccount.com")))
 
     val mockResourceService = new ResourceService(resourceTypes, accessPolicyDAO, directoryDAO, "example.com")
     val mockUserService = new UserService(directoryDAO, googleDirectoryDAO, googleIamDAO, "dev.test.firecloud.org", petServiceAccountConfig)

@@ -1,4 +1,5 @@
 package org.broadinstitute.dsde.workbench.sam.directory
+
 import akka.http.scaladsl.model.StatusCodes
 import org.broadinstitute.dsde.workbench.model._
 
@@ -14,10 +15,11 @@ import org.broadinstitute.dsde.workbench.sam._
 class MockDirectoryDAO extends DirectoryDAO {
   private val groups: mutable.Map[WorkbenchGroupName, WorkbenchGroup] = new TrieMap()
   private val users: mutable.Map[WorkbenchUserId, WorkbenchUser] = new TrieMap()
-  private val enabledUsers: mutable.Map[WorkbenchUserId, Unit] = new TrieMap()
+  private val enabledUsers: mutable.Map[WorkbenchSubject, Unit] = new TrieMap()
   private val usersWithEmails: mutable.Map[WorkbenchUserEmail, WorkbenchUserId] = new TrieMap()
   private val groupsWithEmails: mutable.Map[WorkbenchGroupEmail, WorkbenchGroupName] = new TrieMap()
-  private val petServiceAccounts: mutable.Map[WorkbenchUserId, WorkbenchUserServiceAccountEmail] = new TrieMap()
+  private val petServiceAccounts: mutable.Map[WorkbenchUserServiceAccountId, WorkbenchUserServiceAccount] = new TrieMap()
+  private val petServiceAccountsByUser: mutable.Map[WorkbenchUserId, WorkbenchUserServiceAccountEmail] = new TrieMap()
 
   override def createGroup(group: WorkbenchGroup): Future[WorkbenchGroup] = Future {
     if (groups.keySet.contains(group.name)) {
@@ -120,31 +122,47 @@ class MockDirectoryDAO extends DirectoryDAO {
     listSubjectsGroups(groupName, Set.empty).map(_.name)
   }
 
-  override def enableUser(userId: WorkbenchUserId): Future[Unit] = Future {
-    enabledUsers += (userId -> ())
+  override def enableIdentity(subject: WorkbenchSubject): Future[Unit] = Future {
+    enabledUsers += (subject -> ())
   }
 
-  override def disableUser(userId: WorkbenchUserId): Future[Unit] = Future {
-    enabledUsers -= userId
+  override def disableIdentity(subject: WorkbenchSubject): Future[Unit] = Future {
+    enabledUsers -= subject
   }
 
-  override def isEnabled(userId: WorkbenchUserId): Future[Boolean] = Future {
-    enabledUsers.contains(userId)
+  override def isEnabled(subject: WorkbenchSubject): Future[Boolean] = Future {
+    enabledUsers.contains(subject)
   }
 
   override def loadGroupEmail(groupName: WorkbenchGroupName): Future[Option[WorkbenchGroupEmail]] = loadGroup(groupName).map(_.map(_.email))
 
+  override def createPetServiceAccount(petServiceAccount: WorkbenchUserServiceAccount): Future[WorkbenchUserServiceAccount] = Future {
+    if (petServiceAccounts.keySet.contains(petServiceAccount.id)) {
+      throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"pet service account ${petServiceAccount.id} already exists"))
+    }
+    petServiceAccounts += petServiceAccount.id -> petServiceAccount
+    petServiceAccount
+  }
+
+  override def loadPetServiceAccount(petServiceAccountId: WorkbenchUserServiceAccountId): Future[Option[WorkbenchUserServiceAccount]] = Future {
+    petServiceAccounts.get(petServiceAccountId)
+  }
+
+  override def deletePetServiceAccount(petServiceAccountId: WorkbenchUserServiceAccountId): Future[Unit] = Future {
+    petServiceAccounts -= petServiceAccountId
+  }
+
   override def getPetServiceAccountForUser(userId: WorkbenchUserId): Future[Option[WorkbenchUserServiceAccountEmail]] = Future {
-    petServiceAccounts.get(userId)
+    petServiceAccountsByUser.get(userId)
   }
 
   override def addPetServiceAccountToUser(userId: WorkbenchUserId, email: WorkbenchUserServiceAccountEmail): Future[WorkbenchUserServiceAccountEmail] = {
-    petServiceAccounts += (userId -> email)
+    petServiceAccountsByUser += (userId -> email)
     Future.successful(email)
   }
 
   override def removePetServiceAccountFromUser(userId: WorkbenchUserId): Future[Unit] = {
-    petServiceAccounts -= userId
+    petServiceAccountsByUser -= userId
     Future.successful(())
   }
 }

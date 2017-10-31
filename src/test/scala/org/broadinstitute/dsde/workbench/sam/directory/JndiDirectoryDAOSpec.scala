@@ -75,6 +75,29 @@ class JndiDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     }
   }
 
+  it should "create, read, delete pet service accounts" in {
+    val serviceAccountId = WorkbenchUserServiceAccountId(UUID.randomUUID().toString)
+    val serviceAccount = WorkbenchUserServiceAccount(serviceAccountId, WorkbenchUserServiceAccountEmail("foo@bar.com"), WorkbenchUserServiceAccountDisplayName(""))
+
+    assertResult(None) {
+      runAndWait(dao.loadPetServiceAccount(serviceAccount.id))
+    }
+
+    assertResult(serviceAccount) {
+      runAndWait(dao.createPetServiceAccount(serviceAccount))
+    }
+
+    assertResult(Some(serviceAccount)) {
+      runAndWait(dao.loadPetServiceAccount(serviceAccount.id))
+    }
+
+    runAndWait(dao.deletePetServiceAccount(serviceAccount.id))
+
+    assertResult(None) {
+      runAndWait(dao.loadPetServiceAccount(serviceAccount.id))
+    }
+  }
+
   it should "list groups" in {
     val userId = WorkbenchUserId(UUID.randomUUID().toString)
     val user = WorkbenchUser(userId, WorkbenchUserEmail("foo@bar.com"))
@@ -250,7 +273,7 @@ class JndiDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     }
   }
 
-  it should "create, read, delete pet service accounts" in {
+  it should "associate pet service accounts with users" in {
     val userId = WorkbenchUserId(UUID.randomUUID().toString)
     val user = WorkbenchUser(userId, WorkbenchUserEmail("foo@bar.com"))
     val email = WorkbenchUserServiceAccountEmail("myPetSa@gmail.com")

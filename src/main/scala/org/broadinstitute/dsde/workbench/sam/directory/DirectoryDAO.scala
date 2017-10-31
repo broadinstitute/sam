@@ -28,10 +28,14 @@ trait DirectoryDAO {
   def listFlattenedGroupUsers(groupName: WorkbenchGroupName): Future[Set[WorkbenchUserId]]
   def listAncestorGroups(groupName: WorkbenchGroupName): Future[Set[WorkbenchGroupName]]
 
-  def enableUser(userId: WorkbenchUserId): Future[Unit]
-  def disableUser(userId: WorkbenchUserId): Future[Unit]
-  def isEnabled(userId: WorkbenchUserId): Future[Boolean]
+  def enableIdentity(subject: WorkbenchSubject): Future[Unit]
+  def disableIdentity(subject: WorkbenchSubject): Future[Unit]
+  def isEnabled(subject: WorkbenchSubject): Future[Boolean]
+
+  def createPetServiceAccount(petServiceAccount: WorkbenchUserServiceAccount): Future[WorkbenchUserServiceAccount]
+  def loadPetServiceAccount(petServiceAccountId: WorkbenchUserServiceAccountId): Future[Option[WorkbenchUserServiceAccount]]
+  def deletePetServiceAccount(petServiceAccountId: WorkbenchUserServiceAccountId): Future[Unit]
   def getPetServiceAccountForUser(userId: WorkbenchUserId): Future[Option[WorkbenchUserServiceAccountEmail]]
-  def addPetServiceAccountToUser(userId: WorkbenchUserId, email: WorkbenchUserServiceAccountEmail): Future[WorkbenchUserServiceAccountEmail]
+  def addPetServiceAccountToUser(userId: WorkbenchUserId, petServiceAccountEmail: WorkbenchUserServiceAccountEmail): Future[WorkbenchUserServiceAccountEmail]
   def removePetServiceAccountFromUser(userId: WorkbenchUserId): Future[Unit]
 }

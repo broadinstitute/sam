@@ -31,7 +31,7 @@ class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Google
         case e:GoogleJsonResponseException if e.getDetails.getCode == StatusCodes.Conflict.intValue => ()
       }
       _ <- googleDirectoryDAO.addMemberToGroup(WorkbenchGroupEmail(toProxyFromUser(user.id.value)), WorkbenchUserEmail(user.email.value))
-      _ <- directoryDAO.enableUser(user.id)
+      _ <- directoryDAO.enableIdentity(user.id)
       _ <- createAllUsersGroup
       _ <- directoryDAO.addGroupMember(allUsersGroupName, user.id)
       _ <- googleDirectoryDAO.addMemberToGroup(WorkbenchGroupEmail(toGoogleGroupName(allUsersGroupName.value)), WorkbenchUserEmail(toProxyFromUser(user.id.value))) //TODO: For now, do a manual add to the All_Users Google group (undo this in Phase II)
@@ -60,8 +60,13 @@ class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Google
     directoryDAO.loadUser(userId).flatMap {
       case Some(user) =>
         for {
-          _ <- directoryDAO.enableUser(user.id)
+          _ <- directoryDAO.enableIdentity(user.id)
           _ <- googleDirectoryDAO.addMemberToGroup(WorkbenchGroupEmail(toProxyFromUser(user.id.value)), WorkbenchUserEmail(user.email.value))
+          // Enable the pet service account, if one exists for the user
+          _ <- getPetServiceAccountForUser(user.id).flatMap {
+            case Some(pet) => enablePetServiceAccount(user.id, pet)
+            case None => Future.successful(())
+          }
           userStatus <- getUserStatus(userId)
         } yield userStatus
       case None => Future.successful(None)
@@ -72,7 +77,12 @@ class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Google
     directoryDAO.loadUser(userId).flatMap {
       case Some(user) =>
         for {
-          _ <- directoryDAO.disableUser(user.id)
+          _ <- directoryDAO.disableIdentity(user.id)
+          // Disable the pet service account, if one exists for the user
+          _ <- getPetServiceAccountForUser(user.id).flatMap {
+            case Some(pet) => disablePetServiceAccount(user.id, pet)
+            case None => Future.successful(())
+          }
           _ <- googleDirectoryDAO.removeMemberFromGroup(WorkbenchGroupEmail(toProxyFromUser(user.id.value)), WorkbenchUserEmail(user.email.value))
           userStatus <- getUserStatus(user.id)
         } yield userStatus
@@ -91,31 +101,72 @@ class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Google
   def createUserPetServiceAccount(user: WorkbenchUser): Future[WorkbenchUserServiceAccountEmail] = {
     val (petSa, petSaDisplayName) = toPetSAFromUser(user)
 
-    def create() = {
-      for {
-        petServiceAccount <- googleIamDAO.createServiceAccount(petServiceAccountConfig.googleProject, petSa, petSaDisplayName)
-        _ <- googleDirectoryDAO.addMemberToGroup(WorkbenchGroupEmail(toProxyFromUser(user.id.value)), petServiceAccount.email)
-        _ <- Future.traverse(petServiceAccountConfig.serviceAccountActors) { email =>
-          googleIamDAO.addServiceAccountActorRoleForUser(petServiceAccountConfig.googleProject, petServiceAccount.email, email)
-        }
-        _ <- directoryDAO.addPetServiceAccountToUser(user.id, petServiceAccount.email)
-      } yield petServiceAccount.email
-    }
-
     directoryDAO.getPetServiceAccountForUser(user.id).flatMap {
       case Some(email) => Future.successful(email)
-      case None => create().andThen { case Failure(_) =>
-        // If anything fails with pet service account creation, clean up
-        // any created resources asynchronously, to ensure we don't end
-        // up with orphaned pets.
-        Future.sequence(Seq(
-          directoryDAO.removePetServiceAccountFromUser(user.id),
-          googleIamDAO.removeServiceAccount(petServiceAccountConfig.googleProject, petSa))
-        ).failed.foreach { e =>
-          logger.warn(s"Error occurred cleaning up pet service account [$petSa] [$petSaDisplayName]", e)
+      case None =>
+        // First create the service account in Google, which generates a unique id and email
+        googleIamDAO.createServiceAccount(petServiceAccountConfig.googleProject, petSa, petSaDisplayName).flatMap { petServiceAccount =>
+          // Set up the service account with the necessary permissions
+          setUpServiceAccount(user, petServiceAccount) andThen { case Failure(_) =>
+            // If anything fails with setup, clean up any created resources to ensure we don't end up with orphaned pets.
+            removePetServiceAccount(user, petServiceAccount).failed.foreach { e =>
+              logger.warn(s"Error occurred cleaning up pet service account [$petSa] [$petSaDisplayName]", e)
+            }
         }
       }
     }
+  }
+
+  private def enablePetServiceAccount(userId: WorkbenchUserId, petServiceAccount: WorkbenchUserServiceAccount): Future[Unit] = {
+    for {
+      _ <- directoryDAO.enableIdentity(petServiceAccount.id)
+      _ <- googleDirectoryDAO.addMemberToGroup(WorkbenchGroupEmail(toProxyFromUser(userId.value)), petServiceAccount.email)
+    } yield ()
+  }
+
+  private def disablePetServiceAccount(userId: WorkbenchUserId, petServiceAccount: WorkbenchUserServiceAccount): Future[Unit] = {
+    for {
+      _ <- directoryDAO.disableIdentity(petServiceAccount.id)
+      _ <- googleDirectoryDAO.removeMemberFromGroup(WorkbenchGroupEmail(toProxyFromUser(userId.value)), petServiceAccount.email)
+    } yield ()
+  }
+
+  private def getPetServiceAccountForUser(userId: WorkbenchUserId): Future[Option[WorkbenchUserServiceAccount]] = {
+    directoryDAO.getPetServiceAccountForUser(userId).flatMap {
+      case Some(petEmail) => directoryDAO.loadSubjectFromEmail(petEmail.value).map {
+        case Some(petId: WorkbenchUserServiceAccountId) => Some(WorkbenchUserServiceAccount(petId, petEmail, WorkbenchUserServiceAccountDisplayName("")))
+        case _ => None
+      }
+      case None => Future.successful(None)
+    }
+  }
+
+  private def setUpServiceAccount(user: WorkbenchUser, petServiceAccount: WorkbenchUserServiceAccount): Future[WorkbenchUserServiceAccountEmail] = {
+    for {
+      // add Service Account User role to the configured emails so they can assume the identity of the pet service account
+      _ <- Future.traverse(petServiceAccountConfig.serviceAccountUsers) { email =>
+        googleIamDAO.addServiceAccountUserRoleForUser(petServiceAccountConfig.googleProject, petServiceAccount.email, email)
+      }
+      // add the pet service account attribute to the user's LDAP record
+      _ <- directoryDAO.addPetServiceAccountToUser(user.id, petServiceAccount.email)
+      // create an additional LDAP record for the pet service account itself (in a different organizational unit than the user)
+      _ <- directoryDAO.createPetServiceAccount(petServiceAccount)
+      // enable the pet service account
+      _ <- enablePetServiceAccount(user.id, petServiceAccount)
+    } yield petServiceAccount.email
+  }
+
+  private def removePetServiceAccount(user: WorkbenchUser, petServiceAccount: WorkbenchUserServiceAccount): Future[Unit] = {
+    for {
+      // disable the pet service account
+      _ <- disablePetServiceAccount(user.id, petServiceAccount)
+      // remove the LDAP record for the pet service account
+      _ <- directoryDAO.deletePetServiceAccount(petServiceAccount.id)
+      // remove the pet service account attribute on the user's LDAP record
+      _ <- directoryDAO.removePetServiceAccountFromUser(user.id)
+      // remove the service account itself in Google
+      _ <- googleIamDAO.removeServiceAccount(petServiceAccountConfig.googleProject, petServiceAccount.id)
+    } yield ()
   }
 
   def createAllUsersGroup: Future[Unit] = {
