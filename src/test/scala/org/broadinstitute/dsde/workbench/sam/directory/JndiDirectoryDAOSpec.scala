@@ -7,7 +7,8 @@ import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
-import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
+import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.openam.JndiAccessPolicyDAO
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.scalatest.{BeforeAndAfterAll, FlatSpec, Matchers}
 
@@ -325,5 +326,34 @@ class JndiDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     assertResult(None) {
       runAndWait(dao.loadUser(user.id))
     }
+  }
+
+  it should "handle different kinds of groups" in {
+    val userId = WorkbenchUserId(UUID.randomUUID().toString)
+    val user = WorkbenchUser(userId, WorkbenchUserEmail("foo@bar.com"))
+
+    val groupName1 = WorkbenchGroupName(UUID.randomUUID().toString)
+    val group1 = BasicWorkbenchGroup(groupName1, Set(userId), WorkbenchGroupEmail("g1@example.com"))
+
+    val groupName2 = WorkbenchGroupName(UUID.randomUUID().toString)
+    val group2 = BasicWorkbenchGroup(groupName2, Set.empty, WorkbenchGroupEmail("g2@example.com"))
+
+    runAndWait(dao.createUser(user))
+    runAndWait(dao.createGroup(group1))
+    runAndWait(dao.createGroup(group2))
+
+    val policyDAO = new JndiAccessPolicyDAO(directoryConfig)
+
+    val typeName1 = ResourceTypeName(UUID.randomUUID().toString)
+
+    val policy1 = AccessPolicy(ResourceAndPolicyName(Resource(typeName1, ResourceId("resource")), AccessPolicyName("role1-a")), Set(userId), WorkbenchGroupEmail("p1@example.com"), Set(ResourceRoleName("role1")), Set(ResourceAction("action1"), ResourceAction("action2")))
+
+    runAndWait(policyDAO.createResourceType(typeName1))
+    runAndWait(policyDAO.createResource(policy1.id.resource))
+    runAndWait(policyDAO.createPolicy(policy1))
+
+    assert(runAndWait(dao.isGroupMember(group1.id, userId)))
+    assert(!runAndWait(dao.isGroupMember(group2.id, userId)))
+    assert(runAndWait(dao.isGroupMember(policy1.id, userId)))
   }
 }
