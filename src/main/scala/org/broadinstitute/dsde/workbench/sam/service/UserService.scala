@@ -104,8 +104,9 @@ class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Google
     directoryDAO.getPetServiceAccountForUser(user.id).flatMap {
       case Some(email) => Future.successful(email)
       case None =>
-        // First create the service account in Google, which generates a unique id and email
-        googleIamDAO.createServiceAccount(petServiceAccountConfig.googleProject, petSa, petSaDisplayName).flatMap { petServiceAccount =>
+        // First find or create the service account in Google, which generates a unique id and email
+        val petSA = googleIamDAO.getOrCreateServiceAccount(petServiceAccountConfig.googleProject, petSa, petSaDisplayName)
+        petSA.flatMap { petServiceAccount =>
           // Set up the service account with the necessary permissions
           setUpServiceAccount(user, petServiceAccount) andThen { case Failure(_) =>
             // If anything fails with setup, clean up any created resources to ensure we don't end up with orphaned pets.
