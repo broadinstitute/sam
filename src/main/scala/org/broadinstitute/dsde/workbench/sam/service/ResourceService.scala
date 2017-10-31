@@ -36,9 +36,9 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
 
       for {
         _ <- accessPolicyDAO.createPolicy(AccessPolicy(
-          AccessPolicyName(role.roleName.value),
-          resource,
-          WorkbenchGroup(WorkbenchGroupName(role.roleName.value), roleMembers, email),
+          ResourceAndPolicyName(resource, AccessPolicyName(role.roleName.value)),
+          roleMembers,
+          email,
           Set(role.roleName),
           Set.empty
         ))
@@ -108,9 +108,10 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     val impliedActionsFromRoles = policyMembership.roles.flatMap(actionsByRole)
 
     subjectsFromEmails.flatMap { members =>
-      val newPolicy = AccessPolicy(policyName, resource, WorkbenchGroup(WorkbenchGroupName(policyName.value), members, email), policyMembership.roles, policyMembership.actions ++ impliedActionsFromRoles)
+      val resourceAndPolicyName = ResourceAndPolicyName(resource, policyName)
+      val newPolicy = AccessPolicy(resourceAndPolicyName, members, email, policyMembership.roles, policyMembership.actions ++ impliedActionsFromRoles)
 
-      accessPolicyDAO.loadPolicy(policyName, resource).flatMap {
+      accessPolicyDAO.loadPolicy(resourceAndPolicyName).flatMap {
         case None => accessPolicyDAO.createPolicy(newPolicy)
         case Some(_) => accessPolicyDAO.overwritePolicy(newPolicy)
       }
@@ -118,13 +119,13 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
   }
 
   private def loadAccessPolicyWithEmails(policy: AccessPolicy): Future[AccessPolicyResponseEntry] = {
-    val users = policy.members.members.collect { case userId: WorkbenchUserId => userId }
-    val groups = policy.members.members.collect { case groupName: WorkbenchGroupName => groupName }
+    val users = policy.members.collect { case userId: WorkbenchUserId => userId }
+    val groups = policy.members.collect { case groupName: WorkbenchGroupName => groupName }
 
     for {
       userEmails <- directoryDAO.loadUsers(users)
       groupEmails <- directoryDAO.loadGroups(groups)
-    } yield AccessPolicyResponseEntry(policy.name, AccessPolicyMembership(userEmails.toSet[WorkbenchUser].map(_.email.value) ++ groupEmails.map(_.email.value), policy.actions, policy.roles))
+    } yield AccessPolicyResponseEntry(policy.id.accessPolicyName, AccessPolicyMembership(userEmails.toSet[WorkbenchUser].map(_.email.value) ++ groupEmails.map(_.email.value), policy.actions, policy.roles))
   }
 
   def listResourcePolicies(resource: Resource, userInfo: UserInfo): Future[Set[AccessPolicyResponseEntry]] = {

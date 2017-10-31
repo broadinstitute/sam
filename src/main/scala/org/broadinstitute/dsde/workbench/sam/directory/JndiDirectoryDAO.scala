@@ -7,6 +7,7 @@ import akka.http.scaladsl.model.StatusCodes
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
 import org.broadinstitute.dsde.workbench.sam._
+import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
 import org.broadinstitute.dsde.workbench.sam.util.{BaseDirContext, JndiSupport}
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -18,7 +19,7 @@ import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO.Attr
  */
 class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit executionContext: ExecutionContext) extends DirectoryDAO with DirectorySubjectNameSupport with JndiSupport {
 
-  override def createGroup(group: WorkbenchGroup): Future[WorkbenchGroup] = withContext { ctx =>
+  override def createGroup(group: BasicWorkbenchGroup): Future[BasicWorkbenchGroup] = withContext { ctx =>
     try {
       val groupContext = new BaseDirContext {
         override def getAttributes(name: String): Attributes = {
@@ -40,12 +41,12 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
         }
       }
 
-      ctx.bind(groupDn(group.name), groupContext)
+      ctx.bind(groupDn(group.id), groupContext)
       group
 
     } catch {
       case e: NameAlreadyBoundException =>
-        throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"group name ${group.name.value} already exists"))
+        throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"group name ${group.id.value} already exists"))
     }
   }
 
@@ -53,15 +54,15 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     ctx.unbind(groupDn(groupName))
   }
 
-  override def removeGroupMember(groupName: WorkbenchGroupName, removeMember: WorkbenchSubject): Future[Unit] = withContext { ctx =>
-    ctx.modifyAttributes(groupDn(groupName), DirContext.REMOVE_ATTRIBUTE, new BasicAttributes(Attr.uniqueMember, subjectDn(removeMember)))
+  override def removeGroupMember(groupId: WorkbenchGroupIdentity, removeMember: WorkbenchSubject): Future[Unit] = withContext { ctx =>
+    ctx.modifyAttributes(groupDn(groupId), DirContext.REMOVE_ATTRIBUTE, new BasicAttributes(Attr.uniqueMember, subjectDn(removeMember)))
   }
 
-  override def addGroupMember(groupName: WorkbenchGroupName, addMember: WorkbenchSubject): Future[Unit] = withContext { ctx =>
-    ctx.modifyAttributes(groupDn(groupName), DirContext.ADD_ATTRIBUTE, new BasicAttributes(Attr.uniqueMember, subjectDn(addMember)))
+  override def addGroupMember(groupId: WorkbenchGroupIdentity, addMember: WorkbenchSubject): Future[Unit] = withContext { ctx =>
+    ctx.modifyAttributes(groupDn(groupId), DirContext.ADD_ATTRIBUTE, new BasicAttributes(Attr.uniqueMember, subjectDn(addMember)))
   }
 
-  override def loadGroup(groupName: WorkbenchGroupName): Future[Option[WorkbenchGroup]] = withContext { ctx =>
+  override def loadGroup(groupName: WorkbenchGroupName): Future[Option[BasicWorkbenchGroup]] = withContext { ctx =>
     Try {
       val attributes = ctx.getAttributes(groupDn(groupName))
 
@@ -69,7 +70,7 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
       val email = getAttribute[String](attributes, Attr.email).getOrElse(throw new WorkbenchException(s"${Attr.email} attribute missing: $groupName"))
       val memberDns = getAttributes[String](attributes, Attr.uniqueMember).getOrElse(Set.empty).toSet
 
-      Option(WorkbenchGroup(WorkbenchGroupName(cn), memberDns.map(dnToSubject), WorkbenchGroupEmail(email)))
+      Option(BasicWorkbenchGroup(WorkbenchGroupName(cn), memberDns.map(dnToSubject), WorkbenchGroupEmail(email)))
 
     }.recover {
       case e: NameNotFoundException => None
@@ -91,7 +92,7 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     }.get
   }
 
-  override def loadGroups(groupNames: Set[WorkbenchGroupName]): Future[Seq[WorkbenchGroup]] = batchedLoad(groupNames.toSeq) { batch => { ctx =>
+  override def loadGroups(groupNames: Set[WorkbenchGroupName]): Future[Seq[BasicWorkbenchGroup]] = batchedLoad(groupNames.toSeq) { batch => { ctx =>
     val filters = batch.toSet[WorkbenchGroupName].map { ref => s"(${Attr.cn}=${ref.value})" }
     ctx.search(groupsOu, s"(|${filters.mkString})", new SearchControls()).extractResultsAndClose.map { result =>
       unmarshalGroup(result.getAttributes)
@@ -106,7 +107,7 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     createIdentityInternal(petServiceAccount.subjectId, petServiceAccount.email).map(_ => petServiceAccount)
   }
 
-  private def createIdentityInternal(subject: WorkbenchSubject, email: WorkbenchEmail): Future[Unit] = withContext { ctx =>
+  private def createIdentityInternal(subject: WorkbenchSubject with ValueObject, email: WorkbenchEmail): Future[Unit] = withContext { ctx =>
     try {
       val identityContext = new BaseDirContext {
         override def getAttributes(name: String): Attributes = {
@@ -193,7 +194,7 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
   }
 
   override def loadUsers(userIds: Set[WorkbenchUserId]): Future[Seq[WorkbenchUser]] = batchedLoad(userIds.toSeq) { batch => { ctx =>
-    val filters = batch.toSet[WorkbenchSubject].map { ref => s"(${Attr.uid}=${ref.value})" }
+    val filters = batch.toSet[WorkbenchSubject with ValueObject].map { ref => s"(${Attr.uid}=${ref.value})" }
     ctx.search(peopleOu, s"(|${filters.mkString})", new SearchControls()).extractResultsAndClose.map { result =>
       unmarshalUser(result.getAttributes)
     }
@@ -226,13 +227,13 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     WorkbenchUserServiceAccount(WorkbenchUserServiceAccountSubjectId(uid), WorkbenchUserServiceAccountEmail(email), WorkbenchUserServiceAccountDisplayName(""))
   }
 
-  private def unmarshalGroup(attributes: Attributes): WorkbenchGroup = {
+  private def unmarshalGroup(attributes: Attributes): BasicWorkbenchGroup = {
     val cn = getAttribute[String](attributes, Attr.cn).getOrElse(throw new WorkbenchException(s"${Attr.cn} attribute missing"))
     val email = getAttribute[String](attributes, Attr.email).getOrElse(throw new WorkbenchException(s"${Attr.email} attribute missing"))
     val memberDns = getAttributes[String](attributes, Attr.member).getOrElse(Set.empty).toSet
     val members = memberDns.map(dnToSubject)
 
-    WorkbenchGroup(WorkbenchGroupName(cn), members, WorkbenchGroupEmail(email))
+    BasicWorkbenchGroup(WorkbenchGroupName(cn), members, WorkbenchGroupEmail(email))
   }
 
   private def getAttribute[T](attributes: Attributes, key: String): Option[T] = {
@@ -251,35 +252,35 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     ctx.unbind(petDn(petServiceAccountUniqueId))
   }
 
-  override def listUsersGroups(userId: WorkbenchUserId): Future[Set[WorkbenchGroupName]] = withContext { ctx =>
+  override def listUsersGroups(userId: WorkbenchUserId): Future[Set[WorkbenchGroupIdentity]] = withContext { ctx =>
     val groups = for (
       attr <- ctx.getAttributes(userDn(userId), Array(Attr.memberOf)).getAll.extractResultsAndClose;
       attrE <- attr.getAll.extractResultsAndClose
-    ) yield dnToGroupName(attrE.asInstanceOf[String])
+    ) yield dnToGroupIdentity(attrE.asInstanceOf[String])
 
     groups.toSet
   }
 
-  override def isGroupMember(groupName: WorkbenchGroupName, member: WorkbenchSubject): Future[Boolean] = withContext { ctx =>
+  override def isGroupMember(groupId: WorkbenchGroupIdentity, member: WorkbenchSubject): Future[Boolean] = withContext { ctx =>
     val groups = for (
       attr <- ctx.getAttributes(subjectDn(member), Array(Attr.memberOf)).getAll.extractResultsAndClose;
       attrE <- attr.getAll.extractResultsAndClose
-    ) yield dnToGroupName(attrE.asInstanceOf[String])
+    ) yield dnToGroupIdentity(attrE.asInstanceOf[String])
 
-    groups.toSet.contains(groupName)
+    groups.toSet.contains(groupId)
   }
 
-  override def listFlattenedGroupUsers(groupName: WorkbenchGroupName): Future[Set[WorkbenchUserId]] = withContext { ctx =>
-    ctx.search(peopleOu, new BasicAttributes(Attr.memberOf, groupDn(groupName), true)).extractResultsAndClose.map { result =>
+  override def listFlattenedGroupUsers(groupId: WorkbenchGroupIdentity): Future[Set[WorkbenchUserId]] = withContext { ctx =>
+    ctx.search(peopleOu, new BasicAttributes(Attr.memberOf, groupDn(groupId), true)).extractResultsAndClose.map { result =>
       unmarshalUser(result.getAttributes).id
     }.toSet
   }
 
-  override def listAncestorGroups(groupName: WorkbenchGroupName): Future[Set[WorkbenchGroupName]] = withContext { ctx =>
+  override def listAncestorGroups(groupId: WorkbenchGroupIdentity): Future[Set[WorkbenchGroupIdentity]] = withContext { ctx =>
     val groups = for (
-      attr <- ctx.getAttributes(groupDn(groupName), Array(Attr.memberOf)).getAll.extractResultsAndClose;
+      attr <- ctx.getAttributes(groupDn(groupId), Array(Attr.memberOf)).getAll.extractResultsAndClose;
       attrE <- attr.getAll.extractResultsAndClose
-    ) yield dnToGroupName(attrE.asInstanceOf[String])
+    ) yield dnToGroupIdentity(attrE.asInstanceOf[String])
 
     groups.toSet
   }

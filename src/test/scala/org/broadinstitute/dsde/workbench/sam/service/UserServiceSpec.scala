@@ -9,7 +9,7 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.config.{DirectoryConfig, PetServiceAccountConfig}
 import org.broadinstitute.dsde.workbench.sam.directory.JndiDirectoryDAO
-import org.broadinstitute.dsde.workbench.sam.model.{UserInfo, UserStatus, UserStatusDetails}
+import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, UserInfo, UserStatus, UserStatusDetails}
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.broadinstitute.dsde.workbench.sam.service.UserService.allUsersGroupName
 import org.scalatest.concurrent.ScalaFutures
@@ -68,7 +68,7 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Befor
     dirDAO.loadUser(defaultUserId).futureValue shouldBe Some(defaultUser)
     dirDAO.isEnabled(defaultUserId).futureValue shouldBe true
     dirDAO.loadGroup(UserService.allUsersGroupName).futureValue shouldBe
-      Some(WorkbenchGroup(UserService.allUsersGroupName, Set(defaultUserId), WorkbenchGroupEmail(service.toGoogleGroupName(UserService.allUsersGroupName.value))))
+      Some(BasicWorkbenchGroup(UserService.allUsersGroupName, Set(defaultUserId), WorkbenchGroupEmail(service.toGoogleGroupName(UserService.allUsersGroupName.value))))
 
     // check google
     val mockGoogleDirectoryDAO = service.googleDirectoryDAO.asInstanceOf[MockGoogleDirectoryDAO]

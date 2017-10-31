@@ -39,25 +39,25 @@ class JndiAccessPolicyDAOSpec extends FlatSpec with Matchers with TestSupport wi
     val typeName1 = ResourceTypeName(UUID.randomUUID().toString)
     val typeName2 = ResourceTypeName(UUID.randomUUID().toString)
 
-    val policy1Group = WorkbenchGroup(WorkbenchGroupName("role1-a"), Set(WorkbenchUserId("foo")), toEmail(typeName1.value, "resource", "role1-a"))
-    val policy2Group = WorkbenchGroup(WorkbenchGroupName("role1-b"), Set(WorkbenchUserId("foo")),toEmail(typeName1.value, "resource", "role1-b"))
-    val policy3Group = WorkbenchGroup(WorkbenchGroupName("role1-a"), Set(WorkbenchUserId("foo")), toEmail(typeName2.value, "resource", "role1-a"))
+    val policy1Group = BasicWorkbenchGroup(WorkbenchGroupName("role1-a"), Set(WorkbenchUserId("foo")), toEmail(typeName1.value, "resource", "role1-a"))
+    val policy2Group = BasicWorkbenchGroup(WorkbenchGroupName("role1-b"), Set(WorkbenchUserId("foo")),toEmail(typeName1.value, "resource", "role1-b"))
+    val policy3Group = BasicWorkbenchGroup(WorkbenchGroupName("role1-a"), Set(WorkbenchUserId("foo")), toEmail(typeName2.value, "resource", "role1-a"))
 
-    val policy1 = AccessPolicy(AccessPolicyName("role1-a"), Resource(typeName1, ResourceId("resource")), policy1Group, Set(ResourceRoleName("role1")), Set(ResourceAction("action1"), ResourceAction("action2")))
-    val policy2 = AccessPolicy(AccessPolicyName("role1-b"), Resource(typeName1, ResourceId("resource")), policy2Group, Set(ResourceRoleName("role1")), Set(ResourceAction("action3"), ResourceAction("action4")))
-    val policy3 = AccessPolicy(AccessPolicyName("role1-a"), Resource(typeName2, ResourceId("resource")), policy3Group, Set(ResourceRoleName("role1")), Set(ResourceAction("action1"), ResourceAction("action2")))
+    val policy1 = AccessPolicy(ResourceAndPolicyName(Resource(typeName1, ResourceId("resource")), AccessPolicyName("role1-a")), policy1Group.members, policy1Group.email, Set(ResourceRoleName("role1")), Set(ResourceAction("action1"), ResourceAction("action2")))
+    val policy2 = AccessPolicy(ResourceAndPolicyName(Resource(typeName1, ResourceId("resource")), AccessPolicyName("role1-b")), policy2Group.members, policy2Group.email, Set(ResourceRoleName("role1")), Set(ResourceAction("action3"), ResourceAction("action4")))
+    val policy3 = AccessPolicy(ResourceAndPolicyName(Resource(typeName2, ResourceId("resource")), AccessPolicyName("role1-a")), policy3Group.members, policy3Group.email, Set(ResourceRoleName("role1")), Set(ResourceAction("action1"), ResourceAction("action2")))
 
     runAndWait(dao.createResourceType(typeName1))
     runAndWait(dao.createResourceType(typeName2))
 
-    runAndWait(dao.createResource(policy1.resource))
+    runAndWait(dao.createResource(policy1.id.resource))
     //policy2's resource already exists
-    runAndWait(dao.createResource(policy3.resource))
+    runAndWait(dao.createResource(policy3.id.resource))
 
     assertResult(Seq.empty) {
-      runAndWait(dao.listAccessPolicies(policy1.resource)).toSeq
-      runAndWait(dao.listAccessPolicies(policy2.resource)).toSeq
-      runAndWait(dao.listAccessPolicies(policy3.resource)).toSeq
+      runAndWait(dao.listAccessPolicies(policy1.id.resource)).toSeq
+      runAndWait(dao.listAccessPolicies(policy2.id.resource)).toSeq
+      runAndWait(dao.listAccessPolicies(policy3.id.resource)).toSeq
     }
 
     runAndWait(dao.createPolicy(policy1))
@@ -65,23 +65,23 @@ class JndiAccessPolicyDAOSpec extends FlatSpec with Matchers with TestSupport wi
     runAndWait(dao.createPolicy(policy3))
 
     assertResult(Seq(policy1, policy2)) {
-      runAndWait(dao.listAccessPolicies(policy1.resource)).toSeq
+      runAndWait(dao.listAccessPolicies(policy1.id.resource)).toSeq
     }
 
     assertResult(Seq(policy3)) {
-      runAndWait(dao.listAccessPolicies(policy3.resource)).toSeq
+      runAndWait(dao.listAccessPolicies(policy3.id.resource)).toSeq
     }
 
     runAndWait(dao.deletePolicy(policy1))
 
     assertResult(Seq(policy2)) {
-      runAndWait(dao.listAccessPolicies(policy1.resource)).toSeq
+      runAndWait(dao.listAccessPolicies(policy1.id.resource)).toSeq
     }
 
     runAndWait(dao.deletePolicy(policy2))
 
     assertResult(Seq.empty) {
-      runAndWait(dao.listAccessPolicies(policy1.resource)).toSeq
+      runAndWait(dao.listAccessPolicies(policy1.id.resource)).toSeq
     }
 
     runAndWait(dao.deletePolicy(policy3))
