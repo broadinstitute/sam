@@ -69,6 +69,30 @@ trait JndiSupport {
     val partStrings = matchAttributeNames.map { attrName => s"$attrName=([^,]+)" }
     partStrings.mkString("(?i)", ",", s",$baseDn").r
   }
+
+  import scala.language.implicitConversions
+  /**
+    * Use this implicit conversion class and following call to extractResultsAndClose
+    * instead of JavaConverters and call to asScala
+    * because it makes sure the NamingEnumeration is closed and connections are not leaked.
+    * @param results results from a search, etc.
+    * @return object that can be used to safely handle and close NamingEnumeration
+    */
+  protected implicit class NamingEnumCloser[T](results: NamingEnumeration[T]) {
+    /**
+      * copy results enum into a Seq then close the enum
+      * @return results
+      */
+    def extractResultsAndClose: Seq[T] = {
+      import scala.collection.JavaConverters._
+      try {
+        Seq(results.asScala.toSeq:_*)
+      } finally {
+        results.close()
+      }
+    }
+  }
+
 }
 
 /**
