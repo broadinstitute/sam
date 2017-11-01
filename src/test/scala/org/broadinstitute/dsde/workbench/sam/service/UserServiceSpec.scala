@@ -142,7 +142,7 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Befor
     // create a pet service account
     val emailResponse = service.createUserPetServiceAccount(defaultUser).futureValue
 
-    emailResponse.value should endWith ("@test-project.iam.gserviceaccount.com")
+    emailResponse.value should endWith ("@my-pet-project.iam.gserviceaccount.com")
 
     // verify ldap
     dirDAO.getPetServiceAccountForUser(defaultUserId).futureValue shouldBe Some(emailResponse)
