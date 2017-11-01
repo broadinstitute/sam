@@ -72,17 +72,13 @@ trait JndiSupport {
 
   import scala.language.implicitConversions
   /**
-    * This implicit conversion from NamingEnumeration[T] to NamingEnumCloser[T] and following call to extractResultsAndClose
-    * should be used instead of JavaConverters and call to asScala
+    * Use this implicit conversion class and following call to extractResultsAndClose
+    * instead of JavaConverters and call to asScala
     * because it makes sure the NamingEnumeration is closed and connections are not leaked.
     * @param results results from a search, etc.
     * @return object that can be used to safely handle and close NamingEnumeration
     */
-  protected implicit def toNamingEnumCloser[T](results: NamingEnumeration[T]): NamingEnumCloser[T] = {
-    new NamingEnumCloser(results)
-  }
-
-  protected class NamingEnumCloser[T](results: NamingEnumeration[T]) {
+  protected implicit class NamingEnumCloser[T](results: NamingEnumeration[T]) {
     /**
       * copy results enum into a Seq then close the enum
       * @return results
