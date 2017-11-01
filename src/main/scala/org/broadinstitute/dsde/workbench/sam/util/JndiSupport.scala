@@ -72,7 +72,7 @@ trait JndiSupport {
 
   import scala.language.implicitConversions
   /**
-    * This implicit conversion from NamingEnumeration[T] to NamingCloser[T] and following call to extractResultsAndClose
+    * This implicit conversion from NamingEnumeration[T] to NamingEnumCloser[T] and following call to extractResultsAndClose
     * should be used instead of JavaConverters and call to asScala
     * because it makes sure the NamingEnumeration is closed and connections are not leaked.
     * @param results results from a search, etc.
