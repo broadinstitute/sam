@@ -78,7 +78,7 @@ trait JndiSupport {
     * @param results results from a search, etc.
     * @return object that can be used to safely handle and close NamingEnumeration
     */
-  protected implicit def toNamingCloser[T](results: NamingEnumeration[T]): NamingEnumCloser[T] = {
+  protected implicit def toNamingEnumCloser[T](results: NamingEnumeration[T]): NamingEnumCloser[T] = {
     new NamingEnumCloser(results)
   }
 
