@@ -72,19 +72,31 @@ trait JndiSupport {
 
   import scala.language.implicitConversions
   /**
-    * This implicit conversion from NamingEnumeration[T] to Seq[T] should be used instead of asScala
-    * from JavaConverters because it makes sure the NamingEnumeration is closed and connections are not leaked.
-    * @param results results from a search
-    * @return a copy of results in scala form, results has been closed and is no longer usable
+    * This implicit conversion from NamingEnumeration[T] to NamingCloser[T] and following call to extractResultsAndClose
+    * should be used instead of JavaConverters and call to asScala
+    * because it makes sure the NamingEnumeration is closed and connections are not leaked.
+    * @param results results from a search, etc.
+    * @return object that can be used to safely handle and close NamingEnumeration
     */
-  implicit def extractResultsAndClose[T](results: NamingEnumeration[T]): Seq[T] = {
-    import scala.collection.JavaConverters._
-    try {
-      Seq(results.asScala.toSeq:_*)
-    } finally {
-      results.close()
+  protected implicit def toNamingCloser[T](results: NamingEnumeration[T]): NamingEnumCloser[T] = {
+    new NamingEnumCloser(results)
+  }
+
+  protected class NamingEnumCloser[T](results: NamingEnumeration[T]) {
+    /**
+      * copy results enum into a Seq then close the enum
+      * @return results
+      */
+    def extractResultsAndClose: Seq[T] = {
+      import scala.collection.JavaConverters._
+      try {
+        Seq(results.asScala.toSeq:_*)
+      } finally {
+        results.close()
+      }
     }
   }
+
 }
 
 /**

@@ -93,7 +93,7 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
 
   override def loadGroups(groupNames: Set[WorkbenchGroupName]): Future[Seq[WorkbenchGroup]] = batchedLoad(groupNames.toSeq) { batch => { ctx =>
     val filters = batch.toSet[WorkbenchGroupName].map { ref => s"(${Attr.cn}=${ref.value})" }
-    ctx.search(groupsOu, s"(|${filters.mkString})", new SearchControls()).map { result =>
+    ctx.search(groupsOu, s"(|${filters.mkString})", new SearchControls()).extractResultsAndClose.map { result =>
       unmarshalGroup(result.getAttributes)
     }
   } }
@@ -194,14 +194,14 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
 
   override def loadUsers(userIds: Set[WorkbenchUserId]): Future[Seq[WorkbenchUser]] = batchedLoad(userIds.toSeq) { batch => { ctx =>
     val filters = batch.toSet[WorkbenchSubject].map { ref => s"(${Attr.uid}=${ref.value})" }
-    ctx.search(peopleOu, s"(|${filters.mkString})", new SearchControls()).map { result =>
+    ctx.search(peopleOu, s"(|${filters.mkString})", new SearchControls()).extractResultsAndClose.map { result =>
       unmarshalUser(result.getAttributes)
     }
   } }
 
   override def loadSubjectFromEmail(email: String): Future[Option[WorkbenchSubject]] = withContext { ctx =>
     val subjectResults = ctx.search(directoryConfig.baseDn, s"(${Attr.email}=${email})", new SearchControls(SearchControls.SUBTREE_SCOPE, 0, 0, null, false, false))
-    val subjects = subjectResults.map { result =>
+    val subjects = subjectResults.extractResultsAndClose.map { result =>
       dnToSubject(result.getNameInNamespace)
     }
 
@@ -240,7 +240,7 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
   }
 
   private def getAttributes[T](attributes: Attributes, key: String): Option[TraversableOnce[T]] = {
-    Option(attributes.get(key)).map(_.getAll.map(_.asInstanceOf[T]))
+    Option(attributes.get(key)).map(_.getAll.extractResultsAndClose.map(_.asInstanceOf[T]))
   }
 
   override def deleteUser(userId: WorkbenchUserId): Future[Unit] = withContext { ctx =>
@@ -253,8 +253,8 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
 
   override def listUsersGroups(userId: WorkbenchUserId): Future[Set[WorkbenchGroupName]] = withContext { ctx =>
     val groups = for (
-      attr <- ctx.getAttributes(userDn(userId), Array(Attr.memberOf)).getAll;
-      attrE <- attr.getAll
+      attr <- ctx.getAttributes(userDn(userId), Array(Attr.memberOf)).getAll.extractResultsAndClose;
+      attrE <- attr.getAll.extractResultsAndClose
     ) yield dnToGroupName(attrE.asInstanceOf[String])
 
     groups.toSet
@@ -262,23 +262,23 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
 
   override def isGroupMember(groupName: WorkbenchGroupName, member: WorkbenchSubject): Future[Boolean] = withContext { ctx =>
     val groups = for (
-      attr <- ctx.getAttributes(subjectDn(member), Array(Attr.memberOf)).getAll;
-      attrE <- attr.getAll
+      attr <- ctx.getAttributes(subjectDn(member), Array(Attr.memberOf)).getAll.extractResultsAndClose;
+      attrE <- attr.getAll.extractResultsAndClose
     ) yield dnToGroupName(attrE.asInstanceOf[String])
 
     groups.toSet.contains(groupName)
   }
 
   override def listFlattenedGroupUsers(groupName: WorkbenchGroupName): Future[Set[WorkbenchUserId]] = withContext { ctx =>
-    ctx.search(peopleOu, new BasicAttributes(Attr.memberOf, groupDn(groupName), true)).map { result =>
+    ctx.search(peopleOu, new BasicAttributes(Attr.memberOf, groupDn(groupName), true)).extractResultsAndClose.map { result =>
       unmarshalUser(result.getAttributes).id
     }.toSet
   }
 
   override def listAncestorGroups(groupName: WorkbenchGroupName): Future[Set[WorkbenchGroupName]] = withContext { ctx =>
     val groups = for (
-      attr <- ctx.getAttributes(groupDn(groupName), Array(Attr.memberOf)).getAll;
-      attrE <- attr.getAll
+      attr <- ctx.getAttributes(groupDn(groupName), Array(Attr.memberOf)).getAll.extractResultsAndClose;
+      attrE <- attr.getAll.extractResultsAndClose
     ) yield dnToGroupName(attrE.asInstanceOf[String])
 
     groups.toSet
