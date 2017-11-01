@@ -103,7 +103,7 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
   }
 
   override def createPetServiceAccount(petServiceAccount: WorkbenchUserServiceAccount): Future[WorkbenchUserServiceAccount] = {
-    createIdentityInternal(petServiceAccount.id, petServiceAccount.email).map(_ => petServiceAccount)
+    createIdentityInternal(petServiceAccount.subjectId, petServiceAccount.email).map(_ => petServiceAccount)
   }
 
   private def createIdentityInternal(subject: WorkbenchSubject, email: WorkbenchEmail): Future[Unit] = withContext { ctx =>
@@ -180,9 +180,9 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     }.get
   }
 
-  override def loadPetServiceAccount(petServiceAccountId: WorkbenchUserServiceAccountId): Future[Option[WorkbenchUserServiceAccount]] = withContext { ctx =>
+  override def loadPetServiceAccount(petServiceAccountUniqueId: WorkbenchUserServiceAccountUniqueId): Future[Option[WorkbenchUserServiceAccount]] = withContext { ctx =>
     Try {
-      val attributes = ctx.getAttributes(petDn(petServiceAccountId))
+      val attributes = ctx.getAttributes(petDn(petServiceAccountUniqueId))
 
       Option(unmarshalPetServiceAccount(attributes))
 
@@ -223,7 +223,7 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     val uid = getAttribute[String](attributes, Attr.uid).getOrElse(throw new WorkbenchException(s"${Attr.uid} attribute missing"))
     val email = getAttribute[String](attributes, Attr.email).getOrElse(throw new WorkbenchException(s"${Attr.email} attribute missing"))
 
-    WorkbenchUserServiceAccount(WorkbenchUserServiceAccountId(uid), WorkbenchUserServiceAccountEmail(email), WorkbenchUserServiceAccountDisplayName(""))
+    WorkbenchUserServiceAccount(WorkbenchUserServiceAccountUniqueId(uid), WorkbenchUserServiceAccountEmail(email), WorkbenchUserServiceAccountDisplayName(""))
   }
 
   private def unmarshalGroup(attributes: Attributes): WorkbenchGroup = {
@@ -247,8 +247,8 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     ctx.unbind(userDn(userId))
   }
 
-  override def deletePetServiceAccount(petServiceAccountId: WorkbenchUserServiceAccountId): Future[Unit] = withContext { ctx =>
-    ctx.unbind(petDn(petServiceAccountId))
+  override def deletePetServiceAccount(petServiceAccountUniqueId: WorkbenchUserServiceAccountUniqueId): Future[Unit] = withContext { ctx =>
+    ctx.unbind(petDn(petServiceAccountUniqueId))
   }
 
   override def listUsersGroups(userId: WorkbenchUserId): Future[Set[WorkbenchGroupName]] = withContext { ctx =>
