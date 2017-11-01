@@ -99,19 +99,19 @@ class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Google
   }
 
   def createUserPetServiceAccount(user: WorkbenchUser): Future[WorkbenchUserServiceAccountEmail] = {
-    val (petSa, petSaDisplayName) = toPetSAFromUser(user)
+    val (petSaID, petSaDisplayName) = toPetSAFromUser(user)
 
     directoryDAO.getPetServiceAccountForUser(user.id).flatMap {
       case Some(email) => Future.successful(email)
       case None =>
         // First find or create the service account in Google, which generates a unique id and email
-        val petSA = googleIamDAO.getOrCreateServiceAccount(petServiceAccountConfig.googleProject, petSa, petSaDisplayName)
+        val petSA = googleIamDAO.getOrCreateServiceAccount(petServiceAccountConfig.googleProject, petSaID, petSaDisplayName)
         petSA.flatMap { petServiceAccount =>
           // Set up the service account with the necessary permissions
           setUpServiceAccount(user, petServiceAccount) andThen { case Failure(_) =>
             // If anything fails with setup, clean up any created resources to ensure we don't end up with orphaned pets.
             removePetServiceAccount(user, petServiceAccount).failed.foreach { e =>
-              logger.warn(s"Error occurred cleaning up pet service account [$petSa] [$petSaDisplayName]", e)
+              logger.warn(s"Error occurred cleaning up pet service account [$petSaID] [$petSaDisplayName]", e)
             }
         }
       }
