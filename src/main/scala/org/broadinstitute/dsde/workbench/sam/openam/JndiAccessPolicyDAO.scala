@@ -12,7 +12,6 @@ import org.broadinstitute.dsde.workbench.sam.util.{BaseDirContext, JndiSupport}
 import org.broadinstitute.dsde.workbench.sam._
 
 import scala.concurrent.{ExecutionContext, Future}
-import scala.collection.JavaConverters._
 import scala.util.Try
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO.Attr
 
@@ -201,7 +200,7 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
   private def policyDn(policyName: AccessPolicyName, resource: Resource): String = s"${Attr.policy}=${policyName.value},${resourceDn(resource)}"
 
   private def getAttributes[T](attributes: Attributes, key: String): Option[TraversableOnce[T]] = {
-    Option(attributes.get(key)).map(_.getAll.asScala.map(_.asInstanceOf[T]))
+    Option(attributes.get(key)).map(_.getAll.map(_.asInstanceOf[T]))
   }
 
   private def unmarshalAccessPolicy(attributes: Attributes): AccessPolicy = {
@@ -238,7 +237,7 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
 
   private def listAccessPolicies(resource: Resource, searchAttrs: BasicAttributes): Future[Set[AccessPolicy]] = withContext { ctx =>
     val policies = try {
-      ctx.search(resourceDn(resource), searchAttrs).asScala.map { searchResult =>
+      ctx.search(resourceDn(resource), searchAttrs).map { searchResult =>
         unmarshalAccessPolicy(searchResult.getAttributes)
       }
     } catch {

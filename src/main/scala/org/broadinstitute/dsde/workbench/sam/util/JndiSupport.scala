@@ -69,6 +69,22 @@ trait JndiSupport {
     val partStrings = matchAttributeNames.map { attrName => s"$attrName=([^,]+)" }
     partStrings.mkString("(?i)", ",", s",$baseDn").r
   }
+
+  import scala.language.implicitConversions
+  /**
+    * This implicit conversion from NamingEnumeration[T] to Seq[T] should be used instead of asScala
+    * from JavaConverters because it makes sure the NamingEnumeration is closed and connections are not leaked.
+    * @param results results from a search
+    * @return a copy of results in scala form, results has been closed and is no longer usable
+    */
+  implicit def extractResultsAndClose[T](results: NamingEnumeration[T]): Seq[T] = {
+    import scala.collection.JavaConverters._
+    try {
+      Seq(results.asScala.toSeq:_*)
+    } finally {
+      results.close()
+    }
+  }
 }
 
 /**
