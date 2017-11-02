@@ -7,9 +7,9 @@ object Dependencies {
   val scalaLoggingV = "3.5.0"
   val scalaTestV    = "3.0.1"
 
-  val workbenchUtilV   = "0.2-72adc94"
-  val workbenchModelV  = "0.5-82fd71f-SNAP"
-  val workbenchGoogleV = "0.7-82fd71f-SNAP"
+  val workbenchUtilV   = "0.2-af345cd"
+  val workbenchModelV  = "0.5-af345cd"
+  val workbenchGoogleV = "0.7-af345cd"
 
   val excludeAkkaActor =        ExclusionRule(organization = "com.typesafe.akka", name = "akka-actor_2.12")
   val excludeWorkbenchUtil =    ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-util_2.12")
