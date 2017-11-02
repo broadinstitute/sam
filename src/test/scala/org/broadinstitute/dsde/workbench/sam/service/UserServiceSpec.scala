@@ -17,6 +17,7 @@ import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FlatSpec, Matchers}
 
 import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.util.{Success, Try}
 
 /**
   * Created by rtitle on 10/6/17.
@@ -25,7 +26,6 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Befor
   override implicit val patienceConfig = PatienceConfig(timeout = scaled(5.seconds))
 
   val defaultUserId = WorkbenchUserId("newuser")
-  val defaultPetUserId = WorkbenchUserServiceAccountId("pet-newuser")
   val defaultUserEmail = WorkbenchUserEmail("newuser@new.com")
   val defaultUser = WorkbenchUser(defaultUserId, defaultUserEmail)
   val userInfo = UserInfo("token", WorkbenchUserId(UUID.randomUUID().toString), WorkbenchUserEmail("user@company.com"), 0)
@@ -54,10 +54,8 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Befor
     // clean up
     dirDAO.removePetServiceAccountFromUser(defaultUserId).futureValue
     dirDAO.removeGroupMember(allUsersGroupName, defaultUserId).recover { case _ => () }.futureValue
-    dirDAO.disableIdentity(defaultPetUserId).futureValue
     dirDAO.disableIdentity(defaultUserId).futureValue
     dirDAO.deleteUser(defaultUserId).futureValue
-    dirDAO.deletePetServiceAccount(defaultPetUserId).futureValue
     dirDAO.deleteGroup(UserService.allUsersGroupName).futureValue
   }
 
@@ -142,12 +140,22 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Befor
     // create a pet service account
     val emailResponse = service.createUserPetServiceAccount(defaultUser).futureValue
 
-    emailResponse.value should endWith ("@test-project.iam.gserviceaccount.com")
+    emailResponse.value should endWith ("@my-pet-project.iam.gserviceaccount.com")
 
     // verify ldap
     dirDAO.getPetServiceAccountForUser(defaultUserId).futureValue shouldBe Some(emailResponse)
-    dirDAO.loadPetServiceAccount(defaultPetUserId).futureValue shouldBe
-      Some(WorkbenchUserServiceAccount(defaultPetUserId, WorkbenchUserServiceAccountEmail(emailResponse.value), WorkbenchUserServiceAccountDisplayName("")))
+
+    val ldapPetOpt = dirDAO.loadSubjectFromEmail(emailResponse.value).flatMap {
+      case Some(subject: WorkbenchUserServiceAccountSubjectId) => dirDAO.loadPetServiceAccount(subject)
+      case _ => fail(s"could not load pet LDAP entry from $emailResponse")
+    }.futureValue
+
+    ldapPetOpt shouldBe 'defined
+    val Some(ldapPet) = ldapPetOpt
+    ldapPet.email shouldBe WorkbenchUserServiceAccountEmail(emailResponse.value)
+    ldapPet.displayName shouldBe WorkbenchUserServiceAccountDisplayName("")
+    // MockGoogleIamDAO generates the subject ID as a random Long
+    Try(ldapPet.subjectId.value.toLong) shouldBe a [Success[_]]
 
     // verify google
     val mockGoogleIamDAO = service.googleIamDAO.asInstanceOf[MockGoogleIamDAO]
@@ -160,5 +168,8 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Befor
     // create one again, it should work
     val petSaResponse2 = service.createUserPetServiceAccount(defaultUser).futureValue
     petSaResponse2 shouldBe emailResponse
+
+    dirDAO.disableIdentity(ldapPet.subjectId).futureValue
+    dirDAO.deletePetServiceAccount(ldapPet.subjectId).futureValue
   }
 }

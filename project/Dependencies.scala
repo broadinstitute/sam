@@ -7,9 +7,9 @@ object Dependencies {
   val scalaLoggingV = "3.5.0"
   val scalaTestV    = "3.0.1"
 
-  val workbenchUtilV   = "0.2-72adc94"
-  val workbenchModelV  = "0.4-72adc94"
-  val workbenchGoogleV = "0.5-b4c9b5c"
+  val workbenchUtilV   = "0.2-af345cd"
+  val workbenchModelV  = "0.5-af345cd"
+  val workbenchGoogleV = "0.7-af345cd"
 
   val excludeAkkaActor =        ExclusionRule(organization = "com.typesafe.akka", name = "akka-actor_2.12")
   val excludeWorkbenchUtil =    ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-util_2.12")
@@ -43,6 +43,7 @@ object Dependencies {
   val workbenchUtil: ModuleID =      "org.broadinstitute.dsde.workbench" %% "workbench-util"   % workbenchUtilV
   val workbenchModel: ModuleID =     "org.broadinstitute.dsde.workbench" %% "workbench-model"  % workbenchModelV
   val workbenchGoogle: ModuleID =    "org.broadinstitute.dsde.workbench" %% "workbench-google" % workbenchGoogleV excludeAll(excludeWorkbenchUtil, excludeWorkbenchModel)
+  val workbenchGoogleTests: ModuleID =    "org.broadinstitute.dsde.workbench" %% "workbench-google" % workbenchGoogleV % "test" classifier "tests" excludeAll(excludeWorkbenchUtil, excludeWorkbenchModel)
 
   val rootDependencies = Seq(
     // proactively pull in latest versions of Jackson libs, instead of relying on the versions
@@ -72,6 +73,7 @@ object Dependencies {
 
     workbenchUtil,
     workbenchModel,
-    workbenchGoogle
+    workbenchGoogle,
+    workbenchGoogleTests
   )
 }

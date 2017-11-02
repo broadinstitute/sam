@@ -120,14 +120,14 @@ class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Google
 
   private def enablePetServiceAccount(userId: WorkbenchUserId, petServiceAccount: WorkbenchUserServiceAccount): Future[Unit] = {
     for {
-      _ <- directoryDAO.enableIdentity(petServiceAccount.id)
+      _ <- directoryDAO.enableIdentity(petServiceAccount.subjectId)
       _ <- googleDirectoryDAO.addMemberToGroup(WorkbenchGroupEmail(toProxyFromUser(userId.value)), petServiceAccount.email)
     } yield ()
   }
 
   private def disablePetServiceAccount(userId: WorkbenchUserId, petServiceAccount: WorkbenchUserServiceAccount): Future[Unit] = {
     for {
-      _ <- directoryDAO.disableIdentity(petServiceAccount.id)
+      _ <- directoryDAO.disableIdentity(petServiceAccount.subjectId)
       _ <- googleDirectoryDAO.removeMemberFromGroup(WorkbenchGroupEmail(toProxyFromUser(userId.value)), petServiceAccount.email)
     } yield ()
   }
@@ -135,7 +135,7 @@ class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Google
   private def getPetServiceAccountForUser(userId: WorkbenchUserId): Future[Option[WorkbenchUserServiceAccount]] = {
     directoryDAO.getPetServiceAccountForUser(userId).flatMap {
       case Some(petEmail) => directoryDAO.loadSubjectFromEmail(petEmail.value).map {
-        case Some(petId: WorkbenchUserServiceAccountId) => Some(WorkbenchUserServiceAccount(petId, petEmail, WorkbenchUserServiceAccountDisplayName("")))
+        case Some(petId: WorkbenchUserServiceAccountSubjectId) => Some(WorkbenchUserServiceAccount(petId, petEmail, WorkbenchUserServiceAccountDisplayName("")))
         case _ => None
       }
       case None => Future.successful(None)
@@ -162,11 +162,11 @@ class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Google
       // disable the pet service account
       _ <- disablePetServiceAccount(user.id, petServiceAccount)
       // remove the LDAP record for the pet service account
-      _ <- directoryDAO.deletePetServiceAccount(petServiceAccount.id)
+      _ <- directoryDAO.deletePetServiceAccount(petServiceAccount.subjectId)
       // remove the pet service account attribute on the user's LDAP record
       _ <- directoryDAO.removePetServiceAccountFromUser(user.id)
       // remove the service account itself in Google
-      _ <- googleIamDAO.removeServiceAccount(petServiceAccountConfig.googleProject, petServiceAccount.id)
+      _ <- googleIamDAO.removeServiceAccount(petServiceAccountConfig.googleProject, petServiceAccount.email.toAccountName)
     } yield ()
   }
 
@@ -180,7 +180,7 @@ class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Google
   private[service] def toProxyFromUser(subjectId: String): String = s"PROXY_$subjectId@$googleDomain"
   private[service] def toGoogleGroupName(groupName: String): String = s"GROUP_$groupName@$googleDomain"
 
-  private[service] def toPetSAFromUser(user: WorkbenchUser): (WorkbenchUserServiceAccountId, WorkbenchUserServiceAccountDisplayName) = {
+  private[service] def toPetSAFromUser(user: WorkbenchUser): (WorkbenchUserServiceAccountName, WorkbenchUserServiceAccountDisplayName) = {
     /*
      * Service account IDs must be:
      * 1. between 6 and 30 characters
@@ -189,10 +189,10 @@ class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Google
      *
      * Subject IDs are 22 numeric characters, so "pet-${subjectId}" fulfills these requirements.
      */
-    val serviceAccountId = s"pet-${user.id.value}"
+    val serviceAccountName = s"pet-${user.id.value}"
     val displayName = s"Pet Service Account for user [${user.email.value}]"
 
-    (WorkbenchUserServiceAccountId(serviceAccountId), WorkbenchUserServiceAccountDisplayName(displayName))
+    (WorkbenchUserServiceAccountName(serviceAccountName), WorkbenchUserServiceAccountDisplayName(displayName))
   }
 
   //TODO: Move these to RoleSupport.scala (or something) in some shared library

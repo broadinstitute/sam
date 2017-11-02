@@ -33,8 +33,8 @@ trait DirectoryDAO {
   def isEnabled(subject: WorkbenchSubject): Future[Boolean]
 
   def createPetServiceAccount(petServiceAccount: WorkbenchUserServiceAccount): Future[WorkbenchUserServiceAccount]
-  def loadPetServiceAccount(petServiceAccountId: WorkbenchUserServiceAccountId): Future[Option[WorkbenchUserServiceAccount]]
-  def deletePetServiceAccount(petServiceAccountId: WorkbenchUserServiceAccountId): Future[Unit]
+  def loadPetServiceAccount(petServiceAccountId: WorkbenchUserServiceAccountSubjectId): Future[Option[WorkbenchUserServiceAccount]]
+  def deletePetServiceAccount(petServiceAccountId: WorkbenchUserServiceAccountSubjectId): Future[Unit]
   def getPetServiceAccountForUser(userId: WorkbenchUserId): Future[Option[WorkbenchUserServiceAccountEmail]]
   def addPetServiceAccountToUser(userId: WorkbenchUserId, petServiceAccountEmail: WorkbenchUserServiceAccountEmail): Future[WorkbenchUserServiceAccountEmail]
   def removePetServiceAccountFromUser(userId: WorkbenchUserId): Future[Unit]
