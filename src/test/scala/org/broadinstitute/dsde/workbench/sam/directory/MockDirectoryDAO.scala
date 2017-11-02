@@ -111,7 +111,7 @@ class MockDirectoryDAO extends DirectoryDAO {
       members.flatMap {
         case userId: WorkbenchUserId => Set(userId)
         case groupName: WorkbenchGroupName => listGroupUsers(groupName, visitedGroups + groupName)
-        case serviceAccountId: WorkbenchUserServiceAccountId => throw new WorkbenchException(s"Unexpected service account $serviceAccountId")
+        case serviceAccountId: WorkbenchUserServiceAccountName => throw new WorkbenchException(s"Unexpected service account $serviceAccountId")
       }
     } else {
       Set.empty
