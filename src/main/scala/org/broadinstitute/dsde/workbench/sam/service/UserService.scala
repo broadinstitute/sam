@@ -166,7 +166,7 @@ class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Google
       // remove the pet service account attribute on the user's LDAP record
       _ <- directoryDAO.removePetServiceAccountFromUser(user.id)
       // remove the service account itself in Google
-      _ <- googleIamDAO.removeServiceAccount(petServiceAccountConfig.googleProject, petServiceAccount.email.toAccountId)
+      _ <- googleIamDAO.removeServiceAccount(petServiceAccountConfig.googleProject, petServiceAccount.email.toAccountName)
     } yield ()
   }
 
