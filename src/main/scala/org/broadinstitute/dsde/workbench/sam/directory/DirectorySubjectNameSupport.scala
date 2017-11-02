@@ -18,12 +18,12 @@ trait DirectorySubjectNameSupport extends JndiSupport {
 
   protected def groupDn(groupName: WorkbenchGroupName) = s"cn=${groupName.value},$groupsOu"
   protected def userDn(samUserId: WorkbenchUserId) = s"uid=${samUserId.value},$peopleOu"
-  protected def petDn(serviceAccountId: WorkbenchUserServiceAccountUniqueId) = s"uid=${serviceAccountId.value},$petsOu"
+  protected def petDn(serviceAccountId: WorkbenchUserServiceAccountSubjectId) = s"uid=${serviceAccountId.value},$petsOu"
 
   protected def subjectDn(subject: WorkbenchSubject) = subject match {
     case g: WorkbenchGroupName => groupDn(g)
     case u: WorkbenchUserId => userDn(u)
-    case s: WorkbenchUserServiceAccountUniqueId => petDn(s)
+    case s: WorkbenchUserServiceAccountSubjectId => petDn(s)
   }
 
   protected def dnToSubject(dn: String): WorkbenchSubject = {
@@ -34,7 +34,7 @@ trait DirectorySubjectNameSupport extends JndiSupport {
     dn match {
       case groupMatcher(cn) => WorkbenchGroupName(cn)
       case personMatcher(uid) => WorkbenchUserId(uid)
-      case petMatcher(uid) => WorkbenchUserServiceAccountUniqueId(uid)
+      case petMatcher(uid) => WorkbenchUserServiceAccountSubjectId(uid)
       case _ => throw new WorkbenchException(s"unexpected dn [$dn]")
     }
   }

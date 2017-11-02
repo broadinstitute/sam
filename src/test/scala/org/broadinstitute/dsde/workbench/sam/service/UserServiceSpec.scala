@@ -146,7 +146,7 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Befor
     dirDAO.getPetServiceAccountForUser(defaultUserId).futureValue shouldBe Some(emailResponse)
 
     val ldapPetOpt = dirDAO.loadSubjectFromEmail(emailResponse.value).flatMap {
-      case Some(subject: WorkbenchUserServiceAccountUniqueId) => dirDAO.loadPetServiceAccount(subject)
+      case Some(subject: WorkbenchUserServiceAccountSubjectId) => dirDAO.loadPetServiceAccount(subject)
       case _ => fail(s"could not load pet LDAP entry from $emailResponse")
     }.futureValue
 

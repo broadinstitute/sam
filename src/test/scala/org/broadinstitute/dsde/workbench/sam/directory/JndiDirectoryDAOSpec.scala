@@ -76,7 +76,7 @@ class JndiDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
   }
 
   it should "create, read, delete pet service accounts" in {
-    val serviceAccountUniqueId = WorkbenchUserServiceAccountUniqueId(UUID.randomUUID().toString)
+    val serviceAccountUniqueId = WorkbenchUserServiceAccountSubjectId(UUID.randomUUID().toString)
     val serviceAccount = WorkbenchUserServiceAccount(serviceAccountUniqueId, WorkbenchUserServiceAccountEmail("foo@bar.com"), WorkbenchUserServiceAccountDisplayName(""))
 
     assertResult(None) {

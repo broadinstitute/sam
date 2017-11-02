@@ -135,7 +135,7 @@ class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Google
   private def getPetServiceAccountForUser(userId: WorkbenchUserId): Future[Option[WorkbenchUserServiceAccount]] = {
     directoryDAO.getPetServiceAccountForUser(userId).flatMap {
       case Some(petEmail) => directoryDAO.loadSubjectFromEmail(petEmail.value).map {
-        case Some(petId: WorkbenchUserServiceAccountUniqueId) => Some(WorkbenchUserServiceAccount(petId, petEmail, WorkbenchUserServiceAccountDisplayName("")))
+        case Some(petId: WorkbenchUserServiceAccountSubjectId) => Some(WorkbenchUserServiceAccount(petId, petEmail, WorkbenchUserServiceAccountDisplayName("")))
         case _ => None
       }
       case None => Future.successful(None)
