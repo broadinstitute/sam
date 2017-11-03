@@ -1,5 +1,8 @@
 package org.broadinstitute.dsde.workbench.sam.service
 
+import java.util.UUID
+import javax.naming.directory.{AttributeInUseException, NoSuchAttributeException}
+
 import akka.http.scaladsl.model.StatusCodes
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model._
@@ -9,11 +12,12 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.AccessPolicyDAO
 
 import scala.concurrent.{ExecutionContext, Future}
+import scala.util.Success
 
 /**
   * Created by mbemis on 5/22/17.
   */
-class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceType], val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: DirectoryDAO, val googleDomain: String)(implicit val executionContext: ExecutionContext) extends LazyLogging {
+class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceType], val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExtensions, val emailDomain: String)(implicit val executionContext: ExecutionContext) extends LazyLogging {
   def getResourceTypes(): Future[Map[ResourceTypeName, ResourceType]] = {
     Future.successful(resourceTypes)
   }
@@ -32,7 +36,7 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
 
       val roleMembers: Set[WorkbenchSubject] = Set(userInfo.userId)
 
-      val email = toGoogleGroupEmail(AccessPolicyName(role.roleName.value), Resource(resourceType.name, resourceId))
+      val email = generateGroupEmail(AccessPolicyName(role.roleName.value), Resource(resourceType.name, resourceId))
 
       for {
         _ <- accessPolicyDAO.createPolicy(AccessPolicy(
@@ -102,7 +106,7 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
       directoryDAO.loadSubjectFromEmail
     }.map(_.flatten)
 
-    val email = toGoogleGroupEmail(policyName, resource)
+    val email = generateGroupEmail(policyName, resource)
 
     val actionsByRole = resourceType.roles.map(r => r.roleName -> r.actions).toMap
     val impliedActionsFromRoles = policyMembership.roles.flatMap(actionsByRole)
@@ -113,8 +117,26 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
 
       accessPolicyDAO.loadPolicy(resourceAndPolicyName).flatMap {
         case None => accessPolicyDAO.createPolicy(newPolicy)
-        case Some(_) => accessPolicyDAO.overwritePolicy(newPolicy)
+        case Some(accessPolicy) => accessPolicyDAO.overwritePolicy(AccessPolicy(newPolicy.id, newPolicy.members, accessPolicy.email, newPolicy.roles, newPolicy.actions ))
+      } andThen {
+        case Success(policy) => cloudExtensions.onGroupUpdate(Seq(policy.id)) recover {
+          case t: Throwable =>
+            logger.error(s"error calling cloudExtensions.onGroupUpdate for ${policy.id}", t)
+            throw t
+        }
       }
+    }
+  }
+
+  def addSubjectToPolicy(resourceAndPolicyName: ResourceAndPolicyName, subject: WorkbenchSubject): Future[Unit] = {
+    directoryDAO.addGroupMember(resourceAndPolicyName, subject) recover {
+      case _: AttributeInUseException => // subject is already there
+    }
+  }
+
+  def removeSubjectFromPolicy(resourceAndPolicyName: ResourceAndPolicyName, subject: WorkbenchSubject): Future[Unit] = {
+    directoryDAO.removeGroupMember(resourceAndPolicyName, subject) recover {
+      case _: NoSuchAttributeException => // subject already gone
     }
   }
 
@@ -125,7 +147,7 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     for {
       userEmails <- directoryDAO.loadUsers(users)
       groupEmails <- directoryDAO.loadGroups(groups)
-    } yield AccessPolicyResponseEntry(policy.id.accessPolicyName, AccessPolicyMembership(userEmails.toSet[WorkbenchUser].map(_.email.value) ++ groupEmails.map(_.email.value), policy.actions, policy.roles))
+    } yield AccessPolicyResponseEntry(policy.id.accessPolicyName, AccessPolicyMembership(userEmails.toSet[WorkbenchUser].map(_.email.value) ++ groupEmails.map(_.email.value), policy.actions, policy.roles), policy.email)
   }
 
   def listResourcePolicies(resource: Resource, userInfo: UserInfo): Future[Set[AccessPolicyResponseEntry]] = {
@@ -135,8 +157,8 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     }
   }
 
-  def toGoogleGroupEmail(policyName: AccessPolicyName, resource: Resource) = WorkbenchGroupEmail(s"policy-${resource.resourceTypeName.value}-${resource.resourceId.value}-$policyName@$googleDomain") //TODO: Make sure this is a good/unique naming convention and keep Google length limits in mind
-  def toGoogleGroupName(groupName: WorkbenchGroupName) = WorkbenchGroupEmail(s"GROUP_${groupName.value}@$googleDomain")
+  def generateGroupEmail(policyName: AccessPolicyName, resource: Resource) = WorkbenchEmail(s"policy-${UUID.randomUUID}@$emailDomain")
+  def toGoogleGroupName(groupName: WorkbenchGroupName) = WorkbenchEmail(s"GROUP_${groupName.value}@$emailDomain")
 
   //todo: use this for google group sync
   private def roleGroupName(resourceType: ResourceType, resourceId: ResourceId, role: ResourceRole) = {

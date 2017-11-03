@@ -5,12 +5,13 @@ import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server
 import akka.http.scaladsl.server.{Directive0, Directive1, Directives}
 import akka.http.scaladsl.server.Directives._
-import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchExceptionWithErrorReport}
+import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchExceptionWithErrorReport, WorkbenchSubject}
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import spray.json.DefaultJsonProtocol._
 import org.broadinstitute.dsde.workbench.sam.service.ResourceService
+import org.broadinstitute.dsde.workbench.sam.service.UserService
 import spray.json.JsBoolean
 
 import scala.concurrent.ExecutionContext
@@ -21,11 +22,19 @@ import scala.concurrent.ExecutionContext
 trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives {
   implicit val executionContext: ExecutionContext
   val resourceService: ResourceService
+  val userService: UserService
 
   def withResourceType(name: ResourceTypeName): Directive1[ResourceType] = {
     onSuccess(resourceService.getResourceType(name)).map {
       case Some(resourceType) => resourceType
       case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"resource type ${name.value} not found"))
+    }
+  }
+
+  def withSubject(email: String): Directive1[WorkbenchSubject] = {
+    onSuccess(userService.getSubjectFromEmail(email)).map {
+      case Some(subject) => subject
+      case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"${email} not found"))
     }
   }
 
@@ -68,6 +77,7 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives {
                     get {
                       complete(resourceService.hasPermission(Resource(resourceType.name, ResourceId(resourceId)), ResourceAction(action), userInfo).map { hasPermission =>
                         StatusCodes.OK -> JsBoolean(hasPermission)
+                        StatusCodes.OK -> JsBoolean(hasPermission)
                       })
                     }
                   }
@@ -84,11 +94,30 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives {
                   }
                 } ~
                   pathPrefix(Segment) { policyName =>
+                    val resourceAndPolicyName = ResourceAndPolicyName(Resource(resourceType.name, ResourceId(resourceId)), AccessPolicyName(policyName))
                     pathEndOrSingleSlash {
                       put {
                         requireAction(resource, SamResourceActions.alterPolicies, userInfo) {
                           entity(as[AccessPolicyMembership]) { membershipUpdate =>
                             complete(resourceService.overwritePolicy(resourceType, AccessPolicyName(policyName), Resource(resourceType.name, ResourceId(resourceId)), membershipUpdate, userInfo).map(_ => StatusCodes.Created))
+                          }
+                        }
+                      }
+                    } ~
+                    pathPrefix("memberEmails") {
+                      pathPrefix(Segment) { email =>
+                        withSubject(email) { subject =>
+                          pathEndOrSingleSlash {
+                            put {
+                              requireAction(resource, SamResourceActions.alterPolicies, userInfo) {
+                                complete(resourceService.addSubjectToPolicy(resourceAndPolicyName, subject).map(_ => StatusCodes.NoContent))
+                              }
+                            } ~
+                            delete {
+                              requireAction(resource, SamResourceActions.alterPolicies, userInfo) {
+                                complete(resourceService.removeSubjectFromPolicy(resourceAndPolicyName, subject).map(_ => StatusCodes.NoContent))
+                              }
+                            }
                           }
                         }
                       }
