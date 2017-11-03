@@ -177,6 +177,10 @@ class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Google
     } yield ()
   }
 
+  def getUserFromPetServiceAccount(petSAEmail:WorkbenchUserEmail):Future[Option[WorkbenchUser]] = {
+    directoryDAO.getUserFromPetServiceAccount(WorkbenchUserServiceAccountEmail(petSAEmail.value))
+  }
+
   private[service] def toProxyFromUser(subjectId: String): String = s"PROXY_$subjectId@$googleDomain"
   private[service] def toGoogleGroupName(groupName: String): String = s"GROUP_$groupName@$googleDomain"
 
