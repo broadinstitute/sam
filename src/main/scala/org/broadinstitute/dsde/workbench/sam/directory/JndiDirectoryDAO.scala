@@ -212,6 +212,22 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     }
   }
 
+
+
+  override def getUserFromPetServiceAccount(petSA:WorkbenchUserServiceAccountEmail): Future[Option[WorkbenchUser]] = withContext { ctx =>
+    val subjectResults = ctx.search(peopleOu, s"(${Attr.petServiceAccount}=${petSA.value})", new SearchControls(SearchControls.SUBTREE_SCOPE, 0, 0, null, false, false)).asScala.toSeq
+    val subjects = subjectResults.map { result =>
+      dnToSubject(result.getNameInNamespace)
+    }
+
+    subjects match {
+      case Seq() => None
+      case Seq(subject:WorkbenchUser) => Option(subject)
+      case Seq(subject) => throw new WorkbenchException(s"Database Error: Service Account $petSA did not return a valid subject: $subject")
+      case _ => throw new WorkbenchException(s"Database error: email $petSA refers to too many subjects: $subjects")
+    }
+  }
+
   private def unmarshalUser(attributes: Attributes): WorkbenchUser = {
     val uid = getAttribute[String](attributes, Attr.uid).getOrElse(throw new WorkbenchException(s"${Attr.uid} attribute missing"))
     val email = getAttribute[String](attributes, Attr.email).getOrElse(throw new WorkbenchException(s"${Attr.email} attribute missing"))

@@ -38,4 +38,5 @@ trait DirectoryDAO {
   def getPetServiceAccountForUser(userId: WorkbenchUserId): Future[Option[WorkbenchUserServiceAccountEmail]]
   def addPetServiceAccountToUser(userId: WorkbenchUserId, petServiceAccountEmail: WorkbenchUserServiceAccountEmail): Future[WorkbenchUserServiceAccountEmail]
   def removePetServiceAccountFromUser(userId: WorkbenchUserId): Future[Unit]
+  def getUserFromPetServiceAccount(petSA:WorkbenchUserServiceAccountEmail):Future[Option[WorkbenchUser]]
 }

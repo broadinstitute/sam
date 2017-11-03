@@ -165,4 +165,10 @@ class MockDirectoryDAO extends DirectoryDAO {
     petServiceAccountsByUser -= userId
     Future.successful(())
   }
+
+
+  override def getUserFromPetServiceAccount(petSA:WorkbenchUserServiceAccountEmail): Future[Option[WorkbenchUser]] = {
+    val default = ("","")
+   loadUser(WorkbenchUserId(petServiceAccounts.find(_._2==petSA).getOrElse(default).toString()))
+  }
 }
