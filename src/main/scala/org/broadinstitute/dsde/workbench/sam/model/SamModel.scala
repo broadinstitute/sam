@@ -42,8 +42,8 @@ object SamJsonSupport {
 }
 
 object SamResourceActions {
-  val readPolicies = ResourceAction("readpolicies")
-  val alterPolicies = ResourceAction("alterpolicies")
+  val readPolicies = ResourceAction("read_policies")
+  val alterPolicies = ResourceAction("alter_policies")
   val delete = ResourceAction("delete")
 }
 
