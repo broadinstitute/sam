@@ -215,8 +215,8 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
 
 
   override def getUserFromPetServiceAccount(petSA:WorkbenchUserServiceAccountEmail): Future[Option[WorkbenchUser]] = withContext { ctx =>
-    val subjectResults = ctx.search(peopleOu, s"(${Attr.petServiceAccount}=${petSA.value})", new SearchControls(SearchControls.SUBTREE_SCOPE, 0, 0, null, false, false)).asScala.toSeq
-    val subjects = subjectResults.map { result =>
+    val subjectResults = ctx.search(peopleOu, s"(${Attr.petServiceAccount}=${petSA.value})", new SearchControls(SearchControls.SUBTREE_SCOPE, 0, 0, null, false, false))
+    val subjects = subjectResults.extractResultsAndClose.map { result =>
       dnToSubject(result.getNameInNamespace)
     }
 
