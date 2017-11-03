@@ -1,6 +1,5 @@
 package org.broadinstitute.dsde.workbench.sam.api
 
-import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server._
 import akka.http.scaladsl.server.Directives.{headerValueByName, onSuccess}
 import org.broadinstitute.dsde.workbench.model._
@@ -12,6 +11,8 @@ import scala.concurrent.Future
 
 
 trait StandardUserInfoDirectives extends UserInfoDirectives {
+  val petSAdomain = "\\S+@\\S+.iam.gserviceaccount.com"
+
   def requireUserInfo: Directive1[UserInfo] = (
     headerValueByName("OIDC_access_token") &
     headerValueByName("OIDC_CLAIM_user_id") &
@@ -26,10 +27,13 @@ trait StandardUserInfoDirectives extends UserInfoDirectives {
     }
   }
 
+
+  private def isPetSA(email:String) = email.matches(petSAdomain)
+
   private def getWorkbenchUserEmailId(email:String):Future[Option[WorkbenchUser]] = {
-    if (email.endsWith("gserviceaccount.com"))
-      directoryDAO.loadUser(WorkbenchUserId(email.replaceFirst("pet-","").replace("@\\S+","")))
-    else
+    if (isPetSA(email))
+      directoryDAO.getUserFromPetServiceAccount(WorkbenchUserServiceAccountEmail(email))
+      else
       Future(None)
   }
 }
