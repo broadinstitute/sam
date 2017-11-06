@@ -17,13 +17,19 @@ PROJECT=sam
 function make_jar()
 {
     echo "building jar..."
-    bash ./docker/run-opendj.sh
+    OPENDJ=$(bash ./docker/run-opendj.sh start | tail -n1)
     
     # Get the last commit hash of the model directory and set it as an environment variable
     GIT_MODEL_HASH=$(git log -n 1 --pretty=format:%h)
     
     # make jar.  cache sbt dependencies.
-    docker run --rm --link opendj:opendj -e DIRECTORY_URL=$DIRECTORY_URL -e GIT_MODEL_HASH=$GIT_MODEL_HASH -e DIRECTORY_PASSWORD=$DIRECTORY_PASSWORD -v $PWD:/working -v jar-cache:/root/.ivy -v jar-cache:/root/.ivy2 broadinstitute/scala-baseimage /working/docker/install.sh /working
+    JAR_CMD=`docker run --rm --link $OPENDJ:opendj -e DIRECTORY_URL=$DIRECTORY_URL -e GIT_MODEL_HASH=$GIT_MODEL_HASH -e DIRECTORY_PASSWORD=$DIRECTORY_PASSWORD -v $PWD:/working -v jar-cache:/root/.ivy -v jar-cache:/root/.ivy2 broadinstitute/scala-baseimage /working/docker/install.sh /working`
+
+    bash ./docker/run-opendj.sh stop $OPENDJ
+
+    if [ $JAR_CMD != 0 ]; then
+        exit $JAR_CMD
+    fi
 }
 
 function docker_cmd()
