@@ -8,13 +8,13 @@ import scala.collection.mutable
 import scala.concurrent.Future
 import scala.concurrent.ExecutionContext.Implicits.global
 import org.broadinstitute.dsde.workbench.sam._
-import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
+import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicy, BasicWorkbenchGroup}
 
 /**
   * Created by mbemis on 6/23/17.
   */
 class MockDirectoryDAO extends DirectoryDAO {
-  private val groups: mutable.Map[WorkbenchGroupName, BasicWorkbenchGroup] = new TrieMap()
+  private val groups: mutable.Map[WorkbenchGroupIdentity, WorkbenchGroup] = new TrieMap()
   private val users: mutable.Map[WorkbenchUserId, WorkbenchUser] = new TrieMap()
   private val enabledUsers: mutable.Map[WorkbenchSubject, Unit] = new TrieMap()
   private val usersWithEmails: mutable.Map[WorkbenchUserEmail, WorkbenchUserId] = new TrieMap()
@@ -32,11 +32,11 @@ class MockDirectoryDAO extends DirectoryDAO {
   }
 
   override def loadGroup(groupName: WorkbenchGroupName): Future[Option[BasicWorkbenchGroup]] = Future {
-    groups.get(groupName)
+    groups.get(groupName).map(_.asInstanceOf[BasicWorkbenchGroup])
   }
 
   override def loadGroups(groupNames: Set[WorkbenchGroupName]): Future[Seq[BasicWorkbenchGroup]] = Future {
-    groups.filterKeys(groupNames).values.toSeq
+    groups.filterKeys(groupNames.map(_.asInstanceOf[WorkbenchGroupIdentity])).values.map(_.asInstanceOf[BasicWorkbenchGroup]).toSeq
   }
 
   override def deleteGroup(groupName: WorkbenchGroupName): Future[Unit] = Future {
@@ -45,13 +45,21 @@ class MockDirectoryDAO extends DirectoryDAO {
 
   override def addGroupMember(groupName: WorkbenchGroupIdentity, addMember: WorkbenchSubject): Future[Unit] = Future {
     val group = groups(groupName.asInstanceOf[WorkbenchGroupName])
-    val updatedGroup = group.copy(members = group.members + addMember)
+    val updatedGroup = group match {
+      case g: BasicWorkbenchGroup => g.copy(members = group.members + addMember)
+      case p: AccessPolicy => p.copy(members = group.members + addMember)
+      case _ => throw new WorkbenchException(s"unknown group implementation: $group")
+    }
     groups += groupName.asInstanceOf[WorkbenchGroupName] -> updatedGroup
   }
 
   override def removeGroupMember(groupName: WorkbenchGroupIdentity, removeMember: WorkbenchSubject): Future[Unit] = Future {
     val group = groups(groupName.asInstanceOf[WorkbenchGroupName])
-    val updatedGroup = group.copy(members = group.members - removeMember)
+    val updatedGroup = group match {
+      case g: BasicWorkbenchGroup => g.copy(members = group.members - removeMember)
+      case p: AccessPolicy => p.copy(members = group.members - removeMember)
+      case _ => throw new WorkbenchException(s"unknown group implementation: $group")
+    }
     groups += groupName.asInstanceOf[WorkbenchGroupName] -> updatedGroup
   }
 
@@ -88,7 +96,7 @@ class MockDirectoryDAO extends DirectoryDAO {
     listSubjectsGroups(userId, Set.empty).map(_.id)
   }
 
-  private def listSubjectsGroups(subject: WorkbenchSubject, accumulatedGroups: Set[BasicWorkbenchGroup]): Set[BasicWorkbenchGroup] = {
+  private def listSubjectsGroups(subject: WorkbenchSubject, accumulatedGroups: Set[WorkbenchGroup]): Set[WorkbenchGroup] = {
     val immediateGroups = groups.values.toSet.filter { group => group.members.contains(subject) }
 
     val unvisitedGroups = immediateGroups -- accumulatedGroups
@@ -105,14 +113,15 @@ class MockDirectoryDAO extends DirectoryDAO {
     listGroupUsers(groupName.asInstanceOf[WorkbenchGroupName], Set.empty)
   }
 
-  private def listGroupUsers(groupName: WorkbenchGroupName, visitedGroups: Set[WorkbenchGroupName]): Set[WorkbenchUserId] = {
+  private def listGroupUsers(groupName: WorkbenchGroupIdentity, visitedGroups: Set[WorkbenchGroupIdentity]): Set[WorkbenchUserId] = {
     if (!visitedGroups.contains(groupName)) {
       val members = groups.getOrElse(groupName, BasicWorkbenchGroup(null, Set.empty, WorkbenchGroupEmail("g1@example.com"))).members
 
       members.flatMap {
         case userId: WorkbenchUserId => Set(userId)
-        case groupName: WorkbenchGroupName => listGroupUsers(groupName, visitedGroups + groupName)
+        case groupName: WorkbenchGroupIdentity => listGroupUsers(groupName, visitedGroups + groupName)
         case serviceAccountId: WorkbenchUserServiceAccountName => throw new WorkbenchException(s"Unexpected service account $serviceAccountId")
+        case petSubjectId: WorkbenchUserServiceAccountSubjectId => throw new WorkbenchException(s"Unexpected service account $petSubjectId")
       }
     } else {
       Set.empty
