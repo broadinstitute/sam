@@ -9,6 +9,8 @@ import org.broadinstitute.dsde.workbench.sam.util.{BaseDirContext, JndiSupport}
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Try
 import JndiSchemaDAO._
+import org.broadinstitute.dsde.workbench.sam.directory.DirectorySubjectNameSupport
+
 import scala.collection.JavaConverters._
 
 /**
@@ -37,7 +39,7 @@ object JndiSchemaDAO {
   }
 }
 
-class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit executionContext: ExecutionContext) extends JndiSupport {
+class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit executionContext: ExecutionContext) extends JndiSupport with DirectorySubjectNameSupport {
 
   def init(): Future[Unit] = {
     for {
@@ -241,11 +243,6 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit exe
     Try { schema.destroySubcontext("ClassDefinition/workbenchPerson") }
     Try { schema.destroySubcontext(s"AttributeDefinition/${Attr.petServiceAccount}") }
   }
-
-  val resourcesOu = s"ou=resources,${directoryConfig.baseDn}"
-  val peopleOu = s"ou=people,${directoryConfig.baseDn}"
-  val groupsOu = s"ou=groups,${directoryConfig.baseDn}"
-  val petsOu = s"ou=pets,ou=people,${directoryConfig.baseDn}"
 
   private def createAttributeDefinition(schema: DirContext, numericOID: String, name: String, description: String, singleValue: Boolean, equality: Option[String] = None, ordering: Option[String] = None, syntax: Option[String] = None) = {
     val attributes = new BasicAttributes(true)

@@ -7,6 +7,7 @@ import org.broadinstitute.dsde.workbench.sam.directory.MockDirectoryDAO
 import org.scalatest.{BeforeAndAfterAll, FlatSpec, FreeSpec, Matchers}
 import org.broadinstitute.dsde.workbench.google.mock.MockGoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.model.{WorkbenchException, WorkbenchGroup, WorkbenchGroupEmail, WorkbenchGroupName}
+import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
 import org.broadinstitute.dsde.workbench.util.health.{StatusCheckResponse, SubsystemStatus}
 import org.broadinstitute.dsde.workbench.util.health.Subsystems.{GoogleGroups, OpenDJ}
 
@@ -29,7 +30,7 @@ class StatusServiceSpec extends FreeSpec with Matchers with BeforeAndAfterAll wi
 
   def noGoogleGroup = {
     val service = noOpenDJGroups
-    runAndWait(service.directoryDAO.createGroup(WorkbenchGroup(UserService.allUsersGroupName, Set.empty, allUsersEmail)))
+    runAndWait(service.directoryDAO.createGroup(BasicWorkbenchGroup(UserService.allUsersGroupName, Set.empty, allUsersEmail)))
     service
   }
 
@@ -43,7 +44,7 @@ class StatusServiceSpec extends FreeSpec with Matchers with BeforeAndAfterAll wi
     val service = new StatusService(new MockDirectoryDAO, new MockGoogleDirectoryDAO {
       override def getGoogleGroup(groupEmail: WorkbenchGroupEmail): Future[Option[Group]] = Future.failed(new WorkbenchException("bad google"))
     })
-    runAndWait(service.directoryDAO.createGroup(WorkbenchGroup(UserService.allUsersGroupName, Set.empty, allUsersEmail)))
+    runAndWait(service.directoryDAO.createGroup(BasicWorkbenchGroup(UserService.allUsersGroupName, Set.empty, allUsersEmail)))
     service
   }
 

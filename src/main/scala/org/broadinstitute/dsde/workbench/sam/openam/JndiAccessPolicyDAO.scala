@@ -88,8 +88,8 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
           val oc = new BasicAttribute("objectclass")
           Seq("top", "policy").foreach(oc.add)
           myAttrs.put(oc)
-          myAttrs.put(Attr.cn, policy.name.value)
-          myAttrs.put(Attr.email, policy.members.email.value) //TODO make sure the google group is created
+          myAttrs.put(Attr.cn, policy.id.accessPolicyName.value)
+          myAttrs.put(Attr.email, policy.email.value) //TODO make sure the google group is created
 
           if (policy.actions.nonEmpty) {
             val actions = new BasicAttribute(Attr.action)
@@ -103,10 +103,10 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
             myAttrs.put(roles)
           }
 
-          if(policy.members.members.nonEmpty) {
+          if(policy.members.nonEmpty) {
             val members = new BasicAttribute(Attr.uniqueMember)
 
-            val memberDns = policy.members.members.map { s =>
+            val memberDns = policy.members.map { s =>
               subjectDn(s)
             }
 
@@ -115,13 +115,13 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
             myAttrs.put(members)
           }
 
-          myAttrs.put(Attr.resourceType, policy.resource.resourceTypeName.value)
-          myAttrs.put(Attr.resourceId, policy.resource.resourceId.value)
+          myAttrs.put(Attr.resourceType, policy.id.resource.resourceTypeName.value)
+          myAttrs.put(Attr.resourceId, policy.id.resource.resourceId.value)
           myAttrs
         }
       }
 
-      ctx.bind(policyDn(policy), policyContext)
+      ctx.bind(policyDn(policy.id), policyContext)
       policy
     } catch {
       case _: NameAlreadyBoundException => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, "A policy by this name already exists for this resource"))
@@ -129,14 +129,14 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
   }
 
   override def deletePolicy(policy: AccessPolicy): Future[Unit] = withContext { ctx =>
-    ctx.unbind(policyDn(policy))
+    ctx.unbind(policyDn(policy.id))
   }
 
   override def overwritePolicy(newPolicy: AccessPolicy): Future[AccessPolicy] = withContext { ctx =>
     val myAttrs = new BasicAttributes(true)
 
-    val users = newPolicy.members.members.collect { case userId: WorkbenchUserId => userId }
-    val subGroups = newPolicy.members.members.collect { case groupName: WorkbenchGroupName => groupName }
+    val users = newPolicy.members.collect { case userId: WorkbenchUserId => userId }
+    val subGroups = newPolicy.members.collect { case groupName: WorkbenchGroupName => groupName }
 
     addMemberAttributes(users, subGroups, myAttrs) { _.put(new BasicAttribute(Attr.uniqueMember)) } //add attribute with no value when no member present
 
@@ -152,7 +152,7 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
       myAttrs.put(roles)
     }
 
-    ctx.modifyAttributes(policyDn(newPolicy), DirContext.REPLACE_ATTRIBUTE, myAttrs)
+    ctx.modifyAttributes(policyDn(newPolicy.id), DirContext.REPLACE_ATTRIBUTE, myAttrs)
     newPolicy
   }
 
@@ -180,9 +180,9 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
     listAccessPolicies(resource, searchAttrs)
   }
 
-  override def loadPolicy(policyName: AccessPolicyName, resource: Resource): Future[Option[AccessPolicy]] = withContext { ctx =>
+  override def loadPolicy(resourceAndPolicyName: ResourceAndPolicyName): Future[Option[AccessPolicy]] = withContext { ctx =>
     Try {
-      val attributes = ctx.getAttributes(policyDn(policyName, resource))
+      val attributes = ctx.getAttributes(policyDn(resourceAndPolicyName))
       Option(unmarshalAccessPolicy(attributes))
     }.recover {
       case e: NameNotFoundException => None
@@ -192,12 +192,6 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
   //
   // SUPPORT
   //
-
-  private val resourcesOu = s"ou=resources,${directoryConfig.baseDn}"
-  private def resourceTypeDn(resourceTypeName: ResourceTypeName) = s"${Attr.resourceType}=${resourceTypeName.value},$resourcesOu"
-  private def resourceDn(resource: Resource) = s"${Attr.resourceId}=${resource.resourceId.value},${resourceTypeDn(resource.resourceTypeName)}"
-  private def policyDn(policy: AccessPolicy): String = s"${Attr.policy}=${policy.name},${resourceDn(policy.resource)}"
-  private def policyDn(policyName: AccessPolicyName, resource: Resource): String = s"${Attr.policy}=${policyName.value},${resourceDn(resource)}"
 
   private def getAttributes[T](attributes: Attributes, key: String): Option[TraversableOnce[T]] = {
     Option(attributes.get(key)).map(_.getAll.extractResultsAndClose.map(_.asInstanceOf[T]))
@@ -213,11 +207,8 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
     val actions = getAttributes[String](attributes, Attr.action).getOrElse(Set.empty).toSet.map(a => ResourceAction(a))
 
     val email = WorkbenchGroupEmail(attributes.get(Attr.email).get().toString)
-    val name = WorkbenchGroupName(policyName) //TODO
 
-    val group = WorkbenchGroup(name, members, email)
-
-    AccessPolicy(AccessPolicyName(policyName), resource, group, roles, actions)
+    AccessPolicy(ResourceAndPolicyName(resource, AccessPolicyName(policyName)), members, email, roles, actions)
   }
 
   /**

@@ -8,12 +8,13 @@ import scala.collection.mutable
 import scala.concurrent.Future
 import scala.concurrent.ExecutionContext.Implicits.global
 import org.broadinstitute.dsde.workbench.sam._
+import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicy, BasicWorkbenchGroup}
 
 /**
   * Created by mbemis on 6/23/17.
   */
 class MockDirectoryDAO extends DirectoryDAO {
-  private val groups: mutable.Map[WorkbenchGroupName, WorkbenchGroup] = new TrieMap()
+  private val groups: mutable.Map[WorkbenchGroupIdentity, WorkbenchGroup] = new TrieMap()
   private val users: mutable.Map[WorkbenchUserId, WorkbenchUser] = new TrieMap()
   private val enabledUsers: mutable.Map[WorkbenchSubject, Unit] = new TrieMap()
   private val usersWithEmails: mutable.Map[WorkbenchUserEmail, WorkbenchUserId] = new TrieMap()
@@ -21,41 +22,49 @@ class MockDirectoryDAO extends DirectoryDAO {
   private val petServiceAccounts: mutable.Map[WorkbenchUserServiceAccountSubjectId, WorkbenchUserServiceAccount] = new TrieMap()
   private val petServiceAccountsByUser: mutable.Map[WorkbenchUserId, WorkbenchUserServiceAccountEmail] = new TrieMap()
 
-  override def createGroup(group: WorkbenchGroup): Future[WorkbenchGroup] = Future {
-    if (groups.keySet.contains(group.name)) {
-      throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"group ${group.name} already exists"))
+  override def createGroup(group: BasicWorkbenchGroup): Future[BasicWorkbenchGroup] = Future {
+    if (groups.keySet.contains(group.id)) {
+      throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"group ${group.id} already exists"))
     }
-    groups += group.name -> group
-    groupsWithEmails += group.email -> group.name
+    groups += group.id -> group
+    groupsWithEmails += group.email -> group.id
     group
   }
 
-  override def loadGroup(groupName: WorkbenchGroupName): Future[Option[WorkbenchGroup]] = Future {
-    groups.get(groupName)
+  override def loadGroup(groupName: WorkbenchGroupName): Future[Option[BasicWorkbenchGroup]] = Future {
+    groups.get(groupName).map(_.asInstanceOf[BasicWorkbenchGroup])
   }
 
-  override def loadGroups(groupNames: Set[WorkbenchGroupName]): Future[Seq[WorkbenchGroup]] = Future {
-    groups.filterKeys(groupNames).values.toSeq
+  override def loadGroups(groupNames: Set[WorkbenchGroupName]): Future[Seq[BasicWorkbenchGroup]] = Future {
+    groups.filterKeys(groupNames.map(_.asInstanceOf[WorkbenchGroupIdentity])).values.map(_.asInstanceOf[BasicWorkbenchGroup]).toSeq
   }
 
   override def deleteGroup(groupName: WorkbenchGroupName): Future[Unit] = Future {
     groups -= groupName
   }
 
-  override def addGroupMember(groupName: WorkbenchGroupName, addMember: WorkbenchSubject): Future[Unit] = Future {
-    val group = groups(groupName)
-    val updatedGroup = group.copy(members = group.members + addMember)
-    groups += groupName -> updatedGroup
+  override def addGroupMember(groupName: WorkbenchGroupIdentity, addMember: WorkbenchSubject): Future[Unit] = Future {
+    val group = groups(groupName.asInstanceOf[WorkbenchGroupName])
+    val updatedGroup = group match {
+      case g: BasicWorkbenchGroup => g.copy(members = group.members + addMember)
+      case p: AccessPolicy => p.copy(members = group.members + addMember)
+      case _ => throw new WorkbenchException(s"unknown group implementation: $group")
+    }
+    groups += groupName.asInstanceOf[WorkbenchGroupName] -> updatedGroup
   }
 
-  override def removeGroupMember(groupName: WorkbenchGroupName, removeMember: WorkbenchSubject): Future[Unit] = Future {
-    val group = groups(groupName)
-    val updatedGroup = group.copy(members = group.members - removeMember)
-    groups += groupName -> updatedGroup
+  override def removeGroupMember(groupName: WorkbenchGroupIdentity, removeMember: WorkbenchSubject): Future[Unit] = Future {
+    val group = groups(groupName.asInstanceOf[WorkbenchGroupName])
+    val updatedGroup = group match {
+      case g: BasicWorkbenchGroup => g.copy(members = group.members - removeMember)
+      case p: AccessPolicy => p.copy(members = group.members - removeMember)
+      case _ => throw new WorkbenchException(s"unknown group implementation: $group")
+    }
+    groups += groupName.asInstanceOf[WorkbenchGroupName] -> updatedGroup
   }
 
-  override def isGroupMember(groupName: WorkbenchGroupName, member: WorkbenchSubject): Future[Boolean] = Future {
-    groups.getOrElse(groupName, WorkbenchGroup(null, Set.empty, WorkbenchGroupEmail("g1@example.com"))).members.contains(member)
+  override def isGroupMember(groupId: WorkbenchGroupIdentity, member: WorkbenchSubject): Future[Boolean] = Future {
+    groups.getOrElse(groupId.asInstanceOf[WorkbenchGroupName], BasicWorkbenchGroup(null, Set.empty, WorkbenchGroupEmail("g1@example.com"))).members.contains(member)
   }
 
   override def loadSubjectFromEmail(email: String): Future[Option[WorkbenchSubject]] = Future {
@@ -83,8 +92,8 @@ class MockDirectoryDAO extends DirectoryDAO {
     users -= userId
   }
 
-  override def listUsersGroups(userId: WorkbenchUserId): Future[Set[WorkbenchGroupName]] = Future {
-    listSubjectsGroups(userId, Set.empty).map(_.name)
+  override def listUsersGroups(userId: WorkbenchUserId): Future[Set[WorkbenchGroupIdentity]] = Future {
+    listSubjectsGroups(userId, Set.empty).map(_.id)
   }
 
   private def listSubjectsGroups(subject: WorkbenchSubject, accumulatedGroups: Set[WorkbenchGroup]): Set[WorkbenchGroup] = {
@@ -95,31 +104,32 @@ class MockDirectoryDAO extends DirectoryDAO {
       accumulatedGroups
     } else {
       unvisitedGroups.flatMap { group =>
-        listSubjectsGroups(group.name, accumulatedGroups ++ immediateGroups)
+        listSubjectsGroups(group.id, accumulatedGroups ++ immediateGroups)
       }
     }
   }
 
-  override def listFlattenedGroupUsers(groupName: WorkbenchGroupName): Future[Set[WorkbenchUserId]] = Future {
-    listGroupUsers(groupName, Set.empty)
+  override def listFlattenedGroupUsers(groupName: WorkbenchGroupIdentity): Future[Set[WorkbenchUserId]] = Future {
+    listGroupUsers(groupName.asInstanceOf[WorkbenchGroupName], Set.empty)
   }
 
-  private def listGroupUsers(groupName: WorkbenchGroupName, visitedGroups: Set[WorkbenchGroupName]): Set[WorkbenchUserId] = {
+  private def listGroupUsers(groupName: WorkbenchGroupIdentity, visitedGroups: Set[WorkbenchGroupIdentity]): Set[WorkbenchUserId] = {
     if (!visitedGroups.contains(groupName)) {
-      val members = groups.getOrElse(groupName, WorkbenchGroup(null, Set.empty, WorkbenchGroupEmail("g1@example.com"))).members
+      val members = groups.getOrElse(groupName, BasicWorkbenchGroup(null, Set.empty, WorkbenchGroupEmail("g1@example.com"))).members
 
       members.flatMap {
         case userId: WorkbenchUserId => Set(userId)
-        case groupName: WorkbenchGroupName => listGroupUsers(groupName, visitedGroups + groupName)
+        case groupName: WorkbenchGroupIdentity => listGroupUsers(groupName, visitedGroups + groupName)
         case serviceAccountId: WorkbenchUserServiceAccountName => throw new WorkbenchException(s"Unexpected service account $serviceAccountId")
+        case petSubjectId: WorkbenchUserServiceAccountSubjectId => throw new WorkbenchException(s"Unexpected service account $petSubjectId")
       }
     } else {
       Set.empty
     }
   }
 
-  override def listAncestorGroups(groupName: WorkbenchGroupName): Future[Set[WorkbenchGroupName]] = Future {
-    listSubjectsGroups(groupName, Set.empty).map(_.name)
+  override def listAncestorGroups(groupName: WorkbenchGroupIdentity): Future[Set[WorkbenchGroupIdentity]] = Future {
+    listSubjectsGroups(groupName, Set.empty).map(_.id)
   }
 
   override def enableIdentity(subject: WorkbenchSubject): Future[Unit] = Future {

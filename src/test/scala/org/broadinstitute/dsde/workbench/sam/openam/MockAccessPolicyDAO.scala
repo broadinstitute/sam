@@ -36,15 +36,15 @@ class MockAccessPolicyDAO extends AccessPolicyDAO {
   }
 
   override def createPolicy(policy: AccessPolicy): Future[AccessPolicy] = Future {
-    listAccessPolicies(policy.resource) map { existingPolicies =>
-      policies += (policy.resource.resourceTypeName -> Map(policy.resource.resourceId -> (existingPolicies + policy)))
+    listAccessPolicies(policy.id.resource) map { existingPolicies =>
+      policies += (policy.id.resource.resourceTypeName -> Map(policy.id.resource.resourceId -> (existingPolicies + policy)))
     }
     policy
   }
 
   override def deletePolicy(policy: AccessPolicy): Future[Unit] = Future {
-    listAccessPolicies(policy.resource) map { existingPolicies =>
-      policies += (policy.resource.resourceTypeName -> Map(policy.resource.resourceId -> (existingPolicies - policy)))
+    listAccessPolicies(policy.id.resource) map { existingPolicies =>
+      policies += (policy.id.resource.resourceTypeName -> Map(policy.id.resource.resourceId -> (existingPolicies - policy)))
     }
   }
 
@@ -53,12 +53,12 @@ class MockAccessPolicyDAO extends AccessPolicyDAO {
     Future.successful(Set.empty)
   }
 
-  override def loadPolicy(policyName: AccessPolicyName, resource: Resource): Future[Option[AccessPolicy]] = {
-    listAccessPolicies(resource).map { policies =>
-      policies.filter(_.name == policyName).toSeq match {
+  override def loadPolicy(resourceAndPolicyName: ResourceAndPolicyName): Future[Option[AccessPolicy]] = {
+    listAccessPolicies(resourceAndPolicyName.resource).map { policies =>
+      policies.filter(_.id.accessPolicyName == resourceAndPolicyName.accessPolicyName).toSeq match {
         case Seq() => None
         case Seq(policy) => Option(policy)
-        case _ => throw new WorkbenchException(s"More than one policy found for $policyName")
+        case _ => throw new WorkbenchException(s"More than one policy found for ${resourceAndPolicyName.accessPolicyName}")
       }
 
     }
@@ -71,6 +71,6 @@ class MockAccessPolicyDAO extends AccessPolicyDAO {
   }
 
   override def listAccessPoliciesForUser(resource: Resource, user: WorkbenchUserId): Future[Set[AccessPolicy]] = Future {
-    policies.getOrElse(resource.resourceTypeName, Map.empty).getOrElse(resource.resourceId, Set.empty).filter(_.members.members.contains(user))
+    policies.getOrElse(resource.resourceTypeName, Map.empty).getOrElse(resource.resourceId, Set.empty).filter(_.members.contains(user))
   }
 }

@@ -1,6 +1,6 @@
 package org.broadinstitute.dsde.workbench.sam.model
 
-import org.broadinstitute.dsde.workbench.model.{WorkbenchGroup, WorkbenchUserEmail, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.model._
 import spray.json.DefaultJsonProtocol
 
 /**
@@ -37,6 +37,8 @@ object SamJsonSupport {
 
   implicit val ResourceIdAndPolicyNameFormat = jsonFormat2(ResourceIdAndPolicyName)
 
+  implicit val ResourceAndPolicyNameFormat = jsonFormat2(ResourceAndPolicyName)
+
 }
 
 object SamResourceActions {
@@ -60,7 +62,16 @@ case class ResourceType(name: ResourceTypeName, actions: Set[ResourceAction], ro
 case class ResourceId(value: String) extends ValueObject
 
 case class ResourceIdAndPolicyName(resourceId: ResourceId, accessPolicyName: AccessPolicyName)
+case class ResourceAndPolicyName(resource: Resource, accessPolicyName: AccessPolicyName) extends WorkbenchGroupIdentity
 case class AccessPolicyName(value: String) extends ValueObject
-case class AccessPolicy(name: AccessPolicyName, resource: Resource, members: WorkbenchGroup, roles: Set[ResourceRoleName], actions: Set[ResourceAction])
+
+/*
+Note that AccessPolicy IS A group, does not have a group. This makes the ldap query to list all a user's policies
+and thus resources much easier. We tried modeling with a "has a" relationship in code but a "is a" relationship in
+ldap but it felt unnatural.
+ */
+case class AccessPolicy(id: ResourceAndPolicyName, members: Set[WorkbenchSubject], email: WorkbenchGroupEmail, roles: Set[ResourceRoleName], actions: Set[ResourceAction]) extends WorkbenchGroup
 case class AccessPolicyMembership(memberEmails: Set[String], actions: Set[ResourceAction], roles: Set[ResourceRoleName])
 case class AccessPolicyResponseEntry(policyName: AccessPolicyName, policy: AccessPolicyMembership)
+
+case class BasicWorkbenchGroup(id: WorkbenchGroupName, members: Set[WorkbenchSubject], email: WorkbenchGroupEmail) extends WorkbenchGroup

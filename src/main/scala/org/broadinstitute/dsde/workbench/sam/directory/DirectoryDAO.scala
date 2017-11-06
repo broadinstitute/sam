@@ -1,6 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.directory
 
 import org.broadinstitute.dsde.workbench.model._
+import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
 
 import scala.concurrent.Future
 
@@ -8,14 +9,15 @@ import scala.concurrent.Future
   * Created by dvoet on 5/26/17.
   */
 trait DirectoryDAO {
-  def createGroup(group: WorkbenchGroup): Future[WorkbenchGroup]
-  def loadGroup(groupName: WorkbenchGroupName): Future[Option[WorkbenchGroup]]
-  def loadGroups(groupNames: Set[WorkbenchGroupName]): Future[Seq[WorkbenchGroup]]
+  def createGroup(group: BasicWorkbenchGroup): Future[BasicWorkbenchGroup]
+  def loadGroup(groupName: WorkbenchGroupName): Future[Option[BasicWorkbenchGroup]]
+  def loadGroups(groupNames: Set[WorkbenchGroupName]): Future[Seq[BasicWorkbenchGroup]]
   def loadGroupEmail(groupName: WorkbenchGroupName): Future[Option[WorkbenchGroupEmail]]
   def deleteGroup(groupName: WorkbenchGroupName): Future[Unit]
-  def addGroupMember(groupName: WorkbenchGroupName, addMember: WorkbenchSubject): Future[Unit]
-  def removeGroupMember(groupName: WorkbenchGroupName, removeMember: WorkbenchSubject): Future[Unit]
-  def isGroupMember(groupName: WorkbenchGroupName, member: WorkbenchSubject): Future[Boolean]
+
+  def addGroupMember(groupId: WorkbenchGroupIdentity, addMember: WorkbenchSubject): Future[Unit]
+  def removeGroupMember(groupId: WorkbenchGroupIdentity, removeMember: WorkbenchSubject): Future[Unit]
+  def isGroupMember(groupId: WorkbenchGroupIdentity, member: WorkbenchSubject): Future[Boolean]
 
   def loadSubjectFromEmail(email: String): Future[Option[WorkbenchSubject]]
 
@@ -24,9 +26,9 @@ trait DirectoryDAO {
   def loadUsers(userIds: Set[WorkbenchUserId]): Future[Seq[WorkbenchUser]]
   def deleteUser(userId: WorkbenchUserId): Future[Unit]
 
-  def listUsersGroups(userId: WorkbenchUserId): Future[Set[WorkbenchGroupName]]
-  def listFlattenedGroupUsers(groupName: WorkbenchGroupName): Future[Set[WorkbenchUserId]]
-  def listAncestorGroups(groupName: WorkbenchGroupName): Future[Set[WorkbenchGroupName]]
+  def listUsersGroups(userId: WorkbenchUserId): Future[Set[WorkbenchGroupIdentity]]
+  def listFlattenedGroupUsers(groupId: WorkbenchGroupIdentity): Future[Set[WorkbenchUserId]]
+  def listAncestorGroups(groupId: WorkbenchGroupIdentity): Future[Set[WorkbenchGroupIdentity]]
 
   def enableIdentity(subject: WorkbenchSubject): Future[Unit]
   def disableIdentity(subject: WorkbenchSubject): Future[Unit]
