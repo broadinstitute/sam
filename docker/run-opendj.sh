@@ -21,7 +21,7 @@ if [ ${#@} == 0 ]; then
 fi
 
 if [ $COMMAND = "start" ]; then
-    CONTAINER=opendj-$(date +"%Y.%m.%d-%H:%M:%S")
+    CONTAINER=opendj-$(date +"%y%m%d_%H%M%S")
     start $CONTAINER
     echo $CONTAINER
 elif [ $COMMAND = "stop" ]; then
