@@ -52,11 +52,11 @@ package object config {
 
   implicit val googleDirectoryConfigReader: ValueReader[GoogleDirectoryConfig] = ValueReader.relative { config =>
     GoogleDirectoryConfig(
-      GoogleClientSecrets.load(jsonFactory, new StringReader(config.getString("secrets"))),
+      config.getString("serviceAccountClientId"),
       config.getString("pathToPem"),
+      config.getString("subEmail"),
       config.getString("appsDomain"),
-      config.getString("appName"),
-      config.getString("serviceProject")
+      config.getString("appName")
     )
   }
 

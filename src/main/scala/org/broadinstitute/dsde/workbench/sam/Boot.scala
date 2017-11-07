@@ -36,8 +36,8 @@ object Boot extends App with LazyLogging {
     val accessPolicyDAO = new JndiAccessPolicyDAO(directoryConfig)
     val directoryDAO = new JndiDirectoryDAO(directoryConfig)
     val schemaDAO = new JndiSchemaDAO(directoryConfig)
-    val googleDirectoryDAO = new HttpGoogleDirectoryDAO(googleDirectoryConfig.clientSecrets, googleDirectoryConfig.pemFile, googleDirectoryConfig.appsDomain, googleDirectoryConfig.appName, googleDirectoryConfig.serviceProject, "google")
-    val googleIamDAO = new HttpGoogleIamDAO(googleDirectoryConfig.clientSecrets, googleDirectoryConfig.pemFile, googleDirectoryConfig.appName, "google")
+    val googleDirectoryDAO = new HttpGoogleDirectoryDAO(googleDirectoryConfig.serviceAccountClientId, googleDirectoryConfig.pemFile, googleDirectoryConfig.subEmail, googleDirectoryConfig.appsDomain, googleDirectoryConfig.appName, "google")
+    val googleIamDAO = new HttpGoogleIamDAO(googleDirectoryConfig.serviceAccountClientId, googleDirectoryConfig.pemFile, googleDirectoryConfig.appName, "google")
 
     val configResourceTypes = config.as[Set[ResourceType]]("resourceTypes")
     val resourceService = new ResourceService(configResourceTypes.map(rt => rt.name -> rt).toMap, accessPolicyDAO, directoryDAO, config.getString("googleDirectory.appsDomain"))
