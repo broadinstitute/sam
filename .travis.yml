@@ -12,11 +12,11 @@ services:
   - docker
 
 before_install:
-  - sh docker/run-opendj.sh
+  - sh docker/run-opendj.sh start
 
 script:
   - SBT_OPTS=-Xmx3g sbt clean coverage test -Denv.type=test -Ddirectory.url=ldap://localhost:3389 -Ddirectory.password=testtesttest
 
 after_success:
   - SBT_OPTS=-Xmx3g sbt coveralls
-  - docker rm -f opendj
+  - sh docker/run-opendj.sh stop
