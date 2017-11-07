@@ -52,11 +52,11 @@ package object config {
 
   implicit val googleServicesConfigReader: ValueReader[GoogleServicesConfig] = ValueReader.relative { config =>
     GoogleServicesConfig(
-      config.getString("serviceAccountClientId"),
-      config.getString("pathToPem"),
-      config.getString("subEmail"),
+      config.getString("appName"),
       config.getString("appsDomain"),
-      config.getString("appName")
+      config.getString("pathToPem"),
+      config.getString("serviceAccountClientId"),
+      config.getString("subEmail")
     )
   }
 
