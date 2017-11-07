@@ -25,7 +25,7 @@ object Boot extends App with LazyLogging {
     val config = ConfigFactory.load()
 
     val directoryConfig = config.as[DirectoryConfig]("directory")
-    val googleDirectoryConfig = config.as[GoogleDirectoryConfig]("googleDirectory")
+    val googleDirectoryConfig = config.as[GoogleServicesConfig]("googleServices")
     val petServiceAccountConfig = config.as[PetServiceAccountConfig]("petServiceAccount")
 
     // we need an ActorSystem to host our application in
@@ -40,7 +40,7 @@ object Boot extends App with LazyLogging {
     val googleIamDAO = new HttpGoogleIamDAO(googleDirectoryConfig.serviceAccountClientId, googleDirectoryConfig.pemFile, googleDirectoryConfig.appName, "google")
 
     val configResourceTypes = config.as[Set[ResourceType]]("resourceTypes")
-    val resourceService = new ResourceService(configResourceTypes.map(rt => rt.name -> rt).toMap, accessPolicyDAO, directoryDAO, config.getString("googleDirectory.appsDomain"))
+    val resourceService = new ResourceService(configResourceTypes.map(rt => rt.name -> rt).toMap, accessPolicyDAO, directoryDAO, config.getString("googleServices.appsDomain"))
     val userService = new UserService(directoryDAO, googleDirectoryDAO, googleIamDAO, googleDirectoryConfig.appsDomain, petServiceAccountConfig)
     val statusService = new StatusService(directoryDAO, googleDirectoryDAO, 10 seconds)
 
