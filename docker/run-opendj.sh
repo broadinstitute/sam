@@ -6,7 +6,7 @@ start()  {
     CONTAINER_NAME=opendj
     if [ $1 = "jenkins" ]; then
         PORT=389
-        CONTAINER_NAME=$(opendj-$(date +"%y%m%d_%H%M%S"))
+        CONTAINER_NAME=opendj-$(date +"%y%m%d_%H%M%S")
     fi
     echo "starting up container $CONTAINER_NAME..."
     docker run --name $CONTAINER_NAME -e ROOTPASS="testtesttest" -e BASE_DN=dc=dsde-dev,dc=broadinstitute,dc=org -v ${PWD}/docker/opendjsetup.sh:/opt/opendj/bootstrap/setup.sh -v ${PWD}/docker/example-v1.json:/opt/example-v1.json -d -p $PORT broadinstitute/openam:opendj
