@@ -50,13 +50,13 @@ package object config {
 
   val jsonFactory = JacksonFactory.getDefaultInstance
 
-  implicit val googleDirectoryConfigReader: ValueReader[GoogleDirectoryConfig] = ValueReader.relative { config =>
-    GoogleDirectoryConfig(
-      GoogleClientSecrets.load(jsonFactory, new StringReader(config.getString("secrets"))),
-      config.getString("pathToPem"),
-      config.getString("appsDomain"),
+  implicit val googleServicesConfigReader: ValueReader[GoogleServicesConfig] = ValueReader.relative { config =>
+    GoogleServicesConfig(
       config.getString("appName"),
-      config.getString("serviceProject")
+      config.getString("appsDomain"),
+      config.getString("pathToPem"),
+      config.getString("serviceAccountClientId"),
+      config.getString("subEmail")
     )
   }
 
