@@ -169,6 +169,18 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     }
   }
 
+  def loadUser_internal(userId: WorkbenchUserId, ctx: InitialDirContext): Option[WorkbenchUser] = {
+    Try {
+      val attributes = ctx.getAttributes(userDn(userId))
+
+      Option(unmarshalUser(attributes))
+
+    }.recover {
+      case e: NameNotFoundException => None
+
+    }.get
+  }
+
   override def loadUser(userId: WorkbenchUserId): Future[Option[WorkbenchUser]] = withContext { ctx =>
     Try {
       val attributes = ctx.getAttributes(userDn(userId))
@@ -221,12 +233,14 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
       dnToSubject(result.getNameInNamespace)
     }
 
-    subjects match {
-      case Seq() => None
-      case Seq(subject:WorkbenchUser) => Option(subject)
+    val x: Option[WorkbenchUser] = subjects.toList match {
+      case Nil => None
+      case Seq(subject:WorkbenchUserId) => Option(unmarshalUser(ctx.getAttributes(userDn(subject))))
       case Seq(subject) => throw new WorkbenchException(s"Database Error: Service Account $petSA did not return a valid subject: $subject")
       case _ => throw new WorkbenchException(s"Database error: email $petSA refers to too many subjects: $subjects")
     }
+
+    x
   }
 
   private def unmarshalUser(attributes: Attributes): WorkbenchUser = {
