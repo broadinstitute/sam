@@ -1,8 +1,15 @@
 #!/usr/bin/env bash
 
 start()  {
-    echo "starting up container $1..."
-    docker run --name $1 -e ROOTPASS="testtesttest" -e BASE_DN=dc=dsde-dev,dc=broadinstitute,dc=org -v ${PWD}/docker/opendjsetup.sh:/opt/opendj/bootstrap/setup.sh -v ${PWD}/docker/example-v1.json:/opt/example-v1.json -d -p 389 broadinstitute/openam:opendj
+
+    PORT=3389:389
+    CONTAINER_NAME=opendj
+    if [ $1 = "jenkins" ]; then
+        PORT=389
+        CONTAINER_NAME=$(opendj-$(date +"%y%m%d_%H%M%S"))
+    fi
+    echo "starting up container $CONTAINER_NAME..."
+    docker run --name $CONTAINER_NAME -e ROOTPASS="testtesttest" -e BASE_DN=dc=dsde-dev,dc=broadinstitute,dc=org -v ${PWD}/docker/opendjsetup.sh:/opt/opendj/bootstrap/setup.sh -v ${PWD}/docker/example-v1.json:/opt/example-v1.json -d -p $PORT broadinstitute/openam:opendj
     echo "sleeping 40 seconds til opendj is up and happy. This does not check anything."
     sleep 40
 }
@@ -15,17 +22,17 @@ stop() {
 }
 
 COMMAND=$1
+ENV=${2:-local}
+NAME=${3:-opendj}
 if [ ${#@} == 0 ]; then
     echo "Usage: $0 stop|start"
     exit 1
 fi
 
 if [ $COMMAND = "start" ]; then
-    CONTAINER=opendj-$(date +"%y%m%d_%H%M%S")
-    start $CONTAINER
-    echo $CONTAINER
+    start $ENV
 elif [ $COMMAND = "stop" ]; then
-    stop $2
+    stop $NAME
 else
     exit 1
 fi

@@ -17,7 +17,7 @@ PROJECT=sam
 function make_jar()
 {
     echo "building jar..."
-    OPENDJ=$(bash ./docker/run-opendj.sh start | tail -n1)
+    OPENDJ=$(bash ./docker/run-opendj.sh start jenkins | tail -n1)
     
     # Get the last commit hash of the model directory and set it as an environment variable
     GIT_MODEL_HASH=$(git log -n 1 --pretty=format:%h)
@@ -26,7 +26,7 @@ function make_jar()
     docker run --rm --link $OPENDJ:opendj -e DIRECTORY_URL=$DIRECTORY_URL -e GIT_MODEL_HASH=$GIT_MODEL_HASH -e DIRECTORY_PASSWORD=$DIRECTORY_PASSWORD -v $PWD:/working -v jar-cache:/root/.ivy -v jar-cache:/root/.ivy2 broadinstitute/scala-baseimage /working/docker/install.sh /working
     EXIT_CODE=$?
 
-    bash ./docker/run-opendj.sh stop $OPENDJ
+    bash ./docker/run-opendj.sh stop jenkins $OPENDJ
 
     if [ $EXIT_CODE != 0 ]; then
         echo "Tests/jar build exited with status $EXIT_CODE"
