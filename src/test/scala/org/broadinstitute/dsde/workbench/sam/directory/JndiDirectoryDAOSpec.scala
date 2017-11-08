@@ -399,6 +399,4 @@ class JndiDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
   }
 }
 
-}
-
 
