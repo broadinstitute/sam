@@ -11,28 +11,30 @@ import scala.concurrent.Future
 
 
 trait StandardUserInfoDirectives extends UserInfoDirectives {
-  val petSAdomain = "\\S+@\\S+.iam.gserviceaccount.com"
+  val petSAdomain = "\\S+@\\S+\\.iam\\.gserviceaccount\\.com".r
+
+  private def isPetSA(email: String) = {
+    petSAdomain.pattern.matcher(email).matches
+  }
 
   def requireUserInfo: Directive1[UserInfo] = (
     headerValueByName("OIDC_access_token") &
-    headerValueByName("OIDC_CLAIM_user_id") &
-    headerValueByName("OIDC_CLAIM_expires_in") &
-    headerValueByName("OIDC_CLAIM_email")
-  ) tflatMap {
+      headerValueByName("OIDC_CLAIM_user_id") &
+      headerValueByName("OIDC_CLAIM_expires_in") &
+      headerValueByName("OIDC_CLAIM_email")
+    ) tflatMap {
     case (token, userId, expiresIn, email) => {
-      onSuccess(getWorkbenchUserEmailId(email)).map {
-        case Some(resourceType) => UserInfo(token, resourceType.id, resourceType.email, expiresIn.toLong)
+      onSuccess(getUserFromPetServiceAccount(email)).map {
+        case Some(petOwnerUser) => UserInfo(token, petOwnerUser.id, petOwnerUser.email, expiresIn.toLong)
         case None => UserInfo(token, WorkbenchUserId(userId), WorkbenchUserEmail(email), expiresIn.toLong)
       }
     }
   }
 
-  private def isPetSA(email:String) = email.matches(petSAdomain)
-
-  private def getWorkbenchUserEmailId(email:String):Future[Option[WorkbenchUser]] = {
+  private def getUserFromPetServiceAccount(email:String):Future[Option[WorkbenchUser]] = {
     if (isPetSA(email))
       directoryDAO.getUserFromPetServiceAccount(WorkbenchUserServiceAccountEmail(email))
-      else
+    else
       Future(None)
   }
 }

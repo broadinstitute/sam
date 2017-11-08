@@ -10,8 +10,12 @@ import org.broadinstitute.dsde.workbench.sam.model.UserInfo
   */
 trait MockUserInfoDirectives extends UserInfoDirectives {
   val userInfo: UserInfo
-  val petSAdomain = "\\S+@\\S+.iam.gserviceaccount.com"
-  override def requireUserInfo: Directive1[UserInfo] = provide(if(userInfo.userEmail.value.matches(petSAdomain)){
+  val petSAdomain = "\\S+@\\S+\\.iam\\.gserviceaccount\\.com".r
+
+  private def isPetSA(email: String) = {
+    petSAdomain.pattern.matcher(email).matches
+  }
+  override def requireUserInfo: Directive1[UserInfo] = provide(if(isPetSA(userInfo.userEmail.value)){
     new UserInfo("",WorkbenchUserId("newuser"), WorkbenchUserEmail("newuser@new.com"), userInfo.tokenExpiresIn)
   }else
     userInfo
