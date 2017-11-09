@@ -1,5 +1,6 @@
 package org.broadinstitute.dsde.workbench.sam.openam
 
+import java.util.Date
 import javax.naming.{NameAlreadyBoundException, NameNotFoundException}
 import javax.naming.directory._
 
@@ -117,6 +118,7 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
 
           myAttrs.put(Attr.resourceType, policy.id.resource.resourceTypeName.value)
           myAttrs.put(Attr.resourceId, policy.id.resource.resourceId.value)
+          myAttrs.put(Attr.groupUpdatedTimestamp, formattedDate(new Date()))
           myAttrs
         }
       }
@@ -151,6 +153,8 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
       newPolicy.roles.foreach(role => roles.add(role.value))
       myAttrs.put(roles)
     }
+
+    myAttrs.put(Attr.groupUpdatedTimestamp, formattedDate(new Date()))
 
     ctx.modifyAttributes(policyDn(newPolicy.id), DirContext.REPLACE_ATTRIBUTE, myAttrs)
     newPolicy

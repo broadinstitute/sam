@@ -1,19 +1,25 @@
 package org.broadinstitute.dsde.workbench.sam.service
 
-import org.broadinstitute.dsde.workbench.model.{WorkbenchGroup, WorkbenchGroupName, WorkbenchUserId}
+import akka.http.scaladsl.model.StatusCodes
+import com.typesafe.scalalogging.LazyLogging
+import org.broadinstitute.dsde.workbench.google.GoogleDirectoryDAO
+import org.broadinstitute.dsde.workbench.model._
+import org.broadinstitute.dsde.workbench.sam._
+import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
+import org.broadinstitute.dsde.workbench.sam.model.ResourceAndPolicyName
+import org.broadinstitute.dsde.workbench.sam.openam.AccessPolicyDAO
+import org.broadinstitute.dsde.workbench.util.FutureSupport
 
-import scala.concurrent.Future
+import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success, Try}
 
-class GoogleService {
-  def synchronizeGroupMembersInternal(group: WorkbenchGroupI): Future[SyncReport] = {
-    def loadRefs(refs: Set[Either[WorkbenchUserId, WorkbenchGroupName]]) = {
-      DBIO.sequence(refs.map {
-        case Left(userRef) => dataAccess.rawlsUserQuery.load(userRef).map(userOption => Left(userOption.getOrElse(throw new RawlsException(s"user $userRef not found"))))
-        case Right(groupRef) => dataAccess.rawlsGroupQuery.load(groupRef).map(groupOption => Right(groupOption.getOrElse(throw new RawlsException(s"group $groupRef not found"))))
-      }.toSeq)
-    }
-asdf
+class GoogleService(val directoryDAO: DirectoryDAO, val accessPolicyDAO: AccessPolicyDAO, val gcsDAO: GoogleDirectoryDAO, val googleDomain: String)(implicit val executionContext: ExecutionContext) extends LazyLogging with FutureSupport {
+  private[service] def toProxyFromUser(subjectId: String): String = s"PROXY_$subjectId@$googleDomain"
+
+  case class SyncReportItem(operation: String, email: String, errorReport: Option[ErrorReport])
+  case class SyncReport(groupEmail: WorkbenchGroupEmail, items: Seq[SyncReportItem])
+
+  def synchronizeGroupMembers(groupId: WorkbenchGroupIdentity): Future[SyncReport] = {
     def toSyncReportItem(operation: String, email: String, result: Try[Unit]) = {
       SyncReportItem(
         operation,
@@ -25,39 +31,33 @@ asdf
       )
     }
 
-    DBIO.from(gcsDAO.listGroupMembers(group)) flatMap {
-      case None => DBIO.from(gcsDAO.createGoogleGroup(group) map (_ => Map.empty[String, Option[Either[WorkbenchUserId, WorkbenchGroupName]]]))
-      case Some(members) => DBIO.successful(members)
-    } flatMap { membersByEmail =>
-
-      val knownEmailsByMember = membersByEmail.collect { case (email, Some(member)) => (member, email) }
-      val unknownEmails = membersByEmail.collect { case (email, None) => email }
-
-      val toRemove = knownEmailsByMember.keySet -- group.users.map(Left(_)) -- group.subGroups.map(Right(_))
-      val emailsToRemove = unknownEmails ++ toRemove.map(knownEmailsByMember)
-      val removeFutures = DBIO.sequence(emailsToRemove map { removeMember =>
-        DBIO.from(toFutureTry(gcsDAO.removeEmailFromGoogleGroup(group.groupEmail.value, removeMember)).map(toSyncReportItem("removed", removeMember, _)))
-      })
-
-
-      val realMembers: Set[Either[WorkbenchUserId, WorkbenchGroupName]] = group.users.map(Left(_)) ++ group.subGroups.map(Right(_))
-      val toAdd = realMembers -- knownEmailsByMember.keySet
-      val addFutures = loadRefs(toAdd) flatMap { addMembers =>
-        DBIO.sequence(addMembers map { addMember =>
-          val memberEmail = addMember match {
-            case Left(user) => user.userEmail.value
-            case Right(subGroup) => subGroup.groupEmail.value
-          }
-          DBIO.from(toFutureTry(gcsDAO.addMemberToGoogleGroup(group, addMember)).map(toSyncReportItem("added", memberEmail, _)))
-        })
+    for {
+      groupOption <- groupId match {
+        case basicGroupName: WorkbenchGroupName => directoryDAO.loadGroup(basicGroupName)
+        case rpn: ResourceAndPolicyName => accessPolicyDAO.loadPolicy(rpn)
       }
 
-      for {
-        syncReportItems <- DBIO.sequence(Seq(removeFutures, addFutures))
-        _ <- dataAccess.rawlsGroupQuery.updateSynchronizedDate(group)
-      } yield {
-        SyncReport(group.groupEmail, syncReportItems.flatten)
+      group = groupOption.getOrElse(throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"$groupId not found")))
+
+      googleMemberEmails <- gcsDAO.listGroupMembers(group.email) flatMap {
+        case None => gcsDAO.createGroup(groupId.toString, group.email) map (_ => Set.empty[String])
+        case Some(members) => Future.successful(members.toSet)
       }
+
+      samMemberEmails <- Future.traverse(group.members) {
+        case group: WorkbenchGroupIdentity => directoryDAO.loadSubjectEmail(group)
+        case WorkbenchUserId(userSubjectId) => Future.successful(Option(WorkbenchUserEmail(toProxyFromUser(userSubjectId))))
+      }.map(_.collect { case Some(email) => email.value })
+
+      toAdd = samMemberEmails -- googleMemberEmails
+      toRemove = googleMemberEmails -- samMemberEmails
+
+      addTrials <- Future.traverse(toAdd) { addEmail => gcsDAO.addMemberToGroup(group.email, WorkbenchUserEmail(addEmail)).toTry.map(toSyncReportItem("added", addEmail, _)) }
+      removeTrials <- Future.traverse(toRemove) { removeEmail => gcsDAO.removeMemberFromGroup(group.email, WorkbenchUserEmail(removeEmail)).toTry.map(toSyncReportItem("removed", removeEmail, _)) }
+
+      _ <- directoryDAO.updateSynchronizedDate(groupId)
+    } yield {
+      SyncReport(group.email, Seq(addTrials, removeTrials).flatten)
     }
   }
 }

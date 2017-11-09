@@ -62,7 +62,9 @@ case class ResourceType(name: ResourceTypeName, actions: Set[ResourceAction], ro
 case class ResourceId(value: String) extends ValueObject
 
 case class ResourceIdAndPolicyName(resourceId: ResourceId, accessPolicyName: AccessPolicyName)
-case class ResourceAndPolicyName(resource: Resource, accessPolicyName: AccessPolicyName) extends WorkbenchGroupIdentity
+case class ResourceAndPolicyName(resource: Resource, accessPolicyName: AccessPolicyName) extends WorkbenchGroupIdentity {
+  override def toString: String = s"${accessPolicyName.value}.${resource.resourceId.value}.${resource.resourceTypeName.value}"
+}
 case class AccessPolicyName(value: String) extends ValueObject
 
 /*

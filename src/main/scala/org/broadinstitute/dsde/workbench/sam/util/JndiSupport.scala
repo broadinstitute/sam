@@ -1,6 +1,8 @@
 package org.broadinstitute.dsde.workbench.sam.util
 
+import java.text.SimpleDateFormat
 import java.util
+import java.util.Date
 import javax.naming._
 import javax.naming.directory._
 
@@ -93,6 +95,7 @@ trait JndiSupport {
     }
   }
 
+  protected def formattedDate(date: Date) = new SimpleDateFormat("yyyyMMddHHmmss.SSSZ").format(date)
 }
 
 /**

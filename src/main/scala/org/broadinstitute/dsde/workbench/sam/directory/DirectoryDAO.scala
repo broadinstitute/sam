@@ -18,8 +18,10 @@ trait DirectoryDAO {
   def addGroupMember(groupId: WorkbenchGroupIdentity, addMember: WorkbenchSubject): Future[Unit]
   def removeGroupMember(groupId: WorkbenchGroupIdentity, removeMember: WorkbenchSubject): Future[Unit]
   def isGroupMember(groupId: WorkbenchGroupIdentity, member: WorkbenchSubject): Future[Boolean]
+  def updateSynchronizedDate(groupId: WorkbenchGroupIdentity): Future[Unit]
 
   def loadSubjectFromEmail(email: String): Future[Option[WorkbenchSubject]]
+  def loadSubjectEmail(subject: WorkbenchSubject): Future[Option[WorkbenchEmail]]
 
   def createUser(user: WorkbenchUser): Future[WorkbenchUser]
   def loadUser(userId: WorkbenchUserId): Future[Option[WorkbenchUser]]
