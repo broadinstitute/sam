@@ -175,4 +175,14 @@ class MockDirectoryDAO extends DirectoryDAO {
     petServiceAccountsByUser -= userId
     Future.successful(())
   }
+
+  override def updateSynchronizedDate(groupId: WorkbenchGroupIdentity): Future[Unit] = { Future.successful(())}
+
+  override def loadSubjectEmail(subject: WorkbenchSubject): Future[Option[WorkbenchEmail]] = Future {
+    subject match {
+      case id: WorkbenchUserId => users.get(id).map(_.email)
+      case id: WorkbenchGroupIdentity => groups.get(id).map(_.email)
+      case id: WorkbenchUserServiceAccountSubjectId => petServiceAccounts.get(id).map(_.email)
+    }
+  }
 }

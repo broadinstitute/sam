@@ -233,6 +233,7 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
       subject match {
         case _: WorkbenchUserId => WorkbenchUserEmail(emailString)
         case _: WorkbenchGroupIdentity => WorkbenchGroupEmail(emailString)
+        case _: WorkbenchUserServiceAccountSubjectId => WorkbenchUserServiceAccountEmail(emailString)
       }
     }
   }

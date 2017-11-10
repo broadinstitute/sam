@@ -36,7 +36,8 @@ object Dependencies {
 
   val cats: ModuleID =              "org.typelevel"       %% "cats"                  % "0.9.0"
 
-  val scalaTest: ModuleID = "org.scalatest" %% "scalatest" % scalaTestV % "test"
+  val scalaTest: ModuleID =       "org.scalatest" %% "scalatest"    % scalaTestV % "test"
+  val mockito: ModuleID =         "org.mockito"    % "mockito-core" % "2.7.22"   % "test"
 
   // All of workbench-libs pull in Akka; exclude it since we provide our own Akka dependency.
   // workbench-google pulls in workbench-{util, model, metrics}; exclude them so we can control the library versions individually.
@@ -70,6 +71,7 @@ object Dependencies {
     cats,
 
     scalaTest,
+    mockito,
 
     workbenchUtil,
     workbenchModel,
