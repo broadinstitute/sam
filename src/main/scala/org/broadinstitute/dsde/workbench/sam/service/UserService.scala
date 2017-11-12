@@ -27,7 +27,7 @@ class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Google
   def createUser(user: WorkbenchUser): Future[UserStatus] = {
     for {
       createdUser <- directoryDAO.createUser(user)
-      _ <- googleDirectoryDAO.createGroup(WorkbenchGroupName(user.email.value), WorkbenchGroupEmail(toProxyFromUser(user.id.value))) recover {
+      _ <- googleDirectoryDAO.createGroup(user.email.value, WorkbenchGroupEmail(toProxyFromUser(user.id.value))) recover {
         case e:GoogleJsonResponseException if e.getDetails.getCode == StatusCodes.Conflict.intValue => ()
       }
       _ <- googleDirectoryDAO.addMemberToGroup(WorkbenchGroupEmail(toProxyFromUser(user.id.value)), WorkbenchUserEmail(user.email.value))
@@ -173,7 +173,7 @@ class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Google
   def createAllUsersGroup: Future[Unit] = {
     for {
       _ <- directoryDAO.createGroup(BasicWorkbenchGroup(allUsersGroupName, Set.empty, WorkbenchGroupEmail(toGoogleGroupName(allUsersGroupName.value)))) recover { case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode == Option(StatusCodes.Conflict) => () }
-      _ <- googleDirectoryDAO.createGroup(WorkbenchGroupName(allUsersGroupName.value), WorkbenchGroupEmail(toGoogleGroupName(allUsersGroupName.value))) recover { case e: GoogleJsonResponseException if e.getDetails.getCode == StatusCodes.Conflict.intValue => () }
+      _ <- googleDirectoryDAO.createGroup(allUsersGroupName.value, WorkbenchGroupEmail(toGoogleGroupName(allUsersGroupName.value))) recover { case e: GoogleJsonResponseException if e.getDetails.getCode == StatusCodes.Conflict.intValue => () }
     } yield ()
   }
 

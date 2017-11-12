@@ -1,4 +1,4 @@
-package org.broadinstitute.dsde.workbench.sam.service
+package org.broadinstitute.dsde.workbench.sam.google
 
 import akka.http.scaladsl.model.StatusCodes
 import com.typesafe.scalalogging.LazyLogging
@@ -13,11 +13,8 @@ import org.broadinstitute.dsde.workbench.util.FutureSupport
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success, Try}
 
-case class SyncReportItem(operation: String, email: String, errorReport: Option[ErrorReport])
-case class SyncReport(groupEmail: WorkbenchGroupEmail, items: Seq[SyncReportItem])
-
 class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: AccessPolicyDAO, val googleDirectoryDAO: GoogleDirectoryDAO, val googleDomain: String)(implicit val executionContext: ExecutionContext) extends LazyLogging with FutureSupport {
-  private[service] def toProxyFromUser(subjectId: String): String = s"PROXY_$subjectId@$googleDomain"
+  private[google] def toProxyFromUser(subjectId: String): String = s"PROXY_$subjectId@$googleDomain"
 
   def synchronizeGroupMembers(groupId: WorkbenchGroupIdentity): Future[SyncReport] = {
     def toSyncReportItem(operation: String, email: String, result: Try[Unit]) = {

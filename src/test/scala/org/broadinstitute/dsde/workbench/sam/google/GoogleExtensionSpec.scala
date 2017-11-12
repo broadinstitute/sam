@@ -1,19 +1,17 @@
-package org.broadinstitute.dsde.workbench.sam.service
+package org.broadinstitute.dsde.workbench.sam.google
 
 import org.broadinstitute.dsde.workbench.google.GoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam._
-import org.broadinstitute.dsde.workbench.sam.TestSupport
+import org.broadinstitute.dsde.workbench.sam.{TestSupport, _}
 import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.AccessPolicyDAO
+import org.mockito.Mockito._
 import org.scalatest.mockito.MockitoSugar
 import org.scalatest.{FlatSpec, Matchers}
-import org.mockito.Mockito
-import org.mockito.Mockito._
 
-import scala.concurrent.Future
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
 
 class GoogleExtensionSpec extends FlatSpec with Matchers with TestSupport with MockitoSugar {
 
