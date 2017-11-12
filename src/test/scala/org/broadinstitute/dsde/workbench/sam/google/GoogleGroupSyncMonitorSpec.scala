@@ -1,10 +1,12 @@
 package org.broadinstitute.dsde.workbench.sam.google
 
 import akka.actor.ActorSystem
+import akka.http.scaladsl.model.StatusCodes
 import akka.testkit.TestKit
 import org.broadinstitute.dsde.workbench.google.mock.MockGooglePubSubDAO
-import org.broadinstitute.dsde.workbench.model.{WorkbenchGroupEmail, WorkbenchGroupName}
+import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchExceptionWithErrorReport, WorkbenchGroupEmail, WorkbenchGroupName}
 import org.broadinstitute.dsde.workbench.sam.TestSupport
+import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
 import org.scalatest.mockito.MockitoSugar
@@ -42,7 +44,8 @@ class GoogleGroupSyncMonitorSpec(_system: ActorSystem) extends TestKit(_system) 
     when(mockGoogleExtensions.synchronizeGroupMembers(policyToSyncId)).thenReturn(Future.successful(SyncReport(policyToSyncEmail, Seq.empty)))
 
     val topicName = "testtopic"
-    system.actorOf(GoogleGroupSyncMonitorSupervisor.props(10 milliseconds, 0 seconds, mockGooglePubSubDAO, topicName, "testsub", 1, mockGoogleExtensions))
+    val subscriptionName = "testsub"
+    system.actorOf(GoogleGroupSyncMonitorSupervisor.props(10 milliseconds, 0 seconds, mockGooglePubSubDAO, topicName, subscriptionName, 1, mockGoogleExtensions))
 
     eventually {
       assert(runAndWait(mockGooglePubSubDAO.getTopic(topicName)).isDefined)
@@ -56,6 +59,32 @@ class GoogleGroupSyncMonitorSpec(_system: ActorSystem) extends TestKit(_system) 
       assertResult(2) { mockGooglePubSubDAO.acks.size() }
       verify(mockGoogleExtensions).synchronizeGroupMembers(groupToSyncId)
       verify(mockGoogleExtensions).synchronizeGroupMembers(policyToSyncId)
+    }
+  }
+
+  it should "handle missing target group" in {
+    implicit val patienceConfig = PatienceConfig(timeout = 1 second)
+    val mockGooglePubSubDAO = new MockGooglePubSubDAO
+    val mockGoogleExtensions = mock[GoogleExtensions]
+
+    val groupToSyncEmail = WorkbenchGroupEmail("testgroup@example.com")
+    val groupToSyncId = WorkbenchGroupName("testgroup")
+    when(mockGoogleExtensions.synchronizeGroupMembers(groupToSyncId)).thenReturn(Future.failed(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "not found"))))
+
+    val topicName = "testtopic"
+    val subscriptionName = "testsub"
+    system.actorOf(GoogleGroupSyncMonitorSupervisor.props(10 milliseconds, 0 seconds, mockGooglePubSubDAO, topicName, subscriptionName, 1, mockGoogleExtensions))
+
+    eventually {
+      assert(runAndWait(mockGooglePubSubDAO.getTopic(topicName)).isDefined)
+    }
+
+    import SamJsonSupport.ResourceAndPolicyNameFormat
+    import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport.WorkbenchGroupNameFormat
+    mockGooglePubSubDAO.publishMessages(topicName, Seq(groupToSyncId.toJson.compactPrint))
+
+    eventually {
+      assertResult(1) { mockGooglePubSubDAO.acks.size() }
     }
   }
 }

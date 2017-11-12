@@ -57,7 +57,7 @@ class GoogleGroupSyncMonitorSupervisor(val pollInterval: FiniteDuration, pollInt
   override val supervisorStrategy =
     OneForOneStrategy() {
       case e => {
-        logger.error("error syncing google group", e)
+        logger.error("unexpected error in google group sync monitor", e)
         // start one to replace the error, stop the errored child so that we also drop its mailbox (i.e. restart not good enough)
         startOne()
         Stop
@@ -128,6 +128,8 @@ class GoogleGroupSyncMonitorActor(val pollInterval: FiniteDuration, pollInterval
 
         case regrets: Throwable => throw regrets
       }
+
+    case Status.Failure(t) => throw t
 
     case ReceiveTimeout =>
       throw new WorkbenchException("GoogleGroupSyncMonitorActor has received no messages for too long")
