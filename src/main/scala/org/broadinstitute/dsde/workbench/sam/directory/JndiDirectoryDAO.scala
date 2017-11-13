@@ -75,6 +75,11 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     ctx.modifyAttributes(groupDn(groupId), DirContext.REPLACE_ATTRIBUTE, new BasicAttributes(Attr.groupSynchronizedTimestamp, formattedDate(new Date()), true))
   }
 
+  override def getSynchronizedDate(groupId: WorkbenchGroupIdentity): Future[Option[Date]] = withContext { ctx =>
+    val attributes = ctx.getAttributes(groupDn(groupId), Array(Attr.groupSynchronizedTimestamp))
+    getAttribute[String](attributes, Attr.groupSynchronizedTimestamp).map(parseDate)
+  }
+
   override def loadGroup(groupName: WorkbenchGroupName): Future[Option[BasicWorkbenchGroup]] = withContext { ctx =>
     Try {
       val attributes = ctx.getAttributes(groupDn(groupName))

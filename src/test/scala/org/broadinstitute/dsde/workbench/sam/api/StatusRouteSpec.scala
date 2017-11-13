@@ -15,7 +15,7 @@ import org.broadinstitute.dsde.workbench.sam.config.PetServiceAccountConfig
 import org.broadinstitute.dsde.workbench.sam.directory.MockDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model.UserInfo
 import org.broadinstitute.dsde.workbench.sam.openam.MockAccessPolicyDAO
-import org.broadinstitute.dsde.workbench.sam.service.{ResourceService, StatusService, UserService}
+import org.broadinstitute.dsde.workbench.sam.service.{NoExtensions, ResourceService, StatusService, UserService}
 import org.scalatest.concurrent.Eventually._
 
 import scala.concurrent.duration._
@@ -40,8 +40,8 @@ class StatusRouteSpec extends FlatSpec with Matchers with ScalatestRouteTest wit
     val googleIamDAO = new MockGoogleIamDAO()
     val petServiceAccountConfig = PetServiceAccountConfig(GoogleProject("test-project"), Set(WorkbenchUserEmail("test@test.gserviceaccount.com")))
 
-    val mockResourceService = new ResourceService(Map.empty, policyDAO, directoryDAO, "example.com")
-    val mockUserService = new UserService(directoryDAO, googleDirectoryDAO, googleIamDAO, "dev.test.firecloud.org", petServiceAccountConfig)
+    val mockResourceService = new ResourceService(Map.empty, policyDAO, directoryDAO, NoExtensions, "example.com")
+    val mockUserService = new UserService(directoryDAO, NoExtensions, googleDirectoryDAO, "dev.test.firecloud.org")
     val mockStatusService = new StatusService(directoryDAO, googleDirectoryDAO)
 
     val samRoutes = new TestSamRoutes(mockResourceService, mockUserService, mockStatusService, UserInfo("", WorkbenchUserId(""), WorkbenchUserEmail(""), 0))

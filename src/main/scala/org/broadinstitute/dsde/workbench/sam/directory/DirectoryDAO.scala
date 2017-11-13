@@ -1,5 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.directory
 
+import java.util.Date
+
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
 
@@ -19,6 +21,7 @@ trait DirectoryDAO {
   def removeGroupMember(groupId: WorkbenchGroupIdentity, removeMember: WorkbenchSubject): Future[Unit]
   def isGroupMember(groupId: WorkbenchGroupIdentity, member: WorkbenchSubject): Future[Boolean]
   def updateSynchronizedDate(groupId: WorkbenchGroupIdentity): Future[Unit]
+  def getSynchronizedDate(groupId: WorkbenchGroupIdentity): Future[Option[Date]]
 
   def loadSubjectFromEmail(email: String): Future[Option[WorkbenchSubject]]
   def loadSubjectEmail(subject: WorkbenchSubject): Future[Option[WorkbenchEmail]]

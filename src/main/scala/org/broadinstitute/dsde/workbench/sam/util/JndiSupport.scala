@@ -96,6 +96,7 @@ trait JndiSupport {
   }
 
   protected def formattedDate(date: Date) = new SimpleDateFormat("yyyyMMddHHmmss.SSSZ").format(date)
+  protected def parseDate(date: String) = new SimpleDateFormat("yyyyMMddHHmmss.SSSZ").parse(date)
 }
 
 /**
