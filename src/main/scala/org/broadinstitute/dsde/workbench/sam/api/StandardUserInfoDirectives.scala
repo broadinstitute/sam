@@ -35,6 +35,6 @@ trait StandardUserInfoDirectives extends UserInfoDirectives {
     if (isPetSA(email))
       directoryDAO.getUserFromPetServiceAccount(WorkbenchUserServiceAccountEmail(email))
     else
-      Future(None)
+      Future.successful(None)
   }
 }
