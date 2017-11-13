@@ -40,7 +40,7 @@ Build jar and docker image:
 ## To run unit tests
 Spin up a local OpenDJ:
 ```
-sh docker/run-opendj.sh
+sh docker/run-opendj.sh start
 ```
 
 Make sure your `SBT_OPTS` are set:
@@ -51,4 +51,8 @@ export SBT_OPTS="-Ddirectory.url=ldap://localhost:3389 -Ddirectory.password=test
 Run tests:
 ```
 sbt test
+```
+Stop your local opendj:
+```
+sh docker/run-opendj.sh stop
 ```
