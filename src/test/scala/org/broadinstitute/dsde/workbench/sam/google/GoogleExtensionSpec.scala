@@ -96,7 +96,7 @@ class GoogleExtensionSpec extends FlatSpec with Matchers with TestSupport with M
     }
   }
 
-  it should "get a pet service account for a user" in {
+  "GoogleExtension" should "get a pet service account for a user" in {
     val dirDAO = new JndiDirectoryDAO(directoryConfig)
     val schemaDao = new JndiSchemaDAO(directoryConfig)
     runAndWait(schemaDao.init())
@@ -144,9 +144,6 @@ class GoogleExtensionSpec extends FlatSpec with Matchers with TestSupport with M
       // create one again, it should work
       val petSaResponse2 = googleExtensions.createUserPetServiceAccount(defaultUser).futureValue
       petSaResponse2 shouldBe emailResponse
-
-      dirDAO.disableIdentity(ldapPet.subjectId).futureValue
-      dirDAO.deletePetServiceAccount(ldapPet.subjectId).futureValue
     } finally {
       schemaDao.clearDatabase().futureValue
     }
