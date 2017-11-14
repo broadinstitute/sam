@@ -116,7 +116,11 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
         case None => accessPolicyDAO.createPolicy(newPolicy)
         case Some(_) => accessPolicyDAO.overwritePolicy(newPolicy)
       } andThen {
-        case Success(policy) => cloudExtensions.onGroupUpdate(Seq(policy.id))
+        case Success(policy) => cloudExtensions.onGroupUpdate(Seq(policy.id)) recover {
+          case t: Throwable =>
+            logger.error(s"error calling cloudExtensions.onGroupUpdate for ${policy.id}", t)
+            throw t
+        }
       }
     }
   }

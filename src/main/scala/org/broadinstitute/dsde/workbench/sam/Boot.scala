@@ -52,6 +52,8 @@ object Boot extends App with LazyLogging {
       val googleExtensions = googleExt
     }
 
+    googleExt.onBoot()
+
     for {
       _ <- schemaDAO.init() recover {
         case t: Throwable =>

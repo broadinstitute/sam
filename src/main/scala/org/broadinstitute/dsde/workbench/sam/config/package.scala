@@ -61,7 +61,8 @@ package object config {
       org.broadinstitute.dsde.workbench.util.toScalaDuration(config.getDuration("groupSync.pollInterval")),
       org.broadinstitute.dsde.workbench.util.toScalaDuration(config.getDuration("groupSync.pollJitter")),
       config.getString("groupSync.pubSubTopic"),
-      config.getString("groupSync.pubSubSubscription")
+      config.getString("groupSync.pubSubSubscription"),
+      config.getInt("groupSync.workerCount")
     )
   }
 

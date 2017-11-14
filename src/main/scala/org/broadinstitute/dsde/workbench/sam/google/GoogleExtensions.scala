@@ -21,11 +21,13 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
   private[google] def toProxyFromUser(subjectId: String): String = s"PROXY_$subjectId@${googleServicesConfig.appsDomain}"
 
   override def onBoot()(implicit system: ActorSystem): Unit = {
-    system.actorOf(GoogleGroupSyncMonitor.props(
+    system.actorOf(GoogleGroupSyncMonitorSupervisor.props(
       googleServicesConfig.groupSyncPollInterval,
       googleServicesConfig.groupSyncPollJitter,
       googlePubSubDAO,
+      googleServicesConfig.groupSyncTopic,
       googleServicesConfig.groupSyncSubscription,
+      googleServicesConfig.groupSyncWorkerCount,
       this
     ))
   }
