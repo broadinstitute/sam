@@ -172,4 +172,38 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Befor
     dirDAO.disableIdentity(ldapPet.subjectId).futureValue
     dirDAO.deletePetServiceAccount(ldapPet.subjectId).futureValue
   }
+
+  it should "delete a pet service account" in {
+    // create a user
+    val newUser = service.createUser(defaultUser).futureValue
+    newUser shouldBe UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
+
+    // create a pet service account
+    val emailResponse = service.createUserPetServiceAccount(defaultUser).futureValue
+    emailResponse.value should endWith ("@my-pet-project.iam.gserviceaccount.com")
+
+    // verify ldap
+    dirDAO.getPetServiceAccountForUser(defaultUserId).futureValue shouldBe Some(emailResponse)
+
+    // verify google
+    val mockGoogleIamDAO = service.googleIamDAO.asInstanceOf[MockGoogleIamDAO]
+    val mockGoogleDirectoryDAO = service.googleDirectoryDAO.asInstanceOf[MockGoogleDirectoryDAO]
+    val groupEmail = WorkbenchGroupEmail(service.toProxyFromUser(defaultUserId.value))
+    mockGoogleIamDAO.serviceAccounts should contain key (emailResponse)
+    mockGoogleDirectoryDAO.groups should contain key (groupEmail)
+    mockGoogleDirectoryDAO.groups(groupEmail) shouldBe Set(defaultUserEmail, emailResponse)
+
+    // delete the pet service account
+    service.deleteUserPetServiceAccount(newUser.userInfo.userSubjectId).futureValue
+
+    // the user should still exist in LDAP
+    dirDAO.loadUser(defaultUserId).futureValue shouldBe Some(defaultUser)
+
+    // the pet should not exist in LDAP
+    dirDAO.getPetServiceAccountForUser(defaultUserId).futureValue shouldBe None
+
+    // the pet should not exist in Google
+    mockGoogleIamDAO.serviceAccounts should not contain key (emailResponse)
+  }
+
 }

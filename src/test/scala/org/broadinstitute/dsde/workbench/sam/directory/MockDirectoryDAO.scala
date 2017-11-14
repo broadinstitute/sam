@@ -21,6 +21,7 @@ class MockDirectoryDAO extends DirectoryDAO {
   private val groupsWithEmails: mutable.Map[WorkbenchGroupEmail, WorkbenchGroupName] = new TrieMap()
   private val petServiceAccounts: mutable.Map[WorkbenchUserServiceAccountSubjectId, WorkbenchUserServiceAccount] = new TrieMap()
   private val petServiceAccountsByUser: mutable.Map[WorkbenchUserId, WorkbenchUserServiceAccountEmail] = new TrieMap()
+  private val petsWithEmails: mutable.Map[WorkbenchUserServiceAccountEmail, WorkbenchUserServiceAccountSubjectId] = new TrieMap()
 
   override def createGroup(group: BasicWorkbenchGroup): Future[BasicWorkbenchGroup] = Future {
     if (groups.keySet.contains(group.id)) {
@@ -68,7 +69,9 @@ class MockDirectoryDAO extends DirectoryDAO {
   }
 
   override def loadSubjectFromEmail(email: String): Future[Option[WorkbenchSubject]] = Future {
-    Option(usersWithEmails.getOrElse(WorkbenchUserEmail(email), groupsWithEmails.getOrElse(WorkbenchGroupEmail(email), null)))
+    Option(usersWithEmails.getOrElse(WorkbenchUserEmail(email),
+      groupsWithEmails.getOrElse(WorkbenchGroupEmail(email),
+        petsWithEmails.getOrElse(WorkbenchUserServiceAccountEmail(email), null))))
   }
 
   override def createUser(user: WorkbenchUser): Future[WorkbenchUser] = Future {
@@ -151,6 +154,7 @@ class MockDirectoryDAO extends DirectoryDAO {
       throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"pet service account ${petServiceAccount.subjectId} already exists"))
     }
     petServiceAccounts += petServiceAccount.subjectId -> petServiceAccount
+    petsWithEmails += petServiceAccount.email -> petServiceAccount.subjectId
     petServiceAccount
   }
 

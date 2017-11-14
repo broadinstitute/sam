@@ -87,6 +87,15 @@ trait UserRoutes extends UserInfoDirectives {
                       }
                     }
                   }
+                } ~
+                pathPrefix("petServiceAccount") {
+                  pathEndOrSingleSlash {
+                    delete {
+                      complete {
+                        userService.deleteUserPetServiceAccount(WorkbenchUserId(userId)).map(_ => StatusCodes.OK)
+                      }
+                    }
+                  }
                 }
             }
           }
