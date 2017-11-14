@@ -328,6 +328,47 @@ class JndiDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     }
   }
 
+  it should "get pet service account associated with users" in {
+    val userId = WorkbenchUserId(UUID.randomUUID().toString)
+    val user = WorkbenchUser(userId, WorkbenchUserEmail("foo@bar.com"))
+    val email = WorkbenchUserServiceAccountEmail(s"pet-$userId@gmail.com")
+
+    // create a user
+    assertResult(None) {
+      runAndWait(dao.loadUser(user.id))
+    }
+
+    assertResult(user) {
+      runAndWait(dao.createUser(user))
+    }
+
+    assertResult(Some(user)) {
+      runAndWait(dao.loadUser(user.id))
+    }
+
+    // it should initially have no pet service account
+    assertResult(None) {
+      runAndWait(dao.getUserFromPetServiceAccount(email))
+    }
+
+    // add a pet service account
+    assertResult(email) {
+      runAndWait(dao.addPetServiceAccountToUser(userId, email))
+    }
+
+    // get the pet service account
+    assertResult(Some(user)) {
+      runAndWait(dao.getUserFromPetServiceAccount(email))
+    }
+
+    // delete the user
+    runAndWait(dao.deleteUser(user.id))
+
+    assertResult(None) {
+      runAndWait(dao.loadUser(user.id))
+    }
+  }
+
   it should "handle different kinds of groups" in {
     val userId = WorkbenchUserId(UUID.randomUUID().toString)
     val user = WorkbenchUser(userId, WorkbenchUserEmail("foo@bar.com"))
@@ -357,3 +398,5 @@ class JndiDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     assert(runAndWait(dao.isGroupMember(policy1.id, userId)))
   }
 }
+
+

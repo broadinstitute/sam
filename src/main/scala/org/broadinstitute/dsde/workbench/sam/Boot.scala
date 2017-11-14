@@ -44,7 +44,7 @@ object Boot extends App with LazyLogging {
     val userService = new UserService(directoryDAO, googleDirectoryDAO, googleIamDAO, googleDirectoryConfig.appsDomain, petServiceAccountConfig)
     val statusService = new StatusService(directoryDAO, googleDirectoryDAO, 10 seconds)
 
-    val samRoutes = new SamRoutes(resourceService, userService, statusService, config.as[SwaggerConfig]("swagger")) with StandardUserInfoDirectives
+    val samRoutes = new SamRoutes(resourceService, userService, statusService, config.as[SwaggerConfig]("swagger"),directoryDAO) with StandardUserInfoDirectives
 
     for {
       _ <- schemaDAO.init() recover {
