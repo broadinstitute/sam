@@ -17,6 +17,7 @@ import org.scalatest.concurrent.ScalaFutures
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
+import scala.concurrent.duration._
 import scala.util.{Success, Try}
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
@@ -97,6 +98,7 @@ class GoogleExtensionSpec extends FlatSpec with Matchers with TestSupport with M
   }
 
   "GoogleExtension" should "get a pet service account for a user" in {
+    implicit val patienceConfig = PatienceConfig(1 second)
     val dirDAO = new JndiDirectoryDAO(directoryConfig)
     val schemaDao = new JndiSchemaDAO(directoryConfig)
     runAndWait(schemaDao.init())
