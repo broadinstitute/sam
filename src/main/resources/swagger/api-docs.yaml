@@ -75,6 +75,19 @@ paths:
       tags:
         - Admin
 
+  /api/admin/user/{userId}/petServiceAccount:
+    delete:
+      summary: deletes a user's pet service account
+      parameters:
+        - in: path
+          description: User ID from which to delete pet
+          name: userId
+          required: true
+          type: string
+      operationId: deletePet
+      tags:
+        - Admin
+
   /api/resource/{resourceTypeName}:
     get:
       summary: List resources and policies for this resource for the caller
