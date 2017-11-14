@@ -80,7 +80,7 @@ paths:
       summary: deletes a user's pet service account
       parameters:
         - in: path
-          description: User ID from which to delete pet
+          description: User ID whose pet to delete
           name: userId
           required: true
           type: string
