@@ -228,5 +228,23 @@ class UserRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest {
       status shouldEqual StatusCodes.OK
       responseAs[UserStatus] shouldEqual UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
     }
+
+    // create another pet service account
+    Get("/api/user/petServiceAccount") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      val response = responseAs[WorkbenchUserServiceAccountEmail]
+      response.value should endWith ("@test-project.iam.gserviceaccount.com")
+    }
+
+    // delete the pet service account again
+    Delete(s"/api/admin/user/$defaultUserId/petServiceAccount") ~> adminRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+    }
+
+    // the user should still exist
+    Get(s"/api/admin/user/$defaultUserId") ~> adminRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[UserStatus] shouldEqual UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
+    }
   }
 }
