@@ -145,7 +145,7 @@ class GoogleExtensionSpec extends FlatSpec with Matchers with TestSupport with M
       val petSaResponse2 = googleExtensions.createUserPetServiceAccount(defaultUser).futureValue
       petSaResponse2 shouldBe emailResponse
     } finally {
-      schemaDao.clearDatabase().futureValue
+      runAndWait(schemaDao.clearDatabase())
     }
   }
 }
