@@ -44,7 +44,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives {
           }
         }
       }
-    }
+    } ~
     pathPrefix("policy") {
       pathPrefix("sync") {
         path(Segment / Segment / Segment) { (resourceTypeName, resourceId, accessPolicyName) =>
