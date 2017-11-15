@@ -143,13 +143,16 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     }
   }
 
+  private def petAttrs(petServiceAccountEmail: WorkbenchUserServiceAccountEmail): BasicAttributes = {
+    val myAttrs = new BasicAttributes(true)
+    myAttrs.put(new BasicAttribute("objectclass", "workbenchPerson"))
+    myAttrs.put(new BasicAttribute(Attr.petServiceAccount, petServiceAccountEmail.value))
+    myAttrs
+  }
+
   override def addPetServiceAccountToUser(userId: WorkbenchUserId, petServiceAccountEmail: WorkbenchUserServiceAccountEmail): Future[WorkbenchUserServiceAccountEmail] = {
     withContext { ctx =>
-      val myAttrs = new BasicAttributes(true)
-      myAttrs.put(new BasicAttribute("objectclass", "workbenchPerson"))
-      myAttrs.put(new BasicAttribute(Attr.petServiceAccount, petServiceAccountEmail.value))
-
-      ctx.modifyAttributes(userDn(userId), DirContext.ADD_ATTRIBUTE, myAttrs)
+      ctx.modifyAttributes(userDn(userId), DirContext.ADD_ATTRIBUTE, petAttrs(petServiceAccountEmail))
       petServiceAccountEmail
     } recover { case _: AttributeInUseException =>
       throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"user with id ${userId.value} already has a pet service account"))
@@ -159,12 +162,9 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
   override def removePetServiceAccountFromUser(userId: WorkbenchUserId): Future[Unit] = {
     getPetServiceAccountForUser(userId).flatMap {
       case None => Future.successful(())
-      case Some(email) =>
+      case Some(petServiceAccountEmail) =>
         withContext { ctx =>
-          val myAttrs = new BasicAttributes(true)
-          myAttrs.put(new BasicAttribute(Attr.petServiceAccount, email.value))
-
-          ctx.modifyAttributes(userDn(userId), DirContext.REMOVE_ATTRIBUTE, myAttrs)
+          ctx.modifyAttributes(userDn(userId), DirContext.REMOVE_ATTRIBUTE, petAttrs(petServiceAccountEmail))
         }
     }
   }

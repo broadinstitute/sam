@@ -320,6 +320,22 @@ class JndiDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
       runAndWait(dao.getPetServiceAccountForUser(userId))
     }
 
+    // add and delete the pet again
+
+    assertResult(email) {
+      runAndWait(dao.addPetServiceAccountToUser(userId, email))
+    }
+
+    assertResult(Some(email)) {
+      runAndWait(dao.getPetServiceAccountForUser(userId))
+    }
+
+    runAndWait(dao.removePetServiceAccountFromUser(userId))
+
+    assertResult(None) {
+      runAndWait(dao.getPetServiceAccountForUser(userId))
+    }
+
     // delete the user
     runAndWait(dao.deleteUser(user.id))
 
