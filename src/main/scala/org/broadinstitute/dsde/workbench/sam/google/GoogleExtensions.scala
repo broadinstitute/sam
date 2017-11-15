@@ -9,7 +9,7 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.config.{GoogleServicesConfig, PetServiceAccountConfig}
 import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
-import org.broadinstitute.dsde.workbench.sam.model.ResourceAndPolicyName
+import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.AccessPolicyDAO
 import org.broadinstitute.dsde.workbench.sam.service.CloudExtensions
 import org.broadinstitute.dsde.workbench.util.FutureSupport
@@ -212,6 +212,39 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
     }
   }
 
+  def onCreatePolicy(resourceType: String, resourceName: String, accessPolicyName: AccessPolicyName): Future[AccessPolicyResponseEntry] = {
+    val resource = Resource(ResourceTypeName(resourceType), ResourceId(resourceName))
+    val resourceAndPolicyName = ResourceAndPolicyName(resource, accessPolicyName)
+    val loadedPolicy = accessPolicyDAO.loadPolicy(resourceAndPolicyName).flatMap {
+      case Some(accessPolicy) => Future.successful(accessPolicy)
+      case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Policy $accessPolicyName not found on resource ${resource} not found"))
+    } andThen {
+      case Success(accessPolicy) => googleDirectoryDAO.createGroup(s"${accessPolicy.id}", accessPolicy.email)
+    }
+    loadedPolicy.map{
+      policy => AccessPolicyResponseEntry(accessPolicyName, AccessPolicyMembership(policy.members.map(_.email.value), policy.actions, policy.roles), policy.email)
+    }
+    }
+
+//  def createUserPetServiceAccount(user: WorkbenchUser): Future[WorkbenchUserServiceAccountEmail] = {
+//    val (petSaID, petSaDisplayName) = toPetSAFromUser(user)
+//
+//    directoryDAO.getPetServiceAccountForUser(user.id).flatMap {
+//      case Some(email) => Future.successful(email)
+//      case None =>
+//         First find or create the service account in Google, which generates a unique id and email
+//        val petSA = googleIamDAO.getOrCreateServiceAccount(petServiceAccountConfig.googleProject, petSaID, petSaDisplayName)
+//        petSA.flatMap { petServiceAccount =>
+//           Set up the service account with the necessary permissions
+//          setUpServiceAccount(user, petServiceAccount) andThen { case Failure(_) =>
+//             If anything fails with setup, clean up any created resources to ensure we don't end up with orphaned pets.
+//            removePetServiceAccount(user, petServiceAccount).failed.foreach { e =>
+//              logger.warn(s"Error occurred cleaning up pet service account [$petSaID] [$petSaDisplayName]", e)
+//            }
+//          }
+//        }
+//    }
+//  }
   private[google] def toPetSAFromUser(user: WorkbenchUser): (WorkbenchUserServiceAccountName, WorkbenchUserServiceAccountDisplayName) = {
     /*
      * Service account IDs must be:

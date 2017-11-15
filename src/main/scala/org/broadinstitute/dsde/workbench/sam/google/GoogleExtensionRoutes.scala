@@ -7,6 +7,7 @@ import akka.http.scaladsl.server.Directives._
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.model.WorkbenchUser
 import org.broadinstitute.dsde.workbench.sam.api.{ExtensionRoutes, UserInfoDirectives}
+import org.broadinstitute.dsde.workbench.sam.model._
 
 import scala.concurrent.ExecutionContext
 
@@ -37,6 +38,23 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives {
               complete {
                 googleExtensions.createUserPetServiceAccount(WorkbenchUser(userInfo.userId, userInfo.userEmail)).map { petSA =>
                   StatusCodes.OK -> petSA
+                }
+              }
+            }
+          }
+        } ~
+        pathPrefix("policy") {
+          pathPrefix(Segment) { resourceTypeName =>
+            pathPrefix(Segment) { resourceId =>
+              pathPrefix(Segment) { accessPolicyName =>
+                pathEndOrSingleSlash {
+                  post {
+                    complete {
+                      googleExtensions.onCreatePolicy(resourceTypeName, resourceId, AccessPolicyName(accessPolicyName)).map { policy =>
+                        StatusCodes.Created -> policy
+                      }
+                    }
+                  }
                 }
               }
             }
