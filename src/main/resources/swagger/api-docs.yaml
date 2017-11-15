@@ -38,7 +38,7 @@ paths:
 
   /api/admin/user/{userId}:
     get:
-      summary: gets the registration status of the specified user
+      summary: gets the registration status of the user, by user id
       parameters:
         - in: path
           description: User ID to check the status of
@@ -48,6 +48,29 @@ paths:
       operationId: adminGetUserStatus
       tags:
         - Admin
+      responses:
+        200:
+          description: status of specified user
+          schema:
+            $ref: '#/definitions/UserStatus'
+
+  /api/admin/user/email/{email}:
+    get:
+      summary: gets the registration status of the user, by email
+      parameters:
+        - in: path
+          description: Email address of user to check
+          name: email
+          required: true
+          type: string
+      operationId: adminGetUserByEmail
+      tags:
+        - Admin
+      responses:
+        200:
+          description: status of specified user
+          schema:
+            $ref: '#/definitions/UserStatus'
 
   /api/admin/user/{userId}/disable:
     put:
@@ -61,6 +84,11 @@ paths:
       operationId: disableUser
       tags:
         - Admin
+      responses:
+        200:
+          description: status of specified user
+          schema:
+            $ref: '#/definitions/UserStatus'
 
   /api/admin/user/{userId}/enable:
     put:
@@ -74,6 +102,11 @@ paths:
       operationId: enableUser
       tags:
         - Admin
+      responses:
+        200:
+          description: status of specified user
+          schema:
+            $ref: '#/definitions/UserStatus'
 
   /api/admin/user/{userId}/petServiceAccount:
     delete:
@@ -427,7 +460,7 @@ definitions:
           type: string
 
   Enabled:
-    description: ''
+    description: the status of the user's account
     required:
       - ldap
       - allUsersGroup
@@ -578,10 +611,10 @@ definitions:
         description: Map[String, SubsystemStatus]
 
   UserInfo:
-    description: ''
+    description: the user's details
     required:
-      - id
-      - email
+      - userSubjectId
+      - userEmail
     properties:
       userSubjectId:
         type: string
@@ -593,14 +626,13 @@ definitions:
   UserStatus:
     description: ''
     required:
-      - id
+      - userInfo
+      - enabled
     properties:
       userInfo:
         $ref: '#/definitions/UserInfo'
-        description: the user's details
       enabled:
         $ref: '#/definitions/Enabled'
-        description: the status of the user's account
 
   UserPetServiceAccount:
     description: ''

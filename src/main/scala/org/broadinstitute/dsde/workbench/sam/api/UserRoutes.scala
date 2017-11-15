@@ -45,6 +45,15 @@ trait UserRoutes extends UserInfoDirectives {
       requireUserInfo { userInfo =>
         asWorkbenchAdmin(userInfo) {
           pathPrefix("user") {
+            path("email" / Segment) { email =>
+              complete {
+                userService.getUserStatusFromEmail(email).map { statusOption =>
+                  statusOption.map { status =>
+                    StatusCodes.OK -> Option(status)
+                  }.getOrElse(StatusCodes.NotFound -> None)
+                }
+              }
+            } ~
             pathPrefix(Segment) { userId =>
               pathEnd {
                 delete {
