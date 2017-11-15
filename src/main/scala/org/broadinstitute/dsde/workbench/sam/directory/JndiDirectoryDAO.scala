@@ -162,6 +162,7 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
       case Some(email) =>
         withContext { ctx =>
           val myAttrs = new BasicAttributes(true)
+          myAttrs.put(new BasicAttribute("objectclass", "workbenchPerson"))
           myAttrs.put(new BasicAttribute(Attr.petServiceAccount, email.value))
 
           ctx.modifyAttributes(userDn(userId), DirContext.REMOVE_ATTRIBUTE, myAttrs)
