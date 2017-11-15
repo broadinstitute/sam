@@ -98,6 +98,22 @@ class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Google
     } yield deleteResult
   }
 
+  def deleteUserPetServiceAccount(userId: WorkbenchUserId): Future[Unit] = {
+    // Get the pet email from the user id
+    directoryDAO.getPetServiceAccountForUser(userId).flatMap {
+      case None => Future.successful(())
+      case Some(petEmail) =>
+        // Load the pet subject id from the email
+        directoryDAO.loadSubjectFromEmail(petEmail.value).flatMap {
+          case None => throw new WorkbenchException(s"subject ID for pet $petEmail could not be found")
+          case Some(petSubject: WorkbenchUserServiceAccountSubjectId) =>
+            // Delete the pet service account in LDAP and Google
+            removePetServiceAccount(userId, WorkbenchUserServiceAccount(petSubject, petEmail, WorkbenchUserServiceAccountDisplayName("")))
+          case _ => throw new WorkbenchException(s"Unexpected subject ID for pet $petEmail")
+        }
+    }
+  }
+
   def createUserPetServiceAccount(user: WorkbenchUser): Future[WorkbenchUserServiceAccountEmail] = {
     val (petSaID, petSaDisplayName) = toPetSAFromUser(user)
 
@@ -110,7 +126,7 @@ class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Google
           // Set up the service account with the necessary permissions
           setUpServiceAccount(user, petServiceAccount) andThen { case Failure(_) =>
             // If anything fails with setup, clean up any created resources to ensure we don't end up with orphaned pets.
-            removePetServiceAccount(user, petServiceAccount).failed.foreach { e =>
+            removePetServiceAccount(user.id, petServiceAccount).failed.foreach { e =>
               logger.warn(s"Error occurred cleaning up pet service account [$petSaID] [$petSaDisplayName]", e)
             }
         }
@@ -157,14 +173,14 @@ class UserService(val directoryDAO: DirectoryDAO, val googleDirectoryDAO: Google
     } yield petServiceAccount.email
   }
 
-  private def removePetServiceAccount(user: WorkbenchUser, petServiceAccount: WorkbenchUserServiceAccount): Future[Unit] = {
+  private def removePetServiceAccount(userId: WorkbenchUserId, petServiceAccount: WorkbenchUserServiceAccount): Future[Unit] = {
     for {
       // disable the pet service account
-      _ <- disablePetServiceAccount(user.id, petServiceAccount)
+      _ <- disablePetServiceAccount(userId, petServiceAccount)
       // remove the LDAP record for the pet service account
       _ <- directoryDAO.deletePetServiceAccount(petServiceAccount.subjectId)
       // remove the pet service account attribute on the user's LDAP record
-      _ <- directoryDAO.removePetServiceAccountFromUser(user.id)
+      _ <- directoryDAO.removePetServiceAccountFromUser(userId)
       // remove the service account itself in Google
       _ <- googleIamDAO.removeServiceAccount(petServiceAccountConfig.googleProject, petServiceAccount.email.toAccountName)
     } yield ()
