@@ -212,23 +212,6 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
     }
   }
 
-  def onCreatePolicy(resourceType: String, resourceName: String, accessPolicyName: AccessPolicyName): Future[AccessPolicyResponseEntry] = {
-    val resource = Resource(ResourceTypeName(resourceType), ResourceId(resourceName))
-    val resourceAndPolicyName = ResourceAndPolicyName(resource, accessPolicyName)
-    accessPolicyDAO.loadPolicy(resourceAndPolicyName).flatMap {
-      case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Policy $accessPolicyName not found on resource ${resource} not found"))
-      case Some(policy) => {
-        googleDirectoryDAO.createGroup(s"${policy.id}", policy.email)
-        val users = policy.members.collect { case userId: WorkbenchUserId => userId }
-        val groups = policy.members.collect { case groupName: WorkbenchGroupName => groupName }
-        for {
-          userEmails <- directoryDAO.loadUsers(users)
-          groupEmails <- directoryDAO.loadGroups(groups)
-        } yield AccessPolicyResponseEntry(policy.id.accessPolicyName, AccessPolicyMembership(userEmails.toSet[WorkbenchUser].map(_.email.value) ++ groupEmails.map(_.email.value), policy.actions, policy.roles), policy.email)
-      }
-    }
-  }
-
   private[google] def toPetSAFromUser(user: WorkbenchUser): (WorkbenchUserServiceAccountName, WorkbenchUserServiceAccountDisplayName) = {
     /*
      * Service account IDs must be:

@@ -5,7 +5,7 @@ import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directives._
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
-import org.broadinstitute.dsde.workbench.model.WorkbenchUser
+import org.broadinstitute.dsde.workbench.model.{WorkbenchGroupIdentity, WorkbenchUser}
 import org.broadinstitute.dsde.workbench.sam.api.{ExtensionRoutes, UserInfoDirectives}
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
@@ -44,19 +44,20 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives {
               }
             }
           }
-        } ~
-        pathPrefix("policy") {
-          pathPrefix(Segment) { resourceTypeName =>
-            pathPrefix(Segment) { resourceId =>
-              pathPrefix(Segment) { accessPolicyName =>
-                pathEndOrSingleSlash {
-                  post {
-                    complete {
-                      googleExtensions.onCreatePolicy(resourceTypeName, resourceId, AccessPolicyName(accessPolicyName)).map { policy =>
-                        StatusCodes.Created -> policy
-                      }
-                    }
-                  }
+        }
+      }
+    }
+    pathPrefix("policy") {
+      pathPrefix("sync") {
+        path(Segment / Segment / Segment) { (resourceTypeName, resourceId, accessPolicyName) =>
+          val resource = Resource(ResourceTypeName(resourceTypeName), ResourceId(resourceId))
+          val resourceAndPolicyName = ResourceAndPolicyName(resource, AccessPolicyName(accessPolicyName))
+          val groupId: WorkbenchGroupIdentity = resourceAndPolicyName
+          pathEndOrSingleSlash {
+            post {
+              complete {
+                googleExtensions.synchronizeGroupMembers(groupId).map { syncReport =>
+                  syncReport.groupEmail
                 }
               }
             }
@@ -64,6 +65,4 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives {
         }
       }
     }
-
-
 }

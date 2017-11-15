@@ -35,7 +35,7 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
 
       val roleMembers: Set[WorkbenchSubject] = Set(userInfo.userId)
 
-      val email = generateGoogleGroupEmail(AccessPolicyName(role.roleName.value), Resource(resourceType.name, resourceId))
+      val email = generateGroupEmail(AccessPolicyName(role.roleName.value), Resource(resourceType.name, resourceId))
 
       for {
         _ <- accessPolicyDAO.createPolicy(AccessPolicy(
@@ -105,7 +105,7 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
       directoryDAO.loadSubjectFromEmail
     }.map(_.flatten)
 
-    val email = generateGoogleGroupEmail(policyName, resource)
+    val email = generateGroupEmail(policyName, resource)
 
     val actionsByRole = resourceType.roles.map(r => r.roleName -> r.actions).toMap
     val impliedActionsFromRoles = policyMembership.roles.flatMap(actionsByRole)
@@ -144,7 +144,7 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     }
   }
 
-  def generateGoogleGroupEmail(policyName: AccessPolicyName, resource: Resource) = WorkbenchGroupEmail(s"policy-${UUID.randomUUID}@$googleDomain")
+  def generateGroupEmail(policyName: AccessPolicyName, resource: Resource) = WorkbenchGroupEmail(s"policy-${UUID.randomUUID}@$googleDomain")
   def toGoogleGroupName(groupName: WorkbenchGroupName) = WorkbenchGroupEmail(s"GROUP_${groupName.value}@$googleDomain")
 
   //todo: use this for google group sync
