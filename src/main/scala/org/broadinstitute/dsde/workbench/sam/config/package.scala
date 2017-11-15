@@ -56,7 +56,13 @@ package object config {
       config.getString("appsDomain"),
       config.getString("pathToPem"),
       config.getString("serviceAccountClientId"),
-      config.getString("subEmail")
+      config.getString("subEmail"),
+      config.getString("groupSync.pubSubProject"),
+      org.broadinstitute.dsde.workbench.util.toScalaDuration(config.getDuration("groupSync.pollInterval")),
+      org.broadinstitute.dsde.workbench.util.toScalaDuration(config.getDuration("groupSync.pollJitter")),
+      config.getString("groupSync.pubSubTopic"),
+      config.getString("groupSync.pubSubSubscription"),
+      config.getInt("groupSync.workerCount")
     )
   }
 

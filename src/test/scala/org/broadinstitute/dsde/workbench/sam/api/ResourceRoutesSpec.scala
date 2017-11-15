@@ -16,7 +16,7 @@ import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.config.PetServiceAccountConfig
 import org.broadinstitute.dsde.workbench.sam.directory.MockDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.openam.MockAccessPolicyDAO
-import org.broadinstitute.dsde.workbench.sam.service.{ResourceService, StatusService, UserService}
+import org.broadinstitute.dsde.workbench.sam.service.{NoExtensions, ResourceService, StatusService, UserService}
 
 /**
   * Created by dvoet on 6/7/17.
@@ -32,8 +32,8 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     val googleIamDAO = new MockGoogleIamDAO()
     val petServiceAccountConfig = PetServiceAccountConfig(GoogleProject("test-project"), Set(WorkbenchUserEmail("test@test.gserviceaccount.com")))
 
-    val mockResourceService = new ResourceService(resourceTypes, accessPolicyDAO, directoryDAO, "example.com")
-    val mockUserService = new UserService(directoryDAO, googleDirectoryDAO, googleIamDAO, "dev.test.firecloud.org", petServiceAccountConfig)
+    val mockResourceService = new ResourceService(resourceTypes, accessPolicyDAO, directoryDAO, NoExtensions, "example.com")
+    val mockUserService = new UserService(directoryDAO, NoExtensions, googleDirectoryDAO, "dev.test.firecloud.org")
     val mockStatusService = new StatusService(directoryDAO, googleDirectoryDAO)
 
     new TestSamRoutes(mockResourceService, mockUserService, mockStatusService, userInfo)

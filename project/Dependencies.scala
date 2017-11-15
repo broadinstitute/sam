@@ -7,9 +7,9 @@ object Dependencies {
   val scalaLoggingV = "3.5.0"
   val scalaTestV    = "3.0.1"
 
-  val workbenchUtilV   = "0.2-e161b68"
-  val workbenchModelV  = "0.6-e161b68"
-  val workbenchGoogleV = "0.9-af22896"
+  val workbenchUtilV   = "0.2-dab9d10-SNAP"
+  val workbenchModelV  = "0.6-dab9d10-SNAP"
+  val workbenchGoogleV = "0.9-dab9d10-SNAP"
 
   val excludeAkkaActor =        ExclusionRule(organization = "com.typesafe.akka", name = "akka-actor_2.12")
   val excludeWorkbenchUtil =    ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-util_2.12")
@@ -36,7 +36,8 @@ object Dependencies {
 
   val cats: ModuleID =              "org.typelevel"       %% "cats"                  % "0.9.0"
 
-  val scalaTest: ModuleID = "org.scalatest" %% "scalatest" % scalaTestV % "test"
+  val scalaTest: ModuleID =       "org.scalatest" %% "scalatest"    % scalaTestV % "test"
+  val mockito: ModuleID =         "org.mockito"    % "mockito-core" % "2.7.22"   % "test"
 
   // All of workbench-libs pull in Akka; exclude it since we provide our own Akka dependency.
   // workbench-google pulls in workbench-{util, model, metrics}; exclude them so we can control the library versions individually.
@@ -70,6 +71,7 @@ object Dependencies {
     cats,
 
     scalaTest,
+    mockito,
 
     workbenchUtil,
     workbenchModel,

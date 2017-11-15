@@ -4,7 +4,7 @@ import java.util.UUID
 
 import com.typesafe.config.ConfigFactory
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.scalatest.{BeforeAndAfterAll, FlatSpec, Matchers}
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FlatSpec, Matchers}
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.model.{WorkbenchGroup, WorkbenchGroupEmail, WorkbenchGroupName, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.TestSupport
@@ -17,18 +17,20 @@ import scala.concurrent.ExecutionContext.Implicits.global
 /**
   * Created by dvoet on 6/26/17.
   */
-class JndiAccessPolicyDAOSpec extends FlatSpec with Matchers with TestSupport with BeforeAndAfterAll {
+class JndiAccessPolicyDAOSpec extends FlatSpec with Matchers with TestSupport with BeforeAndAfter with BeforeAndAfterAll {
   val directoryConfig = ConfigFactory.load().as[DirectoryConfig]("directory")
   val dao = new JndiAccessPolicyDAO(directoryConfig)
   val dirDao = new JndiDirectoryDAO(directoryConfig)
   val schemaDao = new JndiSchemaDAO(directoryConfig)
 
   override protected def beforeAll(): Unit = {
+    super.beforeAll()
     runAndWait(schemaDao.init())
   }
 
-  override protected def afterAll(): Unit = {
+  before {
     runAndWait(schemaDao.clearDatabase())
+    runAndWait(schemaDao.createOrgUnits())
   }
 
   def toEmail(resourceType: String, resourceId: String, policyName: String) = {

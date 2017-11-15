@@ -9,11 +9,12 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.AccessPolicyDAO
 
 import scala.concurrent.{ExecutionContext, Future}
+import scala.util.Success
 
 /**
   * Created by mbemis on 5/22/17.
   */
-class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceType], val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: DirectoryDAO, val googleDomain: String)(implicit val executionContext: ExecutionContext) extends LazyLogging {
+class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceType], val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExtensions, val googleDomain: String)(implicit val executionContext: ExecutionContext) extends LazyLogging {
   def getResourceTypes(): Future[Map[ResourceTypeName, ResourceType]] = {
     Future.successful(resourceTypes)
   }
@@ -114,6 +115,12 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
       accessPolicyDAO.loadPolicy(resourceAndPolicyName).flatMap {
         case None => accessPolicyDAO.createPolicy(newPolicy)
         case Some(_) => accessPolicyDAO.overwritePolicy(newPolicy)
+      } andThen {
+        case Success(policy) => cloudExtensions.onGroupUpdate(Seq(policy.id)) recover {
+          case t: Throwable =>
+            logger.error(s"error calling cloudExtensions.onGroupUpdate for ${policy.id}", t)
+            throw t
+        }
       }
     }
   }

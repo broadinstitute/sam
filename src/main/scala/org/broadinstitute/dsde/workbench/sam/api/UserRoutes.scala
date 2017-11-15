@@ -93,20 +93,4 @@ trait UserRoutes extends UserInfoDirectives {
         }
       }
     }
-
-  def userPetServiceAccountRoutes: server.Route =
-    pathPrefix("user") {
-      requireUserInfo { userInfo =>
-        path("petServiceAccount") {
-          get {
-            complete {
-              userService.createUserPetServiceAccount(WorkbenchUser(userInfo.userId, userInfo.userEmail)).map { petSA =>
-                StatusCodes.OK -> petSA
-              }
-            }
-          }
-        }
-      }
-    }
-
 }

@@ -1,5 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.directory
 
+import java.text.SimpleDateFormat
+import java.util.Date
 import javax.naming._
 import javax.naming.directory._
 
@@ -18,7 +20,6 @@ import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO.Attr
  * Created by dvoet on 11/5/15.
  */
 class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit executionContext: ExecutionContext) extends DirectoryDAO with DirectorySubjectNameSupport with JndiSupport {
-
   override def createGroup(group: BasicWorkbenchGroup): Future[BasicWorkbenchGroup] = withContext { ctx =>
     try {
       val groupContext = new BaseDirContext {
@@ -36,6 +37,8 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
             group.members.foreach(subject => members.add(subjectDn(subject)))
             myAttrs.put(members)
           }
+
+          myAttrs.put(new BasicAttribute(Attr.groupUpdatedTimestamp, formattedDate(new Date())))
 
           myAttrs
         }
@@ -56,10 +59,25 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
 
   override def removeGroupMember(groupId: WorkbenchGroupIdentity, removeMember: WorkbenchSubject): Future[Unit] = withContext { ctx =>
     ctx.modifyAttributes(groupDn(groupId), DirContext.REMOVE_ATTRIBUTE, new BasicAttributes(Attr.uniqueMember, subjectDn(removeMember)))
+    updateUpdatedDate(groupId, ctx)
   }
 
   override def addGroupMember(groupId: WorkbenchGroupIdentity, addMember: WorkbenchSubject): Future[Unit] = withContext { ctx =>
     ctx.modifyAttributes(groupDn(groupId), DirContext.ADD_ATTRIBUTE, new BasicAttributes(Attr.uniqueMember, subjectDn(addMember)))
+    updateUpdatedDate(groupId, ctx)
+  }
+
+  private def updateUpdatedDate(groupId: WorkbenchGroupIdentity, ctx: InitialDirContext) = {
+    ctx.modifyAttributes(groupDn(groupId), DirContext.REPLACE_ATTRIBUTE, new BasicAttributes(Attr.groupUpdatedTimestamp, formattedDate(new Date())))
+  }
+
+  override def updateSynchronizedDate(groupId: WorkbenchGroupIdentity): Future[Unit] = withContext { ctx =>
+    ctx.modifyAttributes(groupDn(groupId), DirContext.REPLACE_ATTRIBUTE, new BasicAttributes(Attr.groupSynchronizedTimestamp, formattedDate(new Date()), true))
+  }
+
+  override def getSynchronizedDate(groupId: WorkbenchGroupIdentity): Future[Option[Date]] = withContext { ctx =>
+    val attributes = ctx.getAttributes(groupDn(groupId), Array(Attr.groupSynchronizedTimestamp))
+    getAttribute[String](attributes, Attr.groupSynchronizedTimestamp).map(parseDate)
   }
 
   override def loadGroup(groupName: WorkbenchGroupName): Future[Option[BasicWorkbenchGroup]] = withContext { ctx =>
@@ -210,6 +228,13 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
       case Seq() => None
       case Seq(subject) => Option(subject)
       case _ => throw new WorkbenchException(s"Database error: email $email refers to too many subjects: $subjects")
+    }
+  }
+
+  override def loadSubjectEmail(subject: WorkbenchSubject): Future[Option[WorkbenchEmail]] = withContext { ctx =>
+    val subDn = subjectDn(subject)
+    Option(ctx.getAttributes(subDn).get(Attr.email)).map { emailAttr =>
+      subject.emailOf(emailAttr.get.asInstanceOf[String])
     }
   }
 

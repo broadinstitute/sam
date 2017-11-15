@@ -1,15 +1,16 @@
 package org.broadinstitute.dsde.workbench.sam
 
 import akka.actor.ActorSystem
-import akka.http.scaladsl.Http
+import akka.http.scaladsl.{Http, server}
 import akka.stream.ActorMaterializer
 import com.typesafe.config.ConfigFactory
 import com.typesafe.scalalogging.LazyLogging
 import net.ceedubs.ficus.Ficus._
-import org.broadinstitute.dsde.workbench.google.{HttpGoogleDirectoryDAO, HttpGoogleIamDAO}
+import org.broadinstitute.dsde.workbench.google.{HttpGoogleDirectoryDAO, HttpGoogleIamDAO, HttpGooglePubSubDAO}
 import org.broadinstitute.dsde.workbench.sam.api.{SamRoutes, StandardUserInfoDirectives}
 import org.broadinstitute.dsde.workbench.sam.config._
 import org.broadinstitute.dsde.workbench.sam.directory._
+import org.broadinstitute.dsde.workbench.sam.google.{GoogleExtensionRoutes, GoogleExtensions}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam._
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
@@ -25,7 +26,7 @@ object Boot extends App with LazyLogging {
     val config = ConfigFactory.load()
 
     val directoryConfig = config.as[DirectoryConfig]("directory")
-    val googleDirectoryConfig = config.as[GoogleServicesConfig]("googleServices")
+    val googleServicesConfig = config.as[GoogleServicesConfig]("googleServices")
     val petServiceAccountConfig = config.as[PetServiceAccountConfig]("petServiceAccount")
 
     // we need an ActorSystem to host our application in
@@ -36,15 +37,22 @@ object Boot extends App with LazyLogging {
     val accessPolicyDAO = new JndiAccessPolicyDAO(directoryConfig)
     val directoryDAO = new JndiDirectoryDAO(directoryConfig)
     val schemaDAO = new JndiSchemaDAO(directoryConfig)
-    val googleDirectoryDAO = new HttpGoogleDirectoryDAO(googleDirectoryConfig.serviceAccountClientId, googleDirectoryConfig.pemFile, googleDirectoryConfig.subEmail, googleDirectoryConfig.appsDomain, googleDirectoryConfig.appName, "google")
-    val googleIamDAO = new HttpGoogleIamDAO(googleDirectoryConfig.serviceAccountClientId, googleDirectoryConfig.pemFile, googleDirectoryConfig.appName, "google")
+    val googleDirectoryDAO = new HttpGoogleDirectoryDAO(googleServicesConfig.serviceAccountClientId, googleServicesConfig.pemFile, googleServicesConfig.subEmail, googleServicesConfig.appsDomain, googleServicesConfig.appName, "google")
+    val googleIamDAO = new HttpGoogleIamDAO(googleServicesConfig.serviceAccountClientId, googleServicesConfig.pemFile, googleServicesConfig.appName, "google")
+    val googlePubSubDAO = new HttpGooglePubSubDAO(googleServicesConfig.serviceAccountClientId, googleServicesConfig.pemFile, googleServicesConfig.appName, googleServicesConfig.groupSyncPubSubProject, "google")
+
+    val googleExt = new GoogleExtensions(directoryDAO, accessPolicyDAO, googleDirectoryDAO, googlePubSubDAO, googleIamDAO, googleServicesConfig, petServiceAccountConfig)
 
     val configResourceTypes = config.as[Set[ResourceType]]("resourceTypes")
-    val resourceService = new ResourceService(configResourceTypes.map(rt => rt.name -> rt).toMap, accessPolicyDAO, directoryDAO, config.getString("googleServices.appsDomain"))
-    val userService = new UserService(directoryDAO, googleDirectoryDAO, googleIamDAO, googleDirectoryConfig.appsDomain, petServiceAccountConfig)
+    val resourceService = new ResourceService(configResourceTypes.map(rt => rt.name -> rt).toMap, accessPolicyDAO, directoryDAO, googleExt, config.getString("googleServices.appsDomain"))
+    val userService = new UserService(directoryDAO, googleExt, googleDirectoryDAO, googleServicesConfig.appsDomain)
     val statusService = new StatusService(directoryDAO, googleDirectoryDAO, 10 seconds)
 
-    val samRoutes = new SamRoutes(resourceService, userService, statusService, config.as[SwaggerConfig]("swagger")) with StandardUserInfoDirectives
+    val samRoutes = new SamRoutes(resourceService, userService, statusService, config.as[SwaggerConfig]("swagger")) with StandardUserInfoDirectives with GoogleExtensionRoutes {
+      val googleExtensions = googleExt
+    }
+
+    googleExt.onBoot()
 
     for {
       _ <- schemaDAO.init() recover {

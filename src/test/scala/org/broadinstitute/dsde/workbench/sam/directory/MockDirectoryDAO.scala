@@ -1,5 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.directory
 
+import java.util.Date
+
 import akka.http.scaladsl.model.StatusCodes
 import org.broadinstitute.dsde.workbench.model._
 
@@ -175,4 +177,16 @@ class MockDirectoryDAO extends DirectoryDAO {
     petServiceAccountsByUser -= userId
     Future.successful(())
   }
+
+  override def updateSynchronizedDate(groupId: WorkbenchGroupIdentity): Future[Unit] = { Future.successful(()) }
+
+  override def loadSubjectEmail(subject: WorkbenchSubject): Future[Option[WorkbenchEmail]] = Future {
+    subject match {
+      case id: WorkbenchUserId => users.get(id).map(_.email)
+      case id: WorkbenchGroupIdentity => groups.get(id).map(_.email)
+      case id: WorkbenchUserServiceAccountSubjectId => petServiceAccounts.get(id).map(_.email)
+    }
+  }
+
+  override def getSynchronizedDate(groupId: WorkbenchGroupIdentity): Future[Option[Date]] = { Future.successful(None) }
 }
