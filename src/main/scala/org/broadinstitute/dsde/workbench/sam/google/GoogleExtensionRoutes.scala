@@ -7,9 +7,7 @@ import akka.http.scaladsl.server.Directives._
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.model.{WorkbenchGroupIdentity, WorkbenchUser}
 import org.broadinstitute.dsde.workbench.sam.api.{ExtensionRoutes, UserInfoDirectives}
-import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
-import spray.json.DefaultJsonProtocol._
 
 import scala.concurrent.ExecutionContext
 
@@ -57,7 +55,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives {
             post {
               complete {
                 googleExtensions.synchronizeGroupMembers(groupId).map { syncReport =>
-                  syncReport.groupEmail
+                  StatusCodes.Created -> syncReport.groupEmail
                 }
               }
             }
