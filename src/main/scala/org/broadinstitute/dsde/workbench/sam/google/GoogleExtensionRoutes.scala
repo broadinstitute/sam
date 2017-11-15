@@ -7,7 +7,9 @@ import akka.http.scaladsl.server.Directives._
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.model.WorkbenchUser
 import org.broadinstitute.dsde.workbench.sam.api.{ExtensionRoutes, UserInfoDirectives}
+import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
+import spray.json.DefaultJsonProtocol._
 
 import scala.concurrent.ExecutionContext
 
