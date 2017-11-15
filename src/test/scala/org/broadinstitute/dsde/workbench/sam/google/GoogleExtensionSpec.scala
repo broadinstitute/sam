@@ -11,6 +11,7 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.AccessPolicyDAO
 import org.broadinstitute.dsde.workbench.sam.service.{NoExtensions, UserService}
 import org.mockito.Mockito._
+import org.mockito.ArgumentMatchers._
 import org.scalatest.mockito.MockitoSugar
 import org.scalatest.{FlatSpec, Matchers}
 import org.scalatest.concurrent.ScalaFutures
@@ -59,11 +60,10 @@ class GoogleExtensionSpec extends FlatSpec with Matchers with TestSupport with M
       target match {
         case g: BasicWorkbenchGroup =>
           when(mockDirectoryDAO.loadGroup(g.id)).thenReturn(Future.successful(Option(testGroup)))
-          when(mockDirectoryDAO.updateSynchronizedDate(g.id)).thenReturn(Future.successful(()))
         case p: AccessPolicy =>
           when(mockAccessPolicyDAO.loadPolicy(p.id)).thenReturn(Future.successful(Option(testPolicy)))
-          when(mockDirectoryDAO.updateSynchronizedDate(p.id)).thenReturn(Future.successful(()))
       }
+      when(mockDirectoryDAO.updateSynchronizedDate(any[WorkbenchGroupIdentity])).thenReturn(Future.successful(()))
 
       val subGroups = Seq(inSamSubGroup, inGoogleSubGroup, inBothSubGroup)
       subGroups.foreach { g => when(mockDirectoryDAO.loadSubjectEmail(g.id)).thenReturn(Future.successful(Option(g.email))) }
@@ -72,8 +72,8 @@ class GoogleExtensionSpec extends FlatSpec with Matchers with TestSupport with M
       val removed = Seq(inGoogleSubGroup.email.value, ge.toProxyFromUser(inGoogleUserId.value))
 
       when(mockGoogleDirectoryDAO.listGroupMembers(target.email)).thenReturn(Future.successful(Option(Seq(ge.toProxyFromUser(inGoogleUserId.value), ge.toProxyFromUser(inBothUserId.value), inGoogleSubGroup.email.value, inBothSubGroup.email.value, removeError))))
-      added.foreach { email => when(mockGoogleDirectoryDAO.addMemberToGroup(target.email, WorkbenchUserEmail(email))).thenReturn(Future.successful(())) }
-      removed.foreach { email => when(mockGoogleDirectoryDAO.removeMemberFromGroup(target.email, WorkbenchUserEmail(email))).thenReturn(Future.successful(())) }
+      when(mockGoogleDirectoryDAO.addMemberToGroup(any[WorkbenchGroupEmail], any[WorkbenchEmail])).thenReturn(Future.successful(()))
+      when(mockGoogleDirectoryDAO.removeMemberFromGroup(any[WorkbenchGroupEmail], any[WorkbenchEmail])).thenReturn(Future.successful(()))
 
       val addException = new Exception("addError")
       when(mockGoogleDirectoryDAO.addMemberToGroup(target.email, WorkbenchUserEmail(ge.toProxyFromUser(addError.value)))).thenReturn(Future.failed(addException))
@@ -101,53 +101,52 @@ class GoogleExtensionSpec extends FlatSpec with Matchers with TestSupport with M
     implicit val patienceConfig = PatienceConfig(1 second)
     val dirDAO = new JndiDirectoryDAO(directoryConfig)
     val schemaDao = new JndiSchemaDAO(directoryConfig)
+
+    runAndWait(schemaDao.clearDatabase())
     runAndWait(schemaDao.init())
-    try {
-      val mockGoogleIamDAO = new MockGoogleIamDAO
-      val mockGoogleDirectoryDAO = new MockGoogleDirectoryDAO
 
-      val googleExtensions = new GoogleExtensions(dirDAO, null, mockGoogleDirectoryDAO, null, mockGoogleIamDAO, googleServicesConfig, petServiceAccountConfig)
-      val service = new UserService(dirDAO, googleExtensions, mockGoogleDirectoryDAO, googleServicesConfig.appsDomain)
+    val mockGoogleIamDAO = new MockGoogleIamDAO
+    val mockGoogleDirectoryDAO = new MockGoogleDirectoryDAO
 
-      val defaultUserId = WorkbenchUserId("newuser")
-      val defaultUserEmail = WorkbenchUserEmail("newuser@new.com")
-      val defaultUser = WorkbenchUser(defaultUserId, defaultUserEmail)
+    val googleExtensions = new GoogleExtensions(dirDAO, null, mockGoogleDirectoryDAO, null, mockGoogleIamDAO, googleServicesConfig, petServiceAccountConfig)
+    val service = new UserService(dirDAO, googleExtensions, mockGoogleDirectoryDAO, googleServicesConfig.appsDomain)
 
-      // create a user
-      val newUser = service.createUser(defaultUser).futureValue
-      newUser shouldBe UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
+    val defaultUserId = WorkbenchUserId("newuser")
+    val defaultUserEmail = WorkbenchUserEmail("newuser@new.com")
+    val defaultUser = WorkbenchUser(defaultUserId, defaultUserEmail)
 
-      // create a pet service account
-      val emailResponse = googleExtensions.createUserPetServiceAccount(defaultUser).futureValue
+    // create a user
+    val newUser = service.createUser(defaultUser).futureValue
+    newUser shouldBe UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
 
-      emailResponse.value should endWith(s"@${petServiceAccountConfig.googleProject}.iam.gserviceaccount.com")
+    // create a pet service account
+    val emailResponse = googleExtensions.createUserPetServiceAccount(defaultUser).futureValue
 
-      // verify ldap
-      dirDAO.getPetServiceAccountForUser(defaultUserId).futureValue shouldBe Some(emailResponse)
+    emailResponse.value should endWith(s"@${petServiceAccountConfig.googleProject}.iam.gserviceaccount.com")
 
-      val ldapPetOpt = dirDAO.loadSubjectFromEmail(emailResponse.value).flatMap {
-        case Some(subject: WorkbenchUserServiceAccountSubjectId) => dirDAO.loadPetServiceAccount(subject)
-        case _ => fail(s"could not load pet LDAP entry from $emailResponse")
-      }.futureValue
+    // verify ldap
+    dirDAO.getPetServiceAccountForUser(defaultUserId).futureValue shouldBe Some(emailResponse)
 
-      ldapPetOpt shouldBe 'defined
-      val Some(ldapPet) = ldapPetOpt
-      ldapPet.email shouldBe WorkbenchUserServiceAccountEmail(emailResponse.value)
-      ldapPet.displayName shouldBe WorkbenchUserServiceAccountDisplayName("")
-      // MockGoogleIamDAO generates the subject ID as a random Long
-      Try(ldapPet.subjectId.value.toLong) shouldBe a[Success[_]]
+    val ldapPetOpt = dirDAO.loadSubjectFromEmail(emailResponse.value).flatMap {
+      case Some(subject: WorkbenchUserServiceAccountSubjectId) => dirDAO.loadPetServiceAccount(subject)
+      case _ => fail(s"could not load pet LDAP entry from $emailResponse")
+    }.futureValue
 
-      // verify google
-      val groupEmail = WorkbenchGroupEmail(googleExtensions.toProxyFromUser(defaultUserId.value))
-      mockGoogleIamDAO.serviceAccounts should contain key (emailResponse)
-      mockGoogleDirectoryDAO.groups should contain key (groupEmail)
-      mockGoogleDirectoryDAO.groups(groupEmail) shouldBe Set(defaultUserEmail, emailResponse)
+    ldapPetOpt shouldBe 'defined
+    val Some(ldapPet) = ldapPetOpt
+    ldapPet.email shouldBe WorkbenchUserServiceAccountEmail(emailResponse.value)
+    ldapPet.displayName shouldBe WorkbenchUserServiceAccountDisplayName("")
+    // MockGoogleIamDAO generates the subject ID as a random Long
+    Try(ldapPet.subjectId.value.toLong) shouldBe a[Success[_]]
 
-      // create one again, it should work
-      val petSaResponse2 = googleExtensions.createUserPetServiceAccount(defaultUser).futureValue
-      petSaResponse2 shouldBe emailResponse
-    } finally {
-      runAndWait(schemaDao.clearDatabase())
-    }
+    // verify google
+    val groupEmail = WorkbenchGroupEmail(googleExtensions.toProxyFromUser(defaultUserId.value))
+    mockGoogleIamDAO.serviceAccounts should contain key (emailResponse)
+    mockGoogleDirectoryDAO.groups should contain key (groupEmail)
+    mockGoogleDirectoryDAO.groups(groupEmail) shouldBe Set(defaultUserEmail, emailResponse)
+
+    // create one again, it should work
+    val petSaResponse2 = googleExtensions.createUserPetServiceAccount(defaultUser).futureValue
+    petSaResponse2 shouldBe emailResponse
   }
 }

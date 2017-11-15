@@ -68,6 +68,7 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives {
                     get {
                       complete(resourceService.hasPermission(Resource(resourceType.name, ResourceId(resourceId)), ResourceAction(action), userInfo).map { hasPermission =>
                         StatusCodes.OK -> JsBoolean(hasPermission)
+                        StatusCodes.OK -> JsBoolean(hasPermission)
                       })
                     }
                   }

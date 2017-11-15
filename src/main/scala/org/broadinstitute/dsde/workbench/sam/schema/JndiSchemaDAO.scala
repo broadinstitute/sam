@@ -1,6 +1,6 @@
 package org.broadinstitute.dsde.workbench.sam.schema
 
-import javax.naming.NameAlreadyBoundException
+import javax.naming.{NameAlreadyBoundException, NameNotFoundException}
 import javax.naming.directory._
 
 import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
@@ -51,12 +51,18 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit exe
   def createSchema(): Future[Unit] = {
     for {
       _ <- createWorkbenchGroupSchema()
+      _ <- createOrgUnits()
+      _ <- createPolicySchema()
+      _ <- createWorkbenchPersonSchema()
+    } yield ()
+  }
+
+  def createOrgUnits(): Future[Unit] = {
+    for {
       _ <- createOrgUnit(peopleOu)
       _ <- createOrgUnit(groupsOu)
       _ <- createOrgUnit(resourcesOu)
       _ <- createOrgUnit(petsOu)
-      _ <- createPolicySchema()
-      _ <- createWorkbenchPersonSchema()
     } yield ()
   }
 
@@ -265,11 +271,13 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit exe
     clear(ctx, peopleOu)
   }
 
-  private def clear(ctx: DirContext, dn: String): Unit = {
+  private def clear(ctx: DirContext, dn: String): Unit = Try {
     ctx.list(dn).asScala.foreach { nameClassPair =>
       val fullName = if (nameClassPair.isRelative) s"${nameClassPair.getName},$dn" else nameClassPair.getName
       clear(ctx, fullName)
     }
     ctx.unbind(dn)
+  } recover {
+    case _: NameNotFoundException =>
   }
 }

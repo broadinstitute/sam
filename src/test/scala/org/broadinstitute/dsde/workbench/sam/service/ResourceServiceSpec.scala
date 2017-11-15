@@ -6,7 +6,7 @@ import akka.http.scaladsl.model.StatusCodes
 import com.typesafe.config.ConfigFactory
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.directory.JndiDirectoryDAO
-import org.scalatest.{BeforeAndAfterAll, FlatSpec, Matchers}
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FlatSpec, Matchers}
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
@@ -20,7 +20,7 @@ import scala.util.Try
 /**
   * Created by dvoet on 6/27/17.
   */
-class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with BeforeAndAfterAll {
+class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with BeforeAndAfter with BeforeAndAfterAll {
   val directoryConfig = ConfigFactory.load().as[DirectoryConfig]("directory")
   val dirDAO = new JndiDirectoryDAO(directoryConfig)
   val policyDAO = new JndiAccessPolicyDAO(directoryConfig)
@@ -33,11 +33,13 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
   val service = new ResourceService(Map(defaultResourceType.name -> defaultResourceType, otherResourceType.name -> otherResourceType), policyDAO, dirDAO, NoExtensions, "example.com")
 
   override protected def beforeAll(): Unit = {
+    super.beforeAll()
     runAndWait(schemaDao.init())
   }
 
-  override protected def afterAll(): Unit = {
+  before {
     runAndWait(schemaDao.clearDatabase())
+    runAndWait(schemaDao.createOrgUnits())
   }
 
   private val dummyUserInfo = UserInfo("token", WorkbenchUserId("userid"), WorkbenchUserEmail("user@company.com"), 0)

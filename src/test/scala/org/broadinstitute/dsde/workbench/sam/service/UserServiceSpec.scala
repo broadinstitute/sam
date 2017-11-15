@@ -17,7 +17,6 @@ import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FlatSpec, Matchers}
 
 import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext.Implicits.global
-import scala.util.{Success, Try}
 
 /**
   * Created by rtitle on 10/6/17.
@@ -39,14 +38,14 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Befor
   var service: UserService = _
 
   override protected def beforeAll(): Unit = {
+    super.beforeAll()
     runAndWait(schemaDao.init())
   }
 
-  override protected def afterAll(): Unit = {
-    runAndWait(schemaDao.clearDatabase())
-  }
-
   before {
+    runAndWait(schemaDao.clearDatabase())
+    runAndWait(schemaDao.createOrgUnits())
+
     service = new UserService(dirDAO, NoExtensions, new MockGoogleDirectoryDAO(), "dev.test.firecloud.org")
   }
 
