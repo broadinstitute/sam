@@ -120,7 +120,7 @@ class GoogleExtensionSpec extends FlatSpec with Matchers with TestSupport with M
       // create a pet service account
       val emailResponse = googleExtensions.createUserPetServiceAccount(defaultUser).futureValue
 
-      emailResponse.value should endWith("@my-pet-project.iam.gserviceaccount.com")
+      emailResponse.value should endWith(s"@${petServiceAccountConfig.googleProject}.iam.gserviceaccount.com")
 
       // verify ldap
       dirDAO.getPetServiceAccountForUser(defaultUserId).futureValue shouldBe Some(emailResponse)

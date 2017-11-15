@@ -234,12 +234,7 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
   override def loadSubjectEmail(subject: WorkbenchSubject): Future[Option[WorkbenchEmail]] = withContext { ctx =>
     val subDn = subjectDn(subject)
     Option(ctx.getAttributes(subDn).get(Attr.email)).map { emailAttr =>
-      val emailString = emailAttr.get.asInstanceOf[String]
-      subject match {
-        case _: WorkbenchUserId => WorkbenchUserEmail(emailString)
-        case _: WorkbenchGroupIdentity => WorkbenchGroupEmail(emailString)
-        case _: WorkbenchUserServiceAccountSubjectId => WorkbenchUserServiceAccountEmail(emailString)
-      }
+      subject.emailOf(emailAttr.get.asInstanceOf[String])
     }
   }
 
