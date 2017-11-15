@@ -215,12 +215,12 @@ class UserRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest {
 
     // delete the pet service account
     Delete(s"/api/admin/user/$defaultUserId/petServiceAccount") ~> adminRoutes.route ~> check {
-      status shouldEqual StatusCodes.OK
+      status shouldEqual StatusCodes.NoContent
     }
 
     // same result again
     Delete(s"/api/admin/user/$defaultUserId/petServiceAccount") ~> adminRoutes.route ~> check {
-      status shouldEqual StatusCodes.OK
+      status shouldEqual StatusCodes.NoContent
     }
 
     // the user should still exist
@@ -238,7 +238,7 @@ class UserRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest {
 
     // delete the pet service account again
     Delete(s"/api/admin/user/$defaultUserId/petServiceAccount") ~> adminRoutes.route ~> check {
-      status shouldEqual StatusCodes.OK
+      status shouldEqual StatusCodes.NoContent
     }
 
     // the user should still exist

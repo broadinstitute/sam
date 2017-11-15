@@ -92,7 +92,7 @@ trait UserRoutes extends UserInfoDirectives {
                   pathEndOrSingleSlash {
                     delete {
                       complete {
-                        userService.deleteUserPetServiceAccount(WorkbenchUserId(userId)).map(_ => StatusCodes.OK)
+                        userService.deleteUserPetServiceAccount(WorkbenchUserId(userId)).map(_ => StatusCodes.NoContent)
                       }
                     }
                   }

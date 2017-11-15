@@ -78,6 +78,15 @@ paths:
   /api/admin/user/{userId}/petServiceAccount:
     delete:
       summary: deletes a user's pet service account
+      responses:
+        204:
+          description: Successfully deleted pet service account
+        403:
+          description: You do not have admin privileges
+        500:
+          description: Internal Error
+          schema:
+            $ref: '#/definitions/ErrorReport'
       parameters:
         - in: path
           description: User ID whose pet to delete
