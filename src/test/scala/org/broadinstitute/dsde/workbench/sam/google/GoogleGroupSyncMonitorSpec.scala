@@ -37,11 +37,11 @@ class GoogleGroupSyncMonitorSpec(_system: ActorSystem) extends TestKit(_system) 
 
     val groupToSyncEmail = WorkbenchGroupEmail("testgroup@example.com")
     val groupToSyncId = WorkbenchGroupName("testgroup")
-    when(mockGoogleExtensions.synchronizeGroupMembers(groupToSyncId)).thenReturn(Future.successful(SyncReport(groupToSyncEmail, Seq.empty)))
+    when(mockGoogleExtensions.synchronizeGroupMembers(groupToSyncId)).thenReturn(Future.successful(Map(groupToSyncEmail -> Seq.empty[SyncReportItem])))
 
     val policyToSyncEmail = WorkbenchGroupEmail("testpolicy@example.com")
     val policyToSyncId = ResourceAndPolicyName(Resource(ResourceTypeName("rt"), ResourceId("rid")), AccessPolicyName("pname"))
-    when(mockGoogleExtensions.synchronizeGroupMembers(policyToSyncId)).thenReturn(Future.successful(SyncReport(policyToSyncEmail, Seq.empty)))
+    when(mockGoogleExtensions.synchronizeGroupMembers(policyToSyncId)).thenReturn(Future.successful(Map(policyToSyncEmail -> Seq.empty[SyncReportItem])))
 
     val topicName = "testtopic"
     val subscriptionName = "testsub"
