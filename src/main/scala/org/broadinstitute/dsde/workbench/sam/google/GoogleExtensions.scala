@@ -9,7 +9,7 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.config.{GoogleServicesConfig, PetServiceAccountConfig}
 import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
-import org.broadinstitute.dsde.workbench.sam.model.ResourceAndPolicyName
+import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.AccessPolicyDAO
 import org.broadinstitute.dsde.workbench.sam.service.CloudExtensions
 import org.broadinstitute.dsde.workbench.util.FutureSupport
