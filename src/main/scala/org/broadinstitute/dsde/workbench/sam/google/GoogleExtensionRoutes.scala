@@ -42,25 +42,25 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives {
               }
             }
           }
-        }
-      }
-    } ~
-    pathPrefix("policy") {
-      pathPrefix("sync") {
-        path(Segment / Segment / Segment) { (resourceTypeName, resourceId, accessPolicyName) =>
-          val resource = Resource(ResourceTypeName(resourceTypeName), ResourceId(resourceId))
-          val resourceAndPolicyName = ResourceAndPolicyName(resource, AccessPolicyName(accessPolicyName))
-          val groupId: WorkbenchGroupIdentity = resourceAndPolicyName
-          pathEndOrSingleSlash {
-            post {
-              complete {
-                googleExtensions.synchronizeGroupMembers(groupId).map { syncReport =>
-                  StatusCodes.Created -> syncReport.groupEmail
+        } ~
+          pathPrefix("policy") {
+            pathPrefix("sync") {
+              path(Segment / Segment / Segment) { (resourceTypeName, resourceId, accessPolicyName) =>
+                val resource = Resource(ResourceTypeName(resourceTypeName), ResourceId(resourceId))
+                val resourceAndPolicyName = ResourceAndPolicyName(resource, AccessPolicyName(accessPolicyName))
+                val groupId: WorkbenchGroupIdentity = resourceAndPolicyName
+                pathEndOrSingleSlash {
+                  post {
+                    complete {
+                      googleExtensions.synchronizeGroupMembers(groupId).map { syncReport =>
+                        StatusCodes.Created -> syncReport.groupEmail
+                      }
+                    }
+                  }
                 }
               }
             }
           }
-        }
       }
     }
 }
