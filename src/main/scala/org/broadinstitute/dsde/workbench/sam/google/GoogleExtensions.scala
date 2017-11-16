@@ -9,7 +9,7 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.config.{GoogleServicesConfig, PetServiceAccountConfig}
 import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
-import org.broadinstitute.dsde.workbench.sam.model.ResourceAndPolicyName
+import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.AccessPolicyDAO
 import org.broadinstitute.dsde.workbench.sam.service.CloudExtensions
 import org.broadinstitute.dsde.workbench.util.FutureSupport
@@ -209,6 +209,23 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
       _ <- directoryDAO.updateSynchronizedDate(groupId)
     } yield {
       SyncReport(group.email, Seq(addTrials, removeTrials).flatten)
+    }
+  }
+
+  def onCreatePolicy(resourceType: String, resourceName: String, accessPolicyName: AccessPolicyName): Future[AccessPolicyResponseEntry] = {
+    val resource = Resource(ResourceTypeName(resourceType), ResourceId(resourceName))
+    val resourceAndPolicyName = ResourceAndPolicyName(resource, accessPolicyName)
+    accessPolicyDAO.loadPolicy(resourceAndPolicyName).flatMap {
+      case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Policy $accessPolicyName not found on resource ${resource} not found"))
+      case Some(policy) => {
+        googleDirectoryDAO.createGroup(s"${policy.id}", policy.email)
+        val users = policy.members.collect { case userId: WorkbenchUserId => userId }
+        val groups = policy.members.collect { case groupName: WorkbenchGroupName => groupName }
+        for {
+          userEmails <- directoryDAO.loadUsers(users)
+          groupEmails <- directoryDAO.loadGroups(groups)
+        } yield AccessPolicyResponseEntry(policy.id.accessPolicyName, AccessPolicyMembership(userEmails.toSet[WorkbenchUser].map(_.email.value) ++ groupEmails.map(_.email.value), policy.actions, policy.roles), policy.email)
+      }
     }
   }
 
