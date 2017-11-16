@@ -91,6 +91,7 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
 
     Post(s"/api/google/policy/sync/${resourceType.name}/foo/owner") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
+      responseAs[String] contains("user1@example.com")
     }
   }
 }
