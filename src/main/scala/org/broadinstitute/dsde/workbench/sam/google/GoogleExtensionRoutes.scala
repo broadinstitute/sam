@@ -43,7 +43,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives {
             }
           }
         } ~
-          pathPrefix("policy") {
+          pathPrefix("resource") {
             path(Segment / Segment / Segment / "sync") { (resourceTypeName, resourceId, accessPolicyName) =>
               val resource = Resource(ResourceTypeName(resourceTypeName), ResourceId(resourceId))
               val resourceAndPolicyName = ResourceAndPolicyName(resource, AccessPolicyName(accessPolicyName))
