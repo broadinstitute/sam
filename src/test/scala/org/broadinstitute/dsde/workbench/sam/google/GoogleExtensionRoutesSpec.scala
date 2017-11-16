@@ -89,9 +89,18 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
       status shouldEqual StatusCodes.NoContent
     }
 
-    Post(s"/api/google/policy/sync/${resourceType.name}/foo/owner") ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.Created
-      responseAs[String] contains("user1@example.com")
+    import spray.json.DefaultJsonProtocol._
+    val createdPolicy = Get(s"/api/resource/${resourceType.name}/foo/policies") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[Seq[AccessPolicyResponseEntry]].find(_.policyName == AccessPolicyName(resourceType.ownerRoleName.value)).getOrElse(fail("created policy not returned by get request"))
+    }
+
+    import GoogleModelJsonSupport._
+    Post(s"/api/google/policy/${resourceType.name}/foo/${resourceType.ownerRoleName.value}/sync") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      assertResult(SyncReport(createdPolicy.email, Seq(SyncReportItem("added", googleExt.toProxyFromUser(defaultUserInfo.userId.value), None)))) {
+        responseAs[SyncReport]
+      }
     }
   }
 }

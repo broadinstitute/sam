@@ -44,17 +44,15 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives {
           }
         } ~
           pathPrefix("policy") {
-            pathPrefix("sync") {
-              path(Segment / Segment / Segment) { (resourceTypeName, resourceId, accessPolicyName) =>
-                val resource = Resource(ResourceTypeName(resourceTypeName), ResourceId(resourceId))
-                val resourceAndPolicyName = ResourceAndPolicyName(resource, AccessPolicyName(accessPolicyName))
-                val groupId: WorkbenchGroupIdentity = resourceAndPolicyName
-                pathEndOrSingleSlash {
-                  post {
-                    complete {
-                      googleExtensions.synchronizeGroupMembers(groupId).map { syncReport =>
-                        StatusCodes.Created -> syncReport.groupEmail
-                      }
+            path(Segment / Segment / Segment / "sync") { (resourceTypeName, resourceId, accessPolicyName) =>
+              val resource = Resource(ResourceTypeName(resourceTypeName), ResourceId(resourceId))
+              val resourceAndPolicyName = ResourceAndPolicyName(resource, AccessPolicyName(accessPolicyName))
+              pathEndOrSingleSlash {
+                post {
+                  complete {
+                    import GoogleModelJsonSupport._
+                    googleExtensions.synchronizeGroupMembers(resourceAndPolicyName).map { syncReport =>
+                      StatusCodes.OK -> syncReport
                     }
                   }
                 }
