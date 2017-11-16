@@ -33,7 +33,7 @@ object SamJsonSupport {
 
   implicit val AccessPolicyMembershipFormat = jsonFormat3(AccessPolicyMembership)
 
-  implicit val AccessPolicyResponseEntryFormat = jsonFormat2(AccessPolicyResponseEntry)
+  implicit val AccessPolicyResponseEntryFormat = jsonFormat3(AccessPolicyResponseEntry)
 
   implicit val ResourceIdAndPolicyNameFormat = jsonFormat2(ResourceIdAndPolicyName)
 
@@ -74,6 +74,6 @@ ldap but it felt unnatural.
  */
 case class AccessPolicy(id: ResourceAndPolicyName, members: Set[WorkbenchSubject], email: WorkbenchGroupEmail, roles: Set[ResourceRoleName], actions: Set[ResourceAction]) extends WorkbenchGroup
 case class AccessPolicyMembership(memberEmails: Set[String], actions: Set[ResourceAction], roles: Set[ResourceRoleName])
-case class AccessPolicyResponseEntry(policyName: AccessPolicyName, policy: AccessPolicyMembership)
+case class AccessPolicyResponseEntry(policyName: AccessPolicyName, policy: AccessPolicyMembership, email: WorkbenchGroupEmail)
 
 case class BasicWorkbenchGroup(id: WorkbenchGroupName, members: Set[WorkbenchSubject], email: WorkbenchGroupEmail) extends WorkbenchGroup

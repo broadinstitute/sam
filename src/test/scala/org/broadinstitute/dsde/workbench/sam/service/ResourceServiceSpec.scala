@@ -45,7 +45,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
   private val dummyUserInfo = UserInfo("token", WorkbenchUserId("userid"), WorkbenchUserEmail("user@company.com"), 0)
 
   def toEmail(resourceType: String, resourceName: String, policyName: String) = {
-    WorkbenchGroupEmail(s"policy-$resourceType-$resourceName-$policyName@example.com")
+    WorkbenchGroupEmail("policy-randomuuid@example.com")
   }
 
   private def constructExpectedPolicies(resourceType: ResourceType, resource: Resource) = {
@@ -64,7 +64,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     runAndWait(service.createResource(defaultResourceType, resourceName, dummyUserInfo))
 
     assertResult(constructExpectedPolicies(defaultResourceType, resource)) {
-      runAndWait(policyDAO.listAccessPolicies(resource))
+      runAndWait{policyDAO.listAccessPolicies(resource)}.map(_.copy(email=WorkbenchGroupEmail("policy-randomuuid@example.com")))
     }
 
     //cleanup
@@ -169,7 +169,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     runAndWait(service.createResourceType(defaultResourceType))
     runAndWait(service.createResource(defaultResourceType, resource.resourceId, dummyUserInfo))
 
-    val policies = runAndWait(policyDAO.listAccessPolicies(resource))
+    val policies = runAndWait(policyDAO.listAccessPolicies(resource)).map(_.copy(email=WorkbenchGroupEmail("policy-randomuuid@example.com")))
 
     constructExpectedPolicies(defaultResourceType, resource) should contain theSameElementsAs(policies)
 
@@ -187,7 +187,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
 
     runAndWait(service.overwritePolicy(defaultResourceType, newPolicy.id.accessPolicyName, newPolicy.id.resource, AccessPolicyMembership(Set.empty, Set(ResourceAction("non_owner_action")), Set.empty), dummyUserInfo))
 
-    val policies = runAndWait(policyDAO.listAccessPolicies(resource))
+    val policies = runAndWait(policyDAO.listAccessPolicies(resource)).map(_.copy(email=WorkbenchGroupEmail("policy-randomuuid@example.com")))
 
     assert(policies.contains(newPolicy))
 
