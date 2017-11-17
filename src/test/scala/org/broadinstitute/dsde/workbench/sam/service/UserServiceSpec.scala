@@ -46,7 +46,7 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Befor
     runAndWait(schemaDao.clearDatabase())
     runAndWait(schemaDao.createOrgUnits())
 
-    service = new UserService(dirDAO, NoExtensions, new MockGoogleDirectoryDAO(), "dev.test.firecloud.org")
+    service = new UserService(dirDAO, NoExtensions, "dev.test.firecloud.org")
   }
 
   after {
@@ -67,16 +67,7 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Befor
     dirDAO.loadUser(defaultUserId).futureValue shouldBe Some(defaultUser)
     dirDAO.isEnabled(defaultUserId).futureValue shouldBe true
     dirDAO.loadGroup(UserService.allUsersGroupName).futureValue shouldBe
-      Some(BasicWorkbenchGroup(UserService.allUsersGroupName, Set(defaultUserId), WorkbenchGroupEmail(service.toGoogleGroupName(UserService.allUsersGroupName.value))))
-
-    // check google
-    val mockGoogleDirectoryDAO = service.googleDirectoryDAO.asInstanceOf[MockGoogleDirectoryDAO]
-    val groupEmail = WorkbenchGroupEmail(service.toProxyFromUser(defaultUserId.value))
-    val allUsersGroupEmail = WorkbenchGroupEmail(service.toGoogleGroupName(UserService.allUsersGroupName.value))
-//    mockGoogleDirectoryDAO.groups should contain key (groupEmail)
-//    mockGoogleDirectoryDAO.groups(groupEmail) shouldBe Set(defaultUserEmail)
-    mockGoogleDirectoryDAO.groups should contain key (allUsersGroupEmail)
-    mockGoogleDirectoryDAO.groups(allUsersGroupEmail) shouldBe Set(WorkbenchUserEmail(service.toProxyFromUser(defaultUserId.value)))
+      Some(BasicWorkbenchGroup(UserService.allUsersGroupName, Set(defaultUserId), service.allUsersGroupFuture.futureValue.email))
   }
 
   it should "get user status" in {
@@ -106,12 +97,6 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Befor
 
     // check ldap
     dirDAO.isEnabled(defaultUserId).futureValue shouldBe false
-
-    // check google
-//    val mockGoogleDirectoryDAO = service.googleDirectoryDAO.asInstanceOf[MockGoogleDirectoryDAO]
-//    val groupEmail = WorkbenchGroupEmail(service.toProxyFromUser(defaultUserId.value))
-//    mockGoogleDirectoryDAO.groups should contain key (groupEmail)
-//    mockGoogleDirectoryDAO.groups(groupEmail) shouldBe Set()
   }
 
   it should "delete a user" in {
@@ -124,10 +109,5 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Befor
 
     // check ldap
     dirDAO.loadUser(defaultUserId).futureValue shouldBe None
-
-    // check google
-    val mockGoogleDirectoryDAO = service.googleDirectoryDAO.asInstanceOf[MockGoogleDirectoryDAO]
-    val groupEmail = WorkbenchGroupEmail(service.toProxyFromUser(defaultUserId.value))
-    mockGoogleDirectoryDAO.groups should not contain key (groupEmail)
   }
 }

@@ -16,7 +16,7 @@ import scala.util.Success
 /**
   * Created by mbemis on 5/22/17.
   */
-class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceType], val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExtensions, val googleDomain: String)(implicit val executionContext: ExecutionContext) extends LazyLogging {
+class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceType], val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExtensions, val emailDomain: String)(implicit val executionContext: ExecutionContext) extends LazyLogging {
   def getResourceTypes(): Future[Map[ResourceTypeName, ResourceType]] = {
     Future.successful(resourceTypes)
   }
@@ -144,8 +144,8 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     }
   }
 
-  def generateGroupEmail(policyName: AccessPolicyName, resource: Resource) = WorkbenchGroupEmail(s"policy-${UUID.randomUUID}@$googleDomain")
-  def toGoogleGroupName(groupName: WorkbenchGroupName) = WorkbenchGroupEmail(s"GROUP_${groupName.value}@$googleDomain")
+  def generateGroupEmail(policyName: AccessPolicyName, resource: Resource) = WorkbenchGroupEmail(s"policy-${UUID.randomUUID}@$emailDomain")
+  def toGoogleGroupName(groupName: WorkbenchGroupName) = WorkbenchGroupEmail(s"GROUP_${groupName.value}@$emailDomain")
 
   //todo: use this for google group sync
   private def roleGroupName(resourceType: ResourceType, resourceId: ResourceId, role: ResourceRole) = {

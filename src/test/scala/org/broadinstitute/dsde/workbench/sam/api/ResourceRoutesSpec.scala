@@ -33,7 +33,7 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     val petServiceAccountConfig = PetServiceAccountConfig(GoogleProject("test-project"), Set(WorkbenchUserEmail("test@test.gserviceaccount.com")))
 
     val mockResourceService = new ResourceService(resourceTypes, accessPolicyDAO, directoryDAO, NoExtensions, "example.com")
-    val mockUserService = new UserService(directoryDAO, NoExtensions, googleDirectoryDAO, "dev.test.firecloud.org")
+    val mockUserService = new UserService(directoryDAO, NoExtensions, "dev.test.firecloud.org")
     val mockStatusService = new StatusService(directoryDAO, googleDirectoryDAO)
 
     new TestSamRoutes(mockResourceService, mockUserService, mockStatusService, userInfo)

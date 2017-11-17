@@ -1,21 +1,25 @@
 package org.broadinstitute.dsde.workbench.sam.api
 
+import akka.actor.ActorSystem
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.testkit.ScalatestRouteTest
-import org.broadinstitute.dsde.workbench.google.mock.{MockGoogleDirectoryDAO}
+import org.broadinstitute.dsde.workbench.google.mock.MockGoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
+import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.directory.MockDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.service.{NoExtensions, StatusService, UserService}
+import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, NoExtensions, StatusService, UserService}
 import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.mockito.MockitoSugar
 
+import scala.concurrent.Future
 /**
   * Created by dvoet on 6/7/17.
   */
-class UserRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest {
+class UserRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest with MockitoSugar with TestSupport {
   val defaultUserId = WorkbenchUserId("newuser")
   val defaultUserEmail = WorkbenchUserEmail("newuser@new.com")
   val adminUserId = WorkbenchUserId("adminuser")
@@ -25,25 +29,30 @@ class UserRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest {
     val googleDirectoryDAO = new MockGoogleDirectoryDAO()
     val directoryDAO = new MockDirectoryDAO()
 
-    val samRoutes = new TestSamRoutes(null, new UserService(directoryDAO, NoExtensions, googleDirectoryDAO, "dev.test.firecloud.org"), new StatusService(directoryDAO, googleDirectoryDAO), UserInfo("", defaultUserId, defaultUserEmail, 0))
+    val samRoutes = new TestSamRoutes(null, new UserService(directoryDAO, NoExtensions, "dev.test.firecloud.org"), new StatusService(directoryDAO, googleDirectoryDAO), UserInfo("", defaultUserId, defaultUserEmail, 0))
     testCode(samRoutes)
   }
 
-  def setupAdminsGroup(googleDirectoryDAO: MockGoogleDirectoryDAO): Unit = {
+  def setupAdminsGroup(googleDirectoryDAO: MockGoogleDirectoryDAO): Future[WorkbenchGroupEmail] = {
+    val adminGroupEmail = WorkbenchGroupEmail("fc-admins@dev.test.firecloud.org")
     for {
-      _ <- googleDirectoryDAO.createGroup(WorkbenchGroupName("fc-admins"), WorkbenchGroupEmail("fc-admins@dev.test.firecloud.org"))
-      _ <- googleDirectoryDAO.addMemberToGroup(WorkbenchGroupEmail("fc-admins@dev.test.firecloud.org"), WorkbenchUserEmail(adminUserEmail.value))
-    } yield ()
+      _ <- googleDirectoryDAO.createGroup(WorkbenchGroupName("fc-admins"), adminGroupEmail)
+      _ <- googleDirectoryDAO.addMemberToGroup(adminGroupEmail, WorkbenchUserEmail(adminUserEmail.value))
+    } yield adminGroupEmail
   }
 
   def withAdminRoutes[T](testCode: (TestSamRoutes, TestSamRoutes) => T): T = {
     val googleDirectoryDAO = new MockGoogleDirectoryDAO()
     val directoryDAO = new MockDirectoryDAO()
 
-    setupAdminsGroup(googleDirectoryDAO)
+    val adminGroupEmail = runAndWait(setupAdminsGroup(googleDirectoryDAO))
 
-    val samRoutes = new TestSamRoutes(null, new UserService(directoryDAO, NoExtensions, googleDirectoryDAO, "dev.test.firecloud.org"), new StatusService(directoryDAO, googleDirectoryDAO), UserInfo("", defaultUserId, defaultUserEmail, 0))
-    val adminRoutes = new TestSamRoutes(null, new UserService(directoryDAO, NoExtensions, googleDirectoryDAO, "dev.test.firecloud.org"), new StatusService(directoryDAO, googleDirectoryDAO), UserInfo("", adminUserId, adminUserEmail, 0))
+    val cloudExtensions = new NoExtensions {
+      override def isWorkbenchAdmin(memberEmail: WorkbenchEmail): Future[Boolean] = googleDirectoryDAO.isGroupMember(adminGroupEmail, memberEmail)
+    }
+
+    val samRoutes = new TestSamRoutes(null, new UserService(directoryDAO, cloudExtensions, "dev.test.firecloud.org"), new StatusService(directoryDAO, googleDirectoryDAO), UserInfo("", defaultUserId, defaultUserEmail, 0), cloudExtensions)
+    val adminRoutes = new TestSamRoutes(null, new UserService(directoryDAO, cloudExtensions, "dev.test.firecloud.org"), new StatusService(directoryDAO, googleDirectoryDAO), UserInfo("", adminUserId, adminUserEmail, 0), cloudExtensions)
     testCode(samRoutes, adminRoutes)
   }
 

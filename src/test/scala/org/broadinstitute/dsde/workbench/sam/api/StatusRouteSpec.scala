@@ -37,11 +37,9 @@ class StatusRouteSpec extends FlatSpec with Matchers with ScalatestRouteTest wit
     val directoryDAO = new MockDirectoryDAO()
     val googleDirectoryDAO = new MockGoogleDirectoryDAO()
     val policyDAO = new MockAccessPolicyDAO()
-    val googleIamDAO = new MockGoogleIamDAO()
-    val petServiceAccountConfig = PetServiceAccountConfig(GoogleProject("test-project"), Set(WorkbenchUserEmail("test@test.gserviceaccount.com")))
 
     val mockResourceService = new ResourceService(Map.empty, policyDAO, directoryDAO, NoExtensions, "example.com")
-    val mockUserService = new UserService(directoryDAO, NoExtensions, googleDirectoryDAO, "dev.test.firecloud.org")
+    val mockUserService = new UserService(directoryDAO, NoExtensions, "dev.test.firecloud.org")
     val mockStatusService = new StatusService(directoryDAO, googleDirectoryDAO)
 
     val samRoutes = new TestSamRoutes(mockResourceService, mockUserService, mockStatusService, UserInfo("", WorkbenchUserId(""), WorkbenchUserEmail(""), 0))

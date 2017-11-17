@@ -109,7 +109,8 @@ class GoogleExtensionSpec extends FlatSpec with Matchers with TestSupport with M
     val mockGoogleDirectoryDAO = new MockGoogleDirectoryDAO
 
     val googleExtensions = new GoogleExtensions(dirDAO, null, mockGoogleDirectoryDAO, null, mockGoogleIamDAO, googleServicesConfig, petServiceAccountConfig)
-    val service = new UserService(dirDAO, googleExtensions, mockGoogleDirectoryDAO, googleServicesConfig.appsDomain)
+    val service = new UserService(dirDAO, googleExtensions, googleServicesConfig.appsDomain)
+    service.allUsersGroupFuture.futureValue
 
     val defaultUserId = WorkbenchUserId("newuser")
     val defaultUserEmail = WorkbenchUserEmail("newuser@new.com")

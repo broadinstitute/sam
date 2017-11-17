@@ -36,7 +36,7 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
     val googleIamDAO = new MockGoogleIamDAO()
 
     val googleExt = new GoogleExtensions(directoryDAO, null, googleDirectoryDAO, null, googleIamDAO, googleServicesConfig, petServiceAccountConfig)
-    val samRoutes = new TestSamRoutes(null, new UserService(directoryDAO, googleExt, googleDirectoryDAO, "dev.test.firecloud.org"), new StatusService(directoryDAO, googleDirectoryDAO), UserInfo("", defaultUserId, defaultUserEmail, 0)) with GoogleExtensionRoutes {
+    val samRoutes = new TestSamRoutes(null, new UserService(directoryDAO, googleExt, "dev.test.firecloud.org"), new StatusService(directoryDAO, googleDirectoryDAO), UserInfo("", defaultUserId, defaultUserEmail, 0)) with GoogleExtensionRoutes {
       val googleExtensions = googleExt
     }
     testCode(samRoutes)
@@ -76,7 +76,7 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
     val googleExt = new GoogleExtensions(directoryDAO, policyDAO, googleDirectoryDAO, pubSubDAO, googleIamDAO, googleServicesConfig, petServiceAccountConfig)
     googleExt.onBoot()
     val mockResourceService = new ResourceService(resourceTypes, policyDAO, directoryDAO, googleExt, "example.com")
-    val samRoutes = new TestSamRoutes(mockResourceService, new UserService(directoryDAO, googleExt, googleDirectoryDAO, "dev.test.firecloud.org"), new StatusService(directoryDAO, googleDirectoryDAO), UserInfo("", defaultUserInfo.userId, defaultUserInfo.userEmail, 0)) with GoogleExtensionRoutes {
+    val samRoutes = new TestSamRoutes(mockResourceService, new UserService(directoryDAO, googleExt, "dev.test.firecloud.org"), new StatusService(directoryDAO, googleDirectoryDAO), UserInfo("", defaultUserInfo.userId, defaultUserInfo.userEmail, 0)) with GoogleExtensionRoutes {
       val googleExtensions = googleExt
     }
 

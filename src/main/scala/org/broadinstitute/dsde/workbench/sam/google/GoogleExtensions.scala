@@ -12,6 +12,7 @@ import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.AccessPolicyDAO
 import org.broadinstitute.dsde.workbench.sam.service.CloudExtensions
+import org.broadinstitute.dsde.workbench.sam.service.UserService.allUsersGroupName
 import org.broadinstitute.dsde.workbench.util.FutureSupport
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -19,6 +20,20 @@ import scala.util.{Failure, Success, Try}
 
 class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: AccessPolicyDAO, val googleDirectoryDAO: GoogleDirectoryDAO, val googlePubSubDAO: GooglePubSubDAO, val googleIamDAO: GoogleIamDAO, val googleServicesConfig: GoogleServicesConfig, val petServiceAccountConfig: PetServiceAccountConfig)(implicit val executionContext: ExecutionContext) extends LazyLogging with FutureSupport with CloudExtensions {
   private[google] def toProxyFromUser(subjectId: String): String = s"PROXY_$subjectId@${googleServicesConfig.appsDomain}"
+
+  lazy private val allUsersGroupFuture: Future[WorkbenchGroup] = getOrCreateAllUsersGroup
+
+  private def getOrCreateAllUsersGroup: Future[WorkbenchGroup] = {
+    for {
+      allUsersGroupOption <- directoryDAO.loadGroup(allUsersGroupName)
+      allUsersGroup = allUsersGroupOption.getOrElse(throw new WorkbenchException("all users does not exist yet, race condition?"))
+      _ <- googleDirectoryDAO.createGroup(allUsersGroup.id.value, allUsersGroup.email) recover { case e: GoogleJsonResponseException if e.getDetails.getCode == StatusCodes.Conflict.intValue => () }
+    } yield allUsersGroup
+  }
+
+  override def isWorkbenchAdmin(memberEmail: WorkbenchEmail): Future[Boolean] = {
+    googleDirectoryDAO.isGroupMember(WorkbenchGroupEmail(s"fc-admins@${googleServicesConfig.appsDomain}"), memberEmail) recoverWith { case t => throw new WorkbenchException("Unable to query for admin status.", t) }
+  }
 
   override def onBoot()(implicit system: ActorSystem): Unit = {
     system.actorOf(GoogleGroupSyncMonitorSupervisor.props(
@@ -54,6 +69,10 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
         case e:GoogleJsonResponseException if e.getDetails.getCode == StatusCodes.Conflict.intValue => ()
       }
       _ <- googleDirectoryDAO.addMemberToGroup(WorkbenchGroupEmail(toProxyFromUser(user.id.value)), WorkbenchUserEmail(user.email.value))
+
+      allUsersGroup <- allUsersGroupFuture
+
+      _ <- googleDirectoryDAO.addMemberToGroup(allUsersGroup.email, WorkbenchUserEmail(toProxyFromUser(user.id.value)))
     } yield ()
   }
 
