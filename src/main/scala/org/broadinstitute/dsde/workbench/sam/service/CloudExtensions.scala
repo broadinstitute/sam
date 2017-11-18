@@ -7,6 +7,8 @@ import org.broadinstitute.dsde.workbench.sam.api.ExtensionRoutes
 import scala.concurrent.Future
 import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directives._
+import org.broadinstitute.dsde.workbench.util.health.SubsystemStatus
+import org.broadinstitute.dsde.workbench.util.health.Subsystems.Subsystem
 
 trait CloudExtensions {
 
@@ -27,6 +29,9 @@ trait CloudExtensions {
 
   def onUserDelete(userId: WorkbenchUserId): Future[Unit]
 
+  def checkStatus: Map[Subsystem, Future[SubsystemStatus]]
+
+  def allSubSystems: Set[Subsystem]
 }
 
 trait NoExtensions extends CloudExtensions {
@@ -45,6 +50,10 @@ trait NoExtensions extends CloudExtensions {
   override def onUserDisable(user: WorkbenchUser): Future[Unit] = Future.successful(())
 
   override def onUserDelete(userId: WorkbenchUserId): Future[Unit] = Future.successful(())
+
+  override def checkStatus: Map[Subsystem, Future[SubsystemStatus]] = Map.empty
+
+  override def allSubSystems: Set[Subsystem] = Set.empty
 }
 
 object NoExtensions extends NoExtensions
