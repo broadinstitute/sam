@@ -184,4 +184,21 @@ class GoogleExtensionSpec extends FlatSpec with Matchers with TestSupport with M
     val petSaResponse2 = googleExtensions.createUserPetServiceAccount(defaultUser).futureValue
     petSaResponse2 shouldBe emailResponse
   }
+
+  it should "get a group's last synchronized date" in {
+    val groupName = WorkbenchGroupName("group1")
+    val groupEmail = WorkbenchGroupEmail("group1@example.com")
+    val testGroup = BasicWorkbenchGroup(groupName, Set(), groupEmail)
+
+    //    val ge = new GoogleExtensions(dirDAO, mockAccessPolicyDAO, mockGoogleDirectoryDAO, null, null, googleServicesConfig, petServiceAccountConfig)
+    val mockDirectoryDAO = mock[DirectoryDAO]
+    val ge = new GoogleExtensions(mockDirectoryDAO, null, null, null, null, googleServicesConfig, petServiceAccountConfig)
+
+    when(mockDirectoryDAO.getSynchronizedDate(groupName)).thenReturn(Future.successful(None))
+    runAndWait(ge.getSynchronizedDate(groupName)) shouldBe None
+
+    val date = new Date()
+    when(mockDirectoryDAO.getSynchronizedDate(groupName)).thenReturn(Future.successful(Some(date)))
+    runAndWait(ge.getSynchronizedDate(groupName)) shouldBe Some(date)
+  }
 }

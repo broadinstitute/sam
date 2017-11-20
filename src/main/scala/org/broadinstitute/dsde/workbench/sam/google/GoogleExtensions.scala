@@ -1,5 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.google
 
+import java.util.Date
+
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
 import com.google.api.client.googleapis.json.GoogleJsonResponseException
@@ -186,6 +188,10 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
       // remove the service account itself in Google
       _ <- googleIamDAO.removeServiceAccount(petServiceAccountConfig.googleProject, petServiceAccount.email.toAccountName)
     } yield ()
+  }
+
+  def getSynchronizedDate(groupId: WorkbenchGroupIdentity): Future[Option[Date]] = {
+    directoryDAO.getSynchronizedDate(groupId)
   }
 
   def synchronizeGroupMembers(groupId: WorkbenchGroupIdentity, visitedGroups: Set[WorkbenchGroupIdentity] = Set.empty[WorkbenchGroupIdentity]): Future[Map[WorkbenchGroupEmail, Seq[SyncReportItem]]] = {

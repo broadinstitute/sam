@@ -57,6 +57,13 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives {
                       StatusCodes.OK -> syncReport
                     }
                   }
+                } ~
+                get {
+                  complete {
+                    googleExtensions.getSynchronizedDate(resourceAndPolicyName).map { date =>
+                      StatusCodes.OK -> date.map(_.toString)
+                    }
+                  }
                 }
               }
             }
