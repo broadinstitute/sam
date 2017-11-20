@@ -187,10 +187,7 @@ class GoogleExtensionSpec extends FlatSpec with Matchers with TestSupport with M
 
   it should "get a group's last synchronized date" in {
     val groupName = WorkbenchGroupName("group1")
-    val groupEmail = WorkbenchGroupEmail("group1@example.com")
-    val testGroup = BasicWorkbenchGroup(groupName, Set(), groupEmail)
 
-    //    val ge = new GoogleExtensions(dirDAO, mockAccessPolicyDAO, mockGoogleDirectoryDAO, null, null, googleServicesConfig, petServiceAccountConfig)
     val mockDirectoryDAO = mock[DirectoryDAO]
     val ge = new GoogleExtensions(mockDirectoryDAO, null, null, null, null, googleServicesConfig, petServiceAccountConfig)
 
