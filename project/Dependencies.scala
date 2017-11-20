@@ -7,7 +7,7 @@ object Dependencies {
   val scalaLoggingV = "3.5.0"
   val scalaTestV    = "3.0.1"
 
-  val workbenchUtilV   = "0.2-dcca21f"
+  val workbenchUtilV   = "0.2-7be4c23-SNAP"
   val workbenchModelV  = "0.7-dcca21f"
   val workbenchGoogleV = "0.9-dcca21f"
 

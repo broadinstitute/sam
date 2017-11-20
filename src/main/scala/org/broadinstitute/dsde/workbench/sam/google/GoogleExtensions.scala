@@ -284,9 +284,9 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
     Map(
       Subsystems.GoogleGroups -> checkGroups,
       Subsystems.GooglePubSub -> checkPubsub,
-      Subsystems.GoogleBilling -> checkIam
+      Subsystems.GoogleIam -> checkIam
     )
   }
 
-  override val allSubSystems: Set[Subsystems.Subsystem] = Set(Subsystems.GoogleGroups, Subsystems.GooglePubSub, Subsystems.GoogleBilling)
+  override val allSubSystems: Set[Subsystems.Subsystem] = Set(Subsystems.GoogleGroups, Subsystems.GooglePubSub, Subsystems.GoogleIam)
 }
