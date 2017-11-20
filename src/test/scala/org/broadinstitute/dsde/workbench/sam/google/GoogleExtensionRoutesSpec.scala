@@ -5,16 +5,14 @@ import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.testkit.ScalatestRouteTest
 import com.typesafe.config.ConfigFactory
-import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.google.mock.{MockGoogleDirectoryDAO, MockGoogleIamDAO, MockGooglePubSubDAO}
-import org.broadinstitute.dsde.workbench.google.model.GoogleProject
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.api.TestSamRoutes
 import org.broadinstitute.dsde.workbench.sam.config.{GoogleServicesConfig, PetServiceAccountConfig}
 import org.broadinstitute.dsde.workbench.sam.directory.MockDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.service.{NoExtensions, ResourceService, StatusService, UserService}
+import org.broadinstitute.dsde.workbench.sam.service.{ResourceService, StatusService, UserService}
 import org.scalatest.{FlatSpec, Matchers}
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.sam.openam.MockAccessPolicyDAO
@@ -23,7 +21,7 @@ import spray.json.{JsBoolean, JsValue}
 /**
   * Created by dvoet on 6/7/17.
   */
-class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest with LazyLogging {
+class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest {
   val defaultUserId = WorkbenchUserId("newuser")
   val defaultUserEmail = WorkbenchUserEmail("newuser@new.com")
 
@@ -105,7 +103,7 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
     }
   }
 
-  "POST /api/google/policy/{resourceTypeName}/{resourceId}/{accessPolicyName}/sync" should "200 with sync date" in {
+  "GET /api/google/policy/{resourceTypeName}/{resourceId}/{accessPolicyName}/sync" should "200 with sync date" in {
     val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceAction("alter_policies"), ResourceAction("can_compute"), ResourceAction("read_policies")), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("alter_policies"), ResourceAction("read_policies")))), ResourceRoleName("owner"))
     val resourceTypes = Map(resourceType.name -> resourceType)
     val defaultUserInfo = UserInfo("accessToken", WorkbenchUserId("user1"), WorkbenchUserEmail("user1@example.com"), 0)
@@ -154,7 +152,6 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
     val createdPolicy = Get(s"/api/resource/${resourceType.name}/foo/policies") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
       val response = responseAs[Seq[AccessPolicyResponseEntry]]
-      logger.info(response.toString)
       response.find(_.policyName == AccessPolicyName(resourceType.ownerRoleName.value)).getOrElse(fail("created policy not returned by get request"))
     }
 
