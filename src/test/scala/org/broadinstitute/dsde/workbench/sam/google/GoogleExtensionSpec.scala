@@ -101,6 +101,37 @@ class GoogleExtensionSpec extends FlatSpec with Matchers with TestSupport with M
     }
   }
 
+  "GoogleGroup Sync" should "break out of cycle" in {
+    val groupName = WorkbenchGroupName("group1")
+    val groupEmail = WorkbenchGroupEmail("group1@example.com")
+    val subGroupName = WorkbenchGroupName("group2")
+    val subGroupEmail = WorkbenchGroupEmail("group2@example.com")
+
+    val subGroup = BasicWorkbenchGroup(subGroupName, Set.empty, subGroupEmail)
+    val topGroup = BasicWorkbenchGroup(groupName, Set.empty, groupEmail)
+
+    val mockAccessPolicyDAO = mock[AccessPolicyDAO]
+    val mockDirectoryDAO = new MockDirectoryDAO
+    val mockGoogleDirectoryDAO = mock[GoogleDirectoryDAO]
+    val mockGooglePubSubDAO = new MockGooglePubSubDAO
+    val mockGoogleIamDAO = new MockGoogleIamDAO
+    val ge = new GoogleExtensions(mockDirectoryDAO, mockAccessPolicyDAO, mockGoogleDirectoryDAO, mockGooglePubSubDAO, mockGoogleIamDAO, googleServicesConfig, petServiceAccountConfig)
+    when(mockGoogleDirectoryDAO.addMemberToGroup(any[WorkbenchGroupEmail], any[WorkbenchEmail])).thenReturn(Future.successful(()))
+    //create groups
+    mockDirectoryDAO.createGroup(topGroup)
+    mockDirectoryDAO.createGroup(subGroup)
+    //add subGroup to topGroup
+    mockGoogleDirectoryDAO.addMemberToGroup(groupEmail, subGroupEmail)
+    mockDirectoryDAO.addGroupMember(topGroup.id, subGroup.id)
+    //add topGroup to subGroup - creating cycle
+    mockGoogleDirectoryDAO.addMemberToGroup(subGroupEmail, groupEmail)
+    mockDirectoryDAO.addGroupMember(subGroup.id, topGroup.id)
+    when(mockGoogleDirectoryDAO.listGroupMembers(topGroup.email)).thenReturn(Future.successful(Option(Seq(subGroupEmail.value))))
+    when(mockGoogleDirectoryDAO.listGroupMembers(subGroup.email)).thenReturn(Future.successful(Option(Seq(groupEmail.value))))
+    val syncedEmails = runAndWait(ge.synchronizeGroupMembers(topGroup.id)).keys
+    syncedEmails shouldEqual Set(groupEmail, subGroupEmail)
+  }
+
   "GoogleExtension" should "get a pet service account for a user" in {
     implicit val patienceConfig = PatienceConfig(1 second)
     val dirDAO = new JndiDirectoryDAO(directoryConfig)
