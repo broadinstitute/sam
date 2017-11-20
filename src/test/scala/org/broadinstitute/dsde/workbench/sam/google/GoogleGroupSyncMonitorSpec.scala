@@ -57,8 +57,8 @@ class GoogleGroupSyncMonitorSpec(_system: ActorSystem) extends TestKit(_system) 
 
     eventually {
       assertResult(2) { mockGooglePubSubDAO.acks.size() }
-      verify(mockGoogleExtensions).synchronizeGroupMembers(groupToSyncId)
-      verify(mockGoogleExtensions).synchronizeGroupMembers(policyToSyncId)
+      verify(mockGoogleExtensions, atLeastOnce).synchronizeGroupMembers(groupToSyncId)
+      verify(mockGoogleExtensions, atLeastOnce).synchronizeGroupMembers(policyToSyncId)
     }
   }
 
