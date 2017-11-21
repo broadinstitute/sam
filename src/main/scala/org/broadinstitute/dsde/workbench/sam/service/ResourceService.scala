@@ -127,26 +127,13 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     }
   }
 
-  //use overwritePolicy to add user to policy
-  def addUserToPolicy(resourceType: ResourceType, policyName: AccessPolicyName, resource: Resource, email: String, userInfo: UserInfo): Future[AccessPolicy] = {
+  def addOrRemoveUserFromPolicy(resourceType: ResourceType, policyName: AccessPolicyName, resource: Resource, email: String, userInfo: UserInfo, add: Boolean = true): Future[AccessPolicy] = {
     val resourceAndPolicyName = ResourceAndPolicyName(resource, policyName)
     val policyWithEmails = accessPolicyDAO.loadPolicy(resourceAndPolicyName).flatMap {
       case Some(accessPolicy) => loadAccessPolicyWithEmails(accessPolicy)
     }
     policyWithEmails.flatMap{ policy =>
-      val newEmails = policy.policy.memberEmails ++ Set(email)
-      overwritePolicy(resourceType, policyName, resource, AccessPolicyMembership(newEmails, policy.policy.actions, policy.policy.roles), userInfo)
-    }
-  }
-
-  //use overwritePolicy to remove user from policy
-  def removeUserFromPolicy(resourceType: ResourceType, policyName: AccessPolicyName, resource: Resource, email: String, userInfo: UserInfo): Future[AccessPolicy] = {
-    val resourceAndPolicyName = ResourceAndPolicyName(resource, policyName)
-    val policyWithEmails = accessPolicyDAO.loadPolicy(resourceAndPolicyName).flatMap {
-      case Some(accessPolicy) => loadAccessPolicyWithEmails(accessPolicy)
-    }
-    policyWithEmails.flatMap{ policy =>
-      val newEmails = policy.policy.memberEmails -- Set(email)
+      val newEmails = if(add) {policy.policy.memberEmails ++ Set(email)} else {policy.policy.memberEmails -- Set(email)}
       overwritePolicy(resourceType, policyName, resource, AccessPolicyMembership(newEmails, policy.policy.actions, policy.policy.roles), userInfo)
     }
   }

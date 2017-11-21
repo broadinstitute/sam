@@ -99,12 +99,12 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives {
                         pathEndOrSingleSlash {
                           put {
                             requireAction(resource, SamResourceActions.alterPolicies, userInfo) {
-                              complete(resourceService.addUserToPolicy(resourceType, AccessPolicyName(policyName), Resource(resourceType.name, ResourceId(resourceId)), email, userInfo).map(_ => StatusCodes.NoContent))
+                              complete(resourceService.addOrRemoveUserFromPolicy(resourceType, AccessPolicyName(policyName), Resource(resourceType.name, ResourceId(resourceId)), email, userInfo).map(_ => StatusCodes.NoContent))
                             }
                           } ~
                           delete {
                             requireAction(resource, SamResourceActions.alterPolicies, userInfo) {
-                              complete(resourceService.removeUserFromPolicy(resourceType, AccessPolicyName(policyName), Resource(resourceType.name, ResourceId(resourceId)), email, userInfo).map(_ => StatusCodes.NoContent))
+                              complete(resourceService.addOrRemoveUserFromPolicy(resourceType, AccessPolicyName(policyName), Resource(resourceType.name, ResourceId(resourceId)), email, userInfo, false).map(_ => StatusCodes.NoContent))
                             }
                           }
                         }
