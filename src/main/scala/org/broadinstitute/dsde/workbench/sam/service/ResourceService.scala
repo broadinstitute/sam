@@ -127,14 +127,19 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     }
   }
 
-  def addOrRemoveUserFromPolicy(resourceType: ResourceType, policyName: AccessPolicyName, resource: Resource, email: String, userInfo: UserInfo, add: Boolean = true): Future[AccessPolicy] = {
+  def addUserToPolicy(resourceType: ResourceType, policyName: AccessPolicyName, resource: Resource, email: String, userInfo: UserInfo) = {
     val resourceAndPolicyName = ResourceAndPolicyName(resource, policyName)
-    val policyWithEmails = accessPolicyDAO.loadPolicy(resourceAndPolicyName).flatMap {
-      case Some(accessPolicy) => loadAccessPolicyWithEmails(accessPolicy)
+    directoryDAO.loadSubjectFromEmail(email).map{
+      case Some(subject) => directoryDAO.addGroupMember(resourceAndPolicyName, subject)
+      case None => Future.successful(None)
     }
-    policyWithEmails.flatMap{ policy =>
-      val newEmails = if(add) {policy.policy.memberEmails ++ Set(email)} else {policy.policy.memberEmails -- Set(email)}
-      overwritePolicy(resourceType, policyName, resource, AccessPolicyMembership(newEmails, policy.policy.actions, policy.policy.roles), userInfo)
+  }
+
+  def removeUserFromPolicy(resourceType: ResourceType, policyName: AccessPolicyName, resource: Resource, email: String, userInfo: UserInfo) = {
+    val resourceAndPolicyName = ResourceAndPolicyName(resource, policyName)
+    directoryDAO.loadSubjectFromEmail(email).map{
+      case Some(subject) => directoryDAO.removeGroupMember(resourceAndPolicyName, subject)
+      case None => Future.successful(None)
     }
   }
 
