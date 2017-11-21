@@ -129,6 +129,53 @@ class UserRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest {
     }
   }
 
+  "GET /admin/user/email/{email}" should "get the user status of a user by email (as an admin)" in withAdminRoutes { (samRoutes, adminRoutes) =>
+    Post("/register/user") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Created
+      responseAs[UserStatus] shouldEqual UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
+    }
+
+    Get(s"/api/admin/user/email/$defaultUserEmail") ~> adminRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[UserStatus] shouldEqual UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
+    }
+  }
+
+  it should "return 404 for an unknown user by email (as an admin)" in withAdminRoutes { (samRoutes, adminRoutes) =>
+    Get(s"/api/admin/user/email/XXX${defaultUserEmail}XXX") ~> adminRoutes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
+    }
+  }
+
+  it should "return 404 for a service account email (as an admin)" in withAdminRoutes { (samRoutes, adminRoutes) =>
+    Post("/register/user") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Created
+      responseAs[UserStatus] shouldEqual UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
+    }
+
+    // create a pet service account
+    Get("/api/user/petServiceAccount") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      val response = responseAs[WorkbenchUserServiceAccountEmail]
+      response.value should endWith ("@test-project.iam.gserviceaccount.com")
+      Get(s"/api/admin/user/email/${response.value}") ~> adminRoutes.route ~> check {
+        status shouldEqual StatusCodes.NotFound
+      }
+    }
+  }
+
+  it should "return 404 for an group's email (as an admin)" in withAdminRoutes { (samRoutes, adminRoutes) =>
+    Get(s"/api/admin/user/email/fc-admins@dev.test.firecloud.org") ~> adminRoutes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
+    }
+  }
+
+  it should "not allow a non-admin to get the status of another user" in withAdminRoutes { (samRoutes, _) =>
+    Get(s"/api/admin/user/email/$defaultUserEmail") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Forbidden
+    }
+  }
+
   "PUT /admin/user/{userSubjectId}/(re|dis)able" should "disable and then re-enable a user (as an admin)" in withAdminRoutes { (samRoutes, adminRoutes) =>
     Post("/register/user") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
