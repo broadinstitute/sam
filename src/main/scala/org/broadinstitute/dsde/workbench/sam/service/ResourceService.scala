@@ -128,7 +128,7 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
   }
 
   //use overwritePolicy to add user to policy
-  def addUsertoPolicy(resourceType: ResourceType, policyName: AccessPolicyName, resource: Resource, email: String, userInfo: UserInfo): Future[AccessPolicy] = {
+  def addUserToPolicy(resourceType: ResourceType, policyName: AccessPolicyName, resource: Resource, email: String, userInfo: UserInfo): Future[AccessPolicy] = {
     val resourceAndPolicyName = ResourceAndPolicyName(resource, policyName)
     val policyWithEmails = accessPolicyDAO.loadPolicy(resourceAndPolicyName).flatMap {
       case Some(accessPolicy) => loadAccessPolicyWithEmails(accessPolicy)
