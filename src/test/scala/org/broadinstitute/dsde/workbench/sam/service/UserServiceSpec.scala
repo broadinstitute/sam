@@ -4,14 +4,12 @@ import java.util.UUID
 
 import com.typesafe.config.ConfigFactory
 import net.ceedubs.ficus.Ficus._
-import org.broadinstitute.dsde.workbench.google.mock.{MockGoogleDirectoryDAO, MockGoogleIamDAO}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.config.{DirectoryConfig, PetServiceAccountConfig}
 import org.broadinstitute.dsde.workbench.sam.directory.JndiDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, UserInfo, UserStatus, UserStatusDetails}
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
-import org.broadinstitute.dsde.workbench.sam.service.UserService.allUsersGroupName
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FlatSpec, Matchers}
 
@@ -46,16 +44,7 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Befor
     runAndWait(schemaDao.clearDatabase())
     runAndWait(schemaDao.createOrgUnits())
 
-    service = new UserService(dirDAO, NoExtensions, "dev.test.firecloud.org")
-  }
-
-  after {
-    // clean up
-    dirDAO.removePetServiceAccountFromUser(defaultUserId).futureValue
-    dirDAO.removeGroupMember(allUsersGroupName, defaultUserId).recover { case _ => () }.futureValue
-    dirDAO.disableIdentity(defaultUserId).futureValue
-    dirDAO.deleteUser(defaultUserId).futureValue
-    dirDAO.deleteGroup(UserService.allUsersGroupName).futureValue
+    service = new UserService(dirDAO, NoExtensions)
   }
 
   "UserService" should "create a user" in {
@@ -66,8 +55,8 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Befor
     // check ldap
     dirDAO.loadUser(defaultUserId).futureValue shouldBe Some(defaultUser)
     dirDAO.isEnabled(defaultUserId).futureValue shouldBe true
-    dirDAO.loadGroup(UserService.allUsersGroupName).futureValue shouldBe
-      Some(BasicWorkbenchGroup(UserService.allUsersGroupName, Set(defaultUserId), service.allUsersGroupFuture.futureValue.email))
+    dirDAO.loadGroup(service.cloudExtensions.allUsersGroupName).futureValue shouldBe
+      Some(BasicWorkbenchGroup(service.cloudExtensions.allUsersGroupName, Set(defaultUserId), service.cloudExtensions.getOrCreateAllUsersGroup(dirDAO).futureValue.email))
   }
 
   it should "get user status" in {

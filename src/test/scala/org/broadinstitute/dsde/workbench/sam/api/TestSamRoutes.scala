@@ -22,7 +22,6 @@ import scala.concurrent.ExecutionContext
 class TestSamRoutes(resourceService: ResourceService, userService: UserService, statusService: StatusService, val userInfo: UserInfo, val cloudExtensions: CloudExtensions = NoExtensions)(implicit override val system: ActorSystem, override val materializer: Materializer, override val executionContext: ExecutionContext)
   extends SamRoutes(resourceService, userService, statusService, SwaggerConfig("", "")) with MockUserInfoDirectives with ExtensionRoutes with ScalaFutures {
 
-  userService.allUsersGroupFuture.futureValue
   def extensionRoutes: server.Route = reject
 }
 
@@ -36,9 +35,9 @@ object TestSamRoutes {
     val policyDAO = new MockAccessPolicyDAO()
 
     val mockResourceService = new ResourceService(resourceTypes, policyDAO, directoryDAO, NoExtensions, "example.com")
-    val mockUserService = new UserService(directoryDAO, NoExtensions, "dev.test.firecloud.org")
+    val mockUserService = new UserService(directoryDAO, NoExtensions)
 
-    val allUsersGroup = TestSupport.runAndWait(mockUserService.createAllUsersGroup)
+    val allUsersGroup = TestSupport.runAndWait(NoExtensions.getOrCreateAllUsersGroup(directoryDAO))
     TestSupport.runAndWait(googleDirectoryDAO.createGroup(allUsersGroup.id.toString, allUsersGroup.email))
 
     val mockStatusService = new StatusService(directoryDAO, NoExtensions)

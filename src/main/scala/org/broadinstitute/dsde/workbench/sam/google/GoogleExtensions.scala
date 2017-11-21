@@ -13,7 +13,6 @@ import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.AccessPolicyDAO
 import org.broadinstitute.dsde.workbench.sam.service.CloudExtensions
-import org.broadinstitute.dsde.workbench.sam.service.UserService.allUsersGroupName
 import org.broadinstitute.dsde.workbench.util.FutureSupport
 import org.broadinstitute.dsde.workbench.util.health.{HealthMonitor, SubsystemStatus, Subsystems}
 
@@ -23,14 +22,16 @@ import scala.util.{Failure, Success, Try}
 class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: AccessPolicyDAO, val googleDirectoryDAO: GoogleDirectoryDAO, val googlePubSubDAO: GooglePubSubDAO, val googleIamDAO: GoogleIamDAO, val googleServicesConfig: GoogleServicesConfig, val petServiceAccountConfig: PetServiceAccountConfig)(implicit val executionContext: ExecutionContext) extends LazyLogging with FutureSupport with CloudExtensions {
   private[google] def toProxyFromUser(subjectId: String): String = s"PROXY_$subjectId@${googleServicesConfig.appsDomain}"
 
-  lazy private val allUsersGroupFuture: Future[WorkbenchGroup] = getOrCreateAllUsersGroup
+  override val emailDomain = googleServicesConfig.appsDomain
 
-  private def getOrCreateAllUsersGroup: Future[WorkbenchGroup] = {
+  override def getOrCreateAllUsersGroup(directoryDAO: DirectoryDAO)(implicit executionContext: ExecutionContext): Future[WorkbenchGroup] = {
+    val allUsersGroup = BasicWorkbenchGroup(allUsersGroupName, Set.empty, WorkbenchGroupEmail(s"GROUP_${allUsersGroupName.value}@$emailDomain"))
     for {
-      allUsersGroupOption <- directoryDAO.loadGroup(allUsersGroupName)
-      allUsersGroup = allUsersGroupOption.getOrElse(throw new WorkbenchException("all users does not exist yet, race condition?"))
-      _ <- googleDirectoryDAO.createGroup(allUsersGroup.id.value, allUsersGroup.email) recover { case e: GoogleJsonResponseException if e.getDetails.getCode == StatusCodes.Conflict.intValue => () }
-    } yield allUsersGroup
+      createdGroup <- directoryDAO.createGroup(allUsersGroup) recover {
+        case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode == Option(StatusCodes.Conflict) => allUsersGroup
+      }
+      _ <- googleDirectoryDAO.createGroup(createdGroup.id.toString, createdGroup.email) recover { case e: GoogleJsonResponseException if e.getDetails.getCode == StatusCodes.Conflict.intValue => () }
+    } yield createdGroup
   }
 
   override def isWorkbenchAdmin(memberEmail: WorkbenchEmail): Future[Boolean] = {
@@ -72,7 +73,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
       }
       _ <- googleDirectoryDAO.addMemberToGroup(WorkbenchGroupEmail(toProxyFromUser(user.id.value)), WorkbenchUserEmail(user.email.value))
 
-      allUsersGroup <- allUsersGroupFuture
+      allUsersGroup <- getOrCreateAllUsersGroup(directoryDAO)
 
       _ <- googleDirectoryDAO.addMemberToGroup(allUsersGroup.email, WorkbenchUserEmail(toProxyFromUser(user.id.value)))
     } yield ()
@@ -254,7 +255,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
     def checkGroups: Future[SubsystemStatus] = {
       logger.debug("Checking Google Groups...")
       for {
-        allUsersGroup <- allUsersGroupFuture
+        allUsersGroup <- getOrCreateAllUsersGroup(directoryDAO)
         groupOption <- googleDirectoryDAO.getGoogleGroup(allUsersGroup.email)
       } yield {
         groupOption match {

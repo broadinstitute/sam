@@ -32,7 +32,7 @@ class StatusServiceSpec extends FreeSpec with Matchers with BeforeAndAfterAll wi
 
   def ok = {
     val service = noOpenDJGroups
-    runAndWait(service.directoryDAO.createGroup(BasicWorkbenchGroup(UserService.allUsersGroupName, Set.empty, allUsersEmail)))
+    runAndWait(service.directoryDAO.createGroup(BasicWorkbenchGroup(NoExtensions.allUsersGroupName, Set.empty, allUsersEmail)))
     service
   }
 
@@ -40,7 +40,7 @@ class StatusServiceSpec extends FreeSpec with Matchers with BeforeAndAfterAll wi
     val service = new StatusService(new MockDirectoryDAO, new NoExtensions {
       override def checkStatus: Map[Subsystems.Subsystem, Future[SubsystemStatus]] = Map(Subsystems.GoogleGroups -> Future.failed(new WorkbenchException("bad google")))
     })
-    runAndWait(service.directoryDAO.createGroup(BasicWorkbenchGroup(UserService.allUsersGroupName, Set.empty, allUsersEmail)))
+    runAndWait(service.directoryDAO.createGroup(BasicWorkbenchGroup(NoExtensions.allUsersGroupName, Set.empty, allUsersEmail)))
     service
   }
 
@@ -54,7 +54,7 @@ class StatusServiceSpec extends FreeSpec with Matchers with BeforeAndAfterAll wi
   val cases = {
     Seq(
       ("ok", ok, StatusCheckResponse(true, Map(OpenDJ -> SubsystemStatus(true, None), GoogleGroups -> SubsystemStatus(true, None)))),
-      ("noOpenDJGroups", noOpenDJGroups, StatusCheckResponse(false, Map(OpenDJ -> SubsystemStatus(false, Option(List(s"could not find group ${UserService.allUsersGroupName} in opendj"))), GoogleGroups -> SubsystemStatus(true, None)))),
+      ("noOpenDJGroups", noOpenDJGroups, StatusCheckResponse(false, Map(OpenDJ -> SubsystemStatus(false, Option(List(s"could not find group ${NoExtensions.allUsersGroupName} in opendj"))), GoogleGroups -> SubsystemStatus(true, None)))),
       ("failingExtension", failingExtension, StatusCheckResponse(false, Map(OpenDJ -> SubsystemStatus(true, None), GoogleGroups -> SubsystemStatus(false, Option(List(s"bad google")))))),
       ("failingOpenDJ", failingOpenDJ, StatusCheckResponse(false, Map(OpenDJ -> SubsystemStatus(false, Option(List("bad opendj"))))))
     )

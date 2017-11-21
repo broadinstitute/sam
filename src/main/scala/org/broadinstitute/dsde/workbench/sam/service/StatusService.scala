@@ -24,7 +24,7 @@ class StatusService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudEx
   def getStatus(): Future[StatusCheckResponse] = (healthMonitor ? GetCurrentStatus).asInstanceOf[Future[StatusCheckResponse]]
 
   private def checkStatus(): Map[Subsystem, Future[SubsystemStatus]] = {
-    cloudExtensions.checkStatus + (OpenDJ -> checkOpenDJ(UserService.allUsersGroupName))
+    cloudExtensions.checkStatus + (OpenDJ -> checkOpenDJ(cloudExtensions.allUsersGroupName))
   }
 
   private def checkOpenDJ(groupToLoad: WorkbenchGroupName): Future[SubsystemStatus] = {

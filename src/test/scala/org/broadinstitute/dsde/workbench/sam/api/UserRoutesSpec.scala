@@ -29,7 +29,7 @@ class UserRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest with
     val googleDirectoryDAO = new MockGoogleDirectoryDAO()
     val directoryDAO = new MockDirectoryDAO()
 
-    val samRoutes = new TestSamRoutes(null, new UserService(directoryDAO, NoExtensions, "dev.test.firecloud.org"), new StatusService(directoryDAO, NoExtensions), UserInfo("", defaultUserId, defaultUserEmail, 0))
+    val samRoutes = new TestSamRoutes(null, new UserService(directoryDAO, NoExtensions), new StatusService(directoryDAO, NoExtensions), UserInfo("", defaultUserId, defaultUserEmail, 0))
     testCode(samRoutes)
   }
 
@@ -51,8 +51,8 @@ class UserRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest with
       override def isWorkbenchAdmin(memberEmail: WorkbenchEmail): Future[Boolean] = googleDirectoryDAO.isGroupMember(adminGroupEmail, memberEmail)
     }
 
-    val samRoutes = new TestSamRoutes(null, new UserService(directoryDAO, cloudExtensions, "dev.test.firecloud.org"), new StatusService(directoryDAO, NoExtensions), UserInfo("", defaultUserId, defaultUserEmail, 0), cloudExtensions)
-    val adminRoutes = new TestSamRoutes(null, new UserService(directoryDAO, cloudExtensions, "dev.test.firecloud.org"), new StatusService(directoryDAO, NoExtensions), UserInfo("", adminUserId, adminUserEmail, 0), cloudExtensions)
+    val samRoutes = new TestSamRoutes(null, new UserService(directoryDAO, cloudExtensions), new StatusService(directoryDAO, NoExtensions), UserInfo("", defaultUserId, defaultUserEmail, 0), cloudExtensions)
+    val adminRoutes = new TestSamRoutes(null, new UserService(directoryDAO, cloudExtensions), new StatusService(directoryDAO, NoExtensions), UserInfo("", adminUserId, adminUserEmail, 0), cloudExtensions)
     testCode(samRoutes, adminRoutes)
   }
 
