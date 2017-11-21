@@ -8,8 +8,8 @@ import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.model.{WorkbenchGroupIdentity, WorkbenchUser}
 import org.broadinstitute.dsde.workbench.sam.api.{ExtensionRoutes, UserInfoDirectives}
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import spray.json.DefaultJsonProtocol._
-
 
 import scala.concurrent.ExecutionContext
 
@@ -61,7 +61,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives {
                 get {
                   complete {
                     googleExtensions.getSynchronizedDate(resourceAndPolicyName).map { date =>
-                      StatusCodes.OK -> date.map(_.toString)
+                      StatusCodes.OK -> GroupSyncResponse(date.map(_.toString).getOrElse(""))
                     }
                   }
                 }
