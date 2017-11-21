@@ -23,9 +23,10 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
   private[google] def toProxyFromUser(subjectId: String): String = s"PROXY_$subjectId@${googleServicesConfig.appsDomain}"
 
   override val emailDomain = googleServicesConfig.appsDomain
+  private val allUsersGroupEmail = WorkbenchGroupEmail(s"GROUP_${allUsersGroupName.value}@$emailDomain")
 
   override def getOrCreateAllUsersGroup(directoryDAO: DirectoryDAO)(implicit executionContext: ExecutionContext): Future[WorkbenchGroup] = {
-    val allUsersGroup = BasicWorkbenchGroup(allUsersGroupName, Set.empty, WorkbenchGroupEmail(s"GROUP_${allUsersGroupName.value}@$emailDomain"))
+    val allUsersGroup = BasicWorkbenchGroup(allUsersGroupName, Set.empty, allUsersGroupEmail)
     for {
       createdGroup <- directoryDAO.createGroup(allUsersGroup) recover {
         case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode == Option(StatusCodes.Conflict) => allUsersGroup
@@ -255,12 +256,11 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
     def checkGroups: Future[SubsystemStatus] = {
       logger.debug("Checking Google Groups...")
       for {
-        allUsersGroup <- getOrCreateAllUsersGroup(directoryDAO)
-        groupOption <- googleDirectoryDAO.getGoogleGroup(allUsersGroup.email)
+        groupOption <- googleDirectoryDAO.getGoogleGroup(allUsersGroupEmail)
       } yield {
         groupOption match {
           case Some(_) => OkStatus
-          case None => failedStatus(s"could not find group ${allUsersGroup.email} in google")
+          case None => failedStatus(s"could not find group ${allUsersGroupEmail} in google")
         }
       }
     }
