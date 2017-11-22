@@ -14,7 +14,7 @@ import org.broadinstitute.dsde.workbench.sam.google.{GoogleExtensionRoutes, Goog
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam._
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
-import org.broadinstitute.dsde.workbench.sam.service.{ResourceService, StatusService, UserService}
+import org.broadinstitute.dsde.workbench.sam.service._
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
@@ -26,8 +26,7 @@ object Boot extends App with LazyLogging {
     val config = ConfigFactory.load()
 
     val directoryConfig = config.as[DirectoryConfig]("directory")
-    val googleServicesConfig = config.as[GoogleServicesConfig]("googleServices")
-    val petServiceAccountConfig = config.as[PetServiceAccountConfig]("petServiceAccount")
+    val googleServicesConfigOption = config.getAs[GoogleServicesConfig]("googleServices")
 
     // we need an ActorSystem to host our application in
     implicit val system = ActorSystem("sam")
@@ -37,22 +36,33 @@ object Boot extends App with LazyLogging {
     val accessPolicyDAO = new JndiAccessPolicyDAO(directoryConfig)
     val directoryDAO = new JndiDirectoryDAO(directoryConfig)
     val schemaDAO = new JndiSchemaDAO(directoryConfig)
-    val googleDirectoryDAO = new HttpGoogleDirectoryDAO(googleServicesConfig.serviceAccountClientId, googleServicesConfig.pemFile, googleServicesConfig.subEmail, googleServicesConfig.appsDomain, googleServicesConfig.appName, "google")
-    val googleIamDAO = new HttpGoogleIamDAO(googleServicesConfig.serviceAccountClientId, googleServicesConfig.pemFile, googleServicesConfig.appName, "google")
-    val googlePubSubDAO = new HttpGooglePubSubDAO(googleServicesConfig.serviceAccountClientId, googleServicesConfig.pemFile, googleServicesConfig.appName, googleServicesConfig.groupSyncPubSubProject, "google")
 
-    val googleExt = new GoogleExtensions(directoryDAO, accessPolicyDAO, googleDirectoryDAO, googlePubSubDAO, googleIamDAO, googleServicesConfig, petServiceAccountConfig)
+    val cloudExt = googleServicesConfigOption match {
+      case Some(googleServicesConfig) =>
+        val petServiceAccountConfig = config.as[PetServiceAccountConfig]("petServiceAccount")
+        val googleDirectoryDAO = new HttpGoogleDirectoryDAO(googleServicesConfig.serviceAccountClientId, googleServicesConfig.pemFile, googleServicesConfig.subEmail, googleServicesConfig.appsDomain, googleServicesConfig.appName, "google")
+        val googleIamDAO = new HttpGoogleIamDAO(googleServicesConfig.serviceAccountClientId, googleServicesConfig.pemFile, googleServicesConfig.appName, "google")
+        val googlePubSubDAO = new HttpGooglePubSubDAO(googleServicesConfig.serviceAccountClientId, googleServicesConfig.pemFile, googleServicesConfig.appName, googleServicesConfig.groupSyncPubSubProject, "google")
 
-    val configResourceTypes = config.as[Set[ResourceType]]("resourceTypes")
-    val resourceService = new ResourceService(configResourceTypes.map(rt => rt.name -> rt).toMap, accessPolicyDAO, directoryDAO, googleExt, config.getString("googleServices.appsDomain"))
-    val userService = new UserService(directoryDAO, googleExt, googleDirectoryDAO, googleServicesConfig.appsDomain)
-    val statusService = new StatusService(directoryDAO, googleDirectoryDAO, 10 seconds)
+        new GoogleExtensions(directoryDAO, accessPolicyDAO, googleDirectoryDAO, googlePubSubDAO, googleIamDAO, googleServicesConfig, petServiceAccountConfig)
 
-    val samRoutes = new SamRoutes(resourceService, userService, statusService, config.as[SwaggerConfig]("swagger")) with StandardUserInfoDirectives with GoogleExtensionRoutes {
-      val googleExtensions = googleExt
+      case None => NoExtensions
     }
 
-    googleExt.onBoot()
+    val configResourceTypes = config.as[Set[ResourceType]]("resourceTypes")
+    val resourceService = new ResourceService(configResourceTypes.map(rt => rt.name -> rt).toMap, accessPolicyDAO, directoryDAO, cloudExt, config.getString("googleServices.appsDomain"))
+    val userService = new UserService(directoryDAO, cloudExt)
+    val statusService = new StatusService(directoryDAO, cloudExt, 10 seconds)
+
+    val samRoutes = cloudExt match {
+      case googleExt: GoogleExtensions => new SamRoutes(resourceService, userService, statusService, config.as[SwaggerConfig]("swagger")) with StandardUserInfoDirectives with GoogleExtensionRoutes {
+        val googleExtensions = googleExt
+        val cloudExtensions = googleExt
+      }
+      case _ => new SamRoutes(resourceService, userService, statusService, config.as[SwaggerConfig]("swagger")) with StandardUserInfoDirectives with NoExtensionRoutes
+    }
+
+    cloudExt.onBoot()
 
     for {
       _ <- schemaDAO.init() recover {

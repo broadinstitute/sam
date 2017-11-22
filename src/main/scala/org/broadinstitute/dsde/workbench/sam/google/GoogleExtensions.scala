@@ -4,6 +4,7 @@ import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
 import com.google.api.client.googleapis.json.GoogleJsonResponseException
 import com.typesafe.scalalogging.LazyLogging
+import org.broadinstitute.dsde.workbench.google.model.GoogleProject
 import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleIamDAO, GooglePubSubDAO}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam._
@@ -13,12 +14,30 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.AccessPolicyDAO
 import org.broadinstitute.dsde.workbench.sam.service.CloudExtensions
 import org.broadinstitute.dsde.workbench.util.FutureSupport
+import org.broadinstitute.dsde.workbench.util.health.{HealthMonitor, SubsystemStatus, Subsystems}
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success, Try}
 
 class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: AccessPolicyDAO, val googleDirectoryDAO: GoogleDirectoryDAO, val googlePubSubDAO: GooglePubSubDAO, val googleIamDAO: GoogleIamDAO, val googleServicesConfig: GoogleServicesConfig, val petServiceAccountConfig: PetServiceAccountConfig)(implicit val executionContext: ExecutionContext) extends LazyLogging with FutureSupport with CloudExtensions {
   private[google] def toProxyFromUser(subjectId: String): String = s"PROXY_$subjectId@${googleServicesConfig.appsDomain}"
+
+  override val emailDomain = googleServicesConfig.appsDomain
+  private val allUsersGroupEmail = WorkbenchGroupEmail(s"GROUP_${allUsersGroupName.value}@$emailDomain")
+
+  override def getOrCreateAllUsersGroup(directoryDAO: DirectoryDAO)(implicit executionContext: ExecutionContext): Future[WorkbenchGroup] = {
+    val allUsersGroup = BasicWorkbenchGroup(allUsersGroupName, Set.empty, allUsersGroupEmail)
+    for {
+      createdGroup <- directoryDAO.createGroup(allUsersGroup) recover {
+        case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode == Option(StatusCodes.Conflict) => allUsersGroup
+      }
+      _ <- googleDirectoryDAO.createGroup(createdGroup.id.toString, createdGroup.email) recover { case e: GoogleJsonResponseException if e.getDetails.getCode == StatusCodes.Conflict.intValue => () }
+    } yield createdGroup
+  }
+
+  override def isWorkbenchAdmin(memberEmail: WorkbenchEmail): Future[Boolean] = {
+    googleDirectoryDAO.isGroupMember(WorkbenchGroupEmail(s"fc-admins@${googleServicesConfig.appsDomain}"), memberEmail) recoverWith { case t => throw new WorkbenchException("Unable to query for admin status.", t) }
+  }
 
   override def onBoot()(implicit system: ActorSystem): Unit = {
     system.actorOf(GoogleGroupSyncMonitorSupervisor.props(
@@ -54,6 +73,10 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
         case e:GoogleJsonResponseException if e.getDetails.getCode == StatusCodes.Conflict.intValue => ()
       }
       _ <- googleDirectoryDAO.addMemberToGroup(WorkbenchGroupEmail(toProxyFromUser(user.id.value)), WorkbenchUserEmail(user.email.value))
+
+      allUsersGroup <- getOrCreateAllUsersGroup(directoryDAO)
+
+      _ <- googleDirectoryDAO.addMemberToGroup(allUsersGroup.email, WorkbenchUserEmail(toProxyFromUser(user.id.value)))
     } yield ()
   }
 
@@ -238,4 +261,44 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
     (WorkbenchUserServiceAccountName(serviceAccountName), WorkbenchUserServiceAccountDisplayName(displayName))
   }
 
+  override def checkStatus: Map[Subsystems.Subsystem, Future[SubsystemStatus]] = {
+    import HealthMonitor._
+
+    def checkGroups: Future[SubsystemStatus] = {
+      logger.debug("Checking Google Groups...")
+      for {
+        groupOption <- googleDirectoryDAO.getGoogleGroup(allUsersGroupEmail)
+      } yield {
+        groupOption match {
+          case Some(_) => OkStatus
+          case None => failedStatus(s"could not find group ${allUsersGroupEmail} in google")
+        }
+      }
+    }
+
+    def checkPubsub: Future[SubsystemStatus] = {
+      logger.debug("Checking Google PubSub...")
+      googlePubSubDAO.getTopic(googleServicesConfig.groupSyncTopic).map {
+        case Some(_) => OkStatus
+        case None => failedStatus(s"Could not find topic: ${googleServicesConfig.groupSyncTopic}")
+      }
+    }
+
+    def checkIam: Future[SubsystemStatus] = {
+      val accountName = WorkbenchUserServiceAccountEmail(googleServicesConfig.serviceAccountClientEmail).toAccountName
+      googleIamDAO.findServiceAccount(GoogleProject(googleServicesConfig.serviceAccountClientProject), accountName).map {
+        case Some(_) => OkStatus
+        case None => failedStatus(s"Could not find service account: $accountName")
+      }
+    }
+
+
+    Map(
+      Subsystems.GoogleGroups -> checkGroups,
+      Subsystems.GooglePubSub -> checkPubsub,
+      Subsystems.GoogleIam -> checkIam
+    )
+  }
+
+  override val allSubSystems: Set[Subsystems.Subsystem] = Set(Subsystems.GoogleGroups, Subsystems.GooglePubSub, Subsystems.GoogleIam)
 }

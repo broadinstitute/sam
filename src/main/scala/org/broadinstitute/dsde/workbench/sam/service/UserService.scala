@@ -2,10 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.service
 
 import javax.naming.NameNotFoundException
 
-import akka.http.scaladsl.model.StatusCodes
-import com.google.api.client.googleapis.json.GoogleJsonResponseException
 import com.typesafe.scalalogging.LazyLogging
-import org.broadinstitute.dsde.workbench.google.GoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model._
@@ -15,21 +12,15 @@ import scala.concurrent.{ExecutionContext, Future}
 /**
   * Created by dvoet on 7/14/17.
   */
-object UserService {
-  val allUsersGroupName = WorkbenchGroupName("All_Users")
-}
-class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExtensions, val googleDirectoryDAO: GoogleDirectoryDAO, val emailDomain: String)(implicit val executionContext: ExecutionContext) extends LazyLogging {
-
-  import UserService.allUsersGroupName
+class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExtensions)(implicit val executionContext: ExecutionContext) extends LazyLogging {
 
   def createUser(user: WorkbenchUser): Future[UserStatus] = {
     for {
+      allUsersGroup <- cloudExtensions.getOrCreateAllUsersGroup(directoryDAO)
       createdUser <- directoryDAO.createUser(user)
-      _ <- cloudExtensions.onUserCreate(createdUser)
       _ <- directoryDAO.enableIdentity(user.id)
-      _ <- createAllUsersGroup
-      _ <- directoryDAO.addGroupMember(allUsersGroupName, user.id)
-      _ <- googleDirectoryDAO.addMemberToGroup(WorkbenchGroupEmail(toGoogleGroupName(allUsersGroupName.value)), WorkbenchUserEmail(toProxyFromUser(user.id.value))) //TODO: For now, do a manual add to the All_Users Google group (undo this in Phase II)
+      _ <- directoryDAO.addGroupMember(allUsersGroup.id, user.id)
+      _ <- cloudExtensions.onUserCreate(createdUser)
       userStatus <- getUserStatus(createdUser.id)
     } yield {
       userStatus.getOrElse(throw new WorkbenchException("getUserStatus returned None after user was created"))
@@ -43,7 +34,8 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
       case Some(user) =>
         for {
           googleStatus <- cloudExtensions.getUserStatus(user)
-          allUsersStatus <- directoryDAO.isGroupMember(allUsersGroupName, user.id) recover { case e: NameNotFoundException => false }
+          allUsersGroup <- cloudExtensions.getOrCreateAllUsersGroup(directoryDAO)
+          allUsersStatus <- directoryDAO.isGroupMember(allUsersGroup.id, user.id) recover { case e: NameNotFoundException => false }
           ldapStatus <- directoryDAO.isEnabled(user.id)
         } yield {
           Option(UserStatus(UserStatusDetails(user.id, user.email), Map("ldap" -> ldapStatus, "allUsersGroup" -> allUsersStatus, "google" -> googleStatus)))
@@ -79,24 +71,12 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
 
   def deleteUser(userId: WorkbenchUserId, userInfo: UserInfo): Future[Unit] = {
     for {
-      _ <- directoryDAO.removeGroupMember(allUsersGroupName, userId)
+      allUsersGroup <- cloudExtensions.getOrCreateAllUsersGroup(directoryDAO)
+      _ <- directoryDAO.removeGroupMember(allUsersGroup.id, userId)
       _ <- cloudExtensions.onUserDelete(userId)
       deleteResult <- directoryDAO.deleteUser(userId)
     } yield deleteResult
   }
 
-  def createAllUsersGroup: Future[Unit] = {
-    for {
-      _ <- directoryDAO.createGroup(BasicWorkbenchGroup(allUsersGroupName, Set.empty, WorkbenchGroupEmail(toGoogleGroupName(allUsersGroupName.value)))) recover { case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode == Option(StatusCodes.Conflict) => () }
-      _ <- googleDirectoryDAO.createGroup(allUsersGroupName.value, WorkbenchGroupEmail(toGoogleGroupName(allUsersGroupName.value))) recover { case e: GoogleJsonResponseException if e.getDetails.getCode == StatusCodes.Conflict.intValue => () }
-    } yield ()
-  }
-
-  private[service] def toProxyFromUser(subjectId: String): String = s"PROXY_$subjectId@$emailDomain"
-  private[service] def toGoogleGroupName(groupName: String): String = s"GROUP_$groupName@$emailDomain"
-
-  //TODO: Move these to RoleSupport.scala (or something) in some shared library
-  def tryIsWorkbenchAdmin(memberEmail: WorkbenchEmail): Future[Boolean] = {
-    googleDirectoryDAO.isGroupMember(WorkbenchGroupEmail(s"fc-admins@$emailDomain"), memberEmail) recoverWith { case t => throw new WorkbenchException("Unable to query for admin status.", t) }
-  }
+  private[service] def toProxyFromUser(subjectId: String): String = s"PROXY_$subjectId@${cloudExtensions.emailDomain}"
 }

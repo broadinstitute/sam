@@ -27,7 +27,7 @@ class StatusRouteSpec extends FlatSpec with Matchers with ScalatestRouteTest wit
     implicit val patienceConfig = PatienceConfig(timeout = 1 second)
     eventually {
       Get("/status") ~> samRoutes.route ~> check {
-        responseAs[StatusCheckResponse] shouldEqual StatusCheckResponse(true, Map(OpenDJ -> HealthMonitor.OkStatus, GoogleGroups -> HealthMonitor.OkStatus))
+        responseAs[StatusCheckResponse] shouldEqual StatusCheckResponse(true, Map(OpenDJ -> HealthMonitor.OkStatus))
         status shouldEqual StatusCodes.OK
       }
     }
@@ -35,14 +35,11 @@ class StatusRouteSpec extends FlatSpec with Matchers with ScalatestRouteTest wit
 
   it should "give 500 for not ok" in {
     val directoryDAO = new MockDirectoryDAO()
-    val googleDirectoryDAO = new MockGoogleDirectoryDAO()
     val policyDAO = new MockAccessPolicyDAO()
-    val googleIamDAO = new MockGoogleIamDAO()
-    val petServiceAccountConfig = PetServiceAccountConfig(GoogleProject("test-project"), Set(WorkbenchUserEmail("test@test.gserviceaccount.com")))
 
     val mockResourceService = new ResourceService(Map.empty, policyDAO, directoryDAO, NoExtensions, "example.com")
-    val mockUserService = new UserService(directoryDAO, NoExtensions, googleDirectoryDAO, "dev.test.firecloud.org")
-    val mockStatusService = new StatusService(directoryDAO, googleDirectoryDAO)
+    val mockUserService = new UserService(directoryDAO, NoExtensions)
+    val mockStatusService = new StatusService(directoryDAO, NoExtensions)
 
     val samRoutes = new TestSamRoutes(mockResourceService, mockUserService, mockStatusService, UserInfo("", WorkbenchUserId(""), WorkbenchUserEmail(""), 0))
 
