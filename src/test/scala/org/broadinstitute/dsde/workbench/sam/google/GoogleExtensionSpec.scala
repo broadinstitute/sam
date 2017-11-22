@@ -101,7 +101,7 @@ class GoogleExtensionSpec extends FlatSpec with Matchers with TestSupport with M
     }
   }
 
-  "GoogleGroup Sync" should "break out of cycle" in {
+  it should "break out of cycle" in {
     val groupName = WorkbenchGroupName("group1")
     val groupEmail = WorkbenchGroupEmail("group1@example.com")
     val subGroupName = WorkbenchGroupName("group2")
