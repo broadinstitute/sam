@@ -272,4 +272,38 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
       runAndWait(service.listUserAccessPolicies(defaultResourceType, dummyUserInfo))
     }
   }
+
+  "add/remove SubjectToPolicy" should "add/remove subject and tolerate prior (non)existence" in {
+    val resource = Resource(defaultResourceType.name, ResourceId("my-resource"))
+    val policyName = AccessPolicyName(defaultResourceType.ownerRoleName.value)
+    val otherUserInfo = UserInfo("token", WorkbenchUserId("otheruserid"), WorkbenchUserEmail("otheruser@company.com"), 0)
+
+    runAndWait(dirDAO.createUser(WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)))
+    runAndWait(dirDAO.createUser(WorkbenchUser(otherUserInfo.userId, otherUserInfo.userEmail)))
+
+    runAndWait(service.createResourceType(defaultResourceType))
+    runAndWait(service.createResource(defaultResourceType, resource.resourceId, dummyUserInfo))
+
+    // assert baseline
+    assertResult(Set.empty) {
+      runAndWait(service.listUserAccessPolicies(defaultResourceType, otherUserInfo))
+    }
+
+    runAndWait(service.addSubjectToPolicy(ResourceAndPolicyName(resource, policyName), otherUserInfo.userId))
+    assertResult(Set(ResourceIdAndPolicyName(resource.resourceId, policyName))) {
+      runAndWait(service.listUserAccessPolicies(defaultResourceType, otherUserInfo))
+    }
+
+    // add a second time to make sure no exception is thrown
+    runAndWait(service.addSubjectToPolicy(ResourceAndPolicyName(resource, policyName), otherUserInfo.userId))
+
+
+    runAndWait(service.removeSubjectFromPolicy(ResourceAndPolicyName(resource, policyName), otherUserInfo.userId))
+    assertResult(Set.empty) {
+      runAndWait(service.listUserAccessPolicies(defaultResourceType, otherUserInfo))
+    }
+
+    // remove a second time to make sure no exception is thrown
+    runAndWait(service.removeSubjectFromPolicy(ResourceAndPolicyName(resource, policyName), otherUserInfo.userId))
+  }
 }
