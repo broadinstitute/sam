@@ -165,7 +165,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
     } yield ()
   }
 
-  def synchronizeGroupMembers(groupId: WorkbenchGroupIdentity): Future[SyncReport] = {
+  def synchronizeGroupMembers(groupId: WorkbenchGroupIdentity, visitedGroups: Set[WorkbenchGroupIdentity] = Set.empty[WorkbenchGroupIdentity]): Future[Map[WorkbenchGroupEmail, Seq[SyncReportItem]]] = {
     def toSyncReportItem(operation: String, email: String, result: Try[Unit]) = {
       SyncReportItem(
         operation,
@@ -176,39 +176,50 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
         }
       )
     }
+    if(visitedGroups.contains(groupId)) {
+      Future.successful(Map.empty)
+    } else {
+      for {
+        groupOption <- groupId match {
+          case basicGroupName: WorkbenchGroupName => directoryDAO.loadGroup(basicGroupName)
+          case rpn: ResourceAndPolicyName => accessPolicyDAO.loadPolicy(rpn)
+        }
 
-    for {
-      groupOption <- groupId match {
-        case basicGroupName: WorkbenchGroupName => directoryDAO.loadGroup(basicGroupName)
-        case rpn: ResourceAndPolicyName => accessPolicyDAO.loadPolicy(rpn)
+        group = groupOption.getOrElse(throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"$groupId not found")))
+
+        subGroupSyncs <- Future.traverse(group.members) {
+          case subGroup: WorkbenchGroupIdentity =>
+            directoryDAO.getSynchronizedDate(subGroup).flatMap{
+              case None => synchronizeGroupMembers(subGroup, visitedGroups + groupId)
+              case _ => Future.successful(Map.empty[WorkbenchGroupEmail, Seq[SyncReportItem]])
+            }
+          case _ => Future.successful(Map.empty[WorkbenchGroupEmail, Seq[SyncReportItem]])
+        }
+
+        googleMemberEmails <- googleDirectoryDAO.listGroupMembers(group.email) flatMap {
+          case None => googleDirectoryDAO.createGroup(groupId.toString, group.email) map (_ => Set.empty[String])
+          case Some(members) => Future.successful(members.toSet)
+        }
+        samMemberEmails <- Future.traverse(group.members) {
+          case group: WorkbenchGroupIdentity => directoryDAO.loadSubjectEmail(group)
+
+          // use proxy group email instead of user's actual email
+          case WorkbenchUserId(userSubjectId) => Future.successful(Option(WorkbenchUserEmail(toProxyFromUser(userSubjectId))))
+
+          // not sure why this next case would happen but if a petSA is in a group just use its email
+          case petSA: WorkbenchUserServiceAccountSubjectId => directoryDAO.loadSubjectEmail(petSA)
+        }.map(_.collect { case Some(email) => email.value })
+
+        toAdd = samMemberEmails -- googleMemberEmails
+        toRemove = googleMemberEmails -- samMemberEmails
+
+        addTrials <- Future.traverse(toAdd) { addEmail => googleDirectoryDAO.addMemberToGroup(group.email, WorkbenchUserEmail(addEmail)).toTry.map(toSyncReportItem("added", addEmail, _)) }
+        removeTrials <- Future.traverse(toRemove) { removeEmail => googleDirectoryDAO.removeMemberFromGroup(group.email, WorkbenchUserEmail(removeEmail)).toTry.map(toSyncReportItem("removed", removeEmail, _)) }
+
+        _ <- directoryDAO.updateSynchronizedDate(groupId)
+      } yield {
+        Map(group.email -> Seq(addTrials, removeTrials).flatten) ++ subGroupSyncs.flatten
       }
-
-      group = groupOption.getOrElse(throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"$groupId not found")))
-
-      googleMemberEmails <- googleDirectoryDAO.listGroupMembers(group.email) flatMap {
-        case None => googleDirectoryDAO.createGroup(groupId.toString, group.email) map (_ => Set.empty[String])
-        case Some(members) => Future.successful(members.toSet)
-      }
-
-      samMemberEmails <- Future.traverse(group.members) {
-        case group: WorkbenchGroupIdentity => directoryDAO.loadSubjectEmail(group)
-
-        // use proxy group email instead of user's actual email
-        case WorkbenchUserId(userSubjectId) => Future.successful(Option(WorkbenchUserEmail(toProxyFromUser(userSubjectId))))
-
-        // not sure why this next case would happen but if a petSA is in a group just use its email
-        case petSA: WorkbenchUserServiceAccountSubjectId => directoryDAO.loadSubjectEmail(petSA)
-      }.map(_.collect { case Some(email) => email.value })
-
-      toAdd = samMemberEmails -- googleMemberEmails
-      toRemove = googleMemberEmails -- samMemberEmails
-
-      addTrials <- Future.traverse(toAdd) { addEmail => googleDirectoryDAO.addMemberToGroup(group.email, WorkbenchUserEmail(addEmail)).toTry.map(toSyncReportItem("added", addEmail, _)) }
-      removeTrials <- Future.traverse(toRemove) { removeEmail => googleDirectoryDAO.removeMemberFromGroup(group.email, WorkbenchUserEmail(removeEmail)).toTry.map(toSyncReportItem("removed", removeEmail, _)) }
-
-      _ <- directoryDAO.updateSynchronizedDate(groupId)
-    } yield {
-      SyncReport(group.email, Seq(addTrials, removeTrials).flatten)
     }
   }
 

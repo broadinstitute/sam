@@ -102,8 +102,8 @@ class GoogleGroupSyncMonitorActor(val pollInterval: FiniteDuration, pollInterval
       val nextTime = org.broadinstitute.dsde.workbench.util.addJitter(pollInterval, pollIntervalJitter)
       system.scheduler.scheduleOnce(nextTime.asInstanceOf[FiniteDuration], self, StartMonitorPass)
 
-    case (Success(report: SyncReport), ackId: String) =>
-      val errorReports = report.items.collect {
+    case (Success(report: Map[WorkbenchGroupEmail, Seq[SyncReportItem]]), ackId: String) =>
+      val errorReports = report.values.flatten.collect {
         case SyncReportItem(_, _, errorReports) if errorReports.nonEmpty => errorReports
       }.flatten
 
@@ -113,9 +113,10 @@ class GoogleGroupSyncMonitorActor(val pollInterval: FiniteDuration, pollInterval
 
         import DefaultJsonProtocol._
         import org.broadinstitute.dsde.workbench.sam.google.GoogleModelJsonSupport._
-        logger.info(s"synchronized google group ${report.groupEmail.value}: ${report.items.toJson.compactPrint}")
+        import WorkbenchIdentityJsonSupport._
+        logger.info(s"synchronized google group ${report.toJson.compactPrint}")
       } else {
-        throw new WorkbenchExceptionWithErrorReport(ErrorReport("error(s) syncing google group", errorReports))
+        throw new WorkbenchExceptionWithErrorReport(ErrorReport("error(s) syncing google group", errorReports.toSeq))
       }
 
     case (Failure(t), ackId: String) =>

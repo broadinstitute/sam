@@ -1,8 +1,9 @@
 package org.broadinstitute.dsde.workbench.sam.google
 
+import java.util.Date
 import com.typesafe.config.ConfigFactory
 import org.broadinstitute.dsde.workbench.google.GoogleDirectoryDAO
-import org.broadinstitute.dsde.workbench.google.mock.{MockGoogleDirectoryDAO, MockGoogleIamDAO}
+import org.broadinstitute.dsde.workbench.google.mock.{MockGoogleDirectoryDAO, MockGoogleIamDAO, MockGooglePubSubDAO}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.config.{DirectoryConfig, GoogleServicesConfig, PetServiceAccountConfig}
 import org.broadinstitute.dsde.workbench.sam.{TestSupport, _}
@@ -10,6 +11,7 @@ import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryDAO, JndiDirect
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.AccessPolicyDAO
 import org.broadinstitute.dsde.workbench.sam.service.{NoExtensions, UserService}
+import org.broadinstitute.dsde.workbench.sam.directory.MockDirectoryDAO
 import org.mockito.Mockito._
 import org.mockito.ArgumentMatchers._
 import org.scalatest.mockito.MockitoSugar
@@ -55,7 +57,8 @@ class GoogleExtensionSpec extends FlatSpec with Matchers with TestSupport with M
       val mockAccessPolicyDAO = mock[AccessPolicyDAO]
       val mockDirectoryDAO = mock[DirectoryDAO]
       val mockGoogleDirectoryDAO = mock[GoogleDirectoryDAO]
-      val ge = new GoogleExtensions(mockDirectoryDAO, mockAccessPolicyDAO, mockGoogleDirectoryDAO, null, null, googleServicesConfig, petServiceAccountConfig)
+      val mockGooglePubSubDAO = new MockGooglePubSubDAO
+      val ge = new GoogleExtensions(mockDirectoryDAO, mockAccessPolicyDAO, mockGoogleDirectoryDAO, mockGooglePubSubDAO, null, googleServicesConfig, petServiceAccountConfig)
 
       target match {
         case g: BasicWorkbenchGroup =>
@@ -64,6 +67,7 @@ class GoogleExtensionSpec extends FlatSpec with Matchers with TestSupport with M
           when(mockAccessPolicyDAO.loadPolicy(p.id)).thenReturn(Future.successful(Option(testPolicy)))
       }
       when(mockDirectoryDAO.updateSynchronizedDate(any[WorkbenchGroupIdentity])).thenReturn(Future.successful(()))
+      when(mockDirectoryDAO.getSynchronizedDate(any[WorkbenchGroupIdentity])).thenReturn(Future.successful(Some(new Date(2017, 11, 22))))
 
       val subGroups = Seq(inSamSubGroup, inGoogleSubGroup, inBothSubGroup)
       subGroups.foreach { g => when(mockDirectoryDAO.loadSubjectEmail(g.id)).thenReturn(Future.successful(Option(g.email))) }
@@ -83,8 +87,8 @@ class GoogleExtensionSpec extends FlatSpec with Matchers with TestSupport with M
 
       val results = runAndWait(ge.synchronizeGroupMembers(target.id))
 
-      results.groupEmail should equal(target.email)
-      results.items should contain theSameElementsAs (
+      results.head._1 should equal(target.email)
+      results.head._2 should contain theSameElementsAs (
         added.map(SyncReportItem("added", _, None)) ++
           removed.map(SyncReportItem("removed", _, None)) ++
           Seq(
@@ -95,6 +99,37 @@ class GoogleExtensionSpec extends FlatSpec with Matchers with TestSupport with M
       removed.foreach { email => verify(mockGoogleDirectoryDAO).removeMemberFromGroup(target.email, WorkbenchUserEmail(email)) }
       verify(mockDirectoryDAO).updateSynchronizedDate(target.id)
     }
+  }
+
+  it should "break out of cycle" in {
+    val groupName = WorkbenchGroupName("group1")
+    val groupEmail = WorkbenchGroupEmail("group1@example.com")
+    val subGroupName = WorkbenchGroupName("group2")
+    val subGroupEmail = WorkbenchGroupEmail("group2@example.com")
+
+    val subGroup = BasicWorkbenchGroup(subGroupName, Set.empty, subGroupEmail)
+    val topGroup = BasicWorkbenchGroup(groupName, Set.empty, groupEmail)
+
+    val mockAccessPolicyDAO = mock[AccessPolicyDAO]
+    val mockDirectoryDAO = new MockDirectoryDAO
+    val mockGoogleDirectoryDAO = mock[GoogleDirectoryDAO]
+    val mockGooglePubSubDAO = new MockGooglePubSubDAO
+    val mockGoogleIamDAO = new MockGoogleIamDAO
+    val ge = new GoogleExtensions(mockDirectoryDAO, mockAccessPolicyDAO, mockGoogleDirectoryDAO, mockGooglePubSubDAO, mockGoogleIamDAO, googleServicesConfig, petServiceAccountConfig)
+    when(mockGoogleDirectoryDAO.addMemberToGroup(any[WorkbenchGroupEmail], any[WorkbenchEmail])).thenReturn(Future.successful(()))
+    //create groups
+    mockDirectoryDAO.createGroup(topGroup)
+    mockDirectoryDAO.createGroup(subGroup)
+    //add subGroup to topGroup
+    mockGoogleDirectoryDAO.addMemberToGroup(groupEmail, subGroupEmail)
+    mockDirectoryDAO.addGroupMember(topGroup.id, subGroup.id)
+    //add topGroup to subGroup - creating cycle
+    mockGoogleDirectoryDAO.addMemberToGroup(subGroupEmail, groupEmail)
+    mockDirectoryDAO.addGroupMember(subGroup.id, topGroup.id)
+    when(mockGoogleDirectoryDAO.listGroupMembers(topGroup.email)).thenReturn(Future.successful(Option(Seq(subGroupEmail.value))))
+    when(mockGoogleDirectoryDAO.listGroupMembers(subGroup.email)).thenReturn(Future.successful(Option(Seq(groupEmail.value))))
+    val syncedEmails = runAndWait(ge.synchronizeGroupMembers(topGroup.id)).keys
+    syncedEmails shouldEqual Set(groupEmail, subGroupEmail)
   }
 
   "GoogleExtension" should "get a pet service account for a user" in {
