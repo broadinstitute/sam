@@ -15,8 +15,7 @@ import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicy, BasicWorkbench
 /**
   * Created by mbemis on 6/23/17.
   */
-class MockDirectoryDAO extends DirectoryDAO {
-  private val groups: mutable.Map[WorkbenchGroupIdentity, WorkbenchGroup] = new TrieMap()
+class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, WorkbenchGroup] = new TrieMap()) extends DirectoryDAO {
   private val users: mutable.Map[WorkbenchUserId, WorkbenchUser] = new TrieMap()
   private val enabledUsers: mutable.Map[WorkbenchSubject, Unit] = new TrieMap()
   private val usersWithEmails: mutable.Map[WorkbenchUserEmail, WorkbenchUserId] = new TrieMap()
@@ -46,27 +45,27 @@ class MockDirectoryDAO extends DirectoryDAO {
   }
 
   override def addGroupMember(groupName: WorkbenchGroupIdentity, addMember: WorkbenchSubject): Future[Unit] = Future {
-    val group = groups(groupName.asInstanceOf[WorkbenchGroupName])
+    val group = groups(groupName)
     val updatedGroup = group match {
       case g: BasicWorkbenchGroup => g.copy(members = group.members + addMember)
       case p: AccessPolicy => p.copy(members = group.members + addMember)
       case _ => throw new WorkbenchException(s"unknown group implementation: $group")
     }
-    groups += groupName.asInstanceOf[WorkbenchGroupName] -> updatedGroup
+    groups += groupName -> updatedGroup
   }
 
   override def removeGroupMember(groupName: WorkbenchGroupIdentity, removeMember: WorkbenchSubject): Future[Unit] = Future {
-    val group = groups(groupName.asInstanceOf[WorkbenchGroupName])
+    val group = groups(groupName)
     val updatedGroup = group match {
       case g: BasicWorkbenchGroup => g.copy(members = group.members - removeMember)
       case p: AccessPolicy => p.copy(members = group.members - removeMember)
       case _ => throw new WorkbenchException(s"unknown group implementation: $group")
     }
-    groups += groupName.asInstanceOf[WorkbenchGroupName] -> updatedGroup
+    groups += groupName -> updatedGroup
   }
 
   override def isGroupMember(groupId: WorkbenchGroupIdentity, member: WorkbenchSubject): Future[Boolean] = Future {
-    groups.getOrElse(groupId.asInstanceOf[WorkbenchGroupName], BasicWorkbenchGroup(null, Set.empty, WorkbenchGroupEmail("g1@example.com"))).members.contains(member)
+    groups.getOrElse(groupId, BasicWorkbenchGroup(null, Set.empty, WorkbenchGroupEmail("g1@example.com"))).members.contains(member)
   }
 
   override def loadSubjectFromEmail(email: String): Future[Option[WorkbenchSubject]] = Future {
@@ -112,7 +111,7 @@ class MockDirectoryDAO extends DirectoryDAO {
   }
 
   override def listFlattenedGroupUsers(groupName: WorkbenchGroupIdentity): Future[Set[WorkbenchUserId]] = Future {
-    listGroupUsers(groupName.asInstanceOf[WorkbenchGroupName], Set.empty)
+    listGroupUsers(groupName, Set.empty)
   }
 
   private def listGroupUsers(groupName: WorkbenchGroupIdentity, visitedGroups: Set[WorkbenchGroupIdentity]): Set[WorkbenchUserId] = {

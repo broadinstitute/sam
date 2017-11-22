@@ -7,7 +7,7 @@ import org.scalatest.{FlatSpec, Matchers}
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import org.broadinstitute.dsde.workbench.google.mock.{MockGoogleDirectoryDAO, MockGoogleIamDAO}
 import org.broadinstitute.dsde.workbench.google.model.GoogleProject
-import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchUserEmail, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchUser, WorkbenchUserEmail, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import spray.json.{JsBoolean, JsValue}
 import spray.json.DefaultJsonProtocol._
@@ -39,7 +39,7 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     new TestSamRoutes(mockResourceService, mockUserService, mockStatusService, userInfo)
   }
 
-  "GET /api/resources/{resourceType}/{resourceId}/actions/{action}" should "404 for unknown resource type" in {
+  "GET /api/resource/{resourceType}/{resourceId}/actions/{action}" should "404 for unknown resource type" in {
     val samRoutes = TestSamRoutes(Map.empty)
 
     Get("/api/resource/foo/bar/action") ~> samRoutes.route ~> check {
@@ -56,7 +56,7 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     }
   }
 
-  "POST /api/resources/{resourceType}/{resourceId}" should "204 create resource" in {
+  "POST /api/resource/{resourceType}/{resourceId}" should "204 create resource" in {
     val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceAction("run")), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("run")))), ResourceRoleName("owner"))
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
 
@@ -71,7 +71,7 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
 
   }
 
-  "GET /api/resources/{resourceType}/{resourceId}/roles" should "200 on list resource roles" in {
+  "GET /api/resource/{resourceType}/{resourceId}/roles" should "200 on list resource roles" in {
     val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceAction("run")), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("run")))), ResourceRoleName("owner"))
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
 
@@ -94,7 +94,7 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     }
   }
 
-  "PUT /api/resources/{resourceType}/{resourceId}/policies" should "201 on a new policy being created for a resource" in {
+  "PUT /api/resource/{resourceType}/{resourceId}/policies" should "201 on a new policy being created for a resource" in {
     val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceAction("alter_policies"), ResourceAction("can_compute")), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("alter_policies")))), ResourceRoleName("owner"))
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
 
@@ -201,7 +201,7 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     }
   }
 
-  "GET /api/resources/{resourceType}/{resourceId}/policies" should "200 when listing policies for a resource and user has read_policies permission" in {
+  "GET /api/resource/{resourceType}/{resourceId}/policies" should "200 when listing policies for a resource and user has read_policies permission" in {
     val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceAction("read_policies"), ResourceAction("can_compute")), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("read_policies")))), ResourceRoleName("owner"))
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
 
@@ -256,7 +256,7 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     }
   }
 
-  "DELETE /api/resources/{resourceType}/{resourceId}" should "204 when deleting a resource and the user has permission to do so" in {
+  "DELETE /api/resource/{resourceType}/{resourceId}" should "204 when deleting a resource and the user has permission to do so" in {
     val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceAction("alter_policies"), ResourceAction("read_policies"), ResourceAction("delete")), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("delete"), ResourceAction("read_policies")))), ResourceRoleName("owner"))
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
 
@@ -310,7 +310,7 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     val samRoutes = createSamRoutes(Map(resourceType.name -> resourceType))
 
     runAndWait(samRoutes.resourceService.createResourceType(resourceType))
-    runAndWait(samRoutes.resourceService.accessPolicyDAO.createResource(Resource(resourceType.name, ResourceId("foo"))))
+    runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), UserInfo("accessToken", WorkbenchUserId("user2"), WorkbenchUserEmail("user2@example.com"), 0)))
 
     //Verify resource exists by checking for conflict on recreate
     Post(s"/api/resource/${resourceType.name}/foo") ~> samRoutes.route ~> check {
@@ -323,7 +323,7 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     }
   }
 
-  "GET /api/resources/{resourceType}" should "200" in {
+  "GET /api/resource/{resourceType}" should "200" in {
     val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceAction("read_policies"), ResourceAction("can_compute")), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("read_policies")))), ResourceRoleName("owner"))
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
 
@@ -335,6 +335,134 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     //Read the policies
     Get(s"/api/resource/${resourceType.name}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
+    }
+  }
+
+  "PUT /api/resource/{resourceType}/{resourceId}/policies/{policyName}/memberEmails/{email}" should "204 adding a member" in {
+    // happy case
+    val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceAction("alter_policies"), ResourceAction("can_compute")), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("alter_policies")))), ResourceRoleName("owner"))
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
+    val testUser = WorkbenchUser(WorkbenchUserId("testuser"), WorkbenchUserEmail("testuser@foo.com"))
+
+    runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), defaultUserInfo))
+
+    runAndWait(samRoutes.userService.createUser(testUser))
+
+    Put(s"/api/resource/${resourceType.name}/foo/policies/${resourceType.ownerRoleName}/memberEmails/${testUser.email}") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+    }
+  }
+
+  it should "400 adding unknown subject" in {
+    // differs from happy case in that we don't create user
+    val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceAction("alter_policies"), ResourceAction("can_compute")), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("alter_policies")))), ResourceRoleName("owner"))
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
+    val testUser = WorkbenchUser(WorkbenchUserId("testuser"), WorkbenchUserEmail("testuser@foo.com"))
+
+    runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), defaultUserInfo))
+
+    //runAndWait(samRoutes.userService.createUser(testUser))
+
+    Put(s"/api/resource/${resourceType.name}/foo/policies/${resourceType.ownerRoleName}/memberEmails/${testUser.email}") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.BadRequest
+    }
+  }
+
+  it should "403 adding without permission" in {
+    // differs from happy case in that owner role does not have alter_policies
+    val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceAction("alter_policies"), ResourceAction("can_compute")), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("can_compute")))), ResourceRoleName("owner"))
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
+    val testUser = WorkbenchUser(WorkbenchUserId("testuser"), WorkbenchUserEmail("testuser@foo.com"))
+
+    runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), defaultUserInfo))
+
+    runAndWait(samRoutes.userService.createUser(testUser))
+
+    Put(s"/api/resource/${resourceType.name}/foo/policies/${resourceType.ownerRoleName}/memberEmails/${testUser.email}") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Forbidden
+    }
+  }
+
+  it should "404 adding without any access" in {
+    // differs from happy case in that testUser creates resource, not defaultUser which calls the PUT
+    val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceAction("alter_policies"), ResourceAction("can_compute")), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("can_compute")))), ResourceRoleName("owner"))
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
+    val testUser = UserInfo("token", WorkbenchUserId("testuser"), WorkbenchUserEmail("testuser@foo.com"), 0)
+
+    runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), testUser))
+
+    runAndWait(samRoutes.userService.createUser(testUser.toWorkbenchUser))
+
+    Put(s"/api/resource/${resourceType.name}/foo/policies/${resourceType.ownerRoleName}/memberEmails/${testUser.userEmail}") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
+    }
+  }
+
+  "DELETE /api/resource/{resourceType}/{resourceId}/policies/{policyName}/memberEmails/{email}" should "204 deleting a member" in {
+    // happy case
+    val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceAction("alter_policies"), ResourceAction("can_compute")), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("alter_policies")))), ResourceRoleName("owner"))
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
+    val testUser = WorkbenchUser(WorkbenchUserId("testuser"), WorkbenchUserEmail("testuser@foo.com"))
+
+    runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), defaultUserInfo))
+
+    runAndWait(samRoutes.userService.createUser(testUser))
+
+    runAndWait(samRoutes.resourceService.addSubjectToPolicy(ResourceAndPolicyName(Resource(resourceType.name,  ResourceId("foo")), AccessPolicyName(resourceType.ownerRoleName.value)), testUser.id))
+
+    Delete(s"/api/resource/${resourceType.name}/foo/policies/${resourceType.ownerRoleName}/memberEmails/${testUser.email}") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+    }
+  }
+
+  it should "400 deleting unknown subject" in {
+    // differs from happy case in that we don't create user
+    val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceAction("alter_policies"), ResourceAction("can_compute")), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("alter_policies")))), ResourceRoleName("owner"))
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
+    val testUser = WorkbenchUser(WorkbenchUserId("testuser"), WorkbenchUserEmail("testuser@foo.com"))
+
+    runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), defaultUserInfo))
+
+    //runAndWait(samRoutes.userService.createUser(testUser))
+
+    //runAndWait(samRoutes.resourceService.addSubjectToPolicy(ResourceAndPolicyName(Resource(resourceType.name,  ResourceId("foo")), AccessPolicyName(resourceType.ownerRoleName.value)), testUser.id))
+
+    Delete(s"/api/resource/${resourceType.name}/foo/policies/${resourceType.ownerRoleName}/memberEmails/${testUser.email}") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.BadRequest
+    }
+  }
+
+  it should "403 removing without permission" in {
+    // differs from happy case in that owner role does not have alter_policies
+    val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceAction("alter_policies"), ResourceAction("can_compute")), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("can_compute")))), ResourceRoleName("owner"))
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
+    val testUser = WorkbenchUser(WorkbenchUserId("testuser"), WorkbenchUserEmail("testuser@foo.com"))
+
+    runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), defaultUserInfo))
+
+    runAndWait(samRoutes.userService.createUser(testUser))
+
+    runAndWait(samRoutes.resourceService.addSubjectToPolicy(ResourceAndPolicyName(Resource(resourceType.name,  ResourceId("foo")), AccessPolicyName(resourceType.ownerRoleName.value)), testUser.id))
+
+    Delete(s"/api/resource/${resourceType.name}/foo/policies/${resourceType.ownerRoleName}/memberEmails/${testUser.email}") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Forbidden
+    }
+  }
+
+  it should "404 removing without any access" in {
+    // differs from happy case in that testUser creates resource, not defaultUser which calls the PUT
+    val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceAction("alter_policies"), ResourceAction("can_compute")), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("can_compute")))), ResourceRoleName("owner"))
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
+    val testUser = UserInfo("token", WorkbenchUserId("testuser"), WorkbenchUserEmail("testuser@foo.com"), 0)
+
+    runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), testUser))
+
+    runAndWait(samRoutes.userService.createUser(testUser.toWorkbenchUser))
+
+    runAndWait(samRoutes.resourceService.addSubjectToPolicy(ResourceAndPolicyName(Resource(resourceType.name,  ResourceId("foo")), AccessPolicyName(resourceType.ownerRoleName.value)), testUser.userId))
+
+    Delete(s"/api/resource/${resourceType.name}/foo/policies/${resourceType.ownerRoleName}/memberEmails/${testUser.userEmail}") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
     }
   }
 }

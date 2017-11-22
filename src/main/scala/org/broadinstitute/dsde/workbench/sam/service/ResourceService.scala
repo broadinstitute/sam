@@ -1,6 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.service
 
 import java.util.UUID
+import javax.naming.directory.{AttributeInUseException, NoSuchAttributeException}
 
 import akka.http.scaladsl.model.StatusCodes
 import com.typesafe.scalalogging.LazyLogging
@@ -127,19 +128,15 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     }
   }
 
-  def addUserToPolicy(resourceType: ResourceType, policyName: AccessPolicyName, resource: Resource, email: String, userInfo: UserInfo) = {
-    val resourceAndPolicyName = ResourceAndPolicyName(resource, policyName)
-    directoryDAO.loadSubjectFromEmail(email).map{
-      case Some(subject) => directoryDAO.addGroupMember(resourceAndPolicyName, subject)
-      case None => Future.successful(None)
+  def addSubjectToPolicy(resourceAndPolicyName: ResourceAndPolicyName, subject: WorkbenchSubject): Future[Unit] = {
+    directoryDAO.addGroupMember(resourceAndPolicyName, subject) recover {
+      case _: AttributeInUseException => // subject is already there
     }
   }
 
-  def removeUserFromPolicy(resourceType: ResourceType, policyName: AccessPolicyName, resource: Resource, email: String, userInfo: UserInfo) = {
-    val resourceAndPolicyName = ResourceAndPolicyName(resource, policyName)
-    directoryDAO.loadSubjectFromEmail(email).map{
-      case Some(subject) => directoryDAO.removeGroupMember(resourceAndPolicyName, subject)
-      case None => Future.successful(None)
+  def removeSubjectFromPolicy(resourceAndPolicyName: ResourceAndPolicyName, subject: WorkbenchSubject): Future[Unit] = {
+    directoryDAO.removeGroupMember(resourceAndPolicyName, subject) recover {
+      case _: NoSuchAttributeException => // subject already gone
     }
   }
 

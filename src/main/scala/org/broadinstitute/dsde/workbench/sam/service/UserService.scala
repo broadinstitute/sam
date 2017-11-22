@@ -36,12 +36,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
     }
   }
 
-  def getUserFromEmail(email: String): Future[Option[WorkbenchSubject]] = {
-    directoryDAO.loadSubjectFromEmail(email).flatMap {
-      case None => Future.successful(None)
-      case Some(subject) => Future.successful(Some(subject))
-    }
-  }
+  def getSubjectFromEmail(email: String): Future[Option[WorkbenchSubject]] = directoryDAO.loadSubjectFromEmail(email)
 
   def getUserStatus(userId: WorkbenchUserId): Future[Option[UserStatus]] = {
     directoryDAO.loadUser(userId).flatMap {
