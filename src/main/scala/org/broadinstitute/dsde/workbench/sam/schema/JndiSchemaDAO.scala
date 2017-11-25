@@ -30,7 +30,6 @@ object JndiSchemaDAO {
     val uniqueMember = "uniqueMember"
     val groupUpdatedTimestamp = "groupUpdatedTimestamp"
     val groupSynchronizedTimestamp = "groupSynchronizedTimestamp"
-    val petServiceAccount = "petServiceAccount"
     val member = "member"
     val memberOf = "isMemberOf"
     val givenName = "givenName"
@@ -62,7 +61,6 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit exe
       _ <- createOrgUnit(peopleOu)
       _ <- createOrgUnit(groupsOu)
       _ <- createOrgUnit(resourcesOu)
-      _ <- createOrgUnit(petsOu)
     } yield ()
   }
 
@@ -222,8 +220,6 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit exe
   def createWorkbenchPersonSchema(): Future[Unit] = withContext { ctx =>
     val schema = ctx.getSchema("")
 
-    createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.400", Attr.petServiceAccount, "pet service account of the user", true)
-
     val attrs = new BasicAttributes(true) // Ignore case
     attrs.put("NUMERICOID", "1.3.6.1.4.1.18060.0.4.3.2.300")
     attrs.put("NAME", "workbenchPerson")
@@ -234,10 +230,6 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit exe
     must.add("objectclass")
     attrs.put(must)
 
-    val may = new BasicAttribute("MAY")
-    may.add(Attr.petServiceAccount)
-    attrs.put(may)
-
     // Add the new schema object for "workbenchPerson"
     schema.createSubcontext("ClassDefinition/workbenchPerson", attrs)
   }
@@ -247,7 +239,6 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit exe
 
     // Intentionally ignores errors
     Try { schema.destroySubcontext("ClassDefinition/workbenchPerson") }
-    Try { schema.destroySubcontext(s"AttributeDefinition/${Attr.petServiceAccount}") }
   }
 
   private def createAttributeDefinition(schema: DirContext, numericOID: String, name: String, description: String, singleValue: Boolean, equality: Option[String] = None, ordering: Option[String] = None, syntax: Option[String] = None) = {
@@ -267,7 +258,6 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit exe
   def clearDatabase(): Future[Unit] = withContext { ctx =>
     clear(ctx, resourcesOu)
     clear(ctx, groupsOu)
-    clear(ctx, petsOu)
     clear(ctx, peopleOu)
   }
 

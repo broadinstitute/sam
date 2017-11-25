@@ -140,14 +140,14 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
 
   private def enablePetServiceAccount(userId: WorkbenchUserId, petServiceAccount: WorkbenchUserServiceAccount): Future[Unit] = {
     for {
-      _ <- directoryDAO.enableIdentity(petServiceAccount.subjectId)
+      _ <- directoryDAO.enableIdentity(PetServiceAccountId(userId, petServiceAccount.subjectId))
       _ <- googleDirectoryDAO.addMemberToGroup(WorkbenchGroupEmail(toProxyFromUser(userId.value)), petServiceAccount.email)
     } yield ()
   }
 
   private def disablePetServiceAccount(userId: WorkbenchUserId, petServiceAccount: WorkbenchUserServiceAccount): Future[Unit] = {
     for {
-      _ <- directoryDAO.disableIdentity(petServiceAccount.subjectId)
+      _ <- directoryDAO.disableIdentity(PetServiceAccountId(userId, petServiceAccount.subjectId))
       _ <- googleDirectoryDAO.removeMemberFromGroup(WorkbenchGroupEmail(toProxyFromUser(userId.value)), petServiceAccount.email)
     } yield ()
   }
@@ -168,10 +168,8 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
       _ <- Future.traverse(petServiceAccountConfig.serviceAccountUsers) { email =>
         googleIamDAO.addServiceAccountUserRoleForUser(petServiceAccountConfig.googleProject, petServiceAccount.email, email)
       }
-      // add the pet service account attribute to the user's LDAP record
-      _ <- directoryDAO.addPetServiceAccountToUser(user.id, petServiceAccount.email)
       // create an additional LDAP record for the pet service account itself (in a different organizational unit than the user)
-      _ <- directoryDAO.createPetServiceAccount(petServiceAccount)
+      _ <- directoryDAO.createPetServiceAccount(petServiceAccount, user.id)
       // enable the pet service account
       _ <- enablePetServiceAccount(user.id, petServiceAccount)
     } yield petServiceAccount.email
@@ -182,9 +180,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
     // disable the pet service account
       _ <- disablePetServiceAccount(user.id, petServiceAccount)
       // remove the LDAP record for the pet service account
-      _ <- directoryDAO.deletePetServiceAccount(petServiceAccount.subjectId)
-      // remove the pet service account attribute on the user's LDAP record
-      _ <- directoryDAO.removePetServiceAccountFromUser(user.id)
+      _ <- directoryDAO.deletePetServiceAccount(PetServiceAccountId(user.id, petServiceAccount.subjectId))
       // remove the service account itself in Google
       _ <- googleIamDAO.removeServiceAccount(petServiceAccountConfig.googleProject, petServiceAccount.email.toAccountName)
     } yield ()
@@ -236,7 +232,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
           case WorkbenchUserId(userSubjectId) => Future.successful(Option(WorkbenchUserEmail(toProxyFromUser(userSubjectId))))
 
           // not sure why this next case would happen but if a petSA is in a group just use its email
-          case petSA: WorkbenchUserServiceAccountSubjectId => directoryDAO.loadSubjectEmail(petSA)
+          case petSA: PetServiceAccountId => directoryDAO.loadSubjectEmail(petSA)
         }.map(_.collect { case Some(email) => email.value })
 
         toAdd = samMemberEmails -- googleMemberEmails

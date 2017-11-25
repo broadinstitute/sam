@@ -21,8 +21,7 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
   private val enabledUsers: mutable.Map[WorkbenchSubject, Unit] = new TrieMap()
   private val usersWithEmails: mutable.Map[WorkbenchUserEmail, WorkbenchUserId] = new TrieMap()
   private val groupsWithEmails: mutable.Map[WorkbenchGroupEmail, WorkbenchGroupName] = new TrieMap()
-  private val petServiceAccounts: mutable.Map[WorkbenchUserServiceAccountSubjectId, WorkbenchUserServiceAccount] = new TrieMap()
-  private val petServiceAccountsByUser: mutable.Map[WorkbenchUserId, WorkbenchUserServiceAccountEmail] = new TrieMap()
+  private val petServiceAccountsByUser: mutable.Map[WorkbenchUserId, WorkbenchUserServiceAccount] = new TrieMap()
 
   override def createGroup(group: BasicWorkbenchGroup): Future[BasicWorkbenchGroup] = Future {
     if (groups.keySet.contains(group.id)) {
@@ -123,7 +122,7 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
         case userId: WorkbenchUserId => Set(userId)
         case groupName: WorkbenchGroupIdentity => listGroupUsers(groupName, visitedGroups + groupName)
         case serviceAccountId: WorkbenchUserServiceAccountName => throw new WorkbenchException(s"Unexpected service account $serviceAccountId")
-        case petSubjectId: WorkbenchUserServiceAccountSubjectId => throw new WorkbenchException(s"Unexpected service account $petSubjectId")
+        case petSubjectId: PetServiceAccountId => throw new WorkbenchException(s"Unexpected service account $petSubjectId")
       }
     } else {
       Set.empty
@@ -148,34 +147,24 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
 
   override def loadGroupEmail(groupName: WorkbenchGroupName): Future[Option[WorkbenchGroupEmail]] = loadGroup(groupName).map(_.map(_.email))
 
-  override def createPetServiceAccount(petServiceAccount: WorkbenchUserServiceAccount): Future[WorkbenchUserServiceAccount] = Future {
-    if (petServiceAccounts.keySet.contains(petServiceAccount.subjectId)) {
+  override def createPetServiceAccount(petServiceAccount: WorkbenchUserServiceAccount, userId: WorkbenchUserId): Future[WorkbenchUserServiceAccount] = Future {
+    if (petServiceAccountsByUser.keySet.contains(userId)) {
       throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"pet service account ${petServiceAccount.subjectId} already exists"))
     }
-    petServiceAccounts += petServiceAccount.subjectId -> petServiceAccount
+    petServiceAccountsByUser += userId -> petServiceAccount
     petServiceAccount
   }
 
-  override def loadPetServiceAccount(petServiceAccountUniqueId: WorkbenchUserServiceAccountSubjectId): Future[Option[WorkbenchUserServiceAccount]] = Future {
-    petServiceAccounts.get(petServiceAccountUniqueId)
+  override def loadPetServiceAccount(petServiceAccountUniqueId: PetServiceAccountId): Future[Option[WorkbenchUserServiceAccount]] = Future {
+    petServiceAccountsByUser.get(petServiceAccountUniqueId.userId)
   }
 
-  override def deletePetServiceAccount(petServiceAccountUniqueId: WorkbenchUserServiceAccountSubjectId): Future[Unit] = Future {
-    petServiceAccounts -= petServiceAccountUniqueId
+  override def deletePetServiceAccount(petServiceAccountUniqueId: PetServiceAccountId): Future[Unit] = Future {
+    petServiceAccountsByUser -= petServiceAccountUniqueId.userId
   }
 
   override def getPetServiceAccountForUser(userId: WorkbenchUserId): Future[Option[WorkbenchUserServiceAccountEmail]] = Future {
-    petServiceAccountsByUser.get(userId)
-  }
-
-  override def addPetServiceAccountToUser(userId: WorkbenchUserId, email: WorkbenchUserServiceAccountEmail): Future[WorkbenchUserServiceAccountEmail] = {
-    petServiceAccountsByUser += (userId -> email)
-    Future.successful(email)
-  }
-
-  override def removePetServiceAccountFromUser(userId: WorkbenchUserId): Future[Unit] = {
-    petServiceAccountsByUser -= userId
-    Future.successful(())
+    petServiceAccountsByUser.get(userId).map(_.email)
   }
 
   override def updateSynchronizedDate(groupId: WorkbenchGroupIdentity): Future[Unit] = {
@@ -187,7 +176,7 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     subject match {
       case id: WorkbenchUserId => users.get(id).map(_.email)
       case id: WorkbenchGroupIdentity => groups.get(id).map(_.email)
-      case id: WorkbenchUserServiceAccountSubjectId => petServiceAccounts.get(id).map(_.email)
+      case id: PetServiceAccountId => petServiceAccountsByUser.get(id.userId).map(_.email)
     }
   }
 
