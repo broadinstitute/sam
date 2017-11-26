@@ -1,7 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.config
 
-import org.broadinstitute.dsde.workbench.google.model.GoogleProject
-import org.broadinstitute.dsde.workbench.model.WorkbenchUserEmail
+import org.broadinstitute.dsde.workbench.model.google._
+import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 
 /**
   * Pet Service Account configuration.
@@ -11,4 +11,4 @@ import org.broadinstitute.dsde.workbench.model.WorkbenchUserEmail
   *                            application service accounts need to impersonate as the pet service
   *                            account.
   */
-case class PetServiceAccountConfig(googleProject: GoogleProject, serviceAccountUsers: Set[WorkbenchUserEmail])
+case class PetServiceAccountConfig(googleProject: GoogleProject, serviceAccountUsers: Set[WorkbenchEmail])

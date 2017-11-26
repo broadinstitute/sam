@@ -210,7 +210,7 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
     val roles = getAttributes[String](attributes, Attr.role).getOrElse(Set.empty).toSet.map(r => ResourceRoleName(r))
     val actions = getAttributes[String](attributes, Attr.action).getOrElse(Set.empty).toSet.map(a => ResourceAction(a))
 
-    val email = WorkbenchGroupEmail(attributes.get(Attr.email).get().toString)
+    val email = WorkbenchEmail(attributes.get(Attr.email).get().toString)
 
     AccessPolicy(ResourceAndPolicyName(resource, AccessPolicyName(policyName)), members, email, roles, actions)
   }

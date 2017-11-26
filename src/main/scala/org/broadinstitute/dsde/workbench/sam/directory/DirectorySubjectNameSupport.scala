@@ -1,6 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.directory
 
 import org.broadinstitute.dsde.workbench.model._
+import org.broadinstitute.dsde.workbench.model.google.GoogleProject
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
 import org.broadinstitute.dsde.workbench.sam.model._
@@ -24,7 +25,7 @@ trait DirectorySubjectNameSupport extends JndiSupport {
     }
   }
   protected def userDn(samUserId: WorkbenchUserId) = s"uid=${samUserId.value},$peopleOu"
-  protected def petDn(petServiceAccountId: PetServiceAccountId) = s"uid=${petServiceAccountId.petId.value},${userDn(petServiceAccountId.userId)}"
+  protected def petDn(petServiceAccountId: PetServiceAccountId) = s"${Attr.project}=${petServiceAccountId.project.value},${userDn(petServiceAccountId.userId)}"
   protected def resourceTypeDn(resourceTypeName: ResourceTypeName) = s"${Attr.resourceType}=${resourceTypeName.value},$resourcesOu"
   protected def resourceDn(resource: Resource) = s"${Attr.resourceId}=${resource.resourceId.value},${resourceTypeDn(resource.resourceTypeName)}"
   protected def policyDn(resourceAndPolicyName: ResourceAndPolicyName): String = s"${Attr.policy}=${resourceAndPolicyName.accessPolicyName.value},${resourceDn(resourceAndPolicyName.resource)}"
@@ -40,13 +41,13 @@ trait DirectorySubjectNameSupport extends JndiSupport {
   protected def dnToSubject(dn: String): WorkbenchSubject = {
     val groupMatcher = dnMatcher(Seq(Attr.cn), groupsOu)
     val personMatcher = dnMatcher(Seq(Attr.uid), peopleOu)
-    val petMatcher = dnMatcher(Seq(Attr.uid, Attr.uid), peopleOu)
+    val petMatcher = dnMatcher(Seq(Attr.project, Attr.uid), peopleOu)
     val policyMatcher = dnMatcher(Seq(Attr.policy, Attr.resourceId, Attr.resourceType), resourcesOu)
 
     dn match {
       case groupMatcher(cn) => WorkbenchGroupName(cn)
       case personMatcher(uid) => WorkbenchUserId(uid)
-      case petMatcher(petUid, userUid) => PetServiceAccountId(WorkbenchUserId(userUid), WorkbenchUserServiceAccountSubjectId(petUid))
+      case petMatcher(petProject, userUid) => PetServiceAccountId(WorkbenchUserId(userUid), GoogleProject(petProject))
       case policyMatcher(policyName, resourceId, resourceTypeName) => ResourceAndPolicyName(Resource(ResourceTypeName(resourceTypeName), ResourceId(resourceId)), AccessPolicyName(policyName))
       case _ => throw new WorkbenchException(s"unexpected dn [$dn]")
     }

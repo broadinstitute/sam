@@ -102,7 +102,7 @@ class GoogleGroupSyncMonitorActor(val pollInterval: FiniteDuration, pollInterval
       val nextTime = org.broadinstitute.dsde.workbench.util.addJitter(pollInterval, pollIntervalJitter)
       system.scheduler.scheduleOnce(nextTime.asInstanceOf[FiniteDuration], self, StartMonitorPass)
 
-    case (Success(report: Map[WorkbenchGroupEmail, Seq[SyncReportItem]]), ackId: String) =>
+    case (Success(report: Map[WorkbenchEmail, Seq[SyncReportItem]]), ackId: String) =>
       val errorReports = report.values.flatten.collect {
         case SyncReportItem(_, _, errorReports) if errorReports.nonEmpty => errorReports
       }.flatten

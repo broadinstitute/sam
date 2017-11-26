@@ -35,6 +35,7 @@ object JndiSchemaDAO {
     val givenName = "givenName"
     val sn = "sn"
     val uid = "uid"
+    val project = "project"
   }
 }
 
@@ -52,7 +53,7 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit exe
       _ <- createWorkbenchGroupSchema()
       _ <- createOrgUnits()
       _ <- createPolicySchema()
-      _ <- createWorkbenchPersonSchema()
+      _ <- createWorkbenchPetServiceAccountSchema()
     } yield ()
   }
 
@@ -68,13 +69,9 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit exe
     for {
       _ <- removePolicySchema()
       _ <- removeWorkbenchGroupSchema()
-      _ <- removeWorkbenchPersonSchema()
+      _ <- removeWorkbenchPetServiceAccountSchema()
     } yield ()
   }
-
-  //
-  // workbenchGroup
-  //
 
   private def createWorkbenchGroupSchema(): Future[Unit] = withContext { ctx =>
     val schema = ctx.getSchema("")
@@ -110,10 +107,6 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit exe
     Try { schema.destroySubcontext("AttributeDefinition/" + Attr.groupSynchronizedTimestamp) }
     Try { schema.destroySubcontext("AttributeDefinition/" + Attr.groupUpdatedTimestamp) }
   }
-
-  //
-  // policy
-  //
 
   private def createPolicySchema(): Future[Unit] = withContext { ctx =>
     val schema = ctx.getSchema("")
@@ -190,10 +183,6 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit exe
     Try { schema.destroySubcontext("AttributeDefinition/" + Attr.policy) }
   }
 
-  //
-  // Organizational units
-  //
-
   private def createOrgUnit(dn: String): Future[Unit] = withContext { ctx =>
     try {
       val resourcesContext = new BaseDirContext {
@@ -215,30 +204,33 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit exe
     }
   }
 
-  // Workbench Person
-
-  def createWorkbenchPersonSchema(): Future[Unit] = withContext { ctx =>
+  def createWorkbenchPetServiceAccountSchema(): Future[Unit] = withContext { ctx =>
     val schema = ctx.getSchema("")
 
+    createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.70", Attr.project, "google project", true, equality = Option("caseIgnoreMatch"))
+
     val attrs = new BasicAttributes(true) // Ignore case
-    attrs.put("NUMERICOID", "1.3.6.1.4.1.18060.0.4.3.2.300")
-    attrs.put("NAME", "workbenchPerson")
+    attrs.put("NUMERICOID", "1.3.6.1.4.1.18060.0.4.3.2.700")
+    attrs.put("NAME", "petServiceAccount")
     attrs.put("SUP", "inetOrgPerson")
     attrs.put("STRUCTURAL", "true")
 
     val must = new BasicAttribute("MUST")
     must.add("objectclass")
+    must.add(Attr.project)
+    must.add(Attr.uid)
     attrs.put(must)
 
-    // Add the new schema object for "workbenchPerson"
-    schema.createSubcontext("ClassDefinition/workbenchPerson", attrs)
+    // Add the new schema object for "petServiceAccount"
+    schema.createSubcontext("ClassDefinition/petServiceAccount", attrs)
   }
 
-  def removeWorkbenchPersonSchema(): Future[Unit] = withContext { ctx =>
+  def removeWorkbenchPetServiceAccountSchema(): Future[Unit] = withContext { ctx =>
     val schema = ctx.getSchema("")
 
     // Intentionally ignores errors
-    Try { schema.destroySubcontext("ClassDefinition/workbenchPerson") }
+    Try { schema.destroySubcontext("ClassDefinition/petServiceAccount") }
+    Try { schema.destroySubcontext("AttributeDefinition/" + Attr.project) }
   }
 
   private def createAttributeDefinition(schema: DirContext, numericOID: String, name: String, description: String, singleValue: Boolean, equality: Option[String] = None, ordering: Option[String] = None, syntax: Option[String] = None) = {

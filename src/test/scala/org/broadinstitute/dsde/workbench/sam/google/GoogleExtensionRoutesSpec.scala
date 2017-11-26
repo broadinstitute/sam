@@ -6,6 +6,7 @@ import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.testkit.ScalatestRouteTest
 import com.typesafe.config.ConfigFactory
 import org.broadinstitute.dsde.workbench.google.mock.{MockGoogleDirectoryDAO, MockGoogleIamDAO, MockGooglePubSubDAO}
+import org.broadinstitute.dsde.workbench.model.google._
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.api.TestSamRoutes
@@ -23,7 +24,7 @@ import spray.json.{JsBoolean, JsValue}
   */
 class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest {
   val defaultUserId = WorkbenchUserId("newuser")
-  val defaultUserEmail = WorkbenchUserEmail("newuser@new.com")
+  val defaultUserEmail = WorkbenchEmail("newuser@new.com")
 
   lazy val config = ConfigFactory.load()
   lazy val petServiceAccountConfig = config.as[PetServiceAccountConfig]("petServiceAccount")
@@ -49,24 +50,24 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
     }
 
     // create a pet service account
-    Get("/api/google/user/petServiceAccount") ~> samRoutes.route ~> check {
+    Get("/api/google/user/petServiceAccount/myproject") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
-      val response = responseAs[WorkbenchUserServiceAccountEmail]
-      response.value should endWith (s"@${petServiceAccountConfig.googleProject}.iam.gserviceaccount.com")
+      val response = responseAs[WorkbenchEmail]
+      response.value should endWith (s"@myproject.iam.gserviceaccount.com")
     }
 
     // same result a second time
-    Get("/api/google/user/petServiceAccount") ~> samRoutes.route ~> check {
+    Get("/api/google/user/petServiceAccount/myproject") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
-      val response = responseAs[WorkbenchUserServiceAccountEmail]
-      response.value should endWith (s"@${petServiceAccountConfig.googleProject}.iam.gserviceaccount.com")
+      val response = responseAs[WorkbenchEmail]
+      response.value should endWith (s"@myproject.iam.gserviceaccount.com")
     }
   }
 
   "POST /api/google/policy/{resourceTypeName}/{resourceId}/{accessPolicyName}/sync" should "204 Create Google group for policy" in {
     val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceAction("alter_policies"), ResourceAction("can_compute"), ResourceAction("read_policies")), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("alter_policies"), ResourceAction("read_policies")))), ResourceRoleName("owner"))
     val resourceTypes = Map(resourceType.name -> resourceType)
-    val defaultUserInfo = UserInfo("accessToken", WorkbenchUserId("user1"), WorkbenchUserEmail("user1@example.com"), 0)
+    val defaultUserInfo = UserInfo("accessToken", WorkbenchUserId("user1"), WorkbenchEmail("user1@example.com"), 0)
     val googleDirectoryDAO = new MockGoogleDirectoryDAO()
     val directoryDAO = new MockDirectoryDAO()
     val googleIamDAO = new MockGoogleIamDAO()
@@ -98,7 +99,7 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
     Post(s"/api/google/resource/${resourceType.name}/foo/${resourceType.ownerRoleName.value}/sync") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
       assertResult(Map(createdPolicy.email -> Seq(SyncReportItem("added", googleExt.toProxyFromUser(defaultUserInfo.userId.value), None)))) {
-        responseAs[Map[WorkbenchGroupEmail, Seq[SyncReportItem]]]
+        responseAs[Map[WorkbenchEmail, Seq[SyncReportItem]]]
       }
     }
   }

@@ -4,6 +4,7 @@ import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directives._
+import org.broadinstitute.dsde.workbench.model.google._
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.model.{WorkbenchGroupIdentity, WorkbenchUser}
 import org.broadinstitute.dsde.workbench.sam.api.{ExtensionRoutes, UserInfoDirectives}
@@ -25,7 +26,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives {
           get {
             complete {
               googleExtensions.createUserPetServiceAccount(WorkbenchUser(userInfo.userId, userInfo.userEmail)).map { petSA =>
-                StatusCodes.OK -> petSA
+                StatusCodes.OK -> petSA.serviceAccount.email
               }
             }
           }
@@ -35,27 +36,26 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives {
     pathPrefix("google") {
       requireUserInfo { userInfo =>
         pathPrefix("user") {
-          path("petServiceAccount") {
+          path("petServiceAccount" / Segment) { project =>
             get {
               complete {
-                googleExtensions.createUserPetServiceAccount(WorkbenchUser(userInfo.userId, userInfo.userEmail)).map { petSA =>
-                  StatusCodes.OK -> petSA
+                googleExtensions.createUserPetServiceAccount(WorkbenchUser(userInfo.userId, userInfo.userEmail), GoogleProject(project)).map { petSA =>
+                  StatusCodes.OK -> petSA.serviceAccount.email
                 }
               }
             }
           }
         } ~
-          pathPrefix("resource") {
-            path(Segment / Segment / Segment / "sync") { (resourceTypeName, resourceId, accessPolicyName) =>
-              val resource = Resource(ResourceTypeName(resourceTypeName), ResourceId(resourceId))
-              val resourceAndPolicyName = ResourceAndPolicyName(resource, AccessPolicyName(accessPolicyName))
-              pathEndOrSingleSlash {
-                post {
-                  complete {
-                    import GoogleModelJsonSupport._
-                    googleExtensions.synchronizeGroupMembers(resourceAndPolicyName).map { syncReport =>
-                      StatusCodes.OK -> syncReport
-                    }
+        pathPrefix("resource") {
+          path(Segment / Segment / Segment / "sync") { (resourceTypeName, resourceId, accessPolicyName) =>
+            val resource = Resource(ResourceTypeName(resourceTypeName), ResourceId(resourceId))
+            val resourceAndPolicyName = ResourceAndPolicyName(resource, AccessPolicyName(accessPolicyName))
+            pathEndOrSingleSlash {
+              post {
+                complete {
+                  import GoogleModelJsonSupport._
+                  googleExtensions.synchronizeGroupMembers(resourceAndPolicyName).map { syncReport =>
+                    StatusCodes.OK -> syncReport
                   }
                 } ~
                 get {
@@ -69,6 +69,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives {
               }
             }
           }
+        }
       }
     }
 }

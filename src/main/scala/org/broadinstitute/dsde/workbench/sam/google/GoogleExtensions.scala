@@ -6,7 +6,7 @@ import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
 import com.google.api.client.googleapis.json.GoogleJsonResponseException
 import com.typesafe.scalalogging.LazyLogging
-import org.broadinstitute.dsde.workbench.google.model.GoogleProject
+import org.broadinstitute.dsde.workbench.model.google._
 import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleIamDAO, GooglePubSubDAO}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam._
@@ -25,7 +25,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
   private[google] def toProxyFromUser(subjectId: String): String = s"PROXY_$subjectId@${googleServicesConfig.appsDomain}"
 
   override val emailDomain = googleServicesConfig.appsDomain
-  private val allUsersGroupEmail = WorkbenchGroupEmail(s"GROUP_${allUsersGroupName.value}@$emailDomain")
+  private val allUsersGroupEmail = WorkbenchEmail(s"GROUP_${allUsersGroupName.value}@$emailDomain")
 
   override def getOrCreateAllUsersGroup(directoryDAO: DirectoryDAO)(implicit executionContext: ExecutionContext): Future[WorkbenchGroup] = {
     val allUsersGroup = BasicWorkbenchGroup(allUsersGroupName, Set.empty, allUsersGroupEmail)
@@ -38,7 +38,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
   }
 
   override def isWorkbenchAdmin(memberEmail: WorkbenchEmail): Future[Boolean] = {
-    googleDirectoryDAO.isGroupMember(WorkbenchGroupEmail(s"fc-admins@${googleServicesConfig.appsDomain}"), memberEmail) recoverWith { case t => throw new WorkbenchException("Unable to query for admin status.", t) }
+    googleDirectoryDAO.isGroupMember(WorkbenchEmail(s"fc-admins@${googleServicesConfig.appsDomain}"), memberEmail) recoverWith { case t => throw new WorkbenchException("Unable to query for admin status.", t) }
   }
 
   override def onBoot()(implicit system: ActorSystem): Unit = {
@@ -71,66 +71,67 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
 
   override def onUserCreate(user: WorkbenchUser): Future[Unit] = {
     for {
-      _ <- googleDirectoryDAO.createGroup(user.email.value, WorkbenchGroupEmail(toProxyFromUser(user.id.value))) recover {
+      _ <- googleDirectoryDAO.createGroup(user.email.value, WorkbenchEmail(toProxyFromUser(user.id.value))) recover {
         case e:GoogleJsonResponseException if e.getDetails.getCode == StatusCodes.Conflict.intValue => ()
       }
-      _ <- googleDirectoryDAO.addMemberToGroup(WorkbenchGroupEmail(toProxyFromUser(user.id.value)), WorkbenchUserEmail(user.email.value))
+      _ <- googleDirectoryDAO.addMemberToGroup(WorkbenchEmail(toProxyFromUser(user.id.value)), WorkbenchEmail(user.email.value))
 
       allUsersGroup <- getOrCreateAllUsersGroup(directoryDAO)
 
-      _ <- googleDirectoryDAO.addMemberToGroup(allUsersGroup.email, WorkbenchUserEmail(toProxyFromUser(user.id.value)))
+      _ <- googleDirectoryDAO.addMemberToGroup(allUsersGroup.email, WorkbenchEmail(toProxyFromUser(user.id.value)))
     } yield ()
   }
 
   override def getUserStatus(user: WorkbenchUser): Future[Boolean] = {
-    googleDirectoryDAO.isGroupMember(WorkbenchGroupEmail(toProxyFromUser(user.id.value)), WorkbenchGroupEmail(user.email.value))
+    googleDirectoryDAO.isGroupMember(WorkbenchEmail(toProxyFromUser(user.id.value)), WorkbenchEmail(user.email.value))
   }
 
   override def onUserEnable(user: WorkbenchUser): Future[Unit] = {
     for {
-      _ <- googleDirectoryDAO.addMemberToGroup(WorkbenchGroupEmail(toProxyFromUser(user.id.value)), WorkbenchUserEmail(user.email.value))
+      _ <- googleDirectoryDAO.addMemberToGroup(WorkbenchEmail(toProxyFromUser(user.id.value)), WorkbenchEmail(user.email.value))
       // Enable the pet service account, if one exists for the user
-      _ <- getPetServiceAccountForUser(user.id).flatMap {
-        case Some(pet) => enablePetServiceAccount(user.id, pet)
-        case None => Future.successful(())
-      }
+      _ <- directoryDAO.getAllPetServiceAccountsForUser(user.id).flatMap { Future.traverse(_) { pet =>
+        enablePetServiceAccount(pet)
+      } }
     } yield ()
   }
 
   override def onUserDisable(user: WorkbenchUser): Future[Unit] = {
     for {
     // Disable the pet service account, if one exists for the user
-      _ <- getPetServiceAccountForUser(user.id).flatMap {
-        case Some(pet) => disablePetServiceAccount(user.id, pet)
-        case None => Future.successful(())
-      }
-      _ <- googleDirectoryDAO.removeMemberFromGroup(WorkbenchGroupEmail(toProxyFromUser(user.id.value)), WorkbenchUserEmail(user.email.value))
+      _ <- directoryDAO.getAllPetServiceAccountsForUser(user.id).flatMap { Future.traverse(_) { pet =>
+        disablePetServiceAccount(pet)
+      } }
+      _ <- googleDirectoryDAO.removeMemberFromGroup(WorkbenchEmail(toProxyFromUser(user.id.value)), WorkbenchEmail(user.email.value))
     } yield ()
   }
 
   override def onUserDelete(userId: WorkbenchUserId): Future[Unit] = {
     for {
-      _ <- googleDirectoryDAO.deleteGroup(WorkbenchGroupEmail(toProxyFromUser(userId.value)))
-      _ <- getPetServiceAccountForUser(userId).flatMap {
-        case Some(pet) => googleIamDAO.removeServiceAccount(petServiceAccountConfig.googleProject, pet.email.toAccountName)
-        case None => Future.successful(())
-      }
+      _ <- googleDirectoryDAO.deleteGroup(WorkbenchEmail(toProxyFromUser(userId.value)))
+      _ <- directoryDAO.getAllPetServiceAccountsForUser(userId).flatMap { Future.traverse(_) { pet =>
+        googleIamDAO.removeServiceAccount(petServiceAccountConfig.googleProject, toAccountName(pet.serviceAccount.email))
+      } }
     } yield ()
   }
 
-  def createUserPetServiceAccount(user: WorkbenchUser): Future[WorkbenchUserServiceAccountEmail] = {
+  @deprecated
+  def createUserPetServiceAccount(user: WorkbenchUser): Future[PetServiceAccount] = createUserPetServiceAccount(user, petServiceAccountConfig.googleProject)
+
+  def createUserPetServiceAccount(user: WorkbenchUser, project: GoogleProject): Future[PetServiceAccount] = {
     val (petSaID, petSaDisplayName) = toPetSAFromUser(user)
 
-    directoryDAO.getPetServiceAccountForUser(user.id).flatMap {
-      case Some(email) => Future.successful(email)
+    directoryDAO.loadPetServiceAccount(PetServiceAccountId(user.id, project)).flatMap {
+      case Some(pet) => Future.successful(pet)
       case None =>
         // First find or create the service account in Google, which generates a unique id and email
-        val petSA = googleIamDAO.getOrCreateServiceAccount(petServiceAccountConfig.googleProject, petSaID, petSaDisplayName)
-        petSA.flatMap { petServiceAccount =>
+        val petSA = googleIamDAO.getOrCreateServiceAccount(project, petSaID, petSaDisplayName)
+        petSA.flatMap { serviceAccount =>
           // Set up the service account with the necessary permissions
-          setUpServiceAccount(user, petServiceAccount) andThen { case Failure(_) =>
+          val petServiceAccount = PetServiceAccount(PetServiceAccountId(user.id, project), serviceAccount)
+          setUpServiceAccount(petServiceAccount) andThen { case Failure(_) =>
             // If anything fails with setup, clean up any created resources to ensure we don't end up with orphaned pets.
-            removePetServiceAccount(user, petServiceAccount).failed.foreach { e =>
+            removePetServiceAccount(petServiceAccount).failed.foreach { e =>
               logger.warn(s"Error occurred cleaning up pet service account [$petSaID] [$petSaDisplayName]", e)
             }
           }
@@ -138,51 +139,41 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
     }
   }
 
-  private def enablePetServiceAccount(userId: WorkbenchUserId, petServiceAccount: WorkbenchUserServiceAccount): Future[Unit] = {
+  private def enablePetServiceAccount(petServiceAccount: PetServiceAccount): Future[Unit] = {
     for {
-      _ <- directoryDAO.enableIdentity(PetServiceAccountId(userId, petServiceAccount.subjectId))
-      _ <- googleDirectoryDAO.addMemberToGroup(WorkbenchGroupEmail(toProxyFromUser(userId.value)), petServiceAccount.email)
+      _ <- directoryDAO.enableIdentity(petServiceAccount.id)
+      _ <- googleDirectoryDAO.addMemberToGroup(WorkbenchEmail(toProxyFromUser(petServiceAccount.id.userId.value)), petServiceAccount.serviceAccount.email)
     } yield ()
   }
 
-  private def disablePetServiceAccount(userId: WorkbenchUserId, petServiceAccount: WorkbenchUserServiceAccount): Future[Unit] = {
+  private def disablePetServiceAccount(petServiceAccount: PetServiceAccount): Future[Unit] = {
     for {
-      _ <- directoryDAO.disableIdentity(PetServiceAccountId(userId, petServiceAccount.subjectId))
-      _ <- googleDirectoryDAO.removeMemberFromGroup(WorkbenchGroupEmail(toProxyFromUser(userId.value)), petServiceAccount.email)
+      _ <- directoryDAO.disableIdentity(petServiceAccount.id)
+      _ <- googleDirectoryDAO.removeMemberFromGroup(WorkbenchEmail(toProxyFromUser(petServiceAccount.id.userId.value)), petServiceAccount.serviceAccount.email)
     } yield ()
   }
 
-  private def getPetServiceAccountForUser(userId: WorkbenchUserId): Future[Option[WorkbenchUserServiceAccount]] = {
-    directoryDAO.getPetServiceAccountForUser(userId).flatMap {
-      case Some(petEmail) => directoryDAO.loadSubjectFromEmail(petEmail.value).map {
-        case Some(petId: WorkbenchUserServiceAccountSubjectId) => Some(WorkbenchUserServiceAccount(petId, petEmail, WorkbenchUserServiceAccountDisplayName("")))
-        case _ => None
-      }
-      case None => Future.successful(None)
-    }
+  private def getPetServiceAccountsForUser(userId: WorkbenchUserId): Future[Seq[PetServiceAccount]] = {
+    directoryDAO.getAllPetServiceAccountsForUser(userId)
   }
 
-  private def setUpServiceAccount(user: WorkbenchUser, petServiceAccount: WorkbenchUserServiceAccount): Future[WorkbenchUserServiceAccountEmail] = {
+  private def setUpServiceAccount(petServiceAccount: PetServiceAccount): Future[PetServiceAccount] = {
     for {
-    // add Service Account User role to the configured emails so they can assume the identity of the pet service account
-      _ <- Future.traverse(petServiceAccountConfig.serviceAccountUsers) { email =>
-        googleIamDAO.addServiceAccountUserRoleForUser(petServiceAccountConfig.googleProject, petServiceAccount.email, email)
-      }
       // create an additional LDAP record for the pet service account itself (in a different organizational unit than the user)
-      _ <- directoryDAO.createPetServiceAccount(petServiceAccount, user.id)
+      _ <- directoryDAO.createPetServiceAccount(petServiceAccount)
       // enable the pet service account
-      _ <- enablePetServiceAccount(user.id, petServiceAccount)
-    } yield petServiceAccount.email
+      _ <- enablePetServiceAccount(petServiceAccount)
+    } yield petServiceAccount
   }
 
-  private def removePetServiceAccount(user: WorkbenchUser, petServiceAccount: WorkbenchUserServiceAccount): Future[Unit] = {
+  private def removePetServiceAccount(petServiceAccount: PetServiceAccount): Future[Unit] = {
     for {
     // disable the pet service account
-      _ <- disablePetServiceAccount(user.id, petServiceAccount)
+      _ <- disablePetServiceAccount(petServiceAccount)
       // remove the LDAP record for the pet service account
-      _ <- directoryDAO.deletePetServiceAccount(PetServiceAccountId(user.id, petServiceAccount.subjectId))
+      _ <- directoryDAO.deletePetServiceAccount(petServiceAccount.id)
       // remove the service account itself in Google
-      _ <- googleIamDAO.removeServiceAccount(petServiceAccountConfig.googleProject, petServiceAccount.email.toAccountName)
+      _ <- googleIamDAO.removeServiceAccount(petServiceAccountConfig.googleProject, toAccountName(petServiceAccount.serviceAccount.email))
     } yield ()
   }
 
@@ -190,7 +181,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
     directoryDAO.getSynchronizedDate(groupId)
   }
 
-  def synchronizeGroupMembers(groupId: WorkbenchGroupIdentity, visitedGroups: Set[WorkbenchGroupIdentity] = Set.empty[WorkbenchGroupIdentity]): Future[Map[WorkbenchGroupEmail, Seq[SyncReportItem]]] = {
+  def synchronizeGroupMembers(groupId: WorkbenchGroupIdentity, visitedGroups: Set[WorkbenchGroupIdentity] = Set.empty[WorkbenchGroupIdentity]): Future[Map[WorkbenchEmail, Seq[SyncReportItem]]] = {
     def toSyncReportItem(operation: String, email: String, result: Try[Unit]) = {
       SyncReportItem(
         operation,
@@ -216,9 +207,9 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
           case subGroup: WorkbenchGroupIdentity =>
             directoryDAO.getSynchronizedDate(subGroup).flatMap{
               case None => synchronizeGroupMembers(subGroup, visitedGroups + groupId)
-              case _ => Future.successful(Map.empty[WorkbenchGroupEmail, Seq[SyncReportItem]])
+              case _ => Future.successful(Map.empty[WorkbenchEmail, Seq[SyncReportItem]])
             }
-          case _ => Future.successful(Map.empty[WorkbenchGroupEmail, Seq[SyncReportItem]])
+          case _ => Future.successful(Map.empty[WorkbenchEmail, Seq[SyncReportItem]])
         }
 
         googleMemberEmails <- googleDirectoryDAO.listGroupMembers(group.email) flatMap {
@@ -229,7 +220,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
           case group: WorkbenchGroupIdentity => directoryDAO.loadSubjectEmail(group)
 
           // use proxy group email instead of user's actual email
-          case WorkbenchUserId(userSubjectId) => Future.successful(Option(WorkbenchUserEmail(toProxyFromUser(userSubjectId))))
+          case WorkbenchUserId(userSubjectId) => Future.successful(Option(WorkbenchEmail(toProxyFromUser(userSubjectId))))
 
           // not sure why this next case would happen but if a petSA is in a group just use its email
           case petSA: PetServiceAccountId => directoryDAO.loadSubjectEmail(petSA)
@@ -238,8 +229,8 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
         toAdd = samMemberEmails -- googleMemberEmails
         toRemove = googleMemberEmails -- samMemberEmails
 
-        addTrials <- Future.traverse(toAdd) { addEmail => googleDirectoryDAO.addMemberToGroup(group.email, WorkbenchUserEmail(addEmail)).toTry.map(toSyncReportItem("added", addEmail, _)) }
-        removeTrials <- Future.traverse(toRemove) { removeEmail => googleDirectoryDAO.removeMemberFromGroup(group.email, WorkbenchUserEmail(removeEmail)).toTry.map(toSyncReportItem("removed", removeEmail, _)) }
+        addTrials <- Future.traverse(toAdd) { addEmail => googleDirectoryDAO.addMemberToGroup(group.email, WorkbenchEmail(addEmail)).toTry.map(toSyncReportItem("added", addEmail, _)) }
+        removeTrials <- Future.traverse(toRemove) { removeEmail => googleDirectoryDAO.removeMemberFromGroup(group.email, WorkbenchEmail(removeEmail)).toTry.map(toSyncReportItem("removed", removeEmail, _)) }
 
         _ <- directoryDAO.updateSynchronizedDate(groupId)
       } yield {
@@ -248,7 +239,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
     }
   }
 
-  private[google] def toPetSAFromUser(user: WorkbenchUser): (WorkbenchUserServiceAccountName, WorkbenchUserServiceAccountDisplayName) = {
+  private[google] def toPetSAFromUser(user: WorkbenchUser): (ServiceAccountName, ServiceAccountDisplayName) = {
     /*
      * Service account IDs must be:
      * 1. between 6 and 30 characters
@@ -260,7 +251,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
     val serviceAccountName = s"pet-${user.id.value}"
     val displayName = s"Pet Service Account for user [${user.email.value}]"
 
-    (WorkbenchUserServiceAccountName(serviceAccountName), WorkbenchUserServiceAccountDisplayName(displayName))
+    (ServiceAccountName(serviceAccountName), ServiceAccountDisplayName(displayName))
   }
 
   override def checkStatus: Map[Subsystems.Subsystem, Future[SubsystemStatus]] = {
@@ -287,7 +278,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
     }
 
     def checkIam: Future[SubsystemStatus] = {
-      val accountName = WorkbenchUserServiceAccountEmail(googleServicesConfig.serviceAccountClientEmail).toAccountName
+      val accountName = toAccountName(WorkbenchEmail(googleServicesConfig.serviceAccountClientEmail))
       googleIamDAO.findServiceAccount(GoogleProject(googleServicesConfig.serviceAccountClientProject), accountName).map {
         case Some(_) => OkStatus
         case None => failedStatus(s"Could not find service account: $accountName")

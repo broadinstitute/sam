@@ -21,9 +21,9 @@ import scala.concurrent.Future
   */
 class UserRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest with MockitoSugar with TestSupport {
   val defaultUserId = WorkbenchUserId("newuser")
-  val defaultUserEmail = WorkbenchUserEmail("newuser@new.com")
+  val defaultUserEmail = WorkbenchEmail("newuser@new.com")
   val adminUserId = WorkbenchUserId("adminuser")
-  val adminUserEmail = WorkbenchUserEmail("adminuser@new.com")
+  val adminUserEmail = WorkbenchEmail("adminuser@new.com")
 
   def withDefaultRoutes[T](testCode: TestSamRoutes => T): T = {
     val googleDirectoryDAO = new MockGoogleDirectoryDAO()
@@ -33,11 +33,11 @@ class UserRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest with
     testCode(samRoutes)
   }
 
-  def setupAdminsGroup(googleDirectoryDAO: MockGoogleDirectoryDAO): Future[WorkbenchGroupEmail] = {
-    val adminGroupEmail = WorkbenchGroupEmail("fc-admins@dev.test.firecloud.org")
+  def setupAdminsGroup(googleDirectoryDAO: MockGoogleDirectoryDAO): Future[WorkbenchEmail] = {
+    val adminGroupEmail = WorkbenchEmail("fc-admins@dev.test.firecloud.org")
     for {
       _ <- googleDirectoryDAO.createGroup(WorkbenchGroupName("fc-admins"), adminGroupEmail)
-      _ <- googleDirectoryDAO.addMemberToGroup(adminGroupEmail, WorkbenchUserEmail(adminUserEmail.value))
+      _ <- googleDirectoryDAO.addMemberToGroup(adminGroupEmail, WorkbenchEmail(adminUserEmail.value))
     } yield adminGroupEmail
   }
 

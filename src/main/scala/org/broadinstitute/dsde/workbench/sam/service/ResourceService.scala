@@ -157,8 +157,8 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     }
   }
 
-  def generateGroupEmail(policyName: AccessPolicyName, resource: Resource) = WorkbenchGroupEmail(s"policy-${UUID.randomUUID}@$emailDomain")
-  def toGoogleGroupName(groupName: WorkbenchGroupName) = WorkbenchGroupEmail(s"GROUP_${groupName.value}@$emailDomain")
+  def generateGroupEmail(policyName: AccessPolicyName, resource: Resource) = WorkbenchEmail(s"policy-${UUID.randomUUID}@$emailDomain")
+  def toGoogleGroupName(groupName: WorkbenchGroupName) = WorkbenchEmail(s"GROUP_${groupName.value}@$emailDomain")
 
   //todo: use this for google group sync
   private def roleGroupName(resourceType: ResourceType, resourceId: ResourceId, role: ResourceRole) = {

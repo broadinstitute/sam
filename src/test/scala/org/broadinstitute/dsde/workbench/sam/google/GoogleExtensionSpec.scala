@@ -25,6 +25,7 @@ import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.{Success, Try}
 import net.ceedubs.ficus.Ficus._
+import org.broadinstitute.dsde.workbench.model.google.GoogleProject
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 
 class GoogleExtensionSpec extends FlatSpec with Matchers with TestSupport with MockitoSugar with ScalaFutures {
@@ -40,10 +41,10 @@ class GoogleExtensionSpec extends FlatSpec with Matchers with TestSupport with M
     // errors adding/removing to/from google are reported
 
     val groupName = WorkbenchGroupName("group1")
-    val groupEmail = WorkbenchGroupEmail("group1@example.com")
-    val inSamSubGroup = BasicWorkbenchGroup(WorkbenchGroupName("inSamSubGroup"), Set.empty, WorkbenchGroupEmail("inSamSubGroup@example.com"))
-    val inGoogleSubGroup = BasicWorkbenchGroup(WorkbenchGroupName("inGoogleSubGroup"), Set.empty, WorkbenchGroupEmail("inGoogleSubGroup@example.com"))
-    val inBothSubGroup = BasicWorkbenchGroup(WorkbenchGroupName("inBothSubGroup"), Set.empty, WorkbenchGroupEmail("inBothSubGroup@example.com"))
+    val groupEmail = WorkbenchEmail("group1@example.com")
+    val inSamSubGroup = BasicWorkbenchGroup(WorkbenchGroupName("inSamSubGroup"), Set.empty, WorkbenchEmail("inSamSubGroup@example.com"))
+    val inGoogleSubGroup = BasicWorkbenchGroup(WorkbenchGroupName("inGoogleSubGroup"), Set.empty, WorkbenchEmail("inGoogleSubGroup@example.com"))
+    val inBothSubGroup = BasicWorkbenchGroup(WorkbenchGroupName("inBothSubGroup"), Set.empty, WorkbenchEmail("inBothSubGroup@example.com"))
 
     val inSamUserId = WorkbenchUserId("inSamUser")
     val inGoogleUserId = WorkbenchUserId("inGoogleUser")
@@ -78,14 +79,14 @@ class GoogleExtensionSpec extends FlatSpec with Matchers with TestSupport with M
       val removed = Seq(inGoogleSubGroup.email.value, ge.toProxyFromUser(inGoogleUserId.value))
 
       when(mockGoogleDirectoryDAO.listGroupMembers(target.email)).thenReturn(Future.successful(Option(Seq(ge.toProxyFromUser(inGoogleUserId.value), ge.toProxyFromUser(inBothUserId.value), inGoogleSubGroup.email.value, inBothSubGroup.email.value, removeError))))
-      when(mockGoogleDirectoryDAO.addMemberToGroup(any[WorkbenchGroupEmail], any[WorkbenchEmail])).thenReturn(Future.successful(()))
-      when(mockGoogleDirectoryDAO.removeMemberFromGroup(any[WorkbenchGroupEmail], any[WorkbenchEmail])).thenReturn(Future.successful(()))
+      when(mockGoogleDirectoryDAO.addMemberToGroup(any[WorkbenchEmail], any[WorkbenchEmail])).thenReturn(Future.successful(()))
+      when(mockGoogleDirectoryDAO.removeMemberFromGroup(any[WorkbenchEmail], any[WorkbenchEmail])).thenReturn(Future.successful(()))
 
       val addException = new Exception("addError")
-      when(mockGoogleDirectoryDAO.addMemberToGroup(target.email, WorkbenchUserEmail(ge.toProxyFromUser(addError.value)))).thenReturn(Future.failed(addException))
+      when(mockGoogleDirectoryDAO.addMemberToGroup(target.email, WorkbenchEmail(ge.toProxyFromUser(addError.value)))).thenReturn(Future.failed(addException))
 
       val removeException = new Exception("removeError")
-      when(mockGoogleDirectoryDAO.removeMemberFromGroup(target.email, WorkbenchUserEmail(removeError))).thenReturn(Future.failed(removeException))
+      when(mockGoogleDirectoryDAO.removeMemberFromGroup(target.email, WorkbenchEmail(removeError))).thenReturn(Future.failed(removeException))
 
       val results = runAndWait(ge.synchronizeGroupMembers(target.id))
 
@@ -97,17 +98,17 @@ class GoogleExtensionSpec extends FlatSpec with Matchers with TestSupport with M
             SyncReportItem("added", ge.toProxyFromUser(addError.value), Option(ErrorReport(addException))),
             SyncReportItem("removed", removeError, Option(ErrorReport(removeException)))))
 
-      added.foreach { email => verify(mockGoogleDirectoryDAO).addMemberToGroup(target.email, WorkbenchUserEmail(email)) }
-      removed.foreach { email => verify(mockGoogleDirectoryDAO).removeMemberFromGroup(target.email, WorkbenchUserEmail(email)) }
+      added.foreach { email => verify(mockGoogleDirectoryDAO).addMemberToGroup(target.email, WorkbenchEmail(email)) }
+      removed.foreach { email => verify(mockGoogleDirectoryDAO).removeMemberFromGroup(target.email, WorkbenchEmail(email)) }
       verify(mockDirectoryDAO).updateSynchronizedDate(target.id)
     }
   }
 
   it should "break out of cycle" in {
     val groupName = WorkbenchGroupName("group1")
-    val groupEmail = WorkbenchGroupEmail("group1@example.com")
+    val groupEmail = WorkbenchEmail("group1@example.com")
     val subGroupName = WorkbenchGroupName("group2")
-    val subGroupEmail = WorkbenchGroupEmail("group2@example.com")
+    val subGroupEmail = WorkbenchEmail("group2@example.com")
 
     val subGroup = BasicWorkbenchGroup(subGroupName, Set.empty, subGroupEmail)
     val topGroup = BasicWorkbenchGroup(groupName, Set.empty, groupEmail)
@@ -118,16 +119,16 @@ class GoogleExtensionSpec extends FlatSpec with Matchers with TestSupport with M
     val mockGooglePubSubDAO = new MockGooglePubSubDAO
     val mockGoogleIamDAO = new MockGoogleIamDAO
     val ge = new GoogleExtensions(mockDirectoryDAO, mockAccessPolicyDAO, mockGoogleDirectoryDAO, mockGooglePubSubDAO, mockGoogleIamDAO, googleServicesConfig, petServiceAccountConfig)
-    when(mockGoogleDirectoryDAO.addMemberToGroup(any[WorkbenchGroupEmail], any[WorkbenchEmail])).thenReturn(Future.successful(()))
+    when(mockGoogleDirectoryDAO.addMemberToGroup(any[WorkbenchEmail], any[WorkbenchEmail])).thenReturn(Future.successful(()))
     //create groups
-    mockDirectoryDAO.createGroup(topGroup)
-    mockDirectoryDAO.createGroup(subGroup)
+    runAndWait(mockDirectoryDAO.createGroup(topGroup))
+    runAndWait(mockDirectoryDAO.createGroup(subGroup))
     //add subGroup to topGroup
-    mockGoogleDirectoryDAO.addMemberToGroup(groupEmail, subGroupEmail)
-    mockDirectoryDAO.addGroupMember(topGroup.id, subGroup.id)
+    runAndWait(mockGoogleDirectoryDAO.addMemberToGroup(groupEmail, subGroupEmail))
+    runAndWait(mockDirectoryDAO.addGroupMember(topGroup.id, subGroup.id))
     //add topGroup to subGroup - creating cycle
-    mockGoogleDirectoryDAO.addMemberToGroup(subGroupEmail, groupEmail)
-    mockDirectoryDAO.addGroupMember(subGroup.id, topGroup.id)
+    runAndWait(mockGoogleDirectoryDAO.addMemberToGroup(subGroupEmail, groupEmail))
+    runAndWait(mockDirectoryDAO.addGroupMember(subGroup.id, topGroup.id))
     when(mockGoogleDirectoryDAO.listGroupMembers(topGroup.email)).thenReturn(Future.successful(Option(Seq(subGroupEmail.value))))
     when(mockGoogleDirectoryDAO.listGroupMembers(subGroup.email)).thenReturn(Future.successful(Option(Seq(groupEmail.value))))
     val syncedEmails = runAndWait(ge.synchronizeGroupMembers(topGroup.id)).keys
@@ -149,7 +150,7 @@ class GoogleExtensionSpec extends FlatSpec with Matchers with TestSupport with M
     val service = new UserService(dirDAO, googleExtensions)
 
     val defaultUserId = WorkbenchUserId("newuser")
-    val defaultUserEmail = WorkbenchUserEmail("newuser@new.com")
+    val defaultUserEmail = WorkbenchEmail("newuser@new.com")
     val defaultUser = WorkbenchUser(defaultUserId, defaultUserEmail)
 
     // create a user
@@ -157,34 +158,33 @@ class GoogleExtensionSpec extends FlatSpec with Matchers with TestSupport with M
     newUser shouldBe UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
 
     // create a pet service account
-    val emailResponse = googleExtensions.createUserPetServiceAccount(defaultUser).futureValue
+    val googleProject = GoogleProject("testproject")
+    val petServiceAccount = googleExtensions.createUserPetServiceAccount(defaultUser, googleProject).futureValue
 
-    emailResponse.value should endWith(s"@${petServiceAccountConfig.googleProject}.iam.gserviceaccount.com")
+    petServiceAccount.serviceAccount.email.value should endWith(s"@${googleProject.value}.iam.gserviceaccount.com")
 
     // verify ldap
-    dirDAO.getPetServiceAccountForUser(defaultUserId).futureValue shouldBe Some(emailResponse)
+    dirDAO.loadPetServiceAccount(PetServiceAccountId(defaultUserId, googleProject)).futureValue shouldBe Some(petServiceAccount)
 
-    val ldapPetOpt = dirDAO.loadSubjectFromEmail(emailResponse.value).flatMap {
+    val ldapPetOpt = dirDAO.loadSubjectFromEmail(petServiceAccount.serviceAccount.email.value).flatMap {
       case Some(subject: PetServiceAccountId) => dirDAO.loadPetServiceAccount(subject)
-      case _ => fail(s"could not load pet LDAP entry from $emailResponse")
+      case _ => fail(s"could not load pet LDAP entry from ${petServiceAccount.serviceAccount.email.value}")
     }.futureValue
 
     ldapPetOpt shouldBe 'defined
     val Some(ldapPet) = ldapPetOpt
-    ldapPet.email shouldBe WorkbenchUserServiceAccountEmail(emailResponse.value)
-    ldapPet.displayName shouldBe WorkbenchUserServiceAccountDisplayName("")
     // MockGoogleIamDAO generates the subject ID as a random Long
-    Try(ldapPet.subjectId.value.toLong) shouldBe a[Success[_]]
+    Try(ldapPet.serviceAccount.subjectId.value.toLong) shouldBe a[Success[_]]
 
     // verify google
-    val groupEmail = WorkbenchGroupEmail(googleExtensions.toProxyFromUser(defaultUserId.value))
-    mockGoogleIamDAO.serviceAccounts should contain key (emailResponse)
+    val groupEmail = WorkbenchEmail(googleExtensions.toProxyFromUser(defaultUserId.value))
+    mockGoogleIamDAO.serviceAccounts should contain key (petServiceAccount.serviceAccount.email)
     mockGoogleDirectoryDAO.groups should contain key (groupEmail)
-    mockGoogleDirectoryDAO.groups(groupEmail) shouldBe Set(defaultUserEmail, emailResponse)
+    mockGoogleDirectoryDAO.groups(groupEmail) shouldBe Set(defaultUserEmail, petServiceAccount.serviceAccount.email)
 
     // create one again, it should work
-    val petSaResponse2 = googleExtensions.createUserPetServiceAccount(defaultUser).futureValue
-    petSaResponse2 shouldBe emailResponse
+    val petSaResponse2 = googleExtensions.createUserPetServiceAccount(defaultUser, googleProject).futureValue
+    petSaResponse2 shouldBe petServiceAccount
   }
 
   it should "get a group's last synchronized date" in {
@@ -216,7 +216,7 @@ class GoogleExtensionSpec extends FlatSpec with Matchers with TestSupport with M
     val dirDAO = new JndiDirectoryDAO(directoryConfig)
     val ge = new GoogleExtensions(dirDAO, null, null, null, null, googleServicesConfig, null)
     val groupName = WorkbenchGroupName("group-sync")
-    runAndWait(dirDAO.createGroup(BasicWorkbenchGroup(groupName, Set(), WorkbenchGroupEmail(""))))
+    runAndWait(dirDAO.createGroup(BasicWorkbenchGroup(groupName, Set(), WorkbenchEmail(""))))
     try {
       runAndWait(ge.getSynchronizedDate(groupName)) shouldBe None
     } finally {
@@ -228,7 +228,7 @@ class GoogleExtensionSpec extends FlatSpec with Matchers with TestSupport with M
     val dirDAO = new JndiDirectoryDAO(directoryConfig)
     val ge = new GoogleExtensions(dirDAO, null, new MockGoogleDirectoryDAO(), null, null, googleServicesConfig, null)
     val groupName = WorkbenchGroupName("group-sync")
-    runAndWait(dirDAO.createGroup(BasicWorkbenchGroup(groupName, Set(), WorkbenchGroupEmail("group1@test.firecloud.org"))))
+    runAndWait(dirDAO.createGroup(BasicWorkbenchGroup(groupName, Set(), WorkbenchEmail("group1@test.firecloud.org"))))
     try {
       runAndWait(ge.synchronizeGroupMembers(groupName))
       val syncDate = runAndWait(ge.getSynchronizedDate(groupName)).get

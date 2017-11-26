@@ -5,6 +5,7 @@ import javax.naming._
 import javax.naming.directory._
 
 import akka.http.scaladsl.model.StatusCodes
+import org.broadinstitute.dsde.workbench.model.google._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
 import org.broadinstitute.dsde.workbench.sam._
@@ -91,7 +92,7 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
       val email = getAttribute[String](attributes, Attr.email).getOrElse(throw new WorkbenchException(s"${Attr.email} attribute missing: $groupName"))
       val memberDns = getAttributes[String](attributes, Attr.uniqueMember).getOrElse(Set.empty).toSet
 
-      Option(BasicWorkbenchGroup(WorkbenchGroupName(cn), memberDns.map(dnToSubject), WorkbenchGroupEmail(email)))
+      Option(BasicWorkbenchGroup(WorkbenchGroupName(cn), memberDns.map(dnToSubject), WorkbenchEmail(email)))
 
     }.recover {
       case e: NameNotFoundException => None
@@ -99,13 +100,13 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     }.get
   }
 
-  override def loadGroupEmail(groupName: WorkbenchGroupName): Future[Option[WorkbenchGroupEmail]] = withContext { ctx =>
+  override def loadGroupEmail(groupName: WorkbenchGroupName): Future[Option[WorkbenchEmail]] = withContext { ctx =>
     Try {
       val attributes = ctx.getAttributes(groupDn(groupName), Array(Attr.email))
 
       val email = getAttribute[String](attributes, Attr.email).getOrElse(throw new WorkbenchException(s"${Attr.email} attribute missing: $groupName"))
 
-      Option(WorkbenchGroupEmail(email))
+      Option(WorkbenchEmail(email))
 
     }.recover {
       case e: NameNotFoundException => None
@@ -120,15 +121,7 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     }
   } }
 
-  override def createUser(user: WorkbenchUser): Future[WorkbenchUser] = {
-    createIdentityInternal(user.id, user.email, user.id.value).map(_ => user)
-  }
-
-  override def createPetServiceAccount(petServiceAccount: WorkbenchUserServiceAccount, userId: WorkbenchUserId): Future[WorkbenchUserServiceAccount] = {
-    createIdentityInternal(PetServiceAccountId(userId, petServiceAccount.subjectId), petServiceAccount.email, petServiceAccount.subjectId.value).map(_ => petServiceAccount)
-  }
-
-  private def createIdentityInternal(subject: WorkbenchSubject, email: WorkbenchEmail, uid: String): Future[Unit] = withContext { ctx =>
+  override def createUser(user: WorkbenchUser): Future[WorkbenchUser] = withContext { ctx =>
     try {
       val identityContext = new BaseDirContext {
         override def getAttributes(name: String): Attributes = {
@@ -138,26 +131,60 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
           Seq("top", "inetOrgPerson").foreach(oc.add)
           myAttrs.put(oc)
 
-          myAttrs.put(new BasicAttribute(Attr.email, email.value))
-          myAttrs.put(new BasicAttribute(Attr.sn, uid))
-          myAttrs.put(new BasicAttribute(Attr.cn, uid))
-          myAttrs.put(new BasicAttribute(Attr.uid, uid))
+          myAttrs.put(new BasicAttribute(Attr.email, user.email.value))
+          myAttrs.put(new BasicAttribute(Attr.sn, user.id.value))
+          myAttrs.put(new BasicAttribute(Attr.cn, user.id.value))
+          myAttrs.put(new BasicAttribute(Attr.uid, user.id.value))
 
           myAttrs
         }
       }
 
-      ctx.bind(subjectDn(subject), identityContext)
+      ctx.bind(subjectDn(user.id), identityContext)
+      user
     } catch {
       case _: NameAlreadyBoundException =>
-        throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"identity with id $subject already exists"))
+        throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"identity with id ${user.id} already exists"))
     }
   }
 
-  override def getPetServiceAccountForUser(userId: WorkbenchUserId): Future[Option[WorkbenchUserServiceAccountEmail]] = {
+  override def createPetServiceAccount(petServiceAccount: PetServiceAccount): Future[PetServiceAccount] = withContext { ctx =>
+    try {
+      val identityContext = new BaseDirContext {
+        override def getAttributes(name: String): Attributes = {
+          val myAttrs = new BasicAttributes(true)  // Case ignore
+
+          val oc = new BasicAttribute("objectclass")
+          Seq("top", "petServiceAccount").foreach(oc.add)
+          myAttrs.put(oc)
+
+          myAttrs.put(new BasicAttribute(Attr.email, petServiceAccount.serviceAccount.email.value))
+          myAttrs.put(new BasicAttribute(Attr.sn, petServiceAccount.serviceAccount.subjectId.value))
+          myAttrs.put(new BasicAttribute(Attr.cn, petServiceAccount.serviceAccount.subjectId.value))
+          myAttrs.put(new BasicAttribute(Attr.uid, petServiceAccount.serviceAccount.subjectId.value))
+          myAttrs.put(new BasicAttribute(Attr.project, petServiceAccount.id.project.value))
+
+          if (!petServiceAccount.serviceAccount.displayName.value.isEmpty) {
+            myAttrs.put(new BasicAttribute(Attr.givenName, petServiceAccount.serviceAccount.displayName.value))
+          }
+
+          myAttrs
+        }
+      }
+
+      ctx.bind(subjectDn(petServiceAccount.id), identityContext)
+      petServiceAccount
+    } catch {
+      case _: NameAlreadyBoundException =>
+        throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"identity with id ${petServiceAccount.id} already exists"))
+    }
+  }
+
+  override def getAllPetServiceAccountsForUser(userId: WorkbenchUserId): Future[Seq[PetServiceAccount]] = {
     withContext { ctx =>
-      ctx.search(userDn(userId), new BasicAttributes("objectclass", "inetOrgPerson", true)).extractResultsAndClose.headOption.map { result =>
-        unmarshalPetServiceAccount(result.getAttributes).email
+      val matchingAttributes = new BasicAttributes("objectclass", "petServiceAccount", true)
+      ctx.search(userDn(userId), matchingAttributes).extractResultsAndClose.map { result =>
+        unmarshalPetServiceAccount(userId, result.getAttributes)
       }
     }
   }
@@ -174,11 +201,11 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     }.get
   }
 
-  override def loadPetServiceAccount(petServiceAccountUniqueId: PetServiceAccountId): Future[Option[WorkbenchUserServiceAccount]] = withContext { ctx =>
+  override def loadPetServiceAccount(petServiceAccountId: PetServiceAccountId): Future[Option[PetServiceAccount]] = withContext { ctx =>
     Try {
-      val attributes = ctx.getAttributes(petDn(petServiceAccountUniqueId))
+      val attributes = ctx.getAttributes(petDn(petServiceAccountId))
 
-      Option(unmarshalPetServiceAccount(attributes))
+      Option(unmarshalPetServiceAccount(petServiceAccountId.userId, attributes))
 
     }.recover {
       case e: NameNotFoundException => None
@@ -209,7 +236,7 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
   override def loadSubjectEmail(subject: WorkbenchSubject): Future[Option[WorkbenchEmail]] = withContext { ctx =>
     val subDn = subjectDn(subject)
     Option(ctx.getAttributes(subDn).get(Attr.email)).map { emailAttr =>
-      subject.emailOf(emailAttr.get.asInstanceOf[String])
+      WorkbenchEmail(emailAttr.get.asInstanceOf[String])
     }
   }
 
@@ -217,14 +244,16 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     val uid = getAttribute[String](attributes, Attr.uid).getOrElse(throw new WorkbenchException(s"${Attr.uid} attribute missing"))
     val email = getAttribute[String](attributes, Attr.email).getOrElse(throw new WorkbenchException(s"${Attr.email} attribute missing"))
 
-    WorkbenchUser(WorkbenchUserId(uid), WorkbenchUserEmail(email))
+    WorkbenchUser(WorkbenchUserId(uid), WorkbenchEmail(email))
   }
 
-  private def unmarshalPetServiceAccount(attributes: Attributes): WorkbenchUserServiceAccount = {
+  private def unmarshalPetServiceAccount(userId: WorkbenchUserId, attributes: Attributes): PetServiceAccount = {
     val uid = getAttribute[String](attributes, Attr.uid).getOrElse(throw new WorkbenchException(s"${Attr.uid} attribute missing"))
     val email = getAttribute[String](attributes, Attr.email).getOrElse(throw new WorkbenchException(s"${Attr.email} attribute missing"))
+    val project = getAttribute[String](attributes, Attr.project).getOrElse(throw new WorkbenchException(s"${Attr.project} attribute missing"))
+    val displayName = getAttribute[String](attributes, Attr.givenName).getOrElse("")
 
-    WorkbenchUserServiceAccount(WorkbenchUserServiceAccountSubjectId(uid), WorkbenchUserServiceAccountEmail(email), WorkbenchUserServiceAccountDisplayName(""))
+    PetServiceAccount(PetServiceAccountId(userId, GoogleProject(project)), ServiceAccount(ServiceAccountSubjectId(uid), WorkbenchEmail(email), ServiceAccountDisplayName(displayName)))
   }
 
   private def unmarshalGroup(attributes: Attributes): BasicWorkbenchGroup = {
@@ -233,7 +262,7 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     val memberDns = getAttributes[String](attributes, Attr.member).getOrElse(Set.empty).toSet
     val members = memberDns.map(dnToSubject)
 
-    BasicWorkbenchGroup(WorkbenchGroupName(cn), members, WorkbenchGroupEmail(email))
+    BasicWorkbenchGroup(WorkbenchGroupName(cn), members, WorkbenchEmail(email))
   }
 
   private def getAttribute[T](attributes: Attributes, key: String): Option[T] = {

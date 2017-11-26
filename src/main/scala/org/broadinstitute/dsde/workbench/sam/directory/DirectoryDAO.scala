@@ -2,6 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.directory
 
 import java.util.Date
 
+import org.broadinstitute.dsde.workbench.model.google._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
 
@@ -14,7 +15,7 @@ trait DirectoryDAO {
   def createGroup(group: BasicWorkbenchGroup): Future[BasicWorkbenchGroup]
   def loadGroup(groupName: WorkbenchGroupName): Future[Option[BasicWorkbenchGroup]]
   def loadGroups(groupNames: Set[WorkbenchGroupName]): Future[Seq[BasicWorkbenchGroup]]
-  def loadGroupEmail(groupName: WorkbenchGroupName): Future[Option[WorkbenchGroupEmail]]
+  def loadGroupEmail(groupName: WorkbenchGroupName): Future[Option[WorkbenchEmail]]
   def deleteGroup(groupName: WorkbenchGroupName): Future[Unit]
 
   def addGroupMember(groupId: WorkbenchGroupIdentity, addMember: WorkbenchSubject): Future[Unit]
@@ -39,8 +40,8 @@ trait DirectoryDAO {
   def disableIdentity(subject: WorkbenchSubject): Future[Unit]
   def isEnabled(subject: WorkbenchSubject): Future[Boolean]
 
-  def createPetServiceAccount(petServiceAccount: WorkbenchUserServiceAccount, userId: WorkbenchUserId): Future[WorkbenchUserServiceAccount]
-  def loadPetServiceAccount(petServiceAccountId: PetServiceAccountId): Future[Option[WorkbenchUserServiceAccount]]
+  def createPetServiceAccount(petServiceAccount: PetServiceAccount): Future[PetServiceAccount]
+  def loadPetServiceAccount(petServiceAccountId: PetServiceAccountId): Future[Option[PetServiceAccount]]
   def deletePetServiceAccount(petServiceAccountId: PetServiceAccountId): Future[Unit]
-  def getPetServiceAccountForUser(userId: WorkbenchUserId): Future[Option[WorkbenchUserServiceAccountEmail]]
+  def getAllPetServiceAccountsForUser(userId: WorkbenchUserId): Future[Seq[PetServiceAccount]]
 }

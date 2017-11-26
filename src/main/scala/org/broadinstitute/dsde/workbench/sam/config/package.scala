@@ -7,8 +7,8 @@ import com.google.api.client.json.jackson2.JacksonFactory
 import net.ceedubs.ficus.readers.ValueReader
 import org.broadinstitute.dsde.workbench.sam.model._
 import net.ceedubs.ficus.Ficus._
-import org.broadinstitute.dsde.workbench.google.model.GoogleProject
-import org.broadinstitute.dsde.workbench.model.WorkbenchUserEmail
+import org.broadinstitute.dsde.workbench.model.google._
+import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
 
 /**
@@ -71,7 +71,7 @@ package object config {
   implicit val petServiceAccountConfigReader: ValueReader[PetServiceAccountConfig] = ValueReader.relative { config =>
     PetServiceAccountConfig(
       GoogleProject(config.getString("googleProject")),
-      config.as[Set[String]]("serviceAccountUsers").map(WorkbenchUserEmail)
+      config.as[Set[String]]("serviceAccountUsers").map(WorkbenchEmail)
     )
   }
 }
