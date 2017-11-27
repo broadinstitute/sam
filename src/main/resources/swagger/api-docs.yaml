@@ -75,18 +75,24 @@ paths:
       tags:
         - Admin
 
-  /api/google/user/petServiceAccount:
+  /api/google/user/petServiceAccount/{project}:
     get:
       summary: gets the pet service account for the specified user
       responses:
         200:
           description: 'user pet service account'
           schema:
-            $ref: '#/definitions/UserPetServiceAccount'
+            type: string
         500:
           description: Internal Error
           schema:
             $ref: '#/definitions/ErrorReport'
+      parameters:
+        - in: path
+          description: Google project of the pet
+          name: project
+          required: true
+          type: string
       operationId: getPetServiceAccount
       tags:
         - Google
@@ -747,12 +753,3 @@ definitions:
       enabled:
         $ref: '#/definitions/Enabled'
         description: the status of the user's account
-
-  UserPetServiceAccount:
-    description: ''
-    required:
-      - value
-    properties:
-      value:
-        type: string
-        description: user pet service account email
