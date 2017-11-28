@@ -4,19 +4,69 @@
 ## In a nutshell
 The crux of IAM in Sam is a policy. A policy says **who** can **do what** to a **thing**. More technically the who is called a **subject** and can be a user or a group of users, the do what is called an **action** such as read or update, and the thing is called a **resource** such as a workspace or project. Resources have types which specify what actions are available for its resources, roles (which are collections of actions) and which role is the "owner" role. The "owner" role should have the appropriate actions to administer a resource. When a resource is created a policy with the owner role is automatically created and the creator is added.
 
-Here is a pretty picture showing what is described above
+
+##Terms
+* Subject - an authenticated user
+* Resource - something to which access is controlled
+* Action - may be performed on a resource - meant to be as granular as possible
+* Policy - represents the actions a subject may perform on a resource
+* Role - a collection of actions - meant to aggregate actions into a more meaningful, higher level concept
+* Group - a group of subjects or other groups
+* Resource type - defines a class of resources. Each resource has a type which defines
+  * Available actions
+  * Available roles and actions for each role
+  * Of the available roles which is the “owner” role - this is used when creating a resource to give the creator ownership access
+
+##Requirements
+
+###Guiding Principles
+There are no special/super users in this system. All api calls authenticate as subjects with access rights determined by policies in the same way. In other words, this system should use its own policy mechanisms internally for any authorization needs. (Note that this does leave the problem of bootstrapping, i.e. how is the first user created, which can be achieved by scripts outside the system with direct data store level access)
+This system can be publically facing. This does not mean that it will be in all cases but it should be designed with this in mind
+Authentication is handled at a higher level than this application, e.g. via OAuth and an OIDC proxy
+
+###Evaluation
+Evaluation is the act of determining what a user may access.
+1. Given a subject, resource and action emit a yes or no response, i.e. can the subject perform the action on the resource? 
+1. Given a subject and a resource type, list all resources and associated policies on which the user is a member of (directly or indirectly) at least one policy.
+1. Given a subject and resource, list all the actions the user may perform on that resource
+1. Given a subject and resource, list all the user’s roles on that resource
+
+Of these 1 and 2 are the most important from a performance standpoint. Expect 1 to be called for almost every api call in a system. Expect 2 to be called from UI list pages where users generally want a snappy response.
+
+###Resource and Policy Management
+A policy is specific to a resource and a resource may have multiple policies. Each policy consists of a set of 1 or more subjects/groups and a set of 1 or more actions/roles. All of the subjects may perform all of the actions in the policy. Each policy has a name that is unique within a resource. Access to actions through policies is additive (i.e. the actions available to a user on a resource is an accumulation of all policies the user is a member of for that resource).
+
+There must be functions to create, delete and manage policies for resources. There must be access control around deleting resources and managing policies. There must be some built-in actions to do so (delete, read-policies, alter-policies). 
+
+There must be functions to create and delete resources. When a resource is created the caller should be the “owner.” The “owner” role generally will include delete, read-policies and alter-policies actions but need not always (e.g. if a resource may never be deleted then an owner would not have delete permissions). The actions that make up the “owner” role are defined by the resource type.
+
+Resource types define the set of available actions for all resources of that type. It also defines a set of roles and their associated actions. Roles are useful because it can be cumbersome to deal with granular actions and as a point of extensibility (when new actions are added to resource types, they can be added to roles as well effectively adding the action to all resources with that role). It is not yet necessary to provide apis to create and maintain resource types, this can be achieved through configuration.
+
+###User and Group Management
+User - Create, enable, disable, get status. Disabled users should be rejected from any api calls. Enabling a user should reinstate any prior access.
+
+Group - Create, delete, read, list, add/remove users and groups. Nested groups must be supported. Groups can be implemented as a resource type with admin and member roles.
+
+###Built In Actions
+* read_policies - may read all policies of a resource 
+* alter_policies - may change any policy of a resource
+* delete - may delete a resource
+* can_share::{policy name} - may add/remove members to/from specified policy of a resource
+
+###UML Model
 ![Sam Model](model.png)
+Note that in this model Group is a Subject. This allows it to be used interchangeably with Users within policies.
 
-Once a resource is created one can
-* create new named policies which may contain subjects, any actions that are valid for the resource type, and/or any roles that are valid for the resource type
-* list policies
-* alter policies
-* delete policies
-* ask if one has access to execute an action
+##Cloud Integrations
+Google
+* Groups can be mirrored to google groups.
+* Proxy groups - each user with access to google resources should have a google group known as a proxy. The proxy is 1-to-1 with the user and the user is member of the proxy. The proxy group should be used in place of the user in Google IAM policies and Google groups. Users should not be added directly. This allows easy enable and disable functionality by adding/removing users to their proxy groups. It also allows creation of service accounts that can act as the user (see pet service accounts below).
+* Pet service accounts - Google Compute Engine requires a service account to run compute. Service account credentials are the default credentials on any GCE instance. This is the best way at this time to provide credentials to any processes running on a GCE instance. Pet service accounts are created 1-to-1 with the user, are added to the user’s proxy group and can call system apis as the user. In this way a pet service account can act as the user in all respects that can be controlled by the system (resources outside control of the system need to be manually shared by the user with the proxy group).
 
-Also one can list all accessible resources of a type and associated policies.
 
-## To build 
+## Development
+
+### To build 
 Make sure git secrets is installed:
 ```$xslt
 brew install git-secrets
@@ -37,7 +87,7 @@ Build jar and docker image:
 ./docker/build.sh jar -d build
 ```
 
-## To run unit tests
+### To run unit tests
 Spin up a local OpenDJ:
 ```
 sh docker/run-opendj.sh start
