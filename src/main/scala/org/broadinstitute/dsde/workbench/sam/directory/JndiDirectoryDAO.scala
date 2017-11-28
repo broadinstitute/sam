@@ -14,7 +14,7 @@ import org.broadinstitute.dsde.workbench.sam.util.{BaseDirContext, JndiSupport}
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Try
-import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO.Attr
+import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO.{Attr, ObjectClass}
 
 /**
  * Created by dvoet on 11/5/15.
@@ -182,7 +182,7 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
 
   override def getAllPetServiceAccountsForUser(userId: WorkbenchUserId): Future[Seq[PetServiceAccount]] = {
     withContext { ctx =>
-      val matchingAttributes = new BasicAttributes("objectclass", "petServiceAccount", true)
+      val matchingAttributes = new BasicAttributes("objectclass", ObjectClass.petServiceAccount, true)
       ctx.search(userDn(userId), matchingAttributes).extractResultsAndClose.map { result =>
         unmarshalPetServiceAccount(userId, result.getAttributes)
       }

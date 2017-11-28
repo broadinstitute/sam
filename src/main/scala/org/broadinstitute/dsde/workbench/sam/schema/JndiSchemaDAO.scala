@@ -37,6 +37,14 @@ object JndiSchemaDAO {
     val uid = "uid"
     val project = "project"
   }
+
+  object ObjectClass {
+    val workbenchGroup = "workbenchGroup"
+    val petServiceAccount = "petServiceAccount"
+    val resourceType = "resourceType"
+    val resource = "resource"
+    val policy = "policy"
+  }
 }
 
 class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit executionContext: ExecutionContext) extends JndiSupport with DirectorySubjectNameSupport {
@@ -81,7 +89,7 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit exe
 
     val attrs = new BasicAttributes(true) // Ignore case
     attrs.put("NUMERICOID", "1.3.6.1.4.1.18060.0.4.3.2.100")
-    attrs.put("NAME", "workbenchGroup")
+    attrs.put("NAME", ObjectClass.workbenchGroup)
     attrs.put("SUP", "groupofuniquenames")
     attrs.put("STRUCTURAL", "true")
 
@@ -96,14 +104,14 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit exe
     attrs.put(may)
 
     // Add the new schema object for "fooObjectClass"
-    schema.createSubcontext("ClassDefinition/workbenchGroup", attrs)
+    schema.createSubcontext("ClassDefinition/" + ObjectClass.workbenchGroup, attrs)
   }
 
   private def removeWorkbenchGroupSchema(): Future[Unit] = withContext { ctx =>
     val schema = ctx.getSchema("")
 
     // Intentionally ignores errors
-    Try { schema.destroySubcontext("ClassDefinition/workbenchGroup") }
+    Try { schema.destroySubcontext("ClassDefinition/" + ObjectClass.workbenchGroup) }
     Try { schema.destroySubcontext("AttributeDefinition/" + Attr.groupSynchronizedTimestamp) }
     Try { schema.destroySubcontext("AttributeDefinition/" + Attr.groupUpdatedTimestamp) }
   }
@@ -119,9 +127,9 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit exe
 
     val policyAttrs = new BasicAttributes(true) // Ignore case
     policyAttrs.put("NUMERICOID", "1.3.6.1.4.1.18060.0.4.3.2.0")
-    policyAttrs.put("NAME", "policy")
+    policyAttrs.put("NAME", ObjectClass.policy)
     policyAttrs.put("DESC", "list subjects for a policy")
-    policyAttrs.put("SUP", "workbenchGroup")
+    policyAttrs.put("SUP", ObjectClass.workbenchGroup)
     policyAttrs.put("STRUCTURAL", "true")
 
     val policyMust = new BasicAttribute("MUST")
@@ -139,7 +147,7 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit exe
 
     val resourceTypeAttrs = new BasicAttributes(true) // Ignore case
     resourceTypeAttrs.put("NUMERICOID", "1.3.6.1.4.1.18060.0.4.3.2.1000")
-    resourceTypeAttrs.put("NAME", "resourceType")
+    resourceTypeAttrs.put("NAME", ObjectClass.resourceType)
     resourceTypeAttrs.put("DESC", "type of the resource")
     resourceTypeAttrs.put("SUP", "top")
     resourceTypeAttrs.put("STRUCTURAL", "true")
@@ -152,7 +160,7 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit exe
 
     val resourceAttrs = new BasicAttributes(true) // Ignore case
     resourceAttrs.put("NUMERICOID", "1.3.6.1.4.1.18060.0.4.3.2.1001")
-    resourceAttrs.put("NAME", "resource")
+    resourceAttrs.put("NAME", ObjectClass.resource)
     resourceAttrs.put("DESC", "the resource")
     resourceAttrs.put("SUP", "top")
     resourceAttrs.put("STRUCTURAL", "true")
@@ -164,18 +172,18 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit exe
     resourceAttrs.put(resourceMust)
 
     // Add the new schema object for "fooObjectClass"
-    schema.createSubcontext("ClassDefinition/resourceType", resourceTypeAttrs)
-    schema.createSubcontext("ClassDefinition/resource", resourceAttrs)
-    schema.createSubcontext("ClassDefinition/policy", policyAttrs)
+    schema.createSubcontext("ClassDefinition/" + ObjectClass.resourceType, resourceTypeAttrs)
+    schema.createSubcontext("ClassDefinition/" + ObjectClass.resource, resourceAttrs)
+    schema.createSubcontext("ClassDefinition/" + ObjectClass.policy, policyAttrs)
   }
 
   private def removePolicySchema(): Future[Unit] = withContext { ctx =>
     val schema = ctx.getSchema("")
 
     // Intentionally ignores errors
-    Try { schema.destroySubcontext("ClassDefinition/policy") }
-    Try { schema.destroySubcontext("ClassDefinition/resourceType") }
-    Try { schema.destroySubcontext("ClassDefinition/resource") }
+    Try { schema.destroySubcontext("ClassDefinition/" + ObjectClass.policy) }
+    Try { schema.destroySubcontext("ClassDefinition/" + ObjectClass.resource) }
+    Try { schema.destroySubcontext("ClassDefinition/" + ObjectClass.resourceType) }
     Try { schema.destroySubcontext("AttributeDefinition/" + Attr.resourceType) }
     Try { schema.destroySubcontext("AttributeDefinition/" + Attr.resourceId) }
     Try { schema.destroySubcontext("AttributeDefinition/" + Attr.action) }
@@ -211,7 +219,7 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit exe
 
     val attrs = new BasicAttributes(true) // Ignore case
     attrs.put("NUMERICOID", "1.3.6.1.4.1.18060.0.4.3.2.700")
-    attrs.put("NAME", "petServiceAccount")
+    attrs.put("NAME", ObjectClass.petServiceAccount)
     attrs.put("SUP", "inetOrgPerson")
     attrs.put("STRUCTURAL", "true")
 
@@ -222,14 +230,14 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit exe
     attrs.put(must)
 
     // Add the new schema object for "petServiceAccount"
-    schema.createSubcontext("ClassDefinition/petServiceAccount", attrs)
+    schema.createSubcontext("ClassDefinition/" + ObjectClass.petServiceAccount, attrs)
   }
 
   def removeWorkbenchPetServiceAccountSchema(): Future[Unit] = withContext { ctx =>
     val schema = ctx.getSchema("")
 
     // Intentionally ignores errors
-    Try { schema.destroySubcontext("ClassDefinition/petServiceAccount") }
+    Try { schema.destroySubcontext("ClassDefinition/" + ObjectClass.petServiceAccount) }
     Try { schema.destroySubcontext("AttributeDefinition/" + Attr.project) }
   }
 
