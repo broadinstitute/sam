@@ -5,7 +5,7 @@
 The crux of IAM in Sam is a policy. A policy says **who** can **do what** to a **thing**. More technically the who is called a **subject** and can be a user or a group of users, the do what is called an **action** such as read or update, and the thing is called a **resource** such as a workspace or project. Resources have types which specify what actions are available for its resources, roles (which are collections of actions) and which role is the "owner" role. The "owner" role should have the appropriate actions to administer a resource. When a resource is created a policy with the owner role is automatically created and the creator is added.
 
 
-##Terms
+## Terms
 * Subject - an authenticated user
 * Resource - something to which access is controlled
 * Action - may be performed on a resource - meant to be as granular as possible
@@ -17,14 +17,14 @@ The crux of IAM in Sam is a policy. A policy says **who** can **do what** to a *
   * Available roles and actions for each role
   * Of the available roles which is the “owner” role - this is used when creating a resource to give the creator ownership access
 
-##Requirements
+## Requirements
 
-###Guiding Principles
+### Guiding Principles
 There are no special/super users in this system. All api calls authenticate as subjects with access rights determined by policies in the same way. In other words, this system should use its own policy mechanisms internally for any authorization needs. (Note that this does leave the problem of bootstrapping, i.e. how is the first user created, which can be achieved by scripts outside the system with direct data store level access)
 This system can be publically facing. This does not mean that it will be in all cases but it should be designed with this in mind
 Authentication is handled at a higher level than this application, e.g. via OAuth and an OIDC proxy
 
-###Evaluation
+### Evaluation
 Evaluation is the act of determining what a user may access.
 1. Given a subject, resource and action emit a yes or no response, i.e. can the subject perform the action on the resource? 
 1. Given a subject and a resource type, list all resources and associated policies on which the user is a member of (directly or indirectly) at least one policy.
@@ -33,7 +33,7 @@ Evaluation is the act of determining what a user may access.
 
 Of these 1 and 2 are the most important from a performance standpoint. Expect 1 to be called for almost every api call in a system. Expect 2 to be called from UI list pages where users generally want a snappy response.
 
-###Resource and Policy Management
+### Resource and Policy Management
 A policy is specific to a resource and a resource may have multiple policies. Each policy consists of a set of 1 or more subjects/groups and a set of 1 or more actions/roles. All of the subjects may perform all of the actions in the policy. Each policy has a name that is unique within a resource. Access to actions through policies is additive (i.e. the actions available to a user on a resource is an accumulation of all policies the user is a member of for that resource).
 
 There must be functions to create, delete and manage policies for resources. There must be access control around deleting resources and managing policies. There must be some built-in actions to do so (delete, read-policies, alter-policies). 
@@ -42,22 +42,22 @@ There must be functions to create and delete resources. When a resource is creat
 
 Resource types define the set of available actions for all resources of that type. It also defines a set of roles and their associated actions. Roles are useful because it can be cumbersome to deal with granular actions and as a point of extensibility (when new actions are added to resource types, they can be added to roles as well effectively adding the action to all resources with that role). It is not yet necessary to provide apis to create and maintain resource types, this can be achieved through configuration.
 
-###User and Group Management
+### User and Group Management
 User - Create, enable, disable, get status. Disabled users should be rejected from any api calls. Enabling a user should reinstate any prior access.
 
 Group - Create, delete, read, list, add/remove users and groups. Nested groups must be supported. Groups can be implemented as a resource type with admin and member roles.
 
-###Built In Actions
+### Built In Actions
 * read_policies - may read all policies of a resource 
 * alter_policies - may change any policy of a resource
 * delete - may delete a resource
 * can_share::{policy name} - may add/remove members to/from specified policy of a resource
 
-###UML Model
+### UML Model
 ![Sam Model](model.png)
 Note that in this model Group is a Subject. This allows it to be used interchangeably with Users within policies.
 
-##Cloud Integrations
+## Cloud Integrations
 Google
 * Groups can be mirrored to google groups.
 * Proxy groups - each user with access to google resources should have a google group known as a proxy. The proxy is 1-to-1 with the user and the user is member of the proxy. The proxy group should be used in place of the user in Google IAM policies and Google groups. Users should not be added directly. This allows easy enable and disable functionality by adding/removing users to their proxy groups. It also allows creation of service accounts that can act as the user (see pet service accounts below).
