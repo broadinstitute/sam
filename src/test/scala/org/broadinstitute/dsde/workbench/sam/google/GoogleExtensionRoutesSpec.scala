@@ -19,7 +19,7 @@ import org.broadinstitute.dsde.workbench.sam.openam.MockAccessPolicyDAO
 import spray.json.{JsBoolean, JsValue}
 
 /**
-  * Created by dvoet on 6/7/17.
+  * Unit tests of GoogleExtensionRoutes. Can use real Google services. Must mock everything else.
   */
 class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest {
   val defaultUserId = WorkbenchUserId("newuser")
@@ -124,21 +124,15 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
       status shouldEqual StatusCodes.Created
     }
 
-    Get(s"/api/google/resource/${resourceType.name}/foo/${resourceType.ownerRoleName.value}/sync") ~> samRoutes.route ~> check {
-/* hasn't been created yet so should return not found but doesn't
-      status shouldEqual StatusCodes.NotFound
+    Post(s"/api/resource/${resourceType.name}/foo") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
       assertResult("") {
         responseAs[String]
       }
-*/
-    }
-
-    Post(s"/api/resource/${resourceType.name}/foo") ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.NoContent
     }
 
     Get(s"/api/google/resource/${resourceType.name}/foo/${resourceType.ownerRoleName.value}/sync") ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.OK
+      status shouldEqual StatusCodes.NoContent
       assertResult("") {
         responseAs[String]
       }

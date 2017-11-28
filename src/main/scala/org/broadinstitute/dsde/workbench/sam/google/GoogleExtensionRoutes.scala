@@ -60,8 +60,9 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives {
                 } ~
                 get {
                   complete {
-                    googleExtensions.getSynchronizedDate(resourceAndPolicyName).map { date =>
-                      StatusCodes.OK -> GroupSyncResponse(date.map(_.toString).getOrElse(""))
+                    googleExtensions.getSynchronizedDate(resourceAndPolicyName).map {
+                      case Some(date) => StatusCodes.OK -> Option(GroupSyncResponse(date.toString))
+                      case None => StatusCodes.NoContent -> None
                     }
                   }
                 }
