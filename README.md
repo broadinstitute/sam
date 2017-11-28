@@ -55,14 +55,27 @@ Group - Create, delete, read, list, add/remove users and groups. Nested groups m
 
 ### UML Model
 ![Sam Model](model.png)
+
 Note that in this model Group is a Subject. This allows it to be used interchangeably with Users within policies.
 
 ## Cloud Integrations
-Google
+### Google
 * Groups can be mirrored to google groups.
 * Proxy groups - each user with access to google resources should have a google group known as a proxy. The proxy is 1-to-1 with the user and the user is member of the proxy. The proxy group should be used in place of the user in Google IAM policies and Google groups. Users should not be added directly. This allows easy enable and disable functionality by adding/removing users to their proxy groups. It also allows creation of service accounts that can act as the user (see pet service accounts below).
-* Pet service accounts - Google Compute Engine requires a service account to run compute. Service account credentials are the default credentials on any GCE instance. This is the best way at this time to provide credentials to any processes running on a GCE instance. Pet service accounts are created 1-to-1 with the user, are added to the user’s proxy group and can call system apis as the user. In this way a pet service account can act as the user in all respects that can be controlled by the system (resources outside control of the system need to be manually shared by the user with the proxy group).
+* Pet service accounts - Google Compute Engine requires a service account to run compute. Service account credentials are the default credentials on any GCE instance. This is the best way at this time to provide credentials to any processes running on a GCE instance. Pet service accounts correspond with 1 and only 1 user, are added to the user’s proxy group and can call system apis as the user. In this way a pet service account can act as the user in all respects that can be controlled by the system (resources outside control of the system need to be manually shared by the user with the proxy group).
 
+#### Proposed model for accessing external google resources
+![Data Access](data_access.png)
+
+Note that Sam does not actually launch workflows create VMs but appears to in this diagram in order to simplify interactions. The key concept is the user of service accounts.
+
+#### Google integration requires: 
+* a GSuite domain
+* a project with a service account for the sam application
+* service account with access to
+  * create PubSub topics and subscriptions
+  * admin google groups in GSuite domain
+  * create service accounts and keys in desired projects (usually easiest to grant this at the org level)
 
 ## Development
 
