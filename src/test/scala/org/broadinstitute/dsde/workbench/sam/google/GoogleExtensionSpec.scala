@@ -215,7 +215,7 @@ class GoogleExtensionSpec extends FlatSpec with Matchers with TestSupport with M
   it should "return None when getting sync date for a group that has not been synced" in {
     val dirDAO = new JndiDirectoryDAO(directoryConfig)
     val ge = new GoogleExtensions(dirDAO, null, null, null, null, googleServicesConfig, null)
-    val groupName = WorkbenchGroupName("group1")
+    val groupName = WorkbenchGroupName("group-sync")
     runAndWait(dirDAO.createGroup(BasicWorkbenchGroup(groupName, Set(), WorkbenchGroupEmail(""))))
     try {
       runAndWait(ge.getSynchronizedDate(groupName)) shouldBe None
@@ -227,7 +227,7 @@ class GoogleExtensionSpec extends FlatSpec with Matchers with TestSupport with M
   it should "return sync date for a group that has been synced" in {
     val dirDAO = new JndiDirectoryDAO(directoryConfig)
     val ge = new GoogleExtensions(dirDAO, null, new MockGoogleDirectoryDAO(), null, null, googleServicesConfig, null)
-    val groupName = WorkbenchGroupName("group1")
+    val groupName = WorkbenchGroupName("group-sync")
     runAndWait(dirDAO.createGroup(BasicWorkbenchGroup(groupName, Set(), WorkbenchGroupEmail("group1@test.firecloud.org"))))
     try {
       runAndWait(ge.synchronizeGroupMembers(groupName))
