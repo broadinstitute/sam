@@ -123,6 +123,37 @@ paths:
       tags:
         - Google
 
+    get:
+      summary: Gets the synchronization state (last synchronized date) for the group.
+      responses:
+        200:
+          description: Success
+          schema:
+            $ref: '#/definitions/SyncStatus'
+        204:
+          description: Group is not synchronized to Google
+        404:
+          description: Group not found
+      parameters:
+        - in: path
+          description: Type of resource
+          name: resourceTypeName
+          required: true
+          type: string
+        - in: path
+          description: Id of resource
+          name: resourceId
+          required: true
+          type: string
+        - in: path
+          description: Name of policy to synchronize
+          name: policyName
+          required: true
+          type: string
+      operationId: syncStatus
+      tags:
+        - Google
+
   /api/resource/{resourceTypeName}:
     get:
       summary: List resources and policies for this resource for the caller
@@ -669,6 +700,14 @@ definitions:
         type: string
       errorReport:
         $ref: '#/definitions/ErrorReport'
+
+  SyncStatus:
+    description: status of group synchronization
+    required:
+      - lastSyncDate
+    properties:
+      lastSyncDate:
+        type: string
 
   SystemStatus:
     description: status of each aubsystem Sam depends on

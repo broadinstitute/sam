@@ -1,6 +1,8 @@
 package org.broadinstitute.dsde.workbench.sam.google
 
 import java.util.Date
+
+import akka.http.scaladsl.model.StatusCodes
 import com.typesafe.config.ConfigFactory
 import org.broadinstitute.dsde.workbench.google.GoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.google.mock.{MockGoogleDirectoryDAO, MockGoogleIamDAO, MockGooglePubSubDAO}
@@ -183,5 +185,56 @@ class GoogleExtensionSpec extends FlatSpec with Matchers with TestSupport with M
     // create one again, it should work
     val petSaResponse2 = googleExtensions.createUserPetServiceAccount(defaultUser).futureValue
     petSaResponse2 shouldBe emailResponse
+  }
+
+  it should "get a group's last synchronized date" in {
+    val groupName = WorkbenchGroupName("group1")
+
+    val mockDirectoryDAO = mock[DirectoryDAO]
+    val ge = new GoogleExtensions(mockDirectoryDAO, null, null, null, null, googleServicesConfig, petServiceAccountConfig)
+
+    when(mockDirectoryDAO.getSynchronizedDate(groupName)).thenReturn(Future.successful(None))
+    runAndWait(ge.getSynchronizedDate(groupName)) shouldBe None
+
+    val date = new Date()
+    when(mockDirectoryDAO.getSynchronizedDate(groupName)).thenReturn(Future.successful(Some(date)))
+    runAndWait(ge.getSynchronizedDate(groupName)) shouldBe Some(date)
+  }
+
+  it should "throw an exception with a NotFound error report when getting sync date for group that does not exist" in {
+    val dirDAO = new JndiDirectoryDAO(directoryConfig)
+    val ge = new GoogleExtensions(dirDAO, null, null, null, null, googleServicesConfig, null)
+    val groupName = WorkbenchGroupName("missing-group")
+    val caught: WorkbenchExceptionWithErrorReport = intercept[WorkbenchExceptionWithErrorReport] {
+      runAndWait(ge.getSynchronizedDate(groupName))
+    }
+    caught.errorReport.statusCode shouldBe Some(StatusCodes.NotFound)
+    caught.errorReport.message should include (groupName.toString)
+  }
+
+  it should "return None when getting sync date for a group that has not been synced" in {
+    val dirDAO = new JndiDirectoryDAO(directoryConfig)
+    val ge = new GoogleExtensions(dirDAO, null, null, null, null, googleServicesConfig, null)
+    val groupName = WorkbenchGroupName("group-sync")
+    runAndWait(dirDAO.createGroup(BasicWorkbenchGroup(groupName, Set(), WorkbenchGroupEmail(""))))
+    try {
+      runAndWait(ge.getSynchronizedDate(groupName)) shouldBe None
+    } finally {
+      runAndWait(dirDAO.deleteGroup(groupName))
+    }
+  }
+
+  it should "return sync date for a group that has been synced" in {
+    val dirDAO = new JndiDirectoryDAO(directoryConfig)
+    val ge = new GoogleExtensions(dirDAO, null, new MockGoogleDirectoryDAO(), null, null, googleServicesConfig, null)
+    val groupName = WorkbenchGroupName("group-sync")
+    runAndWait(dirDAO.createGroup(BasicWorkbenchGroup(groupName, Set(), WorkbenchGroupEmail("group1@test.firecloud.org"))))
+    try {
+      runAndWait(ge.synchronizeGroupMembers(groupName))
+      val syncDate = runAndWait(ge.getSynchronizedDate(groupName)).get
+      syncDate.getTime should equal (new Date().getTime +- 1.second.toMillis)
+    } finally {
+      runAndWait(dirDAO.deleteGroup(groupName))
+    }
   }
 }

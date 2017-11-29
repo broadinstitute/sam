@@ -16,6 +16,7 @@ import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicy, BasicWorkbench
   * Created by mbemis on 6/23/17.
   */
 class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, WorkbenchGroup] = new TrieMap()) extends DirectoryDAO {
+  private val groupSynchronzedDates: mutable.Map[WorkbenchGroupIdentity, Date] = new TrieMap()
   private val users: mutable.Map[WorkbenchUserId, WorkbenchUser] = new TrieMap()
   private val enabledUsers: mutable.Map[WorkbenchSubject, Unit] = new TrieMap()
   private val usersWithEmails: mutable.Map[WorkbenchUserEmail, WorkbenchUserId] = new TrieMap()
@@ -177,7 +178,10 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     Future.successful(())
   }
 
-  override def updateSynchronizedDate(groupId: WorkbenchGroupIdentity): Future[Unit] = { Future.successful(()) }
+  override def updateSynchronizedDate(groupId: WorkbenchGroupIdentity): Future[Unit] = {
+    groupSynchronzedDates += groupId -> new Date()
+    Future.successful(())
+  }
 
   override def loadSubjectEmail(subject: WorkbenchSubject): Future[Option[WorkbenchEmail]] = Future {
     subject match {
@@ -187,5 +191,7 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     }
   }
 
-  override def getSynchronizedDate(groupId: WorkbenchGroupIdentity): Future[Option[Date]] = { Future.successful(None) }
+  override def getSynchronizedDate(groupId: WorkbenchGroupIdentity): Future[Option[Date]] = {
+    Future.successful(groupSynchronzedDates.get(groupId))
+  }
 }

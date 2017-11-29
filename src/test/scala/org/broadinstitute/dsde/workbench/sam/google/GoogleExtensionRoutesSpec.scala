@@ -6,7 +6,6 @@ import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.testkit.ScalatestRouteTest
 import com.typesafe.config.ConfigFactory
 import org.broadinstitute.dsde.workbench.google.mock.{MockGoogleDirectoryDAO, MockGoogleIamDAO, MockGooglePubSubDAO}
-import org.broadinstitute.dsde.workbench.google.model.GoogleProject
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.api.TestSamRoutes
@@ -20,7 +19,7 @@ import org.broadinstitute.dsde.workbench.sam.openam.MockAccessPolicyDAO
 import spray.json.{JsBoolean, JsValue}
 
 /**
-  * Created by dvoet on 6/7/17.
+  * Unit tests of GoogleExtensionRoutes. Can use real Google services. Must mock everything else.
   */
 class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest {
   val defaultUserId = WorkbenchUserId("newuser")
@@ -64,7 +63,7 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
     }
   }
 
-  "POST /api/google/policy/sync/{resourceTypeName}/{resourceId}/{accessPolicyName}" should "204 Create Google group for policy" in {
+  "POST /api/google/policy/{resourceTypeName}/{resourceId}/{accessPolicyName}/sync" should "204 Create Google group for policy" in {
     val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceAction("alter_policies"), ResourceAction("can_compute"), ResourceAction("read_policies")), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("alter_policies"), ResourceAction("read_policies")))), ResourceRoleName("owner"))
     val resourceTypes = Map(resourceType.name -> resourceType)
     val defaultUserInfo = UserInfo("accessToken", WorkbenchUserId("user1"), WorkbenchUserEmail("user1@example.com"), 0)
@@ -101,6 +100,58 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
       assertResult(Map(createdPolicy.email -> Seq(SyncReportItem("added", googleExt.toProxyFromUser(defaultUserInfo.userId.value), None)))) {
         responseAs[Map[WorkbenchGroupEmail, Seq[SyncReportItem]]]
       }
+    }
+  }
+
+  "GET /api/google/policy/{resourceTypeName}/{resourceId}/{accessPolicyName}/sync" should "200 with sync date" in {
+    val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceAction("alter_policies"), ResourceAction("can_compute"), ResourceAction("read_policies")), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("alter_policies"), ResourceAction("read_policies")))), ResourceRoleName("owner"))
+    val resourceTypes = Map(resourceType.name -> resourceType)
+    val defaultUserInfo = UserInfo("accessToken", WorkbenchUserId("user1"), WorkbenchUserEmail("user1@example.com"), 0)
+    val googleDirectoryDAO = new MockGoogleDirectoryDAO()
+    val directoryDAO = new MockDirectoryDAO()
+    val googleIamDAO = new MockGoogleIamDAO()
+    val policyDAO = new MockAccessPolicyDAO()
+    val pubSubDAO = new MockGooglePubSubDAO()
+    val googleExt = new GoogleExtensions(directoryDAO, policyDAO, googleDirectoryDAO, pubSubDAO, googleIamDAO, googleServicesConfig, petServiceAccountConfig)
+    googleExt.onBoot()
+    val mockResourceService = new ResourceService(resourceTypes, policyDAO, directoryDAO, googleExt, "example.com")
+    val samRoutes = new TestSamRoutes(mockResourceService, new UserService(directoryDAO, googleExt), new StatusService(directoryDAO, NoExtensions), UserInfo("", defaultUserInfo.userId, defaultUserInfo.userEmail, 0)) with GoogleExtensionRoutes {
+      val googleExtensions = googleExt
+    }
+
+    //create user
+    Post("/register/user") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Created
+    }
+
+    Post(s"/api/resource/${resourceType.name}/foo") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+      assertResult("") {
+        responseAs[String]
+      }
+    }
+
+    Get(s"/api/google/resource/${resourceType.name}/foo/${resourceType.ownerRoleName.value}/sync") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+      assertResult("") {
+        responseAs[String]
+      }
+    }
+
+    Post(s"/api/google/resource/${resourceType.name}/foo/${resourceType.ownerRoleName.value}/sync") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+    }
+
+    import spray.json.DefaultJsonProtocol._
+    val createdPolicy = Get(s"/api/resource/${resourceType.name}/foo/policies") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      val response = responseAs[Seq[AccessPolicyResponseEntry]]
+      response.find(_.policyName == AccessPolicyName(resourceType.ownerRoleName.value)).getOrElse(fail("created policy not returned by get request"))
+    }
+
+    Get(s"/api/google/resource/${resourceType.name}/foo/${resourceType.ownerRoleName.value}/sync") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[String] should not be empty
     }
   }
 }

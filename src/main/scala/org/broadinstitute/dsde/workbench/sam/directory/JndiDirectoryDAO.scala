@@ -1,6 +1,5 @@
 package org.broadinstitute.dsde.workbench.sam.directory
 
-import java.text.SimpleDateFormat
 import java.util.Date
 import javax.naming._
 import javax.naming.directory._
@@ -76,8 +75,12 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
   }
 
   override def getSynchronizedDate(groupId: WorkbenchGroupIdentity): Future[Option[Date]] = withContext { ctx =>
-    val attributes = ctx.getAttributes(groupDn(groupId), Array(Attr.groupSynchronizedTimestamp))
-    getAttribute[String](attributes, Attr.groupSynchronizedTimestamp).map(parseDate)
+    Try {
+      val attributes = ctx.getAttributes(groupDn(groupId), Array(Attr.groupSynchronizedTimestamp))
+      getAttribute[String](attributes, Attr.groupSynchronizedTimestamp).map(parseDate)
+    }.recover {
+      case _: NameNotFoundException => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"$groupId not found"))
+    }.get
   }
 
   override def loadGroup(groupName: WorkbenchGroupName): Future[Option[BasicWorkbenchGroup]] = withContext { ctx =>
