@@ -46,7 +46,16 @@ object Dependencies {
   val workbenchGoogle: ModuleID =    "org.broadinstitute.dsde.workbench" %% "workbench-google" % workbenchGoogleV excludeAll(excludeWorkbenchUtil, excludeWorkbenchModel)
   val workbenchGoogleTests: ModuleID =    "org.broadinstitute.dsde.workbench" %% "workbench-google" % workbenchGoogleV % "test" classifier "tests" excludeAll(excludeWorkbenchUtil, excludeWorkbenchModel)
 
-  val rootDependencies = Seq(
+  val modelDependencies = Seq(
+    jacksonCore,
+    scalaLogging,
+    scalaLogging,
+    scalaTest,
+    akkaHttpSprayJson,
+    workbenchModel
+  )
+
+  val samCoreDependencies: Seq[ModuleID] = modelDependencies ++ Seq(
     // proactively pull in latest versions of Jackson libs, instead of relying on the versions
     // specified as transitive dependencies, due to OWASP DependencyCheck warnings for earlier versions.
 
@@ -69,8 +78,6 @@ object Dependencies {
     akkaHttpTestKit,
 
     cats,
-
-    scalaTest,
     mockito,
 
     workbenchUtil,

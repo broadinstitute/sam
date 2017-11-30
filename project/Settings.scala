@@ -1,5 +1,6 @@
 import Dependencies._
 import Merging._
+import Publishing._
 import Testing._
 import Version._
 import sbt.Keys._
@@ -35,6 +36,10 @@ object Settings {
     test in assembly := {}
   )
 
+  val samAssemblySettings = Seq(
+    mainClass in assembly := Some("org.broadinstitute.dsde.workbench.sam.Boot")
+  )
+
   //common settings for all sbt subprojects
   val commonSettings =
     commonBuildSettings ++ commonAssemblySettings ++ commonTestSettings ++ List(
@@ -44,13 +49,24 @@ object Settings {
     scalacOptions ++= commonCompilerSettings
   )
 
+  val modelSettings = commonSettings ++ List(
+    name := "sam-model",
+    libraryDependencies ++= modelDependencies
+  ) ++ publishSettings ++ rootVersionSettings
+
+  val samCoreSettings = commonSettings ++ List(
+    name := "rawls-core",
+    version := "0.1",
+    libraryDependencies ++= samCoreDependencies
+  ) ++ samAssemblySettings ++ noPublishSettings
+
   //the full list of settings for the root project that's ultimately the one we build into a fat JAR and run
   //coreDefaultSettings (inside commonSettings) sets the project name, which we want to override, so ordering is important.
   //thus commonSettings needs to be added first.
   val rootSettings = commonSettings ++ List(
     name := "sam",
-    libraryDependencies ++= rootDependencies
-  ) ++ commonAssemblySettings ++ rootVersionSettings
+    version := "0.1"
+  ) ++ samAssemblySettings ++ rootVersionSettings
 
 
 }

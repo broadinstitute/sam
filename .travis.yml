@@ -8,6 +8,11 @@ scala:
 
 sudo: required
 
+env:
+  global:
+  - secure:
+  - secure:
+
 services:
   - docker
 
@@ -20,3 +25,4 @@ script:
 after_success:
   - SBT_OPTS=-Xmx3g sbt coveralls
   - docker rm -f opendj
+  - bash scripts/publish.sh
