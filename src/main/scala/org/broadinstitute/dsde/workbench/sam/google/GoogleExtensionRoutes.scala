@@ -46,16 +46,17 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives {
             }
           }
         } ~
-        pathPrefix("resource") {
-          path(Segment / Segment / Segment / "sync") { (resourceTypeName, resourceId, accessPolicyName) =>
-            val resource = Resource(ResourceTypeName(resourceTypeName), ResourceId(resourceId))
-            val resourceAndPolicyName = ResourceAndPolicyName(resource, AccessPolicyName(accessPolicyName))
-            pathEndOrSingleSlash {
-              post {
-                complete {
-                  import GoogleModelJsonSupport._
-                  googleExtensions.synchronizeGroupMembers(resourceAndPolicyName).map { syncReport =>
-                    StatusCodes.OK -> syncReport
+          pathPrefix("resource") {
+            path(Segment / Segment / Segment / "sync") { (resourceTypeName, resourceId, accessPolicyName) =>
+              val resource = Resource(ResourceTypeName(resourceTypeName), ResourceId(resourceId))
+              val resourceAndPolicyName = ResourceAndPolicyName(resource, AccessPolicyName(accessPolicyName))
+              pathEndOrSingleSlash {
+                post {
+                  complete {
+                    import GoogleModelJsonSupport._
+                    googleExtensions.synchronizeGroupMembers(resourceAndPolicyName).map { syncReport =>
+                      StatusCodes.OK -> syncReport
+                    }
                   }
                 } ~
                 get {
@@ -69,7 +70,6 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives {
               }
             }
           }
-        }
       }
     }
 }
