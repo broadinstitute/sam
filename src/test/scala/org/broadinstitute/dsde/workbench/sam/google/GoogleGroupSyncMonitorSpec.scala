@@ -4,7 +4,7 @@ import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
 import akka.testkit.TestKit
 import org.broadinstitute.dsde.workbench.google.mock.MockGooglePubSubDAO
-import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchExceptionWithErrorReport, WorkbenchGroupEmail, WorkbenchGroupName}
+import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchExceptionWithErrorReport, WorkbenchEmail, WorkbenchGroupName}
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.model._
@@ -35,11 +35,11 @@ class GoogleGroupSyncMonitorSpec(_system: ActorSystem) extends TestKit(_system) 
     val mockGooglePubSubDAO = new MockGooglePubSubDAO
     val mockGoogleExtensions = mock[GoogleExtensions]
 
-    val groupToSyncEmail = WorkbenchGroupEmail("testgroup@example.com")
+    val groupToSyncEmail = WorkbenchEmail("testgroup@example.com")
     val groupToSyncId = WorkbenchGroupName("testgroup")
     when(mockGoogleExtensions.synchronizeGroupMembers(groupToSyncId)).thenReturn(Future.successful(Map(groupToSyncEmail -> Seq.empty[SyncReportItem])))
 
-    val policyToSyncEmail = WorkbenchGroupEmail("testpolicy@example.com")
+    val policyToSyncEmail = WorkbenchEmail("testpolicy@example.com")
     val policyToSyncId = ResourceAndPolicyName(Resource(ResourceTypeName("rt"), ResourceId("rid")), AccessPolicyName("pname"))
     when(mockGoogleExtensions.synchronizeGroupMembers(policyToSyncId)).thenReturn(Future.successful(Map(policyToSyncEmail -> Seq.empty[SyncReportItem])))
 
@@ -67,7 +67,7 @@ class GoogleGroupSyncMonitorSpec(_system: ActorSystem) extends TestKit(_system) 
     val mockGooglePubSubDAO = new MockGooglePubSubDAO
     val mockGoogleExtensions = mock[GoogleExtensions]
 
-    val groupToSyncEmail = WorkbenchGroupEmail("testgroup@example.com")
+    val groupToSyncEmail = WorkbenchEmail("testgroup@example.com")
     val groupToSyncId = WorkbenchGroupName("testgroup")
     when(mockGoogleExtensions.synchronizeGroupMembers(groupToSyncId)).thenReturn(Future.failed(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "not found"))))
 

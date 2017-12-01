@@ -42,10 +42,10 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     runAndWait(schemaDao.createOrgUnits())
   }
 
-  private val dummyUserInfo = UserInfo("token", WorkbenchUserId("userid"), WorkbenchUserEmail("user@company.com"), 0)
+  private val dummyUserInfo = UserInfo("token", WorkbenchUserId("userid"), WorkbenchEmail("user@company.com"), 0)
 
   def toEmail(resourceType: String, resourceName: String, policyName: String) = {
-    WorkbenchGroupEmail("policy-randomuuid@example.com")
+    WorkbenchEmail("policy-randomuuid@example.com")
   }
 
   private def constructExpectedPolicies(resourceType: ResourceType, resource: Resource) = {
@@ -64,7 +64,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     runAndWait(service.createResource(defaultResourceType, resourceName, dummyUserInfo))
 
     assertResult(constructExpectedPolicies(defaultResourceType, resource)) {
-      runAndWait{policyDAO.listAccessPolicies(resource)}.map(_.copy(email=WorkbenchGroupEmail("policy-randomuuid@example.com")))
+      runAndWait{policyDAO.listAccessPolicies(resource)}.map(_.copy(email=WorkbenchEmail("policy-randomuuid@example.com")))
     }
 
     //cleanup
@@ -88,7 +88,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
 
       val policies2 = runAndWait(service.createResource(defaultResourceType, resourceName2, dummyUserInfo))
 
-      runAndWait(service.accessPolicyDAO.createPolicy(AccessPolicy(ResourceAndPolicyName(policies2, AccessPolicyName(otherRoleName.value)), Set(dummyUserInfo.userId), WorkbenchGroupEmail("a@b.c"), Set(otherRoleName), Set.empty)))
+      runAndWait(service.accessPolicyDAO.createPolicy(AccessPolicy(ResourceAndPolicyName(policies2, AccessPolicyName(otherRoleName.value)), Set(dummyUserInfo.userId), WorkbenchEmail("a@b.c"), Set(otherRoleName), Set.empty)))
 
       assertResult(defaultResourceType.roles.filter(_.roleName.equals(ResourceRoleName("owner"))).head.actions) {
         runAndWait(service.listUserResourceActions(Resource(defaultResourceType.name, resourceName1), dummyUserInfo))
@@ -169,7 +169,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     runAndWait(service.createResourceType(defaultResourceType))
     runAndWait(service.createResource(defaultResourceType, resource.resourceId, dummyUserInfo))
 
-    val policies = runAndWait(policyDAO.listAccessPolicies(resource)).map(_.copy(email=WorkbenchGroupEmail("policy-randomuuid@example.com")))
+    val policies = runAndWait(policyDAO.listAccessPolicies(resource)).map(_.copy(email=WorkbenchEmail("policy-randomuuid@example.com")))
 
     constructExpectedPolicies(defaultResourceType, resource) should contain theSameElementsAs(policies)
 
@@ -187,7 +187,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
 
     runAndWait(service.overwritePolicy(defaultResourceType, newPolicy.id.accessPolicyName, newPolicy.id.resource, AccessPolicyMembership(Set.empty, Set(ResourceAction("non_owner_action")), Set.empty), dummyUserInfo))
 
-    val policies = runAndWait(policyDAO.listAccessPolicies(resource)).map(_.copy(email=WorkbenchGroupEmail("policy-randomuuid@example.com")))
+    val policies = runAndWait(policyDAO.listAccessPolicies(resource)).map(_.copy(email=WorkbenchEmail("policy-randomuuid@example.com")))
 
     assert(policies.contains(newPolicy))
 
@@ -276,7 +276,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
   "add/remove SubjectToPolicy" should "add/remove subject and tolerate prior (non)existence" in {
     val resource = Resource(defaultResourceType.name, ResourceId("my-resource"))
     val policyName = AccessPolicyName(defaultResourceType.ownerRoleName.value)
-    val otherUserInfo = UserInfo("token", WorkbenchUserId("otheruserid"), WorkbenchUserEmail("otheruser@company.com"), 0)
+    val otherUserInfo = UserInfo("token", WorkbenchUserId("otheruserid"), WorkbenchEmail("otheruser@company.com"), 0)
 
     runAndWait(dirDAO.createUser(WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)))
     runAndWait(dirDAO.createUser(WorkbenchUser(otherUserInfo.userId, otherUserInfo.userEmail)))

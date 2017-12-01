@@ -14,7 +14,7 @@ import org.broadinstitute.dsde.workbench.sam._
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Try
-import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO.Attr
+import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO.{Attr, ObjectClass}
 
 /**
   * Created by dvoet on 6/26/17.
@@ -31,7 +31,7 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
           val myAttrs = new BasicAttributes(true) // Case ignore
 
           val oc = new BasicAttribute("objectclass")
-          Seq("top", "resourceType").foreach(oc.add)
+          Seq("top", ObjectClass.resourceType).foreach(oc.add)
           myAttrs.put(oc)
           myAttrs.put(Attr.ou, "resources")
 
@@ -57,7 +57,7 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
           val myAttrs = new BasicAttributes(true) // Case ignore
 
           val oc = new BasicAttribute("objectclass")
-          Seq("top", "resource").foreach(oc.add)
+          Seq("top", ObjectClass.resource).foreach(oc.add)
           myAttrs.put(oc)
           myAttrs.put(Attr.resourceType, resource.resourceTypeName.value)
 
@@ -87,7 +87,7 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
           val myAttrs = new BasicAttributes(true) // Case ignore
 
           val oc = new BasicAttribute("objectclass")
-          Seq("top", "policy").foreach(oc.add)
+          Seq("top", ObjectClass.policy).foreach(oc.add)
           myAttrs.put(oc)
           myAttrs.put(Attr.cn, policy.id.accessPolicyName.value)
           myAttrs.put(Attr.email, policy.email.value) //TODO make sure the google group is created
@@ -210,7 +210,7 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
     val roles = getAttributes[String](attributes, Attr.role).getOrElse(Set.empty).toSet.map(r => ResourceRoleName(r))
     val actions = getAttributes[String](attributes, Attr.action).getOrElse(Set.empty).toSet.map(a => ResourceAction(a))
 
-    val email = WorkbenchGroupEmail(attributes.get(Attr.email).get().toString)
+    val email = WorkbenchEmail(attributes.get(Attr.email).get().toString)
 
     AccessPolicy(ResourceAndPolicyName(resource, AccessPolicyName(policyName)), members, email, roles, actions)
   }

@@ -6,7 +6,7 @@ import com.typesafe.config.ConfigFactory
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FlatSpec, Matchers}
 import net.ceedubs.ficus.Ficus._
-import org.broadinstitute.dsde.workbench.model.{WorkbenchGroup, WorkbenchGroupEmail, WorkbenchGroupName, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.model.{WorkbenchGroup, WorkbenchEmail, WorkbenchGroupName, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
 import org.broadinstitute.dsde.workbench.sam.directory._
@@ -34,7 +34,7 @@ class JndiAccessPolicyDAOSpec extends FlatSpec with Matchers with TestSupport wi
   }
 
   def toEmail(resourceType: String, resourceId: String, policyName: String) = {
-    WorkbenchGroupEmail(s"policy-$resourceType-$resourceId-$policyName@dev.test.firecloud.org")
+    WorkbenchEmail(s"policy-$resourceType-$resourceId-$policyName@dev.test.firecloud.org")
   }
 
   "JndiAccessPolicyDAO" should "create, list, delete policies" in {

@@ -1,6 +1,6 @@
 package org.broadinstitute.dsde.workbench.sam.google
 
-import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchGroupEmail}
+import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchEmail}
 import spray.json.DefaultJsonProtocol
 
 object GoogleModelJsonSupport {

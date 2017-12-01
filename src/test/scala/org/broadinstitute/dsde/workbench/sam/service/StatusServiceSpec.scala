@@ -6,7 +6,7 @@ import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.directory.MockDirectoryDAO
 import org.scalatest.{BeforeAndAfterAll, FlatSpec, FreeSpec, Matchers}
 import org.broadinstitute.dsde.workbench.google.mock.MockGoogleDirectoryDAO
-import org.broadinstitute.dsde.workbench.model.{WorkbenchException, WorkbenchGroup, WorkbenchGroupEmail, WorkbenchGroupName}
+import org.broadinstitute.dsde.workbench.model.{WorkbenchException, WorkbenchGroup, WorkbenchEmail, WorkbenchGroupName}
 import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
 import org.broadinstitute.dsde.workbench.util.health.{StatusCheckResponse, SubsystemStatus, Subsystems}
 import org.broadinstitute.dsde.workbench.util.health.Subsystems.{GoogleGroups, OpenDJ}
@@ -18,7 +18,7 @@ import org.scalatest.concurrent.Eventually
 
 class StatusServiceSpec extends FreeSpec with Matchers with BeforeAndAfterAll with TestSupport with Eventually {
   implicit val system = ActorSystem("StatusServiceSpec")
-  val allUsersEmail = WorkbenchGroupEmail("allusers@example.com")
+  val allUsersEmail = WorkbenchEmail("allusers@example.com")
 
   override def afterAll(): Unit = {
     system.terminate()
@@ -46,7 +46,7 @@ class StatusServiceSpec extends FreeSpec with Matchers with BeforeAndAfterAll wi
 
   def failingOpenDJ = {
     val service = new StatusService(new MockDirectoryDAO {
-      override def loadGroupEmail(groupName: WorkbenchGroupName): Future[Option[WorkbenchGroupEmail]] = Future.failed(new WorkbenchException("bad opendj"))
+      override def loadGroupEmail(groupName: WorkbenchGroupName): Future[Option[WorkbenchEmail]] = Future.failed(new WorkbenchException("bad opendj"))
     }, NoExtensions)
     service
   }

@@ -66,7 +66,7 @@ trait NoExtensions extends CloudExtensions {
   override val emailDomain = "example.com"
 
   override def getOrCreateAllUsersGroup(directoryDAO: DirectoryDAO)(implicit executionContext: ExecutionContext): Future[WorkbenchGroup] = {
-    val allUsersGroup = BasicWorkbenchGroup(allUsersGroupName, Set.empty, WorkbenchGroupEmail(s"GROUP_${allUsersGroupName.value}@$emailDomain"))
+    val allUsersGroup = BasicWorkbenchGroup(allUsersGroupName, Set.empty, WorkbenchEmail(s"GROUP_${allUsersGroupName.value}@$emailDomain"))
     for {
       createdGroup <- directoryDAO.createGroup(allUsersGroup) recover {
         case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode == Option(StatusCodes.Conflict) => allUsersGroup

@@ -23,9 +23,9 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Befor
   override implicit val patienceConfig = PatienceConfig(timeout = scaled(5.seconds))
 
   val defaultUserId = WorkbenchUserId("newuser")
-  val defaultUserEmail = WorkbenchUserEmail("newuser@new.com")
+  val defaultUserEmail = WorkbenchEmail("newuser@new.com")
   val defaultUser = WorkbenchUser(defaultUserId, defaultUserEmail)
-  val userInfo = UserInfo("token", WorkbenchUserId(UUID.randomUUID().toString), WorkbenchUserEmail("user@company.com"), 0)
+  val userInfo = UserInfo("token", WorkbenchUserId(UUID.randomUUID().toString), WorkbenchEmail("user@company.com"), 0)
 
   lazy val config = ConfigFactory.load()
   lazy val directoryConfig = config.as[DirectoryConfig]("directory")
