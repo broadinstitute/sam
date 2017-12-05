@@ -119,24 +119,32 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
         case None => accessPolicyDAO.createPolicy(newPolicy)
         case Some(accessPolicy) => accessPolicyDAO.overwritePolicy(AccessPolicy(newPolicy.id, newPolicy.members, accessPolicy.email, newPolicy.roles, newPolicy.actions ))
       } andThen {
-        case Success(policy) => cloudExtensions.onGroupUpdate(Seq(policy.id)) recover {
-          case t: Throwable =>
-            logger.error(s"error calling cloudExtensions.onGroupUpdate for ${policy.id}", t)
-            throw t
-        }
+        case Success(policy) => fireGroupUpdateNotification(policy.id)
       }
+    }
+  }
+
+  private def fireGroupUpdateNotification(groupId: WorkbenchGroupIdentity) = {
+    cloudExtensions.onGroupUpdate(Seq(groupId)) recover {
+      case t: Throwable =>
+        logger.error(s"error calling cloudExtensions.onGroupUpdate for $groupId", t)
+        throw t
     }
   }
 
   def addSubjectToPolicy(resourceAndPolicyName: ResourceAndPolicyName, subject: WorkbenchSubject): Future[Unit] = {
     directoryDAO.addGroupMember(resourceAndPolicyName, subject) recover {
       case _: AttributeInUseException => // subject is already there
+    } andThen {
+      case Success(_) => fireGroupUpdateNotification(resourceAndPolicyName)
     }
   }
 
   def removeSubjectFromPolicy(resourceAndPolicyName: ResourceAndPolicyName, subject: WorkbenchSubject): Future[Unit] = {
     directoryDAO.removeGroupMember(resourceAndPolicyName, subject) recover {
       case _: NoSuchAttributeException => // subject already gone
+    } andThen {
+      case Success(_) => fireGroupUpdateNotification(resourceAndPolicyName)
     }
   }
 
