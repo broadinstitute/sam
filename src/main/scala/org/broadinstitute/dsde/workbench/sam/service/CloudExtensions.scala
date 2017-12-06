@@ -8,6 +8,7 @@ import org.broadinstitute.dsde.workbench.sam.api.ExtensionRoutes
 import scala.concurrent.{ExecutionContext, Future}
 import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directives._
+import org.broadinstitute.dsde.workbench.model.google.GoogleProject
 import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
 import org.broadinstitute.dsde.workbench.util.health.SubsystemStatus
@@ -32,6 +33,11 @@ trait CloudExtensions {
   def onUserDisable(user: WorkbenchUser): Future[Unit]
 
   def onUserDelete(userId: WorkbenchUserId): Future[Unit]
+
+  @deprecated
+  def deleteUserPetServiceAccount(userId: WorkbenchUserId): Future[Boolean]
+
+  def deleteUserPetServiceAccount(userId: WorkbenchUserId, project: GoogleProject): Future[Boolean]
 
   def checkStatus: Map[Subsystem, Future[SubsystemStatus]]
 
@@ -58,6 +64,11 @@ trait NoExtensions extends CloudExtensions {
   override def onUserDisable(user: WorkbenchUser): Future[Unit] = Future.successful(())
 
   override def onUserDelete(userId: WorkbenchUserId): Future[Unit] = Future.successful(())
+
+  @deprecated
+  override def deleteUserPetServiceAccount(userId: WorkbenchUserId): Future[Boolean] = Future.successful(true)
+
+  override def deleteUserPetServiceAccount(userId: WorkbenchUserId, project: GoogleProject): Future[Boolean] = Future.successful(true)
 
   override def checkStatus: Map[Subsystem, Future[SubsystemStatus]] = Map.empty
 
