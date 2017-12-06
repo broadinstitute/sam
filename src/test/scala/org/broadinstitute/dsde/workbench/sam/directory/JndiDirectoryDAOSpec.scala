@@ -326,6 +326,27 @@ class JndiDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     assert(!runAndWait(dao.isGroupMember(group2.id, userId)))
     assert(runAndWait(dao.isGroupMember(policy1.id, userId)))
   }
+
+  it should "get pet for user" in {
+    val userId = WorkbenchUserId(UUID.randomUUID().toString)
+    val user = WorkbenchUser(userId, WorkbenchEmail("foo@bar.com"))
+
+    runAndWait(dao.createUser(user))
+
+    val serviceAccount = ServiceAccount(ServiceAccountSubjectId("09834572039847519384"), WorkbenchEmail("foo@sa.com"), ServiceAccountDisplayName("blarg"))
+    val pet = PetServiceAccount(PetServiceAccountId(userId, GoogleProject("foo")), serviceAccount)
+
+    runAndWait(dao.loadPetServiceAccount(pet.id)) shouldBe None
+    runAndWait(dao.createPetServiceAccount(pet)) shouldBe pet
+    runAndWait(dao.loadPetServiceAccount(pet.id)) shouldBe Some(pet)
+    runAndWait(dao.getUserFromPetServiceAccount(serviceAccount.subjectId)) shouldBe Some(user)
+
+    // uid that does not exist
+    runAndWait(dao.getUserFromPetServiceAccount(ServiceAccountSubjectId("asldkasfa"))) shouldBe None
+
+    // uid that does exist but is not a pet
+    runAndWait(dao.getUserFromPetServiceAccount(ServiceAccountSubjectId(user.id.value))) shouldBe None
+  }
 }
 
 
