@@ -14,7 +14,7 @@ function publish ()
     java -jar swagger-codegen-cli.jar help
 
     echo "generating Sam Java Client API..."
-    swagger-codegen-cli generate -l java --input-spec ./src/main/resources/swagger/api-docs.yaml --output generated
+    java -jar swagger-codegen-cli.jar generate -l java --input-spec ./src/main/resources/swagger/api-docs.yaml --output generated
 
     echo "adding plugins file..."
     cd generated
