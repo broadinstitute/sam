@@ -21,6 +21,9 @@ function publish ()
     mkdir project
     echo "addSbtPlugin(\"com.eed3si9n\" % \"sbt-assembly\" % \"0.14.3\")" > project/plugins.sbt
 
+    echo "Printing JAVA_HOME"
+    printenv JAVA_HOME
+
     echo "compiling Java Client API..."
     sbt assembly
     sbt compile
