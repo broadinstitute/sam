@@ -108,12 +108,9 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
 
     val email = generateGroupEmail(policyName, resource)
 
-    val actionsByRole = resourceType.roles.map(r => r.roleName -> r.actions).toMap
-    val impliedActionsFromRoles = policyMembership.roles.flatMap(actionsByRole)
-
     subjectsFromEmails.flatMap { members =>
       val resourceAndPolicyName = ResourceAndPolicyName(resource, policyName)
-      val newPolicy = AccessPolicy(resourceAndPolicyName, members, email, policyMembership.roles, policyMembership.actions ++ impliedActionsFromRoles)
+      val newPolicy = AccessPolicy(resourceAndPolicyName, members, email, policyMembership.roles, policyMembership.actions)
 
       accessPolicyDAO.loadPolicy(resourceAndPolicyName).flatMap {
         case None => accessPolicyDAO.createPolicy(newPolicy)
