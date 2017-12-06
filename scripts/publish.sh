@@ -30,9 +30,9 @@ function publish ()
     find publish -name "*.sha1" -type f -delete
 
     echo "pushing to Artifactory..."
-    cd ..
+    ls publish
 #    curl -X PUT "https://broadinstitute.jfrog.io/broadinstitute/libs-snapshot-build.timestamp=" + timestamp -T Desktop/myNewFile.txt
-    curl -u $ARTIF_USER:$ARTIF_PASSWORD -X PUT "https://broadinstitute.jfrog.io/broadinstitute/libs-snapshot-local/org/broadinstitute/sam" -T publish
+    curl -u $ARTIF_USER:$ARTIF_PASSWORD -X PUT "https://broadinstitute.jfrog.io/broadinstitute/libs-snapshot-local/org/broadinstitute/sam/test" -T publish
 }
 
 publish
