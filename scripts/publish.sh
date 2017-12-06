@@ -18,7 +18,8 @@ function publish ()
 
     echo "adding plugins file..."
     cd generated
-    echo "addSbtPlugin(\"com.eed3si9n\" % \"sbt-assembly\" % \"0.14.3\")" > /project/plugins.sbt
+    mkdir project
+    echo "addSbtPlugin(\"com.eed3si9n\" % \"sbt-assembly\" % \"0.14.3\")" > project/plugins.sbt
 
     echo "compiling Java Client API..."
     sbt assembly
