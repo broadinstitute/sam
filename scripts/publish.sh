@@ -20,7 +20,7 @@ function publish ()
     cd generated
     mkdir project
     echo "addSbtPlugin(\"com.eed3si9n\" % \"sbt-assembly\" % \"0.14.3\")" > project/plugins.sbt
-    sed -i 's/publishArtifact in (Compile, packageDoc) := false/publishTo := Some(Resolver.file(\"file\", new File(\"publish\")))/g' file.txt
+    sed -i 's/publishArtifact in (Compile, packageDoc) := false/publishTo := Some(Resolver.file(\"file\", new File(\"publish\")))/g' build.sbt
 
     echo "compiling Java Client API..."
     sbt assembly
