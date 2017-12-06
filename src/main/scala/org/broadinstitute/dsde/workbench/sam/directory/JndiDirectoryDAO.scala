@@ -251,7 +251,7 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
       subjects match {
         case Seq() => None
         case Seq(PetServiceAccountId(userId, _)) => Option(userId)
-        case Seq(subject) => throw new WorkbenchException(s"Service Account $petSA did not return a valid user: $subject")
+        case Seq(subject) => None
         case _ => throw new WorkbenchException(s"id $petSA refers to too many subjects: $subjects")
       }
     }
