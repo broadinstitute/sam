@@ -28,7 +28,7 @@ function publish ()
     echo "pushing to Artifactory..."
     cd ..
 #    curl -X PUT "https://broadinstitute.jfrog.io/broadinstitute/libs-snapshot-build.timestamp=" + timestamp -T Desktop/myNewFile.txt
-    curl -X PUT "https://broadinstitute.jfrog.io/broadinstitute/libs-snapshot-local/org/broadinstitute/sam" -T generated
+    curl -u $ARTIF_USER:$ARTIF_PASSWORD -X PUT "https://broadinstitute.jfrog.io/broadinstitute/libs-snapshot-local/org/broadinstitute/sam" -T generated
 }
 
 publish
