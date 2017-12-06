@@ -11,9 +11,10 @@ function publish ()
     echo "getting swagger codegen jar..."
     wget http://central.maven.org/maven2/io/swagger/swagger-codegen-cli/2.2.3/swagger-codegen-cli-2.2.3.jar -O swagger-codegen-cli.jar
     java -jar swagger-codegen-cli.jar
+    java -jar swagger-codegen-cli.jar help
 
     echo "generating Sam Java Client API..."
-    swagger-codegen generate -l java --input-spec ./src/main/resources/swagger/api-docs.yaml --output generated
+    swagger-codegen-cli generate -l java --input-spec ./src/main/resources/swagger/api-docs.yaml --output generated
 
     echo "adding plugins file..."
     cd generated
