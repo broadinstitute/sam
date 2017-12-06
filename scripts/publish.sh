@@ -20,18 +20,19 @@ function publish ()
     cd generated
     mkdir project
     echo "addSbtPlugin(\"com.eed3si9n\" % \"sbt-assembly\" % \"0.14.3\")" > project/plugins.sbt
-
-    echo "Printing JAVA_HOME"
-    printenv JAVA_HOME
+    sed -i 's/publishArtifact in (Compile, packageDoc) := false/publishTo := Some(Resolver.file(\"file\", new File(\"publish\")))/g' file.txt
 
     echo "compiling Java Client API..."
     sbt assembly
     sbt compile
+    sbt publish
+    find publish -name "*.md5" -type f -delete
+    find publish -name "*.sha1" -type f -delete
 
     echo "pushing to Artifactory..."
     cd ..
 #    curl -X PUT "https://broadinstitute.jfrog.io/broadinstitute/libs-snapshot-build.timestamp=" + timestamp -T Desktop/myNewFile.txt
-    curl -u $ARTIF_USER:$ARTIF_PASSWORD -X PUT "https://broadinstitute.jfrog.io/broadinstitute/libs-snapshot-local/org/broadinstitute/sam/test-file" -T generated
+    curl -u $ARTIF_USER:$ARTIF_PASSWORD -X PUT "https://broadinstitute.jfrog.io/broadinstitute/libs-snapshot-local/org/broadinstitute/sam" -T publish
 }
 
 publish
