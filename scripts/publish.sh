@@ -34,6 +34,10 @@ function publish ()
     echo "ls publish/io/swagger/swagger-java-client_2.11/1.0.0"
     ls publish/io/swagger/swagger-java-client_2.11/1.0.0
     chmod a+wx publish
+
+    COMMIT_HASH="${TRAVIS_COMMIT:0:7}"
+    echo "Commit hash:$COMMIT_HASH"
+
 #    Scala version    $TRAVIS_SCALA_VERSION
 #    Version
 #    Hash   TRAVIS_COMMIT=8c8efdf797894253c017f703d6ba562b05d23448
@@ -42,10 +46,10 @@ function publish ()
 
 
 #    curl -X PUT "https://broadinstitute.jfrog.io/broadinstitute/libs-snapshot-build.timestamp=" + timestamp -T Desktop/myNewFile.txt
-    curl -u $ARTIF_USER:$ARTIF_PASSWORD -X PUT "https://broadinstitute.jfrog.io/broadinstitute/libs-release-local/org/broadinstitute/dsde/sam_2.11/0.1-hash/swagger-java-client_2.11-1.0.0.jar" -T publish/io/swagger/swagger-java-client_2.11/1.0.0/swagger-java-client_2.11-1.0.0.jar
-    curl -u $ARTIF_USER:$ARTIF_PASSWORD -X PUT "https://broadinstitute.jfrog.io/broadinstitute/libs-release-local/org/broadinstitute/dsde/sam_2.11/0.1-hash/swagger-java-client_2.11-1.0.0.pom" -T publish/io/swagger/swagger-java-client_2.11/1.0.0/swagger-java-client_2.11-1.0.0.pom
-    curl -u $ARTIF_USER:$ARTIF_PASSWORD -X PUT "https://broadinstitute.jfrog.io/broadinstitute/libs-release-local/org/broadinstitute/dsde/sam_2.11/0.1-hash/swagger-java-client_2.11-1.0.0-javadoc.jar" -T publish/io/swagger/swagger-java-client_2.11/1.0.0/swagger-java-client_2.11-1.0.0-javadoc.jar
-    curl -u $ARTIF_USER:$ARTIF_PASSWORD -X PUT "https://broadinstitute.jfrog.io/broadinstitute/libs-release-local/org/broadinstitute/dsde/sam_2.11/0.1-hash/swagger-java-client_2.11-1.0.0-sources.jar" -T publish/io/swagger/swagger-java-client_2.11/1.0.0/swagger-java-client_2.11-1.0.0-sources.jar
+    curl -u $ARTIF_USER:$ARTIF_PASSWORD -X PUT "https://broadinstitute.jfrog.io/broadinstitute/libs-release-local/org/broadinstitute/dsde/sam_2.11/0.1-$COMMIT_HASH/swagger-java-client_2.11-1.0.0.jar" -T publish/org/broadinstitute/dsde/sam_2.11/1.0.0/swagger-java-client_2.11-1.0.0.jar
+    curl -u $ARTIF_USER:$ARTIF_PASSWORD -X PUT "https://broadinstitute.jfrog.io/broadinstitute/libs-release-local/org/broadinstitute/dsde/sam_2.11/0.1-$COMMIT_HASH/swagger-java-client_2.11-1.0.0.pom" -T publish/org/broadinstitute/dsde/sam_2.11/1.0.0/swagger-java-client_2.11-1.0.0.pom
+    curl -u $ARTIF_USER:$ARTIF_PASSWORD -X PUT "https://broadinstitute.jfrog.io/broadinstitute/libs-release-local/org/broadinstitute/dsde/sam_2.11/0.1-$COMMIT_HASH/swagger-java-client_2.11-1.0.0-javadoc.jar" -T publish/org/broadinstitute/dsde/sam_2.11/1.0.0/swagger-java-client_2.11-1.0.0-javadoc.jar
+    curl -u $ARTIF_USER:$ARTIF_PASSWORD -X PUT "https://broadinstitute.jfrog.io/broadinstitute/libs-release-local/org/broadinstitute/dsde/sam_2.11/0.1-$COMMIT_HASH/swagger-java-client_2.11-1.0.0-sources.jar" -T publish/org/broadinstitute/dsde/sam_2.11/1.0.0/swagger-java-client_2.11-1.0.0-sources.jar
 
 }
 
