@@ -99,7 +99,7 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives {
                       put {
                         requireAction(resource, SamResourceActions.alterPolicies, userInfo) {
                           entity(as[AccessPolicyMembership]) { membershipUpdate =>
-                            complete(resourceService.overwritePolicy(resourceType, AccessPolicyName(policyName), Resource(resourceType.name, ResourceId(resourceId)), membershipUpdate, userInfo).map(_ => StatusCodes.Created))
+                            complete(resourceService.overwritePolicy(resourceType, AccessPolicyName(policyName), Resource(resourceType.name, ResourceId(resourceId)), membershipUpdate).map(_ => StatusCodes.Created))
                           }
                         }
                       }
