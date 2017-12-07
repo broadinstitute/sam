@@ -30,9 +30,20 @@ function publish ()
     find publish -name "*.sha1" -type f -delete
 
     echo "pushing to Artifactory..."
-    ls publish
+    printenv
+    echo "ls publish/io/swagger/swagger-java-client_2.11/1.0.0"
+    ls publish/io/swagger/swagger-java-client_2.11/1.0.0
+
+#    Scala version    $TRAVIS_SCALA_VERSION
+#    Version
+#    Hash
+
 #    curl -X PUT "https://broadinstitute.jfrog.io/broadinstitute/libs-snapshot-build.timestamp=" + timestamp -T Desktop/myNewFile.txt
-    curl -u $ARTIF_USER:$ARTIF_PASSWORD -X PUT "https://broadinstitute.jfrog.io/broadinstitute/libs-snapshot-local/org/broadinstitute/sam/test" -T publish
+    curl -u $ARTIF_USER:$ARTIF_PASSWORD -X PUT "https://broadinstitute.jfrog.io/broadinstitute/libs-release-local/org/broadinstitute/dsde/sam_$TRAVIS_SCALA_VERSION/0.1-hash/swagger-java-client_2.11-1.0.0.jar" -T publish/io/swagger/swagger-java-client_$TRAVIS_SCALA_VERSION/1.0.0/swagger-java-client_2.11-1.0.0.jar
+    curl -u $ARTIF_USER:$ARTIF_PASSWORD -X PUT "https://broadinstitute.jfrog.io/broadinstitute/libs-release-local/org/broadinstitute/dsde/sam_$TRAVIS_SCALA_VERSION/0.1-hash/swagger-java-client_2.11-1.0.0.pom" -T publish/io/swagger/swagger-java-client_$TRAVIS_SCALA_VERSION/1.0.0/swagger-java-client_2.11-1.0.0.pom
+    curl -u $ARTIF_USER:$ARTIF_PASSWORD -X PUT "https://broadinstitute.jfrog.io/broadinstitute/libs-release-local/org/broadinstitute/dsde/sam_$TRAVIS_SCALA_VERSION/0.1-hash/swagger-java-client_2.11-1.0.0-javadoc.jar" -T publish/io/swagger/swagger-java-client_$TRAVIS_SCALA_VERSION/1.0.0/swagger-java-client_2.11-1.0.0-javadoc.jar
+    curl -u $ARTIF_USER:$ARTIF_PASSWORD -X PUT "https://broadinstitute.jfrog.io/broadinstitute/libs-release-local/org/broadinstitute/dsde/sam_$TRAVIS_SCALA_VERSION/0.1-hash/swagger-java-client_2.11-1.0.0-sources.jar" -T publish/io/swagger/swagger-java-client_$TRAVIS_SCALA_VERSION/1.0.0/swagger-java-client_2.11-1.0.0-sources.jar
+
 }
 
 publish
