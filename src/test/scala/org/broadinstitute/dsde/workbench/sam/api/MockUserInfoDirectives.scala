@@ -1,7 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.api
 import akka.http.scaladsl.server.Directive1
 import akka.http.scaladsl.server.Directives.provide
-import org.broadinstitute.dsde.workbench.model.{WorkbenchUserEmail, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.directory.MockDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model.UserInfo
 
@@ -15,9 +15,9 @@ trait MockUserInfoDirectives extends UserInfoDirectives {
   private def isPetSA(email: String) = {
     petSAdomain.pattern.matcher(email).matches
   }
-  override def requireUserInfo: Directive1[UserInfo] = provide(if(isPetSA(userInfo.userEmail.value)){
-    new UserInfo("",WorkbenchUserId("newuser"), WorkbenchUserEmail("newuser@new.com"), userInfo.tokenExpiresIn)
-  }else
+  override def requireUserInfo: Directive1[UserInfo] = provide(if(isPetSA(userInfo.userEmail.value)) {
+    new UserInfo("",WorkbenchUserId("newuser"), WorkbenchEmail("newuser@new.com"), userInfo.tokenExpiresIn)
+  } else
     userInfo
-    )
+  )
 }

@@ -7,8 +7,8 @@ import com.google.api.client.json.jackson2.JacksonFactory
 import net.ceedubs.ficus.readers.ValueReader
 import org.broadinstitute.dsde.workbench.sam.model._
 import net.ceedubs.ficus.Ficus._
-import org.broadinstitute.dsde.workbench.google.model.GoogleProject
-import org.broadinstitute.dsde.workbench.model.WorkbenchUserEmail
+import org.broadinstitute.dsde.workbench.model.google._
+import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
 
 /**
@@ -56,14 +56,22 @@ package object config {
       config.getString("appsDomain"),
       config.getString("pathToPem"),
       config.getString("serviceAccountClientId"),
-      config.getString("subEmail")
+      config.getString("serviceAccountClientEmail"),
+      config.getString("serviceAccountClientProject"),
+      config.getString("subEmail"),
+      config.getString("groupSync.pubSubProject"),
+      org.broadinstitute.dsde.workbench.util.toScalaDuration(config.getDuration("groupSync.pollInterval")),
+      org.broadinstitute.dsde.workbench.util.toScalaDuration(config.getDuration("groupSync.pollJitter")),
+      config.getString("groupSync.pubSubTopic"),
+      config.getString("groupSync.pubSubSubscription"),
+      config.getInt("groupSync.workerCount")
     )
   }
 
   implicit val petServiceAccountConfigReader: ValueReader[PetServiceAccountConfig] = ValueReader.relative { config =>
     PetServiceAccountConfig(
       GoogleProject(config.getString("googleProject")),
-      config.as[Set[String]]("serviceAccountUsers").map(WorkbenchUserEmail)
+      config.as[Set[String]]("serviceAccountUsers").map(WorkbenchEmail)
     )
   }
 }

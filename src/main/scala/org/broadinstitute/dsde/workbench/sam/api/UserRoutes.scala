@@ -101,7 +101,7 @@ trait UserRoutes extends UserInfoDirectives {
                   pathEndOrSingleSlash {
                     delete {
                       complete {
-                        userService.deleteUserPetServiceAccount(WorkbenchUserId(userId)).map(_ => StatusCodes.NoContent)
+                        cloudExtensions.deleteUserPetServiceAccount(WorkbenchUserId(userId)).map(_ => StatusCodes.NoContent)
                       }
                     }
                   }
@@ -111,20 +111,4 @@ trait UserRoutes extends UserInfoDirectives {
         }
       }
     }
-
-  def userPetServiceAccountRoutes: server.Route =
-    pathPrefix("user") {
-      requireUserInfo { userInfo =>
-        path("petServiceAccount") {
-          get {
-            complete {
-              userService.createUserPetServiceAccount(WorkbenchUser(userInfo.userId, userInfo.userEmail)).map { petSA =>
-                StatusCodes.OK -> petSA
-              }
-            }
-          }
-        }
-      }
-    }
-
 }

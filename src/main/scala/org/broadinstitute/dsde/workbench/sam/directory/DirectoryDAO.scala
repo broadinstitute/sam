@@ -1,5 +1,8 @@
 package org.broadinstitute.dsde.workbench.sam.directory
 
+import java.util.Date
+
+import org.broadinstitute.dsde.workbench.model.google._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
 
@@ -12,14 +15,17 @@ trait DirectoryDAO {
   def createGroup(group: BasicWorkbenchGroup): Future[BasicWorkbenchGroup]
   def loadGroup(groupName: WorkbenchGroupName): Future[Option[BasicWorkbenchGroup]]
   def loadGroups(groupNames: Set[WorkbenchGroupName]): Future[Seq[BasicWorkbenchGroup]]
-  def loadGroupEmail(groupName: WorkbenchGroupName): Future[Option[WorkbenchGroupEmail]]
+  def loadGroupEmail(groupName: WorkbenchGroupName): Future[Option[WorkbenchEmail]]
   def deleteGroup(groupName: WorkbenchGroupName): Future[Unit]
 
   def addGroupMember(groupId: WorkbenchGroupIdentity, addMember: WorkbenchSubject): Future[Unit]
   def removeGroupMember(groupId: WorkbenchGroupIdentity, removeMember: WorkbenchSubject): Future[Unit]
   def isGroupMember(groupId: WorkbenchGroupIdentity, member: WorkbenchSubject): Future[Boolean]
+  def updateSynchronizedDate(groupId: WorkbenchGroupIdentity): Future[Unit]
+  def getSynchronizedDate(groupId: WorkbenchGroupIdentity): Future[Option[Date]]
 
   def loadSubjectFromEmail(email: String): Future[Option[WorkbenchSubject]]
+  def loadSubjectEmail(subject: WorkbenchSubject): Future[Option[WorkbenchEmail]]
 
   def createUser(user: WorkbenchUser): Future[WorkbenchUser]
   def loadUser(userId: WorkbenchUserId): Future[Option[WorkbenchUser]]
@@ -34,11 +40,9 @@ trait DirectoryDAO {
   def disableIdentity(subject: WorkbenchSubject): Future[Unit]
   def isEnabled(subject: WorkbenchSubject): Future[Boolean]
 
-  def createPetServiceAccount(petServiceAccount: WorkbenchUserServiceAccount): Future[WorkbenchUserServiceAccount]
-  def loadPetServiceAccount(petServiceAccountId: WorkbenchUserServiceAccountSubjectId): Future[Option[WorkbenchUserServiceAccount]]
-  def deletePetServiceAccount(petServiceAccountId: WorkbenchUserServiceAccountSubjectId): Future[Unit]
-  def getPetServiceAccountForUser(userId: WorkbenchUserId): Future[Option[WorkbenchUserServiceAccountEmail]]
-  def addPetServiceAccountToUser(userId: WorkbenchUserId, petServiceAccountEmail: WorkbenchUserServiceAccountEmail): Future[WorkbenchUserServiceAccountEmail]
-  def removePetServiceAccountFromUser(userId: WorkbenchUserId): Future[Unit]
-  def getUserFromPetServiceAccount(petSA: WorkbenchUserServiceAccountEmail):Future[Option[WorkbenchUser]]
+  def getUserFromPetServiceAccount(petSA: ServiceAccountSubjectId):Future[Option[WorkbenchUser]]
+  def createPetServiceAccount(petServiceAccount: PetServiceAccount): Future[PetServiceAccount]
+  def loadPetServiceAccount(petServiceAccountId: PetServiceAccountId): Future[Option[PetServiceAccount]]
+  def deletePetServiceAccount(petServiceAccountId: PetServiceAccountId): Future[Unit]
+  def getAllPetServiceAccountsForUser(userId: WorkbenchUserId): Future[Seq[PetServiceAccount]]
 }
