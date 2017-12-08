@@ -25,4 +25,4 @@ script:
 after_success:
   - SBT_OPTS=-Xmx3g sbt coveralls
   - sh docker/run-opendj.sh stop
-  - bash scripts/publish.sh
+  - bash swagger-api-client/publish.sh
