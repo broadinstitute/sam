@@ -48,10 +48,10 @@ function publish ()
     declare -a SCALA_VERSIONS_ARRAY=("2.11" "2.12")
     declare -a SUFFIX_ARRAY=(".jar" ".pom" "-javadoc.jar" "-sources.jar")
 
-    for scala_version in $SCALA_VERSIONS_ARRAY
+    for scala_version in "${SCALA_VERSIONS_ARRAY[@]}"
       do
         ARTIFACTORY_PATH="org/broadinstitute/dsde/${APP_NAME}_$scala_version/$VERSION_HASH/${APP_NAME}_$scala_version-$VERSION_HASH"
-        for suffix in $SUFFIX_ARRAY
+        for suffix in "${SUFFIX_ARRAY[@]}"
           do
             curl -u $ARTIF_USER:$ARTIF_PASSWORD -X PUT "https://broadinstitute.jfrog.io/broadinstitute/libs-release-local/$ARTIFACTORY_PATH$suffix" -T publish/$ARTIFACTORY_PATH$suffix
 #            curl -u $ARTIF_USER:$ARTIF_PASSWORD -X PUT "https://broadinstitute.jfrog.io/broadinstitute/libs-release-local/$ARTIFACTORY_PATH.jar" -T publish/$ARTIFACTORY_PATH.jar
