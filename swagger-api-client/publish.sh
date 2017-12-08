@@ -22,26 +22,35 @@ function publish ()
     VERSION_HASH="1.0-$COMMIT_HASH"
     ORGANIZATION="org.broadinstitute.dsde"
     APP_NAME="sam"
-    PATH="org/broadinstitute/dsde/sam_2.11/1.0.0/swagger-java-client_2.11-1.0.0"
 
     SCALA_11_VERSION="2.11.8"
     SCALA_12_VERSION="2.12.3"
     SCALA_VERSIONS="List(\"$SCALA_11_VERSION\", \"$SCALA_12_VERSION\")"
+    PATH_SCALA_11="org/broadinstitute/dsde/sam_2.11/$VERSION_HASH/swagger-java-client_2.11-$VERSION_HASH"
+    PATH_SCALA_12="org/broadinstitute/dsde/sam_2.12/$VERSION_HASH/swagger-java-client_2.12-$VERSION_HASH"
 
     sed -i "s|\$version|$VERSION_HASH|g" sam/swagger-client-build.txt
     sed -i "s|\$organization|$ORGANIZATION|g" sam/swagger-client-build.txt
     sed -i "s|\$name|$APP_NAME|g" sam/swagger-client-build.txt
-    sed -i "s|\$scalaVersions|$SCALA_VERSIONS|g" sam/swagger-client-build.txt
 
+    echo "read build template"
+    cat sam/swagger-client-build.txt
+
+    sed -i "s|\$scalaVersions|$SCALA_VERSIONS|g" sam/swagger-client-build.txt > generated/build.sbt
+
+    echo "read build template again"
+    cat sam/swagger-client-build.txt
+
+    echo "read build"
+    cat generated/build.sbt
 
     echo "adding plugins file..."
     cd generated
     mkdir project
-#    echo "addSbtPlugin(\"com.eed3si9n\" % \"sbt-assembly\" % \"0.14.3\")" > project/plugins.sbt
+    echo "addSbtPlugin(\"com.eed3si9n\" % \"sbt-assembly\" % \"0.14.3\")" > project/plugins.sbt
+
+
 #    sed -i 's/$version/$/g' build.sbt
-
-
-
 #    sed -i '/organization := /c\    organization := \"org.broadinstitute.dsde\",' build.sbt
 #    sed 's/.*organization := */organization := \"org.broadinstitute.dsde\",/'
 #    sed 's/.*TEXT_TO_BE_REPLACED.*/This line is removed by the admin./'
@@ -52,13 +61,31 @@ function publish ()
 
     echo "compiling Java Client API..."
     sbt compile assembly publish
-    find publish -name "*.md5" -type f -delete
-    find publish -name "*.sha1" -type f -delete
+
+    echo "what's in publish"
+    ls publish
+    echo "what's in publish/org"
+    ls publish/org
+    echo "what's in publish/org/dsde"
+    ls publish/org/dsde
+    echo "what's in publish/org/dsde/swagger-java-client_2.11"
+    ls publish/org/dsde/swagger-java-client_2.11
+    echo "what's in publish/org/dsde/swagger-java-client_2.12"
+    ls publish/org/dsde/swagger-java-client_2.12
+    echo "what's in publish/org/dsde/swagger-java-client_2.11/version"
+    ls publish/org/dsde/swagger-java-client_2.11/$VERSION_HASH
+    echo "what's in publish/org/dsde/swagger-java-client_2.12/version"
+    ls publish/org/dsde/swagger-java-client_2.12/$VERSION_HASH
+
+    find publish/org/dsde/swagger-java-client_2.11/$VERSION_HASH -name "*.md5" -type f -delete
+    find publish/org/dsde/swagger-java-client_2.11/$VERSION_HASH -name "*.sha1" -type f -delete
+    find publish/org/dsde/swagger-java-client_2.12/$VERSION_HASH -name "*.md5" -type f -delete
+    find publish/org/dsde/swagger-java-client_2.12/$VERSION_HASH -name "*.sha1" -type f -delete
 
     echo "pushing to Artifactory..."
     printenv
     echo "ls publish/io/swagger/swagger-java-client_2.11/1.0.0"
-    ls publish/io/swagger/swagger-java-client_2.11/1.0.0
+    ls publish/org/swagger/swagger-java-client_2.11/1.0.0
     chmod a+wx publish
 
 #    Scala version    $TRAVIS_SCALA_VERSION
