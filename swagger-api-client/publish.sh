@@ -33,15 +33,15 @@ function publish ()
     ls
     echo "and here..."
     ls sam
-    
-    sed -i "s|\$version|$VERSION_HASH|g" sam/swagger-client-build.txt
-    sed -i "s|\$organization|$ORGANIZATION|g" sam/swagger-client-build.txt
-    sed -i "s|\$name|$APP_NAME|g" sam/swagger-client-build.txt
+
+    sed -i "s|\$version|$VERSION_HASH|g" swagger-client-build.txt
+    sed -i "s|\$organization|$ORGANIZATION|g" swagger-client-build.txt
+    sed -i "s|\$name|$APP_NAME|g" swagger-client-build.txt
 
     echo "read build template"
     cat sam/swagger-client-build.txt
 
-    sed -i "s|\$scalaVersions|$SCALA_VERSIONS|g" sam/swagger-client-build.txt > generated/build.sbt
+    sed -i "s|\$scalaVersions|$SCALA_VERSIONS|g" swagger-client-build.txt > generated/build.sbt
 
     echo "read build template again"
     cat sam/swagger-client-build.txt
