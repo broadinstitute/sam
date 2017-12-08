@@ -10,46 +10,37 @@ function publish ()
 {
     echo "getting swagger codegen jar..."
     wget http://central.maven.org/maven2/io/swagger/swagger-codegen-cli/2.2.3/swagger-codegen-cli-2.2.3.jar -O swagger-codegen-cli.jar
-    java -jar swagger-codegen-cli.jar
-    java -jar swagger-codegen-cli.jar help
-
     echo "generating Sam Java Client API..."
     java -jar swagger-codegen-cli.jar generate -l java --input-spec ./src/main/resources/swagger/api-docs.yaml --output generated
 
+
     COMMIT_HASH="${TRAVIS_COMMIT:0:7}"
     echo "Commit hash:$COMMIT_HASH"
-
     VERSION_HASH="1.0-$COMMIT_HASH"
     ORGANIZATION="org.broadinstitute.dsde"
     APP_NAME="sam"
-
     SCALA_11_VERSION="2.11.8"
     SCALA_12_VERSION="2.12.3"
     SCALA_VERSIONS="List(\"$SCALA_11_VERSION\", \"$SCALA_12_VERSION\")"
     PATH_SCALA_11="org/broadinstitute/dsde/sam_2.11/$VERSION_HASH/swagger-java-client_2.11-$VERSION_HASH"
     PATH_SCALA_12="org/broadinstitute/dsde/sam_2.12/$VERSION_HASH/swagger-java-client_2.12-$VERSION_HASH"
 
-    echo "what is here..."
+    rm generated/build.sbt
+    cp -f swagger-client-build.txt generated/build.sbt
+    cd generated
+    echo "look at generated"
     ls
-
-
-    sed -i "s|\$version|$VERSION_HASH|g" swagger-client-build.txt
-    sed -i "s|\$organization|$ORGANIZATION|g" swagger-client-build.txt
-    sed -i "s|\$name|$APP_NAME|g" swagger-client-build.txt
-
-    echo "read build template"
-    cat swagger-client-build.txt
-
-    sed -i "s|\$scalaVersions|$SCALA_VERSIONS|g" swagger-client-build.txt > generated/build.sbt
-
-    echo "read build template again"
-    cat swagger-client-build.txt
-
+    sed -i "s|\$version|$VERSION_HASH|g" build.sbt
+    sed -i "s|\$organization|$ORGANIZATION|g" build.sbt
+    sed -i "s|\$name|$APP_NAME|g" build.sbt
     echo "read build"
-    cat generated/build.sbt
+    cat build.sbt
+    sed -i "s|\$scalaVersions|$SCALA_VERSIONS|g" build.sbt
+
+    echo "read build again"
+    cat build.sbt
 
     echo "adding plugins file..."
-    cd generated
     mkdir project
     echo "addSbtPlugin(\"com.eed3si9n\" % \"sbt-assembly\" % \"0.14.3\")" > project/plugins.sbt
 
