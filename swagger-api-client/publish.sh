@@ -29,6 +29,11 @@ function publish ()
     PATH_SCALA_11="org/broadinstitute/dsde/sam_2.11/$VERSION_HASH/swagger-java-client_2.11-$VERSION_HASH"
     PATH_SCALA_12="org/broadinstitute/dsde/sam_2.12/$VERSION_HASH/swagger-java-client_2.12-$VERSION_HASH"
 
+    echo "what is here..."
+    ls
+    echo "and here..."
+    ls sam
+    
     sed -i "s|\$version|$VERSION_HASH|g" sam/swagger-client-build.txt
     sed -i "s|\$organization|$ORGANIZATION|g" sam/swagger-client-build.txt
     sed -i "s|\$name|$APP_NAME|g" sam/swagger-client-build.txt
