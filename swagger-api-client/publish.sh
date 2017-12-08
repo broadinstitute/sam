@@ -23,7 +23,7 @@ SCALA_12_VERSION_SHORT="${SCALA_12_VERSION:0:4}"
 SCALA_VERSIONS="List(\"$SCALA_11_VERSION\", \"$SCALA_12_VERSION\")"
 
 rm generated/build.sbt
-cp -f swagger-client-build.txt generated/build.sbt
+cp -f swagger-api-client/swagger-client-build.txt generated/build.sbt
 cd generated
 sed -i "s|\$version|$VERSION_HASH|g" build.sbt
 sed -i "s|\$organization|$ORGANIZATION|g" build.sbt
@@ -46,6 +46,7 @@ declare -a SUFFIX_ARRAY=(".jar" ".pom" "-javadoc.jar" "-sources.jar")
 
 for scala_version in "${SCALA_VERSIONS_ARRAY[@]}"
   do
+    #`swagger-codegen generate` creates some extra files we want to remove
     find publish/${PATH_PREFIX}_$scala_version/$VERSION_HASH -name "*.md5" -type f -delete
     find publish/${PATH_PREFIX}_$scala_version/$VERSION_HASH -name "*.sha1" -type f -delete
 
