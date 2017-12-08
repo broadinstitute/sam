@@ -54,16 +54,19 @@ function publish ()
     ls publish/org/broadinstitute/dsde/sam_2.12/$VERSION_HASH
 
     echo "pushing to Artifactory..."
-    PATH_SCALA_11="org/broadinstitute/dsde/${APP_NAME}_2.11/$VERSION_HASH/${APP_NAME}_2.11-$VERSION_HASH"
-    PATH_SCALA_12="org/broadinstitute/dsde/${APP_NAME}_2.12/$VERSION_HASH/${APP_NAME}_2.12-$VERSION_HASH"
 
     chmod a+wx publish
 
-#    curl -X PUT "https://broadinstitute.jfrog.io/broadinstitute/libs-snapshot-build.timestamp=" + timestamp -T Desktop/myNewFile.txt
-    curl -u $ARTIF_USER:$ARTIF_PASSWORD -X PUT "https://broadinstitute.jfrog.io/broadinstitute/libs-release-local/$PATH_SCALA_11.jar" -T publish/$PATH_SCALA_11.jar
-    curl -u $ARTIF_USER:$ARTIF_PASSWORD -X PUT "https://broadinstitute.jfrog.io/broadinstitute/libs-release-local/$PATH_SCALA_11.pom" -T publish/$PATH_SCALA_11.pom
-    curl -u $ARTIF_USER:$ARTIF_PASSWORD -X PUT "https://broadinstitute.jfrog.io/broadinstitute/libs-release-local/$PATH_SCALA_11-javadoc.jar" -T publish/$PATH_SCALA_11-javadoc.jar
-    curl -u $ARTIF_USER:$ARTIF_PASSWORD -X PUT "https://broadinstitute.jfrog.io/broadinstitute/libs-release-local/$PATH_SCALA_11-sources.jar" -T publish/$PATH_SCALA_11-sources.jar
+    declare -a SCALA_VERSIONS_ARRAY=("2.11" "2.12")
+
+    for scala_version in $SCALA_VERSIONS_ARRAY
+    do
+        ARTIFACTORY_PATH="org/broadinstitute/dsde/${APP_NAME}_$scala_version/$VERSION_HASH/${APP_NAME}_$scala_version-$VERSION_HASH"
+        curl -u $ARTIF_USER:$ARTIF_PASSWORD -X PUT "https://broadinstitute.jfrog.io/broadinstitute/libs-release-local/$ARTIFACTORY_PATH.jar" -T publish/$ARTIFACTORY_PATH.jar
+        curl -u $ARTIF_USER:$ARTIF_PASSWORD -X PUT "https://broadinstitute.jfrog.io/broadinstitute/libs-release-local/$ARTIFACTORY_PATH.pom" -T publish/$ARTIFACTORY_PATH.pom
+        curl -u $ARTIF_USER:$ARTIF_PASSWORD -X PUT "https://broadinstitute.jfrog.io/broadinstitute/libs-release-local/$ARTIFACTORY_PATH-javadoc.jar" -T publish/$ARTIFACTORY_PATH-javadoc.jar
+        curl -u $ARTIF_USER:$ARTIF_PASSWORD -X PUT "https://broadinstitute.jfrog.io/broadinstitute/libs-release-local/$ARTIFACTORY_PATH-sources.jar" -T publish/$ARTIFACTORY_PATH-sources.jar
+    done
 
 }
 
