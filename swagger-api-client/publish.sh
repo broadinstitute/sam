@@ -61,16 +61,18 @@ function publish ()
     ls publish
     echo "what's in publish/org"
     ls publish/org
-    echo "what's in publish/org/dsde"
-    ls publish/org/dsde
-    echo "what's in publish/org/dsde/swagger-java-client_2.11"
-    ls publish/org/dsde/swagger-java-client_2.11
-    echo "what's in publish/org/dsde/swagger-java-client_2.12"
-    ls publish/org/dsde/swagger-java-client_2.12
-    echo "what's in publish/org/dsde/swagger-java-client_2.11/version"
-    ls publish/org/dsde/swagger-java-client_2.11/$VERSION_HASH
-    echo "what's in publish/org/dsde/swagger-java-client_2.12/version"
-    ls publish/org/dsde/swagger-java-client_2.12/$VERSION_HASH
+    echo "what's in publish/org/broadinstitute"
+    ls publish/org/broadinstitute
+    echo "what's in publish/org/broadinstitute/dsde"
+    ls publish/org/broadinstitute/dsde
+    echo "what's in publish/org/broadinstitute/dsde/swagger-java-client_2.11"
+    ls publish/org/broadinstitute/dsde/swagger-java-client_2.11
+    echo "what's in publish/org/broadinstitute/dsde/swagger-java-client_2.12"
+    ls publish/org/broadinstitute/dsde/swagger-java-client_2.12
+    echo "what's in publish/org/broadinstitute/dsde/swagger-java-client_2.11/version"
+    ls publish/org/broadinstitute/dsde/swagger-java-client_2.11/$VERSION_HASH
+    echo "what's in publish/org/broadinstitute/dsde/swagger-java-client_2.12/version"
+    ls publish/org/broadinstitute/dsde/swagger-java-client_2.12/$VERSION_HASH
 
     find publish/org/dsde/swagger-java-client_2.11/$VERSION_HASH -name "*.md5" -type f -delete
     find publish/org/dsde/swagger-java-client_2.11/$VERSION_HASH -name "*.sha1" -type f -delete
