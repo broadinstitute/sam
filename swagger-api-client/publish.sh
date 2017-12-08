@@ -74,15 +74,15 @@ function publish ()
 
     chmod a+wx publish
 
-    find publish/org/broadinstitute/dsde/sam_2.11/1.0-$VERSION_HASH -name "*.md5" -type f -delete
-    find publish/org/broadinstitute/dsde/sam_2.11/1.0-$VERSION_HASH -name "*.sha1" -type f -delete
-    find publish/org/broadinstitute/dsde/sam_2.12/1.0-$VERSION_HASH -name "*.md5" -type f -delete
-    find publish/org/broadinstitute/dsde/sam_2.12/1.0-$VERSION_HASH -name "*.sha1" -type f -delete
+    find publish/org/broadinstitute/dsde/sam_2.11/$VERSION_HASH -name "*.md5" -type f -delete
+    find publish/org/broadinstitute/dsde/sam_2.11/$VERSION_HASH -name "*.sha1" -type f -delete
+    find publish/org/broadinstitute/dsde/sam_2.12/$VERSION_HASH -name "*.md5" -type f -delete
+    find publish/org/broadinstitute/dsde/sam_2.12/$VERSION_HASH -name "*.sha1" -type f -delete
 
     echo "what's in publish/org/broadinstitute/dsde/sam_2.11/version post removal"
-    ls publish/org/broadinstitute/dsde/sam_2.11/1.0-$VERSION_HASH
+    ls publish/org/broadinstitute/dsde/sam_2.11/$VERSION_HASH
     echo "what's in publish/org/broadinstitute/dsde/sam_2.12/version post removal"
-    ls publish/org/broadinstitute/dsde/sam_2.12/1.0-$VERSION_HASH
+    ls publish/org/broadinstitute/dsde/sam_2.12/$VERSION_HASH
 
     echo "pushing to Artifactory..."
     printenv
