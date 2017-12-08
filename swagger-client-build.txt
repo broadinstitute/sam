@@ -1,8 +1,8 @@
 lazy val root = (project in file(".")).
   settings(
-    organization := "org.broadinstitute.dsde",
-    name := "sam",
-    version := $version,
+    organization := "$organization",
+    name := "$name",
+    version := "$version",
     crossScalaVersions := $scalaVersions,
     scalacOptions ++= Seq("-feature"),
     javacOptions in compile ++= Seq("-Xlint:deprecation"),
