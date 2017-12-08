@@ -55,7 +55,7 @@ function publish ()
 #    cat build.sbt
 
     echo "compiling Java Client API..."
-    sbt compile assembly publish
+    sbt compile assembly +publish
 
     echo "what's in publish"
     ls publish
@@ -65,25 +65,29 @@ function publish ()
     ls publish/org/broadinstitute
     echo "what's in publish/org/broadinstitute/dsde"
     ls publish/org/broadinstitute/dsde
-    echo "what's in publish/org/broadinstitute/dsde/swagger-java-client_2.11"
-    ls publish/org/broadinstitute/dsde/swagger-java-client_2.11
-    echo "what's in publish/org/broadinstitute/dsde/swagger-java-client_2.12"
-    ls publish/org/broadinstitute/dsde/swagger-java-client_2.12
-    echo "what's in publish/org/broadinstitute/dsde/swagger-java-client_2.11/version"
-    ls publish/org/broadinstitute/dsde/swagger-java-client_2.11/$VERSION_HASH
-    echo "what's in publish/org/broadinstitute/dsde/swagger-java-client_2.12/version"
-    ls publish/org/broadinstitute/dsde/swagger-java-client_2.12/$VERSION_HASH
+    echo "what's in publish/org/broadinstitute/dsde/sam_2.11"
+    ls publish/org/broadinstitute/dsde/sam_2.11
+    echo "what's in publish/org/broadinstitute/dsde/sam_2.12"
+    ls publish/org/broadinstitute/dsde/sam_2.12
+    echo "what's in publish/org/broadinstitute/dsde/sam_2.11/version"
+    ls publish/org/broadinstitute/dsde/sam_2.11/1.0-$VERSION_HASH
+    echo "what's in publish/org/broadinstitute/dsde/sam_2.12/version"
+    ls publish/org/broadinstitute/dsde/sam_2.12/1.0-$VERSION_HASH
 
-    find publish/org/dsde/swagger-java-client_2.11/$VERSION_HASH -name "*.md5" -type f -delete
-    find publish/org/dsde/swagger-java-client_2.11/$VERSION_HASH -name "*.sha1" -type f -delete
-    find publish/org/dsde/swagger-java-client_2.12/$VERSION_HASH -name "*.md5" -type f -delete
-    find publish/org/dsde/swagger-java-client_2.12/$VERSION_HASH -name "*.sha1" -type f -delete
+    chmod a+wx publish
+
+    find publish/org/broadinstitute/dsde/sam_2.11/1.0-$VERSION_HASH -name "*.md5" -type f -delete
+    find publish/org/broadinstitute/dsde/sam_2.11/1.0-$VERSION_HASH -name "*.sha1" -type f -delete
+    find publish/org/broadinstitute/dsde/sam_2.12/1.0-$VERSION_HASH -name "*.md5" -type f -delete
+    find publish/org/broadinstitute/dsde/sam_2.12/1.0-$VERSION_HASH -name "*.sha1" -type f -delete
+
+    echo "what's in publish/org/broadinstitute/dsde/sam_2.11/version post removal"
+    ls publish/org/broadinstitute/dsde/sam_2.11/1.0-$VERSION_HASH
+    echo "what's in publish/org/broadinstitute/dsde/sam_2.12/version post removal"
+    ls publish/org/broadinstitute/dsde/sam_2.12/1.0-$VERSION_HASH
 
     echo "pushing to Artifactory..."
     printenv
-    echo "ls publish/io/swagger/swagger-java-client_2.11/1.0.0"
-    ls publish/org/swagger/swagger-java-client_2.11/1.0.0
-    chmod a+wx publish
 
 #    Scala version    $TRAVIS_SCALA_VERSION
 #    Version
@@ -93,10 +97,10 @@ function publish ()
 
 
 #    curl -X PUT "https://broadinstitute.jfrog.io/broadinstitute/libs-snapshot-build.timestamp=" + timestamp -T Desktop/myNewFile.txt
-    curl -u $ARTIF_USER:$ARTIF_PASSWORD -X PUT "https://broadinstitute.jfrog.io/broadinstitute/libs-release-local/org/broadinstitute/dsde/sam_2.11/0.1-$COMMIT_HASH/swagger-java-client_2.11-1.0.0.jar" -T publish/org/broadinstitute/dsde/sam_2.11/1.0.0/swagger-java-client_2.11-1.0.0.jar
-    curl -u $ARTIF_USER:$ARTIF_PASSWORD -X PUT "https://broadinstitute.jfrog.io/broadinstitute/libs-release-local/org/broadinstitute/dsde/sam_2.11/0.1-$COMMIT_HASH/swagger-java-client_2.11-1.0.0.pom" -T publish/org/broadinstitute/dsde/sam_2.11/1.0.0/swagger-java-client_2.11-1.0.0.pom
-    curl -u $ARTIF_USER:$ARTIF_PASSWORD -X PUT "https://broadinstitute.jfrog.io/broadinstitute/libs-release-local/org/broadinstitute/dsde/sam_2.11/0.1-$COMMIT_HASH/swagger-java-client_2.11-1.0.0-javadoc.jar" -T publish/org/broadinstitute/dsde/sam_2.11/1.0.0/swagger-java-client_2.11-1.0.0-javadoc.jar
-    curl -u $ARTIF_USER:$ARTIF_PASSWORD -X PUT "https://broadinstitute.jfrog.io/broadinstitute/libs-release-local/org/broadinstitute/dsde/sam_2.11/0.1-$COMMIT_HASH/swagger-java-client_2.11-1.0.0-sources.jar" -T publish/org/broadinstitute/dsde/sam_2.11/1.0.0/swagger-java-client_2.11-1.0.0-sources.jar
+    curl -u $ARTIF_USER:$ARTIF_PASSWORD -X PUT "https://broadinstitute.jfrog.io/broadinstitute/libs-release-local/org/broadinstitute/dsde/sam_2.11/$VERSION_HASH/swagger-java-client_2.11-1.0.0.jar" -T publish/org/broadinstitute/dsde/sam_2.11/1.0.0/swagger-java-client_2.11-1.0.0.jar
+    curl -u $ARTIF_USER:$ARTIF_PASSWORD -X PUT "https://broadinstitute.jfrog.io/broadinstitute/libs-release-local/org/broadinstitute/dsde/sam_2.11/$VERSION_HASH/swagger-java-client_2.11-1.0.0.pom" -T publish/org/broadinstitute/dsde/sam_2.11/1.0.0/swagger-java-client_2.11-1.0.0.pom
+    curl -u $ARTIF_USER:$ARTIF_PASSWORD -X PUT "https://broadinstitute.jfrog.io/broadinstitute/libs-release-local/org/broadinstitute/dsde/sam_2.11/$VERSION_HASH/swagger-java-client_2.11-1.0.0-javadoc.jar" -T publish/org/broadinstitute/dsde/sam_2.11/1.0.0/swagger-java-client_2.11-1.0.0-javadoc.jar
+    curl -u $ARTIF_USER:$ARTIF_PASSWORD -X PUT "https://broadinstitute.jfrog.io/broadinstitute/libs-release-local/org/broadinstitute/dsde/sam_2.11/$VERSION_HASH/swagger-java-client_2.11-1.0.0-sources.jar" -T publish/org/broadinstitute/dsde/sam_2.11/1.0.0/swagger-java-client_2.11-1.0.0-sources.jar
 
 }
 
