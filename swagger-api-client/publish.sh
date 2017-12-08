@@ -4,7 +4,7 @@ set -e
 
 # sbt publish publishes libs to Artifactory for the scala version sbt is running as.
 # sbt +publish publishes libs to Artifactory for all scala versions listed in crossScalaVersions.
-SNAPSHOT=![["$TRAVIS_PULL_REQUEST" == "false" && "$TRAVIS_BRANCH" == "develop"]]
+SNAPSHOT=$(( "$TRAVIS_PULL_REQUEST" == "false" && "$TRAVIS_BRANCH" == "develop" ? "SNAP" : "" ))
 
 echo "getting swagger codegen jar..."
 wget http://central.maven.org/maven2/io/swagger/swagger-codegen-cli/2.2.3/swagger-codegen-cli-2.2.3.jar -O swagger-codegen-cli.jar
@@ -12,7 +12,7 @@ echo "generating Sam Java Client API..."
 java -jar swagger-codegen-cli.jar generate -l java --input-spec ./src/main/resources/swagger/api-docs.yaml --output generated
 
 COMMIT_HASH="${TRAVIS_COMMIT:0:7}"
-VERSION_HASH="1.0-$COMMIT_HASH-$SNAPSHOT"
+VERSION_HASH="1.0-${COMMIT_HASH}${SNAPSHOT}"
 ORGANIZATION="org.broadinstitute.dsde"
 APP_NAME="sam"
 PATH_PREFIX="org/broadinstitute/dsde/$APP_NAME"
