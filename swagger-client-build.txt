@@ -4,6 +4,7 @@ lazy val root = (project in file(".")).
     name := "$name",
     version := "$version",
     crossScalaVersions := $scalaVersions,
+    scalaVersion  := "2.12.3",
     scalacOptions ++= Seq("-feature"),
     javacOptions in compile ++= Seq("-Xlint:deprecation"),
     publishTo := Some(Resolver.file("file", new File("publish")) ),
