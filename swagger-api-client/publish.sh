@@ -13,7 +13,6 @@ function publish ()
     echo "generating Sam Java Client API..."
     java -jar swagger-codegen-cli.jar generate -l java --input-spec ./src/main/resources/swagger/api-docs.yaml --output generated
 
-
     COMMIT_HASH="${TRAVIS_COMMIT:0:7}"
     VERSION_HASH="1.0-$COMMIT_HASH"
     ORGANIZATION="org.broadinstitute.dsde"
@@ -55,8 +54,8 @@ function publish ()
     ls publish/org/broadinstitute/dsde/sam_2.12/$VERSION_HASH
 
     echo "pushing to Artifactory..."
-    PATH_SCALA_11="org/broadinstitute/dsde/$APP_NAME_2.11/$VERSION_HASH/$APP_NAME_2.11-$VERSION_HASH"
-    PATH_SCALA_12="org/broadinstitute/dsde/$APP_NAME_2.12/$VERSION_HASH/$APP_NAME_2.12-$VERSION_HASH"
+    PATH_SCALA_11="org/broadinstitute/dsde/${APP_NAME}_2.11/$VERSION_HASH/${APP_NAME}_2.11-$VERSION_HASH"
+    PATH_SCALA_12="org/broadinstitute/dsde/${APP_NAME}_2.12/$VERSION_HASH/${APP_NAME}_2.12-$VERSION_HASH"
 
     chmod a+wx publish
 
