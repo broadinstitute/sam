@@ -22,8 +22,6 @@ function publish ()
     SCALA_11_VERSION="2.11.8"
     SCALA_12_VERSION="2.12.3"
     SCALA_VERSIONS="List(\"$SCALA_11_VERSION\", \"$SCALA_12_VERSION\")"
-    PATH_SCALA_11="org/broadinstitute/dsde/sam_2.11/$VERSION_HASH/swagger-java-client_2.11-$VERSION_HASH"
-    PATH_SCALA_12="org/broadinstitute/dsde/sam_2.12/$VERSION_HASH/swagger-java-client_2.12-$VERSION_HASH"
 
     rm generated/build.sbt
     cp -f swagger-client-build.txt generated/build.sbt
@@ -70,9 +68,9 @@ function publish ()
     echo "what's in publish/org/broadinstitute/dsde/sam_2.12"
     ls publish/org/broadinstitute/dsde/sam_2.12
     echo "what's in publish/org/broadinstitute/dsde/sam_2.11/version"
-    ls publish/org/broadinstitute/dsde/sam_2.11/1.0-$VERSION_HASH
+    ls publish/org/broadinstitute/dsde/sam_2.11/$VERSION_HASH
     echo "what's in publish/org/broadinstitute/dsde/sam_2.12/version"
-    ls publish/org/broadinstitute/dsde/sam_2.12/1.0-$VERSION_HASH
+    ls publish/org/broadinstitute/dsde/sam_2.12/$VERSION_HASH
 
     chmod a+wx publish
 
@@ -89,18 +87,14 @@ function publish ()
     echo "pushing to Artifactory..."
     printenv
 
-#    Scala version    $TRAVIS_SCALA_VERSION
-#    Version
-#    Hash   TRAVIS_COMMIT=8c8efdf797894253c017f703d6ba562b05d23448
-
-#    curl -u $ARTIF_USER:$ARTIF_PASSWORD -X PUT "https://broadinstitute.jfrog.io/broadinstitute/libs-release-local/org/broadinstitute/dsde/sam_2.11/0.1-hash/swagger-java-client_2.11-1.0.0.jar" -T publish/io/swagger/swagger-java-client_2.11/1.0.0/swagger-java-client_2.11-1.0.0.jar
-
+    PATH_SCALA_11="org/broadinstitute/dsde/$APP_NAME_2.11/$VERSION_HASH/$APP_NAME_2.11-$VERSION_HASH"
+    PATH_SCALA_12="org/broadinstitute/dsde/$APP_NAME_2.12/$VERSION_HASH/$APP_NAME_2.12-$VERSION_HASH"
 
 #    curl -X PUT "https://broadinstitute.jfrog.io/broadinstitute/libs-snapshot-build.timestamp=" + timestamp -T Desktop/myNewFile.txt
-    curl -u $ARTIF_USER:$ARTIF_PASSWORD -X PUT "https://broadinstitute.jfrog.io/broadinstitute/libs-release-local/org/broadinstitute/dsde/sam_2.11/$VERSION_HASH/swagger-java-client_2.11-1.0.0.jar" -T publish/org/broadinstitute/dsde/sam_2.11/1.0.0/swagger-java-client_2.11-1.0.0.jar
-    curl -u $ARTIF_USER:$ARTIF_PASSWORD -X PUT "https://broadinstitute.jfrog.io/broadinstitute/libs-release-local/org/broadinstitute/dsde/sam_2.11/$VERSION_HASH/swagger-java-client_2.11-1.0.0.pom" -T publish/org/broadinstitute/dsde/sam_2.11/1.0.0/swagger-java-client_2.11-1.0.0.pom
-    curl -u $ARTIF_USER:$ARTIF_PASSWORD -X PUT "https://broadinstitute.jfrog.io/broadinstitute/libs-release-local/org/broadinstitute/dsde/sam_2.11/$VERSION_HASH/swagger-java-client_2.11-1.0.0-javadoc.jar" -T publish/org/broadinstitute/dsde/sam_2.11/1.0.0/swagger-java-client_2.11-1.0.0-javadoc.jar
-    curl -u $ARTIF_USER:$ARTIF_PASSWORD -X PUT "https://broadinstitute.jfrog.io/broadinstitute/libs-release-local/org/broadinstitute/dsde/sam_2.11/$VERSION_HASH/swagger-java-client_2.11-1.0.0-sources.jar" -T publish/org/broadinstitute/dsde/sam_2.11/1.0.0/swagger-java-client_2.11-1.0.0-sources.jar
+    curl -u $ARTIF_USER:$ARTIF_PASSWORD -X PUT "https://broadinstitute.jfrog.io/broadinstitute/libs-release-local/$PATH_SCALA_11.jar" -T publish/$PATH_SCALA_11.jar
+    curl -u $ARTIF_USER:$ARTIF_PASSWORD -X PUT "https://broadinstitute.jfrog.io/broadinstitute/libs-release-local/$PATH_SCALA_11.pom" -T publish/$PATH_SCALA_11.pom
+    curl -u $ARTIF_USER:$ARTIF_PASSWORD -X PUT "https://broadinstitute.jfrog.io/broadinstitute/libs-release-local/$PATH_SCALA_11-javadoc.jar" -T publish/$PATH_SCALA_11-javadoc.jar
+    curl -u $ARTIF_USER:$ARTIF_PASSWORD -X PUT "https://broadinstitute.jfrog.io/broadinstitute/libs-release-local/$PATH_SCALA_11-sources.jar" -T publish/$PATH_SCALA_11-sources.jar
 
 }
 
