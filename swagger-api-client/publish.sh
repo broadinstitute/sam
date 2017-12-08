@@ -15,9 +15,9 @@ function publish ()
 
 
     COMMIT_HASH="${TRAVIS_COMMIT:0:7}"
-    echo "Commit hash:$COMMIT_HASH"
     VERSION_HASH="1.0-$COMMIT_HASH"
     ORGANIZATION="org.broadinstitute.dsde"
+
     APP_NAME="sam"
     SCALA_11_VERSION="2.11.8"
     SCALA_12_VERSION="2.12.3"
@@ -26,53 +26,23 @@ function publish ()
     rm generated/build.sbt
     cp -f swagger-client-build.txt generated/build.sbt
     cd generated
-    echo "look at generated"
-    ls
+
     sed -i "s|\$version|$VERSION_HASH|g" build.sbt
     sed -i "s|\$organization|$ORGANIZATION|g" build.sbt
     sed -i "s|\$name|$APP_NAME|g" build.sbt
-    echo "read build"
-    cat build.sbt
     sed -i "s|\$scalaVersions|$SCALA_VERSIONS|g" build.sbt
-
-    echo "read build again"
-    cat build.sbt
 
     echo "adding plugins file..."
     mkdir project
     echo "addSbtPlugin(\"com.eed3si9n\" % \"sbt-assembly\" % \"0.14.3\")" > project/plugins.sbt
 
-
-#    sed -i 's/$version/$/g' build.sbt
-#    sed -i '/organization := /c\    organization := \"org.broadinstitute.dsde\",' build.sbt
-#    sed 's/.*organization := */organization := \"org.broadinstitute.dsde\",/'
-#    sed 's/.*TEXT_TO_BE_REPLACED.*/This line is removed by the admin./'
-#    sed -i '/name := /c\    name := \"sam\",' build.sbt
-#    sed -i '/version := /c\    version := \"1.0.0\",' build.sbt
-#    echo "print build.sbt"
-#    cat build.sbt
-
     echo "compiling Java Client API..."
     sbt compile assembly +publish
 
-    echo "what's in publish"
-    ls publish
-    echo "what's in publish/org"
-    ls publish/org
-    echo "what's in publish/org/broadinstitute"
-    ls publish/org/broadinstitute
-    echo "what's in publish/org/broadinstitute/dsde"
-    ls publish/org/broadinstitute/dsde
-    echo "what's in publish/org/broadinstitute/dsde/sam_2.11"
-    ls publish/org/broadinstitute/dsde/sam_2.11
-    echo "what's in publish/org/broadinstitute/dsde/sam_2.12"
-    ls publish/org/broadinstitute/dsde/sam_2.12
     echo "what's in publish/org/broadinstitute/dsde/sam_2.11/version"
     ls publish/org/broadinstitute/dsde/sam_2.11/$VERSION_HASH
     echo "what's in publish/org/broadinstitute/dsde/sam_2.12/version"
     ls publish/org/broadinstitute/dsde/sam_2.12/$VERSION_HASH
-
-    chmod a+wx publish
 
     find publish/org/broadinstitute/dsde/sam_2.11/$VERSION_HASH -name "*.md5" -type f -delete
     find publish/org/broadinstitute/dsde/sam_2.11/$VERSION_HASH -name "*.sha1" -type f -delete
@@ -85,10 +55,10 @@ function publish ()
     ls publish/org/broadinstitute/dsde/sam_2.12/$VERSION_HASH
 
     echo "pushing to Artifactory..."
-    printenv
-
     PATH_SCALA_11="org/broadinstitute/dsde/$APP_NAME_2.11/$VERSION_HASH/$APP_NAME_2.11-$VERSION_HASH"
     PATH_SCALA_12="org/broadinstitute/dsde/$APP_NAME_2.12/$VERSION_HASH/$APP_NAME_2.12-$VERSION_HASH"
+
+    chmod a+wx publish
 
 #    curl -X PUT "https://broadinstitute.jfrog.io/broadinstitute/libs-snapshot-build.timestamp=" + timestamp -T Desktop/myNewFile.txt
     curl -u $ARTIF_USER:$ARTIF_PASSWORD -X PUT "https://broadinstitute.jfrog.io/broadinstitute/libs-release-local/$PATH_SCALA_11.jar" -T publish/$PATH_SCALA_11.jar
