@@ -46,7 +46,7 @@ object Dependencies {
   val workbenchGoogle: ModuleID =    "org.broadinstitute.dsde.workbench" %% "workbench-google" % workbenchGoogleV excludeAll(excludeWorkbenchUtil, excludeWorkbenchModel)
   val workbenchGoogleTests: ModuleID =    "org.broadinstitute.dsde.workbench" %% "workbench-google" % workbenchGoogleV % "test" classifier "tests" excludeAll(excludeWorkbenchUtil, excludeWorkbenchModel)
 
-  val rootDependencies = Seq(
+  val samCoreDependencies = Seq(
     // proactively pull in latest versions of Jackson libs, instead of relying on the versions
     // specified as transitive dependencies, due to OWASP DependencyCheck warnings for earlier versions.
 
@@ -77,5 +77,15 @@ object Dependencies {
     workbenchModel,
     workbenchGoogle,
     workbenchGoogleTests
+  )
+
+  val samClientDependencies = Seq(
+    "io.swagger" % "swagger-annotations" % "1.5.15",
+    "com.squareup.okhttp" % "okhttp" % "2.7.5",
+    "com.squareup.okhttp" % "logging-interceptor" % "2.7.5",
+    "com.google.code.gson" % "gson" % "2.8.1",
+    "joda-time" % "joda-time" % "2.9.9" % "compile",
+    "junit" % "junit" % "4.12" % "test",
+    "com.novocode" % "junit-interface" % "0.10" % "test"
   )
 }

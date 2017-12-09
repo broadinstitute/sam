@@ -21,6 +21,6 @@ object Version {
     if (isSnapshot) s"$version-SNAPSHOT" else version
   }
 
-  val rootVersionSettings: Seq[Setting[_]] =
+  val coreVersionSettings: Seq[Setting[_]] =
     Seq(version := getVersionString)
 }

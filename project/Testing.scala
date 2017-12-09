@@ -66,6 +66,8 @@ object Testing {
 
   )
 
+  val noTestSettings = Seq( test in Test := {} )
+
   implicit class ProjectTestSettings(val project: Project) extends AnyVal {
     def withTestSettings: Project = project
       .configs(IntegrationTest).settings(inConfig(IntegrationTest)(Defaults.testTasks): _*)

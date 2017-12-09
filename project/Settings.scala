@@ -1,5 +1,6 @@
 import Dependencies._
 import Merging._
+import Publishing._
 import Testing._
 import Version._
 import sbt.Keys._
@@ -44,13 +45,23 @@ object Settings {
     scalacOptions ++= commonCompilerSettings
   )
 
+  val swaggerCodegenSettings = sourceGenerators in Compile += Def.task {
+    SwaggerCodegen.genSwaggerClientCode((sourceManaged in Compile).value)
+  }.taskValue
+
   //the full list of settings for the root project that's ultimately the one we build into a fat JAR and run
   //coreDefaultSettings (inside commonSettings) sets the project name, which we want to override, so ordering is important.
   //thus commonSettings needs to be added first.
-  val rootSettings = commonSettings ++ List(
-    name := "sam",
-    libraryDependencies ++= rootDependencies
-  ) ++ commonAssemblySettings ++ rootVersionSettings
+  val samCoreSettings = commonSettings ++ List(
+    name := "samCore",
+    libraryDependencies ++= samCoreDependencies
+  ) ++ noPublishSettings
 
+  val samClientSettings = commonSettings ++ List(
+    name := "samClient",
+    libraryDependencies ++= samClientDependencies,
+    swaggerCodegenSettings
+  ) ++ publishSettings
 
+  val rootSettings = commonSettings ++ noPublishSettings ++ noTestSettings
 }
