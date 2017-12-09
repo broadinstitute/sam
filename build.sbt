@@ -1,9 +1,18 @@
 import Settings._
 import Testing._
 
-lazy val root = project.in(file("."))
-  .settings(rootSettings:_*)
+lazy val samCore = project.in(file("core"))
+  .settings(samCoreSettings:_*)
   .withTestSettings
+
+lazy val samClient = project.in(file("client"))
+  .settings(samClientSettings:_*)
+  .withTestSettings
+
+lazy val sam = project.in(file("."))
+  .settings(rootSettings:_*)
+  .aggregate(samCore)
+  .aggregate(samClient)
 
 Revolver.settings
 
