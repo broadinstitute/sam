@@ -2,6 +2,7 @@ import Dependencies._
 import Merging._
 import Publishing._
 import Testing._
+import Version._
 import sbt.Keys._
 import sbt._
 import sbtassembly.AssemblyPlugin.autoImport._
@@ -62,5 +63,5 @@ object Settings {
     swaggerCodegenSettings
   ) ++ publishSettings
 
-  val rootSettings = commonSettings ++ noPublishSettings
+  val rootSettings = commonSettings ++ noPublishSettings ++ noTestSettings
 }
