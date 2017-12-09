@@ -79,6 +79,7 @@ object Dependencies {
     workbenchGoogleTests
   )
 
+  // These are needed by swagger-codegen
   val samClientDependencies = Seq(
     "io.swagger" % "swagger-annotations" % "1.5.15",
     "com.squareup.okhttp" % "okhttp" % "2.7.5",
