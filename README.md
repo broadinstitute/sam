@@ -58,6 +58,9 @@ Group - Create, delete, read, list, add/remove users and groups. Nested groups m
 
 Note that in this model Group is a Subject. This allows it to be used interchangeably with Users within policies.
 
+### API
+[Sam APIs](http://petstore.swagger.io/?url=https://raw.githubusercontent.com/broadinstitute/sam/develop/src/main/resources/swagger/api-docs.yaml)
+
 ## Cloud Integrations
 ### Google
 * Groups can be mirrored to google groups.
