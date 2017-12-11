@@ -102,7 +102,7 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
       status shouldEqual StatusCodes.NoContent
     }
 
-    val members = AccessPolicyMembership(Set("foo@bar.baz"), Set(ResourceAction("can_compute")), Set.empty)
+    val members = AccessPolicyMembership(Set(WorkbenchEmail("foo@bar.baz")), Set(ResourceAction("can_compute")), Set.empty)
 
     Put(s"/api/resource/${resourceType.name}/foo/policies/canCompute", members) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
@@ -117,13 +117,13 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
       status shouldEqual StatusCodes.NoContent
     }
 
-    val members = AccessPolicyMembership(Set("foo@bar.baz"), Set(ResourceAction("can_compute")), Set.empty)
+    val members = AccessPolicyMembership(Set(WorkbenchEmail("foo@bar.baz")), Set(ResourceAction("can_compute")), Set.empty)
 
     Put(s"/api/resource/${resourceType.name}/foo/policies/canCompute", members) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
     }
 
-    val members2 = AccessPolicyMembership(Set("foo@bar.baz"), Set(ResourceAction("can_compute")), Set(ResourceRoleName("owner")))
+    val members2 = AccessPolicyMembership(Set(WorkbenchEmail("foo@bar.baz")), Set(ResourceAction("can_compute")), Set(ResourceRoleName("owner")))
 
     Put(s"/api/resource/${resourceType.name}/foo/policies/canCompute", members2) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
@@ -138,7 +138,7 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
       status shouldEqual StatusCodes.NoContent
     }
 
-    val members = AccessPolicyMembership(Set("foo@bar.baz"), Set(ResourceAction("fake_action")), Set.empty)
+    val members = AccessPolicyMembership(Set(WorkbenchEmail("foo@bar.baz")), Set(ResourceAction("fake_action")), Set.empty)
 
     Put(s"/api/resource/${resourceType.name}/foo/policies/canCompute", members) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.BadRequest
@@ -153,7 +153,7 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
       status shouldEqual StatusCodes.NoContent
     }
 
-    val members = AccessPolicyMembership(Set("foo@bar.baz"), Set(ResourceAction("cancompute")), Set(ResourceRoleName("fakerole")))
+    val members = AccessPolicyMembership(Set(WorkbenchEmail("foo@bar.baz")), Set(ResourceAction("cancompute")), Set(ResourceRoleName("fakerole")))
 
     Put(s"/api/resource/${resourceType.name}/foo/policies/canCompute", members) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.BadRequest
@@ -163,7 +163,7 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
   it should "403 when creating a policy on a resource when the user doesn't have alter_policies permission (but can see the resource)" in {
     val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceAction("alter_policies"), ResourceAction("can_compute")), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("can_compute")))), ResourceRoleName("owner"))
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
-    val members = AccessPolicyMembership(Set("me@me.me"), Set(ResourceAction("can_compute")), Set.empty)
+    val members = AccessPolicyMembership(Set(WorkbenchEmail("me@me.me")), Set(ResourceAction("can_compute")), Set.empty)
 
     Post(s"/api/resource/${resourceType.name}/foo") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NoContent
@@ -176,7 +176,7 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
 
   it should "404 when creating a policy on a resource type that doesnt exist" in {
     val samRoutes = TestSamRoutes(Map.empty)
-    val members = AccessPolicyMembership(Set("foo@bar.baz"), Set(ResourceAction("can_compute")), Set.empty)
+    val members = AccessPolicyMembership(Set(WorkbenchEmail("foo@bar.baz")), Set(ResourceAction("can_compute")), Set.empty)
 
     //Create a resource of a type that doesn't exist
     Put(s"/api/resource/fakeresourcetype/foo/policies/canCompute", members) ~> samRoutes.route ~> check {
@@ -188,7 +188,7 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceAction("alter_policies"), ResourceAction("can_compute")), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("alter_policies")))), ResourceRoleName("owner"))
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
     val otherUserSamRoutes = TestSamRoutes(Map(resourceType.name -> resourceType), UserInfo("accessToken", WorkbenchUserId("user2"), WorkbenchEmail("user2@example.com"), 0))
-    val members = AccessPolicyMembership(Set("foo@bar.baz"), Set(ResourceAction("can_compute")), Set.empty)
+    val members = AccessPolicyMembership(Set(WorkbenchEmail("foo@bar.baz")), Set(ResourceAction("can_compute")), Set.empty)
 
     //Create a resource
     Post(s"/api/resource/${resourceType.name}/foo") ~> samRoutes.route ~> check {

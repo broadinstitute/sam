@@ -5,7 +5,7 @@ import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server
 import akka.http.scaladsl.server.{Directive0, Directive1, Directives}
 import akka.http.scaladsl.server.Directives._
-import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchExceptionWithErrorReport, WorkbenchSubject}
+import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchEmail, WorkbenchExceptionWithErrorReport, WorkbenchSubject}
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
@@ -31,7 +31,7 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives {
     }
   }
 
-  def withSubject(email: String): Directive1[WorkbenchSubject] = {
+  def withSubject(email: WorkbenchEmail): Directive1[WorkbenchSubject] = {
     onSuccess(userService.getSubjectFromEmail(email)).map {
       case Some(subject) => subject
       case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"${email} not found"))
@@ -106,7 +106,7 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives {
                     } ~
                     pathPrefix("memberEmails") {
                       pathPrefix(Segment) { email =>
-                        withSubject(email) { subject =>
+                        withSubject(WorkbenchEmail(email)) { subject =>
                           pathEndOrSingleSlash {
                             put {
                               requireAction(resource, SamResourceActions.alterPolicies, userInfo) {

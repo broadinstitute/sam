@@ -71,9 +71,8 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     groups.getOrElse(groupId, BasicWorkbenchGroup(null, Set.empty, WorkbenchEmail("g1@example.com"))).members.contains(member)
   }
 
-  override def loadSubjectFromEmail(email: String): Future[Option[WorkbenchSubject]] = Future {
-    val e = WorkbenchEmail(email)
-    Option(usersWithEmails.getOrElse(e, groupsWithEmails.getOrElse(e, petsWithEmails.getOrElse(e, null))))
+  override def loadSubjectFromEmail(email: WorkbenchEmail): Future[Option[WorkbenchSubject]] = Future {
+    Option(usersWithEmails.getOrElse(email, groupsWithEmails.getOrElse(email, petsWithEmails.getOrElse(email, null))))
   }
 
   override def createUser(user: WorkbenchUser): Future[WorkbenchUser] = Future {
