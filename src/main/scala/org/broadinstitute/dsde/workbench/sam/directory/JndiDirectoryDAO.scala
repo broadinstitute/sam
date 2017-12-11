@@ -61,6 +61,8 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
   override def removeGroupMember(groupId: WorkbenchGroupIdentity, removeMember: WorkbenchSubject): Future[Unit] = withContext { ctx =>
     ctx.modifyAttributes(groupDn(groupId), DirContext.REMOVE_ATTRIBUTE, new BasicAttributes(Attr.uniqueMember, subjectDn(removeMember)))
     updateUpdatedDate(groupId, ctx)
+  } recover {
+    case _: NoSuchAttributeException => ()  // don't fail if the member is already not in the group
   }
 
   override def addGroupMember(groupId: WorkbenchGroupIdentity, addMember: WorkbenchSubject): Future[Unit] = withContext { ctx =>
