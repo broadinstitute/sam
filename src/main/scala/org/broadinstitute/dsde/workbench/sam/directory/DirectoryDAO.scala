@@ -24,7 +24,7 @@ trait DirectoryDAO {
   def updateSynchronizedDate(groupId: WorkbenchGroupIdentity): Future[Unit]
   def getSynchronizedDate(groupId: WorkbenchGroupIdentity): Future[Option[Date]]
 
-  def loadSubjectFromEmail(email: String): Future[Option[WorkbenchSubject]]
+  def loadSubjectFromEmail(email: WorkbenchEmail): Future[Option[WorkbenchSubject]]
   def loadSubjectEmail(subject: WorkbenchSubject): Future[Option[WorkbenchEmail]]
 
   def createUser(user: WorkbenchUser): Future[WorkbenchUser]

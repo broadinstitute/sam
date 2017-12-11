@@ -166,7 +166,7 @@ class GoogleExtensionSpec extends FlatSpec with Matchers with TestSupport with M
     // verify ldap
     dirDAO.loadPetServiceAccount(PetServiceAccountId(defaultUserId, googleProject)).futureValue shouldBe Some(petServiceAccount)
 
-    val ldapPetOpt = dirDAO.loadSubjectFromEmail(petServiceAccount.serviceAccount.email.value).flatMap {
+    val ldapPetOpt = dirDAO.loadSubjectFromEmail(petServiceAccount.serviceAccount.email).flatMap {
       case Some(subject: PetServiceAccountId) => dirDAO.loadPetServiceAccount(subject)
       case _ => fail(s"could not load pet LDAP entry from ${petServiceAccount.serviceAccount.email.value}")
     }.futureValue
