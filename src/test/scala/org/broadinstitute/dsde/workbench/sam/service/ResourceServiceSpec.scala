@@ -223,7 +223,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     runAndWait(service.createResource(rt, resource.resourceId, dummyUserInfo))
 
     val actions = Set(ResourceAction("foo-bang-bar"))
-    val newPolicy = runAndWait(service.overwritePolicy(rt, AccessPolicyName("foo"), resource, AccessPolicyMembership(Set.empty, actions, Set.empty), dummyUserInfo))
+    val newPolicy = runAndWait(service.overwritePolicy(rt, AccessPolicyName("foo"), resource, AccessPolicyMembership(Set.empty, actions, Set.empty)))
 
     assertResult(actions) {
       newPolicy.actions
@@ -264,7 +264,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     runAndWait(service.createResource(rt, resource.resourceId, dummyUserInfo))
 
     intercept[WorkbenchExceptionWithErrorReport] {
-      runAndWait(service.overwritePolicy(rt, AccessPolicyName("foo"), resource, AccessPolicyMembership(Set.empty, Set(ResourceAction("foo--bar")), Set.empty), dummyUserInfo))
+      runAndWait(service.overwritePolicy(rt, AccessPolicyName("foo"), resource, AccessPolicyMembership(Set.empty, Set(ResourceAction("foo--bar")), Set.empty)))
     }
   }
 
