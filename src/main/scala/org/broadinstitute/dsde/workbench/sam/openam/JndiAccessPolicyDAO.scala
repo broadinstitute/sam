@@ -1,20 +1,20 @@
 package org.broadinstitute.dsde.workbench.sam.openam
 
 import java.util.Date
-import javax.naming.{NameAlreadyBoundException, NameNotFoundException}
 import javax.naming.directory._
+import javax.naming.{NameAlreadyBoundException, NameNotFoundException}
 
 import akka.http.scaladsl.model.StatusCodes
 import org.broadinstitute.dsde.workbench.model._
+import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
 import org.broadinstitute.dsde.workbench.sam.directory.DirectorySubjectNameSupport
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO.{Attr, ObjectClass}
 import org.broadinstitute.dsde.workbench.sam.util.{BaseDirContext, JndiSupport}
-import org.broadinstitute.dsde.workbench.sam._
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Try
-import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO.{Attr, ObjectClass}
 
 /**
   * Created by dvoet on 6/26/17.

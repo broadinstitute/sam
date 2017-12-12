@@ -1,7 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam
 
 import akka.actor.ActorSystem
-import akka.http.scaladsl.{Http, server}
+import akka.http.scaladsl.Http
 import akka.stream.ActorMaterializer
 import com.typesafe.config.ConfigFactory
 import com.typesafe.scalalogging.LazyLogging
@@ -18,6 +18,7 @@ import org.broadinstitute.dsde.workbench.sam.service._
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
+import scala.language.postfixOps
 
 object Boot extends App with LazyLogging {
 

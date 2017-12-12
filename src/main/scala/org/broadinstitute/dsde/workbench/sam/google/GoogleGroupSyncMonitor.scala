@@ -8,14 +8,15 @@ import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.google.GooglePubSubDAO
 import org.broadinstitute.dsde.workbench.google.GooglePubSubDAO.PubSubMessage
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.model.ResourceAndPolicyName
 import org.broadinstitute.dsde.workbench.sam._
+import org.broadinstitute.dsde.workbench.sam.model.ResourceAndPolicyName
 import org.broadinstitute.dsde.workbench.util.FutureSupport
 import spray.json._
 
+import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.{FiniteDuration, _}
-import scala.concurrent.{ExecutionContext, Future}
-import scala.util.{Success, Failure, Try}
+import scala.language.postfixOps
+import scala.util.{Failure, Success, Try}
 
 /**
  * Created by dvoet on 12/6/16.
@@ -112,8 +113,8 @@ class GoogleGroupSyncMonitorActor(val pollInterval: FiniteDuration, pollInterval
         acknowledgeMessage(ackId).map(_ => StartMonitorPass) pipeTo self
 
         import DefaultJsonProtocol._
-        import org.broadinstitute.dsde.workbench.sam.google.GoogleModelJsonSupport._
         import WorkbenchIdentityJsonSupport._
+        import org.broadinstitute.dsde.workbench.sam.google.GoogleModelJsonSupport._
         logger.info(s"synchronized google group ${report.toJson.compactPrint}")
       } else {
         throw new WorkbenchExceptionWithErrorReport(ErrorReport("error(s) syncing google group", errorReports.toSeq))
