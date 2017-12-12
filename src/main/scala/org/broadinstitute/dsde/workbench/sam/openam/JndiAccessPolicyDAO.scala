@@ -178,10 +178,14 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
   }
 
   override def listAccessPoliciesForUser(resource: Resource, user: WorkbenchUserId): Future[Set[AccessPolicy]] = {
-    val searchAttrs = new BasicAttributes(true)  // Case ignore
-    searchAttrs.put(Attr.uniqueMember, subjectDn(user))
-
-    listAccessPolicies(resource, searchAttrs)
+    withContext { ctx =>
+      val memberOfAttribute = Option(ctx.getAttributes(subjectDn(user), Array(Attr.memberOf)).get(Attr.memberOf))
+      val memberOfDns = memberOfAttribute.map(_.getAll.extractResultsAndClose.asInstanceOf[Seq[String]]).getOrElse(Seq.empty)
+      val memberOfSubjects = memberOfDns.map(dnToSubject)
+      memberOfSubjects.collect {
+        case ripn@ResourceAndPolicyName(`resource`, _) => unmarshalAccessPolicy(ctx.getAttributes(subjectDn(ripn)))
+      }.toSet
+    }
   }
 
   override def loadPolicy(resourceAndPolicyName: ResourceAndPolicyName): Future[Option[AccessPolicy]] = withContext { ctx =>

@@ -108,6 +108,27 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     }
   }
 
+  it should "list the user's actions for a resource with nested groups" in {
+    val resourceName1 = ResourceId("resource1")
+
+    runAndWait(dirDAO.createUser(WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)))
+    val user = runAndWait(dirDAO.createUser(WorkbenchUser(WorkbenchUserId("asdfawefawea"), WorkbenchEmail("asdfawefawea@foo.bar"))))
+    val group = BasicWorkbenchGroup(WorkbenchGroupName("g"), Set(user.id), WorkbenchEmail("foo@bar.com"))
+    runAndWait(dirDAO.createGroup(group))
+
+    runAndWait(service.createResourceType(defaultResourceType))
+    val resource = runAndWait(service.createResource(defaultResourceType, resourceName1, dummyUserInfo))
+    val nonOwnerAction = ResourceAction("non_owner_action")
+    runAndWait(service.overwritePolicy(defaultResourceType, AccessPolicyName("new_policy"), resource, AccessPolicyMembership(Set(group.email.value), Set(nonOwnerAction), Set.empty)))
+
+    val userInfo = UserInfo("", user.id, user.email, 0)
+    assertResult(Set(ResourceAction("non_owner_action"))) {
+      runAndWait(service.listUserResourceActions(Resource(defaultResourceType.name, resourceName1), userInfo))
+    }
+
+    assert(runAndWait(service.hasPermission(Resource(defaultResourceType.name, resourceName1), nonOwnerAction, userInfo)))
+  }
+
   "createResource" should "detect conflict on create" in {
     val ownerRoleName = ResourceRoleName("owner")
     val resourceType = ResourceType(ResourceTypeName(UUID.randomUUID().toString), Set(ResourceAction("delete"), ResourceAction("view")), Set(ResourceRole(ownerRoleName, Set(ResourceAction("delete"), ResourceAction("view")))), ownerRoleName)
@@ -185,7 +206,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     val group = BasicWorkbenchGroup(WorkbenchGroupName("foo"), Set.empty, toEmail(resource.resourceTypeName.value, resource.resourceId.value, "foo"))
     val newPolicy = AccessPolicy(ResourceAndPolicyName(resource, AccessPolicyName("foo")), group.members, group.email, Set.empty, Set(ResourceAction("non_owner_action")))
 
-    runAndWait(service.overwritePolicy(defaultResourceType, newPolicy.id.accessPolicyName, newPolicy.id.resource, AccessPolicyMembership(Set.empty, Set(ResourceAction("non_owner_action")), Set.empty), dummyUserInfo))
+    runAndWait(service.overwritePolicy(defaultResourceType, newPolicy.id.accessPolicyName, newPolicy.id.resource, AccessPolicyMembership(Set.empty, Set(ResourceAction("non_owner_action")), Set.empty)))
 
     val policies = runAndWait(policyDAO.listAccessPolicies(resource)).map(_.copy(email=WorkbenchEmail("policy-randomuuid@example.com")))
 
@@ -204,7 +225,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     val newPolicy = AccessPolicy(ResourceAndPolicyName(resource, AccessPolicyName("foo")), group.members, group.email, Set.empty, Set(ResourceAction("INVALID_ACTION")))
 
     intercept[WorkbenchExceptionWithErrorReport] {
-      runAndWait(service.overwritePolicy(defaultResourceType, newPolicy.id.accessPolicyName, newPolicy.id.resource, AccessPolicyMembership(Set.empty, Set(ResourceAction("INVALID_ACTION")), Set.empty), dummyUserInfo))
+      runAndWait(service.overwritePolicy(defaultResourceType, newPolicy.id.accessPolicyName, newPolicy.id.resource, AccessPolicyMembership(Set.empty, Set(ResourceAction("INVALID_ACTION")), Set.empty)))
     }
 
     val policies = runAndWait(policyDAO.listAccessPolicies(resource))
@@ -224,7 +245,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     val newPolicy = AccessPolicy(ResourceAndPolicyName(resource, AccessPolicyName("foo")), group.members, group.email, Set(ResourceRoleName("INVALID_ROLE")), Set.empty)
 
     intercept[WorkbenchExceptionWithErrorReport] {
-      runAndWait(service.overwritePolicy(defaultResourceType, newPolicy.id.accessPolicyName, newPolicy.id.resource, AccessPolicyMembership(Set.empty, Set.empty, Set(ResourceRoleName("INVALID_ROLE"))), dummyUserInfo))
+      runAndWait(service.overwritePolicy(defaultResourceType, newPolicy.id.accessPolicyName, newPolicy.id.resource, AccessPolicyMembership(Set.empty, Set.empty, Set(ResourceRoleName("INVALID_ROLE")))))
     }
 
     val policies = runAndWait(policyDAO.listAccessPolicies(resource))
@@ -263,10 +284,10 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     runAndWait(service.createResource(otherResourceType, resource3.resourceId, dummyUserInfo))
     runAndWait(service.createResource(otherResourceType, resource4.resourceId, dummyUserInfo))
 
-    runAndWait(service.overwritePolicy(defaultResourceType, AccessPolicyName("in-it"), resource1, AccessPolicyMembership(Set(dummyUserInfo.userEmail.value), Set(ResourceAction("alter_policies")), Set.empty), dummyUserInfo))
-    runAndWait(service.overwritePolicy(defaultResourceType, AccessPolicyName("not-in-it"), resource1, AccessPolicyMembership(Set.empty, Set(ResourceAction("alter_policies")), Set.empty), dummyUserInfo))
-    runAndWait(service.overwritePolicy(otherResourceType, AccessPolicyName("in-it"), resource3, AccessPolicyMembership(Set(dummyUserInfo.userEmail.value), Set(ResourceAction("alter_policies")), Set.empty), dummyUserInfo))
-    runAndWait(service.overwritePolicy(otherResourceType, AccessPolicyName("not-in-it"), resource3, AccessPolicyMembership(Set.empty, Set(ResourceAction("alter_policies")), Set.empty), dummyUserInfo))
+    runAndWait(service.overwritePolicy(defaultResourceType, AccessPolicyName("in-it"), resource1, AccessPolicyMembership(Set(dummyUserInfo.userEmail.value), Set(ResourceAction("alter_policies")), Set.empty)))
+    runAndWait(service.overwritePolicy(defaultResourceType, AccessPolicyName("not-in-it"), resource1, AccessPolicyMembership(Set.empty, Set(ResourceAction("alter_policies")), Set.empty)))
+    runAndWait(service.overwritePolicy(otherResourceType, AccessPolicyName("in-it"), resource3, AccessPolicyMembership(Set(dummyUserInfo.userEmail.value), Set(ResourceAction("alter_policies")), Set.empty)))
+    runAndWait(service.overwritePolicy(otherResourceType, AccessPolicyName("not-in-it"), resource3, AccessPolicyMembership(Set.empty, Set(ResourceAction("alter_policies")), Set.empty)))
 
     assertResult(Set(ResourceIdAndPolicyName(resource1.resourceId, AccessPolicyName(defaultResourceType.ownerRoleName.value)), ResourceIdAndPolicyName(resource2.resourceId, AccessPolicyName(defaultResourceType.ownerRoleName.value)), ResourceIdAndPolicyName(resource1.resourceId, AccessPolicyName("in-it")))) {
       runAndWait(service.listUserAccessPolicies(defaultResourceType, dummyUserInfo))
