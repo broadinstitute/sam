@@ -85,6 +85,4 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
       deleteResult <- directoryDAO.deleteUser(userId)
     } yield deleteResult
   }
-
-  private[service] def toProxyFromUser(subjectId: String): String = s"PROXY_$subjectId@${cloudExtensions.emailDomain}"
 }
