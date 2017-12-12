@@ -3,17 +3,16 @@ package org.broadinstitute.dsde.workbench.sam.service
 import akka.actor.ActorSystem
 import akka.pattern.ask
 import akka.util.Timeout
-import org.broadinstitute.dsde.workbench.google.GoogleDirectoryDAO
-import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchGroupName}
-import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
-
-import scala.concurrent.{ExecutionContext, Future}
 import com.typesafe.scalalogging.LazyLogging
+import org.broadinstitute.dsde.workbench.model.WorkbenchGroupName
+import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
 import org.broadinstitute.dsde.workbench.util.health.HealthMonitor.GetCurrentStatus
-import org.broadinstitute.dsde.workbench.util.health.Subsystems.{GoogleGroups, OpenDJ, Subsystem}
+import org.broadinstitute.dsde.workbench.util.health.Subsystems.{OpenDJ, Subsystem}
 import org.broadinstitute.dsde.workbench.util.health.{HealthMonitor, StatusCheckResponse, SubsystemStatus}
 
 import scala.concurrent.duration._
+import scala.concurrent.{ExecutionContext, Future}
+import scala.language.postfixOps
 
 class StatusService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExtensions, initialDelay: FiniteDuration = Duration.Zero, pollInterval: FiniteDuration = 1 minute)(implicit system: ActorSystem, executionContext: ExecutionContext) extends LazyLogging {
   implicit val askTimeout = Timeout(5 seconds)

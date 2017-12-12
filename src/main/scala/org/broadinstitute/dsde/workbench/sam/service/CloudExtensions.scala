@@ -2,17 +2,17 @@ package org.broadinstitute.dsde.workbench.sam.service
 
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
-import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.api.ExtensionRoutes
-
-import scala.concurrent.{ExecutionContext, Future}
 import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directives._
+import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.GoogleProject
+import org.broadinstitute.dsde.workbench.sam.api.ExtensionRoutes
 import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
 import org.broadinstitute.dsde.workbench.util.health.SubsystemStatus
 import org.broadinstitute.dsde.workbench.util.health.Subsystems.Subsystem
+
+import scala.concurrent.{ExecutionContext, Future}
 
 trait CloudExtensions {
   val allUsersGroupName = WorkbenchGroupName("All_Users")
@@ -34,7 +34,7 @@ trait CloudExtensions {
 
   def onUserDelete(userId: WorkbenchUserId): Future[Unit]
 
-  @deprecated
+  @deprecated("Use new two-argument version of this function", "Sam Phase 3")
   def deleteUserPetServiceAccount(userId: WorkbenchUserId): Future[Boolean]
 
   def deleteUserPetServiceAccount(userId: WorkbenchUserId, project: GoogleProject): Future[Boolean]
@@ -65,7 +65,7 @@ trait NoExtensions extends CloudExtensions {
 
   override def onUserDelete(userId: WorkbenchUserId): Future[Unit] = Future.successful(())
 
-  @deprecated
+  @deprecated("Use new two-argument version of this function", "Sam Phase 3")
   override def deleteUserPetServiceAccount(userId: WorkbenchUserId): Future[Boolean] = Future.successful(true)
 
   override def deleteUserPetServiceAccount(userId: WorkbenchUserId, project: GoogleProject): Future[Boolean] = Future.successful(true)
