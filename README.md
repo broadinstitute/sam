@@ -51,7 +51,7 @@ Group - Create, delete, read, list, add/remove users and groups. Nested groups m
 * read_policies - may read all policies of a resource 
 * alter_policies - may change any policy of a resource
 * delete - may delete a resource
-* can_share::{policy name} - may add/remove members to/from specified policy of a resource
+* can_share_{policy name} - may add/remove members to/from specified policy of a resource
 
 ### UML Model
 ![Sam Model](model.png)

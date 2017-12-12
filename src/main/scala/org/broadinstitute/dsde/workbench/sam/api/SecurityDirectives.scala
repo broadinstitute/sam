@@ -11,12 +11,14 @@ import org.broadinstitute.dsde.workbench.sam.service.ResourceService
 trait SecurityDirectives {
   val resourceService: ResourceService
 
-  def requireAction(resource: Resource, action: ResourceAction, userInfo: UserInfo): Directive0 = {
+  def requireAction(resource: Resource, action: ResourceAction, userInfo: UserInfo): Directive0 = requireOneOfAction(resource, Set(action), userInfo)
+
+  def requireOneOfAction(resource: Resource, requestedActions: Set[ResourceAction], userInfo: UserInfo): Directive0 = {
     Directives.mapInnerRoute { innerRoute =>
       onSuccess(resourceService.listUserResourceActions(resource, userInfo)) { actions =>
-        if(actions.contains(action)) innerRoute
+        if(!actions.intersect(requestedActions).isEmpty) innerRoute
         else if (actions.isEmpty) Directives.failWith(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Resource ${resource.resourceTypeName.value}/${resource.resourceId.value} not found")))
-        else Directives.failWith(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden, s"You may not perform ${action.toString.toUpperCase} on ${resource.resourceTypeName.value}/${resource.resourceId.value}")))
+        else Directives.failWith(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden, s"You may not perform any of ${requestedActions.mkString("[", ", ", "]").toString.toUpperCase} on ${resource.resourceTypeName.value}/${resource.resourceId.value}")))
       }
     }
   }

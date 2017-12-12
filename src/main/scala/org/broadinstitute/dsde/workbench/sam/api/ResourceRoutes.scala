@@ -107,13 +107,11 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives {
                       pathPrefix(Segment) { email =>
                         withSubject(WorkbenchEmail(email)) { subject =>
                           pathEndOrSingleSlash {
-                            put {
-                              requireAction(resource, SamResourceActions.alterPolicies, userInfo) {
+                            requireOneOfAction(resource, Set(SamResourceActions.alterPolicies, SamResourceActions.canShare(resourceAndPolicyName.accessPolicyName)), userInfo) {
+                              put {
                                 complete(resourceService.addSubjectToPolicy(resourceAndPolicyName, subject).map(_ => StatusCodes.NoContent))
-                              }
-                            } ~
-                            delete {
-                              requireAction(resource, SamResourceActions.alterPolicies, userInfo) {
+                              } ~
+                              delete {
                                 complete(resourceService.removeSubjectFromPolicy(resourceAndPolicyName, subject).map(_ => StatusCodes.NoContent))
                               }
                             }

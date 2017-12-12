@@ -353,6 +353,21 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     }
   }
 
+  it should "204 adding a member with can share" in {
+    // happy case
+    val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceAction("can_share_.+"), ResourceAction("can_compute")), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("can_share_owner")))), ResourceRoleName("owner"))
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
+    val testUser = WorkbenchUser(WorkbenchUserId("testuser"), WorkbenchEmail("testuser@foo.com"))
+
+    runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), defaultUserInfo))
+
+    runAndWait(samRoutes.userService.createUser(testUser))
+
+    Put(s"/api/resource/${resourceType.name}/foo/policies/${resourceType.ownerRoleName}/memberEmails/${testUser.email}") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+    }
+  }
+
   it should "400 adding unknown subject" in {
     // differs from happy case in that we don't create user
     val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceAction("alter_policies"), ResourceAction("can_compute")), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("alter_policies")))), ResourceRoleName("owner"))
@@ -370,7 +385,7 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
 
   it should "403 adding without permission" in {
     // differs from happy case in that owner role does not have alter_policies
-    val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceAction("alter_policies"), ResourceAction("can_compute")), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("can_compute")))), ResourceRoleName("owner"))
+    val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceAction("alter_policies"), ResourceAction("can_share_.+")), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("can_share_splat")))), ResourceRoleName("owner"))
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
     val testUser = WorkbenchUser(WorkbenchUserId("testuser"), WorkbenchEmail("testuser@foo.com"))
 
@@ -415,6 +430,23 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     }
   }
 
+  it should "204 deleting a member with can share" in {
+    // happy case
+    val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceAction("can_share_.+"), ResourceAction("can_compute")), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("can_share_owner")))), ResourceRoleName("owner"))
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
+    val testUser = WorkbenchUser(WorkbenchUserId("testuser"), WorkbenchEmail("testuser@foo.com"))
+
+    runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), defaultUserInfo))
+
+    runAndWait(samRoutes.userService.createUser(testUser))
+
+    runAndWait(samRoutes.resourceService.addSubjectToPolicy(ResourceAndPolicyName(Resource(resourceType.name,  ResourceId("foo")), AccessPolicyName(resourceType.ownerRoleName.value)), testUser.id))
+
+    Delete(s"/api/resource/${resourceType.name}/foo/policies/${resourceType.ownerRoleName}/memberEmails/${testUser.email}") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+    }
+  }
+
   it should "400 deleting unknown subject" in {
     // differs from happy case in that we don't create user
     val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceAction("alter_policies"), ResourceAction("can_compute")), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("alter_policies")))), ResourceRoleName("owner"))
@@ -434,7 +466,7 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
 
   it should "403 removing without permission" in {
     // differs from happy case in that owner role does not have alter_policies
-    val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceAction("alter_policies"), ResourceAction("can_compute")), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("can_compute")))), ResourceRoleName("owner"))
+    val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceAction("alter_policies"), ResourceAction("can_share_.+")), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("can_share_splat")))), ResourceRoleName("owner"))
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
     val testUser = WorkbenchUser(WorkbenchUserId("testuser"), WorkbenchEmail("testuser@foo.com"))
 
