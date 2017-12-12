@@ -97,10 +97,7 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
 
   //Overwrites an existing policy (keyed by resourceType/resourceId/policyName), saves a new one if it doesn't exist yet
   def overwritePolicy(resourceType: ResourceType, policyName: AccessPolicyName, resource: Resource, policyMembership: AccessPolicyMembership): Future[AccessPolicy] = {
-    if(!policyMembership.actions.subsetOf(resourceType.actions))
-      throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"You have specified an invalid action for resource type ${resourceType.name}. Valid actions are: ${resourceType.actions.mkString(", ")}"))
-    if(!policyMembership.roles.subsetOf(resourceType.roles.map(_.roleName)))
-      throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"You have specified an invalid role for resource type ${resourceType.name}. Valid roles are: ${resourceType.roles.map(_.roleName).mkString(", ")}"))
+    validateActionsAndRoles(resourceType, policyMembership)
 
     val subjectsFromEmails = Future.traverse(policyMembership.memberEmails) {
       directoryDAO.loadSubjectFromEmail
@@ -119,6 +116,14 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
         case Success(policy) => fireGroupUpdateNotification(policy.id)
       }
     }
+  }
+
+  private def validateActionsAndRoles(resourceType: ResourceType, policyMembership: AccessPolicyMembership) = {
+    val invalidAction = policyMembership.actions.find(a => resourceType.actions.find(_.matches(a)).isEmpty)
+    if (invalidAction.isDefined)
+      throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"You have specified an invalid action for resource type ${resourceType.name}. Valid actions are: ${resourceType.actions.mkString(", ")}"))
+    if (!policyMembership.roles.subsetOf(resourceType.roles.map(_.roleName)))
+      throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"You have specified an invalid role for resource type ${resourceType.name}. Valid roles are: ${resourceType.roles.map(_.roleName).mkString(", ")}"))
   }
 
   private def fireGroupUpdateNotification(groupId: WorkbenchGroupIdentity) = {

@@ -51,7 +51,10 @@ object SamResourceActions {
 case class UserStatusDetails(userSubjectId: WorkbenchUserId, userEmail: WorkbenchEmail) //for backwards compatibility to old API
 case class UserStatus(userInfo: UserStatusDetails, enabled: Map[String, Boolean])
 
-case class ResourceAction(value: String) extends ValueObject
+case class ResourceAction(value: String) extends ValueObject {
+  lazy val regex = value.r
+  def matches(other: ResourceAction) = regex.pattern.matcher(other.value).matches()
+}
 case class ResourceRoleName(value: String) extends ValueObject
 case class ResourceRole(roleName: ResourceRoleName, actions: Set[ResourceAction])
 

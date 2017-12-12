@@ -215,6 +215,27 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     runAndWait(service.deleteResource(resource, dummyUserInfo))
   }
 
+  it should "succeed with a regex action" in {
+    val rt = ResourceType(ResourceTypeName(UUID.randomUUID().toString), Set(ResourceAction("foo-.+-bar")), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("foo-biz-bar")))), ResourceRoleName("owner"))
+    val resource = Resource(rt.name, ResourceId("my-resource"))
+
+    runAndWait(service.createResourceType(rt))
+    runAndWait(service.createResource(rt, resource.resourceId, dummyUserInfo))
+
+    val actions = Set(ResourceAction("foo-bang-bar"))
+    val newPolicy = runAndWait(service.overwritePolicy(rt, AccessPolicyName("foo"), resource, AccessPolicyMembership(Set.empty, actions, Set.empty), dummyUserInfo))
+
+    assertResult(actions) {
+      newPolicy.actions
+    }
+
+    val policies = runAndWait(policyDAO.listAccessPolicies(resource))
+
+    assert(policies.contains(newPolicy))
+
+    runAndWait(service.deleteResource(resource, dummyUserInfo))
+  }
+
   it should "fail when given an invalid action" in {
     val resource = Resource(defaultResourceType.name, ResourceId("my-resource"))
 
@@ -233,6 +254,18 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     assert(!policies.contains(newPolicy))
 
     runAndWait(service.deleteResource(resource, dummyUserInfo))
+  }
+
+  it should "fail when given an invalid regex action" in {
+    val rt = ResourceType(ResourceTypeName(UUID.randomUUID().toString), Set(ResourceAction("foo-.+-bar")), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("foo-biz-bar")))), ResourceRoleName("owner"))
+    val resource = Resource(rt.name, ResourceId("my-resource"))
+
+    runAndWait(service.createResourceType(rt))
+    runAndWait(service.createResource(rt, resource.resourceId, dummyUserInfo))
+
+    intercept[WorkbenchExceptionWithErrorReport] {
+      runAndWait(service.overwritePolicy(rt, AccessPolicyName("foo"), resource, AccessPolicyMembership(Set.empty, Set(ResourceAction("foo--bar")), Set.empty), dummyUserInfo))
+    }
   }
 
   it should "fail when given an invalid role" in {
