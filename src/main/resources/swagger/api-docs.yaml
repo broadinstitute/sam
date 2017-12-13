@@ -398,6 +398,7 @@ paths:
           type: string
         - in: path
           description: Email of user to be added
+          name: email
           required: true
           type: string
       operationId: addUserToPolicy
@@ -436,6 +437,7 @@ paths:
           type: string
         - in: path
           description: Email of user to be removed
+          name: email
           required: true
           type: string
       operationId: removeUserFromPolicy
