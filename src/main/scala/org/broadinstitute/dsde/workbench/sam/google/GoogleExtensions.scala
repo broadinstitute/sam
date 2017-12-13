@@ -22,7 +22,7 @@ import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success, Try}
 
 class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: AccessPolicyDAO, val googleDirectoryDAO: GoogleDirectoryDAO, val googlePubSubDAO: GooglePubSubDAO, val googleIamDAO: GoogleIamDAO, val googleServicesConfig: GoogleServicesConfig, val petServiceAccountConfig: PetServiceAccountConfig)(implicit val executionContext: ExecutionContext) extends LazyLogging with FutureSupport with CloudExtensions {
-  private[google] def toProxyFromUser(subjectId: String): String = s"PROXY_$subjectId@${googleServicesConfig.appsDomain}"
+  private[google] def toProxyFromUser(subjectId: WorkbenchUserId): WorkbenchEmail = WorkbenchEmail(s"PROXY_${subjectId.value}@${googleServicesConfig.appsDomain}")
 
   override val emailDomain = googleServicesConfig.appsDomain
   private val allUsersGroupEmail = WorkbenchEmail(s"GROUP_${allUsersGroupName.value}@$emailDomain")
@@ -71,24 +71,24 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
 
   override def onUserCreate(user: WorkbenchUser): Future[Unit] = {
     for {
-      _ <- googleDirectoryDAO.createGroup(user.email.value, WorkbenchEmail(toProxyFromUser(user.id.value))) recover {
+      _ <- googleDirectoryDAO.createGroup(user.email.value, toProxyFromUser(user.id)) recover {
         case e:GoogleJsonResponseException if e.getDetails.getCode == StatusCodes.Conflict.intValue => ()
       }
-      _ <- googleDirectoryDAO.addMemberToGroup(WorkbenchEmail(toProxyFromUser(user.id.value)), WorkbenchEmail(user.email.value))
+      _ <- googleDirectoryDAO.addMemberToGroup(toProxyFromUser(user.id), WorkbenchEmail(user.email.value))
 
       allUsersGroup <- getOrCreateAllUsersGroup(directoryDAO)
 
-      _ <- googleDirectoryDAO.addMemberToGroup(allUsersGroup.email, WorkbenchEmail(toProxyFromUser(user.id.value)))
+      _ <- googleDirectoryDAO.addMemberToGroup(allUsersGroup.email, toProxyFromUser(user.id))
     } yield ()
   }
 
   override def getUserStatus(user: WorkbenchUser): Future[Boolean] = {
-    googleDirectoryDAO.isGroupMember(WorkbenchEmail(toProxyFromUser(user.id.value)), WorkbenchEmail(user.email.value))
+    googleDirectoryDAO.isGroupMember(toProxyFromUser(user.id), WorkbenchEmail(user.email.value))
   }
 
   override def onUserEnable(user: WorkbenchUser): Future[Unit] = {
     for {
-      _ <- googleDirectoryDAO.addMemberToGroup(WorkbenchEmail(toProxyFromUser(user.id.value)), WorkbenchEmail(user.email.value))
+      _ <- googleDirectoryDAO.addMemberToGroup(toProxyFromUser(user.id), WorkbenchEmail(user.email.value))
       // Enable the pet service account, if one exists for the user
       _ <- directoryDAO.getAllPetServiceAccountsForUser(user.id).flatMap { Future.traverse(_) { pet =>
         enablePetServiceAccount(pet)
@@ -102,13 +102,13 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
       _ <- directoryDAO.getAllPetServiceAccountsForUser(user.id).flatMap { Future.traverse(_) { pet =>
         disablePetServiceAccount(pet)
       } }
-      _ <- googleDirectoryDAO.removeMemberFromGroup(WorkbenchEmail(toProxyFromUser(user.id.value)), WorkbenchEmail(user.email.value))
+      _ <- googleDirectoryDAO.removeMemberFromGroup(toProxyFromUser(user.id), WorkbenchEmail(user.email.value))
     } yield ()
   }
 
   override def onUserDelete(userId: WorkbenchUserId): Future[Unit] = {
     for {
-      _ <- googleDirectoryDAO.deleteGroup(WorkbenchEmail(toProxyFromUser(userId.value)))
+      _ <- googleDirectoryDAO.deleteGroup(toProxyFromUser(userId))
       _ <- directoryDAO.getAllPetServiceAccountsForUser(userId).flatMap { Future.traverse(_) { pet =>
         googleIamDAO.removeServiceAccount(petServiceAccountConfig.googleProject, toAccountName(pet.serviceAccount.email))
       } }
@@ -162,14 +162,14 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
   private def enablePetServiceAccount(petServiceAccount: PetServiceAccount): Future[Unit] = {
     for {
       _ <- directoryDAO.enableIdentity(petServiceAccount.id)
-      _ <- googleDirectoryDAO.addMemberToGroup(WorkbenchEmail(toProxyFromUser(petServiceAccount.id.userId.value)), petServiceAccount.serviceAccount.email)
+      _ <- googleDirectoryDAO.addMemberToGroup(toProxyFromUser(petServiceAccount.id.userId), petServiceAccount.serviceAccount.email)
     } yield ()
   }
 
   private def disablePetServiceAccount(petServiceAccount: PetServiceAccount): Future[Unit] = {
     for {
       _ <- directoryDAO.disableIdentity(petServiceAccount.id)
-      _ <- googleDirectoryDAO.removeMemberFromGroup(WorkbenchEmail(toProxyFromUser(petServiceAccount.id.userId.value)), petServiceAccount.serviceAccount.email)
+      _ <- googleDirectoryDAO.removeMemberFromGroup(toProxyFromUser(petServiceAccount.id.userId), petServiceAccount.serviceAccount.email)
     } yield ()
   }
 
@@ -240,7 +240,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
           case group: WorkbenchGroupIdentity => directoryDAO.loadSubjectEmail(group)
 
           // use proxy group email instead of user's actual email
-          case WorkbenchUserId(userSubjectId) => Future.successful(Option(WorkbenchEmail(toProxyFromUser(userSubjectId))))
+          case userSubjectId: WorkbenchUserId => Future.successful(Option(toProxyFromUser(userSubjectId)))
 
           // not sure why this next case would happen but if a petSA is in a group just use its email
           case petSA: PetServiceAccountId => directoryDAO.loadSubjectEmail(petSA)

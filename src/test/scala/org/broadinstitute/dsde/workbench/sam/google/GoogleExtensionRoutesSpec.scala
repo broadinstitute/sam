@@ -64,6 +64,28 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
     }
   }
 
+  "GET /api/google/user/proxyGroup" should "return a user's proxy group" in withDefaultRoutes { samRoutes =>
+    val googleDirectoryDAO = new MockGoogleDirectoryDAO()
+    val directoryDAO = new MockDirectoryDAO()
+    val googleIamDAO = new MockGoogleIamDAO()
+    val policyDAO = new MockAccessPolicyDAO()
+    val pubSubDAO = new MockGooglePubSubDAO()
+    val googleExt = new GoogleExtensions(directoryDAO, policyDAO, googleDirectoryDAO, pubSubDAO, googleIamDAO, googleServicesConfig, petServiceAccountConfig)
+    googleExt.onBoot()
+
+    // create a user
+    Post("/register/user") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Created
+      responseAs[UserStatus] shouldEqual UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
+    }
+
+    Get("/api/google/user/proxyGroup") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      val response = responseAs[WorkbenchEmail]
+      response shouldBe googleExt.toProxyFromUser(defaultUserId)
+    }
+  }
+
   "POST /api/google/policy/{resourceTypeName}/{resourceId}/{accessPolicyName}/sync" should "204 Create Google group for policy" in {
     val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceAction("alter_policies"), ResourceAction("can_compute"), ResourceAction("read_policies")), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("alter_policies"), ResourceAction("read_policies")))), ResourceRoleName("owner"))
     val resourceTypes = Map(resourceType.name -> resourceType)
@@ -98,7 +120,7 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
     import GoogleModelJsonSupport._
     Post(s"/api/google/resource/${resourceType.name}/foo/${resourceType.ownerRoleName.value}/sync") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
-      assertResult(Map(createdPolicy.email -> Seq(SyncReportItem("added", googleExt.toProxyFromUser(defaultUserInfo.userId.value), None)))) {
+      assertResult(Map(createdPolicy.email -> Seq(SyncReportItem("added", googleExt.toProxyFromUser(defaultUserInfo.userId).value, None)))) {
         responseAs[Map[WorkbenchEmail, Seq[SyncReportItem]]]
       }
     }

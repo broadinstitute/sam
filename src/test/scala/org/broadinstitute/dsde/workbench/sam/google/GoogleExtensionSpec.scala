@@ -75,15 +75,15 @@ class GoogleExtensionSpec extends FlatSpec with Matchers with TestSupport with M
       val subGroups = Seq(inSamSubGroup, inGoogleSubGroup, inBothSubGroup)
       subGroups.foreach { g => when(mockDirectoryDAO.loadSubjectEmail(g.id)).thenReturn(Future.successful(Option(g.email))) }
 
-      val added = Seq(inSamSubGroup.email.value, ge.toProxyFromUser(inSamUserId.value))
-      val removed = Seq(inGoogleSubGroup.email.value, ge.toProxyFromUser(inGoogleUserId.value))
+      val added = Seq(inSamSubGroup.email, ge.toProxyFromUser(inSamUserId))
+      val removed = Seq(inGoogleSubGroup.email, ge.toProxyFromUser(inGoogleUserId))
 
-      when(mockGoogleDirectoryDAO.listGroupMembers(target.email)).thenReturn(Future.successful(Option(Seq(ge.toProxyFromUser(inGoogleUserId.value), ge.toProxyFromUser(inBothUserId.value), inGoogleSubGroup.email.value, inBothSubGroup.email.value, removeError))))
+      when(mockGoogleDirectoryDAO.listGroupMembers(target.email)).thenReturn(Future.successful(Option(Seq(ge.toProxyFromUser(inGoogleUserId).value, ge.toProxyFromUser(inBothUserId).value, inGoogleSubGroup.email.value, inBothSubGroup.email.value, removeError))))
       when(mockGoogleDirectoryDAO.addMemberToGroup(any[WorkbenchEmail], any[WorkbenchEmail])).thenReturn(Future.successful(()))
       when(mockGoogleDirectoryDAO.removeMemberFromGroup(any[WorkbenchEmail], any[WorkbenchEmail])).thenReturn(Future.successful(()))
 
       val addException = new Exception("addError")
-      when(mockGoogleDirectoryDAO.addMemberToGroup(target.email, WorkbenchEmail(ge.toProxyFromUser(addError.value)))).thenReturn(Future.failed(addException))
+      when(mockGoogleDirectoryDAO.addMemberToGroup(target.email, ge.toProxyFromUser(addError))).thenReturn(Future.failed(addException))
 
       val removeException = new Exception("removeError")
       when(mockGoogleDirectoryDAO.removeMemberFromGroup(target.email, WorkbenchEmail(removeError))).thenReturn(Future.failed(removeException))
@@ -92,14 +92,14 @@ class GoogleExtensionSpec extends FlatSpec with Matchers with TestSupport with M
 
       results.head._1 should equal(target.email)
       results.head._2 should contain theSameElementsAs (
-        added.map(SyncReportItem("added", _, None)) ++
-          removed.map(SyncReportItem("removed", _, None)) ++
+        added.map(e => SyncReportItem("added", e.value, None)) ++
+          removed.map(e => SyncReportItem("removed", e.value, None)) ++
           Seq(
-            SyncReportItem("added", ge.toProxyFromUser(addError.value), Option(ErrorReport(addException))),
+            SyncReportItem("added", ge.toProxyFromUser(addError).value, Option(ErrorReport(addException))),
             SyncReportItem("removed", removeError, Option(ErrorReport(removeException)))))
 
-      added.foreach { email => verify(mockGoogleDirectoryDAO).addMemberToGroup(target.email, WorkbenchEmail(email)) }
-      removed.foreach { email => verify(mockGoogleDirectoryDAO).removeMemberFromGroup(target.email, WorkbenchEmail(email)) }
+      added.foreach { email => verify(mockGoogleDirectoryDAO).addMemberToGroup(target.email, email) }
+      removed.foreach { email => verify(mockGoogleDirectoryDAO).removeMemberFromGroup(target.email, email) }
       verify(mockDirectoryDAO).updateSynchronizedDate(target.id)
     }
   }
@@ -177,7 +177,7 @@ class GoogleExtensionSpec extends FlatSpec with Matchers with TestSupport with M
     Try(ldapPet.serviceAccount.subjectId.value.toLong) shouldBe a[Success[_]]
 
     // verify google
-    val groupEmail = WorkbenchEmail(googleExtensions.toProxyFromUser(defaultUserId.value))
+    val groupEmail = googleExtensions.toProxyFromUser(defaultUserId)
     mockGoogleIamDAO.serviceAccounts should contain key (petServiceAccount.serviceAccount.email)
     mockGoogleDirectoryDAO.groups should contain key (groupEmail)
     mockGoogleDirectoryDAO.groups(groupEmail) shouldBe Set(defaultUserEmail, petServiceAccount.serviceAccount.email)

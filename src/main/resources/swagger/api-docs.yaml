@@ -152,6 +152,22 @@ paths:
       tags:
         - Google
 
+  /api/google/user/proxyGroup:
+    get:
+      summary: gets the proxy group email for the specified user
+      responses:
+        200:
+          description: 'user proxy group'
+          schema:
+            type: string
+        500:
+          description: Internal Error
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      operationId: getProxyGroup
+      tags:
+        - Google
+
   /api/google/resource/{resourceTypeName}/{resourceId}/{policyName}/sync:
     post:
       summary: Synchronize a policy's membership with google group. Once called all further membership changes will by automatically synchronized

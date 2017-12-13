@@ -54,6 +54,11 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives {
                 googleExtensions.deleteUserPetServiceAccount(userInfo.userId, GoogleProject(project)).map(_ => StatusCodes.NoContent)
               }
             }
+          } ~
+          path("proxyGroup") {
+            complete {
+              StatusCodes.OK -> googleExtensions.toProxyFromUser(userInfo.userId)
+            }
           }
         } ~
           pathPrefix("resource") {
