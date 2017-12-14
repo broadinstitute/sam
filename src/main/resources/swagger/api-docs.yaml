@@ -1,4 +1,7 @@
 swagger: '2.0'
+sudo: required
+dist: trusty
+group: deprecated-2017Q4
 
 info:
   title: Sam
