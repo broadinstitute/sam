@@ -264,6 +264,8 @@ paths:
       responses:
         204:
           description: Successfully created resource
+          schema:
+            $ref: '#/definitions/Resource'
         409:
           description: Resource already exists
           schema:
@@ -398,6 +400,7 @@ paths:
           type: string
         - in: path
           description: Email of user to be added
+          name: email
           required: true
           type: string
       operationId: addUserToPolicy
@@ -436,6 +439,7 @@ paths:
           type: string
         - in: path
           description: Email of user to be removed
+          name: email
           required: true
           type: string
       operationId: removeUserFromPolicy
@@ -581,11 +585,14 @@ definitions:
     required:
       - policyName
       - policy
+      - email
     properties:
       policyName:
         type: string
       policy:
         $ref: '#/definitions/AccessPolicyMembership'
+      email:
+        $ref: '#/definitions/WorkbenchEmail'
 
   AccessPolicyMembership:
     description: ''
@@ -655,6 +662,19 @@ definitions:
         items:
           $ref: '#/definitions/StackTraceElement'
 
+  Resource:
+    type: object
+    description: ''
+    required:
+      - resourceTypeName
+      - resourceId
+    properties:
+      resourceTypeName:
+        $ref: '#/definitions/ResourceTypeName'
+      resourceId:
+        $ref: '#/definitions/ResourceId'
+
+
   ResourceAndAccessPolicy:
     type: object
     description: 'specification of a resource with an access policy'
@@ -668,6 +688,26 @@ definitions:
       accessPolicyName:
         type: string
         description: User's policy for the resource
+
+  ResourceId:
+    type: object
+    description: ''
+    required:
+      - value
+    properties:
+      value:
+        type: string
+        description: The string value of the resource id
+
+  ResourceTypeName:
+    type: object
+    description: ''
+    required:
+      - value
+    properties:
+      value:
+        type: string
+        description: The string value of the resource type name
 
 
   ResourceRole:
@@ -808,3 +848,12 @@ definitions:
       enabled:
         $ref: '#/definitions/Enabled'
         description: the status of the user's account
+
+  WorkbenchEmail:
+    description: ''
+    required:
+      - value
+    properties:
+       value:
+         type: string
+         description: The string value of the workbench email
