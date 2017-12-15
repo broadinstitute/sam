@@ -64,7 +64,7 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
     }
   }
 
-  "GET /api/google/user/proxyGroup" should "return a user's proxy group" in withDefaultRoutes { samRoutes =>
+  "GET /api/google/user/proxyGroup/{email}" should "return a user's proxy group" in withDefaultRoutes { samRoutes =>
     val googleDirectoryDAO = new MockGoogleDirectoryDAO()
     val directoryDAO = new MockDirectoryDAO()
     val googleIamDAO = new MockGoogleIamDAO()
@@ -79,7 +79,7 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
       responseAs[UserStatus] shouldEqual UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
     }
 
-    Get("/api/google/user/proxyGroup") ~> samRoutes.route ~> check {
+    Get(s"/api/google/user/proxyGroup/$defaultUserEmail") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
       val response = responseAs[WorkbenchEmail]
       response shouldBe googleExt.toProxyFromUser(defaultUserId)

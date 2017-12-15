@@ -152,7 +152,7 @@ paths:
       tags:
         - Google
 
-  /api/google/user/proxyGroup:
+  /api/google/user/proxyGroup/{email}:
     get:
       summary: gets the proxy group email for the specified user
       responses:
@@ -164,6 +164,12 @@ paths:
           description: Internal Error
           schema:
             $ref: '#/definitions/ErrorReport'
+      parameters:
+        - in: path
+          description: User email whose proxy group to retrieve
+          name: email
+          required: true
+          type: string
       operationId: getProxyGroup
       tags:
         - Google

@@ -39,6 +39,8 @@ trait CloudExtensions {
 
   def deleteUserPetServiceAccount(userId: WorkbenchUserId, project: GoogleProject): Future[Boolean]
 
+  def getUserProxy(userEmail: WorkbenchEmail): Future[WorkbenchEmail]
+
   def checkStatus: Map[Subsystem, Future[SubsystemStatus]]
 
   def allSubSystems: Set[Subsystem]
@@ -69,6 +71,8 @@ trait NoExtensions extends CloudExtensions {
   override def deleteUserPetServiceAccount(userId: WorkbenchUserId): Future[Boolean] = Future.successful(true)
 
   override def deleteUserPetServiceAccount(userId: WorkbenchUserId, project: GoogleProject): Future[Boolean] = Future.successful(true)
+
+  override def getUserProxy(userEmail: WorkbenchEmail): Future[WorkbenchEmail] = Future.successful(userEmail)
 
   override def checkStatus: Map[Subsystem, Future[SubsystemStatus]] = Map.empty
 
