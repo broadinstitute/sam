@@ -94,7 +94,80 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     }
   }
 
-  "PUT /api/resource/{resourceType}/{resourceId}/policies" should "201 on a new policy being created for a resource" in {
+  "GET /api/resource/{resourceType}/{resourceId}/policies/{policyName}" should "200 on existing policy of a resource with read_policies" in {
+    val members = AccessPolicyMembership(Set(defaultUserInfo.userEmail.value), Set(ResourceAction("can_compute")), Set.empty)
+    val resourceType = ResourceType(ResourceTypeName("rt"), Set(SamResourceActions.alterPolicies, SamResourceActions.readPolicies, ResourceAction("can_compute")), Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.alterPolicies, SamResourceActions.readPolicies))), ResourceRoleName("owner"))
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
+
+    val resourceId = ResourceId("foo")
+    val policyName = AccessPolicyName("canCompute")
+    createUserResourcePolicy(members, resourceType, samRoutes, resourceId, policyName)
+
+    Get(s"/api/resource/${resourceType.name}/${resourceId.value}/policies/${policyName.value}") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[AccessPolicyMembership] shouldEqual members
+    }
+  }
+
+  private def createUserResourcePolicy(members: AccessPolicyMembership, resourceType: ResourceType, samRoutes: TestSamRoutes, resourceId: ResourceId, policyName: AccessPolicyName): Unit = {
+    Post("/register/user") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Created
+    }
+
+    Post(s"/api/resource/${resourceType.name}/${resourceId.value}") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+    }
+
+
+    Put(s"/api/resource/${resourceType.name}/${resourceId.value}/policies/${policyName.value}", members) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Created
+    }
+  }
+
+  it should "200 on existing policy of a resource with read_policy" in {
+    val members = AccessPolicyMembership(Set(defaultUserInfo.userEmail.value), Set(ResourceAction("can_compute")), Set.empty)
+    val policyName = AccessPolicyName("canCompute")
+    val resourceType = ResourceType(ResourceTypeName("rt"), Set(SamResourceActions.alterPolicies, SamResourceActions.readPolicy(policyName), ResourceAction("can_compute")), Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.alterPolicies, SamResourceActions.readPolicy(policyName)))), ResourceRoleName("owner"))
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
+
+    val resourceId = ResourceId("foo")
+    createUserResourcePolicy(members, resourceType, samRoutes, resourceId, policyName)
+
+    Get(s"/api/resource/${resourceType.name}/${resourceId.value}/policies/${policyName.value}") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[AccessPolicyMembership] shouldEqual members
+    }
+  }
+
+  it should "404 on non existing policy of a resource" in {
+    val members = AccessPolicyMembership(Set(defaultUserInfo.userEmail.value), Set(ResourceAction("can_compute")), Set.empty)
+    val resourceType = ResourceType(ResourceTypeName("rt"), Set(SamResourceActions.alterPolicies, SamResourceActions.readPolicies, ResourceAction("can_compute")), Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.alterPolicies, SamResourceActions.readPolicies))), ResourceRoleName("owner"))
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
+
+    val resourceId = ResourceId("foo")
+    val policyName = AccessPolicyName("canCompute")
+    createUserResourcePolicy(members, resourceType, samRoutes, resourceId, policyName)
+
+    Get(s"/api/resource/${resourceType.name}/${resourceId.value}/policies/${policyName.value}_dne") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
+    }
+  }
+
+  it should "403 on existing policy of a resource without read policies" in {
+    val members = AccessPolicyMembership(Set(defaultUserInfo.userEmail.value), Set(ResourceAction("can_compute")), Set.empty)
+    val resourceType = ResourceType(ResourceTypeName("rt"), Set(SamResourceActions.alterPolicies, ResourceAction("can_compute")), Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.alterPolicies))), ResourceRoleName("owner"))
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
+
+    val resourceId = ResourceId("foo")
+    val policyName = AccessPolicyName("canCompute")
+    createUserResourcePolicy(members, resourceType, samRoutes, resourceId, policyName)
+
+    Get(s"/api/resource/${resourceType.name}/${resourceId.value}/policies/${policyName.value}") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Forbidden
+    }
+  }
+
+  "PUT /api/resource/{resourceType}/{resourceId}/policies/{policyName}" should "201 on a new policy being created for a resource" in {
     val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceAction("alter_policies"), ResourceAction("can_compute")), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("alter_policies")))), ResourceRoleName("owner"))
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
 
@@ -355,7 +428,7 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
 
   it should "204 adding a member with can share" in {
     // happy case
-    val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceAction("can_share_.+"), ResourceAction("can_compute")), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("can_share_owner")))), ResourceRoleName("owner"))
+    val resourceType = ResourceType(ResourceTypeName("rt"), Set(SamResourceActions.sharePolicy(AccessPolicyName(".+")), ResourceAction("can_compute")), Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.sharePolicy(AccessPolicyName("owner"))))), ResourceRoleName("owner"))
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
     val testUser = WorkbenchUser(WorkbenchUserId("testuser"), WorkbenchEmail("testuser@foo.com"))
 
@@ -385,7 +458,7 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
 
   it should "403 adding without permission" in {
     // differs from happy case in that owner role does not have alter_policies
-    val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceAction("alter_policies"), ResourceAction("can_share_.+")), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("can_share_splat")))), ResourceRoleName("owner"))
+    val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceAction("alter_policies"), SamResourceActions.sharePolicy(AccessPolicyName(".+"))), Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.sharePolicy(AccessPolicyName("splat"))))), ResourceRoleName("owner"))
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
     val testUser = WorkbenchUser(WorkbenchUserId("testuser"), WorkbenchEmail("testuser@foo.com"))
 
@@ -432,7 +505,7 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
 
   it should "204 deleting a member with can share" in {
     // happy case
-    val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceAction("can_share_.+"), ResourceAction("can_compute")), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("can_share_owner")))), ResourceRoleName("owner"))
+    val resourceType = ResourceType(ResourceTypeName("rt"), Set(SamResourceActions.sharePolicy(AccessPolicyName(".+")), ResourceAction("can_compute")), Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.sharePolicy(AccessPolicyName("owner"))))), ResourceRoleName("owner"))
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
     val testUser = WorkbenchUser(WorkbenchUserId("testuser"), WorkbenchEmail("testuser@foo.com"))
 

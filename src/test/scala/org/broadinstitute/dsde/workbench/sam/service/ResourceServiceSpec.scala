@@ -68,7 +68,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     }
 
     //cleanup
-    runAndWait(service.deleteResource(resource, dummyUserInfo))
+    runAndWait(service.deleteResource(resource))
 
     assertResult(Set.empty) {
       runAndWait(policyDAO.listAccessPolicies(resource))
@@ -102,8 +102,8 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
       assert(runAndWait(service.hasPermission(Resource(defaultResourceType.name, resourceName2), ResourceAction("non_owner_action"), dummyUserInfo)))
       assert(!runAndWait(service.hasPermission(Resource(defaultResourceType.name, ResourceId("doesnotexist")), ResourceAction("view"), dummyUserInfo)))
     } finally {
-      Try { runAndWait(service.deleteResource(Resource(defaultResourceType.name, resourceName1), dummyUserInfo)) }
-      Try { runAndWait(service.deleteResource(Resource(defaultResourceType.name, resourceName2), dummyUserInfo)) }
+      Try { runAndWait(service.deleteResource(Resource(defaultResourceType.name, resourceName1))) }
+      Try { runAndWait(service.deleteResource(Resource(defaultResourceType.name, resourceName2))) }
       Try { runAndWait(dirDAO.deleteUser(dummyUserInfo.userId)) }
     }
   }
@@ -149,7 +149,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
       exception.errorReport.statusCode shouldEqual Option(StatusCodes.Conflict)
     } finally {
       //cleanup
-      Try { runAndWait(service.deleteResource(Resource(resourceType.name, resourceName), dummyUserInfo)) }
+      Try { runAndWait(service.deleteResource(Resource(resourceType.name, resourceName))) }
     }
   }
 
@@ -166,7 +166,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
 
     roles shouldEqual Set(ResourceRoleName("owner"))
 
-    runAndWait(service.deleteResource(resource, dummyUserInfo))
+    runAndWait(service.deleteResource(resource))
     runAndWait(service.directoryDAO.deleteUser(dummyUserInfo.userId))
   }
 
@@ -194,7 +194,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
 
     constructExpectedPolicies(defaultResourceType, resource) should contain theSameElementsAs(policies)
 
-    runAndWait(service.deleteResource(resource, dummyUserInfo))
+    runAndWait(service.deleteResource(resource))
   }
 
   "overwritePolicy" should "succeed with a valid request" in {
@@ -212,7 +212,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
 
     assert(policies.contains(newPolicy))
 
-    runAndWait(service.deleteResource(resource, dummyUserInfo))
+    runAndWait(service.deleteResource(resource))
   }
 
   it should "succeed with a regex action" in {
@@ -233,7 +233,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
 
     assert(policies.contains(newPolicy))
 
-    runAndWait(service.deleteResource(resource, dummyUserInfo))
+    runAndWait(service.deleteResource(resource))
   }
 
   it should "fail when given an invalid action" in {
@@ -253,7 +253,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
 
     assert(!policies.contains(newPolicy))
 
-    runAndWait(service.deleteResource(resource, dummyUserInfo))
+    runAndWait(service.deleteResource(resource))
   }
 
   it should "fail when given an invalid regex action" in {
@@ -285,7 +285,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
 
     assert(!policies.contains(newPolicy))
 
-    runAndWait(service.deleteResource(resource, dummyUserInfo))
+    runAndWait(service.deleteResource(resource))
   }
 
   "deleteResource" should "delete the resource" in {
@@ -296,7 +296,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
 
     assert(runAndWait(policyDAO.listAccessPolicies(resource)).nonEmpty)
 
-    runAndWait(service.deleteResource(resource, dummyUserInfo))
+    runAndWait(service.deleteResource(resource))
 
     assert(runAndWait(policyDAO.listAccessPolicies(resource)).isEmpty)
   }

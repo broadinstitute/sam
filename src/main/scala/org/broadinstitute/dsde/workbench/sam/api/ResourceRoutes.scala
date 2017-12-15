@@ -63,7 +63,7 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives {
               pathEndOrSingleSlash {
                 delete {
                   requireAction(resource, SamResourceActions.delete, userInfo) {
-                    complete(resourceService.deleteResource(Resource(resourceType.name, ResourceId(resourceId)), userInfo).map(_ => StatusCodes.NoContent))
+                    complete(resourceService.deleteResource(Resource(resourceType.name, ResourceId(resourceId))).map(_ => StatusCodes.NoContent))
                   }
                 } ~
                   post {
@@ -76,7 +76,6 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives {
                     get {
                       complete(resourceService.hasPermission(Resource(resourceType.name, ResourceId(resourceId)), ResourceAction(action), userInfo).map { hasPermission =>
                         StatusCodes.OK -> JsBoolean(hasPermission)
-                        StatusCodes.OK -> JsBoolean(hasPermission)
                       })
                     }
                   }
@@ -86,7 +85,7 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives {
                 pathEndOrSingleSlash {
                   get {
                     requireAction(resource, SamResourceActions.readPolicies, userInfo) {
-                      complete(resourceService.listResourcePolicies(Resource(resourceType.name, ResourceId(resourceId)), userInfo).map { response =>
+                      complete(resourceService.listResourcePolicies(Resource(resourceType.name, ResourceId(resourceId))).map { response =>
                         StatusCodes.OK -> response
                       })
                     }
@@ -95,6 +94,14 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives {
                   pathPrefix(Segment) { policyName =>
                     val resourceAndPolicyName = ResourceAndPolicyName(Resource(resourceType.name, ResourceId(resourceId)), AccessPolicyName(policyName))
                     pathEndOrSingleSlash {
+                      get {
+                        requireOneOfAction(resource, Set(SamResourceActions.readPolicies, SamResourceActions.readPolicy(resourceAndPolicyName.accessPolicyName)), userInfo) {
+                          complete(resourceService.loadResourcePolicy(resourceAndPolicyName).map {
+                            case Some(response) => StatusCodes.OK -> response
+                            case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "policy not found"))
+                          })
+                        }
+                      } ~
                       put {
                         requireAction(resource, SamResourceActions.alterPolicies, userInfo) {
                           entity(as[AccessPolicyMembership]) { membershipUpdate =>
@@ -107,7 +114,7 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives {
                       pathPrefix(Segment) { email =>
                         withSubject(WorkbenchEmail(email)) { subject =>
                           pathEndOrSingleSlash {
-                            requireOneOfAction(resource, Set(SamResourceActions.alterPolicies, SamResourceActions.canShare(resourceAndPolicyName.accessPolicyName)), userInfo) {
+                            requireOneOfAction(resource, Set(SamResourceActions.alterPolicies, SamResourceActions.sharePolicy(resourceAndPolicyName.accessPolicyName)), userInfo) {
                               put {
                                 complete(resourceService.addSubjectToPolicy(resourceAndPolicyName, subject).map(_ => StatusCodes.NoContent))
                               } ~

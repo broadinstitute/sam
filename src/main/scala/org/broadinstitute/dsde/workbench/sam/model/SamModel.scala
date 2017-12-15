@@ -47,7 +47,8 @@ object SamResourceActions {
   val alterPolicies = ResourceAction("alter_policies")
   val delete = ResourceAction("delete")
 
-  def canShare(policy: AccessPolicyName) = ResourceAction(s"can_share_${policy.value}")
+  def sharePolicy(policy: AccessPolicyName) = ResourceAction(s"share_policy::${policy.value}")
+  def readPolicy(policy: AccessPolicyName) = ResourceAction(s"read_policy::${policy.value}")
 }
 
 case class UserStatusDetails(userSubjectId: WorkbenchUserId, userEmail: WorkbenchEmail) //for backwards compatibility to old API
