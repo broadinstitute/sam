@@ -119,7 +119,7 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
   }
 
   private def validateActionsAndRoles(resourceType: ResourceType, policyMembership: AccessPolicyMembership) = {
-    val invalidAction = policyMembership.actions.find(a => resourceType.actionPatterns.find(_.matches(a)).isEmpty)
+    val invalidAction = policyMembership.actions.find(a => !resourceType.actionPatterns.exists(_.matches(a)))
     if (invalidAction.isDefined)
       throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"You have specified an invalid action for resource type ${resourceType.name}. Valid actions are: ${resourceType.actionPatterns.mkString(", ")}"))
     if (!policyMembership.roles.subsetOf(resourceType.roles.map(_.roleName)))
