@@ -85,9 +85,10 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
       response shouldBe googleExt.toProxyFromUser(defaultUserId)
     }
   }
+  private val name = ResourceType(ResourceTypeName("rt"), Set(SamResourceActionPatterns.alterPolicies, ResourceActionPattern("can_compute"), SamResourceActionPatterns.readPolicies), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("alter_policies"), ResourceAction("read_policies")))), ResourceRoleName("owner"))
 
   "POST /api/google/policy/{resourceTypeName}/{resourceId}/{accessPolicyName}/sync" should "204 Create Google group for policy" in {
-    val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceAction("alter_policies"), ResourceAction("can_compute"), ResourceAction("read_policies")), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("alter_policies"), ResourceAction("read_policies")))), ResourceRoleName("owner"))
+    val resourceType = name
     val resourceTypes = Map(resourceType.name -> resourceType)
     val defaultUserInfo = UserInfo("accessToken", WorkbenchUserId("user1"), WorkbenchEmail("user1@example.com"), 0)
     val googleDirectoryDAO = new MockGoogleDirectoryDAO()
@@ -127,7 +128,7 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
   }
 
   "GET /api/google/policy/{resourceTypeName}/{resourceId}/{accessPolicyName}/sync" should "200 with sync date" in {
-    val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceAction("alter_policies"), ResourceAction("can_compute"), ResourceAction("read_policies")), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("alter_policies"), ResourceAction("read_policies")))), ResourceRoleName("owner"))
+    val resourceType = name
     val resourceTypes = Map(resourceType.name -> resourceType)
     val defaultUserInfo = UserInfo("accessToken", WorkbenchUserId("user1"), WorkbenchEmail("user1@example.com"), 0)
     val googleDirectoryDAO = new MockGoogleDirectoryDAO()

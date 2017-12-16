@@ -32,7 +32,7 @@ package object config {
   implicit val resourceTypeReader: ValueReader[ResourceType] = ValueReader.relative { config =>
     ResourceType(
       ResourceTypeName(config.getString("name")),
-      config.as[Set[String]]("actions").map(ResourceAction),
+      config.as[Set[String]]("actionPatterns").map(ResourceActionPattern),
       config.as[Set[ResourceRole]]("roles"),
       ResourceRoleName(config.getString("ownerRoleName"))
     )
