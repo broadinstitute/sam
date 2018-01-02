@@ -89,7 +89,7 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
   }
 
   "GET /api/resource/{resourceType}/{resourceId}/policies/{policyName}" should "200 on existing policy of a resource with read_policies" in {
-    val members = AccessPolicyMembership(Set(defaultUserInfo.userEmail.value), Set(ResourceAction("can_compute")), Set.empty)
+    val members = AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set(ResourceAction("can_compute")), Set.empty)
     val resourceType = ResourceType(ResourceTypeName("rt"), Set(SamResourceActionPatterns.alterPolicies, SamResourceActionPatterns.readPolicies, ResourceActionPattern("can_compute")), Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.alterPolicies, SamResourceActions.readPolicies))), ResourceRoleName("owner"))
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
 
@@ -119,7 +119,7 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
   }
 
   it should "200 on existing policy of a resource with read_policy" in {
-    val members = AccessPolicyMembership(Set(defaultUserInfo.userEmail.value), Set(ResourceAction("can_compute")), Set.empty)
+    val members = AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set(ResourceAction("can_compute")), Set.empty)
     val policyName = AccessPolicyName("canCompute")
     val resourceType = ResourceType(ResourceTypeName("rt"), Set(SamResourceActionPatterns.alterPolicies, SamResourceActionPatterns.readPolicy, ResourceActionPattern("can_compute")), Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.alterPolicies, SamResourceActions.readPolicy(policyName)))), ResourceRoleName("owner"))
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
@@ -134,7 +134,7 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
   }
 
   it should "404 on non existing policy of a resource" in {
-    val members = AccessPolicyMembership(Set(defaultUserInfo.userEmail.value), Set(ResourceAction("can_compute")), Set.empty)
+    val members = AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set(ResourceAction("can_compute")), Set.empty)
     val resourceType = ResourceType(ResourceTypeName("rt"), Set(SamResourceActionPatterns.alterPolicies, SamResourceActionPatterns.readPolicies, ResourceActionPattern("can_compute")), Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.alterPolicies, SamResourceActions.readPolicies))), ResourceRoleName("owner"))
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
 
@@ -148,7 +148,7 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
   }
 
   it should "403 on existing policy of a resource without read policies" in {
-    val members = AccessPolicyMembership(Set(defaultUserInfo.userEmail.value), Set(ResourceAction("can_compute")), Set.empty)
+    val members = AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set(ResourceAction("can_compute")), Set.empty)
     val resourceType = ResourceType(ResourceTypeName("rt"), Set(SamResourceActionPatterns.alterPolicies, ResourceActionPattern("can_compute")), Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.alterPolicies))), ResourceRoleName("owner"))
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
 
