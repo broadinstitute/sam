@@ -11,6 +11,8 @@ object SamJsonSupport {
   import DefaultJsonProtocol._
   import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 
+  implicit val ResourceActionPatternFormat = ValueObjectFormat(ResourceActionPattern)
+
   implicit val ResourceActionFormat = ValueObjectFormat(ResourceAction)
 
   implicit val ResourceRoleNameFormat = ValueObjectFormat(ResourceRoleName)
@@ -46,11 +48,27 @@ object SamResourceActions {
   val readPolicies = ResourceAction("read_policies")
   val alterPolicies = ResourceAction("alter_policies")
   val delete = ResourceAction("delete")
+
+  def sharePolicy(policy: AccessPolicyName) = ResourceAction(s"share_policy::${policy.value}")
+  def readPolicy(policy: AccessPolicyName) = ResourceAction(s"read_policy::${policy.value}")
+}
+
+object SamResourceActionPatterns {
+  val readPolicies = ResourceActionPattern("read_policies")
+  val alterPolicies = ResourceActionPattern("alter_policies")
+  val delete = ResourceActionPattern("delete")
+  
+  val sharePolicy = ResourceActionPattern("share_policy::.+")
+  val readPolicy = ResourceActionPattern("read_policy::.+")
 }
 
 case class UserStatusDetails(userSubjectId: WorkbenchUserId, userEmail: WorkbenchEmail) //for backwards compatibility to old API
 case class UserStatus(userInfo: UserStatusDetails, enabled: Map[String, Boolean])
 
+case class ResourceActionPattern(value: String) extends ValueObject {
+  lazy val regex = value.r
+  def matches(other: ResourceAction) = regex.pattern.matcher(other.value).matches()
+}
 case class ResourceAction(value: String) extends ValueObject
 case class ResourceRoleName(value: String) extends ValueObject
 case class ResourceRole(roleName: ResourceRoleName, actions: Set[ResourceAction])
@@ -58,7 +76,7 @@ case class ResourceRole(roleName: ResourceRoleName, actions: Set[ResourceAction]
 case class ResourceTypeName(value: String) extends ValueObject
 
 case class Resource(resourceTypeName: ResourceTypeName, resourceId: ResourceId)
-case class ResourceType(name: ResourceTypeName, actions: Set[ResourceAction], roles: Set[ResourceRole], ownerRoleName: ResourceRoleName)
+case class ResourceType(name: ResourceTypeName, actionPatterns: Set[ResourceActionPattern], roles: Set[ResourceRole], ownerRoleName: ResourceRoleName)
 
 case class ResourceId(value: String) extends ValueObject
 

@@ -54,7 +54,7 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     accessPolicyDAO.listAccessPolicies(resourceType.name, userInfo.userId)
   }
 
-  def deleteResource(resource: Resource, userInfo: UserInfo): Future[Unit] = {
+  def deleteResource(resource: Resource): Future[Unit] = {
     for {
       policiesToDelete <- accessPolicyDAO.listAccessPolicies(resource)
       _ <- Future.traverse(policiesToDelete) {accessPolicyDAO.deletePolicy}
@@ -97,10 +97,7 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
 
   //Overwrites an existing policy (keyed by resourceType/resourceId/policyName), saves a new one if it doesn't exist yet
   def overwritePolicy(resourceType: ResourceType, policyName: AccessPolicyName, resource: Resource, policyMembership: AccessPolicyMembership): Future[AccessPolicy] = {
-    if(!policyMembership.actions.subsetOf(resourceType.actions))
-      throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"You have specified an invalid action for resource type ${resourceType.name}. Valid actions are: ${resourceType.actions.mkString(", ")}"))
-    if(!policyMembership.roles.subsetOf(resourceType.roles.map(_.roleName)))
-      throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"You have specified an invalid role for resource type ${resourceType.name}. Valid roles are: ${resourceType.roles.map(_.roleName).mkString(", ")}"))
+    validateActionsAndRoles(resourceType, policyMembership)
 
     val subjectsFromEmails = Future.traverse(policyMembership.memberEmails) {
       directoryDAO.loadSubjectFromEmail
@@ -119,6 +116,14 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
         case Success(policy) => fireGroupUpdateNotification(policy.id)
       }
     }
+  }
+
+  private def validateActionsAndRoles(resourceType: ResourceType, policyMembership: AccessPolicyMembership) = {
+    val invalidAction = policyMembership.actions.find(a => !resourceType.actionPatterns.exists(_.matches(a)))
+    if (invalidAction.isDefined)
+      throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"You have specified an invalid action for resource type ${resourceType.name}. Valid actions are: ${resourceType.actionPatterns.mkString(", ")}"))
+    if (!policyMembership.roles.subsetOf(resourceType.roles.map(_.roleName)))
+      throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"You have specified an invalid role for resource type ${resourceType.name}. Valid roles are: ${resourceType.roles.map(_.roleName).mkString(", ")}"))
   }
 
   private def fireGroupUpdateNotification(groupId: WorkbenchGroupIdentity) = {
@@ -145,28 +150,32 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     }
   }
 
-  private def loadAccessPolicyWithEmails(policy: AccessPolicy): Future[AccessPolicyResponseEntry] = {
+  private def loadAccessPolicyWithEmails(policy: AccessPolicy): Future[AccessPolicyMembership] = {
     val users = policy.members.collect { case userId: WorkbenchUserId => userId }
     val groups = policy.members.collect { case groupName: WorkbenchGroupName => groupName }
 
     for {
       userEmails <- directoryDAO.loadUsers(users)
       groupEmails <- directoryDAO.loadGroups(groups)
-    } yield AccessPolicyResponseEntry(policy.id.accessPolicyName, AccessPolicyMembership(userEmails.toSet[WorkbenchUser].map(_.email) ++ groupEmails.map(_.email), policy.actions, policy.roles), policy.email)
+    } yield AccessPolicyMembership(userEmails.toSet[WorkbenchUser].map(_.email) ++ groupEmails.map(_.email), policy.actions, policy.roles)
   }
 
-  def listResourcePolicies(resource: Resource, userInfo: UserInfo): Future[Set[AccessPolicyResponseEntry]] = {
+  def listResourcePolicies(resource: Resource): Future[Set[AccessPolicyResponseEntry]] = {
     accessPolicyDAO.listAccessPolicies(resource).flatMap { policies =>
-      //could improve this by making a few changes to listAccessPolicies to return emails. todo for later in the PR process!
-      Future.sequence(policies.map(loadAccessPolicyWithEmails))
+      Future.sequence(policies.map { policy =>
+        loadAccessPolicyWithEmails(policy).map { membership =>
+          AccessPolicyResponseEntry(policy.id.accessPolicyName, membership, policy.email)
+        }
+      })
     }
   }
 
-  def generateGroupEmail(policyName: AccessPolicyName, resource: Resource) = WorkbenchEmail(s"policy-${UUID.randomUUID}@$emailDomain")
-  def toGoogleGroupName(groupName: WorkbenchGroupName) = WorkbenchEmail(s"GROUP_${groupName.value}@$emailDomain")
-
-  //todo: use this for google group sync
-  private def roleGroupName(resourceType: ResourceType, resourceId: ResourceId, role: ResourceRole) = {
-    WorkbenchGroupName(s"${resourceType.name}-${resourceId.value}-${role.roleName.value}")
+  def loadResourcePolicy(resourceAndPolicyName: ResourceAndPolicyName): Future[Option[AccessPolicyMembership]] = {
+    accessPolicyDAO.loadPolicy(resourceAndPolicyName).flatMap {
+      case Some(policy) => loadAccessPolicyWithEmails(policy).map(Option(_))
+      case None => Future.successful(None)
+    }
   }
+
+  private def generateGroupEmail(policyName: AccessPolicyName, resource: Resource) = WorkbenchEmail(s"policy-${UUID.randomUUID}@$emailDomain")
 }
