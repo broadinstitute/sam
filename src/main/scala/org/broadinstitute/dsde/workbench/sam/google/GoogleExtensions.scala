@@ -197,6 +197,38 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
     } yield ()
   }
 
+
+  //this class is getting to be too big. look into moving some things out of it.
+  def createPetServiceAccountKey(userId: WorkbenchUserId, project: GoogleProject): Future[Unit] = {
+    for {
+      maybePet <- directoryDAO.loadPetServiceAccount(PetServiceAccountId(userId, project))
+      response <- maybePet match {
+        case Some(pet) =>
+          for {
+            _ <- googleIamDAO.createServiceAccountKey(project, pet.serviceAccount.email) recover {
+              case e: GoogleJsonResponseException if e.getDetails.getCode == StatusCodes.TooManyRequests.intValue => throw new WorkbenchException("You have reached the 10 key limit on service accounts. Please remove one to create another.")
+            }
+          } yield ()
+
+        case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "Pet service account not found. Please create one and try again."))
+      }
+    } yield response
+  }
+
+  def removePetServiceAccountKey(userId: WorkbenchUserId, project: GoogleProject, keyId: ServiceAccountKeyId): Future[Unit] = {
+    for {
+      maybePet <- directoryDAO.loadPetServiceAccount(PetServiceAccountId(userId, project))
+      response <- maybePet match {
+        case Some(pet) =>
+          for {
+            _ <- googleIamDAO.removeServiceAccountKey(project, pet.serviceAccount.email, keyId)
+          } yield ()
+
+        case None => Future.successful(()) // didn't find the pet, nothing to remove
+      }
+    } yield response
+  }
+
   def getSynchronizedDate(groupId: WorkbenchGroupIdentity): Future[Option[Date]] = {
     directoryDAO.getSynchronizedDate(groupId)
   }

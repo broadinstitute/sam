@@ -152,6 +152,55 @@ paths:
       tags:
         - Google
 
+  /api/google/user/petServiceAccount/{project}/keys:
+    post:
+      summary: creates a new key for the user's pet service account
+      responses:
+        200:
+          description: 'user pet service account'
+          schema:
+            type: string
+        500:
+          description: Internal Error
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      parameters:
+        - in: path
+          description: Google project of the pet
+          name: project
+          required: true
+          type: string
+      operationId: createPetServiceAccountKey
+      tags:
+        - Google
+
+  /api/google/user/petServiceAccount/{project}/keys/{keyId}:
+    delete:
+      summary: removes an existing key for the user's pet service account
+      responses:
+        200:
+          description: 'user pet service account'
+          schema:
+            type: string
+        500:
+          description: Internal Error
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      parameters:
+        - in: path
+          description: Google project of the pet
+          name: project
+          required: true
+          type: string
+        - in: path
+          description: key ID for the key to remove
+          name: keyId
+          required: true
+          type: string
+      operationId: removePetServiceAccountKey
+      tags:
+        - Google
+
   /api/google/user/proxyGroup/{email}:
     get:
       summary: gets the proxy group email for the specified user
