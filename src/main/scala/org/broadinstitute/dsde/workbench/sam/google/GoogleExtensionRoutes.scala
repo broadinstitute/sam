@@ -41,7 +41,21 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives {
     pathPrefix("google") {
       requireUserInfo { userInfo =>
         pathPrefix("user") {
-          path("petServiceAccount" / Segment) { project =>
+          pathPrefix("petServiceAccount" / Segment) { project =>
+            pathPrefix("keys") {
+              post {
+                complete {
+                  googleExtensions.createPetServiceAccountKey(userInfo.userId, GoogleProject(project)).map(_ => StatusCodes.NoContent)
+                }
+              } ~
+                path(Segment) { keyId =>
+                  delete {
+                    complete {
+                      googleExtensions.removePetServiceAccountKey(userInfo.userId, GoogleProject(project), ServiceAccountKeyId(keyId)).map(_ => StatusCodes.NoContent)
+                    }
+                  }
+                }
+            } ~
             get {
               complete {
                 googleExtensions.createUserPetServiceAccount(WorkbenchUser(userInfo.userId, userInfo.userEmail), GoogleProject(project)).map { petSA =>
