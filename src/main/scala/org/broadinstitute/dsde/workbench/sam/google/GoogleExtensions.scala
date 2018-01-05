@@ -274,11 +274,11 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
     (ServiceAccountName(serviceAccountName), ServiceAccountDisplayName(displayName))
   }
 
-  override def getUserProxy(userEmail: WorkbenchEmail): Future[WorkbenchEmail] = {
+  override def getUserProxy(userEmail: WorkbenchEmail): Future[Option[WorkbenchEmail]] = {
     directoryDAO.loadSubjectFromEmail(userEmail).map {
       // don't attempt to handle groups or service accounts - just users
-      case Some(user: WorkbenchUserId) => toProxyFromUser(user)
-      case _ => throw new WorkbenchException(s"Unable to load User Subject ID for email ${userEmail.value}")
+      case Some(user: WorkbenchUserId) => Some(toProxyFromUser(user))
+      case _ => None
     }
   }
 

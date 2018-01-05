@@ -57,8 +57,9 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives {
           } ~
           path("proxyGroup" / Segment) { targetUserEmail =>
             complete {
-              googleExtensions.getUserProxy(WorkbenchEmail(targetUserEmail)).map { proxyEmail =>
-                StatusCodes.OK -> proxyEmail
+              googleExtensions.getUserProxy(WorkbenchEmail(targetUserEmail)).map {
+                case Some(proxyEmail) =>  StatusCodes.OK -> Option(proxyEmail)
+                case _ =>  StatusCodes.NotFound -> None
               }
             }
           }
