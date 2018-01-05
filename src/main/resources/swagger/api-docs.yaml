@@ -160,6 +160,8 @@ paths:
           description: 'user proxy group'
           schema:
             type: string
+        404:
+          description: 'user not found'
         500:
           description: Internal Error
           schema:
