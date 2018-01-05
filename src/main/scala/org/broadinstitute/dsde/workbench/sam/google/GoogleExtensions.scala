@@ -274,6 +274,14 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
     (ServiceAccountName(serviceAccountName), ServiceAccountDisplayName(displayName))
   }
 
+  override def getUserProxy(userEmail: WorkbenchEmail): Future[Option[WorkbenchEmail]] = {
+    directoryDAO.loadSubjectFromEmail(userEmail).map {
+      // don't attempt to handle groups or service accounts - just users
+      case Some(user: WorkbenchUserId) => Option(toProxyFromUser(user))
+      case _ => None
+    }
+  }
+
   override def checkStatus: Map[Subsystems.Subsystem, Future[SubsystemStatus]] = {
     import HealthMonitor._
 

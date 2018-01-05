@@ -6,7 +6,7 @@ import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directives._
 import org.broadinstitute.dsde.workbench.model.google._
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
-import org.broadinstitute.dsde.workbench.model.{WorkbenchGroupIdentity, WorkbenchUser, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchUser}
 import org.broadinstitute.dsde.workbench.sam.api.{ExtensionRoutes, UserInfoDirectives}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
@@ -55,9 +55,12 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives {
               }
             }
           } ~
-          path("proxyGroup") {
+          path("proxyGroup" / Segment) { targetUserEmail =>
             complete {
-              StatusCodes.OK -> googleExtensions.toProxyFromUser(userInfo.userId)
+              googleExtensions.getUserProxy(WorkbenchEmail(targetUserEmail)).map {
+                case Some(proxyEmail) =>  StatusCodes.OK -> Option(proxyEmail)
+                case _ =>  StatusCodes.NotFound -> None
+              }
             }
           }
         } ~
