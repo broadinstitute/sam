@@ -157,9 +157,9 @@ paths:
       summary: gets a key for the user's pet service account
       responses:
         200:
-          description: 'user pet service account'
+          description: 'key for a pet service account'
           schema:
-            type: string
+            $ref: '#/definitions/ServiceAccountKey'
         500:
           description: Internal Error
           schema:
@@ -170,7 +170,7 @@ paths:
           name: project
           required: true
           type: string
-      operationId: createPetServiceAccountKey
+      operationId: getPetServiceAccountKey
       tags:
         - Google
 
@@ -180,8 +180,6 @@ paths:
       responses:
         204:
           description: 'user pet service account'
-          schema:
-            type: string
         500:
           description: Internal Error
           schema:
@@ -816,6 +814,28 @@ definitions:
       ownerRoleName:
         type: string
         description: The name of the role that can perform administrative functions on a resource of this type
+
+  ServiceAccountKey:
+    type: object
+    description: 'key for a service account'
+    required:
+      - id
+      - privateKeyData
+      - validAfter
+      - validBefore
+    properties:
+      id:
+        type: string
+        description: The id of the key
+      privateKeyData:
+        type: string
+        description: The private key data
+      validAfter:
+        type: string
+        description: The date that the key begins being balid
+      validBefore:
+        type: string
+        description: The date that the key is valid until
 
   StackTraceElement:
     description: ''
