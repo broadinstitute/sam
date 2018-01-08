@@ -196,7 +196,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
       _ <- googleIamDAO.removeServiceAccount(petServiceAccountConfig.googleProject, toAccountName(petServiceAccount.serviceAccount.email))
     } yield ()
   }
-  
+
   //this class is getting to be too big. look into moving some things out of it.
   def getPetServiceAccountKey(user: WorkbenchUser, project: GoogleProject): Future[ServiceAccountKey] = {
     for {

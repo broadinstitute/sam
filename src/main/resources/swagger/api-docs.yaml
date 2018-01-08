@@ -160,8 +160,6 @@ paths:
           description: 'key for a pet service account'
           schema:
             $ref: '#/definitions/ServiceAccountKey'
-        404:
-          description: 'pet service account not found'
         500:
           description: Internal Error
           schema:
@@ -182,8 +180,6 @@ paths:
       responses:
         204:
           description: 'user pet service account'
-        404:
-          description: 'pet service account not found'
         500:
           description: Internal Error
           schema:
