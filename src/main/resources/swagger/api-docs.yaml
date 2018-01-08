@@ -152,9 +152,9 @@ paths:
       tags:
         - Google
 
-  /api/google/user/petServiceAccount/{project}/keys:
-    post:
-      summary: creates a new key for the user's pet service account
+  /api/google/user/petServiceAccount/{project}/key:
+    get:
+      summary: gets a key for the user's pet service account
       responses:
         200:
           description: 'user pet service account'
@@ -174,11 +174,11 @@ paths:
       tags:
         - Google
 
-  /api/google/user/petServiceAccount/{project}/keys/{keyId}:
+  /api/google/user/petServiceAccount/{project}/key/{keyId}:
     delete:
       summary: removes an existing key for the user's pet service account
       responses:
-        200:
+        204:
           description: 'user pet service account'
           schema:
             type: string

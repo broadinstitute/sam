@@ -5,6 +5,7 @@ import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directives._
 import org.broadinstitute.dsde.workbench.model.google._
+import org.broadinstitute.dsde.workbench.model.google.GoogleModelJsonSupport._
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchUser}
 import org.broadinstitute.dsde.workbench.sam.api.{ExtensionRoutes, UserInfoDirectives}
@@ -42,10 +43,10 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives {
       requireUserInfo { userInfo =>
         pathPrefix("user") {
           pathPrefix("petServiceAccount" / Segment) { project =>
-            pathPrefix("keys") {
-              post {
+            pathPrefix("key") {
+              get {
                 complete {
-                  googleExtensions.createPetServiceAccountKey(userInfo.userId, GoogleProject(project)).map(_ => StatusCodes.NoContent)
+                  googleExtensions.getPetServiceAccountKey(userInfo.userId, GoogleProject(project)).map(x => StatusCodes.OK -> x)
                 }
               } ~
                 path(Segment) { keyId =>
