@@ -204,15 +204,11 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
       maybePet <- directoryDAO.loadPetServiceAccount(PetServiceAccountId(userId, project))
       response <- maybePet match {
         case Some(pet) =>
-          googleIamDAO.listServiceAccountKeys(project, pet.serviceAccount.email).flatMap { unsanitisedKeys =>
-            //Note that the private key data is only returned when the key is first created
-            //We would need to read it from a bucket here or something if we're reading an existing one
-            val keys = unsanitisedKeys.map(_.copy(privateKeyData = ServiceAccountPrivateKeyData("null")))
-            if(keys.isEmpty) googleIamDAO.createServiceAccountKey(project, pet.serviceAccount.email) recover {
+          for {
+            key <- googleIamDAO.createServiceAccountKey(project, pet.serviceAccount.email) recover {
               case e: GoogleJsonResponseException if e.getDetails.getCode == StatusCodes.TooManyRequests.intValue => throw new WorkbenchException("You have reached the 10 key limit on service accounts. Please remove one to create another.")
             }
-            else Future.successful(keys.sortBy(_.validBefore).last) //returns the key with the furthest-out expiration date (for now)
-          }
+          } yield key
 
         case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "Pet service account not found. Please create one first and then try again."))
       }
@@ -228,7 +224,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
             _ <- googleIamDAO.removeServiceAccountKey(project, pet.serviceAccount.email, keyId)
           } yield ()
 
-        case None => Future.successful(()) // didn't find the pet, nothing to remove
+        case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "Pet service account not found, therefore there is no key to delete"))
       }
     } yield response
   }
