@@ -84,7 +84,10 @@ class GoogleGroupSyncMonitorActor(val pollInterval: FiniteDuration, pollInterval
   // fail safe in case this actor is idle too long but not too fast (1 second lower limit)
   setReceiveTimeout(max((pollInterval + pollIntervalJitter) * 10, 1 second))
 
-  private def max(durations: FiniteDuration*): FiniteDuration = durations.max
+  private def max(durations: FiniteDuration*): FiniteDuration = {
+    implicit val finiteDurationIsOrdered = scala.concurrent.duration.FiniteDuration.FiniteDurationIsOrdered
+    durations.max
+  }
 
   override def receive = {
     case StartMonitorPass =>

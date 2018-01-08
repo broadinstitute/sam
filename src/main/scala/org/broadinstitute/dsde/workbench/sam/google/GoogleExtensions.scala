@@ -199,18 +199,22 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
 
 
   //this class is getting to be too big. look into moving some things out of it.
-  def createPetServiceAccountKey(userId: WorkbenchUserId, project: GoogleProject): Future[Unit] = {
+  def getPetServiceAccountKey(userId: WorkbenchUserId, project: GoogleProject): Future[ServiceAccountKey] = {
     for {
       maybePet <- directoryDAO.loadPetServiceAccount(PetServiceAccountId(userId, project))
       response <- maybePet match {
         case Some(pet) =>
-          for {
-            _ <- googleIamDAO.createServiceAccountKey(project, pet.serviceAccount.email) recover {
+          googleIamDAO.listServiceAccountKeys(project, pet.serviceAccount.email).flatMap { unsanitisedKeys =>
+            //Note that the private key data is only returned when the key is first created
+            //We would need to read it from a bucket here or something if we're reading an existing one
+            val keys = unsanitisedKeys.map(_.copy(privateKeyData = ServiceAccountPrivateKeyData("null")))
+            if(keys.isEmpty) googleIamDAO.createServiceAccountKey(project, pet.serviceAccount.email) recover {
               case e: GoogleJsonResponseException if e.getDetails.getCode == StatusCodes.TooManyRequests.intValue => throw new WorkbenchException("You have reached the 10 key limit on service accounts. Please remove one to create another.")
             }
-          } yield ()
+            else Future.successful(keys.sortBy(_.validBefore).last) //returns the key with the furthest-out expiration date (for now)
+          }
 
-        case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "Pet service account not found. Please create one and try again."))
+        case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "Pet service account not found. Please create one first and then try again."))
       }
     } yield response
   }
