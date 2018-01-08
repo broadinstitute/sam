@@ -46,7 +46,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives {
             pathPrefix("key") {
               get {
                 complete {
-                  googleExtensions.getPetServiceAccountKey(userInfo.userId, GoogleProject(project)).map(x => StatusCodes.OK -> x)
+                  googleExtensions.getPetServiceAccountKey(WorkbenchUser(userInfo.userId, userInfo.userEmail), GoogleProject(project)).map(x => StatusCodes.OK -> x)
                 }
               } ~
                 path(Segment) { keyId =>
