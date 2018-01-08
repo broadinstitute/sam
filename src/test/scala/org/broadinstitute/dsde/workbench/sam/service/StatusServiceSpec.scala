@@ -14,6 +14,7 @@ import org.broadinstitute.dsde.workbench.util.health.Subsystems.{GoogleGroups, O
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 import scala.concurrent.duration._
+import scala.language.postfixOps
 import org.scalatest.concurrent.Eventually
 
 class StatusServiceSpec extends FreeSpec with Matchers with BeforeAndAfterAll with TestSupport with Eventually {

@@ -7,6 +7,7 @@ import akka.http.scaladsl.testkit.ScalatestRouteTest
 import com.typesafe.config.ConfigFactory
 import org.broadinstitute.dsde.workbench.google.mock.{MockGoogleDirectoryDAO, MockGoogleIamDAO, MockGooglePubSubDAO}
 import org.broadinstitute.dsde.workbench.model.google._
+import org.broadinstitute.dsde.workbench.model.google.GoogleModelJsonSupport._
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.api.TestSamRoutes
@@ -177,4 +178,133 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
       responseAs[String] should not be empty
     }
   }
+
+  "GET /api/google/user/petServiceAccount/{project}/key" should "200 with a new key" in {
+    val resourceTypes = Map(resourceType.name -> resourceType)
+    val defaultUserInfo = UserInfo("accessToken", WorkbenchUserId("user1"), WorkbenchEmail("user1@example.com"), 0)
+    val googleDirectoryDAO = new MockGoogleDirectoryDAO()
+    val directoryDAO = new MockDirectoryDAO()
+    val googleIamDAO = new MockGoogleIamDAO()
+    val policyDAO = new MockAccessPolicyDAO()
+    val pubSubDAO = new MockGooglePubSubDAO()
+    val googleExt = new GoogleExtensions(directoryDAO, policyDAO, googleDirectoryDAO, pubSubDAO, googleIamDAO, googleServicesConfig, petServiceAccountConfig)
+    googleExt.onBoot()
+    val mockResourceService = new ResourceService(resourceTypes, policyDAO, directoryDAO, googleExt, "example.com")
+    val samRoutes = new TestSamRoutes(mockResourceService, new UserService(directoryDAO, googleExt), new StatusService(directoryDAO, NoExtensions), UserInfo("", defaultUserInfo.userId, defaultUserInfo.userEmail, 0), directoryDAO) with GoogleExtensionRoutes {
+      val googleExtensions = googleExt
+    }
+
+    //create user
+    Post("/register/user") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Created
+    }
+
+    // create a pet service account
+    Get("/api/google/user/petServiceAccount/myproject") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      val response = responseAs[WorkbenchEmail]
+      response.value should endWith (s"@myproject.iam.gserviceaccount.com")
+    }
+
+    // create a pet service account key
+    Get("/api/google/user/petServiceAccount/myproject/key") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      val response = responseAs[ServiceAccountKey]
+      assert(response.validBefore.isDefined)
+    }
+  }
+
+  it should "404 when user doesn't have a pet SA" in {
+    val resourceTypes = Map(resourceType.name -> resourceType)
+    val defaultUserInfo = UserInfo("accessToken", WorkbenchUserId("user1"), WorkbenchEmail("user1@example.com"), 0)
+    val googleDirectoryDAO = new MockGoogleDirectoryDAO()
+    val directoryDAO = new MockDirectoryDAO()
+    val googleIamDAO = new MockGoogleIamDAO()
+    val policyDAO = new MockAccessPolicyDAO()
+    val pubSubDAO = new MockGooglePubSubDAO()
+    val googleExt = new GoogleExtensions(directoryDAO, policyDAO, googleDirectoryDAO, pubSubDAO, googleIamDAO, googleServicesConfig, petServiceAccountConfig)
+    googleExt.onBoot()
+    val mockResourceService = new ResourceService(resourceTypes, policyDAO, directoryDAO, googleExt, "example.com")
+    val samRoutes = new TestSamRoutes(mockResourceService, new UserService(directoryDAO, googleExt), new StatusService(directoryDAO, NoExtensions), UserInfo("", defaultUserInfo.userId, defaultUserInfo.userEmail, 0), directoryDAO) with GoogleExtensionRoutes {
+      val googleExtensions = googleExt
+    }
+
+    //create user
+    Post("/register/user") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Created
+    }
+
+    // create a pet service account key
+    Get("/api/google/user/petServiceAccount/myproject/key") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
+    }
+  }
+
+  "DELETE /api/google/user/petServiceAccount/{project}/key/{keyId}" should "204 when deleting a key" in {
+    val resourceTypes = Map(resourceType.name -> resourceType)
+    val defaultUserInfo = UserInfo("accessToken", WorkbenchUserId("user1"), WorkbenchEmail("user1@example.com"), 0)
+    val googleDirectoryDAO = new MockGoogleDirectoryDAO()
+    val directoryDAO = new MockDirectoryDAO()
+    val googleIamDAO = new MockGoogleIamDAO()
+    val policyDAO = new MockAccessPolicyDAO()
+    val pubSubDAO = new MockGooglePubSubDAO()
+    val googleExt = new GoogleExtensions(directoryDAO, policyDAO, googleDirectoryDAO, pubSubDAO, googleIamDAO, googleServicesConfig, petServiceAccountConfig)
+    googleExt.onBoot()
+    val mockResourceService = new ResourceService(resourceTypes, policyDAO, directoryDAO, googleExt, "example.com")
+    val samRoutes = new TestSamRoutes(mockResourceService, new UserService(directoryDAO, googleExt), new StatusService(directoryDAO, NoExtensions), UserInfo("", defaultUserInfo.userId, defaultUserInfo.userEmail, 0), directoryDAO) with GoogleExtensionRoutes {
+      val googleExtensions = googleExt
+    }
+
+    //create user
+    Post("/register/user") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Created
+    }
+
+    // create a pet service account
+    Get("/api/google/user/petServiceAccount/myproject") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      val response = responseAs[WorkbenchEmail]
+      response.value should endWith (s"@myproject.iam.gserviceaccount.com")
+    }
+
+    // create a pet service account key
+    Get("/api/google/user/petServiceAccount/myproject/key") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      val response = responseAs[ServiceAccountKey]
+      assert(response.validBefore.isDefined)
+    }
+
+    // create a pet service account key
+    Delete("/api/google/user/petServiceAccount/myproject/key/123") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+    }
+  }
+
+  it should "404 when user doesn't have a pet SA" in {
+    val resourceTypes = Map(resourceType.name -> resourceType)
+    val defaultUserInfo = UserInfo("accessToken", WorkbenchUserId("user1"), WorkbenchEmail("user1@example.com"), 0)
+    val googleDirectoryDAO = new MockGoogleDirectoryDAO()
+    val directoryDAO = new MockDirectoryDAO()
+    val googleIamDAO = new MockGoogleIamDAO()
+    val policyDAO = new MockAccessPolicyDAO()
+    val pubSubDAO = new MockGooglePubSubDAO()
+    val googleExt = new GoogleExtensions(directoryDAO, policyDAO, googleDirectoryDAO, pubSubDAO, googleIamDAO, googleServicesConfig, petServiceAccountConfig)
+    googleExt.onBoot()
+    val mockResourceService = new ResourceService(resourceTypes, policyDAO, directoryDAO, googleExt, "example.com")
+    val samRoutes = new TestSamRoutes(mockResourceService, new UserService(directoryDAO, googleExt), new StatusService(directoryDAO, NoExtensions), UserInfo("", defaultUserInfo.userId, defaultUserInfo.userEmail, 0), directoryDAO) with GoogleExtensionRoutes {
+      val googleExtensions = googleExt
+    }
+
+    //create user
+    Post("/register/user") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Created
+    }
+
+    // create a pet service account key
+    Delete("/api/google/user/petServiceAccount/myproject/key/123") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
+    }
+  }
+
+
 }
