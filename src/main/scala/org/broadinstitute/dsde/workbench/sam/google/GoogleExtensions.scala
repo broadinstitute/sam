@@ -196,18 +196,13 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
       _ <- googleIamDAO.removeServiceAccount(petServiceAccountConfig.googleProject, toAccountName(petServiceAccount.serviceAccount.email))
     } yield ()
   }
-
-
+  
   //this class is getting to be too big. look into moving some things out of it.
-  def getPetServiceAccountKey(userId: WorkbenchUserId, project: GoogleProject): Future[ServiceAccountKey] = {
+  def getPetServiceAccountKey(user: WorkbenchUser, project: GoogleProject): Future[ServiceAccountKey] = {
     for {
-      maybePet <- directoryDAO.loadPetServiceAccount(PetServiceAccountId(userId, project))
-      response <- maybePet match {
-        case Some(pet) =>
-          googleIamDAO.createServiceAccountKey(project, pet.serviceAccount.email) recover {
-            case e: GoogleJsonResponseException if e.getDetails.getCode == StatusCodes.TooManyRequests.intValue => throw new WorkbenchException("You have reached the 10 key limit on service accounts. Please remove one to create another.")
-          }
-        case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "Pet service account not found. Please create one first and then try again."))
+      pet <- createUserPetServiceAccount(user, project)
+      response <- googleIamDAO.createServiceAccountKey(project, pet.serviceAccount.email) recover {
+        case e: GoogleJsonResponseException if e.getDetails.getCode == StatusCodes.TooManyRequests.intValue => throw new WorkbenchException("You have reached the 10 key limit on service accounts. Please remove one to create another.")
       }
     } yield response
   }
@@ -217,7 +212,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
       maybePet <- directoryDAO.loadPetServiceAccount(PetServiceAccountId(userId, project))
       response <- maybePet match {
         case Some(pet) => googleIamDAO.removeServiceAccountKey(project, pet.serviceAccount.email, keyId)
-        case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "Pet service account not found, therefore there is no key to delete"))
+        case None => Future.successful(())
       }
     } yield response
   }
