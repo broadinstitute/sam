@@ -12,7 +12,7 @@ import org.broadinstitute.dsde.workbench.sam.{TestSupport, _}
 import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryDAO, JndiDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.AccessPolicyDAO
-import org.broadinstitute.dsde.workbench.sam.service.{NoExtensions, UserService}
+import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, NoExtensions, UserService}
 import org.broadinstitute.dsde.workbench.sam.directory.MockDirectoryDAO
 import org.mockito.Mockito._
 import org.mockito.ArgumentMatchers._
@@ -26,6 +26,7 @@ import scala.concurrent.duration._
 import scala.language.postfixOps
 import scala.util.{Success, Try}
 import net.ceedubs.ficus.Ficus._
+import org.broadinstitute.dsde.workbench.sam.config._
 import org.broadinstitute.dsde.workbench.model.google.GoogleProject
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 
@@ -34,6 +35,8 @@ class GoogleExtensionSpec extends FlatSpec with Matchers with TestSupport with M
   lazy val directoryConfig = config.as[DirectoryConfig]("directory")
   lazy val petServiceAccountConfig = config.as[PetServiceAccountConfig]("petServiceAccount")
   lazy val googleServicesConfig = config.as[GoogleServicesConfig]("googleServices")
+
+  val configResourceTypes = config.as[Set[ResourceType]]("resourceTypes").map(rt => rt.name -> rt).toMap
 
   "Google group sync" should "add/remove the right emails and handle errors" in {
     // tests that emails only in sam get added to google
@@ -62,7 +65,7 @@ class GoogleExtensionSpec extends FlatSpec with Matchers with TestSupport with M
       val mockDirectoryDAO = mock[DirectoryDAO]
       val mockGoogleDirectoryDAO = mock[GoogleDirectoryDAO]
       val mockGooglePubSubDAO = new MockGooglePubSubDAO
-      val ge = new GoogleExtensions(mockDirectoryDAO, mockAccessPolicyDAO, mockGoogleDirectoryDAO, mockGooglePubSubDAO, null, googleServicesConfig, petServiceAccountConfig)
+      val ge = new GoogleExtensions(mockDirectoryDAO, mockAccessPolicyDAO, mockGoogleDirectoryDAO, mockGooglePubSubDAO, null, googleServicesConfig, petServiceAccountConfig, configResourceTypes(CloudExtensions.resourceTypeName))
 
       target match {
         case g: BasicWorkbenchGroup =>
@@ -119,7 +122,7 @@ class GoogleExtensionSpec extends FlatSpec with Matchers with TestSupport with M
     val mockGoogleDirectoryDAO = mock[GoogleDirectoryDAO]
     val mockGooglePubSubDAO = new MockGooglePubSubDAO
     val mockGoogleIamDAO = new MockGoogleIamDAO
-    val ge = new GoogleExtensions(mockDirectoryDAO, mockAccessPolicyDAO, mockGoogleDirectoryDAO, mockGooglePubSubDAO, mockGoogleIamDAO, googleServicesConfig, petServiceAccountConfig)
+    val ge = new GoogleExtensions(mockDirectoryDAO, mockAccessPolicyDAO, mockGoogleDirectoryDAO, mockGooglePubSubDAO, mockGoogleIamDAO, googleServicesConfig, petServiceAccountConfig, configResourceTypes(CloudExtensions.resourceTypeName))
     when(mockGoogleDirectoryDAO.addMemberToGroup(any[WorkbenchEmail], any[WorkbenchEmail])).thenReturn(Future.successful(()))
     //create groups
     runAndWait(mockDirectoryDAO.createGroup(topGroup))
@@ -147,7 +150,7 @@ class GoogleExtensionSpec extends FlatSpec with Matchers with TestSupport with M
     val mockGoogleIamDAO = new MockGoogleIamDAO
     val mockGoogleDirectoryDAO = new MockGoogleDirectoryDAO
 
-    val googleExtensions = new GoogleExtensions(dirDAO, null, mockGoogleDirectoryDAO, null, mockGoogleIamDAO, googleServicesConfig, petServiceAccountConfig)
+    val googleExtensions = new GoogleExtensions(dirDAO, null, mockGoogleDirectoryDAO, null, mockGoogleIamDAO, googleServicesConfig, petServiceAccountConfig, configResourceTypes(CloudExtensions.resourceTypeName))
     val service = new UserService(dirDAO, googleExtensions)
 
     val defaultUserId = WorkbenchUserId("newuser")
@@ -205,7 +208,7 @@ class GoogleExtensionSpec extends FlatSpec with Matchers with TestSupport with M
     val groupName = WorkbenchGroupName("group1")
 
     val mockDirectoryDAO = mock[DirectoryDAO]
-    val ge = new GoogleExtensions(mockDirectoryDAO, null, null, null, null, googleServicesConfig, petServiceAccountConfig)
+    val ge = new GoogleExtensions(mockDirectoryDAO, null, null, null, null, googleServicesConfig, petServiceAccountConfig, configResourceTypes(CloudExtensions.resourceTypeName))
 
     when(mockDirectoryDAO.getSynchronizedDate(groupName)).thenReturn(Future.successful(None))
     runAndWait(ge.getSynchronizedDate(groupName)) shouldBe None
@@ -217,7 +220,7 @@ class GoogleExtensionSpec extends FlatSpec with Matchers with TestSupport with M
 
   it should "throw an exception with a NotFound error report when getting sync date for group that does not exist" in {
     val dirDAO = new JndiDirectoryDAO(directoryConfig)
-    val ge = new GoogleExtensions(dirDAO, null, null, null, null, googleServicesConfig, null)
+    val ge = new GoogleExtensions(dirDAO, null, null, null, null, googleServicesConfig, null, configResourceTypes(CloudExtensions.resourceTypeName))
     val groupName = WorkbenchGroupName("missing-group")
     val caught: WorkbenchExceptionWithErrorReport = intercept[WorkbenchExceptionWithErrorReport] {
       runAndWait(ge.getSynchronizedDate(groupName))
@@ -228,7 +231,7 @@ class GoogleExtensionSpec extends FlatSpec with Matchers with TestSupport with M
 
   it should "return None when getting sync date for a group that has not been synced" in {
     val dirDAO = new JndiDirectoryDAO(directoryConfig)
-    val ge = new GoogleExtensions(dirDAO, null, null, null, null, googleServicesConfig, null)
+    val ge = new GoogleExtensions(dirDAO, null, null, null, null, googleServicesConfig, null, configResourceTypes(CloudExtensions.resourceTypeName))
     val groupName = WorkbenchGroupName("group-sync")
     runAndWait(dirDAO.createGroup(BasicWorkbenchGroup(groupName, Set(), WorkbenchEmail(""))))
     try {
@@ -240,7 +243,7 @@ class GoogleExtensionSpec extends FlatSpec with Matchers with TestSupport with M
 
   it should "return sync date for a group that has been synced" in {
     val dirDAO = new JndiDirectoryDAO(directoryConfig)
-    val ge = new GoogleExtensions(dirDAO, null, new MockGoogleDirectoryDAO(), null, null, googleServicesConfig, null)
+    val ge = new GoogleExtensions(dirDAO, null, new MockGoogleDirectoryDAO(), null, null, googleServicesConfig, null, configResourceTypes(CloudExtensions.resourceTypeName))
     val groupName = WorkbenchGroupName("group-sync")
     runAndWait(dirDAO.createGroup(BasicWorkbenchGroup(groupName, Set(), WorkbenchEmail("group1@test.firecloud.org"))))
     try {

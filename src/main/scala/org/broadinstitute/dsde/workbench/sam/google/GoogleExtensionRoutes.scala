@@ -4,18 +4,20 @@ import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directives._
+import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.model.google._
 import org.broadinstitute.dsde.workbench.model.google.GoogleModelJsonSupport._
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
-import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchUser}
-import org.broadinstitute.dsde.workbench.sam.api.{ExtensionRoutes, UserInfoDirectives}
+import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchEmail, WorkbenchExceptionWithErrorReport, WorkbenchUser}
+import org.broadinstitute.dsde.workbench.sam.api.{ExtensionRoutes, SecurityDirectives, UserInfoDirectives}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
+import org.broadinstitute.dsde.workbench.sam.service.CloudExtensions
 import spray.json.DefaultJsonProtocol._
 
 import scala.concurrent.ExecutionContext
 
-trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives {
+trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with SecurityDirectives {
   implicit val executionContext: ExecutionContext
   val googleExtensions: GoogleExtensions
 
@@ -41,6 +43,18 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives {
     } ~
     pathPrefix("google") {
       requireUserInfo { userInfo =>
+        path("petServiceAccount" / Segment / Segment ) { (project, userEmail) =>
+          get {
+            requireAction(Resource(CloudExtensions.resourceTypeName, GoogleExtensions.resourceId), GoogleExtensions.getPetPrivateKeyAction, userInfo) {
+              complete {
+                googleExtensions.getPetServiceAccountKey(WorkbenchEmail(userEmail), GoogleProject(project)) map {
+                  case Some(key) => StatusCodes.OK -> key
+                  case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "pet service account not found"))
+                }
+              }
+            }
+          }
+        } ~
         pathPrefix("user") {
           pathPrefix("petServiceAccount" / Segment) { project =>
             pathPrefix("key") {
@@ -49,13 +63,13 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives {
                   googleExtensions.getPetServiceAccountKey(WorkbenchUser(userInfo.userId, userInfo.userEmail), GoogleProject(project)).map(x => StatusCodes.OK -> x)
                 }
               } ~
-                path(Segment) { keyId =>
-                  delete {
-                    complete {
-                      googleExtensions.removePetServiceAccountKey(userInfo.userId, GoogleProject(project), ServiceAccountKeyId(keyId)).map(_ => StatusCodes.NoContent)
-                    }
+              path(Segment) { keyId =>
+                delete {
+                  complete {
+                    googleExtensions.removePetServiceAccountKey(userInfo.userId, GoogleProject(project), ServiceAccountKeyId(keyId)).map(_ => StatusCodes.NoContent)
                   }
                 }
+              }
             } ~
             get {
               complete {
