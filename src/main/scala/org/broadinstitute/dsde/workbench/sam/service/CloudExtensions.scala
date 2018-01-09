@@ -8,11 +8,15 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.GoogleProject
 import org.broadinstitute.dsde.workbench.sam.api.ExtensionRoutes
 import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
-import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
+import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, ResourceTypeName}
 import org.broadinstitute.dsde.workbench.util.health.SubsystemStatus
 import org.broadinstitute.dsde.workbench.util.health.Subsystems.Subsystem
 
 import scala.concurrent.{ExecutionContext, Future}
+
+object CloudExtensions {
+  val resourceTypeName = ResourceTypeName("cloud-extension")
+}
 
 trait CloudExtensions {
   val allUsersGroupName = WorkbenchGroupName("All_Users")
@@ -20,7 +24,7 @@ trait CloudExtensions {
   // this is temporary until we get the admin group rolled into a sam group
   def isWorkbenchAdmin(memberEmail: WorkbenchEmail): Future[Boolean]
 
-  def onBoot()(implicit system: ActorSystem): Unit
+  def onBoot(samApplication: SamApplication)(implicit system: ActorSystem): Future[Unit]
 
   def onGroupUpdate(groupIdentities: Seq[WorkbenchGroupIdentity]): Future[Unit]
 
@@ -53,7 +57,7 @@ trait CloudExtensions {
 trait NoExtensions extends CloudExtensions {
   override def isWorkbenchAdmin(memberEmail: WorkbenchEmail): Future[Boolean] = Future.successful(true)
 
-  override def onBoot()(implicit system: ActorSystem): Unit = {}
+  override def onBoot(samApplication: SamApplication)(implicit system: ActorSystem): Future[Unit] = Future.successful(())
 
   override def onGroupUpdate(groupIdentities: Seq[WorkbenchGroupIdentity]): Future[Unit] = Future.successful(())
 

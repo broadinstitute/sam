@@ -38,6 +38,9 @@ object Boot extends App with LazyLogging {
     val directoryDAO = new JndiDirectoryDAO(directoryConfig)
     val schemaDAO = new JndiSchemaDAO(directoryConfig)
 
+    val configResourceTypes = config.as[Set[ResourceType]]("resourceTypes")
+    val resourceTypes = configResourceTypes.map(rt => rt.name -> rt).toMap
+
     val cloudExt = googleServicesConfigOption match {
       case Some(googleServicesConfig) =>
         val petServiceAccountConfig = config.as[PetServiceAccountConfig]("petServiceAccount")
@@ -45,13 +48,12 @@ object Boot extends App with LazyLogging {
         val googleIamDAO = new HttpGoogleIamDAO(googleServicesConfig.serviceAccountClientId, googleServicesConfig.pemFile, googleServicesConfig.appName, "google")
         val googlePubSubDAO = new HttpGooglePubSubDAO(googleServicesConfig.serviceAccountClientId, googleServicesConfig.pemFile, googleServicesConfig.appName, googleServicesConfig.groupSyncPubSubProject, "google")
 
-        new GoogleExtensions(directoryDAO, accessPolicyDAO, googleDirectoryDAO, googlePubSubDAO, googleIamDAO, googleServicesConfig, petServiceAccountConfig)
+        new GoogleExtensions(directoryDAO, accessPolicyDAO, googleDirectoryDAO, googlePubSubDAO, googleIamDAO, googleServicesConfig, petServiceAccountConfig, resourceTypes(CloudExtensions.resourceTypeName))
 
       case None => NoExtensions
     }
 
-    val configResourceTypes = config.as[Set[ResourceType]]("resourceTypes")
-    val resourceService = new ResourceService(configResourceTypes.map(rt => rt.name -> rt).toMap, accessPolicyDAO, directoryDAO, cloudExt, config.getString("googleServices.appsDomain"))
+    val resourceService = new ResourceService(resourceTypes, accessPolicyDAO, directoryDAO, cloudExt, config.getString("googleServices.appsDomain"))
     val userService = new UserService(directoryDAO, cloudExt)
     val statusService = new StatusService(directoryDAO, cloudExt, 10 seconds)
 
@@ -62,8 +64,6 @@ object Boot extends App with LazyLogging {
       }
       case _ => new SamRoutes(resourceService, userService, statusService, config.as[SwaggerConfig]("swagger"), directoryDAO) with StandardUserInfoDirectives with NoExtensionRoutes
     }
-
-    cloudExt.onBoot()
 
     for {
       _ <- schemaDAO.init() recover {
@@ -77,6 +77,8 @@ object Boot extends App with LazyLogging {
           logger.error("FATAL - unable to init resource types", t)
           throw t
       }
+
+      _ <- cloudExt.onBoot(SamApplication(userService, resourceService, statusService))
 
       _ <- Http().bindAndHandle(samRoutes.route, "0.0.0.0", 8080) recover {
         case t: Throwable =>
