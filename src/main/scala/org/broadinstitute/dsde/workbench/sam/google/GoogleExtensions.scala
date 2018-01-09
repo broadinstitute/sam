@@ -61,13 +61,13 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
     val serviceAccountUserInfo = UserInfo("", WorkbenchUserId(googleServicesConfig.serviceAccountClientId), WorkbenchEmail(googleServicesConfig.serviceAccountClientEmail), 0)
     for {
       _ <- samApplication.userService.createUser(serviceAccountUserInfo.toWorkbenchUser) recover {
-        case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode == StatusCodes.Conflict =>
+        case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode == Option(StatusCodes.Conflict) =>
       }
 
       _ <- samApplication.resourceService.createResourceType(extensionResourceType)
 
       _ <- samApplication.resourceService.createResource(extensionResourceType, GoogleExtensions.resourceId, serviceAccountUserInfo) recover {
-        case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode == StatusCodes.Conflict =>
+        case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode == Option(StatusCodes.Conflict) =>
       }
     } yield ()
   }

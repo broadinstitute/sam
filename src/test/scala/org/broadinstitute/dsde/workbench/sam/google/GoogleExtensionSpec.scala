@@ -2,7 +2,9 @@ package org.broadinstitute.dsde.workbench.sam.google
 
 import java.util.{Date, UUID}
 
+import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
+import akka.testkit.TestKit
 import com.typesafe.config.ConfigFactory
 import org.broadinstitute.dsde.workbench.google.GoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.google.mock.{MockGoogleDirectoryDAO, MockGoogleIamDAO, MockGooglePubSubDAO}
@@ -11,13 +13,13 @@ import org.broadinstitute.dsde.workbench.sam.config.{DirectoryConfig, GoogleServ
 import org.broadinstitute.dsde.workbench.sam.{TestSupport, _}
 import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryDAO, JndiDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.openam.AccessPolicyDAO
-import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, NoExtensions, UserService}
+import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, MockAccessPolicyDAO}
+import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.directory.MockDirectoryDAO
 import org.mockito.Mockito._
 import org.mockito.ArgumentMatchers._
 import org.scalatest.mockito.MockitoSugar
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.{BeforeAndAfterAll, FlatSpec, FlatSpecLike, Matchers}
 import org.scalatest.concurrent.ScalaFutures
 
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -30,7 +32,18 @@ import org.broadinstitute.dsde.workbench.sam.config._
 import org.broadinstitute.dsde.workbench.model.google.GoogleProject
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 
-class GoogleExtensionSpec extends FlatSpec with Matchers with TestSupport with MockitoSugar with ScalaFutures {
+class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with FlatSpecLike with Matchers with TestSupport with MockitoSugar with ScalaFutures with BeforeAndAfterAll {
+  def this() = this(ActorSystem("GoogleGroupSyncMonitorSpec"))
+
+  override def beforeAll(): Unit = {
+    super.beforeAll()
+  }
+
+  override def afterAll(): Unit = {
+    TestKit.shutdownActorSystem(system)
+    super.afterAll()
+  }
+
   lazy val config = ConfigFactory.load()
   lazy val directoryConfig = config.as[DirectoryConfig]("directory")
   lazy val petServiceAccountConfig = config.as[PetServiceAccountConfig]("petServiceAccount")
@@ -253,5 +266,36 @@ class GoogleExtensionSpec extends FlatSpec with Matchers with TestSupport with M
     } finally {
       runAndWait(dirDAO.deleteGroup(groupName))
     }
+  }
+
+  it should "create google extension resource on boot" in {
+    val mockAccessPolicyDAO = new MockAccessPolicyDAO
+    val mockDirectoryDAO = new MockDirectoryDAO
+    val mockGoogleDirectoryDAO = new MockGoogleDirectoryDAO
+    val mockGooglePubSubDAO = new MockGooglePubSubDAO
+    val mockGoogleIamDAO = new MockGoogleIamDAO
+
+    val ge = new GoogleExtensions(mockDirectoryDAO, mockAccessPolicyDAO, mockGoogleDirectoryDAO, mockGooglePubSubDAO, mockGoogleIamDAO, googleServicesConfig, petServiceAccountConfig, configResourceTypes(CloudExtensions.resourceTypeName))
+
+    val app = SamApplication(new UserService(mockDirectoryDAO, ge), new ResourceService(configResourceTypes, mockAccessPolicyDAO, mockDirectoryDAO, ge, "example.com"), null)
+    val resourceAndPolicyName = ResourceAndPolicyName(Resource(CloudExtensions.resourceTypeName, GoogleExtensions.resourceId), AccessPolicyName("owner"))
+
+    runAndWait(mockDirectoryDAO.loadUser(WorkbenchUserId(googleServicesConfig.serviceAccountClientId))) shouldBe None
+    runAndWait(mockAccessPolicyDAO.loadPolicy(resourceAndPolicyName)) shouldBe None
+
+    runAndWait(ge.onBoot(app))
+
+    runAndWait(mockDirectoryDAO.loadUser(WorkbenchUserId(googleServicesConfig.serviceAccountClientId))) shouldBe Some(WorkbenchUser(WorkbenchUserId(googleServicesConfig.serviceAccountClientId), WorkbenchEmail(googleServicesConfig.serviceAccountClientEmail)))
+    runAndWait(mockAccessPolicyDAO.loadPolicy(resourceAndPolicyName)).map(_.copy(email = null)) shouldBe Some(AccessPolicy(
+      resourceAndPolicyName,
+      Set(WorkbenchUserId(googleServicesConfig.serviceAccountClientId)),
+      null,
+      Set(ResourceRoleName("owner")),
+      Set.empty
+    ))
+
+    // make sure a repeated call does not fail
+    runAndWait(ge.onBoot(app))
+
   }
 }
