@@ -141,11 +141,11 @@ paths:
         404:
           description: 'user does not exist or caller does not have any access to cloud-extension/google resource'
           schema:
-            $ref: '#/definitions/ServiceAccountKey'
+            $ref: '#/definitions/ErrorReport'
         403:
           description: 'caller has some access to cloud-extension/google but not to the get_pet_private_key action'
           schema:
-            $ref: '#/definitions/ServiceAccountKey'
+            $ref: '#/definitions/ErrorReport'
         500:
           description: Internal Error
           schema:
@@ -859,6 +859,9 @@ definitions:
       - validAfter
       - validBefore
     properties:
+      email:
+        type: string
+        description: the email of the service account
       id:
         type: string
         description: The id of the key
@@ -867,7 +870,7 @@ definitions:
         description: The private key data
       validAfter:
         type: string
-        description: The date that the key begins being balid
+        description: The date that the key begins being valid
       validBefore:
         type: string
         description: The date that the key is valid until
