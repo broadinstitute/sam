@@ -44,7 +44,6 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
   }
 
   override def onBoot()(implicit system: ActorSystem): Unit = {
-    googleStorageDAO.createBucket(googleServicesConfig.serviceAccountClientProject, petServiceAccountConfig.keyBucketName)
     system.actorOf(GoogleGroupSyncMonitorSupervisor.props(
       googleServicesConfig.groupSyncPollInterval,
       googleServicesConfig.groupSyncPollJitter,
@@ -198,33 +197,6 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
       // remove the service account itself in Google
       _ <- googleIamDAO.removeServiceAccount(petServiceAccountConfig.googleProject, toAccountName(petServiceAccount.serviceAccount.email))
     } yield ()
-  }
-
-  //this class is getting to be too big. look into moving some things out of it.
-  def getPetServiceAccountKey(user: WorkbenchUser, project: GoogleProject): Future[ServiceAccountKey] = {
-    import spray.json._
-
-    googleStorageDAO.getObject(petServiceAccountConfig.keyBucketName, s"${user.id.value}-${project.value}.json").flatMap {
-      case Some(key) => Future.successful(key.toString.parseJson.convertTo[ServiceAccountKey])
-      case None =>
-        for {
-          pet <- createUserPetServiceAccount(user, project)
-          key <- googleIamDAO.createServiceAccountKey(project, pet.serviceAccount.email) recover {
-            case e: GoogleJsonResponseException if e.getDetails.getCode == StatusCodes.TooManyRequests.intValue => throw new WorkbenchException("You have reached the 10 key limit on service accounts. Please remove one to create another.")
-          }
-          _ <- googleStorageDAO.storeObject(petServiceAccountConfig.keyBucketName, s"${user.id.value}-${project.value}.json", new ByteArrayInputStream(key.toJson.prettyPrint.getBytes))
-        } yield key
-    }
-  }
-
-  def removePetServiceAccountKey(userId: WorkbenchUserId, project: GoogleProject, keyId: ServiceAccountKeyId): Future[Unit] = {
-    for {
-      maybePet <- directoryDAO.loadPetServiceAccount(PetServiceAccountId(userId, project))
-      response <- maybePet match {
-        case Some(pet) => googleIamDAO.removeServiceAccountKey(project, pet.serviceAccount.email, keyId)
-        case None => Future.successful(())
-      }
-    } yield response
   }
 
   def getSynchronizedDate(groupId: WorkbenchGroupIdentity): Future[Option[Date]] = {

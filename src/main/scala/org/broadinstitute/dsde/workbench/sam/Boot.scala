@@ -11,6 +11,7 @@ import org.broadinstitute.dsde.workbench.sam.api.{SamRoutes, StandardUserInfoDir
 import org.broadinstitute.dsde.workbench.sam.config._
 import org.broadinstitute.dsde.workbench.sam.directory._
 import org.broadinstitute.dsde.workbench.sam.google.{GoogleExtensionRoutes, GoogleExtensions}
+import org.broadinstitute.dsde.workbench.sam.keycache.{GoogleKeyCache, NoKeyCache}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam._
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
@@ -38,7 +39,7 @@ object Boot extends App with LazyLogging {
     val directoryDAO = new JndiDirectoryDAO(directoryConfig)
     val schemaDAO = new JndiSchemaDAO(directoryConfig)
 
-    val cloudExt = googleServicesConfigOption match {
+    val (cloudExt, cloudKeyCache) = googleServicesConfigOption match {
       case Some(googleServicesConfig) =>
         val petServiceAccountConfig = config.as[PetServiceAccountConfig]("petServiceAccount")
         val googleDirectoryDAO = new HttpGoogleDirectoryDAO(googleServicesConfig.serviceAccountClientId, googleServicesConfig.pemFile, googleServicesConfig.subEmail, googleServicesConfig.appsDomain, googleServicesConfig.appName, "google")
@@ -46,9 +47,11 @@ object Boot extends App with LazyLogging {
         val googlePubSubDAO = new HttpGooglePubSubDAO(googleServicesConfig.serviceAccountClientId, googleServicesConfig.pemFile, googleServicesConfig.appName, googleServicesConfig.groupSyncPubSubProject, "google")
         val googleStorageDAO = new HttpGoogleStorageDAO(googleServicesConfig.serviceAccountClientId, googleServicesConfig.pemFile, googleServicesConfig.appName, "google")
 
-        new GoogleExtensions(directoryDAO, accessPolicyDAO, googleDirectoryDAO, googlePubSubDAO, googleIamDAO, googleStorageDAO, googleServicesConfig, petServiceAccountConfig)
+        val googleExtensions = new GoogleExtensions(directoryDAO, accessPolicyDAO, googleDirectoryDAO, googlePubSubDAO, googleIamDAO, googleStorageDAO, googleServicesConfig, petServiceAccountConfig)
+        val googleKeyCache = new GoogleKeyCache(directoryDAO, googleIamDAO, googleStorageDAO, googleExtensions, googleServicesConfig, petServiceAccountConfig)
+        (googleExtensions, googleKeyCache)
 
-      case None => NoExtensions
+      case None => (NoExtensions, NoKeyCache)
     }
 
     val configResourceTypes = config.as[Set[ResourceType]]("resourceTypes")
@@ -60,11 +63,14 @@ object Boot extends App with LazyLogging {
       case googleExt: GoogleExtensions => new SamRoutes(resourceService, userService, statusService, config.as[SwaggerConfig]("swagger"), directoryDAO) with StandardUserInfoDirectives with GoogleExtensionRoutes {
         val googleExtensions = googleExt
         val cloudExtensions = googleExt
+        val googleKeyCache = cloudKeyCache.asInstanceOf[GoogleKeyCache] //ehh
+        val keyCache = cloudKeyCache.asInstanceOf[GoogleKeyCache]
       }
       case _ => new SamRoutes(resourceService, userService, statusService, config.as[SwaggerConfig]("swagger"), directoryDAO) with StandardUserInfoDirectives with NoExtensionRoutes
     }
 
     cloudExt.onBoot()
+    cloudKeyCache.onBoot()
 
     for {
       _ <- schemaDAO.init() recover {
