@@ -9,7 +9,6 @@ import org.broadinstitute.dsde.workbench.model.google.GoogleModelJsonSupport._
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchUser}
 import org.broadinstitute.dsde.workbench.sam.api.{ExtensionRoutes, UserInfoDirectives}
-import org.broadinstitute.dsde.workbench.sam.keycache.GoogleKeyCache
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import spray.json.DefaultJsonProtocol._

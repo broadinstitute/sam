@@ -1,16 +1,16 @@
-package org.broadinstitute.dsde.workbench.sam.keycache
+package org.broadinstitute.dsde.workbench.sam.google
 
 import java.io.ByteArrayInputStream
 
 import akka.http.scaladsl.model.StatusCodes
 import com.google.api.client.googleapis.json.GoogleJsonResponseException
 import org.broadinstitute.dsde.workbench.google.{GoogleIamDAO, GoogleStorageDAO}
-import org.broadinstitute.dsde.workbench.model.{PetServiceAccountId, WorkbenchException, WorkbenchUser, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.model.google.GoogleModelJsonSupport._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccountKey, ServiceAccountKeyId}
+import org.broadinstitute.dsde.workbench.model.{PetServiceAccountId, WorkbenchException, WorkbenchUser, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.config.{GoogleServicesConfig, PetServiceAccountConfig}
 import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
-import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
+import org.broadinstitute.dsde.workbench.sam.service.KeyCache
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -20,7 +20,9 @@ import scala.concurrent.{ExecutionContext, Future}
 class GoogleKeyCache(val directoryDAO: DirectoryDAO, val googleIamDAO: GoogleIamDAO, val googleStorageDAO: GoogleStorageDAO, val googleExtensions: GoogleExtensions, val googleServicesConfig: GoogleServicesConfig, val petServiceAccountConfig: PetServiceAccountConfig)(implicit val executionContext: ExecutionContext) extends KeyCache {
 
   override def onBoot(): Future[Unit] = {
-    googleStorageDAO.createBucket(googleServicesConfig.serviceAccountClientProject, petServiceAccountConfig.keyBucketName).map { _ => () }
+    googleStorageDAO.createBucket(googleServicesConfig.serviceAccountClientProject, petServiceAccountConfig.keyBucketName).map { _ =>
+      googleStorageDAO.setBucketLifecycle(petServiceAccountConfig.keyBucketName, 2) //todo: read age from config
+    }
   }
 
   override def getKey(user: WorkbenchUser, project: GoogleProject): Future[ServiceAccountKey] = {

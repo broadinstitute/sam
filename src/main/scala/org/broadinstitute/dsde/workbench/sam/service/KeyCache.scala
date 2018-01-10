@@ -1,7 +1,7 @@
-package org.broadinstitute.dsde.workbench.sam.keycache
+package org.broadinstitute.dsde.workbench.sam.service
 
-import org.broadinstitute.dsde.workbench.model.{WorkbenchUser, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccountKey, ServiceAccountKeyId, ServiceAccountPrivateKeyData}
+import org.broadinstitute.dsde.workbench.model.{WorkbenchUser, WorkbenchUserId}
 
 import scala.concurrent.Future
 
