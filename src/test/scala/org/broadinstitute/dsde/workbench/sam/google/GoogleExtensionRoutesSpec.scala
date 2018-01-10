@@ -7,7 +7,7 @@ import akka.http.scaladsl.testkit.ScalatestRouteTest
 import com.typesafe.config.ConfigFactory
 import org.broadinstitute.dsde.workbench.google.mock.{MockGoogleDirectoryDAO, MockGoogleIamDAO, MockGooglePubSubDAO}
 import org.broadinstitute.dsde.workbench.model.google._
-import org.broadinstitute.dsde.workbench.model.google.GoogleModelJsonSupport._
+import org.broadinstitute.dsde.workbench.sam.google.GoogleModelJsonSupport._
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.api.TestSamRoutes
@@ -212,7 +212,7 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
     // create a pet service account key
     Get("/api/google/user/petServiceAccount/myproject/key") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
-      val response = responseAs[ServiceAccountKey]
+      val response = responseAs[ServiceAccountKeyWithEmail]
       assert(response.validBefore.isDefined)
     }
   }
@@ -247,7 +247,7 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
     // create a pet service account key
     Get("/api/google/user/petServiceAccount/myproject/key") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
-      val response = responseAs[ServiceAccountKey]
+      val response = responseAs[ServiceAccountKeyWithEmail]
       assert(response.validBefore.isDefined)
     }
 
@@ -288,7 +288,7 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
     // create a pet service account key
     Get(s"/api/google/petServiceAccount/myproject/${defaultUserInfo.userEmail.value}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
-      val response = responseAs[ServiceAccountKey]
+      val response = responseAs[ServiceAccountKeyWithEmail]
       assert(response.validBefore.isDefined)
     }
   }
