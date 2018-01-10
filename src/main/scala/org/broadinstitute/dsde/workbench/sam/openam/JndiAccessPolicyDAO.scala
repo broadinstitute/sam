@@ -142,17 +142,13 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
 
     addMemberAttributes(users, subGroups, myAttrs) { _.put(new BasicAttribute(Attr.uniqueMember)) } //add attribute with no value when no member present
 
-    if (newPolicy.actions.nonEmpty) {
-      val actions = new BasicAttribute(Attr.action)
-      newPolicy.actions.foreach(action => actions.add(action.value))
-      myAttrs.put(actions)
-    }
+    val actions = new BasicAttribute(Attr.action)
+    newPolicy.actions.foreach(action => actions.add(action.value))
+    myAttrs.put(actions)
 
-    if (newPolicy.roles.nonEmpty) {
-      val roles = new BasicAttribute(Attr.role)
-      newPolicy.roles.foreach(role => roles.add(role.value))
-      myAttrs.put(roles)
-    }
+    val roles = new BasicAttribute(Attr.role)
+    newPolicy.roles.foreach(role => roles.add(role.value))
+    myAttrs.put(roles)
 
     myAttrs.put(Attr.groupUpdatedTimestamp, formattedDate(new Date()))
 
