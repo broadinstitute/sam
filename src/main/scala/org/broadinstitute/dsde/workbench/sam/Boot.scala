@@ -6,7 +6,7 @@ import akka.stream.ActorMaterializer
 import com.typesafe.config.ConfigFactory
 import com.typesafe.scalalogging.LazyLogging
 import net.ceedubs.ficus.Ficus._
-import org.broadinstitute.dsde.workbench.google.{HttpGoogleDirectoryDAO, HttpGoogleIamDAO, HttpGooglePubSubDAO}
+import org.broadinstitute.dsde.workbench.google.{HttpGoogleDirectoryDAO, HttpGoogleIamDAO, HttpGooglePubSubDAO, HttpGoogleStorageDAO}
 import org.broadinstitute.dsde.workbench.sam.api.{SamRoutes, StandardUserInfoDirectives}
 import org.broadinstitute.dsde.workbench.sam.config._
 import org.broadinstitute.dsde.workbench.sam.directory._
@@ -44,8 +44,9 @@ object Boot extends App with LazyLogging {
         val googleDirectoryDAO = new HttpGoogleDirectoryDAO(googleServicesConfig.serviceAccountClientId, googleServicesConfig.pemFile, googleServicesConfig.subEmail, googleServicesConfig.appsDomain, googleServicesConfig.appName, "google")
         val googleIamDAO = new HttpGoogleIamDAO(googleServicesConfig.serviceAccountClientId, googleServicesConfig.pemFile, googleServicesConfig.appName, "google")
         val googlePubSubDAO = new HttpGooglePubSubDAO(googleServicesConfig.serviceAccountClientId, googleServicesConfig.pemFile, googleServicesConfig.appName, googleServicesConfig.groupSyncPubSubProject, "google")
+        val googleStorageDAO = new HttpGoogleStorageDAO(googleServicesConfig.serviceAccountClientId, googleServicesConfig.pemFile, googleServicesConfig.appName, "google")
 
-        new GoogleExtensions(directoryDAO, accessPolicyDAO, googleDirectoryDAO, googlePubSubDAO, googleIamDAO, googleServicesConfig, petServiceAccountConfig)
+        new GoogleExtensions(directoryDAO, accessPolicyDAO, googleDirectoryDAO, googlePubSubDAO, googleIamDAO, googleStorageDAO, googleServicesConfig, petServiceAccountConfig)
 
       case None => NoExtensions
     }

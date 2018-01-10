@@ -1,14 +1,16 @@
 package org.broadinstitute.dsde.workbench.sam.google
 
+import java.io.ByteArrayInputStream
 import java.util.Date
 
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
 import com.google.api.client.googleapis.json.GoogleJsonResponseException
 import com.typesafe.scalalogging.LazyLogging
-import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleIamDAO, GooglePubSubDAO}
+import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleIamDAO, GooglePubSubDAO, GoogleStorageDAO}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google._
+import org.broadinstitute.dsde.workbench.model.google.GoogleModelJsonSupport._
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.config.{GoogleServicesConfig, PetServiceAccountConfig}
 import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
@@ -21,7 +23,7 @@ import org.broadinstitute.dsde.workbench.util.health.{HealthMonitor, SubsystemSt
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success, Try}
 
-class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: AccessPolicyDAO, val googleDirectoryDAO: GoogleDirectoryDAO, val googlePubSubDAO: GooglePubSubDAO, val googleIamDAO: GoogleIamDAO, val googleServicesConfig: GoogleServicesConfig, val petServiceAccountConfig: PetServiceAccountConfig)(implicit val executionContext: ExecutionContext) extends LazyLogging with FutureSupport with CloudExtensions {
+class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: AccessPolicyDAO, val googleDirectoryDAO: GoogleDirectoryDAO, val googlePubSubDAO: GooglePubSubDAO, val googleIamDAO: GoogleIamDAO, val googleStorageDAO: GoogleStorageDAO, val googleServicesConfig: GoogleServicesConfig, val petServiceAccountConfig: PetServiceAccountConfig)(implicit val executionContext: ExecutionContext) extends LazyLogging with FutureSupport with CloudExtensions {
   private[google] def toProxyFromUser(subjectId: WorkbenchUserId): WorkbenchEmail = WorkbenchEmail(s"PROXY_${subjectId.value}@${googleServicesConfig.appsDomain}")
 
   override val emailDomain = googleServicesConfig.appsDomain
@@ -42,6 +44,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
   }
 
   override def onBoot()(implicit system: ActorSystem): Unit = {
+    googleStorageDAO.createBucket(googleServicesConfig.serviceAccountClientProject, petServiceAccountConfig.keyBucketName)
     system.actorOf(GoogleGroupSyncMonitorSupervisor.props(
       googleServicesConfig.groupSyncPollInterval,
       googleServicesConfig.groupSyncPollJitter,
@@ -199,12 +202,19 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
 
   //this class is getting to be too big. look into moving some things out of it.
   def getPetServiceAccountKey(user: WorkbenchUser, project: GoogleProject): Future[ServiceAccountKey] = {
-    for {
-      pet <- createUserPetServiceAccount(user, project)
-      response <- googleIamDAO.createServiceAccountKey(project, pet.serviceAccount.email) recover {
-        case e: GoogleJsonResponseException if e.getDetails.getCode == StatusCodes.TooManyRequests.intValue => throw new WorkbenchException("You have reached the 10 key limit on service accounts. Please remove one to create another.")
-      }
-    } yield response
+    import spray.json._
+
+    googleStorageDAO.getObject(petServiceAccountConfig.keyBucketName, s"${user.id.value}-${project.value}.json").flatMap {
+      case Some(key) => Future.successful(key.toString.parseJson.convertTo[ServiceAccountKey])
+      case None =>
+        for {
+          pet <- createUserPetServiceAccount(user, project)
+          key <- googleIamDAO.createServiceAccountKey(project, pet.serviceAccount.email) recover {
+            case e: GoogleJsonResponseException if e.getDetails.getCode == StatusCodes.TooManyRequests.intValue => throw new WorkbenchException("You have reached the 10 key limit on service accounts. Please remove one to create another.")
+          }
+          _ <- googleStorageDAO.storeObject(petServiceAccountConfig.keyBucketName, s"${user.id.value}-${project.value}.json", new ByteArrayInputStream(key.toJson.prettyPrint.getBytes))
+        } yield key
+    }
   }
 
   def removePetServiceAccountKey(userId: WorkbenchUserId, project: GoogleProject, keyId: ServiceAccountKeyId): Future[Unit] = {
