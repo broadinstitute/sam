@@ -19,6 +19,7 @@ import org.broadinstitute.dsde.workbench.sam.service.{NoExtensions, ResourceServ
 import org.scalatest.concurrent.Eventually._
 
 import scala.concurrent.duration._
+import scala.language.postfixOps
 
 class StatusRouteSpec extends FlatSpec with Matchers with ScalatestRouteTest with TestSupport {
 

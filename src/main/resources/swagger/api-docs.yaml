@@ -130,6 +130,41 @@ paths:
       tags:
         - Admin
 
+  /api/google/petServiceAccount/{project}/{userEmail}:
+    get:
+      summary: gets a key for the user's pet service account, get_pet_private_key action on cloud-extension/google required
+      responses:
+        200:
+          description: 'key for a pet service account'
+          schema:
+            $ref: '#/definitions/ServiceAccountKey'
+        404:
+          description: 'user does not exist or caller does not have any access to cloud-extension/google resource'
+          schema:
+            $ref: '#/definitions/ErrorReport'
+        403:
+          description: 'caller has some access to cloud-extension/google but not to the get_pet_private_key action'
+          schema:
+            $ref: '#/definitions/ErrorReport'
+        500:
+          description: Internal Error
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      parameters:
+        - in: path
+          description: Google project of the pet
+          name: project
+          required: true
+          type: string
+        - in: path
+          description: User's email address
+          name: userEmail
+          required: true
+          type: string
+      operationId: getUserPetServiceAccountKey
+      tags:
+        - Google
+
   /api/google/user/petServiceAccount/{project}:
     get:
       summary: gets the pet service account for the specified user
@@ -149,6 +184,53 @@ paths:
           required: true
           type: string
       operationId: getPetServiceAccount
+      tags:
+        - Google
+
+  /api/google/user/petServiceAccount/{project}/key:
+    get:
+      summary: gets a key for the user's pet service account
+      responses:
+        200:
+          description: 'key for a pet service account'
+          schema:
+            $ref: '#/definitions/ServiceAccountKey'
+        500:
+          description: Internal Error
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      parameters:
+        - in: path
+          description: Google project of the pet
+          name: project
+          required: true
+          type: string
+      operationId: getPetServiceAccountKey
+      tags:
+        - Google
+
+  /api/google/user/petServiceAccount/{project}/key/{keyId}:
+    delete:
+      summary: removes an existing key for the user's pet service account
+      responses:
+        204:
+          description: 'user pet service account'
+        500:
+          description: Internal Error
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      parameters:
+        - in: path
+          description: Google project of the pet
+          name: project
+          required: true
+          type: string
+        - in: path
+          description: key ID for the key to remove
+          name: keyId
+          required: true
+          type: string
+      operationId: removePetServiceAccountKey
       tags:
         - Google
 
@@ -767,6 +849,31 @@ definitions:
       ownerRoleName:
         type: string
         description: The name of the role that can perform administrative functions on a resource of this type
+
+  ServiceAccountKey:
+    type: object
+    description: 'key for a service account'
+    required:
+      - id
+      - privateKeyData
+      - validAfter
+      - validBefore
+    properties:
+      email:
+        type: string
+        description: the email of the service account
+      id:
+        type: string
+        description: The id of the key
+      privateKeyData:
+        type: string
+        description: The private key data
+      validAfter:
+        type: string
+        description: The date that the key begins being valid
+      validBefore:
+        type: string
+        description: The date that the key is valid until
 
   StackTraceElement:
     description: ''

@@ -14,14 +14,19 @@ import org.broadinstitute.dsde.workbench.sam.config.{GoogleServicesConfig, PetSe
 import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.AccessPolicyDAO
-import org.broadinstitute.dsde.workbench.sam.service.CloudExtensions
+import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, SamApplication}
 import org.broadinstitute.dsde.workbench.util.FutureSupport
 import org.broadinstitute.dsde.workbench.util.health.{HealthMonitor, SubsystemStatus, Subsystems}
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success, Try}
 
-class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: AccessPolicyDAO, val googleDirectoryDAO: GoogleDirectoryDAO, val googlePubSubDAO: GooglePubSubDAO, val googleIamDAO: GoogleIamDAO, val googleServicesConfig: GoogleServicesConfig, val petServiceAccountConfig: PetServiceAccountConfig)(implicit val executionContext: ExecutionContext) extends LazyLogging with FutureSupport with CloudExtensions {
+object GoogleExtensions {
+  val resourceId = ResourceId("google")
+  val getPetPrivateKeyAction = ResourceAction("get_pet_private_key")
+}
+
+class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: AccessPolicyDAO, val googleDirectoryDAO: GoogleDirectoryDAO, val googlePubSubDAO: GooglePubSubDAO, val googleIamDAO: GoogleIamDAO, val googleServicesConfig: GoogleServicesConfig, val petServiceAccountConfig: PetServiceAccountConfig, extensionResourceType: ResourceType)(implicit val executionContext: ExecutionContext) extends LazyLogging with FutureSupport with CloudExtensions {
   private[google] def toProxyFromUser(subjectId: WorkbenchUserId): WorkbenchEmail = WorkbenchEmail(s"PROXY_${subjectId.value}@${googleServicesConfig.appsDomain}")
 
   override val emailDomain = googleServicesConfig.appsDomain
@@ -41,7 +46,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
     googleDirectoryDAO.isGroupMember(WorkbenchEmail(s"fc-admins@${googleServicesConfig.appsDomain}"), memberEmail) recoverWith { case t => throw new WorkbenchException("Unable to query for admin status.", t) }
   }
 
-  override def onBoot()(implicit system: ActorSystem): Unit = {
+  override def onBoot(samApplication: SamApplication)(implicit system: ActorSystem): Future[Unit] = {
     system.actorOf(GoogleGroupSyncMonitorSupervisor.props(
       googleServicesConfig.groupSyncPollInterval,
       googleServicesConfig.groupSyncPollJitter,
@@ -51,6 +56,20 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
       googleServicesConfig.groupSyncWorkerCount,
       this
     ))
+
+
+    val serviceAccountUserInfo = UserInfo("", WorkbenchUserId(googleServicesConfig.serviceAccountClientId), WorkbenchEmail(googleServicesConfig.serviceAccountClientEmail), 0)
+    for {
+      _ <- samApplication.userService.createUser(serviceAccountUserInfo.toWorkbenchUser) recover {
+        case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode == Option(StatusCodes.Conflict) =>
+      }
+
+      _ <- samApplication.resourceService.createResourceType(extensionResourceType)
+
+      _ <- samApplication.resourceService.createResource(extensionResourceType, GoogleExtensions.resourceId, serviceAccountUserInfo) recover {
+        case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode == Option(StatusCodes.Conflict) =>
+      }
+    } yield ()
   }
 
   override def onGroupUpdate(groupIdentities: Seq[WorkbenchGroupIdentity]): Future[Unit] = {
@@ -195,6 +214,36 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
       // remove the service account itself in Google
       _ <- googleIamDAO.removeServiceAccount(petServiceAccountConfig.googleProject, toAccountName(petServiceAccount.serviceAccount.email))
     } yield ()
+  }
+
+  def getPetServiceAccountKey(userEmail: WorkbenchEmail, project: GoogleProject): Future[Option[ServiceAccountKeyWithEmail]] = {
+    for {
+      subject <- directoryDAO.loadSubjectFromEmail(userEmail)
+      result <- subject match {
+        case Some(userId: WorkbenchUserId) => getPetServiceAccountKey(WorkbenchUser(userId, userEmail), project).map(Option(_))
+        case _ => Future.successful(None)
+      }
+    } yield result
+  }
+
+  //this class is getting to be too big. look into moving some things out of it.
+  def getPetServiceAccountKey(user: WorkbenchUser, project: GoogleProject): Future[ServiceAccountKeyWithEmail] = {
+    for {
+      pet <- createUserPetServiceAccount(user, project)
+      response <- googleIamDAO.createServiceAccountKey(project, pet.serviceAccount.email) recover {
+        case e: GoogleJsonResponseException if e.getDetails.getCode == StatusCodes.TooManyRequests.intValue => throw new WorkbenchException("You have reached the 10 key limit on service accounts. Please remove one to create another.")
+      }
+    } yield new ServiceAccountKeyWithEmail(pet.serviceAccount.email, response)
+  }
+
+  def removePetServiceAccountKey(userId: WorkbenchUserId, project: GoogleProject, keyId: ServiceAccountKeyId): Future[Unit] = {
+    for {
+      maybePet <- directoryDAO.loadPetServiceAccount(PetServiceAccountId(userId, project))
+      response <- maybePet match {
+        case Some(pet) => googleIamDAO.removeServiceAccountKey(project, pet.serviceAccount.email, keyId)
+        case None => Future.successful(())
+      }
+    } yield response
   }
 
   def getSynchronizedDate(groupId: WorkbenchGroupIdentity): Future[Option[Date]] = {
