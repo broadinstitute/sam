@@ -45,7 +45,7 @@ object Dependencies {
   val workbenchModel: ModuleID =     "org.broadinstitute.dsde.workbench" %% "workbench-model"  % workbenchModelV
   val workbenchGoogle: ModuleID =    "org.broadinstitute.dsde.workbench" %% "workbench-google" % workbenchGoogleV excludeAll(excludeWorkbenchUtil, excludeWorkbenchModel)
   val workbenchGoogleTests: ModuleID =    "org.broadinstitute.dsde.workbench" %% "workbench-google" % workbenchGoogleV % "test" classifier "tests" excludeAll(excludeWorkbenchUtil, excludeWorkbenchModel)
-  val workbenchServiceTests: ModuleID = "org.broadinstitute.dsde.workbench" %% "workbench-service-test" % "0.0.1-alpha-sam-eb037a4" % "test" classifier "tests"
+  val workbenchServiceTests: ModuleID = "org.broadinstitute.dsde.workbench" %% "workbench-service-test" % "0.1.1-alpha-sam-eb037a4" % "test" classifier "tests"
 
   val rootDependencies = Seq(
     // proactively pull in latest versions of Jackson libs, instead of relying on the versions
