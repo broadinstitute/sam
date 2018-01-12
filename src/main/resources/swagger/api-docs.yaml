@@ -5,6 +5,7 @@ info:
   description: |
     Workbench identity and access management.
   version: "0.1"
+
   license:
     name: BSD
     url: http://opensource.org/licenses/BSD-3-Clause
@@ -136,6 +137,8 @@ paths:
       responses:
         200:
           description: 'json format key for a pet service account, see https://cloud.google.com/iam/docs/creating-managing-service-account-keys'
+          schema:
+            type: string
         404:
           description: 'user does not exist or caller does not have any access to cloud-extension/google resource'
           schema:
