@@ -135,9 +135,7 @@ paths:
       summary: gets a key for the user's pet service account, get_pet_private_key action on cloud-extension/google required
       responses:
         200:
-          description: 'key for a pet service account'
-          schema:
-            $ref: '#/definitions/ServiceAccountKey'
+          description: 'json format key for a pet service account, see https://cloud.google.com/iam/docs/creating-managing-service-account-keys'
         404:
           description: 'user does not exist or caller does not have any access to cloud-extension/google resource'
           schema:
@@ -192,9 +190,7 @@ paths:
       summary: gets a key for the user's pet service account
       responses:
         200:
-          description: 'key for a pet service account'
-          schema:
-            $ref: '#/definitions/ServiceAccountKey'
+          description: 'json format key for a pet service account, see https://cloud.google.com/iam/docs/creating-managing-service-account-keys'
         500:
           description: Internal Error
           schema:
@@ -226,7 +222,7 @@ paths:
           required: true
           type: string
         - in: path
-          description: key ID for the key to remove
+          description: key ID for the key to remove, private_key_id field of json key from get request
           name: keyId
           required: true
           type: string
@@ -849,31 +845,6 @@ definitions:
       ownerRoleName:
         type: string
         description: The name of the role that can perform administrative functions on a resource of this type
-
-  ServiceAccountKey:
-    type: object
-    description: 'key for a service account'
-    required:
-      - id
-      - privateKeyData
-      - validAfter
-      - validBefore
-    properties:
-      email:
-        type: string
-        description: the email of the service account
-      id:
-        type: string
-        description: The id of the key
-      privateKeyData:
-        type: string
-        description: The private key data
-      validAfter:
-        type: string
-        description: The date that the key begins being valid
-      validBefore:
-        type: string
-        description: The date that the key is valid until
 
   StackTraceElement:
     description: ''

@@ -216,7 +216,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
     } yield ()
   }
 
-  def getPetServiceAccountKey(userEmail: WorkbenchEmail, project: GoogleProject): Future[Option[ServiceAccountKeyWithEmail]] = {
+  def getPetServiceAccountKey(userEmail: WorkbenchEmail, project: GoogleProject): Future[Option[String]] = {
     for {
       subject <- directoryDAO.loadSubjectFromEmail(userEmail)
       result <- subject match {
@@ -227,13 +227,15 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
   }
 
   //this class is getting to be too big. look into moving some things out of it.
-  def getPetServiceAccountKey(user: WorkbenchUser, project: GoogleProject): Future[ServiceAccountKeyWithEmail] = {
+  def getPetServiceAccountKey(user: WorkbenchUser, project: GoogleProject): Future[String] = {
     for {
       pet <- createUserPetServiceAccount(user, project)
       response <- googleIamDAO.createServiceAccountKey(project, pet.serviceAccount.email) recover {
         case e: GoogleJsonResponseException if e.getDetails.getCode == StatusCodes.TooManyRequests.intValue => throw new WorkbenchException("You have reached the 10 key limit on service accounts. Please remove one to create another.")
       }
-    } yield new ServiceAccountKeyWithEmail(pet.serviceAccount.email, response)
+    } yield {
+      response.privateKeyData.decode.getOrElse(throw new WorkbenchException(s"could not decode service account private key data for key ${response.id}"))
+    }
   }
 
   def removePetServiceAccountKey(userId: WorkbenchUserId, project: GoogleProject, keyId: ServiceAccountKeyId): Future[Unit] = {
