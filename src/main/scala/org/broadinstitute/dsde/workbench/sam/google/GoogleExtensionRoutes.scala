@@ -48,8 +48,9 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
           get {
             requireAction(Resource(CloudExtensions.resourceTypeName, GoogleExtensions.resourceId), GoogleExtensions.getPetPrivateKeyAction, userInfo) {
               complete {
+                import spray.json._
                 googleExtensions.getPetServiceAccountKey(WorkbenchEmail(userEmail), GoogleProject(project)) map {
-                  case Some(key) => StatusCodes.OK -> key
+                  case Some(key) => StatusCodes.OK -> key.parseJson
                   case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "pet service account not found"))
                 }
               }
