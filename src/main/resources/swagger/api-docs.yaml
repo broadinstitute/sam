@@ -191,6 +191,8 @@ paths:
       responses:
         200:
           description: 'json format key for a pet service account, see https://cloud.google.com/iam/docs/creating-managing-service-account-keys'
+          schema:
+            type: string
         500:
           description: Internal Error
           schema:
