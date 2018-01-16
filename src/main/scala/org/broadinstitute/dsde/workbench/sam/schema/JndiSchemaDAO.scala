@@ -119,11 +119,11 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit exe
   private def createPolicySchema(): Future[Unit] = withContext { ctx =>
     val schema = ctx.getSchema("")
 
-    createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.1", Attr.resourceType, "the type of the resource", true, equality = Option("caseIgnoreMatch"))
-    createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.8", Attr.resourceId, "the id of the resource", true, equality = Option("caseIgnoreMatch"))
-    createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.4", Attr.action, "the actions applicable to a policy", false)
-    createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.6", Attr.role, "the roles for the policy, if any", false)
-    createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.7", Attr.policy, "the policy name", true, equality = Option("caseIgnoreMatch"))
+    createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.1", Attr.resourceType, "the type of the resource", true, equality = Option("caseIgnoreMatch"), syntax = Option("1.3.6.1.4.1.1466.115.121.1.26"))
+    createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.8", Attr.resourceId, "the id of the resource", true, equality = Option("caseIgnoreMatch"), syntax = Option("1.3.6.1.4.1.1466.115.121.1.26"))
+    createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.4", Attr.action, "the actions applicable to a policy", false, syntax = Option("1.3.6.1.4.1.1466.115.121.1.26"))
+    createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.6", Attr.role, "the roles for the policy, if any", false, syntax = Option("1.3.6.1.4.1.1466.115.121.1.26"))
+    createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.7", Attr.policy, "the policy name", true, equality = Option("caseIgnoreMatch"), syntax = Option("1.3.6.1.4.1.1466.115.121.1.26"))
 
     val policyAttrs = new BasicAttributes(true) // Ignore case
     policyAttrs.put("NUMERICOID", "1.3.6.1.4.1.18060.0.4.3.2.0")
@@ -215,7 +215,7 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit exe
   def createWorkbenchPetServiceAccountSchema(): Future[Unit] = withContext { ctx =>
     val schema = ctx.getSchema("")
 
-    createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.70", Attr.project, "google project", true, equality = Option("caseIgnoreMatch"))
+    createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.70", Attr.project, "google project", true, equality = Option("caseIgnoreMatch"), syntax = Option("1.3.6.1.4.1.1466.115.121.1.26"))
 
     val attrs = new BasicAttributes(true) // Ignore case
     attrs.put("NUMERICOID", "1.3.6.1.4.1.18060.0.4.3.2.700")
