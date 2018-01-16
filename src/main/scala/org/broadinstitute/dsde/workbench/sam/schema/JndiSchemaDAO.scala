@@ -31,7 +31,7 @@ object JndiSchemaDAO {
     val groupUpdatedTimestamp = "groupUpdatedTimestamp"
     val groupSynchronizedTimestamp = "groupSynchronizedTimestamp"
     val member = "member"
-    val memberOf = "isMemberOf"
+    val memberOf = "memberOf"
     val givenName = "givenName"
     val sn = "sn"
     val uid = "uid"
