@@ -38,7 +38,7 @@ object Dependencies {
     "org.scalatest"       %%  "scalatest"     % "3.0.1"   % "test",
     "org.seleniumhq.selenium" % "selenium-java" % "3.8.1" % "test",
     "com.typesafe.scala-logging" %% "scala-logging" % "3.1.0",
-    "org.broadinstitute.dsde.workbench" %% "workbench-service-test" % "0.1.1-alpha-sam-7a2f728-SNAP" % "test" classifier "tests" excludeAll (excludeWorkbenchGoogle, excludeWorkbenchModel),
+    "org.broadinstitute.dsde.workbench" %% "workbench-service-test" % "0.1.1-alpha-sam-15fb06c-SNAP" % "test" classifier "tests" excludeAll (excludeWorkbenchGoogle, excludeWorkbenchModel),
     workbenchModel,
     workbenchGoogle,
 
