@@ -6,8 +6,6 @@ import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.testkit.ScalatestRouteTest
 import com.typesafe.config.ConfigFactory
 import org.broadinstitute.dsde.workbench.google.mock.{MockGoogleDirectoryDAO, MockGoogleIamDAO, MockGooglePubSubDAO}
-import org.broadinstitute.dsde.workbench.model.google._
-import org.broadinstitute.dsde.workbench.sam.google.GoogleModelJsonSupport._
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.api.TestSamRoutes
@@ -17,15 +15,21 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.scalatest.{FlatSpec, Matchers}
 import net.ceedubs.ficus.Ficus._
+import org.broadinstitute.dsde.workbench.google.GoogleIamDAO
+import org.broadinstitute.dsde.workbench.model.google._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.config._
 import org.broadinstitute.dsde.workbench.sam.openam.MockAccessPolicyDAO
-import spray.json.{JsBoolean, JsValue}
+import org.scalatest.mockito.MockitoSugar
+import org.mockito.Mockito._
+import org.mockito.ArgumentMatchers._
+
+import scala.concurrent.{ExecutionContext, Future}
 
 /**
   * Unit tests of GoogleExtensionRoutes. Can use real Google services. Must mock everything else.
   */
-class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest with TestSupport {
+class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest with TestSupport with MockitoSugar {
   val defaultUserId = WorkbenchUserId("newuser")
   val defaultUserEmail = WorkbenchEmail("newuser@new.com")
 
@@ -187,7 +191,7 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
     val defaultUserInfo = UserInfo("accessToken", WorkbenchUserId("user1"), WorkbenchEmail("user1@example.com"), 0)
     val googleDirectoryDAO = new MockGoogleDirectoryDAO()
     val directoryDAO = new MockDirectoryDAO()
-    val googleIamDAO = new MockGoogleIamDAO()
+    val (googleIamDAO: GoogleIamDAO, expectedJson: String) = createMockGoogleIamDaoForSAKeyTests
     val policyDAO = new MockAccessPolicyDAO()
     val pubSubDAO = new MockGooglePubSubDAO()
     val googleExt = new GoogleExtensions(directoryDAO, policyDAO, googleDirectoryDAO, pubSubDAO, googleIamDAO, googleServicesConfig, petServiceAccountConfig, configResourceTypes(CloudExtensions.resourceTypeName))
@@ -212,8 +216,8 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
     // create a pet service account key
     Get("/api/google/user/petServiceAccount/myproject/key") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
-      val response = responseAs[ServiceAccountKeyWithEmail]
-      assert(response.validBefore.isDefined)
+      val response = responseAs[String]
+      response shouldEqual(expectedJson)
     }
   }
 
@@ -222,7 +226,7 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
     val defaultUserInfo = UserInfo("accessToken", WorkbenchUserId("user1"), WorkbenchEmail("user1@example.com"), 0)
     val googleDirectoryDAO = new MockGoogleDirectoryDAO()
     val directoryDAO = new MockDirectoryDAO()
-    val googleIamDAO = new MockGoogleIamDAO()
+    val (googleIamDAO: GoogleIamDAO, expectedJson: String) = createMockGoogleIamDaoForSAKeyTests
     val policyDAO = new MockAccessPolicyDAO()
     val pubSubDAO = new MockGooglePubSubDAO()
     val googleExt = new GoogleExtensions(directoryDAO, policyDAO, googleDirectoryDAO, pubSubDAO, googleIamDAO, googleServicesConfig, petServiceAccountConfig, configResourceTypes(CloudExtensions.resourceTypeName))
@@ -247,8 +251,8 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
     // create a pet service account key
     Get("/api/google/user/petServiceAccount/myproject/key") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
-      val response = responseAs[ServiceAccountKeyWithEmail]
-      assert(response.validBefore.isDefined)
+      val response = responseAs[String]
+      response shouldEqual(expectedJson)
     }
 
     // create a pet service account key
@@ -257,11 +261,20 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
     }
   }
 
-  private def setupPetSATest: (UserInfo, TestSamRoutes with GoogleExtensionRoutes) = {
+  private def createMockGoogleIamDaoForSAKeyTests: (GoogleIamDAO, String) = {
+    val googleIamDAO = mock[GoogleIamDAO]
+    val expectedJson = """{"json":"yes I am"}"""
+    when(googleIamDAO.getOrCreateServiceAccount(any[GoogleProject], any[ServiceAccountName], any[ServiceAccountDisplayName])(any[ExecutionContext])).thenReturn(Future.successful(ServiceAccount(ServiceAccountSubjectId("12312341234"), WorkbenchEmail("pet@myproject.iam.gserviceaccount.com"), ServiceAccountDisplayName(""))))
+    when(googleIamDAO.createServiceAccountKey(any[GoogleProject], any[WorkbenchEmail])).thenReturn(Future.successful(ServiceAccountKey(ServiceAccountKeyId("foo"), ServiceAccountPrivateKeyData(ServiceAccountPrivateKeyData(expectedJson).encode), None, None)))
+    when(googleIamDAO.removeServiceAccountKey(any[GoogleProject], any[WorkbenchEmail], any[ServiceAccountKeyId])).thenReturn(Future.successful(()))
+    (googleIamDAO, expectedJson)
+  }
+
+  private def setupPetSATest: (UserInfo, TestSamRoutes with GoogleExtensionRoutes, String) = {
     val defaultUserInfo = UserInfo("accessToken", WorkbenchUserId("user1"), WorkbenchEmail("user1@example.com"), 0)
     val googleDirectoryDAO = new MockGoogleDirectoryDAO()
     val directoryDAO = new MockDirectoryDAO()
-    val googleIamDAO = new MockGoogleIamDAO()
+    val (googleIamDAO: GoogleIamDAO, expectedJson: String) = createMockGoogleIamDaoForSAKeyTests
     val policyDAO = new MockAccessPolicyDAO()
     val pubSubDAO = new MockGooglePubSubDAO()
     val googleExt = new GoogleExtensions(directoryDAO, policyDAO, googleDirectoryDAO, pubSubDAO, googleIamDAO, googleServicesConfig.copy(serviceAccountClientEmail = defaultUserInfo.userEmail.value, serviceAccountClientId = defaultUserInfo.userId.value), petServiceAccountConfig, configResourceTypes(CloudExtensions.resourceTypeName))
@@ -274,11 +287,11 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
     }
 
     runAndWait(googleExt.onBoot(SamApplication(userService, mockResourceService, statusService)))
-    (defaultUserInfo, samRoutes)
+    (defaultUserInfo, samRoutes, expectedJson)
   }
 
   "GET /api/google/petServiceAccount/{project}/{userEmail}" should "200 with a key" in {
-    val (defaultUserInfo, samRoutes) = setupPetSATest
+    val (defaultUserInfo, samRoutes, expectedJson) = setupPetSATest
 
     val members = AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set(GoogleExtensions.getPetPrivateKeyAction), Set.empty)
     Put(s"/api/resource/${CloudExtensions.resourceTypeName.value}/${GoogleExtensions.resourceId.value}/policies/foo", members) ~> samRoutes.route ~> check {
@@ -288,13 +301,13 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
     // create a pet service account key
     Get(s"/api/google/petServiceAccount/myproject/${defaultUserInfo.userEmail.value}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
-      val response = responseAs[ServiceAccountKeyWithEmail]
-      assert(response.validBefore.isDefined)
+      val response = responseAs[String]
+      response shouldEqual(expectedJson)
     }
   }
 
   it should "404 when user does not exist" in {
-    val (defaultUserInfo, samRoutes) = setupPetSATest
+    val (defaultUserInfo, samRoutes, _) = setupPetSATest
 
     val members = AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set(GoogleExtensions.getPetPrivateKeyAction), Set.empty)
     Put(s"/api/resource/${CloudExtensions.resourceTypeName.value}/${GoogleExtensions.resourceId.value}/policies/foo", members) ~> samRoutes.route ~> check {
@@ -308,7 +321,7 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
   }
 
   it should "403 when caller does not have action" in {
-    val (defaultUserInfo, samRoutes) = setupPetSATest
+    val (_, samRoutes, _) = setupPetSATest
 
     // create a pet service account key
     Get(s"/api/google/petServiceAccount/myproject/I-do-not-exist@foo.bar") ~> samRoutes.route ~> check {

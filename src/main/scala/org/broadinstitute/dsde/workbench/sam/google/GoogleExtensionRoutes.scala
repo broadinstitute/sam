@@ -1,7 +1,8 @@
 package org.broadinstitute.dsde.workbench.sam.google
 
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
-import akka.http.scaladsl.model.StatusCodes
+import akka.http.scaladsl.model.{ContentTypes, StatusCodes}
+import akka.http.scaladsl.model.headers._
 import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directives._
 import org.broadinstitute.dsde.workbench.sam._
@@ -47,8 +48,10 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
           get {
             requireAction(Resource(CloudExtensions.resourceTypeName, GoogleExtensions.resourceId), GoogleExtensions.getPetPrivateKeyAction, userInfo) {
               complete {
+                import spray.json._
                 googleExtensions.getPetServiceAccountKey(WorkbenchEmail(userEmail), GoogleProject(project)) map {
-                  case Some(key) => StatusCodes.OK -> key
+                  // parse json to ensure it is json and tells akka http the right content-type
+                  case Some(key) => StatusCodes.OK -> key.parseJson
                   case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "pet service account not found"))
                 }
               }
@@ -60,7 +63,9 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
             pathPrefix("key") {
               get {
                 complete {
-                  googleExtensions.getPetServiceAccountKey(WorkbenchUser(userInfo.userId, userInfo.userEmail), GoogleProject(project)).map(x => StatusCodes.OK -> x)
+                  import spray.json._
+                  // parse json to ensure it is json and tells akka http the right content-type
+                  googleExtensions.getPetServiceAccountKey(WorkbenchUser(userInfo.userId, userInfo.userEmail), GoogleProject(project)).map { x => StatusCodes.OK -> x.parseJson }
                 }
               } ~
               path(Segment) { keyId =>
@@ -71,16 +76,18 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                 }
               }
             } ~
-            get {
-              complete {
-                googleExtensions.createUserPetServiceAccount(WorkbenchUser(userInfo.userId, userInfo.userEmail), GoogleProject(project)).map { petSA =>
-                  StatusCodes.OK -> petSA.serviceAccount.email
+            pathEnd {
+              get {
+                complete {
+                  googleExtensions.createUserPetServiceAccount(WorkbenchUser(userInfo.userId, userInfo.userEmail), GoogleProject(project)).map { petSA =>
+                    StatusCodes.OK -> petSA.serviceAccount.email
+                  }
                 }
-              }
-            } ~
-            delete {
-              complete {
-                googleExtensions.deleteUserPetServiceAccount(userInfo.userId, GoogleProject(project)).map(_ => StatusCodes.NoContent)
+              } ~
+              delete {
+                complete {
+                  googleExtensions.deleteUserPetServiceAccount(userInfo.userId, GoogleProject(project)).map(_ => StatusCodes.NoContent)
+                }
               }
             }
           } ~
