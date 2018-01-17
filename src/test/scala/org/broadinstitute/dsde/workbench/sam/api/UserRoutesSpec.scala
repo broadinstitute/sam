@@ -198,4 +198,21 @@ class UserRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest with
       status shouldEqual StatusCodes.Forbidden
     }
   }
+
+  "DELETE /admin/user/{userSubjectId}/petServiceAccount/{project}" should "delete a pet (as an admin)" in withAdminRoutes { (samRoutes, adminRoutes) =>
+    Post("/register/user") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Created
+      responseAs[UserStatus] shouldEqual UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
+    }
+
+    Delete(s"/api/admin/user/$defaultUserId/petServiceAccount/myproject") ~> adminRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+    }
+  }
+
+  it should "not allow a non-admin to delete a pet" in withAdminRoutes { (samRoutes, _) =>
+    Delete(s"/api/admin/user/$defaultUserId/petServiceAccount/myproject") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Forbidden
+    }
+  }
 }

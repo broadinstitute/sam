@@ -130,6 +130,33 @@ paths:
       tags:
         - Admin
 
+  /api/admin/user/{userId}/petServiceAccount/{project}:
+    delete:
+      summary: deletes a user's pet service account for a project
+      responses:
+        204:
+          description: Successfully deleted pet service account for a project
+        403:
+          description: You do not have admin privileges
+        500:
+          description: Internal Error
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      parameters:
+        - in: path
+          description: User ID whose pet to delete
+          name: userId
+          required: true
+          type: string
+        - in: path
+          description: Google project of the pet
+          name: project
+          required: true
+          type: string
+      operationId: deletePetPerProject
+      tags:
+        - Admin
+
   /api/google/petServiceAccount/{project}/{userEmail}:
     get:
       summary: gets a key for the user's pet service account, get_pet_private_key action on cloud-extension/google required
