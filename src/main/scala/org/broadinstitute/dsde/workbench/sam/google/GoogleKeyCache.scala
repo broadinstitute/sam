@@ -30,7 +30,7 @@ class GoogleKeyCache(val directoryDAO: DirectoryDAO, val googleIamDAO: GoogleIam
   private def keyNamePrefix(project: GoogleProject, saEmail: WorkbenchEmail) = s"${project.value}/${saEmail.value}"
   private def keyNameFull(project: GoogleProject, saEmail: WorkbenchEmail, keyId: ServiceAccountKeyId) = s"${keyNamePrefix(project, saEmail)}/${keyId.value}"
 
-  def getKey(userEmail: WorkbenchEmail, project: GoogleProject): Future[Option[String]] = {
+  override def getKey(userEmail: WorkbenchEmail, project: GoogleProject): Future[Option[String]] = {
     for {
       subject <- directoryDAO.loadSubjectFromEmail(userEmail)
       result <- subject match {
