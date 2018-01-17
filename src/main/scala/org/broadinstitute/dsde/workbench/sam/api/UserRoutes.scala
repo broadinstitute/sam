@@ -6,6 +6,7 @@ import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directives._
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchUser, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
+import org.broadinstitute.dsde.workbench.model.google.GoogleProject
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.service.UserService
 
@@ -102,6 +103,13 @@ trait UserRoutes extends UserInfoDirectives {
                     delete {
                       complete {
                         cloudExtensions.deleteUserPetServiceAccount(WorkbenchUserId(userId)).map(_ => StatusCodes.NoContent)
+                      }
+                    }
+                  } ~
+                  path(Segment) { project =>
+                    delete {
+                      complete {
+                        cloudExtensions.deleteUserPetServiceAccount(WorkbenchUserId(userId), GoogleProject(project)).map(_ => StatusCodes.NoContent)
                       }
                     }
                   }
