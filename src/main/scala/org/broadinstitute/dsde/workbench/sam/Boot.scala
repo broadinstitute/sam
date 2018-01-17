@@ -41,31 +41,27 @@ object Boot extends App with LazyLogging {
     val configResourceTypes = config.as[Set[ResourceType]]("resourceTypes")
     val resourceTypes = configResourceTypes.map(rt => rt.name -> rt).toMap
 
-    val (cloudExt, cloudKeyCache) = googleServicesConfigOption match {
+    val cloudExt = googleServicesConfigOption match {
       case Some(googleServicesConfig) =>
         val petServiceAccountConfig = config.as[PetServiceAccountConfig]("petServiceAccount")
         val googleDirectoryDAO = new HttpGoogleDirectoryDAO(googleServicesConfig.serviceAccountClientId, googleServicesConfig.pemFile, googleServicesConfig.subEmail, googleServicesConfig.appsDomain, googleServicesConfig.appName, "google")
         val googleIamDAO = new HttpGoogleIamDAO(googleServicesConfig.serviceAccountClientId, googleServicesConfig.pemFile, googleServicesConfig.appName, "google")
         val googlePubSubDAO = new HttpGooglePubSubDAO(googleServicesConfig.serviceAccountClientId, googleServicesConfig.pemFile, googleServicesConfig.appName, googleServicesConfig.groupSyncPubSubProject, "google")
         val googleStorageDAO = new HttpGoogleStorageDAO(googleServicesConfig.serviceAccountClientId, googleServicesConfig.pemFile, googleServicesConfig.appName, "google")
+        val googleKeyCache = new GoogleKeyCache(googleIamDAO, googleStorageDAO, googleServicesConfig, petServiceAccountConfig)
 
-        val googleExtensions = new GoogleExtensions(directoryDAO, accessPolicyDAO, googleDirectoryDAO, googlePubSubDAO, googleIamDAO, googleStorageDAO, googleServicesConfig, petServiceAccountConfig, resourceTypes(CloudExtensions.resourceTypeName))
-        val googleKeyCache = new GoogleKeyCache(directoryDAO, googleIamDAO, googleStorageDAO, googleExtensions, googleServicesConfig, petServiceAccountConfig)
-        (googleExtensions, googleKeyCache)
-
-      case None => (NoExtensions, NoKeyCache)
+        new GoogleExtensions(directoryDAO, accessPolicyDAO, googleDirectoryDAO, googlePubSubDAO, googleIamDAO, googleStorageDAO, googleKeyCache, googleServicesConfig, petServiceAccountConfig, resourceTypes(CloudExtensions.resourceTypeName))
+      case None => NoExtensions
     }
 
     val resourceService = new ResourceService(resourceTypes, accessPolicyDAO, directoryDAO, cloudExt, config.getString("googleServices.appsDomain"))
     val userService = new UserService(directoryDAO, cloudExt)
     val statusService = new StatusService(directoryDAO, cloudExt, 10 seconds)
 
-    val samRoutes = (cloudExt, cloudKeyCache) match {
-      case (googleExt: GoogleExtensions, cloudKeyCache: GoogleKeyCache) => new SamRoutes(resourceService, userService, statusService, config.as[SwaggerConfig]("swagger"), directoryDAO) with StandardUserInfoDirectives with GoogleExtensionRoutes {
+    val samRoutes = cloudExt match {
+      case googleExt: GoogleExtensions => new SamRoutes(resourceService, userService, statusService, config.as[SwaggerConfig]("swagger"), directoryDAO) with StandardUserInfoDirectives with GoogleExtensionRoutes {
         val googleExtensions = googleExt
         val cloudExtensions = googleExt
-        val googleKeyCache = cloudKeyCache
-        val keyCache = cloudKeyCache
       }
       case _ => new SamRoutes(resourceService, userService, statusService, config.as[SwaggerConfig]("swagger"), directoryDAO) with StandardUserInfoDirectives with NoExtensionRoutes
     }
@@ -85,7 +81,7 @@ object Boot extends App with LazyLogging {
 
       _ <- cloudExt.onBoot(SamApplication(userService, resourceService, statusService))
 
-      _ <- cloudKeyCache.onBoot()
+//      _ <- cloudKeyCache.onBoot()
 
       _ <- Http().bindAndHandle(samRoutes.route, "0.0.0.0", 8080) recover {
         case t: Throwable =>

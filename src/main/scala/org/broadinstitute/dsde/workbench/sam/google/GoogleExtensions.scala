@@ -26,7 +26,7 @@ object GoogleExtensions {
   val getPetPrivateKeyAction = ResourceAction("get_pet_private_key")
 }
 
-class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: AccessPolicyDAO, val googleDirectoryDAO: GoogleDirectoryDAO, val googlePubSubDAO: GooglePubSubDAO, val googleIamDAO: GoogleIamDAO, val googleStorageDAO: GoogleStorageDAO, val googleServicesConfig: GoogleServicesConfig, val petServiceAccountConfig: PetServiceAccountConfig, extensionResourceType: ResourceType)(implicit val executionContext: ExecutionContext) extends LazyLogging with FutureSupport with CloudExtensions {
+class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: AccessPolicyDAO, val googleDirectoryDAO: GoogleDirectoryDAO, val googlePubSubDAO: GooglePubSubDAO, val googleIamDAO: GoogleIamDAO, val googleStorageDAO: GoogleStorageDAO, val googleKeyCache: GoogleKeyCache, val googleServicesConfig: GoogleServicesConfig, val petServiceAccountConfig: PetServiceAccountConfig, extensionResourceType: ResourceType)(implicit val executionContext: ExecutionContext) extends LazyLogging with FutureSupport with CloudExtensions {
   private[google] def toProxyFromUser(subjectId: WorkbenchUserId): WorkbenchEmail = WorkbenchEmail(s"PROXY_${subjectId.value}@${googleServicesConfig.appsDomain}")
 
   override val emailDomain = googleServicesConfig.appsDomain
@@ -69,6 +69,8 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
       _ <- samApplication.resourceService.createResource(extensionResourceType, GoogleExtensions.resourceId, serviceAccountUserInfo) recover {
         case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode == Option(StatusCodes.Conflict) =>
       }
+
+      _ <- googleKeyCache.onBoot()
     } yield ()
   }
 
@@ -176,6 +178,33 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
           }
         }
     }
+  }
+
+  def getPetServiceAccountKey(userEmail: WorkbenchEmail, project: GoogleProject): Future[Option[String]] = {
+    for {
+      subject <- directoryDAO.loadSubjectFromEmail(userEmail)
+      key <- subject match {
+        case Some(userId: WorkbenchUserId) => getPetServiceAccountKey(WorkbenchUser(userId, userEmail), project).map(Option(_))
+        case _ => Future.successful(None)
+      }
+    } yield key
+  }
+
+  def getPetServiceAccountKey(user: WorkbenchUser, project: GoogleProject): Future[String] = {
+    for {
+      pet <- createUserPetServiceAccount(user, project)
+      key <- googleKeyCache.getKey(pet, project)
+    } yield key
+  }
+
+  def removePetServiceAccountKey(userId: WorkbenchUserId, project: GoogleProject, keyId: ServiceAccountKeyId): Future[Unit] = {
+    for {
+      maybePet <- directoryDAO.loadPetServiceAccount(PetServiceAccountId(userId, project))
+      result <- maybePet match {
+        case Some(pet) => googleKeyCache.removeKey(pet, project, keyId)
+        case none => Future.successful(())
+      }
+    } yield result
   }
 
   private def enablePetServiceAccount(petServiceAccount: PetServiceAccount): Future[Unit] = {
