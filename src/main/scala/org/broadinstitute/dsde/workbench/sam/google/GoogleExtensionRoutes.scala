@@ -7,7 +7,7 @@ import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directives._
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.model.google._
-import org.broadinstitute.dsde.workbench.sam.google.GoogleModelJsonSupport._
+import org.broadinstitute.dsde.workbench.model.google.GoogleModelJsonSupport._
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchEmail, WorkbenchExceptionWithErrorReport, WorkbenchUser}
 import org.broadinstitute.dsde.workbench.sam.api.{ExtensionRoutes, SecurityDirectives, UserInfoDirectives}
@@ -21,6 +21,7 @@ import scala.concurrent.ExecutionContext
 trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with SecurityDirectives {
   implicit val executionContext: ExecutionContext
   val googleExtensions: GoogleExtensions
+  val googleKeyCache: GoogleKeyCache
 
   override def extensionRoutes: server.Route =
     //  THIS FIRST ROUTE IS DEPRECATED, put any new routes under the pathPrefix("google") below
@@ -49,7 +50,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
             requireAction(Resource(CloudExtensions.resourceTypeName, GoogleExtensions.resourceId), GoogleExtensions.getPetPrivateKeyAction, userInfo) {
               complete {
                 import spray.json._
-                googleExtensions.getPetServiceAccountKey(WorkbenchEmail(userEmail), GoogleProject(project)) map {
+                googleKeyCache.getKey(WorkbenchEmail(userEmail), GoogleProject(project)) map {
                   // parse json to ensure it is json and tells akka http the right content-type
                   case Some(key) => StatusCodes.OK -> key.parseJson
                   case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "pet service account not found"))
@@ -65,13 +66,13 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                 complete {
                   import spray.json._
                   // parse json to ensure it is json and tells akka http the right content-type
-                  googleExtensions.getPetServiceAccountKey(WorkbenchUser(userInfo.userId, userInfo.userEmail), GoogleProject(project)).map { x => StatusCodes.OK -> x.parseJson }
+                  googleKeyCache.getKey(WorkbenchUser(userInfo.userId, userInfo.userEmail), GoogleProject(project)).map(key => StatusCodes.OK -> key.parseJson)
                 }
               } ~
               path(Segment) { keyId =>
                 delete {
                   complete {
-                    googleExtensions.removePetServiceAccountKey(userInfo.userId, GoogleProject(project), ServiceAccountKeyId(keyId)).map(_ => StatusCodes.NoContent)
+                    googleKeyCache.removeKey(userInfo.userId, GoogleProject(project), ServiceAccountKeyId(keyId)).map(_ => StatusCodes.NoContent)
                   }
                 }
               }
