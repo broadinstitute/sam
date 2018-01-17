@@ -11,4 +11,4 @@ import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
   *                            application service accounts need to impersonate as the pet service
   *                            account.
   */
-case class PetServiceAccountConfig(googleProject: GoogleProject, serviceAccountUsers: Set[WorkbenchEmail])
+case class PetServiceAccountConfig(googleProject: GoogleProject, serviceAccountUsers: Set[WorkbenchEmail], keyBucketName: String, activeKeyMaxAge: Int, retiredKeyMaxAge: Int)
