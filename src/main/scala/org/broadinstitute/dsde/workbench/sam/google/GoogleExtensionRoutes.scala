@@ -21,7 +21,6 @@ import scala.concurrent.ExecutionContext
 trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with SecurityDirectives {
   implicit val executionContext: ExecutionContext
   val googleExtensions: GoogleExtensions
-  val googleKeyCache: GoogleKeyCache
 
   override def extensionRoutes: server.Route =
     //  THIS FIRST ROUTE IS DEPRECATED, put any new routes under the pathPrefix("google") below
@@ -50,7 +49,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
             requireAction(Resource(CloudExtensions.resourceTypeName, GoogleExtensions.resourceId), GoogleExtensions.getPetPrivateKeyAction, userInfo) {
               complete {
                 import spray.json._
-                googleKeyCache.getKey(WorkbenchEmail(userEmail), GoogleProject(project)) map {
+                googleExtensions.getPetServiceAccountKey(WorkbenchEmail(userEmail), GoogleProject(project)) map {
                   // parse json to ensure it is json and tells akka http the right content-type
                   case Some(key) => StatusCodes.OK -> key.parseJson
                   case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "pet service account not found"))
@@ -66,13 +65,13 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                 complete {
                   import spray.json._
                   // parse json to ensure it is json and tells akka http the right content-type
-                  googleKeyCache.getKey(WorkbenchUser(userInfo.userId, userInfo.userEmail), GoogleProject(project)).map(key => StatusCodes.OK -> key.parseJson)
+                  googleExtensions.getPetServiceAccountKey(WorkbenchUser(userInfo.userId, userInfo.userEmail), GoogleProject(project)).map(key => StatusCodes.OK -> key.parseJson)
                 }
               } ~
               path(Segment) { keyId =>
                 delete {
                   complete {
-                    googleKeyCache.removeKey(userInfo.userId, GoogleProject(project), ServiceAccountKeyId(keyId)).map(_ => StatusCodes.NoContent)
+                    googleExtensions.removePetServiceAccountKey(userInfo.userId, GoogleProject(project), ServiceAccountKeyId(keyId)).map(_ => StatusCodes.NoContent)
                   }
                 }
               }
