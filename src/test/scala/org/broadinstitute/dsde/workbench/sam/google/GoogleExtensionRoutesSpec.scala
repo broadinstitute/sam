@@ -46,12 +46,11 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
     val directoryDAO = new MockDirectoryDAO()
     val googleIamDAO = new MockGoogleIamDAO()
     val googleStorageDAO = new MockGoogleStorageDAO()
-    val googleExt = new GoogleExtensions(directoryDAO, null, googleDirectoryDAO, null, googleIamDAO, null, googleServicesConfig, petServiceAccountConfig, configResourceTypes(CloudExtensions.resourceTypeName))
-    val cloudKeyCache = new GoogleKeyCache(directoryDAO, googleIamDAO, googleStorageDAO, googleExt, googleServicesConfig, petServiceAccountConfig)
+    val cloudKeyCache = new GoogleKeyCache(googleIamDAO, googleStorageDAO, googleServicesConfig, petServiceAccountConfig)
+    val googleExt = new GoogleExtensions(directoryDAO, null, googleDirectoryDAO, null, googleIamDAO, null, cloudKeyCache, googleServicesConfig, petServiceAccountConfig, configResourceTypes(CloudExtensions.resourceTypeName))
 
     val samRoutes = new TestSamRoutes(null, new UserService(directoryDAO, googleExt), new StatusService(directoryDAO, NoExtensions), UserInfo("", defaultUserId, defaultUserEmail, 0), directoryDAO) with GoogleExtensionRoutes {
       val googleExtensions = googleExt
-      val googleKeyCache = cloudKeyCache
     }
     testCode(samRoutes)
   }
@@ -84,7 +83,9 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
     val googleIamDAO = new MockGoogleIamDAO()
     val policyDAO = new MockAccessPolicyDAO()
     val pubSubDAO = new MockGooglePubSubDAO()
-    val googleExt = new GoogleExtensions(directoryDAO, policyDAO, googleDirectoryDAO, pubSubDAO, googleIamDAO, null, googleServicesConfig, petServiceAccountConfig, configResourceTypes(CloudExtensions.resourceTypeName))
+    val googleStorageDAO = new MockGoogleStorageDAO()
+    val cloudKeyCache = new GoogleKeyCache(googleIamDAO, googleStorageDAO, googleServicesConfig, petServiceAccountConfig)
+    val googleExt = new GoogleExtensions(directoryDAO, policyDAO, googleDirectoryDAO, pubSubDAO, googleIamDAO, null, cloudKeyCache, googleServicesConfig, petServiceAccountConfig, configResourceTypes(CloudExtensions.resourceTypeName))
 
     // create a user
     Post("/register/user") ~> samRoutes.route ~> check {
@@ -110,8 +111,8 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
     val googleStorageDAO = new MockGoogleStorageDAO()
     val policyDAO = new MockAccessPolicyDAO()
     val pubSubDAO = new MockGooglePubSubDAO()
-    val googleExt = new GoogleExtensions(directoryDAO, policyDAO, googleDirectoryDAO, pubSubDAO, googleIamDAO, null, googleServicesConfig, petServiceAccountConfig, configResourceTypes(CloudExtensions.resourceTypeName))
-    val cloudKeyCache = new GoogleKeyCache(directoryDAO, googleIamDAO, googleStorageDAO, googleExt, googleServicesConfig, petServiceAccountConfig)
+    val cloudKeyCache = new GoogleKeyCache(googleIamDAO, googleStorageDAO, googleServicesConfig, petServiceAccountConfig)
+    val googleExt = new GoogleExtensions(directoryDAO, policyDAO, googleDirectoryDAO, pubSubDAO, googleIamDAO, googleStorageDAO, cloudKeyCache, googleServicesConfig, petServiceAccountConfig, configResourceTypes(CloudExtensions.resourceTypeName))
 
     val mockResourceService = new ResourceService(resourceTypes, policyDAO, directoryDAO, googleExt, "example.com")
     val samRoutes = new TestSamRoutes(mockResourceService, new UserService(directoryDAO, googleExt), new StatusService(directoryDAO, NoExtensions), UserInfo("", defaultUserInfo.userId, defaultUserInfo.userEmail, 0), directoryDAO) with GoogleExtensionRoutes {
@@ -152,8 +153,8 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
     val googleStorageDAO = new MockGoogleStorageDAO()
     val policyDAO = new MockAccessPolicyDAO()
     val pubSubDAO = new MockGooglePubSubDAO()
-    val googleExt = new GoogleExtensions(directoryDAO, policyDAO, googleDirectoryDAO, pubSubDAO, googleIamDAO, null, googleServicesConfig, petServiceAccountConfig, configResourceTypes(CloudExtensions.resourceTypeName))
-    val cloudKeyCache = new GoogleKeyCache(directoryDAO, googleIamDAO, googleStorageDAO, googleExt, googleServicesConfig, petServiceAccountConfig)
+    val cloudKeyCache = new GoogleKeyCache(googleIamDAO, googleStorageDAO, googleServicesConfig, petServiceAccountConfig)
+    val googleExt = new GoogleExtensions(directoryDAO, policyDAO, googleDirectoryDAO, pubSubDAO, googleIamDAO, googleStorageDAO, cloudKeyCache, googleServicesConfig, petServiceAccountConfig, configResourceTypes(CloudExtensions.resourceTypeName))
 
     val mockResourceService = new ResourceService(resourceTypes, policyDAO, directoryDAO, googleExt, "example.com")
     val samRoutes = new TestSamRoutes(mockResourceService, new UserService(directoryDAO, googleExt), new StatusService(directoryDAO, NoExtensions), UserInfo("", defaultUserInfo.userId, defaultUserInfo.userEmail, 0), directoryDAO) with GoogleExtensionRoutes {
@@ -206,8 +207,8 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
     val googleStorageDAO = new MockGoogleStorageDAO()
     val policyDAO = new MockAccessPolicyDAO()
     val pubSubDAO = new MockGooglePubSubDAO()
-    val googleExt = new GoogleExtensions(directoryDAO, policyDAO, googleDirectoryDAO, pubSubDAO, googleIamDAO, null, googleServicesConfig, petServiceAccountConfig, configResourceTypes(CloudExtensions.resourceTypeName))
-    val cloudKeyCache = new GoogleKeyCache(directoryDAO, googleIamDAO, googleStorageDAO, googleExt, googleServicesConfig, petServiceAccountConfig)
+    val cloudKeyCache = new GoogleKeyCache(googleIamDAO, googleStorageDAO, googleServicesConfig, petServiceAccountConfig)
+    val googleExt = new GoogleExtensions(directoryDAO, policyDAO, googleDirectoryDAO, pubSubDAO, googleIamDAO, googleStorageDAO, cloudKeyCache, googleServicesConfig, petServiceAccountConfig, configResourceTypes(CloudExtensions.resourceTypeName))
 
     val mockResourceService = new ResourceService(resourceTypes, policyDAO, directoryDAO, googleExt, "example.com")
     val samRoutes = new TestSamRoutes(mockResourceService, new UserService(directoryDAO, googleExt), new StatusService(directoryDAO, NoExtensions), UserInfo("", defaultUserInfo.userId, defaultUserInfo.userEmail, 0), directoryDAO) with GoogleExtensionRoutes {
@@ -244,8 +245,8 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
     val googleStorageDAO = new MockGoogleStorageDAO()
     val policyDAO = new MockAccessPolicyDAO()
     val pubSubDAO = new MockGooglePubSubDAO()
-    val googleExt = new GoogleExtensions(directoryDAO, policyDAO, googleDirectoryDAO, pubSubDAO, googleIamDAO, null, googleServicesConfig, petServiceAccountConfig, configResourceTypes(CloudExtensions.resourceTypeName))
-    val cloudKeyCache = new GoogleKeyCache(directoryDAO, googleIamDAO, googleStorageDAO, googleExt, googleServicesConfig, petServiceAccountConfig)
+    val cloudKeyCache = new GoogleKeyCache(googleIamDAO, googleStorageDAO, googleServicesConfig, petServiceAccountConfig)
+    val googleExt = new GoogleExtensions(directoryDAO, policyDAO, googleDirectoryDAO, pubSubDAO, googleIamDAO, googleStorageDAO, cloudKeyCache, googleServicesConfig, petServiceAccountConfig, configResourceTypes(CloudExtensions.resourceTypeName))
 
     val mockResourceService = new ResourceService(resourceTypes, policyDAO, directoryDAO, googleExt, "example.com")
     val samRoutes = new TestSamRoutes(mockResourceService, new UserService(directoryDAO, googleExt), new StatusService(directoryDAO, NoExtensions), UserInfo("", defaultUserInfo.userId, defaultUserInfo.userEmail, 0), directoryDAO) with GoogleExtensionRoutes {
@@ -295,8 +296,8 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
     val googleStorageDAO = new MockGoogleStorageDAO()
     val policyDAO = new MockAccessPolicyDAO()
     val pubSubDAO = new MockGooglePubSubDAO()
-    val googleExt = new GoogleExtensions(directoryDAO, policyDAO, googleDirectoryDAO, pubSubDAO, googleIamDAO, null, googleServicesConfig.copy(serviceAccountClientEmail = defaultUserInfo.userEmail.value, serviceAccountClientId = defaultUserInfo.userId.value), petServiceAccountConfig, configResourceTypes(CloudExtensions.resourceTypeName))
-    val cloudKeyCache = new GoogleKeyCache(directoryDAO, googleIamDAO, googleStorageDAO, googleExt, googleServicesConfig, petServiceAccountConfig)
+    val cloudKeyCache = new GoogleKeyCache(googleIamDAO, googleStorageDAO, googleServicesConfig, petServiceAccountConfig)
+    val googleExt = new GoogleExtensions(directoryDAO, policyDAO, googleDirectoryDAO, pubSubDAO, googleIamDAO, googleStorageDAO, cloudKeyCache, googleServicesConfig.copy(serviceAccountClientEmail = defaultUserInfo.userEmail.value, serviceAccountClientId = defaultUserInfo.userId.value), petServiceAccountConfig, configResourceTypes(CloudExtensions.resourceTypeName))
 
     val mockResourceService = new ResourceService(configResourceTypes, policyDAO, directoryDAO, googleExt, "example.com")
     val userService = new UserService(directoryDAO, googleExt)

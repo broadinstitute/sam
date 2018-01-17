@@ -2,20 +2,18 @@ package org.broadinstitute.dsde.workbench.sam.google
 
 import java.io.ByteArrayInputStream
 
-import akka.http.scaladsl.model.{DateTime, StatusCodes}
+import akka.http.scaladsl.model.StatusCodes
 import cats.data.OptionT
 import cats.implicits._
 import com.google.api.client.googleapis.json.GoogleJsonResponseException
 import com.google.api.services.storage.model.StorageObject
 import org.broadinstitute.dsde.workbench.google.{GoogleIamDAO, GoogleStorageDAO}
-import org.broadinstitute.dsde.workbench.model.google.GoogleModelJsonSupport._
-import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccountKey, ServiceAccountKeyId}
 import org.broadinstitute.dsde.workbench.model._
+import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccountKey, ServiceAccountKeyId}
 import org.broadinstitute.dsde.workbench.sam.config.{GoogleServicesConfig, PetServiceAccountConfig}
 import org.broadinstitute.dsde.workbench.sam.service.KeyCache
 
 import scala.concurrent.{ExecutionContext, Future}
-import spray.json._
 
 /**
   * Created by mbemis on 1/10/18.

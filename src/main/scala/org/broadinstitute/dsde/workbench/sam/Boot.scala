@@ -81,8 +81,6 @@ object Boot extends App with LazyLogging {
 
       _ <- cloudExt.onBoot(SamApplication(userService, resourceService, statusService))
 
-//      _ <- cloudKeyCache.onBoot()
-
       _ <- Http().bindAndHandle(samRoutes.route, "0.0.0.0", 8080) recover {
         case t: Throwable =>
           logger.error("FATAL - failure starting http server", t)
