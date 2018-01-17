@@ -146,7 +146,8 @@ class SamApiSpec extends FreeSpec with Matchers with ScalaFutures with CleanUp {
       implicit val userAuthToken: AuthToken = anyUser.makeAuthToken()
 
       val userId = Sam.user.status().get.userInfo.userSubjectId
-      val proxyGroup = Sam.user.proxyGroup()
+      val userEmail = Sam.user.status().get.userInfo.userEmail
+      val proxyGroup = Sam.user.proxyGroup(userEmail)
 
       // will break when Sam's implementation does
       proxyGroup shouldBe WorkbenchEmail(s"PROXY_$userId@${Config.GCS.appsDomain}")
