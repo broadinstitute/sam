@@ -21,7 +21,7 @@ import scala.concurrent.{ExecutionContext, Future}
 class GoogleKeyCache(val googleIamDAO: GoogleIamDAO, val googleStorageDAO: GoogleStorageDAO, val googleServicesConfig: GoogleServicesConfig, val petServiceAccountConfig: PetServiceAccountConfig)(implicit val executionContext: ExecutionContext) extends KeyCache {
 
   override def onBoot(): Future[Unit] = {
-    googleStorageDAO.createBucket(googleServicesConfig.serviceAccountClientProject, petServiceAccountConfig.keyBucketName).map { _ =>
+    googleStorageDAO.createBucket(googleServicesConfig.serviceAccountClientProject, petServiceAccountConfig.keyBucketName).flatMap { _ =>
       googleStorageDAO.setBucketLifecycle(petServiceAccountConfig.keyBucketName, petServiceAccountConfig.activeKeyMaxAge)
     }
   }
@@ -29,7 +29,7 @@ class GoogleKeyCache(val googleIamDAO: GoogleIamDAO, val googleStorageDAO: Googl
   override def getKey(pet: PetServiceAccount, project: GoogleProject): Future[String] = {
     val retrievedKeys = for {
       keyObjects <- googleStorageDAO.listObjectsWithPrefix(petServiceAccountConfig.keyBucketName, keyNamePrefix(project, pet.serviceAccount.email))
-      keys <- googleIamDAO.listServiceAccountKeys(project, pet.serviceAccount.email)
+      keys <- googleIamDAO.listServiceAccountKeys(project, pet.serviceAccount.email, true)
     } yield (keyObjects.toList, keys.toList)
 
     retrievedKeys.flatMap {
