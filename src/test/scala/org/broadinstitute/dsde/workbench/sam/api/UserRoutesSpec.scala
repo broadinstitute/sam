@@ -96,9 +96,7 @@ class UserRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest with
     }
 
     Get("/register/user") ~> SARoutes.route ~> check {
-      println(responseAs[UserStatus])
       status shouldEqual StatusCodes.OK
-      println(UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true)))
       responseAs[UserStatus] shouldEqual UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
     }
   }

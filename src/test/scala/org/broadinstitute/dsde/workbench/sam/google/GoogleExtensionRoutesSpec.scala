@@ -1,9 +1,12 @@
 package org.broadinstitute.dsde.workbench.sam.google
 
+import java.io.ByteArrayInputStream
+
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.testkit.ScalatestRouteTest
+import com.google.api.services.storage.model.StorageObject
 import com.typesafe.config.ConfigFactory
 import org.broadinstitute.dsde.workbench.google.mock.{MockGoogleDirectoryDAO, MockGoogleIamDAO, MockGooglePubSubDAO, MockGoogleStorageDAO}
 import org.broadinstitute.dsde.workbench.model.google._
@@ -17,7 +20,7 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.scalatest.{FlatSpec, Matchers}
 import net.ceedubs.ficus.Ficus._
-import org.broadinstitute.dsde.workbench.google.GoogleIamDAO
+import org.broadinstitute.dsde.workbench.google.{GoogleIamDAO, GoogleStorageDAO}
 import org.broadinstitute.dsde.workbench.model.google._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.config._
@@ -204,7 +207,7 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
     val googleDirectoryDAO = new MockGoogleDirectoryDAO()
     val directoryDAO = new MockDirectoryDAO()
     val (googleIamDAO: GoogleIamDAO, expectedJson: String) = createMockGoogleIamDaoForSAKeyTests
-    val googleStorageDAO = new MockGoogleStorageDAO()
+    val (googleStorageDAO, _) = createMockGoogleStorageDAOForSaKeyTests
     val policyDAO = new MockAccessPolicyDAO()
     val pubSubDAO = new MockGooglePubSubDAO()
     val cloudKeyCache = new GoogleKeyCache(googleIamDAO, googleStorageDAO, googleServicesConfig, petServiceAccountConfig)
@@ -285,7 +288,16 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
     when(googleIamDAO.getOrCreateServiceAccount(any[GoogleProject], any[ServiceAccountName], any[ServiceAccountDisplayName])(any[ExecutionContext])).thenReturn(Future.successful(ServiceAccount(ServiceAccountSubjectId("12312341234"), WorkbenchEmail("pet@myproject.iam.gserviceaccount.com"), ServiceAccountDisplayName(""))))
     when(googleIamDAO.createServiceAccountKey(any[GoogleProject], any[WorkbenchEmail])).thenReturn(Future.successful(ServiceAccountKey(ServiceAccountKeyId("foo"), ServiceAccountPrivateKeyData(ServiceAccountPrivateKeyData(expectedJson).encode), None, None)))
     when(googleIamDAO.removeServiceAccountKey(any[GoogleProject], any[WorkbenchEmail], any[ServiceAccountKeyId])).thenReturn(Future.successful(()))
+    when(googleIamDAO.listServiceAccountKeys(any[GoogleProject], any[WorkbenchEmail])).thenReturn(Future.successful(Seq.empty))
     (googleIamDAO, expectedJson)
+  }
+
+  private def createMockGoogleStorageDAOForSaKeyTests: (GoogleStorageDAO, String) = {
+    val googleStorageDAO = mock[GoogleStorageDAO]
+    val expectedJson = """{"valid":"json"}"""
+    when(googleStorageDAO.listObjectsWithPrefix(any[String], any[String])).thenReturn(Future.successful(Seq(new StorageObject().setName("foo"))))
+    when(googleStorageDAO.storeObject(any[String], any[String], any[ByteArrayInputStream], any[String])).thenReturn(Future.successful(()))
+    (googleStorageDAO, expectedJson)
   }
 
   private def setupPetSATest: (UserInfo, TestSamRoutes with GoogleExtensionRoutes, String) = {
