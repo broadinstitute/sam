@@ -13,7 +13,7 @@ java -jar swagger-codegen-cli.jar generate -l java --input-spec ./src/main/resou
 
 COMMIT_HASH="${TRAVIS_COMMIT:0:7}"
 VERSION_HASH="1.0-${COMMIT_HASH}${SNAPSHOT}"
-ORGANIZATION="org.broadinstitute.dsde"
+ORGANIZATION="org.broadinstitute.dsde.sam-client"
 APP_NAME="sam"
 PATH_PREFIX="org/broadinstitute/dsde/sam-client/$APP_NAME"
 SCALA_11_VERSION="2.11.8"
