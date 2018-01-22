@@ -744,14 +744,11 @@ definitions:
     required:
       - policyName
       - policy
-      - email
     properties:
       policyName:
         type: string
       policy:
         $ref: '#/definitions/AccessPolicyMembership'
-      email:
-        $ref: string
 
   AccessPolicyMembership:
     description: ''
