@@ -193,7 +193,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
   def getPetServiceAccountKey(user: WorkbenchUser, project: GoogleProject): Future[String] = {
     for {
       pet <- createUserPetServiceAccount(user, project)
-      key <- googleKeyCache.getKey(pet, project)
+      key <- googleKeyCache.getKey(pet)
     } yield key
   }
 
@@ -201,7 +201,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
     for {
       maybePet <- directoryDAO.loadPetServiceAccount(PetServiceAccountId(userId, project))
       result <- maybePet match {
-        case Some(pet) => googleKeyCache.removeKey(pet, project, keyId)
+        case Some(pet) => googleKeyCache.removeKey(pet, keyId)
         case none => Future.successful(())
       }
     } yield result
