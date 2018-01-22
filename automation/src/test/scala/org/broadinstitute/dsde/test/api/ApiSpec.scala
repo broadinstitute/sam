@@ -1,31 +1,27 @@
 package org.broadinstitute.dsde.test.api.sam
 
-import org.broadinstitute.dsde.workbench.service.Orchestration
-import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
-import org.broadinstitute.dsde.workbench.service.test.CleanUp
-import org.scalatest.concurrent.ScalaFutures
-import org.broadinstitute.dsde.workbench.auth.ServiceAccountAuthToken
-import org.broadinstitute.dsde.workbench.service.Sam
+import org.broadinstitute.dsde.workbench.service.{Orchestration, Sam, Thurloe}
 import org.broadinstitute.dsde.workbench.service.Sam.user.UserStatusDetails
-import org.broadinstitute.dsde.workbench.dao.Google.googleIamDAO
+import org.broadinstitute.dsde.workbench.auth.{AuthToken, ServiceAccountAuthToken}
 import org.broadinstitute.dsde.workbench.config.{Config, Credentials, UserPool}
+import org.broadinstitute.dsde.workbench.model._
+import org.broadinstitute.dsde.workbench.dao.Google.googleIamDAO
+import org.broadinstitute.dsde.workbench.fixture.BillingFixtures
+import org.broadinstitute.dsde.workbench.service.test.CleanUp
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountName}
-import org.broadinstitute.dsde.workbench.model.google
-import org.broadinstitute.dsde.workbench.auth.AuthToken
-//import org.scalatest.concurrent.ScalaFutures
-import org.scalatest.{FreeSpec, Matchers}
+import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.time.{Seconds, Span}
-//import org.scalatest.{FreeSpec, Matchers}
+import org.scalatest.{FreeSpec, Matchers}
 
-class SamApiSpec extends FreeSpec with Matchers with ScalaFutures with CleanUp {
+class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaFutures with CleanUp {
   implicit override val patienceConfig: PatienceConfig = PatienceConfig(timeout = scaled(Span(5, Seconds)))
 
-  def findSaInGoogle(name: ServiceAccountName): Option[ServiceAccount] = {
-    googleIamDAO.findServiceAccount(GoogleProject(Config.Projects.default), name).futureValue
+  def findSaInGoogle(project: String, name: ServiceAccountName): Option[ServiceAccount] = {
+    googleIamDAO.findServiceAccount(GoogleProject(project), name).futureValue
   }
 
-  def findPetInGoogle(userInfo: UserStatusDetails): Option[ServiceAccount] = {
-    findSaInGoogle(Sam.petName(userInfo))
+  def findPetInGoogle(project: String, userInfo: UserStatusDetails): Option[ServiceAccount] = {
+    findSaInGoogle(project, Sam.petName(userInfo))
   }
 
   def registerAsNewUser(email: WorkbenchEmail)(implicit authToken: AuthToken): Unit = {
@@ -45,13 +41,12 @@ class SamApiSpec extends FreeSpec with Matchers with ScalaFutures with CleanUp {
     Orchestration.profile.registerUser(newUserProfile)
   }
 
-  // TODO: why isn't WorkbenchSubject a ValueObject?  I'd like to use it here
   def removeUser(subjectId: String): Unit = {
     implicit val token: AuthToken = UserPool.chooseAdmin.makeAuthToken()
     if (Sam.admin.doesUserExist(subjectId).getOrElse(false)) {
       Sam.admin.deleteUser(subjectId)
     }
-//    Thurloe.keyValuePairs.deleteAll(subjectId)
+    Thurloe.keyValuePairs.deleteAll(subjectId)
   }
 
   "Sam test utilities" - {
@@ -89,41 +84,46 @@ class SamApiSpec extends FreeSpec with Matchers with ScalaFutures with CleanUp {
       val anyUser: Credentials = UserPool.chooseAnyUser
       val userAuthToken: AuthToken = anyUser.makeAuthToken()
 
+      val owner: Credentials = UserPool.chooseProjectOwner
+      val ownerAuthToken: AuthToken = owner.makeAuthToken()
+
       // set auth tokens explicitly to control which credentials are used
 
       val userStatus = Sam.user.status()(userAuthToken).get
 
-      // ensure known state for pet (not present)
+      withBillingProject("auto-sam") { projectName =>
+        // ensure known state for pet (not present)
 
-      Sam.removePet(userStatus.userInfo)
-      findPetInGoogle(userStatus.userInfo) shouldBe None
+        Sam.removePet(projectName, userStatus.userInfo)
+        findPetInGoogle(projectName, userStatus.userInfo) shouldBe None
 
-      val petAccountEmail = Sam.user.petServiceAccountEmail()(userAuthToken)
-      petAccountEmail.value should not be userStatus.userInfo.userEmail
-      findPetInGoogle(userStatus.userInfo).map(_.email) shouldBe Some(petAccountEmail)
-
-
-      // first call should create pet.  confirm that a second call to create/retrieve gives the same results
-      Sam.user.petServiceAccountEmail()(userAuthToken) shouldBe petAccountEmail
+        val petAccountEmail = Sam.user.petServiceAccountEmail(projectName)(userAuthToken)
+        petAccountEmail.value should not be userStatus.userInfo.userEmail
+        findPetInGoogle(projectName, userStatus.userInfo).map(_.email) shouldBe Some(petAccountEmail)
 
 
-      val petAuthToken = ServiceAccountAuthToken(petAccountEmail)
-      register cleanUp petAuthToken.removePrivateKey()
+        // first call should create pet.  confirm that a second call to create/retrieve gives the same results
+        Sam.user.petServiceAccountEmail(projectName)(userAuthToken) shouldBe petAccountEmail
 
-      Sam.user.status()(petAuthToken) shouldBe Some(userStatus)
 
-      // who is my pet -> who is my user's pet -> it's me
-      Sam.user.petServiceAccountEmail()(petAuthToken) shouldBe petAccountEmail
+        val petAuthToken = ServiceAccountAuthToken(petAccountEmail)
+        register cleanUp petAuthToken.removePrivateKey()
 
-      // clean up
+        Sam.user.status()(petAuthToken) shouldBe Some(userStatus)
 
-      Sam.removePet(userStatus.userInfo)
-      findPetInGoogle(userStatus.userInfo) shouldBe None
+        // who is my pet -> who is my user's pet -> it's me
+        Sam.user.petServiceAccountEmail(projectName)(petAuthToken) shouldBe petAccountEmail
+
+        // clean up
+
+        Sam.removePet(projectName, userStatus.userInfo)
+        findPetInGoogle(projectName, userStatus.userInfo) shouldBe None
+      }(ownerAuthToken)
     }
 
     "should not treat non-pet service accounts as pets" in {
       val saEmail = WorkbenchEmail(Config.GCS.qaEmail)
-      val sa = findSaInGoogle(google.toAccountName(saEmail)).get
+      val sa = findSaInGoogle(Config.Projects.default, google.toAccountName(saEmail)).get
 
       // ensure clean state: SA's user not registered
       removeUser(sa.subjectId.value)
@@ -141,16 +141,28 @@ class SamApiSpec extends FreeSpec with Matchers with ScalaFutures with CleanUp {
       removeUser(sa.subjectId.value)
     }
 
-    "should retrieve the user's proxy group" in {
-      val anyUser: Credentials = UserPool.chooseAnyUser
-      implicit val userAuthToken: AuthToken = anyUser.makeAuthToken()
+    "should retrieve a user's proxy group as any user" in {
+      val Seq(user1: Credentials, user2: Credentials) = UserPool.chooseStudents(2)
+      val authToken1: AuthToken = user1.makeAuthToken()
+      val authToken2: AuthToken = user2.makeAuthToken()
 
-      val userId = Sam.user.status().get.userInfo.userSubjectId
-      val userEmail = Sam.user.status().get.userInfo.userEmail
-      val proxyGroup = Sam.user.proxyGroup(userEmail)
+      val info1 = Sam.user.status()(authToken1).get.userInfo
+      val info2 = Sam.user.status()(authToken2).get.userInfo
+      val email1 = WorkbenchEmail(Sam.user.status()(authToken1).get.userInfo.userEmail)
+      val email2 = WorkbenchEmail(Sam.user.status()(authToken2).get.userInfo.userEmail)
+      val userId1 = Sam.user.status()(authToken1).get.userInfo.userSubjectId
+      val userId2 = Sam.user.status()(authToken2).get.userInfo.userSubjectId
 
-      // will break when Sam's implementation does
-      proxyGroup shouldBe WorkbenchEmail(s"PROXY_$userId@${Config.GCS.appsDomain}")
+      val proxyGroup1_1 = Sam.user.proxyGroup(email1.value)(authToken1)
+      val proxyGroup1_2 = Sam.user.proxyGroup(email1.value)(authToken2)
+      val proxyGroup2_1 = Sam.user.proxyGroup(email2.value)(authToken1)
+      val proxyGroup2_2 = Sam.user.proxyGroup(email2.value)(authToken2)
+
+      // will break when Sam's implementation changes
+      proxyGroup1_1 shouldBe WorkbenchEmail(s"PROXY_$userId1@${Config.GCS.appsDomain}")
+      proxyGroup1_2 shouldBe WorkbenchEmail(s"PROXY_$userId1@${Config.GCS.appsDomain}")
+      proxyGroup2_1 shouldBe WorkbenchEmail(s"PROXY_$userId2@${Config.GCS.appsDomain}")
+      proxyGroup2_2 shouldBe WorkbenchEmail(s"PROXY_$userId2@${Config.GCS.appsDomain}")
     }
   }
 
