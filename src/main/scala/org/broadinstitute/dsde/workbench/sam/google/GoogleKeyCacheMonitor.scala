@@ -1,0 +1,147 @@
+package org.broadinstitute.dsde.workbench.sam.google
+
+import akka.actor.SupervisorStrategy.{Escalate, Stop}
+import akka.actor._
+import akka.pattern._
+import akka.http.scaladsl.model.StatusCodes
+import com.typesafe.scalalogging.LazyLogging
+import org.broadinstitute.dsde.workbench.google.GooglePubSubDAO
+import org.broadinstitute.dsde.workbench.google.GooglePubSubDAO.PubSubMessage
+import org.broadinstitute.dsde.workbench.model._
+import org.broadinstitute.dsde.workbench.model.google.ServiceAccountKeyId
+import org.broadinstitute.dsde.workbench.sam._
+import org.broadinstitute.dsde.workbench.sam.model.ResourceAndPolicyName
+import org.broadinstitute.dsde.workbench.util.FutureSupport
+import spray.json._
+
+import scala.concurrent.ExecutionContext
+import scala.concurrent.duration.{FiniteDuration, _}
+import scala.language.postfixOps
+import scala.util.{Failure, Success, Try}
+
+/**
+  * Created by mbemis on 1/19/18.
+  */
+object GoogleKeyCacheMonitorSupervisor {
+  sealed trait GoogleKeyCacheMonitorSupervisorMessage
+  case object Init extends GoogleKeyCacheMonitorSupervisorMessage
+  case object Start extends GoogleKeyCacheMonitorSupervisorMessage
+
+  def props(pollInterval: FiniteDuration, pollIntervalJitter: FiniteDuration, pubSubDao: GooglePubSubDAO, pubSubTopicName: String, pubSubSubscriptionName: String, workerCount: Int, googleExtensions: GoogleExtensions)(implicit executionContext: ExecutionContext): Props = {
+    Props(new GoogleKeyCacheMonitorSupervisor(pollInterval, pollIntervalJitter, pubSubDao, pubSubTopicName, pubSubSubscriptionName, workerCount, googleExtensions))
+  }
+}
+
+class GoogleKeyCacheMonitorSupervisor(val pollInterval: FiniteDuration, pollIntervalJitter: FiniteDuration, pubSubDao: GooglePubSubDAO, pubSubTopicName: String, pubSubSubscriptionName: String, workerCount: Int, googleExtensions: GoogleExtensions)(implicit executionContext: ExecutionContext) extends Actor with LazyLogging {
+  import GoogleGroupSyncMonitorSupervisor._
+  import context._
+
+  self ! Init
+
+  override def receive = {
+    case Init => init pipeTo self
+    case Start => for(i <- 1 to workerCount) startOne()
+    case Status.Failure(t) => logger.error("error initializing google key cache monitor", t)
+  }
+
+  def init = {
+    for {
+      _ <- pubSubDao.createTopic(pubSubTopicName)
+      _ <- pubSubDao.createSubscription(pubSubTopicName, pubSubSubscriptionName)
+    } yield Start
+  }
+
+  def startOne(): Unit = {
+    logger.info("starting GoogleKeyCacheMonitorActor")
+    actorOf(GoogleKeyCacheMonitor.props(pollInterval, pollIntervalJitter, pubSubDao, pubSubSubscriptionName, googleExtensions))
+  }
+
+  override val supervisorStrategy =
+    OneForOneStrategy() {
+      case e => {
+        logger.error("unexpected error in google key cache monitor", e)
+        // start one to replace the error, stop the errored child so that we also drop its mailbox (i.e. restart not good enough)
+        startOne()
+        Stop
+      }
+    }
+
+}
+
+object GoogleKeyCacheMonitor {
+  case object StartMonitorPass
+
+  def props(pollInterval: FiniteDuration, pollIntervalJitter: FiniteDuration, pubSubDao: GooglePubSubDAO, pubSubSubscriptionName: String, googleExtensions: GoogleExtensions)(implicit executionContext: ExecutionContext): Props = {
+    Props(new GoogleKeyCacheMonitorActor(pollInterval, pollIntervalJitter, pubSubDao, pubSubSubscriptionName, googleExtensions))
+  }
+}
+
+class GoogleKeyCacheMonitorActor(val pollInterval: FiniteDuration, pollIntervalJitter: FiniteDuration, pubSubDao: GooglePubSubDAO, pubSubSubscriptionName: String, googleExtensions: GoogleExtensions)(implicit executionContext: ExecutionContext) extends Actor with LazyLogging with FutureSupport {
+  import GoogleGroupSyncMonitor._
+  import context._
+
+  self ! StartMonitorPass
+
+  // fail safe in case this actor is idle too long but not too fast (1 second lower limit)
+  setReceiveTimeout(max((pollInterval + pollIntervalJitter) * 10, 1 second))
+
+  private def max(durations: FiniteDuration*): FiniteDuration = {
+    implicit val finiteDurationIsOrdered = scala.concurrent.duration.FiniteDuration.FiniteDurationIsOrdered
+    durations.max
+  }
+
+  override def receive = {
+    case StartMonitorPass =>
+      // start the process by pulling a message and sending it back to self
+      pubSubDao.pullMessages(pubSubSubscriptionName, 1).map(_.headOption) pipeTo self
+
+    case Some(message: PubSubMessage) =>
+      logger.debug(s"received sync message: $message")
+
+      val (pet, keyId): (PetServiceAccount, ServiceAccountKeyId) = parseMessage(message)
+
+      googleExtensions.googleIamDAO.removeServiceAccountKey(pet.id.project, pet.serviceAccount.email, keyId).toTry.map(sr => (sr, message.ackId)) pipeTo self
+
+    case None =>
+      // there was no message to wait and try again
+      val nextTime = org.broadinstitute.dsde.workbench.util.addJitter(pollInterval, pollIntervalJitter)
+      system.scheduler.scheduleOnce(nextTime.asInstanceOf[FiniteDuration], self, StartMonitorPass)
+
+    case (Success(_), ackId: String) =>
+      acknowledgeMessage(ackId).map(_ => StartMonitorPass) pipeTo self
+
+    case (Failure(_), ackId: String) =>
+      acknowledgeMessage(ackId).map(_ => StartMonitorPass) pipeTo self
+
+    case Status.Failure(t) => throw t
+
+    case ReceiveTimeout =>
+      throw new WorkbenchException("GoogleKeyCacheMonitorActor has received no messages for too long")
+
+    case x => logger.info(s"unhandled $x")
+  }
+
+  private def acknowledgeMessage(ackId: String) = {
+    pubSubDao.acknowledgeMessagesById(pubSubSubscriptionName, Seq(ackId))
+  }
+
+  private def parseMessage(message: PubSubMessage) = {
+    (Try {
+//      import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport.ResourceAndPolicyNameFormat
+//      message.contents.parseJson.convertTo[ResourceAndPolicyName]
+      (null, null)
+    } recover {
+      case _: DeserializationException =>
+//        import WorkbenchIdentityJsonSupport.WorkbenchGroupNameFormat
+//        message.contents.parseJson.convertTo[WorkbenchGroupName]
+        (null, null)
+    }).get
+  }
+
+  override val supervisorStrategy =
+    OneForOneStrategy() {
+      case e => {
+        Escalate
+      }
+    }
+}

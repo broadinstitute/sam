@@ -2,12 +2,14 @@ package org.broadinstitute.dsde.workbench.sam.google
 
 import java.io.ByteArrayInputStream
 
-import akka.http.scaladsl.model.StatusCodes
+import akka.actor.ActorSystem
+import akka.http.scaladsl.model.{DateTime, StatusCodes}
 import cats.data.OptionT
 import cats.implicits._
 import com.google.api.client.googleapis.json.GoogleJsonResponseException
+import com.google.api.services.iam.v1.model.Role
 import com.google.api.services.storage.model.StorageObject
-import org.broadinstitute.dsde.workbench.google.{GoogleIamDAO, GoogleStorageDAO}
+import org.broadinstitute.dsde.workbench.google.{GoogleIamDAO, GooglePubSubDAO, GoogleStorageDAO}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccountKey, ServiceAccountKeyId}
 import org.broadinstitute.dsde.workbench.sam.config.{GoogleServicesConfig, PetServiceAccountConfig}
@@ -18,9 +20,27 @@ import scala.concurrent.{ExecutionContext, Future}
 /**
   * Created by mbemis on 1/10/18.
   */
-class GoogleKeyCache(val googleIamDAO: GoogleIamDAO, val googleStorageDAO: GoogleStorageDAO, val googleServicesConfig: GoogleServicesConfig, val petServiceAccountConfig: PetServiceAccountConfig)(implicit val executionContext: ExecutionContext) extends KeyCache {
+class GoogleKeyCache(val googleIamDAO: GoogleIamDAO, val googleStorageDAO: GoogleStorageDAO, val googlePubSubDAO: GooglePubSubDAO, val googleServicesConfig: GoogleServicesConfig, val petServiceAccountConfig: PetServiceAccountConfig)(implicit val executionContext: ExecutionContext) extends KeyCache {
 
-  override def onBoot(): Future[Unit] = {
+  override def onBoot()(implicit system: ActorSystem): Future[Unit] = {
+    system.actorOf(GoogleKeyCacheMonitorSupervisor.props(
+      googleServicesConfig.groupSyncPollInterval,
+      googleServicesConfig.groupSyncPollJitter,
+      googlePubSubDAO,
+      googleServicesConfig.groupSyncTopic,
+      googleServicesConfig.groupSyncSubscription,
+      googleServicesConfig.groupSyncWorkerCount,
+      this
+    ))
+
+    for {
+      _ <- googleStorageDAO.createBucket(googleServicesConfig.serviceAccountClientProject, petServiceAccountConfig.keyBucketName)
+      _ <- googleStorageDAO.setBucketLifecycle(petServiceAccountConfig.keyBucketName, petServiceAccountConfig.retiredKeyMaxAge)
+//      _ <- googlePubSubDAO.createTopic("foo") // (topic)
+//      _ <- googlePubSubDAO.createSubscription("foo", "bar") // (topic, subscription)
+//      _ <- googlePubSubDAO.setTopicIamPolicy("foo", "broad-dsde-dev@gs-project-accounts.iam.gserviceaccount.com", new  // (topic, user, role)
+    } yield null
+
     googleStorageDAO.createBucket(googleServicesConfig.serviceAccountClientProject, petServiceAccountConfig.keyBucketName).flatMap { _ =>
       googleStorageDAO.setBucketLifecycle(petServiceAccountConfig.keyBucketName, petServiceAccountConfig.activeKeyMaxAge)
     }
@@ -62,11 +82,15 @@ class GoogleKeyCache(val googleIamDAO: GoogleIamDAO, val googleStorageDAO: Googl
   }
 
   private def retrieveActiveKey(pet: PetServiceAccount, project: GoogleProject, keyObjects: List[StorageObject], keys: List[ServiceAccountKey]): Future[String] = {
-    val mostRecentKeyName = keyObjects.sortBy(_.getTimeCreated.getValue).last.getName //here is where we'll soon ask the question: "is this key still active?" if it's not, we'll create a new key
+    val mostRecentKey = keyObjects.sortBy(_.getTimeCreated.getValue).last
+    val keyRetired = System.currentTimeMillis() - mostRecentKey.getTimeCreated.getValue > 30000 //hardcoded for 30 seconds right now for testing
 
-    googleStorageDAO.getObject(petServiceAccountConfig.keyBucketName, mostRecentKeyName).flatMap {
-      case Some(key) => Future.successful(key.toString)
-      case None => furnishNewKey(pet, project) //this is a case that should never occur, but if it does, we should furnish a new key
+    if(keyRetired) furnishNewKey(pet, project)
+    else {
+      googleStorageDAO.getObject(petServiceAccountConfig.keyBucketName, mostRecentKey.getName).flatMap {
+        case Some(key) => Future.successful(key.toString)
+        case None => furnishNewKey(pet, project) //this is a case that should never occur, but if it does, we should furnish a new key
+      }
     }
   }
 
