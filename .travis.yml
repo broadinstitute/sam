@@ -8,7 +8,6 @@ scala:
 
 sudo: required
 
-env:
 services:
   - docker
 
