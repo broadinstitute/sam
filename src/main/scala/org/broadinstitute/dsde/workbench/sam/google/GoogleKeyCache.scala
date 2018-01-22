@@ -26,20 +26,20 @@ class GoogleKeyCache(val googleIamDAO: GoogleIamDAO, val googleStorageDAO: Googl
     }
   }
 
-  override def getKey(pet: PetServiceAccount, project: GoogleProject): Future[String] = {
+  override def getKey(pet: PetServiceAccount): Future[String] = {
     val retrievedKeys = for {
-      keyObjects <- googleStorageDAO.listObjectsWithPrefix(petServiceAccountConfig.keyBucketName, keyNamePrefix(project, pet.serviceAccount.email))
-      keys <- googleIamDAO.listServiceAccountKeys(project, pet.serviceAccount.email, true)
+      keyObjects <- googleStorageDAO.listObjectsWithPrefix(petServiceAccountConfig.keyBucketName, keyNamePrefix(pet.id.project, pet.serviceAccount.email))
+      keys <- googleIamDAO.listServiceAccountKeys(pet.id.project, pet.serviceAccount.email, true)
     } yield (keyObjects.toList, keys.toList)
 
     retrievedKeys.flatMap {
-      case (Nil, _) => furnishNewKey(pet, project) //mismatch. there were no keys found in the bucket, but there may be keys on the service account
-      case (_, Nil) => furnishNewKey(pet, project) //mismatch. there were no keys found on the service account, but there may be keys in the bucket
-      case (keyObjects, keys) => retrieveActiveKey(pet, project, keyObjects, keys)
+      case (Nil, _) => furnishNewKey(pet, pet.id.project) //mismatch. there were no keys found in the bucket, but there may be keys on the service account
+      case (_, Nil) => furnishNewKey(pet, pet.id.project) //mismatch. there were no keys found on the service account, but there may be keys in the bucket
+      case (keyObjects, keys) => retrieveActiveKey(pet, pet.id.project, keyObjects, keys)
     }
   }
 
-  override def removeKey(pet: PetServiceAccount, project: GoogleProject, keyId: ServiceAccountKeyId): Future[Unit] = {
+  override def removeKey(pet: PetServiceAccount, keyId: ServiceAccountKeyId): Future[Unit] = {
     for {
       _ <- googleIamDAO.removeServiceAccountKey(pet.id.project, pet.serviceAccount.email, keyId)
       _ <- googleStorageDAO.removeObject(petServiceAccountConfig.keyBucketName, keyNameFull(pet.id.project, pet.serviceAccount.email, keyId))

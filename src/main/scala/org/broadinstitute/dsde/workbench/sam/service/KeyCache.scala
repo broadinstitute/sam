@@ -10,14 +10,14 @@ import scala.concurrent.Future
   */
 trait KeyCache {
   def onBoot(): Future[Unit]
-  def getKey(pet: PetServiceAccount, project: GoogleProject): Future[String]
-  def removeKey(pet: PetServiceAccount, project: GoogleProject, keyId: ServiceAccountKeyId): Future[Unit]
+  def getKey(pet: PetServiceAccount): Future[String]
+  def removeKey(pet: PetServiceAccount, keyId: ServiceAccountKeyId): Future[Unit]
 }
 
 trait NoKeyCache extends KeyCache {
   override def onBoot(): Future[Unit] = Future.successful(())
-  override def getKey(pet: PetServiceAccount, project: GoogleProject): Future[String] = Future.successful("")
-  override def removeKey(pet: PetServiceAccount, project: GoogleProject, keyId: ServiceAccountKeyId): Future[Unit] = Future.successful(())
+  override def getKey(pet: PetServiceAccount): Future[String] = Future.successful("")
+  override def removeKey(pet: PetServiceAccount, keyId: ServiceAccountKeyId): Future[Unit] = Future.successful(())
 }
 
 object NoKeyCache extends NoKeyCache
