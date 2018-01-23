@@ -1,7 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.service
 
-import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccountKeyId}
-import org.broadinstitute.dsde.workbench.model.{PetServiceAccount, WorkbenchEmail, WorkbenchUser, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.model.google.ServiceAccountKeyId
+import org.broadinstitute.dsde.workbench.model.PetServiceAccount
 
 import scala.concurrent.Future
 
@@ -13,11 +13,3 @@ trait KeyCache {
   def getKey(pet: PetServiceAccount): Future[String]
   def removeKey(pet: PetServiceAccount, keyId: ServiceAccountKeyId): Future[Unit]
 }
-
-trait NoKeyCache extends KeyCache {
-  override def onBoot(): Future[Unit] = Future.successful(())
-  override def getKey(pet: PetServiceAccount): Future[String] = Future.successful("")
-  override def removeKey(pet: PetServiceAccount, keyId: ServiceAccountKeyId): Future[Unit] = Future.successful(())
-}
-
-object NoKeyCache extends NoKeyCache
