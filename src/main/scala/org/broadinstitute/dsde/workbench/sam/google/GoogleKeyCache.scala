@@ -9,7 +9,7 @@ import com.google.api.client.googleapis.json.GoogleJsonResponseException
 import com.google.api.services.storage.model.StorageObject
 import org.broadinstitute.dsde.workbench.google.{GoogleIamDAO, GoogleStorageDAO}
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccountKey, ServiceAccountKeyId}
+import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccountKeyId}
 import org.broadinstitute.dsde.workbench.sam.config.{GoogleServicesConfig, PetServiceAccountConfig}
 import org.broadinstitute.dsde.workbench.sam.service.KeyCache
 
@@ -35,14 +35,14 @@ class GoogleKeyCache(val googleIamDAO: GoogleIamDAO, val googleStorageDAO: Googl
     retrievedKeys.flatMap {
       case (Nil, _) => furnishNewKey(pet) //mismatch. there were no keys found in the bucket, but there may be keys on the service account
       case (_, Nil) => furnishNewKey(pet) //mismatch. there were no keys found on the service account, but there may be keys in the bucket
-      case (keyObjects, keys) => retrieveActiveKey(pet, keyObjects, keys)
+      case (keyObjects, _) => retrieveActiveKey(pet, keyObjects)
     }
   }
 
   override def removeKey(pet: PetServiceAccount, keyId: ServiceAccountKeyId): Future[Unit] = {
     for {
-      _ <- googleIamDAO.removeServiceAccountKey(pet.id.project, pet.serviceAccount.email, keyId)
       _ <- googleStorageDAO.removeObject(petServiceAccountConfig.keyBucketName, keyNameFull(pet.id.project, pet.serviceAccount.email, keyId))
+      _ <- googleIamDAO.removeServiceAccountKey(pet.id.project, pet.serviceAccount.email, keyId)
     } yield ()
   }
 
@@ -61,7 +61,7 @@ class GoogleKeyCache(val googleIamDAO: GoogleIamDAO, val googleStorageDAO: Googl
     keyFuture.value.map(_.getOrElse(throw new WorkbenchException("Unable to furnish new key")))
   }
 
-  private def retrieveActiveKey(pet: PetServiceAccount, keyObjects: List[StorageObject], keys: List[ServiceAccountKey]): Future[String] = {
+  private def retrieveActiveKey(pet: PetServiceAccount, keyObjects: List[StorageObject]): Future[String] = {
     val mostRecentKeyName = keyObjects.sortBy(_.getTimeCreated.getValue).last.getName //here is where we'll soon ask the question: "is this key still active?" if it's not, we'll create a new key
 
     googleStorageDAO.getObject(petServiceAccountConfig.keyBucketName, mostRecentKeyName).flatMap {
