@@ -40,9 +40,9 @@ function docker_cmd()
     if [ $DOCKER_CMD = "build" ] || [ $DOCKER_CMD = "push" ]; then
         echo "building sam docker image..."
         if [ "$ENV" != "dev" ] && [ "$ENV" != "alpha" ] && [ "$ENV" != "staging" ] && [ "$ENV" != "perf" ]; then
-            DOCKER_TAG=${GIT_BRANCH}
+            DOCKER_TAG=${BRANCH}
         else
-            GIT_SHA=$(git rev-parse ${GIT_BRANCH})
+            GIT_SHA=$(git rev-parse ${BRANCH})
             echo GIT_SHA=$GIT_SHA > env.properties
             DOCKER_TAG=${GIT_SHA:0:12}
         fi
@@ -64,7 +64,7 @@ function docker_cmd()
 
 # parse command line options
 DOCKER_CMD=
-GIT_BRANCH=${GIT_BRANCH:-$(git rev-parse --abbrev-ref HEAD)}  # default to current branch
+BRANCH=${BRANCH:-$(git rev-parse --abbrev-ref HEAD)}  # default to current branch
 REPO=${REPO:-broadinstitute/$PROJECT}  # default to sam docker repo
 TESTS_REPO=$REPO-tests
 ENV=${ENV:-""}  # if env is not set, push an image with branch name
