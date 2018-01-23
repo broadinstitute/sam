@@ -106,7 +106,7 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
         Sam.user.petServiceAccountEmail(projectName)(userAuthToken) shouldBe petAccountEmail
 
 
-        val petAuthToken = ServiceAccountAuthToken(petAccountEmail)
+        val petAuthToken = ServiceAccountAuthToken(GoogleProject(Config.Projects.default), petAccountEmail)
         register cleanUp petAuthToken.removePrivateKey()
 
         Sam.user.status()(petAuthToken) shouldBe Some(userStatus)
