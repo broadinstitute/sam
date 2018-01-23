@@ -207,7 +207,7 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
     val googleDirectoryDAO = new MockGoogleDirectoryDAO()
     val directoryDAO = new MockDirectoryDAO()
     val (googleIamDAO: GoogleIamDAO, expectedJson: String) = createMockGoogleIamDaoForSAKeyTests
-    val (googleStorageDAO, _) = createMockGoogleStorageDAOForSaKeyTests
+    val googleStorageDAO = createMockGoogleStorageDAOForSaKeyTests
     val policyDAO = new MockAccessPolicyDAO()
     val pubSubDAO = new MockGooglePubSubDAO()
     val cloudKeyCache = new GoogleKeyCache(googleIamDAO, googleStorageDAO, googleServicesConfig, petServiceAccountConfig)
@@ -288,16 +288,15 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
     when(googleIamDAO.getOrCreateServiceAccount(any[GoogleProject], any[ServiceAccountName], any[ServiceAccountDisplayName])(any[ExecutionContext])).thenReturn(Future.successful(ServiceAccount(ServiceAccountSubjectId("12312341234"), WorkbenchEmail("pet@myproject.iam.gserviceaccount.com"), ServiceAccountDisplayName(""))))
     when(googleIamDAO.createServiceAccountKey(any[GoogleProject], any[WorkbenchEmail])).thenReturn(Future.successful(ServiceAccountKey(ServiceAccountKeyId("foo"), ServiceAccountPrivateKeyData(ServiceAccountPrivateKeyData(expectedJson).encode), None, None)))
     when(googleIamDAO.removeServiceAccountKey(any[GoogleProject], any[WorkbenchEmail], any[ServiceAccountKeyId])).thenReturn(Future.successful(()))
-    when(googleIamDAO.listServiceAccountKeys(any[GoogleProject], any[WorkbenchEmail], any[Boolean])).thenReturn(Future.successful(Seq.empty))
+    when(googleIamDAO.listUserManagedServiceAccountKeys(any[GoogleProject], any[WorkbenchEmail])).thenReturn(Future.successful(Seq.empty))
     (googleIamDAO, expectedJson)
   }
 
-  private def createMockGoogleStorageDAOForSaKeyTests: (GoogleStorageDAO, String) = {
+  private def createMockGoogleStorageDAOForSaKeyTests: GoogleStorageDAO = {
     val googleStorageDAO = mock[GoogleStorageDAO]
-    val expectedJson = """{"valid":"json"}"""
     when(googleStorageDAO.listObjectsWithPrefix(any[String], any[String])).thenReturn(Future.successful(Seq(new StorageObject().setName("foo"))))
     when(googleStorageDAO.storeObject(any[String], any[String], any[ByteArrayInputStream], any[String])).thenReturn(Future.successful(()))
-    (googleStorageDAO, expectedJson)
+    googleStorageDAO
   }
 
   private def setupPetSATest: (UserInfo, TestSamRoutes with GoogleExtensionRoutes, String) = {
