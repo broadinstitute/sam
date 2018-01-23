@@ -17,5 +17,6 @@ case class GoogleServicesConfig(appName: String,
                                 groupSyncPollJitter: FiniteDuration,
                                 groupSyncTopic: String,
                                 groupSyncSubscription: String,
-                                groupSyncWorkerCount: Int
+                                groupSyncWorkerCount: Int,
+                                googleKeyCacheConfig: GoogleKeyCacheConfig
                                )
