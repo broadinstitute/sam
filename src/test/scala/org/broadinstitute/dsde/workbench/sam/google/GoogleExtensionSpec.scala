@@ -1,12 +1,14 @@
 package org.broadinstitute.dsde.workbench.sam.google
 
-import java.util.{Date, UUID}
+import java.io.ByteArrayInputStream
+import java.util.Date
 
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
 import akka.testkit.TestKit
+import com.google.api.services.storage.model.StorageObject
 import com.typesafe.config.ConfigFactory
-import org.broadinstitute.dsde.workbench.google.GoogleDirectoryDAO
+import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleStorageDAO}
 import org.broadinstitute.dsde.workbench.google.mock.{MockGoogleDirectoryDAO, MockGoogleIamDAO, MockGooglePubSubDAO, MockGoogleStorageDAO}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.config.{DirectoryConfig, GoogleServicesConfig, PetServiceAccountConfig}
@@ -276,7 +278,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val mockGooglePubSubDAO = new MockGooglePubSubDAO
     val mockGoogleStorageDAO = new MockGoogleStorageDAO
     val mockGoogleIamDAO = new MockGoogleIamDAO
-    val googleKeyCache = new GoogleKeyCache(mockGoogleIamDAO, mockGoogleStorageDAO, googleServicesConfig, petServiceAccountConfig)
+    val googleKeyCache = new GoogleKeyCache(mockGoogleIamDAO, new MockGoogleStorageDAO, googleServicesConfig, petServiceAccountConfig)
 
     val ge = new GoogleExtensions(mockDirectoryDAO, mockAccessPolicyDAO, mockGoogleDirectoryDAO, mockGooglePubSubDAO, mockGoogleIamDAO, mockGoogleStorageDAO, googleKeyCache, googleServicesConfig, petServiceAccountConfig, configResourceTypes(CloudExtensions.resourceTypeName))
 
@@ -300,6 +302,46 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     // make sure a repeated call does not fail
     runAndWait(ge.onBoot(app))
 
+  }
+
+  private def setupGoogleKeyCacheTests: (GoogleExtensions, UserService) = {
+    implicit val patienceConfig = PatienceConfig(1 second)
+    val dirDAO = new JndiDirectoryDAO(directoryConfig)
+    val schemaDao = new JndiSchemaDAO(directoryConfig)
+
+    runAndWait(schemaDao.clearDatabase())
+    runAndWait(schemaDao.init())
+
+    val mockGoogleIamDAO = new MockGoogleIamDAO
+    val mockGoogleDirectoryDAO = new MockGoogleDirectoryDAO
+    val mockGoogleStorageDAO = new MockGoogleStorageDAO
+    val googleKeyCache = new GoogleKeyCache(mockGoogleIamDAO, mockGoogleStorageDAO, googleServicesConfig, petServiceAccountConfig)
+
+    val googleExtensions = new GoogleExtensions(dirDAO, null, mockGoogleDirectoryDAO, null, mockGoogleIamDAO, mockGoogleStorageDAO, googleKeyCache, googleServicesConfig, petServiceAccountConfig, configResourceTypes(CloudExtensions.resourceTypeName))
+    val service = new UserService(dirDAO, googleExtensions)
+
+    (googleExtensions, service)
+  }
+
+  "GoogleKeyCache" should "create a service account key and return the same key when called again" in {
+    val (googleExtensions, service) = setupGoogleKeyCacheTests
+
+    val defaultUserId = WorkbenchUserId("newuser")
+    val defaultUserEmail = WorkbenchEmail("newuser@new.com")
+    val defaultUser = WorkbenchUser(defaultUserId, defaultUserEmail)
+
+    // create a user
+    val newUser = service.createUser(defaultUser).futureValue
+    newUser shouldBe UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
+
+    // create a pet service account
+    val googleProject = GoogleProject("testproject")
+    val petServiceAccount = googleExtensions.createUserPetServiceAccount(defaultUser, googleProject).futureValue
+
+    petServiceAccount.serviceAccount.email.value should endWith(s"@${googleProject.value}.iam.gserviceaccount.com")
+
+    assert(runAndWait(googleExtensions.getPetServiceAccountKey(defaultUser, googleProject)).equals("abcdefg"))
+    assert(runAndWait(googleExtensions.getPetServiceAccountKey(defaultUser, googleProject)).equals("abcdefg"))
   }
 
 }

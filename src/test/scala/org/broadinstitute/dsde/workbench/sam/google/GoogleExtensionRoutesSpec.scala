@@ -207,7 +207,7 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
     val googleDirectoryDAO = new MockGoogleDirectoryDAO()
     val directoryDAO = new MockDirectoryDAO()
     val (googleIamDAO: GoogleIamDAO, expectedJson: String) = createMockGoogleIamDaoForSAKeyTests
-    val googleStorageDAO = createMockGoogleStorageDAOForSaKeyTests
+    val googleStorageDAO = new MockGoogleStorageDAO()
     val policyDAO = new MockAccessPolicyDAO()
     val pubSubDAO = new MockGooglePubSubDAO()
     val cloudKeyCache = new GoogleKeyCache(googleIamDAO, googleStorageDAO, googleServicesConfig, petServiceAccountConfig)
@@ -292,19 +292,12 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
     (googleIamDAO, expectedJson)
   }
 
-  private def createMockGoogleStorageDAOForSaKeyTests: GoogleStorageDAO = {
-    val googleStorageDAO = mock[GoogleStorageDAO]
-    when(googleStorageDAO.listObjectsWithPrefix(any[String], any[String])).thenReturn(Future.successful(Seq(new StorageObject().setName("foo"))))
-    when(googleStorageDAO.storeObject(any[String], any[String], any[ByteArrayInputStream], any[String])).thenReturn(Future.successful(()))
-    googleStorageDAO
-  }
-
   private def setupPetSATest: (UserInfo, TestSamRoutes with GoogleExtensionRoutes, String) = {
     val defaultUserInfo = UserInfo("accessToken", WorkbenchUserId("user1"), WorkbenchEmail("user1@example.com"), 0)
     val googleDirectoryDAO = new MockGoogleDirectoryDAO()
     val directoryDAO = new MockDirectoryDAO()
     val (googleIamDAO: GoogleIamDAO, expectedJson: String) = createMockGoogleIamDaoForSAKeyTests
-    val googleStorageDAO = new MockGoogleStorageDAO()
+    val googleStorageDAO = new MockGoogleStorageDAO
     val policyDAO = new MockAccessPolicyDAO()
     val pubSubDAO = new MockGooglePubSubDAO()
     val cloudKeyCache = new GoogleKeyCache(googleIamDAO, googleStorageDAO, googleServicesConfig, petServiceAccountConfig)
@@ -360,4 +353,5 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
       status shouldEqual StatusCodes.Forbidden
     }
   }
+
 }
