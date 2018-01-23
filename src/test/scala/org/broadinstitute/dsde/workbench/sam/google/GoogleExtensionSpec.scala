@@ -31,7 +31,7 @@ import scala.language.postfixOps
 import scala.util.{Success, Try}
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.sam.config._
-import org.broadinstitute.dsde.workbench.model.google.GoogleProject
+import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccountKeyId}
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 
 class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with FlatSpecLike with Matchers with TestSupport with MockitoSugar with ScalaFutures with BeforeAndAfterAll {
@@ -338,10 +338,40 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val googleProject = GoogleProject("testproject")
     val petServiceAccount = googleExtensions.createUserPetServiceAccount(defaultUser, googleProject).futureValue
 
-    petServiceAccount.serviceAccount.email.value should endWith(s"@${googleProject.value}.iam.gserviceaccount.com")
+    //get a key, which should create a brand new one
+    val firstKey = runAndWait(googleExtensions.getPetServiceAccountKey(defaultUser, googleProject))
 
-    assert(runAndWait(googleExtensions.getPetServiceAccountKey(defaultUser, googleProject)).equals("abcdefg"))
-    assert(runAndWait(googleExtensions.getPetServiceAccountKey(defaultUser, googleProject)).equals("abcdefg"))
+    //get a key again, which should return the original cached key created above
+    val secondKey = runAndWait(googleExtensions.getPetServiceAccountKey(defaultUser, googleProject))
+
+    assert(firstKey == secondKey)
+  }
+
+  it should "remove an existing key and then return a brand new one" in {
+    val (googleExtensions, service) = setupGoogleKeyCacheTests
+
+    val defaultUserId = WorkbenchUserId("newuser")
+    val defaultUserEmail = WorkbenchEmail("newuser@new.com")
+    val defaultUser = WorkbenchUser(defaultUserId, defaultUserEmail)
+
+    // create a user
+    val newUser = service.createUser(defaultUser).futureValue
+    newUser shouldBe UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
+
+    // create a pet service account
+    val googleProject = GoogleProject("testproject")
+    val petServiceAccount = googleExtensions.createUserPetServiceAccount(defaultUser, googleProject).futureValue
+
+    //get a key, which should create a brand new one
+    val firstKey = runAndWait(googleExtensions.getPetServiceAccountKey(defaultUser, googleProject))
+
+    //remove the key we just created
+    runAndWait(googleExtensions.removePetServiceAccountKey(defaultUserId, googleProject, ServiceAccountKeyId(firstKey)))
+
+    //get a key again, which should once again create a brand new one because we've deleted the cached one
+    val secondKey = runAndWait(googleExtensions.getPetServiceAccountKey(defaultUser, googleProject))
+
+    assert(firstKey != secondKey)
   }
 
 }
