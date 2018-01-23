@@ -28,6 +28,7 @@ object Boot extends App with LazyLogging {
 
     val directoryConfig = config.as[DirectoryConfig]("directory")
     val googleServicesConfigOption = config.getAs[GoogleServicesConfig]("googleServices")
+//    val googleKeyCacheConfigOption = config.getAs[GoogleKeyCacheConfig]("googleKeyCache")
 
     // we need an ActorSystem to host our application in
     implicit val system = ActorSystem("sam")
@@ -48,7 +49,7 @@ object Boot extends App with LazyLogging {
         val googleIamDAO = new HttpGoogleIamDAO(googleServicesConfig.serviceAccountClientId, googleServicesConfig.pemFile, googleServicesConfig.appName, "google")
         val googlePubSubDAO = new HttpGooglePubSubDAO(googleServicesConfig.serviceAccountClientId, googleServicesConfig.pemFile, googleServicesConfig.appName, googleServicesConfig.groupSyncPubSubProject, "google")
         val googleStorageDAO = new HttpGoogleStorageDAO(googleServicesConfig.serviceAccountClientId, googleServicesConfig.pemFile, googleServicesConfig.appName, "google")
-        val googleKeyCache = new GoogleKeyCache(googleIamDAO, googleStorageDAO, googleServicesConfig, petServiceAccountConfig)
+        val googleKeyCache = new GoogleKeyCache(googleIamDAO, googleStorageDAO, googlePubSubDAO, googleServicesConfig, petServiceAccountConfig)
 
         new GoogleExtensions(directoryDAO, accessPolicyDAO, googleDirectoryDAO, googlePubSubDAO, googleIamDAO, googleStorageDAO, googleKeyCache, googleServicesConfig, petServiceAccountConfig, resourceTypes(CloudExtensions.resourceTypeName))
       case None => NoExtensions

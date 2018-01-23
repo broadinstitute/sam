@@ -64,7 +64,8 @@ package object config {
       org.broadinstitute.dsde.workbench.util.toScalaDuration(config.getDuration("groupSync.pollJitter")),
       config.getString("groupSync.pubSubTopic"),
       config.getString("groupSync.pubSubSubscription"),
-      config.getInt("groupSync.workerCount")
+      config.getInt("groupSync.workerCount"),
+      config.as[GoogleKeyCacheConfig]("googleKeyCache")
     )
   }
 
@@ -75,6 +76,20 @@ package object config {
       config.getString("keyBucketName"),
       config.getInt("activeKeyMaxAge"),
       config.getInt("retiredKeyMaxAge")
+    )
+  }
+
+  implicit val googleKeyCacheConfigReader: ValueReader[GoogleKeyCacheConfig] = ValueReader.relative { config =>
+    GoogleKeyCacheConfig(
+      config.getString("bucketName"),
+      config.getInt("activeKeyMaxAge"),
+      config.getInt("retiredKeyMaxAge"),
+      config.getString("monitor.pubSubProject"),
+      org.broadinstitute.dsde.workbench.util.toScalaDuration(config.getDuration("monitor.pollInterval")),
+      org.broadinstitute.dsde.workbench.util.toScalaDuration(config.getDuration("monitor.pollJitter")),
+      config.getString("monitor.pubSubTopic"),
+      config.getString("monitor.pubSubSubscription"),
+      config.getInt("monitor.workerCount")
     )
   }
 }
