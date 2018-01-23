@@ -301,4 +301,5 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     runAndWait(ge.onBoot(app))
 
   }
+
 }
