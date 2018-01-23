@@ -29,7 +29,7 @@ class GoogleKeyCache(val googleIamDAO: GoogleIamDAO, val googleStorageDAO: Googl
   override def getKey(pet: PetServiceAccount): Future[String] = {
     val retrievedKeys = for {
       keyObjects <- googleStorageDAO.listObjectsWithPrefix(petServiceAccountConfig.keyBucketName, keyNamePrefix(pet.id.project, pet.serviceAccount.email))
-      keys <- googleIamDAO.listServiceAccountKeys(pet.id.project, pet.serviceAccount.email, true)
+      keys <- googleIamDAO.listUserManagedServiceAccountKeys(pet.id.project, pet.serviceAccount.email)
     } yield (keyObjects.toList, keys.toList)
 
     retrievedKeys.flatMap {
