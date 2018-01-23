@@ -128,7 +128,7 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
       // ensure clean state: SA's user not registered
       removeUser(sa.subjectId.value)
 
-      implicit val saAuthToken: ServiceAccountAuthToken = ServiceAccountAuthToken(saEmail)
+      implicit val saAuthToken: ServiceAccountAuthToken = ServiceAccountAuthToken(GoogleProject(Config.Projects.default), saEmail)
       register cleanUp saAuthToken.removePrivateKey()
 
       registerAsNewUser(saEmail)
