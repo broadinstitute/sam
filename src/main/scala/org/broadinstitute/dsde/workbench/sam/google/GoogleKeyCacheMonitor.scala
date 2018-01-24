@@ -2,6 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.google
 
 import akka.actor.SupervisorStrategy.{Escalate, Stop}
 import akka.actor._
+import akka.pattern._
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.google.GooglePubSubDAO.PubSubMessage
 import org.broadinstitute.dsde.workbench.google.{GoogleIamDAO, GooglePubSubDAO}
