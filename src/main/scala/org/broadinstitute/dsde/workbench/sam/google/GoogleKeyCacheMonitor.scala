@@ -99,26 +99,15 @@ class GoogleKeyCacheMonitorActor(val pollInterval: FiniteDuration, pollIntervalJ
 
     case Some(message: PubSubMessage) =>
       logger.debug(s"received sync message: $message")
-
-
-      val x= message.contents.parseJson.asJsObject.getFields("name")
-
-      println(message)
-      val parsedMessage = x.head.toString.replace("\"", "").split("/").toList
-
-      println(parsedMessage)
-
-      googleIamDAO.removeServiceAccountKey(GoogleProject(parsedMessage(0)), WorkbenchEmail(parsedMessage(1)), ServiceAccountKeyId(parsedMessage(2)))
+      val (project, serviceAccountEmail, keyId) = parseMessage(message)
+      googleIamDAO.removeServiceAccountKey(project, serviceAccountEmail, keyId).map(response => (response, message.ackId)) pipeTo self
 
     case None =>
       // there was no message to wait and try again
       val nextTime = org.broadinstitute.dsde.workbench.util.addJitter(pollInterval, pollIntervalJitter)
       system.scheduler.scheduleOnce(nextTime.asInstanceOf[FiniteDuration], self, StartMonitorPass)
 
-    case (Success(_), ackId: String) =>
-      acknowledgeMessage(ackId).map(_ => StartMonitorPass) pipeTo self
-
-    case (Failure(_), ackId: String) =>
+    case ((), ackId: String) =>
       acknowledgeMessage(ackId).map(_ => StartMonitorPass) pipeTo self
 
     case Status.Failure(t) => throw t
@@ -134,15 +123,12 @@ class GoogleKeyCacheMonitorActor(val pollInterval: FiniteDuration, pollIntervalJ
   }
 
   private def parseMessage(message: PubSubMessage) = {
-    (Try {
-      message.contents.parseJson.asJsObject.getFields("name")
-      (null, null)
-    } recover {
-      case _: DeserializationException =>
-        //        import WorkbenchIdentityJsonSupport.WorkbenchGroupNameFormat
-        //        message.contents.parseJson.convertTo[WorkbenchGroupName]
-        (null, null)
-    }).get
+    val objectIdPattern = """"([^/]+)/([^/]+)/([^/]+)"""".r
+
+    message.contents.parseJson.asJsObject.getFields("name").head.compactPrint match {
+      case objectIdPattern(project, serviceAccountEmail, keyId) => (GoogleProject(project), WorkbenchEmail(serviceAccountEmail), ServiceAccountKeyId(keyId))
+      case m => throw new Exception(s"unable to parse message $m")
+    }
   }
 
   override val supervisorStrategy =
