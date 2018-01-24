@@ -3,6 +3,7 @@
 {{with $environment := env "ENVIRONMENT"}}
 {{with $dir := env "ROOT_DIR"}}
 {{with $local_ui := env "LOCAL_UI"}}
+{{with $trialBillingPemSecrets := vault (printf "secret/dsde/firecloud/%s/common/trial-billing-account.pem" $environment)}}
 {{with $users := vault (printf "secret/dsde/firecloud/%s/common/users" $environment)}}
 {{with $secrets := vault (printf "secret/dsde/firecloud/%s/common/secrets" $environment)}}
 
@@ -33,6 +34,9 @@ gcs {
   serviceProject = "broad-dsde-{{$environment}}"
   smoketestsProject = {{if eq $environment "prod"}}"broad-dsde-{{$environment}}-smoketests"{{else}}"broad-dsde-{{$environment}}"{{end}}
   qaPemFile = "{{$dir}}/src/test/resources/firecloud-account.pem"
+  trialBillingPemFile = "{{$dir}}/src/test/resources/trial-billing-account.pem"
+  trialBillingPemFileClientId = "{{$trialBillingPemSecrets.Data.client_email}}"
+
   billingAccount = "Broad Institute - 8201528"
   billingAccountId = "billingAccounts/00708C-45D19D-27AAFA"
 }
@@ -58,6 +62,7 @@ chromeSettings {
   chromedriverHost = "http://hub:4444/wd/hub"
   chromedriverPath = "/usr/local/bin/chromedriver"
 }
+{{end}}
 {{end}}
 {{end}}
 {{end}}
