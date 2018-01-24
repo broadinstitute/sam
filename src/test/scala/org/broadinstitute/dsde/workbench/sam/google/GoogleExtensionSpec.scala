@@ -348,6 +348,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
   }
 
   it should "remove an existing key and then return a brand new one" in {
+    implicit val patienceConfig = PatienceConfig(1 second)
     val (googleExtensions, service) = setupGoogleKeyCacheTests
 
     val defaultUserId = WorkbenchUserId("newuser")
