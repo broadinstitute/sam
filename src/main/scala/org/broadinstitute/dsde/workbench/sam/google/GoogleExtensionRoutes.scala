@@ -1,18 +1,16 @@
 package org.broadinstitute.dsde.workbench.sam.google
 
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
-import akka.http.scaladsl.model.{ContentTypes, StatusCodes}
-import akka.http.scaladsl.model.headers._
+import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directives._
-import org.broadinstitute.dsde.workbench.sam._
-import org.broadinstitute.dsde.workbench.model.google._
-import org.broadinstitute.dsde.workbench.sam.google.GoogleModelJsonSupport._
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
+import org.broadinstitute.dsde.workbench.model.google._
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchEmail, WorkbenchExceptionWithErrorReport, WorkbenchUser}
+import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.api.{ExtensionRoutes, SecurityDirectives, UserInfoDirectives}
-import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
+import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.CloudExtensions
 import spray.json.DefaultJsonProtocol._
 
@@ -65,7 +63,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                 complete {
                   import spray.json._
                   // parse json to ensure it is json and tells akka http the right content-type
-                  googleExtensions.getPetServiceAccountKey(WorkbenchUser(userInfo.userId, userInfo.userEmail), GoogleProject(project)).map { x => StatusCodes.OK -> x.parseJson }
+                  googleExtensions.getPetServiceAccountKey(WorkbenchUser(userInfo.userId, userInfo.userEmail), GoogleProject(project)).map(key => StatusCodes.OK -> key.parseJson)
                 }
               } ~
               path(Segment) { keyId =>

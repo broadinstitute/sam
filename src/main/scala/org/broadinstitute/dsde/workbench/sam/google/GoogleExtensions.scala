@@ -6,7 +6,7 @@ import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
 import com.google.api.client.googleapis.json.GoogleJsonResponseException
 import com.typesafe.scalalogging.LazyLogging
-import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleIamDAO, GooglePubSubDAO}
+import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleIamDAO, GooglePubSubDAO, GoogleStorageDAO}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google._
 import org.broadinstitute.dsde.workbench.sam._
@@ -26,7 +26,7 @@ object GoogleExtensions {
   val getPetPrivateKeyAction = ResourceAction("get_pet_private_key")
 }
 
-class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: AccessPolicyDAO, val googleDirectoryDAO: GoogleDirectoryDAO, val googlePubSubDAO: GooglePubSubDAO, val googleIamDAO: GoogleIamDAO, val googleServicesConfig: GoogleServicesConfig, val petServiceAccountConfig: PetServiceAccountConfig, extensionResourceType: ResourceType)(implicit val executionContext: ExecutionContext) extends LazyLogging with FutureSupport with CloudExtensions {
+class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: AccessPolicyDAO, val googleDirectoryDAO: GoogleDirectoryDAO, val googlePubSubDAO: GooglePubSubDAO, val googleIamDAO: GoogleIamDAO, val googleStorageDAO: GoogleStorageDAO, val googleKeyCache: GoogleKeyCache, val googleServicesConfig: GoogleServicesConfig, val petServiceAccountConfig: PetServiceAccountConfig, extensionResourceType: ResourceType)(implicit val executionContext: ExecutionContext) extends LazyLogging with FutureSupport with CloudExtensions {
   private[google] def toProxyFromUser(subjectId: WorkbenchUserId): WorkbenchEmail = WorkbenchEmail(s"PROXY_${subjectId.value}@${googleServicesConfig.appsDomain}")
 
   override val emailDomain = googleServicesConfig.appsDomain
@@ -69,6 +69,8 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
       _ <- samApplication.resourceService.createResource(extensionResourceType, GoogleExtensions.resourceId, serviceAccountUserInfo) recover {
         case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode == Option(StatusCodes.Conflict) =>
       }
+
+      _ <- googleKeyCache.onBoot()
     } yield ()
   }
 
@@ -178,6 +180,33 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
     }
   }
 
+  def getPetServiceAccountKey(userEmail: WorkbenchEmail, project: GoogleProject): Future[Option[String]] = {
+    for {
+      subject <- directoryDAO.loadSubjectFromEmail(userEmail)
+      key <- subject match {
+        case Some(userId: WorkbenchUserId) => getPetServiceAccountKey(WorkbenchUser(userId, userEmail), project).map(Option(_))
+        case _ => Future.successful(None)
+      }
+    } yield key
+  }
+
+  def getPetServiceAccountKey(user: WorkbenchUser, project: GoogleProject): Future[String] = {
+    for {
+      pet <- createUserPetServiceAccount(user, project)
+      key <- googleKeyCache.getKey(pet)
+    } yield key
+  }
+
+  def removePetServiceAccountKey(userId: WorkbenchUserId, project: GoogleProject, keyId: ServiceAccountKeyId): Future[Unit] = {
+    for {
+      maybePet <- directoryDAO.loadPetServiceAccount(PetServiceAccountId(userId, project))
+      result <- maybePet match {
+        case Some(pet) => googleKeyCache.removeKey(pet, keyId)
+        case none => Future.successful(())
+      }
+    } yield result
+  }
+
   private def enablePetServiceAccount(petServiceAccount: PetServiceAccount): Future[Unit] = {
     for {
       _ <- directoryDAO.enableIdentity(petServiceAccount.id)
@@ -214,38 +243,6 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
       // remove the service account itself in Google
       _ <- googleIamDAO.removeServiceAccount(petServiceAccountConfig.googleProject, toAccountName(petServiceAccount.serviceAccount.email))
     } yield ()
-  }
-
-  def getPetServiceAccountKey(userEmail: WorkbenchEmail, project: GoogleProject): Future[Option[String]] = {
-    for {
-      subject <- directoryDAO.loadSubjectFromEmail(userEmail)
-      result <- subject match {
-        case Some(userId: WorkbenchUserId) => getPetServiceAccountKey(WorkbenchUser(userId, userEmail), project).map(Option(_))
-        case _ => Future.successful(None)
-      }
-    } yield result
-  }
-
-  //this class is getting to be too big. look into moving some things out of it.
-  def getPetServiceAccountKey(user: WorkbenchUser, project: GoogleProject): Future[String] = {
-    for {
-      pet <- createUserPetServiceAccount(user, project)
-      response <- googleIamDAO.createServiceAccountKey(project, pet.serviceAccount.email) recover {
-        case e: GoogleJsonResponseException if e.getDetails.getCode == StatusCodes.TooManyRequests.intValue => throw new WorkbenchException("You have reached the 10 key limit on service accounts. Please remove one to create another.")
-      }
-    } yield {
-      response.privateKeyData.decode.getOrElse(throw new WorkbenchException(s"could not decode service account private key data for key ${response.id}"))
-    }
-  }
-
-  def removePetServiceAccountKey(userId: WorkbenchUserId, project: GoogleProject, keyId: ServiceAccountKeyId): Future[Unit] = {
-    for {
-      maybePet <- directoryDAO.loadPetServiceAccount(PetServiceAccountId(userId, project))
-      response <- maybePet match {
-        case Some(pet) => googleIamDAO.removeServiceAccountKey(project, pet.serviceAccount.email, keyId)
-        case None => Future.successful(())
-      }
-    } yield response
   }
 
   def getSynchronizedDate(groupId: WorkbenchGroupIdentity): Future[Option[Date]] = {
