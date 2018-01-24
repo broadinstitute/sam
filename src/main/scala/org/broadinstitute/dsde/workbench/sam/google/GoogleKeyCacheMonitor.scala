@@ -2,22 +2,17 @@ package org.broadinstitute.dsde.workbench.sam.google
 
 import akka.actor.SupervisorStrategy.{Escalate, Stop}
 import akka.actor._
-import akka.pattern._
-import akka.http.scaladsl.model.StatusCodes
 import com.typesafe.scalalogging.LazyLogging
-import org.broadinstitute.dsde.workbench.google.{GoogleIamDAO, GooglePubSubDAO}
 import org.broadinstitute.dsde.workbench.google.GooglePubSubDAO.PubSubMessage
+import org.broadinstitute.dsde.workbench.google.{GoogleIamDAO, GooglePubSubDAO}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccountKeyId}
-import org.broadinstitute.dsde.workbench.sam._
-import org.broadinstitute.dsde.workbench.sam.model.ResourceAndPolicyName
 import org.broadinstitute.dsde.workbench.util.FutureSupport
 import spray.json._
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.{FiniteDuration, _}
 import scala.language.postfixOps
-import scala.util.{Failure, Success, Try}
 
 /**
   * Created by mbemis on 1/19/18.
@@ -33,7 +28,7 @@ object GoogleKeyCacheMonitorSupervisor {
 }
 
 class GoogleKeyCacheMonitorSupervisor(val pollInterval: FiniteDuration, pollIntervalJitter: FiniteDuration, pubSubDao: GooglePubSubDAO, googleIamDAO: GoogleIamDAO, pubSubTopicName: String, pubSubSubscriptionName: String, workerCount: Int, googleKeyCache: GoogleKeyCache)(implicit executionContext: ExecutionContext) extends Actor with LazyLogging {
-  import GoogleGroupSyncMonitorSupervisor._
+  import GoogleKeyCacheMonitorSupervisor._
   import context._
 
   self ! Init
@@ -79,7 +74,7 @@ object GoogleKeyCacheMonitor {
 }
 
 class GoogleKeyCacheMonitorActor(val pollInterval: FiniteDuration, pollIntervalJitter: FiniteDuration, pubSubDao: GooglePubSubDAO, googleIamDAO: GoogleIamDAO, pubSubSubscriptionName: String, googleKeyCache: GoogleKeyCache)(implicit executionContext: ExecutionContext) extends Actor with LazyLogging with FutureSupport {
-  import GoogleGroupSyncMonitor._
+  import GoogleKeyCacheMonitor._
   import context._
 
   self ! StartMonitorPass
