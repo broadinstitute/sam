@@ -97,7 +97,6 @@ class GoogleKeyCacheMonitorActor(val pollInterval: FiniteDuration, pollIntervalJ
 
     case Some(message: PubSubMessage) =>
       logger.debug(s"received sync message: $message")
-      println(message)
       val (project, serviceAccountEmail, keyId) = parseMessage(message)
       googleIamDAO.removeServiceAccountKey(project, serviceAccountEmail, keyId).map(response => (response, message.ackId)) pipeTo self
 

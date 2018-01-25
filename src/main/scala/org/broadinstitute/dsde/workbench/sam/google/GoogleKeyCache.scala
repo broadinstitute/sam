@@ -76,7 +76,7 @@ class GoogleKeyCache(val googleIamDAO: GoogleIamDAO, val googleStorageDAO: Googl
 
   private def retrieveActiveKey(pet: PetServiceAccount, keyObjects: List[StorageObject]): Future[String] = {
     val mostRecentKey = keyObjects.sortBy(_.getTimeCreated.getValue).last
-    val keyRetired = System.currentTimeMillis() - mostRecentKey.getTimeCreated.getValue > 30000 //harcdoded to 30 seconds for development
+    val keyRetired = System.currentTimeMillis() - mostRecentKey.getTimeCreated.getValue > 86400000 * googleServicesConfig.googleKeyCacheConfig.activeKeyMaxAge
 
     if(keyRetired) furnishNewKey(pet)
     else {
