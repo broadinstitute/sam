@@ -43,6 +43,7 @@ function docker_cmd()
             DOCKER_TAG=${BRANCH}
         else
             GIT_SHA=$(git rev-parse origin/${BRANCH})
+            echo GIT_SHA=$GIT_SHA > env.properties
             DOCKER_TAG=${GIT_SHA:0:12}
         fi
         docker build -t $REPO:${DOCKER_TAG} .
