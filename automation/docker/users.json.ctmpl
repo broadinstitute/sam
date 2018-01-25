@@ -44,6 +44,10 @@
   "notebookswhitelisted": {
     "hermione": "hermione.owner@quality.firecloud.org",
     "ron": "ron.weasley@quality.firecloud.org"
+  },
+  "campaignManagers": {
+    "dumbledore": "dumbledore.admin@quality.firecloud.org",
+    "voldemort": "voldemort.admin@quality.firecloud.org"
   }
 }
 {{else}}
@@ -76,10 +80,10 @@
   "notebookswhitelisted": {
     "hermione": "hermione.owner@test.firecloud.org",
     "ron": "ron.weasley@test.firecloud.org"
-  }
+  },
   "campaignManagers": {
-      "dumbledore": "dumbledore.admin@test.firecloud.org",
-      "voldemort": "voldemort.admin@test.firecloud.org"
+    "dumbledore": "dumbledore.admin@test.firecloud.org",
+    "voldemort": "voldemort.admin@test.firecloud.org"
   }
 }
 {{end}}
