@@ -42,7 +42,7 @@ function docker_cmd()
         if [ "$ENV" != "dev" ] && [ "$ENV" != "alpha" ] && [ "$ENV" != "staging" ] && [ "$ENV" != "perf" ]; then
             DOCKER_TAG=${BRANCH}
         else
-            GIT_SHA=$(git rev-parse ${BRANCH})
+            GIT_SHA=$(git rev-parse origin/${BRANCH})
             echo GIT_SHA=$GIT_SHA > env.properties
             DOCKER_TAG=${GIT_SHA:0:12}
         fi
