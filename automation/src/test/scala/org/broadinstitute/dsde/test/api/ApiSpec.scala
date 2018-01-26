@@ -122,23 +122,14 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
     }
 
     "should not treat non-pet service accounts as pets" in {
+      // Use sam service account when this test moves to sam
       val saEmail = WorkbenchEmail(Config.GCS.qaEmail)
-      val sa = findSaInGoogle(Config.Projects.default, google.toAccountName(saEmail)).get
-
-      // ensure clean state: SA's user not registered
-      removeUser(sa.subjectId.value)
 
       implicit val saAuthToken: ServiceAccountAuthToken = ServiceAccountAuthToken(GoogleProject(Config.Projects.default), saEmail)
       register cleanUp saAuthToken.removePrivateKey()
 
-      registerAsNewUser(saEmail)
-
       // I am no one's pet.  I am myself.
       Sam.user.status()(saAuthToken).map(_.userInfo.userEmail) shouldBe Some(saEmail.value)
-
-      // clean up
-
-      removeUser(sa.subjectId.value)
     }
 
     "should retrieve a user's proxy group as any user" in {
