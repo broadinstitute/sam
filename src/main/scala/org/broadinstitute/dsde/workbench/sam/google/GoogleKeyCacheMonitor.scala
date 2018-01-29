@@ -46,8 +46,8 @@ class GoogleKeyCacheMonitorSupervisor(val pollInterval: FiniteDuration, pollInte
     for {
       _ <- pubSubDao.createTopic(pubSubTopicName)
       _ <- pubSubDao.createSubscription(pubSubTopicName, pubSubSubscriptionName)
-      _ <- pubSubDao.grantTopicIamPermissions(pubSubTopicName, Map(WorkbenchEmail(projectServiceAccount) -> "roles/pubsub.publisher"))
-      _ <- googleKeyCache.googleStorageDAO.setObjectChangePubSubTrigger(googleKeyCache.googleServicesConfig.googleKeyCacheConfig.bucketName, topicToFullPath(pubSubTopicName), Seq("OBJECT_DELETE"))
+      _ <- pubSubDao.setTopicIamPermissions(pubSubTopicName, Map(WorkbenchEmail(projectServiceAccount) -> "roles/pubsub.publisher"))
+      _ <- googleKeyCache.googleStorageDAO.setObjectChangePubSubTrigger(googleKeyCache.googleServicesConfig.googleKeyCacheConfig.bucketName, topicToFullPath(pubSubTopicName), List("OBJECT_DELETE"))
     } yield Start
   }
 
@@ -96,7 +96,7 @@ class GoogleKeyCacheMonitorActor(val pollInterval: FiniteDuration, pollIntervalJ
       pubSubDao.pullMessages(pubSubSubscriptionName, 1).map(_.headOption) pipeTo self
 
     case Some(message: PubSubMessage) =>
-      logger.debug(s"received sync message: $message")
+      logger.debug(s"received key deletion message: $message")
       val (project, serviceAccountEmail, keyId) = parseMessage(message)
       googleIamDAO.removeServiceAccountKey(project, serviceAccountEmail, keyId).map(response => (response, message.ackId)) pipeTo self
 
