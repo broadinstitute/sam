@@ -178,7 +178,7 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
 
       key1Id shouldBe key2Id
 
-      register cleanUp Sam.user.deletePetServiceAccountKey(Config.Projects.default, key1Id.toString
+      register cleanUp Sam.user.deletePetServiceAccountKey(Config.Projects.default, key1Id.toString)
     }
   }
 
