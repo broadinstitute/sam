@@ -166,17 +166,19 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
     }
 
     "should retrieve a new service account key and cache it for further retrievals" in {
+      import spray.json._
+
       val user = UserPool.chooseStudent
 
-      val key1 = Sam.user.getPetServiceAccountKey(Config.Projects.default)(user.makeAuthToken)
-      val key2 = Sam.user.getPetServiceAccountKey(Config.Projects.default)(user.makeAuthToken)
+      val key1Id = Sam.user.getPetServiceAccountKey(Config.Projects.default)(user.makeAuthToken).toJson.asJsObject.getFields("id").head
+      val key2Id = Sam.user.getPetServiceAccountKey(Config.Projects.default)(user.makeAuthToken).toJson.asJsObject.getFields("id").head
 
-      println(key1)
-      println(key2)
+      println(key1Id)
+      println(key2Id)
 
-      key1 shouldBe key2
+      key1Id shouldBe key2Id
 
-//      register cleanUp Sam.user.deletePetServiceAccountKey(Config.Projects.default, key1.)
+      register cleanUp Sam.user.deletePetServiceAccountKey(Config.Projects.default, key1Id.toString
     }
   }
 
