@@ -304,6 +304,34 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
 
   }
 
+  it should "include username, subject ID, and apps domain in proxy group email" in {
+    val appsDomain = "test.cloudfire.org"
+    val subjectId = "0123456789"
+    val username = "foo"
+
+    val config = googleServicesConfig.copy(appsDomain = appsDomain)
+    val googleExtensions = new GoogleExtensions(null, null, null, null, null, null, null, config, null, null)
+
+    val user = WorkbenchUser(WorkbenchUserId(subjectId), WorkbenchEmail(s"$username@test.org"))
+
+    val proxyEmail = googleExtensions.toProxyFromUser(user).value
+    proxyEmail shouldBe "foo_0123456789@test.cloudfire.org"
+    proxyEmail should include (username)
+    proxyEmail should include (subjectId)
+    proxyEmail should include (appsDomain)
+  }
+
+  it should "truncate username if proxy group email would otherwise be too long" in {
+    val config = googleServicesConfig.copy(appsDomain = "test.cloudfire.org")
+    val googleExtensions = new GoogleExtensions(null, null, null, null, null, null, null, config, null, null)
+
+    val user = WorkbenchUser(WorkbenchUserId("0123456789"), WorkbenchEmail("foo-bar-baz-qux-quux-corge-grault-garply@test.org"))
+
+    val proxyEmail = googleExtensions.toProxyFromUser(user).value
+    proxyEmail shouldBe "foo-bar-baz-qux-quux-corge-grault-_0123456789@test.cloudfire.org"
+    proxyEmail should have length 64
+  }
+
   private def setupGoogleKeyCacheTests: (GoogleExtensions, UserService) = {
     implicit val patienceConfig = PatienceConfig(1 second)
     val dirDAO = new JndiDirectoryDAO(directoryConfig)
