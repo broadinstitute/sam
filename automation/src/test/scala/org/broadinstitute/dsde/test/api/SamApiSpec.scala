@@ -164,6 +164,29 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
       proxyGroup2_1 shouldBe WorkbenchEmail(s"PROXY_$userId2@${Config.GCS.appsDomain}")
       proxyGroup2_2 shouldBe WorkbenchEmail(s"PROXY_$userId2@${Config.GCS.appsDomain}")
     }
+
+    "should furnish a new service account key and cache it for further retrievals" in {
+      val user = UserPool.chooseStudent
+
+      val key1Id = Sam.user.getPetServiceAccountKey(Config.Projects.default)(user.makeAuthToken)("private_key_id").toString
+      val key2Id = Sam.user.getPetServiceAccountKey(Config.Projects.default)(user.makeAuthToken)("private_key_id").toString
+
+      key1Id shouldBe key2Id
+
+      register cleanUp Sam.user.deletePetServiceAccountKey(Config.Projects.default, key1Id.toString)(user.makeAuthToken)
+    }
+
+    "should furnish a new service account key after deleting a cached key" in {
+      val user = UserPool.chooseStudent
+
+      val key1Id = Sam.user.getPetServiceAccountKey(Config.Projects.default)(user.makeAuthToken)("private_key_id").toString
+      Sam.user.deletePetServiceAccountKey(Config.Projects.default, key1Id)(user.makeAuthToken)
+
+      val key2Id = Sam.user.getPetServiceAccountKey(Config.Projects.default)(user.makeAuthToken)("private_key_id").toString
+      register cleanUp Sam.user.deletePetServiceAccountKey(Config.Projects.default, key2Id.toString)(user.makeAuthToken)
+
+      key1Id shouldNot be(key2Id)
+    }
   }
 
 }
