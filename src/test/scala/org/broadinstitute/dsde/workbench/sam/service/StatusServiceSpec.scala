@@ -38,10 +38,12 @@ class StatusServiceSpec extends FreeSpec with Matchers with BeforeAndAfterAll wi
   }
 
   def failingExtension = {
-    val service = new StatusService(new MockDirectoryDAO, new NoExtensions {
+    val directoryDAO = new MockDirectoryDAO
+    runAndWait(directoryDAO.createGroup(BasicWorkbenchGroup(NoExtensions.allUsersGroupName, Set.empty, allUsersEmail)))
+
+    val service = new StatusService(directoryDAO, new NoExtensions {
       override def checkStatus: Map[Subsystems.Subsystem, Future[SubsystemStatus]] = Map(Subsystems.GoogleGroups -> Future.failed(new WorkbenchException("bad google")))
     })
-    runAndWait(service.directoryDAO.createGroup(BasicWorkbenchGroup(NoExtensions.allUsersGroupName, Set.empty, allUsersEmail)))
     service
   }
 
