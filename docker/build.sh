@@ -41,20 +41,22 @@ function docker_cmd()
         echo "building sam docker image..."
         if [ "$ENV" != "dev" ] && [ "$ENV" != "alpha" ] && [ "$ENV" != "staging" ] && [ "$ENV" != "perf" ]; then
             DOCKER_TAG=${BRANCH}
+            DOCKER_TAG_TESTS=${BRANCH}
         else
             GIT_SHA=$(git rev-parse origin/${BRANCH})
             echo GIT_SHA=$GIT_SHA > env.properties
             DOCKER_TAG=${GIT_SHA:0:12}
+            DOCKER_TAG_TESTS=latest
         fi
         docker build -t $REPO:${DOCKER_TAG} .
         cd automation
-        docker build -f Dockerfile-tests -t $TESTS_REPO:${DOCKER_TAG} .
+        docker build -f Dockerfile-tests -t $TESTS_REPO:${DOCKER_TAG_TESTS} .
         cd ..
 
         if [ $DOCKER_CMD = "push" ]; then
             echo "pushing docker image..."
             docker push $REPO:${DOCKER_TAG}
-            docker push $TESTS_REPO:${DOCKER_TAG}
+            docker push $TESTS_REPO:${DOCKER_TAG_TESTS}
         fi
     else
         echo "Not a valid docker option!  Choose either build or push (which includes build)"
