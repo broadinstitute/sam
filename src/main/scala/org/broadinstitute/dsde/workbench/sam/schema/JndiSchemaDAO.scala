@@ -36,9 +36,11 @@ object JndiSchemaDAO {
     val sn = "sn"
     val uid = "uid"
     val project = "project"
+    val proxyEmail = "proxyEmail"
   }
 
   object ObjectClass {
+    val workbenchPerson = "workbenchPerson"
     val workbenchGroup = "workbenchGroup"
     val petServiceAccount = "petServiceAccount"
     val resourceType = "resourceType"
@@ -58,6 +60,7 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit exe
 
   def createSchema(): Future[Unit] = {
     for {
+      _ <- createWorkbenchPersonSchema()
       _ <- createWorkbenchGroupSchema()
       _ <- createOrgUnits()
       _ <- createPolicySchema()
@@ -78,7 +81,32 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit exe
       _ <- removePolicySchema()
       _ <- removeWorkbenchGroupSchema()
       _ <- removeWorkbenchPetServiceAccountSchema()
+      _ <- removeWorkbenchPersonSchema()
     } yield ()
+  }
+
+  private def createWorkbenchPersonSchema(): Future[Unit] = withContext { ctx =>
+    val schema = ctx.getSchema("")
+
+    createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.30", Attr.proxyEmail, "proxy group email", true)
+
+    val attrs = new BasicAttributes(true) // Ignore case
+    attrs.put("NUMERICOID", "1.3.6.1.4.1.18060.0.4.3.2.300")
+    attrs.put("NAME", ObjectClass.workbenchPerson)
+    attrs.put("SUP", "inetOrgPerson")
+    attrs.put("STRUCTURAL", "true")
+
+    val must = new BasicAttribute("MUST")
+    must.add("objectclass")
+    must.add(Attr.uid)
+    attrs.put(must)
+
+    val may = new BasicAttribute("MAY")
+    may.add(Attr.proxyEmail)
+    attrs.put(may)
+
+    // Add the new schema object for "fooObjectClass"
+    schema.createSubcontext("ClassDefinition/" + ObjectClass.workbenchPerson, attrs)
   }
 
   private def createWorkbenchGroupSchema(): Future[Unit] = withContext { ctx =>
@@ -105,6 +133,14 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit exe
 
     // Add the new schema object for "fooObjectClass"
     schema.createSubcontext("ClassDefinition/" + ObjectClass.workbenchGroup, attrs)
+  }
+
+  private def removeWorkbenchPersonSchema(): Future[Unit] = withContext { ctx =>
+    val schema = ctx.getSchema("")
+
+    // Intentionally ignores errors
+    Try { schema.destroySubcontext("ClassDefinition/" + ObjectClass.workbenchPerson) }
+    Try { schema.destroySubcontext("AttributeDefinition/" + Attr.proxyEmail) }
   }
 
   private def removeWorkbenchGroupSchema(): Future[Unit] = withContext { ctx =>

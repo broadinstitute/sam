@@ -27,7 +27,18 @@ object GoogleExtensions {
 }
 
 class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: AccessPolicyDAO, val googleDirectoryDAO: GoogleDirectoryDAO, val googlePubSubDAO: GooglePubSubDAO, val googleIamDAO: GoogleIamDAO, val googleStorageDAO: GoogleStorageDAO, val googleKeyCache: GoogleKeyCache, val googleServicesConfig: GoogleServicesConfig, val petServiceAccountConfig: PetServiceAccountConfig, extensionResourceType: ResourceType)(implicit val executionContext: ExecutionContext) extends LazyLogging with FutureSupport with CloudExtensions {
+
+  @deprecated
   private[google] def toProxyFromUser(subjectId: WorkbenchUserId): WorkbenchEmail = WorkbenchEmail(s"PROXY_${subjectId.value}@${googleServicesConfig.appsDomain}")
+
+  private val maxGroupEmailLength = 64
+
+  private[google] def toProxyFromUser(user: WorkbenchUser): WorkbenchEmail = {
+    val username = user.email.value.split("@").head
+    val emailSuffix = s"_${user.id.value}@${googleServicesConfig.appsDomain}"
+    val maxUsernameLength = maxGroupEmailLength - emailSuffix.length
+    WorkbenchEmail(username.take(maxUsernameLength) + emailSuffix)
+  }
 
   override val emailDomain = googleServicesConfig.appsDomain
   private val allUsersGroupEmail = WorkbenchEmail(s"GROUP_${allUsersGroupName.value}@$emailDomain")
