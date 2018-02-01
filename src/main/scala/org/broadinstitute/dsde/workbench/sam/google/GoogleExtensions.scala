@@ -34,13 +34,10 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
   private val maxGroupEmailLength = 64
 
   private[google] def toProxyFromUser(user: WorkbenchUser): WorkbenchEmail = {
-    val maxUsernameLength = maxGroupEmailLength -
-      "_".length -
-      user.id.value.length -
-      "@".length -
-      googleServicesConfig.appsDomain.length
     val username = user.email.value.split("@").head
-    WorkbenchEmail(s"${username.take(maxUsernameLength)}_${user.id.value}@${googleServicesConfig.appsDomain}")
+    val emailSuffix = s"_${user.id.value}@${googleServicesConfig.appsDomain}"
+    val maxUsernameLength = maxGroupEmailLength - emailSuffix.length
+    WorkbenchEmail(username.take(maxUsernameLength) + emailSuffix)
   }
 
   override val emailDomain = googleServicesConfig.appsDomain
