@@ -121,7 +121,7 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
       }(ownerAuthToken)
     }
 
-    "should not treat non-pet service accounts as pets" in {
+    "should not treat non-pet service accounts as pets" ignore {
       val saEmail = WorkbenchEmail(Config.GCS.qaEmail)
       val sa = findSaInGoogle(Config.Projects.default, google.toAccountName(saEmail)).get
 
