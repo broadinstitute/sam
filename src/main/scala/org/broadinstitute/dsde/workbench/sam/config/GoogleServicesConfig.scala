@@ -12,10 +12,12 @@ case class GoogleServicesConfig(appName: String,
                                 serviceAccountClientEmail: String,
                                 serviceAccountClientProject: String,
                                 subEmail: String,
+                                projectServiceAccount: String,
                                 groupSyncPubSubProject: String,
                                 groupSyncPollInterval: FiniteDuration,
                                 groupSyncPollJitter: FiniteDuration,
                                 groupSyncTopic: String,
                                 groupSyncSubscription: String,
-                                groupSyncWorkerCount: Int
+                                groupSyncWorkerCount: Int,
+                                googleKeyCacheConfig: GoogleKeyCacheConfig
                                )

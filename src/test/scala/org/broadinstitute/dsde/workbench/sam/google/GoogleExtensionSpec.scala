@@ -278,7 +278,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val mockGooglePubSubDAO = new MockGooglePubSubDAO
     val mockGoogleStorageDAO = new MockGoogleStorageDAO
     val mockGoogleIamDAO = new MockGoogleIamDAO
-    val googleKeyCache = new GoogleKeyCache(mockGoogleIamDAO, new MockGoogleStorageDAO, googleServicesConfig, petServiceAccountConfig)
+    val googleKeyCache = new GoogleKeyCache(mockGoogleIamDAO, mockGoogleStorageDAO, mockGooglePubSubDAO, googleServicesConfig, petServiceAccountConfig)
 
     val ge = new GoogleExtensions(mockDirectoryDAO, mockAccessPolicyDAO, mockGoogleDirectoryDAO, mockGooglePubSubDAO, mockGoogleIamDAO, mockGoogleStorageDAO, googleKeyCache, googleServicesConfig, petServiceAccountConfig, configResourceTypes(CloudExtensions.resourceTypeName))
 
@@ -342,8 +342,9 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
 
     val mockGoogleIamDAO = new MockGoogleIamDAO
     val mockGoogleDirectoryDAO = new MockGoogleDirectoryDAO
+    val mockGooglePubSubDAO = new MockGooglePubSubDAO
     val mockGoogleStorageDAO = new MockGoogleStorageDAO
-    val googleKeyCache = new GoogleKeyCache(mockGoogleIamDAO, mockGoogleStorageDAO, googleServicesConfig, petServiceAccountConfig)
+    val googleKeyCache = new GoogleKeyCache(mockGoogleIamDAO, mockGoogleStorageDAO, mockGooglePubSubDAO, googleServicesConfig, petServiceAccountConfig)
 
     val googleExtensions = new GoogleExtensions(dirDAO, null, mockGoogleDirectoryDAO, null, mockGoogleIamDAO, mockGoogleStorageDAO, googleKeyCache, googleServicesConfig, petServiceAccountConfig, configResourceTypes(CloudExtensions.resourceTypeName))
     val service = new UserService(dirDAO, googleExtensions)
