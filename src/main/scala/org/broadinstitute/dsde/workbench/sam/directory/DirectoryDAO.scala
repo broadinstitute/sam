@@ -31,6 +31,7 @@ trait DirectoryDAO {
   def loadUser(userId: WorkbenchUserId): Future[Option[WorkbenchUser]]
   def loadUsers(userIds: Set[WorkbenchUserId]): Future[Seq[WorkbenchUser]]
   def deleteUser(userId: WorkbenchUserId): Future[Unit]
+  def addUserAttribute(userId: WorkbenchUserId, attrId: String, value: Any): Future[Unit]
 
   def listUsersGroups(userId: WorkbenchUserId): Future[Set[WorkbenchGroupIdentity]]
   def listFlattenedGroupUsers(groupId: WorkbenchGroupIdentity): Future[Set[WorkbenchUserId]]

@@ -204,6 +204,11 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     }.get
   }
 
+  override def addUserAttribute(userId: WorkbenchUserId, attrId: String, value: Any): Future[Unit] = withContext { ctx =>
+    val basicAttributes: Attributes = new BasicAttributes(attrId, value, true)
+    ctx.modifyAttributes(userDn(userId), DirContext.ADD_ATTRIBUTE, basicAttributes)
+  }
+
   override def loadPetServiceAccount(petServiceAccountId: PetServiceAccountId): Future[Option[PetServiceAccount]] = withContext { ctx =>
     Try {
       val attributes = ctx.getAttributes(petDn(petServiceAccountId))

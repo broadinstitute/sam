@@ -200,4 +200,6 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
       case _ => Future.failed(throw new WorkbenchException(s"id $petSAId refers to too many subjects: $userIds"))
     }
   }
+
+  override def addUserAttribute(userId: WorkbenchUserId, attrId: String, value: Any): Future[Unit] = ???
 }

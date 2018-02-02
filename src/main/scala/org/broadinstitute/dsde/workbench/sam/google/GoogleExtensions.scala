@@ -14,6 +14,7 @@ import org.broadinstitute.dsde.workbench.sam.config.{GoogleServicesConfig, PetSe
 import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.AccessPolicyDAO
+import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO.Attr
 import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, SamApplication}
 import org.broadinstitute.dsde.workbench.util.FutureSupport
 import org.broadinstitute.dsde.workbench.util.health.{HealthMonitor, SubsystemStatus, Subsystems}
@@ -102,15 +103,18 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
   }
 
   override def onUserCreate(user: WorkbenchUser): Future[Unit] = {
+    val proxyEmail = toProxyFromUser(user)
     for {
-      _ <- googleDirectoryDAO.createGroup(user.email.value, toProxyFromUser(user.id)) recover {
+      _ <- googleDirectoryDAO.createGroup(user.email.value, proxyEmail) recover {
         case e:GoogleJsonResponseException if e.getDetails.getCode == StatusCodes.Conflict.intValue => ()
       }
-      _ <- googleDirectoryDAO.addMemberToGroup(toProxyFromUser(user.id), WorkbenchEmail(user.email.value))
+      _ <- googleDirectoryDAO.addMemberToGroup(proxyEmail, WorkbenchEmail(user.email.value))
 
       allUsersGroup <- getOrCreateAllUsersGroup(directoryDAO)
 
-      _ <- googleDirectoryDAO.addMemberToGroup(allUsersGroup.email, toProxyFromUser(user.id))
+      _ <- googleDirectoryDAO.addMemberToGroup(allUsersGroup.email, proxyEmail)
+
+      _ <- directoryDAO.addUserAttribute(user.id, Attr.proxyEmail, proxyEmail)
     } yield ()
   }
 
