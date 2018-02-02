@@ -2,7 +2,7 @@ package org.broadinstitute.dsde.test.api.sam
 
 import org.broadinstitute.dsde.workbench.service.{Orchestration, Sam, Thurloe}
 import org.broadinstitute.dsde.workbench.service.Sam.user.UserStatusDetails
-import org.broadinstitute.dsde.workbench.auth.{AuthToken, ServiceAccountAuthToken}
+import org.broadinstitute.dsde.workbench.auth.{AuthToken, ServiceAccountAuthTokenFromJson, ServiceAccountAuthTokenFromPem}
 import org.broadinstitute.dsde.workbench.config.{Config, Credentials, UserPool}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.dao.Google.googleIamDAO
@@ -105,9 +105,7 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
         // first call should create pet.  confirm that a second call to create/retrieve gives the same results
         Sam.user.petServiceAccountEmail(projectName)(userAuthToken) shouldBe petAccountEmail
 
-
-        val petAuthToken = ServiceAccountAuthToken(GoogleProject(projectName), petAccountEmail)
-        register cleanUp petAuthToken.removePrivateKey()
+        val petAuthToken = ServiceAccountAuthTokenFromJson(Sam.user.petServiceAccountKey(projectName)(userAuthToken))
 
         Sam.user.status()(petAuthToken) shouldBe Some(userStatus)
 
@@ -121,24 +119,13 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
       }(ownerAuthToken)
     }
 
-    "should not treat non-pet service accounts as pets" ignore {
+    "should not treat non-pet service accounts as pets" in {
       val saEmail = WorkbenchEmail(Config.GCS.qaEmail)
-      val sa = findSaInGoogle(Config.Projects.default, google.toAccountName(saEmail)).get
 
-      // ensure clean state: SA's user not registered
-      removeUser(sa.subjectId.value)
-
-      implicit val saAuthToken: ServiceAccountAuthToken = ServiceAccountAuthToken(GoogleProject(Config.Projects.default), saEmail)
-      register cleanUp saAuthToken.removePrivateKey()
-
-      registerAsNewUser(saEmail)
+      implicit val saAuthToken = ServiceAccountAuthTokenFromPem(Config.GCS.qaEmail, Config.GCS.pathToQAPem)
 
       // I am no one's pet.  I am myself.
       Sam.user.status()(saAuthToken).map(_.userInfo.userEmail) shouldBe Some(saEmail.value)
-
-      // clean up
-
-      removeUser(sa.subjectId.value)
     }
 
     "should retrieve a user's proxy group as any user" in {
@@ -168,25 +155,30 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
     "should furnish a new service account key and cache it for further retrievals" in {
       val user = UserPool.chooseStudent
 
-      val key1Id = Sam.user.getPetServiceAccountKey(Config.Projects.default)(user.makeAuthToken)("private_key_id").toString
-      val key2Id = Sam.user.getPetServiceAccountKey(Config.Projects.default)(user.makeAuthToken)("private_key_id").toString
+      val key1 = Sam.user.petServiceAccountKey(Config.Projects.default)(user.makeAuthToken)
+      val key2 = Sam.user.petServiceAccountKey(Config.Projects.default)(user.makeAuthToken)
 
-      key1Id shouldBe key2Id
+      key1 shouldBe key2
 
-      register cleanUp Sam.user.deletePetServiceAccountKey(Config.Projects.default, key1Id.toString)(user.makeAuthToken)
+      register cleanUp Sam.user.deletePetServiceAccountKey(Config.Projects.default, keyIdFromJson(key1))(user.makeAuthToken)
     }
 
     "should furnish a new service account key after deleting a cached key" in {
       val user = UserPool.chooseStudent
 
-      val key1Id = Sam.user.getPetServiceAccountKey(Config.Projects.default)(user.makeAuthToken)("private_key_id").toString
-      Sam.user.deletePetServiceAccountKey(Config.Projects.default, key1Id)(user.makeAuthToken)
+      val key1 = Sam.user.petServiceAccountKey(Config.Projects.default)(user.makeAuthToken)
+      Sam.user.deletePetServiceAccountKey(Config.Projects.default, keyIdFromJson(key1))(user.makeAuthToken)
 
-      val key2Id = Sam.user.getPetServiceAccountKey(Config.Projects.default)(user.makeAuthToken)("private_key_id").toString
-      register cleanUp Sam.user.deletePetServiceAccountKey(Config.Projects.default, key2Id.toString)(user.makeAuthToken)
+      val key2 = Sam.user.petServiceAccountKey(Config.Projects.default)(user.makeAuthToken)
+      register cleanUp Sam.user.deletePetServiceAccountKey(Config.Projects.default, keyIdFromJson(key2))(user.makeAuthToken)
 
-      key1Id shouldNot be(key2Id)
+      key1 shouldNot be(key2)
     }
+  }
+
+  private def keyIdFromJson(jsonKey: String): String = {
+    import spray.json._
+    jsonKey.parseJson.asJsObject.getFields("private_key_id").head.asInstanceOf[JsString].value
   }
 
 }
