@@ -142,7 +142,7 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
     import GoogleModelJsonSupport._
     Post(s"/api/google/resource/${resourceType.name}/foo/${resourceType.ownerRoleName.value}/sync") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
-      assertResult(Map(createdPolicy.email -> Seq(SyncReportItem("added", googleExt.toProxyFromUser(defaultUserInfo.userId).value, None)))) {
+      assertResult(Map(createdPolicy.email -> Seq(SyncReportItem("added", googleExt.toProxyFromUser(defaultUserInfo.userId).value.toLowerCase, None)))) {
         responseAs[Map[WorkbenchEmail, Seq[SyncReportItem]]]
       }
     }
