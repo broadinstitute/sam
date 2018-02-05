@@ -3,10 +3,10 @@ package org.broadinstitute.dsde.workbench.sam.service
 import akka.actor.ActorSystem
 import com.google.api.services.admin.directory.model.Group
 import org.broadinstitute.dsde.workbench.sam.TestSupport
-import org.broadinstitute.dsde.workbench.sam.directory.MockDirectoryDAO
+import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryDAO, MockDirectoryDAO}
 import org.scalatest.{BeforeAndAfterAll, FlatSpec, FreeSpec, Matchers}
 import org.broadinstitute.dsde.workbench.google.mock.MockGoogleDirectoryDAO
-import org.broadinstitute.dsde.workbench.model.{WorkbenchException, WorkbenchGroup, WorkbenchEmail, WorkbenchGroupName}
+import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException, WorkbenchGroup, WorkbenchGroupName}
 import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
 import org.broadinstitute.dsde.workbench.util.health.{StatusCheckResponse, SubsystemStatus, Subsystems}
 import org.broadinstitute.dsde.workbench.util.health.Subsystems.{GoogleGroups, OpenDJ}
@@ -25,27 +25,30 @@ class StatusServiceSpec extends FreeSpec with Matchers with BeforeAndAfterAll wi
     system.terminate()
   }
 
-  def noOpenDJGroups = {
-    new StatusService(new MockDirectoryDAO, new NoExtensions {
+  private def newStatusService(directoryDAO: DirectoryDAO) = {
+    new StatusService(directoryDAO, new NoExtensions {
       override def checkStatus: Map[Subsystems.Subsystem, Future[SubsystemStatus]] = Map(Subsystems.GoogleGroups -> Future.successful(SubsystemStatus(true, None)))
     }, pollInterval = 10 milliseconds)
   }
 
-  def ok = {
-    val service = noOpenDJGroups
-    runAndWait(service.directoryDAO.createGroup(BasicWorkbenchGroup(NoExtensions.allUsersGroupName, Set.empty, allUsersEmail)))
-    service
+  private def directoryDAOWithAllUsersGroup = {
+    val directoryDAO = new MockDirectoryDAO
+    runAndWait(directoryDAO.createGroup(BasicWorkbenchGroup(NoExtensions.allUsersGroupName, Set.empty, allUsersEmail)))
+    directoryDAO
   }
 
-  def failingExtension = {
-    val service = new StatusService(new MockDirectoryDAO, new NoExtensions {
+  private def noOpenDJGroups = newStatusService(new MockDirectoryDAO)
+
+  private def ok = newStatusService(directoryDAOWithAllUsersGroup)
+
+  private def failingExtension = {
+    val service = new StatusService(directoryDAOWithAllUsersGroup, new NoExtensions {
       override def checkStatus: Map[Subsystems.Subsystem, Future[SubsystemStatus]] = Map(Subsystems.GoogleGroups -> Future.failed(new WorkbenchException("bad google")))
     })
-    runAndWait(service.directoryDAO.createGroup(BasicWorkbenchGroup(NoExtensions.allUsersGroupName, Set.empty, allUsersEmail)))
     service
   }
 
-  def failingOpenDJ = {
+  private def failingOpenDJ = {
     val service = new StatusService(new MockDirectoryDAO {
       override def loadGroupEmail(groupName: WorkbenchGroupName): Future[Option[WorkbenchEmail]] = Future.failed(new WorkbenchException("bad opendj"))
     }, NoExtensions)

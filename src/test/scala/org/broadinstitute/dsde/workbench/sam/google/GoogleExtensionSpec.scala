@@ -353,6 +353,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
   }
 
   "GoogleKeyCache" should "create a service account key and return the same key when called again" in {
+    implicit val patienceConfig = PatienceConfig(1 second)
     val (googleExtensions, service) = setupGoogleKeyCacheTests
 
     val defaultUserId = WorkbenchUserId("newuser")
