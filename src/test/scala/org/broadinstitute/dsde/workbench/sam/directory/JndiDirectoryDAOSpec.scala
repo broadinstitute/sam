@@ -80,6 +80,25 @@ class JndiDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     }
   }
 
+  it should "add and read user attributes" in {
+    val userId = WorkbenchUserId(UUID.randomUUID().toString)
+    val user = WorkbenchUser(userId, WorkbenchEmail("foo@bar.com"))
+
+    assertResult(user) {
+      runAndWait(dao.createUser(user))
+    }
+
+    assertResult(None) {
+      runAndWait(dao.readUserAttribute(userId, "proxyEmail"))
+    }
+
+    runAndWait(dao.addUserAttribute(userId, "proxyEmail", "foo_1234@test.firecloud.org"))
+
+    assertResult(Some("foo_1234@test.firecloud.org")) {
+      runAndWait(dao.readUserAttribute(userId, "proxyEmail"))
+    }
+  }
+
   it should "create, read, delete pet service accounts" in {
     val userId = WorkbenchUserId(UUID.randomUUID().toString)
     val user = WorkbenchUser(userId, WorkbenchEmail("foo@bar.com"))
