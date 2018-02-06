@@ -14,6 +14,7 @@ import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.mockito.ArgumentCaptor
 import org.mockito.ArgumentMatchers._
 import org.mockito.Mockito._
+import org.mockito.stubbing.Answer
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FlatSpec, Matchers}
 import org.scalatest.mockito.MockitoSugar
@@ -56,8 +57,11 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
     googleExtensions = mock[GoogleExtensions]
     when(googleExtensions.allUsersGroupName).thenReturn(NoExtensions.allUsersGroupName)
     when(googleExtensions.getOrCreateAllUsersGroup(any[DirectoryDAO])(any[ExecutionContext])).thenReturn(NoExtensions.getOrCreateAllUsersGroup(dirDAO))
-    when(googleExtensions.onUserCreate(any[WorkbenchUser])).thenReturn(Future.successful())
+    when(googleExtensions.onUserCreate(any[WorkbenchUser])).thenReturn(Future.successful(()))
+    when(googleExtensions.onUserDelete(any[WorkbenchUserId])).thenReturn(Future.successful(()))
     when(googleExtensions.getUserStatus(any[WorkbenchUser])).thenReturn(Future.successful(true))
+    when(googleExtensions.onUserDisable(any[WorkbenchUser])).thenReturn(Future.successful(()))
+    when(googleExtensions.onUserEnable(any[WorkbenchUser])).thenReturn(Future.successful(()))
 
     service = new UserService(dirDAO, googleExtensions)
   }
