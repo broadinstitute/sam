@@ -66,10 +66,14 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val inBothSubGroup = BasicWorkbenchGroup(WorkbenchGroupName("inBothSubGroup"), Set.empty, WorkbenchEmail("inBothSubGroup@example.com"))
 
     val inSamUserId = WorkbenchUserId("inSamUser")
+    val inSamUserProxyEmail = "foo_inSamUser@test.firecloud.org"
     val inGoogleUserId = WorkbenchUserId("inGoogleUser")
+    val inGoogleUserProxyEmail = "foo_inGoogleUser@test.firecloud.org"
     val inBothUserId = WorkbenchUserId("inBothUser")
+    val inBothUserProxyEmail = "foo_inBothUser@test.firecloud.org"
 
     val addError = WorkbenchUserId("addError")
+    val addErrorProxyEmail = "foo_addError@test.firecloud.org"
     val removeError = "removeError@foo.bar"
 
     val testGroup = BasicWorkbenchGroup(groupName, Set(inSamSubGroup.id, inBothSubGroup.id, inSamUserId, inBothUserId, addError), groupEmail)
@@ -90,19 +94,23 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
       }
       when(mockDirectoryDAO.updateSynchronizedDate(any[WorkbenchGroupIdentity])).thenReturn(Future.successful(()))
       when(mockDirectoryDAO.getSynchronizedDate(any[WorkbenchGroupIdentity])).thenReturn(Future.successful(Some(new Date(2017, 11, 22))))
+      when(mockDirectoryDAO.readUserAttribute[String](WorkbenchUserId("addError"), "proxyEmail")).thenReturn(Future.successful(Some(addErrorProxyEmail)))
+      when(mockDirectoryDAO.readUserAttribute[String](WorkbenchUserId("inSamUser"), "proxyEmail")).thenReturn(Future.successful(Some(inSamUserProxyEmail)))
+      when(mockDirectoryDAO.readUserAttribute[String](WorkbenchUserId("inGoogleUser"), "proxyEmail")).thenReturn(Future.successful(Some(inGoogleUserProxyEmail)))
+      when(mockDirectoryDAO.readUserAttribute[String](WorkbenchUserId("inBothUser"), "proxyEmail")).thenReturn(Future.successful(Some(inBothUserProxyEmail)))
 
       val subGroups = Seq(inSamSubGroup, inGoogleSubGroup, inBothSubGroup)
       subGroups.foreach { g => when(mockDirectoryDAO.loadSubjectEmail(g.id)).thenReturn(Future.successful(Option(g.email))) }
 
-      val added = Seq(inSamSubGroup.email, ge.toProxyFromUser(inSamUserId))
-      val removed = Seq(inGoogleSubGroup.email, ge.toProxyFromUser(inGoogleUserId))
+      val added = Seq(inSamSubGroup.email, WorkbenchEmail(inSamUserProxyEmail))
+      val removed = Seq(inGoogleSubGroup.email, WorkbenchEmail(inGoogleUserProxyEmail))
 
-      when(mockGoogleDirectoryDAO.listGroupMembers(target.email)).thenReturn(Future.successful(Option(Seq(ge.toProxyFromUser(inGoogleUserId).value, ge.toProxyFromUser(inBothUserId).value.toLowerCase, inGoogleSubGroup.email.value, inBothSubGroup.email.value, removeError))))
+      when(mockGoogleDirectoryDAO.listGroupMembers(target.email)).thenReturn(Future.successful(Option(Seq(WorkbenchEmail(inGoogleUserProxyEmail).value, WorkbenchEmail(inBothUserProxyEmail).value.toLowerCase, inGoogleSubGroup.email.value, inBothSubGroup.email.value, removeError))))
       when(mockGoogleDirectoryDAO.addMemberToGroup(any[WorkbenchEmail], any[WorkbenchEmail])).thenReturn(Future.successful(()))
       when(mockGoogleDirectoryDAO.removeMemberFromGroup(any[WorkbenchEmail], any[WorkbenchEmail])).thenReturn(Future.successful(()))
 
       val addException = new Exception("addError")
-      when(mockGoogleDirectoryDAO.addMemberToGroup(target.email, WorkbenchEmail(ge.toProxyFromUser(addError).value.toLowerCase))).thenReturn(Future.failed(addException))
+      when(mockGoogleDirectoryDAO.addMemberToGroup(target.email, WorkbenchEmail(addErrorProxyEmail.toLowerCase))).thenReturn(Future.failed(addException))
 
       val removeException = new Exception("removeError")
       when(mockGoogleDirectoryDAO.removeMemberFromGroup(target.email, WorkbenchEmail(removeError.toLowerCase))).thenReturn(Future.failed(removeException))
@@ -114,7 +122,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
         added.map(e => SyncReportItem("added", e.value.toLowerCase, None)) ++
           removed.map(e => SyncReportItem("removed", e.value.toLowerCase, None)) ++
           Seq(
-            SyncReportItem("added", ge.toProxyFromUser(addError).value.toLowerCase, Option(ErrorReport(addException))),
+            SyncReportItem("added", WorkbenchEmail(addErrorProxyEmail).value.toLowerCase, Option(ErrorReport(addException))),
             SyncReportItem("removed", removeError.toLowerCase, Option(ErrorReport(removeException)))))
 
       added.foreach { email => verify(mockGoogleDirectoryDAO).addMemberToGroup(target.email, WorkbenchEmail(email.value.toLowerCase)) }
@@ -168,8 +176,9 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val googleExtensions = new GoogleExtensions(dirDAO, null, mockGoogleDirectoryDAO, null, mockGoogleIamDAO, null, null, googleServicesConfig, petServiceAccountConfig, configResourceTypes(CloudExtensions.resourceTypeName))
     val service = new UserService(dirDAO, googleExtensions)
 
-    val defaultUserId = WorkbenchUserId("newuser")
+    val defaultUserId = WorkbenchUserId("newuser123")
     val defaultUserEmail = WorkbenchEmail("newuser@new.com")
+    val defaultUserProxyEmail = WorkbenchEmail(s"newuser_newuser123@${googleServicesConfig.appsDomain}")
     val defaultUser = WorkbenchUser(defaultUserId, defaultUserEmail)
 
     // create a user
@@ -196,10 +205,9 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     Try(ldapPet.serviceAccount.subjectId.value.toLong) shouldBe a[Success[_]]
 
     // verify google
-    val groupEmail = googleExtensions.toProxyFromUser(defaultUserId)
-    mockGoogleIamDAO.serviceAccounts should contain key (petServiceAccount.serviceAccount.email)
-    mockGoogleDirectoryDAO.groups should contain key (groupEmail)
-    mockGoogleDirectoryDAO.groups(groupEmail) shouldBe Set(defaultUserEmail, petServiceAccount.serviceAccount.email)
+    mockGoogleIamDAO.serviceAccounts should contain key petServiceAccount.serviceAccount.email
+    mockGoogleDirectoryDAO.groups should contain key defaultUserProxyEmail
+    mockGoogleDirectoryDAO.groups(defaultUserProxyEmail) shouldBe Set(defaultUserEmail, petServiceAccount.serviceAccount.email)
 
     // create one again, it should work
     val petSaResponse2 = googleExtensions.createUserPetServiceAccount(defaultUser, googleProject).futureValue

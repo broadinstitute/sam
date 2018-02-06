@@ -29,9 +29,6 @@ object GoogleExtensions {
 
 class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: AccessPolicyDAO, val googleDirectoryDAO: GoogleDirectoryDAO, val googlePubSubDAO: GooglePubSubDAO, val googleIamDAO: GoogleIamDAO, val googleStorageDAO: GoogleStorageDAO, val googleKeyCache: GoogleKeyCache, val googleServicesConfig: GoogleServicesConfig, val petServiceAccountConfig: PetServiceAccountConfig, extensionResourceType: ResourceType)(implicit val executionContext: ExecutionContext) extends LazyLogging with FutureSupport with CloudExtensions {
 
-  @deprecated
-  private[google] def toProxyFromUser(subjectId: WorkbenchUserId): WorkbenchEmail = WorkbenchEmail(s"PROXY_${subjectId.value}@${googleServicesConfig.appsDomain}")
-
   private val maxGroupEmailLength = 64
 
   private[google] def toProxyFromUser(user: WorkbenchUser): WorkbenchEmail = {
@@ -114,42 +111,43 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
 
       _ <- googleDirectoryDAO.addMemberToGroup(allUsersGroup.email, proxyEmail)
 
-      _ <- directoryDAO.addUserAttribute(user.id, Attr.proxyEmail, proxyEmail)
+      _ <- directoryDAO.addUserAttribute(user.id, Attr.proxyEmail, proxyEmail.value)
     } yield ()
   }
 
   override def getUserStatus(user: WorkbenchUser): Future[Boolean] = {
-    googleDirectoryDAO.isGroupMember(toProxyFromUser(user.id), WorkbenchEmail(user.email.value))
+    googleDirectoryDAO.isGroupMember(toProxyFromUser(user), WorkbenchEmail(user.email.value))
+  }
+
+  /**
+    * Evaluate a future for each pet in parallel.
+    */
+  private def forAllPets[T](userId: WorkbenchUserId)(f: PetServiceAccount => Future[T]): Future[Seq[T]] = {
+    for {
+      pets <- directoryDAO.getAllPetServiceAccountsForUser(userId)
+      a <- Future.traverse(pets) { pet => f(pet) }
+    } yield a
   }
 
   override def onUserEnable(user: WorkbenchUser): Future[Unit] = {
     for {
-      _ <- googleDirectoryDAO.addMemberToGroup(toProxyFromUser(user.id), WorkbenchEmail(user.email.value))
-      // Enable the pet service account, if one exists for the user
-      _ <- directoryDAO.getAllPetServiceAccountsForUser(user.id).flatMap { Future.traverse(_) { pet =>
-        enablePetServiceAccount(pet)
-      } }
+      _ <- googleDirectoryDAO.addMemberToGroup(toProxyFromUser(user), WorkbenchEmail(user.email.value))
+      _ <- forAllPets(user.id) { enablePetServiceAccount }
     } yield ()
   }
 
   override def onUserDisable(user: WorkbenchUser): Future[Unit] = {
     for {
-    // Disable the pet service account, if one exists for the user
-      _ <- directoryDAO.getAllPetServiceAccountsForUser(user.id).flatMap { Future.traverse(_) { pet =>
-        disablePetServiceAccount(pet)
-      } }
-      _ <- googleDirectoryDAO.removeMemberFromGroup(toProxyFromUser(user.id), WorkbenchEmail(user.email.value))
+      _ <- forAllPets(user.id) { disablePetServiceAccount }
+      _ <- googleDirectoryDAO.removeMemberFromGroup(toProxyFromUser(user), WorkbenchEmail(user.email.value))
     } yield ()
   }
 
   override def onUserDelete(userId: WorkbenchUserId): Future[Unit] = {
     for {
-      _ <- googleDirectoryDAO.deleteGroup(toProxyFromUser(userId))
-      _ <- directoryDAO.getAllPetServiceAccountsForUser(userId).flatMap { Future.traverse(_) { pet =>
-        googleIamDAO.removeServiceAccount(petServiceAccountConfig.googleProject, toAccountName(pet.serviceAccount.email))
-      } }
-      pets <- directoryDAO.getAllPetServiceAccountsForUser(userId)
-      _ <- Future.traverse(pets) { pet => directoryDAO.deletePetServiceAccount(pet.id) }
+      _ <- withProxyEmail(userId) { googleDirectoryDAO.deleteGroup }
+      _ <- forAllPets(userId) { pet => googleIamDAO.removeServiceAccount(petServiceAccountConfig.googleProject, toAccountName(pet.serviceAccount.email)) }
+      _ <- forAllPets(userId) { pet => directoryDAO.deletePetServiceAccount(pet.id) }
     } yield ()
   }
 
@@ -225,14 +223,14 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
   private def enablePetServiceAccount(petServiceAccount: PetServiceAccount): Future[Unit] = {
     for {
       _ <- directoryDAO.enableIdentity(petServiceAccount.id)
-      _ <- googleDirectoryDAO.addMemberToGroup(toProxyFromUser(petServiceAccount.id.userId), petServiceAccount.serviceAccount.email)
+      _ <- withProxyEmail(petServiceAccount.id.userId) { proxyEmail => googleDirectoryDAO.addMemberToGroup(proxyEmail, petServiceAccount.serviceAccount.email) }
     } yield ()
   }
 
   private def disablePetServiceAccount(petServiceAccount: PetServiceAccount): Future[Unit] = {
     for {
       _ <- directoryDAO.disableIdentity(petServiceAccount.id)
-      _ <- googleDirectoryDAO.removeMemberFromGroup(toProxyFromUser(petServiceAccount.id.userId), petServiceAccount.serviceAccount.email)
+      _ <- withProxyEmail(petServiceAccount.id.userId) { proxyEmail => googleDirectoryDAO.removeMemberFromGroup(proxyEmail, petServiceAccount.serviceAccount.email) }
     } yield ()
   }
 
@@ -303,7 +301,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
           case group: WorkbenchGroupIdentity => directoryDAO.loadSubjectEmail(group)
 
           // use proxy group email instead of user's actual email
-          case userSubjectId: WorkbenchUserId => Future.successful(Option(toProxyFromUser(userSubjectId)))
+          case userSubjectId: WorkbenchUserId => getUserProxy(userSubjectId)
 
           // not sure why this next case would happen but if a petSA is in a group just use its email
           case petSA: PetServiceAccountId => directoryDAO.loadSubjectEmail(petSA)
@@ -338,10 +336,24 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
   }
 
   override def getUserProxy(userEmail: WorkbenchEmail): Future[Option[WorkbenchEmail]] = {
-    directoryDAO.loadSubjectFromEmail(userEmail).map {
+    directoryDAO.loadSubjectFromEmail(userEmail).flatMap {
       // don't attempt to handle groups or service accounts - just users
-      case Some(user: WorkbenchUserId) => Option(toProxyFromUser(user))
-      case _ => None
+      case Some(user: WorkbenchUserId) => getUserProxy(user)
+      case _ => Future.successful(None)
+    }
+  }
+
+  def getUserProxy(userId: WorkbenchUserId): Future[Option[WorkbenchEmail]] = {
+    directoryDAO.readUserAttribute[String](userId, Attr.proxyEmail).map(_.map(WorkbenchEmail))
+  }
+
+  private def withProxyEmail[T](userId: WorkbenchUserId)(f: WorkbenchEmail => Future[T]): Future[Option[Future[T]]] = {
+    for {
+      maybeProxyEmail <- getUserProxy(userId)
+    } yield {
+      for {
+        proxyEmail <- maybeProxyEmail
+      } yield f(proxyEmail)
     }
   }
 

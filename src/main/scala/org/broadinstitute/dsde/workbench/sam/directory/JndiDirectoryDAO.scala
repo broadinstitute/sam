@@ -131,7 +131,7 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
           val myAttrs = new BasicAttributes(true)  // Case ignore
 
           val oc = new BasicAttribute("objectclass")
-          Seq("top", "inetOrgPerson").foreach(oc.add)
+          Seq("top", "workbenchPerson").foreach(oc.add)
           myAttrs.put(oc)
 
           myAttrs.put(new BasicAttribute(Attr.email, user.email.value))
@@ -202,11 +202,6 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
       case e: NameNotFoundException => None
 
     }.get
-  }
-
-  override def addUserAttribute(userId: WorkbenchUserId, attrId: String, value: Any): Future[Unit] = withContext { ctx =>
-    val basicAttributes: Attributes = new BasicAttributes(attrId, value, true)
-    ctx.modifyAttributes(userDn(userId), DirContext.ADD_ATTRIBUTE, basicAttributes)
   }
 
   override def loadPetServiceAccount(petServiceAccountId: PetServiceAccountId): Future[Option[PetServiceAccount]] = withContext { ctx =>
@@ -381,6 +376,20 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
 
     memberDns.map(dnToSubject).contains(subject)
   } recover { case e: NameNotFoundException => false }
+
+  override def addUserAttribute(userId: WorkbenchUserId, attrId: String, value: Any): Future[Unit] = withContext { ctx =>
+    val basicAttributes: Attributes = new BasicAttributes(attrId, value, true)
+    ctx.modifyAttributes(userDn(userId), DirContext.ADD_ATTRIBUTE, basicAttributes)
+  }
+
+  override def readUserAttribute[T](userId: WorkbenchUserId, attrId: String): Future[Option[T]] = withContext { ctx =>
+    Try {
+      val attributes = ctx.getAttributes(userDn(userId))
+      getAttribute[T](attributes, attrId)
+    }.recover {
+      case _: NameNotFoundException => None
+    }.get
+  }
 
   private def withContext[T](op: InitialDirContext => T): Future[T] = withContext(directoryConfig.directoryUrl, directoryConfig.user, directoryConfig.password)(op)
   private def batchedLoad[T, R](input: Seq[T])(op: Seq[T] => InitialDirContext => Seq[R]): Future[Seq[R]] = batchedLoad(directoryConfig.directoryUrl, directoryConfig.user, directoryConfig.password)(input)(op)

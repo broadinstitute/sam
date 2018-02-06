@@ -31,7 +31,6 @@ trait DirectoryDAO {
   def loadUser(userId: WorkbenchUserId): Future[Option[WorkbenchUser]]
   def loadUsers(userIds: Set[WorkbenchUserId]): Future[Seq[WorkbenchUser]]
   def deleteUser(userId: WorkbenchUserId): Future[Unit]
-  def addUserAttribute(userId: WorkbenchUserId, attrId: String, value: Any): Future[Unit]
 
   def listUsersGroups(userId: WorkbenchUserId): Future[Set[WorkbenchGroupIdentity]]
   def listFlattenedGroupUsers(groupId: WorkbenchGroupIdentity): Future[Set[WorkbenchUserId]]
@@ -46,4 +45,7 @@ trait DirectoryDAO {
   def loadPetServiceAccount(petServiceAccountId: PetServiceAccountId): Future[Option[PetServiceAccount]]
   def deletePetServiceAccount(petServiceAccountId: PetServiceAccountId): Future[Unit]
   def getAllPetServiceAccountsForUser(userId: WorkbenchUserId): Future[Seq[PetServiceAccount]]
+
+  def addUserAttribute(userId: WorkbenchUserId, attrId: String, value: Any): Future[Unit]
+  def readUserAttribute[T](userId: WorkbenchUserId, attrId: String): Future[Option[T]]
 }
