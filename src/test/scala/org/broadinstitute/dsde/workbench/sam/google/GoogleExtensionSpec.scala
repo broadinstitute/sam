@@ -97,28 +97,28 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
       val added = Seq(inSamSubGroup.email, ge.toProxyFromUser(inSamUserId))
       val removed = Seq(inGoogleSubGroup.email, ge.toProxyFromUser(inGoogleUserId))
 
-      when(mockGoogleDirectoryDAO.listGroupMembers(target.email)).thenReturn(Future.successful(Option(Seq(ge.toProxyFromUser(inGoogleUserId).value, ge.toProxyFromUser(inBothUserId).value, inGoogleSubGroup.email.value, inBothSubGroup.email.value, removeError))))
+      when(mockGoogleDirectoryDAO.listGroupMembers(target.email)).thenReturn(Future.successful(Option(Seq(ge.toProxyFromUser(inGoogleUserId).value, ge.toProxyFromUser(inBothUserId).value.toLowerCase, inGoogleSubGroup.email.value, inBothSubGroup.email.value, removeError))))
       when(mockGoogleDirectoryDAO.addMemberToGroup(any[WorkbenchEmail], any[WorkbenchEmail])).thenReturn(Future.successful(()))
       when(mockGoogleDirectoryDAO.removeMemberFromGroup(any[WorkbenchEmail], any[WorkbenchEmail])).thenReturn(Future.successful(()))
 
       val addException = new Exception("addError")
-      when(mockGoogleDirectoryDAO.addMemberToGroup(target.email, ge.toProxyFromUser(addError))).thenReturn(Future.failed(addException))
+      when(mockGoogleDirectoryDAO.addMemberToGroup(target.email, WorkbenchEmail(ge.toProxyFromUser(addError).value.toLowerCase))).thenReturn(Future.failed(addException))
 
       val removeException = new Exception("removeError")
-      when(mockGoogleDirectoryDAO.removeMemberFromGroup(target.email, WorkbenchEmail(removeError))).thenReturn(Future.failed(removeException))
+      when(mockGoogleDirectoryDAO.removeMemberFromGroup(target.email, WorkbenchEmail(removeError.toLowerCase))).thenReturn(Future.failed(removeException))
 
       val results = runAndWait(ge.synchronizeGroupMembers(target.id))
 
       results.head._1 should equal(target.email)
       results.head._2 should contain theSameElementsAs (
-        added.map(e => SyncReportItem("added", e.value, None)) ++
-          removed.map(e => SyncReportItem("removed", e.value, None)) ++
+        added.map(e => SyncReportItem("added", e.value.toLowerCase, None)) ++
+          removed.map(e => SyncReportItem("removed", e.value.toLowerCase, None)) ++
           Seq(
-            SyncReportItem("added", ge.toProxyFromUser(addError).value, Option(ErrorReport(addException))),
-            SyncReportItem("removed", removeError, Option(ErrorReport(removeException)))))
+            SyncReportItem("added", ge.toProxyFromUser(addError).value.toLowerCase, Option(ErrorReport(addException))),
+            SyncReportItem("removed", removeError.toLowerCase, Option(ErrorReport(removeException)))))
 
-      added.foreach { email => verify(mockGoogleDirectoryDAO).addMemberToGroup(target.email, email) }
-      removed.foreach { email => verify(mockGoogleDirectoryDAO).removeMemberFromGroup(target.email, email) }
+      added.foreach { email => verify(mockGoogleDirectoryDAO).addMemberToGroup(target.email, WorkbenchEmail(email.value.toLowerCase)) }
+      removed.foreach { email => verify(mockGoogleDirectoryDAO).removeMemberFromGroup(target.email, WorkbenchEmail(email.value.toLowerCase)) }
       verify(mockDirectoryDAO).updateSynchronizedDate(target.id)
     }
   }

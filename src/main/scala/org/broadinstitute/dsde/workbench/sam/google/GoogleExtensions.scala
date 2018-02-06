@@ -293,7 +293,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
 
         googleMemberEmails <- googleDirectoryDAO.listGroupMembers(group.email) flatMap {
           case None => googleDirectoryDAO.createGroup(groupId.toString, group.email) map (_ => Set.empty[String])
-          case Some(members) => Future.successful(members.toSet)
+          case Some(members) => Future.successful(members.map(_.toLowerCase).toSet)
         }
         samMemberEmails <- Future.traverse(group.members) {
           case group: WorkbenchGroupIdentity => directoryDAO.loadSubjectEmail(group)
@@ -303,7 +303,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
 
           // not sure why this next case would happen but if a petSA is in a group just use its email
           case petSA: PetServiceAccountId => directoryDAO.loadSubjectEmail(petSA)
-        }.map(_.collect { case Some(email) => email.value })
+        }.map(_.collect { case Some(email) => email.value.toLowerCase })
 
         toAdd = samMemberEmails -- googleMemberEmails
         toRemove = googleMemberEmails -- samMemberEmails
