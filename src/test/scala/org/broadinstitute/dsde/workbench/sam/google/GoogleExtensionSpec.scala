@@ -1,16 +1,14 @@
 package org.broadinstitute.dsde.workbench.sam.google
 
-import java.io.ByteArrayInputStream
-import java.util.Date
+import java.util.{Date, UUID}
 
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
 import akka.testkit.TestKit
-import com.google.api.services.storage.model.StorageObject
 import com.typesafe.config.ConfigFactory
 import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleStorageDAO}
 import org.broadinstitute.dsde.workbench.google.mock.{MockGoogleDirectoryDAO, MockGoogleIamDAO, MockGooglePubSubDAO, MockGoogleStorageDAO}
-import org.broadinstitute.dsde.workbench.model._
+import org.broadinstitute.dsde.workbench.model.{WorkbenchExceptionWithErrorReport, _}
 import org.broadinstitute.dsde.workbench.sam.config.{DirectoryConfig, GoogleServicesConfig, PetServiceAccountConfig}
 import org.broadinstitute.dsde.workbench.sam.{TestSupport, _}
 import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryDAO, JndiDirectoryDAO}
@@ -33,6 +31,7 @@ import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.sam.config._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccountKeyId}
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
+import org.mockito.ArgumentMatcher
 
 class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with FlatSpecLike with Matchers with TestSupport with MockitoSugar with ScalaFutures with BeforeAndAfterAll {
   def this() = this(ActorSystem("GoogleGroupSyncMonitorSpec"))
@@ -338,6 +337,40 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val proxyEmail = googleExtensions.toProxyFromUser(user).value
     proxyEmail shouldBe "foo-bar-baz-qux-quux-corge-grault-_0123456789@test.cloudfire.org"
     proxyEmail should have length 64
+  }
+
+  it should "do Googley stuff onUserCreate" in {
+    val userId = WorkbenchUserId(UUID.randomUUID().toString)
+    val userEmail = WorkbenchEmail("foo@test.org")
+    val user = WorkbenchUser(userId, userEmail)
+    val proxyEmail = WorkbenchEmail(s"foo_${userId.value}@${googleServicesConfig.appsDomain}")
+
+    val mockDirectoryDAO = mock[DirectoryDAO]
+    val mockGoogleDirectoryDAO = mock[GoogleDirectoryDAO]
+    val googleExtensions = new GoogleExtensions(mockDirectoryDAO, null, mockGoogleDirectoryDAO, null, null, null, null, googleServicesConfig, null, null)
+
+    /*
+     * BEWARE: Tightly-coupled mocking! This is the simplest way to mock the behavior of
+     * DirectoryDAO to make GoogleExtensions.getOrCreateAllUsersGroup() to work. However, it relies
+     * on getOrCreateAllUsersGroup() always trying to create the group rather than first trying to
+     * look for it.
+     */
+    val allUsersGroup = BasicWorkbenchGroup(NoExtensions.allUsersGroupName, Set.empty, WorkbenchEmail(s"TEST_ALL_USERS_GROUP@test.firecloud.org"))
+    val allUsersGroupMatcher = new ArgumentMatcher[BasicWorkbenchGroup] {
+      override def matches(group: BasicWorkbenchGroup): Boolean = group.id == allUsersGroup.id
+    }
+    when(mockDirectoryDAO.createGroup(argThat(allUsersGroupMatcher))).thenReturn(Future.successful(allUsersGroup))
+
+    when(mockDirectoryDAO.addUserAttribute(userId, "proxyEmail", s"foo_$userId@${googleServicesConfig.appsDomain}")).thenReturn(Future.successful(()))
+    when(mockGoogleDirectoryDAO.createGroup(any[String], any[WorkbenchEmail])).thenReturn(Future.successful(()))
+    when(mockGoogleDirectoryDAO.addMemberToGroup(any[WorkbenchEmail], any[WorkbenchEmail])).thenReturn(Future.successful(()))
+
+    googleExtensions.onUserCreate(user).futureValue
+
+    verify(mockGoogleDirectoryDAO).createGroup(userEmail.value, proxyEmail)
+    verify(mockGoogleDirectoryDAO).addMemberToGroup(proxyEmail, userEmail)
+    verify(mockGoogleDirectoryDAO).addMemberToGroup(allUsersGroup.email, proxyEmail)
+    verify(mockDirectoryDAO).addUserAttribute(userId, "proxyEmail", proxyEmail.value)
   }
 
   private def setupGoogleKeyCacheTests: (GoogleExtensions, UserService) = {
