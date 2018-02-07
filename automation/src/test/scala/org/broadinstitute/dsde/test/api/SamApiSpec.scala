@@ -137,6 +137,8 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
       val info2 = Sam.user.status()(authToken2).get.userInfo
       val email1 = WorkbenchEmail(Sam.user.status()(authToken1).get.userInfo.userEmail)
       val email2 = WorkbenchEmail(Sam.user.status()(authToken2).get.userInfo.userEmail)
+      val username1 = email1.value.split("@").head
+      val username2 = email2.value.split("@").head
       val userId1 = Sam.user.status()(authToken1).get.userInfo.userSubjectId
       val userId2 = Sam.user.status()(authToken2).get.userInfo.userSubjectId
 
@@ -145,11 +147,13 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
       val proxyGroup2_1 = Sam.user.proxyGroup(email2.value)(authToken1)
       val proxyGroup2_2 = Sam.user.proxyGroup(email2.value)(authToken2)
 
-      // will break when Sam's implementation changes
-      proxyGroup1_1 shouldBe WorkbenchEmail(s"PROXY_$userId1@${Config.GCS.appsDomain}")
-      proxyGroup1_2 shouldBe WorkbenchEmail(s"PROXY_$userId1@${Config.GCS.appsDomain}")
-      proxyGroup2_1 shouldBe WorkbenchEmail(s"PROXY_$userId2@${Config.GCS.appsDomain}")
-      proxyGroup2_2 shouldBe WorkbenchEmail(s"PROXY_$userId2@${Config.GCS.appsDomain}")
+      val expectedProxyEmail1 = s"${username1}_$userId1@${Config.GCS.appsDomain}"
+      proxyGroup1_1 shouldBe WorkbenchEmail(expectedProxyEmail1)
+      proxyGroup1_2 shouldBe WorkbenchEmail(expectedProxyEmail1)
+
+      val expectedProxyEmail2 = s"${username2}_$userId2@${Config.GCS.appsDomain}"
+      proxyGroup2_1 shouldBe WorkbenchEmail(expectedProxyEmail2)
+      proxyGroup2_2 shouldBe WorkbenchEmail(expectedProxyEmail2)
     }
 
     "should furnish a new service account key and cache it for further retrievals" in {

@@ -116,7 +116,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
   }
 
   override def getUserStatus(user: WorkbenchUser): Future[Boolean] = {
-    googleDirectoryDAO.isGroupMember(toProxyFromUser(user), WorkbenchEmail(user.email.value))
+    withProxyEmail(user.id) { proxyEmail => googleDirectoryDAO.isGroupMember(proxyEmail, WorkbenchEmail(user.email.value)) }
   }
 
   /**
@@ -131,7 +131,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
 
   override def onUserEnable(user: WorkbenchUser): Future[Unit] = {
     for {
-      _ <- googleDirectoryDAO.addMemberToGroup(toProxyFromUser(user), WorkbenchEmail(user.email.value))
+      _ <- withProxyEmail(user.id) { proxyEmail => googleDirectoryDAO.addMemberToGroup(proxyEmail, WorkbenchEmail(user.email.value)) }
       _ <- forAllPets(user.id) { enablePetServiceAccount }
     } yield ()
   }
@@ -139,7 +139,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
   override def onUserDisable(user: WorkbenchUser): Future[Unit] = {
     for {
       _ <- forAllPets(user.id) { disablePetServiceAccount }
-      _ <- googleDirectoryDAO.removeMemberFromGroup(toProxyFromUser(user), WorkbenchEmail(user.email.value))
+      _ <- withProxyEmail(user.id) { proxyEmail => googleDirectoryDAO.removeMemberFromGroup(proxyEmail, WorkbenchEmail(user.email.value)) }
     } yield ()
   }
 
@@ -347,13 +347,10 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
     directoryDAO.readUserAttribute[String](userId, Attr.proxyEmail).map(_.map(WorkbenchEmail))
   }
 
-  private def withProxyEmail[T](userId: WorkbenchUserId)(f: WorkbenchEmail => Future[T]): Future[Option[Future[T]]] = {
-    for {
-      maybeProxyEmail <- getUserProxy(userId)
-    } yield {
-      for {
-        proxyEmail <- maybeProxyEmail
-      } yield f(proxyEmail)
+  private def withProxyEmail[T](userId: WorkbenchUserId)(f: WorkbenchEmail => Future[T]): Future[T] = {
+    getUserProxy(userId) flatMap {
+      case Some(e) => f(e)
+      case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Proxy group does not exist for subject ID: $userId"))
     }
   }
 
