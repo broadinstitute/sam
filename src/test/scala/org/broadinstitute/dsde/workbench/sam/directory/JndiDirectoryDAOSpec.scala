@@ -94,7 +94,7 @@ class JndiDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
 
     runAndWait(dao.addProxyGroup(userId, WorkbenchEmail("foo_1234@test.firecloud.org")))
 
-    assertResult(Some("foo_1234@test.firecloud.org")) {
+    assertResult(Some(WorkbenchEmail("foo_1234@test.firecloud.org"))) {
       runAndWait(dao.readProxyGroup(userId))
     }
   }
