@@ -5,7 +5,8 @@ import akka.http.scaladsl.testkit.ScalatestRouteTest
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.scalatest.{FlatSpec, Matchers}
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
-import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchUser, WorkbenchEmail, WorkbenchUserId}
+import akka.http.scaladsl.model.headers.OAuth2BearerToken
+import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import spray.json.{JsBoolean, JsValue}
 import spray.json.DefaultJsonProtocol._
@@ -20,7 +21,7 @@ import org.broadinstitute.dsde.workbench.sam.service.{NoExtensions, ResourceServ
   */
 class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest with TestSupport {
 
-  val defaultUserInfo = UserInfo("accessToken", WorkbenchUserId("user1"), WorkbenchEmail("user1@example.com"), 0)
+  val defaultUserInfo = UserInfo(OAuth2BearerToken("accessToken"), WorkbenchUserId("user1"), WorkbenchEmail("user1@example.com"), 0)
 
   private def createSamRoutes(resourceTypes: Map[ResourceTypeName, ResourceType], userInfo: UserInfo = defaultUserInfo) = {
     val accessPolicyDAO = new MockAccessPolicyDAO()
@@ -270,7 +271,7 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
   it should "404 when creating a policy on a resource that the user doesnt have permission to see" in {
     val resourceType = ResourceType(ResourceTypeName("rt"), Set(SamResourceActionPatterns.alterPolicies, ResourceActionPattern("can_compute")), Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.alterPolicies))), ResourceRoleName("owner"))
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
-    val otherUserSamRoutes = TestSamRoutes(Map(resourceType.name -> resourceType), UserInfo("accessToken", WorkbenchUserId("user2"), WorkbenchEmail("user2@example.com"), 0))
+    val otherUserSamRoutes = TestSamRoutes(Map(resourceType.name -> resourceType), UserInfo(OAuth2BearerToken("accessToken"), WorkbenchUserId("user2"), WorkbenchEmail("user2@example.com"), 0))
     val members = AccessPolicyMembership(Set(WorkbenchEmail("foo@bar.baz")), Set(ResourceAction("can_compute")), Set.empty)
 
     //Create a resource
@@ -326,7 +327,7 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
   it should "404 when listing policies for a resource when user can't see the resource" in {
     val resourceType = ResourceType(ResourceTypeName("rt"), Set(SamResourceActionPatterns.alterPolicies, ResourceActionPattern("can_compute")), Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.alterPolicies))), ResourceRoleName("owner"))
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
-    val otherUserSamRoutes = TestSamRoutes(Map(resourceType.name -> resourceType), UserInfo("accessToken", WorkbenchUserId("user2"), WorkbenchEmail("user2@example.com"), 0))
+    val otherUserSamRoutes = TestSamRoutes(Map(resourceType.name -> resourceType), UserInfo(OAuth2BearerToken("accessToken"), WorkbenchUserId("user2"), WorkbenchEmail("user2@example.com"), 0))
 
     //Create the resource
     Post(s"/api/resource/${resourceType.name}/foo") ~> samRoutes.route ~> check {
@@ -393,7 +394,7 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     val samRoutes = createSamRoutes(Map(resourceType.name -> resourceType))
 
     runAndWait(samRoutes.resourceService.createResourceType(resourceType))
-    runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), UserInfo("accessToken", WorkbenchUserId("user2"), WorkbenchEmail("user2@example.com"), 0)))
+    runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), UserInfo(OAuth2BearerToken("accessToken"), WorkbenchUserId("user2"), WorkbenchEmail("user2@example.com"), 0)))
 
     //Verify resource exists by checking for conflict on recreate
     Post(s"/api/resource/${resourceType.name}/foo") ~> samRoutes.route ~> check {
@@ -493,11 +494,11 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     // differs from happy case in that testUser creates resource, not defaultUser which calls the PUT
     val resourceType = ResourceType(ResourceTypeName("rt"), Set(SamResourceActionPatterns.alterPolicies, ResourceActionPattern("can_compute")), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("can_compute")))), ResourceRoleName("owner"))
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
-    val testUser = UserInfo("token", WorkbenchUserId("testuser"), WorkbenchEmail("testuser@foo.com"), 0)
+    val testUser = UserInfo(OAuth2BearerToken("token"), WorkbenchUserId("testuser"), WorkbenchEmail("testuser@foo.com"), 0)
 
     runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), testUser))
 
-    runAndWait(samRoutes.userService.createUser(testUser.toWorkbenchUser))
+    runAndWait(samRoutes.userService.createUser(WorkbenchUser(testUser.userId, testUser.userEmail)))
 
     Put(s"/api/resource/${resourceType.name}/foo/policies/${resourceType.ownerRoleName}/memberEmails/${testUser.userEmail}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
@@ -576,11 +577,11 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     // differs from happy case in that testUser creates resource, not defaultUser which calls the PUT
     val resourceType = ResourceType(ResourceTypeName("rt"), Set(SamResourceActionPatterns.alterPolicies, ResourceActionPattern("can_compute")), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("can_compute")))), ResourceRoleName("owner"))
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
-    val testUser = UserInfo("token", WorkbenchUserId("testuser"), WorkbenchEmail("testuser@foo.com"), 0)
+    val testUser = UserInfo(OAuth2BearerToken("token"), WorkbenchUserId("testuser"), WorkbenchEmail("testuser@foo.com"), 0)
 
     runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), testUser))
 
-    runAndWait(samRoutes.userService.createUser(testUser.toWorkbenchUser))
+    runAndWait(samRoutes.userService.createUser(WorkbenchUser(testUser.userId, testUser.userEmail)))
 
     runAndWait(samRoutes.resourceService.addSubjectToPolicy(ResourceAndPolicyName(Resource(resourceType.name,  ResourceId("foo")), AccessPolicyName(resourceType.ownerRoleName.value)), testUser.userId))
 

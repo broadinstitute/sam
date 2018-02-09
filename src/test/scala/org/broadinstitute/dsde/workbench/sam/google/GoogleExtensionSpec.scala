@@ -290,7 +290,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
 
     runAndWait(ge.onBoot(app))
 
-    runAndWait(mockDirectoryDAO.loadUser(WorkbenchUserId(googleServicesConfig.serviceAccountClientId))) shouldBe Some(WorkbenchUser(WorkbenchUserId(googleServicesConfig.serviceAccountClientId), WorkbenchEmail(googleServicesConfig.serviceAccountClientEmail)))
+    runAndWait(mockDirectoryDAO.loadUser(WorkbenchUserId(googleServicesConfig.serviceAccountClientId))) shouldBe Some(WorkbenchUser(WorkbenchUserId(googleServicesConfig.serviceAccountClientId), googleServicesConfig.serviceAccountClientEmail))
     runAndWait(mockAccessPolicyDAO.loadPolicy(resourceAndPolicyName)).map(_.copy(email = null)) shouldBe Some(AccessPolicy(
       resourceAndPolicyName,
       Set(WorkbenchUserId(googleServicesConfig.serviceAccountClientId)),

@@ -1,15 +1,16 @@
 package org.broadinstitute.dsde.workbench.sam.api
 
 import akka.actor.ActorSystem
+import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directives.reject
 import akka.stream.Materializer
 import org.broadinstitute.dsde.workbench.google.mock.MockGoogleDirectoryDAO
-import org.broadinstitute.dsde.workbench.model.{WorkbenchGroup, WorkbenchGroupIdentity, WorkbenchEmail, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.config.SwaggerConfig
 import org.broadinstitute.dsde.workbench.sam.directory.MockDirectoryDAO
-import org.broadinstitute.dsde.workbench.sam.model.{ResourceType, ResourceTypeName, UserInfo}
+import org.broadinstitute.dsde.workbench.sam.model.{ResourceType, ResourceTypeName}
 import org.broadinstitute.dsde.workbench.sam.openam.MockAccessPolicyDAO
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.scalatest.concurrent.ScalaFutures
@@ -29,7 +30,7 @@ class TestSamRoutes(resourceService: ResourceService, userService: UserService, 
 
 object TestSamRoutes {
 
-  val defaultUserInfo = UserInfo("accessToken", WorkbenchUserId("user1"), WorkbenchEmail("user1@example.com"), 0)
+  val defaultUserInfo = UserInfo(OAuth2BearerToken("accessToken"), WorkbenchUserId("user1"), WorkbenchEmail("user1@example.com"), 0)
 
   def apply(resourceTypes: Map[ResourceTypeName, ResourceType], userInfo: UserInfo = defaultUserInfo)(implicit system: ActorSystem, materializer: Materializer, executionContext: ExecutionContext) = {
     // need to make sure MockDirectoryDAO and MockAccessPolicyDAO share the same groups
