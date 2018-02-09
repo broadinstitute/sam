@@ -23,12 +23,12 @@ object GoogleKeyCacheMonitorSupervisor {
   case object Init extends GoogleKeyCacheMonitorSupervisorMessage
   case object Start extends GoogleKeyCacheMonitorSupervisorMessage
 
-  def props(pollInterval: FiniteDuration, pollIntervalJitter: FiniteDuration, pubSubDao: GooglePubSubDAO, googleIamDAO: GoogleIamDAO, pubSubTopicName: String, pubSubSubscriptionName: String, projectServiceAccount: String, workerCount: Int, googleKeyCache: GoogleKeyCache)(implicit executionContext: ExecutionContext): Props = {
+  def props(pollInterval: FiniteDuration, pollIntervalJitter: FiniteDuration, pubSubDao: GooglePubSubDAO, googleIamDAO: GoogleIamDAO, pubSubTopicName: String, pubSubSubscriptionName: String, projectServiceAccount: WorkbenchEmail, workerCount: Int, googleKeyCache: GoogleKeyCache)(implicit executionContext: ExecutionContext): Props = {
     Props(new GoogleKeyCacheMonitorSupervisor(pollInterval, pollIntervalJitter, pubSubDao, googleIamDAO, pubSubTopicName, pubSubSubscriptionName, projectServiceAccount, workerCount, googleKeyCache))
   }
 }
 
-class GoogleKeyCacheMonitorSupervisor(val pollInterval: FiniteDuration, pollIntervalJitter: FiniteDuration, pubSubDao: GooglePubSubDAO, googleIamDAO: GoogleIamDAO, pubSubTopicName: String, pubSubSubscriptionName: String, projectServiceAccount: String, workerCount: Int, googleKeyCache: GoogleKeyCache)(implicit executionContext: ExecutionContext) extends Actor with LazyLogging {
+class GoogleKeyCacheMonitorSupervisor(val pollInterval: FiniteDuration, pollIntervalJitter: FiniteDuration, pubSubDao: GooglePubSubDAO, googleIamDAO: GoogleIamDAO, pubSubTopicName: String, pubSubSubscriptionName: String, projectServiceAccount: WorkbenchEmail, workerCount: Int, googleKeyCache: GoogleKeyCache)(implicit executionContext: ExecutionContext) extends Actor with LazyLogging {
   import GoogleKeyCacheMonitorSupervisor._
   import context._
 
@@ -46,7 +46,7 @@ class GoogleKeyCacheMonitorSupervisor(val pollInterval: FiniteDuration, pollInte
     for {
       _ <- pubSubDao.createTopic(pubSubTopicName)
       _ <- pubSubDao.createSubscription(pubSubTopicName, pubSubSubscriptionName)
-      _ <- pubSubDao.setTopicIamPermissions(pubSubTopicName, Map(WorkbenchEmail(projectServiceAccount) -> "roles/pubsub.publisher"))
+      _ <- pubSubDao.setTopicIamPermissions(pubSubTopicName, Map(projectServiceAccount -> "roles/pubsub.publisher"))
       _ <- googleKeyCache.googleStorageDAO.setObjectChangePubSubTrigger(googleKeyCache.googleServicesConfig.googleKeyCacheConfig.bucketName, topicToFullPath(pubSubTopicName), List("OBJECT_DELETE"))
     } yield Start
   }

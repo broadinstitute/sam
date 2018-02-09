@@ -1,5 +1,6 @@
 package org.broadinstitute.dsde.workbench.sam.config
 
+import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.model.google.GoogleProject
 
 import scala.concurrent.duration.FiniteDuration
@@ -11,10 +12,10 @@ case class GoogleServicesConfig(appName: String,
                                 appsDomain: String,
                                 pemFile: String,
                                 serviceAccountClientId: String,
-                                serviceAccountClientEmail: String,
+                                serviceAccountClientEmail: WorkbenchEmail,
                                 serviceAccountClientProject: GoogleProject,
-                                subEmail: String,
-                                projectServiceAccount: String,
+                                subEmail: WorkbenchEmail,
+                                projectServiceAccount: WorkbenchEmail,
                                 groupSyncPubSubProject: String,
                                 groupSyncPollInterval: FiniteDuration,
                                 groupSyncPollJitter: FiniteDuration,

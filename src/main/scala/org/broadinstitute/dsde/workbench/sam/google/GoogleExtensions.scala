@@ -70,7 +70,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
     ))
 
 
-    val serviceAccountUserInfo = UserInfo(OAuth2BearerToken(""), WorkbenchUserId(googleServicesConfig.serviceAccountClientId), WorkbenchEmail(googleServicesConfig.serviceAccountClientEmail), 0)
+    val serviceAccountUserInfo = UserInfo(OAuth2BearerToken(""), WorkbenchUserId(googleServicesConfig.serviceAccountClientId), googleServicesConfig.serviceAccountClientEmail, 0)
     for {
       _ <- samApplication.userService.createUser(WorkbenchUser(serviceAccountUserInfo.userId, serviceAccountUserInfo.userEmail)) recover {
         case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode == Option(StatusCodes.Conflict) =>
@@ -366,7 +366,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
     }
 
     def checkIam: Future[SubsystemStatus] = {
-      val accountName = toAccountName(WorkbenchEmail(googleServicesConfig.serviceAccountClientEmail))
+      val accountName = toAccountName(googleServicesConfig.serviceAccountClientEmail)
       googleIamDAO.findServiceAccount(googleServicesConfig.serviceAccountClientProject, accountName).map {
         case Some(_) => OkStatus
         case None => failedStatus(s"Could not find service account: $accountName")
