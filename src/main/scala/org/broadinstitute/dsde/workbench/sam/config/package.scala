@@ -57,7 +57,7 @@ package object config {
       config.getString("pathToPem"),
       config.getString("serviceAccountClientId"),
       config.getString("serviceAccountClientEmail"),
-      config.getString("serviceAccountClientProject"),
+      GoogleProject(config.getString("serviceAccountClientProject")),
       config.getString("subEmail"),
       config.getString("projectServiceAccount"),
       config.getString("groupSync.pubSubProject"),
@@ -79,7 +79,7 @@ package object config {
 
   implicit val googleKeyCacheConfigReader: ValueReader[GoogleKeyCacheConfig] = ValueReader.relative { config =>
     GoogleKeyCacheConfig(
-      config.getString("bucketName"),
+      GcsBucketName(config.getString("bucketName")),
       config.getInt("activeKeyMaxAge"),
       config.getInt("retiredKeyMaxAge"),
       config.getString("monitor.pubSubProject"),

@@ -5,6 +5,6 @@ import org.broadinstitute.dsde.workbench.model.{WorkbenchUser, WorkbenchEmail, W
 /**
   * Created by dvoet on 6/5/17.
   */
-case class UserInfo(accessToken: String, userId: WorkbenchUserId, userEmail: WorkbenchEmail, tokenExpiresIn: Long) {
+case class UserInfo2(accessToken: String, userId: WorkbenchUserId, userEmail: WorkbenchEmail, tokenExpiresIn: Long) {
   def toWorkbenchUser = WorkbenchUser(userId, userEmail)
 }
