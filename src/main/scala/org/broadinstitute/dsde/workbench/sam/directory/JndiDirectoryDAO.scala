@@ -263,6 +263,10 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     }
   }
 
+  override def addProxyGroup(userId: WorkbenchUserId, proxyEmail: WorkbenchEmail): Future[Unit] = addUserAttribute(userId, Attr.proxyEmail, proxyEmail.value)
+
+  override def readProxyGroup(userId: WorkbenchUserId): Future[Option[WorkbenchEmail]] = readUserAttribute(userId, Attr.proxyEmail).map(_.map(WorkbenchEmail))
+
   private def unmarshalUser(attributes: Attributes): WorkbenchUser = {
     val uid = getAttribute[String](attributes, Attr.uid).getOrElse(throw new WorkbenchException(s"${Attr.uid} attribute missing"))
     val email = getAttribute[String](attributes, Attr.email).getOrElse(throw new WorkbenchException(s"${Attr.email} attribute missing"))
@@ -377,15 +381,14 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     memberDns.map(dnToSubject).contains(subject)
   } recover { case e: NameNotFoundException => false }
 
-  override def addUserAttribute(userId: WorkbenchUserId, attrId: String, value: Any): Future[Unit] = withContext { ctx =>
+  private def addUserAttribute(userId: WorkbenchUserId, attrId: String, value: Any): Future[Unit] = withContext { ctx =>
     val basicAttributes: Attributes = new BasicAttributes(attrId, value, true)
     ctx.modifyAttributes(userDn(userId), DirContext.ADD_ATTRIBUTE, basicAttributes)
   }
 
-  override def readUserAttribute[T](userId: WorkbenchUserId, attrId: String): Future[Option[T]] = withContext { ctx =>
+  private def readUserAttribute[T](userId: WorkbenchUserId, attrId: String): Future[Option[T]] = withContext { ctx =>
     Try {
-      val attributes = ctx.getAttributes(userDn(userId))
-      getAttribute[T](attributes, attrId)
+      getAttribute[T](ctx.getAttributes(userDn(userId), Array(attrId)), attrId)
     }.recover {
       case _: NameNotFoundException => None
     }.get

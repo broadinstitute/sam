@@ -12,6 +12,7 @@ import scala.concurrent.Future
 import scala.concurrent.ExecutionContext.Implicits.global
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicy, BasicWorkbenchGroup}
+import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO.Attr
 
 /**
   * Created by mbemis on 6/23/17.
@@ -96,6 +97,10 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
   override def deleteUser(userId: WorkbenchUserId): Future[Unit] = Future {
     users -= userId
   }
+
+  override def addProxyGroup(userId: WorkbenchUserId, proxyEmail: WorkbenchEmail): Future[Unit] = addUserAttribute(userId, Attr.proxyEmail, proxyEmail)
+
+  override def readProxyGroup(userId: WorkbenchUserId): Future[Option[WorkbenchEmail]] = readUserAttribute[WorkbenchEmail](userId, Attr.proxyEmail)
 
   override def listUsersGroups(userId: WorkbenchUserId): Future[Set[WorkbenchGroupIdentity]] = Future {
     listSubjectsGroups(userId, Set.empty).map(_.id)
@@ -202,7 +207,7 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     }
   }
 
-  override def addUserAttribute(userId: WorkbenchUserId, attrId: String, value: Any): Future[Unit] = {
+  private def addUserAttribute(userId: WorkbenchUserId, attrId: String, value: Any): Future[Unit] = {
     userAttributes.get(userId) match {
       case Some(attributes: Map[String, Any]) => attributes += attrId -> value
       case None => userAttributes += userId -> (new TrieMap() += attrId -> value)
@@ -210,7 +215,7 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     Future.successful(())
   }
 
-  override def readUserAttribute[T](userId: WorkbenchUserId, attrId: String): Future[Option[T]] = {
+  private def readUserAttribute[T](userId: WorkbenchUserId, attrId: String): Future[Option[T]] = {
     val value = for {
       attributes <- userAttributes.get(userId)
       value <- attributes.get(attrId)

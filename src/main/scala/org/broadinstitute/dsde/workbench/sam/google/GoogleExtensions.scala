@@ -14,7 +14,6 @@ import org.broadinstitute.dsde.workbench.sam.config.{GoogleServicesConfig, PetSe
 import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.AccessPolicyDAO
-import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO.Attr
 import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, SamApplication}
 import org.broadinstitute.dsde.workbench.util.FutureSupport
 import org.broadinstitute.dsde.workbench.util.health.{HealthMonitor, SubsystemStatus, Subsystems}
@@ -111,12 +110,15 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
 
       _ <- googleDirectoryDAO.addMemberToGroup(allUsersGroup.email, proxyEmail)
 
-      _ <- directoryDAO.addUserAttribute(user.id, Attr.proxyEmail, proxyEmail.value)
+      _ <- directoryDAO.addProxyGroup(user.id, proxyEmail)
     } yield ()
   }
 
   override def getUserStatus(user: WorkbenchUser): Future[Boolean] = {
-    withProxyEmail(user.id) { proxyEmail => googleDirectoryDAO.isGroupMember(proxyEmail, WorkbenchEmail(user.email.value)) }
+    getUserProxy(user.id).flatMap {
+      case Some(proxyEmail) => googleDirectoryDAO.isGroupMember(proxyEmail, WorkbenchEmail(user.email.value))
+      case None => Future.successful(false)
+    }
   }
 
   /**
@@ -343,14 +345,14 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
     }
   }
 
-  def getUserProxy(userId: WorkbenchUserId): Future[Option[WorkbenchEmail]] = {
-    directoryDAO.readUserAttribute[String](userId, Attr.proxyEmail).map(_.map(WorkbenchEmail))
+  private def getUserProxy(userId: WorkbenchUserId): Future[Option[WorkbenchEmail]] = {
+    directoryDAO.readProxyGroup(userId)
   }
 
   private def withProxyEmail[T](userId: WorkbenchUserId)(f: WorkbenchEmail => Future[T]): Future[T] = {
     getUserProxy(userId) flatMap {
       case Some(e) => f(e)
-      case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Proxy group does not exist for subject ID: $userId"))
+      case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.InternalServerError, s"Proxy group does not exist for subject ID: $userId"))
     }
   }
 

@@ -80,7 +80,7 @@ class JndiDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     }
   }
 
-  it should "add and read user attributes" in {
+  it should "add and read proxy group email" in {
     val userId = WorkbenchUserId(UUID.randomUUID().toString)
     val user = WorkbenchUser(userId, WorkbenchEmail("foo@bar.com"))
 
@@ -89,13 +89,13 @@ class JndiDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     }
 
     assertResult(None) {
-      runAndWait(dao.readUserAttribute(userId, "proxyEmail"))
+      runAndWait(dao.readProxyGroup(userId))
     }
 
-    runAndWait(dao.addUserAttribute(userId, "proxyEmail", "foo_1234@test.firecloud.org"))
+    runAndWait(dao.addProxyGroup(userId, WorkbenchEmail("foo_1234@test.firecloud.org")))
 
     assertResult(Some("foo_1234@test.firecloud.org")) {
-      runAndWait(dao.readUserAttribute(userId, "proxyEmail"))
+      runAndWait(dao.readProxyGroup(userId))
     }
   }
 

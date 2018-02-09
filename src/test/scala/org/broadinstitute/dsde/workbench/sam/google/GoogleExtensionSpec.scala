@@ -93,10 +93,10 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
       }
       when(mockDirectoryDAO.updateSynchronizedDate(any[WorkbenchGroupIdentity])).thenReturn(Future.successful(()))
       when(mockDirectoryDAO.getSynchronizedDate(any[WorkbenchGroupIdentity])).thenReturn(Future.successful(Some(new Date(2017, 11, 22))))
-      when(mockDirectoryDAO.readUserAttribute[String](WorkbenchUserId("addError"), "proxyEmail")).thenReturn(Future.successful(Some(addErrorProxyEmail)))
-      when(mockDirectoryDAO.readUserAttribute[String](WorkbenchUserId("inSamUser"), "proxyEmail")).thenReturn(Future.successful(Some(inSamUserProxyEmail)))
-      when(mockDirectoryDAO.readUserAttribute[String](WorkbenchUserId("inGoogleUser"), "proxyEmail")).thenReturn(Future.successful(Some(inGoogleUserProxyEmail)))
-      when(mockDirectoryDAO.readUserAttribute[String](WorkbenchUserId("inBothUser"), "proxyEmail")).thenReturn(Future.successful(Some(inBothUserProxyEmail)))
+      when(mockDirectoryDAO.readProxyGroup(WorkbenchUserId("addError"))).thenReturn(Future.successful(Some(WorkbenchEmail(addErrorProxyEmail))))
+      when(mockDirectoryDAO.readProxyGroup(WorkbenchUserId("inSamUser"))).thenReturn(Future.successful(Some(WorkbenchEmail(inSamUserProxyEmail))))
+      when(mockDirectoryDAO.readProxyGroup(WorkbenchUserId("inGoogleUser"))).thenReturn(Future.successful(Some(WorkbenchEmail(inGoogleUserProxyEmail))))
+      when(mockDirectoryDAO.readProxyGroup(WorkbenchUserId("inBothUser"))).thenReturn(Future.successful(Some(WorkbenchEmail(inBothUserProxyEmail))))
 
       val subGroups = Seq(inSamSubGroup, inGoogleSubGroup, inBothSubGroup)
       subGroups.foreach { g => when(mockDirectoryDAO.loadSubjectEmail(g.id)).thenReturn(Future.successful(Option(g.email))) }
@@ -361,7 +361,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     }
     when(mockDirectoryDAO.createGroup(argThat(allUsersGroupMatcher))).thenReturn(Future.successful(allUsersGroup))
 
-    when(mockDirectoryDAO.addUserAttribute(userId, "proxyEmail", s"foo_$userId@${googleServicesConfig.appsDomain}")).thenReturn(Future.successful(()))
+    when(mockDirectoryDAO.addProxyGroup(userId, WorkbenchEmail(s"foo_$userId@${googleServicesConfig.appsDomain}"))).thenReturn(Future.successful(()))
     when(mockGoogleDirectoryDAO.createGroup(any[String], any[WorkbenchEmail])).thenReturn(Future.successful(()))
     when(mockGoogleDirectoryDAO.addMemberToGroup(any[WorkbenchEmail], any[WorkbenchEmail])).thenReturn(Future.successful(()))
 
@@ -370,7 +370,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     verify(mockGoogleDirectoryDAO).createGroup(userEmail.value, proxyEmail)
     verify(mockGoogleDirectoryDAO).addMemberToGroup(proxyEmail, userEmail)
     verify(mockGoogleDirectoryDAO).addMemberToGroup(allUsersGroup.email, proxyEmail)
-    verify(mockDirectoryDAO).addUserAttribute(userId, "proxyEmail", proxyEmail.value)
+    verify(mockDirectoryDAO).addProxyGroup(userId, proxyEmail)
   }
 
   private def setupGoogleKeyCacheTests: (GoogleExtensions, UserService) = {
