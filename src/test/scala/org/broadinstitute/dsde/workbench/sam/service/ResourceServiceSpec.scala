@@ -289,6 +289,26 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     runAndWait(service.deleteResource(resource))
   }
 
+  it should "fail when given a email that doesn't exist" in {
+    val resource = Resource(defaultResourceType.name, ResourceId("my-resource"))
+
+    runAndWait(service.createResourceType(defaultResourceType))
+    runAndWait(service.createResource(defaultResourceType, resource.resourceId, dummyUserInfo))
+
+    val group = BasicWorkbenchGroup(WorkbenchGroupName("foo"), Set.empty, toEmail(resource.resourceTypeName.value, resource.resourceId.value, "foo"))
+    val newPolicy = AccessPolicy(ResourceAndPolicyName(resource, AccessPolicyName("foo")), group.members, group.email, Set.empty, Set(ResourceAction("non_owner_action")))
+    
+    intercept[WorkbenchExceptionWithErrorReport] {
+      runAndWait(service.overwritePolicy(defaultResourceType, newPolicy.id.accessPolicyName, newPolicy.id.resource, AccessPolicyMembership(Set(WorkbenchEmail("null@null.com")), Set.empty, Set.empty)))
+    }
+
+    val policies = runAndWait(policyDAO.listAccessPolicies(resource))
+
+    assert(!policies.contains(newPolicy))
+
+    runAndWait(service.deleteResource(resource))
+  }
+
   "deleteResource" should "delete the resource" in {
     val resource = Resource(defaultResourceType.name, ResourceId("my-resource"))
 
