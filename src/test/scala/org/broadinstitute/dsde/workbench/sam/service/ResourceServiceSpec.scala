@@ -246,9 +246,11 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     val group = BasicWorkbenchGroup(WorkbenchGroupName("foo"), Set.empty, toEmail(resource.resourceTypeName.value, resource.resourceId.value, "foo"))
     val newPolicy = AccessPolicy(ResourceAndPolicyName(resource, AccessPolicyName("foo")), group.members, group.email, Set.empty, Set(ResourceAction("INVALID_ACTION")))
 
-    intercept[WorkbenchExceptionWithErrorReport] {
+    val exception = intercept[WorkbenchExceptionWithErrorReport] {
       runAndWait(service.overwritePolicy(defaultResourceType, newPolicy.id.accessPolicyName, newPolicy.id.resource, AccessPolicyMembership(Set.empty, Set(ResourceAction("INVALID_ACTION")), Set.empty)))
     }
+
+    assert(exception.getMessage.contains("invalid action"))
 
     val policies = runAndWait(policyDAO.listAccessPolicies(resource))
 
@@ -264,9 +266,11 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     runAndWait(service.createResourceType(rt))
     runAndWait(service.createResource(rt, resource.resourceId, dummyUserInfo))
 
-    intercept[WorkbenchExceptionWithErrorReport] {
+    val exception = intercept[WorkbenchExceptionWithErrorReport] {
       runAndWait(service.overwritePolicy(rt, AccessPolicyName("foo"), resource, AccessPolicyMembership(Set.empty, Set(ResourceAction("foo--bar")), Set.empty)))
     }
+
+    assert(exception.getMessage.contains("invalid action"))
   }
 
   it should "fail when given an invalid role" in {
@@ -278,9 +282,11 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     val group = BasicWorkbenchGroup(WorkbenchGroupName("foo"), Set.empty, toEmail(resource.resourceTypeName.value, resource.resourceId.value, "foo"))
     val newPolicy = AccessPolicy(ResourceAndPolicyName(resource, AccessPolicyName("foo")), group.members, group.email, Set(ResourceRoleName("INVALID_ROLE")), Set.empty)
 
-    intercept[WorkbenchExceptionWithErrorReport] {
+    val exception = intercept[WorkbenchExceptionWithErrorReport] {
       runAndWait(service.overwritePolicy(defaultResourceType, newPolicy.id.accessPolicyName, newPolicy.id.resource, AccessPolicyMembership(Set.empty, Set.empty, Set(ResourceRoleName("INVALID_ROLE")))))
     }
+
+    assert(exception.getMessage.contains("invalid role"))
 
     val policies = runAndWait(policyDAO.listAccessPolicies(resource))
 
@@ -289,7 +295,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     runAndWait(service.deleteResource(resource))
   }
 
-  it should "fail when given a email that doesn't exist" in {
+  it should "fail when given an invalid member email" in {
     val resource = Resource(defaultResourceType.name, ResourceId("my-resource"))
 
     runAndWait(service.createResourceType(defaultResourceType))
@@ -298,9 +304,11 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     val group = BasicWorkbenchGroup(WorkbenchGroupName("foo"), Set.empty, toEmail(resource.resourceTypeName.value, resource.resourceId.value, "foo"))
     val newPolicy = AccessPolicy(ResourceAndPolicyName(resource, AccessPolicyName("foo")), group.members, group.email, Set.empty, Set(ResourceAction("non_owner_action")))
     
-    intercept[WorkbenchExceptionWithErrorReport] {
+    val exception = intercept[WorkbenchExceptionWithErrorReport] {
       runAndWait(service.overwritePolicy(defaultResourceType, newPolicy.id.accessPolicyName, newPolicy.id.resource, AccessPolicyMembership(Set(WorkbenchEmail("null@null.com")), Set.empty, Set.empty)))
     }
+
+    assert(exception.getMessage.contains("invalid member email"))
 
     val policies = runAndWait(policyDAO.listAccessPolicies(resource))
 

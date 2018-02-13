@@ -99,12 +99,15 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
   def overwritePolicy(resourceType: ResourceType, policyName: AccessPolicyName, resource: Resource, policyMembership: AccessPolicyMembership): Future[AccessPolicy] = {
     validateActionsAndRoles(resourceType, policyMembership)
 
-    val subjectsFromEmails = Future.traverse(policyMembership.memberEmails) { email =>
-      directoryDAO.loadSubjectFromEmail(email) match {
-        case subject: Future[Some[WorkbenchEmail]] => subject
-        case _ => throw new Exception(s"User with email ${email} could not be found")
+    val eventualMaybeSubjects = Future.traverse(policyMembership.memberEmails) {
+      directoryDAO.loadSubjectFromEmail
+    }
+
+    val subjectsFromEmails = eventualMaybeSubjects.map { subjects: Set[Option[WorkbenchSubject]] => subjects.map {
+        case Some(subject) => subject
+        case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "You have specified an invalid member email address"))
       }
-    }.map(_.flatten)
+    }
 
     val email = generateGroupEmail(policyName, resource)
 
