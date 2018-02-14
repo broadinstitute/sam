@@ -233,9 +233,11 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
 
     runAndWait(samRoutes.userService.createUser(testUser))
 
-    val members = AccessPolicyMembership(Set(testUser.email), Set(ResourceAction("fake_action")), Set.empty)
+    val fakeActions = Set(ResourceAction("fake_action1"), ResourceAction("other_fake_action"))
+    val members = AccessPolicyMembership(Set(testUser.email), fakeActions, Set.empty)
 
     Put(s"/api/resource/${resourceType.name}/foo/policies/canCompute", members) ~> samRoutes.route ~> check {
+      fakeActions foreach { action => responseAs[String] should include(action.value) }
       responseAs[String] should include ("invalid action")
       status shouldEqual StatusCodes.BadRequest
     }
@@ -253,9 +255,11 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
 
     runAndWait(samRoutes.userService.createUser(testUser))
 
-    val members = AccessPolicyMembership(Set(testUser.email), Set(ResourceAction("can_compute")), Set(ResourceRoleName("fakerole")))
+    val fakeRoles = Set(ResourceRoleName("fakerole"), ResourceRoleName("otherfakerole"))
+    val members = AccessPolicyMembership(Set(testUser.email), Set(ResourceAction("can_compute")), fakeRoles)
 
     Put(s"/api/resource/${resourceType.name}/foo/policies/canCompute", members) ~> samRoutes.route ~> check {
+      fakeRoles foreach { role => responseAs[String] should include (role.value) }
       responseAs[String] should include ("invalid role")
       status shouldEqual StatusCodes.BadRequest
     }

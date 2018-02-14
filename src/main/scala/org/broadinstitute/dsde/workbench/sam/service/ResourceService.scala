@@ -97,8 +97,6 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
 
   //Overwrites an existing policy (keyed by resourceType/resourceId/policyName), saves a new one if it doesn't exist yet
   def overwritePolicy(resourceType: ResourceType, policyName: AccessPolicyName, resource: Resource, policyMembership: AccessPolicyMembership): Future[AccessPolicy] = {
-    validateActionsAndRoles(resourceType, policyMembership)
-
     val eventualMaybeSubjects = Future.traverse(policyMembership.memberEmails) {
       directoryDAO.loadSubjectFromEmail
     }
@@ -108,6 +106,11 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
         case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "You have specified an invalid member email address"))
       }
     }
+
+    // TODO include bad emails
+    val validationErrors = validateActions(resourceType, policyMembership) ++ validateRoles(resourceType, policyMembership)
+    if (validationErrors.nonEmpty)
+      throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "You have specified an invalid policy", validationErrors.toSeq))
 
     val email = generateGroupEmail(policyName, resource)
 
@@ -124,12 +127,20 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     }
   }
 
-  private def validateActionsAndRoles(resourceType: ResourceType, policyMembership: AccessPolicyMembership) = {
-    val invalidAction = policyMembership.actions.find(a => !resourceType.actionPatterns.exists(_.matches(a)))
-    if (invalidAction.isDefined)
-      throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"You have specified an invalid action for resource type ${resourceType.name}. Valid actions are: ${resourceType.actionPatterns.mkString(", ")}"))
-    if (!policyMembership.roles.subsetOf(resourceType.roles.map(_.roleName)))
-      throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"You have specified an invalid role for resource type ${resourceType.name}. Valid roles are: ${resourceType.roles.map(_.roleName).mkString(", ")}"))
+  private def validateRoles(resourceType: ResourceType, policyMembership: AccessPolicyMembership) = {
+    val invalidRoles = policyMembership.roles -- resourceType.roles.map(_.roleName)
+    if (invalidRoles.nonEmpty) {
+      val roleCauses = invalidRoles.map { resourceRoleName => ErrorReport(s"Invalid role: ${resourceRoleName}")}
+      Some(ErrorReport(s"You have specified an invalid role for resource type ${resourceType.name}. Valid roles are: ${resourceType.roles.map(_.roleName).mkString(", ")}", roleCauses.toSeq))
+    } else None
+  }
+
+  private def validateActions(resourceType: ResourceType, policyMembership: AccessPolicyMembership): Option[ErrorReport] = {
+    val invalidActions = policyMembership.actions.filter(a => !resourceType.actionPatterns.exists(_.matches(a)))
+    if (invalidActions.nonEmpty) {
+      val actionCauses = invalidActions.map { resourceAction => ErrorReport(s"Invalid action: ${resourceAction}") }
+      Some(ErrorReport(s"You have specified an invalid action for resource type ${resourceType.name}. Valid actions are: ${resourceType.actionPatterns.mkString(", ")}", actionCauses.toSeq))
+    } else None
   }
 
   private def fireGroupUpdateNotification(groupId: WorkbenchGroupIdentity) = {
