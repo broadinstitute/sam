@@ -97,26 +97,15 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
 
   //Overwrites an existing policy (keyed by resourceType/resourceId/policyName), saves a new one if it doesn't exist yet
   def overwritePolicy(resourceType: ResourceType, policyName: AccessPolicyName, resource: Resource, policyMembership: AccessPolicyMembership): Future[AccessPolicy] = {
-    val eventualMaybeSubjects = Future.traverse(policyMembership.memberEmails) {
-      directoryDAO.loadSubjectFromEmail
-    }
+    mapEmailsToSubjects(policyMembership.memberEmails).flatMap { members: Map[WorkbenchEmail, Option[WorkbenchSubject]] =>
+      val validationErrors = validateMemberEmails(members) ++ validateActions(resourceType, policyMembership) ++ validateRoles(resourceType, policyMembership)
+      if (validationErrors.nonEmpty)
+        throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "You have specified an invalid policy", validationErrors.toSeq))
 
-    val subjectsFromEmails = eventualMaybeSubjects.map { subjects: Set[Option[WorkbenchSubject]] => subjects.map {
-        case Some(subject) => subject
-        case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "You have specified an invalid member email address"))
-      }
-    }
-
-    // TODO include bad emails
-    val validationErrors = validateActions(resourceType, policyMembership) ++ validateRoles(resourceType, policyMembership)
-    if (validationErrors.nonEmpty)
-      throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "You have specified an invalid policy", validationErrors.toSeq))
-
-    val email = generateGroupEmail(policyName, resource)
-
-    subjectsFromEmails.flatMap { members =>
       val resourceAndPolicyName = ResourceAndPolicyName(resource, policyName)
-      val newPolicy = AccessPolicy(resourceAndPolicyName, members, email, policyMembership.roles, policyMembership.actions)
+      val email = generateGroupEmail(policyName, resource)
+      val workbenchSubjects = members.values.flatten.toSet
+      val newPolicy = AccessPolicy(resourceAndPolicyName, workbenchSubjects, email, policyMembership.roles, policyMembership.actions)
 
       accessPolicyDAO.loadPolicy(resourceAndPolicyName).flatMap {
         case None => accessPolicyDAO.createPolicy(newPolicy)
@@ -127,7 +116,25 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     }
   }
 
-  private def validateRoles(resourceType: ResourceType, policyMembership: AccessPolicyMembership) = {
+  private def mapEmailsToSubjects(workbenchEmails: Set[WorkbenchEmail]): Future[Map[WorkbenchEmail, Option[WorkbenchSubject]]] = {
+    // We create an intermediate list here.  Consider using breakout: https://docs.scala-lang.org/tutorials/FAQ/breakout.html
+    val emailToSubjects = (for(workbenchEmail <- workbenchEmails) yield workbenchEmail -> directoryDAO.loadSubjectFromEmail(workbenchEmail)).toMap
+
+    //https://stackoverflow.com/questions/17479160/how-to-convert-mapa-futureb-to-futuremapa-b
+    Future.traverse(emailToSubjects) {
+      case (workbenchEmail, eventualSubject) => eventualSubject.map(workbenchEmail -> _)
+    }.map(_.toMap)
+  }
+
+  private def validateMemberEmails(emailsToSubjects: Map[WorkbenchEmail, Option[WorkbenchSubject]]): Option[ErrorReport] = {
+    val invalidEmails = for(tuple <- emailsToSubjects if tuple._2.isEmpty) yield tuple._1
+    if (invalidEmails.nonEmpty) {
+      val emailCauses = invalidEmails.map { workbenchEmail => ErrorReport(s"Invalid member email: ${workbenchEmail}")}
+      Some(ErrorReport(s"You have specified at least one invalid member email", emailCauses.toSeq))
+    } else None
+  }
+
+  private def validateRoles(resourceType: ResourceType, policyMembership: AccessPolicyMembership): Option[ErrorReport] = {
     val invalidRoles = policyMembership.roles -- resourceType.roles.map(_.roleName)
     if (invalidRoles.nonEmpty) {
       val roleCauses = invalidRoles.map { resourceRoleName => ErrorReport(s"Invalid role: ${resourceRoleName}")}
