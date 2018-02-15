@@ -273,9 +273,15 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
       status shouldEqual StatusCodes.NoContent
     }
 
-    val nonExistingMembers = AccessPolicyMembership(Set(WorkbenchEmail("null@bar.baz")), Set(ResourceAction("can_compute")), Set(ResourceRoleName("owner")))
+    val testUser = WorkbenchUser(WorkbenchUserId("testuser"), WorkbenchEmail("testuser@foo.com"))
+    runAndWait(samRoutes.userService.createUser(testUser))
+
+    val badEmail = WorkbenchEmail("null@bar.baz")
+    val nonExistingMembers = AccessPolicyMembership(Set(badEmail), Set(ResourceAction("can_compute")), Set(ResourceRoleName("owner")))
 
     Put(s"/api/resource/${resourceType.name}/foo/policies/canCompute", nonExistingMembers) ~> samRoutes.route ~> check {
+      responseAs[String] shouldNot include (testUser.email.value)
+      responseAs[String] should include (badEmail.value)
       responseAs[String] should include ("invalid member email")
       status shouldEqual StatusCodes.BadRequest
     }
