@@ -161,18 +161,18 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
       val authToken1: AuthToken = user1.makeAuthToken()
       val authToken2: AuthToken = user2.makeAuthToken()
 
-      val email1 = WorkbenchEmail(Sam.user.status()(authToken1).get.userInfo.userEmail)
-      val username1 = email1.value.split("@").head
-      val userId1 = Sam.user.status()(authToken1).get.userInfo.userSubjectId
+      val email = WorkbenchEmail(Sam.user.status()(authToken1).get.userInfo.userEmail)
+      val username = email.value.split("@").head
+      val userId = Sam.user.status()(authToken1).get.userInfo.userSubjectId
 
       val petSAEmail = Sam.user.petServiceAccountEmail(Config.Projects.default)(authToken1)
 
-      val proxyGroup1_1 = Sam.user.proxyGroup(petSAEmail.value)(authToken1)
-      val proxyGroup1_2 = Sam.user.proxyGroup(petSAEmail.value)(authToken2)
+      val proxyGroup_1 = Sam.user.proxyGroup(petSAEmail.value)(authToken1)
+      val proxyGroup_2 = Sam.user.proxyGroup(petSAEmail.value)(authToken2)
 
-      val expectedProxyEmail1 = s"${username1}_$userId1@${Config.GCS.appsDomain}"
-      proxyGroup1_1 shouldBe WorkbenchEmail(expectedProxyEmail1)
-      proxyGroup1_2 shouldBe WorkbenchEmail(expectedProxyEmail1)
+      val expectedProxyEmail = s"${username}_$userId@${Config.GCS.appsDomain}"
+      proxyGroup_1 shouldBe WorkbenchEmail(expectedProxyEmail)
+      proxyGroup_2 shouldBe WorkbenchEmail(expectedProxyEmail)
     }
 
 
