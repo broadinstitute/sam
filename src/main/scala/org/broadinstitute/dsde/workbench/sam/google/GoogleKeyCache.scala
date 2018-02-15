@@ -7,10 +7,9 @@ import akka.http.scaladsl.model.StatusCodes
 import cats.data.OptionT
 import cats.implicits._
 import com.google.api.client.googleapis.json.GoogleJsonResponseException
-import com.google.api.services.storage.model.StorageObject
 import org.broadinstitute.dsde.workbench.google.{GoogleIamDAO, GooglePubSubDAO, GoogleStorageDAO}
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccountKeyId}
+import org.broadinstitute.dsde.workbench.model.google.{GcsObjectName, GoogleProject, ServiceAccountKeyId}
 import org.broadinstitute.dsde.workbench.sam.config.{GoogleServicesConfig, PetServiceAccountConfig}
 import org.broadinstitute.dsde.workbench.sam.service.KeyCache
 
@@ -60,7 +59,7 @@ class GoogleKeyCache(val googleIamDAO: GoogleIamDAO, val googleStorageDAO: Googl
   }
 
   private def keyNamePrefix(project: GoogleProject, saEmail: WorkbenchEmail) = s"${project.value}/${saEmail.value}"
-  private def keyNameFull(project: GoogleProject, saEmail: WorkbenchEmail, keyId: ServiceAccountKeyId) = s"${keyNamePrefix(project, saEmail)}/${keyId.value}"
+  private def keyNameFull(project: GoogleProject, saEmail: WorkbenchEmail, keyId: ServiceAccountKeyId) = GcsObjectName(s"${keyNamePrefix(project, saEmail)}/${keyId.value}")
 
   private def furnishNewKey(pet: PetServiceAccount): Future[String] = {
     val keyFuture = for {
@@ -68,19 +67,19 @@ class GoogleKeyCache(val googleIamDAO: GoogleIamDAO, val googleStorageDAO: Googl
         case e: GoogleJsonResponseException if e.getDetails.getCode == StatusCodes.TooManyRequests.intValue => throw new WorkbenchException("You have reached the 10 key limit on service accounts. Please remove one to create another.")
       })
       decodedKey <- OptionT.fromOption[Future](key.privateKeyData.decode)
-      _ <- OptionT.liftF(googleStorageDAO.storeObject(googleServicesConfig.googleKeyCacheConfig.bucketName, keyNameFull(pet.id.project, pet.serviceAccount.email, key.id), new ByteArrayInputStream(decodedKey.getBytes)))
+      _ <- OptionT.liftF(googleStorageDAO.storeObject(googleServicesConfig.googleKeyCacheConfig.bucketName, keyNameFull(pet.id.project, pet.serviceAccount.email, key.id), new ByteArrayInputStream(decodedKey.getBytes), "text/plain"))
     } yield decodedKey
 
     keyFuture.value.map(_.getOrElse(throw new WorkbenchException("Unable to furnish new key")))
   }
 
-  private def retrieveActiveKey(pet: PetServiceAccount, keyObjects: List[StorageObject]): Future[String] = {
-    val mostRecentKey = keyObjects.sortBy(_.getTimeCreated.getValue).last
-    val keyRetired = System.currentTimeMillis() - mostRecentKey.getTimeCreated.getValue > 86400000 * googleServicesConfig.googleKeyCacheConfig.activeKeyMaxAge
+  private def retrieveActiveKey(pet: PetServiceAccount, keyObjects: List[GcsObjectName]): Future[String] = {
+    val mostRecentKey = keyObjects.sortBy(_.timeCreated.toEpochMilli).last
+    val keyRetired = System.currentTimeMillis() - mostRecentKey.timeCreated.toEpochMilli > 86400000L * googleServicesConfig.googleKeyCacheConfig.activeKeyMaxAge
 
     if(keyRetired) furnishNewKey(pet)
     else {
-      googleStorageDAO.getObject(googleServicesConfig.googleKeyCacheConfig.bucketName, mostRecentKey.getName).flatMap {
+      googleStorageDAO.getObject(googleServicesConfig.googleKeyCacheConfig.bucketName, mostRecentKey).flatMap {
         case Some(key) => Future.successful(key.toString)
         case None => furnishNewKey(pet) //this is a case that should never occur, but if it does, we should furnish a new key
       }

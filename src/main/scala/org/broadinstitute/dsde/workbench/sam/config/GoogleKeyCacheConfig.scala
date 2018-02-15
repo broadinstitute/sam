@@ -1,5 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.config
 
+import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
+
 import scala.concurrent.duration.FiniteDuration
 
 /**
@@ -12,7 +14,7 @@ import scala.concurrent.duration.FiniteDuration
   * @param activeKeyMaxAge The number of days to keep a key active
   * @param retiredKeyMaxAge The number of days to keep a key before deleting it
   */
-case class GoogleKeyCacheConfig(bucketName: String,
+case class GoogleKeyCacheConfig(bucketName: GcsBucketName,
                                 activeKeyMaxAge: Int,
                                 retiredKeyMaxAge: Int,
                                 monitorPubSubProject: String,

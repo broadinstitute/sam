@@ -4,6 +4,7 @@ import java.util.Date
 
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
+import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import com.google.api.client.googleapis.json.GoogleJsonResponseException
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleIamDAO, GooglePubSubDAO, GoogleStorageDAO}
@@ -69,9 +70,9 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
     ))
 
 
-    val serviceAccountUserInfo = UserInfo("", WorkbenchUserId(googleServicesConfig.serviceAccountClientId), WorkbenchEmail(googleServicesConfig.serviceAccountClientEmail), 0)
+    val serviceAccountUserInfo = UserInfo(OAuth2BearerToken(""), WorkbenchUserId(googleServicesConfig.serviceAccountClientId), googleServicesConfig.serviceAccountClientEmail, 0)
     for {
-      _ <- samApplication.userService.createUser(serviceAccountUserInfo.toWorkbenchUser) recover {
+      _ <- samApplication.userService.createUser(WorkbenchUser(serviceAccountUserInfo.userId, serviceAccountUserInfo.userEmail)) recover {
         case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode == Option(StatusCodes.Conflict) =>
       }
 
@@ -365,8 +366,8 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
     }
 
     def checkIam: Future[SubsystemStatus] = {
-      val accountName = toAccountName(WorkbenchEmail(googleServicesConfig.serviceAccountClientEmail))
-      googleIamDAO.findServiceAccount(GoogleProject(googleServicesConfig.serviceAccountClientProject), accountName).map {
+      val accountName = toAccountName(googleServicesConfig.serviceAccountClientEmail)
+      googleIamDAO.findServiceAccount(googleServicesConfig.serviceAccountClientProject, accountName).map {
         case Some(_) => OkStatus
         case None => failedStatus(s"Could not find service account: $accountName")
       }

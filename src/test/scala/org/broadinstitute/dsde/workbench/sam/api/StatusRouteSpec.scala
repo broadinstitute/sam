@@ -6,14 +6,14 @@ import org.broadinstitute.dsde.workbench.util.health.{HealthMonitor, StatusCheck
 import org.broadinstitute.dsde.workbench.util.health.Subsystems.{GoogleGroups, OpenDJ}
 import org.scalatest.{FlatSpec, Matchers}
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
+import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import org.broadinstitute.dsde.workbench.google.mock.{MockGoogleDirectoryDAO, MockGoogleIamDAO}
 import org.broadinstitute.dsde.workbench.model.google._
 import org.broadinstitute.dsde.workbench.util.health.StatusJsonSupport._
-import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.model.{UserInfo, WorkbenchEmail, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.config.PetServiceAccountConfig
 import org.broadinstitute.dsde.workbench.sam.directory.MockDirectoryDAO
-import org.broadinstitute.dsde.workbench.sam.model.UserInfo
 import org.broadinstitute.dsde.workbench.sam.openam.MockAccessPolicyDAO
 import org.broadinstitute.dsde.workbench.sam.service.{NoExtensions, ResourceService, StatusService, UserService}
 import org.scalatest.concurrent.Eventually._
@@ -42,7 +42,7 @@ class StatusRouteSpec extends FlatSpec with Matchers with ScalatestRouteTest wit
     val mockUserService = new UserService(directoryDAO, NoExtensions)
     val mockStatusService = new StatusService(directoryDAO, NoExtensions)
 
-    val samRoutes = new TestSamRoutes(mockResourceService, mockUserService, mockStatusService, UserInfo("", WorkbenchUserId(""), WorkbenchEmail(""), 0), directoryDAO)
+    val samRoutes = new TestSamRoutes(mockResourceService, mockUserService, mockStatusService, UserInfo(OAuth2BearerToken(""), WorkbenchUserId(""), WorkbenchEmail(""), 0), directoryDAO)
 
     Get("/status") ~> samRoutes.route ~> check {
       responseAs[StatusCheckResponse].ok shouldEqual false
