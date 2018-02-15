@@ -105,6 +105,37 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
       response shouldBe defaultUserProxyEmail
     }
   }
+
+  it should "return a user's proxy group from a pet service account" in withDefaultRoutes { samRoutes =>
+    val googleDirectoryDAO = new MockGoogleDirectoryDAO()
+    val directoryDAO = new MockDirectoryDAO()
+    val googleIamDAO = new MockGoogleIamDAO()
+    val policyDAO = new MockAccessPolicyDAO()
+    val pubSubDAO = new MockGooglePubSubDAO()
+    val googleStorageDAO = new MockGoogleStorageDAO()
+    val cloudKeyCache = new GoogleKeyCache(googleIamDAO, googleStorageDAO, pubSubDAO, googleServicesConfig, petServiceAccountConfig)
+    val googleExt = new GoogleExtensions(directoryDAO, policyDAO, googleDirectoryDAO, pubSubDAO, googleIamDAO, null, cloudKeyCache, googleServicesConfig, petServiceAccountConfig, configResourceTypes(CloudExtensions.resourceTypeName))
+
+    // create a user
+    Post("/register/user") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Created
+      responseAs[UserStatus] shouldEqual UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
+    }
+
+    val petEmail = Get("/api/google/user/petServiceAccount/myproject") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      val response = responseAs[WorkbenchEmail]
+      response.value should endWith (s"@myproject.iam.gserviceaccount.com")
+      response.value
+    }
+
+    Get(s"/api/google/user/proxyGroup/$petEmail") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      val response = responseAs[WorkbenchEmail]
+      response shouldBe defaultUserProxyEmail
+    }
+  }
+
   private val name = ResourceType(ResourceTypeName("rt"), Set(SamResourceActionPatterns.alterPolicies, ResourceActionPattern("can_compute"), SamResourceActionPatterns.readPolicies), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("alter_policies"), ResourceAction("read_policies")))), ResourceRoleName("owner"))
   private val resourceType = ResourceType(ResourceTypeName("rt"), Set(SamResourceActionPatterns.alterPolicies, ResourceActionPattern("can_compute"), SamResourceActionPatterns.readPolicies), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("alter_policies"), ResourceAction("read_policies")))), ResourceRoleName("owner"))
 
