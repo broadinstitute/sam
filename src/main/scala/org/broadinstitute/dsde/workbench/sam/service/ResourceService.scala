@@ -98,9 +98,7 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
   //Overwrites an existing policy (keyed by resourceType/resourceId/policyName), saves a new one if it doesn't exist yet
   def overwritePolicy(resourceType: ResourceType, policyName: AccessPolicyName, resource: Resource, policyMembership: AccessPolicyMembership): Future[AccessPolicy] = {
     mapEmailsToSubjects(policyMembership.memberEmails).flatMap { members: Map[WorkbenchEmail, Option[WorkbenchSubject]] =>
-      val validationErrors = validateMemberEmails(members) ++ validateActions(resourceType, policyMembership) ++ validateRoles(resourceType, policyMembership)
-      if (validationErrors.nonEmpty)
-        throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "You have specified an invalid policy", validationErrors.toSeq))
+      validatePolicy(resourceType, policyMembership, members)
 
       val resourceAndPolicyName = ResourceAndPolicyName(resource, policyName)
       val email = generateGroupEmail(policyName, resource)
@@ -117,15 +115,22 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
   }
 
   private def mapEmailsToSubjects(workbenchEmails: Set[WorkbenchEmail]): Future[Map[WorkbenchEmail, Option[WorkbenchSubject]]] = {
-    // We create an intermediate list here.  Consider using breakout: https://docs.scala-lang.org/tutorials/FAQ/breakout.html
-    val emailToSubjects = (for(workbenchEmail <- workbenchEmails) yield workbenchEmail -> directoryDAO.loadSubjectFromEmail(workbenchEmail)).toMap
+    val eventualSubjects = workbenchEmails.map { workbenchEmail =>
+      directoryDAO.loadSubjectFromEmail(workbenchEmail).map(workbenchEmail -> _)
+    }
 
-    //https://stackoverflow.com/questions/17479160/how-to-convert-mapa-futureb-to-futuremapa-b
-    Future.traverse(emailToSubjects) {
-      case (workbenchEmail, eventualSubject) => eventualSubject.map(workbenchEmail -> _)
-    }.map(_.toMap)
+    Future.sequence(eventualSubjects).map(_.toMap)
   }
 
+  // When validating the policy, we want to collect each entity that was problematic and report that back using ErrorReports
+  private def validatePolicy(resourceType: ResourceType, policyMembership: AccessPolicyMembership, members: Map[WorkbenchEmail, Option[WorkbenchSubject]]) = {
+    val validationErrors = validateMemberEmails(members) ++ validateActions(resourceType, policyMembership) ++ validateRoles(resourceType, policyMembership)
+    if (validationErrors.nonEmpty)
+      throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "You have specified an invalid policy", validationErrors.toSeq))
+  }
+
+  // Keys are the member email addresses we want to add to the policy, values are the corresponding result of trying to lookup the
+  // subject in the Directory using that email address.  If we failed to find a matching subject, then that's not good
   private def validateMemberEmails(emailsToSubjects: Map[WorkbenchEmail, Option[WorkbenchSubject]]): Option[ErrorReport] = {
     val invalidEmails = for(tuple <- emailsToSubjects if tuple._2.isEmpty) yield tuple._1
     if (invalidEmails.nonEmpty) {
