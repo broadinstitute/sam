@@ -2,13 +2,14 @@ package org.broadinstitute.dsde.workbench.sam.service
 
 import java.util.UUID
 
+import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import com.typesafe.config.ConfigFactory
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.config.{DirectoryConfig, PetServiceAccountConfig}
-import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryDAO, JndiDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
+import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryDAO, JndiDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, UserInfo, UserStatus, UserStatusDetails}
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.mockito.ArgumentCaptor
@@ -34,7 +35,7 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
   val defaultUserId = WorkbenchUserId("newuser")
   val defaultUserEmail = WorkbenchEmail("newuser@new.com")
   val defaultUser = WorkbenchUser(defaultUserId, defaultUserEmail)
-  val userInfo = UserInfo("token", WorkbenchUserId(UUID.randomUUID().toString), WorkbenchEmail("user@company.com"), 0)
+  val userInfo = UserInfo(OAuth2BearerToken("token"), WorkbenchUserId(UUID.randomUUID().toString), WorkbenchEmail("user@company.com"), 0)
 
   lazy val config = ConfigFactory.load()
   lazy val directoryConfig = config.as[DirectoryConfig]("directory")

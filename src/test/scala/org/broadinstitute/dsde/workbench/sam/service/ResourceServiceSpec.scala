@@ -3,6 +3,7 @@ package org.broadinstitute.dsde.workbench.sam.service
 import java.util.UUID
 
 import akka.http.scaladsl.model.StatusCodes
+import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import com.typesafe.config.ConfigFactory
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.directory.JndiDirectoryDAO
@@ -43,7 +44,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     runAndWait(schemaDao.createOrgUnits())
   }
 
-  private val dummyUserInfo = UserInfo("token", WorkbenchUserId("userid"), WorkbenchEmail("user@company.com"), 0)
+  private val dummyUserInfo = UserInfo(OAuth2BearerToken("token"), WorkbenchUserId("userid"), WorkbenchEmail("user@company.com"), 0)
 
   def toEmail(resourceType: String, resourceName: String, policyName: String) = {
     WorkbenchEmail("policy-randomuuid@example.com")
@@ -122,7 +123,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     val nonOwnerAction = ResourceAction("non_owner_action")
     runAndWait(service.overwritePolicy(defaultResourceType, AccessPolicyName("new_policy"), resource, AccessPolicyMembership(Set(group.email), Set(nonOwnerAction), Set.empty)))
 
-    val userInfo = UserInfo("", user.id, user.email, 0)
+    val userInfo = UserInfo(OAuth2BearerToken(""), user.id, user.email, 0)
     assertResult(Set(ResourceAction("non_owner_action"))) {
       runAndWait(service.listUserResourceActions(Resource(defaultResourceType.name, resourceName1), userInfo))
     }
@@ -331,7 +332,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
   "add/remove SubjectToPolicy" should "add/remove subject and tolerate prior (non)existence" in {
     val resource = Resource(defaultResourceType.name, ResourceId("my-resource"))
     val policyName = AccessPolicyName(defaultResourceType.ownerRoleName.value)
-    val otherUserInfo = UserInfo("token", WorkbenchUserId("otheruserid"), WorkbenchEmail("otheruser@company.com"), 0)
+    val otherUserInfo = UserInfo(OAuth2BearerToken("token"), WorkbenchUserId("otheruserid"), WorkbenchEmail("otheruser@company.com"), 0)
 
     runAndWait(dirDAO.createUser(WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)))
     runAndWait(dirDAO.createUser(WorkbenchUser(otherUserInfo.userId, otherUserInfo.userEmail)))

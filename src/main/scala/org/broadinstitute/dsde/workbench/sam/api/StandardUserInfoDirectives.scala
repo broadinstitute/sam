@@ -1,12 +1,12 @@
 package org.broadinstitute.dsde.workbench.sam.api
 
+import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import akka.http.scaladsl.server._
 import akka.http.scaladsl.server.Directives.{headerValueByName, onSuccess}
 import org.broadinstitute.dsde.workbench.model._
 import akka.http.scaladsl.server.Directives.headerValueByName
 import org.broadinstitute.dsde.workbench.model.google.ServiceAccountSubjectId
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchUserId}
-import org.broadinstitute.dsde.workbench.sam.model.UserInfo
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -28,9 +28,9 @@ trait StandardUserInfoDirectives extends UserInfoDirectives {
       headerValueByName("OIDC_CLAIM_email")
     ) tflatMap {
     case (token, userId, expiresIn, email) => {
-      val userInfo = UserInfo(token, WorkbenchUserId(userId), WorkbenchEmail(email), expiresIn.toLong)
+      val userInfo = UserInfo(OAuth2BearerToken(token), WorkbenchUserId(userId), WorkbenchEmail(email), expiresIn.toLong)
       onSuccess(getUserFromPetServiceAccount(userInfo).map {
-        case Some(petOwnerUser) => UserInfo(token, petOwnerUser.id, petOwnerUser.email, expiresIn.toLong)
+        case Some(petOwnerUser) => UserInfo(OAuth2BearerToken(token), petOwnerUser.id, petOwnerUser.email, expiresIn.toLong)
         case None => userInfo
       })
     }
