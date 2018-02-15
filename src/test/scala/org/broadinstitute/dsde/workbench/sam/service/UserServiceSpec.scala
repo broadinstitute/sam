@@ -8,19 +8,26 @@ import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.config.{DirectoryConfig, PetServiceAccountConfig}
-import org.broadinstitute.dsde.workbench.sam.directory.JndiDirectoryDAO
+import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
+import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryDAO, JndiDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, UserStatus, UserStatusDetails}
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
+import org.mockito.ArgumentMatchers._
+import org.mockito.Mockito._
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FlatSpec, Matchers}
+import org.scalatest.mockito.MockitoSugar
 
+import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext.Implicits.global
 
 /**
   * Created by rtitle on 10/6/17.
   */
-class UserServiceSpec extends FlatSpec with Matchers with TestSupport with BeforeAndAfter with BeforeAndAfterAll with ScalaFutures {
+class UserServiceSpec extends FlatSpec with Matchers with TestSupport with MockitoSugar
+  with BeforeAndAfter with BeforeAndAfterAll with ScalaFutures {
+
   override implicit val patienceConfig = PatienceConfig(timeout = scaled(5.seconds))
 
   val defaultUserId = WorkbenchUserId("newuser")
@@ -35,6 +42,7 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Befor
   lazy val schemaDao = new JndiSchemaDAO(directoryConfig)
 
   var service: UserService = _
+  var googleExtensions: GoogleExtensions = _
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()
@@ -45,13 +53,23 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Befor
     runAndWait(schemaDao.clearDatabase())
     runAndWait(schemaDao.createOrgUnits())
 
-    service = new UserService(dirDAO, NoExtensions)
+    googleExtensions = mock[GoogleExtensions]
+    when(googleExtensions.allUsersGroupName).thenReturn(NoExtensions.allUsersGroupName)
+    when(googleExtensions.getOrCreateAllUsersGroup(any[DirectoryDAO])(any[ExecutionContext])).thenReturn(NoExtensions.getOrCreateAllUsersGroup(dirDAO))
+    when(googleExtensions.onUserCreate(any[WorkbenchUser])).thenReturn(Future.successful(()))
+    when(googleExtensions.onUserDelete(any[WorkbenchUserId])).thenReturn(Future.successful(()))
+    when(googleExtensions.getUserStatus(any[WorkbenchUser])).thenReturn(Future.successful(true))
+    when(googleExtensions.onUserDisable(any[WorkbenchUser])).thenReturn(Future.successful(()))
+    when(googleExtensions.onUserEnable(any[WorkbenchUser])).thenReturn(Future.successful(()))
+
+    service = new UserService(dirDAO, googleExtensions)
   }
 
   "UserService" should "create a user" in {
     // create a user
     val newUser = service.createUser(defaultUser).futureValue
     newUser shouldBe UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
+    verify(googleExtensions).onUserCreate(defaultUser)
 
     // check ldap
     dirDAO.loadUser(defaultUserId).futureValue shouldBe Some(defaultUser)

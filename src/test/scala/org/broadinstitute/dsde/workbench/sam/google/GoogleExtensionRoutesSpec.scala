@@ -36,8 +36,9 @@ import scala.concurrent.{ExecutionContext, Future}
   * Unit tests of GoogleExtensionRoutes. Can use real Google services. Must mock everything else.
   */
 class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest with TestSupport with MockitoSugar {
-  val defaultUserId = WorkbenchUserId("newuser")
+  val defaultUserId = WorkbenchUserId("newuser123")
   val defaultUserEmail = WorkbenchEmail("newuser@new.com")
+  val defaultUserProxyEmail = WorkbenchEmail(s"newuser_$defaultUserId@${googleServicesConfig.appsDomain}")
 
   lazy val config = ConfigFactory.load()
   lazy val petServiceAccountConfig = config.as[PetServiceAccountConfig]("petServiceAccount")
@@ -101,7 +102,7 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
     Get(s"/api/google/user/proxyGroup/$defaultUserEmail") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
       val response = responseAs[WorkbenchEmail]
-      response shouldBe googleExt.toProxyFromUser(defaultUserId)
+      response shouldBe defaultUserProxyEmail
     }
   }
   private val name = ResourceType(ResourceTypeName("rt"), Set(SamResourceActionPatterns.alterPolicies, ResourceActionPattern("can_compute"), SamResourceActionPatterns.readPolicies), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("alter_policies"), ResourceAction("read_policies")))), ResourceRoleName("owner"))
@@ -109,7 +110,8 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
 
   "POST /api/google/policy/{resourceTypeName}/{resourceId}/{accessPolicyName}/sync" should "204 Create Google group for policy" in {
     val resourceTypes = Map(resourceType.name -> resourceType)
-    val defaultUserInfo = UserInfo(OAuth2BearerToken("accessToken"), WorkbenchUserId("user1"), WorkbenchEmail("user1@example.com"), 0)
+    val defaultUserInfo = UserInfo(OAuth2BearerToken("accessToken"), WorkbenchUserId("user123"), WorkbenchEmail("user1@example.com"), 0)
+    val defaultUserProxyEmail = WorkbenchEmail(s"user1_user123@${googleServicesConfig.appsDomain}")
     val googleDirectoryDAO = new MockGoogleDirectoryDAO()
     val directoryDAO = new MockDirectoryDAO()
     val googleIamDAO = new MockGoogleIamDAO()
@@ -143,7 +145,7 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
     import GoogleModelJsonSupport._
     Post(s"/api/google/resource/${resourceType.name}/foo/${resourceType.ownerRoleName.value}/sync") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
-      assertResult(Map(createdPolicy.email -> Seq(SyncReportItem("added", googleExt.toProxyFromUser(defaultUserInfo.userId).value.toLowerCase, None)))) {
+      assertResult(Map(createdPolicy.email -> Seq(SyncReportItem("added", defaultUserProxyEmail.value.toLowerCase, None)))) {
         responseAs[Map[WorkbenchEmail, Seq[SyncReportItem]]]
       }
     }

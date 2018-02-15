@@ -80,6 +80,25 @@ class JndiDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     }
   }
 
+  it should "add and read proxy group email" in {
+    val userId = WorkbenchUserId(UUID.randomUUID().toString)
+    val user = WorkbenchUser(userId, WorkbenchEmail("foo@bar.com"))
+
+    assertResult(user) {
+      runAndWait(dao.createUser(user))
+    }
+
+    assertResult(None) {
+      runAndWait(dao.readProxyGroup(userId))
+    }
+
+    runAndWait(dao.addProxyGroup(userId, WorkbenchEmail("foo_1234@test.firecloud.org")))
+
+    assertResult(Some(WorkbenchEmail("foo_1234@test.firecloud.org"))) {
+      runAndWait(dao.readProxyGroup(userId))
+    }
+  }
+
   it should "create, read, delete pet service accounts" in {
     val userId = WorkbenchUserId(UUID.randomUUID().toString)
     val user = WorkbenchUser(userId, WorkbenchEmail("foo@bar.com"))
