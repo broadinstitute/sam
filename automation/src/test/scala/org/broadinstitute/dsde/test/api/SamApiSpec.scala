@@ -1,5 +1,7 @@
 package org.broadinstitute.dsde.test.api.sam
 
+import akka.http.scaladsl.model.headers
+import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import org.broadinstitute.dsde.workbench.service.{Orchestration, Sam, Thurloe}
 import org.broadinstitute.dsde.workbench.service.Sam.user.UserStatusDetails
 import org.broadinstitute.dsde.workbench.auth.{AuthToken, ServiceAccountAuthTokenFromJson, ServiceAccountAuthTokenFromPem}
@@ -11,10 +13,20 @@ import org.broadinstitute.dsde.workbench.service.test.CleanUp
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountName}
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.time.{Seconds, Span}
-import org.scalatest.{FreeSpec, Matchers}
+import org.scalatest.{BeforeAndAfterAll, FreeSpec, Matchers}
 
-class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaFutures with CleanUp {
+class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaFutures with CleanUp with BeforeAndAfterAll {
   implicit override val patienceConfig: PatienceConfig = PatienceConfig(timeout = scaled(Span(5, Seconds)))
+
+  override def beforeAll(): Unit = {
+    BillingFixtures.registerGPAllocSuite(this)
+    super.beforeAll()
+  }
+
+  override def afterAll(): Unit = {
+    super.afterAll()
+    BillingFixtures.releaseAllGPAllocedProjects(this)
+  }
 
   def findSaInGoogle(project: String, name: ServiceAccountName): Option[ServiceAccount] = {
     googleIamDAO.findServiceAccount(GoogleProject(project), name).futureValue
@@ -87,11 +99,16 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
       val owner: Credentials = UserPool.chooseProjectOwner
       val ownerAuthToken: AuthToken = owner.makeAuthToken()
 
+      val admin: Credentials = UserPool.chooseAdmin
+      val adminAuthToken: AuthToken = admin.makeAuthToken()
+
       // set auth tokens explicitly to control which credentials are used
 
       val userStatus = Sam.user.status()(userAuthToken).get
+      logger.warn(s"${headers.Authorization(OAuth2BearerToken(ownerAuthToken.value))}")
 
-      withBillingProject("auto-sam") { projectName =>
+      withCleanBillingProject { projectName =>
+      //withBillingProject("auto-sam") { projectName =>
         // ensure known state for pet (not present)
 
         Sam.removePet(projectName, userStatus.userInfo)
@@ -116,7 +133,7 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
 
         Sam.removePet(projectName, userStatus.userInfo)
         findPetInGoogle(projectName, userStatus.userInfo) shouldBe None
-      }(ownerAuthToken)
+      }(adminAuthToken)
     }
 
     "should not treat non-pet service accounts as pets" in {
