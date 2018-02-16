@@ -132,7 +132,7 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
   // Keys are the member email addresses we want to add to the policy, values are the corresponding result of trying to lookup the
   // subject in the Directory using that email address.  If we failed to find a matching subject, then that's not good
   private def validateMemberEmails(emailsToSubjects: Map[WorkbenchEmail, Option[WorkbenchSubject]]): Option[ErrorReport] = {
-    val invalidEmails = for((email, subject) <- emailsToSubjects if subject.isEmpty) yield email
+    val invalidEmails = emailsToSubjects.collect { case (email, None) => email }
     if (invalidEmails.nonEmpty) {
       val emailCauses = invalidEmails.map { workbenchEmail => ErrorReport(s"Invalid member email: ${workbenchEmail}")}
       Some(ErrorReport(s"You have specified at least one invalid member email", emailCauses.toSeq))
