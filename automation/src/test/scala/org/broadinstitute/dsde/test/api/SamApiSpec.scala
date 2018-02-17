@@ -18,7 +18,7 @@ import org.scalatest.{DoNotDiscover, FreeSpec, Matchers}
 @DoNotDiscover
 class SamApiSpec extends FreeSpec with GPAllocFixtures with Matchers with ScalaFutures with CleanUp {
   implicit override val patienceConfig: PatienceConfig = PatienceConfig(timeout = scaled(Span(5, Seconds)))
-  
+
   def findSaInGoogle(project: String, name: ServiceAccountName): Option[ServiceAccount] = {
     googleIamDAO.findServiceAccount(GoogleProject(project), name).futureValue
   }
@@ -88,14 +88,12 @@ class SamApiSpec extends FreeSpec with GPAllocFixtures with Matchers with ScalaF
       val userAuthToken: AuthToken = anyUser.makeAuthToken()
 
       val owner: Credentials = UserPool.chooseProjectOwner
-      val ownerAuthToken: AuthToken = owner.makeAuthToken()
 
       // set auth tokens explicitly to control which credentials are used
 
       val userStatus = Sam.user.status()(userAuthToken).get
 
       withCleanBillingProject(owner) { projectName =>
-      //withBillingProject("auto-sam") { projectName =>
         // ensure known state for pet (not present)
 
         Sam.removePet(projectName, userStatus.userInfo)
