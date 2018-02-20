@@ -177,7 +177,11 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
 
     val defaultUserId = WorkbenchUserId("newuser123")
     val defaultUserEmail = WorkbenchEmail("newuser@new.com")
+/* Re-enable this code and remove the temporary code below after fixing rawls for GAWB-2933
     val defaultUserProxyEmail = WorkbenchEmail(s"newuser_newuser123@${googleServicesConfig.appsDomain}")
+*/
+    val defaultUserProxyEmail = WorkbenchEmail(s"PROXY_newuser123@${googleServicesConfig.appsDomain}")
+/**/
     val defaultUser = WorkbenchUser(defaultUserId, defaultUserEmail)
 
     // create a user
@@ -322,10 +326,14 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val user = WorkbenchUser(WorkbenchUserId(subjectId), WorkbenchEmail(s"$username@test.org"))
 
     val proxyEmail = googleExtensions.toProxyFromUser(user).value
+/* Re-enable this code and remove the temporary code below after fixing rawls for GAWB-2933
     proxyEmail shouldBe "foo_0123456789@test.cloudfire.org"
     proxyEmail should include (username)
     proxyEmail should include (subjectId)
     proxyEmail should include (appsDomain)
+*/
+    proxyEmail shouldBe "PROXY_0123456789@test.cloudfire.org"
+/**/
   }
 
   it should "truncate username if proxy group email would otherwise be too long" in {
@@ -335,15 +343,23 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val user = WorkbenchUser(WorkbenchUserId("0123456789"), WorkbenchEmail("foo-bar-baz-qux-quux-corge-grault-garply@test.org"))
 
     val proxyEmail = googleExtensions.toProxyFromUser(user).value
+/* Re-enable this code and remove the temporary code below after fixing rawls for GAWB-2933
     proxyEmail shouldBe "foo-bar-baz-qux-quux-corge-grault-_0123456789@test.cloudfire.org"
     proxyEmail should have length 64
+*/
+    proxyEmail shouldBe "PROXY_0123456789@test.cloudfire.org"
+/**/
   }
 
   it should "do Googley stuff onUserCreate" in {
     val userId = WorkbenchUserId(UUID.randomUUID().toString)
     val userEmail = WorkbenchEmail("foo@test.org")
     val user = WorkbenchUser(userId, userEmail)
-    val proxyEmail = WorkbenchEmail(s"foo_${userId.value}@${googleServicesConfig.appsDomain}")
+/* Re-enable this code and remove the temporary code below after fixing rawls for GAWB-2933
+    val proxyEmail = WorkbenchEmail(s"foo_$userId@${googleServicesConfig.appsDomain}")
+*/
+    val proxyEmail = WorkbenchEmail(s"PROXY_$userId@${googleServicesConfig.appsDomain}")
+/**/
 
     val mockDirectoryDAO = mock[DirectoryDAO]
     val mockGoogleDirectoryDAO = mock[GoogleDirectoryDAO]
@@ -361,7 +377,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     }
     when(mockDirectoryDAO.createGroup(argThat(allUsersGroupMatcher))).thenReturn(Future.successful(allUsersGroup))
 
-    when(mockDirectoryDAO.addProxyGroup(userId, WorkbenchEmail(s"foo_$userId@${googleServicesConfig.appsDomain}"))).thenReturn(Future.successful(()))
+    when(mockDirectoryDAO.addProxyGroup(userId, proxyEmail)).thenReturn(Future.successful(()))
     when(mockGoogleDirectoryDAO.createGroup(any[String], any[WorkbenchEmail])).thenReturn(Future.successful(()))
     when(mockGoogleDirectoryDAO.addMemberToGroup(any[WorkbenchEmail], any[WorkbenchEmail])).thenReturn(Future.successful(()))
 
