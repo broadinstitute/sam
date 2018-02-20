@@ -38,7 +38,11 @@ import scala.concurrent.{ExecutionContext, Future}
 class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest with TestSupport with MockitoSugar {
   val defaultUserId = WorkbenchUserId("newuser123")
   val defaultUserEmail = WorkbenchEmail("newuser@new.com")
+/* Re-enable this code and remove the temporary code below after fixing rawls for GAWB-2933
   val defaultUserProxyEmail = WorkbenchEmail(s"newuser_$defaultUserId@${googleServicesConfig.appsDomain}")
+*/
+  val defaultUserProxyEmail = WorkbenchEmail(s"PROXY_$defaultUserId@${googleServicesConfig.appsDomain}")
+/**/
 
   lazy val config = ConfigFactory.load()
   lazy val petServiceAccountConfig = config.as[PetServiceAccountConfig]("petServiceAccount")
@@ -111,7 +115,11 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
   "POST /api/google/policy/{resourceTypeName}/{resourceId}/{accessPolicyName}/sync" should "204 Create Google group for policy" in {
     val resourceTypes = Map(resourceType.name -> resourceType)
     val defaultUserInfo = UserInfo(OAuth2BearerToken("accessToken"), WorkbenchUserId("user123"), WorkbenchEmail("user1@example.com"), 0)
+/* Re-enable this code and remove the temporary code below after fixing rawls for GAWB-2933
     val defaultUserProxyEmail = WorkbenchEmail(s"user1_user123@${googleServicesConfig.appsDomain}")
+*/
+    val defaultUserProxyEmail = WorkbenchEmail(s"PROXY_user123@${googleServicesConfig.appsDomain}")
+/**/
     val googleDirectoryDAO = new MockGoogleDirectoryDAO()
     val directoryDAO = new MockDirectoryDAO()
     val googleIamDAO = new MockGoogleIamDAO()
