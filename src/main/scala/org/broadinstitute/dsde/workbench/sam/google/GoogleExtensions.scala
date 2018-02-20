@@ -344,8 +344,8 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
 
   override def getUserProxy(userEmail: WorkbenchEmail): Future[Option[WorkbenchEmail]] = {
     directoryDAO.loadSubjectFromEmail(userEmail).flatMap {
-      // don't attempt to handle groups or service accounts - just users
       case Some(user: WorkbenchUserId) => getUserProxy(user)
+      case Some(pet: PetServiceAccountId) => getUserProxy(pet.userId)
       case _ => Future.successful(None)
     }
   }
