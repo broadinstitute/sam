@@ -115,7 +115,9 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
 
       _ <- googleDirectoryDAO.addMemberToGroup(allUsersGroup.email, proxyEmail)
 
+/* Re-enable this code after fixing rawls for GAWB-2933
       _ <- directoryDAO.addProxyGroup(user.id, proxyEmail)
+*/
     } yield ()
   }
 
@@ -351,7 +353,10 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
   }
 
   private def getUserProxy(userId: WorkbenchUserId): Future[Option[WorkbenchEmail]] = {
+/* Re-enable this code and remove the temporary code below after fixing rawls for GAWB-2933
     directoryDAO.readProxyGroup(userId)
+*/
+    Future.successful(Some(toProxyFromUser(WorkbenchUser(userId, null))))
   }
 
   private def withProxyEmail[T](userId: WorkbenchUserId)(f: WorkbenchEmail => Future[T]): Future[T] = {

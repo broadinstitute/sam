@@ -65,14 +65,30 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val inBothSubGroup = BasicWorkbenchGroup(WorkbenchGroupName("inBothSubGroup"), Set.empty, WorkbenchEmail("inBothSubGroup@example.com"))
 
     val inSamUserId = WorkbenchUserId("inSamUser")
+/* Re-enable this code and remove the temporary code below after fixing rawls for GAWB-2933
     val inSamUserProxyEmail = "foo_inSamUser@test.firecloud.org"
+*/
+    val inSamUserProxyEmail = s"PROXY_inSamUser@${googleServicesConfig.appsDomain}"
+/**/
     val inGoogleUserId = WorkbenchUserId("inGoogleUser")
+/* Re-enable this code and remove the temporary code below after fixing rawls for GAWB-2933
     val inGoogleUserProxyEmail = "foo_inGoogleUser@test.firecloud.org"
+*/
+    val inGoogleUserProxyEmail = s"PROXY_inGoogleUser@${googleServicesConfig.appsDomain}"
+/**/
     val inBothUserId = WorkbenchUserId("inBothUser")
+/* Re-enable this code and remove the temporary code below after fixing rawls for GAWB-2933
     val inBothUserProxyEmail = "foo_inBothUser@test.firecloud.org"
+*/
+    val inBothUserProxyEmail = s"PROXY_inBothUser@${googleServicesConfig.appsDomain}"
+/**/
 
     val addError = WorkbenchUserId("addError")
+/* Re-enable this code and remove the temporary code below after fixing rawls for GAWB-2933
     val addErrorProxyEmail = "foo_addError@test.firecloud.org"
+*/
+    val addErrorProxyEmail = s"PROXY_addError@${googleServicesConfig.appsDomain}"
+/**/
     val removeError = "removeError@foo.bar"
 
     val testGroup = BasicWorkbenchGroup(groupName, Set(inSamSubGroup.id, inBothSubGroup.id, inSamUserId, inBothUserId, addError), groupEmail)
@@ -121,7 +137,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
         added.map(e => SyncReportItem("added", e.value.toLowerCase, None)) ++
           removed.map(e => SyncReportItem("removed", e.value.toLowerCase, None)) ++
           Seq(
-            SyncReportItem("added", WorkbenchEmail(addErrorProxyEmail).value.toLowerCase, Option(ErrorReport(addException))),
+            SyncReportItem("added", addErrorProxyEmail.toLowerCase, Option(ErrorReport(addException))),
             SyncReportItem("removed", removeError.toLowerCase, Option(ErrorReport(removeException)))))
 
       added.foreach { email => verify(mockGoogleDirectoryDAO).addMemberToGroup(target.email, WorkbenchEmail(email.value.toLowerCase)) }
@@ -386,7 +402,9 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     verify(mockGoogleDirectoryDAO).createGroup(userEmail.value, proxyEmail)
     verify(mockGoogleDirectoryDAO).addMemberToGroup(proxyEmail, userEmail)
     verify(mockGoogleDirectoryDAO).addMemberToGroup(allUsersGroup.email, proxyEmail)
+/* Re-enable this code after fixing rawls for GAWB-2933
     verify(mockDirectoryDAO).addProxyGroup(userId, proxyEmail)
+*/
   }
 
   private def setupGoogleKeyCacheTests: (GoogleExtensions, UserService) = {
