@@ -157,6 +157,32 @@ paths:
       tags:
         - Admin
 
+  /api/group/{groupName}:
+    get:
+      summary: List of users in the group
+      responses:
+        200:
+          description: Group members found
+          schema:
+            type: array
+          items:
+            $ref: '#/definitions/UserStatus'
+        404:
+          description: Group does not exist or you are not a member of any policy on the group
+        500:
+          description: Internal Error
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      parameters:
+        - in: path
+          description: Name of group
+          name: groupName
+          required: true
+          type: string
+      operationId: getGroup
+      tags:
+        - Group
+
   /api/google/petServiceAccount/{project}/{userEmail}:
     get:
       summary: gets a key for the user's pet service account, get_pet_private_key action on cloud-extension/google required
