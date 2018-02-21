@@ -27,10 +27,12 @@ package object config {
     )
   }
 
+  def unquote(str: String): String = str.replace("\"", "")
+
   implicit object resourceRoleReader extends ValueReader[ResourceRole] {
     override def read(config: Config, path: String): ResourceRole = {
       ResourceRole(
-        ResourceRoleName(path),
+        ResourceRoleName(unquote(path)),
         config.as[Set[String]]("roleActions").map(ResourceAction)
       )
     }
@@ -38,12 +40,13 @@ package object config {
 
   implicit object resourceTypeReader extends ValueReader[ResourceType] {
     override def read(config: Config, path: String): ResourceType = {
-    ResourceType(
-      ResourceTypeName(path),
-      config.as[Set[String]]("actionPatterns").map(ResourceActionPattern),
-      config.as[Set[ResourceRole]]("roles"), //i think this won't work
-      ResourceRoleName(config.getString("ownerRoleName"))
-    )
+      ResourceType(
+        ResourceTypeName(unquote(path)),
+        config.as[Set[String]]("actionPatterns").map(ResourceActionPattern),
+        config.as[Map[String, ResourceRole]]("roles").values.toSet,
+        ResourceRoleName(config.getString("ownerRoleName"))
+      )
+    }
   }
 
   implicit val directoryConfigReader: ValueReader[DirectoryConfig] = ValueReader.relative { config =>
