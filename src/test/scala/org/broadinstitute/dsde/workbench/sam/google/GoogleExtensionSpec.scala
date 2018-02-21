@@ -50,7 +50,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
   lazy val petServiceAccountConfig = config.as[PetServiceAccountConfig]("petServiceAccount")
   lazy val googleServicesConfig = config.as[GoogleServicesConfig]("googleServices")
 
-  val configResourceTypes = config.as[Set[ResourceType]]("resourceTypes").map(rt => rt.name -> rt).toMap
+  val configResourceTypes = config.as[Map[String, ResourceType]]("resourceTypes").values.map(rt => rt.name -> rt).toMap
 
   "Google group sync" should "add/remove the right emails and handle errors" in {
     // tests that emails only in sam get added to google

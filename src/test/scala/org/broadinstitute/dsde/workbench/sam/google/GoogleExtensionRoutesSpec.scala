@@ -48,7 +48,7 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
   lazy val petServiceAccountConfig = config.as[PetServiceAccountConfig]("petServiceAccount")
   lazy val googleServicesConfig = config.as[GoogleServicesConfig]("googleServices")
 
-  val configResourceTypes = config.as[Set[ResourceType]]("resourceTypes").map(rt => rt.name -> rt).toMap
+  val configResourceTypes = config.as[Map[String, ResourceType]]("resourceTypes").values.map(rt => rt.name -> rt).toMap
 
   def withDefaultRoutes[T](testCode: TestSamRoutes => T): T = {
     val googleDirectoryDAO = new MockGoogleDirectoryDAO()
