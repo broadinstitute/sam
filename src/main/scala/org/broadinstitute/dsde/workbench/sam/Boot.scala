@@ -42,8 +42,7 @@ object Boot extends App with LazyLogging {
     val directoryDAO = new JndiDirectoryDAO(directoryConfig)
     val schemaDAO = new JndiSchemaDAO(directoryConfig)
 
-    val configResourceTypes = config.as[Set[ResourceType]]("resourceTypes")
-    val resourceTypes = configResourceTypes.map(rt => rt.name -> rt).toMap
+    val resourceTypes = config.as[Map[ResourceTypeName, ResourceType]]("resourceTypes")
 
     val cloudExt = googleServicesConfigOption match {
       case Some(googleServicesConfig) =>
