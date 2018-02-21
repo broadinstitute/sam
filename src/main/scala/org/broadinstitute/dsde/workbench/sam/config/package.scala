@@ -33,7 +33,7 @@ package object config {
     ResourceType(
       ResourceTypeName(config.getString("name")),
       config.as[Set[String]]("actionPatterns").map(ResourceActionPattern),
-      config.as[Set[ResourceRole]]("roles"),
+      config.as[Map[String, ResourceRole]]("roles").values.toSet,
       ResourceRoleName(config.getString("ownerRoleName"))
     )
   }
