@@ -186,7 +186,11 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
       status shouldEqual StatusCodes.NoContent
     }
 
-    val members = AccessPolicyMembership(Set(WorkbenchEmail("foo@bar.baz")), Set(ResourceAction("can_compute")), Set.empty)
+    val testUser = WorkbenchUser(WorkbenchUserId("testuser"), WorkbenchEmail("testuser@foo.com"))
+
+    runAndWait(samRoutes.userService.createUser(testUser))
+
+    val members = AccessPolicyMembership(Set(testUser.email), Set(ResourceAction("can_compute")), Set.empty)
 
     Put(s"/api/resource/${resourceType.name}/foo/policies/canCompute", members) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
@@ -201,13 +205,17 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
       status shouldEqual StatusCodes.NoContent
     }
 
-    val members = AccessPolicyMembership(Set(WorkbenchEmail("foo@bar.baz")), Set(ResourceAction("can_compute")), Set.empty)
+    val testUser = WorkbenchUser(WorkbenchUserId("testuser"), WorkbenchEmail("testuser@foo.com"))
+
+    runAndWait(samRoutes.userService.createUser(testUser))
+
+    val members = AccessPolicyMembership(Set(testUser.email), Set(ResourceAction("can_compute")), Set.empty)
 
     Put(s"/api/resource/${resourceType.name}/foo/policies/canCompute", members) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
     }
 
-    val members2 = AccessPolicyMembership(Set(WorkbenchEmail("foo@bar.baz")), Set(ResourceAction("can_compute")), Set(ResourceRoleName("owner")))
+    val members2 = AccessPolicyMembership(Set(testUser.email), Set(ResourceAction("can_compute")), Set(ResourceRoleName("owner")))
 
     Put(s"/api/resource/${resourceType.name}/foo/policies/canCompute", members2) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
@@ -222,9 +230,16 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
       status shouldEqual StatusCodes.NoContent
     }
 
-    val members = AccessPolicyMembership(Set(WorkbenchEmail("foo@bar.baz")), Set(ResourceAction("fake_action")), Set.empty)
+    val testUser = WorkbenchUser(WorkbenchUserId("testuser"), WorkbenchEmail("testuser@foo.com"))
+
+    runAndWait(samRoutes.userService.createUser(testUser))
+
+    val fakeActions = Set(ResourceAction("fake_action1"), ResourceAction("other_fake_action"))
+    val members = AccessPolicyMembership(Set(testUser.email), fakeActions, Set.empty)
 
     Put(s"/api/resource/${resourceType.name}/foo/policies/canCompute", members) ~> samRoutes.route ~> check {
+      fakeActions foreach { action => responseAs[String] should include(action.value) }
+      responseAs[String] should include ("invalid action")
       status shouldEqual StatusCodes.BadRequest
     }
   }
@@ -237,9 +252,38 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
       status shouldEqual StatusCodes.NoContent
     }
 
-    val members = AccessPolicyMembership(Set(WorkbenchEmail("foo@bar.baz")), Set(ResourceAction("cancompute")), Set(ResourceRoleName("fakerole")))
+    val testUser = WorkbenchUser(WorkbenchUserId("testuser"), WorkbenchEmail("testuser@foo.com"))
+
+    runAndWait(samRoutes.userService.createUser(testUser))
+
+    val fakeRoles = Set(ResourceRoleName("fakerole"), ResourceRoleName("otherfakerole"))
+    val members = AccessPolicyMembership(Set(testUser.email), Set(ResourceAction("can_compute")), fakeRoles)
 
     Put(s"/api/resource/${resourceType.name}/foo/policies/canCompute", members) ~> samRoutes.route ~> check {
+      fakeRoles foreach { role => responseAs[String] should include (role.value) }
+      responseAs[String] should include ("invalid role")
+      status shouldEqual StatusCodes.BadRequest
+    }
+  }
+
+  it should "400 on a policy being created with invalid member emails" in {
+    val resourceType = ResourceType(ResourceTypeName("rt"), Set(SamResourceActionPatterns.alterPolicies, ResourceActionPattern("can_compute")), Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.alterPolicies))), ResourceRoleName("owner"))
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
+
+    Post(s"/api/resource/${resourceType.name}/foo") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+    }
+
+    val testUser = WorkbenchUser(WorkbenchUserId("testuser"), WorkbenchEmail("testuser@foo.com"))
+    runAndWait(samRoutes.userService.createUser(testUser))
+
+    val badEmail = WorkbenchEmail("null@bar.baz")
+    val nonExistingMembers = AccessPolicyMembership(Set(badEmail), Set(ResourceAction("can_compute")), Set(ResourceRoleName("owner")))
+
+    Put(s"/api/resource/${resourceType.name}/foo/policies/canCompute", nonExistingMembers) ~> samRoutes.route ~> check {
+      responseAs[String] shouldNot include (testUser.email.value)
+      responseAs[String] should include (badEmail.value)
+      responseAs[String] should include ("invalid member email")
       status shouldEqual StatusCodes.BadRequest
     }
   }
