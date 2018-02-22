@@ -178,7 +178,11 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
       val proxyGroup_1 = Sam.user.proxyGroup(petSAEmail.value)(authToken1)
       val proxyGroup_2 = Sam.user.proxyGroup(petSAEmail.value)(authToken2)
 
+/* Re-enable this code and remove the temporary code below after fixing rawls for GAWB-2933
       val expectedProxyEmail = s"${username}_$userId@${Config.GCS.appsDomain}"
+*/
+      val expectedProxyEmail = s"PROXY_$userId@${Config.GCS.appsDomain}"
+/**/
       proxyGroup_1 shouldBe WorkbenchEmail(expectedProxyEmail)
       proxyGroup_2 shouldBe WorkbenchEmail(expectedProxyEmail)
     }
