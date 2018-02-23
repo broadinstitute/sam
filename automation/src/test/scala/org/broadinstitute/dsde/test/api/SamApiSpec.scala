@@ -1,17 +1,19 @@
-package org.broadinstitute.dsde.test.api.sam
+package org.broadinstitute.dsde.test.api
 
+import akka.http.scaladsl.model.headers
+import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import org.broadinstitute.dsde.workbench.service.{Orchestration, Sam, Thurloe}
 import org.broadinstitute.dsde.workbench.service.Sam.user.UserStatusDetails
 import org.broadinstitute.dsde.workbench.auth.{AuthToken, ServiceAccountAuthTokenFromJson, ServiceAccountAuthTokenFromPem}
 import org.broadinstitute.dsde.workbench.config.{Config, Credentials, UserPool}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.dao.Google.googleIamDAO
-import org.broadinstitute.dsde.workbench.fixture.BillingFixtures
+import org.broadinstitute.dsde.workbench.fixture.{BillingFixtures, GPAllocFixtures}
 import org.broadinstitute.dsde.workbench.service.test.CleanUp
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountName}
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.time.{Seconds, Span}
-import org.scalatest.{FreeSpec, Matchers}
+import org.scalatest.{DoNotDiscover, FreeSpec, Matchers}
 
 class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaFutures with CleanUp {
   implicit override val patienceConfig: PatienceConfig = PatienceConfig(timeout = scaled(Span(5, Seconds)))
@@ -85,13 +87,12 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
       val userAuthToken: AuthToken = anyUser.makeAuthToken()
 
       val owner: Credentials = UserPool.chooseProjectOwner
-      val ownerAuthToken: AuthToken = owner.makeAuthToken()
 
       // set auth tokens explicitly to control which credentials are used
 
       val userStatus = Sam.user.status()(userAuthToken).get
 
-      withBillingProject("auto-sam") { projectName =>
+      withCleanBillingProject(owner) { projectName =>
         // ensure known state for pet (not present)
 
         Sam.removePet(projectName, userStatus.userInfo)
@@ -100,7 +101,6 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
         val petAccountEmail = Sam.user.petServiceAccountEmail(projectName)(userAuthToken)
         petAccountEmail.value should not be userStatus.userInfo.userEmail
         findPetInGoogle(projectName, userStatus.userInfo).map(_.email) shouldBe Some(petAccountEmail)
-
 
         // first call should create pet.  confirm that a second call to create/retrieve gives the same results
         Sam.user.petServiceAccountEmail(projectName)(userAuthToken) shouldBe petAccountEmail
@@ -116,7 +116,7 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
 
         Sam.removePet(projectName, userStatus.userInfo)
         findPetInGoogle(projectName, userStatus.userInfo) shouldBe None
-      }(ownerAuthToken)
+      }
     }
 
     "should not treat non-pet service accounts as pets" in {

@@ -70,3 +70,7 @@ crashlytics.properties
 crashlytics-build.properties
 
 *.pid
+
+### Automation things
+automation/report.xml
+
