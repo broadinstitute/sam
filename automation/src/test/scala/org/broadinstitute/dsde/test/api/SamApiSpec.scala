@@ -15,8 +15,7 @@ import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.time.{Seconds, Span}
 import org.scalatest.{DoNotDiscover, FreeSpec, Matchers}
 
-@DoNotDiscover
-class SamApiSpec extends FreeSpec with GPAllocFixtures with Matchers with ScalaFutures with CleanUp {
+class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaFutures with CleanUp {
   implicit override val patienceConfig: PatienceConfig = PatienceConfig(timeout = scaled(Span(5, Seconds)))
 
   def findSaInGoogle(project: String, name: ServiceAccountName): Option[ServiceAccount] = {
