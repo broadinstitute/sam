@@ -12,22 +12,24 @@ import scala.concurrent.ExecutionContext
   */
 trait GroupRoutes extends UserInfoDirectives with SecurityDirectives {
   implicit val executionContext: ExecutionContext
-  val resourceService: ResourceService
-  val userService: UserService
 
-  def groupRoutes: server.Route =
-    pathPrefix("group") {
-      requireUserInfo { userInfo =>
-        pathPrefix(Segment) { groupName =>
-          pathEndOrSingleSlash {
-            get {
-              complete {
-                //            HttpEntity(ContentTypes.`text/html(UTF-8)`, "<h1>Say hello to akka-http</h1>")
-                StatusCodes.OK -> "Hello Group"
-              }
-            }
-          }
+  def groupRoutes: server.Route = requireUserInfo { userInfo =>
+    path("group" / Segment) { groupName =>
+      get {
+        complete {
+          StatusCodes.OK -> s"Group Name: $groupName"
+        }
+      } ~
+      post {
+        complete {
+          StatusCodes.OK -> s"Posted new Group: $groupName"
+        }
+      } ~
+      delete {
+        complete {
+          StatusCodes.OK -> s"Deleted Group: $groupName"
         }
       }
     }
+  }
 }

@@ -22,8 +22,8 @@ import scala.concurrent.ExecutionContext
 /**
   * Created by dvoet on 7/14/17.
   */
-class TestSamRoutes(resourceService: ResourceService, userService: UserService, statusService: StatusService, val userInfo: UserInfo, directoryDAO: MockDirectoryDAO, val cloudExtensions: CloudExtensions = NoExtensions)(implicit override val system: ActorSystem, override val materializer: Materializer, override val executionContext: ExecutionContext)
-  extends SamRoutes(resourceService, userService, statusService, SwaggerConfig("", ""), directoryDAO) with MockUserInfoDirectives with ExtensionRoutes with ScalaFutures {
+class TestSamRoutes(resourceService: ResourceService, userService: UserService, statusService: StatusService, managedGroupService: ManagedGroupService, val userInfo: UserInfo, directoryDAO: MockDirectoryDAO, val cloudExtensions: CloudExtensions = NoExtensions)(implicit override val system: ActorSystem, override val materializer: Materializer, override val executionContext: ExecutionContext)
+  extends SamRoutes(resourceService, userService, statusService, managedGroupService, SwaggerConfig("", ""), directoryDAO) with MockUserInfoDirectives with ExtensionRoutes with ScalaFutures {
 
   def extensionRoutes: server.Route = reject
 }
@@ -41,12 +41,13 @@ object TestSamRoutes {
 
     val mockResourceService = new ResourceService(resourceTypes, policyDAO, directoryDAO, NoExtensions, "example.com")
     val mockUserService = new UserService(directoryDAO, NoExtensions)
+    val mockManagedGroupService = new ManagedGroupService(mockResourceService, resourceTypes)
 
     val allUsersGroup = TestSupport.runAndWait(NoExtensions.getOrCreateAllUsersGroup(directoryDAO))
     TestSupport.runAndWait(googleDirectoryDAO.createGroup(allUsersGroup.id.toString, allUsersGroup.email))
 
     val mockStatusService = new StatusService(directoryDAO, NoExtensions)
 
-    new TestSamRoutes(mockResourceService, mockUserService, mockStatusService, userInfo, directoryDAO)
+    new TestSamRoutes(mockResourceService, mockUserService, mockStatusService, mockManagedGroupService, userInfo, directoryDAO)
   }
 }

@@ -25,6 +25,7 @@ class GroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest wit
 
     Get("/api/group/foo") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
+      responseAs[String] should include ("Group Name: foo")
     }
   }
 
@@ -32,9 +33,23 @@ class GroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest wit
 
   "GET /api/group/{groupName}/members" should "return the flattened list of users who are non-owner members of this group" is pending
 
-  "POST /api/group/{groupName}" should "create a new managed group, the owner group, and the members group, and the All Group and all policies for those groups" is pending
+  "POST /api/group/{groupName}" should "create a new managed group, the owner group, and the members group, and the All Group and all policies for those groups" in {
+    val samRoutes = TestSamRoutes(Map.empty)
 
-  "DELETE /api/group/{groupName}" should "delete the group, member groups, and all associated policies when the authenticated user is an owner of the group" is pending
+    Post("/api/group/foo") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[String] should include ("Posted new Group: foo")
+    }
+  }
+
+  "DELETE /api/group/{groupName}" should "delete the group, member groups, and all associated policies when the authenticated user is an owner of the group" in {
+    val samRoutes = TestSamRoutes(Map.empty)
+
+    Delete("/api/group/foo") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[String] should include ("Deleted Group: foo")
+    }
+  }
 
   it should "fail if the authenticated user user is not an owner of the group" is pending
 
