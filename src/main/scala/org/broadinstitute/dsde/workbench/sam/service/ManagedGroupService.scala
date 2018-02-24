@@ -59,6 +59,6 @@ class ManagedGroupService(resourceService: ResourceService, val resourceTypes: M
 
 object ManagedGroupService {
   // TODO: Consider moving these to config/package.scala which seems to be where we're defining how to extract data from reference.conf
-  val MemberRoleName = "member"
+  val MemberRoleName = ResourceRoleName("member")
   val ManagedGroupTypeName = ResourceTypeName("managed-group")
 }
