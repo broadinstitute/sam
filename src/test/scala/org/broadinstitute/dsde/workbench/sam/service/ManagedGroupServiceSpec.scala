@@ -2,7 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.service
 
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import com.typesafe.config.ConfigFactory
-import org.broadinstitute.dsde.workbench.model.{UserInfo, WorkbenchEmail, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.model.{UserInfo, WorkbenchEmail, WorkbenchGroupName, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
 import org.broadinstitute.dsde.workbench.sam.directory.JndiDirectoryDAO
@@ -11,23 +11,30 @@ import org.broadinstitute.dsde.workbench.sam.openam.JndiAccessPolicyDAO
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.mockito.MockitoSugar
-import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FlatSpec, Matchers}
+import org.scalatest._
 import net.ceedubs.ficus.Ficus._
+
 import scala.concurrent.ExecutionContext.Implicits.global
 
 /**
   * Created by gpolumbo on 2/21/2018
   */
 class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport with MockitoSugar
-  with BeforeAndAfter with BeforeAndAfterAll with ScalaFutures {
+  with BeforeAndAfter with BeforeAndAfterAll with ScalaFutures with OptionValues {
 
   val directoryConfig = ConfigFactory.load().as[DirectoryConfig]("directory")
   val dirDAO = new JndiDirectoryDAO(directoryConfig)
   val policyDAO = new JndiAccessPolicyDAO(directoryConfig)
   val schemaDao = new JndiSchemaDAO(directoryConfig)
 
+  private val resourceId = ResourceId("myNewGroup")
+  private val expectedResource = Resource(ManagedGroupService.ManagedGroupTypeName, resourceId)
   private val ownerRoleName = ResourceRoleName("admin")
-  private val accessPolicyNames = Set(AccessPolicyName(ownerRoleName.value), AccessPolicyName(ManagedGroupService.MemberRoleName.value))
+  private val ownerPolicyName = AccessPolicyName(ownerRoleName.value)
+  private val memberPolicyName = AccessPolicyName(ManagedGroupService.MemberRoleName.value)
+  private val adminPolicy = ResourceAndPolicyName(expectedResource, ownerPolicyName)
+  private val memberPolicy = ResourceAndPolicyName(expectedResource, memberPolicyName)
+  private val accessPolicyNames = Set(ownerPolicyName, memberPolicyName)
   private val policyActions: Set[ResourceAction] = accessPolicyNames.flatMap(policyName => Set(SamResourceActions.sharePolicy(policyName), SamResourceActions.readPolicy(policyName)))
   private val resourceActions = Set(ResourceAction("delete")) union policyActions
   private val resourceActionPatterns = resourceActions.map(action => ResourceActionPattern(action.value))
@@ -50,16 +57,30 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     runAndWait(schemaDao.clearDatabase())
     runAndWait(schemaDao.createOrgUnits())
     runAndWait(resourceService.createResourceType(managedGroupResourceType))
+    runAndWait(managedGroupService.createManagedGroup(resourceId, dummyUserInfo))
   }
 
-  "ManagedGroupService" should "create a managed group" in {
-    val resourceId = ResourceId("myNewGroup")
-
-    runAndWait(managedGroupService.createManagedGroup(resourceId, dummyUserInfo))
-
-    val expectedResource = Resource(ManagedGroupService.ManagedGroupTypeName, resourceId)
+  "ManagedGroupService create" should "create a managed group with admin and member policies" in {
     val policies = runAndWait(policyDAO.listAccessPolicies(expectedResource))
-    policies.isEmpty shouldEqual false
+    policies.map(_.id.accessPolicyName.value) shouldEqual Set("admin", "member")
+  }
+
+  it should "create a workbenchGroup with the same name as the Managed Group" in {
+    val samGroup: Option[BasicWorkbenchGroup] = runAndWait(dirDAO.loadGroup(WorkbenchGroupName(resourceId.value)))
+    samGroup.value.id.value shouldEqual resourceId.value
+  }
+
+  it should "create a workbenchGroup with 2 member WorkbenchSubjects" in {
+    val samGroup: Option[BasicWorkbenchGroup] = runAndWait(dirDAO.loadGroup(WorkbenchGroupName(resourceId.value)))
+    samGroup.value.members shouldEqual Set(adminPolicy, memberPolicy)
+  }
+
+  // TODO: I think this test is flawed.  Simply asserting that there are no policies associated with a resource may
+  // not be the same thing as asserting that the resource no longer exists
+  "ManagedGroupService delete" should "delete the Manage Group" in {
+    runAndWait(managedGroupService.deleteManagedGroup(resourceId))
+    val policiesAfter = runAndWait(policyDAO.listAccessPolicies(expectedResource))
+    policiesAfter.isEmpty shouldEqual true
   }
 
 }

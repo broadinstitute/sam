@@ -43,7 +43,8 @@ class ManagedGroupService(resourceService: ResourceService, val resourceTypes: M
   private def createAggregateGroup(resource: Resource, componentPolicies: Set[AccessPolicy]): Future[BasicWorkbenchGroup] = {
     val email = generateManagedGroupEmail(resource.resourceId)
     val workbenchGroupName = WorkbenchGroupName(resource.resourceId.value)
-    resourceService.directoryDAO.createGroup(BasicWorkbenchGroup(workbenchGroupName, Set.empty, email))
+    val groupMembers: Set[WorkbenchSubject] = componentPolicies.map(_.id)
+    resourceService.directoryDAO.createGroup(BasicWorkbenchGroup(workbenchGroupName, groupMembers, email))
   }
 
   // TODO: should be named with {ResourceId.value}@firecloud.org, needs validations on length, "google validity", and uniqueness
