@@ -42,6 +42,7 @@ class ManagedGroupService(resourceService: ResourceService, val resourceTypes: M
 
   private def createAggregateGroup(resource: Resource, componentPolicies: Set[AccessPolicy]): Future[BasicWorkbenchGroup] = {
     val email = generateManagedGroupEmail(resource.resourceId)
+    // TODO: Should the group name be JUST the string the user passed in?  Or does it need to be namespaced in some way?
     val workbenchGroupName = WorkbenchGroupName(resource.resourceId.value)
     val groupMembers: Set[WorkbenchSubject] = componentPolicies.map(_.id)
     resourceService.directoryDAO.createGroup(BasicWorkbenchGroup(workbenchGroupName, groupMembers, email))
@@ -53,6 +54,10 @@ class ManagedGroupService(resourceService: ResourceService, val resourceTypes: M
   private def generateManagedGroupEmail(resourceId: ResourceId): WorkbenchEmail = {
     val localPart = resourceId.value
     WorkbenchEmail(s"${localPart}@${resourceService.emailDomain}")
+  }
+
+  def loadManagedGroup(groupId: ResourceId): Future[Option[BasicWorkbenchGroup]] = {
+    resourceService.directoryDAO.loadGroup(WorkbenchGroupName(groupId.value))
   }
 
   def deleteManagedGroup(groupId: ResourceId) = resourceService.deleteResource(Resource(managedGroupType.name, groupId))

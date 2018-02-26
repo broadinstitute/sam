@@ -75,12 +75,18 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     samGroup.value.members shouldEqual Set(adminPolicy, memberPolicy)
   }
 
-  // TODO: I think this test is flawed.  Simply asserting that there are no policies associated with a resource may
-  // not be the same thing as asserting that the resource no longer exists
-  "ManagedGroupService delete" should "delete the Manage Group" in {
+  "ManagedGroupService get" should "return the Managed Group resource" in {
+    runAndWait(managedGroupService.loadManagedGroup(resourceId)).isDefined shouldEqual true
+  }
+
+  // NOTE: All since we don't have a way to look up policies directly without going through a Resource, this test
+  // may not be actually confirming that the policies have been deleted.  They may still be in LDAP, just orphaned
+  // because the resource no longer exists
+  "ManagedGroupService delete" should "delete policies associated to that resource" in {
     runAndWait(managedGroupService.deleteManagedGroup(resourceId))
-    val policiesAfter = runAndWait(policyDAO.listAccessPolicies(expectedResource))
-    policiesAfter.isEmpty shouldEqual true
+    runAndWait(policyDAO.listAccessPolicies(expectedResource)).isEmpty shouldEqual true
+    runAndWait(policyDAO.loadPolicy(adminPolicy)).isDefined shouldEqual false
+    runAndWait(policyDAO.loadPolicy(memberPolicy)).isDefined shouldEqual false
   }
 
 }

@@ -27,7 +27,7 @@ import scala.concurrent.{ExecutionContext, Future}
   */
 abstract class SamRoutes(val resourceService: ResourceService, val userService: UserService, val statusService: StatusService, val managedGroupService: ManagedGroupService, val swaggerConfig: SwaggerConfig, val directoryDAO: DirectoryDAO)(implicit val system: ActorSystem, val materializer: Materializer, val executionContext: ExecutionContext)
   extends LazyLogging
-  with ResourceRoutes with UserRoutes with SwaggerRoutes with StatusRoutes with ExtensionRoutes with GroupRoutes {
+  with ResourceRoutes with UserRoutes with SwaggerRoutes with StatusRoutes with ExtensionRoutes with ManagedGroupRoutes {
 
   def route: server.Route = (logRequestResult & handleExceptions(myExceptionHandler)) {
     swaggerRoutes ~

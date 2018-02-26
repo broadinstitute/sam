@@ -159,16 +159,12 @@ paths:
 
   /api/group/{groupName}:
     get:
-      summary: List of users in the group
+      summary: Show details of the group
       responses:
         200:
-          description: Group members found
-          schema:
-            type: array
-          items:
-            $ref: '#/definitions/UserStatus'
+          description: Group found
         404:
-          description: Group does not exist or you are not a member of any policy on the group
+          description: Group could not be found or you do not have the required permissions on this group
         500:
           description: Internal Error
           schema:
@@ -180,6 +176,44 @@ paths:
           required: true
           type: string
       operationId: getGroup
+      tags:
+        - Group
+    post:
+      summary: Create a new group
+      responses:
+        204:
+          description: Group created
+        500:
+          description: Internal Error
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      parameters:
+        - in: path
+          description: Name of group
+          name: groupName
+          required: true
+          type: string
+      operationId: postGroup
+      tags:
+        - Group
+    delete:
+      summary: Delete group
+      responses:
+        204:
+          description: Group deleted
+        404:
+          description: Group could not be found or you do not have the required permissions on this group
+        500:
+          description: Internal Error
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      parameters:
+        - in: path
+          description: Name of group
+          name: groupName
+          required: true
+          type: string
+      operationId: deleteGroup
       tags:
         - Group
 
