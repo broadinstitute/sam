@@ -101,16 +101,12 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
       directoryDAO.loadSubjectFromEmail
     }.map(_.flatten)
 
-    //TODO: Update this method to use one of the new createPolicy() methods
-    val email = generateGroupEmail()
-
     subjectsFromEmails.flatMap { members =>
       val resourceAndPolicyName = ResourceAndPolicyName(resource, policyName)
-      val newPolicy = AccessPolicy(resourceAndPolicyName, members, email, policyMembership.roles, policyMembership.actions)
 
       accessPolicyDAO.loadPolicy(resourceAndPolicyName).flatMap {
-        case None => accessPolicyDAO.createPolicy(newPolicy)
-        case Some(accessPolicy) => accessPolicyDAO.overwritePolicy(AccessPolicy(newPolicy.id, newPolicy.members, accessPolicy.email, newPolicy.roles, newPolicy.actions ))
+        case None => createPolicy(resourceAndPolicyName, members, generateGroupEmail(), policyMembership.roles, policyMembership.actions)
+        case Some(accessPolicy) => accessPolicyDAO.overwritePolicy(AccessPolicy(resourceAndPolicyName, members, accessPolicy.email, policyMembership.roles, policyMembership.actions ))
       } andThen {
         case Success(policy) => fireGroupUpdateNotification(policy.id)
       }
@@ -176,7 +172,5 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     }
   }
 
-  // TODO:  The passed parameters are not used...can we remove them?
-//  private def generateGroupEmail(policyName: AccessPolicyName, resource: Resource) = WorkbenchEmail(s"policy-${UUID.randomUUID}@$emailDomain")
   private def generateGroupEmail() = WorkbenchEmail(s"policy-${UUID.randomUUID}@$emailDomain")
 }

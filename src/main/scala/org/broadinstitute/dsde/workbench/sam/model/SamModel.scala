@@ -42,8 +42,6 @@ object SamJsonSupport {
   implicit val ResourceAndPolicyNameFormat = jsonFormat2(ResourceAndPolicyName)
 
   implicit val GroupSyncResponseFormat = jsonFormat1(GroupSyncResponse)
-
-  implicit val serializableWorkbenchGroupFormat = jsonFormat3(SerializableWorkbenchGroup)
 }
 
 object SamResourceActions {
@@ -97,17 +95,6 @@ case class AccessPolicy(id: ResourceAndPolicyName, members: Set[WorkbenchSubject
 case class AccessPolicyMembership(memberEmails: Set[WorkbenchEmail], actions: Set[ResourceAction], roles: Set[ResourceRoleName])
 case class AccessPolicyResponseEntry(policyName: AccessPolicyName, policy: AccessPolicyMembership, email: WorkbenchEmail)
 
-case class BasicWorkbenchGroup(id: WorkbenchGroupName, members: Set[WorkbenchSubject], email: WorkbenchEmail) extends WorkbenchGroup {
-  def asSerializable: SerializableWorkbenchGroup = {
-    val memberIds = members.map {
-      case v: ValueObject => v.value
-      case p: ResourceAndPolicyName => p.toString
-      case pet: PetServiceAccountId => pet.userId.value
-      case other => throw new WorkbenchException(s"Unrecognized WorkbenchSubject type: $other")
-    }
-    SerializableWorkbenchGroup(id, memberIds, email)
-  }
-}
-case class SerializableWorkbenchGroup(id: WorkbenchGroupName, memberIds: Set[String], email: WorkbenchEmail)
+case class BasicWorkbenchGroup(id: WorkbenchGroupName, members: Set[WorkbenchSubject], email: WorkbenchEmail) extends WorkbenchGroup
 
 case class GroupSyncResponse(lastSyncDate: String)

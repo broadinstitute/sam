@@ -34,7 +34,7 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
   }
 
   def assertCreateGroup(samRoutes: TestSamRoutes, groupId: String = groupId): Unit = {
-    Post("/api/group/foo") ~> samRoutes.route ~> check {
+    Post(s"/api/group/$groupId") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NoContent
       responseAs[String].isEmpty shouldEqual true
     }
@@ -44,9 +44,9 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
     Get(s"/api/group/$groupId") ~> samRoutes.route ~> check {
       val expectedResource = Resource(ManagedGroupService.ManagedGroupTypeName, ResourceId(groupId))
       status shouldEqual StatusCodes.OK
-      responseAs[String].isEmpty shouldEqual false
-      responseAs[String] should include(ResourceAndPolicyName(expectedResource, memberPolicyName).toString())
-      responseAs[String] should include(ResourceAndPolicyName(expectedResource, ownerPolicyName).toString())
+      responseAs[String] should include (s"${groupId}@${samRoutes.resourceService.emailDomain}")
+      responseAs[String] shouldNot include(ResourceAndPolicyName(expectedResource, memberPolicyName).toString())
+      responseAs[String] shouldNot include(ResourceAndPolicyName(expectedResource, ownerPolicyName).toString())
     }
   }
 
@@ -64,17 +64,12 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
     assertCreateGroup(samRoutes)
   }
 
-  // TODO: Confirm with Ursa and/or Doug about whether we want a "full" Group object returned or just the list of group members
   "GET /api/group/{groupName}" should "return a flattened list of users who are in this group" in {
     val samRoutes = TestSamRoutes(resourceTypes)
     assertGroupDoesNotExist(samRoutes)
     assertCreateGroup(samRoutes)
     assertGetGroup(samRoutes)
   }
-
-  // TODO: Ask Doug if these routes are needed?
-  "GET /api/group/{groupName}/owners" should "return the flattened list of users who are owners of this group" is pending
-  "GET /api/group/{groupName}/members" should "return the flattened list of users who are non-owner members of this group" is pending
 
   "DELETE /api/group/{groupName}" should "delete the group, member groups, and all associated policies when the authenticated user is an owner of the group" in {
     val samRoutes = TestSamRoutes(resourceTypes)
@@ -95,7 +90,6 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
     val theDude = UserInfo(OAuth2BearerToken("tokenDude"), WorkbenchUserId("ElDudarino"), WorkbenchEmail("ElDudarino@example.com"), 0)
     val dudesRoutes = new TestSamRoutes(defaultRoutes.resourceService, defaultRoutes.userService, defaultRoutes.statusService, defaultRoutes.managedGroupService, theDude, defaultRoutes.mockDirectoryDao)
 
-    // TODO: Should a random user be allowed to GET a group?  Or should we be reporting Unauthorized on this call?
     assertGetGroup(dudesRoutes)
     Delete(s"/api/group/$groupId") ~> dudesRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound

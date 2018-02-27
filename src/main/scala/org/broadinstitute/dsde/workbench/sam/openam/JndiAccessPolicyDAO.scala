@@ -72,7 +72,7 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
     }
   }
 
-  // TODO: Method is not tested.  To test properly, we'll need a loadResource or getResource method
+  // TODO: Method is not tested.  To test properly, we'll probably need a loadResource or getResource method
   override def deleteResource(resource: Resource): Future[Unit] = withContext { ctx =>
     ctx.unbind(resourceDn(resource))
   }
