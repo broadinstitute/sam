@@ -29,29 +29,36 @@ trait ManagedGroupRoutes extends UserInfoDirectives with SecurityDirectives {
   def groupRoutes: server.Route = requireUserInfo { userInfo =>
     path("group" / Segment) { groupId =>
       get {
-        complete(handleGetGroup(groupId))
+        handleGetGroup(groupId)
       } ~
       post {
-        complete(handlePostGroup(groupId, userInfo))
+        handlePostGroup(groupId, userInfo)
       } ~
       delete {
-        complete(handleDeleteGroup(groupId))
+        handleDeleteGroup(groupId, userInfo)
       }
     }
   }
 
-  private def handleDeleteGroup(groupId: String) = {
-    managedGroupService.deleteManagedGroup(ResourceId(groupId)).map(_ => StatusCodes.NoContent)
+  private def handleGetGroup(groupId: String) = {
+    complete (
+      managedGroupService.loadManagedGroup(ResourceId(groupId)).map {
+        case Some(response) => StatusCodes.OK -> response.asSerializable
+        case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "group not found"))
+      }
+    )
   }
 
   private def handlePostGroup(groupId: String, userInfo: UserInfo) = {
-    managedGroupService.createManagedGroup(ResourceId(groupId), userInfo).map(_ => StatusCodes.NoContent)
+    complete(managedGroupService.createManagedGroup(ResourceId(groupId), userInfo).map(_ => StatusCodes.NoContent))
   }
 
-  private def handleGetGroup(groupId: String) = {
-    managedGroupService.loadManagedGroup(ResourceId(groupId)).map {
-      case Some(response) => StatusCodes.OK -> response.asSerializable
-      case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "group not found"))
+  private def handleDeleteGroup(groupId: String, userInfo: UserInfo) = {
+    val resource = Resource(ManagedGroupService.ManagedGroupTypeName, ResourceId(groupId))
+    requireOneOfAction(resource, Set(SamResourceActions.delete), userInfo) {
+      delete {
+        complete(managedGroupService.deleteManagedGroup(ResourceId(groupId)).map(_ => StatusCodes.NoContent))
+      }
     }
   }
 }

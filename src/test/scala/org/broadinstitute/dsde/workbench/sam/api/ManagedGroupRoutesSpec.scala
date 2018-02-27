@@ -87,7 +87,7 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
   // Note:  Ignored for now as I could not get it to pass.
   // 1. Perhaps the way I was swapping users was incorrect
   // 2. Maybe there is something deeper in the guts of "delete" that needs to explicitly check the policy to delete
-  it should "fail if the authenticated user user is not an owner of the group" ignore {
+  it should "fail if the authenticated user user is not an owner of the group" in {
     val defaultRoutes = TestSamRoutes(resourceTypes)
     assertCreateGroup(defaultRoutes)
     assertGetGroup(defaultRoutes)
@@ -98,7 +98,7 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
     // TODO: Should a random user be allowed to GET a group?  Or should we be reporting Unauthorized on this call?
     assertGetGroup(dudesRoutes)
     Delete(s"/api/group/$groupId") ~> dudesRoutes.route ~> check {
-      status shouldEqual StatusCodes.NoContent
+      status shouldEqual StatusCodes.NotFound
     }
     assertGetGroup(dudesRoutes)
     assertGetGroup(defaultRoutes)
