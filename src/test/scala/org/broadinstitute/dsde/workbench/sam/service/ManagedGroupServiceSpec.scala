@@ -2,7 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.service
 
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import com.typesafe.config.ConfigFactory
-import org.broadinstitute.dsde.workbench.model.{UserInfo, WorkbenchEmail, WorkbenchGroupName, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
 import org.broadinstitute.dsde.workbench.sam.directory.JndiDirectoryDAO
@@ -53,29 +53,54 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     runAndWait(schemaDao.init())
   }
 
+  def makeResourceType(): ResourceTypeName = runAndWait(resourceService.createResourceType(managedGroupResourceType))
+
+  def makeGroup(groupId: String = resourceId.value): Resource = {
+    makeResourceType()
+    runAndWait(managedGroupService.createManagedGroup(ResourceId(groupId), dummyUserInfo))
+  }
+
   before {
     runAndWait(schemaDao.clearDatabase())
     runAndWait(schemaDao.createOrgUnits())
-    runAndWait(resourceService.createResourceType(managedGroupResourceType))
-    runAndWait(managedGroupService.createManagedGroup(resourceId, dummyUserInfo))
   }
 
   "ManagedGroupService create" should "create a managed group with admin and member policies" in {
+    makeGroup()
     val policies = runAndWait(policyDAO.listAccessPolicies(expectedResource))
     policies.map(_.id.accessPolicyName.value) shouldEqual Set("admin", "member")
   }
 
   it should "create a workbenchGroup with the same name as the Managed Group" in {
+    makeGroup()
     val samGroup: Option[BasicWorkbenchGroup] = runAndWait(dirDAO.loadGroup(WorkbenchGroupName(resourceId.value)))
     samGroup.value.id.value shouldEqual resourceId.value
   }
 
   it should "create a workbenchGroup with 2 member WorkbenchSubjects" in {
+    makeGroup()
     val samGroup: Option[BasicWorkbenchGroup] = runAndWait(dirDAO.loadGroup(WorkbenchGroupName(resourceId.value)))
     samGroup.value.members shouldEqual Set(adminPolicy, memberPolicy)
   }
 
+  it should "fail when the group name is too long" in {
+    val groupName = "a" * 64
+    intercept[WorkbenchExceptionWithErrorReport] {
+      makeGroup(groupName)
+    }
+    runAndWait(managedGroupService.loadManagedGroup(resourceId)).isDefined shouldEqual false
+  }
+
+  it should "fail when the group name has invalid characters" in {
+    val groupName = "Make It Rain!!! $$$$$"
+    intercept[WorkbenchExceptionWithErrorReport] {
+      makeGroup(groupName)
+    }
+    runAndWait(managedGroupService.loadManagedGroup(resourceId)).isDefined shouldEqual false
+  }
+
   "ManagedGroupService get" should "return the Managed Group resource" in {
+    makeGroup()
     runAndWait(managedGroupService.loadManagedGroup(resourceId)).isDefined shouldEqual true
   }
 
@@ -83,6 +108,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
   // may not be actually confirming that the policies have been deleted.  They may still be in LDAP, just orphaned
   // because the resource no longer exists
   "ManagedGroupService delete" should "delete policies associated to that resource" in {
+    makeGroup()
     runAndWait(policyDAO.listAccessPolicies(expectedResource)).isEmpty shouldEqual false
     runAndWait(policyDAO.loadPolicy(adminPolicy)).isDefined shouldEqual true
     runAndWait(policyDAO.loadPolicy(memberPolicy)).isDefined shouldEqual true

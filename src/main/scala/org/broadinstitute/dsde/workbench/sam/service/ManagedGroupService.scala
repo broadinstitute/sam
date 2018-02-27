@@ -1,8 +1,10 @@
 package org.broadinstitute.dsde.workbench.sam.service
 
+import akka.http.scaladsl.model.StatusCodes
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam._
 
 import scala.concurrent.Future
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -43,7 +45,33 @@ class ManagedGroupService(resourceService: ResourceService, val resourceTypes: M
   // Read RAWLS org.broadinstitute.dsde.rawls.user.UserService#createManagedGroup on how it validates emails (see also: https://support.google.com/a/answer/33386?hl=en&vid=0-237593324832-1519419282150)
   private def generateManagedGroupEmail(resourceId: ResourceId): WorkbenchEmail = {
     val localPart = resourceId.value
-    WorkbenchEmail(s"${localPart}@${resourceService.emailDomain}")
+    validateEmail(localPart)
+    WorkbenchEmail(constructEmail(localPart))
+  }
+
+  private def constructEmail(localPart: String) = {
+    s"${localPart}@${resourceService.emailDomain}"
+  }
+
+  private def validateEmail(localPart: String) = {
+    val errors = validateLocalPartPattern(localPart) ++ validateEmailLength(constructEmail(localPart))
+    if (errors.nonEmpty)
+      throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "Cannot create valid email address from group name" , errors.toSeq))
+  }
+
+  private def validateLocalPartPattern(str: String): Option[ErrorReport] = {
+    ManagedGroupService.LocalPartRe.findFirstMatchIn(str) match {
+      case Some(_) => None
+      case None => Option(ErrorReport(s"You have specified a group name that contains characters that are not permitted in an email address. Group name may only contain alphanumeric characters, underscores, and dashes"))
+    }
+  }
+
+  private val maxLength = 64
+  private def validateEmailLength(str: String): Option[ErrorReport] = {
+    if (str.length >= maxLength)
+      Option(ErrorReport(s"Email address '$str' is ${str.length} characters in length.  Email address length must be less than $maxLength"))
+    else
+      None
   }
 
   // Per dvoet, when asking for a group, we will just return the group email
@@ -51,9 +79,6 @@ class ManagedGroupService(resourceService: ResourceService, val resourceTypes: M
     resourceService.directoryDAO.loadGroup(WorkbenchGroupName(groupId.value)).map(_.map(_.email))
   }
 
-  // Run the "create" process in reverse
-  // 1. Delete the WorkbenchGroup
-  // 2. Delete the resource (which by its implementation also takes care of deleting all associated policies)
   def deleteManagedGroup(groupId: ResourceId) = {
     resourceService.directoryDAO.deleteGroup(WorkbenchGroupName(groupId.value))
     resourceService.deleteResource(Resource(managedGroupType.name, groupId))
@@ -63,4 +88,5 @@ class ManagedGroupService(resourceService: ResourceService, val resourceTypes: M
 object ManagedGroupService {
   val MemberRoleName = ResourceRoleName("member")
   val ManagedGroupTypeName = ResourceTypeName("managed-group")
+  val LocalPartRe = "^[A-z0-9_-]+$".r
 }
