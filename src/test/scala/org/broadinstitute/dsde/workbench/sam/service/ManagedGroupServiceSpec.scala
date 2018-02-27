@@ -83,7 +83,12 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
   // may not be actually confirming that the policies have been deleted.  They may still be in LDAP, just orphaned
   // because the resource no longer exists
   "ManagedGroupService delete" should "delete policies associated to that resource" in {
+    runAndWait(policyDAO.listAccessPolicies(expectedResource)).isEmpty shouldEqual false
+    runAndWait(policyDAO.loadPolicy(adminPolicy)).isDefined shouldEqual true
+    runAndWait(policyDAO.loadPolicy(memberPolicy)).isDefined shouldEqual true
+
     runAndWait(managedGroupService.deleteManagedGroup(resourceId))
+
     runAndWait(policyDAO.listAccessPolicies(expectedResource)).isEmpty shouldEqual true
     runAndWait(policyDAO.loadPolicy(adminPolicy)).isDefined shouldEqual false
     runAndWait(policyDAO.loadPolicy(memberPolicy)).isDefined shouldEqual false

@@ -20,9 +20,9 @@ class ManagedGroupService(resourceService: ResourceService, val resourceTypes: M
   // 1. Create new Resource with ResourceType: "managed-group"
   //    - This will also create the Admin Policy for this Resource
   //      - Admin Policy will grant "admin" role to the user specified by {user_info} on the newly created Resource
-  // 2. Create a new Policy (which is a SAM Group) for granting users the "member" role on the newly created Resource
+  // 2. Create a new Policy (which is a WorkbenchGroup) for granting users the "member" role on the newly created Resource
   //    - This new policy will be created with an empty set of Subjects
-  // 3. Create a new SAM Group for "All Managed Group Members"
+  // 3. Create a new SAM Group for "All Managed Group Members" that should be named with the id specified by the user
   //    - The set of Subjects in this group will be the Admin Policy (created in step 1) and the Members Policy (created in step 2)
   def createManagedGroup(groupId: ResourceId, userInfo: UserInfo): Future[Resource] = {
     // TODO: Do the policy emails need to be "nice" google group emails???
@@ -60,11 +60,16 @@ class ManagedGroupService(resourceService: ResourceService, val resourceTypes: M
     resourceService.directoryDAO.loadGroup(WorkbenchGroupName(groupId.value))
   }
 
-  def deleteManagedGroup(groupId: ResourceId) = resourceService.deleteResource(Resource(managedGroupType.name, groupId))
+  // Run the "create" process in reverse
+  // 1. Delete the WorkbenchGroup
+  // 2. Delete the resource (which by its implementation also takes care of deleting all associated policies)
+  def deleteManagedGroup(groupId: ResourceId) = {
+    resourceService.directoryDAO.deleteGroup(WorkbenchGroupName(groupId.value))
+    resourceService.deleteResource(Resource(managedGroupType.name, groupId))
+  }
 }
 
 object ManagedGroupService {
-  // TODO: Consider moving these to config/package.scala which seems to be where we're defining how to extract data from reference.conf
   val MemberRoleName = ResourceRoleName("member")
   val ManagedGroupTypeName = ResourceTypeName("managed-group")
 }

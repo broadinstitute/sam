@@ -26,6 +26,7 @@ class TestSamRoutes(resourceService: ResourceService, userService: UserService, 
   extends SamRoutes(resourceService, userService, statusService, managedGroupService, SwaggerConfig("", ""), directoryDAO) with MockUserInfoDirectives with ExtensionRoutes with ScalaFutures {
 
   def extensionRoutes: server.Route = reject
+  def mockDirectoryDao: MockDirectoryDAO = directoryDAO
 }
 
 object TestSamRoutes {
