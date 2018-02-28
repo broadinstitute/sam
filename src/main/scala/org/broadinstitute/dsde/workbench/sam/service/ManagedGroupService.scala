@@ -17,7 +17,6 @@ class ManagedGroupService(resourceService: ResourceService, val resourceTypes: M
   def managedGroupType: ResourceType = resourceTypes.getOrElse(ManagedGroupService.ManagedGroupTypeName, throw new WorkbenchException(s"resource type ${ManagedGroupService.ManagedGroupTypeName.value} not found"))
   def memberRole = managedGroupType.roles.find(_.roleName == ManagedGroupService.MemberRoleName).getOrElse(throw new WorkbenchException(s"${ManagedGroupService.MemberRoleName} role does not exist in $managedGroupType"))
 
-  // Important Note, see: org/broadinstitute/dsde/workbench/sam/model/SamModel.scala:90
   def createManagedGroup(groupId: ResourceId, userInfo: UserInfo): Future[Resource] = {
     for {
       managedGroup <- resourceService.createResource(managedGroupType, groupId, userInfo)
