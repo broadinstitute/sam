@@ -159,7 +159,7 @@ paths:
 
   /api/group/{groupName}:
     get:
-      summary: Show details of the group
+      summary: Show email address of the group
       responses:
         200:
           description: Group found
