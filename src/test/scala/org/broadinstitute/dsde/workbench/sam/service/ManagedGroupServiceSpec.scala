@@ -61,8 +61,15 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     makeResourceType()
     val intendedId = ResourceId(groupId)
     val intendedResource = Resource(ManagedGroupService.ManagedGroupTypeName, intendedId)
+
     val resource = runAndWait(managedGroupService.createManagedGroup(intendedId, dummyUserInfo))
     resource shouldEqual intendedResource
+
+    val policies = runAndWait(policyDAO.listAccessPolicies(resource))
+    policies.map(_.id.accessPolicyName.value) shouldEqual Set("admin", "member")
+    runAndWait(policyDAO.loadPolicy(ResourceAndPolicyName(resource, ownerPolicyName))) shouldBe a [Some[AccessPolicy]]
+    runAndWait(policyDAO.loadPolicy(ResourceAndPolicyName(resource, memberPolicyName))) shouldBe a [Some[AccessPolicy]]
+
     resource
   }
 
@@ -96,7 +103,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
       runAndWait(managedGroupService.createManagedGroup(ResourceId(groupName), dummyUserInfo))
     }
     exception.getMessage should include ("A resource of this type and name already exists")
-    runAndWait(managedGroupService.loadManagedGroup(resourceId)).isEmpty shouldEqual true
+    runAndWait(managedGroupService.loadManagedGroup(resourceId)) shouldEqual None
   }
 
   it should "fail when the group name is too long" in {
@@ -105,7 +112,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
       assertMakeGroup(groupName)
     }
     exception.getMessage should include ("Email address length must be shorter than 64 characters")
-    runAndWait(managedGroupService.loadManagedGroup(resourceId)).isEmpty shouldEqual true
+    runAndWait(managedGroupService.loadManagedGroup(resourceId)) shouldEqual None
   }
 
   it should "fail when the group name has invalid characters" in {
@@ -114,7 +121,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
       assertMakeGroup(groupName)
     }
     exception.getMessage should include ("Group name may only contain alphanumeric characters, underscores, and dashes")
-    runAndWait(managedGroupService.loadManagedGroup(resourceId)).isEmpty shouldEqual true
+    runAndWait(managedGroupService.loadManagedGroup(resourceId)) shouldEqual None
   }
 
   "ManagedGroupService get" should "return the Managed Group resource" in {
@@ -128,16 +135,13 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
   // because the resource no longer exists
   "ManagedGroupService delete" should "delete policies associated to that resource" in {
     assertMakeGroup()
-    runAndWait(policyDAO.listAccessPolicies(expectedResource)).isEmpty shouldEqual false
-    runAndWait(policyDAO.loadPolicy(adminPolicy)).isDefined shouldEqual true
-    runAndWait(policyDAO.loadPolicy(memberPolicy)).isDefined shouldEqual true
 
     val delResponse = runAndWait(managedGroupService.deleteManagedGroup(resourceId))
     delResponse shouldEqual ()
 
-    runAndWait(policyDAO.listAccessPolicies(expectedResource)).isEmpty shouldEqual true
-    runAndWait(policyDAO.loadPolicy(adminPolicy)).isDefined shouldEqual false
-    runAndWait(policyDAO.loadPolicy(memberPolicy)).isDefined shouldEqual false
+    runAndWait(policyDAO.listAccessPolicies(expectedResource)) shouldEqual Set.empty
+    runAndWait(policyDAO.loadPolicy(adminPolicy)) shouldEqual None
+    runAndWait(policyDAO.loadPolicy(memberPolicy)) shouldEqual None
   }
 
 }
