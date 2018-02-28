@@ -100,11 +100,10 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
 
       val resourceAndPolicyName = ResourceAndPolicyName(resource, policyName)
       val workbenchSubjects = members.values.flatten.toSet
-      val newPolicy = AccessPolicy(resourceAndPolicyName, workbenchSubjects, email, policyMembership.roles, policyMembership.actions)
 
       accessPolicyDAO.loadPolicy(resourceAndPolicyName).flatMap {
-        case None => createPolicy(resourceAndPolicyName, members, generateGroupEmail(), policyMembership.roles, policyMembership.actions)
-        case Some(accessPolicy) => accessPolicyDAO.overwritePolicy(AccessPolicy(resourceAndPolicyName, members, accessPolicy.email, policyMembership.roles, policyMembership.actions ))
+        case None => createPolicy(resourceAndPolicyName, workbenchSubjects, generateGroupEmail(), policyMembership.roles, policyMembership.actions)
+        case Some(accessPolicy) => accessPolicyDAO.overwritePolicy(AccessPolicy(resourceAndPolicyName, workbenchSubjects, accessPolicy.email, policyMembership.roles, policyMembership.actions ))
       } andThen {
         case Success(policy) => fireGroupUpdateNotification(policy.id)
       }
