@@ -40,30 +40,30 @@ class ManagedGroupService(resourceService: ResourceService, val resourceTypes: M
   }
 
   private def generateManagedGroupEmail(resourceId: ResourceId): WorkbenchEmail = {
-    val localPart = resourceId.value
-    validateEmail(localPart)
-    WorkbenchEmail(constructEmail(localPart))
+    val groupName = resourceId.value
+    validateGroupName(groupName)
+    WorkbenchEmail(constructEmail(groupName))
   }
 
-  private def constructEmail(localPart: String) = {
-    s"${localPart}@${resourceService.emailDomain}"
+  private def constructEmail(groupName: String) = {
+    s"${groupName}@${resourceService.emailDomain}"
   }
 
-  private def validateEmail(localPart: String) = {
-    val errors = validateLocalPartPattern(localPart) ++ validateEmailLength(constructEmail(localPart))
+  private def validateGroupName(groupName: String) = {
+    val errors = validateGroupNamePattern(groupName) ++ validateGroupNameLength(constructEmail(groupName))
     if (errors.nonEmpty)
       throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "Cannot create valid email address from group name" , errors.toSeq))
   }
 
-  private def validateLocalPartPattern(str: String): Option[ErrorReport] = {
-    ManagedGroupService.LocalPartRe.findFirstMatchIn(str) match {
-      case Some(_) => None
-      case None => Option(ErrorReport(s"You have specified a group name that contains characters that are not permitted in an email address. Group name may only contain alphanumeric characters, underscores, and dashes"))
+  private def validateGroupNamePattern(str: String): Option[ErrorReport] = {
+    str match {
+      case ManagedGroupService.GroupNameRe() => None
+      case _ => Option(ErrorReport(s"You have specified a group name that contains characters that are not permitted in an email address. Group name may only contain alphanumeric characters, underscores, and dashes"))
     }
   }
 
   private val maxLength = 64
-  private def validateEmailLength(str: String): Option[ErrorReport] = {
+  private def validateGroupNameLength(str: String): Option[ErrorReport] = {
     if (str.length >= maxLength)
       Option(ErrorReport(s"Email address '$str' is ${str.length} characters in length.  Email address length must be less than $maxLength"))
     else
@@ -84,5 +84,5 @@ class ManagedGroupService(resourceService: ResourceService, val resourceTypes: M
 object ManagedGroupService {
   val MemberRoleName = ResourceRoleName("member")
   val ManagedGroupTypeName = ResourceTypeName("managed-group")
-  val LocalPartRe = "^[A-z0-9_-]+$".r
+  val GroupNameRe = "^[A-z0-9_-]+$".r
 }
