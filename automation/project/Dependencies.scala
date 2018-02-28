@@ -9,9 +9,12 @@ object Dependencies {
   val workbenchModel: ModuleID = "org.broadinstitute.dsde.workbench" %% "workbench-model" % workbenchModelV
   val excludeWorkbenchModel = ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-model_2.11")
 
-  val workbenchGoogleV = "0.10-d97f551"
+  val workbenchGoogleV = "0.16-eac241e"
   val workbenchGoogle: ModuleID = "org.broadinstitute.dsde.workbench" %% "workbench-google" % workbenchGoogleV excludeAll excludeWorkbenchModel
   val excludeWorkbenchGoogle = ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-google_2.11")
+
+  val workbenchServiceTestV = "0.5-30b3ceb"
+  val workbenchServiceTest: ModuleID = "org.broadinstitute.dsde.workbench" %% "workbench-service-test" % workbenchServiceTestV % "test" classifier "tests" excludeAll (excludeWorkbenchGoogle, excludeWorkbenchModel)
 
   val rootDependencies = Seq(
     // proactively pull in latest versions of Jackson libs, instead of relying on the versions
@@ -38,7 +41,8 @@ object Dependencies {
     "org.scalatest"       %%  "scalatest"     % "3.0.1"   % "test",
     "org.seleniumhq.selenium" % "selenium-java" % "3.8.1" % "test",
     "com.typesafe.scala-logging" %% "scala-logging" % "3.1.0",
-    "org.broadinstitute.dsde.workbench" %% "workbench-service-test" % "0.1-edad3db-SNAP" % "test" classifier "tests" excludeAll (excludeWorkbenchGoogle, excludeWorkbenchModel),
+
+    workbenchServiceTest,
     workbenchModel,
     workbenchGoogle,
 

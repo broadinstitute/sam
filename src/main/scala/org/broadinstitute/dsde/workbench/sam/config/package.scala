@@ -1,15 +1,12 @@
 package org.broadinstitute.dsde.workbench.sam
 
-import java.io.StringReader
-
-import com.google.api.client.googleapis.auth.oauth2.GoogleClientSecrets
 import com.google.api.client.json.jackson2.JacksonFactory
+import com.typesafe.config._
 import net.ceedubs.ficus.readers.ValueReader
 import org.broadinstitute.dsde.workbench.sam.model._
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.model.google._
 import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
-import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
 
 /**
   * Created by dvoet on 7/18/17.
@@ -22,20 +19,28 @@ package object config {
     )
   }
 
-  implicit val resourceRoleReader: ValueReader[ResourceRole] = ValueReader.relative { config =>
-    ResourceRole(
-      ResourceRoleName(config.getString("roleName")),
-      config.as[Set[String]]("roleActions").map(ResourceAction)
-    )
+  def unquote(str: String): String = str.replace("\"", "")
+
+  implicit object resourceRoleReader extends ValueReader[ResourceRole] {
+    override def read(config: Config, path: String): ResourceRole = {
+      val uqPath = unquote(path)
+      ResourceRole(
+        ResourceRoleName(uqPath),
+        config.as[Set[String]](s"$uqPath.roleActions").map(ResourceAction)
+      )
+    }
   }
 
-  implicit val resourceTypeReader: ValueReader[ResourceType] = ValueReader.relative { config =>
-    ResourceType(
-      ResourceTypeName(config.getString("name")),
-      config.as[Set[String]]("actionPatterns").map(ResourceActionPattern),
-      config.as[Set[ResourceRole]]("roles"),
-      ResourceRoleName(config.getString("ownerRoleName"))
-    )
+  implicit object resourceTypeReader extends ValueReader[ResourceType] {
+    override def read(config: Config, path: String): ResourceType = {
+      val uqPath = unquote(path)
+      ResourceType(
+        ResourceTypeName(uqPath),
+        config.as[Set[String]](s"$uqPath.actionPatterns").map(ResourceActionPattern),
+        config.as[Map[String, ResourceRole]](s"$uqPath.roles").values.toSet,
+        ResourceRoleName(config.getString(s"$uqPath.ownerRoleName"))
+      )
+    }
   }
 
   implicit val directoryConfigReader: ValueReader[DirectoryConfig] = ValueReader.relative { config =>

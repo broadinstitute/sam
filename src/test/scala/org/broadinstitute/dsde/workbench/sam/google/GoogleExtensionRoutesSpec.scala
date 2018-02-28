@@ -38,13 +38,17 @@ import scala.concurrent.{ExecutionContext, Future}
 class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest with TestSupport with MockitoSugar {
   val defaultUserId = WorkbenchUserId("newuser123")
   val defaultUserEmail = WorkbenchEmail("newuser@new.com")
+/* Re-enable this code and remove the temporary code below after fixing rawls for GAWB-2933
   val defaultUserProxyEmail = WorkbenchEmail(s"newuser_$defaultUserId@${googleServicesConfig.appsDomain}")
+*/
+  val defaultUserProxyEmail = WorkbenchEmail(s"PROXY_$defaultUserId@${googleServicesConfig.appsDomain}")
+/**/
 
   lazy val config = ConfigFactory.load()
   lazy val petServiceAccountConfig = config.as[PetServiceAccountConfig]("petServiceAccount")
   lazy val googleServicesConfig = config.as[GoogleServicesConfig]("googleServices")
 
-  val configResourceTypes = config.as[Set[ResourceType]]("resourceTypes").map(rt => rt.name -> rt).toMap
+  val configResourceTypes = config.as[Map[String, ResourceType]]("resourceTypes").values.map(rt => rt.name -> rt).toMap
 
   def withDefaultRoutes[T](testCode: TestSamRoutes => T): T = {
     val googleDirectoryDAO = new MockGoogleDirectoryDAO()
@@ -105,13 +109,48 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
       response shouldBe defaultUserProxyEmail
     }
   }
+
+  it should "return a user's proxy group from a pet service account" in withDefaultRoutes { samRoutes =>
+    val googleDirectoryDAO = new MockGoogleDirectoryDAO()
+    val directoryDAO = new MockDirectoryDAO()
+    val googleIamDAO = new MockGoogleIamDAO()
+    val policyDAO = new MockAccessPolicyDAO()
+    val pubSubDAO = new MockGooglePubSubDAO()
+    val googleStorageDAO = new MockGoogleStorageDAO()
+    val cloudKeyCache = new GoogleKeyCache(googleIamDAO, googleStorageDAO, pubSubDAO, googleServicesConfig, petServiceAccountConfig)
+    val googleExt = new GoogleExtensions(directoryDAO, policyDAO, googleDirectoryDAO, pubSubDAO, googleIamDAO, null, cloudKeyCache, googleServicesConfig, petServiceAccountConfig, configResourceTypes(CloudExtensions.resourceTypeName))
+
+    // create a user
+    Post("/register/user") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Created
+      responseAs[UserStatus] shouldEqual UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
+    }
+
+    val petEmail = Get("/api/google/user/petServiceAccount/myproject") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      val response = responseAs[WorkbenchEmail]
+      response.value should endWith (s"@myproject.iam.gserviceaccount.com")
+      response.value
+    }
+
+    Get(s"/api/google/user/proxyGroup/$petEmail") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      val response = responseAs[WorkbenchEmail]
+      response shouldBe defaultUserProxyEmail
+    }
+  }
+
   private val name = ResourceType(ResourceTypeName("rt"), Set(SamResourceActionPatterns.alterPolicies, ResourceActionPattern("can_compute"), SamResourceActionPatterns.readPolicies), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("alter_policies"), ResourceAction("read_policies")))), ResourceRoleName("owner"))
   private val resourceType = ResourceType(ResourceTypeName("rt"), Set(SamResourceActionPatterns.alterPolicies, ResourceActionPattern("can_compute"), SamResourceActionPatterns.readPolicies), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("alter_policies"), ResourceAction("read_policies")))), ResourceRoleName("owner"))
 
   "POST /api/google/policy/{resourceTypeName}/{resourceId}/{accessPolicyName}/sync" should "204 Create Google group for policy" in {
     val resourceTypes = Map(resourceType.name -> resourceType)
     val defaultUserInfo = UserInfo(OAuth2BearerToken("accessToken"), WorkbenchUserId("user123"), WorkbenchEmail("user1@example.com"), 0)
+/* Re-enable this code and remove the temporary code below after fixing rawls for GAWB-2933
     val defaultUserProxyEmail = WorkbenchEmail(s"user1_user123@${googleServicesConfig.appsDomain}")
+*/
+    val defaultUserProxyEmail = WorkbenchEmail(s"PROXY_user123@${googleServicesConfig.appsDomain}")
+/**/
     val googleDirectoryDAO = new MockGoogleDirectoryDAO()
     val directoryDAO = new MockDirectoryDAO()
     val googleIamDAO = new MockGoogleIamDAO()

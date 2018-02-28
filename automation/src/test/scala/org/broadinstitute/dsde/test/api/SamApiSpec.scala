@@ -1,17 +1,19 @@
-package org.broadinstitute.dsde.test.api.sam
+package org.broadinstitute.dsde.test.api
 
+import akka.http.scaladsl.model.headers
+import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import org.broadinstitute.dsde.workbench.service.{Orchestration, Sam, Thurloe}
 import org.broadinstitute.dsde.workbench.service.Sam.user.UserStatusDetails
 import org.broadinstitute.dsde.workbench.auth.{AuthToken, ServiceAccountAuthTokenFromJson, ServiceAccountAuthTokenFromPem}
 import org.broadinstitute.dsde.workbench.config.{Config, Credentials, UserPool}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.dao.Google.googleIamDAO
-import org.broadinstitute.dsde.workbench.fixture.BillingFixtures
+import org.broadinstitute.dsde.workbench.fixture.{BillingFixtures, GPAllocFixtures}
 import org.broadinstitute.dsde.workbench.service.test.CleanUp
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountName}
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.time.{Seconds, Span}
-import org.scalatest.{FreeSpec, Matchers}
+import org.scalatest.{DoNotDiscover, FreeSpec, Matchers}
 
 class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaFutures with CleanUp {
   implicit override val patienceConfig: PatienceConfig = PatienceConfig(timeout = scaled(Span(5, Seconds)))
@@ -85,13 +87,12 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
       val userAuthToken: AuthToken = anyUser.makeAuthToken()
 
       val owner: Credentials = UserPool.chooseProjectOwner
-      val ownerAuthToken: AuthToken = owner.makeAuthToken()
 
       // set auth tokens explicitly to control which credentials are used
 
       val userStatus = Sam.user.status()(userAuthToken).get
 
-      withBillingProject("auto-sam") { projectName =>
+      withCleanBillingProject(owner) { projectName =>
         // ensure known state for pet (not present)
 
         Sam.removePet(projectName, userStatus.userInfo)
@@ -100,7 +101,6 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
         val petAccountEmail = Sam.user.petServiceAccountEmail(projectName)(userAuthToken)
         petAccountEmail.value should not be userStatus.userInfo.userEmail
         findPetInGoogle(projectName, userStatus.userInfo).map(_.email) shouldBe Some(petAccountEmail)
-
 
         // first call should create pet.  confirm that a second call to create/retrieve gives the same results
         Sam.user.petServiceAccountEmail(projectName)(userAuthToken) shouldBe petAccountEmail
@@ -116,7 +116,7 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
 
         Sam.removePet(projectName, userStatus.userInfo)
         findPetInGoogle(projectName, userStatus.userInfo) shouldBe None
-      }(ownerAuthToken)
+      }
     }
 
     "should not treat non-pet service accounts as pets" in {
@@ -147,14 +147,46 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
       val proxyGroup2_1 = Sam.user.proxyGroup(email2.value)(authToken1)
       val proxyGroup2_2 = Sam.user.proxyGroup(email2.value)(authToken2)
 
+/* Re-enable this code and remove the temporary code below after fixing rawls for GAWB-2933
       val expectedProxyEmail1 = s"${username1}_$userId1@${Config.GCS.appsDomain}"
+*/
+      val expectedProxyEmail1 = s"PROXY_$userId1@${Config.GCS.appsDomain}"
+/**/
       proxyGroup1_1 shouldBe WorkbenchEmail(expectedProxyEmail1)
       proxyGroup1_2 shouldBe WorkbenchEmail(expectedProxyEmail1)
 
+/* Re-enable this code and remove the temporary code below after fixing rawls for GAWB-2933
       val expectedProxyEmail2 = s"${username2}_$userId2@${Config.GCS.appsDomain}"
+*/
+      val expectedProxyEmail2 = s"PROXY_$userId2@${Config.GCS.appsDomain}"
+/**/
       proxyGroup2_1 shouldBe WorkbenchEmail(expectedProxyEmail2)
       proxyGroup2_2 shouldBe WorkbenchEmail(expectedProxyEmail2)
     }
+
+    "should retrieve a user's proxy group from a pet service account email as any user" in {
+      val Seq(user1: Credentials, user2: Credentials) = UserPool.chooseStudents(2)
+      val authToken1: AuthToken = user1.makeAuthToken()
+      val authToken2: AuthToken = user2.makeAuthToken()
+
+      val email = WorkbenchEmail(Sam.user.status()(authToken1).get.userInfo.userEmail)
+      val username = email.value.split("@").head
+      val userId = Sam.user.status()(authToken1).get.userInfo.userSubjectId
+
+      val petSAEmail = Sam.user.petServiceAccountEmail(Config.Projects.default)(authToken1)
+
+      val proxyGroup_1 = Sam.user.proxyGroup(petSAEmail.value)(authToken1)
+      val proxyGroup_2 = Sam.user.proxyGroup(petSAEmail.value)(authToken2)
+
+/* Re-enable this code and remove the temporary code below after fixing rawls for GAWB-2933
+      val expectedProxyEmail = s"${username}_$userId@${Config.GCS.appsDomain}"
+*/
+      val expectedProxyEmail = s"PROXY_$userId@${Config.GCS.appsDomain}"
+/**/
+      proxyGroup_1 shouldBe WorkbenchEmail(expectedProxyEmail)
+      proxyGroup_2 shouldBe WorkbenchEmail(expectedProxyEmail)
+    }
+
 
     "should furnish a new service account key and cache it for further retrievals" in {
       val user = UserPool.chooseStudent

@@ -42,8 +42,8 @@ object Boot extends App with LazyLogging {
     val directoryDAO = new JndiDirectoryDAO(directoryConfig)
     val schemaDAO = new JndiSchemaDAO(directoryConfig)
 
-    val configResourceTypes = config.as[Set[ResourceType]]("resourceTypes")
-    val resourceTypes = configResourceTypes.map(rt => rt.name -> rt).toMap
+    val resourceTypes = config.as[Map[String, ResourceType]]("resourceTypes").values.toSet
+    val resourceTypeMap = resourceTypes.map(rt => rt.name -> rt).toMap
 
     val cloudExt = googleServicesConfigOption match {
       case Some(googleServicesConfig) =>
@@ -54,11 +54,11 @@ object Boot extends App with LazyLogging {
         val googleStorageDAO = new HttpGoogleStorageDAO(googleServicesConfig.appName, Pem(WorkbenchEmail(googleServicesConfig.serviceAccountClientId), new File(googleServicesConfig.pemFile)), "google")
         val googleKeyCache = new GoogleKeyCache(googleIamDAO, googleStorageDAO, googlePubSubDAO, googleServicesConfig, petServiceAccountConfig)
 
-        new GoogleExtensions(directoryDAO, accessPolicyDAO, googleDirectoryDAO, googlePubSubDAO, googleIamDAO, googleStorageDAO, googleKeyCache, googleServicesConfig, petServiceAccountConfig, resourceTypes(CloudExtensions.resourceTypeName))
+        new GoogleExtensions(directoryDAO, accessPolicyDAO, googleDirectoryDAO, googlePubSubDAO, googleIamDAO, googleStorageDAO, googleKeyCache, googleServicesConfig, petServiceAccountConfig, resourceTypeMap(CloudExtensions.resourceTypeName))
       case None => NoExtensions
     }
 
-    val resourceService = new ResourceService(resourceTypes, accessPolicyDAO, directoryDAO, cloudExt, config.getString("googleServices.appsDomain"))
+    val resourceService = new ResourceService(resourceTypeMap, accessPolicyDAO, directoryDAO, cloudExt, config.getString("googleServices.appsDomain"))
     val userService = new UserService(directoryDAO, cloudExt)
     val statusService = new StatusService(directoryDAO, cloudExt, 10 seconds)
     val managedGroupService = new ManagedGroupService(resourceService, resourceTypes)
@@ -78,7 +78,7 @@ object Boot extends App with LazyLogging {
           throw t
       }
 
-      _ <- Future.traverse(configResourceTypes.map(_.name)) { accessPolicyDAO.createResourceType } recover {
+      _ <- Future.traverse(resourceTypes.map(_.name)) { accessPolicyDAO.createResourceType } recover {
         case t: Throwable =>
           logger.error("FATAL - unable to init resource types", t)
           throw t
