@@ -36,7 +36,6 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
   def assertCreateGroup(samRoutes: TestSamRoutes, groupId: String = groupId): Unit = {
     Post(s"/api/group/$groupId") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
-      responseAs[String] shouldEqual StatusCodes.Created.defaultMessage
     }
   }
 
@@ -44,20 +43,16 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
     Get(s"/api/group/$groupId") ~> samRoutes.route ~> check {
       val expectedResource = Resource(ManagedGroupService.ManagedGroupTypeName, ResourceId(groupId))
       status shouldEqual StatusCodes.OK
-      responseAs[String] should include (s"${groupId}@${samRoutes.resourceService.emailDomain}")
-      responseAs[String] shouldNot include(ResourceAndPolicyName(expectedResource, memberPolicyName).toString())
-      responseAs[String] shouldNot include(ResourceAndPolicyName(expectedResource, ownerPolicyName).toString())
     }
   }
 
   def assertDeleteGroup(samRoutes: TestSamRoutes, groupId: String = groupId) = {
     Delete(s"/api/group/$groupId") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NoContent
-      responseAs[String].isEmpty shouldEqual true
     }
   }
 
-  "POST /api/group/{groupName}" should "create a new managed group with a 201 response code" in {
+  "POST /api/group/{groupName}" should "respond 201 if the group did not already exist" in {
     val samRoutes = TestSamRoutes(resourceTypes)
     assertGroupDoesNotExist(samRoutes)
     assertCreateGroup(samRoutes)
@@ -69,7 +64,6 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
     assertGetGroup(samRoutes)
     Post(s"/api/group/$groupId") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Conflict
-      responseAs[String] should include ("A resource of this type and name already exists")
     }
   }
 
@@ -81,7 +75,6 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
     val badGroupName = "bad$name"
     Post(s"/api/group/$badGroupName") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.BadRequest
-      responseAs[String] should include ("characters that are not permitted")
     }
   }
 
@@ -93,18 +86,10 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
     val badGroupName = "X" * 64
     Post(s"/api/group/$badGroupName") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.BadRequest
-      responseAs[String] should include ("Email address length must be less than")
     }
   }
 
-  "GET /api/group/{groupName}" should "return a flattened list of users who are in this group" in {
-    val samRoutes = TestSamRoutes(resourceTypes)
-    assertGroupDoesNotExist(samRoutes)
-    assertCreateGroup(samRoutes)
-    assertGetGroup(samRoutes)
-  }
-
-  "DELETE /api/group/{groupName}" should "delete the group, member groups, and all associated policies when the authenticated user is an owner of the group" in {
+  "DELETE /api/group/{groupName}" should "should respond with 204 when the group is successfully deleted" in {
     val samRoutes = TestSamRoutes(resourceTypes)
     assertCreateGroup(samRoutes)
     assertGetGroup(samRoutes)
@@ -112,7 +97,7 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
     assertGroupDoesNotExist(samRoutes)
   }
 
-  it should "fail if the authenticated user user is not an owner of the group" in {
+  it should "fail with 404 if the authenticated user is not in the owner policy for the group" in {
     val defaultRoutes = TestSamRoutes(resourceTypes)
     assertCreateGroup(defaultRoutes)
     assertGetGroup(defaultRoutes)

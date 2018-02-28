@@ -15,6 +15,7 @@ import org.scalatest._
 import net.ceedubs.ficus.Ficus._
 
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.runtime.BoxedUnit
 
 /**
   * Created by gpolumbo on 2/21/2018
@@ -42,7 +43,8 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
   private val defaultRoles = Set(defaultOwnerRole, ResourceRole(ManagedGroupService.MemberRoleName, Set.empty))
   private val managedGroupResourceType = ResourceType(ManagedGroupService.ManagedGroupTypeName, resourceActionPatterns, defaultRoles, ownerRoleName)
   private val resourceTypes = Map(managedGroupResourceType.name -> managedGroupResourceType)
-  private val resourceService = new ResourceService(resourceTypes, policyDAO, dirDAO, NoExtensions, "example.com")
+  private val testDomain = "example.com"
+  private val resourceService = new ResourceService(resourceTypes, policyDAO, dirDAO, NoExtensions, testDomain)
 
   val managedGroupService = new ManagedGroupService(resourceService, resourceTypes)
 
@@ -55,9 +57,13 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
 
   def makeResourceType(): ResourceTypeName = runAndWait(resourceService.createResourceType(managedGroupResourceType))
 
-  def makeGroup(groupId: String = resourceId.value): Resource = {
+  def assertMakeGroup(groupId: String = resourceId.value): Resource = {
     makeResourceType()
-    runAndWait(managedGroupService.createManagedGroup(ResourceId(groupId), dummyUserInfo))
+    val intendedId = ResourceId(groupId)
+    val intendedResource = Resource(ManagedGroupService.ManagedGroupTypeName, intendedId)
+    val resource = runAndWait(managedGroupService.createManagedGroup(intendedId, dummyUserInfo))
+    resource shouldEqual intendedResource
+    resource
   }
 
   before {
@@ -66,54 +72,68 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
   }
 
   "ManagedGroupService create" should "create a managed group with admin and member policies" in {
-    makeGroup()
+    assertMakeGroup()
     val policies = runAndWait(policyDAO.listAccessPolicies(expectedResource))
     policies.map(_.id.accessPolicyName.value) shouldEqual Set("admin", "member")
   }
 
   it should "create a workbenchGroup with the same name as the Managed Group" in {
-    makeGroup()
+    assertMakeGroup()
     val samGroup: Option[BasicWorkbenchGroup] = runAndWait(dirDAO.loadGroup(WorkbenchGroupName(resourceId.value)))
     samGroup.value.id.value shouldEqual resourceId.value
   }
 
   it should "create a workbenchGroup with 2 member WorkbenchSubjects" in {
-    makeGroup()
+    assertMakeGroup()
     val samGroup: Option[BasicWorkbenchGroup] = runAndWait(dirDAO.loadGroup(WorkbenchGroupName(resourceId.value)))
     samGroup.value.members shouldEqual Set(adminPolicy, memberPolicy)
   }
 
+  it should "fail when trying to create a group that already exists" in {
+    val groupName = "uniqueName"
+    assertMakeGroup(groupName)
+    val exception = intercept[WorkbenchExceptionWithErrorReport] {
+      runAndWait(managedGroupService.createManagedGroup(ResourceId(groupName), dummyUserInfo))
+    }
+    exception.getMessage should include ("A resource of this type and name already exists")
+    runAndWait(managedGroupService.loadManagedGroup(resourceId)).isEmpty shouldEqual true
+  }
+
   it should "fail when the group name is too long" in {
     val groupName = "a" * 64
-    intercept[WorkbenchExceptionWithErrorReport] {
-      makeGroup(groupName)
+    val exception = intercept[WorkbenchExceptionWithErrorReport] {
+      assertMakeGroup(groupName)
     }
-    runAndWait(managedGroupService.loadManagedGroup(resourceId)).isDefined shouldEqual false
+    exception.getMessage should include ("Email address length must be shorter than 64 characters")
+    runAndWait(managedGroupService.loadManagedGroup(resourceId)).isEmpty shouldEqual true
   }
 
   it should "fail when the group name has invalid characters" in {
     val groupName = "Make It Rain!!! $$$$$"
-    intercept[WorkbenchExceptionWithErrorReport] {
-      makeGroup(groupName)
+    val exception = intercept[WorkbenchExceptionWithErrorReport] {
+      assertMakeGroup(groupName)
     }
-    runAndWait(managedGroupService.loadManagedGroup(resourceId)).isDefined shouldEqual false
+    exception.getMessage should include ("Group name may only contain alphanumeric characters, underscores, and dashes")
+    runAndWait(managedGroupService.loadManagedGroup(resourceId)).isEmpty shouldEqual true
   }
 
   "ManagedGroupService get" should "return the Managed Group resource" in {
-    makeGroup()
-    runAndWait(managedGroupService.loadManagedGroup(resourceId)).isDefined shouldEqual true
+    assertMakeGroup()
+    val maybeEmail = runAndWait(managedGroupService.loadManagedGroup(resourceId))
+    maybeEmail.value.value shouldEqual s"${resourceId.value}@$testDomain"
   }
 
   // NOTE: All since we don't have a way to look up policies directly without going through a Resource, this test
   // may not be actually confirming that the policies have been deleted.  They may still be in LDAP, just orphaned
   // because the resource no longer exists
   "ManagedGroupService delete" should "delete policies associated to that resource" in {
-    makeGroup()
+    assertMakeGroup()
     runAndWait(policyDAO.listAccessPolicies(expectedResource)).isEmpty shouldEqual false
     runAndWait(policyDAO.loadPolicy(adminPolicy)).isDefined shouldEqual true
     runAndWait(policyDAO.loadPolicy(memberPolicy)).isDefined shouldEqual true
 
-    runAndWait(managedGroupService.deleteManagedGroup(resourceId))
+    val delResponse = runAndWait(managedGroupService.deleteManagedGroup(resourceId))
+    delResponse shouldEqual ()
 
     runAndWait(policyDAO.listAccessPolicies(expectedResource)).isEmpty shouldEqual true
     runAndWait(policyDAO.loadPolicy(adminPolicy)).isDefined shouldEqual false

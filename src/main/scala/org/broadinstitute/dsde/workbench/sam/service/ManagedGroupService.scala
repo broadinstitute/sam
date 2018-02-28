@@ -52,7 +52,7 @@ class ManagedGroupService(resourceService: ResourceService, val resourceTypes: M
   private def validateGroupName(groupName: String) = {
     val errors = validateGroupNamePattern(groupName) ++ validateGroupNameLength(constructEmail(groupName))
     if (errors.nonEmpty)
-      throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "Cannot create valid email address from group name" , errors.toSeq))
+      throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "Cannot create valid email address with the group name provided" , errors.toSeq))
   }
 
   private def validateGroupNamePattern(str: String): Option[ErrorReport] = {
@@ -65,7 +65,7 @@ class ManagedGroupService(resourceService: ResourceService, val resourceTypes: M
   private val maxLength = 64
   private def validateGroupNameLength(str: String): Option[ErrorReport] = {
     if (str.length >= maxLength)
-      Option(ErrorReport(s"Email address '$str' is ${str.length} characters in length.  Email address length must be less than $maxLength"))
+      Option(ErrorReport(s"Email address '$str' is ${str.length} characters in length.  Email address length must be shorter than $maxLength characters"))
     else
       None
   }
