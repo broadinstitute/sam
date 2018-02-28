@@ -181,8 +181,10 @@ paths:
     post:
       summary: Create a new group
       responses:
-        204:
+        201:
           description: Group created
+        409:
+          description: Group already exists
         500:
           description: Internal Error
           schema:

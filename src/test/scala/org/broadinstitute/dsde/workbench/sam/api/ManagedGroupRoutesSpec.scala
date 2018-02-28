@@ -1,6 +1,6 @@
 package org.broadinstitute.dsde.workbench.sam.api
 
-import akka.http.scaladsl.model.StatusCodes
+import akka.http.scaladsl.model.{StatusCodes, Uri}
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import akka.http.scaladsl.testkit.ScalatestRouteTest
 import org.broadinstitute.dsde.workbench.model.{UserInfo, WorkbenchEmail, WorkbenchUserId}
@@ -35,8 +35,8 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
 
   def assertCreateGroup(samRoutes: TestSamRoutes, groupId: String = groupId): Unit = {
     Post(s"/api/group/$groupId") ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.NoContent
-      responseAs[String].isEmpty shouldEqual true
+      status shouldEqual StatusCodes.Created
+      responseAs[String] shouldEqual StatusCodes.Created.defaultMessage
     }
   }
 
@@ -57,11 +57,44 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
     }
   }
 
-  //  "POST /api/group/{groupName}" should "create a new managed group, the owner group, and the members group, and the All Group and all policies for those groups" in {
-  "POST /api/group/{groupName}" should "create a new managed group with a 204 response code" in {
+  "POST /api/group/{groupName}" should "create a new managed group with a 201 response code" in {
     val samRoutes = TestSamRoutes(resourceTypes)
     assertGroupDoesNotExist(samRoutes)
     assertCreateGroup(samRoutes)
+  }
+
+  it should "fail with a 409 if the group already exists" in {
+    val samRoutes = TestSamRoutes(resourceTypes)
+    assertCreateGroup(samRoutes)
+    assertGetGroup(samRoutes)
+    Post(s"/api/group/$groupId") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Conflict
+      responseAs[String] should include ("A resource of this type and name already exists")
+    }
+  }
+
+  it should "fail with a 400 if the group name contains invalid characters" in {
+    val samRoutes = TestSamRoutes(resourceTypes)
+    assertCreateGroup(samRoutes)
+    assertGetGroup(samRoutes)
+
+    val badGroupName = "bad$name"
+    Post(s"/api/group/$badGroupName") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.BadRequest
+      responseAs[String] should include ("characters that are not permitted")
+    }
+  }
+
+  it should "fail with a 400 if the group name contains 64 or more characters" in {
+    val samRoutes = TestSamRoutes(resourceTypes)
+    assertCreateGroup(samRoutes)
+    assertGetGroup(samRoutes)
+
+    val badGroupName = "X" * 64
+    Post(s"/api/group/$badGroupName") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.BadRequest
+      responseAs[String] should include ("Email address length must be less than")
+    }
   }
 
   "GET /api/group/{groupName}" should "return a flattened list of users who are in this group" in {

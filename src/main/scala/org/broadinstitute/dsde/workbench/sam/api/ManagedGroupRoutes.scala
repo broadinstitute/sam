@@ -50,7 +50,7 @@ trait ManagedGroupRoutes extends UserInfoDirectives with SecurityDirectives {
   }
 
   private def handlePostGroup(groupId: String, userInfo: UserInfo) = {
-    complete(managedGroupService.createManagedGroup(ResourceId(groupId), userInfo).map(_ => StatusCodes.NoContent))
+    complete(managedGroupService.createManagedGroup(ResourceId(groupId), userInfo).map(_ => StatusCodes.Created))
   }
 
   private def handleDeleteGroup(groupId: String, userInfo: UserInfo) = {
