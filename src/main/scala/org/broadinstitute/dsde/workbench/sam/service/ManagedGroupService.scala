@@ -40,9 +40,6 @@ class ManagedGroupService(resourceService: ResourceService, val resourceTypes: M
     resourceService.directoryDAO.createGroup(BasicWorkbenchGroup(workbenchGroupName, groupMembers, email))
   }
 
-  // TODO: should be named with {ResourceId.value}@firecloud.org, needs validations on length, "google validity", and uniqueness
-  // Answer: keep it simple - just the group ID @ domain, make sure it's valid characters and all less than 64 chars
-  // Read RAWLS org.broadinstitute.dsde.rawls.user.UserService#createManagedGroup on how it validates emails (see also: https://support.google.com/a/answer/33386?hl=en&vid=0-237593324832-1519419282150)
   private def generateManagedGroupEmail(resourceId: ResourceId): WorkbenchEmail = {
     val localPart = resourceId.value
     validateEmail(localPart)
