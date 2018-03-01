@@ -27,10 +27,11 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     val accessPolicyDAO = new MockAccessPolicyDAO()
     val directoryDAO = new MockDirectoryDAO()
 
-    val mockResourceService = new ResourceService(resourceTypes, accessPolicyDAO, directoryDAO, NoExtensions, "example.com")
+    val emailDomain = "example.com"
+    val mockResourceService = new ResourceService(resourceTypes, accessPolicyDAO, directoryDAO, NoExtensions, emailDomain)
     val mockUserService = new UserService(directoryDAO, NoExtensions)
     val mockStatusService = new StatusService(directoryDAO, NoExtensions)
-    val mockManagedGroupService = new ManagedGroupService(mockResourceService, resourceTypes)
+    val mockManagedGroupService = new ManagedGroupService(mockResourceService, resourceTypes, accessPolicyDAO, directoryDAO, emailDomain)
 
     new TestSamRoutes(mockResourceService, mockUserService, mockStatusService, mockManagedGroupService, userInfo, directoryDAO)
   }

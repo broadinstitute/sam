@@ -17,7 +17,7 @@ import scala.util.Success
 /**
   * Created by mbemis on 5/22/17.
   */
-class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceType], val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExtensions, val emailDomain: String)(implicit val executionContext: ExecutionContext) extends LazyLogging {
+class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceType], private val accessPolicyDAO: AccessPolicyDAO, private val directoryDAO: DirectoryDAO, private val cloudExtensions: CloudExtensions, private val emailDomain: String)(implicit val executionContext: ExecutionContext) extends LazyLogging {
   def getResourceTypes(): Future[Map[ResourceTypeName, ResourceType]] = {
     Future.successful(resourceTypes)
   }

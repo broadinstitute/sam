@@ -90,7 +90,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
 
       val policies2 = runAndWait(service.createResource(defaultResourceType, resourceName2, dummyUserInfo))
 
-      runAndWait(service.accessPolicyDAO.createPolicy(AccessPolicy(ResourceAndPolicyName(policies2, AccessPolicyName(otherRoleName.value)), Set(dummyUserInfo.userId), WorkbenchEmail("a@b.c"), Set(otherRoleName), Set.empty)))
+      runAndWait(policyDAO.createPolicy(AccessPolicy(ResourceAndPolicyName(policies2, AccessPolicyName(otherRoleName.value)), Set(dummyUserInfo.userId), WorkbenchEmail("a@b.c"), Set(otherRoleName), Set.empty)))
 
       assertResult(defaultResourceType.roles.filter(_.roleName.equals(ResourceRoleName("owner"))).head.actions) {
         runAndWait(service.listUserResourceActions(Resource(defaultResourceType.name, resourceName1), dummyUserInfo))
@@ -159,7 +159,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     val resourceName = ResourceId("resource")
     val resource = Resource(defaultResourceType.name, resourceName)
 
-    runAndWait(service.directoryDAO.createUser(WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)))
+    runAndWait(dirDAO.createUser(WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)))
 
     runAndWait(service.createResourceType(defaultResourceType))
     runAndWait(service.createResource(defaultResourceType, resourceName, dummyUserInfo))
@@ -169,7 +169,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     roles shouldEqual Set(ResourceRoleName("owner"))
 
     runAndWait(service.deleteResource(resource))
-    runAndWait(service.directoryDAO.deleteUser(dummyUserInfo.userId))
+    runAndWait(dirDAO.deleteUser(dummyUserInfo.userId))
   }
 
   it should "return an empty set when the resource doesn't exist" in {
@@ -177,13 +177,13 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     val resourceType = ResourceType(ResourceTypeName(UUID.randomUUID().toString), Set(ResourceActionPattern("a1")), Set(ResourceRole(ownerRoleName, Set(ResourceAction("a1")))), ownerRoleName)
     val resourceName = ResourceId("resource")
 
-    runAndWait(service.directoryDAO.createUser(WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)))
+    runAndWait(dirDAO.createUser(WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)))
 
     val roles = runAndWait(service.listUserResourceRoles(Resource(resourceType.name, resourceName), dummyUserInfo))
 
     roles shouldEqual Set.empty
 
-    runAndWait(service.directoryDAO.deleteUser(dummyUserInfo.userId))
+    runAndWait(dirDAO.deleteUser(dummyUserInfo.userId))
   }
 
   "listResourcePolicies" should "list policies for a newly created resource" in {

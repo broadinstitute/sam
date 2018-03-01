@@ -46,7 +46,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
   private val testDomain = "example.com"
   private val resourceService = new ResourceService(resourceTypes, policyDAO, dirDAO, NoExtensions, testDomain)
 
-  val managedGroupService = new ManagedGroupService(resourceService, resourceTypes)
+  private val managedGroupService = new ManagedGroupService(resourceService, resourceTypes, policyDAO, dirDAO, testDomain)
 
   private val dummyUserInfo = UserInfo(OAuth2BearerToken("token"), WorkbenchUserId("userid"), WorkbenchEmail("user@company.com"), 0)
 

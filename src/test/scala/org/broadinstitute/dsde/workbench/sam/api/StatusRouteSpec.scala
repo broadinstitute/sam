@@ -38,10 +38,11 @@ class StatusRouteSpec extends FlatSpec with Matchers with ScalatestRouteTest wit
     val directoryDAO = new MockDirectoryDAO()
     val policyDAO = new MockAccessPolicyDAO()
 
-    val mockResourceService = new ResourceService(Map.empty, policyDAO, directoryDAO, NoExtensions, "example.com")
+    val emailDomain = "example.com"
+    val mockResourceService = new ResourceService(Map.empty, policyDAO, directoryDAO, NoExtensions, emailDomain)
     val mockUserService = new UserService(directoryDAO, NoExtensions)
     val mockStatusService = new StatusService(directoryDAO, NoExtensions)
-    val mockManagedGroupService = new ManagedGroupService(mockResourceService, Map.empty)
+    val mockManagedGroupService = new ManagedGroupService(mockResourceService, Map.empty, policyDAO, directoryDAO, emailDomain)
 
     val samRoutes = new TestSamRoutes(mockResourceService, mockUserService, mockStatusService, mockManagedGroupService, UserInfo(OAuth2BearerToken(""), WorkbenchUserId(""), WorkbenchEmail(""), 0), directoryDAO)
 

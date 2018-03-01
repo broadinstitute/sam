@@ -5,6 +5,8 @@ import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam._
+import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
+import org.broadinstitute.dsde.workbench.sam.openam.AccessPolicyDAO
 
 import scala.concurrent.Future
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -12,7 +14,8 @@ import scala.concurrent.ExecutionContext.Implicits.global
 /**
   * Created by gpolumbo on 2/21/2018.
   */
-class ManagedGroupService(resourceService: ResourceService, val resourceTypes: Map[ResourceTypeName, ResourceType]) extends LazyLogging {
+//(private val resourceTypes: Map[ResourceTypeName, ResourceType], private val accessPolicyDAO: AccessPolicyDAO, private val directoryDAO: DirectoryDAO, private val cloudExtensions: CloudExtensions, private val emailDomain: String)
+class ManagedGroupService(private val resourceService: ResourceService, private val resourceTypes: Map[ResourceTypeName, ResourceType], private val accessPolicyDAO: AccessPolicyDAO, private val directoryDAO: DirectoryDAO, private val emailDomain: String) extends LazyLogging {
 
   def managedGroupType: ResourceType = resourceTypes.getOrElse(ManagedGroupService.ManagedGroupTypeName, throw new WorkbenchException(s"resource type ${ManagedGroupService.ManagedGroupTypeName.value} not found"))
   def memberRole = managedGroupType.roles.find(_.roleName == ManagedGroupService.MemberRoleName).getOrElse(throw new WorkbenchException(s"${ManagedGroupService.MemberRoleName} role does not exist in $managedGroupType"))
@@ -21,7 +24,7 @@ class ManagedGroupService(resourceService: ResourceService, val resourceTypes: M
     for {
       managedGroup <- resourceService.createResource(managedGroupType, groupId, userInfo)
       _ <- createPolicyForMembers(managedGroup)
-      policies <- resourceService.accessPolicyDAO.listAccessPolicies(managedGroup)
+      policies <- accessPolicyDAO.listAccessPolicies(managedGroup)
       _ <- createAggregateGroup(managedGroup, policies)
     } yield managedGroup
   }
@@ -36,7 +39,7 @@ class ManagedGroupService(resourceService: ResourceService, val resourceTypes: M
     val email = generateManagedGroupEmail(resource.resourceId)
     val workbenchGroupName = WorkbenchGroupName(resource.resourceId.value)
     val groupMembers: Set[WorkbenchSubject] = componentPolicies.map(_.id)
-    resourceService.directoryDAO.createGroup(BasicWorkbenchGroup(workbenchGroupName, groupMembers, email))
+    directoryDAO.createGroup(BasicWorkbenchGroup(workbenchGroupName, groupMembers, email))
   }
 
   private def generateManagedGroupEmail(resourceId: ResourceId): WorkbenchEmail = {
@@ -46,7 +49,7 @@ class ManagedGroupService(resourceService: ResourceService, val resourceTypes: M
   }
 
   private def constructEmail(groupName: String) = {
-    s"${groupName}@${resourceService.emailDomain}"
+    s"${groupName}@${emailDomain}"
   }
 
   private def validateGroupName(groupName: String) = {
@@ -72,11 +75,11 @@ class ManagedGroupService(resourceService: ResourceService, val resourceTypes: M
 
   // Per dvoet, when asking for a group, we will just return the group email
   def loadManagedGroup(groupId: ResourceId): Future[Option[WorkbenchEmail]] = {
-    resourceService.directoryDAO.loadGroup(WorkbenchGroupName(groupId.value)).map(_.map(_.email))
+    directoryDAO.loadGroup(WorkbenchGroupName(groupId.value)).map(_.map(_.email))
   }
 
   def deleteManagedGroup(groupId: ResourceId) = {
-    resourceService.directoryDAO.deleteGroup(WorkbenchGroupName(groupId.value))
+    directoryDAO.deleteGroup(WorkbenchGroupName(groupId.value))
     resourceService.deleteResource(Resource(managedGroupType.name, groupId))
   }
 }

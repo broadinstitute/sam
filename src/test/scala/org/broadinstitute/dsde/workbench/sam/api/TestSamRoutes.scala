@@ -40,9 +40,10 @@ object TestSamRoutes {
     val googleDirectoryDAO = new MockGoogleDirectoryDAO()
     val policyDAO = new MockAccessPolicyDAO(groups)
 
-    val mockResourceService = new ResourceService(resourceTypes, policyDAO, directoryDAO, NoExtensions, "example.com")
+    val emailDomain = "example.com"
+    val mockResourceService = new ResourceService(resourceTypes, policyDAO, directoryDAO, NoExtensions, emailDomain)
     val mockUserService = new UserService(directoryDAO, NoExtensions)
-    val mockManagedGroupService = new ManagedGroupService(mockResourceService, resourceTypes)
+    val mockManagedGroupService = new ManagedGroupService(mockResourceService, resourceTypes, policyDAO, directoryDAO, emailDomain)
 
     val allUsersGroup = TestSupport.runAndWait(NoExtensions.getOrCreateAllUsersGroup(directoryDAO))
     TestSupport.runAndWait(googleDirectoryDAO.createGroup(allUsersGroup.id.toString, allUsersGroup.email))
