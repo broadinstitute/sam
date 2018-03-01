@@ -10,7 +10,7 @@ import org.broadinstitute.dsde.workbench.sam.service.ManagedGroupService
 import org.scalatest.{BeforeAndAfter, FlatSpec, GivenWhenThen, Matchers}
 
 /**
-  * Created by dvoet on 6/7/17.
+  * Created by gpolumbo on 2/26/2017.
   */
 class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest with TestSupport with BeforeAndAfter {
 
