@@ -163,6 +163,9 @@ paths:
       responses:
         200:
           description: Group found
+          schema:
+            description: Email address for the group
+            type: string
         404:
           description: Group could not be found or you do not have the required permissions on this group
         500:
