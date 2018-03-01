@@ -17,8 +17,8 @@ import scala.concurrent.ExecutionContext.Implicits.global
 //(private val resourceTypes: Map[ResourceTypeName, ResourceType], private val accessPolicyDAO: AccessPolicyDAO, private val directoryDAO: DirectoryDAO, private val cloudExtensions: CloudExtensions, private val emailDomain: String)
 class ManagedGroupService(private val resourceService: ResourceService, private val resourceTypes: Map[ResourceTypeName, ResourceType], private val accessPolicyDAO: AccessPolicyDAO, private val directoryDAO: DirectoryDAO, private val emailDomain: String) extends LazyLogging {
 
-  def managedGroupType: ResourceType = resourceTypes.getOrElse(ManagedGroupService.ManagedGroupTypeName, throw new WorkbenchException(s"resource type ${ManagedGroupService.ManagedGroupTypeName.value} not found"))
-  def memberRole = managedGroupType.roles.find(_.roleName == ManagedGroupService.MemberRoleName).getOrElse(throw new WorkbenchException(s"${ManagedGroupService.MemberRoleName} role does not exist in $managedGroupType"))
+  def managedGroupType: ResourceType = resourceTypes.getOrElse(ManagedGroupService.managedGroupTypeName, throw new WorkbenchException(s"resource type ${ManagedGroupService.managedGroupTypeName.value} not found"))
+  def memberRole = managedGroupType.roles.find(_.roleName == ManagedGroupService.memberRoleName).getOrElse(throw new WorkbenchException(s"${ManagedGroupService.memberRoleName} role does not exist in $managedGroupType"))
 
   def createManagedGroup(groupId: ResourceId, userInfo: UserInfo): Future[Resource] = {
     for {
@@ -60,7 +60,7 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
 
   private def validateGroupNamePattern(str: String): Option[ErrorReport] = {
     str match {
-      case ManagedGroupService.GroupNameRe() => None
+      case ManagedGroupService.groupNameRe() => None
       case _ => Option(ErrorReport(s"You have specified a group name that contains characters that are not permitted in an email address. Group name may only contain alphanumeric characters, underscores, and dashes"))
     }
   }
@@ -85,7 +85,7 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
 }
 
 object ManagedGroupService {
-  val MemberRoleName = ResourceRoleName("member")
-  val ManagedGroupTypeName = ResourceTypeName("managed-group")
-  val GroupNameRe = "^[A-z0-9_-]+$".r
+  val memberRoleName = ResourceRoleName("member")
+  val managedGroupTypeName = ResourceTypeName("managed-group")
+  val groupNameRe = "^[A-z0-9_-]+$".r
 }

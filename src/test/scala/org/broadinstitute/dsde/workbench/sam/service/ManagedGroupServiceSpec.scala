@@ -29,10 +29,10 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
   val schemaDao = new JndiSchemaDAO(directoryConfig)
 
   private val resourceId = ResourceId("myNewGroup")
-  private val expectedResource = Resource(ManagedGroupService.ManagedGroupTypeName, resourceId)
+  private val expectedResource = Resource(ManagedGroupService.managedGroupTypeName, resourceId)
   private val ownerRoleName = ResourceRoleName("admin")
   private val ownerPolicyName = AccessPolicyName(ownerRoleName.value)
-  private val memberPolicyName = AccessPolicyName(ManagedGroupService.MemberRoleName.value)
+  private val memberPolicyName = AccessPolicyName(ManagedGroupService.memberRoleName.value)
   private val adminPolicy = ResourceAndPolicyName(expectedResource, ownerPolicyName)
   private val memberPolicy = ResourceAndPolicyName(expectedResource, memberPolicyName)
   private val accessPolicyNames = Set(ownerPolicyName, memberPolicyName)
@@ -40,8 +40,8 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
   private val resourceActions = Set(ResourceAction("delete")) union policyActions
   private val resourceActionPatterns = resourceActions.map(action => ResourceActionPattern(action.value))
   private val defaultOwnerRole = ResourceRole(ownerRoleName, resourceActions)
-  private val defaultRoles = Set(defaultOwnerRole, ResourceRole(ManagedGroupService.MemberRoleName, Set.empty))
-  private val managedGroupResourceType = ResourceType(ManagedGroupService.ManagedGroupTypeName, resourceActionPatterns, defaultRoles, ownerRoleName)
+  private val defaultRoles = Set(defaultOwnerRole, ResourceRole(ManagedGroupService.memberRoleName, Set.empty))
+  private val managedGroupResourceType = ResourceType(ManagedGroupService.managedGroupTypeName, resourceActionPatterns, defaultRoles, ownerRoleName)
   private val resourceTypes = Map(managedGroupResourceType.name -> managedGroupResourceType)
   private val testDomain = "example.com"
   private val resourceService = new ResourceService(resourceTypes, policyDAO, dirDAO, NoExtensions, testDomain)
@@ -60,7 +60,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
   def assertMakeGroup(groupId: String = resourceId.value): Resource = {
     makeResourceType()
     val intendedId = ResourceId(groupId)
-    val intendedResource = Resource(ManagedGroupService.ManagedGroupTypeName, intendedId)
+    val intendedResource = Resource(ManagedGroupService.managedGroupTypeName, intendedId)
 
     val resource = runAndWait(managedGroupService.createManagedGroup(intendedId, dummyUserInfo))
     resource shouldEqual intendedResource

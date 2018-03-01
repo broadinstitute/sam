@@ -16,14 +16,14 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
 
   private val ownerRoleName = ResourceRoleName("admin")
   private val ownerPolicyName = AccessPolicyName(ownerRoleName.value)
-  private val memberPolicyName = AccessPolicyName(ManagedGroupService.MemberRoleName.value)
+  private val memberPolicyName = AccessPolicyName(ManagedGroupService.memberRoleName.value)
   private val accessPolicyNames = Set(ownerPolicyName, memberPolicyName)
   private val policyActions: Set[ResourceAction] = accessPolicyNames.flatMap(policyName => Set(SamResourceActions.sharePolicy(policyName), SamResourceActions.readPolicy(policyName)))
   private val resourceActions = Set(ResourceAction("delete")) union policyActions
   private val resourceActionPatterns = resourceActions.map(action => ResourceActionPattern(action.value))
   private val defaultOwnerRole = ResourceRole(ownerRoleName, resourceActions)
-  private val defaultRoles = Set(defaultOwnerRole, ResourceRole(ManagedGroupService.MemberRoleName, Set.empty))
-  private val managedGroupResourceType = ResourceType(ManagedGroupService.ManagedGroupTypeName, resourceActionPatterns, defaultRoles, ownerRoleName)
+  private val defaultRoles = Set(defaultOwnerRole, ResourceRole(ManagedGroupService.memberRoleName, Set.empty))
+  private val managedGroupResourceType = ResourceType(ManagedGroupService.managedGroupTypeName, resourceActionPatterns, defaultRoles, ownerRoleName)
   private val resourceTypes = Map(managedGroupResourceType.name -> managedGroupResourceType)
   private val groupId = "foo"
 
@@ -41,7 +41,7 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
 
   def assertGetGroup(samRoutes: TestSamRoutes, groupId: String = groupId) = {
     Get(s"/api/group/$groupId") ~> samRoutes.route ~> check {
-      val expectedResource = Resource(ManagedGroupService.ManagedGroupTypeName, ResourceId(groupId))
+      val expectedResource = Resource(ManagedGroupService.managedGroupTypeName, ResourceId(groupId))
       status shouldEqual StatusCodes.OK
     }
   }

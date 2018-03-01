@@ -50,7 +50,7 @@ trait ManagedGroupRoutes extends UserInfoDirectives with SecurityDirectives {
   }
 
   private def handleDeleteGroup(groupId: String, userInfo: UserInfo) = {
-    val resource = Resource(ManagedGroupService.ManagedGroupTypeName, ResourceId(groupId))
+    val resource = Resource(ManagedGroupService.managedGroupTypeName, ResourceId(groupId))
     requireAction(resource, SamResourceActions.delete, userInfo) {
       delete {
         complete(managedGroupService.deleteManagedGroup(ResourceId(groupId)).map(_ => StatusCodes.NoContent))
