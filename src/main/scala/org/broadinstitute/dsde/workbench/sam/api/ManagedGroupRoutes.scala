@@ -1,13 +1,9 @@
 package org.broadinstitute.dsde.workbench.sam.api
 
-// package object for implicit ErrorReportSource
 import org.broadinstitute.dsde.workbench.model.UserInfo
 import org.broadinstitute.dsde.workbench.sam._
-
-// IntelliJ may highlight these imports as unused, but they're needed for the json formatting to work properly
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
-
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directives._
