@@ -94,7 +94,10 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
 
       withCleanBillingProject(owner) { projectName =>
         // ensure known state for pet (not present)
-
+        // since projects get reused in tests it is possible that the pet SA is in google but not in ldap
+        // and if it is not in ldap sam won't try to remove it from google
+        // in order to remove it we need to create it in sam first (and thus ldap) then remove it
+        Sam.user.petServiceAccountEmail(projectName)(userAuthToken)
         Sam.removePet(projectName, userStatus.userInfo)
         findPetInGoogle(projectName, userStatus.userInfo) shouldBe None
 
