@@ -14,7 +14,6 @@ import scala.concurrent.ExecutionContext.Implicits.global
 /**
   * Created by gpolumbo on 2/21/2018.
   */
-//(private val resourceTypes: Map[ResourceTypeName, ResourceType], private val accessPolicyDAO: AccessPolicyDAO, private val directoryDAO: DirectoryDAO, private val cloudExtensions: CloudExtensions, private val emailDomain: String)
 class ManagedGroupService(private val resourceService: ResourceService, private val resourceTypes: Map[ResourceTypeName, ResourceType], private val accessPolicyDAO: AccessPolicyDAO, private val directoryDAO: DirectoryDAO, private val emailDomain: String) extends LazyLogging {
 
   def managedGroupType: ResourceType = resourceTypes.getOrElse(ManagedGroupService.managedGroupTypeName, throw new WorkbenchException(s"resource type ${ManagedGroupService.managedGroupTypeName.value} not found"))
@@ -55,7 +54,7 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
   private def validateGroupName(groupName: String) = {
     val errors = validateGroupNamePattern(groupName) ++ validateGroupNameLength(constructEmail(groupName))
     if (errors.nonEmpty)
-      throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "Cannot create valid email address with the group name provided" , errors.toSeq))
+      throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"Cannot create valid email address with the group name: $groupName" , errors.toSeq))
   }
 
   private def validateGroupNamePattern(str: String): Option[ErrorReport] = {
