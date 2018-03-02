@@ -144,4 +144,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     runAndWait(policyDAO.loadPolicy(memberPolicy)) shouldEqual None
   }
 
+  it should "fail if the managed group is a sub group of any other workbench group" in {
+    assert(false) // this issue isn't done yet
+  }
 }

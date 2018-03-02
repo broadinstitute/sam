@@ -17,6 +17,7 @@ trait DirectoryDAO {
   def loadGroups(groupNames: Set[WorkbenchGroupName]): Future[Seq[BasicWorkbenchGroup]]
   def loadGroupEmail(groupName: WorkbenchGroupName): Future[Option[WorkbenchEmail]]
   def deleteGroup(groupName: WorkbenchGroupName): Future[Unit]
+  def safeDeleteGroup(groupName: WorkbenchGroupName): Future[Unit]
 
   def addGroupMember(groupId: WorkbenchGroupIdentity, addMember: WorkbenchSubject): Future[Unit]
   def removeGroupMember(groupId: WorkbenchGroupIdentity, removeMember: WorkbenchSubject): Future[Unit]

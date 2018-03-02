@@ -366,6 +366,50 @@ class JndiDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     // uid that does exist but is not a pet
     runAndWait(dao.getUserFromPetServiceAccount(ServiceAccountSubjectId(user.id.value))) shouldBe None
   }
+
+  "JndiDirectoryDAO safeDelete" should "prevent deleting groups that are sub-groups of other groups" in {
+    val childGroupName = WorkbenchGroupName(UUID.randomUUID().toString)
+    val childGroup = BasicWorkbenchGroup(childGroupName, Set.empty, WorkbenchEmail("donnie@hollywood-lanes.com"))
+
+    val parentGroupName = WorkbenchGroupName(UUID.randomUUID().toString)
+    val parentGroup = BasicWorkbenchGroup(parentGroupName, Set(childGroupName), WorkbenchEmail("walter@hollywood-lanes.com"))
+
+    assertResult(None) {
+      runAndWait(dao.loadGroup(childGroupName))
+    }
+
+    assertResult(None) {
+      runAndWait(dao.loadGroup(parentGroupName))
+    }
+
+    assertResult(childGroup) {
+      runAndWait(dao.createGroup(childGroup))
+    }
+
+    assertResult(parentGroup) {
+      runAndWait(dao.createGroup(parentGroup))
+    }
+
+    assertResult(Some(childGroup)) {
+      runAndWait(dao.loadGroup(childGroupName))
+    }
+
+    assertResult(Some(parentGroup)) {
+      runAndWait(dao.loadGroup(parentGroupName))
+    }
+
+    intercept[WorkbenchExceptionWithErrorReport] {
+      runAndWait(dao.safeDeleteGroup(childGroupName))
+    }
+
+    assertResult(Some(childGroup)) {
+      runAndWait(dao.loadGroup(childGroupName))
+    }
+
+    assertResult(Some(parentGroup)) {
+      runAndWait(dao.loadGroup(parentGroupName))
+    }
+  }
 }
 
 

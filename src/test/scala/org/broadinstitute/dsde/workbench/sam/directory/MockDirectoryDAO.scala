@@ -49,6 +49,8 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     groups -= groupName
   }
 
+  override def safeDeleteGroup(groupName: WorkbenchGroupName): Future[Unit] = ???
+
   override def addGroupMember(groupName: WorkbenchGroupIdentity, addMember: WorkbenchSubject): Future[Unit] = Future {
     val group = groups(groupName)
     val updatedGroup = group match {

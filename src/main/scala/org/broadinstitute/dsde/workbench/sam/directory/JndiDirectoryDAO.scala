@@ -58,6 +58,15 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     ctx.unbind(groupDn(groupName))
   }
 
+  override def safeDeleteGroup(groupName: WorkbenchGroupName): Future[Unit] = {
+    listAncestorGroups(groupName).map { ancestors =>
+      if (ancestors.nonEmpty) {
+        throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"group ${groupName.value} cannot be deleted because it is a member of at least 1 other group"))
+      } else
+        withContext(_.unbind(groupDn(groupName)))
+    }
+  }
+
   override def removeGroupMember(groupId: WorkbenchGroupIdentity, removeMember: WorkbenchSubject): Future[Unit] = withContext { ctx =>
     ctx.modifyAttributes(groupDn(groupId), DirContext.REMOVE_ATTRIBUTE, new BasicAttributes(Attr.uniqueMember, subjectDn(removeMember)))
     updateUpdatedDate(groupId, ctx)
