@@ -144,4 +144,22 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     runAndWait(policyDAO.loadPolicy(memberPolicy)) shouldEqual None
   }
 
+  it should "fail if the managed group is a sub group of any other workbench group" in {
+    val managedGroup = assertMakeGroup("coolGroup")
+    val managedGroupName = WorkbenchGroupName(managedGroup.resourceId.value)
+    val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName("parentGroup"), Set(managedGroupName), WorkbenchEmail("foo@foo.gov"))
+
+    runAndWait(dirDAO.createGroup(parentGroup)) shouldEqual parentGroup
+
+    // using .get on an option here because if the Option is None and this throws an exception, that's fine
+    runAndWait(dirDAO.loadGroup(parentGroup.id)).get.members shouldEqual Set(managedGroupName)
+
+    intercept[WorkbenchExceptionWithErrorReport] {
+      runAndWait(managedGroupService.deleteManagedGroup(managedGroup.resourceId))
+    }
+
+    runAndWait(managedGroupService.loadManagedGroup(managedGroup.resourceId)) shouldNot be (None)
+    runAndWait(dirDAO.loadGroup(parentGroup.id)).get.members shouldEqual Set(managedGroupName)
+
+  }
 }
