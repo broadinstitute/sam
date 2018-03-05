@@ -14,7 +14,7 @@ import org.broadinstitute.dsde.workbench.model.ErrorReportJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.directory.MockDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.openam.MockAccessPolicyDAO
-import org.broadinstitute.dsde.workbench.sam.service.{NoExtensions, ResourceService, StatusService, UserService}
+import org.broadinstitute.dsde.workbench.sam.service._
 
 /**
   * Created by dvoet on 6/7/17.
@@ -27,11 +27,13 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     val accessPolicyDAO = new MockAccessPolicyDAO()
     val directoryDAO = new MockDirectoryDAO()
 
-    val mockResourceService = new ResourceService(resourceTypes, accessPolicyDAO, directoryDAO, NoExtensions, "example.com")
+    val emailDomain = "example.com"
+    val mockResourceService = new ResourceService(resourceTypes, accessPolicyDAO, directoryDAO, NoExtensions, emailDomain)
     val mockUserService = new UserService(directoryDAO, NoExtensions)
     val mockStatusService = new StatusService(directoryDAO, NoExtensions)
+    val mockManagedGroupService = new ManagedGroupService(mockResourceService, resourceTypes, accessPolicyDAO, directoryDAO, emailDomain)
 
-    new TestSamRoutes(mockResourceService, mockUserService, mockStatusService, userInfo, directoryDAO)
+    new TestSamRoutes(mockResourceService, mockUserService, mockStatusService, mockManagedGroupService, userInfo, directoryDAO)
   }
 
   "GET /api/resource/{resourceType}/{resourceId}/actions/{action}" should "404 for unknown resource type" in {

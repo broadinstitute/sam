@@ -157,6 +157,71 @@ paths:
       tags:
         - Admin
 
+  /api/group/{groupName}:
+    get:
+      summary: Show email address of the group
+      responses:
+        200:
+          description: Group found
+          schema:
+            description: Email address for the group
+            type: string
+        404:
+          description: Group could not be found or you do not have the required permissions on this group
+        500:
+          description: Internal Error
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      parameters:
+        - in: path
+          description: Name of group
+          name: groupName
+          required: true
+          type: string
+      operationId: getGroup
+      tags:
+        - Group
+    post:
+      summary: Create a new group
+      responses:
+        201:
+          description: Group created
+        409:
+          description: Group already exists
+        500:
+          description: Internal Error
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      parameters:
+        - in: path
+          description: Name of group
+          name: groupName
+          required: true
+          type: string
+      operationId: postGroup
+      tags:
+        - Group
+    delete:
+      summary: Delete group
+      responses:
+        204:
+          description: Group deleted
+        404:
+          description: Group could not be found or you do not have the required permissions on this group
+        500:
+          description: Internal Error
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      parameters:
+        - in: path
+          description: Name of group
+          name: groupName
+          required: true
+          type: string
+      operationId: deleteGroup
+      tags:
+        - Group
+
   /api/google/petServiceAccount/{project}/{userEmail}:
     get:
       summary: gets a key for the user's pet service account, get_pet_private_key action on cloud-extension/google required
