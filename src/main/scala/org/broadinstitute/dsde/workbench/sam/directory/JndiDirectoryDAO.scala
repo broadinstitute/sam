@@ -54,16 +54,20 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     }
   }
 
+  // Forcibly delete a group regardless of its membership
+  // If you want to verify that the group is not a member of any other group prior to deletion, use safeDeleteGroup
   override def deleteGroup(groupName: WorkbenchGroupName): Future[Unit] = withContext { ctx =>
     ctx.unbind(groupDn(groupName))
   }
 
+  // Delete a group after verifying that is not a member of another group
+  // If you want to forcibly delete regardless of membership, use deleteGroup
   override def safeDeleteGroup(groupName: WorkbenchGroupName): Future[Unit] = {
     listAncestorGroups(groupName).map { ancestors =>
       if (ancestors.nonEmpty) {
         throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"group ${groupName.value} cannot be deleted because it is a member of at least 1 other group"))
       } else
-        withContext(_.unbind(groupDn(groupName)))
+        deleteGroup(groupName)
     }
   }
 

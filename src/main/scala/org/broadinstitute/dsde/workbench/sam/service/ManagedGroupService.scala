@@ -78,9 +78,10 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
     directoryDAO.loadGroup(WorkbenchGroupName(groupId.value)).map(_.map(_.email))
   }
 
-  def deleteManagedGroup(groupId: ResourceId) = {
-    directoryDAO.deleteGroup(WorkbenchGroupName(groupId.value))
-    resourceService.deleteResource(Resource(managedGroupType.name, groupId))
+  def deleteManagedGroup(groupId: ResourceId): Future[Unit] = {
+    directoryDAO.safeDeleteGroup(WorkbenchGroupName(groupId.value)).flatMap { _ =>
+      resourceService.deleteResource(Resource(managedGroupType.name, groupId))
+    }
   }
 }
 

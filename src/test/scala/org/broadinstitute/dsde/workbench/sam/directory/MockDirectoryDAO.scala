@@ -49,7 +49,14 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     groups -= groupName
   }
 
-  override def safeDeleteGroup(groupName: WorkbenchGroupName): Future[Unit] = ???
+  override def safeDeleteGroup(groupName: WorkbenchGroupName): Future[Unit] = {
+    listAncestorGroups(groupName).map { ancestors =>
+      if (ancestors.nonEmpty) {
+        throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"group ${groupName.value} cannot be deleted because it is a member of at least 1 other group"))
+      } else
+        deleteGroup(groupName)
+    }
+  }
 
   override def addGroupMember(groupName: WorkbenchGroupIdentity, addMember: WorkbenchSubject): Future[Unit] = Future {
     val group = groups(groupName)
