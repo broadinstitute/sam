@@ -162,8 +162,8 @@ class JndiDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
       }
     } finally {
       runAndWait(dao.deleteUser(userId))
-      runAndWait(dao.deleteGroup(groupName1))
       runAndWait(dao.deleteGroup(groupName2))
+      runAndWait(dao.deleteGroup(groupName1))
     }
   }
 
@@ -199,9 +199,9 @@ class JndiDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
       runAndWait(dao.deleteUser(userId1))
       runAndWait(dao.deleteUser(userId2))
       runAndWait(dao.deleteUser(userId3))
-      runAndWait(dao.deleteGroup(groupName1))
-      runAndWait(dao.deleteGroup(groupName2))
       runAndWait(dao.deleteGroup(groupName3))
+      runAndWait(dao.deleteGroup(groupName2))
+      runAndWait(dao.deleteGroup(groupName1))
     }
   }
 
@@ -224,9 +224,9 @@ class JndiDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
         runAndWait(dao.listAncestorGroups(groupName1))
       }
     } finally {
-      runAndWait(dao.deleteGroup(groupName1))
-      runAndWait(dao.deleteGroup(groupName2))
       runAndWait(dao.deleteGroup(groupName3))
+      runAndWait(dao.deleteGroup(groupName2))
+      runAndWait(dao.deleteGroup(groupName1))
     }
   }
 
@@ -264,9 +264,10 @@ class JndiDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
       }
     } finally {
       runAndWait(dao.deleteUser(userId))
-      runAndWait(dao.deleteGroup(groupName1))
-      runAndWait(dao.deleteGroup(groupName2))
+      runAndWait(dao.removeGroupMember(groupName1, groupName3))
       runAndWait(dao.deleteGroup(groupName3))
+      runAndWait(dao.deleteGroup(groupName2))
+      runAndWait(dao.deleteGroup(groupName1))
     }
   }
 
@@ -399,7 +400,7 @@ class JndiDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     }
 
     intercept[WorkbenchExceptionWithErrorReport] {
-      runAndWait(dao.safeDeleteGroup(childGroupName))
+      runAndWait(dao.deleteGroup(childGroupName))
     }
 
     assertResult(Some(childGroup)) {
