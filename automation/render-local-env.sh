@@ -55,10 +55,11 @@ pull_configs() {
 
 render_configs() {
     original_dir=$WORKING_DIR
+    echo $PWD/$SCRIPT_ROOT
     cd ../..
     docker pull broadinstitute/dsde-toolbox:dev
     docker run -it --rm -e VAULT_TOKEN=${VAULT_TOKEN} \
-        -e ENVIRONMENT=${ENV} -e ROOT_DIR=${WORKING_DIR} -v $PWD/firecloud-automated-testing/configs:/input -v $PWD/$SCRIPT_ROOT/output \
+        -e ENVIRONMENT=${ENV} -e ROOT_DIR=${WORKING_DIR} -v $PWD/firecloud-automated-testing/configs:/input -v $PWD/$SCRIPT_ROOT:/output \
         -e OUT_PATH=/output/src/test/resources -e INPUT_PATH=/input -e LOCAL_UI=$LOCAL_UI \
         broadinstitute/dsde-toolbox:dev render-templates.sh
 
