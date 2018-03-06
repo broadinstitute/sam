@@ -55,7 +55,6 @@ pull_configs() {
 
 render_configs() {
     original_dir=$WORKING_DIR
-    echo $PWD/$SCRIPT_ROOT
     cd ../..
     docker pull broadinstitute/dsde-toolbox:dev
     docker run -it --rm -e VAULT_TOKEN=${VAULT_TOKEN} \
