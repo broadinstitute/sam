@@ -56,10 +56,11 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
 
   override def deleteGroup(groupName: WorkbenchGroupName): Future[Unit] = {
     listAncestorGroups(groupName).flatMap { ancestors =>
-      if (ancestors.nonEmpty)
-        throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"group ${groupName.value} cannot be deleted because it is a member of at least 1 other group"))
-      else
+      if (ancestors.nonEmpty) {
+        Future.failed(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"group ${groupName.value} cannot be deleted because it is a member of at least 1 other group")))
+      } else {
         withContext(_.unbind(groupDn(groupName)))
+      }
     }
   }
 
