@@ -222,6 +222,32 @@ paths:
       tags:
         - Group
 
+  /api/google/group/{groupName}/sync:
+    post:
+      summary: Synchronize a managed-group with google group
+      responses:
+        200:
+          description: Successfully synchronized group
+          schema:
+            $ref: '#/definitions/SyncReport'
+        404:
+          description: Group could not be found
+          schema:
+            $ref: #/definition/ErrorReport'
+        500:
+          description: Internal Error
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      parameters:
+        - in: path
+          description: Name of group
+          name: groupName
+          required: true
+          type: string
+      operationId: syncManagedGroup
+      tags:
+        - Google
+
   /api/google/petServiceAccount/{project}/{userEmail}:
     get:
       summary: gets a key for the user's pet service account, get_pet_private_key action on cloud-extension/google required
