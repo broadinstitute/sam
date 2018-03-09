@@ -28,6 +28,8 @@ trait CloudExtensions {
 
   def onGroupUpdate(groupIdentities: Seq[WorkbenchGroupIdentity]): Future[Unit]
 
+  def onGroupDelete(groupEmail: WorkbenchEmail): Future[Unit]
+
   def onUserCreate(user: WorkbenchUser): Future[Unit]
 
   def getUserStatus(user: WorkbenchUser): Future[Boolean]
@@ -60,6 +62,8 @@ trait NoExtensions extends CloudExtensions {
   override def onBoot(samApplication: SamApplication)(implicit system: ActorSystem): Future[Unit] = Future.successful(())
 
   override def onGroupUpdate(groupIdentities: Seq[WorkbenchGroupIdentity]): Future[Unit] = Future.successful(())
+
+  override def onGroupDelete(groupEmail: WorkbenchEmail): Future[Unit] = Future.successful(())
 
   override def onUserCreate(user: WorkbenchUser): Future[Unit] = Future.successful(())
 

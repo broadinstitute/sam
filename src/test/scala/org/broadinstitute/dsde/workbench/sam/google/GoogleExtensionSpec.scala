@@ -407,6 +407,21 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
 */
   }
 
+
+  it should "do Googley stuff onGroupDelete" in {
+    val mockDirectoryDAO = mock[DirectoryDAO]
+    val mockGoogleDirectoryDAO = mock[GoogleDirectoryDAO]
+    val googleExtensions = new GoogleExtensions(mockDirectoryDAO, null, mockGoogleDirectoryDAO, null, null, null, null, googleServicesConfig, null, null)
+
+    val testPolicy = BasicWorkbenchGroup(WorkbenchGroupName("blahblahblah"), Set.empty, WorkbenchEmail(s"blahblahblah@test.firecloud.org"))
+
+    when(mockDirectoryDAO.deleteGroup(testPolicy.id)).thenReturn(Future.successful(()))
+
+    googleExtensions.onGroupDelete(testPolicy.email)
+
+    verify(mockGoogleDirectoryDAO).deleteGroup(testPolicy.email)
+  }
+
   private def setupGoogleKeyCacheTests: (GoogleExtensions, UserService) = {
     implicit val patienceConfig = PatienceConfig(1 second)
     val dirDAO = new JndiDirectoryDAO(directoryConfig)
