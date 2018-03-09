@@ -59,6 +59,7 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
       policiesToDelete <- accessPolicyDAO.listAccessPolicies(resource)
       _ <- Future.traverse(policiesToDelete) {accessPolicyDAO.deletePolicy}
       _ <- accessPolicyDAO.deleteResource(resource)
+      _ <- Future.traverse(policiesToDelete) { policy => cloudExtensions.onGroupDelete(policy.email) }
     } yield ()
   }
 
