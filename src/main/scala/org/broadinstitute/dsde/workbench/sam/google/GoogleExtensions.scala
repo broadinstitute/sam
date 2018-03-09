@@ -160,6 +160,10 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
     } yield ()
   }
 
+  override def onGroupDelete(groupEmail: WorkbenchEmail): Future[Unit] = {
+    googleDirectoryDAO.deleteGroup(groupEmail)
+  }
+
   @deprecated("Use new two-argument version of this function", "Sam Phase 3")
   def createUserPetServiceAccount(user: WorkbenchUser): Future[PetServiceAccount] = createUserPetServiceAccount(user, petServiceAccountConfig.googleProject)
 
