@@ -13,9 +13,11 @@ import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.mockito.MockitoSugar
 import org.scalatest._
 import net.ceedubs.ficus.Ficus._
+import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
+import org.mockito.Mockito.{verify, when}
 
 import scala.concurrent.ExecutionContext.Implicits.global
-import scala.runtime.BoxedUnit
+import scala.concurrent.Future
 
 /**
   * Created by gpolumbo on 2/21/2018
@@ -46,7 +48,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
   private val testDomain = "example.com"
   private val resourceService = new ResourceService(resourceTypes, policyDAO, dirDAO, NoExtensions, testDomain)
 
-  private val managedGroupService = new ManagedGroupService(resourceService, resourceTypes, policyDAO, dirDAO, testDomain)
+  private val managedGroupService = new ManagedGroupService(resourceService, resourceTypes, policyDAO, dirDAO, NoExtensions, testDomain)
 
   private val dummyUserInfo = UserInfo(OAuth2BearerToken("token"), WorkbenchUserId("userid"), WorkbenchEmail("user@company.com"), 0)
 
@@ -57,20 +59,25 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
 
   def makeResourceType(): ResourceTypeName = runAndWait(resourceService.createResourceType(managedGroupResourceType))
 
-  def assertMakeGroup(groupId: String = resourceId.value): Resource = {
-    makeResourceType()
-    val intendedId = ResourceId(groupId)
-    val intendedResource = Resource(ManagedGroupService.managedGroupTypeName, intendedId)
-
-    val resource = runAndWait(managedGroupService.createManagedGroup(intendedId, dummyUserInfo))
-    resource shouldEqual intendedResource
-
+  def assertPoliciesOnResource(resource: Resource, policyDAO: JndiAccessPolicyDAO = policyDAO, expectedPolicies: Set[AccessPolicyName] = Set(ownerPolicyName, memberPolicyName)) = {
     val policies = runAndWait(policyDAO.listAccessPolicies(resource))
-    policies.map(_.id.accessPolicyName.value) shouldEqual Set("admin", "member")
-    runAndWait(policyDAO.loadPolicy(ResourceAndPolicyName(resource, ownerPolicyName))) shouldBe a [Some[AccessPolicy]]
-    runAndWait(policyDAO.loadPolicy(ResourceAndPolicyName(resource, memberPolicyName))) shouldBe a [Some[AccessPolicy]]
+    policies.map(_.id.accessPolicyName.value) shouldEqual expectedPolicies.map(_.value)
+    expectedPolicies.foreach { policyName =>
+      runAndWait(policyDAO.loadPolicy(ResourceAndPolicyName(resource, policyName))) shouldBe a[Some[AccessPolicy]]
+    }
+  }
 
+  def assertMakeGroup(groupId: String = resourceId.value, managedGroupService: ManagedGroupService = managedGroupService, policyDAO: JndiAccessPolicyDAO = policyDAO): Resource = {
+    val resource: Resource = makeGroup(groupId, managedGroupService)
+    val intendedResource = Resource(ManagedGroupService.managedGroupTypeName, ResourceId(groupId))
+    resource shouldEqual intendedResource
+    assertPoliciesOnResource(resource, expectedPolicies = Set(ownerPolicyName, memberPolicyName))
     resource
+  }
+
+  private def makeGroup(groupName: String, managedGroupService: ManagedGroupService, userInfo: UserInfo = dummyUserInfo) = {
+    makeResourceType()
+    runAndWait(managedGroupService.createManagedGroup(ResourceId(groupName), userInfo))
   }
 
   before {
@@ -133,12 +140,15 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
   // NOTE: All since we don't have a way to look up policies directly without going through a Resource, this test
   // may not be actually confirming that the policies have been deleted.  They may still be in LDAP, just orphaned
   // because the resource no longer exists
-  "ManagedGroupService delete" should "delete policies associated to that resource" in {
-    assertMakeGroup()
+  "ManagedGroupService delete" should "delete policies associated to that resource in LDAP and in Google" in {
+    val mockGoogleExtensions = mock[GoogleExtensions]
+    val managedGroupService = new ManagedGroupService(resourceService, resourceTypes, policyDAO, dirDAO, mockGoogleExtensions, testDomain)
+    val groupEmail = WorkbenchEmail(resourceId.value + "@" + testDomain)
 
-    val delResponse = runAndWait(managedGroupService.deleteManagedGroup(resourceId))
-    delResponse shouldEqual ()
-
+    assertMakeGroup(managedGroupService = managedGroupService)
+    when(mockGoogleExtensions.onGroupDelete(groupEmail)).thenReturn(Future.successful(()))
+    runAndWait(managedGroupService.deleteManagedGroup(resourceId))
+    verify(mockGoogleExtensions).onGroupDelete(groupEmail)
     runAndWait(policyDAO.listAccessPolicies(expectedResource)) shouldEqual Set.empty
     runAndWait(policyDAO.loadPolicy(adminPolicy)) shouldEqual None
     runAndWait(policyDAO.loadPolicy(memberPolicy)) shouldEqual None

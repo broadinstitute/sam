@@ -14,7 +14,7 @@ import scala.concurrent.ExecutionContext.Implicits.global
 /**
   * Created by gpolumbo on 2/21/2018.
   */
-class ManagedGroupService(private val resourceService: ResourceService, private val resourceTypes: Map[ResourceTypeName, ResourceType], private val accessPolicyDAO: AccessPolicyDAO, private val directoryDAO: DirectoryDAO, private val emailDomain: String) extends LazyLogging {
+class ManagedGroupService(private val resourceService: ResourceService, private val resourceTypes: Map[ResourceTypeName, ResourceType], private val accessPolicyDAO: AccessPolicyDAO, private val directoryDAO: DirectoryDAO, private val cloudExtensions: CloudExtensions, private val emailDomain: String) extends LazyLogging {
 
   def managedGroupType: ResourceType = resourceTypes.getOrElse(ManagedGroupService.managedGroupTypeName, throw new WorkbenchException(s"resource type ${ManagedGroupService.managedGroupTypeName.value} not found"))
   def memberRole = managedGroupType.roles.find(_.roleName == ManagedGroupService.memberRoleName).getOrElse(throw new WorkbenchException(s"${ManagedGroupService.memberRoleName} role does not exist in $managedGroupType"))
@@ -78,9 +78,11 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
   }
 
   def deleteManagedGroup(groupId: ResourceId): Future[Unit] = {
-    directoryDAO.deleteGroup(WorkbenchGroupName(groupId.value)).flatMap { _ =>
-      resourceService.deleteResource(Resource(managedGroupType.name, groupId))
-    }
+    for {
+      _ <- directoryDAO.deleteGroup(WorkbenchGroupName(groupId.value))
+      _ <- cloudExtensions.onGroupDelete(WorkbenchEmail(constructEmail(groupId.value)))
+      _ <- resourceService.deleteResource(Resource(managedGroupType.name, groupId))
+    } yield ()
   }
 }
 

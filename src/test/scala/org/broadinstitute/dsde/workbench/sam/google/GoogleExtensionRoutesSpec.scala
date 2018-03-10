@@ -164,7 +164,7 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
     val mockResourceService = new ResourceService(resourceTypes, policyDAO, directoryDAO, googleExt, emailDomain)
     val mockUserService = new UserService(directoryDAO, googleExt)
     val mockStatusService = new StatusService(directoryDAO, NoExtensions)
-    val mockManagedGroupService = new ManagedGroupService(mockResourceService, resourceTypes, policyDAO, directoryDAO, emailDomain)
+    val mockManagedGroupService = new ManagedGroupService(mockResourceService, resourceTypes, policyDAO, directoryDAO, googleExt, emailDomain)
     val samRoutes = new TestSamRoutes(mockResourceService, mockUserService, mockStatusService, mockManagedGroupService, UserInfo(OAuth2BearerToken(""), defaultUserInfo.userId, defaultUserInfo.userEmail, 0), directoryDAO) with GoogleExtensionRoutes {
       val googleExtensions = googleExt
       val googleKeyCache = cloudKeyCache
@@ -210,7 +210,7 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
     val mockResourceService = new ResourceService(resourceTypes, policyDAO, directoryDAO, googleExt, emailDomain)
     val mockUserService = new UserService(directoryDAO, googleExt)
     val mockStatusService = new StatusService(directoryDAO, NoExtensions)
-    val mockManagedGroupService = new ManagedGroupService(mockResourceService, resourceTypes, policyDAO, directoryDAO, emailDomain)
+    val mockManagedGroupService = new ManagedGroupService(mockResourceService, resourceTypes, policyDAO, directoryDAO, googleExt, emailDomain)
     val samRoutes = new TestSamRoutes(mockResourceService, mockUserService, mockStatusService, mockManagedGroupService, UserInfo(OAuth2BearerToken(""), defaultUserInfo.userId, defaultUserInfo.userEmail, 0), directoryDAO) with GoogleExtensionRoutes {
       val googleExtensions = googleExt
       val googleKeyCache = cloudKeyCache
@@ -268,7 +268,7 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
     val mockResourceService = new ResourceService(resourceTypes, policyDAO, directoryDAO, googleExt, emailDomain)
     val mockUserService = new UserService(directoryDAO, googleExt)
     val mockStatusService = new StatusService(directoryDAO, NoExtensions)
-    val mockManagedGroupService = new ManagedGroupService(mockResourceService, resourceTypes, policyDAO, directoryDAO, emailDomain)
+    val mockManagedGroupService = new ManagedGroupService(mockResourceService, resourceTypes, policyDAO, directoryDAO, googleExt, emailDomain)
     val samRoutes = new TestSamRoutes(mockResourceService, mockUserService, mockStatusService, mockManagedGroupService, UserInfo(OAuth2BearerToken(""), defaultUserInfo.userId, defaultUserInfo.userEmail, 0), directoryDAO) with GoogleExtensionRoutes {
       val googleExtensions = googleExt
       val googleKeyCache = cloudKeyCache
@@ -310,7 +310,7 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
     val mockResourceService = new ResourceService(resourceTypes, policyDAO, directoryDAO, googleExt, emailDomain)
     val mockUserService = new UserService(directoryDAO, googleExt)
     val mockStatusService = new StatusService(directoryDAO, NoExtensions)
-    val mockManagedGroupService = new ManagedGroupService(mockResourceService, resourceTypes, policyDAO, directoryDAO, emailDomain)
+    val mockManagedGroupService = new ManagedGroupService(mockResourceService, resourceTypes, policyDAO, directoryDAO, googleExt, emailDomain)
     val samRoutes = new TestSamRoutes(mockResourceService, mockUserService, mockStatusService, mockManagedGroupService, UserInfo(OAuth2BearerToken(""), defaultUserInfo.userId, defaultUserInfo.userEmail, 0), directoryDAO) with GoogleExtensionRoutes {
       val googleExtensions = googleExt
       val googleKeyCache = cloudKeyCache
@@ -366,7 +366,7 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
     val mockResourceService = new ResourceService(configResourceTypes, policyDAO, directoryDAO, googleExt, emailDomain)
     val userService = new UserService(directoryDAO, googleExt)
     val statusService = new StatusService(directoryDAO, NoExtensions)
-    val managedGroupService = new ManagedGroupService(mockResourceService, configResourceTypes, policyDAO, directoryDAO, emailDomain)
+    val managedGroupService = new ManagedGroupService(mockResourceService, configResourceTypes, policyDAO, directoryDAO, googleExt, emailDomain)
     val samRoutes = new TestSamRoutes(mockResourceService, userService, statusService, managedGroupService, UserInfo(OAuth2BearerToken(""), defaultUserInfo.userId, defaultUserInfo.userEmail, 0), directoryDAO) with GoogleExtensionRoutes {
       val googleExtensions = googleExt
       val googleKeyCache = cloudKeyCache
@@ -442,7 +442,7 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
     val mockResourceService = new ResourceService(resourceTypes, policyDAO, directoryDAO, googleExt, emailDomain)
     val mockUserService = new UserService(directoryDAO, googleExt)
     val mockStatusService = new StatusService(directoryDAO, NoExtensions)
-    val mockManagedGroupService = new ManagedGroupService(mockResourceService, resourceTypes, policyDAO, directoryDAO, emailDomain)
+    val mockManagedGroupService = new ManagedGroupService(mockResourceService, resourceTypes, policyDAO, directoryDAO, googleExt, emailDomain)
     val samRoutes = new TestSamRoutes(mockResourceService, mockUserService, mockStatusService, mockManagedGroupService, UserInfo(OAuth2BearerToken(""), defaultUserInfo.userId, defaultUserInfo.userEmail, 0), directoryDAO) with GoogleExtensionRoutes {
       val googleExtensions = googleExt
       val googleKeyCache = cloudKeyCache
