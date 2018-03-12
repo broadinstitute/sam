@@ -19,14 +19,13 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
   def managedGroupType: ResourceType = resourceTypes.getOrElse(ManagedGroupService.managedGroupTypeName, throw new WorkbenchException(s"resource type ${ManagedGroupService.managedGroupTypeName.value} not found"))
   def memberRole = managedGroupType.roles.find(_.roleName == ManagedGroupService.memberRoleName).getOrElse(throw new WorkbenchException(s"${ManagedGroupService.memberRoleName} role does not exist in $managedGroupType"))
 
-  // TODO: What should be returned here?  Just a Resource object?  The report generated from the sync with Google?  Both?
   def createManagedGroup(groupId: ResourceId, userInfo: UserInfo): Future[Resource] = {
     for {
       managedGroup <- resourceService.createResource(managedGroupType, groupId, userInfo)
       _ <- createPolicyForMembers(managedGroup)
       policies <- accessPolicyDAO.listAccessPolicies(managedGroup)
       workbenchGroup <- createAggregateGroup(managedGroup, policies)
-      _ <- cloudExtensions.onGroupCreate(workbenchGroup.id)
+      _ <- cloudExtensions.synchronizeGroupMembers(workbenchGroup.id)
     } yield managedGroup
   }
 

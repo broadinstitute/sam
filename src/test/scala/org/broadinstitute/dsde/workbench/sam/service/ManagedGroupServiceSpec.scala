@@ -14,7 +14,7 @@ import org.scalatest.mockito.MockitoSugar
 import org.scalatest._
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.sam.google.{GoogleExtensions, SyncReportItem}
-import org.mockito.Mockito.{verify, when}
+import org.mockito.Mockito.{verify, when, times}
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
@@ -108,9 +108,9 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     val managedGroupService = new ManagedGroupService(resourceService, resourceTypes, policyDAO, dirDAO, mockGoogleExtensions, testDomain)
     val groupName = WorkbenchGroupName(resourceId.value)
 
-    when(mockGoogleExtensions.onGroupCreate(groupName)).thenReturn(Future.successful(Map[WorkbenchEmail, Seq[SyncReportItem]]()))
+    when(mockGoogleExtensions.synchronizeGroupMembers(groupName)).thenReturn(Future.successful(Map[WorkbenchEmail, Seq[SyncReportItem]]()))
     assertMakeGroup(managedGroupService = managedGroupService)
-    verify(mockGoogleExtensions).onGroupCreate(groupName)
+    verify(mockGoogleExtensions, times(2)).synchronizeGroupMembers(groupName)
   }
 
   it should "fail when trying to create a group that already exists" in {
@@ -154,7 +154,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     val groupEmail = WorkbenchEmail(resourceId.value + "@" + testDomain)
     val mockGoogleExtensions = mock[GoogleExtensions]
     when(mockGoogleExtensions.onGroupDelete(groupEmail)).thenReturn(Future.successful(()))
-    when(mockGoogleExtensions.onGroupCreate(WorkbenchGroupName(resourceId.value))).thenReturn(Future.successful(Map[WorkbenchEmail, Seq[SyncReportItem]]()))
+    when(mockGoogleExtensions.synchronizeGroupMembers(WorkbenchGroupName(resourceId.value))).thenReturn(Future.successful(Map[WorkbenchEmail, Seq[SyncReportItem]]()))
     val managedGroupService = new ManagedGroupService(resourceService, resourceTypes, policyDAO, dirDAO, mockGoogleExtensions, testDomain)
 
     assertMakeGroup(managedGroupService = managedGroupService)

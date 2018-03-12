@@ -160,11 +160,6 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
     } yield ()
   }
 
-  override def onGroupCreate(groupId: WorkbenchGroupIdentity): Future[Map[WorkbenchEmail, Seq[SyncReportItem]]] = {
-    synchronizeGroupMembers(groupId)
-    // TODO: Does this need to call onGroupUpdate too?
-  }
-
   override def onGroupDelete(groupEmail: WorkbenchEmail): Future[Unit] = {
     googleDirectoryDAO.deleteGroup(groupEmail)
   }
@@ -280,7 +275,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
     directoryDAO.getSynchronizedDate(groupId)
   }
 
-  def synchronizeGroupMembers(groupId: WorkbenchGroupIdentity, visitedGroups: Set[WorkbenchGroupIdentity] = Set.empty[WorkbenchGroupIdentity]): Future[Map[WorkbenchEmail, Seq[SyncReportItem]]] = {
+  override def synchronizeGroupMembers(groupId: WorkbenchGroupIdentity, visitedGroups: Set[WorkbenchGroupIdentity] = Set.empty[WorkbenchGroupIdentity]): Future[Map[WorkbenchEmail, Seq[SyncReportItem]]] = {
     def toSyncReportItem(operation: String, email: String, result: Try[Unit]) = {
       SyncReportItem(
         operation,
