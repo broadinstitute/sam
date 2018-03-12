@@ -41,7 +41,9 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
           Option(UserStatus(UserStatusDetails(user.id, user.email), Map("ldap" -> ldapStatus, "allUsersGroup" -> allUsersStatus, "google" -> googleStatus)))
         }
 
-      case None => Future.successful(None)
+      case None =>
+        logger.info(s"User not found in directory: $userId")
+        Future.successful(None)
     }
   }
 
