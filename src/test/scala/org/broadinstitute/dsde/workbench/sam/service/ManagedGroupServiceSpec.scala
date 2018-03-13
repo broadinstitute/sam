@@ -172,4 +172,14 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     runAndWait(dirDAO.loadGroup(parentGroup.id)).get.members shouldEqual Set(managedGroupName)
 
   }
+
+  "ManagedGroupService listAllMembers" should "return a flattened list of all of the members of the group" is pending
+  it should "throw an exception if the group does not exist" is pending
+
+  "ManagedGroupService getPolicyMembers" should "return a list of the members of a policy in the group" is pending
+  it should "throw an exception if the group does not exist" is pending
+
+  "ManagedGroupService updatePolicyMembers" should "overwrite the members of a policy in the group" is pending
+  it should "throw an exception if the group does not exist" is pending
+  it should "throw an exception if the membership ids are invalid" is pending
 }

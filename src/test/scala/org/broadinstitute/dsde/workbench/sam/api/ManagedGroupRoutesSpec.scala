@@ -112,4 +112,27 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
     assertGetGroup(dudesRoutes)
     assertGetGroup(defaultRoutes)
   }
+
+  "GET /api/group/{groupName}/all" should "succeed with 200 when the group exists" is pending
+  it should "fail with 404 when the group doesn't exist" is pending
+  it should "fail with 403 when the user making the request is not in the group" is pending
+
+  "GET /api/group/{groupName}/members" should "succeed with 200 when the group exists and the requesting user is in the group" is pending
+  it should "fail with 403 when the requesting user is not in the group" is pending
+  it should "fail with 404 when the group does not exist" is pending
+
+  "PUT /api/group/{groupName}/members" should "succeed with 201 after successfully updating the 'member' policy of the group" is pending
+  it should "fail with 403 when the requesting user is not in the admin policy for the group" is pending
+  it should "fail with 404 when the group does not exist" is pending
+  it should "fail with 500 when any of the email addresses being added are invalid"
+
+  "GET /api/group/{groupName}/admins" should "succeed with 200 when the group exists and the requesting user is in the group" is pending
+  it should "fail with 403 when the requesting user is not in the group" is pending
+  it should "fail with 404 when the group does not exist" is pending
+
+  "PUT /api/group/{groupName}/admins" should "succeed with 201 after successfully updating the 'admin' policy of the group" is pending
+  it should "fail with 403 when the requesting user is not in the admin policy for the group" is pending
+  it should "fail with 404 when the group does not exist" is pending
+  it should "fail with 500 when any of the email addresses being added are invalid"
+
 }
