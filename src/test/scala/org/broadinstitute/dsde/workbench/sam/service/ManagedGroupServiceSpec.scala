@@ -108,9 +108,9 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     val managedGroupService = new ManagedGroupService(resourceService, resourceTypes, policyDAO, dirDAO, mockGoogleExtensions, testDomain)
     val groupName = WorkbenchGroupName(resourceId.value)
 
-    when(mockGoogleExtensions.synchronizeGroupMembers(groupName)).thenReturn(Future.successful(Map[WorkbenchEmail, Seq[SyncReportItem]]()))
+    when(mockGoogleExtensions.publishGroup(groupName)).thenReturn(Future.successful(()))
     assertMakeGroup(managedGroupService = managedGroupService)
-    verify(mockGoogleExtensions, times(2)).synchronizeGroupMembers(groupName)
+    verify(mockGoogleExtensions).publishGroup(groupName)
   }
 
   it should "fail when trying to create a group that already exists" in {
@@ -154,7 +154,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     val groupEmail = WorkbenchEmail(resourceId.value + "@" + testDomain)
     val mockGoogleExtensions = mock[GoogleExtensions]
     when(mockGoogleExtensions.onGroupDelete(groupEmail)).thenReturn(Future.successful(()))
-    when(mockGoogleExtensions.synchronizeGroupMembers(WorkbenchGroupName(resourceId.value))).thenReturn(Future.successful(Map[WorkbenchEmail, Seq[SyncReportItem]]()))
+    when(mockGoogleExtensions.publishGroup(WorkbenchGroupName(resourceId.value))).thenReturn(Future.successful(()))
     val managedGroupService = new ManagedGroupService(resourceService, resourceTypes, policyDAO, dirDAO, mockGoogleExtensions, testDomain)
 
     assertMakeGroup(managedGroupService = managedGroupService)

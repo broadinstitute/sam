@@ -27,6 +27,8 @@ trait CloudExtensions {
 
   def onBoot(samApplication: SamApplication)(implicit system: ActorSystem): Future[Unit]
 
+  def publishGroup(id: WorkbenchGroupName): Future[Unit]
+
   def onGroupUpdate(groupIdentities: Seq[WorkbenchGroupIdentity]): Future[Unit]
 
   def onGroupDelete(groupEmail: WorkbenchEmail): Future[Unit]
@@ -55,14 +57,14 @@ trait CloudExtensions {
   def emailDomain: String
 
   def getOrCreateAllUsersGroup(directoryDAO: DirectoryDAO)(implicit executionContext: ExecutionContext): Future[WorkbenchGroup]
-
-  def synchronizeGroupMembers(groupId: WorkbenchGroupIdentity, visitedGroups: Set[WorkbenchGroupIdentity] = Set.empty[WorkbenchGroupIdentity]): Future[Map[WorkbenchEmail, Seq[SyncReportItem]]]
 }
 
 trait NoExtensions extends CloudExtensions {
   override def isWorkbenchAdmin(memberEmail: WorkbenchEmail): Future[Boolean] = Future.successful(true)
 
   override def onBoot(samApplication: SamApplication)(implicit system: ActorSystem): Future[Unit] = Future.successful(())
+
+  override def publishGroup(id: WorkbenchGroupName): Future[Unit] = Future.successful(())
 
   override def onGroupUpdate(groupIdentities: Seq[WorkbenchGroupIdentity]): Future[Unit] = Future.successful(())
 
@@ -99,8 +101,6 @@ trait NoExtensions extends CloudExtensions {
       }
     } yield createdGroup
   }
-
-  override def synchronizeGroupMembers(groupId: WorkbenchGroupIdentity, visitedGroups: Set[WorkbenchGroupIdentity]): Future[Map[WorkbenchEmail, Seq[SyncReportItem]]] = Future.successful(Map[WorkbenchEmail, Seq[SyncReportItem]]())
 }
 
 object NoExtensions extends NoExtensions

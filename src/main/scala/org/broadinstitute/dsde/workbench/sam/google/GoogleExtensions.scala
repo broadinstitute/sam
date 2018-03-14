@@ -18,6 +18,9 @@ import org.broadinstitute.dsde.workbench.sam.openam.AccessPolicyDAO
 import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, SamApplication}
 import org.broadinstitute.dsde.workbench.util.FutureSupport
 import org.broadinstitute.dsde.workbench.util.health.{HealthMonitor, SubsystemStatus, Subsystems}
+import WorkbenchIdentityJsonSupport.WorkbenchGroupNameFormat
+import spray.json._
+import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport.ResourceAndPolicyNameFormat
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success, Try}
@@ -87,11 +90,14 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
     } yield ()
   }
 
-  override def onGroupUpdate(groupIdentities: Seq[WorkbenchGroupIdentity]): Future[Unit] = {
-    import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport.ResourceAndPolicyNameFormat
-    import WorkbenchIdentityJsonSupport.WorkbenchGroupNameFormat
-    import spray.json._
+  // Uses Google Pub/Sub to offload creation of the group.
+  // The handler for the subscription will ultimately call GoogleExtensions.synchronizeGroupMembers, which will
+  // do all the heavy lifting of creating the Google Group and adding members.
+  override def publishGroup(id: WorkbenchGroupName): Future[Unit] = {
+    googlePubSubDAO.publishMessages(googleServicesConfig.groupSyncTopic, Seq(id.toJson.compactPrint))
+  }
 
+  override def onGroupUpdate(groupIdentities: Seq[WorkbenchGroupIdentity]): Future[Unit] = {
     for {
       idsAndSyncDates <- Future.traverse(groupIdentities) { id => directoryDAO.getSynchronizedDate(id).map(dateOption => id -> dateOption) }
       // only sync groups that have already been synchronized
@@ -275,7 +281,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
     directoryDAO.getSynchronizedDate(groupId)
   }
 
-  override def synchronizeGroupMembers(groupId: WorkbenchGroupIdentity, visitedGroups: Set[WorkbenchGroupIdentity] = Set.empty[WorkbenchGroupIdentity]): Future[Map[WorkbenchEmail, Seq[SyncReportItem]]] = {
+  def synchronizeGroupMembers(groupId: WorkbenchGroupIdentity, visitedGroups: Set[WorkbenchGroupIdentity] = Set.empty[WorkbenchGroupIdentity]): Future[Map[WorkbenchEmail, Seq[SyncReportItem]]] = {
     def toSyncReportItem(operation: String, email: String, result: Try[Unit]) = {
       SyncReportItem(
         operation,
