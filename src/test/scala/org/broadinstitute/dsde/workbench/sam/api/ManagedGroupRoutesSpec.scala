@@ -113,10 +113,6 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
     assertGetGroup(defaultRoutes)
   }
 
-  "GET /api/group/{groupName}/all" should "succeed with 200 when the group exists" is pending
-  it should "fail with 404 when the group doesn't exist" is pending
-  it should "fail with 403 when the user making the request is not in the group" is pending
-
   "GET /api/group/{groupName}/members" should "succeed with 200 when the group exists and the requesting user is in the group" is pending
   it should "fail with 403 when the requesting user is not in the group" is pending
   it should "fail with 404 when the group does not exist" is pending

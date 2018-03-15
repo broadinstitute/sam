@@ -242,10 +242,19 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     }
   }
 
+  // TODO: What do we want this method to do when the subject does not exist?
+  // Currently, it throws a NameNotFoundException
   override def loadSubjectEmail(subject: WorkbenchSubject): Future[Option[WorkbenchEmail]] = withContext { ctx =>
     val subDn = subjectDn(subject)
     Option(ctx.getAttributes(subDn).get(Attr.email)).map { emailAttr =>
       WorkbenchEmail(emailAttr.get.asInstanceOf[String])
+    }
+  }
+
+  // TODO: Reimplement to get emails directly in a single JNDI query
+  override def loadSubjectEmails(subjects: Set[WorkbenchSubject]): Future[Set[WorkbenchEmail]] = {
+    Future.traverse(subjects) { subject =>
+      loadSubjectEmail(subject).map(_.getOrElse(throw new WorkbenchException(s"Failed to find email for WorkbenchSubject: $subject")))
     }
   }
 

@@ -84,10 +84,45 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
       _ <- resourceService.deleteResource(Resource(managedGroupType.name, groupId))
     } yield ()
   }
+
+  def listAdminEmails(resource: Resource): Future[Set[WorkbenchEmail]] = {
+    listPolicyMemberEmails(resource, AccessPolicyName(ManagedGroupService.adminValue))
+  }
+
+  def listMemberEmails(resource: Resource): Future[Set[WorkbenchEmail]] = {
+    listPolicyMemberEmails(resource, AccessPolicyName(ManagedGroupService.memberValue))
+  }
+
+  private def listPolicyMemberEmails(resource: Resource, policyName: AccessPolicyName): Future[Set[WorkbenchEmail]] = {
+    val resourceAndPolicyName = ResourceAndPolicyName(resource, policyName)
+    accessPolicyDAO.loadPolicy(resourceAndPolicyName) flatMap {
+      case Some(policy) => directoryDAO.loadSubjectEmails(policy.members)
+      case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Group or policy could not be found: $resourceAndPolicyName"))
+    }
+  }
+
+  def overwriteAdminEmails(resource: Resource, emails: Set[WorkbenchEmail]): Future[AccessPolicy] = {
+    overwritePolicyMemberEmails(resource, AccessPolicyName(ManagedGroupService.adminValue), emails)
+  }
+
+  def overwriteMemberEmails(resource: Resource, emails: Set[WorkbenchEmail]): Future[AccessPolicy] = {
+    overwritePolicyMemberEmails(resource, AccessPolicyName(ManagedGroupService.memberValue), emails)
+  }
+
+  private def overwritePolicyMemberEmails(resource: Resource, policyName: AccessPolicyName, emails: Set[WorkbenchEmail]): Future[AccessPolicy] = {
+    val resourceAndPolicyName = ResourceAndPolicyName(resource, policyName)
+    accessPolicyDAO.loadPolicy(resourceAndPolicyName).flatMap {
+      case Some(policy) => val updatedPolicy = AccessPolicyMembership(emails, policy.actions, policy.roles)
+        resourceService.overwritePolicy(managedGroupType, policyName, resource, updatedPolicy)
+      case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Group or policy could not be found: $resourceAndPolicyName"))
+    }
+  }
 }
 
 object ManagedGroupService {
-  val memberRoleName = ResourceRoleName("member")
+  val memberValue = "member"
+  val adminValue = "admin"
+  val memberRoleName = ResourceRoleName(memberValue)
   val managedGroupTypeName = ResourceTypeName("managed-group")
   val groupNameRe = "^[A-z0-9_-]+$".r
 }
