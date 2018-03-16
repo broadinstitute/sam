@@ -85,35 +85,35 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
     } yield ()
   }
 
-  def listAdminEmails(resource: Resource): Future[Set[WorkbenchEmail]] = {
-    listPolicyMemberEmails(resource, AccessPolicyName(ManagedGroupService.adminValue))
+  def listAdminEmails(resourceId: ResourceId): Future[Set[WorkbenchEmail]] = {
+    listPolicyMemberEmails(resourceId, AccessPolicyName(ManagedGroupService.adminValue))
   }
 
-  def listMemberEmails(resource: Resource): Future[Set[WorkbenchEmail]] = {
-    listPolicyMemberEmails(resource, AccessPolicyName(ManagedGroupService.memberValue))
+  def listMemberEmails(resourceId: ResourceId): Future[Set[WorkbenchEmail]] = {
+    listPolicyMemberEmails(resourceId, AccessPolicyName(ManagedGroupService.memberValue))
   }
 
-  private def listPolicyMemberEmails(resource: Resource, policyName: AccessPolicyName): Future[Set[WorkbenchEmail]] = {
-    val resourceAndPolicyName = ResourceAndPolicyName(resource, policyName)
+  private def listPolicyMemberEmails(resourceId: ResourceId, policyName: AccessPolicyName) = {
+    val resourceAndPolicyName = ResourceAndPolicyName(Resource(ManagedGroupService.managedGroupTypeName, resourceId), policyName)
     accessPolicyDAO.loadPolicy(resourceAndPolicyName) flatMap {
       case Some(policy) => directoryDAO.loadSubjectEmails(policy.members)
       case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Group or policy could not be found: $resourceAndPolicyName"))
     }
   }
 
-  def overwriteAdminEmails(resource: Resource, emails: Set[WorkbenchEmail]): Future[AccessPolicy] = {
-    overwritePolicyMemberEmails(resource, AccessPolicyName(ManagedGroupService.adminValue), emails)
+  def overwriteAdminEmails(resourceId: ResourceId, emails: Set[WorkbenchEmail]): Future[AccessPolicy] = {
+    overwritePolicyMemberEmails(resourceId, AccessPolicyName(ManagedGroupService.adminValue), emails)
   }
 
-  def overwriteMemberEmails(resource: Resource, emails: Set[WorkbenchEmail]): Future[AccessPolicy] = {
-    overwritePolicyMemberEmails(resource, AccessPolicyName(ManagedGroupService.memberValue), emails)
+  def overwriteMemberEmails(resourceId: ResourceId, emails: Set[WorkbenchEmail]): Future[AccessPolicy] = {
+    overwritePolicyMemberEmails(resourceId, AccessPolicyName(ManagedGroupService.memberValue), emails)
   }
 
-  private def overwritePolicyMemberEmails(resource: Resource, policyName: AccessPolicyName, emails: Set[WorkbenchEmail]): Future[AccessPolicy] = {
-    val resourceAndPolicyName = ResourceAndPolicyName(resource, policyName)
+  private def overwritePolicyMemberEmails(resourceId: ResourceId, policyName: AccessPolicyName, emails: Set[WorkbenchEmail]): Future[AccessPolicy] = {
+    val resourceAndPolicyName = ResourceAndPolicyName(Resource(ManagedGroupService.managedGroupTypeName, resourceId), policyName)
     accessPolicyDAO.loadPolicy(resourceAndPolicyName).flatMap {
       case Some(policy) => val updatedPolicy = AccessPolicyMembership(emails, policy.actions, policy.roles)
-        resourceService.overwritePolicy(managedGroupType, policyName, resource, updatedPolicy)
+        resourceService.overwritePolicy(managedGroupType, policyName, resourceAndPolicyName.resource, updatedPolicy)
       case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Group or policy could not be found: $resourceAndPolicyName"))
     }
   }

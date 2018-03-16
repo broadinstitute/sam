@@ -1,16 +1,16 @@
 package org.broadinstitute.dsde.workbench.sam.api
 
-import org.broadinstitute.dsde.workbench.model.UserInfo
-import org.broadinstitute.dsde.workbench.sam._
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
-import org.broadinstitute.dsde.workbench.sam.model._
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directives._
-import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchExceptionWithErrorReport}
+import akka.http.scaladsl.server.Route
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
-import org.broadinstitute.dsde.workbench.sam.model.ResourceId
+import org.broadinstitute.dsde.workbench.model._
+import org.broadinstitute.dsde.workbench.sam._
+import org.broadinstitute.dsde.workbench.sam.model.{ResourceId, _}
 import org.broadinstitute.dsde.workbench.sam.service.ManagedGroupService
+import spray.json.DefaultJsonProtocol._
 
 import scala.concurrent.ExecutionContext
 
@@ -23,20 +23,38 @@ trait ManagedGroupRoutes extends UserInfoDirectives with SecurityDirectives {
   val managedGroupService: ManagedGroupService
 
   def groupRoutes: server.Route = requireUserInfo { userInfo =>
-    path("group" / Segment) { groupId =>
-      get {
-        handleGetGroup(groupId)
+    pathPrefix("group" / Segment) { groupId =>
+      pathEndOrSingleSlash {
+        get {
+          handleGetGroup(groupId)
+        } ~
+        post {
+          handlePostGroup(groupId, userInfo)
+        } ~
+        delete {
+          handleDeleteGroup(groupId, userInfo)
+        }
       } ~
-      post {
-        handlePostGroup(groupId, userInfo)
+      path("members") {
+        get {
+          handleListMemberEmails(groupId, userInfo)
+        } ~
+        put {
+          handleOverwriteMemberEmails(groupId, userInfo)
+        }
       } ~
-      delete {
-        handleDeleteGroup(groupId, userInfo)
+      path("admins") {
+        get {
+          handleListAdminEmails(groupId, userInfo)
+        } ~
+        put {
+          handleOverwriteAdminEmails(groupId, userInfo)
+        }
       }
     }
   }
 
-  private def handleGetGroup(groupId: String) = {
+  private def handleGetGroup(groupId: String): Route = {
     complete (
       managedGroupService.loadManagedGroup(ResourceId(groupId)).map {
         case Some(response) => StatusCodes.OK -> response
@@ -45,16 +63,47 @@ trait ManagedGroupRoutes extends UserInfoDirectives with SecurityDirectives {
     )
   }
 
-  private def handlePostGroup(groupId: String, userInfo: UserInfo) = {
+  private def handlePostGroup(groupId: String, userInfo: UserInfo): Route = {
     complete(managedGroupService.createManagedGroup(ResourceId(groupId), userInfo).map(_ => StatusCodes.Created))
   }
 
-  private def handleDeleteGroup(groupId: String, userInfo: UserInfo) = {
+  private def handleDeleteGroup(groupId: String, userInfo: UserInfo): Route = {
     val resource = Resource(ManagedGroupService.managedGroupTypeName, ResourceId(groupId))
     requireAction(resource, SamResourceActions.delete, userInfo) {
-      delete {
-        complete(managedGroupService.deleteManagedGroup(ResourceId(groupId)).map(_ => StatusCodes.NoContent))
+      complete(managedGroupService.deleteManagedGroup(ResourceId(groupId)).map(_ => StatusCodes.NoContent))
+    }
+  }
+
+  private def handleListAdminEmails(groupId: String, userInfo: UserInfo): Route = {
+    val resource = Resource(ManagedGroupService.managedGroupTypeName, ResourceId(groupId))
+    // TODO: What is the correct Action that's needed here?  "readPolicies" or "read_policy::admin"?
+    requireAction(resource, SamResourceActions.readPolicy(AccessPolicyName(ManagedGroupService.adminValue)), userInfo) {
+      complete(
+        managedGroupService.listAdminEmails(ResourceId(groupId)).map(StatusCodes.OK -> _)
+      )
+    }
+  }
+
+  private def handleListMemberEmails(groupId: String, userInfo: UserInfo) = {
+    val resource = Resource(ManagedGroupService.managedGroupTypeName, ResourceId(groupId))
+    // TODO: What is the correct Action that's needed here?  "readPolicies" or "read_policy::admin"?
+    requireAction(resource, SamResourceActions.readPolicy(AccessPolicyName(ManagedGroupService.adminValue)), userInfo) {
+      complete(
+        managedGroupService.listMemberEmails(ResourceId(groupId)).map(StatusCodes.OK -> _)
+      )
+    }
+  }
+
+  private def handleOverwriteMemberEmails(groupId: String, userInfo: UserInfo) = {
+    val resource = Resource(ManagedGroupService.managedGroupTypeName, ResourceId(groupId))
+    requireAction(resource, SamResourceActions.alterPolicies, userInfo) {
+      entity(as[Set[WorkbenchEmail]]) { members =>
+        complete(
+          managedGroupService.overwriteMemberEmails(ResourceId(groupId), members).map(_ => StatusCodes.Created)
+        )
       }
     }
   }
+
+  private def handleOverwriteAdminEmails(groupId: String, userInfo: UserInfo) = ???
 }

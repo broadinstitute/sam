@@ -176,24 +176,24 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
   "ManagedGroupService listAdminEmails" should "return a list of email addresses for the groups admin policy" in {
     val managedGroup = assertMakeGroup()
     runAndWait(dirDAO.createUser(WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)))
-    runAndWait(managedGroupService.listAdminEmails(managedGroup)) shouldEqual Set(dummyUserInfo.userEmail)
+    runAndWait(managedGroupService.listAdminEmails(managedGroup.resourceId)) shouldEqual Set(dummyUserInfo.userEmail)
   }
 
   it should "throw an exception if the group does not exist" in {
     intercept[WorkbenchExceptionWithErrorReport] {
-      runAndWait(managedGroupService.listAdminEmails(expectedResource))
+      runAndWait(managedGroupService.listAdminEmails(resourceId))
     }
   }
 
   "ManagedGroupService listMemberEmails" should "return a list of email addresses for the groups member policy" in {
     val managedGroup = assertMakeGroup()
     runAndWait(dirDAO.createUser(WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)))
-    runAndWait(managedGroupService.listMemberEmails(managedGroup)) shouldEqual Set.empty
+    runAndWait(managedGroupService.listMemberEmails(managedGroup.resourceId)) shouldEqual Set.empty
   }
 
   it should "throw an exception if the group does not exist" in {
     intercept[WorkbenchExceptionWithErrorReport] {
-      runAndWait(managedGroupService.listMemberEmails(expectedResource))
+      runAndWait(managedGroupService.listMemberEmails(resourceId))
     }
   }
 
@@ -204,11 +204,11 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     runAndWait(dirDAO.createUser(dummyAdmin))
     runAndWait(dirDAO.createUser(otherAdmin))
 
-    runAndWait(managedGroupService.listAdminEmails(managedGroup)) shouldEqual Set(dummyAdmin.email)
+    runAndWait(managedGroupService.listAdminEmails(managedGroup.resourceId)) shouldEqual Set(dummyAdmin.email)
 
-    runAndWait(managedGroupService.overwriteAdminEmails(managedGroup, Set(otherAdmin.email)))
+    runAndWait(managedGroupService.overwriteAdminEmails(managedGroup.resourceId, Set(otherAdmin.email)))
 
-    runAndWait(managedGroupService.listAdminEmails(managedGroup)) shouldEqual Set(otherAdmin.email)
+    runAndWait(managedGroupService.listAdminEmails(managedGroup.resourceId)) shouldEqual Set(otherAdmin.email)
   }
 
   it should "permit overwriting with 'group' subjects" in {
@@ -220,17 +220,17 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     val dummyAdmin = WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)
     runAndWait(dirDAO.createUser(dummyAdmin))
 
-    runAndWait(managedGroupService.listAdminEmails(managedGroup)) shouldEqual Set(dummyAdmin.email)
+    runAndWait(managedGroupService.listAdminEmails(managedGroup.resourceId)) shouldEqual Set(dummyAdmin.email)
 
     val newAdmins = Set(dummyAdmin.email, someGroupEmail)
-    runAndWait(managedGroupService.overwriteAdminEmails(managedGroup, newAdmins))
+    runAndWait(managedGroupService.overwriteAdminEmails(managedGroup.resourceId, newAdmins))
 
-    runAndWait(managedGroupService.listAdminEmails(managedGroup)) shouldEqual newAdmins
+    runAndWait(managedGroupService.listAdminEmails(managedGroup.resourceId)) shouldEqual newAdmins
   }
 
   it should "throw an exception if the group does not exist" in {
     intercept[WorkbenchExceptionWithErrorReport] {
-      runAndWait(managedGroupService.overwriteAdminEmails(expectedResource, Set.empty))
+      runAndWait(managedGroupService.overwriteAdminEmails(expectedResource.resourceId, Set.empty))
     }
   }
 
@@ -239,7 +239,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     val badAdmin = WorkbenchUser(WorkbenchUserId("admin2"), WorkbenchEmail("admin2@foo.test"))
 
     intercept[WorkbenchExceptionWithErrorReport] {
-      runAndWait(managedGroupService.overwriteAdminEmails(managedGroup, Set(badAdmin.email)))
+      runAndWait(managedGroupService.overwriteAdminEmails(managedGroup.resourceId, Set(badAdmin.email)))
     }
   }
 
@@ -249,12 +249,12 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     val someGroupEmail = WorkbenchEmail("someGroup@some.org")
     runAndWait(dirDAO.createGroup(BasicWorkbenchGroup(WorkbenchGroupName("someGroup"), Set.empty, someGroupEmail)))
 
-    runAndWait(managedGroupService.listMemberEmails(managedGroup)) shouldEqual Set()
+    runAndWait(managedGroupService.listMemberEmails(managedGroup.resourceId)) shouldEqual Set()
 
     val newMembers = Set(someGroupEmail)
-    runAndWait(managedGroupService.overwriteMemberEmails(managedGroup, newMembers))
+    runAndWait(managedGroupService.overwriteMemberEmails(managedGroup.resourceId, newMembers))
 
-    runAndWait(managedGroupService.listMemberEmails(managedGroup)) shouldEqual newMembers
+    runAndWait(managedGroupService.listMemberEmails(managedGroup.resourceId)) shouldEqual newMembers
   }
 
   it should "permit overwriting with 'user' subjects" in {
@@ -262,16 +262,16 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     val joeSchmoe = WorkbenchUser(WorkbenchUserId("joe"), WorkbenchEmail("joe.schmoe@foo.test"))
     runAndWait(dirDAO.createUser(joeSchmoe))
 
-    runAndWait(managedGroupService.listMemberEmails(managedGroup)) shouldEqual Set()
+    runAndWait(managedGroupService.listMemberEmails(managedGroup.resourceId)) shouldEqual Set()
 
-    runAndWait(managedGroupService.overwriteMemberEmails(managedGroup, Set(joeSchmoe.email)))
+    runAndWait(managedGroupService.overwriteMemberEmails(managedGroup.resourceId, Set(joeSchmoe.email)))
 
-    runAndWait(managedGroupService.listMemberEmails(managedGroup)) shouldEqual Set(joeSchmoe.email)
+    runAndWait(managedGroupService.listMemberEmails(managedGroup.resourceId)) shouldEqual Set(joeSchmoe.email)
   }
 
   it should "throw an exception if the group does not exist" in {
     intercept[WorkbenchExceptionWithErrorReport] {
-      runAndWait(managedGroupService.overwriteMemberEmails(expectedResource, Set.empty))
+      runAndWait(managedGroupService.overwriteMemberEmails(expectedResource.resourceId, Set.empty))
     }
   }
 
@@ -280,7 +280,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     val badUser = WorkbenchUser(WorkbenchUserId("MrNobody"), WorkbenchEmail("null@foo.test"))
 
     intercept[WorkbenchExceptionWithErrorReport] {
-      runAndWait(managedGroupService.overwriteMemberEmails(managedGroup, Set(badUser.email)))
+      runAndWait(managedGroupService.overwriteMemberEmails(managedGroup.resourceId, Set(badUser.email)))
     }
   }
 
@@ -299,15 +299,15 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     runAndWait(dirDAO.createUser(dummyAdmin))
     runAndWait(dirDAO.createUser(otherAdmin))
 
-    runAndWait(managedGroupService.listAdminEmails(managedGroup)) shouldEqual Set(dummyAdmin.email)
-    runAndWait(managedGroupService.listMemberEmails(managedGroup)) shouldEqual Set()
+    runAndWait(managedGroupService.listAdminEmails(managedGroup.resourceId)) shouldEqual Set(dummyAdmin.email)
+    runAndWait(managedGroupService.listMemberEmails(managedGroup.resourceId)) shouldEqual Set()
 
     val newMembers = Set(someGroupEmail, joeSchmoe.email)
-    runAndWait(managedGroupService.overwriteMemberEmails(managedGroup, newMembers))
-    runAndWait(managedGroupService.listMemberEmails(managedGroup)) shouldEqual newMembers
+    runAndWait(managedGroupService.overwriteMemberEmails(managedGroup.resourceId, newMembers))
+    runAndWait(managedGroupService.listMemberEmails(managedGroup.resourceId)) shouldEqual newMembers
 
     val newAdmins = Set(xmenEmail, dummyAdmin.email, otherAdmin.email)
-    runAndWait(managedGroupService.overwriteAdminEmails(managedGroup, newAdmins))
-    runAndWait(managedGroupService.listAdminEmails(managedGroup)) shouldEqual newAdmins
+    runAndWait(managedGroupService.overwriteAdminEmails(managedGroup.resourceId, newAdmins))
+    runAndWait(managedGroupService.listAdminEmails(managedGroup.resourceId)) shouldEqual newAdmins
   }
 }

@@ -1,13 +1,16 @@
 package org.broadinstitute.dsde.workbench.sam.api
 
-import akka.http.scaladsl.model.{StatusCodes, Uri}
+import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
+import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import akka.http.scaladsl.testkit.ScalatestRouteTest
-import org.broadinstitute.dsde.workbench.model.{UserInfo, WorkbenchEmail, WorkbenchUserId}
-import org.broadinstitute.dsde.workbench.sam.{TestSupport, model}
+import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
+import org.broadinstitute.dsde.workbench.model._
+import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.ManagedGroupService
-import org.scalatest.{BeforeAndAfter, FlatSpec, GivenWhenThen, Matchers}
+import org.scalatest.{BeforeAndAfter, FlatSpec, Matchers}
+import spray.json.DefaultJsonProtocol._
 
 /**
   * Created by gpolumbo on 2/26/2017.
@@ -49,6 +52,12 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
   def assertDeleteGroup(samRoutes: TestSamRoutes, groupId: String = groupId) = {
     Delete(s"/api/group/$groupId") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NoContent
+    }
+  }
+
+  def assertCreateUser(samRoutes: TestSamRoutes) = {
+    Post("/register/user") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Created
     }
   }
 
@@ -113,21 +122,92 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
     assertGetGroup(defaultRoutes)
   }
 
-  "GET /api/group/{groupName}/members" should "succeed with 200 when the group exists and the requesting user is in the group" is pending
-  it should "fail with 403 when the requesting user is not in the group" is pending
-  it should "fail with 404 when the group does not exist" is pending
+  // TODO: Should this only be permitted for Group Admins?  Or should it be allowed for anyone in the group?
+  "GET /api/group/{groupName}/members" should "succeed with 200 when the group exists and the requesting user is in the group" in {
+    val samRoutes = TestSamRoutes(resourceTypes)
+    assertCreateGroup(samRoutes)
 
-  "PUT /api/group/{groupName}/members" should "succeed with 201 after successfully updating the 'member' policy of the group" is pending
-  it should "fail with 403 when the requesting user is not in the admin policy for the group" is pending
+    Get(s"/api/group/$groupId/members") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[String] shouldEqual "[]"
+    }
+  }
+
+  it should "fail with 404 when the requesting user is not in the group" in {
+    val defaultRoutes = TestSamRoutes(resourceTypes)
+    assertCreateGroup(defaultRoutes)
+    assertGetGroup(defaultRoutes)
+
+    val theDude = UserInfo(OAuth2BearerToken("tokenDude"), WorkbenchUserId("ElDudarino"), WorkbenchEmail("ElDudarino@example.com"), 0)
+    val dudesRoutes = new TestSamRoutes(defaultRoutes.resourceService, defaultRoutes.userService, defaultRoutes.statusService, defaultRoutes.managedGroupService, theDude, defaultRoutes.mockDirectoryDao)
+
+    Get(s"/api/group/$groupId/members") ~> dudesRoutes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
+    }
+  }
+
+  it should "fail with 404 when the group does not exist" in {
+    val samRoutes = TestSamRoutes(resourceTypes)
+
+    Get(s"/api/group/$groupId/members") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
+    }
+  }
+
+  "PUT /api/group/{groupName}/members" should "succeed with 201 after successfully updating the 'member' policy of the group" in {
+    pending
+    val samRoutes = TestSamRoutes(resourceTypes)
+    assertCreateGroup(samRoutes)
+
+    val newGuyEmail = WorkbenchEmail("newGuy@organization.org")
+    val members = Set(newGuyEmail)
+    Put(s"/api/group/$groupId/members", members) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Created
+      // TODO: What should be in the response body?  Whole policy?  Just the current list of members? Nothing?
+//      responseAs[String] shouldEqual "[]"
+    }
+  }
+
+  it should "fail with 404 when the requesting user is not in the admin policy for the group" is pending
   it should "fail with 404 when the group does not exist" is pending
   it should "fail with 500 when any of the email addresses being added are invalid"
 
-  "GET /api/group/{groupName}/admins" should "succeed with 200 when the group exists and the requesting user is in the group" is pending
-  it should "fail with 403 when the requesting user is not in the group" is pending
-  it should "fail with 404 when the group does not exist" is pending
+  // TODO: Should this only be permitted for Group Admins?  Or should it be allowed for anyone in the group?
+  "GET /api/group/{groupName}/admins" should "succeed with 200 when the group exists and the requesting user is in the group" in {
+    val samRoutes = TestSamRoutes(resourceTypes)
+    assertCreateUser(samRoutes)
+    assertCreateGroup(samRoutes)
+    assertGetGroup(samRoutes)
+
+    Get(s"/api/group/$groupId/admins") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[String] should include (TestSamRoutes.defaultUserInfo.userEmail.value)
+    }
+  }
+
+  it should "fail with 404 when the requesting user is not in the group" in {
+    val defaultRoutes = TestSamRoutes(resourceTypes)
+    assertCreateGroup(defaultRoutes)
+    assertGetGroup(defaultRoutes)
+
+    val theDude = UserInfo(OAuth2BearerToken("tokenDude"), WorkbenchUserId("ElDudarino"), WorkbenchEmail("ElDudarino@example.com"), 0)
+    val dudesRoutes = new TestSamRoutes(defaultRoutes.resourceService, defaultRoutes.userService, defaultRoutes.statusService, defaultRoutes.managedGroupService, theDude, defaultRoutes.mockDirectoryDao)
+
+    Get(s"/api/group/$groupId/admins") ~> dudesRoutes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
+    }
+  }
+
+  it should "fail with 404 when the group does not exist" in {
+    val samRoutes = TestSamRoutes(resourceTypes)
+
+    Get(s"/api/group/$groupId/admins") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
+    }
+  }
 
   "PUT /api/group/{groupName}/admins" should "succeed with 201 after successfully updating the 'admin' policy of the group" is pending
-  it should "fail with 403 when the requesting user is not in the admin policy for the group" is pending
+  it should "fail with 404 when the requesting user is not in the admin policy for the group" is pending
   it should "fail with 404 when the group does not exist" is pending
   it should "fail with 500 when any of the email addresses being added are invalid"
 
