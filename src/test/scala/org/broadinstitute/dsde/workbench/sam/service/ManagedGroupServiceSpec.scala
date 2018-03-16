@@ -211,19 +211,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     runAndWait(managedGroupService.listAdminEmails(managedGroup)) shouldEqual Set(otherAdmin.email)
   }
 
-  "ManagedGroupService.overwriteMemberEmails" should "permit overwriting with 'user' subjects" in {
-    val managedGroup = assertMakeGroup()
-    val joeSchmoe = WorkbenchUser(WorkbenchUserId("joe"), WorkbenchEmail("joe.schmoe@foo.test"))
-    runAndWait(dirDAO.createUser(joeSchmoe))
-
-    runAndWait(managedGroupService.listMemberEmails(managedGroup)) shouldEqual Set()
-
-    runAndWait(managedGroupService.overwriteMemberEmails(managedGroup, Set(joeSchmoe.email)))
-
-    runAndWait(managedGroupService.listMemberEmails(managedGroup)) shouldEqual Set(joeSchmoe.email)
-  }
-
-  "ManagedGroupService.overwriteAdminEmails" should "permit overwriting with 'group' subjects" in {
+  it should "permit overwriting with 'group' subjects" in {
     val managedGroup = assertMakeGroup()
 
     val someGroupEmail = WorkbenchEmail("someGroup@some.org")
@@ -240,6 +228,21 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     runAndWait(managedGroupService.listAdminEmails(managedGroup)) shouldEqual newAdmins
   }
 
+  it should "throw an exception if the group does not exist" in {
+    intercept[WorkbenchExceptionWithErrorReport] {
+      runAndWait(managedGroupService.overwriteAdminEmails(expectedResource, Set.empty))
+    }
+  }
+
+  it should "throw an exception if any of the email addresses do not match an existing subject" in {
+    val managedGroup = assertMakeGroup()
+    val badAdmin = WorkbenchUser(WorkbenchUserId("admin2"), WorkbenchEmail("admin2@foo.test"))
+
+    intercept[WorkbenchExceptionWithErrorReport] {
+      runAndWait(managedGroupService.overwriteAdminEmails(managedGroup, Set(badAdmin.email)))
+    }
+  }
+
   "ManagedGroupService.overwriteMemberEmails" should "permit overwriting with 'group' subjects" in {
     val managedGroup = assertMakeGroup()
 
@@ -254,7 +257,57 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     runAndWait(managedGroupService.listMemberEmails(managedGroup)) shouldEqual newMembers
   }
 
-  "ManagedGroupService updatePolicyMembers" should "overwrite the members of a policy in the group" is pending
-  it should "throw an exception if the group does not exist" is pending
-  it should "throw an exception if the membership ids are invalid" is pending
+  it should "permit overwriting with 'user' subjects" in {
+    val managedGroup = assertMakeGroup()
+    val joeSchmoe = WorkbenchUser(WorkbenchUserId("joe"), WorkbenchEmail("joe.schmoe@foo.test"))
+    runAndWait(dirDAO.createUser(joeSchmoe))
+
+    runAndWait(managedGroupService.listMemberEmails(managedGroup)) shouldEqual Set()
+
+    runAndWait(managedGroupService.overwriteMemberEmails(managedGroup, Set(joeSchmoe.email)))
+
+    runAndWait(managedGroupService.listMemberEmails(managedGroup)) shouldEqual Set(joeSchmoe.email)
+  }
+
+  it should "throw an exception if the group does not exist" in {
+    intercept[WorkbenchExceptionWithErrorReport] {
+      runAndWait(managedGroupService.overwriteMemberEmails(expectedResource, Set.empty))
+    }
+  }
+
+  it should "throw an exception if any of the email addresses do not match an existing subject" in {
+    val managedGroup = assertMakeGroup()
+    val badUser = WorkbenchUser(WorkbenchUserId("MrNobody"), WorkbenchEmail("null@foo.test"))
+
+    intercept[WorkbenchExceptionWithErrorReport] {
+      runAndWait(managedGroupService.overwriteMemberEmails(managedGroup, Set(badUser.email)))
+    }
+  }
+
+  "ManagedGroupService overwriting policy members" should "permit overwriting with many subjects and different types" in {
+    val managedGroup = assertMakeGroup()
+
+    val someGroupEmail = WorkbenchEmail("someGroup@some.org")
+    val xmenEmail = WorkbenchEmail("xmen@xavier.org")
+    val joeSchmoe = WorkbenchUser(WorkbenchUserId("joe"), WorkbenchEmail("joe.schmoe@foo.test"))
+    val dummyAdmin = WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)
+    val otherAdmin = WorkbenchUser(WorkbenchUserId("admin2"), WorkbenchEmail("admin2@foo.test"))
+
+    runAndWait(dirDAO.createGroup(BasicWorkbenchGroup(WorkbenchGroupName("someGroup"), Set.empty, someGroupEmail)))
+    runAndWait(dirDAO.createGroup(BasicWorkbenchGroup(WorkbenchGroupName("xmen"), Set.empty, xmenEmail)))
+    runAndWait(dirDAO.createUser(joeSchmoe))
+    runAndWait(dirDAO.createUser(dummyAdmin))
+    runAndWait(dirDAO.createUser(otherAdmin))
+
+    runAndWait(managedGroupService.listAdminEmails(managedGroup)) shouldEqual Set(dummyAdmin.email)
+    runAndWait(managedGroupService.listMemberEmails(managedGroup)) shouldEqual Set()
+
+    val newMembers = Set(someGroupEmail, joeSchmoe.email)
+    runAndWait(managedGroupService.overwriteMemberEmails(managedGroup, newMembers))
+    runAndWait(managedGroupService.listMemberEmails(managedGroup)) shouldEqual newMembers
+
+    val newAdmins = Set(xmenEmail, dummyAdmin.email, otherAdmin.email)
+    runAndWait(managedGroupService.overwriteAdminEmails(managedGroup, newAdmins))
+    runAndWait(managedGroupService.listAdminEmails(managedGroup)) shouldEqual newAdmins
+  }
 }
