@@ -38,7 +38,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
     val maxUsernameLength = maxGroupEmailLength - emailSuffix.length
     WorkbenchEmail(username.take(maxUsernameLength) + emailSuffix)
 */
-    WorkbenchEmail(s"PROXY_${user.id.value}@${googleServicesConfig.appsDomain}")
+    WorkbenchEmail(s"${googleServicesConfig.proxyNamePrefix.getOrElse("PROXY_")}${user.id.value}@${googleServicesConfig.appsDomain}")
 /**/
   }
 
