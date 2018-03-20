@@ -2,7 +2,7 @@ package org.broadinstitute.dsde.test.api
 
 import akka.http.scaladsl.model.headers
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
-import org.broadinstitute.dsde.workbench.service.{Orchestration, Sam, Thurloe}
+import org.broadinstitute.dsde.workbench.service.{Google, Orchestration, Sam, Thurloe}
 import org.broadinstitute.dsde.workbench.service.Sam.user.UserStatusDetails
 import org.broadinstitute.dsde.workbench.auth.{AuthToken, ServiceAccountAuthTokenFromJson, ServiceAccountAuthTokenFromPem}
 import org.broadinstitute.dsde.workbench.config.{Config, Credentials, UserPool}
@@ -14,6 +14,9 @@ import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAcc
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.time.{Seconds, Span}
 import org.scalatest.{DoNotDiscover, FreeSpec, Matchers}
+
+import scala.concurrent.Await
+import scala.concurrent.duration.Duration
 
 class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaFutures with CleanUp {
   implicit override val patienceConfig: PatienceConfig = PatienceConfig(timeout = scaled(Span(5, Seconds)))
@@ -213,11 +216,35 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
 
       key1 shouldNot be(key2)
     }
+
+    "should re-create a pet SA in google even if it still exists in sam" in {
+      val user = UserPool.chooseStudent
+
+      val petSaKeyOriginal = Sam.user.petServiceAccountKey(Config.Projects.default)(user.makeAuthToken)
+      val petSaEmailOriginal = clientEmailFromJson(petSaKeyOriginal)
+      val petSaKeyIdOriginal = keyIdFromJson(petSaKeyOriginal)
+      val petSaName = petSaEmailOriginal.split('@').head
+
+      //act as a rogue process and delete the pet SA without telling sam
+      Await.result(googleIamDAO.removeServiceAccount(GoogleProject(Config.Projects.default), ServiceAccountName(petSaName)), Duration.Inf)
+
+      val petSaKeyNew = Sam.user.petServiceAccountKey(Config.Projects.default)(user.makeAuthToken)
+      val petSaEmailNew = clientEmailFromJson(petSaKeyNew)
+      val petSaKeyIdNew = keyIdFromJson(petSaKeyNew)
+
+      petSaEmailOriginal should equal(petSaEmailNew) //sanity check to make sure the SA is the same
+      petSaKeyIdOriginal should not equal petSaKeyIdNew //make sure we were able to generate a new key and that a new one was returned
+    }
   }
 
   private def keyIdFromJson(jsonKey: String): String = {
     import spray.json._
     jsonKey.parseJson.asJsObject.getFields("private_key_id").head.asInstanceOf[JsString].value
+  }
+
+  private def clientEmailFromJson(jsonKey: String): String = {
+    import spray.json._
+    jsonKey.parseJson.asJsObject.getFields("client_email").head.asInstanceOf[JsString].value
   }
 
 }
