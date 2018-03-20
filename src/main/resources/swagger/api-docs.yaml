@@ -273,10 +273,10 @@ paths:
       tags:
         - Group
     put:
-      summary: Overwrite email addresses of members of the 'admin' policy
+      summary: 'Overwrite email addresses of members of the "admin" policy'
       responses:
         201:
-          description: Admin Policy successfully created/updated
+          description: Admin Policy successfully updated
         404:
           description: Group does not exist or you are not a member of the admin policy for the group
         500:
@@ -287,6 +287,11 @@ paths:
         - in: path
           description: Name of group
           name: groupName
+          required: true
+          type: string
+        - in: body
+          description: The list of emails
+          name: emailAddresses
           required: true
           type: string
       operationId: OverwriteGroupAdminEmails
@@ -318,10 +323,10 @@ paths:
       tags:
         - Group
     put:
-      summary: Overwrite email addresses of members of the 'member' policy
+      summary: 'Overwrite email addresses of members of the "member" policy'
       responses:
         201:
-          description: Member Policy successfully created/updated
+          description: Member Policy successfully updated
         403:
           description: You do not have permission to perform this action on the resource
         404:
@@ -334,6 +339,11 @@ paths:
         - in: path
           description: Name of group
           name: groupName
+          required: true
+          type: string
+        - in: body
+          description: The list of emails
+          name: emailAddresses
           required: true
           type: string
       operationId: OverwriteGroupMemberEmails
