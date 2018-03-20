@@ -188,21 +188,22 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
   def createUserPetServiceAccount(user: WorkbenchUser, project: GoogleProject): Future[PetServiceAccount] = {
     val (petSaID, petSaDisplayName) = toPetSAFromUser(user)
 
-    directoryDAO.loadPetServiceAccount(PetServiceAccountId(user.id, project)).flatMap {
-      case Some(pet) => Future.successful(pet)
-      case None =>
-        // First find or create the service account in Google, which generates a unique id and email
-        val petSA = googleIamDAO.getOrCreateServiceAccount(project, petSaID, petSaDisplayName)
-        petSA.flatMap { serviceAccount =>
-          // Set up the service account with the necessary permissions
-          val petServiceAccount = PetServiceAccount(PetServiceAccountId(user.id, project), serviceAccount)
+    // First find or create the service account in Google, which generates a unique id and email
+    val petSA = googleIamDAO.getOrCreateServiceAccount(project, petSaID, petSaDisplayName)
+    petSA.flatMap { serviceAccount =>
+      // Set up the service account with the necessary permissions
+      val petServiceAccount = PetServiceAccount(PetServiceAccountId(user.id, project), serviceAccount)
+      // If the service account doesn't exist in OpenDJ, create it
+      directoryDAO.loadPetServiceAccount(PetServiceAccountId(user.id, project)).flatMap {
+        case Some(pet) => Future.successful(pet)
+        case None =>
           setUpServiceAccount(petServiceAccount) andThen { case Failure(_) =>
             // If anything fails with setup, clean up any created resources to ensure we don't end up with orphaned pets.
             removePetServiceAccount(petServiceAccount).failed.foreach { e =>
               logger.warn(s"Error occurred cleaning up pet service account [$petSaID] [$petSaDisplayName]", e)
             }
           }
-        }
+      }
     }
   }
 
@@ -228,7 +229,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
       maybePet <- directoryDAO.loadPetServiceAccount(PetServiceAccountId(userId, project))
       result <- maybePet match {
         case Some(pet) => googleKeyCache.removeKey(pet, keyId)
-        case none => Future.successful(())
+        case None => Future.successful(())
       }
     } yield result
   }
