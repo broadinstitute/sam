@@ -24,86 +24,90 @@ trait ManagedGroupRoutes extends UserInfoDirectives with SecurityDirectives {
 
   def groupRoutes: server.Route = requireUserInfo { userInfo =>
     pathPrefix("group" / Segment) { groupId =>
+      val managedGroup = Resource(ManagedGroupService.managedGroupTypeName, ResourceId(groupId))
+
       pathEndOrSingleSlash {
         get {
-          handleGetGroup(groupId)
+          handleGetGroup(managedGroup)
         } ~
         post {
-          handlePostGroup(groupId, userInfo)
+          handlePostGroup(managedGroup, userInfo)
         } ~
         delete {
-          handleDeleteGroup(groupId, userInfo)
+          handleDeleteGroup(managedGroup, userInfo)
         }
       } ~
       path("members") {
         get {
-          handleListMemberEmails(groupId, userInfo)
+          handleListMemberEmails(managedGroup, userInfo)
         } ~
         put {
-          handleOverwriteMemberEmails(groupId, userInfo)
+          handleOverwriteMemberEmails(managedGroup, userInfo)
         }
       } ~
       path("admins") {
         get {
-          handleListAdminEmails(groupId, userInfo)
+          handleListAdminEmails(managedGroup, userInfo)
         } ~
         put {
-          handleOverwriteAdminEmails(groupId, userInfo)
+          handleOverwriteAdminEmails(managedGroup, userInfo)
         }
       }
     }
   }
 
-  private def handleGetGroup(groupId: String): Route = {
+  private def handleGetGroup(managedGroup: Resource): Route = {
     complete (
-      managedGroupService.loadManagedGroup(ResourceId(groupId)).map {
+      managedGroupService.loadManagedGroup(managedGroup.resourceId).map {
         case Some(response) => StatusCodes.OK -> response
         case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "group not found"))
       }
     )
   }
 
-  private def handlePostGroup(groupId: String, userInfo: UserInfo): Route = {
-    complete(managedGroupService.createManagedGroup(ResourceId(groupId), userInfo).map(_ => StatusCodes.Created))
+  private def handlePostGroup(managedGroup: Resource, userInfo: UserInfo): Route = {
+    complete(managedGroupService.createManagedGroup(managedGroup.resourceId, userInfo).map(_ => StatusCodes.Created))
   }
 
-  private def handleDeleteGroup(groupId: String, userInfo: UserInfo): Route = {
-    val resource = Resource(ManagedGroupService.managedGroupTypeName, ResourceId(groupId))
-    requireAction(resource, SamResourceActions.delete, userInfo) {
-      complete(managedGroupService.deleteManagedGroup(ResourceId(groupId)).map(_ => StatusCodes.NoContent))
+  private def handleDeleteGroup(managedGroup: Resource, userInfo: UserInfo): Route = {
+    requireAction(managedGroup, SamResourceActions.delete, userInfo) {
+      complete(managedGroupService.deleteManagedGroup(managedGroup.resourceId).map(_ => StatusCodes.NoContent))
     }
   }
 
-  private def handleListAdminEmails(groupId: String, userInfo: UserInfo): Route = {
-    val resource = Resource(ManagedGroupService.managedGroupTypeName, ResourceId(groupId))
-    // TODO: What is the correct Action that's needed here?  "readPolicies" or "read_policy::admin"?
-    requireAction(resource, SamResourceActions.readPolicy(AccessPolicyName(ManagedGroupService.adminValue)), userInfo) {
+  private def handleListAdminEmails(managedGroup: Resource, userInfo: UserInfo): Route = {
+    requireAction(managedGroup, SamResourceActions.readPolicy(AccessPolicyName(ManagedGroupService.adminValue)), userInfo) {
       complete(
-        managedGroupService.listAdminEmails(ResourceId(groupId)).map(StatusCodes.OK -> _)
+        managedGroupService.listAdminEmails(managedGroup.resourceId).map(StatusCodes.OK -> _)
       )
     }
   }
 
-  private def handleListMemberEmails(groupId: String, userInfo: UserInfo) = {
-    val resource = Resource(ManagedGroupService.managedGroupTypeName, ResourceId(groupId))
-    // TODO: What is the correct Action that's needed here?  "readPolicies" or "read_policy::admin"?
-    requireAction(resource, SamResourceActions.readPolicy(AccessPolicyName(ManagedGroupService.adminValue)), userInfo) {
+  private def handleListMemberEmails(managedGroup: Resource, userInfo: UserInfo): Route = {
+    requireAction(managedGroup, SamResourceActions.readPolicy(AccessPolicyName(ManagedGroupService.adminValue)), userInfo) {
       complete(
-        managedGroupService.listMemberEmails(ResourceId(groupId)).map(StatusCodes.OK -> _)
+        managedGroupService.listMemberEmails(managedGroup.resourceId).map(StatusCodes.OK -> _)
       )
     }
   }
 
-  private def handleOverwriteMemberEmails(groupId: String, userInfo: UserInfo) = {
-    val resource = Resource(ManagedGroupService.managedGroupTypeName, ResourceId(groupId))
-    requireAction(resource, SamResourceActions.alterPolicies, userInfo) {
+  private def handleOverwriteMemberEmails(managedGroup: Resource, userInfo: UserInfo): Route = {
+    requireAction(managedGroup, SamResourceActions.sharePolicy(AccessPolicyName(ManagedGroupService.memberValue)), userInfo) {
       entity(as[Set[WorkbenchEmail]]) { members =>
         complete(
-          managedGroupService.overwriteMemberEmails(ResourceId(groupId), members).map(_ => StatusCodes.Created)
+          managedGroupService.overwriteMemberEmails(managedGroup.resourceId, members).map(_ => StatusCodes.Created)
         )
       }
     }
   }
 
-  private def handleOverwriteAdminEmails(groupId: String, userInfo: UserInfo) = ???
+  private def handleOverwriteAdminEmails(managedGroup: Resource, userInfo: UserInfo): Route = {
+    requireAction(managedGroup, SamResourceActions.sharePolicy(AccessPolicyName(ManagedGroupService.adminValue)), userInfo) {
+      entity(as[Set[WorkbenchEmail]]) { members =>
+        complete(
+          managedGroupService.overwriteAdminEmails(managedGroup.resourceId, members).map(_ => StatusCodes.Created)
+        )
+      }
+    }
+  }
 }
