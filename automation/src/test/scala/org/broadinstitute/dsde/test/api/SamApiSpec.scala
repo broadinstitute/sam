@@ -202,49 +202,47 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
 
       key1 shouldBe key2
 
-      register cleanUp Sam.user.deletePetServiceAccountKey(Config.Projects.default, keyIdFromJson(key1))(user.makeAuthToken)
+      register cleanUp Sam.user.deletePetServiceAccountKey(Config.Projects.default, getFieldFromJson(key1, "private_key_id"))(user.makeAuthToken)
     }
 
     "should furnish a new service account key after deleting a cached key" in {
       val user = UserPool.chooseStudent
 
       val key1 = Sam.user.petServiceAccountKey(Config.Projects.default)(user.makeAuthToken)
-      Sam.user.deletePetServiceAccountKey(Config.Projects.default, keyIdFromJson(key1))(user.makeAuthToken)
+      Sam.user.deletePetServiceAccountKey(Config.Projects.default, getFieldFromJson(key1, "private_key_id"))(user.makeAuthToken)
 
       val key2 = Sam.user.petServiceAccountKey(Config.Projects.default)(user.makeAuthToken)
-      register cleanUp Sam.user.deletePetServiceAccountKey(Config.Projects.default, keyIdFromJson(key2))(user.makeAuthToken)
+      register cleanUp Sam.user.deletePetServiceAccountKey(Config.Projects.default, getFieldFromJson(key2, "private_key_id"))(user.makeAuthToken)
 
       key1 shouldNot be(key2)
     }
 
     "should re-create a pet SA in google even if it still exists in sam" in {
       val user = UserPool.chooseStudent
+      val projectName = Config.Projects.default
 
-      val petSaKeyOriginal = Sam.user.petServiceAccountKey(Config.Projects.default)(user.makeAuthToken)
-      val petSaEmailOriginal = clientEmailFromJson(petSaKeyOriginal)
-      val petSaKeyIdOriginal = keyIdFromJson(petSaKeyOriginal)
+      //this must use a GPAlloc'd project to avoid deleting the pet for a shared project, which
+      //may have unexpected side effects
+      val petSaKeyOriginal = Sam.user.petServiceAccountKey(projectName)(user.makeAuthToken)
+      val petSaEmailOriginal = getFieldFromJson(petSaKeyOriginal, "client_email")
+      val petSaKeyIdOriginal = getFieldFromJson(petSaKeyOriginal, "private_key_id")
       val petSaName = petSaEmailOriginal.split('@').head
 
       //act as a rogue process and delete the pet SA without telling sam
-      Await.result(googleIamDAO.removeServiceAccount(GoogleProject(Config.Projects.default), ServiceAccountName(petSaName)), Duration.Inf)
+      Await.result(googleIamDAO.removeServiceAccount(GoogleProject(projectName), ServiceAccountName(petSaName)), Duration.Inf)
 
-      val petSaKeyNew = Sam.user.petServiceAccountKey(Config.Projects.default)(user.makeAuthToken)
-      val petSaEmailNew = clientEmailFromJson(petSaKeyNew)
-      val petSaKeyIdNew = keyIdFromJson(petSaKeyNew)
+      val petSaKeyNew = Sam.user.petServiceAccountKey(projectName)(user.makeAuthToken)
+      val petSaEmailNew = getFieldFromJson(petSaKeyNew, "client_email")
+      val petSaKeyIdNew = getFieldFromJson(petSaKeyNew, "private_key_id")
 
       petSaEmailOriginal should equal(petSaEmailNew) //sanity check to make sure the SA is the same
       petSaKeyIdOriginal should not equal petSaKeyIdNew //make sure we were able to generate a new key and that a new one was returned
     }
   }
 
-  private def keyIdFromJson(jsonKey: String): String = {
+  private def getFieldFromJson(jsonKey: String, field: String): String = {
     import spray.json._
-    jsonKey.parseJson.asJsObject.getFields("private_key_id").head.asInstanceOf[JsString].value
-  }
-
-  private def clientEmailFromJson(jsonKey: String): String = {
-    import spray.json._
-    jsonKey.parseJson.asJsObject.getFields("client_email").head.asInstanceOf[JsString].value
+    jsonKey.parseJson.asJsObject.getFields(field).head.asInstanceOf[JsString].value
   }
 
 }
