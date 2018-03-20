@@ -1,19 +1,17 @@
 package org.broadinstitute.dsde.test.api
 
-import akka.http.scaladsl.model.headers
-import akka.http.scaladsl.model.headers.OAuth2BearerToken
-import org.broadinstitute.dsde.workbench.service.{Google, Orchestration, Sam, Thurloe}
+import org.broadinstitute.dsde.workbench.service.{Orchestration, Sam, Thurloe}
 import org.broadinstitute.dsde.workbench.service.Sam.user.UserStatusDetails
 import org.broadinstitute.dsde.workbench.auth.{AuthToken, ServiceAccountAuthTokenFromJson, ServiceAccountAuthTokenFromPem}
 import org.broadinstitute.dsde.workbench.config.{Config, Credentials, UserPool}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.dao.Google.googleIamDAO
-import org.broadinstitute.dsde.workbench.fixture.{BillingFixtures, GPAllocFixtures}
+import org.broadinstitute.dsde.workbench.fixture.BillingFixtures
 import org.broadinstitute.dsde.workbench.service.test.CleanUp
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountName}
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.time.{Seconds, Span}
-import org.scalatest.{DoNotDiscover, FreeSpec, Matchers}
+import org.scalatest.{FreeSpec, Matchers}
 
 import scala.concurrent.Await
 import scala.concurrent.duration.Duration
