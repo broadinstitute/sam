@@ -22,5 +22,6 @@ case class GoogleServicesConfig(appName: String,
                                 groupSyncTopic: String,
                                 groupSyncSubscription: String,
                                 groupSyncWorkerCount: Int,
-                                googleKeyCacheConfig: GoogleKeyCacheConfig
+                                googleKeyCacheConfig: GoogleKeyCacheConfig,
+                                proxyNamePrefix: Option[String]
                                )

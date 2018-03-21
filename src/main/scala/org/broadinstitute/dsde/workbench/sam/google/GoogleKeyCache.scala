@@ -35,7 +35,7 @@ class GoogleKeyCache(val googleIamDAO: GoogleIamDAO, val googleStorageDAO: Googl
 
     googleStorageDAO.createBucket(googleServicesConfig.serviceAccountClientProject, googleServicesConfig.googleKeyCacheConfig.bucketName).recover {
       case t: GoogleJsonResponseException if t.getDetails.getMessage.contains("You already own this bucket") && t.getDetails.getCode == 409 => ()
-    } flatMap { _ => googleStorageDAO.setBucketLifecycle(googleServicesConfig.googleKeyCacheConfig.bucketName, googleServicesConfig.googleKeyCacheConfig.activeKeyMaxAge) }
+    } flatMap { _ => googleStorageDAO.setBucketLifecycle(googleServicesConfig.googleKeyCacheConfig.bucketName, googleServicesConfig.googleKeyCacheConfig.retiredKeyMaxAge) }
   }
 
   override def getKey(pet: PetServiceAccount): Future[String] = {
