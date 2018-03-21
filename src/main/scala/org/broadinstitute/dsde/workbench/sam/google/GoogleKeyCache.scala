@@ -9,7 +9,7 @@ import cats.implicits._
 import com.google.api.client.googleapis.json.GoogleJsonResponseException
 import org.broadinstitute.dsde.workbench.google.{GoogleIamDAO, GooglePubSubDAO, GoogleStorageDAO}
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.model.google.{GcsObjectName, GoogleProject, ServiceAccountKeyId}
+import org.broadinstitute.dsde.workbench.model.google.{GcsObjectName, GoogleProject, ServiceAccountKey, ServiceAccountKeyId}
 import org.broadinstitute.dsde.workbench.sam.config.{GoogleServicesConfig, PetServiceAccountConfig}
 import org.broadinstitute.dsde.workbench.sam.service.KeyCache
 
@@ -42,12 +42,12 @@ class GoogleKeyCache(val googleIamDAO: GoogleIamDAO, val googleStorageDAO: Googl
     val retrievedKeys = for {
       keyObjects <- googleStorageDAO.listObjectsWithPrefix(googleServicesConfig.googleKeyCacheConfig.bucketName, keyNamePrefix(pet.id.project, pet.serviceAccount.email))
       keys <- googleIamDAO.listUserManagedServiceAccountKeys(pet.id.project, pet.serviceAccount.email)
-    } yield (keyObjects.toList, keys.toList)
+    } yield (keyObjects, keys.toList)
 
     retrievedKeys.flatMap {
       case (Nil, _) => furnishNewKey(pet) //mismatch. there were no keys found in the bucket, but there may be keys on the service account
       case (_, Nil) => furnishNewKey(pet) //mismatch. there were no keys found on the service account, but there may be keys in the bucket
-      case (keyObjects, _) => retrieveActiveKey(pet, keyObjects)
+      case (keyObjects, serviceAccountKeys) => retrieveActiveKey(pet, keyObjects, serviceAccountKeys)
     }
   }
 
@@ -73,11 +73,17 @@ class GoogleKeyCache(val googleIamDAO: GoogleIamDAO, val googleStorageDAO: Googl
     keyFuture.value.map(_.getOrElse(throw new WorkbenchException("Unable to furnish new key")))
   }
 
-  private def retrieveActiveKey(pet: PetServiceAccount, keyObjects: List[GcsObjectName]): Future[String] = {
+  private def retrieveActiveKey(pet: PetServiceAccount, keyObjects: List[GcsObjectName], serviceAccountKeys: List[ServiceAccountKey]): Future[String] = {
     val mostRecentKey = keyObjects.sortBy(_.timeCreated.toEpochMilli).last
     val keyRetired = System.currentTimeMillis() - mostRecentKey.timeCreated.toEpochMilli > 86400000L * googleServicesConfig.googleKeyCacheConfig.activeKeyMaxAge
 
-    if(keyRetired) furnishNewKey(pet)
+    val keyPathPattern = """([^\/]+)\/([^\/]+)\/([^\/]+)""".r
+    val keyPathPattern(project, petSaEmail, keyId) = mostRecentKey.value
+
+    //The key may exist in the Google bucket cache, but could have been deleted from the SA directly
+    val keyExistsForSA = serviceAccountKeys.exists(_.id.value.contentEquals(keyId))
+
+    if(keyRetired || !keyExistsForSA) furnishNewKey(pet)
     else {
       googleStorageDAO.getObject(googleServicesConfig.googleKeyCacheConfig.bucketName, mostRecentKey).flatMap {
         case Some(key) => Future.successful(key.toString)
