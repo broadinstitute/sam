@@ -226,12 +226,16 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
       val petSaKeyIdOriginal = getFieldFromJson(petSaKeyOriginal, "private_key_id")
       val petSaName = petSaEmailOriginal.split('@').head
 
+      register cleanUp Sam.user.deletePetServiceAccountKey(Config.Projects.default, petSaKeyIdOriginal)(user.makeAuthToken)
+
       //act as a rogue process and delete the pet SA without telling sam
       Await.result(googleIamDAO.removeServiceAccount(GoogleProject(projectName), ServiceAccountName(petSaName)), Duration.Inf)
 
       val petSaKeyNew = Sam.user.petServiceAccountKey(projectName)(user.makeAuthToken)
       val petSaEmailNew = getFieldFromJson(petSaKeyNew, "client_email")
       val petSaKeyIdNew = getFieldFromJson(petSaKeyNew, "private_key_id")
+
+      register cleanUp Sam.user.deletePetServiceAccountKey(Config.Projects.default, petSaKeyIdNew)(user.makeAuthToken)
 
       petSaEmailOriginal should equal(petSaEmailNew) //sanity check to make sure the SA is the same
       petSaKeyIdOriginal should not equal petSaKeyIdNew //make sure we were able to generate a new key and that a new one was returned
