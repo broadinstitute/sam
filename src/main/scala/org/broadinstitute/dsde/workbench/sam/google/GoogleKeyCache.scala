@@ -73,8 +73,8 @@ class GoogleKeyCache(val googleIamDAO: GoogleIamDAO, val googleStorageDAO: Googl
     keyFuture.value.map(_.getOrElse(throw new WorkbenchException("Unable to furnish new key")))
   }
 
-  private def retrieveActiveKey(pet: PetServiceAccount, keyObjects: List[GcsObjectName], serviceAccountKeys: List[ServiceAccountKey]): Future[String] = {
-    val mostRecentKey = keyObjects.sortBy(_.timeCreated.toEpochMilli).last
+  private def retrieveActiveKey(pet: PetServiceAccount, cachedKeyObjects: List[GcsObjectName], serviceAccountKeys: List[ServiceAccountKey]): Future[String] = {
+    val mostRecentKey = cachedKeyObjects.sortBy(_.timeCreated.toEpochMilli).last
     val keyRetired = System.currentTimeMillis() - mostRecentKey.timeCreated.toEpochMilli > 86400000L * googleServicesConfig.googleKeyCacheConfig.activeKeyMaxAge
 
     val keyPathPattern = """([^\/]+)\/([^\/]+)\/([^\/]+)""".r
