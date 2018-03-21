@@ -71,7 +71,8 @@ package object config {
       config.getString("groupSync.pubSubTopic"),
       config.getString("groupSync.pubSubSubscription"),
       config.getInt("groupSync.workerCount"),
-      config.as[GoogleKeyCacheConfig]("googleKeyCache")
+      config.as[GoogleKeyCacheConfig]("googleKeyCache"),
+      config.as[Option[String]]("proxyNamePrefix")
     )
   }
 
