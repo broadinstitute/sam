@@ -153,18 +153,18 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
 /* Re-enable this code and remove the temporary code below after fixing rawls for GAWB-2933
       val expectedProxyEmail1 = s"${username1}_$userId1@${Config.GCS.appsDomain}"
 */
-      val expectedProxyEmail1 = s"PROXY_$userId1@${Config.GCS.appsDomain}"
+      val expectedProxyEmail1 = s"$userId1@${Config.GCS.appsDomain}"
 /**/
-      proxyGroup1_1 shouldBe WorkbenchEmail(expectedProxyEmail1)
-      proxyGroup1_2 shouldBe WorkbenchEmail(expectedProxyEmail1)
+      proxyGroup1_1.value should endWith (expectedProxyEmail1)
+      proxyGroup1_2.value should endWith (expectedProxyEmail1)
 
 /* Re-enable this code and remove the temporary code below after fixing rawls for GAWB-2933
       val expectedProxyEmail2 = s"${username2}_$userId2@${Config.GCS.appsDomain}"
 */
-      val expectedProxyEmail2 = s"PROXY_$userId2@${Config.GCS.appsDomain}"
+      val expectedProxyEmail2 = s"$userId2@${Config.GCS.appsDomain}"
 /**/
-      proxyGroup2_1 shouldBe WorkbenchEmail(expectedProxyEmail2)
-      proxyGroup2_2 shouldBe WorkbenchEmail(expectedProxyEmail2)
+      proxyGroup2_1.value should endWith (expectedProxyEmail2)
+      proxyGroup2_2.value should endWith (expectedProxyEmail2)
     }
 
     "should retrieve a user's proxy group from a pet service account email as any user" in {
@@ -184,10 +184,10 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
 /* Re-enable this code and remove the temporary code below after fixing rawls for GAWB-2933
       val expectedProxyEmail = s"${username}_$userId@${Config.GCS.appsDomain}"
 */
-      val expectedProxyEmail = s"PROXY_$userId@${Config.GCS.appsDomain}"
+      val expectedProxyEmail = s"$userId@${Config.GCS.appsDomain}"
 /**/
-      proxyGroup_1 shouldBe WorkbenchEmail(expectedProxyEmail)
-      proxyGroup_2 shouldBe WorkbenchEmail(expectedProxyEmail)
+      proxyGroup_1.value should endWith (expectedProxyEmail)
+      proxyGroup_2.value should endWith (expectedProxyEmail)
     }
 
 
