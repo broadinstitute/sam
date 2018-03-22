@@ -233,7 +233,7 @@ paths:
         404:
           description: Group could not be found
           schema:
-            $ref: #/definition/ErrorReport'
+            $ref: '#/definition/ErrorReport'
         500:
           description: Internal Error
           schema:
@@ -255,8 +255,7 @@ paths:
         200:
           description: 'Email addresses in the "admin" policy'
           schema:
-            description: 'Email addresses in the "admin" policy'
-            type: string
+            $ref: '#/definitions/ArrayOfEmails'
         404:
           description: Group could not be found or you do not have the required permissions on this group
         500:
@@ -293,7 +292,8 @@ paths:
           description: The list of emails
           name: emailAddresses
           required: true
-          type: string
+          schema:
+            $ref: '#/definitions/ArrayOfEmails'
       operationId: OverwriteGroupAdminEmails
       tags:
         - Group
@@ -305,8 +305,7 @@ paths:
         200:
           description: 'Email addresses in the "member" policy'
           schema:
-            description: 'Email addresses in the "member" policy'
-            type: string
+            $ref: '#/definitions/ArrayOfEmails'
         404:
           description: Group could not be found or you do not have the required permissions on this group
         500:
@@ -345,7 +344,8 @@ paths:
           description: The list of emails
           name: emailAddresses
           required: true
-          type: string
+          schema:
+            $ref: '#/definitions/ArrayOfEmails'
       operationId: OverwriteGroupMemberEmails
       tags:
         - Group
@@ -962,6 +962,16 @@ definitions:
         type: array
         items:
           type: string
+
+  ArrayOfEmails:
+    description: An array of email addresses
+    type: array
+    items:
+      type: string
+    example:
+      - person@company.com
+      - group_name@company.com
+      - foo@bar.com
 
   Enabled:
     description: the status of the user's account
