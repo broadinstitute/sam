@@ -72,7 +72,7 @@ package object config {
       config.getString("groupSync.pubSubSubscription"),
       config.getInt("groupSync.workerCount"),
       config.as[GoogleKeyCacheConfig]("googleKeyCache"),
-      config.as[Option[String]]("proxyNamePrefix")
+      config.as[Option[String]]("resourceNamePrefix")
     )
   }
 

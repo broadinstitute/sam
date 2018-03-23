@@ -6,6 +6,7 @@ import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import com.google.api.client.googleapis.json.GoogleJsonResponseException
+import com.google.api.services.admin.directory.model.Group
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleIamDAO, GooglePubSubDAO, GoogleStorageDAO}
 import org.broadinstitute.dsde.workbench.model._
@@ -38,12 +39,12 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
     val maxUsernameLength = maxGroupEmailLength - emailSuffix.length
     WorkbenchEmail(username.take(maxUsernameLength) + emailSuffix)
 */
-    WorkbenchEmail(s"${googleServicesConfig.proxyNamePrefix.getOrElse("PROXY_")}${user.id.value}@${googleServicesConfig.appsDomain}")
+    WorkbenchEmail(s"${googleServicesConfig.resourceNamePrefix.getOrElse("")}PROXY_${user.id.value}@${googleServicesConfig.appsDomain}")
 /**/
   }
 
   override val emailDomain = googleServicesConfig.appsDomain
-  private val allUsersGroupEmail = WorkbenchEmail(s"GROUP_${allUsersGroupName.value}@$emailDomain")
+  private val allUsersGroupEmail = WorkbenchEmail(s"${googleServicesConfig.resourceNamePrefix.getOrElse("")}GROUP_${allUsersGroupName.value}@$emailDomain")
 
   override def getOrCreateAllUsersGroup(directoryDAO: DirectoryDAO)(implicit executionContext: ExecutionContext): Future[WorkbenchGroup] = {
     val allUsersGroup = BasicWorkbenchGroup(allUsersGroupName, Set.empty, allUsersGroupEmail)
@@ -186,23 +187,28 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
   }
 
   def createUserPetServiceAccount(user: WorkbenchUser, project: GoogleProject): Future[PetServiceAccount] = {
-    val (petSaID, petSaDisplayName) = toPetSAFromUser(user)
+    val (petSaName, petSaDisplayName) = toPetSAFromUser(user)
 
-    directoryDAO.loadPetServiceAccount(PetServiceAccountId(user.id, project)).flatMap {
-      case Some(pet) => Future.successful(pet)
-      case None =>
-        // First find or create the service account in Google, which generates a unique id and email
-        val petSA = googleIamDAO.getOrCreateServiceAccount(project, petSaID, petSaDisplayName)
-        petSA.flatMap { serviceAccount =>
+    // First find or create the service account in Google, which generates a unique id and email.
+    // We do this first because the pet may have been deleted from Google by an outsider, which would
+    // leave behind a reference in OpenDJ. It is not enough to just see if the pet exists in OpenDJ.
+    val petSA = googleIamDAO.getOrCreateServiceAccount(project, petSaName, petSaDisplayName)
+    petSA.flatMap { serviceAccount =>
+      // If the service account doesn't exist in OpenDJ, create it
+      directoryDAO.loadPetServiceAccount(PetServiceAccountId(user.id, project)).flatMap {
+        case Some(pet) => Future.successful(pet)
+        case None => {
           // Set up the service account with the necessary permissions
           val petServiceAccount = PetServiceAccount(PetServiceAccountId(user.id, project), serviceAccount)
+
           setUpServiceAccount(petServiceAccount) andThen { case Failure(_) =>
             // If anything fails with setup, clean up any created resources to ensure we don't end up with orphaned pets.
             removePetServiceAccount(petServiceAccount).failed.foreach { e =>
-              logger.warn(s"Error occurred cleaning up pet service account [$petSaID] [$petSaDisplayName]", e)
+              logger.warn(s"Error occurred cleaning up pet service account [$petSaName] [$petSaDisplayName]", e)
             }
           }
         }
+      }
     }
   }
 
@@ -228,7 +234,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
       maybePet <- directoryDAO.loadPetServiceAccount(PetServiceAccountId(userId, project))
       result <- maybePet match {
         case Some(pet) => googleKeyCache.removeKey(pet, keyId)
-        case none => Future.successful(())
+        case None => Future.successful(())
       }
     } yield result
   }
@@ -342,7 +348,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
      *
      * Subject IDs are 22 numeric characters, so "pet-${subjectId}" fulfills these requirements.
      */
-    val serviceAccountName = s"pet-${user.id.value}"
+    val serviceAccountName = s"${googleServicesConfig.resourceNamePrefix.getOrElse("")}pet-${user.id.value}"
     val displayName = s"Pet Service Account for user [${user.email.value}]"
 
     (ServiceAccountName(serviceAccountName), ServiceAccountDisplayName(displayName))
