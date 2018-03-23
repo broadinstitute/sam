@@ -85,15 +85,7 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
     } yield ()
   }
 
-  def listAdminEmails(resourceId: ResourceId): Future[Set[WorkbenchEmail]] = {
-    listPolicyMemberEmails(resourceId, AccessPolicyName(ManagedGroupService.adminValue))
-  }
-
-  def listMemberEmails(resourceId: ResourceId): Future[Set[WorkbenchEmail]] = {
-    listPolicyMemberEmails(resourceId, AccessPolicyName(ManagedGroupService.memberValue))
-  }
-
-  private def listPolicyMemberEmails(resourceId: ResourceId, policyName: AccessPolicyName) = {
+  def listPolicyMemberEmails(resourceId: ResourceId, policyName: AccessPolicyName) = {
     val resourceAndPolicyName = ResourceAndPolicyName(Resource(ManagedGroupService.managedGroupTypeName, resourceId), policyName)
     accessPolicyDAO.loadPolicy(resourceAndPolicyName) flatMap {
       case Some(policy) => directoryDAO.loadSubjectEmails(policy.members)
@@ -101,15 +93,7 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
     }
   }
 
-  def overwriteAdminEmails(resourceId: ResourceId, emails: Set[WorkbenchEmail]): Future[AccessPolicy] = {
-    overwritePolicyMemberEmails(resourceId, AccessPolicyName(ManagedGroupService.adminValue), emails)
-  }
-
-  def overwriteMemberEmails(resourceId: ResourceId, emails: Set[WorkbenchEmail]): Future[AccessPolicy] = {
-    overwritePolicyMemberEmails(resourceId, AccessPolicyName(ManagedGroupService.memberValue), emails)
-  }
-
-  private def overwritePolicyMemberEmails(resourceId: ResourceId, policyName: AccessPolicyName, emails: Set[WorkbenchEmail]): Future[AccessPolicy] = {
+  def overwritePolicyMemberEmails(resourceId: ResourceId, policyName: AccessPolicyName, emails: Set[WorkbenchEmail]): Future[AccessPolicy] = {
     val resourceAndPolicyName = ResourceAndPolicyName(Resource(ManagedGroupService.managedGroupTypeName, resourceId), policyName)
     accessPolicyDAO.loadPolicy(resourceAndPolicyName).flatMap {
       case Some(policy) => val updatedPolicy = AccessPolicyMembership(emails, policy.actions, policy.roles)

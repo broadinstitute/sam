@@ -173,64 +173,38 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
 
   }
 
-  "ManagedGroupService listAdminEmails" should "return a list of email addresses for the groups admin policy" in {
+  "ManagedGroupService listPolicyMemberEmails" should "return a list of email addresses for the groups admin policy" in {
     val managedGroup = assertMakeGroup()
     runAndWait(dirDAO.createUser(WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)))
-    runAndWait(managedGroupService.listAdminEmails(managedGroup.resourceId)) shouldEqual Set(dummyUserInfo.userEmail)
+    runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ownerPolicyName)) shouldEqual Set(dummyUserInfo.userEmail)
+    runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, memberPolicyName)) shouldEqual Set.empty
   }
 
   it should "throw an exception if the group does not exist" in {
     intercept[WorkbenchExceptionWithErrorReport] {
-      runAndWait(managedGroupService.listAdminEmails(resourceId))
+      runAndWait(managedGroupService.listPolicyMemberEmails(resourceId, ownerPolicyName))
     }
   }
 
-  "ManagedGroupService listMemberEmails" should "return a list of email addresses for the groups member policy" in {
-    val managedGroup = assertMakeGroup()
-    runAndWait(dirDAO.createUser(WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)))
-    runAndWait(managedGroupService.listMemberEmails(managedGroup.resourceId)) shouldEqual Set.empty
-  }
-
-  it should "throw an exception if the group does not exist" in {
-    intercept[WorkbenchExceptionWithErrorReport] {
-      runAndWait(managedGroupService.listMemberEmails(resourceId))
-    }
-  }
-
-  "ManagedGroupService.overwriteAdminEmails" should "permit overwriting with 'user' subjects" in {
+  "ManagedGroupService.overwritePolicyMemberEmails" should "permit overwriting the admin policy" in {
     val managedGroup = assertMakeGroup()
     val dummyAdmin = WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)
     val otherAdmin = WorkbenchUser(WorkbenchUserId("admin2"), WorkbenchEmail("admin2@foo.test"))
+    val someGroupEmail = WorkbenchEmail("someGroup@some.org")
     runAndWait(dirDAO.createUser(dummyAdmin))
     runAndWait(dirDAO.createUser(otherAdmin))
-
-    runAndWait(managedGroupService.listAdminEmails(managedGroup.resourceId)) shouldEqual Set(dummyAdmin.email)
-
-    runAndWait(managedGroupService.overwriteAdminEmails(managedGroup.resourceId, Set(otherAdmin.email)))
-
-    runAndWait(managedGroupService.listAdminEmails(managedGroup.resourceId)) shouldEqual Set(otherAdmin.email)
-  }
-
-  it should "permit overwriting with 'group' subjects" in {
-    val managedGroup = assertMakeGroup()
-
-    val someGroupEmail = WorkbenchEmail("someGroup@some.org")
     runAndWait(dirDAO.createGroup(BasicWorkbenchGroup(WorkbenchGroupName("someGroup"), Set.empty, someGroupEmail)))
 
-    val dummyAdmin = WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)
-    runAndWait(dirDAO.createUser(dummyAdmin))
+    runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ownerPolicyName)) shouldEqual Set(dummyAdmin.email)
 
-    runAndWait(managedGroupService.listAdminEmails(managedGroup.resourceId)) shouldEqual Set(dummyAdmin.email)
+    runAndWait(managedGroupService.overwritePolicyMemberEmails(managedGroup.resourceId, ownerPolicyName, Set(otherAdmin.email, someGroupEmail)))
 
-    val newAdmins = Set(dummyAdmin.email, someGroupEmail)
-    runAndWait(managedGroupService.overwriteAdminEmails(managedGroup.resourceId, newAdmins))
-
-    runAndWait(managedGroupService.listAdminEmails(managedGroup.resourceId)) shouldEqual newAdmins
+    runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ownerPolicyName)) shouldEqual Set(otherAdmin.email, someGroupEmail)
   }
 
   it should "throw an exception if the group does not exist" in {
     intercept[WorkbenchExceptionWithErrorReport] {
-      runAndWait(managedGroupService.overwriteAdminEmails(expectedResource.resourceId, Set.empty))
+      runAndWait(managedGroupService.overwritePolicyMemberEmails(expectedResource.resourceId, ownerPolicyName, Set.empty))
     }
   }
 
@@ -239,75 +213,23 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     val badAdmin = WorkbenchUser(WorkbenchUserId("admin2"), WorkbenchEmail("admin2@foo.test"))
 
     intercept[WorkbenchExceptionWithErrorReport] {
-      runAndWait(managedGroupService.overwriteAdminEmails(managedGroup.resourceId, Set(badAdmin.email)))
+      runAndWait(managedGroupService.overwritePolicyMemberEmails(managedGroup.resourceId, ownerPolicyName, Set(badAdmin.email)))
     }
   }
 
-  "ManagedGroupService.overwriteMemberEmails" should "permit overwriting with 'group' subjects" in {
+  it should "permit overwriting the member policy" in {
     val managedGroup = assertMakeGroup()
 
+    val someUser = WorkbenchUser(WorkbenchUserId("someUser"), WorkbenchEmail("someUser@foo.test"))
     val someGroupEmail = WorkbenchEmail("someGroup@some.org")
+    runAndWait(dirDAO.createUser(someUser))
     runAndWait(dirDAO.createGroup(BasicWorkbenchGroup(WorkbenchGroupName("someGroup"), Set.empty, someGroupEmail)))
 
-    runAndWait(managedGroupService.listMemberEmails(managedGroup.resourceId)) shouldEqual Set()
+    runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, memberPolicyName)) shouldEqual Set()
 
-    val newMembers = Set(someGroupEmail)
-    runAndWait(managedGroupService.overwriteMemberEmails(managedGroup.resourceId, newMembers))
+    val newMembers = Set(someGroupEmail, someUser.email)
+    runAndWait(managedGroupService.overwritePolicyMemberEmails(managedGroup.resourceId, memberPolicyName, newMembers))
 
-    runAndWait(managedGroupService.listMemberEmails(managedGroup.resourceId)) shouldEqual newMembers
-  }
-
-  it should "permit overwriting with 'user' subjects" in {
-    val managedGroup = assertMakeGroup()
-    val joeSchmoe = WorkbenchUser(WorkbenchUserId("joe"), WorkbenchEmail("joe.schmoe@foo.test"))
-    runAndWait(dirDAO.createUser(joeSchmoe))
-
-    runAndWait(managedGroupService.listMemberEmails(managedGroup.resourceId)) shouldEqual Set()
-
-    runAndWait(managedGroupService.overwriteMemberEmails(managedGroup.resourceId, Set(joeSchmoe.email)))
-
-    runAndWait(managedGroupService.listMemberEmails(managedGroup.resourceId)) shouldEqual Set(joeSchmoe.email)
-  }
-
-  it should "throw an exception if the group does not exist" in {
-    intercept[WorkbenchExceptionWithErrorReport] {
-      runAndWait(managedGroupService.overwriteMemberEmails(expectedResource.resourceId, Set.empty))
-    }
-  }
-
-  it should "throw an exception if any of the email addresses do not match an existing subject" in {
-    val managedGroup = assertMakeGroup()
-    val badUser = WorkbenchUser(WorkbenchUserId("MrNobody"), WorkbenchEmail("null@foo.test"))
-
-    intercept[WorkbenchExceptionWithErrorReport] {
-      runAndWait(managedGroupService.overwriteMemberEmails(managedGroup.resourceId, Set(badUser.email)))
-    }
-  }
-
-  "ManagedGroupService overwriting policy members" should "permit overwriting with many subjects and different types" in {
-    val managedGroup = assertMakeGroup()
-
-    val someGroupEmail = WorkbenchEmail("someGroup@some.org")
-    val xmenEmail = WorkbenchEmail("xmen@xavier.org")
-    val joeSchmoe = WorkbenchUser(WorkbenchUserId("joe"), WorkbenchEmail("joe.schmoe@foo.test"))
-    val dummyAdmin = WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)
-    val otherAdmin = WorkbenchUser(WorkbenchUserId("admin2"), WorkbenchEmail("admin2@foo.test"))
-
-    runAndWait(dirDAO.createGroup(BasicWorkbenchGroup(WorkbenchGroupName("someGroup"), Set.empty, someGroupEmail)))
-    runAndWait(dirDAO.createGroup(BasicWorkbenchGroup(WorkbenchGroupName("xmen"), Set.empty, xmenEmail)))
-    runAndWait(dirDAO.createUser(joeSchmoe))
-    runAndWait(dirDAO.createUser(dummyAdmin))
-    runAndWait(dirDAO.createUser(otherAdmin))
-
-    runAndWait(managedGroupService.listAdminEmails(managedGroup.resourceId)) shouldEqual Set(dummyAdmin.email)
-    runAndWait(managedGroupService.listMemberEmails(managedGroup.resourceId)) shouldEqual Set()
-
-    val newMembers = Set(someGroupEmail, joeSchmoe.email)
-    runAndWait(managedGroupService.overwriteMemberEmails(managedGroup.resourceId, newMembers))
-    runAndWait(managedGroupService.listMemberEmails(managedGroup.resourceId)) shouldEqual newMembers
-
-    val newAdmins = Set(xmenEmail, dummyAdmin.email, otherAdmin.email)
-    runAndWait(managedGroupService.overwriteAdminEmails(managedGroup.resourceId, newAdmins))
-    runAndWait(managedGroupService.listAdminEmails(managedGroup.resourceId)) shouldEqual newAdmins
+    runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, memberPolicyName)) shouldEqual newMembers
   }
 }

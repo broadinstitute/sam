@@ -37,20 +37,16 @@ trait ManagedGroupRoutes extends UserInfoDirectives with SecurityDirectives {
           handleDeleteGroup(managedGroup, userInfo)
         }
       } ~
-      path("members") {
-        get {
-          handleListMemberEmails(managedGroup, userInfo)
-        } ~
-        put {
-          handleOverwriteMemberEmails(managedGroup, userInfo)
-        }
-      } ~
-      path("admins") {
-        get {
-          handleListAdminEmails(managedGroup, userInfo)
-        } ~
-        put {
-          handleOverwriteAdminEmails(managedGroup, userInfo)
+      pathPrefix(Segment) { policyName =>
+        val accessPolicyName = AccessPolicyName(if (policyName == "members") ManagedGroupService.memberValue else ManagedGroupService.adminValue)
+
+        pathEndOrSingleSlash {
+          get {
+            handleListEmails(managedGroup, accessPolicyName, userInfo)
+          } ~
+          put {
+            handleOverwriteEmails(managedGroup, accessPolicyName, userInfo)
+          }
         }
       }
     }
@@ -75,37 +71,19 @@ trait ManagedGroupRoutes extends UserInfoDirectives with SecurityDirectives {
     }
   }
 
-  private def handleListAdminEmails(managedGroup: Resource, userInfo: UserInfo): Route = {
+  private def handleListEmails(managedGroup: Resource, policyName: AccessPolicyName, userInfo: UserInfo): Route = {
     requireAction(managedGroup, SamResourceActions.readPolicy(AccessPolicyName(ManagedGroupService.adminValue)), userInfo) {
       complete(
-        managedGroupService.listAdminEmails(managedGroup.resourceId).map(StatusCodes.OK -> _)
+        managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, policyName).map(StatusCodes.OK -> _)
       )
     }
   }
 
-  private def handleListMemberEmails(managedGroup: Resource, userInfo: UserInfo): Route = {
-    requireAction(managedGroup, SamResourceActions.readPolicy(AccessPolicyName(ManagedGroupService.adminValue)), userInfo) {
-      complete(
-        managedGroupService.listMemberEmails(managedGroup.resourceId).map(StatusCodes.OK -> _)
-      )
-    }
-  }
-
-  private def handleOverwriteMemberEmails(managedGroup: Resource, userInfo: UserInfo): Route = {
-    requireAction(managedGroup, SamResourceActions.sharePolicy(AccessPolicyName(ManagedGroupService.memberValue)), userInfo) {
+  private def handleOverwriteEmails(managedGroup: Resource, policyName: AccessPolicyName, userInfo: UserInfo): Route = {
+    requireAction(managedGroup, SamResourceActions.sharePolicy(policyName), userInfo) {
       entity(as[Set[WorkbenchEmail]]) { members =>
         complete(
-          managedGroupService.overwriteMemberEmails(managedGroup.resourceId, members).map(_ => StatusCodes.Created)
-        )
-      }
-    }
-  }
-
-  private def handleOverwriteAdminEmails(managedGroup: Resource, userInfo: UserInfo): Route = {
-    requireAction(managedGroup, SamResourceActions.sharePolicy(AccessPolicyName(ManagedGroupService.adminValue)), userInfo) {
-      entity(as[Set[WorkbenchEmail]]) { members =>
-        complete(
-          managedGroupService.overwriteAdminEmails(managedGroup.resourceId, members).map(_ => StatusCodes.Created)
+          managedGroupService.overwritePolicyMemberEmails(managedGroup.resourceId, policyName, members).map(_ => StatusCodes.Created)
         )
       }
     }

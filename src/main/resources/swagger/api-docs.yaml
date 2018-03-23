@@ -222,6 +222,68 @@ paths:
       tags:
         - Group
 
+  /api/group/{groupName}/{policyName}:
+    get:
+      summary: 'Get email addresses for members of the "admin" policy'
+      responses:
+        200:
+          description: 'Email addresses in the "admin" policy'
+          schema:
+            $ref: '#/definitions/ArrayOfEmails'
+        404:
+          description: Group could not be found or you do not have the required permissions on this group
+        500:
+          description: Internal Error
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      parameters:
+        - in: path
+          description: Name of group
+          name: groupName
+          required: true
+          type: string
+        - in: path
+          description: Name of policy
+          name: policyName
+          required: true
+          type: string
+          enum: ["members", "admins"]
+      operationId: GetGroupAdminEmails
+      tags:
+        - Group
+    put:
+      summary: 'Overwrite email addresses of members of the "admin" policy'
+      responses:
+        201:
+          description: Admin Policy successfully updated
+        404:
+          description: Group does not exist or you are not a member of the admin policy for the group
+        500:
+          description: Internal Error
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      parameters:
+        - in: path
+          description: Name of group
+          name: groupName
+          required: true
+          type: string
+        - in: path
+          description: Name of policy
+          name: policyName
+          required: true
+          type: string
+          enum: ["members", "admins"]
+        - in: body
+          description: The list of emails
+          name: emailAddresses
+          required: true
+          schema:
+            $ref: '#/definitions/ArrayOfEmails'
+      operationId: OverwriteGroupAdminEmails
+      tags:
+        - Group
+
   /api/google/group/{groupName}/sync:
     post:
       summary: Synchronize a managed-group with google group
@@ -247,108 +309,6 @@ paths:
       operationId: syncManagedGroup
       tags:
         - Google
-
-  /api/group/{groupName}/admins:
-    get:
-      summary: 'Get email addresses for members of the "admin" policy'
-      responses:
-        200:
-          description: 'Email addresses in the "admin" policy'
-          schema:
-            $ref: '#/definitions/ArrayOfEmails'
-        404:
-          description: Group could not be found or you do not have the required permissions on this group
-        500:
-          description: Internal Error
-          schema:
-            $ref: '#/definitions/ErrorReport'
-      parameters:
-        - in: path
-          description: Name of group
-          name: groupName
-          required: true
-          type: string
-      operationId: GetGroupAdminEmails
-      tags:
-        - Group
-    put:
-      summary: 'Overwrite email addresses of members of the "admin" policy'
-      responses:
-        201:
-          description: Admin Policy successfully updated
-        404:
-          description: Group does not exist or you are not a member of the admin policy for the group
-        500:
-          description: Internal Error
-          schema:
-            $ref: '#/definitions/ErrorReport'
-      parameters:
-        - in: path
-          description: Name of group
-          name: groupName
-          required: true
-          type: string
-        - in: body
-          description: The list of emails
-          name: emailAddresses
-          required: true
-          schema:
-            $ref: '#/definitions/ArrayOfEmails'
-      operationId: OverwriteGroupAdminEmails
-      tags:
-        - Group
-
-  /api/group/{groupName}/members:
-    get:
-      summary: 'Get email addresses for members of the "member" policy'
-      responses:
-        200:
-          description: 'Email addresses in the "member" policy'
-          schema:
-            $ref: '#/definitions/ArrayOfEmails'
-        404:
-          description: Group could not be found or you do not have the required permissions on this group
-        500:
-          description: Internal Error
-          schema:
-            $ref: '#/definitions/ErrorReport'
-      parameters:
-        - in: path
-          description: Name of group
-          name: groupName
-          required: true
-          type: string
-      operationId: GetGroupMemberEmails
-      tags:
-        - Group
-    put:
-      summary: 'Overwrite email addresses of members of the "member" policy'
-      responses:
-        201:
-          description: Member Policy successfully updated
-        403:
-          description: You do not have permission to perform this action on the resource
-        404:
-          description: Group does not exist or you are not a member of the admin policy for the group
-        500:
-          description: Internal Error
-          schema:
-            $ref: '#/definitions/ErrorReport'
-      parameters:
-        - in: path
-          description: Name of group
-          name: groupName
-          required: true
-          type: string
-        - in: body
-          description: The list of emails
-          name: emailAddresses
-          required: true
-          schema:
-            $ref: '#/definitions/ArrayOfEmails'
-      operationId: OverwriteGroupMemberEmails
-      tags:
-        - Group
 
   /api/google/petServiceAccount/{project}/{userEmail}:
     get:
