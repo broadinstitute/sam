@@ -244,10 +244,14 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
 
   // TODO: What do we want this method to do when the subject does not exist? Currently, it throws a NameNotFoundException which is not handled properly
   override def loadSubjectEmail(subject: WorkbenchSubject): Future[Option[WorkbenchEmail]] = withContext { ctx =>
-    val subDn = subjectDn(subject)
-    Option(ctx.getAttributes(subDn).get(Attr.email)).map { emailAttr =>
-      WorkbenchEmail(emailAttr.get.asInstanceOf[String])
-    }
+    Try {
+      val subDn = subjectDn(subject)
+      Option(ctx.getAttributes(subDn).get(Attr.email)).map { emailAttr =>
+        WorkbenchEmail(emailAttr.get.asInstanceOf[String])
+      }
+    }.recover {
+      case _: NameNotFoundException => None
+    }.get
   }
 
   override def loadSubjectEmails(subjects: Set[WorkbenchSubject]): Future[Set[WorkbenchEmail]] = {

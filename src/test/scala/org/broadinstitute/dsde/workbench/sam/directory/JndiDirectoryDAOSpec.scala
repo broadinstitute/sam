@@ -421,10 +421,7 @@ class JndiDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
       runAndWait(dao.loadUser(user.id))
     }
 
-    // TODO: Not sure this is the right kind of exception we want thrown
-    intercept[NameNotFoundException] {
-      runAndWait(dao.loadSubjectEmail(userId))
-    }
+    runAndWait(dao.loadSubjectEmail(userId)) shouldEqual None
   }
 
   it should "succeed if the user has been created" in {
