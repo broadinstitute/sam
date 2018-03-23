@@ -25,7 +25,8 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
       managedGroup <- resourceService.createResource(managedGroupType, groupId, userInfo)
       _ <- createPolicyForMembers(managedGroup)
       policies <- accessPolicyDAO.listAccessPolicies(managedGroup)
-      _ <- createAggregateGroup(managedGroup, policies)
+      workbenchGroup <- createAggregateGroup(managedGroup, policies)
+      _ <- cloudExtensions.publishGroup(workbenchGroup.id)
     } yield managedGroup
   }
 

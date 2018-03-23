@@ -6,7 +6,7 @@ import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directives._
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.model.google._
-import org.broadinstitute.dsde.workbench.model._
+import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchEmail, WorkbenchExceptionWithErrorReport, WorkbenchUser}
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.api.{ExtensionRoutes, SecurityDirectives, UserInfoDirectives}
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
@@ -118,17 +118,6 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                     case None => StatusCodes.NoContent -> None
                   }
                 }
-              }
-            }
-          }
-        } ~
-        path("group" / Segment / "sync") { groupName =>
-          val groupId = WorkbenchGroupName(groupName)
-          post {
-            complete {
-              import GoogleModelJsonSupport._
-              googleExtensions.synchronizeGroupMembers(groupId).map { syncReport =>
-                StatusCodes.OK -> syncReport
               }
             }
           }

@@ -13,8 +13,8 @@ import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.mockito.MockitoSugar
 import org.scalatest._
 import net.ceedubs.ficus.Ficus._
-import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
-import org.mockito.Mockito.{verify, when}
+import org.broadinstitute.dsde.workbench.sam.google.{GoogleExtensions, SyncReportItem}
+import org.mockito.Mockito.{verify, when, times}
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
@@ -100,6 +100,16 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     samGroup.value.members shouldEqual Set(adminPolicy, memberPolicy)
   }
 
+  it should "sync the new group with Google" in {
+    val mockGoogleExtensions = mock[GoogleExtensions]
+    val managedGroupService = new ManagedGroupService(resourceService, resourceTypes, policyDAO, dirDAO, mockGoogleExtensions, testDomain)
+    val groupName = WorkbenchGroupName(resourceId.value)
+
+    when(mockGoogleExtensions.publishGroup(groupName)).thenReturn(Future.successful(()))
+    assertMakeGroup(managedGroupService = managedGroupService)
+    verify(mockGoogleExtensions).publishGroup(groupName)
+  }
+
   it should "fail when trying to create a group that already exists" in {
     val groupName = "uniqueName"
     assertMakeGroup(groupName)
@@ -138,12 +148,13 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
   // may not be actually confirming that the policies have been deleted.  They may still be in LDAP, just orphaned
   // because the resource no longer exists
   "ManagedGroupService delete" should "delete policies associated to that resource in LDAP and in Google" in {
-    val mockGoogleExtensions = mock[GoogleExtensions]
-    val managedGroupService = new ManagedGroupService(resourceService, resourceTypes, policyDAO, dirDAO, mockGoogleExtensions, testDomain)
     val groupEmail = WorkbenchEmail(resourceId.value + "@" + testDomain)
+    val mockGoogleExtensions = mock[GoogleExtensions]
+    when(mockGoogleExtensions.onGroupDelete(groupEmail)).thenReturn(Future.successful(()))
+    when(mockGoogleExtensions.publishGroup(WorkbenchGroupName(resourceId.value))).thenReturn(Future.successful(()))
+    val managedGroupService = new ManagedGroupService(resourceService, resourceTypes, policyDAO, dirDAO, mockGoogleExtensions, testDomain)
 
     assertMakeGroup(managedGroupService = managedGroupService)
-    when(mockGoogleExtensions.onGroupDelete(groupEmail)).thenReturn(Future.successful(()))
     runAndWait(managedGroupService.deleteManagedGroup(resourceId))
     verify(mockGoogleExtensions).onGroupDelete(groupEmail)
     runAndWait(policyDAO.listAccessPolicies(expectedResource)) shouldEqual Set.empty
