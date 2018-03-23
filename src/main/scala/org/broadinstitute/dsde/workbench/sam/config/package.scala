@@ -96,4 +96,14 @@ package object config {
       config.getInt("monitor.workerCount")
     )
   }
+
+  implicit val schemaLockConfig: ValueReader[SchemaLockConfig] = ValueReader.relative { config =>
+    SchemaLockConfig(
+      config.getBoolean("lockSchemaOnBoot"),
+      config.getInt("recheckTimeInterval"),
+      config.getInt("maxTimeToWait"),
+      config.getString("instanceId"),
+      config.getInt("schemaVersion")
+    )
+  }
 }

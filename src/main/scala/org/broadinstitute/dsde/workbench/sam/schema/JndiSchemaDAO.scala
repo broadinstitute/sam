@@ -1,17 +1,20 @@
 package org.broadinstitute.dsde.workbench.sam.schema
 
-import javax.naming.{NameAlreadyBoundException, NameNotFoundException}
 import javax.naming.directory._
+import javax.naming.{NameAlreadyBoundException, NameNotFoundException}
 
-import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
+import com.typesafe.scalalogging.LazyLogging
+import org.broadinstitute.dsde.workbench.model.WorkbenchException
+import org.broadinstitute.dsde.workbench.sam.config.{DirectoryConfig, SchemaLockConfig}
+import org.broadinstitute.dsde.workbench.sam.directory.DirectorySubjectNameSupport
+import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO._
+import org.broadinstitute.dsde.workbench.sam.schema.SchemaStatus._
 import org.broadinstitute.dsde.workbench.sam.util.{BaseDirContext, JndiSupport}
 
-import scala.concurrent.{ExecutionContext, Future}
-import scala.util.Try
-import JndiSchemaDAO._
-import org.broadinstitute.dsde.workbench.sam.directory.DirectorySubjectNameSupport
-
 import scala.collection.JavaConverters._
+import scala.concurrent.duration.Duration
+import scala.concurrent.{Await, ExecutionContext, Future}
+import scala.util.{Failure, Success, Try}
 
 /**
   * Created by mbemis on 10/3/17.
@@ -49,40 +52,190 @@ object JndiSchemaDAO {
   }
 }
 
-class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit executionContext: ExecutionContext) extends JndiSupport with DirectorySubjectNameSupport {
+object SchemaStatus {
+  sealed trait SchemaStatus
+
+  case object Wait extends SchemaStatus
+  case object Proceed extends SchemaStatus
+  case object Ignore extends SchemaStatus
+}
+
+class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig, val schemaLockConfig: SchemaLockConfig)(implicit executionContext: ExecutionContext) extends JndiSupport with DirectorySubjectNameSupport with LazyLogging {
 
   def init(): Future[Unit] = {
+    if(schemaLockConfig.lockSchemaOnBoot) { initWithSchemaLock() }
+    else { recreateSchema().map(_ => ()) }
+  }
+
+  def initWithSchemaLock(): Future[Unit] = {
     for {
-      _ <- destroySchema()
-      _ <- createSchema()
+      schemaLockStatus <- initSchemaLock()
+      schemaUpdateStatus <- schemaLockStatus match {
+        case Proceed => recreateSchema()
+        case Ignore => Future.successful(Ignore)
+      }
+      _ <- schemaUpdateStatus match {
+        case Proceed => setSchemaUpdateComplete()
+        case Ignore => Future.successful(Ignore)
+      }
     } yield ()
   }
 
-  def createSchema(): Future[Unit] = {
+  def initSchemaLock(): Future[SchemaStatus] = {
+    logger.info("Acquiring schema lock...")
+
+    for {
+      _ <- createSchemaChangeLockSchema()
+      _ <- createOrgUnit(schemaLockOu)
+      result <- lockSchema()
+    } yield result
+  }
+
+  private def recreateSchema(): Future[SchemaStatus] = {
+    for {
+      _ <- destroySchema()
+      _ <- createSchema()
+    } yield Proceed
+  }
+
+  def setSchemaUpdateComplete(): Future[Unit] = withContext { ctx =>
+    val myAttrs = new BasicAttributes(true)
+    myAttrs.put("completed", true.toString)
+
+    logger.info(s"Schema successfully updated to version [${schemaLockConfig.schemaVersion}]")
+
+    ctx.modifyAttributes(schemaLockDn(schemaLockConfig.schemaVersion), DirContext.REPLACE_ATTRIBUTE, myAttrs)
+  }
+
+  def readSchemaStatus(): Future[SchemaStatus] = withContext { ctx =>
+    val attributes = Try { ctx.getAttributes(schemaLockDn(schemaLockConfig.schemaVersion)) }
+
+    attributes match {
+      case Success(attrs) =>
+        val instanceId = attrs.get("instanceId").get.toString
+        val schemaVersion = attrs.get("schemaVersion").get.toString
+        val completed = attrs.get("completed").get.toString.toBoolean
+
+        if(completed) {
+          logger.info(s"Schema update to version [$schemaVersion] already completed by sam instance [$instanceId].")
+          Ignore
+        }
+        else {
+          logger.info(s"Schema update to version [$schemaVersion] currently in progress by sam instance [$instanceId].")
+          Wait
+        }
+      case Failure(_) =>
+        logger.info("Update not yet applied. Applying...")
+        Proceed
+    }
+  }
+
+  def lockSchema(): Future[SchemaStatus] = {
+    readSchemaStatus().flatMap {
+      case Wait => waitForSchemaLock(schemaLockConfig.maxTimeToWait / schemaLockConfig.recheckTimeInterval)
+      case Proceed => insertSchemaLock()
+      case Ignore => Future.successful(Ignore)
+    }
+  }
+
+
+  def waitForSchemaLock(remainingAttempts: Int): Future[SchemaStatus] = {
+    if(remainingAttempts == 0) { throw new WorkbenchException(s"Operation timed out. Could not acquire schema lock before timeout...") }
+    else {
+      logger.info("Waiting for schema lock...")
+      Thread.sleep(schemaLockConfig.recheckTimeInterval * 100) //change this to 1k
+      readSchemaStatus().flatMap {
+        case Wait => waitForSchemaLock(remainingAttempts - 1)
+        case s: SchemaStatus => Future.successful(s)
+      }
+    }
+  }
+
+  def insertSchemaLock(): Future[SchemaStatus] = Try { withContext { ctx =>
+    val resourceContext = new BaseDirContext {
+      override def getAttributes(name: String): Attributes = {
+        val myAttrs = new BasicAttributes(true) // Case ignore
+
+        val oc = new BasicAttribute("objectclass")
+        Seq("top", "schemaVersion").foreach(oc.add)
+        myAttrs.put(oc)
+        myAttrs.put("schemaVersion", schemaLockConfig.schemaVersion.toString)
+        myAttrs.put("completed", false.toString)
+        myAttrs.put("instanceId", schemaLockConfig.instanceId)
+
+        myAttrs
+      }
+    }
+    ctx.bind(schemaLockDn(schemaLockConfig.schemaVersion), resourceContext)
+  }
+  } match {
+    case Failure(e: NameAlreadyBoundException) =>
+      logger.info("Another sam instance is currently updating the schema.")
+      waitForSchemaLock(schemaLockConfig.maxTimeToWait / schemaLockConfig.recheckTimeInterval)
+    case Failure(e) => throw e
+    case Success(_) =>
+      logger.info("Acquired schema lock.")
+      Future.successful(Proceed)
+  }
+
+  def createSchema(): Future[SchemaStatus] = {
+    logger.info("Applying new schema...")
+
     for {
       _ <- createWorkbenchPersonSchema()
       _ <- createWorkbenchGroupSchema()
       _ <- createOrgUnits()
       _ <- createPolicySchema()
       _ <- createWorkbenchPetServiceAccountSchema()
-    } yield ()
+    } yield Proceed
   }
 
-  def createOrgUnits(): Future[Unit] = {
+  def createOrgUnits(): Future[SchemaStatus] = {
     for {
       _ <- createOrgUnit(peopleOu)
       _ <- createOrgUnit(groupsOu)
       _ <- createOrgUnit(resourcesOu)
-    } yield ()
+    } yield Proceed
   }
 
-  def destroySchema(): Future[Unit] = {
+  def destroySchema(): Future[SchemaStatus] = {
+    logger.info("Destroying outdated schema...")
+
     for {
       _ <- removePolicySchema()
       _ <- removeWorkbenchGroupSchema()
       _ <- removeWorkbenchPetServiceAccountSchema()
       _ <- removeWorkbenchPersonSchema()
-    } yield ()
+    } yield Proceed
+  }
+
+
+  private def createSchemaChangeLockSchema(): Future[Unit] = withContext { ctx =>
+    try {
+      val schema = ctx.getSchema("")
+
+      createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.31", "schemaVersion", "the version id of the lock", true)
+      createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.32", "completed", "true if the schema updated has been completed", true)
+      createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.33", "instanceId", "the id of the sam instance that holds the lock", true)
+
+      val attrs = new BasicAttributes(true) // Ignore case
+      attrs.put("NUMERICOID", "1.3.6.1.4.1.18060.0.4.3.2.301")
+      attrs.put("NAME", "schemaVersion")
+      attrs.put("SUP", "top")
+      attrs.put("STRUCTURAL", "true")
+
+      val must = new BasicAttribute("MUST")
+      must.add("objectclass")
+      must.add("schemaVersion")
+      must.add("completed")
+      must.add("instanceId")
+      attrs.put(must)
+
+      // Add the new schema object for "fooObjectClass"
+      schema.createSubcontext("ClassDefinition/" + "schemaLock", attrs)
+    } catch {
+      case _: AttributeInUseException => ()
+    }
   }
 
   private def createWorkbenchPersonSchema(): Future[Unit] = withContext { ctx =>
@@ -295,6 +448,7 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig)(implicit exe
     clear(ctx, resourcesOu)
     clear(ctx, groupsOu)
     clear(ctx, peopleOu)
+    clear(ctx, schemaLockOu)
   }
 
   private def clear(ctx: DirContext, dn: String): Unit = Try {

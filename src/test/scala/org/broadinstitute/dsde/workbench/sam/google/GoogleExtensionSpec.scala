@@ -47,6 +47,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
 
   lazy val config = ConfigFactory.load()
   lazy val directoryConfig = config.as[DirectoryConfig]("directory")
+  lazy val schemaLockConfig = ConfigFactory.load().as[SchemaLockConfig]("schemaLock")
   lazy val petServiceAccountConfig = config.as[PetServiceAccountConfig]("petServiceAccount")
   lazy val googleServicesConfig = config.as[GoogleServicesConfig]("googleServices")
 
@@ -229,7 +230,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
 
   private def initPetTest: (JndiDirectoryDAO, MockGoogleIamDAO, MockGoogleDirectoryDAO, GoogleExtensions, UserService, WorkbenchUserId, WorkbenchEmail, WorkbenchEmail, WorkbenchUser) = {
     val dirDAO = new JndiDirectoryDAO(directoryConfig)
-    val schemaDao = new JndiSchemaDAO(directoryConfig)
+    val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
     runAndWait(schemaDao.clearDatabase())
     runAndWait(schemaDao.init())
@@ -462,7 +463,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
   private def setupGoogleKeyCacheTests: (GoogleExtensions, UserService) = {
     implicit val patienceConfig = PatienceConfig(1 second)
     val dirDAO = new JndiDirectoryDAO(directoryConfig)
-    val schemaDao = new JndiSchemaDAO(directoryConfig)
+    val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
     runAndWait(schemaDao.clearDatabase())
     runAndWait(schemaDao.init())
