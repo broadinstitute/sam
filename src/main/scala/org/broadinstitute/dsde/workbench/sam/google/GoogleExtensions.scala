@@ -187,23 +187,28 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
   }
 
   def createUserPetServiceAccount(user: WorkbenchUser, project: GoogleProject): Future[PetServiceAccount] = {
-    val (petSaID, petSaDisplayName) = toPetSAFromUser(user)
+    val (petSaName, petSaDisplayName) = toPetSAFromUser(user)
 
-    directoryDAO.loadPetServiceAccount(PetServiceAccountId(user.id, project)).flatMap {
-      case Some(pet) => Future.successful(pet)
-      case None =>
-        // First find or create the service account in Google, which generates a unique id and email
-        val petSA = googleIamDAO.getOrCreateServiceAccount(project, petSaID, petSaDisplayName)
-        petSA.flatMap { serviceAccount =>
+    // First find or create the service account in Google, which generates a unique id and email.
+    // We do this first because the pet may have been deleted from Google by an outsider, which would
+    // leave behind a reference in OpenDJ. It is not enough to just see if the pet exists in OpenDJ.
+    val petSA = googleIamDAO.getOrCreateServiceAccount(project, petSaName, petSaDisplayName)
+    petSA.flatMap { serviceAccount =>
+      // If the service account doesn't exist in OpenDJ, create it
+      directoryDAO.loadPetServiceAccount(PetServiceAccountId(user.id, project)).flatMap {
+        case Some(pet) => Future.successful(pet)
+        case None => {
           // Set up the service account with the necessary permissions
           val petServiceAccount = PetServiceAccount(PetServiceAccountId(user.id, project), serviceAccount)
+
           setUpServiceAccount(petServiceAccount) andThen { case Failure(_) =>
             // If anything fails with setup, clean up any created resources to ensure we don't end up with orphaned pets.
             removePetServiceAccount(petServiceAccount).failed.foreach { e =>
-              logger.warn(s"Error occurred cleaning up pet service account [$petSaID] [$petSaDisplayName]", e)
+              logger.warn(s"Error occurred cleaning up pet service account [$petSaName] [$petSaDisplayName]", e)
             }
           }
         }
+      }
     }
   }
 
@@ -229,7 +234,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
       maybePet <- directoryDAO.loadPetServiceAccount(PetServiceAccountId(userId, project))
       result <- maybePet match {
         case Some(pet) => googleKeyCache.removeKey(pet, keyId)
-        case none => Future.successful(())
+        case None => Future.successful(())
       }
     } yield result
   }

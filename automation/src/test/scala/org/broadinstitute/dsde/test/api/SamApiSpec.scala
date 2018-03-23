@@ -1,19 +1,20 @@
 package org.broadinstitute.dsde.test.api
 
-import akka.http.scaladsl.model.headers
-import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import org.broadinstitute.dsde.workbench.service.{Orchestration, Sam, Thurloe}
 import org.broadinstitute.dsde.workbench.service.Sam.user.UserStatusDetails
 import org.broadinstitute.dsde.workbench.auth.{AuthToken, ServiceAccountAuthTokenFromJson, ServiceAccountAuthTokenFromPem}
 import org.broadinstitute.dsde.workbench.config.{Config, Credentials, UserPool}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.dao.Google.googleIamDAO
-import org.broadinstitute.dsde.workbench.fixture.{BillingFixtures, GPAllocFixtures}
+import org.broadinstitute.dsde.workbench.fixture.BillingFixtures
 import org.broadinstitute.dsde.workbench.service.test.CleanUp
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountName}
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.time.{Seconds, Span}
-import org.scalatest.{DoNotDiscover, FreeSpec, Matchers}
+import org.scalatest.{FreeSpec, Matchers}
+
+import scala.concurrent.Await
+import scala.concurrent.duration.Duration
 
 class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaFutures with CleanUp {
   implicit override val patienceConfig: PatienceConfig = PatienceConfig(timeout = scaled(Span(5, Seconds)))
@@ -199,25 +200,56 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
 
       key1 shouldBe key2
 
-      register cleanUp Sam.user.deletePetServiceAccountKey(Config.Projects.default, keyIdFromJson(key1))(user.makeAuthToken)
+      register cleanUp Sam.user.deletePetServiceAccountKey(Config.Projects.default, getFieldFromJson(key1, "private_key_id"))(user.makeAuthToken)
     }
 
     "should furnish a new service account key after deleting a cached key" in {
       val user = UserPool.chooseStudent
 
       val key1 = Sam.user.petServiceAccountKey(Config.Projects.default)(user.makeAuthToken)
-      Sam.user.deletePetServiceAccountKey(Config.Projects.default, keyIdFromJson(key1))(user.makeAuthToken)
+      Sam.user.deletePetServiceAccountKey(Config.Projects.default, getFieldFromJson(key1, "private_key_id"))(user.makeAuthToken)
 
       val key2 = Sam.user.petServiceAccountKey(Config.Projects.default)(user.makeAuthToken)
-      register cleanUp Sam.user.deletePetServiceAccountKey(Config.Projects.default, keyIdFromJson(key2))(user.makeAuthToken)
+      register cleanUp Sam.user.deletePetServiceAccountKey(Config.Projects.default, getFieldFromJson(key2, "private_key_id"))(user.makeAuthToken)
 
       key1 shouldNot be(key2)
     }
+
+    //this is ignored because there is a permission error with GPAlloc that needs to be looked into.
+    //in a GPAlloc'd project, the firecloud service account does not have permission to remove the pet SA
+    // @mbemis
+    "should re-create a pet SA in google even if it still exists in sam" ignore {
+      val user = UserPool.chooseStudent
+      val projectName = Config.Projects.default
+
+      //this must use a GPAlloc'd project to avoid deleting the pet for a shared project, which
+      //may have unexpected side effects
+      withCleanBillingProject(user) { projectName =>
+        val petSaKeyOriginal = Sam.user.petServiceAccountKey(projectName)(user.makeAuthToken)
+        val petSaEmailOriginal = getFieldFromJson(petSaKeyOriginal, "client_email")
+        val petSaKeyIdOriginal = getFieldFromJson(petSaKeyOriginal, "private_key_id")
+        val petSaName = petSaEmailOriginal.split('@').head
+
+        register cleanUp Sam.user.deletePetServiceAccountKey(Config.Projects.default, petSaKeyIdOriginal)(user.makeAuthToken)
+
+        //act as a rogue process and delete the pet SA without telling sam
+        Await.result(googleIamDAO.removeServiceAccount(GoogleProject(projectName), ServiceAccountName(petSaName)), Duration.Inf)
+
+        val petSaKeyNew = Sam.user.petServiceAccountKey(projectName)(user.makeAuthToken)
+        val petSaEmailNew = getFieldFromJson(petSaKeyNew, "client_email")
+        val petSaKeyIdNew = getFieldFromJson(petSaKeyNew, "private_key_id")
+
+        register cleanUp Sam.user.deletePetServiceAccountKey(Config.Projects.default, petSaKeyIdNew)(user.makeAuthToken)
+
+        petSaEmailOriginal should equal(petSaEmailNew) //sanity check to make sure the SA is the same
+        petSaKeyIdOriginal should not equal petSaKeyIdNew //make sure we were able to generate a new key and that a new one was returned
+      }
+    }
   }
 
-  private def keyIdFromJson(jsonKey: String): String = {
+  private def getFieldFromJson(jsonKey: String, field: String): String = {
     import spray.json._
-    jsonKey.parseJson.asJsObject.getFields("private_key_id").head.asInstanceOf[JsString].value
+    jsonKey.parseJson.asJsObject.getFields(field).head.asInstanceOf[JsString].value
   }
 
 }
