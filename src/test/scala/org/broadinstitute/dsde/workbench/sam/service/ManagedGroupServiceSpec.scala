@@ -32,18 +32,15 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
 
   private val resourceId = ResourceId("myNewGroup")
   private val expectedResource = Resource(ManagedGroupService.managedGroupTypeName, resourceId)
-  private val ownerRoleName = ResourceRoleName("admin")
-  private val ownerPolicyName = AccessPolicyName(ownerRoleName.value)
-  private val memberPolicyName = AccessPolicyName(ManagedGroupService.memberRoleName.value)
-  private val adminPolicy = ResourceAndPolicyName(expectedResource, ownerPolicyName)
-  private val memberPolicy = ResourceAndPolicyName(expectedResource, memberPolicyName)
-  private val accessPolicyNames = Set(ownerPolicyName, memberPolicyName)
+  private val adminPolicy = ResourceAndPolicyName(expectedResource, ManagedGroupService.adminPolicyName)
+  private val memberPolicy = ResourceAndPolicyName(expectedResource, ManagedGroupService.memberPolicyName)
+  private val accessPolicyNames = Set(ManagedGroupService.adminPolicyName, ManagedGroupService.memberPolicyName)
   private val policyActions: Set[ResourceAction] = accessPolicyNames.flatMap(policyName => Set(SamResourceActions.sharePolicy(policyName), SamResourceActions.readPolicy(policyName)))
   private val resourceActions = Set(ResourceAction("delete")) union policyActions
   private val resourceActionPatterns = resourceActions.map(action => ResourceActionPattern(action.value))
-  private val defaultOwnerRole = ResourceRole(ownerRoleName, resourceActions)
+  private val defaultOwnerRole = ResourceRole(ManagedGroupService.adminRoleName, resourceActions)
   private val defaultRoles = Set(defaultOwnerRole, ResourceRole(ManagedGroupService.memberRoleName, Set.empty))
-  private val managedGroupResourceType = ResourceType(ManagedGroupService.managedGroupTypeName, resourceActionPatterns, defaultRoles, ownerRoleName)
+  private val managedGroupResourceType = ResourceType(ManagedGroupService.managedGroupTypeName, resourceActionPatterns, defaultRoles, ManagedGroupService.adminRoleName)
   private val resourceTypes = Map(managedGroupResourceType.name -> managedGroupResourceType)
   private val testDomain = "example.com"
   private val resourceService = new ResourceService(resourceTypes, policyDAO, dirDAO, NoExtensions, testDomain)
@@ -59,7 +56,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
 
   def makeResourceType(): ResourceTypeName = runAndWait(resourceService.createResourceType(managedGroupResourceType))
 
-  def assertPoliciesOnResource(resource: Resource, policyDAO: JndiAccessPolicyDAO = policyDAO, expectedPolicies: Set[AccessPolicyName] = Set(ownerPolicyName, memberPolicyName)) = {
+  def assertPoliciesOnResource(resource: Resource, policyDAO: JndiAccessPolicyDAO = policyDAO, expectedPolicies: Set[AccessPolicyName] = Set(ManagedGroupService.adminPolicyName, ManagedGroupService.memberPolicyName)) = {
     val policies = runAndWait(policyDAO.listAccessPolicies(resource))
     policies.map(_.id.accessPolicyName.value) shouldEqual expectedPolicies.map(_.value)
     expectedPolicies.foreach { policyName =>
@@ -71,7 +68,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     val resource: Resource = makeGroup(groupId, managedGroupService)
     val intendedResource = Resource(ManagedGroupService.managedGroupTypeName, ResourceId(groupId))
     resource shouldEqual intendedResource
-    assertPoliciesOnResource(resource, expectedPolicies = Set(ownerPolicyName, memberPolicyName))
+    assertPoliciesOnResource(resource, expectedPolicies = Set(ManagedGroupService.adminPolicyName, ManagedGroupService.memberPolicyName))
     resource
   }
 
@@ -176,13 +173,13 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
   "ManagedGroupService listPolicyMemberEmails" should "return a list of email addresses for the groups admin policy" in {
     val managedGroup = assertMakeGroup()
     runAndWait(dirDAO.createUser(WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)))
-    runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ownerPolicyName)) shouldEqual Set(dummyUserInfo.userEmail)
-    runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, memberPolicyName)) shouldEqual Set.empty
+    runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName)) shouldEqual Set(dummyUserInfo.userEmail)
+    runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.memberPolicyName)) shouldEqual Set.empty
   }
 
   it should "throw an exception if the group does not exist" in {
     intercept[WorkbenchExceptionWithErrorReport] {
-      runAndWait(managedGroupService.listPolicyMemberEmails(resourceId, ownerPolicyName))
+      runAndWait(managedGroupService.listPolicyMemberEmails(resourceId, ManagedGroupService.adminPolicyName))
     }
   }
 
@@ -195,16 +192,16 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     runAndWait(dirDAO.createUser(otherAdmin))
     runAndWait(dirDAO.createGroup(BasicWorkbenchGroup(WorkbenchGroupName("someGroup"), Set.empty, someGroupEmail)))
 
-    runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ownerPolicyName)) shouldEqual Set(dummyAdmin.email)
+    runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName)) shouldEqual Set(dummyAdmin.email)
 
-    runAndWait(managedGroupService.overwritePolicyMemberEmails(managedGroup.resourceId, ownerPolicyName, Set(otherAdmin.email, someGroupEmail)))
+    runAndWait(managedGroupService.overwritePolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName, Set(otherAdmin.email, someGroupEmail)))
 
-    runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ownerPolicyName)) shouldEqual Set(otherAdmin.email, someGroupEmail)
+    runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName)) shouldEqual Set(otherAdmin.email, someGroupEmail)
   }
 
   it should "throw an exception if the group does not exist" in {
     intercept[WorkbenchExceptionWithErrorReport] {
-      runAndWait(managedGroupService.overwritePolicyMemberEmails(expectedResource.resourceId, ownerPolicyName, Set.empty))
+      runAndWait(managedGroupService.overwritePolicyMemberEmails(expectedResource.resourceId, ManagedGroupService.adminPolicyName, Set.empty))
     }
   }
 
@@ -213,7 +210,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     val badAdmin = WorkbenchUser(WorkbenchUserId("admin2"), WorkbenchEmail("admin2@foo.test"))
 
     intercept[WorkbenchExceptionWithErrorReport] {
-      runAndWait(managedGroupService.overwritePolicyMemberEmails(managedGroup.resourceId, ownerPolicyName, Set(badAdmin.email)))
+      runAndWait(managedGroupService.overwritePolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName, Set(badAdmin.email)))
     }
   }
 
@@ -225,11 +222,11 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     runAndWait(dirDAO.createUser(someUser))
     runAndWait(dirDAO.createGroup(BasicWorkbenchGroup(WorkbenchGroupName("someGroup"), Set.empty, someGroupEmail)))
 
-    runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, memberPolicyName)) shouldEqual Set()
+    runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.memberPolicyName)) shouldEqual Set()
 
     val newMembers = Set(someGroupEmail, someUser.email)
-    runAndWait(managedGroupService.overwritePolicyMemberEmails(managedGroup.resourceId, memberPolicyName, newMembers))
+    runAndWait(managedGroupService.overwritePolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.memberPolicyName, newMembers))
 
-    runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, memberPolicyName)) shouldEqual newMembers
+    runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.memberPolicyName)) shouldEqual newMembers
   }
 }

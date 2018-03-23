@@ -10,6 +10,7 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.model.{ResourceId, _}
 import org.broadinstitute.dsde.workbench.sam.service.ManagedGroupService
+import org.broadinstitute.dsde.workbench.sam.service.ManagedGroupService.ManagedGroupPolicyName
 import spray.json.DefaultJsonProtocol._
 
 import scala.concurrent.ExecutionContext
@@ -38,7 +39,7 @@ trait ManagedGroupRoutes extends UserInfoDirectives with SecurityDirectives {
         }
       } ~
       pathPrefix(Segment) { policyName =>
-        val accessPolicyName = AccessPolicyName(if (policyName == "members") ManagedGroupService.memberValue else ManagedGroupService.adminValue)
+        val accessPolicyName = parsePolicyName(policyName)
 
         pathEndOrSingleSlash {
           get {
@@ -49,6 +50,16 @@ trait ManagedGroupRoutes extends UserInfoDirectives with SecurityDirectives {
           }
         }
       }
+    }
+  }
+
+  private def parsePolicyName(policyName: String): ManagedGroupPolicyName = {
+    if (policyName == "members") {
+      ManagedGroupService.memberPolicyName
+    } else if (policyName == "admins") {
+      ManagedGroupService.adminPolicyName
+    } else {
+      throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "Policy name for managed groups must be one of: [\"admins\", \"members\"]"))
     }
   }
 
@@ -71,16 +82,16 @@ trait ManagedGroupRoutes extends UserInfoDirectives with SecurityDirectives {
     }
   }
 
-  private def handleListEmails(managedGroup: Resource, policyName: AccessPolicyName, userInfo: UserInfo): Route = {
-    requireAction(managedGroup, SamResourceActions.readPolicy(AccessPolicyName(ManagedGroupService.adminValue)), userInfo) {
+  private def handleListEmails(managedGroup: Resource, policyName: ManagedGroupPolicyName, userInfo: UserInfo): Route = {
+    requireAction(managedGroup, SamResourceActions.readPolicy(policyName.asInstanceOf[AccessPolicyName]), userInfo) {
       complete(
         managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, policyName).map(StatusCodes.OK -> _)
       )
     }
   }
 
-  private def handleOverwriteEmails(managedGroup: Resource, policyName: AccessPolicyName, userInfo: UserInfo): Route = {
-    requireAction(managedGroup, SamResourceActions.sharePolicy(policyName), userInfo) {
+  private def handleOverwriteEmails(managedGroup: Resource, policyName: ManagedGroupPolicyName, userInfo: UserInfo): Route = {
+    requireAction(managedGroup, SamResourceActions.sharePolicy(policyName.asInstanceOf[AccessPolicyName]), userInfo) {
       entity(as[Set[WorkbenchEmail]]) { members =>
         complete(
           managedGroupService.overwritePolicyMemberEmails(managedGroup.resourceId, policyName, members).map(_ => StatusCodes.Created)

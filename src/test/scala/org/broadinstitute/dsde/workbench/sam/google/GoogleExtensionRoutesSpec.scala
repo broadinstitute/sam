@@ -417,9 +417,7 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
 
   "POST /api/google/group/{groupName}/sync" should "respond with a 200 when successful" in {
     val ownerRoleName = ResourceRoleName("admin")
-    val ownerPolicyName = AccessPolicyName(ownerRoleName.value)
-    val memberPolicyName = AccessPolicyName(ManagedGroupService.memberRoleName.value)
-    val accessPolicyNames = Set(ownerPolicyName, memberPolicyName)
+    val accessPolicyNames = Set(ManagedGroupService.adminPolicyName, ManagedGroupService.memberPolicyName)
     val policyActions: Set[ResourceAction] = accessPolicyNames.flatMap(policyName => Set(SamResourceActions.sharePolicy(policyName), SamResourceActions.readPolicy(policyName)))
     val resourceActions = Set(ResourceAction("delete")) union policyActions
     val resourceActionPatterns = resourceActions.map(action => ResourceActionPattern(action.value))

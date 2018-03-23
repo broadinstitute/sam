@@ -7,6 +7,7 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.openam.AccessPolicyDAO
+import org.broadinstitute.dsde.workbench.sam.service.ManagedGroupService.ManagedGroupPolicyName
 
 import scala.concurrent.Future
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -85,28 +86,37 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
     } yield ()
   }
 
-  def listPolicyMemberEmails(resourceId: ResourceId, policyName: AccessPolicyName) = {
-    val resourceAndPolicyName = ResourceAndPolicyName(Resource(ManagedGroupService.managedGroupTypeName, resourceId), policyName)
+  def listPolicyMemberEmails(resourceId: ResourceId, policyName: ManagedGroupPolicyName) = {
+    val resourceAndPolicyName = ResourceAndPolicyName(Resource(ManagedGroupService.managedGroupTypeName, resourceId), policyName.asInstanceOf[AccessPolicyName])
     accessPolicyDAO.loadPolicy(resourceAndPolicyName) flatMap {
       case Some(policy) => directoryDAO.loadSubjectEmails(policy.members)
       case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Group or policy could not be found: $resourceAndPolicyName"))
     }
   }
 
-  def overwritePolicyMemberEmails(resourceId: ResourceId, policyName: AccessPolicyName, emails: Set[WorkbenchEmail]): Future[AccessPolicy] = {
-    val resourceAndPolicyName = ResourceAndPolicyName(Resource(ManagedGroupService.managedGroupTypeName, resourceId), policyName)
+  def overwritePolicyMemberEmails(resourceId: ResourceId, policyName: ManagedGroupPolicyName, emails: Set[WorkbenchEmail]): Future[AccessPolicy] = {
+    val resourceAndPolicyName = ResourceAndPolicyName(Resource(ManagedGroupService.managedGroupTypeName, resourceId), policyName.asInstanceOf[AccessPolicyName])
     accessPolicyDAO.loadPolicy(resourceAndPolicyName).flatMap {
-      case Some(policy) => val updatedPolicy = AccessPolicyMembership(emails, policy.actions, policy.roles)
-        resourceService.overwritePolicy(managedGroupType, policyName, resourceAndPolicyName.resource, updatedPolicy)
+      case Some(policy) => {
+        val updatedPolicy = AccessPolicyMembership(emails, policy.actions, policy.roles)
+        resourceService.overwritePolicy(managedGroupType, resourceAndPolicyName.accessPolicyName, resourceAndPolicyName.resource, updatedPolicy)
+      }
       case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Group or policy could not be found: $resourceAndPolicyName"))
     }
   }
 }
 
 object ManagedGroupService {
-  val memberValue = "member"
-  val adminValue = "admin"
-  val memberRoleName = ResourceRoleName(memberValue)
   val managedGroupTypeName = ResourceTypeName("managed-group")
   val groupNameRe = "^[A-z0-9_-]+$".r
+  private val memberValue = "member"
+  private val adminValue = "admin"
+
+  sealed trait ManagedGroupPolicyName
+  val adminPolicyName = new AccessPolicyName(adminValue) with ManagedGroupPolicyName
+  val memberPolicyName = new AccessPolicyName(memberValue) with ManagedGroupPolicyName
+
+  sealed trait ManagedGroupRoleName
+  val adminRoleName = new ResourceRoleName(adminValue) with ManagedGroupRoleName
+  val memberRoleName = new ResourceRoleName(memberValue) with ManagedGroupRoleName
 }

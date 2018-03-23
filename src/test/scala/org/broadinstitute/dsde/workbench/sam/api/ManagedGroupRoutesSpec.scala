@@ -17,16 +17,14 @@ import spray.json.DefaultJsonProtocol._
   */
 class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest with TestSupport with BeforeAndAfter {
 
-  private val ownerRoleName = ResourceRoleName("admin")
-  private val ownerPolicyName = AccessPolicyName(ownerRoleName.value)
-  private val memberPolicyName = AccessPolicyName(ManagedGroupService.memberRoleName.value)
-  private val accessPolicyNames = Set(ownerPolicyName, memberPolicyName)
+  private val accessPolicyNames = Set(ManagedGroupService.adminPolicyName, ManagedGroupService.memberPolicyName)
   private val policyActions: Set[ResourceAction] = accessPolicyNames.flatMap(policyName => Set(SamResourceActions.sharePolicy(policyName), SamResourceActions.readPolicy(policyName)))
   private val resourceActions = Set(ResourceAction("delete")) union policyActions
   private val resourceActionPatterns = resourceActions.map(action => ResourceActionPattern(action.value))
-  private val defaultOwnerRole = ResourceRole(ownerRoleName, resourceActions)
-  private val defaultRoles = Set(defaultOwnerRole, ResourceRole(ManagedGroupService.memberRoleName, Set.empty))
-  private val managedGroupResourceType = ResourceType(ManagedGroupService.managedGroupTypeName, resourceActionPatterns, defaultRoles, ownerRoleName)
+  private val defaultOwnerRole = ResourceRole(ManagedGroupService.adminRoleName, resourceActions)
+  private val defaultMemberRole = ResourceRole(ManagedGroupService.memberRoleName, Set.empty)
+  private val defaultRoles = Set(defaultOwnerRole, defaultMemberRole)
+  private val managedGroupResourceType = ResourceType(ManagedGroupService.managedGroupTypeName, resourceActionPatterns, defaultRoles, ManagedGroupService.adminRoleName)
   private val resourceTypes = Map(managedGroupResourceType.name -> managedGroupResourceType)
   private val groupId = "foo"
 
@@ -169,6 +167,16 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
 
     Get(s"/api/group/$groupId/members") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
+    }
+  }
+
+  "GET /api/group/{groupName}/{policyName}" should "fail with 404 if policy name is not in [members, admins]" in {
+    val samRoutes = TestSamRoutes(resourceTypes)
+    assertCreateGroup(samRoutes)
+
+    Get(s"/api/group/$groupId/blah") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
+      responseAs[String] should include ("must be one of")
     }
   }
 
