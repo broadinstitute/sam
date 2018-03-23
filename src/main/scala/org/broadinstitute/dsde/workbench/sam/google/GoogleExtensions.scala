@@ -6,6 +6,7 @@ import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import com.google.api.client.googleapis.json.GoogleJsonResponseException
+import com.google.api.services.admin.directory.model.Group
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleIamDAO, GooglePubSubDAO, GoogleStorageDAO}
 import org.broadinstitute.dsde.workbench.model._
@@ -38,12 +39,12 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
     val maxUsernameLength = maxGroupEmailLength - emailSuffix.length
     WorkbenchEmail(username.take(maxUsernameLength) + emailSuffix)
 */
-    WorkbenchEmail(s"${googleServicesConfig.proxyNamePrefix.getOrElse("PROXY_")}${user.id.value}@${googleServicesConfig.appsDomain}")
+    WorkbenchEmail(s"${googleServicesConfig.resourceNamePrefix.getOrElse("")}PROXY_${user.id.value}@${googleServicesConfig.appsDomain}")
 /**/
   }
 
   override val emailDomain = googleServicesConfig.appsDomain
-  private val allUsersGroupEmail = WorkbenchEmail(s"GROUP_${allUsersGroupName.value}@$emailDomain")
+  private val allUsersGroupEmail = WorkbenchEmail(s"${googleServicesConfig.resourceNamePrefix.getOrElse("")}GROUP_${allUsersGroupName.value}@$emailDomain")
 
   override def getOrCreateAllUsersGroup(directoryDAO: DirectoryDAO)(implicit executionContext: ExecutionContext): Future[WorkbenchGroup] = {
     val allUsersGroup = BasicWorkbenchGroup(allUsersGroupName, Set.empty, allUsersGroupEmail)
@@ -342,7 +343,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
      *
      * Subject IDs are 22 numeric characters, so "pet-${subjectId}" fulfills these requirements.
      */
-    val serviceAccountName = s"pet-${user.id.value}"
+    val serviceAccountName = s"${googleServicesConfig.resourceNamePrefix.getOrElse("")}pet-${user.id.value}"
     val displayName = s"Pet Service Account for user [${user.email.value}]"
 
     (ServiceAccountName(serviceAccountName), ServiceAccountDisplayName(displayName))
