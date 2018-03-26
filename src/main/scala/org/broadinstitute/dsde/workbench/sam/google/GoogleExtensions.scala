@@ -52,7 +52,12 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
       createdGroup <- directoryDAO.createGroup(allUsersGroup) recover {
         case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode == Option(StatusCodes.Conflict) => allUsersGroup
       }
-      _ <- googleDirectoryDAO.createGroup(createdGroup.id.toString, createdGroup.email) recover { case e: GoogleJsonResponseException if e.getDetails.getCode == StatusCodes.Conflict.intValue => () }
+      existingGoogleGroup <- googleDirectoryDAO.getGoogleGroup(createdGroup.email)
+      _ <- existingGoogleGroup match {
+        case None => googleDirectoryDAO.createGroup(createdGroup.id.toString, createdGroup.email) recover { case e: GoogleJsonResponseException if e.getDetails.getCode == StatusCodes.Conflict.intValue => () }
+        case Some(_) => Future.successful()
+      }
+
     } yield createdGroup
   }
 
