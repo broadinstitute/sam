@@ -255,9 +255,9 @@ paths:
       summary: 'Overwrite email addresses of members of the "admin" policy'
       responses:
         201:
-          description: Admin Policy successfully updated
+          description: Policy successfully updated
         404:
-          description: Group does not exist or you are not a member of the admin policy for the group
+          description: Group does not exist or you are not a member of the policy for the group
         500:
           description: Internal Error
           schema:
