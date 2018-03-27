@@ -284,6 +284,76 @@ paths:
       tags:
         - Group
 
+  /api/group/{groupName}/{policyName}/{email}:
+    put:
+      summary: Add email to the policy
+      responses:
+        204:
+          description: Email successfully added
+        400:
+          description: Email is invalid
+        403:
+          description: You do not have permission to alter this policy
+        404:
+          description: Group does not exist, policy does not exist, or subject with specified email was not found
+        500:
+          description: Internal Error
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      parameters:
+        - in: path
+          description: Name of group
+          name: groupName
+          required: true
+          type: string
+        - in: path
+          description: Name of policy
+          name: policyName
+          required: true
+          type: string
+          enum: ["members", "admins"]
+        - in: path
+          description: Email address
+          name: email
+          required: true
+          type: string
+      operationId: AddEmailToGroup
+      tags:
+        - Group
+    delete:
+      summary: Remove email from the policy
+      responses:
+        204:
+          description: Email successfully removed
+        403:
+          description: You do not have permission to alter this policy
+        404:
+          description: Group does not exist or policy does not exist
+        500:
+          description: Internal Error
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      parameters:
+        - in: path
+          description: Name of group
+          name: groupName
+          required: true
+          type: string
+        - in: path
+          description: Name of policy
+          name: policyName
+          required: true
+          type: string
+          enum: ["members", "admins"]
+        - in: path
+          description: Email address
+          name: email
+          required: true
+          type: string
+      operationId: RemoveEmailFromGroup
+      tags:
+        - Group
+
   /api/google/group/{groupName}/sync:
     post:
       summary: Synchronize a managed-group with google group
@@ -295,7 +365,7 @@ paths:
         404:
           description: Group could not be found
           schema:
-            $ref: '#/definition/ErrorReport'
+            $ref: '#/definitions/ErrorReport'
         500:
           description: Internal Error
           schema:
