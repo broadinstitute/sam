@@ -53,6 +53,9 @@ trait ManagedGroupRoutes extends UserInfoDirectives with SecurityDirectives with
           pathEndOrSingleSlash {
             put {
               handleAddEmailToPolicy(managedGroup, accessPolicyName, email, userInfo)
+            } ~
+            delete {
+              handleDeleteEmailFromPolicy(managedGroup, accessPolicyName, email, userInfo)
             }
           }
         }
@@ -112,6 +115,16 @@ trait ManagedGroupRoutes extends UserInfoDirectives with SecurityDirectives with
       withSubject(WorkbenchEmail(email)) { subject =>
         complete(
           managedGroupService.addSubjectToPolicy(managedGroup.resourceId, accessPolicyName, subject).map(_ => StatusCodes.NoContent)
+        )
+      }
+    }
+  }
+
+  private def handleDeleteEmailFromPolicy(managedGroup: Resource, accessPolicyName: ManagedGroupPolicyName, email: String, userInfo: UserInfo): Route = {
+    requireAction(managedGroup, SamResourceActions.sharePolicy(accessPolicyName.asInstanceOf[AccessPolicyName]), userInfo) {
+      withSubject(WorkbenchEmail(email)) { subject =>
+        complete(
+          managedGroupService.removeSubjectFromPolicy(managedGroup.resourceId, accessPolicyName, subject).map(_ => StatusCodes.NoContent)
         )
       }
     }

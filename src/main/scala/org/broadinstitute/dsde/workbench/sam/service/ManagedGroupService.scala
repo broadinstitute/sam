@@ -110,6 +110,11 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
     val resourceAndPolicyName = ResourceAndPolicyName(Resource(ManagedGroupService.managedGroupTypeName, resourceId), policyName.asInstanceOf[AccessPolicyName])
     resourceService.addSubjectToPolicy(resourceAndPolicyName, subject)
   }
+
+  def removeSubjectFromPolicy(resourceId: ResourceId, policyName: ManagedGroupPolicyName, subject: WorkbenchSubject): Future[Unit] = {
+    val resourceAndPolicyName = ResourceAndPolicyName(Resource(ManagedGroupService.managedGroupTypeName, resourceId), policyName.asInstanceOf[AccessPolicyName])
+    resourceService.removeSubjectFromPolicy(resourceAndPolicyName, subject)
+  }
 }
 
 object ManagedGroupService {

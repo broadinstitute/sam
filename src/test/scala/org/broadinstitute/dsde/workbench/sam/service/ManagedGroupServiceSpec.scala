@@ -276,4 +276,25 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     runAndWait(managedGroupService.addSubjectToPolicy(managedGroup.resourceId, ManagedGroupService.adminPolicyName, someUser.id))
   }
 
+  "ManagedGroupService removeSubjectFromPolicy" should "successfully remove the subject from the policy for the group" in {
+    val managedGroup = assertMakeGroup()
+    val adminUser = WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)
+    runAndWait(dirDAO.createUser(adminUser))
+    runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName)) shouldEqual Set(adminUser.email)
+
+    runAndWait(managedGroupService.removeSubjectFromPolicy(managedGroup.resourceId, ManagedGroupService.adminPolicyName, adminUser.id))
+
+    runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName)) shouldEqual Set.empty
+  }
+
+  it should "not do anything if the subject is not a member of the policy" in {
+    val managedGroup = assertMakeGroup()
+    val adminUser = WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)
+    runAndWait(dirDAO.createUser(adminUser))
+    runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName)) shouldEqual Set(adminUser.email)
+
+    runAndWait(managedGroupService.removeSubjectFromPolicy(managedGroup.resourceId, ManagedGroupService.adminPolicyName, WorkbenchUserId("someUser")))
+
+    runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName)) shouldEqual Set(adminUser.email)
+  }
 }

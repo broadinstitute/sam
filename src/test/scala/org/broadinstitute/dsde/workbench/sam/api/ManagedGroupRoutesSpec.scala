@@ -431,10 +431,54 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
     }
   }
 
-  "DELETE /api/group/{groupName}/{policyName}/{email}" should "respond with 204 and remove the email address from the specified group and policy" is pending
-  it should "respond with 204 when the email address was already not present in the group and policy" is pending
-  it should "respond with 404 when the group does not exist" is pending
-  it should "respond with 400 when the email address is invalid" is pending
-  it should "respond with 400 when the policy is invalid" is pending
-  it should "respond with 403 when the requesting user does not have permissions to edit the group and policy" is pending
+  // TODO: In order to be able to delete the subject, they need to exist in opendj.  Is this what we want?
+  "DELETE /api/group/{groupName}/{policyName}/{email}" should "respond with 204 and remove the email address from the specified group and policy" in {
+    val samRoutes = TestSamRoutes(resourceTypes)
+    assertCreateGroup(samRoutes)
+    assertCreateUser(samRoutes)
+
+    Delete(s"/api/group/$groupId/admins/${samRoutes.userInfo.userEmail}") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+    }
+  }
+
+  // TODO:  I think this should just work and give back a 204
+  it should "respond with 404 when the email address was already not present in the group and policy" in {
+    val samRoutes = TestSamRoutes(resourceTypes)
+    assertCreateGroup(samRoutes)
+
+    Delete(s"/api/group/$groupId/admins/${samRoutes.userInfo.userEmail}") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.BadRequest
+    }
+  }
+
+  it should "respond with 404 when the group does not exist" in {
+    val samRoutes = TestSamRoutes(resourceTypes)
+
+    Delete(s"/api/group/$groupId/admins/${samRoutes.userInfo.userEmail}") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
+    }
+  }
+
+  it should "respond with 404 when the policy is invalid" in {
+    val samRoutes = TestSamRoutes(resourceTypes)
+    assertCreateGroup(samRoutes)
+
+    Delete(s"/api/group/$groupId/people/${samRoutes.userInfo.userEmail}") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
+    }
+  }
+
+  it should "respond with 404 when the requesting user does not have permissions to edit the group and policy" in {
+    val samRoutes = TestSamRoutes(resourceTypes)
+    assertCreateGroup(samRoutes)
+    assertCreateUser(samRoutes)
+
+    val newGuy = makeOtherUser(samRoutes)
+    assertCreateUser(newGuy.routes)
+
+    Delete(s"/api/group/$groupId/admins/${samRoutes.userInfo.userEmail}") ~> newGuy.routes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
+    }
+  }
 }
