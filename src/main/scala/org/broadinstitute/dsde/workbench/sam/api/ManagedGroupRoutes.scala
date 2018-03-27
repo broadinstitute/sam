@@ -18,7 +18,7 @@ import scala.concurrent.ExecutionContext
 /**
   * Created by gpolumbo on 2/20/2018.
   */
-trait ManagedGroupRoutes extends UserInfoDirectives with SecurityDirectives {
+trait ManagedGroupRoutes extends UserInfoDirectives with SecurityDirectives with SamModelDirectives {
   implicit val executionContext: ExecutionContext
 
   val managedGroupService: ManagedGroupService
@@ -47,6 +47,13 @@ trait ManagedGroupRoutes extends UserInfoDirectives with SecurityDirectives {
           } ~
           put {
             handleOverwriteEmails(managedGroup, accessPolicyName, userInfo)
+          }
+        } ~
+        pathPrefix(Segment) { email =>
+          pathEndOrSingleSlash {
+            put {
+              handleAddEmailToPolicy(managedGroup, accessPolicyName, email, userInfo)
+            }
           }
         }
       }
@@ -82,19 +89,29 @@ trait ManagedGroupRoutes extends UserInfoDirectives with SecurityDirectives {
     }
   }
 
-  private def handleListEmails(managedGroup: Resource, policyName: ManagedGroupPolicyName, userInfo: UserInfo): Route = {
-    requireAction(managedGroup, SamResourceActions.readPolicy(policyName.asInstanceOf[AccessPolicyName]), userInfo) {
+  private def handleListEmails(managedGroup: Resource, accessPolicyName: ManagedGroupPolicyName, userInfo: UserInfo): Route = {
+    requireAction(managedGroup, SamResourceActions.readPolicy(accessPolicyName.asInstanceOf[AccessPolicyName]), userInfo) {
       complete(
-        managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, policyName).map(StatusCodes.OK -> _)
+        managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, accessPolicyName).map(StatusCodes.OK -> _)
       )
     }
   }
 
-  private def handleOverwriteEmails(managedGroup: Resource, policyName: ManagedGroupPolicyName, userInfo: UserInfo): Route = {
-    requireAction(managedGroup, SamResourceActions.sharePolicy(policyName.asInstanceOf[AccessPolicyName]), userInfo) {
+  private def handleOverwriteEmails(managedGroup: Resource, accessPolicyName: ManagedGroupPolicyName, userInfo: UserInfo): Route = {
+    requireAction(managedGroup, SamResourceActions.sharePolicy(accessPolicyName.asInstanceOf[AccessPolicyName]), userInfo) {
       entity(as[Set[WorkbenchEmail]]) { members =>
         complete(
-          managedGroupService.overwritePolicyMemberEmails(managedGroup.resourceId, policyName, members).map(_ => StatusCodes.Created)
+          managedGroupService.overwritePolicyMemberEmails(managedGroup.resourceId, accessPolicyName, members).map(_ => StatusCodes.Created)
+        )
+      }
+    }
+  }
+
+  private def handleAddEmailToPolicy(managedGroup: Resource, accessPolicyName: ManagedGroupPolicyName, email: String, userInfo: UserInfo): Route = {
+    requireAction(managedGroup, SamResourceActions.sharePolicy(accessPolicyName.asInstanceOf[AccessPolicyName]), userInfo) {
+      withSubject(WorkbenchEmail(email)) { subject =>
+        complete(
+          managedGroupService.addSubjectToPolicy(managedGroup.resourceId, accessPolicyName, subject).map(_ => StatusCodes.NoContent)
         )
       }
     }

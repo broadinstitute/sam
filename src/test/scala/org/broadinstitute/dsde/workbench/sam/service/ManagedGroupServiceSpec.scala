@@ -240,4 +240,40 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
 
     runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.memberPolicyName)) shouldEqual newMembers
   }
+
+  "ManagedGroupService addSubjectToPolicy" should "successfully add the subject to the existing policy for the group" in {
+    val managedGroup = assertMakeGroup()
+    val adminUser = WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)
+    runAndWait(dirDAO.createUser(adminUser))
+    runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName)) shouldEqual Set(adminUser.email)
+
+    val someUser = WorkbenchUser(WorkbenchUserId("someUser"), WorkbenchEmail("someUser@foo.test"))
+    runAndWait(dirDAO.createUser(someUser))
+    runAndWait(managedGroupService.addSubjectToPolicy(managedGroup.resourceId, ManagedGroupService.adminPolicyName, someUser.id))
+
+    val expectedEmails = Set(adminUser.email, someUser.email)
+    runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName)) shouldEqual expectedEmails
+  }
+
+  it should "succeed without changing if the email address is already in the policy" in {
+    val managedGroup = assertMakeGroup()
+    val adminUser = WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)
+    runAndWait(dirDAO.createUser(adminUser))
+    runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName)) shouldEqual Set(adminUser.email)
+    runAndWait(managedGroupService.addSubjectToPolicy(managedGroup.resourceId, ManagedGroupService.adminPolicyName, adminUser.id))
+    runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName)) shouldEqual Set(adminUser.email)
+  }
+
+  // TODO: Is this right?  ResourceService.overwriteResource fails with invalid emails, should addSubjectToPolicy fail too?
+  // The correct behavior is enforced in the routing, but is that the right place?  Should it be enforced in the Service class?
+  it should "succeed even if the subject is doesn't exist" in {
+    val managedGroup = assertMakeGroup()
+    val adminUser = WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)
+    runAndWait(dirDAO.createUser(adminUser))
+    runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName)) shouldEqual Set(adminUser.email)
+
+    val someUser = WorkbenchUser(WorkbenchUserId("someUser"), WorkbenchEmail("someUser@foo.test"))
+    runAndWait(managedGroupService.addSubjectToPolicy(managedGroup.resourceId, ManagedGroupService.adminPolicyName, someUser.id))
+  }
+
 }
