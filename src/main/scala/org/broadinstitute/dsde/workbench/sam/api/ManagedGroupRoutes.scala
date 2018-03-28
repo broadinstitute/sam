@@ -32,7 +32,7 @@ trait ManagedGroupRoutes extends UserInfoDirectives with SecurityDirectives with
           handleGetGroup(managedGroup)
         } ~
         post {
-          handlePostGroup(managedGroup, userInfo)
+          handleCreateGroup(managedGroup, userInfo)
         } ~
         delete {
           handleDeleteGroup(managedGroup, userInfo)
@@ -82,7 +82,7 @@ trait ManagedGroupRoutes extends UserInfoDirectives with SecurityDirectives with
     )
   }
 
-  private def handlePostGroup(managedGroup: Resource, userInfo: UserInfo): Route = {
+  private def handleCreateGroup(managedGroup: Resource, userInfo: UserInfo): Route = {
     complete(managedGroupService.createManagedGroup(managedGroup.resourceId, userInfo).map(_ => StatusCodes.Created))
   }
 
@@ -93,7 +93,7 @@ trait ManagedGroupRoutes extends UserInfoDirectives with SecurityDirectives with
   }
 
   private def handleListEmails(managedGroup: Resource, accessPolicyName: ManagedGroupPolicyName, userInfo: UserInfo): Route = {
-    requireAction(managedGroup, SamResourceActions.readPolicy(accessPolicyName.asInstanceOf[AccessPolicyName]), userInfo) {
+    requireAction(managedGroup, SamResourceActions.readPolicy(accessPolicyName), userInfo) {
       complete(
         managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, accessPolicyName).map(StatusCodes.OK -> _)
       )
@@ -101,7 +101,7 @@ trait ManagedGroupRoutes extends UserInfoDirectives with SecurityDirectives with
   }
 
   private def handleOverwriteEmails(managedGroup: Resource, accessPolicyName: ManagedGroupPolicyName, userInfo: UserInfo): Route = {
-    requireAction(managedGroup, SamResourceActions.sharePolicy(accessPolicyName.asInstanceOf[AccessPolicyName]), userInfo) {
+    requireAction(managedGroup, SamResourceActions.sharePolicy(accessPolicyName), userInfo) {
       entity(as[Set[WorkbenchEmail]]) { members =>
         complete(
           managedGroupService.overwritePolicyMemberEmails(managedGroup.resourceId, accessPolicyName, members).map(_ => StatusCodes.Created)
@@ -111,7 +111,7 @@ trait ManagedGroupRoutes extends UserInfoDirectives with SecurityDirectives with
   }
 
   private def handleAddEmailToPolicy(managedGroup: Resource, accessPolicyName: ManagedGroupPolicyName, email: String, userInfo: UserInfo): Route = {
-    requireAction(managedGroup, SamResourceActions.sharePolicy(accessPolicyName.asInstanceOf[AccessPolicyName]), userInfo) {
+    requireAction(managedGroup, SamResourceActions.sharePolicy(accessPolicyName), userInfo) {
       withSubject(WorkbenchEmail(email)) { subject =>
         complete(
           managedGroupService.addSubjectToPolicy(managedGroup.resourceId, accessPolicyName, subject).map(_ => StatusCodes.NoContent)
@@ -121,7 +121,7 @@ trait ManagedGroupRoutes extends UserInfoDirectives with SecurityDirectives with
   }
 
   private def handleDeleteEmailFromPolicy(managedGroup: Resource, accessPolicyName: ManagedGroupPolicyName, email: String, userInfo: UserInfo): Route = {
-    requireAction(managedGroup, SamResourceActions.sharePolicy(accessPolicyName.asInstanceOf[AccessPolicyName]), userInfo) {
+    requireAction(managedGroup, SamResourceActions.sharePolicy(accessPolicyName), userInfo) {
       withSubject(WorkbenchEmail(email)) { subject =>
         complete(
           managedGroupService.removeSubjectFromPolicy(managedGroup.resourceId, accessPolicyName, subject).map(_ => StatusCodes.NoContent)

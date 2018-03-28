@@ -88,7 +88,7 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
   }
 
   def listPolicyMemberEmails(resourceId: ResourceId, policyName: ManagedGroupPolicyName): Future[Set[WorkbenchEmail]] = {
-    val resourceAndPolicyName = ResourceAndPolicyName(Resource(ManagedGroupService.managedGroupTypeName, resourceId), policyName.asInstanceOf[AccessPolicyName])
+    val resourceAndPolicyName = ResourceAndPolicyName(Resource(ManagedGroupService.managedGroupTypeName, resourceId), policyName)
     accessPolicyDAO.loadPolicy(resourceAndPolicyName) flatMap {
       case Some(policy) => directoryDAO.loadSubjectEmails(policy.members)
       case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Group or policy could not be found: $resourceAndPolicyName"))
@@ -96,7 +96,7 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
   }
 
   def overwritePolicyMemberEmails(resourceId: ResourceId, policyName: ManagedGroupPolicyName, emails: Set[WorkbenchEmail]): Future[AccessPolicy] = {
-    val resourceAndPolicyName = ResourceAndPolicyName(Resource(ManagedGroupService.managedGroupTypeName, resourceId), policyName.asInstanceOf[AccessPolicyName])
+    val resourceAndPolicyName = ResourceAndPolicyName(Resource(ManagedGroupService.managedGroupTypeName, resourceId), policyName)
     accessPolicyDAO.loadPolicy(resourceAndPolicyName).flatMap {
       case Some(policy) => {
         val updatedPolicy = AccessPolicyMembership(emails, policy.actions, policy.roles)
@@ -107,12 +107,12 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
   }
 
   def addSubjectToPolicy(resourceId: ResourceId, policyName: ManagedGroupPolicyName, subject: WorkbenchSubject): Future[Unit] = {
-    val resourceAndPolicyName = ResourceAndPolicyName(Resource(ManagedGroupService.managedGroupTypeName, resourceId), policyName.asInstanceOf[AccessPolicyName])
+    val resourceAndPolicyName = ResourceAndPolicyName(Resource(ManagedGroupService.managedGroupTypeName, resourceId), policyName)
     resourceService.addSubjectToPolicy(resourceAndPolicyName, subject)
   }
 
   def removeSubjectFromPolicy(resourceId: ResourceId, policyName: ManagedGroupPolicyName, subject: WorkbenchSubject): Future[Unit] = {
-    val resourceAndPolicyName = ResourceAndPolicyName(Resource(ManagedGroupService.managedGroupTypeName, resourceId), policyName.asInstanceOf[AccessPolicyName])
+    val resourceAndPolicyName = ResourceAndPolicyName(Resource(ManagedGroupService.managedGroupTypeName, resourceId), policyName)
     resourceService.removeSubjectFromPolicy(resourceAndPolicyName, subject)
   }
 }
@@ -123,13 +123,15 @@ object ManagedGroupService {
   private val memberValue = "member"
   private val adminValue = "admin"
 
+  type ManagedGroupPolicyName = AccessPolicyName with AllowedManagedGroupPolicyName
   // In lieu of an Enumeration, this trait is being used to ensure that we can only have these policies in a Managed Group
-  sealed trait ManagedGroupPolicyName
-  val adminPolicyName = new AccessPolicyName(adminValue) with ManagedGroupPolicyName
-  val memberPolicyName = new AccessPolicyName(memberValue) with ManagedGroupPolicyName
+  sealed trait AllowedManagedGroupPolicyName
+  val adminPolicyName: ManagedGroupPolicyName = new AccessPolicyName(adminValue) with AllowedManagedGroupPolicyName
+  val memberPolicyName: ManagedGroupPolicyName = new AccessPolicyName(memberValue) with AllowedManagedGroupPolicyName
 
+  type MangedGroupRoleName = ResourceRoleName with AllowedManagedGroupRoleName
   // In lieu of an Enumeration, this trait is being used to ensure that we can only have these Roles in a Managed Group
-  sealed trait ManagedGroupRoleName
-  val adminRoleName = new ResourceRoleName(adminValue) with ManagedGroupRoleName
-  val memberRoleName = new ResourceRoleName(memberValue) with ManagedGroupRoleName
+  sealed trait AllowedManagedGroupRoleName
+  val adminRoleName = new ResourceRoleName(adminValue) with AllowedManagedGroupRoleName
+  val memberRoleName = new ResourceRoleName(memberValue) with AllowedManagedGroupRoleName
 }
