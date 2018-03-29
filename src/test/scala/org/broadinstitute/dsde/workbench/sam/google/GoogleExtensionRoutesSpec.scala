@@ -414,5 +414,4 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
       status shouldEqual StatusCodes.Forbidden
     }
   }
-
 }

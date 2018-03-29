@@ -18,22 +18,14 @@ import scala.concurrent.ExecutionContext
 /**
   * Created by mbemis on 5/22/17.
   */
-trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives {
+trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with SamModelDirectives {
   implicit val executionContext: ExecutionContext
   val resourceService: ResourceService
-  val userService: UserService
 
   def withResourceType(name: ResourceTypeName): Directive1[ResourceType] = {
     onSuccess(resourceService.getResourceType(name)).map {
       case Some(resourceType) => resourceType
       case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"resource type ${name.value} not found"))
-    }
-  }
-
-  def withSubject(email: WorkbenchEmail): Directive1[WorkbenchSubject] = {
-    onSuccess(userService.getSubjectFromEmail(email)).map {
-      case Some(subject) => subject
-      case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"${email} not found"))
     }
   }
 

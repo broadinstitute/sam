@@ -243,10 +243,23 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
   }
 
   override def loadSubjectEmail(subject: WorkbenchSubject): Future[Option[WorkbenchEmail]] = withContext { ctx =>
-    val subDn = subjectDn(subject)
-    Option(ctx.getAttributes(subDn).get(Attr.email)).map { emailAttr =>
-      WorkbenchEmail(emailAttr.get.asInstanceOf[String])
-    }
+    Try {
+      val subDn = subjectDn(subject)
+      Option(ctx.getAttributes(subDn).get(Attr.email)).map { emailAttr =>
+        WorkbenchEmail(emailAttr.get.asInstanceOf[String])
+      }
+    }.recover {
+      case _: NameNotFoundException => None
+    }.get
+  }
+
+  override def loadSubjectEmails(subjects: Set[WorkbenchSubject]): Future[Set[WorkbenchEmail]] = {
+    val users = loadUsers(subjects collect { case userId: WorkbenchUserId => userId })
+    val groups = loadGroups(subjects collect { case groupName: WorkbenchGroupName => groupName })
+    for {
+      userEmails <- users.map(_.map(_.email))
+      groupEmails <- groups.map(_.map(_.email))
+    } yield (userEmails ++ groupEmails).toSet
   }
 
   override def getUserFromPetServiceAccount(petSA: ServiceAccountSubjectId): Future[Option[WorkbenchUser]] = {

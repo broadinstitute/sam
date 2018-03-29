@@ -196,6 +196,12 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     }
   }
 
+  override def loadSubjectEmails(subjects: Set[WorkbenchSubject]): Future[Set[WorkbenchEmail]] = {
+    Future.traverse(subjects) { subject =>
+      loadSubjectEmail(subject).map(_.get)
+    }
+  }
+
   override def getSynchronizedDate(groupId: WorkbenchGroupIdentity): Future[Option[Date]] = {
     Future.successful(groupSynchronzedDates.get(groupId))
   }

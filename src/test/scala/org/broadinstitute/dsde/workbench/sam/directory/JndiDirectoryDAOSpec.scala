@@ -1,6 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.directory
 
 import java.util.UUID
+import javax.naming.NameNotFoundException
 
 import com.typesafe.config.ConfigFactory
 import net.ceedubs.ficus.Ficus._
@@ -409,6 +410,38 @@ class JndiDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
 
     assertResult(Some(parentGroup)) {
       runAndWait(dao.loadGroup(parentGroupName))
+    }
+  }
+
+  "JndiDirectoryDao loadSubjectEmail" should "fail if the user has not been created" in {
+    val userId = WorkbenchUserId(UUID.randomUUID().toString)
+    val user = WorkbenchUser(userId, WorkbenchEmail("foo@bar.com"))
+
+    assertResult(None) {
+      runAndWait(dao.loadUser(user.id))
+    }
+
+    runAndWait(dao.loadSubjectEmail(userId)) shouldEqual None
+  }
+
+  it should "succeed if the user has been created" in {
+    val userId = WorkbenchUserId(UUID.randomUUID().toString)
+    val user = WorkbenchUser(userId, WorkbenchEmail("foo@bar.com"))
+
+    assertResult(None) {
+      runAndWait(dao.loadUser(user.id))
+    }
+
+    assertResult(user) {
+      runAndWait(dao.createUser(user))
+    }
+
+    assertResult(Some(user)) {
+      runAndWait(dao.loadUser(user.id))
+    }
+
+    assertResult(Some(user.email)) {
+      runAndWait(dao.loadSubjectEmail(userId))
     }
   }
 }

@@ -3,13 +3,14 @@ package org.broadinstitute.dsde.workbench.sam.service
 import akka.http.scaladsl.model.StatusCodes
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
+import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.AccessPolicyDAO
+import org.broadinstitute.dsde.workbench.sam.service.ManagedGroupService.ManagedGroupPolicyName
 
-import scala.concurrent.Future
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
 
 /**
   * Created by gpolumbo on 2/21/2018.
@@ -85,10 +86,68 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
       _ <- resourceService.deleteResource(Resource(managedGroupType.name, groupId))
     } yield ()
   }
+
+  def listPolicyMemberEmails(resourceId: ResourceId, policyName: ManagedGroupPolicyName): Future[Set[WorkbenchEmail]] = {
+    val resourceAndPolicyName = ResourceAndPolicyName(Resource(ManagedGroupService.managedGroupTypeName, resourceId), policyName)
+    accessPolicyDAO.loadPolicy(resourceAndPolicyName) flatMap {
+      case Some(policy) => directoryDAO.loadSubjectEmails(policy.members)
+      case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Group or policy could not be found: $resourceAndPolicyName"))
+    }
+  }
+
+  def overwritePolicyMemberEmails(resourceId: ResourceId, policyName: ManagedGroupPolicyName, emails: Set[WorkbenchEmail]): Future[AccessPolicy] = {
+    val resourceAndPolicyName = ResourceAndPolicyName(Resource(ManagedGroupService.managedGroupTypeName, resourceId), policyName)
+    accessPolicyDAO.loadPolicy(resourceAndPolicyName).flatMap {
+      case Some(policy) => {
+        val updatedPolicy = AccessPolicyMembership(emails, policy.actions, policy.roles)
+        resourceService.overwritePolicy(managedGroupType, resourceAndPolicyName.accessPolicyName, resourceAndPolicyName.resource, updatedPolicy)
+      }
+      case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Group or policy could not be found: $resourceAndPolicyName"))
+    }
+  }
+
+  def addSubjectToPolicy(resourceId: ResourceId, policyName: ManagedGroupPolicyName, subject: WorkbenchSubject): Future[Unit] = {
+    val resourceAndPolicyName = ResourceAndPolicyName(Resource(ManagedGroupService.managedGroupTypeName, resourceId), policyName)
+    resourceService.addSubjectToPolicy(resourceAndPolicyName, subject)
+  }
+
+  def removeSubjectFromPolicy(resourceId: ResourceId, policyName: ManagedGroupPolicyName, subject: WorkbenchSubject): Future[Unit] = {
+    val resourceAndPolicyName = ResourceAndPolicyName(Resource(ManagedGroupService.managedGroupTypeName, resourceId), policyName)
+    resourceService.removeSubjectFromPolicy(resourceAndPolicyName, subject)
+  }
 }
 
 object ManagedGroupService {
-  val memberRoleName = ResourceRoleName("member")
   val managedGroupTypeName = ResourceTypeName("managed-group")
   val groupNameRe = "^[A-z0-9_-]+$".r
+  private val memberValue = "member"
+  private val adminValue = "admin"
+
+  type ManagedGroupPolicyName = AccessPolicyName with AllowedManagedGroupPolicyName
+  // In lieu of an Enumeration, this trait is being used to ensure that we can only have these policies in a Managed Group
+  sealed trait AllowedManagedGroupPolicyName
+  val adminPolicyName: ManagedGroupPolicyName = new AccessPolicyName(adminValue) with AllowedManagedGroupPolicyName
+  val memberPolicyName: ManagedGroupPolicyName = new AccessPolicyName(memberValue) with AllowedManagedGroupPolicyName
+
+  def getPolicyName(policyName: String): ManagedGroupPolicyName = {
+    policyName match {
+      case "members" => ManagedGroupService.memberPolicyName
+      case "admins" => ManagedGroupService.adminPolicyName
+      case _ => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "Policy name for managed groups must be one of: [\"admins\", \"members\"]"))
+    }
+  }
+
+  type MangedGroupRoleName = ResourceRoleName with AllowedManagedGroupRoleName
+  // In lieu of an Enumeration, this trait is being used to ensure that we can only have these Roles in a Managed Group
+  sealed trait AllowedManagedGroupRoleName
+  val adminRoleName = new ResourceRoleName(adminValue) with AllowedManagedGroupRoleName
+  val memberRoleName = new ResourceRoleName(memberValue) with AllowedManagedGroupRoleName
+
+  def getRoleName(roleName: String): MangedGroupRoleName = {
+    roleName match {
+      case `memberValue` => ManagedGroupService.memberRoleName
+      case `adminValue` => ManagedGroupService.adminRoleName
+      case _ => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Role name for managed groups must be one of: ['$adminValue', '$memberValue']"))
+    }
+  }
 }

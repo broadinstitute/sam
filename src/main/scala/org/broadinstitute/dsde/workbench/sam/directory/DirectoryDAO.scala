@@ -26,6 +26,7 @@ trait DirectoryDAO {
 
   def loadSubjectFromEmail(email: WorkbenchEmail): Future[Option[WorkbenchSubject]]
   def loadSubjectEmail(subject: WorkbenchSubject): Future[Option[WorkbenchEmail]]
+  def loadSubjectEmails(subjects: Set[WorkbenchSubject]): Future[Set[WorkbenchEmail]]
 
   def createUser(user: WorkbenchUser): Future[WorkbenchUser]
   def loadUser(userId: WorkbenchUserId): Future[Option[WorkbenchUser]]

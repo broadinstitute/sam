@@ -186,7 +186,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     runAndWait(dirDAO.deleteUser(dummyUserInfo.userId))
   }
 
-  "listResourcePolicies" should "list policies for a newly created resource" in {
+  "policyDao.listAccessPolicies" should "list policies for a newly created resource" in {
     val resource = Resource(defaultResourceType.name, ResourceId("my-resource"))
 
     runAndWait(service.createResourceType(defaultResourceType))
@@ -195,6 +195,37 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     val policies = runAndWait(policyDAO.listAccessPolicies(resource)).map(_.copy(email=WorkbenchEmail("policy-randomuuid@example.com")))
 
     constructExpectedPolicies(defaultResourceType, resource) should contain theSameElementsAs(policies)
+
+    runAndWait(service.deleteResource(resource))
+  }
+
+  "listResourcePolicies" should "list policies for a newly created resource without member email addresses if the User does not exist" in {
+    val resource = Resource(defaultResourceType.name, ResourceId("my-resource"))
+    val ownerRole = defaultResourceType.roles.find(_.roleName == defaultResourceType.ownerRoleName).get
+    val forcedEmail = WorkbenchEmail("policy-randomuuid@example.com")
+    val expectedPolicy = AccessPolicyResponseEntry(AccessPolicyName(ownerRole.roleName.value), AccessPolicyMembership(Set.empty, Set.empty, Set(ownerRole.roleName)), forcedEmail)
+
+    runAndWait(service.createResourceType(defaultResourceType))
+    runAndWait(service.createResource(defaultResourceType, resource.resourceId, dummyUserInfo))
+
+    val policies = runAndWait(service.listResourcePolicies(resource)).map(_.copy(email = forcedEmail))
+    policies shouldEqual Set(expectedPolicy)
+
+    runAndWait(service.deleteResource(resource))
+  }
+
+  "listResourcePolicies" should "list policies for a newly created resource with the member email addresses if the User has been added" in {
+    val resource = Resource(defaultResourceType.name, ResourceId("my-resource"))
+    val ownerRole = defaultResourceType.roles.find(_.roleName == defaultResourceType.ownerRoleName).get
+    val forcedEmail = WorkbenchEmail("policy-randomuuid@example.com")
+    val expectedPolicy = AccessPolicyResponseEntry(AccessPolicyName(ownerRole.roleName.value), AccessPolicyMembership(Set(dummyUserInfo.userEmail), Set.empty, Set(ownerRole.roleName)), forcedEmail)
+
+    runAndWait(service.createResourceType(defaultResourceType))
+    runAndWait(service.createResource(defaultResourceType, resource.resourceId, dummyUserInfo))
+    runAndWait(dirDAO.createUser(WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)))
+
+    val policies = runAndWait(service.listResourcePolicies(resource)).map(_.copy(email = forcedEmail))
+    policies shouldEqual Set(expectedPolicy)
 
     runAndWait(service.deleteResource(resource))
   }
