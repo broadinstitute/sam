@@ -39,7 +39,7 @@ trait ManagedGroupRoutes extends UserInfoDirectives with SecurityDirectives with
         }
       } ~
       pathPrefix(Segment) { policyName =>
-        val accessPolicyName = parsePolicyName(policyName)
+        val accessPolicyName = ManagedGroupService.getPolicyName(policyName)
 
         pathEndOrSingleSlash {
           get {
@@ -60,16 +60,6 @@ trait ManagedGroupRoutes extends UserInfoDirectives with SecurityDirectives with
           }
         }
       }
-    }
-  }
-
-  private def parsePolicyName(policyName: String): ManagedGroupPolicyName = {
-    if (policyName == "members") {
-      ManagedGroupService.memberPolicyName
-    } else if (policyName == "admins") {
-      ManagedGroupService.adminPolicyName
-    } else {
-      throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "Policy name for managed groups must be one of: [\"admins\", \"members\"]"))
     }
   }
 

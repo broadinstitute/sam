@@ -3,14 +3,14 @@ package org.broadinstitute.dsde.workbench.sam.service
 import akka.http.scaladsl.model.StatusCodes
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
+import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.AccessPolicyDAO
 import org.broadinstitute.dsde.workbench.sam.service.ManagedGroupService.ManagedGroupPolicyName
 
-import scala.concurrent.Future
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
 
 /**
   * Created by gpolumbo on 2/21/2018.
@@ -129,9 +129,25 @@ object ManagedGroupService {
   val adminPolicyName: ManagedGroupPolicyName = new AccessPolicyName(adminValue) with AllowedManagedGroupPolicyName
   val memberPolicyName: ManagedGroupPolicyName = new AccessPolicyName(memberValue) with AllowedManagedGroupPolicyName
 
+  def getPolicyName(policyName: String): ManagedGroupPolicyName = {
+    policyName match {
+      case "members" => ManagedGroupService.memberPolicyName
+      case "admins" => ManagedGroupService.adminPolicyName
+      case _ => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "Policy name for managed groups must be one of: [\"admins\", \"members\"]"))
+    }
+  }
+
   type MangedGroupRoleName = ResourceRoleName with AllowedManagedGroupRoleName
   // In lieu of an Enumeration, this trait is being used to ensure that we can only have these Roles in a Managed Group
   sealed trait AllowedManagedGroupRoleName
   val adminRoleName = new ResourceRoleName(adminValue) with AllowedManagedGroupRoleName
   val memberRoleName = new ResourceRoleName(memberValue) with AllowedManagedGroupRoleName
+
+  def getRoleName(roleName: String): MangedGroupRoleName = {
+    roleName match {
+      case `memberValue` => ManagedGroupService.memberRoleName
+      case `adminValue` => ManagedGroupService.adminRoleName
+      case _ => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Role name for managed groups must be one of: ['$adminValue', '$memberValue']"))
+    }
+  }
 }
