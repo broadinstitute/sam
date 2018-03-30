@@ -9,6 +9,7 @@ import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.model.{ResourceId, _}
+import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.service.ManagedGroupService
 import org.broadinstitute.dsde.workbench.sam.service.ManagedGroupService.ManagedGroupPolicyName
 import spray.json.DefaultJsonProtocol._
@@ -60,7 +61,16 @@ trait ManagedGroupRoutes extends UserInfoDirectives with SecurityDirectives with
           }
         }
       }
+    } ~
+    path("groups") {
+      get {
+        handleListGroups(userInfo)
+      }
     }
+  }
+
+  def handleListGroups(userInfo: UserInfo): Route = {
+    complete(managedGroupService.listGroups(userInfo.userId).map(StatusCodes.OK -> _))
   }
 
   private def handleGetGroup(managedGroup: Resource): Route = {

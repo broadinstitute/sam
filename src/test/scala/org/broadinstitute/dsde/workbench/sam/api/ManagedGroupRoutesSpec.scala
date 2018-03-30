@@ -481,4 +481,27 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
       status shouldEqual StatusCodes.NotFound
     }
   }
+
+  "GET /api/groups" should "respond with 200 and a list of managed groups the authenticated user belongs to" in {
+    val samRoutes = TestSamRoutes(resourceTypes)
+    val groupNames = Set("foo", "bar", "baz")
+    groupNames.foreach(assertCreateGroup(samRoutes, _))
+
+    Get("/api/groups") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      val res = responseAs[String]
+      groupNames.foreach(res should include (_))
+      res should include ("admin")
+      res shouldNot include ("member")
+    }
+  }
+
+  it should "respond with 200 and an empty list if the user is not a member of any managed groups" in {
+    val samRoutes = TestSamRoutes(resourceTypes)
+
+    Get("/api/groups") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[String] shouldEqual "[]"
+    }
+  }
 }

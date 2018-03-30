@@ -2,19 +2,19 @@ package org.broadinstitute.dsde.workbench.sam.service
 
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import com.typesafe.config.ConfigFactory
+import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
 import org.broadinstitute.dsde.workbench.sam.directory.JndiDirectoryDAO
+import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.JndiAccessPolicyDAO
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
+import org.mockito.Mockito.{verify, when}
+import org.scalatest._
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.mockito.MockitoSugar
-import org.scalatest._
-import net.ceedubs.ficus.Ficus._
-import org.broadinstitute.dsde.workbench.sam.google.{GoogleExtensions, SyncReportItem}
-import org.mockito.Mockito.{verify, when, times}
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
@@ -54,7 +54,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     runAndWait(schemaDao.init())
   }
 
-  def makeResourceType(): ResourceTypeName = runAndWait(resourceService.createResourceType(managedGroupResourceType))
+  def makeResourceType(resourceType: ResourceType): ResourceTypeName = runAndWait(resourceService.createResourceType(resourceType))
 
   def assertPoliciesOnResource(resource: Resource, policyDAO: JndiAccessPolicyDAO = policyDAO, expectedPolicies: Set[AccessPolicyName] = Set(ManagedGroupService.adminPolicyName, ManagedGroupService.memberPolicyName)) = {
     val policies = runAndWait(policyDAO.listAccessPolicies(resource))
@@ -73,7 +73,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
   }
 
   private def makeGroup(groupName: String, managedGroupService: ManagedGroupService, userInfo: UserInfo = dummyUserInfo) = {
-    makeResourceType()
+    makeResourceType(managedGroupResourceType)
     runAndWait(managedGroupService.createManagedGroup(ResourceId(groupName), userInfo))
   }
 
@@ -297,4 +297,52 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
 
     runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName)) shouldEqual Set(adminUser.email)
   }
+
+  private def makeResource(resourceType: ResourceType, resourceId: ResourceId, userInfo: UserInfo): Resource = runAndWait(resourceService.createResource(resourceType, resourceId, userInfo))
+
+  "ManagedGroupService listGroups" should "return the list of groups that passed user belongs to" in {
+    // Setup multiple managed groups owned by different users.
+    // Make the different users a member of some of the groups owned by the other user
+    // Create some resources owned by different users
+    // List Managed Group memberships for users and assert that memberships are only returned for managed groups
+    val newResourceType = managedGroupResourceType.copy(name = ResourceTypeName("somethingElse"))
+    makeResourceType(newResourceType)
+    val resTypes = resourceTypes + (newResourceType.name -> newResourceType)
+
+    val resService = new ResourceService(resTypes, policyDAO, dirDAO, NoExtensions, testDomain)
+    val mgService = new ManagedGroupService(resService, resTypes, policyDAO, dirDAO, NoExtensions, testDomain)
+
+    val user1 = UserInfo(OAuth2BearerToken("token1"), WorkbenchUserId("userId1"), WorkbenchEmail("user1@company.com"), 0)
+    val user2 = UserInfo(OAuth2BearerToken("token2"), WorkbenchUserId("userId2"), WorkbenchEmail("user2@company.com"), 0)
+    runAndWait(dirDAO.createUser(WorkbenchUser(user1.userId, user1.userEmail)))
+    runAndWait(dirDAO.createUser(WorkbenchUser(user2.userId, user2.userEmail)))
+
+    val user1Groups = Set("foo", "bar", "baz")
+    val user2Groups = Set("qux", "quux")
+    user1Groups.foreach(makeGroup(_, mgService, user1))
+    user2Groups.foreach(makeGroup(_, mgService, user2))
+
+    val user1Memberships = Set(user2Groups.head)
+    val user2Memberships = Set(user1Groups.head)
+
+    user1Memberships.foreach(s => mgService.addSubjectToPolicy(ResourceId(s), ManagedGroupService.memberPolicyName, user1.userId))
+    user2Memberships.foreach(s => mgService.addSubjectToPolicy(ResourceId(s), ManagedGroupService.memberPolicyName, user2.userId))
+
+    val user1Resources = Set("quuz", "corge")
+    val user2Resources = Set("grault", "garply")
+
+    user1Resources.foreach(s => makeResource(newResourceType, ResourceId(s), user1))
+    user2Resources.foreach(s => makeResource(newResourceType, ResourceId(s), user2))
+
+    val user1ExpectedAdmin = user1Groups.map(s => ResourceIdAndPolicyName(ResourceId(s), ManagedGroupService.adminPolicyName))
+    val user1ExpectedMember = user1Memberships.map(s => ResourceIdAndPolicyName(ResourceId(s), ManagedGroupService.memberPolicyName))
+    val user1ExpectedGroups = user1ExpectedAdmin ++ user1ExpectedMember
+    runAndWait(mgService.listGroups(user1.userId)) shouldEqual user1ExpectedGroups
+
+    val user2ExpectedAdmin = user2Groups.map(s => ResourceIdAndPolicyName(ResourceId(s), ManagedGroupService.adminPolicyName))
+    val user2ExpectedMember = user2Memberships.map(s => ResourceIdAndPolicyName(ResourceId(s), ManagedGroupService.memberPolicyName))
+    val user2ExpectedGroups = user2ExpectedAdmin ++ user2ExpectedMember
+    runAndWait(mgService.listGroups(user2.userId)) shouldEqual user2ExpectedGroups
+  }
+
 }
