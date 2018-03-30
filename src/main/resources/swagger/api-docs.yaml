@@ -157,6 +157,20 @@ paths:
       tags:
         - Admin
 
+  /api/groups:
+    get:
+      summary: Show all the groups the requesting user belongs to and their policy membership in each group
+      responses:
+        200:
+          description: Managed Group memberships
+        500:
+          description: Internal Error
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      operationId: listGroupMemberships
+      tags:
+        - Group
+
   /api/group/{groupName}:
     get:
       summary: Show email address of the group
