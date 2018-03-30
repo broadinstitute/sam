@@ -163,6 +163,10 @@ paths:
       responses:
         200:
           description: Managed Group memberships
+          schema:
+            type: array
+            items:
+              $ref: '#/definitions/ResourceAndAccessPolicy'
         500:
           description: Internal Error
           schema:
@@ -1078,7 +1082,6 @@ definitions:
       accessPolicyName:
         type: string
         description: User's policy for the resource
-
 
   ResourceRole:
     type: object
