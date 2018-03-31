@@ -328,7 +328,8 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
   private def createMockGoogleIamDaoForSAKeyTests: (GoogleIamDAO, String) = {
     val googleIamDAO = mock[GoogleIamDAO]
     val expectedJson = """{"json":"yes I am"}"""
-    when(googleIamDAO.getOrCreateServiceAccount(any[GoogleProject], any[ServiceAccountName], any[ServiceAccountDisplayName])(any[ExecutionContext])).thenReturn(Future.successful(ServiceAccount(ServiceAccountSubjectId("12312341234"), WorkbenchEmail("pet@myproject.iam.gserviceaccount.com"), ServiceAccountDisplayName(""))))
+    when(googleIamDAO.findServiceAccount(any[GoogleProject], any[ServiceAccountName])).thenReturn(Future.successful(None))
+    when(googleIamDAO.createServiceAccount(any[GoogleProject], any[ServiceAccountName], any[ServiceAccountDisplayName])).thenReturn(Future.successful(ServiceAccount(ServiceAccountSubjectId("12312341234"), WorkbenchEmail("pet@myproject.iam.gserviceaccount.com"), ServiceAccountDisplayName(""))))
     when(googleIamDAO.createServiceAccountKey(any[GoogleProject], any[WorkbenchEmail])).thenReturn(Future.successful(ServiceAccountKey(ServiceAccountKeyId("foo"), ServiceAccountPrivateKeyData(ServiceAccountPrivateKeyData(expectedJson).encode), None, None)))
     when(googleIamDAO.removeServiceAccountKey(any[GoogleProject], any[WorkbenchEmail], any[ServiceAccountKeyId])).thenReturn(Future.successful(()))
     when(googleIamDAO.listUserManagedServiceAccountKeys(any[GoogleProject], any[WorkbenchEmail])).thenReturn(Future.successful(Seq.empty))
