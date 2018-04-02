@@ -66,6 +66,49 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
     val routes = new TestSamRoutes(samRoutes.resourceService, samRoutes.userService, samRoutes.statusService, samRoutes.managedGroupService, userInfo, samRoutes.mockDirectoryDao)
   }
 
+  "GET /api/group/{groupName}" should "respond with 200 if the requesting user is in the admin policy for the group" in {
+    val samRoutes = TestSamRoutes(resourceTypes)
+    assertCreateGroup(samRoutes)
+    assertGetGroup(samRoutes)
+  }
+
+  it should "respond with 200 if the requesting user is in the member policy for the group" in {
+    val samRoutes = TestSamRoutes(resourceTypes)
+    assertCreateGroup(samRoutes)
+    assertGetGroup(samRoutes)
+
+    val newGuyEmail = WorkbenchEmail("newGuy@organization.org")
+    val newGuy = UserInfo(OAuth2BearerToken("newToken"), WorkbenchUserId("NewGuy"), newGuyEmail, 0)
+    val newGuyRoutes = new TestSamRoutes(samRoutes.resourceService, samRoutes.userService, samRoutes.statusService, samRoutes.managedGroupService, newGuy, samRoutes.mockDirectoryDao)
+    assertCreateUser(newGuyRoutes)
+
+    val members = Set(newGuyEmail)
+    Put(s"/api/group/$groupId/members", members) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Created
+    }
+
+    assertGetGroup(newGuyRoutes)
+  }
+
+  it should "respond with 404 if the group does not exist" in {
+    val samRoutes = TestSamRoutes(resourceTypes)
+    assertGroupDoesNotExist(samRoutes)
+  }
+
+  it should "respond with 200 if the group exists but the user is not in the group" in {
+    val samRoutes = TestSamRoutes(resourceTypes)
+    assertCreateGroup(samRoutes)
+
+    val newGuyEmail = WorkbenchEmail("newGuy@organization.org")
+    val newGuy = UserInfo(OAuth2BearerToken("newToken"), WorkbenchUserId("NewGuy"), newGuyEmail, 0)
+    val newGuyRoutes = new TestSamRoutes(samRoutes.resourceService, samRoutes.userService, samRoutes.statusService, samRoutes.managedGroupService, newGuy, samRoutes.mockDirectoryDao)
+    assertCreateUser(newGuyRoutes)
+
+    Get(s"/api/group/$groupId") ~> newGuyRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+    }
+  }
+
   "POST /api/group/{groupName}" should "respond 201 if the group did not already exist" in {
     val samRoutes = TestSamRoutes(resourceTypes)
     assertGroupDoesNotExist(samRoutes)
