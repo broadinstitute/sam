@@ -95,7 +95,7 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
     assertGroupDoesNotExist(samRoutes)
   }
 
-  it should "respond with 404 if the group exists but the user is not in the group" in {
+  it should "respond with 200 if the group exists but the user is not in the group" in {
     val samRoutes = TestSamRoutes(resourceTypes)
     assertCreateGroup(samRoutes)
 
