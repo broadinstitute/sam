@@ -87,8 +87,8 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
     } yield ()
   }
 
-  def listGroups(userId: WorkbenchUserId): Future[Set[ResourceIdAndPolicyName]] = {
-    accessPolicyDAO.listAccessPolicies(ManagedGroupService.managedGroupTypeName, userId)
+  def listGroups(userId: WorkbenchUserId): Future[Set[ResourceIdAndPolicyNameWithEmail]] = {
+    accessPolicyDAO.listAccessPoliciesWithEmail(ManagedGroupService.managedGroupTypeName, userId)
   }
 
   def listPolicyMemberEmails(resourceId: ResourceId, policyName: ManagedGroupPolicyName): Future[Set[WorkbenchEmail]] = {
