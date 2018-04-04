@@ -1,16 +1,19 @@
 package org.broadinstitute.dsde.workbench.sam.google
 
+import java.io.ByteArrayInputStream
 import java.util.Date
 
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import com.google.api.client.googleapis.json.GoogleJsonResponseException
-import com.google.api.services.admin.directory.model.Group
+import com.google.api.services.plus.PlusScopes
+import com.google.api.services.storage.StorageScopes
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleIamDAO, GooglePubSubDAO, GoogleStorageDAO}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google._
+import com.google.auth.oauth2.ServiceAccountCredentials
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.config.{GoogleServicesConfig, PetServiceAccountConfig}
 import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
@@ -23,6 +26,7 @@ import WorkbenchIdentityJsonSupport.WorkbenchGroupNameFormat
 import spray.json._
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport.ResourceAndPolicyNameFormat
 
+import scala.collection.JavaConverters._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success, Try}
 
@@ -251,6 +255,18 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
       pet <- createUserPetServiceAccount(user, project)
       key <- googleKeyCache.getKey(pet)
     } yield key
+  }
+
+  def getPetServiceAccountToken(user: WorkbenchUser, project: GoogleProject): Future[String] = {
+    getPetServiceAccountKey(user, project).flatMap { key =>
+      getAccessTokenUsingJson(key)
+    }
+  }
+
+  def getAccessTokenUsingJson(saKey: String) : Future[String] = Future {
+    val keyStream = new ByteArrayInputStream(saKey.getBytes)
+    val credential = ServiceAccountCredentials.fromStream(keyStream).createScoped(Seq(PlusScopes.USERINFO_EMAIL, PlusScopes.USERINFO_PROFILE, StorageScopes.DEVSTORAGE_READ_ONLY).asJava)
+    credential.refreshAccessToken.getTokenValue
   }
 
   def removePetServiceAccountKey(userId: WorkbenchUserId, project: GoogleProject, keyId: ServiceAccountKeyId): Future[Unit] = {

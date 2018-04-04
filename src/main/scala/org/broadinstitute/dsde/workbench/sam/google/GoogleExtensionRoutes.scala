@@ -13,6 +13,7 @@ import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.CloudExtensions
 import spray.json.DefaultJsonProtocol._
+import spray.json.JsString
 
 import scala.concurrent.ExecutionContext
 
@@ -77,7 +78,9 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
             pathPrefix("token") {
               get {
                 complete {
-                  googleExtensions.getPetServiceAccountToken(WorkbenchUser(userInfo.userId, userInfo.userEmail), GoogleProject(project))
+                  googleExtensions.getPetServiceAccountToken(WorkbenchUser(userInfo.userId, userInfo.userEmail), GoogleProject(project)).map { token =>
+                    StatusCodes.OK -> JsString(token)
+                  }
                 }
               }
             } ~
