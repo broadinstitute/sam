@@ -74,6 +74,13 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                 }
               }
             } ~
+            pathPrefix("token") {
+              get {
+                complete {
+                  googleExtensions.getPetServiceAccountToken(WorkbenchUser(userInfo.userId, userInfo.userEmail), GoogleProject(project))
+                }
+              }
+            } ~
             pathEnd {
               get {
                 complete {
