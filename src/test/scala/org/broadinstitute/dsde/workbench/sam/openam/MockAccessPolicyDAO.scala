@@ -50,6 +50,12 @@ class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdenti
     }.toSet
   }
 
+  override def listAccessPoliciesWithEmail(resourceTypeName: ResourceTypeName, user: WorkbenchUserId): Future[Set[ResourceIdAndPolicyNameWithEmail]] = Future {
+    policies.collect {
+      case (riapn@ResourceAndPolicyName(Resource(`resourceTypeName`, _), _), accessPolicy) if accessPolicy.members.contains(user) => ResourceIdAndPolicyNameWithEmail(riapn.resource.resourceId, riapn.accessPolicyName, accessPolicy.email)
+    }.toSet
+  }
+
   override def loadPolicy(resourceAndPolicyName: ResourceAndPolicyName): Future[Option[AccessPolicy]] = {
     listAccessPolicies(resourceAndPolicyName.resource).map { policies =>
       policies.filter(_.id.accessPolicyName == resourceAndPolicyName.accessPolicyName).toSeq match {
