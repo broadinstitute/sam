@@ -255,6 +255,19 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
         petSaKeyIdOriginal should not equal petSaKeyIdNew //make sure we were able to generate a new key and that a new one was returned
       }
     }
+
+    "should get an access token for a user's own pet service account" in {
+      val user = UserPool.chooseStudent
+
+      withCleanBillingProject(UserPool.chooseProjectOwner, List(user.email)) { project =>
+
+        val token1 = Sam.user.petServiceAccountToken(project)(user.makeAuthToken)
+
+        val token2 = Sam.user.petServiceAccountToken(project)(user.makeAuthToken)
+
+        token1 shouldNot be(token2)
+      }
+    }
   }
 
   private def getFieldFromJson(jsonKey: String, field: String): String = {
