@@ -45,8 +45,13 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     groups.filterKeys(groupNames.map(_.asInstanceOf[WorkbenchGroupIdentity])).values.map(_.asInstanceOf[BasicWorkbenchGroup]).toSeq
   }
 
-  override def deleteGroup(groupName: WorkbenchGroupName): Future[Unit] = Future {
-    groups -= groupName
+  override def deleteGroup(groupName: WorkbenchGroupName): Future[Unit] = {
+    listAncestorGroups(groupName).map { ancestors =>
+      if (ancestors.nonEmpty)
+        throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"group ${groupName.value} cannot be deleted because it is a member of at least 1 other group"))
+      else
+        groups -= groupName
+    }
   }
 
   override def addGroupMember(groupName: WorkbenchGroupIdentity, addMember: WorkbenchSubject): Future[Unit] = Future {
@@ -188,6 +193,12 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
       case id: WorkbenchUserId => users.get(id).map(_.email)
       case id: WorkbenchGroupIdentity => groups.get(id).map(_.email)
       case id: PetServiceAccountId => petServiceAccountsByUser.get(id).map(_.serviceAccount.email)
+    }
+  }
+
+  override def loadSubjectEmails(subjects: Set[WorkbenchSubject]): Future[Set[WorkbenchEmail]] = {
+    Future.traverse(subjects) { subject =>
+      loadSubjectEmail(subject).map(_.get)
     }
   }
 

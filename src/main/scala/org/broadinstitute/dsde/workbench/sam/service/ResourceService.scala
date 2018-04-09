@@ -17,7 +17,7 @@ import scala.util.Success
 /**
   * Created by mbemis on 5/22/17.
   */
-class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceType], val accessPolicyDAO: AccessPolicyDAO, val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExtensions, val emailDomain: String)(implicit val executionContext: ExecutionContext) extends LazyLogging {
+class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceType], private val accessPolicyDAO: AccessPolicyDAO, private val directoryDAO: DirectoryDAO, private val cloudExtensions: CloudExtensions, private val emailDomain: String)(implicit val executionContext: ExecutionContext) extends LazyLogging {
   def getResourceTypes(): Future[Map[ResourceTypeName, ResourceType]] = {
     Future.successful(resourceTypes)
   }
@@ -33,21 +33,19 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
   def createResource(resourceType: ResourceType, resourceId: ResourceId, userInfo: UserInfo): Future[Resource] = {
     accessPolicyDAO.createResource(Resource(resourceType.name, resourceId)) flatMap { resource =>
       val role = resourceType.roles.find(_.roleName == resourceType.ownerRoleName).getOrElse(throw new WorkbenchException(s"owner role ${resourceType.ownerRoleName} does not exist in $resourceType"))
+      val subjects: Set[WorkbenchSubject] = Set(userInfo.userId)
+      val resourceAndPolicyName = ResourceAndPolicyName(resource, AccessPolicyName(role.roleName.value))
 
-      val roleMembers: Set[WorkbenchSubject] = Set(userInfo.userId)
-
-      val email = generateGroupEmail(AccessPolicyName(role.roleName.value), Resource(resourceType.name, resourceId))
-
-      for {
-        _ <- accessPolicyDAO.createPolicy(AccessPolicy(
-          ResourceAndPolicyName(resource, AccessPolicyName(role.roleName.value)),
-          roleMembers,
-          email,
-          Set(role.roleName),
-          Set.empty
-        ))
-      } yield Resource(resourceType.name, resourceId)
+      createPolicy(resourceAndPolicyName, subjects, Set(role.roleName), Set.empty).map {_ => Resource(resourceType.name, resourceId)}
     }
+  }
+
+  def createPolicy(resourceAndPolicyName: ResourceAndPolicyName, members: Set[WorkbenchSubject], roles: Set[ResourceRoleName], actions: Set[ResourceAction]): Future[AccessPolicy] = {
+    createPolicy(resourceAndPolicyName, members, generateGroupEmail(), roles, actions)
+  }
+
+  def createPolicy(resourceAndPolicyName: ResourceAndPolicyName, members: Set[WorkbenchSubject], email: WorkbenchEmail, roles: Set[ResourceRoleName], actions: Set[ResourceAction]): Future[AccessPolicy] = {
+    accessPolicyDAO.createPolicy(AccessPolicy(resourceAndPolicyName, members, email, roles, actions))
   }
 
   def listUserAccessPolicies(resourceType: ResourceType, userInfo: UserInfo): Future[Set[ResourceIdAndPolicyName]] = {
@@ -102,13 +100,11 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
       validatePolicy(resourceType, policyMembership, members)
 
       val resourceAndPolicyName = ResourceAndPolicyName(resource, policyName)
-      val email = generateGroupEmail(policyName, resource)
       val workbenchSubjects = members.values.flatten.toSet
-      val newPolicy = AccessPolicy(resourceAndPolicyName, workbenchSubjects, email, policyMembership.roles, policyMembership.actions)
 
       accessPolicyDAO.loadPolicy(resourceAndPolicyName).flatMap {
-        case None => accessPolicyDAO.createPolicy(newPolicy)
-        case Some(accessPolicy) => accessPolicyDAO.overwritePolicy(AccessPolicy(newPolicy.id, newPolicy.members, accessPolicy.email, newPolicy.roles, newPolicy.actions ))
+        case None => createPolicy(resourceAndPolicyName, workbenchSubjects, generateGroupEmail(), policyMembership.roles, policyMembership.actions)
+        case Some(accessPolicy) => accessPolicyDAO.overwritePolicy(AccessPolicy(resourceAndPolicyName, workbenchSubjects, accessPolicy.email, policyMembership.roles, policyMembership.actions ))
       } andThen {
         case Success(policy) => fireGroupUpdateNotification(policy.id)
       }
@@ -207,5 +203,5 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     }
   }
 
-  private def generateGroupEmail(policyName: AccessPolicyName, resource: Resource) = WorkbenchEmail(s"policy-${UUID.randomUUID}@$emailDomain")
+  private def generateGroupEmail() = WorkbenchEmail(s"policy-${UUID.randomUUID}@$emailDomain")
 }

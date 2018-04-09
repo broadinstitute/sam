@@ -15,7 +15,7 @@ import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.config.PetServiceAccountConfig
 import org.broadinstitute.dsde.workbench.sam.directory.MockDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.openam.MockAccessPolicyDAO
-import org.broadinstitute.dsde.workbench.sam.service.{NoExtensions, ResourceService, StatusService, UserService}
+import org.broadinstitute.dsde.workbench.sam.service._
 import org.scalatest.concurrent.Eventually._
 
 import scala.concurrent.duration._
@@ -38,11 +38,13 @@ class StatusRouteSpec extends FlatSpec with Matchers with ScalatestRouteTest wit
     val directoryDAO = new MockDirectoryDAO()
     val policyDAO = new MockAccessPolicyDAO()
 
-    val mockResourceService = new ResourceService(Map.empty, policyDAO, directoryDAO, NoExtensions, "example.com")
+    val emailDomain = "example.com"
+    val mockResourceService = new ResourceService(Map.empty, policyDAO, directoryDAO, NoExtensions, emailDomain)
     val mockUserService = new UserService(directoryDAO, NoExtensions)
     val mockStatusService = new StatusService(directoryDAO, NoExtensions)
+    val mockManagedGroupService = new ManagedGroupService(mockResourceService, Map.empty, policyDAO, directoryDAO, NoExtensions, emailDomain)
 
-    val samRoutes = new TestSamRoutes(mockResourceService, mockUserService, mockStatusService, UserInfo(OAuth2BearerToken(""), WorkbenchUserId(""), WorkbenchEmail(""), 0), directoryDAO)
+    val samRoutes = new TestSamRoutes(mockResourceService, mockUserService, mockStatusService, mockManagedGroupService, UserInfo(OAuth2BearerToken(""), WorkbenchUserId(""), WorkbenchEmail(""), 0), directoryDAO)
 
     Get("/status") ~> samRoutes.route ~> check {
       responseAs[StatusCheckResponse].ok shouldEqual false

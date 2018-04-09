@@ -54,8 +54,14 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     }
   }
 
-  override def deleteGroup(groupName: WorkbenchGroupName): Future[Unit] = withContext { ctx =>
-    ctx.unbind(groupDn(groupName))
+  override def deleteGroup(groupName: WorkbenchGroupName): Future[Unit] = {
+    listAncestorGroups(groupName).flatMap { ancestors =>
+      if (ancestors.nonEmpty) {
+        Future.failed(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"group ${groupName.value} cannot be deleted because it is a member of at least 1 other group")))
+      } else {
+        withContext(_.unbind(groupDn(groupName)))
+      }
+    }
   }
 
   override def removeGroupMember(groupId: WorkbenchGroupIdentity, removeMember: WorkbenchSubject): Future[Unit] = withContext { ctx =>
@@ -237,10 +243,23 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
   }
 
   override def loadSubjectEmail(subject: WorkbenchSubject): Future[Option[WorkbenchEmail]] = withContext { ctx =>
-    val subDn = subjectDn(subject)
-    Option(ctx.getAttributes(subDn).get(Attr.email)).map { emailAttr =>
-      WorkbenchEmail(emailAttr.get.asInstanceOf[String])
-    }
+    Try {
+      val subDn = subjectDn(subject)
+      Option(ctx.getAttributes(subDn).get(Attr.email)).map { emailAttr =>
+        WorkbenchEmail(emailAttr.get.asInstanceOf[String])
+      }
+    }.recover {
+      case _: NameNotFoundException => None
+    }.get
+  }
+
+  override def loadSubjectEmails(subjects: Set[WorkbenchSubject]): Future[Set[WorkbenchEmail]] = {
+    val users = loadUsers(subjects collect { case userId: WorkbenchUserId => userId })
+    val groups = loadGroups(subjects collect { case groupName: WorkbenchGroupName => groupName })
+    for {
+      userEmails <- users.map(_.map(_.email))
+      groupEmails <- groups.map(_.map(_.email))
+    } yield (userEmails ++ groupEmails).toSet
   }
 
   override def getUserFromPetServiceAccount(petSA: ServiceAccountSubjectId): Future[Option[WorkbenchUser]] = {

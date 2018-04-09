@@ -25,14 +25,14 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
     pathPrefix("user") {
       requireUserInfo { userInfo =>
         path("petServiceAccount") {
-          get {
+          get { // NOTE: This endpoint is not visible in Swagger
             complete {
               googleExtensions.createUserPetServiceAccount(WorkbenchUser(userInfo.userId, userInfo.userEmail)).map { petSA =>
                 StatusCodes.OK -> petSA.serviceAccount.email
               }
             }
           } ~
-          delete {
+          delete { // NOTE: This endpoint is not visible in Swagger
             complete {
               googleExtensions.deleteUserPetServiceAccount(userInfo.userId).map(_ => StatusCodes.NoContent)
             }
@@ -82,7 +82,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                   }
                 }
               } ~
-              delete {
+              delete { // NOTE: This endpoint is not visible in Swagger
                 complete {
                   googleExtensions.deleteUserPetServiceAccount(userInfo.userId, GoogleProject(project)).map(_ => StatusCodes.NoContent)
                 }
@@ -98,30 +98,30 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
             }
           }
         } ~
-          pathPrefix("resource") {
-            path(Segment / Segment / Segment / "sync") { (resourceTypeName, resourceId, accessPolicyName) =>
-              val resource = Resource(ResourceTypeName(resourceTypeName), ResourceId(resourceId))
-              val resourceAndPolicyName = ResourceAndPolicyName(resource, AccessPolicyName(accessPolicyName))
-              pathEndOrSingleSlash {
-                post {
-                  complete {
-                    import GoogleModelJsonSupport._
-                    googleExtensions.synchronizeGroupMembers(resourceAndPolicyName).map { syncReport =>
-                      StatusCodes.OK -> syncReport
-                    }
+        pathPrefix("resource") {
+          path(Segment / Segment / Segment / "sync") { (resourceTypeName, resourceId, accessPolicyName) =>
+            val resource = Resource(ResourceTypeName(resourceTypeName), ResourceId(resourceId))
+            val resourceAndPolicyName = ResourceAndPolicyName(resource, AccessPolicyName(accessPolicyName))
+            pathEndOrSingleSlash {
+              post {
+                complete {
+                  import GoogleModelJsonSupport._
+                  googleExtensions.synchronizeGroupMembers(resourceAndPolicyName).map { syncReport =>
+                    StatusCodes.OK -> syncReport
                   }
-                } ~
-                get {
-                  complete {
-                    googleExtensions.getSynchronizedDate(resourceAndPolicyName).map {
-                      case Some(date) => StatusCodes.OK -> Option(GroupSyncResponse(date.toString))
-                      case None => StatusCodes.NoContent -> None
-                    }
+                }
+              } ~
+              get {
+                complete {
+                  googleExtensions.getSynchronizedDate(resourceAndPolicyName).map {
+                    case Some(date) => StatusCodes.OK -> Option(GroupSyncResponse(date.toString))
+                    case None => StatusCodes.NoContent -> None
                   }
                 }
               }
             }
           }
+        }
       }
     }
 }

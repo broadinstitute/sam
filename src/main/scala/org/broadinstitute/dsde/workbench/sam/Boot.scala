@@ -58,16 +58,18 @@ object Boot extends App with LazyLogging {
       case None => NoExtensions
     }
 
-    val resourceService = new ResourceService(resourceTypeMap, accessPolicyDAO, directoryDAO, cloudExt, config.getString("googleServices.appsDomain"))
+    val emailDomain = config.getString("googleServices.appsDomain")
+    val resourceService = new ResourceService(resourceTypeMap, accessPolicyDAO, directoryDAO, cloudExt, emailDomain)
     val userService = new UserService(directoryDAO, cloudExt)
     val statusService = new StatusService(directoryDAO, cloudExt, 10 seconds)
+    val managedGroupService = new ManagedGroupService(resourceService, resourceTypeMap, accessPolicyDAO, directoryDAO, cloudExt, emailDomain)
 
     val samRoutes = cloudExt match {
-      case googleExt: GoogleExtensions => new SamRoutes(resourceService, userService, statusService, config.as[SwaggerConfig]("swagger"), directoryDAO) with StandardUserInfoDirectives with GoogleExtensionRoutes {
+      case googleExt: GoogleExtensions => new SamRoutes(resourceService, userService, statusService, managedGroupService, config.as[SwaggerConfig]("swagger"), directoryDAO) with StandardUserInfoDirectives with GoogleExtensionRoutes {
         val googleExtensions = googleExt
         val cloudExtensions = googleExt
       }
-      case _ => new SamRoutes(resourceService, userService, statusService, config.as[SwaggerConfig]("swagger"), directoryDAO) with StandardUserInfoDirectives with NoExtensionRoutes
+      case _ => new SamRoutes(resourceService, userService, statusService, managedGroupService, config.as[SwaggerConfig]("swagger"), directoryDAO) with StandardUserInfoDirectives with NoExtensionRoutes
     }
 
     for {
