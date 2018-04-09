@@ -41,7 +41,7 @@ object SamJsonSupport {
 
   implicit val ResourceAndPolicyNameFormat = jsonFormat2(ResourceAndPolicyName)
 
-  implicit val ResourceIdAndPolicyNameWithEmailFormat = jsonFormat3(ResourceIdAndPolicyNameWithEmail)
+  implicit val ResourceIdAndPolicyNameWithEmailFormat = jsonFormat3(ManagedGroupPolicyEntry)
 
   implicit val GroupSyncResponseFormat = jsonFormat1(GroupSyncResponse)
 }
@@ -59,7 +59,7 @@ object SamResourceActionPatterns {
   val readPolicies = ResourceActionPattern("read_policies")
   val alterPolicies = ResourceActionPattern("alter_policies")
   val delete = ResourceActionPattern("delete")
-  
+
   val sharePolicy = ResourceActionPattern("share_policy::.+")
   val readPolicy = ResourceActionPattern("read_policy::.+")
 }
@@ -86,8 +86,9 @@ case class ResourceIdAndPolicyName(resourceId: ResourceId, accessPolicyName: Acc
 case class ResourceAndPolicyName(resource: Resource, accessPolicyName: AccessPolicyName) extends WorkbenchGroupIdentity {
   override def toString: String = s"${accessPolicyName.value}.${resource.resourceId.value}.${resource.resourceTypeName.value}"
 }
-case class ResourceIdAndPolicyNameWithEmail(resourceId: ResourceId, accessPolicyName: AccessPolicyName, policyEmail: WorkbenchEmail)
 case class AccessPolicyName(value: String) extends ValueObject
+
+case class ManagedGroupPolicyEntry(resourceId: ResourceId, accessPolicyName: AccessPolicyName, policyEmail: WorkbenchEmail)
 
 /*
 Note that AccessPolicy IS A group, does not have a group. This makes the ldap query to list all a user's policies

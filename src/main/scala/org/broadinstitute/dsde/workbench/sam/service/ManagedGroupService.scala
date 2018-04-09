@@ -87,8 +87,15 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
     } yield ()
   }
 
-  def listGroups(userId: WorkbenchUserId): Future[Set[ResourceIdAndPolicyNameWithEmail]] = {
-    accessPolicyDAO.listAccessPoliciesWithEmail(ManagedGroupService.managedGroupTypeName, userId)
+  def listGroups(userId: WorkbenchUserId): Future[Set[ManagedGroupPolicyEntry]] = {
+    accessPolicyDAO.listAccessPolicies(ManagedGroupService.managedGroupTypeName, userId).flatMap { ripns =>
+      Future.traverse(ripns) { ripn =>
+        directoryDAO.loadGroupEmail(WorkbenchGroupName(ripn.resourceId.value)).map {
+          case Some(email) => ManagedGroupPolicyEntry(ripn.resourceId, ripn.accessPolicyName, email)
+          case None => throw new Exception(s"Unable to load email for group ${ripn.resourceId}")
+        }
+      }
+    }
   }
 
   def listPolicyMemberEmails(resourceId: ResourceId, policyName: ManagedGroupPolicyName): Future[Set[WorkbenchEmail]] = {

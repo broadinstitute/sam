@@ -168,19 +168,6 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
     }
   }
 
-  override def listAccessPoliciesWithEmail(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId): Future[Set[ResourceIdAndPolicyNameWithEmail]] = {
-    listAccessPolicies(resourceTypeName, userId).flatMap { ripns =>
-      Future.traverse(ripns) { ripn => getPolicyEmail(resourceTypeName, ResourceIdAndPolicyName(ripn.resourceId, ripn.accessPolicyName)).map(email => ResourceIdAndPolicyNameWithEmail(ripn.resourceId, ripn.accessPolicyName, email)) }
-    }
-  }
-
-  private def getPolicyEmail(resourceTypeName: ResourceTypeName, resourceIdAndPolicyName: ResourceIdAndPolicyName): Future[WorkbenchEmail] = withContext { ctx =>
-    val resourceAndPolicyName = ResourceAndPolicyName(Resource(resourceTypeName, resourceIdAndPolicyName.resourceId), resourceIdAndPolicyName.accessPolicyName)
-    val attributes = ctx.getAttributes(policyDn(resourceAndPolicyName), Array(Attr.email))
-
-    WorkbenchEmail(attributes.get(Attr.email).get().toString)
-  }
-
   override def listAccessPolicies(resource: Resource): Future[Set[AccessPolicy]] = {
     val searchAttrs = new BasicAttributes(true)  // Case ignore
 
