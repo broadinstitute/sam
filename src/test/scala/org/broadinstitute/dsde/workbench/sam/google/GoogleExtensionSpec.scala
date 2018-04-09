@@ -51,6 +51,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
   lazy val googleServicesConfig = config.as[GoogleServicesConfig]("googleServices")
 
   val configResourceTypes = config.as[Map[String, ResourceType]]("resourceTypes").values.map(rt => rt.name -> rt).toMap
+  override implicit val patienceConfig = PatienceConfig(1 second)
 
   "Google group sync" should "add/remove the right emails and handle errors" in {
     // tests that emails only in sam get added to google
@@ -227,7 +228,6 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
   }
 
   private def initPetTest: (JndiDirectoryDAO, MockGoogleIamDAO, MockGoogleDirectoryDAO, GoogleExtensions, UserService, WorkbenchUserId, WorkbenchEmail, WorkbenchEmail, WorkbenchUser) = {
-    implicit val patienceConfig = PatienceConfig(1 second)
     val dirDAO = new JndiDirectoryDAO(directoryConfig)
     val schemaDao = new JndiSchemaDAO(directoryConfig)
 
