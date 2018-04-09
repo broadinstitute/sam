@@ -1,6 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.directory
 
 import java.util.UUID
+import javax.naming.NameNotFoundException
 
 import com.typesafe.config.ConfigFactory
 import net.ceedubs.ficus.Ficus._
@@ -162,8 +163,8 @@ class JndiDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
       }
     } finally {
       runAndWait(dao.deleteUser(userId))
-      runAndWait(dao.deleteGroup(groupName1))
       runAndWait(dao.deleteGroup(groupName2))
+      runAndWait(dao.deleteGroup(groupName1))
     }
   }
 
@@ -199,9 +200,9 @@ class JndiDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
       runAndWait(dao.deleteUser(userId1))
       runAndWait(dao.deleteUser(userId2))
       runAndWait(dao.deleteUser(userId3))
-      runAndWait(dao.deleteGroup(groupName1))
-      runAndWait(dao.deleteGroup(groupName2))
       runAndWait(dao.deleteGroup(groupName3))
+      runAndWait(dao.deleteGroup(groupName2))
+      runAndWait(dao.deleteGroup(groupName1))
     }
   }
 
@@ -224,9 +225,9 @@ class JndiDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
         runAndWait(dao.listAncestorGroups(groupName1))
       }
     } finally {
-      runAndWait(dao.deleteGroup(groupName1))
-      runAndWait(dao.deleteGroup(groupName2))
       runAndWait(dao.deleteGroup(groupName3))
+      runAndWait(dao.deleteGroup(groupName2))
+      runAndWait(dao.deleteGroup(groupName1))
     }
   }
 
@@ -264,9 +265,10 @@ class JndiDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
       }
     } finally {
       runAndWait(dao.deleteUser(userId))
-      runAndWait(dao.deleteGroup(groupName1))
-      runAndWait(dao.deleteGroup(groupName2))
+      runAndWait(dao.removeGroupMember(groupName1, groupName3))
       runAndWait(dao.deleteGroup(groupName3))
+      runAndWait(dao.deleteGroup(groupName2))
+      runAndWait(dao.deleteGroup(groupName1))
     }
   }
 
@@ -365,6 +367,82 @@ class JndiDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
 
     // uid that does exist but is not a pet
     runAndWait(dao.getUserFromPetServiceAccount(ServiceAccountSubjectId(user.id.value))) shouldBe None
+  }
+
+  "JndiDirectoryDAO safeDelete" should "prevent deleting groups that are sub-groups of other groups" in {
+    val childGroupName = WorkbenchGroupName(UUID.randomUUID().toString)
+    val childGroup = BasicWorkbenchGroup(childGroupName, Set.empty, WorkbenchEmail("donnie@hollywood-lanes.com"))
+
+    val parentGroupName = WorkbenchGroupName(UUID.randomUUID().toString)
+    val parentGroup = BasicWorkbenchGroup(parentGroupName, Set(childGroupName), WorkbenchEmail("walter@hollywood-lanes.com"))
+
+    assertResult(None) {
+      runAndWait(dao.loadGroup(childGroupName))
+    }
+
+    assertResult(None) {
+      runAndWait(dao.loadGroup(parentGroupName))
+    }
+
+    assertResult(childGroup) {
+      runAndWait(dao.createGroup(childGroup))
+    }
+
+    assertResult(parentGroup) {
+      runAndWait(dao.createGroup(parentGroup))
+    }
+
+    assertResult(Some(childGroup)) {
+      runAndWait(dao.loadGroup(childGroupName))
+    }
+
+    assertResult(Some(parentGroup)) {
+      runAndWait(dao.loadGroup(parentGroupName))
+    }
+
+    intercept[WorkbenchExceptionWithErrorReport] {
+      runAndWait(dao.deleteGroup(childGroupName))
+    }
+
+    assertResult(Some(childGroup)) {
+      runAndWait(dao.loadGroup(childGroupName))
+    }
+
+    assertResult(Some(parentGroup)) {
+      runAndWait(dao.loadGroup(parentGroupName))
+    }
+  }
+
+  "JndiDirectoryDao loadSubjectEmail" should "fail if the user has not been created" in {
+    val userId = WorkbenchUserId(UUID.randomUUID().toString)
+    val user = WorkbenchUser(userId, WorkbenchEmail("foo@bar.com"))
+
+    assertResult(None) {
+      runAndWait(dao.loadUser(user.id))
+    }
+
+    runAndWait(dao.loadSubjectEmail(userId)) shouldEqual None
+  }
+
+  it should "succeed if the user has been created" in {
+    val userId = WorkbenchUserId(UUID.randomUUID().toString)
+    val user = WorkbenchUser(userId, WorkbenchEmail("foo@bar.com"))
+
+    assertResult(None) {
+      runAndWait(dao.loadUser(user.id))
+    }
+
+    assertResult(user) {
+      runAndWait(dao.createUser(user))
+    }
+
+    assertResult(Some(user)) {
+      runAndWait(dao.loadUser(user.id))
+    }
+
+    assertResult(Some(user.email)) {
+      runAndWait(dao.loadSubjectEmail(userId))
+    }
   }
 }
 

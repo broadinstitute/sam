@@ -157,6 +157,247 @@ paths:
       tags:
         - Admin
 
+  /api/groups:
+    get:
+      summary: Show all the groups the requesting user belongs to and their policy membership in each group
+      responses:
+        200:
+          description: Managed Group memberships
+          schema:
+            type: array
+            items:
+              $ref: '#/definitions/ResourceAndAccessPolicy'
+        500:
+          description: Internal Error
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      operationId: listGroupMemberships
+      tags:
+        - Group
+
+  /api/group/{groupName}:
+    get:
+      summary: Show email address of the group
+      responses:
+        200:
+          description: Group found
+          schema:
+            description: Email address for the group
+            type: string
+        404:
+          description: Group could not be found or you do not have the required permissions on this group
+        500:
+          description: Internal Error
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      parameters:
+        - in: path
+          description: Name of group
+          name: groupName
+          required: true
+          type: string
+      operationId: getGroup
+      tags:
+        - Group
+    post:
+      summary: Create a new group
+      responses:
+        201:
+          description: Group created
+        409:
+          description: Group already exists
+        500:
+          description: Internal Error
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      parameters:
+        - in: path
+          description: Name of group
+          name: groupName
+          required: true
+          type: string
+      operationId: postGroup
+      tags:
+        - Group
+    delete:
+      summary: Delete group
+      responses:
+        204:
+          description: Group deleted
+        404:
+          description: Group could not be found or you do not have the required permissions on this group
+        500:
+          description: Internal Error
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      parameters:
+        - in: path
+          description: Name of group
+          name: groupName
+          required: true
+          type: string
+      operationId: deleteGroup
+      tags:
+        - Group
+
+  /api/group/{groupName}/{policyName}:
+    get:
+      summary: 'Get email addresses for members of the "admin" policy'
+      responses:
+        200:
+          description: 'Email addresses in the "admin" policy'
+          schema:
+            $ref: '#/definitions/ArrayOfEmails'
+        404:
+          description: Group could not be found or you do not have the required permissions on this group
+        500:
+          description: Internal Error
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      parameters:
+        - in: path
+          description: Name of group
+          name: groupName
+          required: true
+          type: string
+        - in: path
+          description: Name of policy
+          name: policyName
+          required: true
+          type: string
+          enum: ["members", "admins"]
+      operationId: GetGroupAdminEmails
+      tags:
+        - Group
+    put:
+      summary: 'Overwrite email addresses of members of the "admin" policy'
+      responses:
+        201:
+          description: Policy successfully updated
+        404:
+          description: Group does not exist or you are not a member of the policy for the group
+        500:
+          description: Internal Error
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      parameters:
+        - in: path
+          description: Name of group
+          name: groupName
+          required: true
+          type: string
+        - in: path
+          description: Name of policy
+          name: policyName
+          required: true
+          type: string
+          enum: ["members", "admins"]
+        - in: body
+          description: The list of emails
+          name: emailAddresses
+          required: true
+          schema:
+            $ref: '#/definitions/ArrayOfEmails'
+      operationId: OverwriteGroupAdminEmails
+      tags:
+        - Group
+
+  /api/group/{groupName}/{policyName}/{email}:
+    put:
+      summary: Add email to the policy
+      responses:
+        204:
+          description: Email successfully added
+        400:
+          description: Email is invalid
+        403:
+          description: You do not have permission to alter this policy
+        404:
+          description: Group does not exist, policy does not exist, or subject with specified email was not found
+        500:
+          description: Internal Error
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      parameters:
+        - in: path
+          description: Name of group
+          name: groupName
+          required: true
+          type: string
+        - in: path
+          description: Name of policy
+          name: policyName
+          required: true
+          type: string
+          enum: ["members", "admins"]
+        - in: path
+          description: Email address
+          name: email
+          required: true
+          type: string
+      operationId: AddEmailToGroup
+      tags:
+        - Group
+    delete:
+      summary: Remove email from the policy
+      responses:
+        204:
+          description: Email successfully removed
+        403:
+          description: You do not have permission to alter this policy
+        404:
+          description: Group does not exist or policy does not exist
+        500:
+          description: Internal Error
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      parameters:
+        - in: path
+          description: Name of group
+          name: groupName
+          required: true
+          type: string
+        - in: path
+          description: Name of policy
+          name: policyName
+          required: true
+          type: string
+          enum: ["members", "admins"]
+        - in: path
+          description: Email address
+          name: email
+          required: true
+          type: string
+      operationId: RemoveEmailFromGroup
+      tags:
+        - Group
+
+  /api/google/group/{groupName}/sync:
+    post:
+      summary: Synchronize a managed-group with google group
+      responses:
+        200:
+          description: Successfully synchronized group
+          schema:
+            $ref: '#/definitions/SyncReport'
+        404:
+          description: Group could not be found
+          schema:
+            $ref: '#/definitions/ErrorReport'
+        500:
+          description: Internal Error
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      parameters:
+        - in: path
+          description: Name of group
+          name: groupName
+          required: true
+          type: string
+      operationId: syncManagedGroup
+      tags:
+        - Google
+
   /api/google/petServiceAccount/{project}/{userEmail}:
     get:
       summary: gets a key for the user's pet service account, get_pet_private_key action on cloud-extension/google required
@@ -770,6 +1011,16 @@ definitions:
         items:
           type: string
 
+  ArrayOfEmails:
+    description: An array of email addresses
+    type: array
+    items:
+      type: string
+    example:
+      - person@company.com
+      - group_name@company.com
+      - foo@bar.com
+
   Enabled:
     description: the status of the user's account
     required:
@@ -831,7 +1082,6 @@ definitions:
       accessPolicyName:
         type: string
         description: User's policy for the resource
-
 
   ResourceRole:
     type: object
