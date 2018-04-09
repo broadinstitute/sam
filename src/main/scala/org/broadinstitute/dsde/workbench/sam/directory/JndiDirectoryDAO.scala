@@ -155,21 +155,12 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     try {
       val identityContext = new BaseDirContext {
         override def getAttributes(name: String): Attributes = {
-          val myAttrs = new BasicAttributes(true)  // Case ignore
+          val myAttrs: BasicAttributes = createPetServiceAccountAttributes(petServiceAccount)
 
           val oc = new BasicAttribute("objectclass")
           Seq("top", "petServiceAccount").foreach(oc.add)
           myAttrs.put(oc)
-
-          myAttrs.put(new BasicAttribute(Attr.email, petServiceAccount.serviceAccount.email.value))
-          myAttrs.put(new BasicAttribute(Attr.sn, petServiceAccount.serviceAccount.subjectId.value))
-          myAttrs.put(new BasicAttribute(Attr.cn, petServiceAccount.serviceAccount.subjectId.value))
-          myAttrs.put(new BasicAttribute(Attr.uid, petServiceAccount.serviceAccount.subjectId.value))
           myAttrs.put(new BasicAttribute(Attr.project, petServiceAccount.id.project.value))
-
-          if (!petServiceAccount.serviceAccount.displayName.value.isEmpty) {
-            myAttrs.put(new BasicAttribute(Attr.givenName, petServiceAccount.serviceAccount.displayName.value))
-          }
 
           myAttrs
         }
@@ -183,6 +174,19 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     }
   }
 
+  private def createPetServiceAccountAttributes(petServiceAccount: PetServiceAccount) = {
+    val myAttrs = new BasicAttributes(true) // Case ignore
+    myAttrs.put(new BasicAttribute(Attr.email, petServiceAccount.serviceAccount.email.value))
+    myAttrs.put(new BasicAttribute(Attr.sn, petServiceAccount.serviceAccount.subjectId.value))
+    myAttrs.put(new BasicAttribute(Attr.cn, petServiceAccount.serviceAccount.subjectId.value))
+    myAttrs.put(new BasicAttribute(Attr.uid, petServiceAccount.serviceAccount.subjectId.value))
+
+    if (!petServiceAccount.serviceAccount.displayName.value.isEmpty) {
+      myAttrs.put(new BasicAttribute(Attr.givenName, petServiceAccount.serviceAccount.displayName.value))
+    }
+    myAttrs
+  }
+
   override def getAllPetServiceAccountsForUser(userId: WorkbenchUserId): Future[Seq[PetServiceAccount]] = {
     withContext { ctx =>
       val matchingAttributes = new BasicAttributes("objectclass", ObjectClass.petServiceAccount, true)
@@ -190,6 +194,12 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
         unmarshalPetServiceAccount(userId, result.getAttributes)
       }
     }
+  }
+
+
+  override def updatePetServiceAccount(petServiceAccount: PetServiceAccount): Future[PetServiceAccount] = withContext { ctx =>
+    ctx.modifyAttributes(petDn(petServiceAccount.id), DirContext.REPLACE_ATTRIBUTE, createPetServiceAccountAttributes(petServiceAccount))
+    petServiceAccount
   }
 
   override def loadUser(userId: WorkbenchUserId): Future[Option[WorkbenchUser]] = withContext { ctx =>
