@@ -169,8 +169,8 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
   }
 
   override def listAccessPoliciesWithEmail(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId): Future[Set[ResourceIdAndPolicyNameWithEmail]] = {
-    listAccessPolicies(resourceTypeName, userId).flatMap { x =>
-      Future.traverse(x) { y => getPolicyEmail(resourceTypeName, ResourceIdAndPolicyName(y.resourceId, y.accessPolicyName)).map(z => ResourceIdAndPolicyNameWithEmail(y.resourceId, y.accessPolicyName, z)) }
+    listAccessPolicies(resourceTypeName, userId).flatMap { ripns =>
+      Future.traverse(ripns) { ripn => getPolicyEmail(resourceTypeName, ResourceIdAndPolicyName(ripn.resourceId, ripn.accessPolicyName)).map(email => ResourceIdAndPolicyNameWithEmail(ripn.resourceId, ripn.accessPolicyName, email)) }
     }
   }
 
