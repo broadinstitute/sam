@@ -564,4 +564,34 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
       }
     }
   }
+
+  it should "fail with 404 when the group does not exist" in {
+    val samRoutes = TestSamRoutes(resourceTypes)
+
+    Get(s"/api/group/$groupId/admins") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
+    }
+  }
+
+  "PUT /api/group/{groupName}/admin-notifiers" should "succeed with 201 after successfully updating the 'admin-notifier' policy" in {
+    val samRoutes = TestSamRoutes(resourceTypes)
+    assertCreateGroup(samRoutes)
+
+    val newGuy = makeOtherUser(samRoutes)
+    assertCreateUser(newGuy.routes)
+
+    Put(s"/api/group/$groupId/admin-notifiers", Set(newGuy.email)) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Created
+    }
+  }
+
+  it should "fail with 404 when the requesting user is not in the admin policy for the group" in {
+    val samRoutes = TestSamRoutes(resourceTypes)
+    assertCreateGroup(samRoutes)
+
+    val newGuy = makeOtherUser(samRoutes)
+    Put(s"/api/group/$groupId/admin-notifiers", Set(newGuy.email)) ~> newGuy.routes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
+    }
+  }
 }

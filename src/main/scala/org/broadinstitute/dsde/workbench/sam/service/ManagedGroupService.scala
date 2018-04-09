@@ -37,7 +37,7 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
 
   private def createPolicyForAdminNotification(managedGroup: Resource): Future[AccessPolicy] = {
     val resourceAndPolicyName = ResourceAndPolicyName(managedGroup, ManagedGroupService.adminNotifierPolicyName)
-    resourceService.createPolicy(resourceAndPolicyName, members = Set.empty, Set.empty, actions = Set(ResourceAction("notify_admins")))
+    resourceService.createPolicy(resourceAndPolicyName, members = Set.empty, roles = Set.empty, actions = Set(ResourceAction("notify_admins")))
   }
 
   private def createAggregateGroup(resource: Resource, componentPolicies: Set[ResourceAndPolicyName]): Future[BasicWorkbenchGroup] = {

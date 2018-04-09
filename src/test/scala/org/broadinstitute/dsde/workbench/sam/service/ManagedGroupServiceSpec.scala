@@ -85,7 +85,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
   "ManagedGroupService create" should "create a managed group with admin and member policies" in {
     assertMakeGroup()
     val policies = runAndWait(policyDAO.listAccessPolicies(expectedResource))
-    policies.map(_.id.accessPolicyName.value) shouldEqual Set("admin", "member", "admin_notifier")
+    policies.map(_.id.accessPolicyName.value) shouldEqual Set("admin", "member", "admin-notifier")
   }
 
   it should "create a workbenchGroup with the same name as the Managed Group" in {
