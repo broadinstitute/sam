@@ -200,27 +200,37 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
   def createUserPetServiceAccount(user: WorkbenchUser, project: GoogleProject): Future[PetServiceAccount] = {
     val (petSaName, petSaDisplayName) = toPetSAFromUser(user)
 
-    // First find or create the service account in Google, which generates a unique id and email.
-    // We do this first because the pet may have been deleted from Google by an outsider, which would
-    // leave behind a reference in OpenDJ. It is not enough to just see if the pet exists in OpenDJ.
-    val petSA = googleIamDAO.getOrCreateServiceAccount(project, petSaName, petSaDisplayName)
-    petSA.flatMap { serviceAccount =>
-      // If the service account doesn't exist in OpenDJ, create it
-      directoryDAO.loadPetServiceAccount(PetServiceAccountId(user.id, project)).flatMap {
-        case Some(pet) => Future.successful(pet)
-        case None => {
-          // Set up the service account with the necessary permissions
-          val petServiceAccount = PetServiceAccount(PetServiceAccountId(user.id, project), serviceAccount)
+    // The normal situation is that the pet either exists in both ldap and google or neither.
+    // Sometimes, especially in tests, the pet may be removed from ldap, but not google or the other way around.
+    // This code is a little extra complicated to detect the cases when a pet does not exist in google, ldap or both
+    // and do the right thing.
+    for {
+      maybeServiceAccount <- googleIamDAO.findServiceAccount(project, petSaName)
+      maybePet <- directoryDAO.loadPetServiceAccount(PetServiceAccountId(user.id, project))
 
-          setUpServiceAccount(petServiceAccount) andThen { case Failure(_) =>
-            // If anything fails with setup, clean up any created resources to ensure we don't end up with orphaned pets.
-            removePetServiceAccount(petServiceAccount).failed.foreach { e =>
-              logger.warn(s"Error occurred cleaning up pet service account [$petSaName] [$petSaDisplayName]", e)
-            }
-          }
-        }
+      serviceAccount <- maybeServiceAccount match {
+        // SA does not exist in google, create it and add it to the proxy group
+        case None => for {
+          sa <- googleIamDAO.createServiceAccount(project, petSaName, petSaDisplayName)
+          _ <- withProxyEmail(user.id) { proxyEmail => googleDirectoryDAO.addMemberToGroup(proxyEmail, sa.email) }
+        } yield sa
+
+        // SA already exists in google, use it
+        case Some(sa) => Future.successful(sa)
       }
-    }
+
+      pet <- maybePet match {
+        // pet does not exist in ldap, create it and enable the identity
+        case None => for {
+          p <- directoryDAO.createPetServiceAccount(PetServiceAccount(PetServiceAccountId(user.id, project), serviceAccount))
+          _ <- directoryDAO.enableIdentity(p.id)
+        } yield p
+
+        // pet already exists in ldap, use it
+        case Some(p) => Future.successful(p)
+      }
+      
+    } yield pet
   }
 
   def getPetServiceAccountKey(userEmail: WorkbenchEmail, project: GoogleProject): Future[Option[String]] = {
@@ -266,15 +276,6 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
 
   private def getPetServiceAccountsForUser(userId: WorkbenchUserId): Future[Seq[PetServiceAccount]] = {
     directoryDAO.getAllPetServiceAccountsForUser(userId)
-  }
-
-  private def setUpServiceAccount(petServiceAccount: PetServiceAccount): Future[PetServiceAccount] = {
-    for {
-      // create an additional LDAP record for the pet service account itself (in a different organizational unit than the user)
-      _ <- directoryDAO.createPetServiceAccount(petServiceAccount)
-      // enable the pet service account
-      _ <- enablePetServiceAccount(petServiceAccount)
-    } yield petServiceAccount
   }
 
   private def removePetServiceAccount(petServiceAccount: PetServiceAccount): Future[Unit] = {
