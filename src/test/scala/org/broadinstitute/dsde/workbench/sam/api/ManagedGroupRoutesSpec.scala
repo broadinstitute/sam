@@ -424,7 +424,6 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
 
     val defaultUserInfo = samRoutes.userInfo
     Put(s"/api/group/$groupId/admins/${defaultUserInfo.userEmail}") ~> samRoutes.route ~> check {
-      println(responseAs[String])
       status shouldEqual StatusCodes.NoContent
     }
   }
