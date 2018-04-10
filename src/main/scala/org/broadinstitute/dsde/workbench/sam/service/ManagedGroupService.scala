@@ -88,15 +88,13 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
   }
 
   def listGroups(userId: WorkbenchUserId): Future[Set[ManagedGroupMembershipEntry]] = {
-    accessPolicyDAO.listAccessPolicies(ManagedGroupService.managedGroupTypeName, userId).flatMap { ripns =>
-      val emailsToLookup = ripns.map(x => WorkbenchGroupName(x.resourceId.value))
-
-      directoryDAO.batchLoadGroupEmail(emailsToLookup).map { emailLookup =>
-        val emailLookupMap = emailLookup.toMap
-
-        ripns.map { ripn =>
-          ManagedGroupMembershipEntry(ripn.resourceId, ripn.accessPolicyName, emailLookupMap(WorkbenchGroupName(ripn.resourceId.value)))
-        }
+    for {
+      ripns <- accessPolicyDAO.listAccessPolicies(ManagedGroupService.managedGroupTypeName, userId)
+      emailLookup <- directoryDAO.batchLoadGroupEmail(ripns.map(ripn => WorkbenchGroupName(ripn.resourceId.value)))
+    } yield {
+      val emailLookupMap = emailLookup.toMap
+      ripns.map { ripn =>
+        ManagedGroupMembershipEntry(ripn.resourceId, ripn.accessPolicyName, emailLookupMap(WorkbenchGroupName(ripn.resourceId.value)))
       }
     }
   }
