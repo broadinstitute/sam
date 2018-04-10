@@ -132,6 +132,15 @@ class JndiDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
       runAndWait(dao.getAllPetServiceAccountsForUser(userId))
     }
 
+    val updatedPetSA = petServiceAccount.copy(serviceAccount = ServiceAccount(ServiceAccountSubjectId(UUID.randomUUID().toString), WorkbenchEmail("foo@bar.com"), ServiceAccountDisplayName("qqq")))
+    assertResult(updatedPetSA) {
+      runAndWait(dao.updatePetServiceAccount(updatedPetSA))
+    }
+
+    assertResult(Some(updatedPetSA)) {
+      runAndWait(dao.loadPetServiceAccount(petServiceAccount.id))
+    }
+
     runAndWait(dao.deletePetServiceAccount(petServiceAccount.id))
 
     assertResult(None) {

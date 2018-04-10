@@ -29,7 +29,7 @@ import scala.language.postfixOps
 import scala.util.{Success, Try}
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.sam.config._
-import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccountKeyId}
+import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccountKeyId, ServiceAccountName}
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.mockito.ArgumentMatcher
 
@@ -51,6 +51,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
   lazy val googleServicesConfig = config.as[GoogleServicesConfig]("googleServices")
 
   val configResourceTypes = config.as[Map[String, ResourceType]]("resourceTypes").values.map(rt => rt.name -> rt).toMap
+  override implicit val patienceConfig = PatienceConfig(1 second)
 
   "Google group sync" should "add/remove the right emails and handle errors" in {
     // tests that emails only in sam get added to google
@@ -178,27 +179,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
   }
 
   "GoogleExtension" should "get a pet service account for a user" in {
-    implicit val patienceConfig = PatienceConfig(1 second)
-    val dirDAO = new JndiDirectoryDAO(directoryConfig)
-    val schemaDao = new JndiSchemaDAO(directoryConfig)
-
-    runAndWait(schemaDao.clearDatabase())
-    runAndWait(schemaDao.init())
-
-    val mockGoogleIamDAO = new MockGoogleIamDAO
-    val mockGoogleDirectoryDAO = new MockGoogleDirectoryDAO
-
-    val googleExtensions = new GoogleExtensions(dirDAO, null, mockGoogleDirectoryDAO, null, mockGoogleIamDAO, null, null, googleServicesConfig, petServiceAccountConfig, configResourceTypes(CloudExtensions.resourceTypeName))
-    val service = new UserService(dirDAO, googleExtensions)
-
-    val defaultUserId = WorkbenchUserId("newuser123")
-    val defaultUserEmail = WorkbenchEmail("newuser@new.com")
-/* Re-enable this code and remove the temporary code below after fixing rawls for GAWB-2933
-    val defaultUserProxyEmail = WorkbenchEmail(s"newuser_newuser123@${googleServicesConfig.appsDomain}")
-*/
-    val defaultUserProxyEmail = WorkbenchEmail(s"PROXY_newuser123@${googleServicesConfig.appsDomain}")
-/**/
-    val defaultUser = WorkbenchUser(defaultUserId, defaultUserEmail)
+    val (dirDAO: JndiDirectoryDAO, mockGoogleIamDAO: MockGoogleIamDAO, mockGoogleDirectoryDAO: MockGoogleDirectoryDAO, googleExtensions: GoogleExtensions, service: UserService, defaultUserId: WorkbenchUserId, defaultUserEmail: WorkbenchEmail, defaultUserProxyEmail: WorkbenchEmail, defaultUser: WorkbenchUser) = initPetTest
 
     // create a user
     val newUser = service.createUser(defaultUser).futureValue
@@ -244,6 +225,67 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     // the pet should not exist in Google
     mockGoogleIamDAO.serviceAccounts should not contain key (petServiceAccount.serviceAccount.email)
 
+  }
+
+  private def initPetTest: (JndiDirectoryDAO, MockGoogleIamDAO, MockGoogleDirectoryDAO, GoogleExtensions, UserService, WorkbenchUserId, WorkbenchEmail, WorkbenchEmail, WorkbenchUser) = {
+    val dirDAO = new JndiDirectoryDAO(directoryConfig)
+    val schemaDao = new JndiSchemaDAO(directoryConfig)
+
+    runAndWait(schemaDao.clearDatabase())
+    runAndWait(schemaDao.init())
+
+    val mockGoogleIamDAO = new MockGoogleIamDAO
+    val mockGoogleDirectoryDAO = new MockGoogleDirectoryDAO
+
+    val googleExtensions = new GoogleExtensions(dirDAO, null, mockGoogleDirectoryDAO, null, mockGoogleIamDAO, null, null, googleServicesConfig, petServiceAccountConfig, configResourceTypes(CloudExtensions.resourceTypeName))
+    val service = new UserService(dirDAO, googleExtensions)
+
+    val defaultUserId = WorkbenchUserId("newuser123")
+    val defaultUserEmail = WorkbenchEmail("newuser@new.com")
+    /* Re-enable this code and remove the temporary code below after fixing rawls for GAWB-2933
+    val defaultUserProxyEmail = WorkbenchEmail(s"newuser_newuser123@${googleServicesConfig.appsDomain}")
+*/
+    val defaultUserProxyEmail = WorkbenchEmail(s"PROXY_newuser123@${googleServicesConfig.appsDomain}")
+    /**/
+    val defaultUser = WorkbenchUser(defaultUserId, defaultUserEmail)
+    (dirDAO, mockGoogleIamDAO, mockGoogleDirectoryDAO, googleExtensions, service, defaultUserId, defaultUserEmail, defaultUserProxyEmail, defaultUser)
+  }
+
+  it should "attach existing service account to pet" in {
+    val (dirDAO: JndiDirectoryDAO, mockGoogleIamDAO: MockGoogleIamDAO, mockGoogleDirectoryDAO: MockGoogleDirectoryDAO, googleExtensions: GoogleExtensions, service: UserService, defaultUserId: WorkbenchUserId, defaultUserEmail: WorkbenchEmail, defaultUserProxyEmail: WorkbenchEmail, defaultUser: WorkbenchUser) = initPetTest
+    val googleProject = GoogleProject("testproject")
+
+    val (saName, saDisplayName) = googleExtensions.toPetSAFromUser(defaultUser)
+    val serviceAccount = mockGoogleIamDAO.createServiceAccount(googleProject, saName, saDisplayName).futureValue
+    // create a user
+
+    val newUser = service.createUser(defaultUser).futureValue
+    newUser shouldBe UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
+
+    // create a pet service account
+    val petServiceAccount = googleExtensions.createUserPetServiceAccount(defaultUser, googleProject).futureValue
+    petServiceAccount.serviceAccount shouldBe serviceAccount
+
+  }
+
+  it should "recreate service account when missing for pet" in {
+    val (dirDAO: JndiDirectoryDAO, mockGoogleIamDAO: MockGoogleIamDAO, mockGoogleDirectoryDAO: MockGoogleDirectoryDAO, googleExtensions: GoogleExtensions, service: UserService, defaultUserId: WorkbenchUserId, defaultUserEmail: WorkbenchEmail, defaultUserProxyEmail: WorkbenchEmail, defaultUser: WorkbenchUser) = initPetTest
+
+    // create a user
+    val newUser = service.createUser(defaultUser).futureValue
+    newUser shouldBe UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
+
+    // create a pet service account
+    val googleProject = GoogleProject("testproject")
+    val petServiceAccount = googleExtensions.createUserPetServiceAccount(defaultUser, googleProject).futureValue
+
+    import org.broadinstitute.dsde.workbench.model.google.toAccountName
+    mockGoogleIamDAO.removeServiceAccount(googleProject, toAccountName(petServiceAccount.serviceAccount.email)).futureValue
+    mockGoogleIamDAO.findServiceAccount(googleProject, petServiceAccount.serviceAccount.email).futureValue shouldBe None
+
+    val petServiceAccount2 = googleExtensions.createUserPetServiceAccount(defaultUser, googleProject).futureValue
+    petServiceAccount.serviceAccount shouldNot equal(petServiceAccount2.serviceAccount)
+    mockGoogleIamDAO.findServiceAccount(googleProject, petServiceAccount.serviceAccount.email).futureValue shouldBe Some(petServiceAccount2.serviceAccount)
   }
 
   it should "get a group's last synchronized date" in {

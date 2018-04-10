@@ -48,4 +48,5 @@ trait DirectoryDAO {
   def loadPetServiceAccount(petServiceAccountId: PetServiceAccountId): Future[Option[PetServiceAccount]]
   def deletePetServiceAccount(petServiceAccountId: PetServiceAccountId): Future[Unit]
   def getAllPetServiceAccountsForUser(userId: WorkbenchUserId): Future[Seq[PetServiceAccount]]
+  def updatePetServiceAccount(petServiceAccount: PetServiceAccount): Future[PetServiceAccount]
 }

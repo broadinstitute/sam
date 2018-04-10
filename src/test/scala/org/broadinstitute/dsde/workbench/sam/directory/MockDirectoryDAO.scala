@@ -218,6 +218,11 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     }
   }
 
+  override def updatePetServiceAccount(petServiceAccount: PetServiceAccount): Future[PetServiceAccount] = Future {
+    petServiceAccountsByUser.update(petServiceAccount.id, petServiceAccount)
+    petServiceAccount
+  }
+
   private def addUserAttribute(userId: WorkbenchUserId, attrId: String, value: Any): Future[Unit] = {
     userAttributes.get(userId) match {
       case Some(attributes: Map[String, Any]) => attributes += attrId -> value

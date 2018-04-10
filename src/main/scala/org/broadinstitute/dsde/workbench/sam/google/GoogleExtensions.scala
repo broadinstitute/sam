@@ -219,15 +219,18 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
         case Some(sa) => Future.successful(sa)
       }
 
-      pet <- maybePet match {
+      pet <- (maybePet, maybeServiceAccount) match {
         // pet does not exist in ldap, create it and enable the identity
-        case None => for {
+        case (None, _) => for {
           p <- directoryDAO.createPetServiceAccount(PetServiceAccount(PetServiceAccountId(user.id, project), serviceAccount))
           _ <- directoryDAO.enableIdentity(p.id)
         } yield p
 
-        // pet already exists in ldap, use it
-        case Some(p) => Future.successful(p)
+        // pet already exists in ldap, but a new SA was created so update ldap with new SA info
+        case (Some(p), None) => directoryDAO.updatePetServiceAccount(p.copy(serviceAccount = serviceAccount))
+
+        // everything already existed
+        case (Some(p), Some(_)) => Future.successful(p)
       }
       
     } yield pet
