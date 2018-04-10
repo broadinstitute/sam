@@ -62,6 +62,9 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
         case None => logger.info(s"User ${tempUser.email} does not yet exist! Proceeding...")
       }
 
+      //Now assert that it's gone for real
+      Sam.user.status()(tempAuthToken) shouldBe None
+
       registerAsNewUser(WorkbenchEmail(tempUser.email))(tempAuthToken)
 
       val tempUserInfo = Sam.user.status()(tempAuthToken).get.userInfo
