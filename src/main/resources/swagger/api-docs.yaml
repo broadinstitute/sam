@@ -166,7 +166,7 @@ paths:
           schema:
             type: array
             items:
-              $ref: '#/definitions/ResourceAndAccessPolicy'
+              $ref: '#/definitions/ManagedGroupPolicyEntry'
         500:
           description: Internal Error
           schema:
@@ -1068,6 +1068,24 @@ definitions:
         description: stack trace
         items:
           $ref: '#/definitions/StackTraceElement'
+
+  ManagedGroupPolicyEntry:
+    type: object
+    description: 'specification of a managed group with an access policy and the email associated with he managed group'
+    required:
+      - resourceId
+      - accessPolicyName
+      - groupEmail
+    properties:
+      resourceId:
+        type: string
+        description: The id of the resource
+      accessPolicyName:
+        type: string
+        description: User's policy for the resource
+      groupEmail:
+        type: string
+        description: The email address associated with the group
 
   ResourceAndAccessPolicy:
     type: object
