@@ -89,10 +89,13 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
 
   def listGroups(userId: WorkbenchUserId): Future[Set[ManagedGroupMembershipEntry]] = {
     accessPolicyDAO.listAccessPolicies(ManagedGroupService.managedGroupTypeName, userId).flatMap { ripns =>
-      Future.traverse(ripns) { ripn =>
-        directoryDAO.loadGroupEmail(WorkbenchGroupName(ripn.resourceId.value)).map {
-          case Some(email) => ManagedGroupMembershipEntry(ripn.resourceId, ripn.accessPolicyName, email)
-          case None => throw new Exception(s"Unable to load email for group ${ripn.resourceId}")
+      val emailsToLookup = ripns.map(x => WorkbenchGroupName(x.resourceId.value))
+
+      directoryDAO.batchLoadGroupEmail(emailsToLookup).map { emailLookup =>
+        val emailLookupMap = emailLookup.toMap
+
+        ripns.map { ripn =>
+          ManagedGroupMembershipEntry(ripn.resourceId, ripn.accessPolicyName, emailLookupMap(WorkbenchGroupName(ripn.resourceId.value)))
         }
       }
     }
