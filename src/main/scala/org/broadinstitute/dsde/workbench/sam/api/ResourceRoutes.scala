@@ -59,7 +59,9 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
                   }
                 } ~
                   post {
-                    complete(resourceService.createResource(resourceType, ResourceId(resourceId), userInfo).map(_ => StatusCodes.NoContent))
+                    entity(as[Option[Map[AccessPolicyName, AccessPolicyMembership]]]) { policies =>
+                      complete(resourceService.createResource(resourceType, ResourceId(resourceId), policies, userInfo).map(_ => StatusCodes.NoContent))
+                    }
                   }
               } ~
               pathPrefix("action") {

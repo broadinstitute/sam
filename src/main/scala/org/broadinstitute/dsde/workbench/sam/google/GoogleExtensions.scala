@@ -88,7 +88,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
 
       _ <- samApplication.resourceService.createResourceType(extensionResourceType)
 
-      _ <- samApplication.resourceService.createResource(extensionResourceType, GoogleExtensions.resourceId, serviceAccountUserInfo) recover {
+      _ <- samApplication.resourceService.createResource(extensionResourceType, GoogleExtensions.resourceId, policies = None, serviceAccountUserInfo) recover {
         case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode == Option(StatusCodes.Conflict) =>
       }
 

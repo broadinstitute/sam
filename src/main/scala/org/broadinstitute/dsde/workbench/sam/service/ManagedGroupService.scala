@@ -18,22 +18,16 @@ import scala.concurrent.Future
 class ManagedGroupService(private val resourceService: ResourceService, private val resourceTypes: Map[ResourceTypeName, ResourceType], private val accessPolicyDAO: AccessPolicyDAO, private val directoryDAO: DirectoryDAO, private val cloudExtensions: CloudExtensions, private val emailDomain: String) extends LazyLogging {
 
   def managedGroupType: ResourceType = resourceTypes.getOrElse(ManagedGroupService.managedGroupTypeName, throw new WorkbenchException(s"resource type ${ManagedGroupService.managedGroupTypeName.value} not found"))
-  def memberRole = managedGroupType.roles.find(_.roleName == ManagedGroupService.memberRoleName).getOrElse(throw new WorkbenchException(s"${ManagedGroupService.memberRoleName} role does not exist in $managedGroupType"))
 
   def createManagedGroup(groupId: ResourceId, userInfo: UserInfo): Future[Resource] = {
+    val policiesToCreate = managedGroupType.roles.map(role => AccessPolicyName(role.roleName.value) -> AccessPolicyMembership(Set.empty, Set.empty, Set(role.roleName))).toMap
+
     for {
-      managedGroup <- resourceService.createResource(managedGroupType, groupId, userInfo)
-      _ <- createPolicyForMembers(managedGroup)
+      managedGroup <- resourceService.createResource(managedGroupType, groupId, Option(policiesToCreate), userInfo)
       policies <- accessPolicyDAO.listAccessPolicies(managedGroup)
       workbenchGroup <- createAggregateGroup(managedGroup, policies)
       _ <- cloudExtensions.publishGroup(workbenchGroup.id)
     } yield managedGroup
-  }
-
-  private def createPolicyForMembers(managedGroup: Resource): Future[AccessPolicy] = {
-    val accessPolicyName = AccessPolicyName(memberRole.roleName.value)
-    val resourceAndPolicyName = ResourceAndPolicyName(managedGroup, accessPolicyName)
-    resourceService.createPolicy(resourceAndPolicyName, members = Set.empty, Set(memberRole.roleName), actions = Set.empty)
   }
 
   private def createAggregateGroup(resource: Resource, componentPolicies: Set[AccessPolicy]): Future[BasicWorkbenchGroup] = {

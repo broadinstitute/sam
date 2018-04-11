@@ -30,7 +30,39 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     accessPolicyDAO.createResourceType(resourceType.name)
   }
 
-  def createResource(resourceType: ResourceType, resourceId: ResourceId, userInfo: UserInfo): Future[Resource] = {
+  def createResource(resourceType: ResourceType, resourceId: ResourceId, policies: Option[Map[AccessPolicyName, AccessPolicyMembership]] = None, userInfo: UserInfo): Future[Resource] = {
+    accessPolicyDAO.createResource(Resource(resourceType.name, resourceId)) flatMap { resource =>
+      val policiesToCreate = policies match {
+        case Some(policies) => {
+          val x = policies.map { case (accessPolicyName, accessPolicyMembership) =>
+            val resourceAndPolicyName = ResourceIdAndPolicyName(resourceId, accessPolicyName)
+            val subjects = Future.traverse(accessPolicyMembership.memberEmails) { directoryDAO.loadSubjectFromEmail }.map(x => x.collect { case Some(e) => e })
+            val roles = accessPolicyMembership.roles
+            val actions = accessPolicyMembership.actions
+
+
+            subjects.map { x =>
+              (resourceAndPolicyName, x, roles, actions)
+            }
+          }
+
+          x
+        }
+
+        case None => {
+          val role = resourceType.roles.find(_.roleName == resourceType.ownerRoleName).getOrElse(throw new WorkbenchException(s"owner role ${resourceType.ownerRoleName} does not exist in $resourceType"))
+          val subjects: Set[WorkbenchSubject] = Set(userInfo.userId)
+          val resourceAndPolicyName = ResourceAndPolicyName(resource, AccessPolicyName(role.roleName.value))
+
+          Iterable(Future.successful((resourceAndPolicyName, subjects, Set(role.roleName), Set.empty)))
+        }
+      }
+
+      Future.sequence(policiesToCreate)
+    }
+
+
+
     accessPolicyDAO.createResource(Resource(resourceType.name, resourceId)) flatMap { resource =>
       val role = resourceType.roles.find(_.roleName == resourceType.ownerRoleName).getOrElse(throw new WorkbenchException(s"owner role ${resourceType.ownerRoleName} does not exist in $resourceType"))
       val subjects: Set[WorkbenchSubject] = Set(userInfo.userId)
