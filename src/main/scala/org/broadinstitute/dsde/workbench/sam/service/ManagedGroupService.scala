@@ -123,6 +123,11 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
     val resourceAndPolicyName = ResourceAndPolicyName(Resource(ManagedGroupService.managedGroupTypeName, resourceId), policyName)
     resourceService.removeSubjectFromPolicy(resourceAndPolicyName, subject)
   }
+
+  def requestAccess(resourceId: ResourceId): Future[Unit] = {
+    println(s"requesting access to ${resourceId}")
+    Future.successful(())
+  }
 }
 
 object ManagedGroupService {

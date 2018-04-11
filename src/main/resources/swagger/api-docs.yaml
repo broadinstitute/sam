@@ -240,6 +240,28 @@ paths:
       tags:
         - Group
 
+  /api/group/{groupName}/requestAccess:
+    post:
+      summary: Request access to a managed group
+      responses:
+        204:
+          description: Request sent
+        404:
+          description: Group could not be found or you do not have the required permissions on this group
+        500:
+          description: Internal Error
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      parameters:
+        - in: path
+          description: Name of group
+          name: groupName
+          required: true
+          type: string
+      operationId: requestAccess
+      tags:
+        - Group
+
   /api/group/{groupName}/{policyName}:
     get:
       summary: 'Get email addresses for members of the "admin" policy'

@@ -39,6 +39,11 @@ trait ManagedGroupRoutes extends UserInfoDirectives with SecurityDirectives with
           handleDeleteGroup(managedGroup, userInfo)
         }
       } ~
+      pathPrefix("requestAccess") {
+        post {
+          handleRequestAccess(managedGroup, userInfo)
+        }
+      } ~
       pathPrefix(Segment) { policyName =>
         val accessPolicyName = ManagedGroupService.getPolicyName(policyName)
 
@@ -127,6 +132,14 @@ trait ManagedGroupRoutes extends UserInfoDirectives with SecurityDirectives with
           managedGroupService.removeSubjectFromPolicy(managedGroup.resourceId, accessPolicyName, subject).map(_ => StatusCodes.NoContent)
         )
       }
+    }
+  }
+
+  private def handleRequestAccess(managedGroup: Resource, userInfo: UserInfo): Route = {
+    requireAction(managedGroup, SamResourceActions.notifyAdmins, userInfo) {
+      complete(
+        managedGroupService.requestAccess(managedGroup.resourceId).map(_ => StatusCodes.NoContent)
+      )
     }
   }
 }
