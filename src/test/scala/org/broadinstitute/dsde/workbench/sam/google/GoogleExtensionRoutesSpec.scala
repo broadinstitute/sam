@@ -341,44 +341,6 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
     }
   }
 
-//  "GET /api/google/user/petServiceAccount/{project}/token" should "200 with a new access token" in {
-//    val resourceTypes = Map(resourceType.name -> resourceType)
-//    val defaultUserInfo = UserInfo(OAuth2BearerToken("accessToken"), WorkbenchUserId("user1"), WorkbenchEmail("user1@example.com"), 0)
-//    val googleDirectoryDAO = new MockGoogleDirectoryDAO()
-//    val directoryDAO = new MockDirectoryDAO()
-//    val (googleIamDAO: GoogleIamDAO, expectedJson: String) = createMockGoogleIamDaoForSAKeyTests
-//    val googleStorageDAO = new MockGoogleStorageDAO()
-//    val policyDAO = new MockAccessPolicyDAO()
-//    val pubSubDAO = new MockGooglePubSubDAO()
-//    val cloudKeyCache = new GoogleKeyCache(googleIamDAO, googleStorageDAO, pubSubDAO, googleServicesConfig, petServiceAccountConfig)
-//    val googleExt = new GoogleExtensions(directoryDAO, policyDAO, googleDirectoryDAO, pubSubDAO, googleIamDAO, googleStorageDAO, cloudKeyCache, googleServicesConfig, petServiceAccountConfig, configResourceTypes(CloudExtensions.resourceTypeName))
-//
-//    val mockResourceService = new ResourceService(resourceTypes, policyDAO, directoryDAO, googleExt, "example.com")
-//    val samRoutes = new TestSamRoutes(mockResourceService, new UserService(directoryDAO, googleExt), new StatusService(directoryDAO, NoExtensions), UserInfo(OAuth2BearerToken(""), defaultUserInfo.userId, defaultUserInfo.userEmail, 0), directoryDAO) with GoogleExtensionRoutes {
-//      val googleExtensions = googleExt
-//      val googleKeyCache = cloudKeyCache
-//    }
-//
-//    //create user
-//    Post("/register/user") ~> samRoutes.route ~> check {
-//      status shouldEqual StatusCodes.Created
-//    }
-//
-//    // create a pet service account
-//    Get("/api/google/user/petServiceAccount/myproject") ~> samRoutes.route ~> check {
-//      status shouldEqual StatusCodes.OK
-//      val response = responseAs[WorkbenchEmail]
-//      response.value should endWith (s"@myproject.iam.gserviceaccount.com")
-//    }
-//
-//    // create a pet service account key
-//    Get("/api/google/user/petServiceAccount/myproject/token") ~> samRoutes.route ~> check {
-//      status shouldEqual StatusCodes.OK
-//      val response = responseAs[String]
-//      response shouldEqual(expectedJson)
-//    }
-//  }
-
   private def createMockGoogleIamDaoForSAKeyTests: (GoogleIamDAO, String) = {
     val googleIamDAO = mock[GoogleIamDAO]
     val expectedJson = """{"json":"yes I am"}"""
