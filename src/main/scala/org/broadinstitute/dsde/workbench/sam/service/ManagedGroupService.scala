@@ -127,16 +127,12 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
 
   def requestAccess(resourceId: ResourceId, requesterUserId: WorkbenchUserId): Future[Unit] = {
     val resourceAndPolicyName = ResourceAndPolicyName(Resource(ManagedGroupService.managedGroupTypeName, resourceId), ManagedGroupService.adminPolicyName)
-    accessPolicyDAO.loadPolicy(resourceAndPolicyName).map {
-      case Some(policy) => {
-        //todo: FLATTEN POLICY
-        val notifications = policy.members.map { recipientUserId =>
-          Notifications.GroupAccessRequestNotification(recipientUserId.asInstanceOf[WorkbenchUserId], WorkbenchGroupName(resourceId.value), policy.members.map(_.asInstanceOf[WorkbenchUserId]), requesterUserId)
-        }
-
-        cloudExtensions.fireAndForgetNotifications(notifications)
+    accessPolicyDAO.listFlattenedPolicyUsers(resourceAndPolicyName).map { users =>
+      val notifications = users.map { recipientUserId =>
+        Notifications.GroupAccessRequestNotification(recipientUserId, WorkbenchGroupName(resourceId.value), users, requesterUserId)
       }
-      case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Group or policy could not be found: $resourceAndPolicyName"))
+
+      cloudExtensions.fireAndForgetNotifications(notifications)
     }
   }
 }

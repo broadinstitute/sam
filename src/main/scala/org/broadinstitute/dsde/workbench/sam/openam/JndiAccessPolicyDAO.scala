@@ -194,12 +194,29 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
     }.get
   }
 
+  override def listFlattenedPolicyUsers(resourceAndPolicyName: ResourceAndPolicyName): Future[Set[WorkbenchUserId]] = withContext { ctx =>
+    ctx.search(peopleOu, new BasicAttributes(Attr.memberOf, policyDn(resourceAndPolicyName), true)).extractResultsAndClose.map { result =>
+      unmarshalUser(result.getAttributes).id
+    }.toSet
+  }
+
   //
   // SUPPORT
   //
 
   private def getAttributes[T](attributes: Attributes, key: String): Option[TraversableOnce[T]] = {
     Option(attributes.get(key)).map(_.getAll.extractResultsAndClose.map(_.asInstanceOf[T]))
+  }
+
+  private def unmarshalUser(attributes: Attributes): WorkbenchUser = {
+    val uid = getAttribute[String](attributes, Attr.uid).getOrElse(throw new WorkbenchException(s"${Attr.uid} attribute missing"))
+    val email = getAttribute[String](attributes, Attr.email).getOrElse(throw new WorkbenchException(s"${Attr.email} attribute missing"))
+
+    WorkbenchUser(WorkbenchUserId(uid), WorkbenchEmail(email))
+  }
+
+  private def getAttribute[T](attributes: Attributes, key: String): Option[T] = {
+    Option(attributes.get(key)).map(_.get.asInstanceOf[T])
   }
 
   private def unmarshalAccessPolicy(attributes: Attributes): AccessPolicy = {
