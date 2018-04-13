@@ -159,7 +159,7 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
       val expectedProxyEmail1 = s"${username1}_$userId1@${Config.GCS.appsDomain}"
 */
       val expectedProxyEmail1 = s"$userId1@${Config.GCS.appsDomain}"
-/**/
+/*...*/
       proxyGroup1_1.value should endWith (expectedProxyEmail1)
       proxyGroup1_2.value should endWith (expectedProxyEmail1)
 
@@ -167,7 +167,7 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
       val expectedProxyEmail2 = s"${username2}_$userId2@${Config.GCS.appsDomain}"
 */
       val expectedProxyEmail2 = s"$userId2@${Config.GCS.appsDomain}"
-/**/
+/*...*/
       proxyGroup2_1.value should endWith (expectedProxyEmail2)
       proxyGroup2_2.value should endWith (expectedProxyEmail2)
     }
