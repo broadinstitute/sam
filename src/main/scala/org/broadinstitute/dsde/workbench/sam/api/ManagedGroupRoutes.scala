@@ -138,7 +138,7 @@ trait ManagedGroupRoutes extends UserInfoDirectives with SecurityDirectives with
   private def handleRequestAccess(managedGroup: Resource, userInfo: UserInfo): Route = {
     requireAction(managedGroup, SamResourceActions.notifyAdmins, userInfo) {
       complete(
-        managedGroupService.requestAccess(managedGroup.resourceId).map(_ => StatusCodes.NoContent)
+        managedGroupService.requestAccess(managedGroup.resourceId, userInfo.userId).map(_ => StatusCodes.NoContent)
       )
     }
   }

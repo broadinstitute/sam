@@ -9,6 +9,7 @@ import org.broadinstitute.dsde.workbench.model.google.GoogleProject
 import org.broadinstitute.dsde.workbench.sam.api.ExtensionRoutes
 import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.google.SyncReportItem
+import org.broadinstitute.dsde.workbench.sam.model.Notifications.Notification
 import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, ResourceTypeName}
 import org.broadinstitute.dsde.workbench.util.health.SubsystemStatus
 import org.broadinstitute.dsde.workbench.util.health.Subsystems.Subsystem
@@ -50,6 +51,8 @@ trait CloudExtensions {
 
   def getUserProxy(userEmail: WorkbenchEmail): Future[Option[WorkbenchEmail]]
 
+  def fireAndForgetNotifications[T <: Notification](notifications: Set[T]): Unit
+
   def checkStatus: Map[Subsystem, Future[SubsystemStatus]]
 
   def allSubSystems: Set[Subsystem]
@@ -86,6 +89,8 @@ trait NoExtensions extends CloudExtensions {
   override def deleteUserPetServiceAccount(userId: WorkbenchUserId, project: GoogleProject): Future[Boolean] = Future.successful(true)
 
   override def getUserProxy(userEmail: WorkbenchEmail): Future[Option[WorkbenchEmail]] = Future.successful(Option(userEmail))
+
+  override def fireAndForgetNotifications[T <: Notification](notifications: Set[T]): Unit = ()
 
   override def checkStatus: Map[Subsystem, Future[SubsystemStatus]] = Map.empty
 
