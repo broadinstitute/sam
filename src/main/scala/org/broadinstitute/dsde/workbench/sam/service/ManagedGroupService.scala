@@ -133,12 +133,8 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
         val notifications = policy.members.map { recipientUserId =>
           Notifications.GroupAccessRequestNotification(recipientUserId.asInstanceOf[WorkbenchUserId], WorkbenchGroupName(resourceId.value), policy.members.map(_.asInstanceOf[WorkbenchUserId]), requesterUserId)
         }
-        println("request access by firing off these emails:")
-        println(notifications)
 
-        
-//        cloudExtensions.fireAndForgetNotifications(notifications)
-//        notificationDAO.fireAndForgetNotifications(notifications)
+        cloudExtensions.fireAndForgetNotifications(notifications)
       }
       case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Group or policy could not be found: $resourceAndPolicyName"))
     }
