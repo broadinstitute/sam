@@ -298,7 +298,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName)) shouldEqual Set(adminUser.email)
   }
 
-  private def makeResource(resourceType: ResourceType, resourceId: ResourceId, userInfo: UserInfo): Resource = runAndWait(resourceService.createResource(resourceType, resourceId, userInfo))
+  private def makeResource(resourceType: ResourceType, resourceId: ResourceId, userInfo: UserInfo): Resource = runAndWait(resourceService.createResource(resourceType, resourceId, None, userInfo))
 
   "ManagedGroupService listGroups" should "return the list of groups that passed user belongs to" in {
     // Setup multiple managed groups owned by different users.

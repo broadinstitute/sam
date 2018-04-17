@@ -440,7 +440,7 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     val samRoutes = createSamRoutes(Map(resourceType.name -> resourceType))
 
     runAndWait(samRoutes.resourceService.createResourceType(resourceType))
-    runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), UserInfo(OAuth2BearerToken("accessToken"), WorkbenchUserId("user2"), WorkbenchEmail("user2@example.com"), 0)))
+    runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), None, UserInfo(OAuth2BearerToken("accessToken"), WorkbenchUserId("user2"), WorkbenchEmail("user2@example.com"), 0)))
 
     //Verify resource exists by checking for conflict on recreate
     Post(s"/api/resource/${resourceType.name}/foo") ~> samRoutes.route ~> check {
@@ -478,7 +478,7 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
     val testUser = WorkbenchUser(WorkbenchUserId("testuser"), WorkbenchEmail("testuser@foo.com"))
 
-    runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), defaultUserInfo))
+    runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), None, defaultUserInfo))
 
     runAndWait(samRoutes.userService.createUser(testUser))
 
@@ -497,7 +497,7 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
     val testUser = WorkbenchUser(WorkbenchUserId("testuser"), WorkbenchEmail("testuser@foo.com"))
 
-    runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), defaultUserInfo))
+    runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), None, defaultUserInfo))
 
     runAndWait(samRoutes.userService.createUser(testUser))
 
@@ -512,7 +512,7 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
     val testUser = WorkbenchUser(WorkbenchUserId("testuser"), WorkbenchEmail("testuser@foo.com"))
 
-    runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), defaultUserInfo))
+    runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), None, defaultUserInfo))
 
     //runAndWait(samRoutes.userService.createUser(testUser))
 
@@ -527,7 +527,7 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
     val testUser = WorkbenchUser(WorkbenchUserId("testuser"), WorkbenchEmail("testuser@foo.com"))
 
-    runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), defaultUserInfo))
+    runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), None, defaultUserInfo))
 
     runAndWait(samRoutes.userService.createUser(testUser))
 
@@ -542,7 +542,7 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
     val testUser = UserInfo(OAuth2BearerToken("token"), WorkbenchUserId("testuser"), WorkbenchEmail("testuser@foo.com"), 0)
 
-    runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), testUser))
+    runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), None, testUser))
 
     runAndWait(samRoutes.userService.createUser(WorkbenchUser(testUser.userId, testUser.userEmail)))
 
@@ -557,7 +557,7 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
     val testUser = WorkbenchUser(WorkbenchUserId("testuser"), WorkbenchEmail("testuser@foo.com"))
 
-    runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), defaultUserInfo))
+    runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), None, defaultUserInfo))
 
     runAndWait(samRoutes.userService.createUser(testUser))
 
@@ -574,7 +574,7 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
     val testUser = WorkbenchUser(WorkbenchUserId("testuser"), WorkbenchEmail("testuser@foo.com"))
 
-    runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), defaultUserInfo))
+    runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), None, defaultUserInfo))
 
     runAndWait(samRoutes.userService.createUser(testUser))
 
@@ -591,7 +591,7 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
     val testUser = WorkbenchUser(WorkbenchUserId("testuser"), WorkbenchEmail("testuser@foo.com"))
 
-    runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), defaultUserInfo))
+    runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), None, defaultUserInfo))
 
     //runAndWait(samRoutes.userService.createUser(testUser))
 
@@ -608,7 +608,7 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
     val testUser = WorkbenchUser(WorkbenchUserId("testuser"), WorkbenchEmail("testuser@foo.com"))
 
-    runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), defaultUserInfo))
+    runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), None, defaultUserInfo))
 
     runAndWait(samRoutes.userService.createUser(testUser))
 
@@ -625,7 +625,7 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
     val testUser = UserInfo(OAuth2BearerToken("token"), WorkbenchUserId("testuser"), WorkbenchEmail("testuser@foo.com"), 0)
 
-    runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), testUser))
+    runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), None, testUser))
 
     runAndWait(samRoutes.userService.createUser(WorkbenchUser(testUser.userId, testUser.userEmail)))
 
