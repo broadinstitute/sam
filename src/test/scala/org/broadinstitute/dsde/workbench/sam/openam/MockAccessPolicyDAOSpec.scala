@@ -86,7 +86,7 @@ class MockAccessPolicyDAOSpec extends FlatSpec with Matchers with TestSupport wi
     runAndWait(mock.userService.createUser(dummyUser))
 
     val expectedGroups = Set(ResourceIdAndPolicyName(ResourceId(groupName), ManagedGroupService.adminPolicyName))
-    runAndWait(jndi.managedGroupService.listGroups(dummyUserInfo.userId)).map(ripn => ResourceIdAndPolicyName(ripn.resourceId, ripn.accessPolicyName)) shouldEqual expectedGroups
-    runAndWait(mock.managedGroupService.listGroups(dummyUserInfo.userId)).map(ripn => ResourceIdAndPolicyName(ripn.resourceId, ripn.accessPolicyName)) shouldEqual expectedGroups
+    runAndWait(jndi.managedGroupService.listGroups(dummyUserInfo.userId)).map(ripn => ResourceIdAndPolicyName(ripn.groupName, ripn.role)) shouldEqual expectedGroups
+    runAndWait(mock.managedGroupService.listGroups(dummyUserInfo.userId)).map(ripn => ResourceIdAndPolicyName(ripn.groupName, ripn.role)) shouldEqual expectedGroups
   }
 }
