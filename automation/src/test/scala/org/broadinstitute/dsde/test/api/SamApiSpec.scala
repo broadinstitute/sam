@@ -52,6 +52,17 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
       val tempUser: Credentials = UserPool.chooseTemp
       val tempAuthToken: AuthToken = tempUser.makeAuthToken()
 
+      //It's possible that some other bad test leaves this user regsistered.
+      //Clean it up if it exists already...
+      Sam.user.status()(tempAuthToken) match {
+        case Some(user) => {
+          logger.info(s"User ${user.userInfo.userEmail} was already registered. Removing before test starts...")
+          removeUser(user.userInfo.userSubjectId)
+        }
+        case None => logger.info(s"User ${tempUser.email} does not yet exist! Proceeding...")
+      }
+
+      //Now assert that it's gone for real
       Sam.user.status()(tempAuthToken) shouldBe None
 
       registerAsNewUser(WorkbenchEmail(tempUser.email))(tempAuthToken)
