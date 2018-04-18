@@ -58,11 +58,11 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
                     complete(resourceService.deleteResource(Resource(resourceType.name, ResourceId(resourceId))).map(_ => StatusCodes.NoContent))
                   }
                 } ~
-                  post {
-                    entity(as[Option[Map[AccessPolicyName, AccessPolicyMembership]]]) { policies =>
-                      complete(resourceService.createResource(resourceType, ResourceId(resourceId), policies, userInfo).map(_ => StatusCodes.NoContent))
-                    }
+                post {
+                  withOptionalEntity(as[Map[AccessPolicyName, AccessPolicyMembership]]) { policies =>
+                    complete(resourceService.createResource(resourceType, ResourceId(resourceId), policies, userInfo).map(_ => StatusCodes.NoContent))
                   }
+                }
               } ~
               pathPrefix("action") {
                 pathPrefix(Segment) { action =>

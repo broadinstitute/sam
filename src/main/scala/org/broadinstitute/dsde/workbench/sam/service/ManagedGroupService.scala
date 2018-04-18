@@ -20,10 +20,14 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
   def managedGroupType: ResourceType = resourceTypes.getOrElse(ManagedGroupService.managedGroupTypeName, throw new WorkbenchException(s"resource type ${ManagedGroupService.managedGroupTypeName.value} not found"))
 
   def createManagedGroup(groupId: ResourceId, userInfo: UserInfo): Future[Resource] = {
-    val policiesToCreate = managedGroupType.roles.map(role => AccessPolicyName(role.roleName.value) -> AccessPolicyMembership(Set.empty, Set.empty, Set(role.roleName))).toMap
+    def memberRole = managedGroupType.roles.find(_.roleName == ManagedGroupService.memberRoleName).getOrElse(throw new WorkbenchException(s"${ManagedGroupService.memberRoleName} role does not exist in $managedGroupType"))
+    def adminRole = managedGroupType.ownerRoleName
+
+    val memberPolicy = AccessPolicyName(memberRole.roleName.value) -> AccessPolicyMembership(Set.empty, Set.empty, Set(memberRole.roleName))
+    val adminPolicy = AccessPolicyName(adminRole.value) -> AccessPolicyMembership(Set(userInfo.userEmail), Set.empty, Set(adminRole))
 
     for {
-      managedGroup <- resourceService.createResource(managedGroupType, groupId, Option(policiesToCreate), userInfo)
+      managedGroup <- resourceService.createResource(managedGroupType, groupId, Option(Map(adminPolicy, memberPolicy)), userInfo)
       policies <- accessPolicyDAO.listAccessPolicies(managedGroup)
       workbenchGroup <- createAggregateGroup(managedGroup, policies)
       _ <- cloudExtensions.publishGroup(workbenchGroup.id)
