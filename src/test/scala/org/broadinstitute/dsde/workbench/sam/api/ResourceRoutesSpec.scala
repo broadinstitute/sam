@@ -44,7 +44,7 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
       responseAs[ErrorReport].message shouldEqual "resource type foo not found"
     }
   }
-  
+
   "GET /api/resourceTypes" should "200 when listing all resource types" in {
     val samRoutes = TestSamRoutes(Map.empty)
 
