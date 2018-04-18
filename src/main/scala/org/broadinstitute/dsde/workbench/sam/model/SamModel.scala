@@ -21,7 +21,7 @@ object SamJsonSupport {
 
   implicit val ResourceTypeNameFormat = ValueObjectFormat(ResourceTypeName)
 
-  implicit val ResourceTypeFormat = jsonFormat4(ResourceType)
+  implicit val ResourceTypeFormat = jsonFormat5(ResourceType)
 
   implicit val UserStatusDetailsFormat = jsonFormat2(UserStatusDetails)
 
@@ -76,7 +76,7 @@ case class ResourceRole(roleName: ResourceRoleName, actions: Set[ResourceAction]
 case class ResourceTypeName(value: String) extends ValueObject
 
 case class Resource(resourceTypeName: ResourceTypeName, resourceId: ResourceId)
-case class ResourceType(name: ResourceTypeName, actionPatterns: Set[ResourceActionPattern], roles: Set[ResourceRole], ownerRoleName: ResourceRoleName)
+case class ResourceType(name: ResourceTypeName, actionPatterns: Set[ResourceActionPattern], roles: Set[ResourceRole], ownerRoleName: ResourceRoleName, reuseIds: Boolean = false)
 
 case class ResourceId(value: String) extends ValueObject
 
