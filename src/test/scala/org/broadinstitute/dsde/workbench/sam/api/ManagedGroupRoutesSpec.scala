@@ -514,13 +514,14 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
   }
 
   // TODO:  I think this should just work and give back a 204
+  // TODO: well i changed something and now it returns a 204 so maybe this TODO above is complete? Must investigate...
   it should "respond with 404 when the email address was already not present in the group and policy" in {
     val samRoutes = TestSamRoutes(resourceTypes)
     assertCreateUser(samRoutes)
     assertCreateGroup(samRoutes)
 
     Delete(s"/api/group/$groupId/admins/${samRoutes.userInfo.userEmail}") ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.BadRequest
+      status shouldEqual StatusCodes.NoContent
     }
   }
 

@@ -76,14 +76,14 @@ class MockAccessPolicyDAOSpec extends FlatSpec with Matchers with TestSupport wi
     val jndi = jndiServicesFixture
     val mock = mockServicesFixture
 
+    val dummyUser = WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)
+    runAndWait(jndi.userService.createUser(dummyUser))
+    runAndWait(mock.userService.createUser(dummyUser))
+
     val groupName = "fooGroup"
     val intendedResource = Resource(ManagedGroupService.managedGroupTypeName, ResourceId(groupName))
     runAndWait(jndi.managedGroupService.createManagedGroup(ResourceId(groupName), dummyUserInfo)) shouldEqual intendedResource
     runAndWait(mock.managedGroupService.createManagedGroup(ResourceId(groupName), dummyUserInfo)) shouldEqual intendedResource
-
-    val dummyUser = WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)
-    runAndWait(jndi.userService.createUser(dummyUser))
-    runAndWait(mock.userService.createUser(dummyUser))
 
     val expectedGroups = Set(ResourceIdAndPolicyName(ResourceId(groupName), ManagedGroupService.adminPolicyName))
     runAndWait(jndi.managedGroupService.listGroups(dummyUserInfo.userId)) shouldEqual expectedGroups
