@@ -521,7 +521,7 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
     assertCreateGroup(samRoutes)
 
     Delete(s"/api/group/$groupId/admin/${samRoutes.userInfo.userEmail}") ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.BadRequest
+      status shouldEqual StatusCodes.NoContent
     }
   }
 
