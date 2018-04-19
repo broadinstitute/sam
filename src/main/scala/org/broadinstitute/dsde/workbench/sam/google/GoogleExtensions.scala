@@ -257,15 +257,16 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
     } yield key
   }
 
-  def getPetServiceAccountToken(user: WorkbenchUser, project: GoogleProject): Future[String] = {
+  def getPetServiceAccountToken(user: WorkbenchUser, project: GoogleProject, scopes: Set[String]): Future[String] = {
     getPetServiceAccountKey(user, project).flatMap { key =>
-      getAccessTokenUsingJson(key)
+      getAccessTokenUsingJson(key, scopes)
     }
   }
 
-  def getAccessTokenUsingJson(saKey: String) : Future[String] = Future {
+  def getAccessTokenUsingJson(saKey: String, desiredScopes: Set[String]) : Future[String] = Future {
     val keyStream = new ByteArrayInputStream(saKey.getBytes)
-    val credential = ServiceAccountCredentials.fromStream(keyStream).createScoped(Seq(PlusScopes.USERINFO_EMAIL, PlusScopes.USERINFO_PROFILE, StorageScopes.DEVSTORAGE_READ_ONLY).asJava)
+    val credential = ServiceAccountCredentials.fromStream(keyStream).createScoped(desiredScopes.asJava)
+//    val credential = ServiceAccountCredentials.fromStream(keyStream).createScoped(Seq(PlusScopes.USERINFO_EMAIL, PlusScopes.USERINFO_PROFILE, StorageScopes.DEVSTORAGE_READ_ONLY).asJava)
     credential.refreshAccessToken.getTokenValue
   }
 
