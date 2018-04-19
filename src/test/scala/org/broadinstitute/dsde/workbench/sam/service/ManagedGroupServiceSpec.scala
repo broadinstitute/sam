@@ -1,5 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.service
 
+import java.util.UUID
+
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import com.typesafe.config.ConfigFactory
 import net.ceedubs.ficus.Ficus._
@@ -305,7 +307,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     // Make the different users a member of some of the groups owned by the other user
     // Create some resources owned by different users
     // List Managed Group memberships for users and assert that memberships are only returned for managed groups
-    val newResourceType = managedGroupResourceType.copy(name = ResourceTypeName("somethingElse"))
+    val newResourceType = managedGroupResourceType.copy(name = ResourceTypeName(UUID.randomUUID().toString))
     makeResourceType(newResourceType)
     val resTypes = resourceTypes + (newResourceType.name -> newResourceType)
 
