@@ -57,7 +57,6 @@ class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdenti
         case Seq(policy) => Option(policy)
         case _ => throw new WorkbenchException(s"More than one policy found for ${resourceAndPolicyName.accessPolicyName}")
       }
-
     }
   }
 

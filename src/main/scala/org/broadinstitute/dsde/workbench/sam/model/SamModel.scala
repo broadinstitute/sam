@@ -41,6 +41,8 @@ object SamJsonSupport {
 
   implicit val ResourceAndPolicyNameFormat = jsonFormat2(ResourceAndPolicyName)
 
+  implicit val ManagedGroupMembershipEntryFormat = jsonFormat3(ManagedGroupMembershipEntry)
+
   implicit val GroupSyncResponseFormat = jsonFormat1(GroupSyncResponse)
 }
 
@@ -96,5 +98,7 @@ case class AccessPolicyMembership(memberEmails: Set[WorkbenchEmail], actions: Se
 case class AccessPolicyResponseEntry(policyName: AccessPolicyName, policy: AccessPolicyMembership, email: WorkbenchEmail)
 
 case class BasicWorkbenchGroup(id: WorkbenchGroupName, members: Set[WorkbenchSubject], email: WorkbenchEmail) extends WorkbenchGroup
+
+case class ManagedGroupMembershipEntry(groupName: ResourceId, role: AccessPolicyName, groupEmail: WorkbenchEmail)
 
 case class GroupSyncResponse(lastSyncDate: String)
