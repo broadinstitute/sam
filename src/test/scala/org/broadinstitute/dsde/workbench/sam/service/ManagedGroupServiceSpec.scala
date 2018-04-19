@@ -40,7 +40,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
   private val resourceActionPatterns = resourceActions.map(action => ResourceActionPattern(action.value))
   private val defaultOwnerRole = ResourceRole(ManagedGroupService.adminRoleName, resourceActions)
   private val defaultRoles = Set(defaultOwnerRole, ResourceRole(ManagedGroupService.memberRoleName, Set.empty))
-  private val managedGroupResourceType = ResourceType(ManagedGroupService.managedGroupTypeName, resourceActionPatterns, defaultRoles, ManagedGroupService.adminRoleName)
+  private val managedGroupResourceType = ResourceType(ManagedGroupService.managedGroupTypeName, resourceActionPatterns, defaultRoles, ManagedGroupService.adminRoleName, true)
   private val resourceTypes = Map(managedGroupResourceType.name -> managedGroupResourceType)
   private val testDomain = "example.com"
   private val resourceService = new ResourceService(resourceTypes, policyDAO, dirDAO, NoExtensions, testDomain)
@@ -120,6 +120,14 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     runAndWait(managedGroupService.loadManagedGroup(resourceId)) shouldEqual None
   }
 
+  it should "succeed after a managed group with the same name has been deleted" in {
+    val groupId = ResourceId("uniqueName")
+    managedGroupResourceType.reuseIds shouldEqual true
+    assertMakeGroup(groupId.value)
+    runAndWait(managedGroupService.deleteManagedGroup(groupId))
+    assertMakeGroup(groupId.value)
+  }
+
   it should "fail when the group name is too long" in {
     val groupName = "a" * 64
     val exception = intercept[WorkbenchExceptionWithErrorReport] {
@@ -178,7 +186,6 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
 
     runAndWait(managedGroupService.loadManagedGroup(managedGroup.resourceId)) shouldNot be (None)
     runAndWait(dirDAO.loadGroup(parentGroup.id)).get.members shouldEqual Set(managedGroupName)
-
   }
 
   "ManagedGroupService listPolicyMemberEmails" should "return a list of email addresses for the groups admin policy" in {

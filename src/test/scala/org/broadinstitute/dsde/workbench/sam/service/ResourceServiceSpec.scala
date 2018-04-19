@@ -333,6 +333,40 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     assert(runAndWait(policyDAO.listAccessPolicies(resource)).isEmpty)
   }
 
+  it should "not allow a new resource to be created with the same name as the deleted resource if 'reuseIds' is false for the Resource Type" in {
+    val resource = Resource(defaultResourceType.name, ResourceId("my-resource"))
+
+    defaultResourceType.reuseIds shouldEqual false
+
+    runAndWait(service.createResourceType(defaultResourceType))
+    runAndWait(service.createResource(defaultResourceType, resource.resourceId, None, dummyUserInfo))
+    runAndWait(service.deleteResource(resource))
+
+    val err = intercept[WorkbenchExceptionWithErrorReport] {
+      runAndWait(service.createResource(defaultResourceType, resource.resourceId, None, dummyUserInfo))
+    }
+    err.getMessage should include ("resource of this type and name already exists")
+  }
+
+  it should "allow a new resource to be created with the same name as the deleted resource if 'reuseIds' is true for the Resource Type" in {
+    val reusableResourceType = defaultResourceType.copy(reuseIds = true)
+    reusableResourceType.reuseIds shouldEqual true
+    val localService = new ResourceService(Map(reusableResourceType.name -> reusableResourceType), policyDAO, dirDAO, NoExtensions, "example.com")
+
+    runAndWait(localService.createResourceType(reusableResourceType))
+
+    val resource = Resource(reusableResourceType.name, ResourceId("my-resource"))
+
+    runAndWait(localService.createResource(reusableResourceType, resource.resourceId, None, dummyUserInfo))
+    runAndWait(policyDAO.listAccessPolicies(resource)) should not be empty
+
+    runAndWait(localService.deleteResource(resource))
+    runAndWait(policyDAO.listAccessPolicies(resource)) shouldBe empty
+
+    runAndWait(localService.createResource(reusableResourceType, resource.resourceId, None, dummyUserInfo))
+    runAndWait(policyDAO.listAccessPolicies(resource)) should not be empty
+  }
+
   "listUserAccessPolicies" should "list user's access policies but not others" in {
     val resource1 = Resource(defaultResourceType.name, ResourceId("my-resource1"))
     val resource2 = Resource(defaultResourceType.name, ResourceId("my-resource2"))
