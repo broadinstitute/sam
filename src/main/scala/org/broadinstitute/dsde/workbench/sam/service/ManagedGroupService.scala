@@ -91,8 +91,16 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
     } yield ()
   }
 
-  def listGroups(userId: WorkbenchUserId): Future[Set[ResourceIdAndPolicyName]] = {
-    accessPolicyDAO.listAccessPolicies(ManagedGroupService.managedGroupTypeName, userId)
+  def listGroups(userId: WorkbenchUserId): Future[Set[ManagedGroupMembershipEntry]] = {
+    for {
+      ripns <- accessPolicyDAO.listAccessPolicies(ManagedGroupService.managedGroupTypeName, userId)
+      emailLookup <- directoryDAO.batchLoadGroupEmail(ripns.map(ripn => WorkbenchGroupName(ripn.resourceId.value)))
+    } yield {
+      val emailLookupMap = emailLookup.toMap
+      ripns.map { ripn =>
+        ManagedGroupMembershipEntry(ripn.resourceId, ripn.accessPolicyName, emailLookupMap(WorkbenchGroupName(ripn.resourceId.value)))
+      }
+    }
   }
 
   def listPolicyMemberEmails(resourceId: ResourceId, policyName: ManagedGroupPolicyName): Future[Set[WorkbenchEmail]] = {
@@ -152,8 +160,8 @@ object ManagedGroupService {
 
   def getPolicyName(policyName: String): ManagedGroupPolicyName = {
     policyName match {
-      case "members" => ManagedGroupService.memberPolicyName
-      case "admins" => ManagedGroupService.adminPolicyName
+      case "member" => ManagedGroupService.memberPolicyName
+      case "admin" => ManagedGroupService.adminPolicyName
       case "admin-notifiers" => ManagedGroupService.adminNotifierPolicyName
       case _ => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "Policy name for managed groups must be one of: [\"admins\", \"members\"]"))
     }

@@ -166,7 +166,7 @@ paths:
           schema:
             type: array
             items:
-              $ref: '#/definitions/ResourceAndAccessPolicy'
+              $ref: '#/definitions/ManagedGroupMembershipEntry'
         500:
           description: Internal Error
           schema:
@@ -287,7 +287,7 @@ paths:
           name: policyName
           required: true
           type: string
-          enum: ["members", "admins"]
+          enum: ["member", "admin"]
       operationId: GetGroupAdminEmails
       tags:
         - Group
@@ -313,7 +313,7 @@ paths:
           name: policyName
           required: true
           type: string
-          enum: ["members", "admins"]
+          enum: ["member", "admin"]
         - in: body
           description: The list of emails
           name: emailAddresses
@@ -351,7 +351,7 @@ paths:
           name: policyName
           required: true
           type: string
-          enum: ["members", "admins"]
+          enum: ["member", "admin"]
         - in: path
           description: Email address
           name: email
@@ -384,7 +384,7 @@ paths:
           name: policyName
           required: true
           type: string
-          enum: ["members", "admins"]
+          enum: ["member", "admin"]
         - in: path
           description: Email address
           name: email
@@ -1090,6 +1090,24 @@ definitions:
         description: stack trace
         items:
           $ref: '#/definitions/StackTraceElement'
+
+  ManagedGroupMembershipEntry:
+    type: object
+    description: 'specification of a managed group with an access policy and the email associated with the managed group'
+    required:
+      - groupName
+      - role
+      - groupEmail
+    properties:
+      groupName:
+        type: string
+        description: The name of the managed group
+      role:
+        type: string
+        description: User's role in the group
+      groupEmail:
+        type: string
+        description: The email address associated with the group
 
   ResourceAndAccessPolicy:
     type: object

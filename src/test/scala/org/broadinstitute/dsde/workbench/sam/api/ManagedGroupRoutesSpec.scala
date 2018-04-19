@@ -67,7 +67,7 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
   }
 
   def setGroupMembers(samRoutes: TestSamRoutes, members: Set[WorkbenchEmail], expectedStatus: StatusCode): Unit = {
-    Put(s"/api/group/$groupId/members", members) ~> samRoutes.route ~> check {
+    Put(s"/api/group/$groupId/member", members) ~> samRoutes.route ~> check {
       status shouldEqual expectedStatus
     }
   }
@@ -180,11 +180,11 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
     }
   }
 
-  "GET /api/group/{groupName}/members" should "succeed with 200 when the group exists and the requesting user is in the group" in {
+  "GET /api/group/{groupName}/member" should "succeed with 200 when the group exists and the requesting user is in the group" in {
     val samRoutes = TestSamRoutes(resourceTypes)
     assertCreateGroup(samRoutes)
 
-    Get(s"/api/group/$groupId/members") ~> samRoutes.route ~> check {
+    Get(s"/api/group/$groupId/member") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
       responseAs[String] shouldEqual "[]"
     }
@@ -199,7 +199,7 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
 
     setGroupMembers(samRoutes, Set(newGuy.email), expectedStatus = StatusCodes.Created)
 
-    Get(s"/api/group/$groupId/members") ~> newGuy.routes.route ~> check {
+    Get(s"/api/group/$groupId/member") ~> newGuy.routes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
   }
@@ -215,12 +215,12 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
   it should "fail with 404 when the group does not exist" in {
     val samRoutes = TestSamRoutes(resourceTypes)
 
-    Get(s"/api/group/$groupId/members") ~> samRoutes.route ~> check {
+    Get(s"/api/group/$groupId/member") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
   }
 
-  "GET /api/group/{groupName}/{policyName}" should "fail with 404 if policy name is not in [members, admins]" in {
+  "GET /api/group/{groupName}/{policyName}" should "fail with 404 if policy name is not in [member, admin]" in {
     val samRoutes = TestSamRoutes(resourceTypes)
     assertCreateGroup(samRoutes)
 
@@ -230,14 +230,14 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
     }
   }
 
-  "PUT /api/group/{groupName}/members" should "fail with 400 when updating the 'member' policy of the group with a user who has not been created yet" in {
+  "PUT /api/group/{groupName}/member" should "fail with 400 when updating the 'member' policy of the group with a user who has not been created yet" in {
     val samRoutes = TestSamRoutes(resourceTypes)
     assertCreateGroup(samRoutes)
 
     val newGuyEmail = WorkbenchEmail("newGuy@organization.org")
     val members = Set(newGuyEmail)
 
-    Put(s"/api/group/$groupId/members", members) ~> samRoutes.route ~> check {
+    Put(s"/api/group/$groupId/member", members) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.BadRequest
       responseAs[String] should include (newGuyEmail.toString())
     }
@@ -277,19 +277,19 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
     val newGuyEmail = WorkbenchEmail("I'm not an email address but I should be")
 
     val members = Set(newGuyEmail)
-    Put(s"/api/group/$groupId/members", members) ~> samRoutes.route ~> check {
+    Put(s"/api/group/$groupId/member", members) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.BadRequest
       responseAs[String] should include (newGuyEmail.toString())
     }
   }
 
-  "GET /api/group/{groupName}/admins" should "succeed with 200 when the group exists and the requesting user is in the group" in {
+  "GET /api/group/{groupName}/admin" should "succeed with 200 when the group exists and the requesting user is in the group" in {
     val samRoutes = TestSamRoutes(resourceTypes)
     assertCreateUser(samRoutes)
     assertCreateGroup(samRoutes)
     assertGetGroup(samRoutes)
 
-    Get(s"/api/group/$groupId/admins") ~> samRoutes.route ~> check {
+    Get(s"/api/group/$groupId/admin") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
       responseAs[String] should include (TestSamRoutes.defaultUserInfo.userEmail.value)
     }
@@ -304,14 +304,14 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
 
     setGroupMembers(samRoutes, Set(newGuy.email), expectedStatus = StatusCodes.Created)
 
-    Get(s"/api/group/$groupId/admins") ~> newGuy.routes.route ~> check {
+    Get(s"/api/group/$groupId/admin") ~> newGuy.routes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
   }
 
   it should "fail with 404 when the requesting user is not in the group" in {
     withUserNotInGroup(TestSamRoutes(resourceTypes)) { nonMemberRoutes =>
-      Get(s"/api/group/$groupId/admins") ~> nonMemberRoutes.route ~> check {
+      Get(s"/api/group/$groupId/admin") ~> nonMemberRoutes.route ~> check {
         status shouldEqual StatusCodes.NotFound
       }
     }
@@ -320,19 +320,19 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
   it should "fail with 404 when the group does not exist" in {
     val samRoutes = TestSamRoutes(resourceTypes)
 
-    Get(s"/api/group/$groupId/admins") ~> samRoutes.route ~> check {
+    Get(s"/api/group/$groupId/admin") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
   }
 
-  "PUT /api/group/{groupName}/admins" should "fail with 400 when updating the 'admin' policy of the group with a user who has not been created yet" in {
+  "PUT /api/group/{groupName}/admin" should "fail with 400 when updating the 'admin' policy of the group with a user who has not been created yet" in {
     val samRoutes = TestSamRoutes(resourceTypes)
     assertCreateGroup(samRoutes)
 
     val newGuyEmail = WorkbenchEmail("newGuy@organization.org")
     val members = Set(newGuyEmail)
 
-    Put(s"/api/group/$groupId/admins", members) ~> samRoutes.route ~> check {
+    Put(s"/api/group/$groupId/admin", members) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.BadRequest
       responseAs[String] should include (newGuyEmail.toString())
     }
@@ -346,7 +346,7 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
     assertCreateUser(newGuy.routes)
 
     val members = Set(newGuy.email)
-    Put(s"/api/group/$groupId/admins", members) ~> samRoutes.route ~> check {
+    Put(s"/api/group/$groupId/admin", members) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
     }
   }
@@ -358,7 +358,7 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
     val newGuy = makeOtherUser(samRoutes)
 
     val members = Set(newGuy.email)
-    Put(s"/api/group/$groupId/admins", members) ~> newGuy.routes.route ~> check {
+    Put(s"/api/group/$groupId/admin", members) ~> newGuy.routes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
   }
@@ -372,7 +372,7 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
     assertCreateUser(newGuyRoutes)
 
     val members = Set(newGuyEmail)
-    Put(s"/api/group/$groupId/admins", members) ~> samRoutes.route ~> check {
+    Put(s"/api/group/$groupId/admin", members) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
   }
@@ -384,7 +384,7 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
     val newGuyEmail = WorkbenchEmail("An Invalid email address")
 
     val members = Set(newGuyEmail)
-    Put(s"/api/group/$groupId/admins", members) ~> samRoutes.route ~> check {
+    Put(s"/api/group/$groupId/admin", members) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.BadRequest
       responseAs[String] should include (newGuyEmail.toString())
     }
@@ -397,7 +397,7 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
     val newGuy = makeOtherUser(samRoutes)
     assertCreateUser(newGuy.routes)
 
-    Put(s"/api/group/$groupId/admins/${newGuy.email}") ~> samRoutes.route ~> check {
+    Put(s"/api/group/$groupId/admin/${newGuy.email}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NoContent
     }
   }
@@ -408,8 +408,7 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
     assertCreateGroup(samRoutes)
 
     val defaultUserInfo = samRoutes.userInfo
-    Put(s"/api/group/$groupId/admins/${defaultUserInfo.userEmail}") ~> samRoutes.route ~> check {
-      println(responseAs[String])
+    Put(s"/api/group/$groupId/admin/${defaultUserInfo.userEmail}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NoContent
     }
   }
@@ -419,7 +418,7 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
     val newGuy = makeOtherUser(samRoutes)
     assertCreateUser(newGuy.routes)
 
-    Put(s"/api/group/$groupId/admins/${newGuy.email}") ~> samRoutes.route ~> check {
+    Put(s"/api/group/$groupId/admin/${newGuy.email}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
   }
@@ -430,7 +429,7 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
 
     val notAnEmail = "NotAnEmailAddress"
 
-    Put(s"/api/group/$groupId/admins/$notAnEmail") ~> samRoutes.route ~> check {
+    Put(s"/api/group/$groupId/admin/$notAnEmail") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.BadRequest
     }
   }
@@ -454,7 +453,7 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
     val newGuy = makeOtherUser(samRoutes)
     assertCreateUser(newGuy.routes)
 
-    Put(s"/api/group/$groupId/admins/${samRoutes.userInfo.userEmail}") ~> newGuy.routes.route ~> check {
+    Put(s"/api/group/$groupId/admin/${samRoutes.userInfo.userEmail}") ~> newGuy.routes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
   }
@@ -465,7 +464,7 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
     assertCreateGroup(samRoutes)
     assertCreateUser(samRoutes)
 
-    Delete(s"/api/group/$groupId/admins/${samRoutes.userInfo.userEmail}") ~> samRoutes.route ~> check {
+    Delete(s"/api/group/$groupId/admin/${samRoutes.userInfo.userEmail}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NoContent
     }
   }
@@ -475,7 +474,7 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
     val samRoutes = TestSamRoutes(resourceTypes)
     assertCreateGroup(samRoutes)
 
-    Delete(s"/api/group/$groupId/admins/${samRoutes.userInfo.userEmail}") ~> samRoutes.route ~> check {
+    Delete(s"/api/group/$groupId/admin/${samRoutes.userInfo.userEmail}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.BadRequest
     }
   }
@@ -483,7 +482,7 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
   it should "respond with 404 when the group does not exist" in {
     val samRoutes = TestSamRoutes(resourceTypes)
 
-    Delete(s"/api/group/$groupId/admins/${samRoutes.userInfo.userEmail}") ~> samRoutes.route ~> check {
+    Delete(s"/api/group/$groupId/admin/${samRoutes.userInfo.userEmail}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
   }
@@ -505,7 +504,7 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
     val newGuy = makeOtherUser(samRoutes)
     assertCreateUser(newGuy.routes)
 
-    Delete(s"/api/group/$groupId/admins/${samRoutes.userInfo.userEmail}") ~> newGuy.routes.route ~> check {
+    Delete(s"/api/group/$groupId/admin/${samRoutes.userInfo.userEmail}") ~> newGuy.routes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
   }
@@ -569,7 +568,7 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
   it should "fail with 404 when the group does not exist" in {
     val samRoutes = TestSamRoutes(resourceTypes)
 
-    Get(s"/api/group/$groupId/admins") ~> samRoutes.route ~> check {
+    Get(s"/api/group/$groupId/admin") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
   }
