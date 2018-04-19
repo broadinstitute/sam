@@ -28,9 +28,9 @@ import scala.concurrent.duration._
 import scala.language.postfixOps
 import scala.util.{Success, Try}
 import net.ceedubs.ficus.Ficus._
+import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
 import org.broadinstitute.dsde.workbench.sam.config._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccountKeyId, ServiceAccountName}
-import org.broadinstitute.dsde.workbench.sam.api.dataaccess.PubSubNotificationDAO
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.mockito.ArgumentMatcher
 
