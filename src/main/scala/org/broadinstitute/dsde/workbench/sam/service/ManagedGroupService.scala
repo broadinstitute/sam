@@ -4,7 +4,6 @@ import akka.http.scaladsl.model.StatusCodes
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam._
-import org.broadinstitute.dsde.workbench.sam.api.dataaccess.NotificationDAO
 import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.AccessPolicyDAO
@@ -129,7 +128,7 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
     val resourceAndPolicyName = ResourceAndPolicyName(Resource(ManagedGroupService.managedGroupTypeName, resourceId), ManagedGroupService.adminPolicyName)
     accessPolicyDAO.listFlattenedPolicyUsers(resourceAndPolicyName).map { users =>
       val notifications = users.map { recipientUserId =>
-        Notifications.GroupAccessRequestNotification(recipientUserId, WorkbenchGroupName(resourceId.value), users, requesterUserId)
+        Notifications.GroupAccessRequestNotification(recipientUserId, WorkbenchGroupName(resourceId.value).value, users, requesterUserId)
       }
 
       cloudExtensions.fireAndForgetNotifications(notifications)

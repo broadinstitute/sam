@@ -20,8 +20,8 @@ import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, SamApplic
 import org.broadinstitute.dsde.workbench.util.FutureSupport
 import org.broadinstitute.dsde.workbench.util.health.{HealthMonitor, SubsystemStatus, Subsystems}
 import WorkbenchIdentityJsonSupport.WorkbenchGroupNameFormat
-import org.broadinstitute.dsde.workbench.sam.api.dataaccess.NotificationDAO
-import org.broadinstitute.dsde.workbench.sam.model.Notifications.Notification
+import org.broadinstitute.dsde.workbench.dataaccess.NotificationDAO
+import org.broadinstitute.dsde.workbench.model.Notifications.Notification
 import spray.json._
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport.ResourceAndPolicyNameFormat
 
