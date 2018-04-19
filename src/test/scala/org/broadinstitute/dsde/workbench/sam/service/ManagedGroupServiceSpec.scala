@@ -336,13 +336,13 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     user1Resources.foreach(s => makeResource(newResourceType, ResourceId(s), user1))
     user2Resources.foreach(s => makeResource(newResourceType, ResourceId(s), user2))
 
-    val user1ExpectedAdmin = user1Groups.map(s => ResourceIdAndPolicyName(ResourceId(s), ManagedGroupService.adminPolicyName))
-    val user1ExpectedMember = user1Memberships.map(s => ResourceIdAndPolicyName(ResourceId(s), ManagedGroupService.memberPolicyName))
+    val user1ExpectedAdmin = user1Groups.map(s => ManagedGroupMembershipEntry(ResourceId(s), ManagedGroupService.adminPolicyName, WorkbenchEmail(s"$s@example.com")))
+    val user1ExpectedMember = user1Memberships.map(s => ManagedGroupMembershipEntry(ResourceId(s), ManagedGroupService.memberPolicyName, WorkbenchEmail(s"$s@example.com")))
     val user1ExpectedGroups = user1ExpectedAdmin ++ user1ExpectedMember
     runAndWait(mgService.listGroups(user1.userId)) shouldEqual user1ExpectedGroups
 
-    val user2ExpectedAdmin = user2Groups.map(s => ResourceIdAndPolicyName(ResourceId(s), ManagedGroupService.adminPolicyName))
-    val user2ExpectedMember = user2Memberships.map(s => ResourceIdAndPolicyName(ResourceId(s), ManagedGroupService.memberPolicyName))
+    val user2ExpectedAdmin = user2Groups.map(s => ManagedGroupMembershipEntry(ResourceId(s), ManagedGroupService.adminPolicyName, WorkbenchEmail(s"$s@example.com")))
+    val user2ExpectedMember = user2Memberships.map(s => ManagedGroupMembershipEntry(ResourceId(s), ManagedGroupService.memberPolicyName, WorkbenchEmail(s"$s@example.com")))
     val user2ExpectedGroups = user2ExpectedAdmin ++ user2ExpectedMember
     runAndWait(mgService.listGroups(user2.userId)) shouldEqual user2ExpectedGroups
   }
