@@ -159,7 +159,7 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
       val expectedProxyEmail1 = s"${username1}_$userId1@${Config.GCS.appsDomain}"
 */
       val expectedProxyEmail1 = s"$userId1@${Config.GCS.appsDomain}"
-// /**/
+
       proxyGroup1_1.value should endWith (expectedProxyEmail1)
       proxyGroup1_2.value should endWith (expectedProxyEmail1)
 
@@ -167,7 +167,7 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
       val expectedProxyEmail2 = s"${username2}_$userId2@${Config.GCS.appsDomain}"
 */
       val expectedProxyEmail2 = s"$userId2@${Config.GCS.appsDomain}"
-// /**/
+
       proxyGroup2_1.value should endWith (expectedProxyEmail2)
       proxyGroup2_2.value should endWith (expectedProxyEmail2)
     }
@@ -191,7 +191,7 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
       val expectedProxyEmail = s"${username}_$userId@${Config.GCS.appsDomain}"
 */
         val expectedProxyEmail = s"$userId@${Config.GCS.appsDomain}"
-        // /**/
+
         proxyGroup_1.value should endWith(expectedProxyEmail)
         proxyGroup_2.value should endWith(expectedProxyEmail)
       }
@@ -260,12 +260,23 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
       val user = UserPool.chooseStudent
 
       withCleanBillingProject(UserPool.chooseProjectOwner, List(user.email)) { project =>
+        // get my pet's email
+        val petEmail1 =  Sam.user.petServiceAccountEmail(project)(user.makeAuthToken)
 
-        val token1 = Sam.user.petServiceAccountToken(project)(user.makeAuthToken)
+        // get my pet's token
+        val petToken = Sam.user.petServiceAccountToken(project)(user.makeAuthToken)
 
-        val token2 = Sam.user.petServiceAccountToken(project)(user.makeAuthToken)
+        // convert string token to an AuthToken
+        val petAuthToken = new AuthToken {
+          override def buildCredential() = ???
+          override lazy val value = petToken
+        }
 
-        token1 shouldNot be(token2)
+        // get my pet's email using my pet's token
+        val petEmail2 = Sam.user.petServiceAccountEmail(project)(petAuthToken)
+
+        // result should be the same
+        petEmail2 shouldBe petEmail1
       }
     }
   }
