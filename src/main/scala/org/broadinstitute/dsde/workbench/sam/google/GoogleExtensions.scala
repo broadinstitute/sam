@@ -266,7 +266,6 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
   def getAccessTokenUsingJson(saKey: String, desiredScopes: Set[String]) : Future[String] = Future {
     val keyStream = new ByteArrayInputStream(saKey.getBytes)
     val credential = ServiceAccountCredentials.fromStream(keyStream).createScoped(desiredScopes.asJava)
-//    val credential = ServiceAccountCredentials.fromStream(keyStream).createScoped(Seq(PlusScopes.USERINFO_EMAIL, PlusScopes.USERINFO_PROFILE, StorageScopes.DEVSTORAGE_READ_ONLY).asJava)
     credential.refreshAccessToken.getTokenValue
   }
 

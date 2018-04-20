@@ -501,7 +501,7 @@ paths:
         - Google
 
   /api/google/user/petServiceAccount/{project}/token:
-    get:
+    post:
       summary: gets a token for the user's pet service account
       responses:
         200:
@@ -518,6 +518,12 @@ paths:
           name: project
           required: true
           type: string
+        - in: body
+          description: Scopes for the token
+          name: scopes
+          required: true
+          schema:
+            $ref: '#/definitions/ArrayOfScopes'
       operationId: getPetServiceAccountToken
       tags:
         - Google
@@ -1042,6 +1048,16 @@ definitions:
       - person@company.com
       - group_name@company.com
       - foo@bar.com
+
+  ArrayOfScopes:
+    description: An array of scopes
+    type: array
+    items:
+      type: string
+    example:
+      - https://www.googleapis.com/auth/userinfo.email
+      - https://www.googleapis.com/auth/userinfo.profile
+
 
   Enabled:
     description: the status of the user's account
