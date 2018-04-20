@@ -271,7 +271,7 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
 
         // convert string token to an AuthToken
         val petAuthToken = new AuthToken {
-          override def buildCredential() = GoogleCredential
+          override def buildCredential() = ???
           override lazy val value = petToken
         }
 
