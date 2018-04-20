@@ -500,6 +500,34 @@ paths:
       tags:
         - Google
 
+  /api/google/user/petServiceAccount/{project}/token:
+    post:
+      summary: gets a token for the user's pet service account
+      responses:
+        200:
+          description: 'an access token for the users pet service account'
+          schema:
+            type: string
+        500:
+          description: Internal Error
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      parameters:
+        - in: path
+          description: Google project of the pet
+          name: project
+          required: true
+          type: string
+        - in: body
+          description: Scopes for the token
+          name: scopes
+          required: true
+          schema:
+            $ref: '#/definitions/ArrayOfScopes'
+      operationId: getPetServiceAccountToken
+      tags:
+        - Google
+
   /api/google/user/proxyGroup/{email}:
     get:
       summary: gets the proxy group email for the specified user
@@ -1020,6 +1048,16 @@ definitions:
       - person@company.com
       - group_name@company.com
       - foo@bar.com
+
+  ArrayOfScopes:
+    description: An array of scopes
+    type: array
+    items:
+      type: string
+    example:
+      - https://www.googleapis.com/auth/userinfo.email
+      - https://www.googleapis.com/auth/userinfo.profile
+
 
   Enabled:
     description: the status of the user's account
