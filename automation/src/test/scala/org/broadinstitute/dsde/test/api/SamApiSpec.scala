@@ -1,5 +1,6 @@
 package org.broadinstitute.dsde.test.api
 
+import com.google.api.client.googleapis.auth.oauth2.GoogleCredential
 import org.broadinstitute.dsde.workbench.service.{Orchestration, Sam, Thurloe}
 import org.broadinstitute.dsde.workbench.service.Sam.user.UserStatusDetails
 import org.broadinstitute.dsde.workbench.auth.{AuthToken, ServiceAccountAuthTokenFromJson, ServiceAccountAuthTokenFromPem}
@@ -263,12 +264,14 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
         // get my pet's email
         val petEmail1 =  Sam.user.petServiceAccountEmail(project)(user.makeAuthToken)
 
+        val scopes = Set("https://www.googleapis.com/auth/userinfo.email", "https://www.googleapis.com/auth/userinfo.profile")
+
         // get my pet's token
-        val petToken = Sam.user.petServiceAccountToken(project)(user.makeAuthToken)
+        val petToken = Sam.user.petServiceAccountToken(project, scopes)(user.makeAuthToken)
 
         // convert string token to an AuthToken
         val petAuthToken = new AuthToken {
-          override def buildCredential() = ???
+          override def buildCredential() = GoogleCredential
           override lazy val value = petToken
         }
 
