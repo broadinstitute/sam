@@ -76,12 +76,12 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     for {
       policiesToDelete <- accessPolicyDAO.listAccessPolicies(resource)
       _ <- Future.traverse(policiesToDelete) {accessPolicyDAO.deletePolicy}
-      _ <- attemptDeleteResource(resource)
+      _ <- maybeDeleteResource(resource)
       _ <- Future.traverse(policiesToDelete) { policy => cloudExtensions.onGroupDelete(policy.email) }
     } yield ()
   }
 
-  private def attemptDeleteResource(resource: Resource): Future[Unit] = {
+  private def maybeDeleteResource(resource: Resource): Future[Unit] = {
     resourceTypes.get(resource.resourceTypeName) match {
       case Some(resourceType) if resourceType.reuseIds => accessPolicyDAO.deleteResource(resource)
       case _ => Future.successful()
