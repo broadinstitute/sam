@@ -68,13 +68,24 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     accessPolicyDAO.listAccessPolicies(resourceType.name, userInfo.userId)
   }
 
+  // IF Resource ID reuse is allowed (as defined by the Resource Type), then we can delete the resource
+  // ELSE Resource ID reuse is not allowed, and we enforce this by deleting all policies associated with the Resource,
+  //      but not the Resource itself, thereby orphaning the Resource so that it cannot be used or accessed anymore and
+  //      preventing a new Resource with the same ID from being created
   def deleteResource(resource: Resource): Future[Unit] = {
     for {
       policiesToDelete <- accessPolicyDAO.listAccessPolicies(resource)
       _ <- Future.traverse(policiesToDelete) {accessPolicyDAO.deletePolicy}
-      _ <- accessPolicyDAO.deleteResource(resource)
+      _ <- maybeDeleteResource(resource)
       _ <- Future.traverse(policiesToDelete) { policy => cloudExtensions.onGroupDelete(policy.email) }
     } yield ()
+  }
+
+  private def maybeDeleteResource(resource: Resource): Future[Unit] = {
+    resourceTypes.get(resource.resourceTypeName) match {
+      case Some(resourceType) if resourceType.reuseIds => accessPolicyDAO.deleteResource(resource)
+      case _ => Future.successful()
+    }
   }
 
   def hasPermission(resource: Resource, action: ResourceAction, userInfo: UserInfo): Future[Boolean] = {

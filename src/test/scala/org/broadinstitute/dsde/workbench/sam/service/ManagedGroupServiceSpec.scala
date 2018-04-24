@@ -5,7 +5,7 @@ import com.typesafe.config.ConfigFactory
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
-import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
+import org.broadinstitute.dsde.workbench.sam.config.{DirectoryConfig, _}
 import org.broadinstitute.dsde.workbench.sam.directory.JndiDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
 import org.broadinstitute.dsde.workbench.sam.model._
@@ -25,7 +25,8 @@ import scala.concurrent.Future
 class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport with MockitoSugar
   with BeforeAndAfter with BeforeAndAfterAll with ScalaFutures with OptionValues {
 
-  val directoryConfig = ConfigFactory.load().as[DirectoryConfig]("directory")
+  private val config = ConfigFactory.load()
+  val directoryConfig = config.as[DirectoryConfig]("directory")
   val dirDAO = new JndiDirectoryDAO(directoryConfig)
   val policyDAO = new JndiAccessPolicyDAO(directoryConfig)
   val schemaDao = new JndiSchemaDAO(directoryConfig)
@@ -34,18 +35,15 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
   private val expectedResource = Resource(ManagedGroupService.managedGroupTypeName, resourceId)
   private val adminPolicy = ResourceAndPolicyName(expectedResource, ManagedGroupService.adminPolicyName)
   private val memberPolicy = ResourceAndPolicyName(expectedResource, ManagedGroupService.memberPolicyName)
-  private val accessPolicyNames = Set(ManagedGroupService.adminPolicyName, ManagedGroupService.memberPolicyName)
-  private val policyActions: Set[ResourceAction] = accessPolicyNames.flatMap(policyName => Set(SamResourceActions.sharePolicy(policyName), SamResourceActions.readPolicy(policyName)))
-  private val resourceActions = Set(ResourceAction("delete")) union policyActions
-  private val resourceActionPatterns = resourceActions.map(action => ResourceActionPattern(action.value))
-  private val defaultOwnerRole = ResourceRole(ManagedGroupService.adminRoleName, resourceActions)
-  private val defaultRoles = Set(defaultOwnerRole, ResourceRole(ManagedGroupService.memberRoleName, Set.empty))
-  private val managedGroupResourceType = ResourceType(ManagedGroupService.managedGroupTypeName, resourceActionPatterns, defaultRoles, ManagedGroupService.adminRoleName)
-  private val resourceTypes = Map(managedGroupResourceType.name -> managedGroupResourceType)
-  private val testDomain = "example.com"
-  private val resourceService = new ResourceService(resourceTypes, policyDAO, dirDAO, NoExtensions, testDomain)
 
-  private val managedGroupService = new ManagedGroupService(resourceService, resourceTypes, policyDAO, dirDAO, NoExtensions, testDomain)
+  //Note: we intentionally use the Managed Group resource type loaded from reference.conf for the tests here.
+  private val resourceTypes = config.as[Map[String, ResourceType]]("resourceTypes").values.toSet
+  private val resourceTypeMap = resourceTypes.map(rt => rt.name -> rt).toMap
+  private val managedGroupResourceType = resourceTypeMap.getOrElse(ResourceTypeName("managed-group"), throw new Error("Failed to load managed-group resource type from reference.conf"))
+  private val testDomain = "example.com"
+
+  private val resourceService = new ResourceService(resourceTypeMap, policyDAO, dirDAO, NoExtensions, testDomain)
+  private val managedGroupService = new ManagedGroupService(resourceService, resourceTypeMap, policyDAO, dirDAO, NoExtensions, testDomain)
 
   private val dummyUserInfo = UserInfo(OAuth2BearerToken("token"), WorkbenchUserId("userid"), WorkbenchEmail("user@company.com"), 0)
 
@@ -102,7 +100,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
 
   it should "sync the new group with Google" in {
     val mockGoogleExtensions = mock[GoogleExtensions]
-    val managedGroupService = new ManagedGroupService(resourceService, resourceTypes, policyDAO, dirDAO, mockGoogleExtensions, testDomain)
+    val managedGroupService = new ManagedGroupService(resourceService, resourceTypeMap, policyDAO, dirDAO, mockGoogleExtensions, testDomain)
     val groupName = WorkbenchGroupName(resourceId.value)
 
     when(mockGoogleExtensions.publishGroup(groupName)).thenReturn(Future.successful(()))
@@ -118,6 +116,14 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     }
     exception.getMessage should include ("A resource of this type and name already exists")
     runAndWait(managedGroupService.loadManagedGroup(resourceId)) shouldEqual None
+  }
+
+  it should "succeed after a managed group with the same name has been deleted" in {
+    val groupId = ResourceId("uniqueName")
+    managedGroupResourceType.reuseIds shouldEqual true
+    assertMakeGroup(groupId.value)
+    runAndWait(managedGroupService.deleteManagedGroup(groupId))
+    assertMakeGroup(groupId.value)
   }
 
   it should "fail when the group name is too long" in {
@@ -152,7 +158,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     val mockGoogleExtensions = mock[GoogleExtensions]
     when(mockGoogleExtensions.onGroupDelete(groupEmail)).thenReturn(Future.successful(()))
     when(mockGoogleExtensions.publishGroup(WorkbenchGroupName(resourceId.value))).thenReturn(Future.successful(()))
-    val managedGroupService = new ManagedGroupService(resourceService, resourceTypes, policyDAO, dirDAO, mockGoogleExtensions, testDomain)
+    val managedGroupService = new ManagedGroupService(resourceService, resourceTypeMap, policyDAO, dirDAO, mockGoogleExtensions, testDomain)
 
     assertMakeGroup(managedGroupService = managedGroupService)
     runAndWait(managedGroupService.deleteManagedGroup(resourceId))
@@ -178,7 +184,6 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
 
     runAndWait(managedGroupService.loadManagedGroup(managedGroup.resourceId)) shouldNot be (None)
     runAndWait(dirDAO.loadGroup(parentGroup.id)).get.members shouldEqual Set(managedGroupName)
-
   }
 
   "ManagedGroupService listPolicyMemberEmails" should "return a list of email addresses for the groups admin policy" in {
@@ -317,7 +322,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     // List Managed Group memberships for users and assert that memberships are only returned for managed groups
     val newResourceType = managedGroupResourceType.copy(name = ResourceTypeName("somethingElse"))
     makeResourceType(newResourceType)
-    val resTypes = resourceTypes + (newResourceType.name -> newResourceType)
+    val resTypes = resourceTypeMap + (newResourceType.name -> newResourceType)
 
     val resService = new ResourceService(resTypes, policyDAO, dirDAO, NoExtensions, testDomain)
     val mgService = new ManagedGroupService(resService, resTypes, policyDAO, dirDAO, NoExtensions, testDomain)

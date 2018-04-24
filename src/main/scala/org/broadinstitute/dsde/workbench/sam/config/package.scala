@@ -38,7 +38,8 @@ package object config {
         ResourceTypeName(uqPath),
         config.as[Set[String]](s"$uqPath.actionPatterns").map(ResourceActionPattern),
         config.as[Map[String, ResourceRole]](s"$uqPath.roles").values.toSet,
-        ResourceRoleName(config.getString(s"$uqPath.ownerRoleName"))
+        ResourceRoleName(config.getString(s"$uqPath.ownerRoleName")),
+        config.getBoolean(s"$uqPath.reuseIds")
       )
     }
   }
