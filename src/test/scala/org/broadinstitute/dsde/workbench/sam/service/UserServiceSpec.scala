@@ -7,7 +7,7 @@ import com.typesafe.config.ConfigFactory
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
-import org.broadinstitute.dsde.workbench.sam.config.{DirectoryConfig, PetServiceAccountConfig}
+import org.broadinstitute.dsde.workbench.sam.config.{DirectoryConfig, PetServiceAccountConfig, SchemaLockConfig}
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
 import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryDAO, JndiDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, UserStatus, UserStatusDetails}
@@ -37,9 +37,10 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
 
   lazy val config = ConfigFactory.load()
   lazy val directoryConfig = config.as[DirectoryConfig]("directory")
+  lazy val schemaLockConfig = ConfigFactory.load().as[SchemaLockConfig]("schemaLock")
   lazy val petServiceAccountConfig = config.as[PetServiceAccountConfig]("petServiceAccount")
   lazy val dirDAO = new JndiDirectoryDAO(directoryConfig)
-  lazy val schemaDao = new JndiSchemaDAO(directoryConfig)
+  lazy val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
   var service: UserService = _
   var googleExtensions: GoogleExtensions = _

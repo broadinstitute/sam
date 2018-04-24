@@ -7,7 +7,7 @@ import com.typesafe.config.ConfigFactory
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
-import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
+import org.broadinstitute.dsde.workbench.sam.config.{DirectoryConfig, SchemaLockConfig}
 import org.broadinstitute.dsde.workbench.sam.directory.JndiDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
 import org.broadinstitute.dsde.workbench.sam.model._
@@ -28,9 +28,10 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
   with BeforeAndAfter with BeforeAndAfterAll with ScalaFutures with OptionValues {
 
   val directoryConfig = ConfigFactory.load().as[DirectoryConfig]("directory")
+  val schemaLockConfig = ConfigFactory.load().as[SchemaLockConfig]("schemaLock")
   val dirDAO = new JndiDirectoryDAO(directoryConfig)
   val policyDAO = new JndiAccessPolicyDAO(directoryConfig)
-  val schemaDao = new JndiSchemaDAO(directoryConfig)
+  val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
   private val resourceId = ResourceId("myNewGroup")
   private val expectedResource = Resource(ManagedGroupService.managedGroupTypeName, resourceId)

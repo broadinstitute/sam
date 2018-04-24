@@ -16,6 +16,7 @@ trait DirectorySubjectNameSupport extends JndiSupport {
   val peopleOu = s"ou=people,${directoryConfig.baseDn}"
   val groupsOu = s"ou=groups,${directoryConfig.baseDn}"
   val resourcesOu = s"ou=resources,${directoryConfig.baseDn}"
+  val schemaLockOu = s"ou=schemaLock,${directoryConfig.baseDn}"
 
   protected def groupDn(groupId: WorkbenchGroupIdentity) = {
     groupId match {
@@ -28,6 +29,7 @@ trait DirectorySubjectNameSupport extends JndiSupport {
   protected def petDn(petServiceAccountId: PetServiceAccountId) = s"${Attr.project}=${petServiceAccountId.project.value},${userDn(petServiceAccountId.userId)}"
   protected def resourceTypeDn(resourceTypeName: ResourceTypeName) = s"${Attr.resourceType}=${resourceTypeName.value},$resourcesOu"
   protected def resourceDn(resource: Resource) = s"${Attr.resourceId}=${resource.resourceId.value},${resourceTypeDn(resource.resourceTypeName)}"
+  protected def schemaLockDn(schemaVersion: Int) = s"schemaVersion=$schemaVersion,$schemaLockOu"
   protected def policyDn(resourceAndPolicyName: ResourceAndPolicyName): String = s"${Attr.policy}=${resourceAndPolicyName.accessPolicyName.value},${resourceDn(resourceAndPolicyName.resource)}"
 
   protected def subjectDn(subject: WorkbenchSubject) = subject match {
