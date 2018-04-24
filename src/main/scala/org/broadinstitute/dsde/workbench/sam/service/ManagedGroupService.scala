@@ -134,7 +134,7 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
 
   def requestAccess(resourceId: ResourceId, requesterUserId: WorkbenchUserId): Future[Unit] = {
     val resourceAndPolicyName = ResourceAndPolicyName(Resource(ManagedGroupService.managedGroupTypeName, resourceId), ManagedGroupService.adminPolicyName)
-    accessPolicyDAO.listFlattenedPolicyUsers(resourceAndPolicyName).map { users =>
+    accessPolicyDAO.listFlattenedPolicyMembers(resourceAndPolicyName).map { users =>
       val notifications = users.map { recipientUserId =>
         Notifications.GroupAccessRequestNotification(recipientUserId, WorkbenchGroupName(resourceId.value).value, users, requesterUserId)
       }
@@ -160,9 +160,9 @@ object ManagedGroupService {
 
   def getPolicyName(policyName: String): ManagedGroupPolicyName = {
     policyName match {
-      case "member" => ManagedGroupService.memberPolicyName
-      case "admin" => ManagedGroupService.adminPolicyName
-      case "admin-notifiers" => ManagedGroupService.adminNotifierPolicyName
+      case `memberValue` => ManagedGroupService.memberPolicyName
+      case `adminValue` => ManagedGroupService.adminPolicyName
+      case `adminNotifierValue` => ManagedGroupService.adminNotifierPolicyName
       case _ => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "Policy name for managed groups must be one of: [\"admins\", \"members\"]"))
     }
   }

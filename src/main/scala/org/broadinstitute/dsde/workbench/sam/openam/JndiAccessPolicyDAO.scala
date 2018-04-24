@@ -194,7 +194,7 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
     }.get
   }
 
-  override def listFlattenedPolicyUsers(resourceAndPolicyName: ResourceAndPolicyName): Future[Set[WorkbenchUserId]] = withContext { ctx =>
+  override def listFlattenedPolicyMembers(resourceAndPolicyName: ResourceAndPolicyName): Future[Set[WorkbenchUserId]] = withContext { ctx =>
     ctx.search(peopleOu, new BasicAttributes(Attr.memberOf, policyDn(resourceAndPolicyName), true)).extractResultsAndClose.map { result =>
       unmarshalUser(result.getAttributes).id
     }.toSet
