@@ -33,6 +33,8 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     val mockStatusService = new StatusService(directoryDAO, NoExtensions)
     val mockManagedGroupService = new ManagedGroupService(mockResourceService, resourceTypes, accessPolicyDAO, directoryDAO, NoExtensions, emailDomain)
 
+    mockUserService.createUser(WorkbenchUser(defaultUserInfo.userId, defaultUserInfo.userEmail))
+
     new TestSamRoutes(mockResourceService, mockUserService, mockStatusService, mockManagedGroupService, userInfo, directoryDAO)
   }
 
@@ -111,10 +113,6 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
   }
 
   private def createUserResourcePolicy(members: AccessPolicyMembership, resourceType: ResourceType, samRoutes: TestSamRoutes, resourceId: ResourceId, policyName: AccessPolicyName): Unit = {
-    Post("/register/user") ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.Created
-    }
-
     Post(s"/api/resource/${resourceType.name}/${resourceId.value}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NoContent
     }
@@ -440,7 +438,8 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     val samRoutes = createSamRoutes(Map(resourceType.name -> resourceType))
 
     runAndWait(samRoutes.resourceService.createResourceType(resourceType))
-    runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), None, UserInfo(OAuth2BearerToken("accessToken"), WorkbenchUserId("user2"), WorkbenchEmail("user2@example.com"), 0)))
+    runAndWait(samRoutes.userService.createUser(WorkbenchUser(WorkbenchUserId("user2"), WorkbenchEmail("user2@example.com"))))
+    runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), UserInfo(OAuth2BearerToken("accessToken"), WorkbenchUserId("user2"), WorkbenchEmail("user2@example.com"), 0)))
 
     //Verify resource exists by checking for conflict on recreate
     Post(s"/api/resource/${resourceType.name}/foo") ~> samRoutes.route ~> check {
@@ -478,7 +477,7 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
     val testUser = WorkbenchUser(WorkbenchUserId("testuser"), WorkbenchEmail("testuser@foo.com"))
 
-    runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), None, defaultUserInfo))
+    runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), defaultUserInfo))
 
     runAndWait(samRoutes.userService.createUser(testUser))
 
@@ -497,7 +496,7 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
     val testUser = WorkbenchUser(WorkbenchUserId("testuser"), WorkbenchEmail("testuser@foo.com"))
 
-    runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), None, defaultUserInfo))
+    runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), defaultUserInfo))
 
     runAndWait(samRoutes.userService.createUser(testUser))
 
@@ -512,7 +511,7 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
     val testUser = WorkbenchUser(WorkbenchUserId("testuser"), WorkbenchEmail("testuser@foo.com"))
 
-    runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), None, defaultUserInfo))
+    runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), defaultUserInfo))
 
     //runAndWait(samRoutes.userService.createUser(testUser))
 
@@ -527,7 +526,7 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
     val testUser = WorkbenchUser(WorkbenchUserId("testuser"), WorkbenchEmail("testuser@foo.com"))
 
-    runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), None, defaultUserInfo))
+    runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), defaultUserInfo))
 
     runAndWait(samRoutes.userService.createUser(testUser))
 
@@ -542,9 +541,9 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
     val testUser = UserInfo(OAuth2BearerToken("token"), WorkbenchUserId("testuser"), WorkbenchEmail("testuser@foo.com"), 0)
 
-    runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), None, testUser))
-
     runAndWait(samRoutes.userService.createUser(WorkbenchUser(testUser.userId, testUser.userEmail)))
+
+    runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), testUser))
 
     Put(s"/api/resource/${resourceType.name}/foo/policies/${resourceType.ownerRoleName}/memberEmails/${testUser.userEmail}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
@@ -557,7 +556,7 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
     val testUser = WorkbenchUser(WorkbenchUserId("testuser"), WorkbenchEmail("testuser@foo.com"))
 
-    runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), None, defaultUserInfo))
+    runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), defaultUserInfo))
 
     runAndWait(samRoutes.userService.createUser(testUser))
 
@@ -574,7 +573,7 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
     val testUser = WorkbenchUser(WorkbenchUserId("testuser"), WorkbenchEmail("testuser@foo.com"))
 
-    runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), None, defaultUserInfo))
+    runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), defaultUserInfo))
 
     runAndWait(samRoutes.userService.createUser(testUser))
 
@@ -591,7 +590,7 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
     val testUser = WorkbenchUser(WorkbenchUserId("testuser"), WorkbenchEmail("testuser@foo.com"))
 
-    runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), None, defaultUserInfo))
+    runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), defaultUserInfo))
 
     //runAndWait(samRoutes.userService.createUser(testUser))
 
@@ -608,7 +607,7 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
     val testUser = WorkbenchUser(WorkbenchUserId("testuser"), WorkbenchEmail("testuser@foo.com"))
 
-    runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), None, defaultUserInfo))
+    runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), defaultUserInfo))
 
     runAndWait(samRoutes.userService.createUser(testUser))
 
@@ -625,9 +624,9 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
     val testUser = UserInfo(OAuth2BearerToken("token"), WorkbenchUserId("testuser"), WorkbenchEmail("testuser@foo.com"), 0)
 
-    runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), None, testUser))
-
     runAndWait(samRoutes.userService.createUser(WorkbenchUser(testUser.userId, testUser.userEmail)))
+
+    runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), testUser))
 
     runAndWait(samRoutes.resourceService.addSubjectToPolicy(ResourceAndPolicyName(Resource(resourceType.name,  ResourceId("foo")), AccessPolicyName(resourceType.ownerRoleName.value)), testUser.userId))
 

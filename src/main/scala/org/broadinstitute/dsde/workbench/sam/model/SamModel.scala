@@ -44,6 +44,8 @@ object SamJsonSupport {
   implicit val ManagedGroupMembershipEntryFormat = jsonFormat3(ManagedGroupMembershipEntry)
 
   implicit val GroupSyncResponseFormat = jsonFormat1(GroupSyncResponse)
+
+  implicit val CreateResourceRequestFormat = jsonFormat2(CreateResourceRequest)
 }
 
 object SamResourceActions {
@@ -87,6 +89,7 @@ case class ResourceAndPolicyName(resource: Resource, accessPolicyName: AccessPol
   override def toString: String = s"${accessPolicyName.value}.${resource.resourceId.value}.${resource.resourceTypeName.value}"
 }
 case class AccessPolicyName(value: String) extends ValueObject
+case class CreateResourceRequest(resourceId: ResourceId, policies: Map[AccessPolicyName, AccessPolicyMembership])
 
 /*
 Note that AccessPolicy IS A group, does not have a group. This makes the ldap query to list all a user's policies
