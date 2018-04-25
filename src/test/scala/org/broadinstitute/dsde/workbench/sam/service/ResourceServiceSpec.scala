@@ -142,6 +142,59 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     exception.errorReport.statusCode shouldEqual Option(StatusCodes.Conflict)
   }
 
+  it should "create resource with custom policies" in {
+    val ownerRoleName = ResourceRoleName("owner")
+    val resourceType = ResourceType(ResourceTypeName(UUID.randomUUID().toString), Set(SamResourceActionPatterns.delete, ResourceActionPattern("view")), Set(ResourceRole(ownerRoleName, Set(ResourceAction("delete"), ResourceAction("view")))), ownerRoleName)
+    val resourceName = ResourceId("resource")
+
+    runAndWait(service.createResourceType(resourceType))
+
+    val policyMembership = AccessPolicyMembership(Set(dummyUserInfo.userEmail), Set(ResourceAction("view")), Set(ownerRoleName))
+    val policyName = AccessPolicyName("foo")
+
+    runAndWait(service.createResource(
+      resourceType,
+      resourceName,
+      Map(policyName -> policyMembership),
+      dummyUserInfo
+    ))
+
+    val policies = runAndWait(service.listResourcePolicies(Resource(resourceType.name, resourceName)))
+    assertResult(Set(AccessPolicyResponseEntry(policyName, policyMembership, WorkbenchEmail("")))) {
+      policies.map(_.copy(email = WorkbenchEmail("")))
+    }
+  }
+
+  it should "prevent ownerless resource" in {
+    val ownerRoleName = ResourceRoleName("owner")
+    val resourceType = ResourceType(ResourceTypeName(UUID.randomUUID().toString), Set(SamResourceActionPatterns.delete, ResourceActionPattern("view")), Set(ResourceRole(ownerRoleName, Set(ResourceAction("delete"), ResourceAction("view")))), ownerRoleName)
+    val resourceName = ResourceId("resource")
+
+    runAndWait(service.createResourceType(resourceType))
+
+    val exception1 = intercept[WorkbenchExceptionWithErrorReport] {
+      runAndWait(service.createResource(
+        resourceType,
+        resourceName,
+        Map(AccessPolicyName("foo") -> AccessPolicyMembership(Set.empty, Set.empty, Set(ownerRoleName))),
+        dummyUserInfo
+      ))
+    }
+
+    exception1.errorReport.statusCode shouldEqual Option(StatusCodes.BadRequest)
+
+    val exception2 = intercept[WorkbenchExceptionWithErrorReport] {
+      runAndWait(service.createResource(
+        resourceType,
+        resourceName,
+        Map(AccessPolicyName("foo") -> AccessPolicyMembership(Set(dummyUserInfo.userEmail), Set.empty, Set.empty)),
+        dummyUserInfo
+      ))
+    }
+
+    exception2.errorReport.statusCode shouldEqual Option(StatusCodes.BadRequest)
+  }
+
   "listUserResourceRoles" should "list the user's role when they have at least one role" in {
     val resourceName = ResourceId("resource")
     val resource = Resource(defaultResourceType.name, resourceName)

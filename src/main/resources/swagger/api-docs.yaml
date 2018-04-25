@@ -607,12 +607,12 @@ paths:
       tags:
         - Resources
     post:
-      summary: Create a new resource
+      summary: Create a new resource, cannot be used when resource type allows id reuse
       responses:
         204:
           description: Successfully created resource
         400:
-          description: Invalid policies
+          description: Invalid policies or resource type allows id reuse
           schema:
             $ref: '#/definitions/ErrorReport'
         409:

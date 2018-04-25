@@ -45,8 +45,14 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
   }
 
   def createResource(resourceType: ResourceType, resourceId: ResourceId, policies: Map[AccessPolicyName, AccessPolicyMembership], userInfo: UserInfo): Future[Resource] = {
+    val ownerExists = policies.exists { case (_, membership) => membership.roles.contains(resourceType.ownerRoleName) && membership.memberEmails.nonEmpty }
+
+    if (!ownerExists) {
+      throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"Cannot create resource without at least 1 policy with ${resourceType.ownerRoleName.value} role and non-empty membership"))
+    }
+
     for {
-      // validate policies first, overwritePolicy below will do this again but we do it first to avoid rollback
+      // validate policies first, overwritePolicy below will do this again but we do it first to avoid rollback on errors
       _ <- Future.traverse(policies) { case (_, policyMembership) =>
         mapEmailsToSubjects(policyMembership.memberEmails).map { members: Map[WorkbenchEmail, Option[WorkbenchSubject]] =>
           validatePolicy(resourceType, policyMembership, members)
