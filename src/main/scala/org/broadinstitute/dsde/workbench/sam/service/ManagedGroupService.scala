@@ -21,7 +21,6 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
   def memberRole: ResourceRole = managedGroupType.roles.find(_.roleName == ManagedGroupService.memberRoleName).getOrElse(throw new WorkbenchException(s"${ManagedGroupService.memberRoleName} role does not exist in $managedGroupType"))
 
   def createManagedGroup(groupId: ResourceId, userInfo: UserInfo): Future[Resource] = {
-    println(s"creating ${groupId}")
     for {
       managedGroup <- resourceService.createResource(managedGroupType, groupId, userInfo)
       _ <- createPolicyForMembers(managedGroup)
@@ -39,7 +38,6 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
 
   private def createPolicyForAdminNotification(managedGroup: Resource): Future[AccessPolicy] = {
     val resourceAndPolicyName = ResourceAndPolicyName(managedGroup, ManagedGroupService.adminNotifierPolicyName)
-    println(resourceAndPolicyName)
     resourceService.createPolicy(resourceAndPolicyName, members = Set.empty, roles = Set.empty, actions = Set(SamResourceActions.notifyAdmins))
   }
 
