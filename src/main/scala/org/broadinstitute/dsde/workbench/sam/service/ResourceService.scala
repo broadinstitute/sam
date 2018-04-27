@@ -30,30 +30,44 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     accessPolicyDAO.createResourceType(resourceType.name)
   }
 
-  def createResource(resourceType: ResourceType, resourceId: ResourceId, policiesOpt: Option[Map[AccessPolicyName, AccessPolicyMembership]] = None, userInfo: UserInfo): Future[Resource] = {
-    accessPolicyDAO.createResource(Resource(resourceType.name, resourceId)) flatMap { resource =>
-      policiesOpt match {
-        case Some(policies) =>
-          Future.traverse(policies) { case (accessPolicyName, accessPolicyMembership) =>
-            val resourceAndPolicyName = ResourceAndPolicyName(Resource(resourceType.name, resourceId), accessPolicyName)
-            val loadedSubjects = Future.traverse(accessPolicyMembership.memberEmails) { directoryDAO.loadSubjectFromEmail }.map(subjOpts => subjOpts.collect { case Some(subj) => subj })
-            val roles = accessPolicyMembership.roles
-            val actions = accessPolicyMembership.actions
+  /**
+    * Create a resource with default policies. The default policies contain 1 policy with the same name as the
+    * owner role for the resourceType, has the owner role, membership contains only userInfo
+    * @param resourceType
+    * @param resourceId
+    * @param userInfo
+    * @return
+    */
+  def createResource(resourceType: ResourceType, resourceId: ResourceId, userInfo: UserInfo): Future[Resource] = {
+    val ownerRole = resourceType.roles.find(_.roleName == resourceType.ownerRoleName).getOrElse(throw new WorkbenchException(s"owner role ${resourceType.ownerRoleName} does not exist in $resourceType"))
+    val defaultPolicies: Map[AccessPolicyName, AccessPolicyMembership] = Map(AccessPolicyName(ownerRole.roleName.value) -> AccessPolicyMembership(Set(userInfo.userEmail), Set.empty, Set(ownerRole.roleName)))
+    createResource(resourceType, resourceId, defaultPolicies, userInfo)
+  }
 
-            loadedSubjects.flatMap { subjects =>
-              createPolicy(resourceAndPolicyName, subjects, roles, actions)
-            }
-          }.map {_ => Resource(resourceType.name, resourceId)}
+  def createResource(resourceType: ResourceType, resourceId: ResourceId, policies: Map[AccessPolicyName, AccessPolicyMembership], userInfo: UserInfo): Future[Resource] = {
+    val ownerExists = policies.exists { case (_, membership) => membership.roles.contains(resourceType.ownerRoleName) && membership.memberEmails.nonEmpty }
 
-        //if the user didn't specify policies to create, default to just creating the owner policy
-        case None =>
-          val role = resourceType.roles.find(_.roleName == resourceType.ownerRoleName).getOrElse(throw new WorkbenchException(s"owner role ${resourceType.ownerRoleName} does not exist in $resourceType"))
-          val subjects: Set[WorkbenchSubject] = Set(userInfo.userId)
-          val resourceAndPolicyName = ResourceAndPolicyName(resource, AccessPolicyName(role.roleName.value))
-
-          createPolicy(resourceAndPolicyName, subjects, Set(role.roleName), Set.empty).map {_ => Resource(resourceType.name, resourceId)}
-      }
+    if (!ownerExists) {
+      throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"Cannot create resource without at least 1 policy with ${resourceType.ownerRoleName.value} role and non-empty membership"))
     }
+
+    for {
+      // validate policies first, overwritePolicy below will do this again but we do it first to avoid rollback on errors
+      _ <- Future.traverse(policies) { case (_, policyMembership) =>
+        mapEmailsToSubjects(policyMembership.memberEmails).map { members: Map[WorkbenchEmail, Option[WorkbenchSubject]] =>
+          validatePolicy(resourceType, policyMembership, members)
+        }
+      }
+
+      resource <- accessPolicyDAO.createResource(Resource(resourceType.name, resourceId))
+
+      _ <- Future.traverse(policies) { case (accessPolicyName, accessPolicyMembership) =>
+        overwritePolicy(resourceType, accessPolicyName, resource, accessPolicyMembership)
+      }
+    } yield {
+      resource
+    }
+
   }
 
   def createPolicy(resourceAndPolicyName: ResourceAndPolicyName, members: Set[WorkbenchSubject], roles: Set[ResourceRoleName], actions: Set[ResourceAction]): Future[AccessPolicy] = {

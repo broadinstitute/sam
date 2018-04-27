@@ -46,7 +46,17 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
         pathPrefix(Segment) { resourceTypeName =>
           withResourceType(ResourceTypeName(resourceTypeName)) { resourceType =>
             pathEndOrSingleSlash {
-              complete(resourceService.listUserAccessPolicies(resourceType, userInfo))
+              get {
+                complete(resourceService.listUserAccessPolicies(resourceType, userInfo))
+              } ~
+              post {
+                entity(as[CreateResourceRequest]) { createResourceRequest =>
+                  if (resourceType.reuseIds) {
+                    throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "this api may not be used for resource types that allow id reuse"))
+                  }
+                  complete(resourceService.createResource(resourceType, createResourceRequest.resourceId, createResourceRequest.policies, userInfo).map(_ => StatusCodes.NoContent))
+                }
+              }
             } ~
             pathPrefix(Segment) { resourceId =>
 
@@ -59,9 +69,7 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
                   }
                 } ~
                 post {
-                  withOptionalEntity(as[Map[AccessPolicyName, AccessPolicyMembership]]) { policies =>
-                    complete(resourceService.createResource(resourceType, ResourceId(resourceId), policies, userInfo).map(_ => StatusCodes.NoContent))
-                  }
+                  complete(resourceService.createResource(resourceType, ResourceId(resourceId), userInfo).map(_ => StatusCodes.NoContent))
                 }
               } ~
               pathPrefix("action") {

@@ -78,6 +78,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
   before {
     runAndWait(schemaDao.clearDatabase())
     runAndWait(schemaDao.createOrgUnits())
+    runAndWait(dirDAO.createUser(WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)))
   }
 
   "ManagedGroupService create" should "create a managed group with admin and member policies" in {
@@ -187,7 +188,6 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
   }
 
   "ManagedGroupService listPolicyMemberEmails" should "return a list of email addresses for the groups admin policy" in {
-    runAndWait(dirDAO.createUser(WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)))
     val managedGroup = assertMakeGroup()
     runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName)) shouldEqual Set(dummyUserInfo.userEmail)
     runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.memberPolicyName)) shouldEqual Set.empty
@@ -203,7 +203,6 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     val dummyAdmin = WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)
     val otherAdmin = WorkbenchUser(WorkbenchUserId("admin2"), WorkbenchEmail("admin2@foo.test"))
     val someGroupEmail = WorkbenchEmail("someGroup@some.org")
-    runAndWait(dirDAO.createUser(dummyAdmin))
     runAndWait(dirDAO.createUser(otherAdmin))
     val managedGroup = assertMakeGroup()
     runAndWait(dirDAO.createGroup(BasicWorkbenchGroup(WorkbenchGroupName("someGroup"), Set.empty, someGroupEmail)))
@@ -248,7 +247,6 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
 
   "ManagedGroupService addSubjectToPolicy" should "successfully add the subject to the existing policy for the group" in {
     val adminUser = WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)
-    runAndWait(dirDAO.createUser(adminUser))
 
     val managedGroup = assertMakeGroup()
 
@@ -264,7 +262,6 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
 
   it should "succeed without changing if the email address is already in the policy" in {
     val adminUser = WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)
-    runAndWait(dirDAO.createUser(adminUser))
 
     val managedGroup = assertMakeGroup()
 
@@ -277,7 +274,6 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
   // The correct behavior is enforced in the routing, but is that the right place?  Should it be enforced in the Service class?
   it should "succeed even if the subject is doesn't exist" in {
     val adminUser = WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)
-    runAndWait(dirDAO.createUser(adminUser))
 
     val managedGroup = assertMakeGroup()
 
@@ -289,7 +285,6 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
 
   "ManagedGroupService removeSubjectFromPolicy" should "successfully remove the subject from the policy for the group" in {
     val adminUser = WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)
-    runAndWait(dirDAO.createUser(adminUser))
 
     val managedGroup = assertMakeGroup()
 
@@ -302,7 +297,6 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
 
   it should "not do anything if the subject is not a member of the policy" in {
     val adminUser = WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)
-    runAndWait(dirDAO.createUser(adminUser))
 
     val managedGroup = assertMakeGroup()
 
@@ -313,7 +307,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName)) shouldEqual Set(adminUser.email)
   }
 
-  private def makeResource(resourceType: ResourceType, resourceId: ResourceId, userInfo: UserInfo): Resource = runAndWait(resourceService.createResource(resourceType, resourceId, None, userInfo))
+  private def makeResource(resourceType: ResourceType, resourceId: ResourceId, userInfo: UserInfo): Resource = runAndWait(resourceService.createResource(resourceType, resourceId, userInfo))
 
   "ManagedGroupService listGroups" should "return the list of groups that passed user belongs to" in {
     // Setup multiple managed groups owned by different users.
