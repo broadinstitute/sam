@@ -40,7 +40,7 @@ class MockAccessPolicyDAOSpec extends FlatSpec with Matchers with TestSupport wi
     val accessPolicyNames = Set(ManagedGroupService.adminPolicyName, ManagedGroupService.memberPolicyName)
     val policyActions: Set[ResourceAction] = accessPolicyNames.flatMap(policyName => Set(SamResourceActions.sharePolicy(policyName), SamResourceActions.readPolicy(policyName)))
     val resourceActions: Set[ResourceAction] = Set(ResourceAction("delete")) union policyActions
-    val resourceActionPatterns: Set[ResourceActionPattern] = resourceActions.map(action => ResourceActionPattern(action.value))
+    val resourceActionPatterns: Set[ResourceActionPattern] = resourceActions.map(action => ResourceActionPattern(action.value, "", false))
     val defaultOwnerRole = ResourceRole(ManagedGroupService.adminRoleName, resourceActions)
     val defaultMemberRole = ResourceRole(ManagedGroupService.memberRoleName, Set.empty)
     val defaultRoles = Set(defaultOwnerRole, defaultMemberRole)

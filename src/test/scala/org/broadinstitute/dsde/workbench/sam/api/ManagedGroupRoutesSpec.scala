@@ -20,7 +20,7 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
   private val accessPolicyNames = Set(ManagedGroupService.adminPolicyName, ManagedGroupService.memberPolicyName)
   private val policyActions: Set[ResourceAction] = accessPolicyNames.flatMap(policyName => Set(SamResourceActions.sharePolicy(policyName), SamResourceActions.readPolicy(policyName)))
   private val resourceActions = Set(ResourceAction("delete")) union policyActions
-  private val resourceActionPatterns = resourceActions.map(action => ResourceActionPattern(action.value))
+  private val resourceActionPatterns = resourceActions.map(action => ResourceActionPattern(action.value, "", false))
   private val defaultOwnerRole = ResourceRole(ManagedGroupService.adminRoleName, resourceActions)
   private val defaultMemberRole = ResourceRole(ManagedGroupService.memberRoleName, Set.empty)
   private val defaultRoles = Set(defaultOwnerRole, defaultMemberRole)
