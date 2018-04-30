@@ -21,4 +21,5 @@ trait AccessPolicyDAO {
   def listAccessPolicies(resourceTypeName: ResourceTypeName, user: WorkbenchUserId): Future[Set[ResourceIdAndPolicyName]]
   def listAccessPolicies(resource: Resource): Future[Set[AccessPolicy]]
   def listAccessPoliciesForUser(resource: Resource, user: WorkbenchUserId): Future[Set[AccessPolicy]]
+  def listFlattenedPolicyMembers(resourceAndPolicyName: ResourceAndPolicyName): Future[Set[WorkbenchUserId]]
 }

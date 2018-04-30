@@ -23,6 +23,8 @@ import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, SamApplic
 import org.broadinstitute.dsde.workbench.util.FutureSupport
 import org.broadinstitute.dsde.workbench.util.health.{HealthMonitor, SubsystemStatus, Subsystems}
 import WorkbenchIdentityJsonSupport.WorkbenchGroupNameFormat
+import org.broadinstitute.dsde.workbench.dataaccess.NotificationDAO
+import org.broadinstitute.dsde.workbench.model.Notifications.Notification
 import spray.json._
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport.ResourceAndPolicyNameFormat
 
@@ -35,7 +37,7 @@ object GoogleExtensions {
   val getPetPrivateKeyAction = ResourceAction("get_pet_private_key")
 }
 
-class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: AccessPolicyDAO, val googleDirectoryDAO: GoogleDirectoryDAO, val googlePubSubDAO: GooglePubSubDAO, val googleIamDAO: GoogleIamDAO, val googleStorageDAO: GoogleStorageDAO, val googleKeyCache: GoogleKeyCache, val googleServicesConfig: GoogleServicesConfig, val petServiceAccountConfig: PetServiceAccountConfig, extensionResourceType: ResourceType)(implicit val executionContext: ExecutionContext) extends LazyLogging with FutureSupport with CloudExtensions {
+class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: AccessPolicyDAO, val googleDirectoryDAO: GoogleDirectoryDAO, val googlePubSubDAO: GooglePubSubDAO, val googleIamDAO: GoogleIamDAO, val googleStorageDAO: GoogleStorageDAO, val googleKeyCache: GoogleKeyCache, val notificationDAO: NotificationDAO, val googleServicesConfig: GoogleServicesConfig, val petServiceAccountConfig: PetServiceAccountConfig, extensionResourceType: ResourceType)(implicit val executionContext: ExecutionContext) extends LazyLogging with FutureSupport with CloudExtensions {
 
   private val maxGroupEmailLength = 64
 
@@ -383,6 +385,10 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
     val displayName = s"Pet Service Account for user [${user.email.value}]"
 
     (ServiceAccountName(serviceAccountName), ServiceAccountDisplayName(displayName))
+  }
+
+  override def fireAndForgetNotifications[T <: Notification](notifications: Set[T]): Unit = {
+    notificationDAO.fireAndForgetNotifications(notifications)
   }
 
   override def getUserProxy(userEmail: WorkbenchEmail): Future[Option[WorkbenchEmail]] = {

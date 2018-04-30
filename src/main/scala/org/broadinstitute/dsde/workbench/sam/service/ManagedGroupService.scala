@@ -18,29 +18,33 @@ import scala.concurrent.Future
 class ManagedGroupService(private val resourceService: ResourceService, private val resourceTypes: Map[ResourceTypeName, ResourceType], private val accessPolicyDAO: AccessPolicyDAO, private val directoryDAO: DirectoryDAO, private val cloudExtensions: CloudExtensions, private val emailDomain: String) extends LazyLogging {
 
   def managedGroupType: ResourceType = resourceTypes.getOrElse(ManagedGroupService.managedGroupTypeName, throw new WorkbenchException(s"resource type ${ManagedGroupService.managedGroupTypeName.value} not found"))
-  def memberRole = managedGroupType.roles.find(_.roleName == ManagedGroupService.memberRoleName).getOrElse(throw new WorkbenchException(s"${ManagedGroupService.memberRoleName} role does not exist in $managedGroupType"))
+  def memberRole: ResourceRole = managedGroupType.roles.find(_.roleName == ManagedGroupService.memberRoleName).getOrElse(throw new WorkbenchException(s"${ManagedGroupService.memberRoleName} role does not exist in $managedGroupType"))
 
   def createManagedGroup(groupId: ResourceId, userInfo: UserInfo): Future[Resource] = {
     for {
       managedGroup <- resourceService.createResource(managedGroupType, groupId, userInfo)
       _ <- createPolicyForMembers(managedGroup)
-      policies <- accessPolicyDAO.listAccessPolicies(managedGroup)
-      workbenchGroup <- createAggregateGroup(managedGroup, policies)
+      _ <- createPolicyForAdminNotification(managedGroup)
+      workbenchGroup <- createAggregateGroup(managedGroup, ManagedGroupService.makeMembershipPolicyNames(managedGroup))
       _ <- cloudExtensions.publishGroup(workbenchGroup.id)
     } yield managedGroup
   }
 
   private def createPolicyForMembers(managedGroup: Resource): Future[AccessPolicy] = {
-    val accessPolicyName = AccessPolicyName(memberRole.roleName.value)
-    val resourceAndPolicyName = ResourceAndPolicyName(managedGroup, accessPolicyName)
+    val resourceAndPolicyName = ResourceAndPolicyName(managedGroup, ManagedGroupService.memberPolicyName)
+
     resourceService.createPolicy(resourceAndPolicyName, members = Set.empty, Set(memberRole.roleName), actions = Set.empty)
   }
 
-  private def createAggregateGroup(resource: Resource, componentPolicies: Set[AccessPolicy]): Future[BasicWorkbenchGroup] = {
+  private def createPolicyForAdminNotification(managedGroup: Resource): Future[AccessPolicy] = {
+    val resourceAndPolicyName = ResourceAndPolicyName(managedGroup, ManagedGroupService.adminNotifierPolicyName)
+    resourceService.createPolicy(resourceAndPolicyName, members = Set.empty, roles = Set.empty, actions = Set(SamResourceActions.notifyAdmins))
+  }
+
+  private def createAggregateGroup(resource: Resource, componentPolicies: Set[ResourceAndPolicyName]): Future[BasicWorkbenchGroup] = {
     val email = generateManagedGroupEmail(resource.resourceId)
     val workbenchGroupName = WorkbenchGroupName(resource.resourceId.value)
-    val groupMembers: Set[WorkbenchSubject] = componentPolicies.map(_.id)
-    directoryDAO.createGroup(BasicWorkbenchGroup(workbenchGroupName, groupMembers, email))
+    directoryDAO.createGroup(BasicWorkbenchGroup(workbenchGroupName, componentPolicies.toSet, email))
   }
 
   private def generateManagedGroupEmail(resourceId: ResourceId): WorkbenchEmail = {
@@ -127,6 +131,17 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
     val resourceAndPolicyName = ResourceAndPolicyName(Resource(ManagedGroupService.managedGroupTypeName, resourceId), policyName)
     resourceService.removeSubjectFromPolicy(resourceAndPolicyName, subject)
   }
+
+  def requestAccess(resourceId: ResourceId, requesterUserId: WorkbenchUserId): Future[Unit] = {
+    val resourceAndPolicyName = ResourceAndPolicyName(Resource(ManagedGroupService.managedGroupTypeName, resourceId), ManagedGroupService.adminPolicyName)
+    accessPolicyDAO.listFlattenedPolicyMembers(resourceAndPolicyName).map { users =>
+      val notifications = users.map { recipientUserId =>
+        Notifications.GroupAccessRequestNotification(recipientUserId, WorkbenchGroupName(resourceId.value).value, users, requesterUserId)
+      }
+
+      cloudExtensions.fireAndForgetNotifications(notifications)
+    }
+  }
 }
 
 object ManagedGroupService {
@@ -134,31 +149,39 @@ object ManagedGroupService {
   val groupNameRe = "^[A-z0-9_-]+$".r
   private val memberValue = "member"
   private val adminValue = "admin"
+  private val adminNotifierValue = "admin-notifier"
 
   type ManagedGroupPolicyName = AccessPolicyName with AllowedManagedGroupPolicyName
   // In lieu of an Enumeration, this trait is being used to ensure that we can only have these policies in a Managed Group
   sealed trait AllowedManagedGroupPolicyName
   val adminPolicyName: ManagedGroupPolicyName = new AccessPolicyName(adminValue) with AllowedManagedGroupPolicyName
   val memberPolicyName: ManagedGroupPolicyName = new AccessPolicyName(memberValue) with AllowedManagedGroupPolicyName
+  val adminNotifierPolicyName: ManagedGroupPolicyName = new AccessPolicyName(adminNotifierValue) with AllowedManagedGroupPolicyName
 
   def getPolicyName(policyName: String): ManagedGroupPolicyName = {
     policyName match {
-      case "member" => ManagedGroupService.memberPolicyName
-      case "admin" => ManagedGroupService.adminPolicyName
-      case _ => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "Policy name for managed groups must be one of: [\"admin\", \"member\"]"))
+      case `memberValue` => ManagedGroupService.memberPolicyName
+      case `adminValue` => ManagedGroupService.adminPolicyName
+      case `adminNotifierValue` => ManagedGroupService.adminNotifierPolicyName
+      case _ => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "Policy name for managed groups must be one of: [\"admins\", \"members\"]"))
     }
   }
+
+  def makeMembershipPolicyNames(r: Resource): Set[ResourceAndPolicyName] =
+    Set(adminPolicyName, memberPolicyName).map(ResourceAndPolicyName(r, _))
 
   type MangedGroupRoleName = ResourceRoleName with AllowedManagedGroupRoleName
   // In lieu of an Enumeration, this trait is being used to ensure that we can only have these Roles in a Managed Group
   sealed trait AllowedManagedGroupRoleName
   val adminRoleName = new ResourceRoleName(adminValue) with AllowedManagedGroupRoleName
   val memberRoleName = new ResourceRoleName(memberValue) with AllowedManagedGroupRoleName
+  val adminNotifierRoleName = new ResourceRoleName(adminNotifierValue) with AllowedManagedGroupRoleName
 
   def getRoleName(roleName: String): MangedGroupRoleName = {
     roleName match {
       case `memberValue` => ManagedGroupService.memberRoleName
       case `adminValue` => ManagedGroupService.adminRoleName
+      case `adminNotifierValue` => ManagedGroupService.adminNotifierRoleName
       case _ => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Role name for managed groups must be one of: ['$adminValue', '$memberValue']"))
     }
   }
