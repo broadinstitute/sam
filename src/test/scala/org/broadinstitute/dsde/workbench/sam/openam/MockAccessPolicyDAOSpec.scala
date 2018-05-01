@@ -44,7 +44,8 @@ class MockAccessPolicyDAOSpec extends FlatSpec with Matchers with TestSupport wi
     val resourceActionPatterns: Set[ResourceActionPattern] = resourceActions.map(action => ResourceActionPattern(action.value))
     val defaultOwnerRole = ResourceRole(ManagedGroupService.adminRoleName, resourceActions)
     val defaultMemberRole = ResourceRole(ManagedGroupService.memberRoleName, Set.empty)
-    val defaultRoles = Set(defaultOwnerRole, defaultMemberRole)
+    val defaultAdminNotifierRole = ResourceRole(ManagedGroupService.adminNotifierRoleName, Set(ResourceAction("notify_admins")))
+    val defaultRoles = Set(defaultOwnerRole, defaultMemberRole, defaultAdminNotifierRole)
     val managedGroupResourceType = ResourceType(ManagedGroupService.managedGroupTypeName, resourceActionPatterns, defaultRoles, ManagedGroupService.adminRoleName)
     val resourceTypes = Map(managedGroupResourceType.name -> managedGroupResourceType)
     val emailDomain = "example.com"

@@ -23,7 +23,8 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
   private val resourceActionPatterns = resourceActions.map(action => ResourceActionPattern(action.value))
   private val defaultOwnerRole = ResourceRole(ManagedGroupService.adminRoleName, resourceActions)
   private val defaultMemberRole = ResourceRole(ManagedGroupService.memberRoleName, Set.empty)
-  private val defaultRoles = Set(defaultOwnerRole, defaultMemberRole)
+  private val defaultAdminNotifierRole = ResourceRole(ManagedGroupService.adminNotifierRoleName, Set(ResourceAction("notify_admins")))
+  private val defaultRoles = Set(defaultOwnerRole, defaultMemberRole, defaultAdminNotifierRole)
   private val managedGroupResourceType = ResourceType(ManagedGroupService.managedGroupTypeName, resourceActionPatterns, defaultRoles, ManagedGroupService.adminRoleName)
   private val resourceTypes = Map(managedGroupResourceType.name -> managedGroupResourceType)
   private val groupId = "foo"
