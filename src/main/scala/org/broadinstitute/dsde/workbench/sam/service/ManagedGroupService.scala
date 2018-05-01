@@ -97,8 +97,10 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
       emailLookup <- directoryDAO.batchLoadGroupEmail(ripns.map(ripn => WorkbenchGroupName(ripn.resourceId.value)))
     } yield {
       val emailLookupMap = emailLookup.toMap
-      ripns.map { ripn =>
-        ManagedGroupMembershipEntry(ripn.resourceId, ripn.accessPolicyName, emailLookupMap(WorkbenchGroupName(ripn.resourceId.value)))
+      // This will silently ignore any group where the email could not be loaded. This can happen when a
+      // managed group is in an inconsistent state (partially created/deleted or created incorrectly).
+      ripns.flatMap { ripn =>
+        emailLookupMap.get(WorkbenchGroupName(ripn.resourceId.value)).map(email => ManagedGroupMembershipEntry(ripn.resourceId, ripn.accessPolicyName, email))
       }
     }
   }
