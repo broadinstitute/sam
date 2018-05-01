@@ -73,4 +73,8 @@ class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdenti
       case (riapn@ResourceAndPolicyName(`resource`, _), policy: AccessPolicy) if policy.members.contains(user) => policy
     }.toSet
   }
+
+  override def listFlattenedPolicyMembers(resourceAndPolicyName: ResourceAndPolicyName): Future[Set[WorkbenchUserId]] = {
+    Future.successful(Set.empty)
+  }
 }

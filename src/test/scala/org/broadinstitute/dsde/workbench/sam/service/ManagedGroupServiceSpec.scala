@@ -1,11 +1,13 @@
 package org.broadinstitute.dsde.workbench.sam.service
 
+import java.util.UUID
+
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import com.typesafe.config.ConfigFactory
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
-import org.broadinstitute.dsde.workbench.sam.config.{DirectoryConfig, _}
+import org.broadinstitute.dsde.workbench.sam.config._
 import org.broadinstitute.dsde.workbench.sam.directory.JndiDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
 import org.broadinstitute.dsde.workbench.sam.model._
@@ -27,9 +29,10 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
 
   private val config = ConfigFactory.load()
   val directoryConfig = config.as[DirectoryConfig]("directory")
+  val schemaLockConfig = ConfigFactory.load().as[SchemaLockConfig]("schemaLock")
   val dirDAO = new JndiDirectoryDAO(directoryConfig)
   val policyDAO = new JndiAccessPolicyDAO(directoryConfig)
-  val schemaDao = new JndiSchemaDAO(directoryConfig)
+  val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
   private val resourceId = ResourceId("myNewGroup")
   private val expectedResource = Resource(ManagedGroupService.managedGroupTypeName, resourceId)
@@ -66,7 +69,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     val resource: Resource = makeGroup(groupId, managedGroupService)
     val intendedResource = Resource(ManagedGroupService.managedGroupTypeName, ResourceId(groupId))
     resource shouldEqual intendedResource
-    assertPoliciesOnResource(resource, expectedPolicies = Set(ManagedGroupService.adminPolicyName, ManagedGroupService.memberPolicyName))
+    assertPoliciesOnResource(resource, expectedPolicies = Set(ManagedGroupService.adminPolicyName, ManagedGroupService.memberPolicyName, ManagedGroupService.adminNotifierPolicyName))
     resource
   }
 
@@ -84,7 +87,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
   "ManagedGroupService create" should "create a managed group with admin and member policies" in {
     assertMakeGroup()
     val policies = runAndWait(policyDAO.listAccessPolicies(expectedResource))
-    policies.map(_.id.accessPolicyName.value) shouldEqual Set("admin", "member")
+    policies.map(_.id.accessPolicyName.value) shouldEqual Set("admin", "member", "admin-notifier")
   }
 
   it should "create a workbenchGroup with the same name as the Managed Group" in {
@@ -314,7 +317,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     // Make the different users a member of some of the groups owned by the other user
     // Create some resources owned by different users
     // List Managed Group memberships for users and assert that memberships are only returned for managed groups
-    val newResourceType = managedGroupResourceType.copy(name = ResourceTypeName("somethingElse"))
+    val newResourceType = managedGroupResourceType.copy(name = ResourceTypeName(UUID.randomUUID().toString))
     makeResourceType(newResourceType)
     val resTypes = resourceTypeMap + (newResourceType.name -> newResourceType)
 

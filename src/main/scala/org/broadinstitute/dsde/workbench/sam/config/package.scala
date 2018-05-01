@@ -72,6 +72,7 @@ package object config {
       config.getString("groupSync.pubSubTopic"),
       config.getString("groupSync.pubSubSubscription"),
       config.getInt("groupSync.workerCount"),
+      config.getString("notifications.topicName"),
       config.as[GoogleKeyCacheConfig]("googleKeyCache"),
       config.as[Option[String]]("resourceNamePrefix")
     )
@@ -95,6 +96,16 @@ package object config {
       config.getString("monitor.pubSubTopic"),
       config.getString("monitor.pubSubSubscription"),
       config.getInt("monitor.workerCount")
+    )
+  }
+
+  implicit val schemaLockConfig: ValueReader[SchemaLockConfig] = ValueReader.relative { config =>
+    SchemaLockConfig(
+      config.getBoolean("lockSchemaOnBoot"),
+      config.getInt("recheckTimeInterval"),
+      config.getInt("maxTimeToWait"),
+      config.getString("instanceId"),
+      config.getInt("schemaVersion")
     )
   }
 }

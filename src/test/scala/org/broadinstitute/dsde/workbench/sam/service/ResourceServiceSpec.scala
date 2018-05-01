@@ -10,7 +10,7 @@ import org.broadinstitute.dsde.workbench.sam.directory.JndiDirectoryDAO
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FlatSpec, Matchers}
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
+import org.broadinstitute.dsde.workbench.sam.config.{DirectoryConfig, SchemaLockConfig}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.JndiAccessPolicyDAO
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
@@ -23,9 +23,10 @@ import scala.util.Try
   */
 class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with BeforeAndAfter with BeforeAndAfterAll {
   val directoryConfig = ConfigFactory.load().as[DirectoryConfig]("directory")
+  val schemaLockConfig = ConfigFactory.load().as[SchemaLockConfig]("schemaLock")
   val dirDAO = new JndiDirectoryDAO(directoryConfig)
   val policyDAO = new JndiAccessPolicyDAO(directoryConfig)
-  val schemaDao = new JndiSchemaDAO(directoryConfig)
+  val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
   private val defaultResourceTypeActions = Set(ResourceAction("alter_policies"), ResourceAction("delete"), ResourceAction("read_policies"), ResourceAction("view"), ResourceAction("non_owner_action"))
   private val defaultResourceTypeActionPatterns = Set(SamResourceActionPatterns.alterPolicies, SamResourceActionPatterns.delete, SamResourceActionPatterns.readPolicies, ResourceActionPattern("view"), ResourceActionPattern("non_owner_action"))

@@ -240,6 +240,28 @@ paths:
       tags:
         - Group
 
+  /api/group/{groupName}/requestAccess:
+    post:
+      summary: Request access to a managed group
+      responses:
+        204:
+          description: Request sent
+        404:
+          description: Group could not be found or you do not have the required permissions on this group
+        500:
+          description: Internal Error
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      parameters:
+        - in: path
+          description: Name of group
+          name: groupName
+          required: true
+          type: string
+      operationId: requestAccess
+      tags:
+        - Group
+
   /api/group/{groupName}/{policyName}:
     get:
       summary: 'Get email addresses for members of the "admin" policy'
@@ -497,6 +519,34 @@ paths:
           required: true
           type: string
       operationId: removePetServiceAccountKey
+      tags:
+        - Google
+
+  /api/google/user/petServiceAccount/{project}/token:
+    post:
+      summary: gets a token for the user's pet service account
+      responses:
+        200:
+          description: 'an access token for the users pet service account'
+          schema:
+            type: string
+        500:
+          description: Internal Error
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      parameters:
+        - in: path
+          description: Google project of the pet
+          name: project
+          required: true
+          type: string
+        - in: body
+          description: Scopes for the token
+          name: scopes
+          required: true
+          schema:
+            $ref: '#/definitions/ArrayOfScopes'
+      operationId: getPetServiceAccountToken
       tags:
         - Google
 
@@ -1052,6 +1102,15 @@ definitions:
       - person@company.com
       - group_name@company.com
       - foo@bar.com
+
+  ArrayOfScopes:
+    description: An array of scopes
+    type: array
+    items:
+      type: string
+    example:
+      - https://www.googleapis.com/auth/userinfo.email
+      - https://www.googleapis.com/auth/userinfo.profile
 
   CreateResourceRequest:
     description: information to create a resource

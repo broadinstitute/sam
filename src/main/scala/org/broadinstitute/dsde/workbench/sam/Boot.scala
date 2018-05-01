@@ -8,9 +8,10 @@ import akka.stream.ActorMaterializer
 import com.typesafe.config.ConfigFactory
 import com.typesafe.scalalogging.LazyLogging
 import net.ceedubs.ficus.Ficus._
+import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
 import org.broadinstitute.dsde.workbench.google.GoogleCredentialModes.Pem
 import org.broadinstitute.dsde.workbench.google.{HttpGoogleDirectoryDAO, HttpGoogleIamDAO, HttpGooglePubSubDAO, HttpGoogleStorageDAO}
-import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
+import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException}
 import org.broadinstitute.dsde.workbench.sam.api.{SamRoutes, StandardUserInfoDirectives}
 import org.broadinstitute.dsde.workbench.sam.config._
 import org.broadinstitute.dsde.workbench.sam.directory._
@@ -32,6 +33,7 @@ object Boot extends App with LazyLogging {
 
     val directoryConfig = config.as[DirectoryConfig]("directory")
     val googleServicesConfigOption = config.getAs[GoogleServicesConfig]("googleServices")
+    val schemaLockConfig = config.as[SchemaLockConfig]("schemaLock")
 
     // we need an ActorSystem to host our application in
     implicit val system = ActorSystem("sam")
@@ -40,7 +42,7 @@ object Boot extends App with LazyLogging {
 
     val accessPolicyDAO = new JndiAccessPolicyDAO(directoryConfig)
     val directoryDAO = new JndiDirectoryDAO(directoryConfig)
-    val schemaDAO = new JndiSchemaDAO(directoryConfig)
+    val schemaDAO = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
     val resourceTypes = config.as[Map[String, ResourceType]]("resourceTypes").values.toSet
     val resourceTypeMap = resourceTypes.map(rt => rt.name -> rt).toMap
@@ -53,8 +55,9 @@ object Boot extends App with LazyLogging {
         val googlePubSubDAO = new HttpGooglePubSubDAO(googleServicesConfig.appName, Pem(WorkbenchEmail(googleServicesConfig.serviceAccountClientId), new File(googleServicesConfig.pemFile)), "google", googleServicesConfig.groupSyncPubSubProject)
         val googleStorageDAO = new HttpGoogleStorageDAO(googleServicesConfig.appName, Pem(WorkbenchEmail(googleServicesConfig.serviceAccountClientId), new File(googleServicesConfig.pemFile)), "google")
         val googleKeyCache = new GoogleKeyCache(googleIamDAO, googleStorageDAO, googlePubSubDAO, googleServicesConfig, petServiceAccountConfig)
+        val notificationDAO = new PubSubNotificationDAO(googlePubSubDAO, googleServicesConfig.notificationTopic)
 
-        new GoogleExtensions(directoryDAO, accessPolicyDAO, googleDirectoryDAO, googlePubSubDAO, googleIamDAO, googleStorageDAO, googleKeyCache, googleServicesConfig, petServiceAccountConfig, resourceTypeMap(CloudExtensions.resourceTypeName))
+        new GoogleExtensions(directoryDAO, accessPolicyDAO, googleDirectoryDAO, googlePubSubDAO, googleIamDAO, googleStorageDAO, googleKeyCache, notificationDAO, googleServicesConfig, petServiceAccountConfig, resourceTypeMap(CloudExtensions.resourceTypeName))
       case None => NoExtensions
     }
 
@@ -74,6 +77,9 @@ object Boot extends App with LazyLogging {
 
     for {
       _ <- schemaDAO.init() recover {
+        case e: WorkbenchException =>
+          logger.error("FATAL - could not update schema to latest version. Is the schema lock stuck? See documentation here for more information: [link]")
+          throw e
         case t: Throwable =>
           logger.error("FATAL - could not init ldap schema", t)
           throw t

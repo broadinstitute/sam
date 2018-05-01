@@ -13,6 +13,7 @@ import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.CloudExtensions
 import spray.json.DefaultJsonProtocol._
+import spray.json.JsString
 
 import scala.concurrent.ExecutionContext
 
@@ -70,6 +71,17 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                 delete {
                   complete {
                     googleExtensions.removePetServiceAccountKey(userInfo.userId, GoogleProject(project), ServiceAccountKeyId(keyId)).map(_ => StatusCodes.NoContent)
+                  }
+                }
+              }
+            } ~
+            pathPrefix("token") {
+              post {
+                entity(as[Set[String]]) { scopes =>
+                  complete {
+                    googleExtensions.getPetServiceAccountToken(WorkbenchUser(userInfo.userId, userInfo.userEmail), GoogleProject(project), scopes).map { token =>
+                      StatusCodes.OK -> JsString(token)
+                    }
                   }
                 }
               }

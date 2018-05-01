@@ -8,7 +8,7 @@ import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountDisplayName, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.sam.TestSupport
-import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
+import org.broadinstitute.dsde.workbench.sam.config.{DirectoryConfig, SchemaLockConfig}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.JndiAccessPolicyDAO
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
@@ -21,8 +21,9 @@ import scala.concurrent.ExecutionContext.Implicits.global
   */
 class JndiDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with BeforeAndAfter with BeforeAndAfterAll {
   val directoryConfig = ConfigFactory.load().as[DirectoryConfig]("directory")
+  val schemaLockConfig = ConfigFactory.load().as[SchemaLockConfig]("schemaLock")
   val dao = new JndiDirectoryDAO(directoryConfig)
-  val schemaDao = new JndiSchemaDAO(directoryConfig)
+  val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()

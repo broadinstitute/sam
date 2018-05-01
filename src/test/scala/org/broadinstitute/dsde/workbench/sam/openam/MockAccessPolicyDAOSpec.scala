@@ -5,7 +5,7 @@ import com.typesafe.config.ConfigFactory
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
-import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
+import org.broadinstitute.dsde.workbench.sam.config.{DirectoryConfig, SchemaLockConfig}
 import org.broadinstitute.dsde.workbench.sam.directory._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
@@ -21,7 +21,8 @@ import scala.concurrent.ExecutionContext.Implicits.global
   */
 class MockAccessPolicyDAOSpec extends FlatSpec with Matchers with TestSupport with BeforeAndAfter with BeforeAndAfterAll {
   val directoryConfig: DirectoryConfig = ConfigFactory.load().as[DirectoryConfig]("directory")
-  val schemaDao = new JndiSchemaDAO(directoryConfig)
+  val schemaLockConfig = ConfigFactory.load().as[SchemaLockConfig]("schemaLock")
+  val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
   private val dummyUserInfo = UserInfo(OAuth2BearerToken("token"), WorkbenchUserId("userid"), WorkbenchEmail("user@company.com"), 0)
 
@@ -37,9 +38,9 @@ class MockAccessPolicyDAOSpec extends FlatSpec with Matchers with TestSupport wi
 
   def sharedFixtures = new {
     val groups: mutable.Map[WorkbenchGroupIdentity, WorkbenchGroup] = new TrieMap()
-    val accessPolicyNames = Set(ManagedGroupService.adminPolicyName, ManagedGroupService.memberPolicyName)
+    val accessPolicyNames = Set(ManagedGroupService.adminPolicyName, ManagedGroupService.memberPolicyName, ManagedGroupService.adminNotifierPolicyName)
     val policyActions: Set[ResourceAction] = accessPolicyNames.flatMap(policyName => Set(SamResourceActions.sharePolicy(policyName), SamResourceActions.readPolicy(policyName)))
-    val resourceActions: Set[ResourceAction] = Set(ResourceAction("delete")) union policyActions
+    val resourceActions: Set[ResourceAction] = Set(ResourceAction("delete"), SamResourceActions.notifyAdmins) union policyActions
     val resourceActionPatterns: Set[ResourceActionPattern] = resourceActions.map(action => ResourceActionPattern(action.value))
     val defaultOwnerRole = ResourceRole(ManagedGroupService.adminRoleName, resourceActions)
     val defaultMemberRole = ResourceRole(ManagedGroupService.memberRoleName, Set.empty)
