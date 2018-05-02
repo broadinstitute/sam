@@ -18,33 +18,30 @@ import scala.concurrent.Future
 class ManagedGroupService(private val resourceService: ResourceService, private val resourceTypes: Map[ResourceTypeName, ResourceType], private val accessPolicyDAO: AccessPolicyDAO, private val directoryDAO: DirectoryDAO, private val cloudExtensions: CloudExtensions, private val emailDomain: String) extends LazyLogging {
 
   def managedGroupType: ResourceType = resourceTypes.getOrElse(ManagedGroupService.managedGroupTypeName, throw new WorkbenchException(s"resource type ${ManagedGroupService.managedGroupTypeName.value} not found"))
-  def memberRole: ResourceRole = managedGroupType.roles.find(_.roleName == ManagedGroupService.memberRoleName).getOrElse(throw new WorkbenchException(s"${ManagedGroupService.memberRoleName} role does not exist in $managedGroupType"))
 
   def createManagedGroup(groupId: ResourceId, userInfo: UserInfo): Future[Resource] = {
+    def adminRole = managedGroupType.ownerRoleName
+
+    val memberPolicy = ManagedGroupService.memberPolicyName -> AccessPolicyMembership(Set.empty, Set.empty, Set(ManagedGroupService.memberRoleName))
+    val adminPolicy = ManagedGroupService.adminPolicyName -> AccessPolicyMembership(Set(userInfo.userEmail), Set.empty, Set(adminRole))
+    val adminNotificationPolicy = ManagedGroupService.adminNotifierPolicyName -> AccessPolicyMembership(Set.empty, Set.empty, Set(ManagedGroupService.adminNotifierRoleName))
+
     for {
-      managedGroup <- resourceService.createResource(managedGroupType, groupId, userInfo)
-      _ <- createPolicyForMembers(managedGroup)
-      _ <- createPolicyForAdminNotification(managedGroup)
-      workbenchGroup <- createAggregateGroup(managedGroup, ManagedGroupService.makeMembershipPolicyNames(managedGroup))
+      managedGroup <- resourceService.createResource(managedGroupType, groupId, Map(adminPolicy, memberPolicy, adminNotificationPolicy), userInfo)
+      policies <- accessPolicyDAO.listAccessPolicies(managedGroup)
+      workbenchGroup <- createAggregateGroup(managedGroup, policies)
       _ <- cloudExtensions.publishGroup(workbenchGroup.id)
     } yield managedGroup
   }
 
-  private def createPolicyForMembers(managedGroup: Resource): Future[AccessPolicy] = {
-    val resourceAndPolicyName = ResourceAndPolicyName(managedGroup, ManagedGroupService.memberPolicyName)
-
-    resourceService.createPolicy(resourceAndPolicyName, members = Set.empty, Set(memberRole.roleName), actions = Set.empty)
-  }
-
-  private def createPolicyForAdminNotification(managedGroup: Resource): Future[AccessPolicy] = {
-    val resourceAndPolicyName = ResourceAndPolicyName(managedGroup, ManagedGroupService.adminNotifierPolicyName)
-    resourceService.createPolicy(resourceAndPolicyName, members = Set.empty, roles = Set.empty, actions = Set(SamResourceActions.notifyAdmins))
-  }
-
-  private def createAggregateGroup(resource: Resource, componentPolicies: Set[ResourceAndPolicyName]): Future[BasicWorkbenchGroup] = {
+  private def createAggregateGroup(resource: Resource, componentPolicies: Set[AccessPolicy]): Future[BasicWorkbenchGroup] = {
     val email = generateManagedGroupEmail(resource.resourceId)
     val workbenchGroupName = WorkbenchGroupName(resource.resourceId.value)
-    directoryDAO.createGroup(BasicWorkbenchGroup(workbenchGroupName, componentPolicies.toSet, email))
+    val groupMembers: Set[WorkbenchSubject] = componentPolicies.collect {
+      // collect only member and admin policies
+      case AccessPolicy(id@ResourceAndPolicyName(_, ManagedGroupService.memberPolicyName | ManagedGroupService.adminPolicyName), _, _, _, _) => id
+    }
+    directoryDAO.createGroup(BasicWorkbenchGroup(workbenchGroupName, groupMembers, email))
   }
 
   private def generateManagedGroupEmail(resourceId: ResourceId): WorkbenchEmail = {

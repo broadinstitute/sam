@@ -30,14 +30,44 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     accessPolicyDAO.createResourceType(resourceType.name)
   }
 
+  /**
+    * Create a resource with default policies. The default policies contain 1 policy with the same name as the
+    * owner role for the resourceType, has the owner role, membership contains only userInfo
+    * @param resourceType
+    * @param resourceId
+    * @param userInfo
+    * @return
+    */
   def createResource(resourceType: ResourceType, resourceId: ResourceId, userInfo: UserInfo): Future[Resource] = {
-    accessPolicyDAO.createResource(Resource(resourceType.name, resourceId)) flatMap { resource =>
-      val role = resourceType.roles.find(_.roleName == resourceType.ownerRoleName).getOrElse(throw new WorkbenchException(s"owner role ${resourceType.ownerRoleName} does not exist in $resourceType"))
-      val subjects: Set[WorkbenchSubject] = Set(userInfo.userId)
-      val resourceAndPolicyName = ResourceAndPolicyName(resource, AccessPolicyName(role.roleName.value))
+    val ownerRole = resourceType.roles.find(_.roleName == resourceType.ownerRoleName).getOrElse(throw new WorkbenchException(s"owner role ${resourceType.ownerRoleName} does not exist in $resourceType"))
+    val defaultPolicies: Map[AccessPolicyName, AccessPolicyMembership] = Map(AccessPolicyName(ownerRole.roleName.value) -> AccessPolicyMembership(Set(userInfo.userEmail), Set.empty, Set(ownerRole.roleName)))
+    createResource(resourceType, resourceId, defaultPolicies, userInfo)
+  }
 
-      createPolicy(resourceAndPolicyName, subjects, Set(role.roleName), Set.empty).map {_ => Resource(resourceType.name, resourceId)}
+  def createResource(resourceType: ResourceType, resourceId: ResourceId, policies: Map[AccessPolicyName, AccessPolicyMembership], userInfo: UserInfo): Future[Resource] = {
+    val ownerExists = policies.exists { case (_, membership) => membership.roles.contains(resourceType.ownerRoleName) && membership.memberEmails.nonEmpty }
+
+    if (!ownerExists) {
+      throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"Cannot create resource without at least 1 policy with ${resourceType.ownerRoleName.value} role and non-empty membership"))
     }
+
+    for {
+      // validate policies first, overwritePolicy below will do this again but we do it first to avoid rollback on errors
+      _ <- Future.traverse(policies) { case (_, policyMembership) =>
+        mapEmailsToSubjects(policyMembership.memberEmails).map { members: Map[WorkbenchEmail, Option[WorkbenchSubject]] =>
+          validatePolicy(resourceType, policyMembership, members)
+        }
+      }
+
+      resource <- accessPolicyDAO.createResource(Resource(resourceType.name, resourceId))
+
+      _ <- Future.traverse(policies) { case (accessPolicyName, accessPolicyMembership) =>
+        overwritePolicy(resourceType, accessPolicyName, resource, accessPolicyMembership)
+      }
+    } yield {
+      resource
+    }
+
   }
 
   def createPolicy(resourceAndPolicyName: ResourceAndPolicyName, members: Set[WorkbenchSubject], roles: Set[ResourceRoleName], actions: Set[ResourceAction]): Future[AccessPolicy] = {
@@ -52,13 +82,24 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     accessPolicyDAO.listAccessPolicies(resourceType.name, userInfo.userId)
   }
 
+  // IF Resource ID reuse is allowed (as defined by the Resource Type), then we can delete the resource
+  // ELSE Resource ID reuse is not allowed, and we enforce this by deleting all policies associated with the Resource,
+  //      but not the Resource itself, thereby orphaning the Resource so that it cannot be used or accessed anymore and
+  //      preventing a new Resource with the same ID from being created
   def deleteResource(resource: Resource): Future[Unit] = {
     for {
       policiesToDelete <- accessPolicyDAO.listAccessPolicies(resource)
       _ <- Future.traverse(policiesToDelete) {accessPolicyDAO.deletePolicy}
-      _ <- accessPolicyDAO.deleteResource(resource)
+      _ <- maybeDeleteResource(resource)
       _ <- Future.traverse(policiesToDelete) { policy => cloudExtensions.onGroupDelete(policy.email) }
     } yield ()
+  }
+
+  private def maybeDeleteResource(resource: Resource): Future[Unit] = {
+    resourceTypes.get(resource.resourceTypeName) match {
+      case Some(resourceType) if resourceType.reuseIds => accessPolicyDAO.deleteResource(resource)
+      case _ => Future.successful()
+    }
   }
 
   def hasPermission(resource: Resource, action: ResourceAction, userInfo: UserInfo): Future[Boolean] = {

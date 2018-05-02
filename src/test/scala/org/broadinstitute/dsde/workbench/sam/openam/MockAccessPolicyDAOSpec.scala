@@ -38,13 +38,14 @@ class MockAccessPolicyDAOSpec extends FlatSpec with Matchers with TestSupport wi
 
   def sharedFixtures = new {
     val groups: mutable.Map[WorkbenchGroupIdentity, WorkbenchGroup] = new TrieMap()
-    val accessPolicyNames = Set(ManagedGroupService.adminPolicyName, ManagedGroupService.memberPolicyName)
+    val accessPolicyNames = Set(ManagedGroupService.adminPolicyName, ManagedGroupService.memberPolicyName, ManagedGroupService.adminNotifierPolicyName)
     val policyActions: Set[ResourceAction] = accessPolicyNames.flatMap(policyName => Set(SamResourceActions.sharePolicy(policyName), SamResourceActions.readPolicy(policyName)))
-    val resourceActions: Set[ResourceAction] = Set(ResourceAction("delete")) union policyActions
+    val resourceActions: Set[ResourceAction] = Set(ResourceAction("delete"), SamResourceActions.notifyAdmins) union policyActions
     val resourceActionPatterns: Set[ResourceActionPattern] = resourceActions.map(action => ResourceActionPattern(action.value))
     val defaultOwnerRole = ResourceRole(ManagedGroupService.adminRoleName, resourceActions)
     val defaultMemberRole = ResourceRole(ManagedGroupService.memberRoleName, Set.empty)
-    val defaultRoles = Set(defaultOwnerRole, defaultMemberRole)
+    val defaultAdminNotifierRole = ResourceRole(ManagedGroupService.adminNotifierRoleName, Set(ResourceAction("notify_admins")))
+    val defaultRoles = Set(defaultOwnerRole, defaultMemberRole, defaultAdminNotifierRole)
     val managedGroupResourceType = ResourceType(ManagedGroupService.managedGroupTypeName, resourceActionPatterns, defaultRoles, ManagedGroupService.adminRoleName)
     val resourceTypes = Map(managedGroupResourceType.name -> managedGroupResourceType)
     val emailDomain = "example.com"
@@ -77,14 +78,14 @@ class MockAccessPolicyDAOSpec extends FlatSpec with Matchers with TestSupport wi
     val jndi = jndiServicesFixture
     val mock = mockServicesFixture
 
+    val dummyUser = WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)
+    runAndWait(jndi.userService.createUser(dummyUser))
+    runAndWait(mock.userService.createUser(dummyUser))
+
     val groupName = "fooGroup"
     val intendedResource = Resource(ManagedGroupService.managedGroupTypeName, ResourceId(groupName))
     runAndWait(jndi.managedGroupService.createManagedGroup(ResourceId(groupName), dummyUserInfo)) shouldEqual intendedResource
     runAndWait(mock.managedGroupService.createManagedGroup(ResourceId(groupName), dummyUserInfo)) shouldEqual intendedResource
-
-    val dummyUser = WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)
-    runAndWait(jndi.userService.createUser(dummyUser))
-    runAndWait(mock.userService.createUser(dummyUser))
 
     val expectedGroups = Set(ResourceIdAndPolicyName(ResourceId(groupName), ManagedGroupService.adminPolicyName))
     runAndWait(jndi.managedGroupService.listGroups(dummyUserInfo.userId)).map(ripn => ResourceIdAndPolicyName(ripn.groupName, ripn.role)) shouldEqual expectedGroups

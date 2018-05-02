@@ -656,6 +656,38 @@ paths:
       operationId: listResourcesAndPolicies
       tags:
         - Resources
+    post:
+      summary: Create a new resource, cannot be used when resource type allows id reuse
+      responses:
+        204:
+          description: Successfully created resource
+        400:
+          description: Invalid policies or resource type allows id reuse
+          schema:
+            $ref: '#/definitions/ErrorReport'
+        409:
+          description: Resource already exists
+          schema:
+            $ref: '#/definitions/ErrorReport'
+        500:
+          description: Internal Error
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      parameters:
+        - in: path
+          description: Type of resource to create
+          name: resourceTypeName
+          required: true
+          type: string
+        - in: body
+          description: The details of the resource
+          name: resourceCreate
+          required: true
+          schema:
+            $ref: '#/definitions/CreateResourceRequest'
+      operationId: createResource
+      tags:
+        - Resources
 
   /api/resource/{resourceTypeName}/{resourceId}:
     delete:
@@ -682,7 +714,7 @@ paths:
       tags:
         - Resources
     post:
-      summary: Create a new resource
+      summary: Create a new resource with default owner policy
       responses:
         204:
           description: Successfully created resource
@@ -705,7 +737,7 @@ paths:
           name: resourceId
           required: true
           type: string
-      operationId: createResource
+      operationId: createResourceWithDefaults
       tags:
         - Resources
 
@@ -1080,6 +1112,20 @@ definitions:
       - https://www.googleapis.com/auth/userinfo.email
       - https://www.googleapis.com/auth/userinfo.profile
 
+  CreateResourceRequest:
+    description: information to create a resource
+    required:
+      - resourceId
+      - policies
+    properties:
+      resourceId:
+        type: string
+        description: id of the resource to create
+      policies:
+        type: object
+        additionalProperties:
+          $ref: '#/definitions/AccessPolicyMembership'
+        description: map of initial policies to create
 
   Enabled:
     description: the status of the user's account
