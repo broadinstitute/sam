@@ -338,8 +338,14 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     val user1Memberships = Set(user2Groups.head)
     val user2Memberships = Set(user1Groups.head)
 
-    user1Memberships.foreach(s => mgService.addSubjectToPolicy(ResourceId(s), ManagedGroupService.memberPolicyName, user1.userId))
-    user2Memberships.foreach(s => mgService.addSubjectToPolicy(ResourceId(s), ManagedGroupService.memberPolicyName, user2.userId))
+    user1Memberships.foreach(s => runAndWait(mgService.addSubjectToPolicy(ResourceId(s), ManagedGroupService.memberPolicyName, user1.userId)))
+    user2Memberships.foreach(s => runAndWait(mgService.addSubjectToPolicy(ResourceId(s), ManagedGroupService.memberPolicyName, user2.userId)))
+
+    // let everyone notify admins
+    (user1Groups ++ user2Groups).foreach { g =>
+      runAndWait(mgService.addSubjectToPolicy(ResourceId(g), ManagedGroupService.adminNotifierPolicyName, user1.userId))
+      runAndWait(mgService.addSubjectToPolicy(ResourceId(g), ManagedGroupService.adminNotifierPolicyName, user2.userId))
+    }
 
     val user1Resources = Set("quuz", "corge")
     val user2Resources = Set("grault", "garply")
