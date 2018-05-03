@@ -71,14 +71,14 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     * @param policies
     * @return Future[Resource]
     */
-  private def persistResource(resourceType: ResourceType, resourceId: ResourceId, policies: Set[AccessPolicyCreator]) = {
+  private def persistResource(resourceType: ResourceType, resourceId: ResourceId, policies: Set[PotentialAccessPolicy]) = {
     for {
       resource <- accessPolicyDAO.createResource(Resource(resourceType.name, resourceId))
       _ <- Future.traverse(policies)(createOrUpdatePolicy(resource, _))
     } yield resource
   }
 
-  private def validateCreateResource(resourceType: ResourceType, resourceId: ResourceId, policies: Set[AccessPolicyCreator], userInfo: UserInfo): Option[Seq[ErrorReport]] = {
+  private def validateCreateResource(resourceType: ResourceType, resourceId: ResourceId, policies: Set[PotentialAccessPolicy], userInfo: UserInfo): Option[Seq[ErrorReport]] = {
     val ownerPolicyErrors = validateOwnerPolicyExists(resourceType, policies).toSeq
     val policyErrors = policies.flatMap(policy => validatePolicy(resourceType, policy)).toSeq
 
@@ -86,7 +86,7 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     if (possibleErrors.nonEmpty) Some(possibleErrors) else None
   }
 
-  private def validateOwnerPolicyExists(resourceType: ResourceType, policies: Set[AccessPolicyCreator]): Option[ErrorReport] = {
+  private def validateOwnerPolicyExists(resourceType: ResourceType, policies: Set[PotentialAccessPolicy]): Option[ErrorReport] = {
     val ownerExists = policies.exists { policy => policy.roles.contains(resourceType.ownerRoleName) && policy.emailsToSubjects.nonEmpty }
     if (!ownerExists) {
       Some(ErrorReport(s"Cannot create resource without at least 1 policy with ${resourceType.ownerRoleName.value} role and non-empty membership"))
@@ -184,7 +184,7 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     * @param policy
     * @return
     */
-  private def createOrUpdatePolicy(resource: Resource, policy: AccessPolicyCreator): Future[AccessPolicy] = {
+  private def createOrUpdatePolicy(resource: Resource, policy: PotentialAccessPolicy): Future[AccessPolicy] = {
     val resourceAndPolicyName = ResourceAndPolicyName(resource, policy.policyName)
     val workbenchSubjects = policy.emailsToSubjects.values.flatten.toSet
     accessPolicyDAO.loadPolicy(resourceAndPolicyName).flatMap {
@@ -210,7 +210,7 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     * @param policy
     * @return
     */
-  private def validatePolicy(resourceType: ResourceType, policy: AccessPolicyCreator): Option[ErrorReport] = {
+  private def validatePolicy(resourceType: ResourceType, policy: PotentialAccessPolicy): Option[ErrorReport] = {
     val validationErrors = validateMemberEmails(policy.emailsToSubjects) ++ validateActions(resourceType, policy) ++ validateRoles(resourceType, policy)
     if (validationErrors.nonEmpty) {
       Some(ErrorReport("You have specified an invalid policy", validationErrors.toSeq))
@@ -232,7 +232,7 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     } else None
   }
 
-  private def validateRoles(resourceType: ResourceType, policy: AccessPolicyCreator): Option[ErrorReport] = {
+  private def validateRoles(resourceType: ResourceType, policy: PotentialAccessPolicy): Option[ErrorReport] = {
     val invalidRoles = policy.roles -- resourceType.roles.map(_.roleName)
     if (invalidRoles.nonEmpty) {
       val roleCauses = invalidRoles.map { resourceRoleName => ErrorReport(s"Invalid role: ${resourceRoleName}")}
@@ -240,7 +240,7 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     } else None
   }
 
-  private def validateActions(resourceType: ResourceType, policy: AccessPolicyCreator): Option[ErrorReport] = {
+  private def validateActions(resourceType: ResourceType, policy: PotentialAccessPolicy): Option[ErrorReport] = {
     val invalidActions = policy.actions.filter(a => !resourceType.actionPatterns.exists(_.matches(a)))
     if (invalidActions.nonEmpty) {
       val actionCauses = invalidActions.map { resourceAction => ErrorReport(s"Invalid action: ${resourceAction}") }
@@ -299,16 +299,16 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     }
   }
 
-  private def makeCreatablePolicies(policies: Map[AccessPolicyName, AccessPolicyMembership]): Future[Set[AccessPolicyCreator]] = {
+  private def makeCreatablePolicies(policies: Map[AccessPolicyName, AccessPolicyMembership]): Future[Set[PotentialAccessPolicy]] = {
     val eventualPolicyCreators = policies.map {
       case (accessPolicyName, accessPolicyMembership) => makeCreatablePolicy(accessPolicyName, accessPolicyMembership)
     }
     Future.sequence(eventualPolicyCreators.toSet)
   }
 
-  private def makeCreatablePolicy(accessPolicyName: AccessPolicyName, accessPolicyMembership: AccessPolicyMembership): Future[AccessPolicyCreator] = {
+  private def makeCreatablePolicy(accessPolicyName: AccessPolicyName, accessPolicyMembership: AccessPolicyMembership): Future[PotentialAccessPolicy] = {
     mapEmailsToSubjects(accessPolicyMembership.memberEmails).map { emailsToSubjects =>
-      AccessPolicyCreator(accessPolicyName, emailsToSubjects, accessPolicyMembership.roles, accessPolicyMembership.actions)
+      PotentialAccessPolicy(accessPolicyName, emailsToSubjects, accessPolicyMembership.roles, accessPolicyMembership.actions)
     }
   }
 
