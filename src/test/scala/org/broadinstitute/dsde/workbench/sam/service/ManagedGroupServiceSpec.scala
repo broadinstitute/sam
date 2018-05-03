@@ -131,11 +131,12 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
   }
 
   it should "fail when the group name is too long" in {
-    val groupName = "a" * 64
+    val maxLen = 60
+    val groupName = "a" * (maxLen + 1)
     val exception = intercept[WorkbenchExceptionWithErrorReport] {
       assertMakeGroup(groupName)
     }
-    exception.getMessage should include ("Email address length must be shorter than 64 characters")
+    exception.getMessage should include (s"must be $maxLen characters or fewer")
     runAndWait(managedGroupService.loadManagedGroup(resourceId)) shouldEqual None
   }
 
