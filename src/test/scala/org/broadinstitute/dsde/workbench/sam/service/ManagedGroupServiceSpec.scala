@@ -131,7 +131,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
   }
 
   it should "fail when the group name is too long" in {
-    val maxLen = 64
+    val maxLen = 60
     val groupName = "a" * (maxLen + 1)
     val exception = intercept[WorkbenchExceptionWithErrorReport] {
       assertMakeGroup(groupName)

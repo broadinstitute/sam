@@ -62,7 +62,7 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
     }
   }
 
-  private val maxLength = 64
+  private val maxLength = 60
   private def validateGroupNameLength(str: String): Option[ErrorReport] = {
     if (str.length > maxLength)
       Option(ErrorReport(s"Group Name '$str' is ${str.length} characters in length.  Group Name must be $maxLength characters or fewer"))
