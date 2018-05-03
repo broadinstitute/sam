@@ -26,6 +26,7 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
     val adminPolicy = ManagedGroupService.adminPolicyName -> AccessPolicyMembership(Set(userInfo.userEmail), Set.empty, Set(adminRole))
     val adminNotificationPolicy = ManagedGroupService.adminNotifierPolicyName -> AccessPolicyMembership(Set.empty, Set.empty, Set(ManagedGroupService.adminNotifierRoleName))
 
+    validateGroupName(groupId.value)
     for {
       managedGroup <- resourceService.createResource(managedGroupType, groupId, Map(adminPolicy, memberPolicy, adminNotificationPolicy), userInfo)
       policies <- accessPolicyDAO.listAccessPolicies(managedGroup)
@@ -35,7 +36,7 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
   }
 
   private def createAggregateGroup(resource: Resource, componentPolicies: Set[AccessPolicy]): Future[BasicWorkbenchGroup] = {
-    val email = generateManagedGroupEmail(resource.resourceId)
+    val email = WorkbenchEmail(constructEmail(resource.resourceId.value))
     val workbenchGroupName = WorkbenchGroupName(resource.resourceId.value)
     val groupMembers: Set[WorkbenchSubject] = componentPolicies.collect {
       // collect only member and admin policies
@@ -44,18 +45,12 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
     directoryDAO.createGroup(BasicWorkbenchGroup(workbenchGroupName, groupMembers, email))
   }
 
-  private def generateManagedGroupEmail(resourceId: ResourceId): WorkbenchEmail = {
-    val groupName = resourceId.value
-    validateGroupName(groupName)
-    WorkbenchEmail(constructEmail(groupName))
-  }
-
   private def constructEmail(groupName: String) = {
     s"${groupName}@${emailDomain}"
   }
 
   private def validateGroupName(groupName: String) = {
-    val errors = validateGroupNamePattern(groupName) ++ validateGroupNameLength(constructEmail(groupName))
+    val errors = validateGroupNamePattern(groupName) ++ validateGroupNameLength(groupName)
     if (errors.nonEmpty)
       throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"Cannot create valid email address with the group name: $groupName" , errors.toSeq))
   }
@@ -67,10 +62,10 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
     }
   }
 
-  private val maxLength = 64
+  private val maxLength = 100
   private def validateGroupNameLength(str: String): Option[ErrorReport] = {
     if (str.length >= maxLength)
-      Option(ErrorReport(s"Email address '$str' is ${str.length} characters in length.  Email address length must be shorter than $maxLength characters"))
+      Option(ErrorReport(s"Group Name '$str' is ${str.length} characters in length.  Group Name must be shorter than $maxLength characters"))
     else
       None
   }

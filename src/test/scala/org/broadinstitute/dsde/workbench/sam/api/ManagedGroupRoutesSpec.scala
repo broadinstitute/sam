@@ -159,7 +159,7 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
     assertCreateGroup(samRoutes)
     assertGetGroup(samRoutes)
 
-    val badGroupName = "X" * 64
+    val badGroupName = "X" * 100
     Post(s"/api/group/$badGroupName") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.BadRequest
     }
