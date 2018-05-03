@@ -8,7 +8,7 @@ import com.typesafe.config.ConfigFactory
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
-import org.broadinstitute.dsde.workbench.sam.config.{DirectoryConfig, SchemaLockConfig}
+import org.broadinstitute.dsde.workbench.sam.config.{DirectoryConfig, SchemaLockConfig, _}
 import org.broadinstitute.dsde.workbench.sam.directory.JndiDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.JndiAccessPolicyDAO
@@ -21,8 +21,9 @@ import scala.concurrent.ExecutionContext.Implicits.global
   * Created by dvoet on 6/27/17.
   */
 class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with BeforeAndAfter with BeforeAndAfterAll {
-  val directoryConfig = ConfigFactory.load().as[DirectoryConfig]("directory")
-  val schemaLockConfig = ConfigFactory.load().as[SchemaLockConfig]("schemaLock")
+  val config = ConfigFactory.load()
+  val directoryConfig = config.as[DirectoryConfig]("directory")
+  val schemaLockConfig = config.as[SchemaLockConfig]("schemaLock")
   val dirDAO = new JndiDirectoryDAO(directoryConfig)
   val policyDAO = new JndiAccessPolicyDAO(directoryConfig)
   val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
