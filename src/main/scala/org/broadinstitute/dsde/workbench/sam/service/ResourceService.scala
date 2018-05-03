@@ -55,78 +55,42 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     */
   def createResource(resourceType: ResourceType, resourceId: ResourceId, policiesMap: Map[AccessPolicyName, AccessPolicyMembership], userInfo: UserInfo): Future[Resource] = {
     makeCreatablePolicies(policiesMap).flatMap { policies =>
-      validateCreateResource(resourceType, resourceId, policiesMap, userInfo).flatMap {
+      validateCreateResource(resourceType, resourceId, policies, userInfo) match {
         case Some(errorReport) => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "Cannot create resource", errorReport))
-        case None => persistResource(resourceType, resourceId, policiesMap)
+        case None => persistResource(resourceType, resourceId, policies)
       }
-    }
-  }
-//  def createResource(resourceType: ResourceType, resourceId: ResourceId, policiesMap: Map[AccessPolicyName, AccessPolicyMembership], userInfo: UserInfo): Future[Resource] = {
-//    val policies = makeCreatablePolicies(policiesMap)
-//    validateCreateResource(resourceType, resourceId, policiesMap, userInfo).map {
-//      case Some(errorReport) => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "Cannot create resource", errorReport))
-//      case None => persistResource(resourceType, resourceId, policiesMap)
-//    }.flatten
-//  }
-
-  private def makeCreatablePolicies(policies: Map[AccessPolicyName, AccessPolicyMembership]): Future[Set[AccessPolicyCreator]] = {
-    Future.sequence(policies.map {
-      case (accessPolicyName, accessPolicyMembership) => makeCreatablePolicy(accessPolicyName, accessPolicyMembership)
-    }.toSet)
-  }
-
-  private def makeCreatablePolicy(accessPolicyName: AccessPolicyName, accessPolicyMembership: AccessPolicyMembership): Future[AccessPolicyCreator] = {
-    mapEmailsToSubjects(accessPolicyMembership.memberEmails).map { emailsToSubjects =>
-      AccessPolicyCreator(accessPolicyName, emailsToSubjects, accessPolicyMembership.roles, accessPolicyMembership.actions)
     }
   }
 
   /**
     * This method only persists the resource and then overwrites/creates the policies for that resource.
-    * This method probably should never be called directly.  If you want to create a Resource, use createResource()
-    * which will also perform critical validations
+    * Be very careful if calling this method directly because it will not validate the resource or its policies.
+    * If you want to create a Resource, use createResource() which will also perform critical validations
     * @param resourceType
     * @param resourceId
     * @param policies
     * @return Future[Resource]
     */
-  private def persistResource(resourceType: ResourceType, resourceId: ResourceId, policies: Map[AccessPolicyName, AccessPolicyMembership]): Future[Resource] = {
+  private def persistResource(resourceType: ResourceType, resourceId: ResourceId, policies: Set[AccessPolicyCreator]) = {
     for {
       resource <- accessPolicyDAO.createResource(Resource(resourceType.name, resourceId))
-      _ <- Future.traverse(policies) {
-        case (accessPolicyName, accessPolicyMembership) => overwritePolicy(resourceType, accessPolicyName, resource, accessPolicyMembership)
-      }
+      _ <- Future.traverse(policies)(createOrUpdatePolicy(resource, _))
     } yield resource
   }
 
-  private def validateCreateResource(resourceType: ResourceType, resourceId: ResourceId, policies: Set[AccessPolicyCreator], userInfo: UserInfo) = {
-    // Validate:
-    // * Owner policy exists, matches reference.conf, and is not empty
-    // * Policy - members are valid, "registered" users; actions exist; roles exist
-    // * Auth Domains - if provided, then at least one action is constrainable
-    val ownerPolicyErrors = validateOwnerPolicy(resourceType, policies)
-    if (ownerPolicyErrors.nonEmpty) {
-      Future.successful(ownerPolicyErrors)
-    } else {
-      val policyErrors = Future.sequence(policies.map(policyMembership => validatePolicy(resourceType, policyMembership)))
-      policyErrors.map { errors =>
-        if (errors.flatten.nonEmpty) {
-          Some(ErrorReport("Invalid policies", errors.flatten.toSeq))
-        } else {
-          None
-        }
-      }
-    }
+  private def validateCreateResource(resourceType: ResourceType, resourceId: ResourceId, policies: Set[AccessPolicyCreator], userInfo: UserInfo): Option[Seq[ErrorReport]] = {
+    val ownerPolicyErrors = validateOwnerPolicyExists(resourceType, policies).toSeq
+    val policyErrors = policies.flatMap(policy => validatePolicy(resourceType, policy)).toSeq
+
+    val possibleErrors = ownerPolicyErrors ++ policyErrors
+    if (possibleErrors.nonEmpty) Some(possibleErrors) else None
   }
 
-  private def validateOwnerPolicy(resourceType: ResourceType, policies: Map[AccessPolicyName, AccessPolicyMembership]): Option[ErrorReport] = {
-    val ownerExists = policies.exists { case (_, membership) => membership.roles.contains(resourceType.ownerRoleName) && membership.memberEmails.nonEmpty }
-
+  private def validateOwnerPolicyExists(resourceType: ResourceType, policies: Set[AccessPolicyCreator]): Option[ErrorReport] = {
+    val ownerExists = policies.exists { policy => policy.roles.contains(resourceType.ownerRoleName) && policy.emailsToSubjects.nonEmpty }
     if (!ownerExists) {
       Some(ErrorReport(s"Cannot create resource without at least 1 policy with ${resourceType.ownerRoleName.value} role and non-empty membership"))
-    } else {
-      None
-    }
+    } else None
   }
 
   def createPolicy(resourceAndPolicyName: ResourceAndPolicyName, members: Set[WorkbenchSubject], roles: Set[ResourceRoleName], actions: Set[ResourceAction]): Future[AccessPolicy] = {
@@ -194,45 +158,40 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     accessPolicyDAO.listAccessPoliciesForUser(resource, userInfo.userId)
   }
 
-  //Overwrites an existing policy (keyed by resourceType/resourceId/policyName), saves a new one if it doesn't exist yet
+  /**
+    * Overwrites an existing policy (keyed by resourceType/resourceId/policyName), saves a new one if it doesn't exist yet
+    * @param resourceType
+    * @param policyName
+    * @param resource
+    * @param policyMembership
+    * @return
+    */
   def overwritePolicy(resourceType: ResourceType, policyName: AccessPolicyName, resource: Resource, policyMembership: AccessPolicyMembership): Future[AccessPolicy] = {
-    validatePolicy(resourceType, policyMembership).map {
-      case Some(errorReport) => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "You have specified an invalid policy", errorReport))
-      case None => performOverwritePolicy(resourceType, policyName, resource, policyMembership)
-    }.flatten
-  }
-
-  private def performOverwritePolicy(resourceType: ResourceType, policyName: AccessPolicyName, resource: Resource, policyMembership: AccessPolicyMembership): Future[AccessPolicy] = {
-    val resourceAndPolicyName = ResourceAndPolicyName(resource, policyName)
-    // TODO: In order for this to work, the Set[WorkbenchEmail] must be converted to Set[WorkbenchSubject]
-    // We should have already validated the policy, so we shouldn't need to look the subjects up again from openDJ
-    // WorkbenchGroupName and WorkbenchUserId are ValueObjects that just have the email address of the group or user
-    // For the steps we're trying to perform in this method, we could just put the policyMembership.memberEmails
-    //   directly into either a WorkbenchGroupName or WorkbenchUserId (it doesn't really matter which)
-    // BUT - Will that get us in trouble in any way?
-    val workbenchSubjects = policyMembership.memberEmails
-    accessPolicyDAO.loadPolicy(resourceAndPolicyName).map {
-      case None => createPolicy(resourceAndPolicyName, workbenchSubjects.flatten, generateGroupEmail(), policyMembership.roles, policyMembership.actions)
-      case Some(accessPolicy) => accessPolicyDAO.overwritePolicy(AccessPolicy(resourceAndPolicyName, workbenchSubjects.flatten, accessPolicy.email, policyMembership.roles, policyMembership.actions))
-    } andThen {
-      case Success(policy) => fireGroupUpdateNotification(policy.id)
+    makeCreatablePolicy(policyName, policyMembership).flatMap { policy =>
+      validatePolicy(resourceType, policy) match {
+        case Some(errorReport) => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "You have specified an invalid policy", errorReport))
+        case None => createOrUpdatePolicy(resource, policy)
+      }
     }
   }
 
-  //Overwrites an existing policy (keyed by resourceType/resourceId/policyName), saves a new one if it doesn't exist yet
-  def overwritePolicyOld(resourceType: ResourceType, policyName: AccessPolicyName, resource: Resource, policyMembership: AccessPolicyMembership): Future[AccessPolicy] = {
-    mapEmailsToSubjects(policyMembership.memberEmails).flatMap { members: Map[WorkbenchEmail, Option[WorkbenchSubject]] =>
-      validatePolicy(resourceType, policyMembership, members)
-
-      val resourceAndPolicyName = ResourceAndPolicyName(resource, policyName)
-      val workbenchSubjects = members.values.flatten.toSet
-
-      accessPolicyDAO.loadPolicy(resourceAndPolicyName).flatMap {
-        case None => createPolicy(resourceAndPolicyName, workbenchSubjects, generateGroupEmail(), policyMembership.roles, policyMembership.actions)
-        case Some(accessPolicy) => accessPolicyDAO.overwritePolicy(AccessPolicy(resourceAndPolicyName, workbenchSubjects, accessPolicy.email, policyMembership.roles, policyMembership.actions ))
-      } andThen {
-        case Success(policy) => fireGroupUpdateNotification(policy.id)
-      }
+  /**
+    * Overwrites the policy if it already exists or creates a new policy entry if it does not exist.
+    * Triggers update to Google Group upon successfully updating the policy.
+    * Note:  This method DOES NOT validate the policy and should probably not be called directly unless you know the
+    * contents are valid.  To validate and save the policy, use overwritePolicy()
+    * @param resource
+    * @param policy
+    * @return
+    */
+  private def createOrUpdatePolicy(resource: Resource, policy: AccessPolicyCreator): Future[AccessPolicy] = {
+    val resourceAndPolicyName = ResourceAndPolicyName(resource, policy.policyName)
+    val workbenchSubjects = policy.emailsToSubjects.values.flatten.toSet
+    accessPolicyDAO.loadPolicy(resourceAndPolicyName).flatMap {
+      case None => createPolicy(resourceAndPolicyName, workbenchSubjects, generateGroupEmail(), policy.roles, policy.actions)
+      case Some(accessPolicy) => accessPolicyDAO.overwritePolicy(AccessPolicy(resourceAndPolicyName, workbenchSubjects, accessPolicy.email, policy.roles, policy.actions))
+    } andThen {
+      case Success(policy) => fireGroupUpdateNotification(policy.id)
     }
   }
 
@@ -244,25 +203,27 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     Future.sequence(eventualSubjects).map(_.toMap)
   }
 
-  // When validating the policy, we want to collect each entity that was problematic and report that back using ErrorReports
-  private def validatePolicy(resourceType: ResourceType, policyMembership: AccessPolicyMembership): Future[Option[ErrorReport]] = {
-    mapEmailsToSubjects(policyMembership.memberEmails).map { members: Map[WorkbenchEmail, Option[WorkbenchSubject]] =>
-    val validationErrors = validateMemberEmails(members) ++ validateActions(resourceType, policyMembership) ++ validateRoles(resourceType, policyMembership)
-      if (validationErrors.nonEmpty) {
-        Some(ErrorReport("You have specified an invalid policy", validationErrors.toSeq))
-      } else None
-    }
+  /**
+    * Validates a policy in the context of a ResourceType.  When validating the policy, we want to collect each entity
+    * that was problematic and report that back using ErrorReports
+    * @param resourceType
+    * @param policy
+    * @return
+    */
+  private def validatePolicy(resourceType: ResourceType, policy: AccessPolicyCreator): Option[ErrorReport] = {
+    val validationErrors = validateMemberEmails(policy.emailsToSubjects) ++ validateActions(resourceType, policy) ++ validateRoles(resourceType, policy)
+    if (validationErrors.nonEmpty) {
+      Some(ErrorReport("You have specified an invalid policy", validationErrors.toSeq))
+    } else None
   }
 
-  // When validating the policy, we want to collect each entity that was problematic and report that back using ErrorReports
-//  private def validatePolicy(resourceType: ResourceType, policyMembership: AccessPolicyMembership, members: Map[WorkbenchEmail, Option[WorkbenchSubject]]) = {
-//    val validationErrors = validateMemberEmails(members) ++ validateActions(resourceType, policyMembership) ++ validateRoles(resourceType, policyMembership)
-//    if (validationErrors.nonEmpty)
-//      throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "You have specified an invalid policy", validationErrors.toSeq))
-//  }
-
-  // Keys are the member email addresses we want to add to the policy, values are the corresponding result of trying to lookup the
-  // subject in the Directory using that email address.  If we failed to find a matching subject, then that's not good
+  /**
+    * A valid email is one that matches the email address for a previously persisted WorkbenchSubject.
+    * @param emailsToSubjects Keys are the member email addresses we want to add to the policy, values are the
+    *                         corresponding result of trying to lookup the subject in the Directory using that email
+    *                         address.  If we failed to find a matching subject, then the email address is invalid
+    * @return an optional ErrorReport enumerating all invalid email addresses
+    */
   private def validateMemberEmails(emailsToSubjects: Map[WorkbenchEmail, Option[WorkbenchSubject]]): Option[ErrorReport] = {
     val invalidEmails = emailsToSubjects.collect { case (email, None) => email }
     if (invalidEmails.nonEmpty) {
@@ -271,16 +232,16 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     } else None
   }
 
-  private def validateRoles(resourceType: ResourceType, policyMembership: AccessPolicyMembership): Option[ErrorReport] = {
-    val invalidRoles = policyMembership.roles -- resourceType.roles.map(_.roleName)
+  private def validateRoles(resourceType: ResourceType, policy: AccessPolicyCreator): Option[ErrorReport] = {
+    val invalidRoles = policy.roles -- resourceType.roles.map(_.roleName)
     if (invalidRoles.nonEmpty) {
       val roleCauses = invalidRoles.map { resourceRoleName => ErrorReport(s"Invalid role: ${resourceRoleName}")}
       Some(ErrorReport(s"You have specified an invalid role for resource type ${resourceType.name}. Valid roles are: ${resourceType.roles.map(_.roleName).mkString(", ")}", roleCauses.toSeq))
     } else None
   }
 
-  private def validateActions(resourceType: ResourceType, policyMembership: AccessPolicyMembership): Option[ErrorReport] = {
-    val invalidActions = policyMembership.actions.filter(a => !resourceType.actionPatterns.exists(_.matches(a)))
+  private def validateActions(resourceType: ResourceType, policy: AccessPolicyCreator): Option[ErrorReport] = {
+    val invalidActions = policy.actions.filter(a => !resourceType.actionPatterns.exists(_.matches(a)))
     if (invalidActions.nonEmpty) {
       val actionCauses = invalidActions.map { resourceAction => ErrorReport(s"Invalid action: ${resourceAction}") }
       Some(ErrorReport(s"You have specified an invalid action for resource type ${resourceType.name}. Valid actions are: ${resourceType.actionPatterns.mkString(", ")}", actionCauses.toSeq))
@@ -335,6 +296,19 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     accessPolicyDAO.loadPolicy(resourceAndPolicyName).flatMap {
       case Some(policy) => loadAccessPolicyWithEmails(policy).map(Option(_))
       case None => Future.successful(None)
+    }
+  }
+
+  private def makeCreatablePolicies(policies: Map[AccessPolicyName, AccessPolicyMembership]): Future[Set[AccessPolicyCreator]] = {
+    val eventualPolicyCreators = policies.map {
+      case (accessPolicyName, accessPolicyMembership) => makeCreatablePolicy(accessPolicyName, accessPolicyMembership)
+    }
+    Future.sequence(eventualPolicyCreators.toSet)
+  }
+
+  private def makeCreatablePolicy(accessPolicyName: AccessPolicyName, accessPolicyMembership: AccessPolicyMembership): Future[AccessPolicyCreator] = {
+    mapEmailsToSubjects(accessPolicyMembership.memberEmails).map { emailsToSubjects =>
+      AccessPolicyCreator(accessPolicyName, emailsToSubjects, accessPolicyMembership.roles, accessPolicyMembership.actions)
     }
   }
 
