@@ -34,6 +34,15 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
 
   val service = new ResourceService(Map(defaultResourceType.name -> defaultResourceType, otherResourceType.name -> otherResourceType), policyDAO, dirDAO, NoExtensions, "example.com")
 
+  private object SamResourceActionPatterns {
+    val readPolicies = ResourceActionPattern("read_policies", "", false)
+    val alterPolicies = ResourceActionPattern("alter_policies", "", false)
+    val delete = ResourceActionPattern("delete", "", false)
+
+    val sharePolicy = ResourceActionPattern("share_policy::.+", "", false)
+    val readPolicy = ResourceActionPattern("read_policy::.+", "", false)
+  }
+
   override protected def beforeAll(): Unit = {
     super.beforeAll()
     runAndWait(schemaDao.init())

@@ -57,15 +57,6 @@ object SamResourceActions {
   def readPolicy(policy: AccessPolicyName) = ResourceAction(s"read_policy::${policy.value}")
 }
 
-object SamResourceActionPatterns {
-  val readPolicies = ResourceActionPattern("read_policies", "", false)
-  val alterPolicies = ResourceActionPattern("alter_policies", "", false)
-  val delete = ResourceActionPattern("delete", "", false)
-  
-  val sharePolicy = ResourceActionPattern("share_policy::.+", "", false)
-  val readPolicy = ResourceActionPattern("read_policy::.+", "", false)
-}
-
 case class UserStatusDetails(userSubjectId: WorkbenchUserId, userEmail: WorkbenchEmail) //for backwards compatibility to old API
 case class UserStatus(userInfo: UserStatusDetails, enabled: Map[String, Boolean])
 

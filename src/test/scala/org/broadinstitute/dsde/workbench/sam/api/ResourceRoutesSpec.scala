@@ -23,6 +23,15 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
 
   val defaultUserInfo = UserInfo(OAuth2BearerToken("accessToken"), WorkbenchUserId("user1"), WorkbenchEmail("user1@example.com"), 0)
 
+  private object SamResourceActionPatterns {
+    val readPolicies = ResourceActionPattern("read_policies", "", false)
+    val alterPolicies = ResourceActionPattern("alter_policies", "", false)
+    val delete = ResourceActionPattern("delete", "", false)
+
+    val sharePolicy = ResourceActionPattern("share_policy::.+", "", false)
+    val readPolicy = ResourceActionPattern("read_policy::.+", "", false)
+  }
+
   private def createSamRoutes(resourceTypes: Map[ResourceTypeName, ResourceType], userInfo: UserInfo = defaultUserInfo) = {
     val accessPolicyDAO = new MockAccessPolicyDAO()
     val directoryDAO = new MockDirectoryDAO()
