@@ -37,7 +37,7 @@ package object config {
       ResourceActionPattern(
         uqPath,
         config.getString(s"$uqPath.description"),
-        config.as[Option[Boolean]](s"$uqPath.authDomainConstrained").getOrElse(false)
+        config.as[Option[Boolean]](s"$uqPath.authDomainConstrainable").getOrElse(false)
       )
     }
   }

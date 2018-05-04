@@ -61,7 +61,7 @@ object SamResourceActions {
 case class UserStatusDetails(userSubjectId: WorkbenchUserId, userEmail: WorkbenchEmail) //for backwards compatibility to old API
 case class UserStatus(userInfo: UserStatusDetails, enabled: Map[String, Boolean])
 
-case class ResourceActionPattern(value: String, description: String, authDomainConstrained: Boolean) {
+case class ResourceActionPattern(value: String, description: String, authDomainConstrainable: Boolean) {
   def matches(other: ResourceAction) = value.r.pattern.matcher(other.value).matches()
 }
 case class ResourceAction(value: String) extends ValueObject

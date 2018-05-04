@@ -72,7 +72,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     val resourceTypes = config.as[Map[String, ResourceType]]("testStuff.resourceTypes").values.toSet
     val rt = resourceTypes.find(_.name == ResourceTypeName("testType")).getOrElse(fail("Missing test resource type, please check src/test/resources/reference.conf"))
     val constrainedAction = rt.actionPatterns.find(_.value == "alter_policies").getOrElse(fail("Missing action pattern, please check src/test/resources/reference.conf"))
-    constrainedAction.authDomainConstrained shouldEqual true
+    constrainedAction.authDomainConstrainable shouldEqual true
   }
 
   "ResourceService" should "create and delete resource" in {
