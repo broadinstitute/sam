@@ -3,7 +3,7 @@ package org.broadinstitute.dsde.workbench.sam.api
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.testkit.ScalatestRouteTest
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.{AppendedClues, FlatSpec, Matchers}
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import org.broadinstitute.dsde.workbench.model._
@@ -19,7 +19,7 @@ import org.broadinstitute.dsde.workbench.sam.service._
 /**
   * Created by dvoet on 6/7/17.
   */
-class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest with TestSupport {
+class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest with TestSupport with AppendedClues {
 
   val defaultUserInfo = UserInfo(OAuth2BearerToken("accessToken"), WorkbenchUserId("user1"), WorkbenchEmail("user1@example.com"), 0)
 
@@ -146,14 +146,16 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     }
   }
 
+  private def responsePayloadClue(str: String): String = s" -> Here is the response payload: $str"
+
   private def createUserResourcePolicy(members: AccessPolicyMembership, resourceType: ResourceType, samRoutes: TestSamRoutes, resourceId: ResourceId, policyName: AccessPolicyName): Unit = {
     Post(s"/api/resource/${resourceType.name}/${resourceId.value}") ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.NoContent
+      status shouldEqual StatusCodes.NoContent withClue responsePayloadClue(responseAs[String])
     }
 
 
     Put(s"/api/resource/${resourceType.name}/${resourceId.value}/policies/${policyName.value}", members) ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.Created
+      status shouldEqual StatusCodes.Created withClue responsePayloadClue(responseAs[String])
     }
   }
 
