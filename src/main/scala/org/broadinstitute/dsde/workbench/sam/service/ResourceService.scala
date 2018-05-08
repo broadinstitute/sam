@@ -18,6 +18,9 @@ import scala.util.Success
   * Created by mbemis on 5/22/17.
   */
 class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceType], private val accessPolicyDAO: AccessPolicyDAO, private val directoryDAO: DirectoryDAO, private val cloudExtensions: CloudExtensions, private val emailDomain: String)(implicit val executionContext: ExecutionContext) extends LazyLogging {
+
+  case class PotentialAccessPolicy(policyName: AccessPolicyName, emailsToSubjects: Map[WorkbenchEmail, Option[WorkbenchSubject]], roles: Set[ResourceRoleName], actions: Set[ResourceAction])
+
   def getResourceTypes(): Future[Map[ResourceTypeName, ResourceType]] = {
     Future.successful(resourceTypes)
   }
@@ -54,10 +57,12 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     * @return Future[Resource]
     */
   def createResource(resourceType: ResourceType, resourceId: ResourceId, policiesMap: Map[AccessPolicyName, AccessPolicyMembership], userInfo: UserInfo): Future[Resource] = {
-    makeCreatablePolicies(policiesMap).flatMap { policies =>
-      validateCreateResource(resourceType, resourceId, policies, userInfo) match {
-        case Some(errorReport) => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "Cannot create resource", errorReport))
-        case None => persistResource(resourceType, resourceId, policies)
+    makePotentialPolicies(policiesMap).flatMap { policies =>
+      val errorReports = validateCreateResource(resourceType, resourceId, policies, userInfo)
+      if (errorReports.nonEmpty) {
+        throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "Cannot create resource", errorReports))
+      } else {
+        persistResource(resourceType, resourceId, policies)
       }
     }
   }
@@ -78,12 +83,10 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     } yield resource
   }
 
-  private def validateCreateResource(resourceType: ResourceType, resourceId: ResourceId, policies: Set[PotentialAccessPolicy], userInfo: UserInfo): Option[Seq[ErrorReport]] = {
+  private def validateCreateResource(resourceType: ResourceType, resourceId: ResourceId, policies: Set[PotentialAccessPolicy], userInfo: UserInfo): Seq[ErrorReport] = {
     val ownerPolicyErrors = validateOwnerPolicyExists(resourceType, policies).toSeq
     val policyErrors = policies.flatMap(policy => validatePolicy(resourceType, policy)).toSeq
-
-    val possibleErrors = ownerPolicyErrors ++ policyErrors
-    if (possibleErrors.nonEmpty) Some(possibleErrors) else None
+    ownerPolicyErrors ++ policyErrors
   }
 
   private def validateOwnerPolicyExists(resourceType: ResourceType, policies: Set[PotentialAccessPolicy]): Option[ErrorReport] = {
@@ -299,11 +302,10 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     }
   }
 
-  private def makeCreatablePolicies(policies: Map[AccessPolicyName, AccessPolicyMembership]): Future[Set[PotentialAccessPolicy]] = {
-    val eventualPolicyCreators = policies.map {
+  private def makePotentialPolicies(policies: Map[AccessPolicyName, AccessPolicyMembership]): Future[Set[PotentialAccessPolicy]] = {
+    Future.traverse(policies) {
       case (accessPolicyName, accessPolicyMembership) => makeCreatablePolicy(accessPolicyName, accessPolicyMembership)
-    }
-    Future.sequence(eventualPolicyCreators.toSet)
+    }.map(_.toSet)
   }
 
   private def makeCreatablePolicy(accessPolicyName: AccessPolicyName, accessPolicyMembership: AccessPolicyMembership): Future[PotentialAccessPolicy] = {
