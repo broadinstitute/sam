@@ -1,0 +1,28 @@
+version: '2'
+services:
+  sam-proxy:
+    image: broadinstitute/openidc-proxy:db_ldap_2_3_3
+    ports:
+      - "29800:80"
+      - "29443:443"
+      - "24890:8888"
+    volumes:
+      - {{$dir}}/sam/server.crt:/etc/ssl/certs/server.crt:ro
+      - {{$dir}}/sam/server.key:/etc/ssl/private/server.key:ro
+      - {{$dir}}/sam/ca-bundle.crt:/etc/ssl/certs/ca-bundle.crt:ro
+      - {{$dir}}/sam/site.conf:/etc/apache2/sites-available/site.conf      
+    environment:
+      CALLBACK_URI: https://sam/oauth2callback
+      LOG_LEVEL: debug
+      SERVER_NAME: sam
+      AUTH_REQUIRE2: Require ldap-group cn=enabled-users,ou=groups,dc=example,dc=com
+      AUTH_LDAP_URL2: 'AuthLDAPURL "ldap://opendj:390/ou=people,dc=example,dc=com?uid?sub?(objectClass=*)"'
+      AUTH_LDAP_GROUP_ATTR2: 'AuthLDAPGroupAttribute member'
+      AUTH_LDAP_BIND_DN2: 'AuthLDAPBindDN "cn=proxy-ro,ou=people,dc=example,dc=com"'
+      AUTH_LDAP_BIND_PASSWORD2: 'AuthLDAPBindPassword readonly'
+      REMOTE_USER_CLAIM: sub
+      ENABLE_STACKDRIVER: 'yes'
+      ENABLE_MODSECURITY: 'yes'
+      LDAP_CACHE_TTL: 300
+      FILTER2: AddOutputFilterByType DEFLATE application/json text/plain text/html application/javascript application/x-javascript
+    restart: always
