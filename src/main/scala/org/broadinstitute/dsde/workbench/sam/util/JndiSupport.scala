@@ -3,10 +3,11 @@ package org.broadinstitute.dsde.workbench.sam.util
 import java.text.SimpleDateFormat
 import java.util
 import java.util.Date
+
 import javax.naming._
 import javax.naming.directory._
-
-import org.broadinstitute.dsde.workbench.model.WorkbenchException
+import org.broadinstitute.dsde.workbench.model.{WorkbenchException, WorkbenchSubject}
+import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO.Attr
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Try
@@ -93,6 +94,10 @@ trait JndiSupport {
         results.close()
       }
     }
+  }
+
+  def touchSubject(subjectDn: String, ctx: InitialDirContext): Unit = {
+    ctx.modifyAttributes(subjectDn, DirContext.REPLACE_ATTRIBUTE, new BasicAttributes(Attr.description, " ", true))
   }
 
   protected def formattedDate(date: Date) = new SimpleDateFormat("yyyyMMddHHmmss.SSSZ").format(date)

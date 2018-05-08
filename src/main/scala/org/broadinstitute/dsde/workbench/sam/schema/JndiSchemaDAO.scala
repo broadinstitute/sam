@@ -40,6 +40,7 @@ object JndiSchemaDAO {
     val uid = "uid"
     val project = "project"
     val proxyEmail = "proxyEmail"
+    val description = "description"
   }
 
   object ObjectClass {

@@ -6,7 +6,7 @@ import com.typesafe.config.ConfigFactory
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FlatSpec, Matchers}
 import net.ceedubs.ficus.Ficus._
-import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchGroup, WorkbenchGroupName, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.config.{DirectoryConfig, SchemaLockConfig}
 import org.broadinstitute.dsde.workbench.sam.directory._
@@ -42,9 +42,12 @@ class JndiAccessPolicyDAOSpec extends FlatSpec with Matchers with TestSupport wi
     val typeName1 = ResourceTypeName(UUID.randomUUID().toString)
     val typeName2 = ResourceTypeName(UUID.randomUUID().toString)
 
-    val policy1Group = BasicWorkbenchGroup(WorkbenchGroupName("role1-a"), Set(WorkbenchUserId("foo")), toEmail(typeName1.value, "resource", "role1-a"))
-    val policy2Group = BasicWorkbenchGroup(WorkbenchGroupName("role1-b"), Set(WorkbenchUserId("foo")),toEmail(typeName1.value, "resource", "role1-b"))
-    val policy3Group = BasicWorkbenchGroup(WorkbenchGroupName("role1-a"), Set(WorkbenchUserId("foo")), toEmail(typeName2.value, "resource", "role1-a"))
+    val userId = WorkbenchUserId("foo")
+    runAndWait(dirDao.createUser(WorkbenchUser(userId, WorkbenchEmail("foo@foo.org"))))
+
+    val policy1Group = BasicWorkbenchGroup(WorkbenchGroupName("role1-a"), Set(userId), toEmail(typeName1.value, "resource", "role1-a"))
+    val policy2Group = BasicWorkbenchGroup(WorkbenchGroupName("role1-b"), Set(userId),toEmail(typeName1.value, "resource", "role1-b"))
+    val policy3Group = BasicWorkbenchGroup(WorkbenchGroupName("role1-a"), Set(userId), toEmail(typeName2.value, "resource", "role1-a"))
 
     val policy1 = AccessPolicy(ResourceAndPolicyName(Resource(typeName1, ResourceId("resource")), AccessPolicyName("role1-a")), policy1Group.members, policy1Group.email, Set(ResourceRoleName("role1")), Set(ResourceAction("action1"), ResourceAction("action2")))
     val policy2 = AccessPolicy(ResourceAndPolicyName(Resource(typeName1, ResourceId("resource")), AccessPolicyName("role1-b")), policy2Group.members, policy2Group.email, Set(ResourceRoleName("role1")), Set(ResourceAction("action3"), ResourceAction("action4")))

@@ -125,6 +125,7 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
       }
 
       ctx.bind(policyDn(policy.id), policyContext)
+      policy.members.foreach(member => touchSubject(subjectDn(member), ctx))
       policy
     } catch {
       case _: NameAlreadyBoundException => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, "A policy by this name already exists for this resource"))
@@ -154,6 +155,7 @@ class JndiAccessPolicyDAO(protected val directoryConfig: DirectoryConfig)(implic
     myAttrs.put(Attr.groupUpdatedTimestamp, formattedDate(new Date()))
 
     ctx.modifyAttributes(policyDn(newPolicy.id), DirContext.REPLACE_ATTRIBUTE, myAttrs)
+    newPolicy.members.foreach(member => touchSubject(subjectDn(member), ctx))
     newPolicy
   }
 

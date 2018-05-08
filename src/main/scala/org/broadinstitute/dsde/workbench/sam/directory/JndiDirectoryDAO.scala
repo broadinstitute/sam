@@ -46,6 +46,7 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
       }
 
       ctx.bind(groupDn(group.id), groupContext)
+      group.members.foreach(member => touchSubject(subjectDn(member), ctx))
       group
 
     } catch {
@@ -66,6 +67,7 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
 
   override def removeGroupMember(groupId: WorkbenchGroupIdentity, removeMember: WorkbenchSubject): Future[Unit] = withContext { ctx =>
     ctx.modifyAttributes(groupDn(groupId), DirContext.REMOVE_ATTRIBUTE, new BasicAttributes(Attr.uniqueMember, subjectDn(removeMember)))
+    touchSubject(subjectDn(groupId), ctx)
     updateUpdatedDate(groupId, ctx)
   } recover {
     case _: NoSuchAttributeException => ()  // don't fail if the member is already not in the group
@@ -73,6 +75,7 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
 
   override def addGroupMember(groupId: WorkbenchGroupIdentity, addMember: WorkbenchSubject): Future[Unit] = withContext { ctx =>
     ctx.modifyAttributes(groupDn(groupId), DirContext.ADD_ATTRIBUTE, new BasicAttributes(Attr.uniqueMember, subjectDn(addMember)))
+    touchSubject(subjectDn(groupId), ctx)
     updateUpdatedDate(groupId, ctx)
   }
 
