@@ -11,7 +11,7 @@ object SamJsonSupport {
   import DefaultJsonProtocol._
   import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 
-  implicit val ResourceActionPatternFormat = ValueObjectFormat(ResourceActionPattern)
+  implicit val ResourceActionPatternFormat = jsonFormat3(ResourceActionPattern)
 
   implicit val ResourceActionFormat = ValueObjectFormat(ResourceAction)
 
@@ -58,21 +58,11 @@ object SamResourceActions {
   def readPolicy(policy: AccessPolicyName) = ResourceAction(s"read_policy::${policy.value}")
 }
 
-object SamResourceActionPatterns {
-  val readPolicies = ResourceActionPattern("read_policies")
-  val alterPolicies = ResourceActionPattern("alter_policies")
-  val delete = ResourceActionPattern("delete")
-  
-  val sharePolicy = ResourceActionPattern("share_policy::.+")
-  val readPolicy = ResourceActionPattern("read_policy::.+")
-}
-
 case class UserStatusDetails(userSubjectId: WorkbenchUserId, userEmail: WorkbenchEmail) //for backwards compatibility to old API
 case class UserStatus(userInfo: UserStatusDetails, enabled: Map[String, Boolean])
 
-case class ResourceActionPattern(value: String) extends ValueObject {
-  lazy val regex = value.r
-  def matches(other: ResourceAction) = regex.pattern.matcher(other.value).matches()
+case class ResourceActionPattern(value: String, description: String, authDomainConstrainable: Boolean) {
+  def matches(other: ResourceAction) = value.r.pattern.matcher(other.value).matches()
 }
 case class ResourceAction(value: String) extends ValueObject
 case class ResourceRoleName(value: String) extends ValueObject
