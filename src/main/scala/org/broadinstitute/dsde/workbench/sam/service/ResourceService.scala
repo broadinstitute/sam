@@ -19,7 +19,7 @@ import scala.util.Success
   */
 class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceType], private val accessPolicyDAO: AccessPolicyDAO, private val directoryDAO: DirectoryDAO, private val cloudExtensions: CloudExtensions, private val emailDomain: String)(implicit val executionContext: ExecutionContext) extends LazyLogging {
 
-  case class PotentialAccessPolicy(policyName: AccessPolicyName, emailsToSubjects: Map[WorkbenchEmail, Option[WorkbenchSubject]], roles: Set[ResourceRoleName], actions: Set[ResourceAction])
+  private case class ValidatableAccessPolicy(policyName: AccessPolicyName, emailsToSubjects: Map[WorkbenchEmail, Option[WorkbenchSubject]], roles: Set[ResourceRoleName], actions: Set[ResourceAction])
 
   def getResourceTypes(): Future[Map[ResourceTypeName, ResourceType]] = {
     Future.successful(resourceTypes)
@@ -76,20 +76,20 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     * @param policies
     * @return Future[Resource]
     */
-  private def persistResource(resourceType: ResourceType, resourceId: ResourceId, policies: Set[PotentialAccessPolicy]) = {
+  private def persistResource(resourceType: ResourceType, resourceId: ResourceId, policies: Set[ValidatableAccessPolicy]) = {
     for {
       resource <- accessPolicyDAO.createResource(Resource(resourceType.name, resourceId))
       _ <- Future.traverse(policies)(createOrUpdatePolicy(resource, _))
     } yield resource
   }
 
-  private def validateCreateResource(resourceType: ResourceType, resourceId: ResourceId, policies: Set[PotentialAccessPolicy], userInfo: UserInfo): Seq[ErrorReport] = {
+  private def validateCreateResource(resourceType: ResourceType, resourceId: ResourceId, policies: Set[ValidatableAccessPolicy], userInfo: UserInfo): Seq[ErrorReport] = {
     val ownerPolicyErrors = validateOwnerPolicyExists(resourceType, policies).toSeq
     val policyErrors = policies.flatMap(policy => validatePolicy(resourceType, policy)).toSeq
     ownerPolicyErrors ++ policyErrors
   }
 
-  private def validateOwnerPolicyExists(resourceType: ResourceType, policies: Set[PotentialAccessPolicy]): Option[ErrorReport] = {
+  private def validateOwnerPolicyExists(resourceType: ResourceType, policies: Set[ValidatableAccessPolicy]): Option[ErrorReport] = {
     val ownerExists = policies.exists { policy => policy.roles.contains(resourceType.ownerRoleName) && policy.emailsToSubjects.nonEmpty }
     if (!ownerExists) {
       Some(ErrorReport(s"Cannot create resource without at least 1 policy with ${resourceType.ownerRoleName.value} role and non-empty membership"))
@@ -187,7 +187,7 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     * @param policy
     * @return
     */
-  private def createOrUpdatePolicy(resource: Resource, policy: PotentialAccessPolicy): Future[AccessPolicy] = {
+  private def createOrUpdatePolicy(resource: Resource, policy: ValidatableAccessPolicy): Future[AccessPolicy] = {
     val resourceAndPolicyName = ResourceAndPolicyName(resource, policy.policyName)
     val workbenchSubjects = policy.emailsToSubjects.values.flatten.toSet
     accessPolicyDAO.loadPolicy(resourceAndPolicyName).flatMap {
@@ -213,7 +213,7 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     * @param policy
     * @return
     */
-  private def validatePolicy(resourceType: ResourceType, policy: PotentialAccessPolicy): Option[ErrorReport] = {
+  private def validatePolicy(resourceType: ResourceType, policy: ValidatableAccessPolicy): Option[ErrorReport] = {
     val validationErrors = validateMemberEmails(policy.emailsToSubjects) ++ validateActions(resourceType, policy) ++ validateRoles(resourceType, policy)
     if (validationErrors.nonEmpty) {
       Some(ErrorReport("You have specified an invalid policy", validationErrors.toSeq))
@@ -235,7 +235,7 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     } else None
   }
 
-  private def validateRoles(resourceType: ResourceType, policy: PotentialAccessPolicy): Option[ErrorReport] = {
+  private def validateRoles(resourceType: ResourceType, policy: ValidatableAccessPolicy): Option[ErrorReport] = {
     val invalidRoles = policy.roles -- resourceType.roles.map(_.roleName)
     if (invalidRoles.nonEmpty) {
       val roleCauses = invalidRoles.map { resourceRoleName => ErrorReport(s"Invalid role: ${resourceRoleName}")}
@@ -243,7 +243,7 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     } else None
   }
 
-  private def validateActions(resourceType: ResourceType, policy: PotentialAccessPolicy): Option[ErrorReport] = {
+  private def validateActions(resourceType: ResourceType, policy: ValidatableAccessPolicy): Option[ErrorReport] = {
     val invalidActions = policy.actions.filter(a => !resourceType.actionPatterns.exists(_.matches(a)))
     if (invalidActions.nonEmpty) {
       val actionCauses = invalidActions.map { resourceAction => ErrorReport(s"Invalid action: ${resourceAction}") }
@@ -302,15 +302,15 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     }
   }
 
-  private def makePotentialPolicies(policies: Map[AccessPolicyName, AccessPolicyMembership]): Future[Set[PotentialAccessPolicy]] = {
+  private def makePotentialPolicies(policies: Map[AccessPolicyName, AccessPolicyMembership]): Future[Set[ValidatableAccessPolicy]] = {
     Future.traverse(policies) {
       case (accessPolicyName, accessPolicyMembership) => makeCreatablePolicy(accessPolicyName, accessPolicyMembership)
     }.map(_.toSet)
   }
 
-  private def makeCreatablePolicy(accessPolicyName: AccessPolicyName, accessPolicyMembership: AccessPolicyMembership): Future[PotentialAccessPolicy] = {
+  private def makeCreatablePolicy(accessPolicyName: AccessPolicyName, accessPolicyMembership: AccessPolicyMembership): Future[ValidatableAccessPolicy] = {
     mapEmailsToSubjects(accessPolicyMembership.memberEmails).map { emailsToSubjects =>
-      PotentialAccessPolicy(accessPolicyName, emailsToSubjects, accessPolicyMembership.roles, accessPolicyMembership.actions)
+      ValidatableAccessPolicy(accessPolicyName, emailsToSubjects, accessPolicyMembership.roles, accessPolicyMembership.actions)
     }
   }
 
