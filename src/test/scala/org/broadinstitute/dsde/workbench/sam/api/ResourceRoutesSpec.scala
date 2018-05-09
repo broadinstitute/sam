@@ -149,6 +149,9 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
   private def responsePayloadClue(str: String): String = s" -> Here is the response payload: $str"
 
   private def createUserResourcePolicy(members: AccessPolicyMembership, resourceType: ResourceType, samRoutes: TestSamRoutes, resourceId: ResourceId, policyName: AccessPolicyName): Unit = {
+    val user = WorkbenchUser(samRoutes.userInfo.userId, samRoutes.userInfo.userEmail)
+    findOrCreateUser(user, samRoutes.userService)
+
     Post(s"/api/resource/${resourceType.name}/${resourceId.value}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NoContent withClue responsePayloadClue(responseAs[String])
     }
@@ -156,6 +159,13 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
 
     Put(s"/api/resource/${resourceType.name}/${resourceId.value}/policies/${policyName.value}", members) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created withClue responsePayloadClue(responseAs[String])
+    }
+  }
+
+  private def findOrCreateUser(user: WorkbenchUser, userService: UserService): UserStatus = {
+    runAndWait(userService.getUserStatus(user.id)) match {
+      case Some(userStatus) => userStatus
+      case None => runAndWait(userService.createUser(user))
     }
   }
 
