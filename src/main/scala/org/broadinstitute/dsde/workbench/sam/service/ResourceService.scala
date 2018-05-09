@@ -57,7 +57,7 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     * @return Future[Resource]
     */
   def createResource(resourceType: ResourceType, resourceId: ResourceId, policiesMap: Map[AccessPolicyName, AccessPolicyMembership], userInfo: UserInfo): Future[Resource] = {
-    makePotentialPolicies(policiesMap).flatMap { policies =>
+    makeValidatablePolicies(policiesMap).flatMap { policies =>
       val errorReports = validateCreateResource(resourceType, resourceId, policies, userInfo)
       if (errorReports.nonEmpty) {
         throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "Cannot create resource", errorReports))
@@ -302,7 +302,7 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     }
   }
 
-  private def makePotentialPolicies(policies: Map[AccessPolicyName, AccessPolicyMembership]): Future[Set[ValidatableAccessPolicy]] = {
+  private def makeValidatablePolicies(policies: Map[AccessPolicyName, AccessPolicyMembership]): Future[Set[ValidatableAccessPolicy]] = {
     Future.traverse(policies) {
       case (accessPolicyName, accessPolicyMembership) => makeCreatablePolicy(accessPolicyName, accessPolicyMembership)
     }.map(_.toSet)
