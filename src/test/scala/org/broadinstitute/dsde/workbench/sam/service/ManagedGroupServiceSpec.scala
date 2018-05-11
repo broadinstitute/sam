@@ -78,304 +78,290 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     runAndWait(managedGroupService.createManagedGroup(ResourceId(groupName), userInfo))
   }
 
-  def assertIsMemberOf(groupName: String, userId: WorkbenchUserId) = {
-    val results = runAndWait(dirDAO.listUsersGroups(userId))
-
-    assert(results.contains(WorkbenchGroupName(groupName)))
-  }
-
   before {
     runAndWait(schemaDao.clearDatabase())
     runAndWait(schemaDao.createOrgUnits())
     runAndWait(dirDAO.createUser(WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)))
   }
 
-  "ReproSpec" should s"create a bad managed group" in {
-    for(i <- 1 to 100) {
-      val groupName = s"groupNumber$i"
+  "ManagedGroupService create" should "create a managed group with admin and member policies" in {
+    assertMakeGroup()
+    val policies = runAndWait(policyDAO.listAccessPolicies(expectedResource))
+    policies.map(_.id.accessPolicyName.value) shouldEqual Set("admin", "member", "admin-notifier")
+  }
+
+  it should "create a workbenchGroup with the same name as the Managed Group" in {
+    assertMakeGroup()
+    val samGroup: Option[BasicWorkbenchGroup] = runAndWait(dirDAO.loadGroup(WorkbenchGroupName(resourceId.value)))
+    samGroup.value.id.value shouldEqual resourceId.value
+  }
+
+  it should "create a workbenchGroup with 2 member WorkbenchSubjects" in {
+    assertMakeGroup()
+    val samGroup: Option[BasicWorkbenchGroup] = runAndWait(dirDAO.loadGroup(WorkbenchGroupName(resourceId.value)))
+    samGroup.value.members shouldEqual Set(adminPolicy, memberPolicy)
+  }
+
+  it should "sync the new group with Google" in {
+    val mockGoogleExtensions = mock[GoogleExtensions]
+    val managedGroupService = new ManagedGroupService(resourceService, resourceTypeMap, policyDAO, dirDAO, mockGoogleExtensions, testDomain)
+    val groupName = WorkbenchGroupName(resourceId.value)
+
+    when(mockGoogleExtensions.publishGroup(groupName)).thenReturn(Future.successful(()))
+    assertMakeGroup(managedGroupService = managedGroupService)
+    verify(mockGoogleExtensions).publishGroup(groupName)
+  }
+
+  it should "fail when trying to create a group that already exists" in {
+    val groupName = "uniqueName"
+    assertMakeGroup(groupName)
+    val exception = intercept[WorkbenchExceptionWithErrorReport] {
+      runAndWait(managedGroupService.createManagedGroup(ResourceId(groupName), dummyUserInfo))
+    }
+    exception.getMessage should include ("A resource of this type and name already exists")
+    runAndWait(managedGroupService.loadManagedGroup(resourceId)) shouldEqual None
+  }
+
+  it should "succeed after a managed group with the same name has been deleted" in {
+    val groupId = ResourceId("uniqueName")
+    managedGroupResourceType.reuseIds shouldEqual true
+    assertMakeGroup(groupId.value)
+    runAndWait(managedGroupService.deleteManagedGroup(groupId))
+    assertMakeGroup(groupId.value)
+  }
+
+  it should "fail when the group name is too long" in {
+    val maxLen = 60
+    val groupName = "a" * (maxLen + 1)
+    val exception = intercept[WorkbenchExceptionWithErrorReport] {
       assertMakeGroup(groupName)
-      assertIsMemberOf(groupName, dummyUserInfo.userId)
+    }
+    exception.getMessage should include (s"must be $maxLen characters or fewer")
+    runAndWait(managedGroupService.loadManagedGroup(resourceId)) shouldEqual None
+  }
+
+  it should "fail when the group name has invalid characters" in {
+    val groupName = "Make It Rain!!! $$$$$"
+    val exception = intercept[WorkbenchExceptionWithErrorReport] {
+      assertMakeGroup(groupName)
+    }
+    exception.getMessage should include ("Group name may only contain alphanumeric characters, underscores, and dashes")
+    runAndWait(managedGroupService.loadManagedGroup(resourceId)) shouldEqual None
+  }
+
+  "ManagedGroupService get" should "return the Managed Group resource" in {
+    assertMakeGroup()
+    val maybeEmail = runAndWait(managedGroupService.loadManagedGroup(resourceId))
+    maybeEmail.value.value shouldEqual s"${resourceId.value}@$testDomain"
+  }
+
+  // NOTE: All since we don't have a way to look up policies directly without going through a Resource, this test
+  // may not be actually confirming that the policies have been deleted.  They may still be in LDAP, just orphaned
+  // because the resource no longer exists
+  "ManagedGroupService delete" should "delete policies associated to that resource in LDAP and in Google" in {
+    val groupEmail = WorkbenchEmail(resourceId.value + "@" + testDomain)
+    val mockGoogleExtensions = mock[GoogleExtensions]
+    when(mockGoogleExtensions.onGroupDelete(groupEmail)).thenReturn(Future.successful(()))
+    when(mockGoogleExtensions.publishGroup(WorkbenchGroupName(resourceId.value))).thenReturn(Future.successful(()))
+    val managedGroupService = new ManagedGroupService(resourceService, resourceTypeMap, policyDAO, dirDAO, mockGoogleExtensions, testDomain)
+
+    assertMakeGroup(managedGroupService = managedGroupService)
+    runAndWait(managedGroupService.deleteManagedGroup(resourceId))
+    verify(mockGoogleExtensions).onGroupDelete(groupEmail)
+    runAndWait(policyDAO.listAccessPolicies(expectedResource)) shouldEqual Set.empty
+    runAndWait(policyDAO.loadPolicy(adminPolicy)) shouldEqual None
+    runAndWait(policyDAO.loadPolicy(memberPolicy)) shouldEqual None
+  }
+
+  it should "fail if the managed group is a sub group of any other workbench group" in {
+    val managedGroup = assertMakeGroup("coolGroup")
+    val managedGroupName = WorkbenchGroupName(managedGroup.resourceId.value)
+    val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName("parentGroup"), Set(managedGroupName), WorkbenchEmail("foo@foo.gov"))
+
+    runAndWait(dirDAO.createGroup(parentGroup)) shouldEqual parentGroup
+
+    // using .get on an option here because if the Option is None and this throws an exception, that's fine
+    runAndWait(dirDAO.loadGroup(parentGroup.id)).get.members shouldEqual Set(managedGroupName)
+
+    intercept[WorkbenchExceptionWithErrorReport] {
+      runAndWait(managedGroupService.deleteManagedGroup(managedGroup.resourceId))
+    }
+
+    runAndWait(managedGroupService.loadManagedGroup(managedGroup.resourceId)) shouldNot be (None)
+    runAndWait(dirDAO.loadGroup(parentGroup.id)).get.members shouldEqual Set(managedGroupName)
+  }
+
+  "ManagedGroupService listPolicyMemberEmails" should "return a list of email addresses for the groups admin policy" in {
+    val managedGroup = assertMakeGroup()
+    runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName)) shouldEqual Set(dummyUserInfo.userEmail)
+    runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.memberPolicyName)) shouldEqual Set.empty
+  }
+
+  it should "throw an exception if the group does not exist" in {
+    intercept[WorkbenchExceptionWithErrorReport] {
+      runAndWait(managedGroupService.listPolicyMemberEmails(resourceId, ManagedGroupService.adminPolicyName))
     }
   }
 
-//  "ManagedGroupService create" should "create a managed group with admin and member policies" in {
-//    assertMakeGroup()
-//    val policies = runAndWait(policyDAO.listAccessPolicies(expectedResource))
-//    policies.map(_.id.accessPolicyName.value) shouldEqual Set("admin", "member", "admin-notifier")
-//  }
-//
-//  it should "create a workbenchGroup with the same name as the Managed Group" in {
-//    assertMakeGroup()
-//    val samGroup: Option[BasicWorkbenchGroup] = runAndWait(dirDAO.loadGroup(WorkbenchGroupName(resourceId.value)))
-//    samGroup.value.id.value shouldEqual resourceId.value
-//  }
-//
-//  it should "create a workbenchGroup with 2 member WorkbenchSubjects" in {
-//    assertMakeGroup()
-//    val samGroup: Option[BasicWorkbenchGroup] = runAndWait(dirDAO.loadGroup(WorkbenchGroupName(resourceId.value)))
-//    samGroup.value.members shouldEqual Set(adminPolicy, memberPolicy)
-//  }
-//
-//  it should "sync the new group with Google" in {
-//    val mockGoogleExtensions = mock[GoogleExtensions]
-//    val managedGroupService = new ManagedGroupService(resourceService, resourceTypeMap, policyDAO, dirDAO, mockGoogleExtensions, testDomain)
-//    val groupName = WorkbenchGroupName(resourceId.value)
-//
-//    when(mockGoogleExtensions.publishGroup(groupName)).thenReturn(Future.successful(()))
-//    assertMakeGroup(managedGroupService = managedGroupService)
-//    verify(mockGoogleExtensions).publishGroup(groupName)
-//  }
-//
-//  it should "fail when trying to create a group that already exists" in {
-//    val groupName = "uniqueName"
-//    assertMakeGroup(groupName)
-//    val exception = intercept[WorkbenchExceptionWithErrorReport] {
-//      runAndWait(managedGroupService.createManagedGroup(ResourceId(groupName), dummyUserInfo))
-//    }
-//    exception.getMessage should include ("A resource of this type and name already exists")
-//    runAndWait(managedGroupService.loadManagedGroup(resourceId)) shouldEqual None
-//  }
-//
-//  it should "succeed after a managed group with the same name has been deleted" in {
-//    val groupId = ResourceId("uniqueName")
-//    managedGroupResourceType.reuseIds shouldEqual true
-//    assertMakeGroup(groupId.value)
-//    runAndWait(managedGroupService.deleteManagedGroup(groupId))
-//    assertMakeGroup(groupId.value)
-//  }
-//
-//  it should "fail when the group name is too long" in {
-//    val maxLen = 60
-//    val groupName = "a" * (maxLen + 1)
-//    val exception = intercept[WorkbenchExceptionWithErrorReport] {
-//      assertMakeGroup(groupName)
-//    }
-//    exception.getMessage should include (s"must be $maxLen characters or fewer")
-//    runAndWait(managedGroupService.loadManagedGroup(resourceId)) shouldEqual None
-//  }
-//
-//  it should "fail when the group name has invalid characters" in {
-//    val groupName = "Make It Rain!!! $$$$$"
-//    val exception = intercept[WorkbenchExceptionWithErrorReport] {
-//      assertMakeGroup(groupName)
-//    }
-//    exception.getMessage should include ("Group name may only contain alphanumeric characters, underscores, and dashes")
-//    runAndWait(managedGroupService.loadManagedGroup(resourceId)) shouldEqual None
-//  }
-//
-//  "ManagedGroupService get" should "return the Managed Group resource" in {
-//    assertMakeGroup()
-//    val maybeEmail = runAndWait(managedGroupService.loadManagedGroup(resourceId))
-//    maybeEmail.value.value shouldEqual s"${resourceId.value}@$testDomain"
-//  }
-//
-//  // NOTE: All since we don't have a way to look up policies directly without going through a Resource, this test
-//  // may not be actually confirming that the policies have been deleted.  They may still be in LDAP, just orphaned
-//  // because the resource no longer exists
-//  "ManagedGroupService delete" should "delete policies associated to that resource in LDAP and in Google" in {
-//    val groupEmail = WorkbenchEmail(resourceId.value + "@" + testDomain)
-//    val mockGoogleExtensions = mock[GoogleExtensions]
-//    when(mockGoogleExtensions.onGroupDelete(groupEmail)).thenReturn(Future.successful(()))
-//    when(mockGoogleExtensions.publishGroup(WorkbenchGroupName(resourceId.value))).thenReturn(Future.successful(()))
-//    val managedGroupService = new ManagedGroupService(resourceService, resourceTypeMap, policyDAO, dirDAO, mockGoogleExtensions, testDomain)
-//
-//    assertMakeGroup(managedGroupService = managedGroupService)
-//    runAndWait(managedGroupService.deleteManagedGroup(resourceId))
-//    verify(mockGoogleExtensions).onGroupDelete(groupEmail)
-//    runAndWait(policyDAO.listAccessPolicies(expectedResource)) shouldEqual Set.empty
-//    runAndWait(policyDAO.loadPolicy(adminPolicy)) shouldEqual None
-//    runAndWait(policyDAO.loadPolicy(memberPolicy)) shouldEqual None
-//  }
-//
-//  it should "fail if the managed group is a sub group of any other workbench group" in {
-//    val managedGroup = assertMakeGroup("coolGroup")
-//    val managedGroupName = WorkbenchGroupName(managedGroup.resourceId.value)
-//    val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName("parentGroup"), Set(managedGroupName), WorkbenchEmail("foo@foo.gov"))
-//
-//    runAndWait(dirDAO.createGroup(parentGroup)) shouldEqual parentGroup
-//
-//    // using .get on an option here because if the Option is None and this throws an exception, that's fine
-//    runAndWait(dirDAO.loadGroup(parentGroup.id)).get.members shouldEqual Set(managedGroupName)
-//
-//    intercept[WorkbenchExceptionWithErrorReport] {
-//      runAndWait(managedGroupService.deleteManagedGroup(managedGroup.resourceId))
-//    }
-//
-//    runAndWait(managedGroupService.loadManagedGroup(managedGroup.resourceId)) shouldNot be (None)
-//    runAndWait(dirDAO.loadGroup(parentGroup.id)).get.members shouldEqual Set(managedGroupName)
-//  }
-//
-//  "ManagedGroupService listPolicyMemberEmails" should "return a list of email addresses for the groups admin policy" in {
-//    val managedGroup = assertMakeGroup()
-//    runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName)) shouldEqual Set(dummyUserInfo.userEmail)
-//    runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.memberPolicyName)) shouldEqual Set.empty
-//  }
-//
-//  it should "throw an exception if the group does not exist" in {
-//    intercept[WorkbenchExceptionWithErrorReport] {
-//      runAndWait(managedGroupService.listPolicyMemberEmails(resourceId, ManagedGroupService.adminPolicyName))
-//    }
-//  }
-//
-//  "ManagedGroupService.overwritePolicyMemberEmails" should "permit overwriting the admin policy" in {
-//    val dummyAdmin = WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)
-//    val otherAdmin = WorkbenchUser(WorkbenchUserId("admin2"), WorkbenchEmail("admin2@foo.test"))
-//    val someGroupEmail = WorkbenchEmail("someGroup@some.org")
-//    runAndWait(dirDAO.createUser(otherAdmin))
-//    val managedGroup = assertMakeGroup()
-//    runAndWait(dirDAO.createGroup(BasicWorkbenchGroup(WorkbenchGroupName("someGroup"), Set.empty, someGroupEmail)))
-//
-//    runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName)) shouldEqual Set(dummyAdmin.email)
-//
-//    runAndWait(managedGroupService.overwritePolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName, Set(otherAdmin.email, someGroupEmail)))
-//
-//    runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName)) shouldEqual Set(otherAdmin.email, someGroupEmail)
-//  }
-//
-//  it should "throw an exception if the group does not exist" in {
-//    intercept[WorkbenchExceptionWithErrorReport] {
-//      runAndWait(managedGroupService.overwritePolicyMemberEmails(expectedResource.resourceId, ManagedGroupService.adminPolicyName, Set.empty))
-//    }
-//  }
-//
-//  it should "throw an exception if any of the email addresses do not match an existing subject" in {
-//    val managedGroup = assertMakeGroup()
-//    val badAdmin = WorkbenchUser(WorkbenchUserId("admin2"), WorkbenchEmail("admin2@foo.test"))
-//
-//    intercept[WorkbenchExceptionWithErrorReport] {
-//      runAndWait(managedGroupService.overwritePolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName, Set(badAdmin.email)))
-//    }
-//  }
-//
-//  it should "permit overwriting the member policy" in {
-//    val managedGroup = assertMakeGroup()
-//
-//    val someUser = WorkbenchUser(WorkbenchUserId("someUser"), WorkbenchEmail("someUser@foo.test"))
-//    val someGroupEmail = WorkbenchEmail("someGroup@some.org")
-//    runAndWait(dirDAO.createUser(someUser))
-//    runAndWait(dirDAO.createGroup(BasicWorkbenchGroup(WorkbenchGroupName("someGroup"), Set.empty, someGroupEmail)))
-//
-//    runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.memberPolicyName)) shouldEqual Set()
-//
-//    val newMembers = Set(someGroupEmail, someUser.email)
-//    runAndWait(managedGroupService.overwritePolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.memberPolicyName, newMembers))
-//
-//    runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.memberPolicyName)) shouldEqual newMembers
-//  }
-//
-//  "ManagedGroupService addSubjectToPolicy" should "successfully add the subject to the existing policy for the group" in {
-//    val adminUser = WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)
-//
-//    val managedGroup = assertMakeGroup()
-//
-//    runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName)) shouldEqual Set(adminUser.email)
-//
-//    val someUser = WorkbenchUser(WorkbenchUserId("someUser"), WorkbenchEmail("someUser@foo.test"))
-//    runAndWait(dirDAO.createUser(someUser))
-//    runAndWait(managedGroupService.addSubjectToPolicy(managedGroup.resourceId, ManagedGroupService.adminPolicyName, someUser.id))
-//
-//    val expectedEmails = Set(adminUser.email, someUser.email)
-//    runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName)) shouldEqual expectedEmails
-//  }
-//
-//  it should "succeed without changing if the email address is already in the policy" in {
-//    val adminUser = WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)
-//
-//    val managedGroup = assertMakeGroup()
-//
-//    runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName)) shouldEqual Set(adminUser.email)
-//    runAndWait(managedGroupService.addSubjectToPolicy(managedGroup.resourceId, ManagedGroupService.adminPolicyName, adminUser.id))
-//    runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName)) shouldEqual Set(adminUser.email)
-//  }
-//
-//  // TODO: Is this right?  ResourceService.overwriteResource fails with invalid emails, should addSubjectToPolicy fail too?
-//  // The correct behavior is enforced in the routing, but is that the right place?  Should it be enforced in the Service class?
-//  it should "succeed even if the subject is doesn't exist" in {
-//    val adminUser = WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)
-//
-//    val managedGroup = assertMakeGroup()
-//
-//    runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName)) shouldEqual Set(adminUser.email)
-//
-//    val someUser = WorkbenchUser(WorkbenchUserId("someUser"), WorkbenchEmail("someUser@foo.test"))
-//    runAndWait(managedGroupService.addSubjectToPolicy(managedGroup.resourceId, ManagedGroupService.adminPolicyName, someUser.id))
-//  }
-//
-//  "ManagedGroupService removeSubjectFromPolicy" should "successfully remove the subject from the policy for the group" in {
-//    val adminUser = WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)
-//
-//    val managedGroup = assertMakeGroup()
-//
-//    runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName)) shouldEqual Set(adminUser.email)
-//
-//    runAndWait(managedGroupService.removeSubjectFromPolicy(managedGroup.resourceId, ManagedGroupService.adminPolicyName, adminUser.id))
-//
-//    runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName)) shouldEqual Set.empty
-//  }
-//
-//  it should "not do anything if the subject is not a member of the policy" in {
-//    val adminUser = WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)
-//
-//    val managedGroup = assertMakeGroup()
-//
-//    runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName)) shouldEqual Set(adminUser.email)
-//
-//    runAndWait(managedGroupService.removeSubjectFromPolicy(managedGroup.resourceId, ManagedGroupService.adminPolicyName, WorkbenchUserId("someUser")))
-//
-//    runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName)) shouldEqual Set(adminUser.email)
-//  }
+  "ManagedGroupService.overwritePolicyMemberEmails" should "permit overwriting the admin policy" in {
+    val dummyAdmin = WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)
+    val otherAdmin = WorkbenchUser(WorkbenchUserId("admin2"), WorkbenchEmail("admin2@foo.test"))
+    val someGroupEmail = WorkbenchEmail("someGroup@some.org")
+    runAndWait(dirDAO.createUser(otherAdmin))
+    val managedGroup = assertMakeGroup()
+    runAndWait(dirDAO.createGroup(BasicWorkbenchGroup(WorkbenchGroupName("someGroup"), Set.empty, someGroupEmail)))
+
+    runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName)) shouldEqual Set(dummyAdmin.email)
+
+    runAndWait(managedGroupService.overwritePolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName, Set(otherAdmin.email, someGroupEmail)))
+
+    runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName)) shouldEqual Set(otherAdmin.email, someGroupEmail)
+  }
+
+  it should "throw an exception if the group does not exist" in {
+    intercept[WorkbenchExceptionWithErrorReport] {
+      runAndWait(managedGroupService.overwritePolicyMemberEmails(expectedResource.resourceId, ManagedGroupService.adminPolicyName, Set.empty))
+    }
+  }
+
+  it should "throw an exception if any of the email addresses do not match an existing subject" in {
+    val managedGroup = assertMakeGroup()
+    val badAdmin = WorkbenchUser(WorkbenchUserId("admin2"), WorkbenchEmail("admin2@foo.test"))
+
+    intercept[WorkbenchExceptionWithErrorReport] {
+      runAndWait(managedGroupService.overwritePolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName, Set(badAdmin.email)))
+    }
+  }
+
+  it should "permit overwriting the member policy" in {
+    val managedGroup = assertMakeGroup()
+
+    val someUser = WorkbenchUser(WorkbenchUserId("someUser"), WorkbenchEmail("someUser@foo.test"))
+    val someGroupEmail = WorkbenchEmail("someGroup@some.org")
+    runAndWait(dirDAO.createUser(someUser))
+    runAndWait(dirDAO.createGroup(BasicWorkbenchGroup(WorkbenchGroupName("someGroup"), Set.empty, someGroupEmail)))
+
+    runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.memberPolicyName)) shouldEqual Set()
+
+    val newMembers = Set(someGroupEmail, someUser.email)
+    runAndWait(managedGroupService.overwritePolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.memberPolicyName, newMembers))
+
+    runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.memberPolicyName)) shouldEqual newMembers
+  }
+
+  "ManagedGroupService addSubjectToPolicy" should "successfully add the subject to the existing policy for the group" in {
+    val adminUser = WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)
+
+    val managedGroup = assertMakeGroup()
+
+    runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName)) shouldEqual Set(adminUser.email)
+
+    val someUser = WorkbenchUser(WorkbenchUserId("someUser"), WorkbenchEmail("someUser@foo.test"))
+    runAndWait(dirDAO.createUser(someUser))
+    runAndWait(managedGroupService.addSubjectToPolicy(managedGroup.resourceId, ManagedGroupService.adminPolicyName, someUser.id))
+
+    val expectedEmails = Set(adminUser.email, someUser.email)
+    runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName)) shouldEqual expectedEmails
+  }
+
+  it should "succeed without changing if the email address is already in the policy" in {
+    val adminUser = WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)
+
+    val managedGroup = assertMakeGroup()
+
+    runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName)) shouldEqual Set(adminUser.email)
+    runAndWait(managedGroupService.addSubjectToPolicy(managedGroup.resourceId, ManagedGroupService.adminPolicyName, adminUser.id))
+    runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName)) shouldEqual Set(adminUser.email)
+  }
+
+  // TODO: Is this right?  ResourceService.overwriteResource fails with invalid emails, should addSubjectToPolicy fail too?
+  // The correct behavior is enforced in the routing, but is that the right place?  Should it be enforced in the Service class?
+  it should "succeed even if the subject is doesn't exist" in {
+    val adminUser = WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)
+
+    val managedGroup = assertMakeGroup()
+
+    runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName)) shouldEqual Set(adminUser.email)
+
+    val someUser = WorkbenchUser(WorkbenchUserId("someUser"), WorkbenchEmail("someUser@foo.test"))
+    runAndWait(managedGroupService.addSubjectToPolicy(managedGroup.resourceId, ManagedGroupService.adminPolicyName, someUser.id))
+  }
+
+  "ManagedGroupService removeSubjectFromPolicy" should "successfully remove the subject from the policy for the group" in {
+    val adminUser = WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)
+
+    val managedGroup = assertMakeGroup()
+
+    runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName)) shouldEqual Set(adminUser.email)
+
+    runAndWait(managedGroupService.removeSubjectFromPolicy(managedGroup.resourceId, ManagedGroupService.adminPolicyName, adminUser.id))
+
+    runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName)) shouldEqual Set.empty
+  }
+
+  it should "not do anything if the subject is not a member of the policy" in {
+    val adminUser = WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)
+
+    val managedGroup = assertMakeGroup()
+
+    runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName)) shouldEqual Set(adminUser.email)
+
+    runAndWait(managedGroupService.removeSubjectFromPolicy(managedGroup.resourceId, ManagedGroupService.adminPolicyName, WorkbenchUserId("someUser")))
+
+    runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName)) shouldEqual Set(adminUser.email)
+  }
 
   private def makeResource(resourceType: ResourceType, resourceId: ResourceId, userInfo: UserInfo): Resource = runAndWait(resourceService.createResource(resourceType, resourceId, userInfo))
-//
-//  "ManagedGroupService listGroups" should "return the list of groups that passed user belongs to" in {
-//    // Setup multiple managed groups owned by different users.
-//    // Make the different users a member of some of the groups owned by the other user
-//    // Create some resources owned by different users
-//    // List Managed Group memberships for users and assert that memberships are only returned for managed groups
-//    val newResourceType = managedGroupResourceType.copy(name = ResourceTypeName(UUID.randomUUID().toString))
-//    makeResourceType(newResourceType)
-//    val resTypes = resourceTypeMap + (newResourceType.name -> newResourceType)
-//
-//    val resService = new ResourceService(resTypes, policyDAO, dirDAO, NoExtensions, testDomain)
-//    val mgService = new ManagedGroupService(resService, resTypes, policyDAO, dirDAO, NoExtensions, testDomain)
-//
-//    val user1 = UserInfo(OAuth2BearerToken("token1"), WorkbenchUserId("userId1"), WorkbenchEmail("user1@company.com"), 0)
-//    val user2 = UserInfo(OAuth2BearerToken("token2"), WorkbenchUserId("userId2"), WorkbenchEmail("user2@company.com"), 0)
-//    runAndWait(dirDAO.createUser(WorkbenchUser(user1.userId, user1.userEmail)))
-//    runAndWait(dirDAO.createUser(WorkbenchUser(user2.userId, user2.userEmail)))
-//
-//    val user1Groups = Set("foo", "bar", "baz")
-//    val user2Groups = Set("qux", "quux")
-//    user1Groups.foreach(makeGroup(_, mgService, user1))
-//    user2Groups.foreach(makeGroup(_, mgService, user2))
-//
-//    val user1Memberships = Set(user2Groups.head)
-//    val user2Memberships = Set(user1Groups.head)
-//
-//    user1Memberships.foreach(s => runAndWait(mgService.addSubjectToPolicy(ResourceId(s), ManagedGroupService.memberPolicyName, user1.userId)))
-//    user2Memberships.foreach(s => runAndWait(mgService.addSubjectToPolicy(ResourceId(s), ManagedGroupService.memberPolicyName, user2.userId)))
-//
-//    // let everyone notify admins
-//    (user1Groups ++ user2Groups).foreach { g =>
-//      runAndWait(mgService.addSubjectToPolicy(ResourceId(g), ManagedGroupService.adminNotifierPolicyName, user1.userId))
-//      runAndWait(mgService.addSubjectToPolicy(ResourceId(g), ManagedGroupService.adminNotifierPolicyName, user2.userId))
-//    }
-//
-//    val user1Resources = Set("quuz", "corge")
-//    val user2Resources = Set("grault", "garply")
-//
-//    user1Resources.foreach(s => makeResource(newResourceType, ResourceId(s), user1))
-//    user2Resources.foreach(s => makeResource(newResourceType, ResourceId(s), user2))
-//
-//    val user1ExpectedAdmin = user1Groups.map(s => ManagedGroupMembershipEntry(ResourceId(s), ManagedGroupService.adminPolicyName, WorkbenchEmail(s"$s@example.com")))
-//    val user1ExpectedMember = user1Memberships.map(s => ManagedGroupMembershipEntry(ResourceId(s), ManagedGroupService.memberPolicyName, WorkbenchEmail(s"$s@example.com")))
-//    val user1ExpectedGroups = user1ExpectedAdmin ++ user1ExpectedMember
-//    runAndWait(mgService.listGroups(user1.userId)) shouldEqual user1ExpectedGroups
-//
-//    val user2ExpectedAdmin = user2Groups.map(s => ManagedGroupMembershipEntry(ResourceId(s), ManagedGroupService.adminPolicyName, WorkbenchEmail(s"$s@example.com")))
-//    val user2ExpectedMember = user2Memberships.map(s => ManagedGroupMembershipEntry(ResourceId(s), ManagedGroupService.memberPolicyName, WorkbenchEmail(s"$s@example.com")))
-//    val user2ExpectedGroups = user2ExpectedAdmin ++ user2ExpectedMember
-//    runAndWait(mgService.listGroups(user2.userId)) shouldEqual user2ExpectedGroups
-//  }
+
+  "ManagedGroupService listGroups" should "return the list of groups that passed user belongs to" in {
+    // Setup multiple managed groups owned by different users.
+    // Make the different users a member of some of the groups owned by the other user
+    // Create some resources owned by different users
+    // List Managed Group memberships for users and assert that memberships are only returned for managed groups
+    val newResourceType = managedGroupResourceType.copy(name = ResourceTypeName(UUID.randomUUID().toString))
+    makeResourceType(newResourceType)
+    val resTypes = resourceTypeMap + (newResourceType.name -> newResourceType)
+
+    val resService = new ResourceService(resTypes, policyDAO, dirDAO, NoExtensions, testDomain)
+    val mgService = new ManagedGroupService(resService, resTypes, policyDAO, dirDAO, NoExtensions, testDomain)
+
+    val user1 = UserInfo(OAuth2BearerToken("token1"), WorkbenchUserId("userId1"), WorkbenchEmail("user1@company.com"), 0)
+    val user2 = UserInfo(OAuth2BearerToken("token2"), WorkbenchUserId("userId2"), WorkbenchEmail("user2@company.com"), 0)
+    runAndWait(dirDAO.createUser(WorkbenchUser(user1.userId, user1.userEmail)))
+    runAndWait(dirDAO.createUser(WorkbenchUser(user2.userId, user2.userEmail)))
+
+    val user1Groups = Set("foo", "bar", "baz")
+    val user2Groups = Set("qux", "quux")
+    user1Groups.foreach(makeGroup(_, mgService, user1))
+    user2Groups.foreach(makeGroup(_, mgService, user2))
+
+    val user1Memberships = Set(user2Groups.head)
+    val user2Memberships = Set(user1Groups.head)
+
+    user1Memberships.foreach(s => runAndWait(mgService.addSubjectToPolicy(ResourceId(s), ManagedGroupService.memberPolicyName, user1.userId)))
+    user2Memberships.foreach(s => runAndWait(mgService.addSubjectToPolicy(ResourceId(s), ManagedGroupService.memberPolicyName, user2.userId)))
+
+    // let everyone notify admins
+    (user1Groups ++ user2Groups).foreach { g =>
+      runAndWait(mgService.addSubjectToPolicy(ResourceId(g), ManagedGroupService.adminNotifierPolicyName, user1.userId))
+      runAndWait(mgService.addSubjectToPolicy(ResourceId(g), ManagedGroupService.adminNotifierPolicyName, user2.userId))
+    }
+
+    val user1Resources = Set("quuz", "corge")
+    val user2Resources = Set("grault", "garply")
+
+    user1Resources.foreach(s => makeResource(newResourceType, ResourceId(s), user1))
+    user2Resources.foreach(s => makeResource(newResourceType, ResourceId(s), user2))
+
+    val user1ExpectedAdmin = user1Groups.map(s => ManagedGroupMembershipEntry(ResourceId(s), ManagedGroupService.adminPolicyName, WorkbenchEmail(s"$s@example.com")))
+    val user1ExpectedMember = user1Memberships.map(s => ManagedGroupMembershipEntry(ResourceId(s), ManagedGroupService.memberPolicyName, WorkbenchEmail(s"$s@example.com")))
+    val user1ExpectedGroups = user1ExpectedAdmin ++ user1ExpectedMember
+    runAndWait(mgService.listGroups(user1.userId)) shouldEqual user1ExpectedGroups
+
+    val user2ExpectedAdmin = user2Groups.map(s => ManagedGroupMembershipEntry(ResourceId(s), ManagedGroupService.adminPolicyName, WorkbenchEmail(s"$s@example.com")))
+    val user2ExpectedMember = user2Memberships.map(s => ManagedGroupMembershipEntry(ResourceId(s), ManagedGroupService.memberPolicyName, WorkbenchEmail(s"$s@example.com")))
+    val user2ExpectedGroups = user2ExpectedAdmin ++ user2ExpectedMember
+    runAndWait(mgService.listGroups(user2.userId)) shouldEqual user2ExpectedGroups
+  }
 
 }
