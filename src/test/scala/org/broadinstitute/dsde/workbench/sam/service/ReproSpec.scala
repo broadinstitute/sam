@@ -20,9 +20,10 @@ import org.scalatest.mockito.MockitoSugar
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
+import org.scalatest.concurrent.Eventually
 
 class ReproSpec extends FlatSpec with Matchers with TestSupport with MockitoSugar
-  with BeforeAndAfter with BeforeAndAfterAll with ScalaFutures with OptionValues {
+  with BeforeAndAfter with BeforeAndAfterAll with ScalaFutures with OptionValues with Eventually {
 
   private val config = ConfigFactory.load()
   val directoryConfig = config.as[DirectoryConfig]("directory")
@@ -54,11 +55,11 @@ class ReproSpec extends FlatSpec with Matchers with TestSupport with MockitoSuga
 
   def makeResourceType(resourceType: ResourceType): ResourceTypeName = runAndWait(resourceService.createResourceType(resourceType))
 
-  def assertPoliciesOnResource(resource: Resource, policyDAO: JndiAccessPolicyDAO = policyDAO, expectedPolicies: Set[AccessPolicyName] = Set(ManagedGroupService.adminPolicyName, ManagedGroupService.memberPolicyName)) = {
+  def assertPoliciesOnResource(resource: Resource, policyDAO: JndiAccessPolicyDAO = policyDAO, expectedPolicies: Map[AccessPolicyName, Set[WorkbenchSubject]]) = {
     val policies = runAndWait(policyDAO.listAccessPolicies(resource))
-    policies.map(_.id.accessPolicyName.value) shouldEqual expectedPolicies.map(_.value)
-    expectedPolicies.foreach { policyName =>
-      runAndWait(policyDAO.loadPolicy(ResourceAndPolicyName(resource, policyName))) shouldBe a[Some[AccessPolicy]]
+    policies.map(_.id.accessPolicyName.value) should contain theSameElementsAs(expectedPolicies.map(_._1.value))
+    expectedPolicies.foreach { case(policyName, members) =>
+      runAndWait(policyDAO.loadPolicy(ResourceAndPolicyName(resource, policyName))).map(_.members) shouldBe Some(members)
     }
   }
 
@@ -66,7 +67,8 @@ class ReproSpec extends FlatSpec with Matchers with TestSupport with MockitoSuga
     val resource: Resource = makeGroup(groupId, managedGroupService)
     val intendedResource = Resource(ManagedGroupService.managedGroupTypeName, ResourceId(groupId))
     resource shouldEqual intendedResource
-    assertPoliciesOnResource(resource, expectedPolicies = Set(ManagedGroupService.adminPolicyName, ManagedGroupService.memberPolicyName, ManagedGroupService.adminNotifierPolicyName))
+    assertPoliciesOnResource(resource, expectedPolicies = Map(ManagedGroupService.adminPolicyName -> Set(dummyUserInfo.userId), ManagedGroupService.memberPolicyName -> Set.empty, ManagedGroupService.adminNotifierPolicyName -> Set.empty))
+    runAndWait(dirDAO.loadGroup(WorkbenchGroupName(groupId))).map(_.members).get should contain theSameElementsAs(Seq(ResourceAndPolicyName(resource, ManagedGroupService.memberPolicyName), ResourceAndPolicyName(resource, ManagedGroupService.adminPolicyName)))
     resource
   }
 
@@ -77,7 +79,7 @@ class ReproSpec extends FlatSpec with Matchers with TestSupport with MockitoSuga
 
   def assertIsMemberOf(groupName: String, userId: WorkbenchUserId) = {
     val results = runAndWait(dirDAO.listUsersGroups(userId))
-
+    results should contain(ResourceAndPolicyName(Resource(managedGroupResourceType.name, ResourceId(groupName)), ManagedGroupService.adminPolicyName))
     assert(results.contains(WorkbenchGroupName(groupName)))
   }
 
@@ -89,9 +91,11 @@ class ReproSpec extends FlatSpec with Matchers with TestSupport with MockitoSuga
 
   "ReproSpec" should s"create a bad managed group" in {
     for(i <- 1 to 100) {
+      println(s"iteration $i")
       val groupName = s"groupNumber$i"
       assertMakeGroup(groupName)
       assertIsMemberOf(groupName, dummyUserInfo.userId)
+      if (i!=1) runAndWait(managedGroupService.deleteManagedGroup(ResourceId(groupName)))
     }
   }
 
