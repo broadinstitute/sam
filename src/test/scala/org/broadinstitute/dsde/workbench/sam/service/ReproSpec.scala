@@ -2,6 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.service
 
 import java.util.UUID
 
+import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import com.typesafe.config.ConfigFactory
 import net.ceedubs.ficus.Ficus._
@@ -22,8 +23,13 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 import org.scalatest.concurrent.Eventually
 
+import scala.concurrent.duration._
+import scala.util.Success
+
 class ReproSpec extends FlatSpec with Matchers with TestSupport with MockitoSugar
   with BeforeAndAfter with BeforeAndAfterAll with ScalaFutures with OptionValues with Eventually {
+
+  implicit val patience = PatienceConfig(1 minute)
 
   private val config = ConfigFactory.load()
   val directoryConfig = config.as[DirectoryConfig]("directory")
@@ -89,13 +95,28 @@ class ReproSpec extends FlatSpec with Matchers with TestSupport with MockitoSuga
     runAndWait(dirDAO.createUser(WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)))
   }
 
-  "ReproSpec" should s"create a bad managed group" in {
+  "ReproSpec" should "create a bad managed group" in {
+    makeGroup("start", managedGroupService)
     for(i <- 1 to 100) {
       println(s"iteration $i")
       val groupName = s"groupNumber$i"
       assertMakeGroup(groupName)
       assertIsMemberOf(groupName, dummyUserInfo.userId)
-      if (i!=1) runAndWait(managedGroupService.deleteManagedGroup(ResourceId(groupName)))
+      runAndWait(managedGroupService.deleteManagedGroup(ResourceId(groupName)))
+    }
+  }
+
+  it should "foo" in {
+    makeResourceType(managedGroupResourceType)
+    for(i <- 1 to 100) {
+      println(s"iteration $i")
+      val innerName = s"inner$i"
+      val outerName = s"outer$i"
+
+      val resource = policyDAO.createResource(Resource(managedGroupResourceType.name, ResourceId(s"N$i"))).futureValue
+      val inner = policyDAO.createPolicy(AccessPolicy(ResourceAndPolicyName(resource, AccessPolicyName(innerName)), Set(dummyUserInfo.userId), WorkbenchEmail("inner@bar.com"), Set.empty, Set.empty)).futureValue
+      val outer = dirDAO.createGroup(BasicWorkbenchGroup(WorkbenchGroupName(outerName), Set(inner.id), WorkbenchEmail("outer@bar.com"))).futureValue
+      dirDAO.listUsersGroups(dummyUserInfo.userId).futureValue should contain(outer.id)
     }
   }
 
