@@ -3,6 +3,7 @@ package org.broadinstitute.dsde.workbench.sam.google
 import akka.actor.SupervisorStrategy.{Escalate, Stop}
 import akka.actor._
 import akka.pattern._
+import com.google.api.client.googleapis.json.GoogleJsonResponseException
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.google.GooglePubSubDAO.PubSubMessage
 import org.broadinstitute.dsde.workbench.google.{GoogleIamDAO, GooglePubSubDAO}
@@ -11,7 +12,7 @@ import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAcc
 import org.broadinstitute.dsde.workbench.util.FutureSupport
 import spray.json._
 
-import scala.concurrent.ExecutionContext
+import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration.{FiniteDuration, _}
 import scala.language.postfixOps
 
@@ -98,7 +99,7 @@ class GoogleKeyCacheMonitorActor(val pollInterval: FiniteDuration, pollIntervalJ
     case Some(message: PubSubMessage) =>
       logger.debug(s"received key deletion message: $message")
       val (project, serviceAccountEmail, keyId) = parseMessage(message)
-      googleIamDAO.removeServiceAccountKey(project, serviceAccountEmail, keyId).map(response => (response, message.ackId)) pipeTo self
+      removeServiceAccountKey(project, serviceAccountEmail, keyId).map(response => (response, message.ackId)) pipeTo self
 
     case None =>
       // there was no message to wait and try again
@@ -114,6 +115,17 @@ class GoogleKeyCacheMonitorActor(val pollInterval: FiniteDuration, pollIntervalJ
       throw new WorkbenchException("GoogleKeyCacheMonitorActor has received no messages for too long")
 
     case x => logger.info(s"unhandled $x")
+  }
+
+  private def removeServiceAccountKey(project: GoogleProject, serviceAccountEmail: WorkbenchEmail, keyId: ServiceAccountKeyId) = {
+    googleIamDAO.findServiceAccount(project, serviceAccountEmail).recover {
+      case t: GoogleJsonResponseException if t.getStatusCode == 403 =>
+        logger.warn(s"could not remove service account key due to 403 error, project $project, sa email $serviceAccountEmail, sa key id $keyId", t)
+        None
+    } flatMap {
+      case None => Future.successful() // service account does not exist or no access
+      case Some(_) => googleIamDAO.removeServiceAccountKey(project, serviceAccountEmail, keyId)
+    }
   }
 
   private def acknowledgeMessage(ackId: String) = {

@@ -19,6 +19,7 @@ import scala.concurrent.{ExecutionContext, Future}
   * Created by mbemis on 1/10/18.
   */
 class GoogleKeyCache(val googleIamDAO: GoogleIamDAO, val googleStorageDAO: GoogleStorageDAO, val googlePubSubDAO: GooglePubSubDAO, val googleServicesConfig: GoogleServicesConfig, val petServiceAccountConfig: PetServiceAccountConfig)(implicit val executionContext: ExecutionContext) extends KeyCache {
+  val keyPathPattern = """([^\/]+)\/([^\/]+)\/([^\/]+)""".r
 
   override def onBoot()(implicit system: ActorSystem): Future[Unit] = {
     system.actorOf(GoogleKeyCacheMonitorSupervisor.props(
@@ -41,8 +42,9 @@ class GoogleKeyCache(val googleIamDAO: GoogleIamDAO, val googleStorageDAO: Googl
   override def getKey(pet: PetServiceAccount): Future[String] = {
     val retrievedKeys = for {
       keyObjects <- googleStorageDAO.listObjectsWithPrefix(googleServicesConfig.googleKeyCacheConfig.bucketName, keyNamePrefix(pet.id.project, pet.serviceAccount.email))
-      keys <- googleIamDAO.listUserManagedServiceAccountKeys(pet.id.project, pet.serviceAccount.email)
-    } yield (keyObjects, keys.toList)
+      keys <- googleIamDAO.listUserManagedServiceAccountKeys(pet.id.project, pet.serviceAccount.email).map(_.toList)
+      cleanedKeyObjects <- cleanupUnknownKeys(pet, keyObjects, keys)
+    } yield (cleanedKeyObjects, keys)
 
     retrievedKeys.flatMap {
       case (Nil, _) => furnishNewKey(pet) //mismatch. there were no keys found in the bucket, but there may be keys on the service account
@@ -58,7 +60,7 @@ class GoogleKeyCache(val googleIamDAO: GoogleIamDAO, val googleStorageDAO: Googl
     } yield ()
   }
 
-  private def keyNamePrefix(project: GoogleProject, saEmail: WorkbenchEmail) = s"${project.value}/${saEmail.value}"
+  private[google] def keyNamePrefix(project: GoogleProject, saEmail: WorkbenchEmail) = s"${project.value}/${saEmail.value}"
   private def keyNameFull(project: GoogleProject, saEmail: WorkbenchEmail, keyId: ServiceAccountKeyId) = GcsObjectName(s"${keyNamePrefix(project, saEmail)}/${keyId.value}")
 
   private def furnishNewKey(pet: PetServiceAccount): Future[String] = {
@@ -77,14 +79,14 @@ class GoogleKeyCache(val googleIamDAO: GoogleIamDAO, val googleStorageDAO: Googl
     val mostRecentKey = cachedKeyObjects.sortBy(_.timeCreated.toEpochMilli).last
     val keyRetired = System.currentTimeMillis() - mostRecentKey.timeCreated.toEpochMilli > 86400000L * googleServicesConfig.googleKeyCacheConfig.activeKeyMaxAge
 
-    val keyPathPattern = """([^\/]+)\/([^\/]+)\/([^\/]+)""".r
     val keyPathPattern(project, petSaEmail, keyId) = mostRecentKey.value
 
     //The key may exist in the Google bucket cache, but could have been deleted from the SA directly
     val keyExistsForSA = serviceAccountKeys.exists(_.id.value.contentEquals(keyId))
 
-    if(keyRetired || !keyExistsForSA) furnishNewKey(pet)
-    else {
+    if(keyRetired || !keyExistsForSA) {
+      furnishNewKey(pet)
+    } else {
       googleStorageDAO.getObject(googleServicesConfig.googleKeyCacheConfig.bucketName, mostRecentKey).flatMap {
         case Some(key) => Future.successful(key.toString)
         case None => furnishNewKey(pet) //this is a case that should never occur, but if it does, we should furnish a new key
@@ -92,4 +94,15 @@ class GoogleKeyCache(val googleIamDAO: GoogleIamDAO, val googleStorageDAO: Googl
     }
   }
 
+  private def cleanupUnknownKeys(pet: PetServiceAccount, cachedKeyObjects: List[GcsObjectName], serviceAccountKeys: List[ServiceAccountKey]): Future[List[GcsObjectName]] = {
+    val cachedKeyIds = cachedKeyObjects.map(_.value).collect { case keyPathPattern(_, _, keyId) => ServiceAccountKeyId(keyId) }
+    val unknownKeyIds: Set[ServiceAccountKeyId] = serviceAccountKeys.map(_.id).toSet -- cachedKeyIds.toSet
+    val knownKeyCachedObjects = cachedKeyObjects.filter { cachedObject =>
+      serviceAccountKeys.exists(key => cachedObject.value.endsWith(key.id.value))
+    }
+
+    Future.traverse(unknownKeyIds) { keyId =>
+      googleIamDAO.removeServiceAccountKey(pet.id.project, pet.serviceAccount.email, keyId)
+    }.map(_ => knownKeyCachedObjects)
+  }
 }
