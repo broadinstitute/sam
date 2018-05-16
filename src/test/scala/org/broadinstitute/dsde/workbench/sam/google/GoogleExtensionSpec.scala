@@ -528,10 +528,61 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val firstKey = runAndWait(googleExtensions.getPetServiceAccountKey(defaultUser, googleProject))
 
     //remove the key we just created
-    runAndWait(googleExtensions.removePetServiceAccountKey(defaultUserId, googleProject, ServiceAccountKeyId(firstKey)))
+    runAndWait(for {
+      keys <- googleExtensions.googleIamDAO.listServiceAccountKeys(googleProject, petServiceAccount.serviceAccount.email)
+      _ <- Future.traverse(keys) { key =>
+        googleExtensions.removePetServiceAccountKey(defaultUserId, googleProject, key.id)
+      }
+    } yield ())
 
     //get a key again, which should once again create a brand new one because we've deleted the cached one
     val secondKey = runAndWait(googleExtensions.getPetServiceAccountKey(defaultUser, googleProject))
+
+    assert(firstKey != secondKey)
+  }
+
+  it should "clean up unknown pet SA keys" in {
+    implicit val patienceConfig = PatienceConfig(1 second)
+    val (googleExtensions, service) = setupGoogleKeyCacheTests
+
+    val defaultUserId = WorkbenchUserId("newuser")
+    val defaultUserEmail = WorkbenchEmail("newuser@new.com")
+    val defaultUser = WorkbenchUser(defaultUserId, defaultUserEmail)
+
+    // create a user
+    val newUser = service.createUser(defaultUser).futureValue
+    newUser shouldBe UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
+
+    // create a pet service account
+    val googleProject = GoogleProject("testproject")
+    val petServiceAccount = googleExtensions.createUserPetServiceAccount(defaultUser, googleProject).futureValue
+
+    //get a key, which should create a brand new one
+    val firstKey = runAndWait(googleExtensions.getPetServiceAccountKey(defaultUser, googleProject))
+
+    //remove the key we just created behind the scenes
+    val removedKeyObjects = runAndWait(for {
+      keyObjects <- googleExtensions.googleStorageDAO.listObjectsWithPrefix(googleExtensions.googleServicesConfig.googleKeyCacheConfig.bucketName, googleExtensions.googleKeyCache.keyNamePrefix(googleProject, petServiceAccount.serviceAccount.email))
+      _ <- Future.traverse(keyObjects) { keyObject =>
+        googleExtensions.googleStorageDAO.removeObject(googleExtensions.googleServicesConfig.googleKeyCacheConfig.bucketName, keyObject)
+      }
+    } yield (keyObjects))
+
+    // assert that keys still exist on service account
+    assert(removedKeyObjects.forall { removed =>
+      val existingKeys = runAndWait(googleExtensions.googleIamDAO.listUserManagedServiceAccountKeys(googleProject, petServiceAccount.serviceAccount.email))
+      existingKeys.exists(key => removed.value.endsWith(key.id.value))
+    })
+
+    //get a key again, which should once again create a brand new one because we've deleted the cached one
+    //and all the keys removed should have been removed from google
+    val secondKey = runAndWait(googleExtensions.getPetServiceAccountKey(defaultUser, googleProject))
+
+    // assert that keys have been removed from service account
+    assert(removedKeyObjects.forall { removed =>
+      val existingKeys = runAndWait(googleExtensions.googleIamDAO.listUserManagedServiceAccountKeys(googleProject, petServiceAccount.serviceAccount.email))
+      !existingKeys.exists(key => removed.value.endsWith(key.id.value))
+    })
 
     assert(firstKey != secondKey)
   }
