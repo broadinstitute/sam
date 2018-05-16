@@ -3,8 +3,8 @@ services:
   sam-app:
     image: broadinstitute/sam:dev
     volumes:
-      - sam.conf:/etc/sam.conf
-      - fiab-startup.sh:/etc/fiab-startup.sh
+      - ./sam.conf:/etc/sam.conf
+      - ./fiab-startup.sh:/etc/fiab-startup.sh
     links:
       - sam-opendj:opendj
     environment:
@@ -30,8 +30,8 @@ services:
     volumes:
       # mount a volume here to persist opendj data
       # - opendjstore/sam:/opt/opendj/data
-      - opendjsetup.sh:/opt/opendj/bootstrap/setup.sh
-      - proxy_user.ldif:/opt/opendj/bootstrap/ldif/zzz_proxy_user.ldif
+      - ./opendjsetup.sh:/opt/opendj/bootstrap/setup.sh
+      - ./proxy_user.ldif:/opt/opendj/bootstrap/ldif/zzz_proxy_user.ldif
     environment:
       BASE_DN: "dc=example,dc=com"
       ROOTPASS: "testtesttest"

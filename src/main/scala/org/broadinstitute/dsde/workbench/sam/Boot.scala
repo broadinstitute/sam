@@ -61,7 +61,7 @@ object Boot extends App with LazyLogging {
       case None => NoExtensions
     }
 
-    val emailDomain = config.getString("googleServices.appsDomain")
+    val emailDomain = config.getString("emailDomain")
     val resourceService = new ResourceService(resourceTypeMap, accessPolicyDAO, directoryDAO, cloudExt, emailDomain)
     val userService = new UserService(directoryDAO, cloudExt)
     val statusService = new StatusService(directoryDAO, cloudExt, 10 seconds)
