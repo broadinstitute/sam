@@ -61,7 +61,11 @@ object Boot extends App with LazyLogging {
       case None => NoExtensions
     }
 
-    val emailDomain = config.getString("emailDomain")
+    // TODO - https://broadinstitute.atlassian.net/browse/GAWB-3603
+    // This should JUST get the value from "emailDomain", but for now we're keeping the backwards compatibility code to
+    // fall back to getting the "googleServices.appsDomain"
+    val emailDomain = config.as[Option[String]]("emailDomain").getOrElse(config.getString("googleServices.appsDomain"))
+
     val resourceService = new ResourceService(resourceTypeMap, accessPolicyDAO, directoryDAO, cloudExt, emailDomain)
     val userService = new UserService(directoryDAO, cloudExt)
     val statusService = new StatusService(directoryDAO, cloudExt, 10 seconds)
