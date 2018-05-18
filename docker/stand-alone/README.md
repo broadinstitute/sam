@@ -34,23 +34,33 @@ Add the following to your `/etc/hosts` file:
 
 ```127.0.0.1 sam.example.localhost.org```
 
-### Generate SSL Certificate
+### SSL Certificate
 
-Generate an SSL Certificate and copy the cert, key, and ca chain to:
-```
-config/server.crt
-config/server.key
-config/ca-bundle.crt
-```
+You should obtain a signed certificate from a trusted certificate authority (CA).  For testing, you may
+also use a self-signed certificate.  
+
+Whether you are using a self-signed certificate or one obtain from a trusted CA, you need to place three files in the 
+`docker/stand-alone` directory.  
+
+- Certificate file - `docker/stand-alone/server.crt`
+- Certificate key - `docker/stand-alone/server.key`
+- Certificate chain - `docker/stand-alone/ca-bundle.crt`
+
+**NOTE** - The names of your certificate, key, and chain files must match those provided above because they will copied 
+to the Docker HTTP proxy container during the `docker-compose` step.  
+
+If you have `openssl` installed, you can generate a self-signed certificate using the following command:
+
+```openssl req -x509 -newkey rsa:4096 -keyout server.key -out server.crt -days 365 -nodes```
+
+You may then copy the generated `server.crt` file to `ca-bundle.crt` to use your certificate as the certificate chain.
 
 ### Starting the application
 1. Create an external docker network: 
-    ```
-    docker network create sam
-    ```
+    
+    ```docker network create sam```
 
 1.  `cd` to the `docker/stand-alone` directory and run:
-    ```
-    docker-compose up
-    ```
+    
+    ```docker-compose up```
 1. SAM should be running at: https://sam.example.localhost.org:29443/
