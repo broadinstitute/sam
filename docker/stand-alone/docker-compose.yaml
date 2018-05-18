@@ -11,8 +11,6 @@ services:
       JAVA_OPTS: -Dconfig.file=/etc/sam.conf -Dcom.sun.jndi.ldap.connect.pool.protocol=plain -Dcom.sun.jndi.ldap.connect.pool.maxsize=100
       SLEEP: 130
     command: [sh, /etc/fiab-startup.sh]
-    networks:
-      - outside
     restart: always
   sam-proxy:
     extends:
@@ -21,8 +19,6 @@ services:
     links:
       - sam-app:app
       - sam-opendj:opendj
-    networks:
-      - outside
   sam-opendj:
     image: broadinstitute/openam:opendj5
     ports:
@@ -35,10 +31,4 @@ services:
     environment:
       BASE_DN: "dc=example,dc=com"
       ROOTPASS: "testtesttest"
-    networks:
-      - outside
     restart: always
-networks:
-  outside:
-    external:
-      name: sam
