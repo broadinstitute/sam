@@ -71,7 +71,11 @@ case class ResourceRole(roleName: ResourceRoleName, actions: Set[ResourceAction]
 case class ResourceTypeName(value: String) extends ValueObject
 
 case class Resource(resourceTypeName: ResourceTypeName, resourceId: ResourceId)
-case class ResourceType(name: ResourceTypeName, actionPatterns: Set[ResourceActionPattern], roles: Set[ResourceRole], ownerRoleName: ResourceRoleName, reuseIds: Boolean = false)
+case class ResourceType(name: ResourceTypeName, actionPatterns: Set[ResourceActionPattern], roles: Set[ResourceRole], ownerRoleName: ResourceRoleName, reuseIds: Boolean = false) {
+  // Ideally we'd just store this boolean in a lazy val, but this will upset the spray/akka json serializers
+  // I can't imagine a scenario where we have enough action patterns that would make this def discernibly slow though
+  def isAuthDomainConstrainable: Boolean = actionPatterns.map(_.authDomainConstrainable).fold(false)(_ || _)
+}
 
 case class ResourceId(value: String) extends ValueObject
 

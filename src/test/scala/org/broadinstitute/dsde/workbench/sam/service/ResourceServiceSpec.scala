@@ -11,7 +11,7 @@ import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.config.{DirectoryConfig, SchemaLockConfig, _}
 import org.broadinstitute.dsde.workbench.sam.directory.JndiDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.openam.JndiAccessPolicyDAO
+import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, JndiAccessPolicyDAO}
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FlatSpec, Matchers}
 
@@ -28,12 +28,36 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
   val policyDAO = new JndiAccessPolicyDAO(directoryConfig)
   val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
+  private val dummyUserInfo = UserInfo(OAuth2BearerToken("token"), WorkbenchUserId("userid"), WorkbenchEmail("user@company.com"), 0)
+
   private val defaultResourceTypeActions = Set(ResourceAction("alter_policies"), ResourceAction("delete"), ResourceAction("read_policies"), ResourceAction("view"), ResourceAction("non_owner_action"))
   private val defaultResourceTypeActionPatterns = Set(SamResourceActionPatterns.alterPolicies, SamResourceActionPatterns.delete, SamResourceActionPatterns.readPolicies, ResourceActionPattern("view", "", false), ResourceActionPattern("non_owner_action", "", false))
   private val defaultResourceType = ResourceType(ResourceTypeName(UUID.randomUUID().toString), defaultResourceTypeActionPatterns, Set(ResourceRole(ResourceRoleName("owner"), defaultResourceTypeActions - ResourceAction("non_owner_action")), ResourceRole(ResourceRoleName("other"), Set(ResourceAction("view"), ResourceAction("non_owner_action")))), ResourceRoleName("owner"))
   private val otherResourceType = ResourceType(ResourceTypeName(UUID.randomUUID().toString), defaultResourceTypeActionPatterns, Set(ResourceRole(ResourceRoleName("owner"), defaultResourceTypeActions - ResourceAction("non_owner_action")), ResourceRole(ResourceRoleName("other"), Set(ResourceAction("view"), ResourceAction("non_owner_action")))), ResourceRoleName("owner"))
 
-  val service = new ResourceService(Map(defaultResourceType.name -> defaultResourceType, otherResourceType.name -> otherResourceType), policyDAO, dirDAO, NoExtensions, "example.com")
+  private val constrainableActionPatterns = Set(ResourceActionPattern("constrainable_view", "Can be constrained by an auth domain", true))
+  private val constrainableViewAction = ResourceAction("constrainable_view")
+  private val constrainableResourceTypeActions = Set(constrainableViewAction)
+  private val constrainableReaderRoleName = ResourceRoleName("constrainable_reader")
+  private val constrainableResourceType = ResourceType(
+    ResourceTypeName(UUID.randomUUID().toString),
+    constrainableActionPatterns,
+    Set(ResourceRole(constrainableReaderRoleName, constrainableResourceTypeActions)),
+    constrainableReaderRoleName
+  )
+  private val constrainablePolicyMembership = AccessPolicyMembership(Set(dummyUserInfo.userEmail), Set(constrainableViewAction), Set(constrainableReaderRoleName))
+
+  //Note: we intentionally use the Managed Group resource type loaded from reference.conf for the tests here.
+  private val realResourceTypes = config.as[Map[String, ResourceType]]("resourceTypes").values.toSet
+  private val realResourceTypeMap = realResourceTypes.map(rt => rt.name -> rt).toMap
+  private val managedGroupResourceType = realResourceTypeMap.getOrElse(ResourceTypeName("managed-group"), throw new Error("Failed to load managed-group resource type from reference.conf"))
+
+  private val emailDomain = "example.com"
+  private val service = new ResourceService(Map(defaultResourceType.name -> defaultResourceType, otherResourceType.name -> otherResourceType), policyDAO, dirDAO, NoExtensions, emailDomain)
+  private val constrainableResourceTypes = Map(constrainableResourceType.name -> constrainableResourceType, managedGroupResourceType.name -> managedGroupResourceType)
+  private val constrainableService = new ResourceService(constrainableResourceTypes, policyDAO, dirDAO, NoExtensions, emailDomain)
+
+  val managedGroupService = new ManagedGroupService(constrainableService, constrainableResourceTypes, policyDAO, dirDAO, NoExtensions, emailDomain)
 
   private object SamResourceActionPatterns {
     val readPolicies = ResourceActionPattern("read_policies", "", false)
@@ -48,8 +72,6 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     super.beforeAll()
     runAndWait(schemaDao.init())
   }
-
-  private val dummyUserInfo = UserInfo(OAuth2BearerToken("token"), WorkbenchUserId("userid"), WorkbenchEmail("user@company.com"), 0)
 
   before {
     runAndWait(schemaDao.clearDatabase())
@@ -194,6 +216,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
       resourceType,
       resourceName,
       Map(policyName -> policyMembership),
+      Set.empty,
       dummyUserInfo
     ))
 
@@ -215,6 +238,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
         resourceType,
         resourceName,
         Map(AccessPolicyName("foo") -> AccessPolicyMembership(Set.empty, Set.empty, Set(ownerRoleName))),
+        Set.empty,
         dummyUserInfo
       ))
     }
@@ -226,11 +250,73 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
         resourceType,
         resourceName,
         Map(AccessPolicyName("foo") -> AccessPolicyMembership(Set(dummyUserInfo.userEmail), Set.empty, Set.empty)),
+        Set.empty,
         dummyUserInfo
       ))
     }
 
     exception2.errorReport.statusCode shouldEqual Option(StatusCodes.BadRequest)
+  }
+
+  private def assertResourceExists(resource: Resource, resourceType: ResourceType, policyDao: AccessPolicyDAO) = {
+    val resultingPolicies = runAndWait(policyDao.listAccessPolicies(resource)).map(_.copy(email = WorkbenchEmail("policy-randomuuid@example.com")))
+    resultingPolicies shouldEqual constructExpectedPolicies(resourceType, resource)
+  }
+
+  "Creating a resource that has at least 1 constrainable action pattern" should "succeed when no auth domain is provided" in {
+    constrainableResourceType.isAuthDomainConstrainable shouldEqual true
+    runAndWait(constrainableService.createResourceType(constrainableResourceType))
+
+    val resource = runAndWait(service.createResource(constrainableResourceType, ResourceId(UUID.randomUUID().toString), dummyUserInfo))
+    assertResourceExists(resource, constrainableResourceType, policyDAO)
+  }
+
+  it should "succeed when at least 1 valid auth domain is provided" in {
+    constrainableResourceType.isAuthDomainConstrainable shouldEqual true
+    runAndWait(constrainableService.createResourceType(constrainableResourceType))
+
+    runAndWait(constrainableService.createResourceType(managedGroupResourceType))
+    val managedGroupName = "fooGroup"
+    runAndWait(managedGroupService.createManagedGroup(ResourceId(managedGroupName), dummyUserInfo))
+
+    val authDomains = Set(WorkbenchGroupName(managedGroupName))
+    val viewPolicyName = AccessPolicyName(constrainableReaderRoleName.value)
+    val resource = runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId(UUID.randomUUID().toString), Map(viewPolicyName -> constrainablePolicyMembership), authDomains, dummyUserInfo))
+    val resultingPolicies: Set[ResourceAndPolicyName] = runAndWait(policyDAO.listAccessPolicies(resource)).map(_.id)
+    resultingPolicies shouldEqual Set(ResourceAndPolicyName(resource, viewPolicyName))
+  }
+
+  it should "fail when at least 1 of the auth domains is not a valid group" in {
+    constrainableResourceType.isAuthDomainConstrainable shouldEqual true
+    runAndWait(constrainableService.createResourceType(constrainableResourceType))
+
+    runAndWait(constrainableService.createResourceType(managedGroupResourceType))
+    val managedGroupName = "fooGroup"
+    runAndWait(managedGroupService.createManagedGroup(ResourceId(managedGroupName), dummyUserInfo))
+    val nonExistentGroup = WorkbenchGroupName("aBadGroup")
+
+    val authDomains = Set(WorkbenchGroupName(managedGroupName), nonExistentGroup)
+    val viewPolicyName = AccessPolicyName(constrainableReaderRoleName.value)
+    intercept[WorkbenchExceptionWithErrorReport] {
+      runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId(UUID.randomUUID().toString), Map(viewPolicyName -> constrainablePolicyMembership), authDomains, dummyUserInfo))
+    }
+  }
+
+  "Creating a resource that has 0 constrainable action patterns" should "fail when at least 1 auth domain is provided" in {
+    defaultResourceType.isAuthDomainConstrainable shouldEqual false
+    runAndWait(service.createResourceType(defaultResourceType))
+
+    runAndWait(constrainableService.createResourceType(managedGroupResourceType))
+    val managedGroupName = "fooGroup"
+    runAndWait(managedGroupService.createManagedGroup(ResourceId(managedGroupName), dummyUserInfo))
+
+    val policyMembership = AccessPolicyMembership(Set(dummyUserInfo.userEmail), Set(ResourceAction("view")), Set(ResourceRoleName("owner")))
+    val policyName = AccessPolicyName("foo")
+
+    val authDomains = Set(WorkbenchGroupName(managedGroupName))
+    intercept[WorkbenchExceptionWithErrorReport] {
+      runAndWait(service.createResource(defaultResourceType, ResourceId(UUID.randomUUID().toString), Map(policyName -> policyMembership), authDomains, dummyUserInfo))
+    }
   }
 
   "listUserResourceRoles" should "list the user's role when they have at least one role" in {

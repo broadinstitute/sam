@@ -44,7 +44,7 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
   def createResource(resourceType: ResourceType, resourceId: ResourceId, userInfo: UserInfo): Future[Resource] = {
     val ownerRole = resourceType.roles.find(_.roleName == resourceType.ownerRoleName).getOrElse(throw new WorkbenchException(s"owner role ${resourceType.ownerRoleName} does not exist in $resourceType"))
     val defaultPolicies: Map[AccessPolicyName, AccessPolicyMembership] = Map(AccessPolicyName(ownerRole.roleName.value) -> AccessPolicyMembership(Set(userInfo.userEmail), Set.empty, Set(ownerRole.roleName)))
-    createResource(resourceType, resourceId, defaultPolicies, userInfo)
+    createResource(resourceType, resourceId, defaultPolicies, Set.empty, userInfo)
   }
 
   /**
@@ -56,13 +56,11 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     * @param userInfo
     * @return Future[Resource]
     */
-  def createResource(resourceType: ResourceType, resourceId: ResourceId, policiesMap: Map[AccessPolicyName, AccessPolicyMembership], userInfo: UserInfo): Future[Resource] = {
+  def createResource(resourceType: ResourceType, resourceId: ResourceId, policiesMap: Map[AccessPolicyName, AccessPolicyMembership], authDomains: Set[WorkbenchGroupName], userInfo: UserInfo): Future[Resource] = {
     makeValidatablePolicies(policiesMap).flatMap { policies =>
-      val errorReports = validateCreateResource(resourceType, resourceId, policies, userInfo)
-      if (errorReports.nonEmpty) {
-        throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "Cannot create resource", errorReports))
-      } else {
-        persistResource(resourceType, resourceId, policies)
+      validateCreateResource(resourceType, resourceId, policies, authDomains, userInfo).flatMap {
+        case Seq() => persistResource(resourceType, resourceId, policies)
+        case errorReports: Seq[ErrorReport] => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "Cannot create resource", errorReports))
       }
     }
   }
@@ -83,16 +81,45 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     } yield resource
   }
 
-  private def validateCreateResource(resourceType: ResourceType, resourceId: ResourceId, policies: Set[ValidatableAccessPolicy], userInfo: UserInfo): Seq[ErrorReport] = {
-    val ownerPolicyErrors = validateOwnerPolicyExists(resourceType, policies).toSeq
-    val policyErrors = policies.flatMap(policy => validatePolicy(resourceType, policy)).toSeq
-    ownerPolicyErrors ++ policyErrors
+  private def validateCreateResource(resourceType: ResourceType, resourceId: ResourceId, policies: Set[ValidatableAccessPolicy], authDomains: Set[WorkbenchGroupName], userInfo: UserInfo): Future[Seq[ErrorReport]] = {
+    for {
+      ownerPolicyErrors <- Future.successful(validateOwnerPolicyExists(resourceType, policies))
+      policyErrors <- Future.successful(policies.flatMap(policy => validatePolicy(resourceType, policy)))
+      authDomainErrors <- validateAuthDomains(resourceType, authDomains)
+    } yield (ownerPolicyErrors ++ policyErrors ++ authDomainErrors).toSeq
   }
 
   private def validateOwnerPolicyExists(resourceType: ResourceType, policies: Set[ValidatableAccessPolicy]): Option[ErrorReport] = {
-    val ownerExists = policies.exists { policy => policy.roles.contains(resourceType.ownerRoleName) && policy.emailsToSubjects.nonEmpty }
-    if (!ownerExists) {
-      Some(ErrorReport(s"Cannot create resource without at least 1 policy with ${resourceType.ownerRoleName.value} role and non-empty membership"))
+    policies.exists { policy => policy.roles.contains(resourceType.ownerRoleName) && policy.emailsToSubjects.nonEmpty } match {
+      case true => None
+      case false => Option(ErrorReport(s"Cannot create resource without at least 1 policy with ${resourceType.ownerRoleName.value} role and non-empty membership"))
+    }
+  }
+
+  private def validateAuthDomains(resourceType: ResourceType, authDomains: Set[WorkbenchGroupName]): Future[Option[ErrorReport]] = {
+    // validate that resource is constrainable
+    // validate that the authDomains specified are valid Groups that exist in opendj
+    validateAuthDomainsExist(authDomains).map { existenceErrors =>
+      val constrainableErrors = validateAuthDomainContraints(resourceType, authDomains).toSeq
+      val errors = constrainableErrors ++ existenceErrors.flatten
+      if (errors.nonEmpty) {
+        Option(ErrorReport("Invalid Auth Domains specified", errors))
+      } else None
+    }
+  }
+
+  private def validateAuthDomainsExist(authDomains: Set[WorkbenchGroupName]): Future[Set[Option[ErrorReport]]] = {
+    Future.traverse(authDomains) { groupName =>
+      directoryDAO.loadGroup(groupName) map {
+        case Some(_) => None
+        case None => Option(ErrorReport(s"Auth Domain $groupName does not exist"))
+      }
+    }
+  }
+
+  private def validateAuthDomainContraints(resourceType: ResourceType, authDomains: Set[WorkbenchGroupName]): Option[ErrorReport] = {
+    if (authDomains.nonEmpty && !resourceType.isAuthDomainConstrainable) {
+      Option(ErrorReport(s"Auth Domains are not permitted on resource of type: ${resourceType.name}"))
     } else None
   }
 
