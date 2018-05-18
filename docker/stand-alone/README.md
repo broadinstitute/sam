@@ -61,3 +61,8 @@ You may then copy the generated `server.crt` file to `ca-bundle.crt` to use your
     
     ```docker-compose up```
 1. SAM should be running at: https://sam.example.localhost.org:29443/
+
+### Email Domain
+
+Specify the email domain for your SAM instance in `docker/stand-alone/sam.conf` by changing the 
+`emailDomain = "replace.me.with.your.domain"` field.
