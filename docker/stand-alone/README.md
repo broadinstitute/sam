@@ -56,9 +56,6 @@ If you have `openssl` installed, you can generate a self-signed certificate usin
 You may then copy the generated `server.crt` file to `ca-bundle.crt` to use your certificate as the certificate chain.
 
 ### Starting the application
-1. Create an external docker network: 
-    
-    ```docker network create sam```
 
 1.  `cd` to the `docker/stand-alone` directory and run:
     
