@@ -1,7 +1,7 @@
 version: '2'
 services:
   sam-app:
-    image: broadinstitute/sam:stand-alone
+    image: ${SAM_APP_IMAGE}
     volumes:
       - ./sam.conf:/etc/sam.conf
       - ./fiab-startup.sh:/etc/fiab-startup.sh
