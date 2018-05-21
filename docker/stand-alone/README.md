@@ -51,3 +51,23 @@ You may then copy the generated `server.crt` file to `ca-bundle.crt` to use your
     ```docker-compose up```
 1. It will take a few minutes to complete the startup process.  When complete, SAM should be accessible at: 
 [https://localhost:29443/](https://localhost:29443/)
+
+## Using SAM
+
+1. Open the SAM Swagger UI at: [https://localhost:29443/](https://localhost:29443/)
+1. Click the `Authorize` button in the upper right of the page to log into SAM
+    1. In the window that pops up, check the 3 checkboxes (`openid`, `email`, and `profile`)
+    1. Click the `Authorize` button at the bottom of the pop-up window
+1. Register your user account in the **Users** section by expanding the `POST /register/user` operation and clicking the
+`Try it out!` button
+1. Confirm you are registered by expanding the GET `/register/user` operation and clicking the `Try it out!` button.  
+The response code should be `200` and the the `Response Body` should include:
+
+    ```
+    "enabled": {
+        "ldap": true,
+        "allUsersGroup": true,
+        "google": true
+      }
+    ```
+1. You should now be able to use the SAM APIs as desired
