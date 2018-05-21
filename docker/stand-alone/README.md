@@ -2,9 +2,10 @@
 
 ## Setup
 
-The instructions below will configure SAM to run on your localhost at `sam.example.localhost.org:29443`.  If you want
-to run SAM on another domain, you will need to update your OAuth Web Application registration, your `etc/hosts` file,
-and your SSL Certificate.
+The instructions below will configure SAM to run on your localhost at `localhost:29443`.  
+
+If you want to run SAM on another domain, you will need to update your OAuth Web Application registration, your 
+`etc/hosts` file, and your SSL Certificate.
 
 ### Docker
 
@@ -18,21 +19,9 @@ order to configure OAuth in SAM, you will need to:
 1. Have or create a [Google Cloud Project](https://cloud.google.com/resource-manager/docs/cloud-platform-resource-hierarchy#projects).
 1. Generate a web application [OAuth Client ID](https://developers.google.com/identity/protocols/OAuth2WebServer#creatingcred) for your
  Google Project.  
-    1. Add an "Authorized JavaScript origin" - `https://sam.example.localhost.org:29443`
-    1. Add an "Authorized redirect URI" - `https://sam.example.localhost.org:29443/o2c.html`
-1. In `docker/stand-alone/sam.conf`, modify:
-    ```
-    swagger {
-      googleClientId = "REPLACE_ME_WITH_YOUR_GOOGLE_OAUTH_CLIENT_ID"
-      realm = "REPLACE_ME_WITH_THE_NAME_OF_YOUR_GOOGLE_PROJECT"
-    }
-    ```
-
-### Update /etc/hosts
-
-Add the following to your `/etc/hosts` file:
-
-```127.0.0.1 sam.example.localhost.org```
+    1. Add an "Authorized JavaScript origin" - `https://localhost:29443`
+    1. Add an "Authorized redirect URI" - `https://localhost:29443/o2c.html`
+1. In `docker/stand-alone/.env`, set the values for `GOOGLE_OAUTH_CLIENT_ID` and `GOOGLE_CLOUD_PROJECT_DOMAIN`  
 
 ### SSL Certificate
 
@@ -60,9 +49,5 @@ You may then copy the generated `server.crt` file to `ca-bundle.crt` to use your
 1.  `cd` to the `docker/stand-alone` directory and run:
     
     ```docker-compose up```
-1. SAM should be running at: https://sam.example.localhost.org:29443/
-
-### Email Domain
-
-Specify the email domain for your SAM instance in `docker/stand-alone/sam.conf` by changing the 
-`emailDomain = "replace.me.with.your.domain"` field.
+1. It will take a few minutes to complete the startup process.  When complete, SAM should be accessible at: 
+[https://localhost:29443/](https://localhost:29443/)
