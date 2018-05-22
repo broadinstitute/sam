@@ -11,7 +11,7 @@ services:
       JAVA_OPTS: -Dconfig.file=/etc/sam.conf -Dcom.sun.jndi.ldap.connect.pool.protocol=plain -Dcom.sun.jndi.ldap.connect.pool.maxsize=100
       SLEEP: 130
       GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID}
-      GOOGLE_CLOUD_PROJECT_DOMAIN: ${GOOGLE_CLOUD_PROJECT_DOMAIN}
+      GOOGLE_CLOUD_PROJECT_ID: ${GOOGLE_CLOUD_PROJECT_ID}
       EMAIL_DOMAIN: ${EMAIL_DOMAIN}
     command: [sh, /etc/fiab-startup.sh]
     restart: always
