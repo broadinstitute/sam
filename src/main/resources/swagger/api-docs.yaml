@@ -157,7 +157,25 @@ paths:
       tags:
         - Admin
 
-  /api/groups:
+  /api/config/v1/resourceTypes:
+    get:
+      responses:
+        200:
+          description: Success
+          schema:
+            type: array
+            items:
+              $ref: '#/definitions/ResourceType'
+        500:
+          description: Internal Error
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      summary: Lists available resource types
+      operationId: listResourceTypes
+      tags:
+        - Config
+
+  /api/groups/v1:
     get:
       summary: Show all the groups the requesting user belongs to and their policy membership in each group
       responses:
@@ -175,7 +193,7 @@ paths:
       tags:
         - Group
 
-  /api/group/{groupName}:
+  /api/groups/v1/{groupName}:
     get:
       summary: Show email address of the group
       responses:
@@ -240,7 +258,7 @@ paths:
       tags:
         - Group
 
-  /api/group/{groupName}/requestAccess:
+  /api/groups/v1/{groupName}/requestAccess:
     post:
       summary: Request access to a managed group
       responses:
@@ -262,7 +280,7 @@ paths:
       tags:
         - Group
 
-  /api/group/{groupName}/{policyName}:
+  /api/groups/v1/{groupName}/{policyName}:
     get:
       summary: 'Get email addresses for members of the "admin" policy'
       responses:
@@ -324,7 +342,7 @@ paths:
       tags:
         - Group
 
-  /api/group/{groupName}/{policyName}/{email}:
+  /api/groups/v1/{groupName}/{policyName}/{email}:
     put:
       summary: Add email to the policy
       responses:
@@ -394,7 +412,7 @@ paths:
       tags:
         - Group
 
-  /api/google/group/{groupName}/sync:
+  /api/google/v1/group/{groupName}/sync:
     post:
       summary: Synchronize a managed-group with google group
       responses:
@@ -420,7 +438,7 @@ paths:
       tags:
         - Google
 
-  /api/google/petServiceAccount/{project}/{userEmail}:
+  /api/google/v1/petServiceAccount/{project}/{userEmail}:
     get:
       summary: gets a key for the user's pet service account, get_pet_private_key action on cloud-extension/google required
       responses:
@@ -455,7 +473,7 @@ paths:
       tags:
         - Google
 
-  /api/google/user/petServiceAccount/{project}:
+  /api/google/v1/user/petServiceAccount/{project}:
     get:
       summary: gets the pet service account for the specified user
       responses:
@@ -477,7 +495,7 @@ paths:
       tags:
         - Google
 
-  /api/google/user/petServiceAccount/{project}/key:
+  /api/google/v1/user/petServiceAccount/{project}/key:
     get:
       summary: gets a key for the user's pet service account
       responses:
@@ -497,7 +515,7 @@ paths:
       tags:
         - Google
 
-  /api/google/user/petServiceAccount/{project}/key/{keyId}:
+  /api/google/v1/user/petServiceAccount/{project}/key/{keyId}:
     delete:
       summary: removes an existing key for the user's pet service account
       responses:
@@ -522,7 +540,7 @@ paths:
       tags:
         - Google
 
-  /api/google/user/petServiceAccount/{project}/token:
+  /api/google/v1/user/petServiceAccount/{project}/token:
     post:
       summary: gets a token for the user's pet service account
       responses:
@@ -550,7 +568,7 @@ paths:
       tags:
         - Google
 
-  /api/google/user/proxyGroup/{email}:
+  /api/google/v1/user/proxyGroup/{email}:
     get:
       summary: gets the proxy group email for the specified user
       responses:
@@ -574,7 +592,7 @@ paths:
       tags:
         - Google
 
-  /api/google/resource/{resourceTypeName}/{resourceId}/{policyName}/sync:
+  /api/google/v1/resource/{resourceTypeName}/{resourceId}/{policyName}/sync:
     post:
       summary: Synchronize a policy's membership with google group. Once called all further membership changes will by automatically synchronized
       responses:
@@ -637,7 +655,7 @@ paths:
       tags:
         - Google
 
-  /api/resource/{resourceTypeName}:
+  /api/resources/v1/{resourceTypeName}:
     get:
       summary: List resources and policies for this resource for the caller
       responses:
@@ -689,7 +707,7 @@ paths:
       tags:
         - Resources
 
-  /api/resource/{resourceTypeName}/{resourceId}:
+  /api/resources/v1/{resourceTypeName}/{resourceId}:
     delete:
       summary: Delete a resource
       responses:
@@ -741,7 +759,7 @@ paths:
       tags:
         - Resources
 
-  /api/resource/{resourceTypeName}/{resourceId}/policies:
+  /api/resources/v1/{resourceTypeName}/{resourceId}/policies:
     get:
       summary: List the policies for a resource
       responses:
@@ -774,7 +792,7 @@ paths:
       tags:
         - Resources
 
-  /api/resource/{resourceTypeName}/{resourceId}/policies/{policyName}:
+  /api/resources/v1/{resourceTypeName}/{resourceId}/policies/{policyName}:
     get:
       summary: Gets a policy on a resource
       responses:
@@ -848,7 +866,7 @@ paths:
       tags:
         - Resources
 
-  /api/resource/{resourceTypeName}/{resourceId}/policies/{policyName}/memberEmails/{email}:
+  /api/resources/v1/{resourceTypeName}/{resourceId}/policies/{policyName}/memberEmails/{email}:
     put:
       summary: Add a user to a policy
       responses:
@@ -929,7 +947,7 @@ paths:
         - Resources
 
 
-  /api/resource/{resourceTypeName}/{resourceId}/roles:
+  /api/resources/v1/{resourceTypeName}/{resourceId}/roles:
     get:
       summary: Query for the list of roles that the requesting user has on the resource
       responses:
@@ -960,7 +978,7 @@ paths:
       tags:
         - Resources
 
-  /api/resource/{resourceTypeName}/{resourceId}/action/{action}:
+  /api/resources/v1/{resourceTypeName}/{resourceId}/action/{action}:
     get:
       summary: Query if requesting user may perform the action
       responses:
@@ -992,25 +1010,7 @@ paths:
       tags:
         - Resources
 
-  /api/resourceTypes:
-    get:
-      responses:
-        200:
-          description: Success
-          schema:
-            type: array
-            items:
-              $ref: '#/definitions/ResourceType'
-        500:
-          description: Internal Error
-          schema:
-            $ref: '#/definitions/ErrorReport'
-      summary: Lists available resource types
-      operationId: listResourceTypes
-      tags:
-        - Resources
-
-  /register/user:
+  /register/user/v1:
     get:
       summary: gets the registration status of the logged in user
       responses:
