@@ -1,20 +1,23 @@
 package org.broadinstitute.dsde.workbench.sam.api
 
-import akka.http.scaladsl.model.StatusCodes
-import akka.http.scaladsl.testkit.ScalatestRouteTest
-import org.broadinstitute.dsde.workbench.sam.model._
-import org.scalatest.{AppendedClues, FlatSpec, Matchers}
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
+import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
-import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
-import spray.json.{JsBoolean, JsValue}
-import spray.json.DefaultJsonProtocol._
+import akka.http.scaladsl.testkit.ScalatestRouteTest
+import com.typesafe.config.ConfigFactory
+import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.model.ErrorReportJsonSupport._
+import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
+import org.broadinstitute.dsde.workbench.sam.config._
 import org.broadinstitute.dsde.workbench.sam.directory.MockDirectoryDAO
+import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
+import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.MockAccessPolicyDAO
 import org.broadinstitute.dsde.workbench.sam.service._
+import org.scalatest.{AppendedClues, FlatSpec, Matchers}
+import spray.json.DefaultJsonProtocol._
+import spray.json.{JsBoolean, JsValue}
 
 /**
   * Created by dvoet on 6/7/17.
@@ -22,6 +25,11 @@ import org.broadinstitute.dsde.workbench.sam.service._
 class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest with TestSupport with AppendedClues {
 
   val defaultUserInfo = UserInfo(OAuth2BearerToken("accessToken"), WorkbenchUserId("user1"), WorkbenchEmail("user1@example.com"), 0)
+
+  private val config = ConfigFactory.load()
+  private val resourceTypes = config.as[Map[String, ResourceType]]("resourceTypes").values.toSet
+  private val resourceTypeMap = resourceTypes.map(rt => rt.name -> rt).toMap
+  private val managedGroupResourceType = resourceTypeMap.getOrElse(ResourceTypeName("managed-group"), throw new Error("Failed to load managed-group resource type from reference.conf"))
 
   private object SamResourceActionPatterns {
     val readPolicies = ResourceActionPattern("read_policies", "", false)
@@ -68,7 +76,28 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceActionPattern("run", "", false)), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("run")))), ResourceRoleName("owner"))
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
 
-    val createResourceRequest = CreateResourceRequest(ResourceId("foo"), Map(AccessPolicyName("goober") -> AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set(ResourceAction("run")), Set(resourceType.ownerRoleName))))
+    val createResourceRequest = CreateResourceRequest(ResourceId("foo"), Map(AccessPolicyName("goober") -> AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set(ResourceAction("run")), Set(resourceType.ownerRoleName))), Set.empty)
+    Post(s"/api/resource/${resourceType.name}", createResourceRequest) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+    }
+
+    Get(s"/api/resource/${resourceType.name}/foo/action/run") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[JsValue] shouldEqual JsBoolean(true)
+    }
+  }
+
+  it should "204 when valid auth domains are provided and the resource type is constrainable" in {
+    val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceActionPattern("run", "", true)), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("run")))), ResourceRoleName("owner"))
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType, managedGroupResourceType.name -> managedGroupResourceType))
+
+    resourceType.isAuthDomainConstrainable shouldEqual true
+
+    val authDomainId = ResourceId("myAuthDomain")
+    runAndWait(samRoutes.managedGroupService.createManagedGroup(authDomainId, defaultUserInfo))
+    val authDomains = Set(WorkbenchGroupName(authDomainId.value))
+
+    val createResourceRequest = CreateResourceRequest(ResourceId("foo"), Map(AccessPolicyName("goober") -> AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set(ResourceAction("run")), Set(resourceType.ownerRoleName))), authDomains)
     Post(s"/api/resource/${resourceType.name}", createResourceRequest) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NoContent
     }
@@ -83,7 +112,33 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceActionPattern("run", "", false)), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("run")))), ResourceRoleName("owner"), true)
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
 
-    val createResourceRequest = CreateResourceRequest(ResourceId("foo"), Map(AccessPolicyName("goober") -> AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set(ResourceAction("run")), Set(resourceType.ownerRoleName))))
+    val createResourceRequest = CreateResourceRequest(ResourceId("foo"), Map(AccessPolicyName("goober") -> AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set(ResourceAction("run")), Set(resourceType.ownerRoleName))), Set.empty)
+    Post(s"/api/resource/${resourceType.name}", createResourceRequest) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.BadRequest
+    }
+  }
+
+  it should "400 when no policies are provided" in {
+    val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceActionPattern("run", "", false)), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("run")))), ResourceRoleName("owner"))
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
+
+    val createResourceRequest = CreateResourceRequest(ResourceId("foo"), Map.empty, Set.empty)
+    Post(s"/api/resource/${resourceType.name}", createResourceRequest) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.BadRequest
+    }
+  }
+
+  it should "400 when auth domains are not valid" in {
+    val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceActionPattern("run", "", true)), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("run")))), ResourceRoleName("owner"))
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType, managedGroupResourceType.name -> managedGroupResourceType))
+
+    resourceType.isAuthDomainConstrainable shouldEqual true
+
+    val authDomainId = ResourceId("myAuthDomain")
+    val authDomains = Set(WorkbenchGroupName(authDomainId.value))
+    // Group is never persisted
+
+    val createResourceRequest = CreateResourceRequest(ResourceId("foo"), Map(AccessPolicyName("goober") -> AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set(ResourceAction("run")), Set(resourceType.ownerRoleName))), authDomains)
     Post(s"/api/resource/${resourceType.name}", createResourceRequest) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.BadRequest
     }
