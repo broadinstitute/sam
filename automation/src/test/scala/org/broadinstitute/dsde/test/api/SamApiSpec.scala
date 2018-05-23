@@ -286,15 +286,18 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
     "should arbitrarily choose a project to return a pet key for when the user has existing pets" in {
       val user = UserPool.chooseStudent
 
-      withCleanBillingProject(UserPool.chooseProjectOwner, List(user.email)) { project =>
-        // get my pet's email directly (this will also create the pet SA)
-        val petEmailDirect =  Sam.user.petServiceAccountEmail(project)(user.makeAuthToken)
+      withCleanBillingProject(UserPool.chooseProjectOwner, List(user.email)) { project1 =>
+        withCleanBillingProject(UserPool.chooseProjectOwner, List(user.email)) { project2 =>
+          // get my pet's email directly (this will also create the pet SA)
+          val petEmailDirect1 = Sam.user.petServiceAccountEmail(project1)(user.makeAuthToken)
+          val petEmailDirect2 = Sam.user.petServiceAccountEmail(project2)(user.makeAuthToken)
 
-        // get my pet's email thru the arbitrary key endpoint
-        val petEmailArbitrary = getFieldFromJson(Sam.user.arbitraryPetServiceAccountKey()(user.makeAuthToken), "client_email")
+          // get my pet's email thru the arbitrary key endpoint
+          val petEmailArbitrary = getFieldFromJson(Sam.user.arbitraryPetServiceAccountKey()(user.makeAuthToken), "client_email")
 
-        // result should be the same
-        petEmailDirect shouldBe petEmailArbitrary
+          // result should be the same
+          petEmailArbitrary shouldBe oneOf(petEmailDirect1, petEmailDirect2)
+        }
       }
     }
 
