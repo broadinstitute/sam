@@ -97,10 +97,8 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
   }
 
   private def validateAuthDomains(resourceType: ResourceType, authDomains: Set[WorkbenchGroupName]): Future[Option[ErrorReport]] = {
-    // validate that resource is constrainable
-    // validate that the authDomains specified are valid Groups that exist in opendj
     validateAuthDomainsExist(authDomains).map { existenceErrors =>
-      val constrainableErrors = validateAuthDomainContraints(resourceType, authDomains).toSeq
+      val constrainableErrors = validateAuthDomainConstraints(resourceType, authDomains).toSeq
       val errors = constrainableErrors ++ existenceErrors.flatten
       if (errors.nonEmpty) {
         Option(ErrorReport("Invalid Auth Domains specified", errors))
@@ -117,7 +115,7 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     }
   }
 
-  private def validateAuthDomainContraints(resourceType: ResourceType, authDomains: Set[WorkbenchGroupName]): Option[ErrorReport] = {
+  private def validateAuthDomainConstraints(resourceType: ResourceType, authDomains: Set[WorkbenchGroupName]): Option[ErrorReport] = {
     if (authDomains.nonEmpty && !resourceType.isAuthDomainConstrainable) {
       Option(ErrorReport(s"Auth Domains are not permitted on resource of type: ${resourceType.name}"))
     } else None
