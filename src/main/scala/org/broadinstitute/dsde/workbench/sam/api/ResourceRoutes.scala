@@ -30,7 +30,7 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
   }
 
   def resourceRoutes: server.Route =
-    pathPrefix("resourceTypes") {
+    (pathPrefix("config" / "v1" / "resourceTypes") | pathPrefix("resourceTypes")) {
       requireUserInfo { userInfo =>
         pathEndOrSingleSlash {
           get {
@@ -41,7 +41,7 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
         }
       }
     } ~
-    pathPrefix("resource") {
+    (pathPrefix("resources" / "v1") | pathPrefix("resource")) {
       requireUserInfo { userInfo =>
         pathPrefix(Segment) { resourceTypeName =>
           withResourceType(ResourceTypeName(resourceTypeName)) { resourceType =>

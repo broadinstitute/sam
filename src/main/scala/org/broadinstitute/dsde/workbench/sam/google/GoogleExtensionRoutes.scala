@@ -41,7 +41,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
         }
       }
     } ~
-    pathPrefix("google") {
+    (pathPrefix("google" / "v1") | pathPrefix("google")) {
       requireUserInfo { userInfo =>
         path("petServiceAccount" / Segment / Segment ) { (project, userEmail) =>
           get {

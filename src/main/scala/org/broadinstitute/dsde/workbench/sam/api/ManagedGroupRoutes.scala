@@ -25,51 +25,55 @@ trait ManagedGroupRoutes extends UserInfoDirectives with SecurityDirectives with
   val managedGroupService: ManagedGroupService
 
   def groupRoutes: server.Route = requireUserInfo { userInfo =>
-    pathPrefix("group" / Segment) { groupId =>
-      val managedGroup = Resource(ManagedGroupService.managedGroupTypeName, ResourceId(groupId))
-
-      pathEndOrSingleSlash {
-        get {
-          handleGetGroup(managedGroup)
-        } ~
-        post {
-          handleCreateGroup(managedGroup, userInfo)
-        } ~
-        delete {
-          handleDeleteGroup(managedGroup, userInfo)
-        }
-      } ~
-      pathPrefix("requestAccess") {
-        post {
-          handleRequestAccess(managedGroup, userInfo)
-        }
-      } ~
-      pathPrefix(Segment) { policyName =>
-        val accessPolicyName = ManagedGroupService.getPolicyName(policyName)
+    (pathPrefix("groups" / "v1") | pathPrefix("group")) {
+      pathPrefix(Segment) { groupId =>
+        val managedGroup = Resource(ManagedGroupService.managedGroupTypeName, ResourceId(groupId))
 
         pathEndOrSingleSlash {
           get {
-            handleListEmails(managedGroup, accessPolicyName, userInfo)
+            handleGetGroup(managedGroup)
           } ~
-          put {
-            handleOverwriteEmails(managedGroup, accessPolicyName, userInfo)
-          }
-        } ~
-        pathPrefix(Segment) { email =>
-          pathEndOrSingleSlash {
-            put {
-              handleAddEmailToPolicy(managedGroup, accessPolicyName, email, userInfo)
+            post {
+              handleCreateGroup(managedGroup, userInfo)
             } ~
             delete {
-              handleDeleteEmailFromPolicy(managedGroup, accessPolicyName, email, userInfo)
+              handleDeleteGroup(managedGroup, userInfo)
+            }
+        } ~
+        pathPrefix("requestAccess") {
+          post {
+            handleRequestAccess(managedGroup, userInfo)
+          }
+        } ~
+        pathPrefix(Segment) { policyName =>
+          val accessPolicyName = ManagedGroupService.getPolicyName(policyName)
+
+          pathEndOrSingleSlash {
+            get {
+              handleListEmails(managedGroup, accessPolicyName, userInfo)
+            } ~
+              put {
+                handleOverwriteEmails(managedGroup, accessPolicyName, userInfo)
+              }
+          } ~
+          pathPrefix(Segment) { email =>
+            pathEndOrSingleSlash {
+              put {
+                handleAddEmailToPolicy(managedGroup, accessPolicyName, email, userInfo)
+              } ~
+              delete {
+                handleDeleteEmailFromPolicy(managedGroup, accessPolicyName, email, userInfo)
+              }
             }
           }
         }
       }
     } ~
-    path("groups") {
-      get {
-        handleListGroups(userInfo)
+    (pathPrefix("groups" / "v1") | pathPrefix("groups")) {
+      pathEndOrSingleSlash {
+        get {
+          handleListGroups(userInfo)
+        }
       }
     }
   }
