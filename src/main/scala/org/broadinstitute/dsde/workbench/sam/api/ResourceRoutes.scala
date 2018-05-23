@@ -54,7 +54,7 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
                   if (resourceType.reuseIds) {
                     throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "this api may not be used for resource types that allow id reuse"))
                   }
-                  complete(resourceService.createResource(resourceType, createResourceRequest.resourceId, createResourceRequest.policies, createResourceRequest.authDomains, userInfo).map(_ => StatusCodes.NoContent))
+                  complete(resourceService.createResource(resourceType, createResourceRequest.resourceId, createResourceRequest.policies, createResourceRequest.authDomain, userInfo).map(_ => StatusCodes.NoContent))
                 }
               }
             } ~

@@ -1126,7 +1126,7 @@ definitions:
         items:
           $ref: '#/definitions/AccessPolicyMembership'
         description: map of initial policies to create
-      authDomains:
+      authDomain:
         type: array
         items:
           type: string

@@ -56,9 +56,9 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     * @param userInfo
     * @return Future[Resource]
     */
-  def createResource(resourceType: ResourceType, resourceId: ResourceId, policiesMap: Map[AccessPolicyName, AccessPolicyMembership], authDomains: Set[WorkbenchGroupName], userInfo: UserInfo): Future[Resource] = {
+  def createResource(resourceType: ResourceType, resourceId: ResourceId, policiesMap: Map[AccessPolicyName, AccessPolicyMembership], authDomain: Set[WorkbenchGroupName], userInfo: UserInfo): Future[Resource] = {
     makeValidatablePolicies(policiesMap).flatMap { policies =>
-      validateCreateResource(resourceType, resourceId, policies, authDomains, userInfo).flatMap {
+      validateCreateResource(resourceType, resourceId, policies, authDomain, userInfo).flatMap {
         case Seq() => persistResource(resourceType, resourceId, policies)
         case errorReports: Seq[ErrorReport] => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "Cannot create resource", errorReports))
       }
@@ -81,11 +81,11 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     } yield resource
   }
 
-  private def validateCreateResource(resourceType: ResourceType, resourceId: ResourceId, policies: Set[ValidatableAccessPolicy], authDomains: Set[WorkbenchGroupName], userInfo: UserInfo): Future[Seq[ErrorReport]] = {
+  private def validateCreateResource(resourceType: ResourceType, resourceId: ResourceId, policies: Set[ValidatableAccessPolicy], authDomain: Set[WorkbenchGroupName], userInfo: UserInfo) = {
     for {
       ownerPolicyErrors <- Future.successful(validateOwnerPolicyExists(resourceType, policies))
       policyErrors <- Future.successful(policies.flatMap(policy => validatePolicy(resourceType, policy)))
-      authDomainErrors <- validateAuthDomains(resourceType, authDomains)
+      authDomainErrors <- validateAuthDomain(resourceType, authDomain)
     } yield (ownerPolicyErrors ++ policyErrors ++ authDomainErrors).toSeq
   }
 
@@ -96,9 +96,9 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     }
   }
 
-  private def validateAuthDomains(resourceType: ResourceType, authDomains: Set[WorkbenchGroupName]): Future[Option[ErrorReport]] = {
-    validateAuthDomainsExist(authDomains).map { existenceErrors =>
-      val constrainableErrors = validateAuthDomainConstraints(resourceType, authDomains).toSeq
+  private def validateAuthDomain(resourceType: ResourceType, authDomain: Set[WorkbenchGroupName]) = {
+    validateAuthDomainExists(authDomain).map { existenceErrors =>
+      val constrainableErrors = validateAuthDomainConstraints(resourceType, authDomain).toSeq
       val errors = constrainableErrors ++ existenceErrors.flatten
       if (errors.nonEmpty) {
         Option(ErrorReport("Invalid Auth Domains specified", errors))
@@ -106,8 +106,8 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     }
   }
 
-  private def validateAuthDomainsExist(authDomains: Set[WorkbenchGroupName]): Future[Set[Option[ErrorReport]]] = {
-    Future.traverse(authDomains) { groupName =>
+  private def validateAuthDomainExists(authDomain: Set[WorkbenchGroupName]) = {
+    Future.traverse(authDomain) { groupName =>
       directoryDAO.loadGroup(groupName) map {
         case Some(_) => None
         case None => Option(ErrorReport(s"Auth Domain $groupName does not exist"))
@@ -115,8 +115,8 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     }
   }
 
-  private def validateAuthDomainConstraints(resourceType: ResourceType, authDomains: Set[WorkbenchGroupName]): Option[ErrorReport] = {
-    if (authDomains.nonEmpty && !resourceType.isAuthDomainConstrainable) {
+  private def validateAuthDomainConstraints(resourceType: ResourceType, authDomain: Set[WorkbenchGroupName]) = {
+    if (authDomain.nonEmpty && !resourceType.isAuthDomainConstrainable) {
       Option(ErrorReport(s"Auth Domains are not permitted on resource of type: ${resourceType.name}"))
     } else None
   }

@@ -212,13 +212,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     val policyMembership = AccessPolicyMembership(Set(dummyUserInfo.userEmail), Set(ResourceAction("view")), Set(ownerRoleName))
     val policyName = AccessPolicyName("foo")
 
-    runAndWait(service.createResource(
-      resourceType,
-      resourceName,
-      Map(policyName -> policyMembership),
-      Set.empty,
-      dummyUserInfo
-    ))
+    runAndWait(service.createResource(resourceType, resourceName, Map(policyName -> policyMembership), Set.empty, dummyUserInfo))
 
     val policies = runAndWait(service.listResourcePolicies(Resource(resourceType.name, resourceName)))
     assertResult(Set(AccessPolicyResponseEntry(policyName, policyMembership, WorkbenchEmail("")))) {
@@ -234,25 +228,13 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     runAndWait(service.createResourceType(resourceType))
 
     val exception1 = intercept[WorkbenchExceptionWithErrorReport] {
-      runAndWait(service.createResource(
-        resourceType,
-        resourceName,
-        Map(AccessPolicyName("foo") -> AccessPolicyMembership(Set.empty, Set.empty, Set(ownerRoleName))),
-        Set.empty,
-        dummyUserInfo
-      ))
+      runAndWait(service.createResource(resourceType, resourceName, Map(AccessPolicyName("foo") -> AccessPolicyMembership(Set.empty, Set.empty, Set(ownerRoleName))), Set.empty, dummyUserInfo))
     }
 
     exception1.errorReport.statusCode shouldEqual Option(StatusCodes.BadRequest)
 
     val exception2 = intercept[WorkbenchExceptionWithErrorReport] {
-      runAndWait(service.createResource(
-        resourceType,
-        resourceName,
-        Map(AccessPolicyName("foo") -> AccessPolicyMembership(Set(dummyUserInfo.userEmail), Set.empty, Set.empty)),
-        Set.empty,
-        dummyUserInfo
-      ))
+      runAndWait(service.createResource(resourceType, resourceName, Map(AccessPolicyName("foo") -> AccessPolicyMembership(Set(dummyUserInfo.userEmail), Set.empty, Set.empty)), Set.empty, dummyUserInfo))
     }
 
     exception2.errorReport.statusCode shouldEqual Option(StatusCodes.BadRequest)
@@ -279,9 +261,9 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     val managedGroupName = "fooGroup"
     runAndWait(managedGroupService.createManagedGroup(ResourceId(managedGroupName), dummyUserInfo))
 
-    val authDomains = Set(WorkbenchGroupName(managedGroupName))
+    val authDomain = Set(WorkbenchGroupName(managedGroupName))
     val viewPolicyName = AccessPolicyName(constrainableReaderRoleName.value)
-    val resource = runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId(UUID.randomUUID().toString), Map(viewPolicyName -> constrainablePolicyMembership), authDomains, dummyUserInfo))
+    val resource = runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId(UUID.randomUUID().toString), Map(viewPolicyName -> constrainablePolicyMembership), authDomain, dummyUserInfo))
     val resultingPolicies: Set[ResourceAndPolicyName] = runAndWait(policyDAO.listAccessPolicies(resource)).map(_.id)
     resultingPolicies shouldEqual Set(ResourceAndPolicyName(resource, viewPolicyName))
   }
@@ -295,10 +277,10 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     runAndWait(managedGroupService.createManagedGroup(ResourceId(managedGroupName), dummyUserInfo))
     val nonExistentGroup = WorkbenchGroupName("aBadGroup")
 
-    val authDomains = Set(WorkbenchGroupName(managedGroupName), nonExistentGroup)
+    val authDomain = Set(WorkbenchGroupName(managedGroupName), nonExistentGroup)
     val viewPolicyName = AccessPolicyName(constrainableReaderRoleName.value)
     intercept[WorkbenchExceptionWithErrorReport] {
-      runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId(UUID.randomUUID().toString), Map(viewPolicyName -> constrainablePolicyMembership), authDomains, dummyUserInfo))
+      runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId(UUID.randomUUID().toString), Map(viewPolicyName -> constrainablePolicyMembership), authDomain, dummyUserInfo))
     }
   }
 
@@ -313,9 +295,9 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     val policyMembership = AccessPolicyMembership(Set(dummyUserInfo.userEmail), Set(ResourceAction("view")), Set(ResourceRoleName("owner")))
     val policyName = AccessPolicyName("foo")
 
-    val authDomains = Set(WorkbenchGroupName(managedGroupName))
+    val authDomain = Set(WorkbenchGroupName(managedGroupName))
     intercept[WorkbenchExceptionWithErrorReport] {
-      runAndWait(service.createResource(defaultResourceType, ResourceId(UUID.randomUUID().toString), Map(policyName -> policyMembership), authDomains, dummyUserInfo))
+      runAndWait(service.createResource(defaultResourceType, ResourceId(UUID.randomUUID().toString), Map(policyName -> policyMembership), authDomain, dummyUserInfo))
     }
   }
 
