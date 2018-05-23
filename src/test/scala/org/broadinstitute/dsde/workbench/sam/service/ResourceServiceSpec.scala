@@ -253,7 +253,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     assertResourceExists(resource, constrainableResourceType, policyDAO)
   }
 
-  it should "succeed when at least 1 valid auth domain is provided" in {
+  it should "succeed when at least 1 valid auth domain group is provided" in {
     constrainableResourceType.isAuthDomainConstrainable shouldEqual true
     runAndWait(constrainableService.createResourceType(constrainableResourceType))
 
@@ -268,7 +268,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     resultingPolicies shouldEqual Set(ResourceAndPolicyName(resource, viewPolicyName))
   }
 
-  it should "fail when at least 1 of the auth domains is not a valid group" in {
+  it should "fail when at least 1 of the auth domain groups does not exist" in {
     constrainableResourceType.isAuthDomainConstrainable shouldEqual true
     runAndWait(constrainableService.createResourceType(constrainableResourceType))
 
@@ -284,7 +284,27 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     }
   }
 
-  "Creating a resource that has 0 constrainable action patterns" should "fail when at least 1 auth domain is provided" in {
+  it should "fail when user does not have access to at least 1 of the auth domain groups" in {
+    constrainableResourceType.isAuthDomainConstrainable shouldEqual true
+    runAndWait(constrainableService.createResourceType(constrainableResourceType))
+
+    val bender = UserInfo(OAuth2BearerToken("token"), WorkbenchUserId("Bender"), WorkbenchEmail("bender@planex.com"), 0)
+    runAndWait(dirDAO.createUser(WorkbenchUser(bender.userId, bender.userEmail)))
+
+    runAndWait(constrainableService.createResourceType(managedGroupResourceType))
+    val managedGroupName1 = "firstGroup"
+    runAndWait(managedGroupService.createManagedGroup(ResourceId(managedGroupName1), dummyUserInfo))
+    val managedGroupName2 = "benderIsGreat"
+    runAndWait(managedGroupService.createManagedGroup(ResourceId(managedGroupName2), bender))
+
+    val authDomain = Set(WorkbenchGroupName(managedGroupName1), WorkbenchGroupName(managedGroupName2))
+    val viewPolicyName = AccessPolicyName(constrainableReaderRoleName.value)
+    intercept[WorkbenchExceptionWithErrorReport] {
+      runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId(UUID.randomUUID().toString), Map(viewPolicyName -> constrainablePolicyMembership), authDomain, dummyUserInfo))
+    }
+  }
+
+  "Creating a resource that has 0 constrainable action patterns" should "fail when an auth domain is provided" in {
     defaultResourceType.isAuthDomainConstrainable shouldEqual false
     runAndWait(service.createResourceType(defaultResourceType))
 

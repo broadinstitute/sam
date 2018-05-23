@@ -142,6 +142,8 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
 object ManagedGroupService {
   val managedGroupTypeName = ResourceTypeName("managed-group")
   val groupNameRe = "^[A-z0-9_-]+$".r
+  val useAction = ResourceAction("use")
+
   private val memberValue = "member"
   private val adminValue = "admin"
   private val adminNotifierValue = "admin-notifier"

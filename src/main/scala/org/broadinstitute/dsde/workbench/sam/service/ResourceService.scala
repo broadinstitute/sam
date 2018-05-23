@@ -85,7 +85,7 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     for {
       ownerPolicyErrors <- Future.successful(validateOwnerPolicyExists(resourceType, policies))
       policyErrors <- Future.successful(policies.flatMap(policy => validatePolicy(resourceType, policy)))
-      authDomainErrors <- validateAuthDomain(resourceType, authDomain)
+      authDomainErrors <- validateAuthDomain(resourceType, authDomain, userInfo)
     } yield (ownerPolicyErrors ++ policyErrors ++ authDomainErrors).toSeq
   }
 
@@ -96,28 +96,29 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     }
   }
 
-  private def validateAuthDomain(resourceType: ResourceType, authDomain: Set[WorkbenchGroupName]) = {
-    validateAuthDomainExists(authDomain).map { existenceErrors =>
+  private def validateAuthDomain(resourceType: ResourceType, authDomain: Set[WorkbenchGroupName], userInfo: UserInfo): Future[Option[ErrorReport]] = {
+    validateAuthDomainPermissions(authDomain, userInfo).map { permissionsErrors =>
       val constrainableErrors = validateAuthDomainConstraints(resourceType, authDomain).toSeq
-      val errors = constrainableErrors ++ existenceErrors.flatten
+      val errors = constrainableErrors ++ permissionsErrors.flatten
       if (errors.nonEmpty) {
-        Option(ErrorReport("Invalid Auth Domains specified", errors))
+        Option(ErrorReport("Invalid Auth Domain specified", errors))
       } else None
     }
   }
 
-  private def validateAuthDomainExists(authDomain: Set[WorkbenchGroupName]) = {
-    Future.traverse(authDomain) { groupName =>
-      directoryDAO.loadGroup(groupName) map {
-        case Some(_) => None
-        case None => Option(ErrorReport(s"Auth Domain $groupName does not exist"))
+  private def validateAuthDomainPermissions(authDomain: Set[WorkbenchGroupName], userInfo: UserInfo): Future[Set[Option[ErrorReport]]] = Future.sequence(
+    authDomain.map { groupName =>
+      val resource = Resource(ManagedGroupService.managedGroupTypeName, ResourceId(groupName.value))
+      hasPermission(resource, ManagedGroupService.useAction, userInfo).map {
+        case false => Option(ErrorReport(s"You do not have access to $groupName or $groupName does not exist"))
+        case _ => None
       }
     }
-  }
+  )
 
-  private def validateAuthDomainConstraints(resourceType: ResourceType, authDomain: Set[WorkbenchGroupName]) = {
+  private def validateAuthDomainConstraints(resourceType: ResourceType, authDomain: Set[WorkbenchGroupName]): Option[ErrorReport] = {
     if (authDomain.nonEmpty && !resourceType.isAuthDomainConstrainable) {
-      Option(ErrorReport(s"Auth Domains are not permitted on resource of type: ${resourceType.name}"))
+      Option(ErrorReport(s"Auth Domain is not permitted on resource of type: ${resourceType.name}"))
     } else None
   }
 

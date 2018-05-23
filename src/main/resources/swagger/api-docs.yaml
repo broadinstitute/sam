@@ -680,7 +680,7 @@ paths:
         204:
           description: Successfully created resource
         400:
-          description: Invalid policies, invalid auth domains, or resource type allows id reuse
+          description: Invalid policies, invalid auth domain, or resource type allows id reuse
           schema:
             $ref: '#/definitions/ErrorReport'
         409:
