@@ -7,26 +7,24 @@ import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import com.google.api.client.googleapis.json.GoogleJsonResponseException
-import com.google.api.services.plus.PlusScopes
-import com.google.api.services.storage.StorageScopes
+import com.google.auth.oauth2.ServiceAccountCredentials
 import com.typesafe.scalalogging.LazyLogging
-import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleIamDAO, GooglePubSubDAO, GoogleStorageDAO}
+import org.broadinstitute.dsde.workbench.dataaccess.NotificationDAO
+import org.broadinstitute.dsde.workbench.google.{GoogleProjectDAO, GoogleDirectoryDAO, GoogleIamDAO, GooglePubSubDAO, GoogleStorageDAO}
+import org.broadinstitute.dsde.workbench.model.Notifications.Notification
+import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport.WorkbenchGroupNameFormat
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google._
-import com.google.auth.oauth2.ServiceAccountCredentials
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.config.{GoogleServicesConfig, PetServiceAccountConfig}
 import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
+import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport.ResourceAndPolicyNameFormat
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.AccessPolicyDAO
 import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, SamApplication}
-import org.broadinstitute.dsde.workbench.util.FutureSupport
 import org.broadinstitute.dsde.workbench.util.health.{HealthMonitor, SubsystemStatus, Subsystems}
-import WorkbenchIdentityJsonSupport.WorkbenchGroupNameFormat
-import org.broadinstitute.dsde.workbench.dataaccess.NotificationDAO
-import org.broadinstitute.dsde.workbench.model.Notifications.Notification
+import org.broadinstitute.dsde.workbench.util.{FutureSupport, Retry}
 import spray.json._
-import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport.ResourceAndPolicyNameFormat
 
 import scala.collection.JavaConverters._
 import scala.concurrent.{ExecutionContext, Future}
@@ -37,7 +35,7 @@ object GoogleExtensions {
   val getPetPrivateKeyAction = ResourceAction("get_pet_private_key")
 }
 
-class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: AccessPolicyDAO, val googleDirectoryDAO: GoogleDirectoryDAO, val googlePubSubDAO: GooglePubSubDAO, val googleIamDAO: GoogleIamDAO, val googleStorageDAO: GoogleStorageDAO, val googleKeyCache: GoogleKeyCache, val notificationDAO: NotificationDAO, val googleServicesConfig: GoogleServicesConfig, val petServiceAccountConfig: PetServiceAccountConfig, extensionResourceType: ResourceType)(implicit val executionContext: ExecutionContext) extends LazyLogging with FutureSupport with CloudExtensions {
+class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: AccessPolicyDAO, val googleDirectoryDAO: GoogleDirectoryDAO, val googlePubSubDAO: GooglePubSubDAO, val googleIamDAO: GoogleIamDAO, val googleStorageDAO: GoogleStorageDAO, val googleProjectDAO: GoogleProjectDAO, val googleKeyCache: GoogleKeyCache, val notificationDAO: NotificationDAO, val googleServicesConfig: GoogleServicesConfig, val petServiceAccountConfig: PetServiceAccountConfig, environment: String, extensionResourceType: ResourceType)(implicit val system: ActorSystem, executionContext: ExecutionContext) extends LazyLogging with FutureSupport with CloudExtensions with Retry {
 
   private val maxGroupEmailLength = 64
 
@@ -263,6 +261,49 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
     getPetServiceAccountKey(user, project).flatMap { key =>
       getAccessTokenUsingJson(key, scopes)
     }
+  }
+
+  def getArbitraryPetServiceAccountKey(user: WorkbenchUser): Future[String] = {
+    for {
+      pets <- directoryDAO.getAllPetServiceAccountsForUser(user.id)
+      key <- if(pets.nonEmpty) getPetServiceAccountKey(user, pets.head.id.project) else getDefaultServiceAccountForShellProject(user)
+    } yield key
+  }
+
+  def getArbitraryPetServiceAccountToken(user: WorkbenchUser, scopes: Set[String]): Future[String] = {
+    getArbitraryPetServiceAccountKey(user).flatMap { key =>
+      getAccessTokenUsingJson(key, scopes)
+    }
+  }
+
+  private def getDefaultServiceAccountForShellProject(user: WorkbenchUser): Future[String] = {
+    val projectName = s"fc-${environment.substring(0, Math.min(environment.length(), 5))}-${user.id.value}" //max 30 characters. subject ID is 21
+    for {
+      creationOperationId <- googleProjectDAO.createProject(projectName).map(opId => Option(opId)) recover {
+        case gjre: GoogleJsonResponseException if gjre.getDetails.getCode == StatusCodes.Conflict.intValue => None
+      }
+      _ <- creationOperationId match {
+        case Some(opId) => pollShellProjectCreation(opId) //poll until it's created
+        case None => Future.successful(())
+      }
+      key <- getPetServiceAccountKey(user, GoogleProject(projectName))
+    } yield key
+  }
+
+  private def pollShellProjectCreation(operationId: String): Future[Boolean] = {
+    def whenCreating(throwable: Throwable): Boolean = {
+      throwable match {
+        case t: Exception => true
+        case _ => false
+      }
+    }
+
+    retryExponentially(whenCreating)(() => {
+      googleProjectDAO.pollOperation(operationId).map { complete =>
+        if(complete) complete
+        else throw new Exception("project still creating...")
+      }
+    })
   }
 
   def getAccessTokenUsingJson(saKey: String, desiredScopes: Set[String]) : Future[String] = Future {

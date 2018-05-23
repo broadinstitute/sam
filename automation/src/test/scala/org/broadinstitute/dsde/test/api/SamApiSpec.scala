@@ -282,6 +282,80 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
         petEmail2 shouldBe petEmail1
       }
     }
+
+    "should arbitrarily choose a project to return a pet key for when the user has existing pets" in {
+      val user = UserPool.chooseStudent
+
+      withCleanBillingProject(UserPool.chooseProjectOwner, List(user.email)) { project =>
+        // get my pet's email directly (this will also create the pet SA)
+        val petEmailDirect =  Sam.user.petServiceAccountEmail(project)(user.makeAuthToken)
+
+        // get my pet's email thru the arbitrary key endpoint
+        val petEmailArbitrary = getFieldFromJson(Sam.user.arbitraryPetServiceAccountKey()(user.makeAuthToken), "client_email")
+
+        // result should be the same
+        petEmailDirect shouldBe petEmailArbitrary
+      }
+    }
+
+    "should arbitrarily choose a project to return a pet key for when the user has no existing pets" in {
+      val user = UserPool.chooseStudent
+
+      val userSubjectId = Sam.user.status().get.userInfo.userSubjectId
+
+      // get my pet's email thru the arbitrary key endpoint
+      val petEmailArbitrary = getFieldFromJson(Sam.user.arbitraryPetServiceAccountKey()(user.makeAuthToken), "client_email")
+
+      assert(petEmailArbitrary.contains(userSubjectId))
+    }
+
+    "should arbitrarily choose a project to return a pet token for when the user has existing pets" in {
+      val user = UserPool.chooseStudent
+
+      withCleanBillingProject(UserPool.chooseProjectOwner, List(user.email)) { project =>
+        // get my pet's email
+        val petEmail1 =  Sam.user.petServiceAccountEmail(project)(user.makeAuthToken)
+
+        val scopes = Set("https://www.googleapis.com/auth/userinfo.email", "https://www.googleapis.com/auth/userinfo.profile")
+
+        // get my pet's token
+        val petToken = Sam.user.arbitraryPetServiceAccountToken(scopes)(user.makeAuthToken)
+
+        // convert string token to an AuthToken
+        val petAuthToken = new AuthToken {
+          override def buildCredential() = ???
+          override lazy val value = petToken
+        }
+
+        // get my pet's email using my pet's token
+        val petEmail2 = Sam.user.petServiceAccountEmail(project)(petAuthToken)
+
+        // result should be the same
+        petEmail2 shouldBe petEmail1
+      }
+    }
+
+    "should arbitrarily choose a project to return a pet token for when the user has no existing pets" in {
+      val user = UserPool.chooseStudent
+
+      val scopes = Set("https://www.googleapis.com/auth/userinfo.email", "https://www.googleapis.com/auth/userinfo.profile")
+
+      // get my pet's token
+      val petToken = Sam.user.arbitraryPetServiceAccountToken(scopes)(user.makeAuthToken)
+
+      // convert string token to an AuthToken
+      val petAuthToken = new AuthToken {
+        override def buildCredential() = ???
+        override lazy val value = petToken
+      }
+
+      // get my pet's email using my pet's token
+      val petEmail1 = getFieldFromJson(Sam.user.arbitraryPetServiceAccountKey()(user.makeAuthToken), "client_email")
+      val petEmail2 = getFieldFromJson(Sam.user.arbitraryPetServiceAccountKey()(petAuthToken), "client_email")
+
+      // result should be the same
+      petEmail2 shouldBe petEmail1
+    }
   }
 
   private def getFieldFromJson(jsonKey: String, field: String): String = {
