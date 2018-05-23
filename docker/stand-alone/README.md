@@ -80,5 +80,5 @@ If you would like to make code changes to SAM and test those changes, do the fol
 1. Run `sbt assembly` - This should build a `.jar` in `target/scala-2.12`
 1. Copy the `.jar` to SAM's root directory: `cp target/scala-2.12/sam-assembly-0.1-xxxxxxx-SNAPSHOT.jar .`
 1. [Re-build](https://docs.docker.com/engine/reference/commandline/build/) the `sam-app` Docker container by running 
-`docker build -t sam/my-tag`.  You can name the tag whatever you want by changing the argument passed to `-t`. 
+`docker build -t sam/my-tag .`  You can name the tag whatever you want by changing the argument passed to `-t`. 
 1. Update `.env` and set `SAM_APP_IMAGE=sam/my-tag` (or whatever name you chose for your tag)
