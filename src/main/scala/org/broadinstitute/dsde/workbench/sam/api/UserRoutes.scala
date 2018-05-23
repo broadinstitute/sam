@@ -20,7 +20,7 @@ trait UserRoutes extends UserInfoDirectives {
   val userService: UserService
 
   def userRoutes: server.Route =
-    pathPrefix("user") {
+    (pathPrefix("user" / "v1") | pathPrefix("user")) {
       requireUserInfo { userInfo =>
         pathEndOrSingleSlash {
           post {
@@ -62,58 +62,58 @@ trait UserRoutes extends UserInfoDirectives {
                     userService.deleteUser(WorkbenchUserId(userId), userInfo).map(_ => StatusCodes.OK)
                   }
                 } ~
-                  get {
+                get {
+                  complete {
+                    userService.getUserStatus(WorkbenchUserId(userId)).map { statusOption =>
+                      statusOption.map { status =>
+                        StatusCodes.OK -> Option(status)
+                      }.getOrElse(StatusCodes.NotFound -> None)
+                    }
+                  }
+                }
+              } ~
+              pathPrefix("enable") {
+                pathEndOrSingleSlash {
+                  put {
                     complete {
-                      userService.getUserStatus(WorkbenchUserId(userId)).map { statusOption =>
+                      userService.enableUser(WorkbenchUserId(userId), userInfo).map { statusOption =>
                         statusOption.map { status =>
                           StatusCodes.OK -> Option(status)
                         }.getOrElse(StatusCodes.NotFound -> None)
                       }
                     }
                   }
+                }
               } ~
-                pathPrefix("enable") {
-                  pathEndOrSingleSlash {
-                    put {
-                      complete {
-                        userService.enableUser(WorkbenchUserId(userId), userInfo).map { statusOption =>
-                          statusOption.map { status =>
-                            StatusCodes.OK -> Option(status)
-                          }.getOrElse(StatusCodes.NotFound -> None)
-                        }
-                      }
-                    }
-                  }
-                } ~
-                pathPrefix("disable") {
-                  pathEndOrSingleSlash {
-                    put {
-                      complete {
-                        userService.disableUser(WorkbenchUserId(userId), userInfo).map { statusOption =>
-                          statusOption.map { status =>
-                            StatusCodes.OK -> Option(status)
-                          }.getOrElse(StatusCodes.NotFound -> None)
-                        }
-                      }
-                    }
-                  }
-                } ~
-                pathPrefix("petServiceAccount") {
-                  pathEndOrSingleSlash {
-                    delete {
-                      complete {
-                        cloudExtensions.deleteUserPetServiceAccount(WorkbenchUserId(userId)).map(_ => StatusCodes.NoContent)
-                      }
-                    }
-                  } ~
-                  path(Segment) { project =>
-                    delete {
-                      complete {
-                        cloudExtensions.deleteUserPetServiceAccount(WorkbenchUserId(userId), GoogleProject(project)).map(_ => StatusCodes.NoContent)
+              pathPrefix("disable") {
+                pathEndOrSingleSlash {
+                  put {
+                    complete {
+                      userService.disableUser(WorkbenchUserId(userId), userInfo).map { statusOption =>
+                        statusOption.map { status =>
+                          StatusCodes.OK -> Option(status)
+                        }.getOrElse(StatusCodes.NotFound -> None)
                       }
                     }
                   }
                 }
+              } ~
+              pathPrefix("petServiceAccount") {
+                pathEndOrSingleSlash {
+                  delete {
+                    complete {
+                      cloudExtensions.deleteUserPetServiceAccount(WorkbenchUserId(userId)).map(_ => StatusCodes.NoContent)
+                    }
+                  }
+                } ~
+                path(Segment) { project =>
+                  delete {
+                    complete {
+                      cloudExtensions.deleteUserPetServiceAccount(WorkbenchUserId(userId), GoogleProject(project)).map(_ => StatusCodes.NoContent)
+                    }
+                  }
+                }
+              }
             }
           }
         }
