@@ -106,15 +106,15 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     }
   }
 
-  private def validateAuthDomainPermissions(authDomain: Set[WorkbenchGroupName], userInfo: UserInfo): Future[Set[Option[ErrorReport]]] = Future.sequence(
-    authDomain.map { groupName =>
+  private def validateAuthDomainPermissions(authDomain: Set[WorkbenchGroupName], userInfo: UserInfo): Future[Set[Option[ErrorReport]]] = {
+    Future.traverse(authDomain) { groupName =>
       val resource = Resource(ManagedGroupService.managedGroupTypeName, ResourceId(groupName.value))
       hasPermission(resource, ManagedGroupService.useAction, userInfo).map {
         case false => Option(ErrorReport(s"You do not have access to $groupName or $groupName does not exist"))
         case _ => None
       }
     }
-  )
+  }
 
   private def validateAuthDomainConstraints(resourceType: ResourceType, authDomain: Set[WorkbenchGroupName]): Option[ErrorReport] = {
     if (authDomain.nonEmpty && !resourceType.isAuthDomainConstrainable) {
