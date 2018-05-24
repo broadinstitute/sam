@@ -45,7 +45,7 @@ object SamJsonSupport {
 
   implicit val GroupSyncResponseFormat = jsonFormat1(GroupSyncResponse)
 
-  implicit val CreateResourceRequestFormat = jsonFormat2(CreateResourceRequest)
+  implicit val CreateResourceRequestFormat = jsonFormat3(CreateResourceRequest)
 }
 
 object SamResourceActions {
@@ -71,7 +71,11 @@ case class ResourceRole(roleName: ResourceRoleName, actions: Set[ResourceAction]
 case class ResourceTypeName(value: String) extends ValueObject
 
 case class Resource(resourceTypeName: ResourceTypeName, resourceId: ResourceId)
-case class ResourceType(name: ResourceTypeName, actionPatterns: Set[ResourceActionPattern], roles: Set[ResourceRole], ownerRoleName: ResourceRoleName, reuseIds: Boolean = false)
+case class ResourceType(name: ResourceTypeName, actionPatterns: Set[ResourceActionPattern], roles: Set[ResourceRole], ownerRoleName: ResourceRoleName, reuseIds: Boolean = false) {
+  // Ideally we'd just store this boolean in a lazy val, but this will upset the spray/akka json serializers
+  // I can't imagine a scenario where we have enough action patterns that would make this def discernibly slow though
+  def isAuthDomainConstrainable: Boolean = actionPatterns.map(_.authDomainConstrainable).fold(false)(_ || _)
+}
 
 case class ResourceId(value: String) extends ValueObject
 
@@ -80,7 +84,7 @@ case class ResourceAndPolicyName(resource: Resource, accessPolicyName: AccessPol
   override def toString: String = s"${accessPolicyName.value}.${resource.resourceId.value}.${resource.resourceTypeName.value}"
 }
 case class AccessPolicyName(value: String) extends ValueObject
-case class CreateResourceRequest(resourceId: ResourceId, policies: Map[AccessPolicyName, AccessPolicyMembership])
+case class CreateResourceRequest(resourceId: ResourceId, policies: Map[AccessPolicyName, AccessPolicyMembership], authDomain: Set[WorkbenchGroupName])
 
 /*
 Note that AccessPolicy IS A group, does not have a group. This makes the ldap query to list all a user's policies

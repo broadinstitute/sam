@@ -680,7 +680,7 @@ paths:
         204:
           description: Successfully created resource
         400:
-          description: Invalid policies or resource type allows id reuse
+          description: Invalid policies, invalid auth domain, or resource type allows id reuse
           schema:
             $ref: '#/definitions/ErrorReport'
         409:
@@ -1122,10 +1122,14 @@ definitions:
         type: string
         description: id of the resource to create
       policies:
-        type: object
-        additionalProperties:
+        type: array
+        items:
           $ref: '#/definitions/AccessPolicyMembership'
         description: map of initial policies to create
+      authDomain:
+        type: array
+        items:
+          type: string
 
   Enabled:
     description: the status of the user's account
