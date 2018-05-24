@@ -303,11 +303,12 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
 
     "should arbitrarily choose a project to return a pet key for when the user has no existing pets" in {
       val user = UserPool.chooseStudent
+      val userToken = user.makeAuthToken()
 
-      val userSubjectId = Sam.user.status().get.userInfo.userSubjectId
+      val userSubjectId = Sam.user.status()(userToken).get.userInfo.userSubjectId
 
       // get my pet's email thru the arbitrary key endpoint
-      val petEmailArbitrary = getFieldFromJson(Sam.user.arbitraryPetServiceAccountKey()(user.makeAuthToken), "client_email")
+      val petEmailArbitrary = getFieldFromJson(Sam.user.arbitraryPetServiceAccountKey()(userToken), "client_email")
 
       assert(petEmailArbitrary.contains(userSubjectId))
     }
