@@ -1,0 +1,37 @@
+version: '2'
+services:
+  sam-app:
+    image: ${SAM_APP_IMAGE}
+    volumes:
+      - ./sam.conf:/etc/sam.conf
+      - ./fiab-startup.sh:/etc/fiab-startup.sh
+    links:
+      - sam-opendj:opendj
+    environment:
+      JAVA_OPTS: -Dconfig.file=/etc/sam.conf -Dcom.sun.jndi.ldap.connect.pool.protocol=plain -Dcom.sun.jndi.ldap.connect.pool.maxsize=100
+      SLEEP: 130
+      GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID}
+      GOOGLE_CLOUD_PROJECT_ID: ${GOOGLE_CLOUD_PROJECT_ID}
+      EMAIL_DOMAIN: ${EMAIL_DOMAIN}
+    command: [sh, /etc/fiab-startup.sh]
+    restart: always
+  sam-proxy:
+    extends:
+      file: proxy-compose.yaml
+      service: sam-proxy
+    links:
+      - sam-app:app
+      - sam-opendj:opendj
+  sam-opendj:
+    image: broadinstitute/openam:opendj5
+    ports:
+      - "390:390"
+    volumes:
+      # mount a volume here to persist opendj data
+      # - opendjstore/sam:/opt/opendj/data
+      - ./opendjsetup.sh:/opt/opendj/bootstrap/setup.sh
+      - ./proxy_user.ldif:/opt/opendj/bootstrap/ldif/zzz_proxy_user.ldif
+    environment:
+      BASE_DN: "dc=example,dc=com"
+      ROOTPASS: "testtesttest"
+    restart: always

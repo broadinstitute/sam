@@ -14,6 +14,9 @@ lib_managed/
 src_managed/
 project/boot/
 project/plugins/project/
+docker/stand-alone/server.crt
+docker/stand-alone/server.key
+docker/stand-alone/ca-bundle.crt
 
 # Scala-IDE specific
 .scala_dependencies
