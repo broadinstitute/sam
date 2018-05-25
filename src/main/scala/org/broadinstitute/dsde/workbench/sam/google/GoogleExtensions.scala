@@ -9,8 +9,9 @@ import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import com.google.api.client.googleapis.json.GoogleJsonResponseException
 import com.google.auth.oauth2.ServiceAccountCredentials
 import com.typesafe.scalalogging.LazyLogging
+import io.grpc.Status.Code
 import org.broadinstitute.dsde.workbench.dataaccess.NotificationDAO
-import org.broadinstitute.dsde.workbench.google.{GoogleProjectDAO, GoogleDirectoryDAO, GoogleIamDAO, GooglePubSubDAO, GoogleStorageDAO}
+import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleIamDAO, GoogleProjectDAO, GooglePubSubDAO, GoogleStorageDAO}
 import org.broadinstitute.dsde.workbench.model.Notifications.Notification
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport.WorkbenchGroupNameFormat
 import org.broadinstitute.dsde.workbench.model._
@@ -293,14 +294,17 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
   private def pollShellProjectCreation(operationId: String): Future[Boolean] = {
     def whenCreating(throwable: Throwable): Boolean = {
       throwable match {
+        case t: WorkbenchException => throw t
         case t: Exception => true
         case _ => false
       }
     }
 
     retryExponentially(whenCreating)(() => {
-      googleProjectDAO.pollOperation(operationId).map { complete =>
-        if(complete) complete
+      googleProjectDAO.pollOperation(operationId).map { operation =>
+        if(operation.getDone && Option(operation.getError).exists(_.getCode.intValue() == Code.ALREADY_EXISTS.value())) true
+        if(operation.getDone && Option(operation.getError).isEmpty) true
+        else if(operation.getDone && Option(operation.getError).isDefined) throw new WorkbenchException(s"project creation failed with error ${operation.getError.getMessage}")
         else throw new Exception("project still creating...")
       }
     })
