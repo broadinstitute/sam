@@ -52,6 +52,13 @@ You may then copy the generated `server.crt` file to `ca-bundle.crt` to use your
 1. It will take a few minutes to complete the startup process.  When complete, SAM should be accessible at: 
 [https://localhost:29443/](https://localhost:29443/)
 
+#### Restarting the application
+
+Data in your containers should be persisted when stopping and restarting them.  If you would like to do a clean restart that
+destroys all previously entered data in your Docker containers and recreates them, use this command: 
+
+```docker-compose up --force-recreate --remove-orphans```
+
 ## Using SAM
 
 1. Open the SAM Swagger UI at: [https://localhost:29443/](https://localhost:29443/)
