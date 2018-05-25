@@ -296,7 +296,7 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
           val petEmailArbitrary = getFieldFromJson(Sam.user.arbitraryPetServiceAccountKey()(user.makeAuthToken), "client_email")
 
           // result should be the same
-          petEmailArbitrary shouldBe oneOf(petEmailDirect1, petEmailDirect2)
+          Set(petEmailDirect1, petEmailDirect2) should contain(petEmailArbitrary)
         }
       }
     }
