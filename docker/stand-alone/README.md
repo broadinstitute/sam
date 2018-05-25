@@ -46,18 +46,30 @@ You may then copy the generated `server.crt` file to `ca-bundle.crt` to use your
 
 ### Starting the application
 
-1.  `cd` to the `docker/stand-alone` directory and run:
+1. `cd` to the `docker/stand-alone` directory and run:
     
     ```docker-compose up```
-1. It will take a few minutes to complete the startup process.  When complete, SAM should be accessible at: 
-[https://localhost:29443/](https://localhost:29443/)
+    
+1. It will take a few minutes to complete the startup process.  
+1. After SAM has started, restart the `sam-opendj` container by running:
+
+    ```docker-compose restart sam-opendj```
+    
+1. When complete, SAM should be accessible at: [https://localhost:29443/](https://localhost:29443/)
 
 #### Restarting the application
 
-Data in your containers should be persisted when stopping and restarting them.  If you would like to do a clean restart that
-destroys all previously entered data in your Docker containers and recreates them, use this command: 
+Data in your containers should be persisted when stopping and restarting them so long as you do not run a command that 
+destroys, removes, or recreates any of the SAM containers.  
 
-```docker-compose up --force-recreate --remove-orphans```
+If you would like to do a clean restart that destroys all previously entered data in your Docker containers and 
+recreates them, use this command: 
+
+```docker-compose up --force-recreate```
+
+After SAM has restarted, restart the `sam-opendj` container by running:
+
+```docker-compose restart sam-opendj```
 
 ## Using SAM
 
