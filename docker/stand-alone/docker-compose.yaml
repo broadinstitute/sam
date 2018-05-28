@@ -27,8 +27,9 @@ services:
     ports:
       - "390:390"
     volumes:
-      # mount a volume here to persist opendj data
-      # - opendjstore/sam:/opt/opendj/data
+      # Uncomment the following volume mapping to persist opendj data
+      # https://docs.docker.com/compose/compose-file/compose-file-v2/#short-syntax
+      #- ./opendjstore/sam:/opt/opendj/data
       - ./opendjsetup.sh:/opt/opendj/bootstrap/setup.sh
       - ./proxy_user.ldif:/opt/opendj/bootstrap/ldif/zzz_proxy_user.ldif
     environment:
