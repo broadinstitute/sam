@@ -57,8 +57,31 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
             }
           }
         } ~
-        pathPrefix("user") {
-          pathPrefix("petServiceAccount" / Segment) { project =>
+        pathPrefix("user" / "petServiceAccount") {
+          pathPrefix("key") {
+            pathEndOrSingleSlash {
+              get {
+                complete {
+                  import spray.json._
+                  googleExtensions.getArbitraryPetServiceAccountKey(WorkbenchUser(userInfo.userId, userInfo.userEmail)).map(key => StatusCodes.OK -> key.parseJson)
+                }
+              }
+            }
+          } ~
+          pathPrefix("token") {
+            pathEndOrSingleSlash {
+              post {
+                entity(as[Set[String]]) { scopes =>
+                  complete {
+                    googleExtensions.getArbitraryPetServiceAccountToken(WorkbenchUser(userInfo.userId, userInfo.userEmail), scopes).map { token =>
+                      StatusCodes.OK -> JsString(token)
+                    }
+                  }
+                }
+              }
+            }
+          } ~
+          pathPrefix(Segment) { project =>
             pathPrefix("key") {
               get {
                 complete {
@@ -100,7 +123,9 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                 }
               }
             }
-          } ~
+          }
+        } ~
+        pathPrefix("user") {
           path("proxyGroup" / Segment) { targetUserEmail =>
             complete {
               googleExtensions.getUserProxy(WorkbenchEmail(targetUserEmail)).map {
