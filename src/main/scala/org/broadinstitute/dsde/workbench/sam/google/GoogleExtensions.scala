@@ -265,10 +265,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
   }
 
   def getArbitraryPetServiceAccountKey(user: WorkbenchUser): Future[String] = {
-    for {
-      pets <- directoryDAO.getAllPetServiceAccountsForUser(user.id)
-      key <- getDefaultServiceAccountForShellProject(user)
-    } yield key
+    getDefaultServiceAccountForShellProject(user)
   }
 
   def getArbitraryPetServiceAccountToken(user: WorkbenchUser, scopes: Set[String]): Future[String] = {
