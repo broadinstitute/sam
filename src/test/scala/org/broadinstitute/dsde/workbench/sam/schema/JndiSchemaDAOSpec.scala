@@ -6,7 +6,7 @@ import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.config.{DirectoryConfig, SchemaLockConfig}
 import org.broadinstitute.dsde.workbench.sam.schema.SchemaStatus.SchemaStatus
 import org.broadinstitute.dsde.workbench.sam.schema.SchemaStatus._
-import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FlatSpec, Matchers}
+import org.scalatest.{Ignore => _, _}
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.{Await, ExecutionContext}
@@ -27,10 +27,11 @@ class JndiSchemaDAOSpec extends FlatSpec with Matchers with TestSupport with Bef
 
   before {
     runAndWait(schemaDao.clearDatabase())
+    runAndWait(schemaDao.clearSchemaLock())
     runAndWait(schemaDao.createOrgUnits())
   }
 
-  "JndiSchemaDAO" should "insert a schema version record when applying a new schema" in {
+  "JndiSchemaDAO" should "insert a schema version record when applying a new schema" taggedAs SchemaInit in {
     //First check to make sure that the schema can be applied
     Await.result(schemaDao.readSchemaStatus(), Duration.Inf) shouldEqual Proceed
 
@@ -41,7 +42,7 @@ class JndiSchemaDAOSpec extends FlatSpec with Matchers with TestSupport with Bef
     Await.result(schemaDao.readSchemaStatus(), Duration.Inf) shouldEqual Ignore
   }
 
-  it should "not update the schema when trying to apply an out-of-date version" in {
+  it should "not update the schema when trying to apply an out-of-date version" taggedAs SchemaInit in {
     val schemaLockConfigChanged = schemaLockConfig.copy(schemaVersion = schemaLockConfig.schemaVersion - 1)
     val schemaDaoOlder = new JndiSchemaDAO(directoryConfig, schemaLockConfigChanged)
 
@@ -68,3 +69,5 @@ class JndiSchemaDAOSpec extends FlatSpec with Matchers with TestSupport with Bef
   }
 
 }
+
+object SchemaInit extends Tag("org.broadinstitute.tags.SchemaInit")

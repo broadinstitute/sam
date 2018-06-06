@@ -235,6 +235,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
 
     runAndWait(schemaDao.clearDatabase())
     runAndWait(schemaDao.init())
+    runAndWait(schemaDao.createOrgUnits())
 
     val mockGoogleIamDAO = new MockGoogleIamDAO
     val mockGoogleDirectoryDAO = new MockGoogleDirectoryDAO
@@ -469,6 +470,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
 
     runAndWait(schemaDao.clearDatabase())
     runAndWait(schemaDao.init())
+    runAndWait(schemaDao.createOrgUnits())
 
     val mockGoogleIamDAO = new MockGoogleIamDAO
     val mockGoogleDirectoryDAO = new MockGoogleDirectoryDAO
