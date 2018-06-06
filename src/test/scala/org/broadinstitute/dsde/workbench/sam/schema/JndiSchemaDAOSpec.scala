@@ -4,12 +4,11 @@ import com.typesafe.config.ConfigFactory
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.config.{DirectoryConfig, SchemaLockConfig}
-import org.broadinstitute.dsde.workbench.sam.schema.SchemaStatus.SchemaStatus
 import org.broadinstitute.dsde.workbench.sam.schema.SchemaStatus._
-import org.scalatest.{Ignore => _, _}
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FlatSpec, Matchers, Tag}
 
 import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.{Await, ExecutionContext}
+import scala.concurrent.Await
 import scala.concurrent.duration.Duration
 
 /**
