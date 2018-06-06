@@ -24,6 +24,9 @@ function make_jar()
     GIT_MODEL_HASH=$(git log -n 1 --pretty=format:%h)
     
     # make jar.  cache sbt dependencies.
+    docker run --rm --link $OPENDJ:opendj -e DIRECTORY_URL=$DIRECTORY_URL -e GIT_MODEL_HASH=$GIT_MODEL_HASH -e DIRECTORY_PASSWORD=$DIRECTORY_PASSWORD -v $PWD:/working -v jar-cache:/root/.ivy -v jar-cache:/root/.ivy2 broadinstitute/scala-baseimage /working/docker/init_schema.sh /working
+    docker restart $OPENDJ
+    sleep 40
     docker run --rm --link $OPENDJ:opendj -e DIRECTORY_URL=$DIRECTORY_URL -e GIT_MODEL_HASH=$GIT_MODEL_HASH -e DIRECTORY_PASSWORD=$DIRECTORY_PASSWORD -v $PWD:/working -v jar-cache:/root/.ivy -v jar-cache:/root/.ivy2 broadinstitute/scala-baseimage /working/docker/install.sh /working
     EXIT_CODE=$?
 

@@ -448,6 +448,9 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig, val schemaLo
     clear(ctx, resourcesOu)
     clear(ctx, groupsOu)
     clear(ctx, peopleOu)
+  }
+
+  def clearSchemaLock(): Future[Unit] = withContext { ctx =>
     clear(ctx, schemaLockOu)
   }
 
