@@ -497,7 +497,7 @@ paths:
 
   /api/google/v1/user/petServiceAccount/key:
     get:
-      summary: gets a key for an arbitrary pet service account for the user
+      summary: gets a key for the default pet service account for the user
       responses:
         200:
           description: 'json format key for a pet service account, see https://cloud.google.com/iam/docs/creating-managing-service-account-keys'
@@ -505,13 +505,13 @@ paths:
           description: Internal Error
           schema:
             $ref: '#/definitions/ErrorReport'
-      operationId: getArbitraryPetServiceAccountKey
+      operationId: getDfaultPetServiceAccountKey
       tags:
         - Google
 
   /api/google/v1/user/petServiceAccount/token:
     post:
-      summary: gets a token for an arbitrary pet service account for the user
+      summary: gets a token for the default pet service account for the user
       responses:
         200:
           description: 'an access token for the users pet service account'
@@ -528,7 +528,7 @@ paths:
           required: true
           schema:
             $ref: '#/definitions/ArrayOfScopes'
-      operationId: getArbitraryPetServiceAccountToken
+      operationId: getDefaultPetServiceAccountToken
       tags:
         - Google
 

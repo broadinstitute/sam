@@ -264,18 +264,18 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
     }
   }
 
-  def getArbitraryPetServiceAccountKey(user: WorkbenchUser): Future[String] = {
+  def getDefaultPetServiceAccountKey(user: WorkbenchUser): Future[String] = {
     getDefaultServiceAccountForShellProject(user)
   }
 
-  def getArbitraryPetServiceAccountToken(user: WorkbenchUser, scopes: Set[String]): Future[String] = {
-    getArbitraryPetServiceAccountKey(user).flatMap { key =>
+  def getDefaultPetServiceAccountToken(user: WorkbenchUser, scopes: Set[String]): Future[String] = {
+    getDefaultPetServiceAccountKey(user).flatMap { key =>
       getAccessTokenUsingJson(key, scopes)
     }
   }
 
   private def getDefaultServiceAccountForShellProject(user: WorkbenchUser): Future[String] = {
-    val projectName = s"xx-${environment.substring(0, Math.min(environment.length(), 5))}-${user.id.value}" //max 30 characters. subject ID is 21
+    val projectName = s"fc-${environment.substring(0, Math.min(environment.length(), 5))}-${user.id.value}" //max 30 characters. subject ID is 21
     for {
       creationOperationId <- googleProjectDAO.createProject(projectName).map(opId => Option(opId)) recover {
         case gjre: GoogleJsonResponseException if gjre.getDetails.getCode == StatusCodes.Conflict.intValue => None
@@ -292,7 +292,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
     } yield key
   }
 
-  private def whenActive(throwable: Throwable): Boolean = {
+  private def whenOperationActive(throwable: Throwable): Boolean = {
     throwable match {
       case t: WorkbenchException => throw t
       case t: Exception => true
@@ -301,7 +301,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
   }
 
   private def pollShellProjectCreation(operationId: String): Future[Boolean] = {
-    retryExponentially(whenActive)(() => {
+    retryExponentially(whenOperationActive)(() => {
       googleProjectDAO.pollOperation(operationId).map { operation =>
         if(operation.getDone && Option(operation.getError).exists(_.getCode.intValue() == Code.ALREADY_EXISTS.value())) true
         else if(operation.getDone && Option(operation.getError).isEmpty) true
@@ -312,7 +312,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
   }
 
   private def pollServiceOperation(operationId: String): Future[Boolean] = {
-    retryExponentially(whenActive)(() => {
+    retryExponentially(whenOperationActive)(() => {
       googleServiceManagerDAO.pollOperation(operationId).map { operation =>
         if(operation.getDone && Option(operation.getError).isEmpty) true
         else if(operation.getDone && Option(operation.getError).isDefined) throw new WorkbenchException(s"service operation failed: ${operation.getError.getMessage}")
