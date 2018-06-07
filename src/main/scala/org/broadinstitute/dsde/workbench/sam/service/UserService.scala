@@ -29,9 +29,9 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
 
   def getSubjectFromEmail(email: WorkbenchEmail): Future[Option[WorkbenchSubject]] = directoryDAO.loadSubjectFromEmail(email)
 
-  def getUserStatus(userId: WorkbenchUserId): Future[Option[UserStatus]] = {
+  def getUserStatus(userId: WorkbenchUserId, userDetailsOnly: Boolean = false): Future[Option[UserStatus]] = {
     directoryDAO.loadUser(userId).flatMap {
-      case Some(user) =>
+      case Some(user) if !userDetailsOnly =>
         for {
           googleStatus <- cloudExtensions.getUserStatus(user)
           allUsersGroup <- cloudExtensions.getOrCreateAllUsersGroup(directoryDAO)
@@ -40,6 +40,8 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
         } yield {
           Option(UserStatus(UserStatusDetails(user.id, user.email), Map("ldap" -> ldapStatus, "allUsersGroup" -> allUsersStatus, "google" -> googleStatus)))
         }
+
+      case Some(user) if userDetailsOnly => Future.successful(Option(UserStatus(UserStatusDetails(user.id, user.email), Map.empty)))
 
       case None => Future.successful(None)
     }

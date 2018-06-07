@@ -90,6 +90,9 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
     // user should exist now
     val status = service.getUserStatus(defaultUserId).futureValue
     status shouldBe Some(UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true)))
+
+    val statusNoEnabled = service.getUserStatus(defaultUserId, true).futureValue
+    statusNoEnabled shouldBe Some(UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map.empty))
   }
 
   it should "enable/disable user" in {

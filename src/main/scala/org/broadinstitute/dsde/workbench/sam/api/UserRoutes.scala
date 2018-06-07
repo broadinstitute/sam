@@ -29,11 +29,13 @@ trait UserRoutes extends UserInfoDirectives {
             }
           } ~
           get {
-            complete {
-              userService.getUserStatus(userInfo.userId).map { statusOption =>
-                statusOption.map { status =>
-                  StatusCodes.OK -> Option(status)
-                }.getOrElse(StatusCodes.NotFound -> None)
+            parameter("userDetailsOnly".?) { userDetailsOnly =>
+              complete {
+                userService.getUserStatus(userInfo.userId, userDetailsOnly.exists(_.equalsIgnoreCase("true"))).map { statusOption =>
+                  statusOption.map { status =>
+                    StatusCodes.OK -> Option(status)
+                  }.getOrElse(StatusCodes.NotFound -> None)
+                }
               }
             }
           }

@@ -1059,6 +1059,12 @@ paths:
           description: user not found
           schema:
             $ref: '#/definitions/ErrorReport'
+      parameters:
+        - in: query
+          description: when set to true does not check the various enabled status of the user
+          name: userDetailsOnly
+          required: false
+          type: string
       operationId: getUserStatus
       tags:
         - Users
