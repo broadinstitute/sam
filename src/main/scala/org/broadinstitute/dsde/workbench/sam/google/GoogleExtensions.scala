@@ -275,17 +275,19 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
   }
 
   private def getDefaultServiceAccountForShellProject(user: WorkbenchUser): Future[String] = {
-    val projectName = s"fc-${environment.substring(0, Math.min(environment.length(), 5))}-${user.id.value}" //max 30 characters. subject ID is 21
+    val projectName = s"xx-${environment.substring(0, Math.min(environment.length(), 5))}-${user.id.value}" //max 30 characters. subject ID is 21
     for {
       creationOperationId <- googleProjectDAO.createProject(projectName).map(opId => Option(opId)) recover {
         case gjre: GoogleJsonResponseException if gjre.getDetails.getCode == StatusCodes.Conflict.intValue => None
       }
       _ <- creationOperationId match {
-        case Some(opId) => pollShellProjectCreation(opId) //poll until it's created
+        case Some(opId) => for {
+          _ <- pollShellProjectCreation(opId) //poll until it's created
+          enableBillingOperationId <- googleServiceManagerDAO.enableService(projectName, "storage-api.googleapis.com")
+          _ <- pollServiceOperation(enableBillingOperationId)
+        } yield ()
         case None => Future.successful(())
       }
-      enableBillingOperationId <- googleServiceManagerDAO.enableService(projectName, "storage-api.googleapis.com")
-      _ <- pollServiceOperation(enableBillingOperationId)
       key <- getPetServiceAccountKey(user, GoogleProject(projectName))
     } yield key
   }
