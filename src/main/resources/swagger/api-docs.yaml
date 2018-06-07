@@ -505,7 +505,7 @@ paths:
           description: Internal Error
           schema:
             $ref: '#/definitions/ErrorReport'
-      operationId: getDfaultPetServiceAccountKey
+      operationId: getDefaultPetServiceAccountKey
       tags:
         - Google
 
