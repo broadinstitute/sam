@@ -283,8 +283,8 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
       _ <- creationOperationId match {
         case Some(opId) => for {
           _ <- pollShellProjectCreation(opId) //poll until it's created
-          enableBillingOperationId <- googleServiceManagerDAO.enableService(projectName, "storage-api.googleapis.com")
-          _ <- pollServiceOperation(enableBillingOperationId)
+          enableStorageOpId <- googleServiceManagerDAO.enableService(projectName, "storage-api.googleapis.com")
+          _ <- pollServiceOperation(enableStorageOpId) //poll until it's enabled
         } yield ()
         case None => Future.successful(())
       }
