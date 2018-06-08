@@ -88,6 +88,11 @@ class UserRoutesV1Spec extends FlatSpec with Matchers with ScalatestRouteTest wi
       status shouldEqual StatusCodes.OK
       responseAs[UserStatus] shouldEqual UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
     }
+
+    Get("/register/user/v1?userDetailsOnly=true") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[UserStatus] shouldEqual UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map.empty)
+    }
   }
 
 
