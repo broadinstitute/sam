@@ -1,8 +1,10 @@
 package org.broadinstitute.dsde.workbench.sam.openam
 
+import java.net.URI
 import java.util.UUID
 
 import com.typesafe.config.ConfigFactory
+import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FlatSpec, Matchers}
 import net.ceedubs.ficus.Ficus._
@@ -20,8 +22,12 @@ import scala.concurrent.ExecutionContext.Implicits.global
 class JndiAccessPolicyDAOSpec extends FlatSpec with Matchers with TestSupport with BeforeAndAfter with BeforeAndAfterAll {
   val directoryConfig = ConfigFactory.load().as[DirectoryConfig]("directory")
   val schemaLockConfig = ConfigFactory.load().as[SchemaLockConfig]("schemaLock")
-  val dao = new JndiAccessPolicyDAO(directoryConfig)
-  val dirDao = new JndiDirectoryDAO(directoryConfig)
+  val dirURI = new URI(directoryConfig.directoryUrl)
+  private val connectionPool = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), 5)
+  val dao = new LdapAccessPolicyDAO(connectionPool, directoryConfig)
+  val dirDao = new LdapDirectoryDAO(connectionPool, directoryConfig)
+//  val dao = new JndiAccessPolicyDAO(directoryConfig)
+//  val dirDao = new JndiDirectoryDAO(directoryConfig)
   val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
   override protected def beforeAll(): Unit = {

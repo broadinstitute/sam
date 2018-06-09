@@ -1,9 +1,12 @@
 package org.broadinstitute.dsde.workbench.sam.directory
 
+import java.net.{URI, URL}
 import java.util.UUID
 import javax.naming.NameNotFoundException
 
+import akka.http.scaladsl.model.StatusCodes
 import com.typesafe.config.ConfigFactory
+import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountDisplayName, ServiceAccountSubjectId}
@@ -22,7 +25,9 @@ import scala.concurrent.ExecutionContext.Implicits.global
 class JndiDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with BeforeAndAfter with BeforeAndAfterAll {
   val directoryConfig = ConfigFactory.load().as[DirectoryConfig]("directory")
   val schemaLockConfig = ConfigFactory.load().as[SchemaLockConfig]("schemaLock")
-  val dao = new JndiDirectoryDAO(directoryConfig)
+  val dirURI = new URI(directoryConfig.directoryUrl)
+  val dao = new LdapDirectoryDAO(new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), 5), directoryConfig)
+//  val dao = new JndiDirectoryDAO(directoryConfig)
   val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
   override protected def beforeAll(): Unit = {
@@ -47,6 +52,11 @@ class JndiDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     assertResult(group) {
       runAndWait(dao.createGroup(group))
     }
+
+    val conflict = intercept[WorkbenchExceptionWithErrorReport] {
+      runAndWait(dao.createGroup(group))
+    }
+    assert(conflict.errorReport.statusCode.contains(StatusCodes.Conflict))
 
     assertResult(Some(group)) {
       runAndWait(dao.loadGroup(group.id))

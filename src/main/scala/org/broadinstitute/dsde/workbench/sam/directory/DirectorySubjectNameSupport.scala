@@ -1,17 +1,21 @@
 package org.broadinstitute.dsde.workbench.sam.directory
 
+import java.text.SimpleDateFormat
+import java.util.Date
+
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.GoogleProject
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO.Attr
-import org.broadinstitute.dsde.workbench.sam.util.JndiSupport
+
+import scala.util.matching.Regex
 
 /**
   * Created by dvoet on 6/6/17.
   */
-trait DirectorySubjectNameSupport extends JndiSupport {
+trait DirectorySubjectNameSupport {
   protected val directoryConfig: DirectoryConfig
   val peopleOu = s"ou=people,${directoryConfig.baseDn}"
   val groupsOu = s"ou=groups,${directoryConfig.baseDn}"
@@ -40,6 +44,20 @@ trait DirectorySubjectNameSupport extends JndiSupport {
     case _ => throw new WorkbenchException(s"unexpected subject [$subject]")
   }
 
+  /**
+    * Constructs a regular expression to extract the leading attribute values of a dn. Example: to extract
+    * policy namd an resource id from the dn policy=foo,resourceId=bar,resourceType=splat,ou=resources,dc=x,dc=u,dc=com
+    * matchAttributeNames would be Seq("policy", "resourceId") and baseDn would be "resourceType=splat,ou=resources,dc=x,dc=u,dc=com".
+    *
+    * @param matchAttributeNames names of attributes in the leading part of the dn that should match and extract values
+    * @param baseDn the trailing part of the dn that should match but we don't care to extract values
+    * @return pattern with capture groups for each member of matchAttributeNames
+    */
+  protected def dnMatcher(matchAttributeNames: Seq[String], baseDn: String): Regex = {
+    val partStrings = matchAttributeNames.map { attrName => s"$attrName=([^,]+)" }
+    partStrings.mkString("(?i)", ",", s",$baseDn").r
+  }
+
   protected def dnToSubject(dn: String): WorkbenchSubject = {
     val groupMatcher = dnMatcher(Seq(Attr.cn), groupsOu)
     val personMatcher = dnMatcher(Seq(Attr.uid), peopleOu)
@@ -62,4 +80,7 @@ trait DirectorySubjectNameSupport extends JndiSupport {
       case _ => throw new WorkbenchException(s"not a group dn [$dn]")
     }
   }
+
+  protected def formattedDate(date: Date) = new SimpleDateFormat("yyyyMMddHHmmss.SSSZ").format(date)
+  protected def parseDate(date: String) = new SimpleDateFormat("yyyyMMddHHmmss.SSSZ").parse(date)
 }
