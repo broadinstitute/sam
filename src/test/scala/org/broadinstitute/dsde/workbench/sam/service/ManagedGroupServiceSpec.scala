@@ -1,14 +1,16 @@
 package org.broadinstitute.dsde.workbench.sam.service
 
+import java.net.URI
 import java.util.UUID
 
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import com.typesafe.config.ConfigFactory
+import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.config._
-import org.broadinstitute.dsde.workbench.sam.directory.JndiDirectoryDAO
+import org.broadinstitute.dsde.workbench.sam.directory.LdapDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.JndiAccessPolicyDAO
@@ -30,7 +32,9 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
   private val config = ConfigFactory.load()
   val directoryConfig = config.as[DirectoryConfig]("directory")
   val schemaLockConfig = ConfigFactory.load().as[SchemaLockConfig]("schemaLock")
-  val dirDAO = new JndiDirectoryDAO(directoryConfig)
+  val dirURI = new URI(directoryConfig.directoryUrl)
+  val connectionPool = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
+  val dirDAO = new LdapDirectoryDAO(connectionPool, directoryConfig)
   val policyDAO = new JndiAccessPolicyDAO(directoryConfig)
   val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 

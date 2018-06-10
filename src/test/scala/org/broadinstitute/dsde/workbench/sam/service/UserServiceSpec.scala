@@ -1,15 +1,17 @@
 package org.broadinstitute.dsde.workbench.sam.service
 
+import java.net.URI
 import java.util.UUID
 
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import com.typesafe.config.ConfigFactory
+import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.config.{DirectoryConfig, PetServiceAccountConfig, SchemaLockConfig}
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
-import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryDAO, JndiDirectoryDAO}
+import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryDAO, LdapDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, UserStatus, UserStatusDetails}
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.mockito.ArgumentMatchers._
@@ -39,7 +41,9 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
   lazy val directoryConfig = config.as[DirectoryConfig]("directory")
   lazy val schemaLockConfig = ConfigFactory.load().as[SchemaLockConfig]("schemaLock")
   lazy val petServiceAccountConfig = config.as[PetServiceAccountConfig]("petServiceAccount")
-  lazy val dirDAO = new JndiDirectoryDAO(directoryConfig)
+  lazy val dirURI = new URI(directoryConfig.directoryUrl)
+  lazy val connectionPool = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
+  lazy val dirDAO = new LdapDirectoryDAO(connectionPool, directoryConfig)
   lazy val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
   var service: UserService = _

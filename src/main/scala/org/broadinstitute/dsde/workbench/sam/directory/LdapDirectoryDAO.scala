@@ -48,7 +48,7 @@ class LdapDirectoryDAO(protected val ldapConnectionPool: LDAPConnectionPool, pro
 
   override def loadGroups(groupNames: Set[WorkbenchGroupName]): Future[Seq[BasicWorkbenchGroup]] = Future {
     val filters = groupNames.grouped(batchSize).map(batch => Filter.createORFilter(batch.map(g => Filter.createEqualityFilter(Attr.cn, g.value)).asJava)).toSeq
-    ldapSearchStream(groupsOu, SearchScope.BASE, filters:_*)(unmarshalGroup)
+    ldapSearchStream(groupsOu, SearchScope.SUB, filters:_*)(unmarshalGroup)
   }
 
   override def loadGroupEmail(groupName: WorkbenchGroupName): Future[Option[WorkbenchEmail]] = Future {
@@ -164,7 +164,7 @@ class LdapDirectoryDAO(protected val ldapConnectionPool: LDAPConnectionPool, pro
 
   override def loadUsers(userIds: Set[WorkbenchUserId]): Future[Seq[WorkbenchUser]] = Future {
     val filters = userIds.grouped(batchSize).map(batch => Filter.createORFilter(batch.map(g => Filter.createEqualityFilter(Attr.uid, g.value)).asJava)).toSeq
-    ldapSearchStream(peopleOu, SearchScope.BASE, filters:_*)(unmarshalUser)
+    ldapSearchStream(peopleOu, SearchScope.ONE, filters:_*)(unmarshalUser)
   }
 
   override def deleteUser(userId: WorkbenchUserId): Future[Unit] = Future {

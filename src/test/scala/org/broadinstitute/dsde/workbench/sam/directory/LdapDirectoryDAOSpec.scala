@@ -22,12 +22,11 @@ import scala.concurrent.ExecutionContext.Implicits.global
 /**
   * Created by dvoet on 5/30/17.
   */
-class JndiDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with BeforeAndAfter with BeforeAndAfterAll {
+class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with BeforeAndAfter with BeforeAndAfterAll {
   val directoryConfig = ConfigFactory.load().as[DirectoryConfig]("directory")
   val schemaLockConfig = ConfigFactory.load().as[SchemaLockConfig]("schemaLock")
   val dirURI = new URI(directoryConfig.directoryUrl)
-  val dao = new LdapDirectoryDAO(new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), 5), directoryConfig)
-//  val dao = new JndiDirectoryDAO(directoryConfig)
+  val dao = new LdapDirectoryDAO(new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize), directoryConfig)
   val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
   override protected def beforeAll(): Unit = {

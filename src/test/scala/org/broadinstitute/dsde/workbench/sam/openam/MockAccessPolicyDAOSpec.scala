@@ -1,7 +1,10 @@
 package org.broadinstitute.dsde.workbench.sam.openam
 
+import java.net.URI
+
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import com.typesafe.config.ConfigFactory
+import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
@@ -54,12 +57,14 @@ class MockAccessPolicyDAOSpec extends FlatSpec with Matchers with TestSupport wi
   def jndiServicesFixture = new {
     val shared = sharedFixtures
     val jndiPolicyDao = new JndiAccessPolicyDAO(directoryConfig)
-    val jndiDirDao = new JndiDirectoryDAO(directoryConfig)
-    val allUsersGroup: WorkbenchGroup = TestSupport.runAndWait(NoExtensions.getOrCreateAllUsersGroup(jndiDirDao))
+    val dirURI = new URI(directoryConfig.directoryUrl)
+    val connectionPool = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
+    val ldapDirDao = new LdapDirectoryDAO(connectionPool, directoryConfig)
+    val allUsersGroup: WorkbenchGroup = TestSupport.runAndWait(NoExtensions.getOrCreateAllUsersGroup(ldapDirDao))
 
-    val resourceService = new ResourceService(shared.resourceTypes, jndiPolicyDao, jndiDirDao, NoExtensions, shared.emailDomain)
-    val userService = new UserService(jndiDirDao, NoExtensions)
-    val managedGroupService = new ManagedGroupService(resourceService, shared.resourceTypes, jndiPolicyDao, jndiDirDao, NoExtensions, shared.emailDomain)
+    val resourceService = new ResourceService(shared.resourceTypes, jndiPolicyDao, ldapDirDao, NoExtensions, shared.emailDomain)
+    val userService = new UserService(ldapDirDao, NoExtensions)
+    val managedGroupService = new ManagedGroupService(resourceService, shared.resourceTypes, jndiPolicyDao, ldapDirDao, NoExtensions, shared.emailDomain)
     shared.resourceTypes foreach {case (_, resourceType) => runAndWait(resourceService.createResourceType(resourceType)) }
   }
 

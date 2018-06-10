@@ -19,15 +19,13 @@ import scala.concurrent.ExecutionContext.Implicits.global
 /**
   * Created by dvoet on 6/26/17.
   */
-class JndiAccessPolicyDAOSpec extends FlatSpec with Matchers with TestSupport with BeforeAndAfter with BeforeAndAfterAll {
+class LdapAccessPolicyDAOSpec extends FlatSpec with Matchers with TestSupport with BeforeAndAfter with BeforeAndAfterAll {
   val directoryConfig = ConfigFactory.load().as[DirectoryConfig]("directory")
   val schemaLockConfig = ConfigFactory.load().as[SchemaLockConfig]("schemaLock")
   val dirURI = new URI(directoryConfig.directoryUrl)
-  private val connectionPool = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), 5)
+  private val connectionPool = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
   val dao = new LdapAccessPolicyDAO(connectionPool, directoryConfig)
   val dirDao = new LdapDirectoryDAO(connectionPool, directoryConfig)
-//  val dao = new JndiAccessPolicyDAO(directoryConfig)
-//  val dirDao = new JndiDirectoryDAO(directoryConfig)
   val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
   override protected def beforeAll(): Unit = {
