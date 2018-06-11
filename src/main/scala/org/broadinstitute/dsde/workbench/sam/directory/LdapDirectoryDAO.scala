@@ -13,6 +13,7 @@ import org.broadinstitute.dsde.workbench.sam.util.LdapSupport
 
 import scala.collection.JavaConverters._
 import scala.concurrent.{ExecutionContext, Future}
+import scala.util.{Failure, Success, Try}
 
 class LdapDirectoryDAO(protected val ldapConnectionPool: LDAPConnectionPool, protected val directoryConfig: DirectoryConfig)(implicit executionContext: ExecutionContext) extends DirectoryDAO with DirectorySubjectNameSupport with LdapSupport {
 
@@ -69,22 +70,34 @@ class LdapDirectoryDAO(protected val ldapConnectionPool: LDAPConnectionPool, pro
     }
   }
 
-  override def addGroupMember(groupId: WorkbenchGroupIdentity, addMember: WorkbenchSubject): Future[Unit] = Future {
-    ldapConnectionPool.modify(groupDn(groupId),
-      new Modification(ModificationType.ADD, Attr.uniqueMember, subjectDn(addMember)),
-      groupUpdatedModification
-    )
+  override def addGroupMember(groupId: WorkbenchGroupIdentity, addMember: WorkbenchSubject): Future[Boolean] = Future {
+    Try {
+      ldapConnectionPool.modify(groupDn(groupId),
+        new Modification(ModificationType.ADD, Attr.uniqueMember, subjectDn(addMember)),
+        groupUpdatedModification
+      )
+    } match {
+      case Success(_) => true
+      case Failure(ldape: LDAPException) if ldape.getResultCode == ResultCode.ATTRIBUTE_OR_VALUE_EXISTS => false
+      case Failure(regrets) => throw regrets
+    }
   }
 
   private def groupUpdatedModification = {
     new Modification(ModificationType.REPLACE, Attr.groupUpdatedTimestamp, formattedDate(new Date()))
   }
 
-  override def removeGroupMember(groupId: WorkbenchGroupIdentity, removeMember: WorkbenchSubject): Future[Unit] = Future {
-    ldapConnectionPool.modify(groupDn(groupId),
-      new Modification(ModificationType.DELETE, Attr.uniqueMember, subjectDn(removeMember)),
-      groupUpdatedModification
-    )
+  override def removeGroupMember(groupId: WorkbenchGroupIdentity, removeMember: WorkbenchSubject): Future[Boolean] = Future {
+    Try {
+      ldapConnectionPool.modify(groupDn(groupId),
+        new Modification(ModificationType.DELETE, Attr.uniqueMember, subjectDn(removeMember)),
+        groupUpdatedModification
+      )
+    } match {
+      case Success(_) => true
+      case Failure(ldape: LDAPException) if ldape.getResultCode == ResultCode.NO_SUCH_ATTRIBUTE => false
+      case Failure(regrets) => throw regrets
+    }
   }
 
   override def isGroupMember(groupId: WorkbenchGroupIdentity, member: WorkbenchSubject): Future[Boolean] = Future {

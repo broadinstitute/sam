@@ -13,7 +13,7 @@ trait LdapSupport {
     *
     * This function makes use of Unboundid's asynchronous and buffered loading of search results. That's why it
     * returns a Stream. The LDAPEntrySource used internally limits the number of items pulled back from ldap
-    * to avoid memory overrun and the user of Stream passes that behavior up to the caller. If the results are
+    * to avoid memory overrun and the use of Stream passes that behavior up to the caller. If the results are
     * possibly large try not to read them all in to memory (e.g. by calling toSet).
     *
     * @param baseDn dn to start the search

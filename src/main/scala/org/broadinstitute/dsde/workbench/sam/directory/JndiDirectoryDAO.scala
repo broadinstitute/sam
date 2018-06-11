@@ -14,7 +14,7 @@ import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO.{Attr, ObjectC
 import org.broadinstitute.dsde.workbench.sam.util.{BaseDirContext, JndiSupport}
 
 import scala.concurrent.{ExecutionContext, Future}
-import scala.util.Try
+import scala.util.{Failure, Success, Try}
 
 /**
  * Created by dvoet on 11/5/15.
@@ -64,16 +64,23 @@ class JndiDirectoryDAO(protected val directoryConfig: DirectoryConfig)(implicit 
     }
   }
 
-  override def removeGroupMember(groupId: WorkbenchGroupIdentity, removeMember: WorkbenchSubject): Future[Unit] = withContext { ctx =>
+  override def removeGroupMember(groupId: WorkbenchGroupIdentity, removeMember: WorkbenchSubject): Future[Boolean] = withContext { ctx =>
     ctx.modifyAttributes(groupDn(groupId), DirContext.REMOVE_ATTRIBUTE, new BasicAttributes(Attr.uniqueMember, subjectDn(removeMember)))
     updateUpdatedDate(groupId, ctx)
+    true
   } recover {
-    case _: NoSuchAttributeException => ()  // don't fail if the member is already not in the group
+    case _: NoSuchAttributeException => false
   }
 
-  override def addGroupMember(groupId: WorkbenchGroupIdentity, addMember: WorkbenchSubject): Future[Unit] = withContext { ctx =>
-    ctx.modifyAttributes(groupDn(groupId), DirContext.ADD_ATTRIBUTE, new BasicAttributes(Attr.uniqueMember, subjectDn(addMember)))
-    updateUpdatedDate(groupId, ctx)
+  override def addGroupMember(groupId: WorkbenchGroupIdentity, addMember: WorkbenchSubject): Future[Boolean] = withContext { ctx =>
+    Try {
+      ctx.modifyAttributes(groupDn(groupId), DirContext.ADD_ATTRIBUTE, new BasicAttributes(Attr.uniqueMember, subjectDn(addMember)))
+      updateUpdatedDate(groupId, ctx)
+    } match {
+      case Success(_) => true
+      case Failure(_: AttributeInUseException) => false
+      case Failure(regrets) => throw regrets
+    }
   }
 
   private def updateUpdatedDate(groupId: WorkbenchGroupIdentity, ctx: InitialDirContext) = {
