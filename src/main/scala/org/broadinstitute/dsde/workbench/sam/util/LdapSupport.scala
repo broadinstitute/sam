@@ -2,6 +2,8 @@ package org.broadinstitute.dsde.workbench.sam.util
 
 import com.unboundid.ldap.sdk._
 
+import scala.util.{Failure, Success, Try}
+
 trait LdapSupport {
   protected val ldapConnectionPool: LDAPConnectionPool
   protected val batchSize = 1000
@@ -14,10 +16,13 @@ trait LdapSupport {
     }.toStream
   }
 
-  protected def ldapEntrySourceStream[T](entrySource: LDAPEntrySource)(unmarshaller: Entry => T): Stream[T] = {
-    Option(entrySource.nextEntry) match {
-      case None => Stream.empty
-      case Some(next) => Stream.cons(unmarshaller(next), ldapEntrySourceStream(entrySource)(unmarshaller))
+  private def ldapEntrySourceStream[T](entrySource: LDAPEntrySource)(unmarshaller: Entry => T): Stream[T] = {
+    Try(Option(entrySource.nextEntry)) match {
+      case Success(None) => Stream.empty
+      case Success(Some(next)) => Stream.cons(unmarshaller(next), ldapEntrySourceStream(entrySource)(unmarshaller))
+      case Failure(ldape: EntrySourceException) if ldape.getCause.isInstanceOf[LDAPException] &&
+        ldape.getCause.asInstanceOf[LDAPException].getResultCode == ResultCode.NO_SUCH_OBJECT => Stream.empty // the base dn does not exist, treat as empty search
+      case Failure(regrets) => throw regrets
     }
   }
 

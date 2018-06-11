@@ -5,7 +5,7 @@ import java.util.UUID
 
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import com.typesafe.config.ConfigFactory
-import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
+import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool, LDAPException}
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
@@ -13,7 +13,7 @@ import org.broadinstitute.dsde.workbench.sam.config._
 import org.broadinstitute.dsde.workbench.sam.directory.LdapDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.openam.JndiAccessPolicyDAO
+import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, LdapAccessPolicyDAO}
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.mockito.Mockito.{verify, when}
 import org.scalatest._
@@ -35,7 +35,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
   val dirURI = new URI(directoryConfig.directoryUrl)
   val connectionPool = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
   val dirDAO = new LdapDirectoryDAO(connectionPool, directoryConfig)
-  val policyDAO = new JndiAccessPolicyDAO(directoryConfig)
+  val policyDAO = new LdapAccessPolicyDAO(connectionPool, directoryConfig)
   val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
   private val resourceId = ResourceId("myNewGroup")
@@ -61,7 +61,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
 
   def makeResourceType(resourceType: ResourceType): ResourceTypeName = runAndWait(resourceService.createResourceType(resourceType))
 
-  def assertPoliciesOnResource(resource: Resource, policyDAO: JndiAccessPolicyDAO = policyDAO, expectedPolicies: Set[AccessPolicyName] = Set(ManagedGroupService.adminPolicyName, ManagedGroupService.memberPolicyName)) = {
+  def assertPoliciesOnResource(resource: Resource, policyDAO: AccessPolicyDAO = policyDAO, expectedPolicies: Set[AccessPolicyName] = Set(ManagedGroupService.adminPolicyName, ManagedGroupService.memberPolicyName)) = {
     val policies = runAndWait(policyDAO.listAccessPolicies(resource))
     policies.map(_.id.accessPolicyName.value) shouldEqual expectedPolicies.map(_.value)
     expectedPolicies.foreach { policyName =>
@@ -69,7 +69,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     }
   }
 
-  def assertMakeGroup(groupId: String = resourceId.value, managedGroupService: ManagedGroupService = managedGroupService, policyDAO: JndiAccessPolicyDAO = policyDAO): Resource = {
+  def assertMakeGroup(groupId: String = resourceId.value, managedGroupService: ManagedGroupService = managedGroupService, policyDAO: AccessPolicyDAO = policyDAO): Resource = {
     val resource: Resource = makeGroup(groupId, managedGroupService)
     val intendedResource = Resource(ManagedGroupService.managedGroupTypeName, ResourceId(groupId))
     resource shouldEqual intendedResource
@@ -273,9 +273,13 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
 
     val managedGroup = assertMakeGroup()
 
-    runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName)) shouldEqual Set(adminUser.email)
-    runAndWait(managedGroupService.addSubjectToPolicy(managedGroup.resourceId, ManagedGroupService.adminPolicyName, adminUser.id))
-    runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName)) shouldEqual Set(adminUser.email)
+    try {
+      runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName)) shouldEqual Set(adminUser.email)
+      runAndWait(managedGroupService.addSubjectToPolicy(managedGroup.resourceId, ManagedGroupService.adminPolicyName, adminUser.id))
+      runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName)) shouldEqual Set(adminUser.email)
+    } catch {
+      case t: LDAPException => println(t.getResultCode)
+    }
   }
 
   // TODO: Is this right?  ResourceService.overwriteResource fails with invalid emails, should addSubjectToPolicy fail too?

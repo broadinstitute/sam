@@ -23,7 +23,7 @@ trait JndiSupport {
     env.put(Context.SECURITY_CREDENTIALS, password)
 
     // enable connection pooling
-    env.put("com.sun.jndi.ldap.connect.pool", "true")
+//    env.put("com.sun.jndi.ldap.connect.pool", "true")
 
     new InitialDirContext(env)
   }

@@ -5,6 +5,7 @@ import javax.naming.directory.{AttributeInUseException, NoSuchAttributeException
 
 import akka.http.scaladsl.model.StatusCodes
 import com.typesafe.scalalogging.LazyLogging
+import com.unboundid.ldap.sdk.{LDAPException, ResultCode}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
@@ -288,6 +289,7 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
   def addSubjectToPolicy(resourceAndPolicyName: ResourceAndPolicyName, subject: WorkbenchSubject): Future[Unit] = {
     directoryDAO.addGroupMember(resourceAndPolicyName, subject) recover {
       case _: AttributeInUseException => // subject is already there
+      case ldape: LDAPException if ldape.getResultCode == ResultCode.ATTRIBUTE_OR_VALUE_EXISTS => // subject is already there
     } andThen {
       case Success(_) => fireGroupUpdateNotification(resourceAndPolicyName)
     }
@@ -296,6 +298,7 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
   def removeSubjectFromPolicy(resourceAndPolicyName: ResourceAndPolicyName, subject: WorkbenchSubject): Future[Unit] = {
     directoryDAO.removeGroupMember(resourceAndPolicyName, subject) recover {
       case _: NoSuchAttributeException => // subject already gone
+      case ldape: LDAPException if ldape.getResultCode == ResultCode.NO_SUCH_ATTRIBUTE => // subject already gone
     } andThen {
       case Success(_) => fireGroupUpdateNotification(resourceAndPolicyName)
     }

@@ -46,12 +46,13 @@ object Boot extends App with LazyLogging {
     import scala.concurrent.ExecutionContext.Implicits.global
 
     val dirURI = new URI(directoryConfig.directoryUrl)
-    val socketFactory = dirURI.getScheme.toLowerCase match {
-      case "ldaps" => SSLContext.getDefault.getSocketFactory
-      case "ldap" => SocketFactory.getDefault
+    val (socketFactory, defaultPort) = dirURI.getScheme.toLowerCase match {
+      case "ldaps" => (SSLContext.getDefault.getSocketFactory, 636)
+      case "ldap" => (SocketFactory.getDefault, 389)
       case unsupported => throw new WorkbenchException(s"unsupported directory url scheme: $unsupported")
     }
-    val ldapConnectionPool = new LDAPConnectionPool(new LDAPConnection(socketFactory, dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
+    val port = if (dirURI.getPort > 0) dirURI.getPort else defaultPort
+    val ldapConnectionPool = new LDAPConnectionPool(new LDAPConnection(socketFactory, dirURI.getHost, port, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
 
     val accessPolicyDAO = new LdapAccessPolicyDAO(ldapConnectionPool, directoryConfig)
     val directoryDAO = new LdapDirectoryDAO(ldapConnectionPool, directoryConfig)

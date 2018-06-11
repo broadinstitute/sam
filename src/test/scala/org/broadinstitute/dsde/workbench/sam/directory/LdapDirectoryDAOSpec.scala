@@ -13,7 +13,7 @@ import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAcc
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.config.{DirectoryConfig, SchemaLockConfig}
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.openam.JndiAccessPolicyDAO
+import org.broadinstitute.dsde.workbench.sam.openam.LdapAccessPolicyDAO
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FlatSpec, Matchers}
 
@@ -26,7 +26,8 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
   val directoryConfig = ConfigFactory.load().as[DirectoryConfig]("directory")
   val schemaLockConfig = ConfigFactory.load().as[SchemaLockConfig]("schemaLock")
   val dirURI = new URI(directoryConfig.directoryUrl)
-  val dao = new LdapDirectoryDAO(new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize), directoryConfig)
+  val connectionPool = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
+  val dao = new LdapDirectoryDAO(connectionPool, directoryConfig)
   val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
   override protected def beforeAll(): Unit = {
@@ -352,7 +353,7 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     runAndWait(dao.createGroup(group1))
     runAndWait(dao.createGroup(group2))
 
-    val policyDAO = new JndiAccessPolicyDAO(directoryConfig)
+    val policyDAO = new LdapAccessPolicyDAO(connectionPool, directoryConfig)
 
     val typeName1 = ResourceTypeName(UUID.randomUUID().toString)
 
