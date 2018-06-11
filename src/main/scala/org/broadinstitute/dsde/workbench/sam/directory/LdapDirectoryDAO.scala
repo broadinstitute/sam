@@ -228,6 +228,7 @@ class LdapDirectoryDAO(protected val ldapConnectionPool: LDAPConnectionPool, pro
           new Attribute("objectclass", Seq("top", "groupofnames").asJava),
           new Attribute(Attr.member, subjectDn(subject))
         )
+      case ldape: LDAPException if ldape.getResultCode == ResultCode.ATTRIBUTE_OR_VALUE_EXISTS =>
     }
   }
 
