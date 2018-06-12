@@ -11,7 +11,7 @@ import com.google.auth.oauth2.ServiceAccountCredentials
 import com.typesafe.scalalogging.LazyLogging
 import io.grpc.Status.Code
 import org.broadinstitute.dsde.workbench.dataaccess.NotificationDAO
-import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleIamDAO, GoogleProjectDAO, GooglePubSubDAO, GoogleStorageDAO}
+import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleIamDAO, GoogleProjectDAO, GooglePubSubDAO, GoogleServiceManagerDAO, GoogleStorageDAO}
 import org.broadinstitute.dsde.workbench.model.Notifications.Notification
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport.WorkbenchGroupNameFormat
 import org.broadinstitute.dsde.workbench.model._
@@ -36,7 +36,7 @@ object GoogleExtensions {
   val getPetPrivateKeyAction = ResourceAction("get_pet_private_key")
 }
 
-class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: AccessPolicyDAO, val googleDirectoryDAO: GoogleDirectoryDAO, val googlePubSubDAO: GooglePubSubDAO, val googleIamDAO: GoogleIamDAO, val googleStorageDAO: GoogleStorageDAO, val googleProjectDAO: GoogleProjectDAO, val googleKeyCache: GoogleKeyCache, val notificationDAO: NotificationDAO, val googleServicesConfig: GoogleServicesConfig, val petServiceAccountConfig: PetServiceAccountConfig, environment: String, extensionResourceType: ResourceType)(implicit val system: ActorSystem, executionContext: ExecutionContext) extends LazyLogging with FutureSupport with CloudExtensions with Retry {
+class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: AccessPolicyDAO, val googleDirectoryDAO: GoogleDirectoryDAO, val googlePubSubDAO: GooglePubSubDAO, val googleIamDAO: GoogleIamDAO, val googleStorageDAO: GoogleStorageDAO, val googleProjectDAO: GoogleProjectDAO, val googleServiceManagerDAO: GoogleServiceManagerDAO, val googleKeyCache: GoogleKeyCache, val notificationDAO: NotificationDAO, val googleServicesConfig: GoogleServicesConfig, val petServiceAccountConfig: PetServiceAccountConfig, environment: String, extensionResourceType: ResourceType)(implicit val system: ActorSystem, executionContext: ExecutionContext) extends LazyLogging with FutureSupport with CloudExtensions with Retry {
 
   private val maxGroupEmailLength = 64
 
@@ -264,12 +264,12 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
     }
   }
 
-  def getArbitraryPetServiceAccountKey(user: WorkbenchUser): Future[String] = {
+  def getDefaultPetServiceAccountKey(user: WorkbenchUser): Future[String] = {
     getDefaultServiceAccountForShellProject(user)
   }
 
-  def getArbitraryPetServiceAccountToken(user: WorkbenchUser, scopes: Set[String]): Future[String] = {
-    getArbitraryPetServiceAccountKey(user).flatMap { key =>
+  def getDefaultPetServiceAccountToken(user: WorkbenchUser, scopes: Set[String]): Future[String] = {
+    getDefaultPetServiceAccountKey(user).flatMap { key =>
       getAccessTokenUsingJson(key, scopes)
     }
   }
@@ -281,28 +281,42 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
         case gjre: GoogleJsonResponseException if gjre.getDetails.getCode == StatusCodes.Conflict.intValue => None
       }
       _ <- creationOperationId match {
-        case Some(opId) => pollShellProjectCreation(opId) //poll until it's created
+        case Some(opId) => for {
+          _ <- pollShellProjectCreation(opId) //poll until it's created
+          enableStorageOpId <- googleServiceManagerDAO.enableService(projectName, "storage-api.googleapis.com")
+          _ <- pollServiceOperation(enableStorageOpId) //poll until it's enabled
+        } yield ()
         case None => Future.successful(())
       }
       key <- getPetServiceAccountKey(user, GoogleProject(projectName))
     } yield key
   }
 
-  private def pollShellProjectCreation(operationId: String): Future[Boolean] = {
-    def whenCreating(throwable: Throwable): Boolean = {
-      throwable match {
-        case t: WorkbenchException => throw t
-        case t: Exception => true
-        case _ => false
-      }
+  private def whenOperationActive(throwable: Throwable): Boolean = {
+    throwable match {
+      case t: WorkbenchException => throw t
+      case t: Exception => true
+      case _ => false
     }
+  }
 
-    retryExponentially(whenCreating)(() => {
+  private def pollShellProjectCreation(operationId: String): Future[Boolean] = {
+    retryExponentially(whenOperationActive)(() => {
       googleProjectDAO.pollOperation(operationId).map { operation =>
         if(operation.getDone && Option(operation.getError).exists(_.getCode.intValue() == Code.ALREADY_EXISTS.value())) true
         else if(operation.getDone && Option(operation.getError).isEmpty) true
         else if(operation.getDone && Option(operation.getError).isDefined) throw new WorkbenchException(s"project creation failed with error ${operation.getError.getMessage}")
         else throw new Exception("project still creating...")
+      }
+    })
+  }
+
+  private def pollServiceOperation(operationId: String): Future[Boolean] = {
+    retryExponentially(whenOperationActive)(() => {
+      googleServiceManagerDAO.pollOperation(operationId).map { operation =>
+        if(operation.getDone && Option(operation.getError).isEmpty) true
+        else if(operation.getDone && Option(operation.getError).isDefined) throw new WorkbenchException(s"service operation failed: ${operation.getError.getMessage}")
+        else throw new Exception("service still enabling...")
       }
     })
   }

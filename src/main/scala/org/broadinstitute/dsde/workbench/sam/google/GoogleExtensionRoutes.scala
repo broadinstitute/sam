@@ -63,7 +63,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
               get {
                 complete {
                   import spray.json._
-                  googleExtensions.getArbitraryPetServiceAccountKey(WorkbenchUser(userInfo.userId, userInfo.userEmail)).map(key => StatusCodes.OK -> key.parseJson)
+                  googleExtensions.getDefaultPetServiceAccountKey(WorkbenchUser(userInfo.userId, userInfo.userEmail)).map(key => StatusCodes.OK -> key.parseJson)
                 }
               }
             }
@@ -73,7 +73,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
               post {
                 entity(as[Set[String]]) { scopes =>
                   complete {
-                    googleExtensions.getArbitraryPetServiceAccountToken(WorkbenchUser(userInfo.userId, userInfo.userEmail), scopes).map { token =>
+                    googleExtensions.getDefaultPetServiceAccountToken(WorkbenchUser(userInfo.userId, userInfo.userEmail), scopes).map { token =>
                       StatusCodes.OK -> JsString(token)
                     }
                   }
