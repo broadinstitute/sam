@@ -36,7 +36,7 @@ object GoogleExtensions {
   val getPetPrivateKeyAction = ResourceAction("get_pet_private_key")
 }
 
-class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: AccessPolicyDAO, val googleDirectoryDAO: GoogleDirectoryDAO, val googlePubSubDAO: GooglePubSubDAO, val googleIamDAO: GoogleIamDAO, val googleStorageDAO: GoogleStorageDAO, val googleProjectDAO: GoogleProjectDAO, val googleKeyCache: GoogleKeyCache, val notificationDAO: NotificationDAO, val googleServicesConfig: GoogleServicesConfig, val petServiceAccountConfig: PetServiceAccountConfig, environment: String, extensionResourceType: ResourceType)(implicit val system: ActorSystem, executionContext: ExecutionContext) extends LazyLogging with FutureSupport with CloudExtensions with Retry {
+class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: AccessPolicyDAO, val googleDirectoryDAO: GoogleDirectoryDAO, val googlePubSubDAO: GooglePubSubDAO, val googleIamDAO: GoogleIamDAO, val googleStorageDAO: GoogleStorageDAO, val googleProjectDAO: GoogleProjectDAO, val googleKeyCache: GoogleKeyCache, val notificationDAO: NotificationDAO, val googleServicesConfig: GoogleServicesConfig, val petServiceAccountConfig: PetServiceAccountConfig, extensionResourceType: ResourceType)(implicit val system: ActorSystem, executionContext: ExecutionContext) extends LazyLogging with FutureSupport with CloudExtensions with Retry {
 
   private val maxGroupEmailLength = 64
 
@@ -275,7 +275,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
   }
 
   private def getDefaultServiceAccountForShellProject(user: WorkbenchUser): Future[String] = {
-    val projectName = s"fc-${environment.substring(0, Math.min(environment.length(), 5))}-${user.id.value}" //max 30 characters. subject ID is 21
+    val projectName = s"fc-${googleServicesConfig.environment.substring(0, Math.min(googleServicesConfig.environment.length(), 5))}-${user.id.value}" //max 30 characters. subject ID is 21
     for {
       creationOperationId <- googleProjectDAO.createProject(projectName).map(opId => Option(opId)) recover {
         case gjre: GoogleJsonResponseException if gjre.getDetails.getCode == StatusCodes.Conflict.intValue => None
