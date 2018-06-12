@@ -10,6 +10,7 @@ import scala.concurrent.duration.FiniteDuration
   */
 case class GoogleServicesConfig(appName: String,
                                 appsDomain: String,
+                                environment: String,
                                 pemFile: String,
                                 serviceAccountClientId: String,
                                 serviceAccountClientEmail: WorkbenchEmail,

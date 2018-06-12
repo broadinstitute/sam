@@ -47,8 +47,6 @@ object Boot extends App with LazyLogging {
     val resourceTypes = config.as[Map[String, ResourceType]]("resourceTypes").values.toSet
     val resourceTypeMap = resourceTypes.map(rt => rt.name -> rt).toMap
 
-    val environment = config.getString("environment")
-
     val cloudExt = googleServicesConfigOption match {
       case Some(googleServicesConfig) =>
         val petServiceAccountConfig = config.as[PetServiceAccountConfig]("petServiceAccount")
@@ -60,7 +58,7 @@ object Boot extends App with LazyLogging {
         val googleKeyCache = new GoogleKeyCache(googleIamDAO, googleStorageDAO, googlePubSubDAO, googleServicesConfig, petServiceAccountConfig)
         val notificationDAO = new PubSubNotificationDAO(googlePubSubDAO, googleServicesConfig.notificationTopic)
 
-        new GoogleExtensions(directoryDAO, accessPolicyDAO, googleDirectoryDAO, googlePubSubDAO, googleIamDAO, googleStorageDAO, googleProjectDAO, googleKeyCache, notificationDAO, googleServicesConfig, petServiceAccountConfig, environment, resourceTypeMap(CloudExtensions.resourceTypeName))
+        new GoogleExtensions(directoryDAO, accessPolicyDAO, googleDirectoryDAO, googlePubSubDAO, googleIamDAO, googleStorageDAO, googleProjectDAO, googleKeyCache, notificationDAO, googleServicesConfig, petServiceAccountConfig, resourceTypeMap(CloudExtensions.resourceTypeName))
       case None => NoExtensions
     }
 

@@ -98,6 +98,7 @@ package object config {
     GoogleServicesConfig(
       config.getString("appName"),
       config.getString("appsDomain"),
+      config.getString("environment"),
       config.getString("pathToPem"),
       config.getString("serviceAccountClientId"),
       WorkbenchEmail(config.getString("serviceAccountClientEmail")),
