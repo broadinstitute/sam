@@ -12,6 +12,7 @@ import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Try
 import scala.util.matching.Regex
 
+@deprecated(message = "use LdapSupport instead")
 trait JndiSupport {
   private val batchSize = 1000
 

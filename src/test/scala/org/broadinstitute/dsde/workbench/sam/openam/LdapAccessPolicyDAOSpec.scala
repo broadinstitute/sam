@@ -42,7 +42,7 @@ class LdapAccessPolicyDAOSpec extends FlatSpec with Matchers with TestSupport wi
     WorkbenchEmail(s"policy-$resourceType-$resourceId-$policyName@dev.test.firecloud.org")
   }
 
-  "JndiAccessPolicyDAO" should "create, list, delete policies" in {
+  "LdapAccessPolicyDAO" should "create, list, delete policies" in {
     val typeName1 = ResourceTypeName(UUID.randomUUID().toString)
     val typeName2 = ResourceTypeName(UUID.randomUUID().toString)
 

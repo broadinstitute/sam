@@ -41,7 +41,7 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
   }
 
 
-  "JndiGroupDirectoryDAO" should "create, read, delete groups" in {
+  "LdapGroupDirectoryDAO" should "create, read, delete groups" in {
     val groupName = WorkbenchGroupName(UUID.randomUUID().toString)
     val group = BasicWorkbenchGroup(groupName, Set.empty, WorkbenchEmail("john@doe.org"))
 
