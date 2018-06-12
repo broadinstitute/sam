@@ -11,6 +11,7 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.ManagedGroupService
 import org.scalatest.{BeforeAndAfter, FlatSpec, Matchers}
 import spray.json.DefaultJsonProtocol._
+
 import scala.language.reflectiveCalls
 
 /**
