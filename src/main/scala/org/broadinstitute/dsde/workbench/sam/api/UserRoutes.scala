@@ -101,13 +101,6 @@ trait UserRoutes extends UserInfoDirectives {
                 }
               } ~
               pathPrefix("petServiceAccount") {
-                pathEndOrSingleSlash {
-                  delete {
-                    complete {
-                      cloudExtensions.deleteUserPetServiceAccount(WorkbenchUserId(userId)).map(_ => StatusCodes.NoContent)
-                    }
-                  }
-                } ~
                 path(Segment) { project =>
                   delete {
                     complete {

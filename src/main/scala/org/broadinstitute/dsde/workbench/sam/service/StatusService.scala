@@ -17,7 +17,7 @@ import scala.language.postfixOps
 class StatusService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExtensions, initialDelay: FiniteDuration = Duration.Zero, pollInterval: FiniteDuration = 1 minute)(implicit system: ActorSystem, executionContext: ExecutionContext) extends LazyLogging {
   implicit val askTimeout = Timeout(5 seconds)
 
-  private val healthMonitor = system.actorOf(HealthMonitor.props(cloudExtensions.allSubSystems + OpenDJ)(checkStatus))
+  private val healthMonitor = system.actorOf(HealthMonitor.props(cloudExtensions.allSubSystems + OpenDJ)(checkStatus _))
   system.scheduler.schedule(initialDelay, pollInterval, healthMonitor, HealthMonitor.CheckAll)
 
   def getStatus(): Future[StatusCheckResponse] = (healthMonitor ? GetCurrentStatus).asInstanceOf[Future[StatusCheckResponse]]

@@ -150,7 +150,7 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
   private def maybeDeleteResource(resource: Resource): Future[Unit] = {
     resourceTypes.get(resource.resourceTypeName) match {
       case Some(resourceType) if resourceType.reuseIds => accessPolicyDAO.deleteResource(resource)
-      case _ => Future.successful()
+      case _ => Future.successful(())
     }
   }
 

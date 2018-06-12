@@ -123,7 +123,7 @@ class GoogleKeyCacheMonitorActor(val pollInterval: FiniteDuration, pollIntervalJ
         logger.warn(s"could not remove service account key due to 403 error, project $project, sa email $serviceAccountEmail, sa key id $keyId", t)
         None
     } flatMap {
-      case None => Future.successful() // service account does not exist or no access
+      case None => Future.successful(()) // service account does not exist or no access
       case Some(_) => googleIamDAO.removeServiceAccountKey(project, serviceAccountEmail, keyId)
     }
   }

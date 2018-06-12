@@ -63,7 +63,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
       existingGoogleGroup <- googleDirectoryDAO.getGoogleGroup(createdGroup.email)
       _ <- existingGoogleGroup match {
         case None => googleDirectoryDAO.createGroup(createdGroup.id.toString, createdGroup.email) recover { case e: GoogleJsonResponseException if e.getDetails.getCode == StatusCodes.Conflict.intValue => () }
-        case Some(_) => Future.successful()
+        case Some(_) => Future.successful(())
       }
 
     } yield createdGroup
