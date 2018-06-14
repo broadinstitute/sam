@@ -1,16 +1,21 @@
 package org.broadinstitute.dsde.workbench.sam
 
 import java.io.File
+import java.net.URI
+import javax.net.SocketFactory
+import javax.net.ssl.SSLContext
 
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import akka.stream.ActorMaterializer
 import com.typesafe.config.ConfigFactory
 import com.typesafe.scalalogging.LazyLogging
+import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
+import com.unboundid.util.ssl.{SSLUtil, TrustStoreTrustManager}
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
 import org.broadinstitute.dsde.workbench.google.GoogleCredentialModes.Pem
-import org.broadinstitute.dsde.workbench.google.{HttpGoogleProjectDAO, HttpGoogleDirectoryDAO, HttpGoogleIamDAO, HttpGooglePubSubDAO, HttpGoogleStorageDAO}
+import org.broadinstitute.dsde.workbench.google.{HttpGoogleDirectoryDAO, HttpGoogleIamDAO, HttpGoogleProjectDAO, HttpGooglePubSubDAO, HttpGoogleStorageDAO}
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException}
 import org.broadinstitute.dsde.workbench.sam.api.{SamRoutes, StandardUserInfoDirectives}
 import org.broadinstitute.dsde.workbench.sam.config._
@@ -40,8 +45,17 @@ object Boot extends App with LazyLogging {
     implicit val materializer = ActorMaterializer()
     import scala.concurrent.ExecutionContext.Implicits.global
 
-    val accessPolicyDAO = new JndiAccessPolicyDAO(directoryConfig)
-    val directoryDAO = new JndiDirectoryDAO(directoryConfig)
+    val dirURI = new URI(directoryConfig.directoryUrl)
+    val (socketFactory, defaultPort) = dirURI.getScheme.toLowerCase match {
+      case "ldaps" => (SSLContext.getDefault.getSocketFactory, 636)
+      case "ldap" => (SocketFactory.getDefault, 389)
+      case unsupported => throw new WorkbenchException(s"unsupported directory url scheme: $unsupported")
+    }
+    val port = if (dirURI.getPort > 0) dirURI.getPort else defaultPort
+    val ldapConnectionPool = new LDAPConnectionPool(new LDAPConnection(socketFactory, dirURI.getHost, port, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
+
+    val accessPolicyDAO = new LdapAccessPolicyDAO(ldapConnectionPool, directoryConfig)
+    val directoryDAO = new LdapDirectoryDAO(ldapConnectionPool, directoryConfig)
     val schemaDAO = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
     val resourceTypes = config.as[Map[String, ResourceType]]("resourceTypes").values.toSet

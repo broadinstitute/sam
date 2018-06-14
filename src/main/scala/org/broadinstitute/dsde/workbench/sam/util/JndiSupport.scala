@@ -12,6 +12,7 @@ import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Try
 import scala.util.matching.Regex
 
+@deprecated(message = "use LdapSupport instead")
 trait JndiSupport {
   private val batchSize = 1000
 
@@ -23,7 +24,7 @@ trait JndiSupport {
     env.put(Context.SECURITY_CREDENTIALS, password)
 
     // enable connection pooling
-    env.put("com.sun.jndi.ldap.connect.pool", "true")
+//    env.put("com.sun.jndi.ldap.connect.pool", "true")
 
     new InitialDirContext(env)
   }
@@ -58,20 +59,6 @@ trait JndiSupport {
     t.get
   }
 
-  /**
-    * Constructs a regular expression to extract the leading attribute values of a dn. Example: to extract
-    * policy namd an resource id from the dn policy=foo,resourceId=bar,resourceType=splat,ou=resources,dc=x,dc=u,dc=com
-    * matchAttributeNames would be Seq("policy", "resourceId") and baseDn would be "resourceType=splat,ou=resources,dc=x,dc=u,dc=com".
-    *
-    * @param matchAttributeNames names of attributes in the leading part of the dn that should match and extract values
-    * @param baseDn the trailing part of the dn that should match but we don't care to extract values
-    * @return pattern with capture groups for each member of matchAttributeNames
-    */
-  protected def dnMatcher(matchAttributeNames: Seq[String], baseDn: String): Regex = {
-    val partStrings = matchAttributeNames.map { attrName => s"$attrName=([^,]+)" }
-    partStrings.mkString("(?i)", ",", s",$baseDn").r
-  }
-
   import scala.language.implicitConversions
   /**
     * Use this implicit conversion class and following call to extractResultsAndClose
@@ -94,9 +81,6 @@ trait JndiSupport {
       }
     }
   }
-
-  protected def formattedDate(date: Date) = new SimpleDateFormat("yyyyMMddHHmmss.SSSZ").format(date)
-  protected def parseDate(date: String) = new SimpleDateFormat("yyyyMMddHHmmss.SSSZ").parse(date)
 }
 
 /**

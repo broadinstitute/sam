@@ -88,7 +88,8 @@ package object config {
       config.getString("user"),
       config.getString("password"),
       config.getString("baseDn"),
-      config.getString("enabledUsersGroupDn")
+      config.getString("enabledUsersGroupDn"),
+      config.as[Option[Int]]("connectionPoolSize").getOrElse(20)
     )
   }
 

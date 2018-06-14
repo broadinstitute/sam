@@ -1,7 +1,6 @@
 package org.broadinstitute.dsde.workbench.sam.service
 
 import java.util.UUID
-import javax.naming.directory.{AttributeInUseException, NoSuchAttributeException}
 
 import akka.http.scaladsl.model.StatusCodes
 import com.typesafe.scalalogging.LazyLogging
@@ -286,17 +285,13 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
   }
 
   def addSubjectToPolicy(resourceAndPolicyName: ResourceAndPolicyName, subject: WorkbenchSubject): Future[Unit] = {
-    directoryDAO.addGroupMember(resourceAndPolicyName, subject) recover {
-      case _: AttributeInUseException => // subject is already there
-    } andThen {
+    directoryDAO.addGroupMember(resourceAndPolicyName, subject).map(_ => ()) andThen {
       case Success(_) => fireGroupUpdateNotification(resourceAndPolicyName)
     }
   }
 
   def removeSubjectFromPolicy(resourceAndPolicyName: ResourceAndPolicyName, subject: WorkbenchSubject): Future[Unit] = {
-    directoryDAO.removeGroupMember(resourceAndPolicyName, subject) recover {
-      case _: NoSuchAttributeException => // subject already gone
-    } andThen {
+    directoryDAO.removeGroupMember(resourceAndPolicyName, subject).map(_ => ()) andThen {
       case Success(_) => fireGroupUpdateNotification(resourceAndPolicyName)
     }
   }
