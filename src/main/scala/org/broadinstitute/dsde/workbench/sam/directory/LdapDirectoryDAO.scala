@@ -105,7 +105,8 @@ class LdapDirectoryDAO(protected val ldapConnectionPool: LDAPConnectionPool, pro
       entry <- Option(ldapConnectionPool.getEntry(subjectDn(member), Attr.memberOf))
       memberOf <- Option(entry.getAttribute(Attr.memberOf))
     } yield {
-      memberOf.getValues.contains(groupDn(groupId))
+      val memberships = memberOf.getValues.toSet.map(dnToGroupIdentity)
+      memberships.contains(groupId)
     }
     isMember.getOrElse(false)
   }
