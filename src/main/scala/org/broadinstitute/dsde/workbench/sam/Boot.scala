@@ -94,7 +94,7 @@ object Boot extends App with LazyLogging {
       case _ => new SamRoutes(resourceService, userService, statusService, managedGroupService, config.as[SwaggerConfig]("swagger"), directoryDAO) with StandardUserInfoDirectives with NoExtensionRoutes
     }
 
-    for {
+    val init = for {
       _ <- schemaDAO.init() recover {
         case e: WorkbenchException =>
           logger.error("FATAL - could not update schema to latest version. Is the schema lock stuck? See documentation here for more information: [link]")
@@ -120,6 +120,12 @@ object Boot extends App with LazyLogging {
 
     } yield {
 
+    }
+
+    init recover {
+      case t: Throwable =>
+        logger.error(s"SHUTTING DOWN - actor system terminated due to error", t)
+        system.terminate()
     }
   }
 
