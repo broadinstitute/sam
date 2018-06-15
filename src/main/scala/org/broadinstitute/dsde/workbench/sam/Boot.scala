@@ -97,7 +97,7 @@ object Boot extends App with LazyLogging {
     val init = for {
       _ <- schemaDAO.init() recover {
         case e: WorkbenchException =>
-          logger.error("FATAL - could not update schema to latest version. Is the schema lock stuck? See documentation here for more information: [link]")
+          logger.error("FATAL - could not update schema to latest version. Is the schema lock stuck?")
           throw e
         case t: Throwable =>
           logger.error("FATAL - could not init ldap schema", t)
