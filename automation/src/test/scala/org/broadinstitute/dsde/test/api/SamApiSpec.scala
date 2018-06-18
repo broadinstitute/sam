@@ -1,15 +1,14 @@
 package org.broadinstitute.dsde.test.api
 
-import com.google.api.client.googleapis.auth.oauth2.GoogleCredential
+import org.broadinstitute.dsde.test.SamConfig
 import org.broadinstitute.dsde.workbench.service.{Orchestration, Sam, Thurloe}
-import org.broadinstitute.dsde.workbench.service.Sam.user.UserStatusDetails
 import org.broadinstitute.dsde.workbench.auth.{AuthToken, ServiceAccountAuthTokenFromJson, ServiceAccountAuthTokenFromPem}
-import org.broadinstitute.dsde.workbench.config.{Config, Credentials, UserPool}
+import org.broadinstitute.dsde.workbench.config.{Credentials, UserPool}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.dao.Google.googleIamDAO
 import org.broadinstitute.dsde.workbench.fixture.BillingFixtures
 import org.broadinstitute.dsde.workbench.service.test.CleanUp
-import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountName}
+import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccountName}
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.time.{Seconds, Span}
 import org.scalatest.{FreeSpec, Matchers}
@@ -19,6 +18,8 @@ import scala.concurrent.duration.Duration
 
 class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaFutures with CleanUp {
   implicit override val patienceConfig: PatienceConfig = PatienceConfig(timeout = scaled(Span(5, Seconds)))
+
+  val gcsConfig = SamConfig.GCS
 
   def registerAsNewUser(email: WorkbenchEmail)(implicit authToken: AuthToken): Unit = {
     val newUserProfile = Orchestration.profile.BasicProfile (
@@ -129,9 +130,9 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
     }
 
     "should not treat non-pet service accounts as pets" in {
-      val saEmail = WorkbenchEmail(Config.GCS.qaEmail)
+      val saEmail = WorkbenchEmail(gcsConfig.qaEmail)
 
-      implicit val saAuthToken = ServiceAccountAuthTokenFromPem(Config.GCS.qaEmail, Config.GCS.pathToQAPem)
+      implicit val saAuthToken = ServiceAccountAuthTokenFromPem(gcsConfig.qaEmail, gcsConfig.pathToQAPem)
 
       // I am no one's pet.  I am myself.
       Sam.user.status()(saAuthToken).map(_.userInfo.userEmail) shouldBe Some(saEmail.value)
@@ -157,17 +158,17 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
       val proxyGroup2_2 = Sam.user.proxyGroup(email2.value)(authToken2)
 
 /* Re-enable this code and remove the temporary code below after fixing rawls for GAWB-2933
-      val expectedProxyEmail1 = s"${username1}_$userId1@${Config.GCS.appsDomain}"
+      val expectedProxyEmail1 = s"${username1}_$userId1@${gcsConfig.appsDomain}"
 */
-      val expectedProxyEmail1 = s"$userId1@${Config.GCS.appsDomain}"
+      val expectedProxyEmail1 = s"$userId1@${gcsConfig.appsDomain}"
 
       proxyGroup1_1.value should endWith (expectedProxyEmail1)
       proxyGroup1_2.value should endWith (expectedProxyEmail1)
 
 /* Re-enable this code and remove the temporary code below after fixing rawls for GAWB-2933
-      val expectedProxyEmail2 = s"${username2}_$userId2@${Config.GCS.appsDomain}"
+      val expectedProxyEmail2 = s"${username2}_$userId2@${gcsConfig.appsDomain}"
 */
-      val expectedProxyEmail2 = s"$userId2@${Config.GCS.appsDomain}"
+      val expectedProxyEmail2 = s"$userId2@${gcsConfig.appsDomain}"
 
       proxyGroup2_1.value should endWith (expectedProxyEmail2)
       proxyGroup2_2.value should endWith (expectedProxyEmail2)
@@ -189,9 +190,9 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
         val proxyGroup_2 = Sam.user.proxyGroup(petSAEmail.value)(authToken2)
 
         /* Re-enable this code and remove the temporary code below after fixing rawls for GAWB-2933
-      val expectedProxyEmail = s"${username}_$userId@${Config.GCS.appsDomain}"
+      val expectedProxyEmail = s"${username}_$userId@${gcsConfig.appsDomain}"
 */
-        val expectedProxyEmail = s"$userId@${Config.GCS.appsDomain}"
+        val expectedProxyEmail = s"$userId@${gcsConfig.appsDomain}"
 
         proxyGroup_1.value should endWith(expectedProxyEmail)
         proxyGroup_2.value should endWith(expectedProxyEmail)
