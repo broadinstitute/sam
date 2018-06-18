@@ -73,10 +73,12 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig, val schemaLo
       schemaUpdateStatus <- schemaLockStatus match {
         case Proceed => recreateSchema()
         case Ignore => Future.successful(Ignore)
+        case _ => Future.successful(Ignore)
       }
       _ <- schemaUpdateStatus match {
         case Proceed => setSchemaUpdateComplete()
         case Ignore => Future.successful(Ignore)
+        case _ => Future.successful(Ignore)
       }
     } yield ()
   }

@@ -1,8 +1,8 @@
 package org.broadinstitute.dsde.workbench.sam.api
 
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
-import akka.http.scaladsl.model.{StatusCode, StatusCodes}
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
+import akka.http.scaladsl.model.{StatusCode, StatusCodes}
 import akka.http.scaladsl.testkit.ScalatestRouteTest
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.model._
@@ -11,6 +11,8 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.ManagedGroupService
 import org.scalatest.{BeforeAndAfter, FlatSpec, Matchers}
 import spray.json.DefaultJsonProtocol._
+
+import scala.language.reflectiveCalls
 
 /**
   * Created by gpolumbo on 2/26/2017.

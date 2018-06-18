@@ -22,25 +22,6 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
   val googleExtensions: GoogleExtensions
 
   override def extensionRoutes: server.Route =
-    //  THIS FIRST ROUTE IS DEPRECATED, put any new routes under the pathPrefix("google") below
-    pathPrefix("user") {
-      requireUserInfo { userInfo =>
-        path("petServiceAccount") {
-          get { // NOTE: This endpoint is not visible in Swagger
-            complete {
-              googleExtensions.createUserPetServiceAccount(WorkbenchUser(userInfo.userId, userInfo.userEmail)).map { petSA =>
-                StatusCodes.OK -> petSA.serviceAccount.email
-              }
-            }
-          } ~
-          delete { // NOTE: This endpoint is not visible in Swagger
-            complete {
-              googleExtensions.deleteUserPetServiceAccount(userInfo.userId).map(_ => StatusCodes.NoContent)
-            }
-          }
-        }
-      }
-    } ~
     (pathPrefix("google" / "v1") | pathPrefix("google")) {
       requireUserInfo { userInfo =>
         path("petServiceAccount" / Segment / Segment ) { (project, userEmail) =>
