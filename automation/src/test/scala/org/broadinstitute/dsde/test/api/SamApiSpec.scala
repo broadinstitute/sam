@@ -9,14 +9,14 @@ import org.broadinstitute.dsde.workbench.dao.Google.googleIamDAO
 import org.broadinstitute.dsde.workbench.fixture.BillingFixtures
 import org.broadinstitute.dsde.workbench.service.test.CleanUp
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccountName}
-import org.scalatest.concurrent.ScalaFutures
+import org.scalatest.concurrent.{Eventually, ScalaFutures}
 import org.scalatest.time.{Seconds, Span}
 import org.scalatest.{FreeSpec, Matchers}
 
 import scala.concurrent.Await
 import scala.concurrent.duration.Duration
 
-class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaFutures with CleanUp {
+class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaFutures with CleanUp with Eventually {
   implicit override val patienceConfig: PatienceConfig = PatienceConfig(timeout = scaled(Span(5, Seconds)))
 
   val gcsConfig = SamConfig.GCS
@@ -106,7 +106,7 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
         val petAccountEmail = Sam.user.petServiceAccountEmail(projectName)(userAuthToken)
         assert(petAccountEmail.value.contains(userStatus.userInfo.userSubjectId))
         Sam.removePet(projectName, userStatus.userInfo)
-        googleIamDAO.findServiceAccount(GoogleProject(projectName), petAccountEmail).futureValue shouldBe None
+        eventually (googleIamDAO.findServiceAccount(GoogleProject(projectName), petAccountEmail).futureValue shouldBe None)
 
         Sam.user.petServiceAccountEmail(projectName)(userAuthToken)
         petAccountEmail.value should not be userStatus.userInfo.userEmail
