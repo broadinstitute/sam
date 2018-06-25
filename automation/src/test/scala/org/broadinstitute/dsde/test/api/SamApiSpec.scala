@@ -106,7 +106,7 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
         val petAccountEmail = Sam.user.petServiceAccountEmail(projectName)(userAuthToken)
         assert(petAccountEmail.value.contains(userStatus.userInfo.userSubjectId))
         Sam.removePet(projectName, userStatus.userInfo)
-        eventually (googleIamDAO.findServiceAccount(GoogleProject(projectName), petAccountEmail).futureValue shouldBe None)
+        eventually(googleIamDAO.findServiceAccount(GoogleProject(projectName), petAccountEmail).futureValue shouldBe None)
 
         Sam.user.petServiceAccountEmail(projectName)(userAuthToken)
         petAccountEmail.value should not be userStatus.userInfo.userEmail
