@@ -125,7 +125,7 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
         // clean up
 
         Sam.removePet(projectName, userStatus.userInfo)
-        googleIamDAO.findServiceAccount(GoogleProject(projectName), petAccountEmail).futureValue shouldBe None
+        eventually(googleIamDAO.findServiceAccount(GoogleProject(projectName), petAccountEmail).futureValue shouldBe None)
       }
     }
 
