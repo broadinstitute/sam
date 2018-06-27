@@ -2,15 +2,15 @@ package org.broadinstitute.dsde.workbench.sam
 
 import java.io.File
 import java.net.URI
+
 import javax.net.SocketFactory
 import javax.net.ssl.SSLContext
-
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import akka.stream.ActorMaterializer
 import com.typesafe.config.ConfigFactory
 import com.typesafe.scalalogging.LazyLogging
-import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
+import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool, LDAPException}
 import com.unboundid.util.ssl.{SSLUtil, TrustStoreTrustManager}
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
@@ -52,7 +52,14 @@ object Boot extends App with LazyLogging {
       case unsupported => throw new WorkbenchException(s"unsupported directory url scheme: $unsupported")
     }
     val port = if (dirURI.getPort > 0) dirURI.getPort else defaultPort
-    val ldapConnectionPool = new LDAPConnectionPool(new LDAPConnection(socketFactory, dirURI.getHost, port, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
+
+    val ldapConnectionPool = try {
+      new LDAPConnectionPool(new LDAPConnection(socketFactory, dirURI.getHost, port, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
+    } catch {
+      case ldapE: LDAPException =>
+        system.terminate()
+        throw ldapE
+    }
 
     val accessPolicyDAO = new LdapAccessPolicyDAO(ldapConnectionPool, directoryConfig)
     val directoryDAO = new LdapDirectoryDAO(ldapConnectionPool, directoryConfig)
