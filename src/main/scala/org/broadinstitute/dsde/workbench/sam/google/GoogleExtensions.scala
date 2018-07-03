@@ -172,7 +172,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
   override def onUserDelete(userId: WorkbenchUserId): Future[Unit] = {
     for {
       _ <- withProxyEmail(userId) { googleDirectoryDAO.deleteGroup }
-      _ <- forAllPets(userId) { pet => googleIamDAO.removeServiceAccount(petServiceAccountConfig.googleProject, toAccountName(pet.serviceAccount.email)) }
+      _ <- forAllPets(userId) { pet => googleIamDAO.removeServiceAccount(pet.id.project, toAccountName(pet.serviceAccount.email)) }
       _ <- forAllPets(userId) { pet => directoryDAO.deletePetServiceAccount(pet.id) }
     } yield ()
   }
