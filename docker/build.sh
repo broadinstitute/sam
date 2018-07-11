@@ -57,7 +57,7 @@ function docker_cmd()
             echo "pushing $REPO image..."
             docker push $REPO:${DOCKER_TAG}
             docker tag $REPO:${DOCKER_TAG} $REPO:${BRANCH}
-            docker push $REPO:${DOCKER_BRANCH}
+            docker push $REPO:${BRANCH}
 
             echo "pushing $TESTS_REPO image..."
             docker push $TESTS_REPO:${DOCKER_TAG_TESTS}
