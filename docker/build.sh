@@ -79,6 +79,7 @@ ENV=${ENV:-""}  # if env is not set, push an image with branch name
 DIRECTORY_URL=${DIRECTORY_URL:-ldap//opendj:389}
 DIRECTORY_PASSWORD=${DIRECTORY_PASSWORD:-testtesttest}
 
+
 while [ "$1" != "" ]; do
     case $1 in
         jar) make_jar ;;
