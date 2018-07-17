@@ -22,7 +22,7 @@ function make_jar()
     
     # Get the last commit hash of the model directory and set it as an environment variable
     GIT_MODEL_HASH=$(git log -n 1 --pretty=format:%h)
-    
+
     # make jar.  cache sbt dependencies.
     docker run --rm --link $OPENDJ:opendj -e DIRECTORY_URL=$DIRECTORY_URL -e GIT_MODEL_HASH=$GIT_MODEL_HASH -e DIRECTORY_PASSWORD=$DIRECTORY_PASSWORD -v $PWD:/working -v jar-cache:/root/.ivy -v jar-cache:/root/.ivy2 broadinstitute/scala-baseimage /working/docker/init_schema.sh /working
     docker restart $OPENDJ
@@ -76,6 +76,8 @@ BRANCH=${BRANCH:-$(git rev-parse --abbrev-ref HEAD)}  # default to current branc
 REPO=${REPO:-broadinstitute/$PROJECT}  # default to sam docker repo
 TESTS_REPO=$REPO-tests
 ENV=${ENV:-""}  # if env is not set, push an image with branch name
+DIRECTORY_URL=${DIRECTORY_URL:-ldap//opendj:389}
+DIRECTORY_PASSWORD=${DIRECTORY_PASSWORD:-testtesttest}
 
 while [ "$1" != "" ]; do
     case $1 in
