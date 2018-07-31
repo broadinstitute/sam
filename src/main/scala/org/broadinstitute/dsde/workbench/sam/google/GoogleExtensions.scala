@@ -216,7 +216,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
       serviceAccount <- maybeServiceAccount match {
         // SA does not exist in google, create it and add it to the proxy group
         case None => for {
-          sa <- googleIamDAO.getOrCreateServiceAccount(project, petSaName, petSaDisplayName)
+          sa <- googleIamDAO.createServiceAccount(project, petSaName, petSaDisplayName)
           _ <- withProxyEmail(user.id) { proxyEmail => googleDirectoryDAO.addMemberToGroup(proxyEmail, sa.email) }
         } yield sa
 
