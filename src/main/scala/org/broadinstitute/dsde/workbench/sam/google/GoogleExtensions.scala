@@ -209,7 +209,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
     // Sometimes, especially in tests, the pet may be removed from ldap, but not google or the other way around.
     // This code is a little extra complicated to detect the cases when a pet does not exist in google, ldap or both
     // and do the right thing.
-    for {
+    val pet = for {
       maybeServiceAccount <- googleIamDAO.findServiceAccount(project, petSaName)
       maybePet <- directoryDAO.loadPetServiceAccount(PetServiceAccountId(user.id, project))
 
@@ -239,6 +239,16 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
       }
       
     } yield pet
+
+    // In the case of high concurrency, the above code may find that there is no pet SA and then try to create one, getting
+    // a 409 Conflict in Google. This recoverWith will catch that case and return the newly-created pet SA instead of simply failing.
+    pet recoverWith {
+      case gjre: GoogleJsonResponseException if gjre.getDetails.getCode == StatusCodes.Conflict.intValue =>
+        googleIamDAO.findServiceAccount(project, petSaName).map { saOpt =>
+          val sa = saOpt.getOrElse(throw new WorkbenchException(s"Could not create pet service account for user [${user.email}]"))
+          PetServiceAccount(PetServiceAccountId(user.id, project), sa)
+        }
+    }
   }
 
   def getPetServiceAccountKey(userEmail: WorkbenchEmail, project: GoogleProject): Future[Option[String]] = {
