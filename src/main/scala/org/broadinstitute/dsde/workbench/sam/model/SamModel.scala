@@ -43,7 +43,7 @@ object SamJsonSupport {
 
   implicit val ManagedGroupMembershipEntryFormat = jsonFormat3(ManagedGroupMembershipEntry)
 
-  implicit val GroupSyncResponseFormat = jsonFormat1(GroupSyncResponse)
+  implicit val GroupSyncResponseFormat = jsonFormat2(GroupSyncResponse)
 
   implicit val CreateResourceRequestFormat = jsonFormat3(CreateResourceRequest)
 }
@@ -99,4 +99,4 @@ case class BasicWorkbenchGroup(id: WorkbenchGroupName, members: Set[WorkbenchSub
 
 case class ManagedGroupMembershipEntry(groupName: ResourceId, role: AccessPolicyName, groupEmail: WorkbenchEmail)
 
-case class GroupSyncResponse(lastSyncDate: String)
+case class GroupSyncResponse(lastSyncDate: String, email: WorkbenchEmail)

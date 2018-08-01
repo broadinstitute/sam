@@ -131,8 +131,8 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
               } ~
               get {
                 complete {
-                  googleExtensions.getSynchronizedDate(resourceAndPolicyName).map {
-                    case Some(date) => StatusCodes.OK -> Option(GroupSyncResponse(date.toString))
+                  googleExtensions.getSynchronizedState(resourceAndPolicyName).map {
+                    case (Some(date), Some(email)) => StatusCodes.OK -> Option(GroupSyncResponse(date.toString, email)
                     case None => StatusCodes.NoContent -> None
                   }
                 }
