@@ -352,8 +352,11 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
     } yield ()
   }
 
-  def getSynchronizedState(groupId: WorkbenchGroupIdentity): (Future[Option[Date]], Future[Option[WorkbenchEmail]]) = {
-    (getSynchronizedDate(groupId), getSynchronizedEmail(groupId))
+  def getSynchronizedState(groupId: WorkbenchGroupIdentity): Future[GroupSyncResponse] = {
+    for {
+      date <- getSynchronizedDate(groupId)
+      email <- getSynchronizedEmail(groupId)
+    } yield GroupSyncResponse(date, email)
   }
 
   def getSynchronizedDate(groupId: WorkbenchGroupIdentity): Future[Option[Date]] = {

@@ -1,5 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.model
 
+import java.util.Date
+
 import org.broadinstitute.dsde.workbench.model._
 import spray.json.DefaultJsonProtocol
 
@@ -99,4 +101,4 @@ case class BasicWorkbenchGroup(id: WorkbenchGroupName, members: Set[WorkbenchSub
 
 case class ManagedGroupMembershipEntry(groupName: ResourceId, role: AccessPolicyName, groupEmail: WorkbenchEmail)
 
-case class GroupSyncResponse(lastSyncDate: String, email: WorkbenchEmail)
+case class GroupSyncResponse(lastSyncDate: Option[Date], email: Option[WorkbenchEmail])
