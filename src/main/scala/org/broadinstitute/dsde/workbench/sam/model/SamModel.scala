@@ -101,4 +101,4 @@ case class BasicWorkbenchGroup(id: WorkbenchGroupName, members: Set[WorkbenchSub
 
 case class ManagedGroupMembershipEntry(groupName: ResourceId, role: AccessPolicyName, groupEmail: WorkbenchEmail)
 
-case class GroupSyncResponse(lastSyncDate: Option[Date], email: Option[WorkbenchEmail])
+case class GroupSyncResponse(lastSyncDate: String, email: WorkbenchEmail)

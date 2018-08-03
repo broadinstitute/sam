@@ -6,6 +6,7 @@ import java.util.Date
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
+import akka.japi
 import com.google.api.client.googleapis.json.GoogleJsonResponseException
 import com.google.auth.oauth2.ServiceAccountCredentials
 import com.typesafe.scalalogging.LazyLogging
@@ -352,11 +353,19 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
     } yield ()
   }
 
-  def getSynchronizedState(groupId: WorkbenchGroupIdentity): Future[GroupSyncResponse] = {
+  def getSynchronizedState(groupId: WorkbenchGroupIdentity): Future[Option[GroupSyncResponse]] = {
+    val groupDate = getSynchronizedDate(groupId)
+    val groupEmail = getSynchronizedEmail(groupId)
+
     for {
-      date <- getSynchronizedDate(groupId)
-      email <- getSynchronizedEmail(groupId)
-    } yield GroupSyncResponse(date, email)
+      date <- groupDate
+      email <- groupEmail
+    } yield {
+      if(email.isDefined || date.isDefined)
+        Option(GroupSyncResponse(date.getOrElse("").toString, email.getOrElse(WorkbenchEmail(""))))
+      else
+        None
+    }
   }
 
   def getSynchronizedDate(groupId: WorkbenchGroupIdentity): Future[Option[Date]] = {
