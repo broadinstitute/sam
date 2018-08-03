@@ -1,7 +1,5 @@
 package org.broadinstitute.dsde.workbench.sam.model
 
-import java.util.Date
-
 import org.broadinstitute.dsde.workbench.model._
 import spray.json.DefaultJsonProtocol
 

@@ -12,8 +12,6 @@ import scala.concurrent.Future
   * Created by dvoet on 5/26/17.
   */
 trait DirectoryDAO {
-
-
   def createGroup(group: BasicWorkbenchGroup): Future[BasicWorkbenchGroup]
   def loadGroup(groupName: WorkbenchGroupName): Future[Option[BasicWorkbenchGroup]]
   def loadGroups(groupNames: Set[WorkbenchGroupName]): Future[Seq[BasicWorkbenchGroup]]
