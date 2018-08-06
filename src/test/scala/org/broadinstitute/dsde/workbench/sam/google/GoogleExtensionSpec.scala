@@ -348,6 +348,45 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     }
   }
 
+  it should "get a group's email" in {
+    val groupName = WorkbenchGroupName("group1")
+
+    val mockDirectoryDAO = mock[DirectoryDAO]
+
+    val ge = new GoogleExtensions(mockDirectoryDAO, null, null, null, null, null, null, null, null, googleServicesConfig, petServiceAccountConfig, configResourceTypes(CloudExtensions.resourceTypeName))
+
+    when(mockDirectoryDAO.getSynchronizedEmail(groupName)).thenReturn(Future.successful(None))
+    runAndWait(ge.getSynchronizedEmail(groupName)) shouldBe None
+
+    val email = new WorkbenchEmail("")
+    when(mockDirectoryDAO.getSynchronizedEmail(groupName)).thenReturn(Future.successful(Some(email)))
+    runAndWait(ge.getSynchronizedEmail(groupName)) shouldBe Some(email)
+  }
+
+  it should "throw an exception with a NotFound error report when getting email for group that does not exist" in {
+    val dirDAO = new LdapDirectoryDAO(connectionPool, directoryConfig)
+    val ge = new GoogleExtensions(dirDAO, null, null, null, null, null, null, null, null, googleServicesConfig, null, configResourceTypes(CloudExtensions.resourceTypeName))
+    val groupName = WorkbenchGroupName("missing-group")
+    val caught: WorkbenchExceptionWithErrorReport = intercept[WorkbenchExceptionWithErrorReport] {
+      runAndWait(ge.getSynchronizedEmail(groupName))
+    }
+    caught.errorReport.statusCode shouldBe Some(StatusCodes.NotFound)
+    caught.errorReport.message should include (groupName.toString)
+  }
+
+  it should "return email for a group" in {
+    val dirDAO = new LdapDirectoryDAO(connectionPool, directoryConfig)
+    val ge = new GoogleExtensions(dirDAO, null, null, null, null, null, null, null, null, googleServicesConfig, null, configResourceTypes(CloudExtensions.resourceTypeName))
+    val groupName = WorkbenchGroupName("group-sync")
+    val email = WorkbenchEmail("group@fake.gmail.com")
+    runAndWait(dirDAO.createGroup(BasicWorkbenchGroup(groupName, Set(), email)))
+    try {
+      runAndWait(ge.getSynchronizedEmail(groupName)) shouldBe Some(email)
+    } finally {
+      runAndWait(dirDAO.deleteGroup(groupName))
+    }
+  }
+
   it should "create google extension resource on boot" in {
     val mockAccessPolicyDAO = new MockAccessPolicyDAO
     val mockDirectoryDAO = new MockDirectoryDAO
