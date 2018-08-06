@@ -368,6 +368,19 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     assert(runAndWait(dao.isGroupMember(policy1.id, userId)))
   }
 
+  it should "be case insensitive when checking for group membership" in {
+    val userId = WorkbenchUserId(UUID.randomUUID().toString)
+    val user = WorkbenchUser(userId, WorkbenchEmail("foo@bar.com"))
+
+    val groupName1 = WorkbenchGroupName(UUID.randomUUID().toString)
+    val group1 = BasicWorkbenchGroup(groupName1, Set(userId), WorkbenchEmail("g1@example.com"))
+
+    runAndWait(dao.createUser(user))
+    runAndWait(dao.createGroup(group1))
+
+    assert(runAndWait(dao.isGroupMember(WorkbenchGroupName(group1.id.value.toUpperCase), userId)))
+  }
+
   it should "get pet for user" in {
     val userId = WorkbenchUserId(UUID.randomUUID().toString)
     val user = WorkbenchUser(userId, WorkbenchEmail("foo@bar.com"))
