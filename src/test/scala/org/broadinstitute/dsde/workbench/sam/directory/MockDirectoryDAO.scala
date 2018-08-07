@@ -215,7 +215,7 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
   }
 
   override def getSynchronizedEmail(groupId: WorkbenchGroupIdentity): Future[Option[WorkbenchEmail]] = {
-    Future.successful(groups.get(groupId).map(_.email))
+    Future.successful(groups.get(WorkbenchGroupName(groupId.toString)).map(_.email))
   }
 
   override def getUserFromPetServiceAccount(petSAId: ServiceAccountSubjectId): Future[Option[WorkbenchUser]] = {

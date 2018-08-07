@@ -208,7 +208,7 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
     }
   }
 
-  "GET /api/google/policy/{resourceTypeName}/{resourceId}/{accessPolicyName}/sync" should "200 with sync date" in {
+  "GET /api/google/policy/{resourceTypeName}/{resourceId}/{accessPolicyName}/sync" should "200 with sync date and policy email" in {
     val resourceTypes = Map(resourceType.name -> resourceType)
     val defaultUserInfo = UserInfo(OAuth2BearerToken("accessToken"), WorkbenchUserId("user1"), WorkbenchEmail("user1@example.com"), 0)
     val googleDirectoryDAO = new MockGoogleDirectoryDAO()
@@ -254,12 +254,7 @@ class GoogleExtensionRoutesSpec extends FlatSpec with Matchers with ScalatestRou
       status shouldEqual StatusCodes.OK
     }
 
-    import spray.json.DefaultJsonProtocol._
-    val createdPolicy = Get(s"/api/resource/${resourceType.name}/foo/policies") ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.OK
-      val response = responseAs[Seq[AccessPolicyResponseEntry]]
-      response.find(_.policyName == AccessPolicyName(resourceType.ownerRoleName.value)).getOrElse(fail("created policy not returned by get request"))
-    }
+    directoryDAO.createGroup(BasicWorkbenchGroup(WorkbenchGroupName(resourceType.ownerRoleName.value + ".foo." + resourceType.name), Set.empty, WorkbenchEmail("foo@bar.com")))
 
     Get(s"/api/google/resource/${resourceType.name}/foo/${resourceType.ownerRoleName.value}/sync") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK

@@ -360,10 +360,10 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
       date <- groupDate
       email <- groupEmail
     } yield {
-      if(email.isDefined || date.isDefined)
-        Option(GroupSyncResponse(date.getOrElse("").toString, email.getOrElse(WorkbenchEmail(""))))
-      else
-        None
+      (date, email) match {
+        case (Some(date), Some(email)) => Option(GroupSyncResponse(date.toString, email))
+        case _ => None
+      }
     }
   }
 
