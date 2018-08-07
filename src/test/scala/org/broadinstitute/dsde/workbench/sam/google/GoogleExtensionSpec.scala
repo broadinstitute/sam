@@ -348,21 +348,6 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     }
   }
 
-  it should "get a group's email" in {
-    val groupName = WorkbenchGroupName("group1")
-
-    val mockDirectoryDAO = mock[DirectoryDAO]
-
-    val ge = new GoogleExtensions(mockDirectoryDAO, null, null, null, null, null, null, null, null, googleServicesConfig, petServiceAccountConfig, configResourceTypes(CloudExtensions.resourceTypeName))
-
-    when(mockDirectoryDAO.getSynchronizedEmail(groupName)).thenReturn(Future.successful(None))
-    runAndWait(ge.getSynchronizedEmail(groupName)) shouldBe None
-
-    val email = new WorkbenchEmail("")
-    when(mockDirectoryDAO.getSynchronizedEmail(groupName)).thenReturn(Future.successful(Some(email)))
-    runAndWait(ge.getSynchronizedEmail(groupName)) shouldBe Some(email)
-  }
-
   it should "throw an exception with a NotFound error report when getting email for group that does not exist" in {
     val dirDAO = new LdapDirectoryDAO(connectionPool, directoryConfig)
     val ge = new GoogleExtensions(dirDAO, null, null, null, null, null, null, null, null, googleServicesConfig, null, configResourceTypes(CloudExtensions.resourceTypeName))

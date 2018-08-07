@@ -357,10 +357,10 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
     val groupEmail = getSynchronizedEmail(groupId)
 
     for {
-      date <- groupDate
-      email <- groupEmail
+      dateOpt <- groupDate
+      emailOpt <- groupEmail
     } yield {
-      (date, email) match {
+      (dateOpt, emailOpt) match {
         case (Some(date), Some(email)) => Option(GroupSyncResponse(date.toString, email))
         case _ => None
       }
