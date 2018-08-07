@@ -1,6 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.google
 
 import java.net.URI
+import java.text.SimpleDateFormat
 import java.util.{Date, UUID}
 
 import akka.actor.ActorSystem
@@ -363,10 +364,43 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val dirDAO = new LdapDirectoryDAO(connectionPool, directoryConfig)
     val ge = new GoogleExtensions(dirDAO, null, null, null, null, null, null, null, null, googleServicesConfig, null, configResourceTypes(CloudExtensions.resourceTypeName))
     val groupName = WorkbenchGroupName("group-sync")
-    val email = WorkbenchEmail("group@fake.gmail.com")
+    val email = WorkbenchEmail("foo@bar.com")
     runAndWait(dirDAO.createGroup(BasicWorkbenchGroup(groupName, Set(), email)))
     try {
       runAndWait(ge.getSynchronizedEmail(groupName)) shouldBe Some(email)
+    } finally {
+      runAndWait(dirDAO.deleteGroup(groupName))
+    }
+  }
+
+  it should "return None if an email is found, but the group has not been synced" in {
+    val dirDAO = new LdapDirectoryDAO(connectionPool, directoryConfig)
+    val ge = new GoogleExtensions(dirDAO, null, null, null, null, null, null, null, null, googleServicesConfig, null, configResourceTypes(CloudExtensions.resourceTypeName))
+    val groupName = WorkbenchGroupName("group-sync")
+    val email = WorkbenchEmail("foo@bar.com")
+    runAndWait(dirDAO.createGroup(BasicWorkbenchGroup(groupName, Set(), email)))
+    try {
+      runAndWait(ge.getSynchronizedState(groupName)) shouldBe None
+    } finally {
+      runAndWait(dirDAO.deleteGroup(groupName))
+    }
+  }
+
+  it should "return SyncState with email and last sync date if there is an email and the group has been synced" in {
+    val dirDAO = new LdapDirectoryDAO(connectionPool, directoryConfig)
+    val ge = new GoogleExtensions(dirDAO, null, new MockGoogleDirectoryDAO(), null, null, null, null, null, null, googleServicesConfig, null, configResourceTypes(CloudExtensions.resourceTypeName))
+    val groupName = WorkbenchGroupName("group-sync")
+    val email = WorkbenchEmail("foo@bar.com")
+    runAndWait(dirDAO.createGroup(BasicWorkbenchGroup(groupName, Set(), email)))
+    try {
+      runAndWait(ge.synchronizeGroupMembers(groupName))
+      val gsr = runAndWait(ge.getSynchronizedState(groupName)).get
+
+      val dateFormat = "EEE MMM dd HH:mm:ss zzz yyyy"
+      val syncDate = new SimpleDateFormat(dateFormat).parse(gsr.lastSyncDate)
+      syncDate.getTime should equal (new Date().getTime +- 1.second.toMillis)
+
+      gsr.email should equal (email)
     } finally {
       runAndWait(dirDAO.deleteGroup(groupName))
     }
