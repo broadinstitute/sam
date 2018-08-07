@@ -38,7 +38,7 @@ object Dependencies {
 
   val googleOAuth2: ModuleID = "com.google.auth" % "google-auth-library-oauth2-http" % "0.9.0"
 
-  val cats: ModuleID =              "org.typelevel"       %% "cats"                  % "0.9.0"
+  val cats: ModuleID =              "org.typelevel"       %% "cats-core"                  % "1.2.0"
 
   val scalaTest: ModuleID =       "org.scalatest" %% "scalatest"    % scalaTestV % "test"
   val mockito: ModuleID =         "org.mockito"    % "mockito-core" % "2.7.22"   % "test"
