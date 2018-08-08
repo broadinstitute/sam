@@ -12,7 +12,7 @@ import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.config.{DirectoryConfig, PetServiceAccountConfig, SchemaLockConfig}
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
 import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryDAO, LdapDirectoryDAO}
-import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, UserStatus, UserStatusDetails}
+import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, UserStatus, UserStatusDetails, UserStatusInfo, UserStatusDiagnostics}
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.mockito.ArgumentMatchers._
 import org.mockito.Mockito._
@@ -97,6 +97,32 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
 
     val statusNoEnabled = service.getUserStatus(defaultUserId, true).futureValue
     statusNoEnabled shouldBe Some(UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map.empty))
+  }
+
+  it should "get user status info" in {
+    // user doesn't exist yet
+    service.getUserStatus(defaultUserId).futureValue shouldBe None
+
+    // create a user
+    val newUser = service.createUser(defaultUser).futureValue
+    newUser shouldBe UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
+
+    // get user status info (id, email, ldap)
+    val info = service.getUserStatusInfo(defaultUserId).futureValue
+    info shouldBe Some(UserStatusInfo(UserStatusDetails(defaultUserId, defaultUserEmail), true))
+  }
+
+  it should "get user status diagnostics" in {
+    // user doesn't exist yet
+    service.getUserStatus(defaultUserId).futureValue shouldBe None
+
+    // create a user
+    val newUser = service.createUser(defaultUser).futureValue
+    newUser shouldBe UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
+
+    // get user status diagnostics (ldap, usersGroups, googleGroups
+    val diagnostics = service.getUserStatusDiagnostics(defaultUserId).futureValue
+    diagnostics shouldBe Some(UserStatusDiagnostics(true, true, true))
   }
 
   it should "enable/disable user" in {
