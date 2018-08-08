@@ -662,7 +662,7 @@ paths:
         - Google
 
     get:
-      summary: Gets the synchronization state (last synchronized date) for the group.
+      summary: Gets the synchronization state (last synchronized date and email) for the group.
       responses:
         200:
           description: Success
@@ -684,7 +684,7 @@ paths:
           required: true
           type: string
         - in: path
-          description: Name of policy to synchronize
+          description: Name of policy to get synchronization state for
           name: policyName
           required: true
           type: string
@@ -1350,8 +1350,11 @@ definitions:
     description: status of group synchronization
     required:
       - lastSyncDate
+      - email
     properties:
       lastSyncDate:
+        type: string
+      email:
         type: string
 
   SystemStatus:

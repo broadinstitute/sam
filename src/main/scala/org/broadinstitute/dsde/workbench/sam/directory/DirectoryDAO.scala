@@ -30,6 +30,7 @@ trait DirectoryDAO {
   def isGroupMember(groupId: WorkbenchGroupIdentity, member: WorkbenchSubject): Future[Boolean]
   def updateSynchronizedDate(groupId: WorkbenchGroupIdentity): Future[Unit]
   def getSynchronizedDate(groupId: WorkbenchGroupIdentity): Future[Option[Date]]
+  def getSynchronizedEmail(groupId: WorkbenchGroupIdentity): Future[Option[WorkbenchEmail]]
 
   def loadSubjectFromEmail(email: WorkbenchEmail): Future[Option[WorkbenchSubject]]
   def loadSubjectEmail(subject: WorkbenchSubject): Future[Option[WorkbenchEmail]]
