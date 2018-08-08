@@ -2,8 +2,6 @@ package org.broadinstitute.dsde.workbench.sam
 
 import java.io.File
 import java.net.URI
-import javax.net.SocketFactory
-import javax.net.ssl.SSLContext
 
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
@@ -11,7 +9,8 @@ import akka.stream.ActorMaterializer
 import com.typesafe.config.ConfigFactory
 import com.typesafe.scalalogging.LazyLogging
 import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
-import com.unboundid.util.ssl.{SSLUtil, TrustStoreTrustManager}
+import javax.net.SocketFactory
+import javax.net.ssl.SSLContext
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
 import org.broadinstitute.dsde.workbench.google.GoogleCredentialModes.Pem

@@ -1,9 +1,8 @@
 package org.broadinstitute.dsde.workbench.sam.schema
 
+import com.typesafe.scalalogging.LazyLogging
 import javax.naming.directory._
 import javax.naming.{NameAlreadyBoundException, NameNotFoundException}
-
-import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model.WorkbenchException
 import org.broadinstitute.dsde.workbench.sam.config.{DirectoryConfig, SchemaLockConfig}
 import org.broadinstitute.dsde.workbench.sam.directory.DirectorySubjectNameSupport
@@ -12,8 +11,7 @@ import org.broadinstitute.dsde.workbench.sam.schema.SchemaStatus._
 import org.broadinstitute.dsde.workbench.sam.util.{BaseDirContext, JndiSupport}
 
 import scala.collection.JavaConverters._
-import scala.concurrent.duration.Duration
-import scala.concurrent.{Await, ExecutionContext, Future}
+import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success, Try}
 
 /**
