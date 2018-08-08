@@ -1083,6 +1083,54 @@ paths:
       tags:
         - Users
 
+  /register/user/v2/self:
+    post:
+      summary: create current user in the system using login credentials
+      responses:
+        201:
+          description: 'user successfully created'
+          schema:
+            $ref: '#/definitions/UserStatus'
+        409:
+          description: user already exists
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      operationId: createUserV2
+      tags:
+        - Users
+
+  /register/user/v2/self/info:
+    get:
+      summary: gets the registration status info of the logged in user
+      responses:
+        200:
+          description: 'user exists'
+          schema:
+            $ref: '#/definitions/UserStatusInfo'
+        404:
+          description: user not found
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      operationId: getUserStatusInfo
+      tags:
+      - Users
+
+  /register/user/v2/self/diagnostics:
+    get:
+      summary: gets the various enabled statuses of the logged in user
+      responses:
+        200:
+          description: 'user exists'
+          schema:
+            $ref: '#/definitions/UserStatusDiagnostics'
+        404:
+          description: user not found
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      operationId: getUserStatusDiagnostics
+      tags:
+      - Users
+
   /status:
     get:
       summary: gets system status
@@ -1392,3 +1440,32 @@ definitions:
       enabled:
         $ref: '#/definitions/Enabled'
         description: the status of the user's account
+
+  UserStatusInfo:
+    description: ''
+    required:
+      - userInfo
+      - enabled
+    properties:
+      userInfo:
+        $ref: '#/definitions/UserInfo'
+      enabled:
+        type: Boolean
+        description: true if the user is enabled in ldap
+
+  UserStatusDiagnostics:
+    description: ''
+    required:
+      - enabled
+      - inAllUsersGroup
+      - inGoogleProxyGroup
+    properties:
+      enabled:
+        type: Boolean
+        description: true if the user is enabled in ldap
+      inAllUsersGroup:
+        type: Boolean
+        description: true if the user is in the all users group
+      inGoogleProxyGroup:
+        type: Boolean
+        description: true if the user is in their proxy group
