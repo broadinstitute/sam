@@ -62,7 +62,7 @@ class UserRoutesV2Spec extends FlatSpec with Matchers with ScalatestRouteTest wi
 
     Get("/register/user/v2/self/info") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
-      responseAs[UserStatusInfo] shouldEqual UserStatusInfo(UserStatusDetails(defaultUserId, defaultUserEmail), true)
+      responseAs[UserStatusInfo] shouldEqual UserStatusInfo(defaultUserId.value, defaultUserEmail.value, true)
     }
   }
 
@@ -90,7 +90,7 @@ class UserRoutesV2Spec extends FlatSpec with Matchers with ScalatestRouteTest wi
 
     Get("/register/user/v2/self/info") ~> SARoutes.route ~> check {
       status shouldEqual StatusCodes.OK
-      responseAs[UserStatusInfo] shouldEqual UserStatusInfo(UserStatusDetails(defaultUserId, defaultUserEmail), true)
+      responseAs[UserStatusInfo] shouldEqual UserStatusInfo(defaultUserId.value, defaultUserEmail.value, true)
     }
   }
 }

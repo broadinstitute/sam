@@ -1444,13 +1444,18 @@ definitions:
   UserStatusInfo:
     description: ''
     required:
-      - userInfo
+      - userSubjectId
+      - userEmail
       - enabled
     properties:
-      userInfo:
-        $ref: '#/definitions/UserInfo'
+      userSubjectId:
+        type: string
+        description: user id
+      userEmail:
+        type: string
+        description: user email
       enabled:
-        type: Boolean
+        type: boolean
         description: true if the user is enabled in ldap
 
   UserStatusDiagnostics:
@@ -1461,11 +1466,11 @@ definitions:
       - inGoogleProxyGroup
     properties:
       enabled:
-        type: Boolean
+        type: boolean
         description: true if the user is enabled in ldap
       inAllUsersGroup:
-        type: Boolean
+        type: boolean
         description: true if the user is in the all users group
       inGoogleProxyGroup:
-        type: Boolean
+        type: boolean
         description: true if the user is in their proxy group

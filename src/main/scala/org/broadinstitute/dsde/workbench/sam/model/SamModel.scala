@@ -27,7 +27,7 @@ object SamJsonSupport {
 
   implicit val UserStatusFormat = jsonFormat2(UserStatus)
 
-  implicit val UserStatusInfoFormat = jsonFormat2(UserStatusInfo)
+  implicit val UserStatusInfoFormat = jsonFormat3(UserStatusInfo)
 
   implicit val userStatusDiagnosticsFormat = jsonFormat3(UserStatusDiagnostics)
 
@@ -64,7 +64,7 @@ object SamResourceActions {
 
 case class UserStatusDetails(userSubjectId: WorkbenchUserId, userEmail: WorkbenchEmail) //for backwards compatibility to old API
 case class UserStatus(userInfo: UserStatusDetails, enabled: Map[String, Boolean])
-case class UserStatusInfo(userInfo: UserStatusDetails, enabled: Boolean)
+case class UserStatusInfo(userSubjectId: String, userEmail: String, enabled: Boolean)
 case class UserStatusDiagnostics(enabled: Boolean, inAllUsersGroup: Boolean, inGoogleProxyGroup: Boolean)
 
 case class ResourceActionPattern(value: String, description: String, authDomainConstrainable: Boolean) {

@@ -109,7 +109,7 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
 
     // get user status info (id, email, ldap)
     val info = service.getUserStatusInfo(defaultUserId).futureValue
-    info shouldBe Some(UserStatusInfo(UserStatusDetails(defaultUserId, defaultUserEmail), true))
+    info shouldBe Some(UserStatusInfo(defaultUserId.value, defaultUserEmail.value, true))
   }
 
   it should "get user status diagnostics" in {

@@ -50,7 +50,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
   def getUserStatusInfo(userId: WorkbenchUserId): Future[Option[UserStatusInfo]] = {
     directoryDAO.loadUser(userId).flatMap {
       case Some(user) => directoryDAO.isEnabled(user.id).flatMap { ldapStatus =>
-        Future.successful(Option(UserStatusInfo(UserStatusDetails(user.id, user.email), ldapStatus))) }
+        Future.successful(Option(UserStatusInfo(user.id.value, user.email.value, ldapStatus))) }
       case None => Future.successful(None)
     }
   }
