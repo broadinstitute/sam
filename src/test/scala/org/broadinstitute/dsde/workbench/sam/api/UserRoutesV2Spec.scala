@@ -51,6 +51,10 @@ class UserRoutesV2Spec extends FlatSpec with Matchers with ScalatestRouteTest wi
   }
 
   "GET /register/user/v2/self/info" should "get the status of an enabled user" in withDefaultRoutes { samRoutes =>
+    Get("/register/user/v2/self/info") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
+    }
+
     Post("/register/user/v2/self") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
       responseAs[UserStatus] shouldEqual UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
@@ -63,6 +67,10 @@ class UserRoutesV2Spec extends FlatSpec with Matchers with ScalatestRouteTest wi
   }
 
   "GET /register/user/v2/self/diagnostics" should "get the diagnostic info for an enabled user" in withDefaultRoutes { samRoutes =>
+    Get("/register/user/v2/self/diagnostics") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
+    }
+
     Post("/register/user/v2/self") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
       responseAs[UserStatus] shouldEqual UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))

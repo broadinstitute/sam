@@ -64,7 +64,7 @@ trait UserRoutes extends UserInfoDirectives {
             path("diagnostics") {
               get {
                 complete {
-                  userService.getUserStatusDiagnostics(userInfo.userId). map { statusOption =>
+                  userService.getUserStatusDiagnostics(userInfo.userId).map { statusOption =>
                     statusOption.map { status =>
                       StatusCodes.OK -> Option(status)
                     }.getOrElse(StatusCodes.NotFound -> None)

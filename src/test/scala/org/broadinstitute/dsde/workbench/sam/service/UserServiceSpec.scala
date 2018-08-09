@@ -101,7 +101,7 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
 
   it should "get user status info" in {
     // user doesn't exist yet
-    service.getUserStatus(defaultUserId).futureValue shouldBe None
+    service.getUserStatusInfo(defaultUserId).futureValue shouldBe None
 
     // create a user
     val newUser = service.createUser(defaultUser).futureValue
@@ -114,7 +114,7 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
 
   it should "get user status diagnostics" in {
     // user doesn't exist yet
-    service.getUserStatus(defaultUserId).futureValue shouldBe None
+    service.getUserStatusDiagnostics(defaultUserId).futureValue shouldBe None
 
     // create a user
     val newUser = service.createUser(defaultUser).futureValue
@@ -126,6 +126,10 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
   }
 
   it should "enable/disable user" in {
+    // user doesn't exist yet
+    service.enableUser(defaultUserId, userInfo).futureValue shouldBe None
+    service.disableUser(defaultUserId, userInfo).futureValue shouldBe None
+
     // create a user
     val newUser = service.createUser(defaultUser).futureValue
     newUser shouldBe UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
