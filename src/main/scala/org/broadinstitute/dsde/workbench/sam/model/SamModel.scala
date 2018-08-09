@@ -29,7 +29,7 @@ object SamJsonSupport {
 
   implicit val UserStatusInfoFormat = jsonFormat3(UserStatusInfo)
 
-  implicit val userStatusDiagnosticsFormat = jsonFormat3(UserStatusDiagnostics)
+  implicit val UserStatusDiagnosticsFormat = jsonFormat3(UserStatusDiagnostics)
 
   implicit val AccessPolicyNameFormat = ValueObjectFormat(AccessPolicyName)
 
