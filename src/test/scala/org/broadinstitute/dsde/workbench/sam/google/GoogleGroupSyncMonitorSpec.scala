@@ -80,7 +80,6 @@ class GoogleGroupSyncMonitorSpec(_system: ActorSystem) extends TestKit(_system) 
       assert(runAndWait(mockGooglePubSubDAO.getTopic(topicName)).isDefined)
     }
 
-    import SamJsonSupport.ResourceAndPolicyNameFormat
     import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport.WorkbenchGroupNameFormat
     mockGooglePubSubDAO.publishMessages(topicName, Seq(groupToSyncId.toJson.compactPrint))
 

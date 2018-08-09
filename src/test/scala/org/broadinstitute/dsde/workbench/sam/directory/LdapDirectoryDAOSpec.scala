@@ -1,8 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.directory
 
-import java.net.{URI, URL}
+import java.net.URI
 import java.util.UUID
-import javax.naming.NameNotFoundException
 
 import akka.http.scaladsl.model.StatusCodes
 import com.typesafe.config.ConfigFactory

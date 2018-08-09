@@ -1,37 +1,31 @@
 package org.broadinstitute.dsde.workbench.sam.google
 
-import java.io.ByteArrayInputStream
-
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
-import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import akka.http.scaladsl.testkit.ScalatestRouteTest
-import com.google.api.services.storage.model.StorageObject
 import com.typesafe.config.ConfigFactory
-import org.broadinstitute.dsde.workbench.google.mock.{MockGoogleDirectoryDAO, MockGoogleIamDAO, MockGooglePubSubDAO, MockGoogleStorageDAO}
-import org.broadinstitute.dsde.workbench.model.google._
-import org.broadinstitute.dsde.workbench.sam.google.GoogleModelJsonSupport._
-import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
-import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.api.TestSamRoutes
-import org.broadinstitute.dsde.workbench.sam.config.{GoogleServicesConfig, PetServiceAccountConfig}
-import org.broadinstitute.dsde.workbench.sam.directory.MockDirectoryDAO
-import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.service._
-import org.scalatest.{FlatSpec, Matchers}
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
-import org.broadinstitute.dsde.workbench.google.{GoogleIamDAO, GoogleStorageDAO}
+import org.broadinstitute.dsde.workbench.google.GoogleIamDAO
+import org.broadinstitute.dsde.workbench.google.mock.{MockGoogleDirectoryDAO, MockGoogleIamDAO, MockGooglePubSubDAO, MockGoogleStorageDAO}
+import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
+import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
-import org.broadinstitute.dsde.workbench.sam.config._
+import org.broadinstitute.dsde.workbench.sam.api.TestSamRoutes
+import org.broadinstitute.dsde.workbench.sam.config.{GoogleServicesConfig, PetServiceAccountConfig, _}
+import org.broadinstitute.dsde.workbench.sam.directory.MockDirectoryDAO
+import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
+import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.MockAccessPolicyDAO
-import org.scalatest.mockito.MockitoSugar
-import org.mockito.Mockito._
+import org.broadinstitute.dsde.workbench.sam.service._
 import org.mockito.ArgumentMatchers._
+import org.mockito.Mockito._
+import org.scalatest.mockito.MockitoSugar
+import org.scalatest.{FlatSpec, Matchers}
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.Future
 
 /**
   * Unit tests of GoogleExtensionRoutes. Can use real Google services. Must mock everything else.

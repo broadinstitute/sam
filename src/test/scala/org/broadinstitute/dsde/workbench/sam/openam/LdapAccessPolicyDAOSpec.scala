@@ -5,14 +5,14 @@ import java.util.UUID
 
 import com.typesafe.config.ConfigFactory
 import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
-import org.broadinstitute.dsde.workbench.sam.model._
-import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FlatSpec, Matchers}
 import net.ceedubs.ficus.Ficus._
-import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchGroup, WorkbenchGroupName, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchGroupName, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.config.{DirectoryConfig, SchemaLockConfig}
 import org.broadinstitute.dsde.workbench.sam.directory._
+import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FlatSpec, Matchers}
 
 import scala.concurrent.ExecutionContext.Implicits.global
 

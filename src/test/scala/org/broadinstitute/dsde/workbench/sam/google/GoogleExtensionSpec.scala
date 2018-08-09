@@ -9,32 +9,31 @@ import akka.http.scaladsl.model.StatusCodes
 import akka.testkit.TestKit
 import com.typesafe.config.ConfigFactory
 import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
+import net.ceedubs.ficus.Ficus._
+import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
 import org.broadinstitute.dsde.workbench.google.GoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.google.mock.{MockGoogleDirectoryDAO, MockGoogleIamDAO, MockGooglePubSubDAO, MockGoogleStorageDAO}
+import org.broadinstitute.dsde.workbench.model.google.GoogleProject
 import org.broadinstitute.dsde.workbench.model.{WorkbenchExceptionWithErrorReport, _}
-import org.broadinstitute.dsde.workbench.sam.config.{DirectoryConfig, GoogleServicesConfig, PetServiceAccountConfig}
-import org.broadinstitute.dsde.workbench.sam.{TestSupport, _}
+import org.broadinstitute.dsde.workbench.sam.config.{DirectoryConfig, GoogleServicesConfig, PetServiceAccountConfig, _}
 import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryDAO, LdapDirectoryDAO, MockDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, MockAccessPolicyDAO}
+import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.broadinstitute.dsde.workbench.sam.service._
-import org.mockito.Mockito._
+import org.broadinstitute.dsde.workbench.sam.{TestSupport, _}
+import org.mockito.ArgumentMatcher
 import org.mockito.ArgumentMatchers._
+import org.mockito.Mockito._
+import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.mockito.MockitoSugar
 import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
-import org.scalatest.concurrent.ScalaFutures
 
 import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.{Await, Future}
+import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.language.postfixOps
 import scala.util.{Success, Try}
-import net.ceedubs.ficus.Ficus._
-import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
-import org.broadinstitute.dsde.workbench.sam.config._
-import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccountKeyId, ServiceAccountName}
-import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
-import org.mockito.ArgumentMatcher
 
 class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with FlatSpecLike with Matchers with TestSupport with MockitoSugar with ScalaFutures with BeforeAndAfterAll {
   def this() = this(ActorSystem("GoogleGroupSyncMonitorSpec"))

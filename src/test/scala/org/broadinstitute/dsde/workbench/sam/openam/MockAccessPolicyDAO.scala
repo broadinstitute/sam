@@ -2,13 +2,12 @@ package org.broadinstitute.dsde.workbench.sam.openam
 import akka.http.scaladsl.model.StatusCodes
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam._
-import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model._
 
 import scala.collection.concurrent.TrieMap
 import scala.collection.mutable
-import scala.concurrent.Future
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
 
 /**
   * Created by dvoet on 7/17/17.

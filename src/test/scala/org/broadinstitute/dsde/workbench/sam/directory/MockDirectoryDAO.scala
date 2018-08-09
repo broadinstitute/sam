@@ -148,9 +148,7 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     listSubjectsGroups(groupName, Set.empty).map(_.id)
   }
 
-  override def enableIdentity(subject: WorkbenchSubject): Future[Unit] = Future {
-    enabledUsers += (subject -> ())
-  }
+  override def enableIdentity(subject: WorkbenchSubject): Future[Unit] = Future.successful(enabledUsers += ((subject, ())))
 
   override def disableIdentity(subject: WorkbenchSubject): Future[Unit] = Future {
     enabledUsers -= subject
@@ -225,7 +223,7 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     userIds match {
       case Seq() => Future.successful(None)
       case Seq(userId) => loadUser(userId)
-      case _ => Future.failed(throw new WorkbenchException(s"id $petSAId refers to too many subjects: $userIds"))
+      case _ => Future.failed(new WorkbenchException(s"id $petSAId refers to too many subjects: $userIds"))
     }
   }
 
