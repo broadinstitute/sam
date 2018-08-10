@@ -1,18 +1,14 @@
 package org.broadinstitute.dsde.workbench.sam.util
 
-import java.text.SimpleDateFormat
 import java.util
-import java.util.Date
+
 import javax.naming._
 import javax.naming.directory._
 
-import org.broadinstitute.dsde.workbench.model.WorkbenchException
-
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Try
-import scala.util.matching.Regex
 
-@deprecated(message = "use LdapSupport instead")
+@deprecated(message = "use LdapSupport instead", since = "unknown")
 trait JndiSupport {
   private val batchSize = 1000
 
@@ -59,7 +55,6 @@ trait JndiSupport {
     t.get
   }
 
-  import scala.language.implicitConversions
   /**
     * Use this implicit conversion class and following call to extractResultsAndClose
     * instead of JavaConverters and call to asScala

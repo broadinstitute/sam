@@ -1,21 +1,19 @@
 package org.broadinstitute.dsde.workbench.sam.service
 
 import akka.actor.ActorSystem
-import com.google.api.services.admin.directory.model.Group
+import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException, WorkbenchGroupName}
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryDAO, MockDirectoryDAO}
-import org.scalatest.{BeforeAndAfterAll, FlatSpec, FreeSpec, Matchers}
-import org.broadinstitute.dsde.workbench.google.mock.MockGoogleDirectoryDAO
-import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException, WorkbenchGroup, WorkbenchGroupName}
 import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
-import org.broadinstitute.dsde.workbench.util.health.{StatusCheckResponse, SubsystemStatus, Subsystems}
 import org.broadinstitute.dsde.workbench.util.health.Subsystems.{GoogleGroups, OpenDJ}
+import org.broadinstitute.dsde.workbench.util.health.{StatusCheckResponse, SubsystemStatus, Subsystems}
+import org.scalatest.concurrent.Eventually
+import org.scalatest.{BeforeAndAfterAll, FreeSpec, Matchers}
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.language.postfixOps
-import org.scalatest.concurrent.Eventually
 
 class StatusServiceSpec extends FreeSpec with Matchers with BeforeAndAfterAll with TestSupport with Eventually {
   implicit val system = ActorSystem("StatusServiceSpec")

@@ -5,7 +5,7 @@ import java.util.UUID
 
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import com.typesafe.config.ConfigFactory
-import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool, LDAPException}
+import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
@@ -65,7 +65,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     val policies = runAndWait(policyDAO.listAccessPolicies(resource))
     policies.map(_.id.accessPolicyName.value) shouldEqual expectedPolicies.map(_.value)
     expectedPolicies.foreach { policyName =>
-      runAndWait(policyDAO.loadPolicy(ResourceAndPolicyName(resource, policyName))) shouldBe a[Some[AccessPolicy]]
+      runAndWait(policyDAO.loadPolicy(ResourceAndPolicyName(resource, policyName))) shouldBe a[Some[AccessPolicy]] //TODO: fix "Type parameter should not be specified because it will be erased at runtime, please use _ instead.  Note that in future version of ScalaTest this will give a compiler error."
     }
   }
 

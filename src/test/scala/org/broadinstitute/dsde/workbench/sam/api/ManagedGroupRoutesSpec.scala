@@ -32,7 +32,7 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
   private val groupId = "foo"
   private val defaultNewUser = UserInfo(OAuth2BearerToken("newToken"), WorkbenchUserId("NewGuy"), WorkbenchEmail("newGuy@organization.org"), 0)
 
-  def assertGroupDoesNotExist(samRoutes: TestSamRoutes, groupId: String = groupId) {
+  def assertGroupDoesNotExist(samRoutes: TestSamRoutes, groupId: String = groupId): Unit = {
     Get(s"/api/group/$groupId") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
