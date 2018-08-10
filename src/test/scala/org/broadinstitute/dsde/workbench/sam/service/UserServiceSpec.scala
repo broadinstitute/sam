@@ -12,7 +12,7 @@ import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.config.{DirectoryConfig, PetServiceAccountConfig, SchemaLockConfig}
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
 import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryDAO, LdapDirectoryDAO}
-import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, UserStatus, UserStatusDetails}
+import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, UserStatus, UserStatusDetails, UserStatusInfo, UserStatusDiagnostics}
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.mockito.ArgumentMatchers._
 import org.mockito.Mockito._
@@ -99,7 +99,37 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
     statusNoEnabled shouldBe Some(UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map.empty))
   }
 
+  it should "get user status info" in {
+    // user doesn't exist yet
+    service.getUserStatusInfo(defaultUserId).futureValue shouldBe None
+
+    // create a user
+    val newUser = service.createUser(defaultUser).futureValue
+    newUser shouldBe UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
+
+    // get user status info (id, email, ldap)
+    val info = service.getUserStatusInfo(defaultUserId).futureValue
+    info shouldBe Some(UserStatusInfo(defaultUserId.value, defaultUserEmail.value, true))
+  }
+
+  it should "get user status diagnostics" in {
+    // user doesn't exist yet
+    service.getUserStatusDiagnostics(defaultUserId).futureValue shouldBe None
+
+    // create a user
+    val newUser = service.createUser(defaultUser).futureValue
+    newUser shouldBe UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
+
+    // get user status diagnostics (ldap, usersGroups, googleGroups
+    val diagnostics = service.getUserStatusDiagnostics(defaultUserId).futureValue
+    diagnostics shouldBe Some(UserStatusDiagnostics(true, true, true))
+  }
+
   it should "enable/disable user" in {
+    // user doesn't exist yet
+    service.enableUser(defaultUserId, userInfo).futureValue shouldBe None
+    service.disableUser(defaultUserId, userInfo).futureValue shouldBe None
+
     // create a user
     val newUser = service.createUser(defaultUser).futureValue
     newUser shouldBe UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))

@@ -47,6 +47,33 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
     }
   }
 
+  def getUserStatusInfo(userId: WorkbenchUserId): Future[Option[UserStatusInfo]] = {
+    directoryDAO.loadUser(userId).flatMap {
+      case Some(user) => directoryDAO.isEnabled(user.id).flatMap { ldapStatus =>
+        Future.successful(Option(UserStatusInfo(user.id.value, user.email.value, ldapStatus))) }
+      case None => Future.successful(None)
+    }
+  }
+
+  def getUserStatusDiagnostics(userId: WorkbenchUserId): Future[Option[UserStatusDiagnostics]] = {
+    directoryDAO.loadUser(userId).flatMap {
+      case Some(user) => {
+        // pulled out of for comprehension to allow concurrent execution
+        val ldapStatus = directoryDAO.isEnabled(user.id)
+        val allUsersStatus = cloudExtensions.getOrCreateAllUsersGroup(directoryDAO).flatMap { allUsersGroup =>
+          directoryDAO.isGroupMember(allUsersGroup.id, user.id) recover { case e: NameNotFoundException => false } }
+        val googleStatus = cloudExtensions.getUserStatus(user)
+
+        for {
+          ldap <- ldapStatus
+          allUsers <- allUsersStatus
+          google <- googleStatus
+        } yield Option(UserStatusDiagnostics(ldap, allUsers, google))
+      }
+      case None => Future.successful(None)
+    }
+  }
+
   def getUserStatusFromEmail(email: WorkbenchEmail): Future[Option[UserStatus]] = {
     directoryDAO.loadSubjectFromEmail(email).flatMap {
       // don't attempt to handle groups or service accounts - just users

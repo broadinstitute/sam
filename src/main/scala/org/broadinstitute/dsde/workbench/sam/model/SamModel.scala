@@ -27,6 +27,10 @@ object SamJsonSupport {
 
   implicit val UserStatusFormat = jsonFormat2(UserStatus)
 
+  implicit val UserStatusInfoFormat = jsonFormat3(UserStatusInfo)
+
+  implicit val UserStatusDiagnosticsFormat = jsonFormat3(UserStatusDiagnostics)
+
   implicit val AccessPolicyNameFormat = ValueObjectFormat(AccessPolicyName)
 
   implicit val ResourceIdFormat = ValueObjectFormat(ResourceId)
@@ -60,6 +64,8 @@ object SamResourceActions {
 
 case class UserStatusDetails(userSubjectId: WorkbenchUserId, userEmail: WorkbenchEmail) //for backwards compatibility to old API
 case class UserStatus(userInfo: UserStatusDetails, enabled: Map[String, Boolean])
+case class UserStatusInfo(userSubjectId: String, userEmail: String, enabled: Boolean)
+case class UserStatusDiagnostics(enabled: Boolean, inAllUsersGroup: Boolean, inGoogleProxyGroup: Boolean)
 
 case class ResourceActionPattern(value: String, description: String, authDomainConstrainable: Boolean) {
   def matches(other: ResourceAction) = value.r.pattern.matcher(other.value).matches()
