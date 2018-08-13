@@ -1,4 +1,5 @@
-package org.broadinstitute.dsde.workbench.sam.api
+package org.broadinstitute.dsde.workbench.sam
+package api
 
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
@@ -6,10 +7,10 @@ import akka.http.scaladsl.model.{StatusCode, StatusCodes}
 import akka.http.scaladsl.testkit.ScalatestRouteTest
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.service.ManagedGroupService
+import org.broadinstitute.dsde.workbench.sam.service.UserService.genRandom
 import org.scalatest.{BeforeAndAfter, FlatSpec, Matchers}
 import spray.json.DefaultJsonProtocol._
 
@@ -32,6 +33,7 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
   private val resourceTypes = Map(managedGroupResourceType.name -> managedGroupResourceType)
   private val groupId = "foo"
   private val defaultNewUser = UserInfo(OAuth2BearerToken("newToken"), WorkbenchUserId("NewGuy"), WorkbenchEmail("newGuy@organization.org"), 0)
+  private def defaultGoogleSubjectId: GoogleSubjectId = GoogleSubjectId(genRandom(System.currentTimeMillis()))
 
   def assertGroupDoesNotExist(samRoutes: TestSamRoutes, groupId: String = groupId): Unit = {
     Get(s"/api/group/$groupId") ~> samRoutes.route ~> check {
@@ -60,7 +62,8 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
 
   // Makes an anonymous object for a user acting on the same data as the user specified in samRoutes
   def makeOtherUser(samRoutes: TestSamRoutes, userInfo: UserInfo = defaultNewUser) = new {
-    runAndWait(samRoutes.userService.createUser(WorkbenchUser(userInfo.userId, userInfo.userEmail)))
+    runAndWait(samRoutes.userService.createUser(
+      CreateWorkbenchUser(userInfo.userId, defaultGoogleSubjectId, userInfo.userEmail)))
     val email = userInfo.userEmail
     val routes = new TestSamRoutes(samRoutes.resourceService, samRoutes.userService, samRoutes.statusService, samRoutes.managedGroupService, userInfo, samRoutes.mockDirectoryDao)
   }
@@ -99,7 +102,8 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
     assertCreateGroup(samRoutes)
     assertGetGroup(samRoutes)
 
-    runAndWait(samRoutes.userService.createUser(WorkbenchUser(newGuy.userId, newGuy.userEmail)))
+    runAndWait(samRoutes.userService.createUser(
+      CreateWorkbenchUser(newGuy.userId, defaultGoogleSubjectId, newGuy.userEmail)))
 
     setGroupMembers(samRoutes, Set(newGuyEmail), expectedStatus = StatusCodes.Created)
 

@@ -17,6 +17,7 @@ import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport.Work
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google._
 import org.broadinstitute.dsde.workbench.sam._
+import org.broadinstitute.dsde.workbench.sam.api.CreateWorkbenchUser
 import org.broadinstitute.dsde.workbench.sam.config.{GoogleServicesConfig, PetServiceAccountConfig}
 import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport.ResourceAndPolicyNameFormat
@@ -25,6 +26,7 @@ import org.broadinstitute.dsde.workbench.sam.openam.AccessPolicyDAO
 import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, SamApplication}
 import org.broadinstitute.dsde.workbench.util.health.{HealthMonitor, SubsystemStatus, Subsystems}
 import org.broadinstitute.dsde.workbench.util.{FutureSupport, Retry}
+import org.broadinstitute.dsde.workbench.sam.service.UserService._
 import spray.json._
 
 import scala.collection.JavaConverters._
@@ -40,14 +42,14 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
 
   private val maxGroupEmailLength = 64
 
-  private[google] def toProxyFromUser(user: WorkbenchUser): WorkbenchEmail = {
+  private[google] def toProxyFromUser(userId: WorkbenchUserId): WorkbenchEmail = {
 /* Re-enable this code and remove the temporary code below after fixing rawls for GAWB-2933
     val username = user.email.value.split("@").head
     val emailSuffix = s"_${user.id.value}@${googleServicesConfig.appsDomain}"
     val maxUsernameLength = maxGroupEmailLength - emailSuffix.length
     WorkbenchEmail(username.take(maxUsernameLength) + emailSuffix)
 */
-    WorkbenchEmail(s"${googleServicesConfig.resourceNamePrefix.getOrElse("")}PROXY_${user.id.value}@${googleServicesConfig.appsDomain}")
+    WorkbenchEmail(s"${googleServicesConfig.resourceNamePrefix.getOrElse("")}PROXY_${userId.value}@${googleServicesConfig.appsDomain}")
 /**/
   }
 
@@ -85,9 +87,18 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
     ))
 
 
-    val serviceAccountUserInfo = UserInfo(OAuth2BearerToken(""), WorkbenchUserId(googleServicesConfig.serviceAccountClientId), googleServicesConfig.serviceAccountClientEmail, 0)
+    val ownerGoogleSubjectId = GoogleSubjectId(googleServicesConfig.serviceAccountClientId)
     for {
-      _ <- samApplication.userService.createUser(WorkbenchUser(serviceAccountUserInfo.userId, serviceAccountUserInfo.userEmail)) recover {
+      user <- directoryDAO.loadSubjectFromGoogleSubjectId(ownerGoogleSubjectId)
+
+      subject <- directoryDAO.loadSubjectFromGoogleSubjectId(GoogleSubjectId(googleServicesConfig.serviceAccountClientId)) //dirty temporary code TODO: this call should be removed after https://broadinstitute.atlassian.net/browse/GAWB-3747
+      serviceAccountUserInfo <- subject match{
+        case Some(uid: WorkbenchUserId) => Future.successful(UserInfo(OAuth2BearerToken(""), uid, googleServicesConfig.serviceAccountClientEmail, 0))
+        case Some(_) => Future.failed(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"subjectId in configration ${googleServicesConfig.serviceAccountClientId} is not a valid user")))
+        case None => Future.successful(UserInfo(OAuth2BearerToken(""), genWorkbenchUserId(System.currentTimeMillis()), googleServicesConfig.serviceAccountClientEmail, 0))
+      }
+      _ <- samApplication.userService.createUser(
+        CreateWorkbenchUser(serviceAccountUserInfo.userId, GoogleSubjectId(googleServicesConfig.serviceAccountClientId), serviceAccountUserInfo.userEmail)) recover {
         case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode == Option(StatusCodes.Conflict) =>
       }
 
@@ -96,7 +107,6 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
       _ <- samApplication.resourceService.createResource(extensionResourceType, GoogleExtensions.resourceId, serviceAccountUserInfo) recover {
         case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode == Option(StatusCodes.Conflict) =>
       }
-
       _ <- googleKeyCache.onBoot()
     } yield ()
   }
@@ -121,15 +131,13 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
   }
 
   override def onUserCreate(user: WorkbenchUser): Future[Unit] = {
-    val proxyEmail = toProxyFromUser(user)
+    val proxyEmail = toProxyFromUser(user.id)
     for {
       _ <- googleDirectoryDAO.createGroup(user.email.value, proxyEmail, Option(googleDirectoryDAO.lockedDownGroupSettings)) recover {
         case e:GoogleJsonResponseException if e.getDetails.getCode == StatusCodes.Conflict.intValue => ()
       }
       _ <- googleDirectoryDAO.addMemberToGroup(proxyEmail, WorkbenchEmail(user.email.value))
-
       allUsersGroup <- getOrCreateAllUsersGroup(directoryDAO)
-
       _ <- googleDirectoryDAO.addMemberToGroup(allUsersGroup.email, proxyEmail)
 
 /* Re-enable this code after fixing rawls for GAWB-2933
@@ -217,13 +225,12 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
         // SA does not exist in google, create it and add it to the proxy group
         case None => for {
           sa <- googleIamDAO.createServiceAccount(project, petSaName, petSaDisplayName)
-          _ <- withProxyEmail(user.id) { proxyEmail => googleDirectoryDAO.addMemberToGroup(proxyEmail, sa.email) }
+          r <- withProxyEmail(user.id){proxyEmail => googleDirectoryDAO.addMemberToGroup(proxyEmail, sa.email)}
         } yield sa
 
         // SA already exists in google, use it
         case Some(sa) => Future.successful(sa)
       }
-
       pet <- (maybePet, maybeServiceAccount) match {
         // pet does not exist in ldap, create it and enable the identity
         case (None, _) => for {
@@ -237,7 +244,6 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
         // everything already existed
         case (Some(p), Some(_)) => Future.successful(p)
       }
-      
     } yield pet
 
     // In the case of high concurrency, the above code may find that there is no pet SA and then try to create one, getting
@@ -256,7 +262,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
     for {
       subject <- directoryDAO.loadSubjectFromEmail(userEmail)
       key <- subject match {
-        case Some(userId: WorkbenchUserId) => getPetServiceAccountKey(WorkbenchUser(userId, userEmail), project).map(Option(_))
+        case Some(userId: WorkbenchUserId) => getPetServiceAccountKey(WorkbenchUser(userId, None, userEmail), project).map(Option(_))
         case _ => Future.successful(None)
       }
     } yield key
@@ -475,7 +481,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
 /* Re-enable this code and remove the temporary code below after fixing rawls for GAWB-2933
     directoryDAO.readProxyGroup(userId)
 */
-    Future.successful(Some(toProxyFromUser(WorkbenchUser(userId, null))))
+    Future.successful(Some(toProxyFromUser(userId)))
   }
 
   private def withProxyEmail[T](userId: WorkbenchUserId)(f: WorkbenchEmail => Future[T]): Future[T] = {

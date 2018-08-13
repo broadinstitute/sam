@@ -70,7 +70,7 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
 
   it should "create, read, delete users" in {
     val userId = WorkbenchUserId(UUID.randomUUID().toString)
-    val user = WorkbenchUser(userId, WorkbenchEmail("foo@bar.com"))
+    val user = WorkbenchUser(userId, None, WorkbenchEmail("foo@bar.com"))
 
     assertResult(None) {
       runAndWait(dao.loadUser(user.id))
@@ -93,7 +93,7 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
 
   it should "add and read proxy group email" in {
     val userId = WorkbenchUserId(UUID.randomUUID().toString)
-    val user = WorkbenchUser(userId, WorkbenchEmail("foo@bar.com"))
+    val user = WorkbenchUser(userId, None, WorkbenchEmail("foo@bar.com"))
 
     assertResult(user) {
       runAndWait(dao.createUser(user))
@@ -112,7 +112,7 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
 
   it should "create, read, delete pet service accounts" in {
     val userId = WorkbenchUserId(UUID.randomUUID().toString)
-    val user = WorkbenchUser(userId, WorkbenchEmail("foo@bar.com"))
+    val user = WorkbenchUser(userId, None, WorkbenchEmail("foo@bar.com"))
     val serviceAccountUniqueId = ServiceAccountSubjectId(UUID.randomUUID().toString)
     val serviceAccount = ServiceAccount(serviceAccountUniqueId, WorkbenchEmail("foo@bar.com"), ServiceAccountDisplayName(""))
     val project = GoogleProject("testproject")
@@ -164,7 +164,7 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
 
   it should "list groups" in {
     val userId = WorkbenchUserId(UUID.randomUUID().toString)
-    val user = WorkbenchUser(userId, WorkbenchEmail("foo@bar.com"))
+    val user = WorkbenchUser(userId, None, WorkbenchEmail("foo@bar.com"))
 
     val groupName1 = WorkbenchGroupName(UUID.randomUUID().toString)
     val group1 = BasicWorkbenchGroup(groupName1, Set(userId), WorkbenchEmail("g1@example.com"))
@@ -189,11 +189,11 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
 
   it should "list flattened group users" in {
     val userId1 = WorkbenchUserId(UUID.randomUUID().toString)
-    val user1 = WorkbenchUser(userId1, WorkbenchEmail("foo@bar.com"))
+    val user1 = WorkbenchUser(userId1, None, WorkbenchEmail("foo@bar.com"))
     val userId2 = WorkbenchUserId(UUID.randomUUID().toString)
-    val user2 = WorkbenchUser(userId2, WorkbenchEmail("foo@bar.com"))
+    val user2 = WorkbenchUser(userId2, None, WorkbenchEmail("foo@bar.com"))
     val userId3 = WorkbenchUserId(UUID.randomUUID().toString)
-    val user3 = WorkbenchUser(userId3, WorkbenchEmail("foo@bar.com"))
+    val user3 = WorkbenchUser(userId3, None, WorkbenchEmail("foo@bar.com"))
 
     val groupName1 = WorkbenchGroupName(UUID.randomUUID().toString)
     val group1 = BasicWorkbenchGroup(groupName1, Set(userId1), WorkbenchEmail("g1@example.com"))
@@ -252,7 +252,7 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
 
   it should "handle circular groups" in {
     val userId = WorkbenchUserId(UUID.randomUUID().toString)
-    val user = WorkbenchUser(userId, WorkbenchEmail("foo@bar.com"))
+    val user = WorkbenchUser(userId, None, WorkbenchEmail("foo@bar.com"))
 
     val groupName1 = WorkbenchGroupName(UUID.randomUUID().toString)
     val group1 = BasicWorkbenchGroup(groupName1, Set(userId), WorkbenchEmail("g1@example.com"))
@@ -293,7 +293,7 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
 
   it should "add/remove groups" in {
     val userId = WorkbenchUserId(UUID.randomUUID().toString)
-    val user = WorkbenchUser(userId, WorkbenchEmail("foo@bar.com"))
+    val user = WorkbenchUser(userId, None, WorkbenchEmail("foo@bar.com"))
 
     val groupName1 = WorkbenchGroupName(UUID.randomUUID().toString)
     val group1 = BasicWorkbenchGroup(groupName1, Set.empty, WorkbenchEmail("g1@example.com"))
@@ -340,7 +340,7 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
 
   it should "handle different kinds of groups" in {
     val userId = WorkbenchUserId(UUID.randomUUID().toString)
-    val user = WorkbenchUser(userId, WorkbenchEmail("foo@bar.com"))
+    val user = WorkbenchUser(userId, None, WorkbenchEmail("foo@bar.com"))
 
     val groupName1 = WorkbenchGroupName(UUID.randomUUID().toString)
     val group1 = BasicWorkbenchGroup(groupName1, Set(userId), WorkbenchEmail("g1@example.com"))
@@ -369,7 +369,7 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
 
   it should "be case insensitive when checking for group membership" in {
     val userId = WorkbenchUserId(UUID.randomUUID().toString)
-    val user = WorkbenchUser(userId, WorkbenchEmail("foo@bar.com"))
+    val user = WorkbenchUser(userId, None, WorkbenchEmail("foo@bar.com"))
 
     val groupName1 = WorkbenchGroupName(UUID.randomUUID().toString)
     val group1 = BasicWorkbenchGroup(groupName1, Set(userId), WorkbenchEmail("g1@example.com"))
@@ -382,7 +382,7 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
 
   it should "get pet for user" in {
     val userId = WorkbenchUserId(UUID.randomUUID().toString)
-    val user = WorkbenchUser(userId, WorkbenchEmail("foo@bar.com"))
+    val user = WorkbenchUser(userId, None, WorkbenchEmail("foo@bar.com"))
 
     runAndWait(dao.createUser(user))
 
@@ -447,7 +447,7 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
 
   "JndiDirectoryDao loadSubjectEmail" should "fail if the user has not been created" in {
     val userId = WorkbenchUserId(UUID.randomUUID().toString)
-    val user = WorkbenchUser(userId, WorkbenchEmail("foo@bar.com"))
+    val user = WorkbenchUser(userId, None, WorkbenchEmail("foo@bar.com"))
 
     assertResult(None) {
       runAndWait(dao.loadUser(user.id))
@@ -458,7 +458,7 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
 
   it should "succeed if the user has been created" in {
     val userId = WorkbenchUserId(UUID.randomUUID().toString)
-    val user = WorkbenchUser(userId, WorkbenchEmail("foo@bar.com"))
+    val user = WorkbenchUser(userId, None, WorkbenchEmail("foo@bar.com"))
 
     assertResult(None) {
       runAndWait(dao.loadUser(user.id))

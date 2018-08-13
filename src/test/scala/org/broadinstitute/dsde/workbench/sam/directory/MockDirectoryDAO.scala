@@ -3,8 +3,9 @@ package org.broadinstitute.dsde.workbench.sam.directory
 import java.util.Date
 
 import akka.http.scaladsl.model.StatusCodes
+import cats.implicits._
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.model.google.ServiceAccountSubjectId
+import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccountSubjectId}
 
 import scala.collection.concurrent.TrieMap
 import scala.collection.mutable
@@ -24,6 +25,7 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
   private val enabledUsers: mutable.Map[WorkbenchSubject, Unit] = new TrieMap()
 
   private val usersWithEmails: mutable.Map[WorkbenchEmail, WorkbenchUserId] = new TrieMap()
+  private val usersWithGoogleSubjectIds: mutable.Map[GoogleSubjectId, WorkbenchSubject] = new TrieMap()
   private val groupsWithEmails: mutable.Map[WorkbenchEmail, WorkbenchGroupName] = new TrieMap()
   private val petServiceAccountsByUser: mutable.Map[PetServiceAccountId, PetServiceAccount] = new TrieMap()
   private val petsWithEmails: mutable.Map[WorkbenchEmail, PetServiceAccountId] = new TrieMap()
@@ -92,6 +94,8 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     }
     users += user.id -> user
     usersWithEmails += user.email -> user.id
+    user.googleSubjectId.map(gid => usersWithGoogleSubjectIds += gid -> user.id)
+
     user
   }
 
@@ -174,6 +178,7 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     }
     petServiceAccountsByUser += petServiceAccount.id -> petServiceAccount
     petsWithEmails += petServiceAccount.serviceAccount.email -> petServiceAccount.id
+    usersWithGoogleSubjectIds += GoogleSubjectId(petServiceAccount.serviceAccount.subjectId.value) -> petServiceAccount.id
     petServiceAccount
   }
 
@@ -249,7 +254,7 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
   private def addUserAttribute(userId: WorkbenchUserId, attrId: String, value: Any): Future[Unit] = {
     userAttributes.get(userId) match {
       case Some(attributes: Map[String, Any]) => attributes += attrId -> value
-      case None => userAttributes += userId -> (new TrieMap() += attrId -> value)
+      case _ => userAttributes += userId -> (new TrieMap() += attrId -> value)
     }
     Future.successful(())
   }
@@ -260,5 +265,18 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
       value <- attributes.get(attrId)
     } yield value.asInstanceOf[T]
     Future.successful(value)
+  }
+
+  override def loadSubjectFromGoogleSubjectId(googleSubjectId: GoogleSubjectId): Future[Option[WorkbenchSubject]] = {
+    val res = for{
+      uid <- usersWithGoogleSubjectIds.get(googleSubjectId)
+    } yield uid
+   res.traverse(Future.successful)
+  }
+
+  override def setGoogleSubjectId(userId: WorkbenchUserId, googleSubjectId: GoogleSubjectId): Future[Unit] = {
+    users.get(userId).fold[Future[Unit]](Future.successful(new Exception(s"user $userId not found")))(
+      u => Future.successful(users + (userId -> u.copy(googleSubjectId = Some(googleSubjectId))))
+    )
   }
 }

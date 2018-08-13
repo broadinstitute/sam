@@ -1,4 +1,5 @@
-package org.broadinstitute.dsde.workbench.sam.service
+package org.broadinstitute.dsde.workbench.sam
+package service
 
 import java.net.URI
 import java.util.UUID
@@ -80,7 +81,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
   before {
     runAndWait(schemaDao.clearDatabase())
     runAndWait(schemaDao.createOrgUnits())
-    runAndWait(dirDAO.createUser(WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)))
+    runAndWait(dirDAO.createUser(WorkbenchUser(dummyUserInfo.userId, Some(TestSupport.genGoogleSubjectId()), dummyUserInfo.userEmail)))
   }
 
   def toEmail(resourceType: String, resourceName: String, policyName: String) = {
@@ -170,7 +171,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
   it should "list the user's actions for a resource with nested groups" in {
     val resourceName1 = ResourceId("resource1")
 
-    val user = runAndWait(dirDAO.createUser(WorkbenchUser(WorkbenchUserId("asdfawefawea"), WorkbenchEmail("asdfawefawea@foo.bar"))))
+    val user = runAndWait(dirDAO.createUser(WorkbenchUser(WorkbenchUserId("asdfawefawea"), None, WorkbenchEmail("asdfawefawea@foo.bar"))))
     val group = BasicWorkbenchGroup(WorkbenchGroupName("g"), Set(user.id), WorkbenchEmail("foo@bar.com"))
     runAndWait(dirDAO.createGroup(group))
 
@@ -293,7 +294,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     runAndWait(constrainableService.createResourceType(constrainableResourceType))
 
     val bender = UserInfo(OAuth2BearerToken("token"), WorkbenchUserId("Bender"), WorkbenchEmail("bender@planex.com"), 0)
-    runAndWait(dirDAO.createUser(WorkbenchUser(bender.userId, bender.userEmail)))
+    runAndWait(dirDAO.createUser(WorkbenchUser(bender.userId, None, bender.userEmail)))
 
     runAndWait(constrainableService.createResourceType(managedGroupResourceType))
     val managedGroupName1 = "firstGroup"
@@ -571,7 +572,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     val policyName = AccessPolicyName(defaultResourceType.ownerRoleName.value)
     val otherUserInfo = UserInfo(OAuth2BearerToken("token"), WorkbenchUserId("otheruserid"), WorkbenchEmail("otheruser@company.com"), 0)
 
-    runAndWait(dirDAO.createUser(WorkbenchUser(otherUserInfo.userId, otherUserInfo.userEmail)))
+    runAndWait(dirDAO.createUser(WorkbenchUser(otherUserInfo.userId, None, otherUserInfo.userEmail)))
 
     runAndWait(service.createResourceType(defaultResourceType))
     runAndWait(service.createResource(defaultResourceType, resource.resourceId, dummyUserInfo))

@@ -30,8 +30,8 @@ class TestSamRoutes(resourceService: ResourceService, userService: UserService, 
 }
 
 object TestSamRoutes {
-
   val defaultUserInfo = UserInfo(OAuth2BearerToken("accessToken"), WorkbenchUserId("user1"), WorkbenchEmail("user1@example.com"), 0)
+  val defaultGoogleSubjectId = GoogleSubjectId("user1")
 
   def apply(resourceTypes: Map[ResourceTypeName, ResourceType], userInfo: UserInfo = defaultUserInfo)(implicit system: ActorSystem, materializer: Materializer, executionContext: ExecutionContext) = {
     // need to make sure MockDirectoryDAO and MockAccessPolicyDAO share the same groups
@@ -44,7 +44,8 @@ object TestSamRoutes {
     val mockResourceService = new ResourceService(resourceTypes, policyDAO, directoryDAO, NoExtensions, emailDomain)
     val mockUserService = new UserService(directoryDAO, NoExtensions)
     val mockManagedGroupService = new ManagedGroupService(mockResourceService, resourceTypes, policyDAO, directoryDAO, NoExtensions, emailDomain)
-    TestSupport.runAndWait(mockUserService.createUser(WorkbenchUser(userInfo.userId, userInfo.userEmail)))
+    TestSupport.runAndWait(mockUserService.createUser(
+      CreateWorkbenchUser(userInfo.userId, defaultGoogleSubjectId, userInfo.userEmail)))
     val allUsersGroup = TestSupport.runAndWait(NoExtensions.getOrCreateAllUsersGroup(directoryDAO))
     TestSupport.runAndWait(googleDirectoryDAO.createGroup(allUsersGroup.id.toString, allUsersGroup.email))
 

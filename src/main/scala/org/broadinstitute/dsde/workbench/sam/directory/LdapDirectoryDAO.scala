@@ -156,20 +156,21 @@ class LdapDirectoryDAO(protected val ldapConnectionPool: LDAPConnectionPool, pro
     } yield (userEmails ++ groupEmails).toSet
   }
 
-  override def createUser(user: WorkbenchUser): Future[WorkbenchUser] = Future {
-    ldapConnectionPool.add(userDn(user.id),
+  override def createUser(user: WorkbenchUser): Future[WorkbenchUser] = {
+    val attrs = List(
       new Attribute(Attr.email, user.email.value),
       new Attribute(Attr.sn, user.id.value),
       new Attribute(Attr.cn, user.id.value),
       new Attribute(Attr.uid, user.id.value),
-      new Attribute(Attr.googleSubjectId, user.id.value),
       new Attribute("objectclass", Seq("top", "workbenchPerson").asJava)
-    )
-
-    user
-  }.recover {
-    case ldape: LDAPException if ldape.getResultCode == ResultCode.ENTRY_ALREADY_EXISTS =>
-      throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"identity with id ${user.id} already exists"))
+    ) ++ user.googleSubjectId.map(gsid => List(new Attribute(Attr.googleSubjectId, gsid.value))).getOrElse(List.empty)
+    Future {
+      ldapConnectionPool.add(userDn(user.id), attrs: _*)
+      user
+    }.recoverWith {
+      case ldape: LDAPException if ldape.getResultCode == ResultCode.ENTRY_ALREADY_EXISTS =>
+        Future.failed(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"identity with id ${user.id} already exists")))
+    }
   }
 
   override def loadUser(userId: WorkbenchUserId): Future[Option[WorkbenchUser]] = Future {
@@ -186,7 +187,7 @@ class LdapDirectoryDAO(protected val ldapConnectionPool: LDAPConnectionPool, pro
     val uid = getAttribute(results, Attr.uid).getOrElse(throw new WorkbenchException(s"${Attr.uid} attribute missing"))
     val email = getAttribute(results, Attr.email).getOrElse(throw new WorkbenchException(s"${Attr.email} attribute missing"))
 
-    WorkbenchUser(WorkbenchUserId(uid), WorkbenchEmail(email))
+    WorkbenchUser(WorkbenchUserId(uid), getAttribute(results, Attr.googleSubjectId).map(GoogleSubjectId), WorkbenchEmail(email))
   }
 
   override def loadUsers(userIds: Set[WorkbenchUserId]): Future[Seq[WorkbenchUser]] = Future {
@@ -264,17 +265,10 @@ class LdapDirectoryDAO(protected val ldapConnectionPool: LDAPConnectionPool, pro
     result.getOrElse(false)
   }
 
-  override def getUserFromPetServiceAccount(petSA: ServiceAccountSubjectId): Future[Option[WorkbenchUser]] = Future {
-    val matchingUsers = ldapSearchStream(peopleOu, SearchScope.SUBORDINATE_SUBTREE, Filter.createEqualityFilter(Attr.uid, petSA.value)) { entry =>
-      dnToSubject(entry.getDN)
-    }.collect {
-      case pet: PetServiceAccountId => pet.userId
-    }.toSet
-
-    if (matchingUsers.size > 1) {
-      throw new WorkbenchException(s"id $petSA refers to too many subjects: $matchingUsers")
-    } else {
-      matchingUsers.headOption.flatMap(loadUserInternal)
+  override def getUserFromPetServiceAccount(petSA: ServiceAccountSubjectId): Future[Option[WorkbenchUser]] = {
+    loadSubjectFromGoogleSubjectId(GoogleSubjectId(petSA.value)).map{
+      case Some(PetServiceAccountId(userId, _)) => loadUserInternal(userId)
+      case _ => None
     }
   }
 
@@ -346,4 +340,17 @@ class LdapDirectoryDAO(protected val ldapConnectionPool: LDAPConnectionPool, pro
   override def setManagedGroupAccessInstructions(groupName: WorkbenchGroupName, accessInstructions: String): Future[Unit] = Future {
     ldapConnectionPool.modify(groupDn(groupName), new Modification(ModificationType.REPLACE, Attr.accessInstructions, accessInstructions))
   }
+
+  override def loadSubjectFromGoogleSubjectId(googleSubjectId: GoogleSubjectId): Future[Option[WorkbenchSubject]] =
+    for{
+      entries <- Future{ldapConnectionPool.search(peopleOu, SearchScope.SUB, Filter.createEqualityFilter(Attr.googleSubjectId, googleSubjectId.value)).getSearchEntries.asScala}
+      res <- entries match {
+        case Seq() => Future.successful(None)
+        case Seq(subject) => Future.successful(Try(dnToSubject(subject.getDN)).toOption)
+        case subjects => Future.failed(new WorkbenchException(s"Database error: googleSubjectId $googleSubjectId refers to too many subjects: ${subjects.map(_.getDN)}"))
+      }
+    } yield res
+
+  override def setGoogleSubjectId(userId: WorkbenchUserId, googleSubjectId: GoogleSubjectId): Future[Unit] =
+    Future{ldapConnectionPool.modify(userDn(userId), new Modification(ModificationType.ADD, Attr.googleSubjectId, googleSubjectId.value))}
 }

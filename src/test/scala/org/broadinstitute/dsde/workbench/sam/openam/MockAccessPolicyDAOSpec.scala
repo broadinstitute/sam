@@ -8,6 +8,7 @@ import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
+import org.broadinstitute.dsde.workbench.sam.api.CreateWorkbenchUser
 import org.broadinstitute.dsde.workbench.sam.config.{DirectoryConfig, SchemaLockConfig}
 import org.broadinstitute.dsde.workbench.sam.directory._
 import org.broadinstitute.dsde.workbench.sam.model._
@@ -84,7 +85,7 @@ class MockAccessPolicyDAOSpec extends FlatSpec with Matchers with TestSupport wi
     val jndi = jndiServicesFixture
     val mock = mockServicesFixture
 
-    val dummyUser = WorkbenchUser(dummyUserInfo.userId, dummyUserInfo.userEmail)
+    val dummyUser = CreateWorkbenchUser(dummyUserInfo.userId, GoogleSubjectId(dummyUserInfo.userId.value), dummyUserInfo.userEmail)
     runAndWait(jndi.userService.createUser(dummyUser))
     runAndWait(mock.userService.createUser(dummyUser))
 
