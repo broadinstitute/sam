@@ -36,6 +36,7 @@ object JndiSchemaDAO {
     val givenName = "givenName"
     val sn = "sn"
     val uid = "uid"
+    val googleSubjectId = "googleSubjectId"
     val project = "project"
     val proxyEmail = "proxyEmail"
   }
@@ -242,6 +243,7 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig, val schemaLo
     val schema = ctx.getSchema("")
 
     createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.30", Attr.proxyEmail, "proxy group email", true)
+    createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.34", Attr.googleSubjectId, "google subject Id", true)
 
     val attrs = new BasicAttributes(true) // Ignore case
     attrs.put("NUMERICOID", "1.3.6.1.4.1.18060.0.4.3.2.300")
@@ -256,6 +258,8 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig, val schemaLo
 
     val may = new BasicAttribute("MAY")
     may.add(Attr.proxyEmail)
+    may.add(Attr.googleSubjectId)
+
     attrs.put(may)
 
     // Add the new schema object for "fooObjectClass"
@@ -294,6 +298,7 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig, val schemaLo
     // Intentionally ignores errors
     Try { schema.destroySubcontext("ClassDefinition/" + ObjectClass.workbenchPerson) }
     Try { schema.destroySubcontext("AttributeDefinition/" + Attr.proxyEmail) }
+    Try { schema.destroySubcontext("AttributeDefinition/" + Attr.googleSubjectId) }
   }
 
   private def removeWorkbenchGroupSchema(): Future[Unit] = withContext { ctx =>
