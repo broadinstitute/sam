@@ -287,6 +287,7 @@ class LdapDirectoryDAO(protected val ldapConnectionPool: LDAPConnectionPool, pro
       new Attribute(Attr.email, petServiceAccount.serviceAccount.email.value),
       new Attribute(Attr.sn, petServiceAccount.serviceAccount.subjectId.value),
       new Attribute(Attr.cn, petServiceAccount.serviceAccount.subjectId.value),
+      new Attribute(Attr.googleSubjectId, petServiceAccount.serviceAccount.subjectId.value),
       new Attribute(Attr.uid, petServiceAccount.serviceAccount.subjectId.value)
     )
 
