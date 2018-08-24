@@ -423,6 +423,10 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig, val schemaLo
     must.add(Attr.uid)
     attrs.put(must)
 
+    val may = new BasicAttribute("MAY")
+    may.add(Attr.googleSubjectId) //TODO: move this to must once old data is back populated
+    attrs.put(may)
+
     // Add the new schema object for "petServiceAccount"
     schema.createSubcontext("ClassDefinition/" + ObjectClass.petServiceAccount, attrs)
   }
