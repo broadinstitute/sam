@@ -62,7 +62,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
       }
       existingGoogleGroup <- googleDirectoryDAO.getGoogleGroup(createdGroup.email)
       _ <- existingGoogleGroup match {
-        case None => googleDirectoryDAO.createGroup(createdGroup.id.toString, createdGroup.email) recover { case e: GoogleJsonResponseException if e.getDetails.getCode == StatusCodes.Conflict.intValue => () }
+        case None => googleDirectoryDAO.createGroup(createdGroup.id.toString, createdGroup.email, Option(googleDirectoryDAO.lockedDownGroupSettings)) recover { case e: GoogleJsonResponseException if e.getDetails.getCode == StatusCodes.Conflict.intValue => () }
         case Some(_) => Future.successful(())
       }
 
@@ -123,7 +123,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
   override def onUserCreate(user: WorkbenchUser): Future[Unit] = {
     val proxyEmail = toProxyFromUser(user)
     for {
-      _ <- googleDirectoryDAO.createGroup(user.email.value, proxyEmail) recover {
+      _ <- googleDirectoryDAO.createGroup(user.email.value, proxyEmail, Option(googleDirectoryDAO.lockedDownGroupSettings)) recover {
         case e:GoogleJsonResponseException if e.getDetails.getCode == StatusCodes.Conflict.intValue => ()
       }
       _ <- googleDirectoryDAO.addMemberToGroup(proxyEmail, WorkbenchEmail(user.email.value))
@@ -418,7 +418,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
         }
 
         googleMemberEmails <- googleDirectoryDAO.listGroupMembers(group.email) flatMap {
-          case None => googleDirectoryDAO.createGroup(groupId.toString, group.email) map (_ => Set.empty[String])
+          case None => googleDirectoryDAO.createGroup(groupId.toString, group.email, Option(googleDirectoryDAO.lockedDownGroupSettings)) map (_ => Set.empty[String])
           case Some(members) => Future.successful(members.map(_.toLowerCase).toSet)
         }
         samMemberEmails <- Future.traverse(group.members) {
