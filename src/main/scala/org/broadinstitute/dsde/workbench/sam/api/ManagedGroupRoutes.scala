@@ -78,7 +78,28 @@ trait ManagedGroupRoutes extends UserInfoDirectives with SecurityDirectives with
     }
   }
 
-  def handleListGroups(userInfo: UserInfo): Route = {
+  def adminGroupRoutes: server.Route =
+    pathPrefix("admin") {
+      requireUserInfo { userInfo =>
+        asWorkbenchAdmin(userInfo) {
+          (pathPrefix("groups" / "v1") | pathPrefix("group")) {
+            pathPrefix(Segment) { groupId =>
+              val managedGroup = Resource(ManagedGroupService.managedGroupTypeName, ResourceId(groupId))
+              pathPrefix("setAccessInstructions") {
+                post {
+                  entity(as[ManagedGroupAccessInstructions]) { accessInstructions =>
+                    handleSetAccessInstructions(managedGroup.resourceId, accessInstructions.instructions)
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+
+  private def handleListGroups(userInfo: UserInfo): Route = {
     complete(managedGroupService.listGroups(userInfo.userId).map(StatusCodes.OK -> _))
   }
 
@@ -142,8 +163,17 @@ trait ManagedGroupRoutes extends UserInfoDirectives with SecurityDirectives with
   private def handleRequestAccess(managedGroup: Resource, userInfo: UserInfo): Route = {
     requireAction(managedGroup, SamResourceActions.notifyAdmins, userInfo) {
       complete(
-        managedGroupService.requestAccess(managedGroup.resourceId, userInfo.userId).map(_ => StatusCodes.NoContent)
+        managedGroupService.requestAccess(managedGroup.resourceId, userInfo.userId).map {
+          case Some(accessInstructions) => StatusCodes.OK -> Option(accessInstructions)
+          case None => StatusCodes.NoContent -> None
+        }
       )
     }
+  }
+
+  private def handleSetAccessInstructions(managedGroup: ResourceId, accessInstructions: String): Route = {
+    complete(
+      managedGroupService.setAccessInstructions(managedGroup, accessInstructions).map(_ => StatusCodes.NoContent)
+    )
   }
 }

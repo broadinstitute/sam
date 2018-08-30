@@ -1,6 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.service
 
 import akka.http.scaladsl.model.StatusCodes
+import akka.japi
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam._
@@ -127,15 +128,33 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
     resourceService.removeSubjectFromPolicy(resourceAndPolicyName, subject)
   }
 
-  def requestAccess(resourceId: ResourceId, requesterUserId: WorkbenchUserId): Future[Unit] = {
-    val resourceAndPolicyName = ResourceAndPolicyName(Resource(ManagedGroupService.managedGroupTypeName, resourceId), ManagedGroupService.adminPolicyName)
-    accessPolicyDAO.listFlattenedPolicyMembers(resourceAndPolicyName).map { users =>
-      val notifications = users.map { recipientUserId =>
-        Notifications.GroupAccessRequestNotification(recipientUserId, WorkbenchGroupName(resourceId.value).value, users, requesterUserId)
-      }
+  def requestAccess(resourceId: ResourceId, requesterUserId: WorkbenchUserId): Future[Option[String]] = {
+    getAccessInstructions(resourceId).map {
+      case accessInstructions: Some[String] => accessInstructions
+      case _ => {
+        val resourceAndPolicyName = ResourceAndPolicyName(Resource(ManagedGroupService.managedGroupTypeName, resourceId), ManagedGroupService.adminPolicyName)
 
-      cloudExtensions.fireAndForgetNotifications(notifications)
+        accessPolicyDAO.listFlattenedPolicyMembers(resourceAndPolicyName).map { users =>
+          val notifications = users.map { recipientUserId =>
+            Notifications.GroupAccessRequestNotification(recipientUserId, WorkbenchGroupName(resourceId.value).value, users, requesterUserId)
+          }
+
+          cloudExtensions.fireAndForgetNotifications(notifications)
+        }
+        None
+      }
     }
+  }
+
+  private def getAccessInstructions(resourceId: ResourceId): Future[Option[String]] = {
+    // query wherever these end up getting stored and return whatever you get back
+    // probably asking either AccessPolicyDAO or DirectoryDAO
+    Future(Option(""))
+  }
+
+  def setAccessInstructions(resourceId: ResourceId, accessInstructions: String): Future[Unit] = {
+    // storing these wherever they belong
+    Future.successful(())
   }
 }
 
