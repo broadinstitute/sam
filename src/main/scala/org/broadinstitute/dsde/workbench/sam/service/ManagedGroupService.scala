@@ -20,7 +20,7 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
 
   def managedGroupType: ResourceType = resourceTypes.getOrElse(ManagedGroupService.managedGroupTypeName, throw new WorkbenchException(s"resource type ${ManagedGroupService.managedGroupTypeName.value} not found"))
 
-  def createManagedGroup(groupId: ResourceId, userInfo: UserInfo): Future[Resource] = {
+  def createManagedGroup(groupId: ResourceId, userInfo: UserInfo, accessInstructionsOpt: Option[String] = None): Future[Resource] = {
     def adminRole = managedGroupType.ownerRoleName
 
     val memberPolicy = ManagedGroupService.memberPolicyName -> AccessPolicyMembership(Set.empty, Set.empty, Set(ManagedGroupService.memberRoleName))
@@ -31,19 +31,19 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
     for {
       managedGroup <- resourceService.createResource(managedGroupType, groupId, Map(adminPolicy, memberPolicy, adminNotificationPolicy), Set.empty, userInfo)
       policies <- accessPolicyDAO.listAccessPolicies(managedGroup)
-      workbenchGroup <- createAggregateGroup(managedGroup, policies)
+      workbenchGroup <- createAggregateGroup(managedGroup, policies, accessInstructionsOpt)
       _ <- cloudExtensions.publishGroup(workbenchGroup.id)
     } yield managedGroup
   }
 
-  private def createAggregateGroup(resource: Resource, componentPolicies: Set[AccessPolicy]): Future[BasicWorkbenchGroup] = {
+  private def createAggregateGroup(resource: Resource, componentPolicies: Set[AccessPolicy], accessInstructionsOpt: Option[String]): Future[BasicWorkbenchGroup] = {
     val email = WorkbenchEmail(constructEmail(resource.resourceId.value))
     val workbenchGroupName = WorkbenchGroupName(resource.resourceId.value)
     val groupMembers: Set[WorkbenchSubject] = componentPolicies.collect {
       // collect only member and admin policies
       case AccessPolicy(id@ResourceAndPolicyName(_, ManagedGroupService.memberPolicyName | ManagedGroupService.adminPolicyName), _, _, _, _) => id
     }
-    directoryDAO.createGroup(BasicWorkbenchGroup(workbenchGroupName, groupMembers, email))
+    directoryDAO.createGroup(BasicWorkbenchGroup(workbenchGroupName, groupMembers, email), accessInstructionsOpt)
   }
 
   private def constructEmail(groupName: String) = {
@@ -146,15 +146,12 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
     }
   }
 
-  private def getAccessInstructions(resourceId: ResourceId): Future[Option[String]] = {
-    // query wherever these end up getting stored and return whatever you get back
-    // probably asking either AccessPolicyDAO or DirectoryDAO
-    Future(Option(""))
+  private def getAccessInstructions(groupId: ResourceId): Future[Option[String]] = {
+    directoryDAO.getManagedGroupAccessInstructions(WorkbenchGroupName(groupId.value))
   }
 
-  def setAccessInstructions(resourceId: ResourceId, accessInstructions: String): Future[Unit] = {
-    // storing these wherever they belong
-    Future.successful(())
+  def setAccessInstructions(groupId: ResourceId, accessInstructions: String): Future[Unit] = {
+    directoryDAO.setManagedGroupAccessInstructions(WorkbenchGroupName(groupId.value), accessInstructions)
   }
 }
 

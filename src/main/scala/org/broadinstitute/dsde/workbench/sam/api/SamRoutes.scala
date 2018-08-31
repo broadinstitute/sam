@@ -32,7 +32,7 @@ abstract class SamRoutes(val resourceService: ResourceService, val userService: 
     swaggerRoutes ~
     statusRoutes ~
     pathPrefix("register") { userRoutes } ~
-    pathPrefix("api") { resourceRoutes ~ adminUserRoutes ~ extensionRoutes ~ groupRoutes }
+    pathPrefix("api") { resourceRoutes ~ adminUserRoutes ~ extensionRoutes ~ groupRoutes ~ adminGroupRoutes }
   }
 
   private val myExceptionHandler = {
