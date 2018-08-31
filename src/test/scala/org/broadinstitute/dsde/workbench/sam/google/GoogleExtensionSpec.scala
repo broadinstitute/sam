@@ -7,6 +7,7 @@ import java.util.{Date, UUID}
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
 import akka.testkit.TestKit
+import com.google.api.services.groupssettings.model.Groups
 import com.typesafe.config.ConfigFactory
 import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import net.ceedubs.ficus.Ficus._
@@ -497,12 +498,13 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
 
     when(mockDirectoryDAO.addProxyGroup(userId, proxyEmail)).thenReturn(Future.successful(()))
     when(mockGoogleDirectoryDAO.getGoogleGroup(any[WorkbenchEmail])).thenReturn(Future.successful(None))
-    when(mockGoogleDirectoryDAO.createGroup(any[String], any[WorkbenchEmail])).thenReturn(Future.successful(()))
+    when(mockGoogleDirectoryDAO.createGroup(any[String], any[WorkbenchEmail], any[Option[Groups]])).thenReturn(Future.successful(()))
     when(mockGoogleDirectoryDAO.addMemberToGroup(any[WorkbenchEmail], any[WorkbenchEmail])).thenReturn(Future.successful(()))
 
     googleExtensions.onUserCreate(user).futureValue
 
-    verify(mockGoogleDirectoryDAO).createGroup(userEmail.value, proxyEmail)
+    val lockedDownGroupSettings = Option(mockGoogleDirectoryDAO.lockedDownGroupSettings)
+    verify(mockGoogleDirectoryDAO).createGroup(userEmail.value, proxyEmail, lockedDownGroupSettings)
     verify(mockGoogleDirectoryDAO).addMemberToGroup(proxyEmail, userEmail)
     verify(mockGoogleDirectoryDAO).addMemberToGroup(allUsersGroup.email, proxyEmail)
 /* Re-enable this code after fixing rawls for GAWB-2933

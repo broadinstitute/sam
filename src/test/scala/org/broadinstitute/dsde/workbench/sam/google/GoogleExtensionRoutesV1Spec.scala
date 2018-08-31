@@ -248,7 +248,7 @@ class GoogleExtensionRoutesV1Spec extends FlatSpec with Matchers with ScalatestR
       status shouldEqual StatusCodes.OK
     }
 
-    directoryDAO.createGroup(BasicWorkbenchGroup(WorkbenchGroupName(resourceType.ownerRoleName.value + ".foo." + resourceType.name), Set.empty, WorkbenchEmail("foo@bar.com")))
+    runAndWait(directoryDAO.createGroup(BasicWorkbenchGroup(WorkbenchGroupName(resourceType.ownerRoleName.value + ".foo." + resourceType.name), Set.empty, WorkbenchEmail("foo@bar.com"))))
 
     Get(s"/api/google/v1/resource/${resourceType.name}/foo/${resourceType.ownerRoleName.value}/sync") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
