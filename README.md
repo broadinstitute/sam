@@ -123,3 +123,5 @@ Stop your local opendj:
 ```
 sh docker/run-opendj.sh stop
 ```
+
+### [CONTRIBUTING.md](../CONTRIBUTING.md)

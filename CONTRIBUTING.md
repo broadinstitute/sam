@@ -21,6 +21,7 @@ Your PR is ready to merge when all of the following things are true:
 1. Two reviewers have thumbed (or otherwise approved) your PR
 2. If your change is user-facing, your PO has seen it and signed off
 3. All tests pass
+4. Test this change deployed correctly and works on dev environment after deployment
 
 ## API changes
 
