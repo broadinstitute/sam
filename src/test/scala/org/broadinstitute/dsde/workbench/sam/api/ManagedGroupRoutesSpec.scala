@@ -640,17 +640,6 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
     }
   }
 
-  // this isn't actually the current behavior, probably should be though
-//  "POST /api/admin/group/{groupName}/setAccessInstructions" should "fail with 404 when group does not exist" in {
-//    val samRoutes = TestSamRoutes(resourceTypes)
-//
-//    val instructions = ManagedGroupAccessInstructions(groupId, "Test instructions")
-//
-//    Post(s"/api/admin/group/${groupId}/setAccessInstructions", instructions) ~> samRoutes.route ~> check {
-//      status shouldEqual StatusCodes.NotFound
-//    }
-//  }
-
   "POST /api/group/{groupName}/requestAccess" should "succeed with 200 and the access instructions when the group exists and has access instructions set" in {
     val samRoutes = TestSamRoutes(resourceTypes)
     assertCreateGroup(samRoutes)
