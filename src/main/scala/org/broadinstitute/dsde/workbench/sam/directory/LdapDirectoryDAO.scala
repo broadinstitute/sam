@@ -156,6 +156,7 @@ class LdapDirectoryDAO(protected val ldapConnectionPool: LDAPConnectionPool, pro
       new Attribute(Attr.sn, user.id.value),
       new Attribute(Attr.cn, user.id.value),
       new Attribute(Attr.uid, user.id.value),
+      new Attribute(Attr.googleSubjectId, user.id.value),
       new Attribute("objectclass", Seq("top", "workbenchPerson").asJava)
     )
 
