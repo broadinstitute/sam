@@ -368,4 +368,19 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     runAndWait(mgService.listGroups(user2.userId)) shouldEqual user2ExpectedGroups
   }
 
+  "ManagedGroupService requestAccess" should "return access instructions when a group has them set" in {
+    val managedGroup = assertMakeGroup()
+    val instructions = "Test Instructions"
+
+    runAndWait(managedGroupService.setAccessInstructions(managedGroup.resourceId, instructions))
+    runAndWait(managedGroupService.requestAccess(managedGroup.resourceId, dummyUserInfo.userId)).get shouldEqual instructions
+
+  }
+
+  it should "return None when access instructions have not been set" in {
+    val managedGroup = assertMakeGroup()
+
+    runAndWait(managedGroupService.requestAccess(managedGroup.resourceId, dummyUserInfo.userId)) shouldEqual None
+  }
+
 }

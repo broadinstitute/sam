@@ -8,6 +8,7 @@ import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.service.ManagedGroupService
 import org.scalatest.{BeforeAndAfter, FlatSpec, Matchers}
 import spray.json.DefaultJsonProtocol._
@@ -620,6 +621,65 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
 
     val newGuy = makeOtherUser(samRoutes)
     Put(s"/api/group/$groupId/admin-notifier", Set(newGuy.email)) ~> newGuy.routes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
+    }
+  }
+
+  "POST /api/admin/group/{groupName}/accessInstructions" should "succeed with 204 and set access instructions" in {
+    val samRoutes = TestSamRoutes(resourceTypes)
+    assertCreateGroup(samRoutes)
+    val instructions = ManagedGroupAccessInstructions(groupId, "Test instructions")
+
+    Post(s"/api/admin/group/${groupId}/accessInstructions", instructions) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+    }
+
+    Post(s"/api/group/${groupId}/requestAccess") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[String] shouldEqual "Test instructions"
+    }
+  }
+
+  // this isn't actually the current behavior, probably should be though
+//  "POST /api/admin/group/{groupName}/setAccessInstructions" should "fail with 404 when group does not exist" in {
+//    val samRoutes = TestSamRoutes(resourceTypes)
+//
+//    val instructions = ManagedGroupAccessInstructions(groupId, "Test instructions")
+//
+//    Post(s"/api/admin/group/${groupId}/setAccessInstructions", instructions) ~> samRoutes.route ~> check {
+//      status shouldEqual StatusCodes.NotFound
+//    }
+//  }
+
+  "POST /api/group/{groupName}/requestAccess" should "succeed with 200 and the access instructions when the group exists and has access instructions set" in {
+    val samRoutes = TestSamRoutes(resourceTypes)
+    assertCreateGroup(samRoutes)
+
+    val instructions = ManagedGroupAccessInstructions(groupId, "Test instructions")
+
+    Post(s"/api/admin/group/${groupId}/accessInstructions", instructions) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+    }
+
+    Post(s"/api/group/${groupId}/requestAccess") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[String] shouldEqual "Test instructions"
+    }
+  }
+
+  it should "succeed with 204 when the group exists but access instructions aren't set" in {
+    val samRoutes = TestSamRoutes(resourceTypes)
+    assertCreateGroup(samRoutes)
+
+    Post(s"/api/group/${groupId}/requestAccess") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+    }
+  }
+
+  it should "fail with 404 when group does not exist" in {
+    val samRoutes = TestSamRoutes(resourceTypes)
+
+    Post(s"/api/group/${groupId}/requestAccess") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
   }

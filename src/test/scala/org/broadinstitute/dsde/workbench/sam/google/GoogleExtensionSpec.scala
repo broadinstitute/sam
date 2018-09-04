@@ -494,7 +494,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val allUsersGroupMatcher = new ArgumentMatcher[BasicWorkbenchGroup] {
       override def matches(group: BasicWorkbenchGroup): Boolean = group.id == allUsersGroup.id
     }
-    when(mockDirectoryDAO.createGroup(argThat(allUsersGroupMatcher))).thenReturn(Future.successful(allUsersGroup))
+    when(mockDirectoryDAO.createGroup(argThat(allUsersGroupMatcher), isNull())).thenReturn(Future.successful(allUsersGroup))
 
     when(mockDirectoryDAO.addProxyGroup(userId, proxyEmail)).thenReturn(Future.successful(()))
     when(mockGoogleDirectoryDAO.getGoogleGroup(any[WorkbenchEmail])).thenReturn(Future.successful(None))

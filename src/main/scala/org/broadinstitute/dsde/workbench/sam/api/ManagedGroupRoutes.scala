@@ -85,7 +85,7 @@ trait ManagedGroupRoutes extends UserInfoDirectives with SecurityDirectives with
           (pathPrefix("groups" / "v1") | pathPrefix("group")) {
             pathPrefix(Segment) { groupId =>
               val managedGroup = Resource(ManagedGroupService.managedGroupTypeName, ResourceId(groupId))
-              pathPrefix("setAccessInstructions") {
+              pathPrefix("accessInstructions") {
                 post {
                   entity(as[ManagedGroupAccessInstructions]) { accessInstructions =>
                     handleSetAccessInstructions(managedGroup, accessInstructions)

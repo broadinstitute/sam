@@ -17,7 +17,7 @@ import scala.util.{Failure, Success, Try}
 
 class LdapDirectoryDAO(protected val ldapConnectionPool: LDAPConnectionPool, protected val directoryConfig: DirectoryConfig)(implicit executionContext: ExecutionContext) extends DirectoryDAO with DirectorySubjectNameSupport with LdapSupport {
 
-  override def createGroup(group: BasicWorkbenchGroup, accessInstructionsOpt: Option[String]): Future[BasicWorkbenchGroup] = Future {
+  override def createGroup(group: BasicWorkbenchGroup, accessInstructionsOpt: Option[String] = None): Future[BasicWorkbenchGroup] = Future {
     val membersAttribute = if (group.members.isEmpty) None else Option(new Attribute(Attr.uniqueMember, group.members.map(subject => subjectDn(subject)).asJava))
 
     val attributes = accessInstructionsOpt match {

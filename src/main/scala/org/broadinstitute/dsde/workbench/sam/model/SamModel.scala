@@ -106,7 +106,6 @@ case class AccessPolicyResponseEntry(policyName: AccessPolicyName, policy: Acces
 case class BasicWorkbenchGroup(id: WorkbenchGroupName, members: Set[WorkbenchSubject], email: WorkbenchEmail) extends WorkbenchGroup
 
 case class ManagedGroupMembershipEntry(groupName: ResourceId, role: AccessPolicyName, groupEmail: WorkbenchEmail)
-
 case class ManagedGroupAccessInstructions(groupName: String, instructions: String)
 
 case class GroupSyncResponse(lastSyncDate: String, email: WorkbenchEmail)
