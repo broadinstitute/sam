@@ -8,6 +8,7 @@ import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.service.ManagedGroupService
 import org.scalatest.{BeforeAndAfter, FlatSpec, Matchers}
 import spray.json.DefaultJsonProtocol._
@@ -620,6 +621,54 @@ class ManagedGroupRoutesV1Spec extends FlatSpec with Matchers with ScalatestRout
 
     val newGuy = makeOtherUser(samRoutes)
     Put(s"/api/groups/v1/$groupId/admin-notifier", Set(newGuy.email)) ~> newGuy.routes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
+    }
+  }
+
+  "POST /api/admin/groups/v1/{groupName}/accessInstructions" should "succeed with 204 and set access instructions" in {
+    val samRoutes = TestSamRoutes(resourceTypes)
+    assertCreateGroup(samRoutes)
+    val instructions = ManagedGroupAccessInstructions(groupId, "Test instructions")
+
+    Post(s"/api/admin/groups/v1/${groupId}/accessInstructions", instructions) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+    }
+
+    Post(s"/api/groups/v1/${groupId}/requestAccess") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[String] shouldEqual "Test instructions"
+    }
+  }
+
+  "POST /api/groups/v1/{groupName}/requestAccess" should "succeed with 200 and the access instructions when the group exists and has access instructions set" in {
+    val samRoutes = TestSamRoutes(resourceTypes)
+    assertCreateGroup(samRoutes)
+
+    val instructions = ManagedGroupAccessInstructions(groupId, "Test instructions")
+
+    Post(s"/api/admin/groups/v1/${groupId}/accessInstructions", instructions) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+    }
+
+    Post(s"/api/groups/v1/${groupId}/requestAccess") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[String] shouldEqual "Test instructions"
+    }
+  }
+
+  it should "succeed with 204 when the group exists but access instructions aren't set" in {
+    val samRoutes = TestSamRoutes(resourceTypes)
+    assertCreateGroup(samRoutes)
+
+    Post(s"/api/groups/v1/${groupId}/requestAccess") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+    }
+  }
+
+  it should "fail with 404 when group does not exist" in {
+    val samRoutes = TestSamRoutes(resourceTypes)
+
+    Post(s"/api/groups/v1/${groupId}/requestAccess") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
   }

@@ -157,6 +157,30 @@ paths:
       tags:
         - Admin
 
+  /api/admin/groups/v1/{groupName}/accessInstructions:
+    post:
+      summary: sets the access instructions for a managed group
+      responses:
+        204:
+          description: Successfully set access instructions
+        404:
+          description: Group could not be found
+          schema:
+            $ref: '#/definitions/ErrorReport'
+        500:
+          description: Internal Error
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      parameters:
+      - in: path
+        description: Name of group
+        name: groupName
+        required: true
+        type: string
+      operationId: setAccessInstructions
+      tags:
+      - Admin
+
   /api/config/v1/resourceTypes:
     get:
       responses:
@@ -262,6 +286,10 @@ paths:
     post:
       summary: Request access to a managed group
       responses:
+        200:
+          description: Access instructions for this group
+          schema:
+            type: string
         204:
           description: Request sent
         404:
