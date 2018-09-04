@@ -127,25 +127,17 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
     resourceService.removeSubjectFromPolicy(resourceAndPolicyName, subject)
   }
 
-  def requestAccess(resourceId: ResourceId, requesterUserId: WorkbenchUserId): Future[Option[String]] = {
-    getAccessInstructions(resourceId).map {
-      case accessInstructions: Some[String] => accessInstructions
-      case _ => {
-        val resourceAndPolicyName = ResourceAndPolicyName(Resource(ManagedGroupService.managedGroupTypeName, resourceId), ManagedGroupService.adminPolicyName)
-
-        accessPolicyDAO.listFlattenedPolicyMembers(resourceAndPolicyName).map { users =>
-          val notifications = users.map { recipientUserId =>
-            Notifications.GroupAccessRequestNotification(recipientUserId, WorkbenchGroupName(resourceId.value).value, users, requesterUserId)
-          }
-
-          cloudExtensions.fireAndForgetNotifications(notifications)
-        }
-        None
+  def requestAccess(resourceId: ResourceId, requesterUserId: WorkbenchUserId): Future[Unit] = {
+    val resourceAndPolicyName = ResourceAndPolicyName(Resource(ManagedGroupService.managedGroupTypeName, resourceId), ManagedGroupService.adminPolicyName)
+    accessPolicyDAO.listFlattenedPolicyMembers(resourceAndPolicyName).map { users =>
+      val notifications = users.map { recipientUserId =>
+        Notifications.GroupAccessRequestNotification(recipientUserId, WorkbenchGroupName(resourceId.value).value, users, requesterUserId)
       }
+      cloudExtensions.fireAndForgetNotifications(notifications)
     }
   }
 
-  private def getAccessInstructions(groupId: ResourceId): Future[Option[String]] = {
+  def getAccessInstructions(groupId: ResourceId): Future[Option[String]] = {
     directoryDAO.getManagedGroupAccessInstructions(WorkbenchGroupName(groupId.value))
   }
 

@@ -235,7 +235,10 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
   }
 
   override def getManagedGroupAccessInstructions(groupName: WorkbenchGroupName): Future[Option[String]] = Future {
-    groupAccessInstructions.get(groupName)
+    if (groups.contains(groupName))
+      groupAccessInstructions.get(groupName)
+    else
+      throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "group not found"))
   }
 
   override def setManagedGroupAccessInstructions(groupName: WorkbenchGroupName, accessInstructions: String): Future[Unit] = Future {

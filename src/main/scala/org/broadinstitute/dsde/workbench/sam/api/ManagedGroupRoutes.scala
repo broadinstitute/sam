@@ -33,16 +33,26 @@ trait ManagedGroupRoutes extends UserInfoDirectives with SecurityDirectives with
           get {
             handleGetGroup(managedGroup)
           } ~
-            post {
-              handleCreateGroup(managedGroup, userInfo)
-            } ~
-            delete {
-              handleDeleteGroup(managedGroup, userInfo)
-            }
+          post {
+            handleCreateGroup(managedGroup, userInfo)
+          } ~
+          delete {
+            handleDeleteGroup(managedGroup, userInfo)
+          }
         } ~
         pathPrefix("requestAccess") {
           post {
             handleRequestAccess(managedGroup, userInfo)
+          }
+        } ~
+        path("accessInstructions") {
+          post {
+            entity(as[ManagedGroupAccessInstructions]) { accessInstructions =>
+              handleSetAccessInstructions(managedGroup, accessInstructions)
+            }
+          } ~
+          get {
+            handleGetAccessInstructions(managedGroup)
           }
         } ~
         pathPrefix(Segment) { policyName =>
@@ -78,25 +88,25 @@ trait ManagedGroupRoutes extends UserInfoDirectives with SecurityDirectives with
     }
   }
 
-  def adminGroupRoutes: server.Route =
-    pathPrefix("admin") {
-      requireUserInfo { userInfo =>
-        asWorkbenchAdmin(userInfo) {
-          (pathPrefix("groups" / "v1") | pathPrefix("group")) {
-            pathPrefix(Segment) { groupId =>
-              val managedGroup = Resource(ManagedGroupService.managedGroupTypeName, ResourceId(groupId))
-              pathPrefix("accessInstructions") {
-                post {
-                  entity(as[ManagedGroupAccessInstructions]) { accessInstructions =>
-                    handleSetAccessInstructions(managedGroup, accessInstructions)
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
+//  def adminGroupRoutes: server.Route =
+//    pathPrefix("admin") {
+//      requireUserInfo { userInfo =>
+//        asWorkbenchAdmin(userInfo) {
+//          (pathPrefix("groups" / "v1") | pathPrefix("group")) {
+//            pathPrefix(Segment) { groupId =>
+//              val managedGroup = Resource(ManagedGroupService.managedGroupTypeName, ResourceId(groupId))
+//              pathPrefix("accessInstructions") {
+//                post {
+//                  entity(as[ManagedGroupAccessInstructions]) { accessInstructions =>
+//                    handleSetAccessInstructions(managedGroup, accessInstructions)
+//                  }
+//                }
+//              }
+//            }
+//          }
+//        }
+//      }
+//    }
 
 
   private def handleListGroups(userInfo: UserInfo): Route = {
@@ -163,10 +173,7 @@ trait ManagedGroupRoutes extends UserInfoDirectives with SecurityDirectives with
   private def handleRequestAccess(managedGroup: Resource, userInfo: UserInfo): Route = {
     requireAction(managedGroup, SamResourceActions.notifyAdmins, userInfo) {
       complete(
-        managedGroupService.requestAccess(managedGroup.resourceId, userInfo.userId).map {
-          case Some(accessInstructions) => StatusCodes.OK -> Option(accessInstructions)
-          case None => StatusCodes.NoContent -> None
-        }
+        managedGroupService.requestAccess(managedGroup.resourceId, userInfo.userId).map(_ => StatusCodes.NoContent)
       )
     }
   }
@@ -174,6 +181,15 @@ trait ManagedGroupRoutes extends UserInfoDirectives with SecurityDirectives with
   private def handleSetAccessInstructions(managedGroup: Resource, accessInstructions: ManagedGroupAccessInstructions): Route = {
     complete(
       managedGroupService.setAccessInstructions(managedGroup.resourceId, accessInstructions.instructions).map(_ => StatusCodes.NoContent)
+    )
+  }
+
+  private def handleGetAccessInstructions(managedGroup: Resource): Route = {
+    complete(
+      managedGroupService.getAccessInstructions(managedGroup.resourceId).map {
+        case Some(accessInstructions) => StatusCodes.OK -> Option(accessInstructions)
+        case None => StatusCodes.NoContent -> None
+      }
     )
   }
 }
