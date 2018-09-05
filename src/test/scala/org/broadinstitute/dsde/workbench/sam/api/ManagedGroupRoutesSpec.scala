@@ -22,7 +22,7 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
 
   private val accessPolicyNames = Set(ManagedGroupService.adminPolicyName, ManagedGroupService.memberPolicyName, ManagedGroupService.adminNotifierPolicyName)
   private val policyActions: Set[ResourceAction] = accessPolicyNames.flatMap(policyName => Set(SamResourceActions.sharePolicy(policyName), SamResourceActions.readPolicy(policyName)))
-  private val resourceActions = Set(ResourceAction("delete"), ResourceAction("notify_admins")) union policyActions
+  private val resourceActions = Set(ResourceAction("delete"), ResourceAction("notify_admins"), ResourceAction("set_access_instructions")) union policyActions
   private val resourceActionPatterns = resourceActions.map(action => ResourceActionPattern(action.value, "", false))
   private val defaultOwnerRole = ResourceRole(ManagedGroupService.adminRoleName, resourceActions)
   private val defaultMemberRole = ResourceRole(ManagedGroupService.memberRoleName, Set.empty)
@@ -628,9 +628,10 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
   "POST /api/group/{groupName}/accessInstructions" should "succeed with 204" in {
     val samRoutes = TestSamRoutes(resourceTypes)
     assertCreateGroup(samRoutes)
-    val instructions = ManagedGroupAccessInstructions(groupId, "Test instructions")
+    val instructions = "Test instructions"
+    val mgaInstructions = ManagedGroupAccessInstructions(groupId, instructions)
 
-    Post(s"/api/group/$groupId/accessInstructions", instructions) ~> samRoutes.route ~> check {
+    Post(s"/api/group/$groupId/accessInstructions", mgaInstructions) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NoContent
     }
   }
@@ -638,15 +639,16 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
   "GET /api/group/{groupName}/accessInstructions" should "succeed with 200 and return the access instructions when group and access instructions exist" in {
     val samRoutes = TestSamRoutes(resourceTypes)
     assertCreateGroup(samRoutes)
-    val instructions = ManagedGroupAccessInstructions(groupId, "Test instructions")
+    val instructions = "Test instructions"
+    val mgaInstructions = ManagedGroupAccessInstructions(groupId, instructions)
 
-    Post(s"/api/group/$groupId/accessInstructions", instructions) ~> samRoutes.route ~> check {
+    Post(s"/api/group/$groupId/accessInstructions", mgaInstructions) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NoContent
     }
 
     Get(s"/api/group/$groupId/accessInstructions") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
-      responseAs[String] shouldEqual "Test instructions"
+      responseAs[String] shouldEqual (instructions)
     }
   }
 
@@ -673,6 +675,23 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
 
     Post(s"/api/group/$groupId/requestAccess") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NoContent
+    }
+  }
+
+  it should "fail with 400 if there are access instructions" in {
+    val samRoutes = TestSamRoutes(resourceTypes)
+    assertCreateGroup(samRoutes)
+
+    val instructions = "Test instructions"
+    val mgaInstructions = ManagedGroupAccessInstructions(groupId, instructions)
+
+    Post(s"/api/group/$groupId/accessInstructions", mgaInstructions) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+    }
+
+    Post(s"/api/group/$groupId/requestAccess") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.BadRequest
+      responseAs[String] should include (instructions)
     }
   }
 

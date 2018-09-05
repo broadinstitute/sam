@@ -128,12 +128,17 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
   }
 
   def requestAccess(resourceId: ResourceId, requesterUserId: WorkbenchUserId): Future[Unit] = {
-    val resourceAndPolicyName = ResourceAndPolicyName(Resource(ManagedGroupService.managedGroupTypeName, resourceId), ManagedGroupService.adminPolicyName)
-    accessPolicyDAO.listFlattenedPolicyMembers(resourceAndPolicyName).map { users =>
-      val notifications = users.map { recipientUserId =>
-        Notifications.GroupAccessRequestNotification(recipientUserId, WorkbenchGroupName(resourceId.value).value, users, requesterUserId)
-      }
-      cloudExtensions.fireAndForgetNotifications(notifications)
+    getAccessInstructions(resourceId).map {
+      case accessInstructions: Some[String] =>
+        throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"Please follow special access instructions: $accessInstructions"))
+      case None =>
+        val resourceAndPolicyName = ResourceAndPolicyName(Resource(ManagedGroupService.managedGroupTypeName, resourceId), ManagedGroupService.adminPolicyName)
+        accessPolicyDAO.listFlattenedPolicyMembers(resourceAndPolicyName).map { users =>
+          val notifications = users.map { recipientUserId =>
+            Notifications.GroupAccessRequestNotification(recipientUserId, WorkbenchGroupName(resourceId.value).value, users, requesterUserId)
+          }
+          cloudExtensions.fireAndForgetNotifications(notifications)
+        }
     }
   }
 

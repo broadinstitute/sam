@@ -48,7 +48,7 @@ trait ManagedGroupRoutes extends UserInfoDirectives with SecurityDirectives with
         path("accessInstructions") {
           post {
             entity(as[ManagedGroupAccessInstructions]) { accessInstructions =>
-              handleSetAccessInstructions(managedGroup, accessInstructions)
+              handleSetAccessInstructions(managedGroup, accessInstructions, userInfo)
             }
           } ~
           get {
@@ -62,9 +62,9 @@ trait ManagedGroupRoutes extends UserInfoDirectives with SecurityDirectives with
             get {
               handleListEmails(managedGroup, accessPolicyName, userInfo)
             } ~
-              put {
-                handleOverwriteEmails(managedGroup, accessPolicyName, userInfo)
-              }
+            put {
+              handleOverwriteEmails(managedGroup, accessPolicyName, userInfo)
+            }
           } ~
           pathPrefix(Segment) { email =>
             pathEndOrSingleSlash {
@@ -87,27 +87,6 @@ trait ManagedGroupRoutes extends UserInfoDirectives with SecurityDirectives with
       }
     }
   }
-
-//  def adminGroupRoutes: server.Route =
-//    pathPrefix("admin") {
-//      requireUserInfo { userInfo =>
-//        asWorkbenchAdmin(userInfo) {
-//          (pathPrefix("groups" / "v1") | pathPrefix("group")) {
-//            pathPrefix(Segment) { groupId =>
-//              val managedGroup = Resource(ManagedGroupService.managedGroupTypeName, ResourceId(groupId))
-//              pathPrefix("accessInstructions") {
-//                post {
-//                  entity(as[ManagedGroupAccessInstructions]) { accessInstructions =>
-//                    handleSetAccessInstructions(managedGroup, accessInstructions)
-//                  }
-//                }
-//              }
-//            }
-//          }
-//        }
-//      }
-//    }
-
 
   private def handleListGroups(userInfo: UserInfo): Route = {
     complete(managedGroupService.listGroups(userInfo.userId).map(StatusCodes.OK -> _))
@@ -178,10 +157,12 @@ trait ManagedGroupRoutes extends UserInfoDirectives with SecurityDirectives with
     }
   }
 
-  private def handleSetAccessInstructions(managedGroup: Resource, accessInstructions: ManagedGroupAccessInstructions): Route = {
-    complete(
-      managedGroupService.setAccessInstructions(managedGroup.resourceId, accessInstructions.instructions).map(_ => StatusCodes.NoContent)
-    )
+  private def handleSetAccessInstructions(managedGroup: Resource, accessInstructions: ManagedGroupAccessInstructions, userInfo: UserInfo): Route = {
+    requireAction(managedGroup, SamResourceActions.setAccessInstructions, userInfo) {
+      complete(
+        managedGroupService.setAccessInstructions(managedGroup.resourceId, accessInstructions.instructions).map(_ => StatusCodes.NoContent)
+      )
+    }
   }
 
   private def handleGetAccessInstructions(managedGroup: Resource): Route = {

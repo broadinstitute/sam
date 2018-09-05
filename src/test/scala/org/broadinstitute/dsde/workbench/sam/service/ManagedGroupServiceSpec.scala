@@ -382,4 +382,32 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     runAndWait(managedGroupService.getAccessInstructions(managedGroup.resourceId)) shouldEqual None
   }
 
+  it should "throw an exception if the group is not found" in {
+    val exception = intercept[WorkbenchExceptionWithErrorReport] {
+      runAndWait(managedGroupService.getAccessInstructions(ResourceId("Nonexistent Group")))
+    }
+    exception.getMessage should include ("not found")
+  }
+
+  "ManagedGroupService setAccessInstructions" should "set access instructions when a group has none" in {
+    val managedGroup = assertMakeGroup()
+    val instructions = "Test Instructions"
+
+    runAndWait(managedGroupService.getAccessInstructions(managedGroup.resourceId)) shouldEqual None
+    runAndWait(managedGroupService.setAccessInstructions(managedGroup.resourceId, instructions))
+    runAndWait(managedGroupService.getAccessInstructions(managedGroup.resourceId)).getOrElse(None) shouldEqual instructions
+  }
+
+  it should "modify the current access instructions" in {
+    makeResourceType(managedGroupResourceType)
+
+    val instructions = "Test Instructions"
+    val managedGroup = runAndWait(managedGroupService.createManagedGroup(ResourceId(resourceId.value), dummyUserInfo, Option(instructions)))
+
+    runAndWait(managedGroupService.getAccessInstructions(managedGroup.resourceId)).getOrElse(None) shouldEqual instructions
+
+    val newInstructions = "Much better instructions"
+    runAndWait(managedGroupService.setAccessInstructions(managedGroup.resourceId, newInstructions))
+    runAndWait(managedGroupService.getAccessInstructions(managedGroup.resourceId)).getOrElse(None) shouldEqual newInstructions
+  }
 }
