@@ -151,7 +151,7 @@ class LdapDirectoryDAO(protected val ldapConnectionPool: LDAPConnectionPool, pro
   }
 
   override def createUser(user: WorkbenchUser): Future[WorkbenchUser] = Future {
-    ldapConnectionPool.add(userDn(user.id),
+    val ls = List(
       new Attribute(Attr.email, user.email.value),
       new Attribute(Attr.sn, user.id.value),
       new Attribute(Attr.cn, user.id.value),
@@ -159,6 +159,8 @@ class LdapDirectoryDAO(protected val ldapConnectionPool: LDAPConnectionPool, pro
       new Attribute(Attr.googleSubjectId, user.id.value),
       new Attribute("objectclass", Seq("top", "workbenchPerson").asJava)
     )
+    println(s"registerring user: $ls")
+    ldapConnectionPool.add(userDn(user.id), ls: _*)
 
     user
   }.recover {
