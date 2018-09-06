@@ -344,6 +344,25 @@ class ResourceRoutesV1Spec extends FlatSpec with Matchers with ScalatestRouteTes
     }
   }
 
+  it should "204 on overwriting a policy's membership" in {
+    val resourceType = ResourceType(ResourceTypeName("rt"), Set(SamResourceActionPatterns.alterPolicies, ResourceActionPattern("can_compute", "", false)), Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.alterPolicies))), ResourceRoleName("owner"))
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
+
+    Post(s"/api/resources/v1/${resourceType.name}/foo") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+    }
+
+    val testUser = WorkbenchUser(WorkbenchUserId("testuser"), WorkbenchEmail("testuser@foo.com"))
+
+    runAndWait(samRoutes.userService.createUser(testUser))
+
+    val members = Set(testUser.email)
+
+    Put(s"/api/resources/v1/${resourceType.name}/foo/policies/canCompute/memberEmails", members) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+    }
+  }
+
   it should "400 on a policy being created with invalid actions" in {
     val resourceType = ResourceType(ResourceTypeName("rt"), Set(SamResourceActionPatterns.alterPolicies, ResourceActionPattern("can_compute", "", false)), Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.alterPolicies))), ResourceRoleName("owner"))
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))

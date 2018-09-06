@@ -421,6 +421,22 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     assert(policies.contains(newPolicy))
   }
 
+  "overwritePolicyMembers" should "succeed with a valid request" in {
+    val resource = Resource(defaultResourceType.name, ResourceId("my-resource"))
+
+    runAndWait(service.createResourceType(defaultResourceType))
+    runAndWait(service.createResource(defaultResourceType, resource.resourceId, dummyUserInfo))
+
+    val group = BasicWorkbenchGroup(WorkbenchGroupName("foo"), Set.empty, toEmail(resource.resourceTypeName.value, resource.resourceId.value, "foo"))
+    val newPolicy = AccessPolicy(ResourceAndPolicyName(resource, AccessPolicyName("foo")), group.members, group.email, Set.empty, Set(ResourceAction("non_owner_action")))
+
+    runAndWait(service.overwritePolicyMembers(defaultResourceType, newPolicy.id.accessPolicyName, newPolicy.id.resource, Set.empty))
+
+    val policies = runAndWait(policyDAO.listAccessPolicies(resource)).map(_.copy(email=WorkbenchEmail("policy-randomuuid@example.com")))
+
+    assert(policies.contains(newPolicy))
+  }
+
   it should "succeed with a regex action" in {
     val rt = ResourceType(ResourceTypeName(UUID.randomUUID().toString), Set(ResourceActionPattern("foo-.+-bar", "", false)), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("foo-biz-bar")))), ResourceRoleName("owner"))
     val resource = Resource(rt.name, ResourceId("my-resource"))

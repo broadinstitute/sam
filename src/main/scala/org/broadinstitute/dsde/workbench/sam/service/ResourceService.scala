@@ -236,6 +236,21 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
   }
 
   /**
+    * Overwrites an existing policy's membership (keyed by resourceType/resourceId/policyName) if it exists
+    * @param resourceType
+    * @param policyName
+    * @param resource
+    * @param membersList
+    * @return
+    */
+  def overwritePolicyMembers(resourceType: ResourceType, policyName: AccessPolicyName, resource: Resource, membersList: Set[WorkbenchEmail]): Future[AccessPolicy] = {
+    loadResourcePolicy(ResourceAndPolicyName(resource, policyName)).flatMap {
+      case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "Policy not found"))
+      case Some(accessPolicyMembership) => overwritePolicy(resourceType, policyName, resource, accessPolicyMembership.copy(memberEmails = membersList))
+    }
+  }
+
+  /**
     * Overwrites the policy if it already exists or creates a new policy entry if it does not exist.
     * Triggers update to Google Group upon successfully updating the policy.
     * Note:  This method DOES NOT validate the policy and should probably not be called directly unless you know the
