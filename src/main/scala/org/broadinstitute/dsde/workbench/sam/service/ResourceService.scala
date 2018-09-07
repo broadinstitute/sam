@@ -3,7 +3,6 @@ package org.broadinstitute.dsde.workbench.sam.service
 import java.util.UUID
 
 import akka.http.scaladsl.model.StatusCodes
-import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam._
