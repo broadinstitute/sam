@@ -65,7 +65,6 @@ class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdenti
   override def overwritePolicy(newPolicy: AccessPolicy): Future[AccessPolicy] = createPolicy(newPolicy).unsafeToFuture()
 
   override def overwritePolicyMembers(id: ResourceAndPolicyName, memberList: Set[WorkbenchSubject]): Future[Unit] = {
-    println(policies)
     loadPolicy(id) flatMap {
       case None => throw new Exception("not found")
       case Some(policy) => overwritePolicy(policy.copy(members = memberList)).map(_ => ())
