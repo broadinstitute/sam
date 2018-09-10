@@ -263,13 +263,19 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
 
     runAndWait(constrainableService.createResourceType(managedGroupResourceType))
     val managedGroupName = "fooGroup"
+    val secondMGroupName = "barGroup"
     runAndWait(managedGroupService.createManagedGroup(ResourceId(managedGroupName), dummyUserInfo))
+    runAndWait(managedGroupService.createManagedGroup(ResourceId(secondMGroupName), dummyUserInfo))
 
-    val authDomain = Set(WorkbenchGroupName(managedGroupName))
+    val authDomain = Set(WorkbenchGroupName(managedGroupName), WorkbenchGroupName(secondMGroupName))
     val viewPolicyName = AccessPolicyName(constrainableReaderRoleName.value)
     val resource = runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId(UUID.randomUUID().toString), Map(viewPolicyName -> constrainablePolicyMembership), authDomain, dummyUserInfo))
-    val resultingPolicies: Set[ResourceAndPolicyName] = runAndWait(policyDAO.listAccessPolicies(resource)).map(_.id)
-    resultingPolicies shouldEqual Set(ResourceAndPolicyName(resource, viewPolicyName))
+//    val resultingPolicies: Set[ResourceAndPolicyName] = runAndWait(policyDAO.listAccessPolicies(resource)).map(_.id)
+    val storedAuthDomain = runAndWait(constrainableService.loadResourceAuthDomain(resource))
+
+    storedAuthDomain shouldEqual authDomain
+
+//    resultingPolicies shouldEqual Set(ResourceAndPolicyName(resource, viewPolicyName))
   }
 
   it should "fail when at least 1 of the auth domain groups does not exist" in {

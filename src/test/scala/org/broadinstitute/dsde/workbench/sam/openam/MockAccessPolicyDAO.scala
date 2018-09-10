@@ -34,6 +34,9 @@ class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdenti
     policies -- toRemove
   }
 
+  // TODO: temporarily stubbed
+  override def loadResourceAuthDomain(resource: Resource): Future[Set[WorkbenchGroupName]] = Future.successful(Set.empty)
+
   override def createPolicy(policy: AccessPolicy): Future[AccessPolicy] = Future {
     policies += policy.id -> policy
     policy
@@ -45,7 +48,7 @@ class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdenti
 
   override def listAccessPolicies(resourceTypeName: ResourceTypeName, user: WorkbenchUserId): Future[Set[ResourceIdAndPolicyName]] = Future {
     policies.collect {
-      case (riapn@ResourceAndPolicyName(Resource(`resourceTypeName`, _), _), accessPolicy) if accessPolicy.members.contains(user) => ResourceIdAndPolicyName(riapn.resource.resourceId, riapn.accessPolicyName)
+      case (riapn@ResourceAndPolicyName(Resource(`resourceTypeName`, _, _), _), accessPolicy) if accessPolicy.members.contains(user) => ResourceIdAndPolicyName(riapn.resource.resourceId, riapn.accessPolicyName)
     }.toSet
   }
 

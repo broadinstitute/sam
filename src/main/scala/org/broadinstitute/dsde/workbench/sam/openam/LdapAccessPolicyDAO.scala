@@ -27,10 +27,13 @@ class LdapAccessPolicyDAO(protected val ldapConnectionPool: LDAPConnectionPool, 
   }
 
   override def createResource(resource: Resource): Future[Resource] = Future {
-    ldapConnectionPool.add(resourceDn(resource),
+    val attributes = Seq(
       new Attribute("objectclass", Seq("top", ObjectClass.resource).asJava),
       new Attribute(Attr.resourceType, resource.resourceTypeName.value)
-    )
+    ) ++
+      maybeAttribute(Attr.authDomain, resource.authDomain.map(_.value))
+
+    ldapConnectionPool.add(resourceDn(resource), attributes.asJava)
     resource
   }.recover {
     case ldape: LDAPException if ldape.getResultCode == ResultCode.ENTRY_ALREADY_EXISTS =>
@@ -40,6 +43,18 @@ class LdapAccessPolicyDAO(protected val ldapConnectionPool: LDAPConnectionPool, 
   // TODO: Method is not tested.  To test properly, we'll probably need a loadResource or getResource method
   override def deleteResource(resource: Resource): Future[Unit] = Future {
     ldapConnectionPool.delete(resourceDn(resource))
+  }
+
+  override def loadResourceAuthDomain(resource: Resource): Future[Set[WorkbenchGroupName]] = Future {
+    ldapSearchStream(resourceDn(resource), SearchScope.BASE, Filter.createEqualityFilter("objectclass", ObjectClass.resource))(unmarshalResource).toSet[Resource].flatMap(_.authDomain)
+  }
+
+  private def unmarshalResource(entry:Entry): Resource = {
+    val resourceId = ResourceId(getAttribute(entry, Attr.resourceId).get)
+    val resourceTypeName = ResourceTypeName(getAttribute(entry, Attr.resourceType).get)
+    val authDomain = getAttributes(entry, Attr.authDomain).getOrElse(Set.empty).toSet.map(g => WorkbenchGroupName(g))
+
+    Resource(resourceTypeName, resourceId, authDomain)
   }
 
   override def createPolicy(policy: AccessPolicy): Future[AccessPolicy] = Future {

@@ -58,7 +58,7 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
   def createResource(resourceType: ResourceType, resourceId: ResourceId, policiesMap: Map[AccessPolicyName, AccessPolicyMembership], authDomain: Set[WorkbenchGroupName], userInfo: UserInfo): Future[Resource] = {
     makeValidatablePolicies(policiesMap).flatMap { policies =>
       validateCreateResource(resourceType, resourceId, policies, authDomain, userInfo).flatMap {
-        case Seq() => persistResource(resourceType, resourceId, policies)
+        case Seq() => persistResource(resourceType, resourceId, policies, authDomain)
         case errorReports: Seq[ErrorReport] => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "Cannot create resource", errorReports))
       }
     }
@@ -71,11 +71,12 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     * @param resourceType
     * @param resourceId
     * @param policies
+    * @param authDomain
     * @return Future[Resource]
     */
-  private def persistResource(resourceType: ResourceType, resourceId: ResourceId, policies: Set[ValidatableAccessPolicy]) = {
+  private def persistResource(resourceType: ResourceType, resourceId: ResourceId, policies: Set[ValidatableAccessPolicy], authDomain: Set[WorkbenchGroupName]) = {
     for {
-      resource <- accessPolicyDAO.createResource(Resource(resourceType.name, resourceId))
+      resource <- accessPolicyDAO.createResource(Resource(resourceType.name, resourceId, authDomain))
       _ <- Future.traverse(policies)(createOrUpdatePolicy(resource, _))
     } yield resource
   }
@@ -119,6 +120,10 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     if (authDomain.nonEmpty && !resourceType.isAuthDomainConstrainable) {
       Option(ErrorReport(s"Auth Domain is not permitted on resource of type: ${resourceType.name}"))
     } else None
+  }
+
+  def loadResourceAuthDomain(resource: Resource): Future[Set[WorkbenchGroupName]] = {
+    accessPolicyDAO.loadResourceAuthDomain(resource)
   }
 
   def createPolicy(resourceAndPolicyName: ResourceAndPolicyName, members: Set[WorkbenchSubject], roles: Set[ResourceRoleName], actions: Set[ResourceAction]): Future[AccessPolicy] = {
