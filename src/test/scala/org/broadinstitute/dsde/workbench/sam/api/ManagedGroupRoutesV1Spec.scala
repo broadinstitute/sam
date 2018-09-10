@@ -629,9 +629,8 @@ class ManagedGroupRoutesV1Spec extends FlatSpec with Matchers with ScalatestRout
     val samRoutes = TestSamRoutes(resourceTypes)
     assertCreateGroup(samRoutes)
     val instructions = "Test instructions"
-    val mgaInstructions = ManagedGroupAccessInstructions(groupId, instructions)
 
-    Post(s"/api/groups/v1/$groupId/accessInstructions", mgaInstructions) ~> samRoutes.route ~> check {
+    Put(s"/api/groups/v1/$groupId/accessInstructions", ManagedGroupAccessInstructions(instructions)) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NoContent
     }
   }
@@ -640,9 +639,8 @@ class ManagedGroupRoutesV1Spec extends FlatSpec with Matchers with ScalatestRout
     val samRoutes = TestSamRoutes(resourceTypes)
     assertCreateGroup(samRoutes)
     val instructions = "Test instructions"
-    val mgaInstructions = ManagedGroupAccessInstructions(groupId, instructions)
 
-    Post(s"/api/groups/v1/$groupId/accessInstructions", mgaInstructions) ~> samRoutes.route ~> check {
+    Put(s"/api/groups/v1/$groupId/accessInstructions", ManagedGroupAccessInstructions(instructions)) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NoContent
     }
 
@@ -683,9 +681,8 @@ class ManagedGroupRoutesV1Spec extends FlatSpec with Matchers with ScalatestRout
     assertCreateGroup(samRoutes)
 
     val instructions = "Test instructions"
-    val mgaInstructions = ManagedGroupAccessInstructions(groupId, instructions)
 
-    Post(s"/api/groups/v1/$groupId/accessInstructions", mgaInstructions) ~> samRoutes.route ~> check {
+    Put(s"/api/groups/v1/$groupId/accessInstructions", ManagedGroupAccessInstructions(instructions)) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NoContent
     }
 

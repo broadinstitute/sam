@@ -20,20 +20,16 @@ class LdapDirectoryDAO(protected val ldapConnectionPool: LDAPConnectionPool, pro
   override def createGroup(group: BasicWorkbenchGroup, accessInstructionsOpt: Option[String] = None): Future[BasicWorkbenchGroup] = Future {
     val membersAttribute = if (group.members.isEmpty) None else Option(new Attribute(Attr.uniqueMember, group.members.map(subject => subjectDn(subject)).asJava))
 
-    val attributes = accessInstructionsOpt match {
-      case Some(accessInstructions) => Seq(
+    val accessInstructionsAttr = accessInstructionsOpt.collect {
+      case accessInstructions => new Attribute(Attr.accessInstructions, accessInstructions)
+    }
+
+    val attributes = Seq(
         new Attribute("objectclass", "top", "workbenchGroup"),
         new Attribute(Attr.email, group.email.value),
         new Attribute(Attr.groupUpdatedTimestamp, formattedDate(new Date())),
-        new Attribute(Attr.accessInstructions, accessInstructions)
-      ) ++ membersAttribute
-
-      case None => Seq(
-        new Attribute("objectclass", "top", "workbenchGroup"),
-        new Attribute(Attr.email, group.email.value),
-        new Attribute(Attr.groupUpdatedTimestamp, formattedDate(new Date()))
-      ) ++ membersAttribute
-    }
+    ) ++ membersAttribute ++
+      accessInstructionsAttr
 
     ldapConnectionPool.add(groupDn(group.id), attributes.asJava)
 

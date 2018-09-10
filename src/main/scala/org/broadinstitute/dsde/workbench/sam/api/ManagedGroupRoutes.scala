@@ -46,7 +46,7 @@ trait ManagedGroupRoutes extends UserInfoDirectives with SecurityDirectives with
           }
         } ~
         path("accessInstructions") {
-          post {
+          put {
             entity(as[ManagedGroupAccessInstructions]) { accessInstructions =>
               handleSetAccessInstructions(managedGroup, accessInstructions, userInfo)
             }
@@ -160,7 +160,7 @@ trait ManagedGroupRoutes extends UserInfoDirectives with SecurityDirectives with
   private def handleSetAccessInstructions(managedGroup: Resource, accessInstructions: ManagedGroupAccessInstructions, userInfo: UserInfo): Route = {
     requireAction(managedGroup, SamResourceActions.setAccessInstructions, userInfo) {
       complete(
-        managedGroupService.setAccessInstructions(managedGroup.resourceId, accessInstructions.instructions).map(_ => StatusCodes.NoContent)
+        managedGroupService.setAccessInstructions(managedGroup.resourceId, accessInstructions.value).map(_ => StatusCodes.NoContent)
       )
     }
   }

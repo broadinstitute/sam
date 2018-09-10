@@ -281,7 +281,7 @@ paths:
         - Group
 
   /api/groups/v1/{groupName}/accessInstructions:
-    post:
+    put:
       summary: sets the access instructions for a managed group
       responses:
         204:
