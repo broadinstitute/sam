@@ -114,6 +114,12 @@ class LdapAccessPolicyDAO(protected val ldapConnectionPool: LDAPConnectionPool, 
     AccessPolicy(ResourceAndPolicyName(resource, AccessPolicyName(policyName)), members, email, roles, actions)
   }
 
+  override def overwritePolicyMembers(id: ResourceAndPolicyName, memberList: Set[WorkbenchSubject]): Future[Unit] = Future {
+    val memberMod = new Modification(ModificationType.REPLACE, Attr.uniqueMember, memberList.map(subjectDn).toArray:_*)
+
+    ldapConnectionPool.modify(policyDn(id), memberMod)
+  }
+
   override def overwritePolicy(newPolicy: AccessPolicy): Future[AccessPolicy] = Future {
     val memberMod = new Modification(ModificationType.REPLACE, Attr.uniqueMember, newPolicy.members.map(subjectDn).toArray:_*)
     val actionMod = new Modification(ModificationType.REPLACE, Attr.action, newPolicy.actions.map(_.value).toArray:_*)

@@ -116,7 +116,7 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
                     pathPrefix("memberEmails") {
                       pathEndOrSingleSlash {
                         put {
-                          requireAction(resource, SamResourceActions.sharePolicy(AccessPolicyName(policyName)), userInfo) {
+                          requireOneOfAction(resource, Set(SamResourceActions.alterPolicies, SamResourceActions.sharePolicy(AccessPolicyName(policyName))), userInfo) {
                             entity(as[Set[WorkbenchEmail]]) { membersList =>
                               complete(resourceService.overwritePolicyMembers(resourceType, AccessPolicyName(policyName), Resource(resourceType.name, ResourceId(resourceId)), membersList).map(_ => StatusCodes.NoContent))
                             }

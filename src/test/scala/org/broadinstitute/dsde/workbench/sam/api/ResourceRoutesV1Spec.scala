@@ -353,13 +353,19 @@ class ResourceRoutesV1Spec extends FlatSpec with Matchers with ScalatestRouteTes
       status shouldEqual StatusCodes.NoContent
     }
 
-    val testUser = WorkbenchUser(WorkbenchUserId("testuser"), WorkbenchEmail("testuser@foo.com"))
+    val testUser = CreateWorkbenchUser(WorkbenchUserId("testuser"), genGoogleSubjectId(), WorkbenchEmail("testuser@foo.com"))
 
     runAndWait(samRoutes.userService.createUser(testUser))
 
-    val members = Set(testUser.email)
+    val members = AccessPolicyMembership(Set(testUser.email), Set(ResourceAction("can_compute")), Set.empty)
 
-    Put(s"/api/resources/v1/${resourceType.name}/foo/policies/canCompute/memberEmails", members) ~> samRoutes.route ~> check {
+    Put(s"/api/resources/v1/${resourceType.name}/foo/policies/canCompute", members) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Created
+    }
+
+    val members2 = Set(testUser.email)
+
+    Put(s"/api/resources/v1/${resourceType.name}/foo/policies/canCompute/memberEmails", members2) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NoContent
     }
   }

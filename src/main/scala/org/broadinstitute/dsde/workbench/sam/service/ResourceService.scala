@@ -243,10 +243,12 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     * @param membersList
     * @return
     */
-  def overwritePolicyMembers(resourceType: ResourceType, policyName: AccessPolicyName, resource: Resource, membersList: Set[WorkbenchEmail]): Future[AccessPolicy] = {
-    loadResourcePolicy(ResourceAndPolicyName(resource, policyName)).flatMap {
-      case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "Policy not found"))
-      case Some(accessPolicyMembership) => overwritePolicy(resourceType, policyName, resource, accessPolicyMembership.copy(memberEmails = membersList))
+  def overwritePolicyMembers(resourceType: ResourceType, policyName: AccessPolicyName, resource: Resource, membersList: Set[WorkbenchEmail]): Future[Unit] = {
+    mapEmailsToSubjects(membersList).flatMap { emailsToSubjects =>
+      validateMemberEmails(emailsToSubjects) match {
+        case Some(error) => Future.failed(new WorkbenchExceptionWithErrorReport(error))
+        case None => accessPolicyDAO.overwritePolicyMembers(ResourceAndPolicyName(resource, policyName), emailsToSubjects.values.flatten.toSet)
+      }
     }
   }
 
