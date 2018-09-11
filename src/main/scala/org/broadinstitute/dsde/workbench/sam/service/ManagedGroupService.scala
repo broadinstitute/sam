@@ -77,8 +77,9 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
 
   def deleteManagedGroup(groupId: ResourceId): Future[Unit] = {
     for {
-      _ <- directoryDAO.deleteGroup(WorkbenchGroupName(groupId.value))
+      // remove from cloud extensions first so a failure there does not leave ldap in a bad state
       _ <- cloudExtensions.onGroupDelete(WorkbenchEmail(constructEmail(groupId.value)))
+      _ <- directoryDAO.deleteGroup(WorkbenchGroupName(groupId.value))
       _ <- resourceService.deleteResource(Resource(managedGroupType.name, groupId))
     } yield ()
   }
