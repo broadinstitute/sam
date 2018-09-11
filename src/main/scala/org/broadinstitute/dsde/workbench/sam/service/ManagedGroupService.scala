@@ -128,9 +128,9 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
   }
 
   def requestAccess(resourceId: ResourceId, requesterUserId: WorkbenchUserId): Future[Unit] = {
-    getAccessInstructions(resourceId).map {
-      case accessInstructions: Some[String] =>
-        throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"Please follow special access instructions: $accessInstructions"))
+    getAccessInstructions(resourceId).flatMap {
+      case Some(accessInstructions) =>
+        Future.failed(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"Please follow special access instructions: $accessInstructions")))
       case None =>
         val resourceAndPolicyName = ResourceAndPolicyName(Resource(ManagedGroupService.managedGroupTypeName, resourceId), ManagedGroupService.adminPolicyName)
         accessPolicyDAO.listFlattenedPolicyMembers(resourceAndPolicyName).map { users =>

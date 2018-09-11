@@ -336,10 +336,11 @@ class LdapDirectoryDAO(protected val ldapConnectionPool: LDAPConnectionPool, pro
     petServiceAccount
   }
 
-  override def getManagedGroupAccessInstructions(groupName: WorkbenchGroupName): Future[Option[String]] = Future {
-    Option(ldapConnectionPool.getEntry(groupDn(groupName), Attr.accessInstructions)).map { entry =>
-      Option(entry.getAttributeValue(Attr.accessInstructions))
-    }.getOrElse(throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"$groupName not found")))
+  override def getManagedGroupAccessInstructions(groupName: WorkbenchGroupName): Future[Option[String]] = {
+    Option(ldapConnectionPool.getEntry(groupDn(groupName))) match {
+      case None => Future.failed(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"$groupName not found")))
+      case Some(e) => Future.successful(Option(e.getAttributeValue(Attr.accessInstructions)))
+    }
   }
 
   override def setManagedGroupAccessInstructions(groupName: WorkbenchGroupName, accessInstructions: String): Future[Unit] = Future {
