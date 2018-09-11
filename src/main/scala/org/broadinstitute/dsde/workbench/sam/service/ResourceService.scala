@@ -140,9 +140,10 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
   def deleteResource(resource: Resource): Future[Unit] = {
     for {
       policiesToDelete <- accessPolicyDAO.listAccessPolicies(resource)
+      // remove from cloud extensions first so a failure there does not leave ldap in a bad state
+      _ <- Future.traverse(policiesToDelete) { policy => cloudExtensions.onGroupDelete(policy.email) }
       _ <- Future.traverse(policiesToDelete) {accessPolicyDAO.deletePolicy}
       _ <- maybeDeleteResource(resource)
-      _ <- Future.traverse(policiesToDelete) { policy => cloudExtensions.onGroupDelete(policy.email) }
     } yield ()
   }
 
