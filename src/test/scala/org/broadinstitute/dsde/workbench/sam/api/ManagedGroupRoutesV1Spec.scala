@@ -625,7 +625,7 @@ class ManagedGroupRoutesV1Spec extends FlatSpec with Matchers with ScalatestRout
     }
   }
 
-  "POST /api/groups/v1/{groupName}/accessInstructions" should "succeed with 204" in {
+  "PUT /api/groups/v1/{groupName}/accessInstructions" should "succeed with 204" in {
     val samRoutes = TestSamRoutes(resourceTypes)
     assertCreateGroup(samRoutes)
     val instructions = "Test instructions"
