@@ -18,7 +18,7 @@ import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO.Attr
   * Created by mbemis on 6/23/17.
   */
 class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, WorkbenchGroup] = new TrieMap()) extends DirectoryDAO {
-  private val groupSynchronzedDates: mutable.Map[WorkbenchGroupIdentity, Date] = new TrieMap()
+  private val groupSynchronizedDates: mutable.Map[WorkbenchGroupIdentity, Date] = new TrieMap()
   private val users: mutable.Map[WorkbenchUserId, WorkbenchUser] = new TrieMap()
   private val userAttributes: mutable.Map[WorkbenchUserId, mutable.Map[String, Any]] = new TrieMap()
   private val enabledUsers: mutable.Map[WorkbenchSubject, Unit] = new TrieMap()
@@ -28,7 +28,9 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
   private val petServiceAccountsByUser: mutable.Map[PetServiceAccountId, PetServiceAccount] = new TrieMap()
   private val petsWithEmails: mutable.Map[WorkbenchEmail, PetServiceAccountId] = new TrieMap()
 
-  override def createGroup(group: BasicWorkbenchGroup): Future[BasicWorkbenchGroup] = Future {
+  private val groupAccessInstructions: mutable.Map[WorkbenchGroupName, String] = new TrieMap()
+
+  override def createGroup(group: BasicWorkbenchGroup, accessInstruction: Option[String] = None): Future[BasicWorkbenchGroup] = Future {
     if (groups.keySet.contains(group.id)) {
       throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"group ${group.id} already exists"))
     }
@@ -190,7 +192,7 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
   }
 
   override def updateSynchronizedDate(groupId: WorkbenchGroupIdentity): Future[Unit] = {
-    groupSynchronzedDates += groupId -> new Date()
+    groupSynchronizedDates += groupId -> new Date()
     Future.successful(())
   }
 
@@ -209,7 +211,7 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
   }
 
   override def getSynchronizedDate(groupId: WorkbenchGroupIdentity): Future[Option[Date]] = {
-    Future.successful(groupSynchronzedDates.get(groupId))
+    Future.successful(groupSynchronizedDates.get(groupId))
   }
 
   override def getSynchronizedEmail(groupId: WorkbenchGroupIdentity): Future[Option[WorkbenchEmail]] = {
@@ -230,6 +232,18 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
   override def updatePetServiceAccount(petServiceAccount: PetServiceAccount): Future[PetServiceAccount] = Future {
     petServiceAccountsByUser.update(petServiceAccount.id, petServiceAccount)
     petServiceAccount
+  }
+
+  override def getManagedGroupAccessInstructions(groupName: WorkbenchGroupName): Future[Option[String]] = Future {
+    if (groups.contains(groupName))
+      groupAccessInstructions.get(groupName)
+    else
+      throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "group not found"))
+  }
+
+  override def setManagedGroupAccessInstructions(groupName: WorkbenchGroupName, accessInstructions: String): Future[Unit] = Future {
+    groupAccessInstructions += groupName -> accessInstructions
+    Future.successful(())
   }
 
   private def addUserAttribute(userId: WorkbenchUserId, attrId: String, value: Any): Future[Unit] = {

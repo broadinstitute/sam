@@ -31,6 +31,7 @@ object JndiSchemaDAO {
     val uniqueMember = "uniqueMember"
     val groupUpdatedTimestamp = "groupUpdatedTimestamp"
     val groupSynchronizedTimestamp = "groupSynchronizedTimestamp"
+    val accessInstructions = "accessInstructions"
     val member = "member"
     val memberOf = "isMemberOf"
     val givenName = "givenName"
@@ -271,6 +272,7 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig, val schemaLo
 
     createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.200", Attr.groupUpdatedTimestamp, "time when group was updated", true, Option("generalizedTimeMatch"), Option("generalizedTimeOrderingMatch"), Option("1.3.6.1.4.1.1466.115.121.1.24"))
     createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.201", Attr.groupSynchronizedTimestamp, "time when group was synchronized", true, Option("generalizedTimeMatch"), Option("generalizedTimeOrderingMatch"), Option("1.3.6.1.4.1.1466.115.121.1.24"))
+    createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.202", Attr.accessInstructions, "access instructions for managed groups", true)
 
     val attrs = new BasicAttributes(true) // Ignore case
     attrs.put("NUMERICOID", "1.3.6.1.4.1.18060.0.4.3.2.100")
@@ -286,6 +288,7 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig, val schemaLo
     val may = new BasicAttribute("MAY")
     may.add(Attr.groupUpdatedTimestamp)
     may.add(Attr.groupSynchronizedTimestamp)
+    may.add(Attr.accessInstructions)
     attrs.put(may)
 
     // Add the new schema object for "fooObjectClass"
@@ -308,6 +311,7 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig, val schemaLo
     Try { schema.destroySubcontext("ClassDefinition/" + ObjectClass.workbenchGroup) }
     Try { schema.destroySubcontext("AttributeDefinition/" + Attr.groupSynchronizedTimestamp) }
     Try { schema.destroySubcontext("AttributeDefinition/" + Attr.groupUpdatedTimestamp) }
+    Try { schema.destroySubcontext("AttributeDefinition/" + Attr.accessInstructions) }
   }
 
   private def createPolicySchema(): Future[Unit] = withContext { ctx =>

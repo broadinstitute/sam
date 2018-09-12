@@ -8,6 +8,7 @@ import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.service.ManagedGroupService
 import org.scalatest.{BeforeAndAfter, FlatSpec, Matchers}
 import spray.json.DefaultJsonProtocol._
@@ -21,7 +22,7 @@ class ManagedGroupRoutesV1Spec extends FlatSpec with Matchers with ScalatestRout
 
   private val accessPolicyNames = Set(ManagedGroupService.adminPolicyName, ManagedGroupService.memberPolicyName, ManagedGroupService.adminNotifierPolicyName)
   private val policyActions: Set[ResourceAction] = accessPolicyNames.flatMap(policyName => Set(SamResourceActions.sharePolicy(policyName), SamResourceActions.readPolicy(policyName)))
-  private val resourceActions = Set(ResourceAction("delete"), ResourceAction("notify_admins")) union policyActions
+  private val resourceActions = Set(ResourceAction("delete"), ResourceAction("notify_admins"), ResourceAction("set_access_instructions")) union policyActions
   private val resourceActionPatterns = resourceActions.map(action => ResourceActionPattern(action.value, "", false))
   private val defaultOwnerRole = ResourceRole(ManagedGroupService.adminRoleName, resourceActions)
   private val defaultMemberRole = ResourceRole(ManagedGroupService.memberRoleName, Set.empty)
@@ -620,6 +621,81 @@ class ManagedGroupRoutesV1Spec extends FlatSpec with Matchers with ScalatestRout
 
     val newGuy = makeOtherUser(samRoutes)
     Put(s"/api/groups/v1/$groupId/admin-notifier", Set(newGuy.email)) ~> newGuy.routes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
+    }
+  }
+
+  "PUT /api/groups/v1/{groupName}/accessInstructions" should "succeed with 204" in {
+    val samRoutes = TestSamRoutes(resourceTypes)
+    assertCreateGroup(samRoutes)
+    val instructions = "Test instructions"
+
+    Put(s"/api/groups/v1/$groupId/accessInstructions", ManagedGroupAccessInstructions(instructions)) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+    }
+  }
+
+  "GET /api/groups/v1/{groupName}/accessInstructions" should "succeed with 200 and return the access instructions when group and access instructions exist" in {
+    val samRoutes = TestSamRoutes(resourceTypes)
+    assertCreateGroup(samRoutes)
+    val instructions = "Test instructions"
+
+    Put(s"/api/groups/v1/$groupId/accessInstructions", ManagedGroupAccessInstructions(instructions)) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+    }
+
+    Get(s"/api/groups/v1/$groupId/accessInstructions") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[String] shouldEqual (instructions)
+    }
+  }
+
+  it should "succeed with 204 when the group exists but access instructions are not set" in {
+    val samRoutes = TestSamRoutes(resourceTypes)
+    assertCreateGroup(samRoutes)
+
+    Get(s"/api/groups/v1/$groupId/accessInstructions") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+    }
+  }
+
+  it should "fail with 404 when the group does not exist" in {
+    val samRoutes = TestSamRoutes(resourceTypes)
+
+    Get(s"/api/groups/v1/$groupId/accessInstructions") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
+    }
+  }
+
+  "POST /api/groups/v1/{groupName}/requestAccess" should "succeed with 204 when the group exists" in {
+    val samRoutes = TestSamRoutes(resourceTypes)
+    assertCreateGroup(samRoutes)
+
+    Post(s"/api/groups/v1/$groupId/requestAccess") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+    }
+  }
+
+  it should "fail with 400 if there are access instructions" in {
+    val samRoutes = TestSamRoutes(resourceTypes)
+    assertCreateGroup(samRoutes)
+
+    val instructions = "Test instructions"
+
+    Put(s"/api/groups/v1/$groupId/accessInstructions", ManagedGroupAccessInstructions(instructions)) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+    }
+
+    Post(s"/api/groups/v1/$groupId/requestAccess") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.BadRequest
+      responseAs[String] should include (instructions)
+    }
+  }
+
+  it should "fail with 404 when group does not exist" in {
+    val samRoutes = TestSamRoutes(resourceTypes)
+
+    Post(s"/api/groups/v1/$groupId/requestAccess") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
   }

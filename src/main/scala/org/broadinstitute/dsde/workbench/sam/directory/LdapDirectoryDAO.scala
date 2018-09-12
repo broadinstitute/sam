@@ -7,7 +7,7 @@ import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{ServiceAccount, ServiceAccountDisplayName, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
-import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
+import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, ResourceId}
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO.{Attr, ObjectClass}
 import org.broadinstitute.dsde.workbench.sam.util.LdapSupport
 
@@ -17,13 +17,19 @@ import scala.util.{Failure, Success, Try}
 
 class LdapDirectoryDAO(protected val ldapConnectionPool: LDAPConnectionPool, protected val directoryConfig: DirectoryConfig)(implicit executionContext: ExecutionContext) extends DirectoryDAO with DirectorySubjectNameSupport with LdapSupport {
 
-  override def createGroup(group: BasicWorkbenchGroup): Future[BasicWorkbenchGroup] = Future {
+  override def createGroup(group: BasicWorkbenchGroup, accessInstructionsOpt: Option[String] = None): Future[BasicWorkbenchGroup] = Future {
     val membersAttribute = if (group.members.isEmpty) None else Option(new Attribute(Attr.uniqueMember, group.members.map(subject => subjectDn(subject)).asJava))
+
+    val accessInstructionsAttr = accessInstructionsOpt.collect {
+      case accessInstructions => new Attribute(Attr.accessInstructions, accessInstructions)
+    }
+
     val attributes = Seq(
-      new Attribute("objectclass", "top", "workbenchGroup"),
-      new Attribute(Attr.email, group.email.value),
-      new Attribute(Attr.groupUpdatedTimestamp, formattedDate(new Date()))
-    ) ++ membersAttribute
+        new Attribute("objectclass", "top", "workbenchGroup"),
+        new Attribute(Attr.email, group.email.value),
+        new Attribute(Attr.groupUpdatedTimestamp, formattedDate(new Date())),
+    ) ++ membersAttribute ++
+      accessInstructionsAttr
 
     ldapConnectionPool.add(groupDn(group.id), attributes.asJava)
 
@@ -328,5 +334,16 @@ class LdapDirectoryDAO(protected val ldapConnectionPool: LDAPConnectionPool, pro
     }
     ldapConnectionPool.modify(petDn(petServiceAccount.id), modifications.asJava)
     petServiceAccount
+  }
+
+  override def getManagedGroupAccessInstructions(groupName: WorkbenchGroupName): Future[Option[String]] = {
+    Option(ldapConnectionPool.getEntry(groupDn(groupName))) match {
+      case None => Future.failed(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"$groupName not found")))
+      case Some(e) => Future.successful(Option(e.getAttributeValue(Attr.accessInstructions)))
+    }
+  }
+
+  override def setManagedGroupAccessInstructions(groupName: WorkbenchGroupName, accessInstructions: String): Future[Unit] = Future {
+    ldapConnectionPool.modify(groupDn(groupName), new Modification(ModificationType.REPLACE, Attr.accessInstructions, accessInstructions))
   }
 }

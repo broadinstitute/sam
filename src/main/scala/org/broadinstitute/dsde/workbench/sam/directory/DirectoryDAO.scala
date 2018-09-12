@@ -4,7 +4,7 @@ import java.util.Date
 
 import org.broadinstitute.dsde.workbench.model.google._
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
+import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, ResourceId}
 
 import scala.concurrent.Future
 
@@ -12,7 +12,7 @@ import scala.concurrent.Future
   * Created by dvoet on 5/26/17.
   */
 trait DirectoryDAO {
-  def createGroup(group: BasicWorkbenchGroup): Future[BasicWorkbenchGroup]
+  def createGroup(group: BasicWorkbenchGroup, accessInstructionsOpt: Option[String] = None): Future[BasicWorkbenchGroup]
   def loadGroup(groupName: WorkbenchGroupName): Future[Option[BasicWorkbenchGroup]]
   def loadGroups(groupNames: Set[WorkbenchGroupName]): Future[Seq[BasicWorkbenchGroup]]
   def loadGroupEmail(groupName: WorkbenchGroupName): Future[Option[WorkbenchEmail]]
@@ -57,4 +57,7 @@ trait DirectoryDAO {
   def deletePetServiceAccount(petServiceAccountId: PetServiceAccountId): Future[Unit]
   def getAllPetServiceAccountsForUser(userId: WorkbenchUserId): Future[Seq[PetServiceAccount]]
   def updatePetServiceAccount(petServiceAccount: PetServiceAccount): Future[PetServiceAccount]
+
+  def getManagedGroupAccessInstructions(groupName: WorkbenchGroupName): Future[Option[String]]
+  def setManagedGroupAccessInstructions(groupName: WorkbenchGroupName, accessInstructions: String): Future[Unit]
 }
