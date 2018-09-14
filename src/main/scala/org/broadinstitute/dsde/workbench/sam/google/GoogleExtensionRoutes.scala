@@ -32,7 +32,8 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                 googleExtensions.getPetServiceAccountKey(WorkbenchEmail(userEmail), GoogleProject(project)) map {
                   // parse json to ensure it is json and tells akka http the right content-type
                   case Some(key) => StatusCodes.OK -> key.parseJson
-                  case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "pet service account not found"))
+                  case None =>
+                    throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "pet service account not found"))
                 }
               }
             }
@@ -44,7 +45,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
               get {
                 complete {
                   import spray.json._
-                  googleExtensions.getArbitraryPetServiceAccountKey(WorkbenchUser(userInfo.userId, userInfo.userEmail)).map(key => StatusCodes.OK -> key.parseJson)
+                  googleExtensions.getArbitraryPetServiceAccountKey(WorkbenchUser(userInfo.userId, None, userInfo.userEmail)).map(key => StatusCodes.OK -> key.parseJson)
                 }
               }
             }
@@ -54,7 +55,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
               post {
                 entity(as[Set[String]]) { scopes =>
                   complete {
-                    googleExtensions.getArbitraryPetServiceAccountToken(WorkbenchUser(userInfo.userId, userInfo.userEmail), scopes).map { token =>
+                    googleExtensions.getArbitraryPetServiceAccountToken(WorkbenchUser(userInfo.userId, None, userInfo.userEmail), scopes).map { token =>
                       StatusCodes.OK -> JsString(token)
                     }
                   }
@@ -68,7 +69,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                 complete {
                   import spray.json._
                   // parse json to ensure it is json and tells akka http the right content-type
-                  googleExtensions.getPetServiceAccountKey(WorkbenchUser(userInfo.userId, userInfo.userEmail), GoogleProject(project)).map(key => StatusCodes.OK -> key.parseJson)
+                  googleExtensions.getPetServiceAccountKey(WorkbenchUser(userInfo.userId, None, userInfo.userEmail), GoogleProject(project)).map(key => StatusCodes.OK -> key.parseJson)
                 }
               } ~
               path(Segment) { keyId =>
@@ -83,7 +84,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
               post {
                 entity(as[Set[String]]) { scopes =>
                   complete {
-                    googleExtensions.getPetServiceAccountToken(WorkbenchUser(userInfo.userId, userInfo.userEmail), GoogleProject(project), scopes).map { token =>
+                    googleExtensions.getPetServiceAccountToken(WorkbenchUser(userInfo.userId, None, userInfo.userEmail), GoogleProject(project), scopes).map { token =>
                       StatusCodes.OK -> JsString(token)
                     }
                   }
@@ -93,7 +94,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
             pathEnd {
               get {
                 complete {
-                  googleExtensions.createUserPetServiceAccount(WorkbenchUser(userInfo.userId, userInfo.userEmail), GoogleProject(project)).map { petSA =>
+                  googleExtensions.createUserPetServiceAccount(WorkbenchUser(userInfo.userId, None, userInfo.userEmail), GoogleProject(project)).map { petSA =>
                     StatusCodes.OK -> petSA.serviceAccount.email
                   }
                 }

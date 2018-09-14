@@ -1,11 +1,12 @@
-package org.broadinstitute.dsde.workbench.sam.api
+package org.broadinstitute.dsde.workbench.sam
+package api
 
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directives._
-import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchUser, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.model.google.GoogleProject
+import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.service.UserService
 
@@ -20,61 +21,64 @@ trait UserRoutes extends UserInfoDirectives {
 
   def userRoutes: server.Route =
     pathPrefix("user") {
-      requireUserInfo { userInfo =>
-        (pathPrefix("v1") | pathEndOrSingleSlash){
+        (pathPrefix("v1") | pathEndOrSingleSlash) {
           pathEndOrSingleSlash {
             post {
-              complete {
-                userService.createUser(WorkbenchUser(userInfo.userId, userInfo.userEmail)).map(userStatus => StatusCodes.Created -> userStatus)
-              }
-            } ~
-            get {
-              parameter("userDetailsOnly".?) { userDetailsOnly =>
+              requireCreateUser { createUser =>
                 complete {
-                  userService.getUserStatus(userInfo.userId, userDetailsOnly.exists(_.equalsIgnoreCase("true"))).map { statusOption =>
-                    statusOption.map { status =>
-                      StatusCodes.OK -> Option(status)
-                    }.getOrElse(StatusCodes.NotFound -> None)
+                  userService.createUser(createUser).map(userStatus => StatusCodes.Created -> userStatus)
+                }
+              }
+            } ~ requireUserInfo { user =>
+              get {
+                parameter("userDetailsOnly".?) { userDetailsOnly =>
+                  complete {
+                    userService.getUserStatus(user.userId, userDetailsOnly.exists(_.equalsIgnoreCase("true"))).map { statusOption =>
+                      statusOption.map { status =>
+                        StatusCodes.OK -> Option(status)
+                      }.getOrElse(StatusCodes.NotFound -> None)
+                    }
                   }
                 }
               }
             }
           }
-        } ~
-        pathPrefix("v2") {
-          pathPrefix("self") {
-            pathEndOrSingleSlash {
-              post {
-                complete {
-                  userService.createUser(WorkbenchUser(userInfo.userId, userInfo.userEmail)).map(userStatus => StatusCodes.Created -> userStatus)
-                }
-              }
-            } ~
-            path("info") {
-              get {
-                complete {
-                  userService.getUserStatusInfo(userInfo.userId).map { statusOption =>
-                    statusOption.map { status =>
-                      StatusCodes.OK -> Option(status)
-                    }.getOrElse(StatusCodes.NotFound -> None)
+        } ~ pathPrefix("v2") {
+              pathPrefix("self") {
+                pathEndOrSingleSlash {
+                  post {
+                    requireCreateUser { createUser =>
+                      complete {
+                        userService.createUser(createUser).map(userStatus => StatusCodes.Created -> userStatus)
+                      }
+                    }
                   }
+                }~ requireUserInfo {user =>
+                    path("info") {
+                      get {
+                        complete {
+                          userService.getUserStatusInfo(user.userId).map { statusOption =>
+                            statusOption.map { status =>
+                              StatusCodes.OK -> Option(status)
+                            }.getOrElse(StatusCodes.NotFound -> None)
+                          }
+                        }
+                      }
+                    } ~
+                    path("diagnostics") {
+                      get {
+                        complete {
+                          userService.getUserStatusDiagnostics(user.userId).map { statusOption =>
+                            statusOption.map { status =>
+                              StatusCodes.OK -> Option(status)
+                            }.getOrElse(StatusCodes.NotFound -> None)
+                          }
+                        }
+                      }
+                    }
                 }
-              }
-            } ~
-            path("diagnostics") {
-              get {
-                complete {
-                  userService.getUserStatusDiagnostics(userInfo.userId).map { statusOption =>
-                    statusOption.map { status =>
-                      StatusCodes.OK -> Option(status)
-                    }.getOrElse(StatusCodes.NotFound -> None)
-                  }
-                }
-              }
             }
           }
-        }
-      }
     }
 
   def adminUserRoutes: server.Route =
@@ -149,3 +153,4 @@ trait UserRoutes extends UserInfoDirectives {
       }
     }
 }
+

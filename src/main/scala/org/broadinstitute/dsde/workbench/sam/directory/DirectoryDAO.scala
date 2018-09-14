@@ -35,6 +35,7 @@ trait DirectoryDAO {
   def loadSubjectFromEmail(email: WorkbenchEmail): Future[Option[WorkbenchSubject]]
   def loadSubjectEmail(subject: WorkbenchSubject): Future[Option[WorkbenchEmail]]
   def loadSubjectEmails(subjects: Set[WorkbenchSubject]): Future[Set[WorkbenchEmail]]
+  def loadSubjectFromGoogleSubjectId(googleSubjectId: GoogleSubjectId): Future[Option[WorkbenchSubject]]
 
   def createUser(user: WorkbenchUser): Future[WorkbenchUser]
   def loadUser(userId: WorkbenchUserId): Future[Option[WorkbenchUser]]
@@ -57,7 +58,7 @@ trait DirectoryDAO {
   def deletePetServiceAccount(petServiceAccountId: PetServiceAccountId): Future[Unit]
   def getAllPetServiceAccountsForUser(userId: WorkbenchUserId): Future[Seq[PetServiceAccount]]
   def updatePetServiceAccount(petServiceAccount: PetServiceAccount): Future[PetServiceAccount]
-
   def getManagedGroupAccessInstructions(groupName: WorkbenchGroupName): Future[Option[String]]
   def setManagedGroupAccessInstructions(groupName: WorkbenchGroupName, accessInstructions: String): Future[Unit]
+  def setGoogleSubjectId(userId: WorkbenchUserId, googleSubjectId: GoogleSubjectId): Future[Unit]
 }

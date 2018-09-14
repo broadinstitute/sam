@@ -1,36 +1,23 @@
-package org.broadinstitute.dsde.workbench.sam.api
+package org.broadinstitute.dsde.workbench.sam
+package api
 
 
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
-import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import akka.http.scaladsl.model.StatusCodes
-import akka.http.scaladsl.model.headers.OAuth2BearerToken
-import akka.http.scaladsl.testkit.ScalatestRouteTest
+import akka.http.scaladsl.model.headers.{OAuth2BearerToken, RawHeader}
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.TestSupport
+import org.broadinstitute.dsde.workbench.model.google.{ServiceAccount, ServiceAccountSubjectId}
+import org.broadinstitute.dsde.workbench.sam.TestSupport._
 import org.broadinstitute.dsde.workbench.sam.directory.MockDirectoryDAO
+import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.{NoExtensions, StatusService, UserService}
-import org.scalatest.{FlatSpec, Matchers}
-import org.scalatest.mockito.MockitoSugar
-
+import org.broadinstitute.dsde.workbench.sam.service.UserService._
+import StandardUserInfoDirectives._
 /**
   * Created by mtalbott on 8/8/18.
   */
-class UserRoutesV2Spec extends FlatSpec with Matchers with ScalatestRouteTest with MockitoSugar with TestSupport {
-
-  val defaultUserId = WorkbenchUserId("newuser")
-  val defaultUserEmail = WorkbenchEmail("newuser@new.com")
-  val petSAUserId = WorkbenchUserId("123")
-  val petSAEmail = WorkbenchEmail("pet-newuser@test.iam.gserviceaccount.com")
-
-  def withDefaultRoutes[T](testCode: TestSamRoutes => T): T = {
-    val directoryDAO = new MockDirectoryDAO()
-
-    val samRoutes = new TestSamRoutes(null, new UserService(directoryDAO, NoExtensions), new StatusService(directoryDAO, NoExtensions), null, UserInfo(OAuth2BearerToken(""), defaultUserId, defaultUserEmail, 0), directoryDAO)
-    testCode(samRoutes)
-  }
-
+class UserRoutesV2Spec extends UserRoutesSpecHelper {
   def withSARoutes[T](testCode: (TestSamRoutes, TestSamRoutes) => T): T = {
     val directoryDAO = new MockDirectoryDAO()
 
@@ -40,57 +27,73 @@ class UserRoutesV2Spec extends FlatSpec with Matchers with ScalatestRouteTest wi
   }
 
   "POST /register/user/v2/self" should "create user" in withDefaultRoutes { samRoutes =>
-    Post("/register/user/v2/self") ~> samRoutes.route ~> check {
+    val header = TestSupport.genGoogleSubjectIdHeader
+
+    Post("/register/user/v2/self").withHeaders(header, TestSupport.defaultEmailHeader) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
-      responseAs[UserStatus] shouldEqual UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
+      val res = responseAs[UserStatus]
+      res.userInfo.userSubjectId.value.length shouldBe 21
+      res.userInfo.userEmail shouldBe defaultUserEmail
+      res.enabled shouldBe Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true)
     }
 
-    Post("/register/user/v2/self") ~> samRoutes.route ~> check {
+    Post("/register/user/v2/self").withHeaders(header, TestSupport.defaultEmailHeader) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Conflict
     }
   }
 
   "GET /register/user/v2/self/info" should "get the status of an enabled user" in withDefaultRoutes { samRoutes =>
-    Get("/register/user/v2/self/info") ~> samRoutes.route ~> check {
+    val googleSubjectId = GoogleSubjectId(genRandom(System.currentTimeMillis()))
+    val firstGetHeaders = List(
+      defaultEmailHeader,
+      TestSupport.googleSubjectIdHeaderWithId(googleSubjectId),
+      RawHeader(accessTokenHeader, ""),
+      RawHeader(expiresInHeader, "1000")
+    )
+    Get("/register/user/v2/self/info").withHeaders(firstGetHeaders) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
-
-    Post("/register/user/v2/self") ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.Created
-      responseAs[UserStatus] shouldEqual UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
-    }
-
-    Get("/register/user/v2/self/info") ~> samRoutes.route ~> check {
+    val (user, headers, samDep, routes) = createTestUser(googSubjectId = Some(googleSubjectId))
+    Get("/register/user/v2/self/info").withHeaders(headers) ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK
-      responseAs[UserStatusInfo] shouldEqual UserStatusInfo(defaultUserId.value, defaultUserEmail.value, true)
+      responseAs[UserStatusInfo] shouldEqual UserStatusInfo(user.id.value, user.email.value, true)
     }
   }
 
   "GET /register/user/v2/self/diagnostics" should "get the diagnostic info for an enabled user" in withDefaultRoutes { samRoutes =>
-    Get("/register/user/v2/self/diagnostics") ~> samRoutes.route ~> check {
+    val googleSubjectId = GoogleSubjectId(genRandom(System.currentTimeMillis()))
+    val firstGetHeaders = List(
+      defaultEmailHeader,
+      TestSupport.googleSubjectIdHeaderWithId(googleSubjectId),
+      RawHeader(accessTokenHeader, ""),
+      RawHeader(expiresInHeader, "1000")
+    )
+    Get("/register/user/v2/self/diagnostics").withHeaders(firstGetHeaders) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
+    val (user, headers, samDep, routes) = createTestUser(googSubjectId = Some(googleSubjectId))
 
-    Post("/register/user/v2/self") ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.Created
-      responseAs[UserStatus] shouldEqual UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
-    }
-
-    Get("/register/user/v2/self/diagnostics") ~> samRoutes.route ~> check {
+    Get("/register/user/v2/self/diagnostics").withHeaders(headers) ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK
       responseAs[UserStatusDiagnostics] shouldEqual UserStatusDiagnostics(true, true, true)
     }
   }
 
-  "POST /register/user/v2/self" should "create a user" in withSARoutes{ (samRoutes, SARoutes) =>
-    Post("/register/user/v2/self") ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.Created
-      responseAs[UserStatus] shouldEqual UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
-    }
+  "POST /register/user/v2/self" should "retrieve PET owner's user info if a PET account is provided" in {
+    val (user, _, samDep, routes) = createTestUser()
+    val petEmail = s"pet-${user.id.value}@test.iam.gserviceaccount.com"
+    val headers = List(
+      RawHeader(emailHeader, petEmail),
+      TestSupport.googleSubjectIdHeaderWithId(user.googleSubjectId.get),
+      RawHeader(accessTokenHeader, ""),
+      RawHeader(expiresInHeader, "1000")
+    )
+    //create a PET service account owned by test user
+    runAndWait(samDep.directoryDAO.createPetServiceAccount(PetServiceAccount(PetServiceAccountId(user.id, null), ServiceAccount(ServiceAccountSubjectId(user.googleSubjectId.get.value), WorkbenchEmail(petEmail), null))))
 
-    Get("/register/user/v2/self/info") ~> SARoutes.route ~> check {
+    Get("/register/user/v2/self/info").withHeaders(headers) ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK
-      responseAs[UserStatusInfo] shouldEqual UserStatusInfo(defaultUserId.value, defaultUserEmail.value, true)
+      responseAs[UserStatusInfo] shouldEqual UserStatusInfo(user.id.value, user.email.value, true)
     }
   }
 }

@@ -16,6 +16,7 @@ import org.broadinstitute.dsde.workbench.google.GoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.google.mock.{MockGoogleDirectoryDAO, MockGoogleIamDAO, MockGooglePubSubDAO, MockGoogleStorageDAO}
 import org.broadinstitute.dsde.workbench.model.google.GoogleProject
 import org.broadinstitute.dsde.workbench.model.{WorkbenchExceptionWithErrorReport, _}
+import org.broadinstitute.dsde.workbench.sam.api.CreateWorkbenchUser
 import org.broadinstitute.dsde.workbench.sam.config.{DirectoryConfig, GoogleServicesConfig, PetServiceAccountConfig, _}
 import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryDAO, LdapDirectoryDAO, MockDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model._
@@ -185,12 +186,13 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
   }
 
   "GoogleExtension" should "get a pet service account for a user" in {
-    val (dirDAO: DirectoryDAO, mockGoogleIamDAO: MockGoogleIamDAO, mockGoogleDirectoryDAO: MockGoogleDirectoryDAO, googleExtensions: GoogleExtensions, service: UserService, defaultUserId: WorkbenchUserId, defaultUserEmail: WorkbenchEmail, defaultUserProxyEmail: WorkbenchEmail, defaultUser: WorkbenchUser) = initPetTest
+    val (dirDAO: DirectoryDAO, mockGoogleIamDAO: MockGoogleIamDAO, mockGoogleDirectoryDAO: MockGoogleDirectoryDAO, googleExtensions: GoogleExtensions, service: UserService, defaultUserId: WorkbenchUserId, defaultUserEmail: WorkbenchEmail, defaultUserProxyEmail: WorkbenchEmail, createDefaultUser: CreateWorkbenchUser) = initPetTest
 
     // create a user
-    val newUser = service.createUser(defaultUser).futureValue
+    val newUser = service.createUser(createDefaultUser).futureValue
     newUser shouldBe UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
 
+    val defaultUser = WorkbenchUser(createDefaultUser.id, Some(createDefaultUser.googleSubjectId), createDefaultUser.email)
     // create a pet service account
     val googleProject = GoogleProject("testproject")
     val petServiceAccount = googleExtensions.createUserPetServiceAccount(defaultUser, googleProject).futureValue
@@ -233,7 +235,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
 
   }
 
-  private def initPetTest: (DirectoryDAO, MockGoogleIamDAO, MockGoogleDirectoryDAO, GoogleExtensions, UserService, WorkbenchUserId, WorkbenchEmail, WorkbenchEmail, WorkbenchUser) = {
+  private def initPetTest: (DirectoryDAO, MockGoogleIamDAO, MockGoogleDirectoryDAO, GoogleExtensions, UserService, WorkbenchUserId, WorkbenchEmail, WorkbenchEmail, CreateWorkbenchUser) = {
     val dirURI = new URI(directoryConfig.directoryUrl)
     val connectionPool = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
     val dirDAO = new LdapDirectoryDAO(connectionPool, directoryConfig)
@@ -256,19 +258,20 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
 */
     val defaultUserProxyEmail = WorkbenchEmail(s"PROXY_newuser123@${googleServicesConfig.appsDomain}")
     /**/
-    val defaultUser = WorkbenchUser(defaultUserId, defaultUserEmail)
+    val defaultUser = CreateWorkbenchUser(defaultUserId, GoogleSubjectId(defaultUserId.value), defaultUserEmail)
     (dirDAO, mockGoogleIamDAO, mockGoogleDirectoryDAO, googleExtensions, service, defaultUserId, defaultUserEmail, defaultUserProxyEmail, defaultUser)
   }
 
   it should "attach existing service account to pet" in {
-    val (dirDAO: DirectoryDAO, mockGoogleIamDAO: MockGoogleIamDAO, mockGoogleDirectoryDAO: MockGoogleDirectoryDAO, googleExtensions: GoogleExtensions, service: UserService, defaultUserId: WorkbenchUserId, defaultUserEmail: WorkbenchEmail, defaultUserProxyEmail: WorkbenchEmail, defaultUser: WorkbenchUser) = initPetTest
+    val (dirDAO: DirectoryDAO, mockGoogleIamDAO: MockGoogleIamDAO, mockGoogleDirectoryDAO: MockGoogleDirectoryDAO, googleExtensions: GoogleExtensions, service: UserService, defaultUserId: WorkbenchUserId, defaultUserEmail: WorkbenchEmail, defaultUserProxyEmail: WorkbenchEmail, createDefaultUser: CreateWorkbenchUser) = initPetTest
     val googleProject = GoogleProject("testproject")
 
+    val defaultUser = WorkbenchUser(createDefaultUser.id, None, createDefaultUser.email)
     val (saName, saDisplayName) = googleExtensions.toPetSAFromUser(defaultUser)
     val serviceAccount = mockGoogleIamDAO.createServiceAccount(googleProject, saName, saDisplayName).futureValue
     // create a user
 
-    val newUser = service.createUser(defaultUser).futureValue
+    val newUser = service.createUser(createDefaultUser).futureValue
     newUser shouldBe UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
 
     // create a pet service account
@@ -278,12 +281,13 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
   }
 
   it should "recreate service account when missing for pet" in {
-    val (dirDAO: DirectoryDAO, mockGoogleIamDAO: MockGoogleIamDAO, mockGoogleDirectoryDAO: MockGoogleDirectoryDAO, googleExtensions: GoogleExtensions, service: UserService, defaultUserId: WorkbenchUserId, defaultUserEmail: WorkbenchEmail, defaultUserProxyEmail: WorkbenchEmail, defaultUser: WorkbenchUser) = initPetTest
+    val (dirDAO: DirectoryDAO, mockGoogleIamDAO: MockGoogleIamDAO, mockGoogleDirectoryDAO: MockGoogleDirectoryDAO, googleExtensions: GoogleExtensions, service: UserService, defaultUserId: WorkbenchUserId, defaultUserEmail: WorkbenchEmail, defaultUserProxyEmail: WorkbenchEmail, createDefaultUser: CreateWorkbenchUser) = initPetTest
 
     // create a user
-    val newUser = service.createUser(defaultUser).futureValue
+    val newUser = service.createUser(createDefaultUser).futureValue
     newUser shouldBe UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
 
+    val defaultUser = WorkbenchUser(createDefaultUser.id, None, createDefaultUser.email)
     // create a pet service account
     val googleProject = GoogleProject("testproject")
     val petServiceAccount = googleExtensions.createUserPetServiceAccount(defaultUser, googleProject).futureValue
@@ -426,15 +430,14 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
 
     runAndWait(ge.onBoot(app))
 
-    runAndWait(mockDirectoryDAO.loadUser(WorkbenchUserId(googleServicesConfig.serviceAccountClientId))) shouldBe Some(WorkbenchUser(WorkbenchUserId(googleServicesConfig.serviceAccountClientId), googleServicesConfig.serviceAccountClientEmail))
-    runAndWait(mockAccessPolicyDAO.loadPolicy(resourceAndPolicyName)).map(_.copy(email = null)) shouldBe Some(AccessPolicy(
-      resourceAndPolicyName,
-      Set(WorkbenchUserId(googleServicesConfig.serviceAccountClientId)),
-      null,
-      Set(ResourceRoleName("owner")),
-      Set.empty
-    ))
-
+    val uid = runAndWait(mockDirectoryDAO.loadSubjectFromGoogleSubjectId(GoogleSubjectId(googleServicesConfig.serviceAccountClientId))).get.asInstanceOf[WorkbenchUserId]
+    val owner = runAndWait(mockDirectoryDAO.loadUser(uid)).get
+    owner.googleSubjectId shouldBe Some(GoogleSubjectId(googleServicesConfig.serviceAccountClientId))
+    owner.email shouldBe googleServicesConfig.serviceAccountClientEmail
+    val res = runAndWait(mockAccessPolicyDAO.loadPolicy(resourceAndPolicyName)).get
+    res.id shouldBe resourceAndPolicyName
+    res.members shouldBe Set(owner.id)
+    res.roles shouldBe Set(ResourceRoleName("owner"))
     // make sure a repeated call does not fail
     runAndWait(ge.onBoot(app))
 
@@ -448,9 +451,9 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val config = googleServicesConfig.copy(appsDomain = appsDomain)
     val googleExtensions = new GoogleExtensions(null, null, null, null, null, null, null, null, null, config, null, null )
 
-    val user = WorkbenchUser(WorkbenchUserId(subjectId), WorkbenchEmail(s"$username@test.org"))
+    val user = WorkbenchUser(WorkbenchUserId(subjectId), None, WorkbenchEmail(s"$username@test.org"))
 
-    val proxyEmail = googleExtensions.toProxyFromUser(user).value
+    val proxyEmail = googleExtensions.toProxyFromUser(user.id).value
 /* Re-enable this code and remove the temporary code below after fixing rawls for GAWB-2933
     proxyEmail shouldBe "foo_0123456789@test.cloudfire.org"
     proxyEmail should include (username)
@@ -465,9 +468,9 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val config = googleServicesConfig.copy(appsDomain = "test.cloudfire.org")
     val googleExtensions = new GoogleExtensions(null, null, null, null, null, null, null, null, null, config, null, null)
 
-    val user = WorkbenchUser(WorkbenchUserId("0123456789"), WorkbenchEmail("foo-bar-baz-qux-quux-corge-grault-garply@test.org"))
+    val user = WorkbenchUser(WorkbenchUserId("0123456789"), None, WorkbenchEmail("foo-bar-baz-qux-quux-corge-grault-garply@test.org"))
 
-    val proxyEmail = googleExtensions.toProxyFromUser(user).value
+    val proxyEmail = googleExtensions.toProxyFromUser(user.id).value
 /* Re-enable this code and remove the temporary code below after fixing rawls for GAWB-2933
     proxyEmail shouldBe "foo-bar-baz-qux-quux-corge-grault-_0123456789@test.cloudfire.org"
     proxyEmail should have length 64
@@ -479,7 +482,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
   it should "do Googley stuff onUserCreate" in {
     val userId = WorkbenchUserId(UUID.randomUUID().toString)
     val userEmail = WorkbenchEmail("foo@test.org")
-    val user = WorkbenchUser(userId, userEmail)
+    val user = WorkbenchUser(userId, None, userEmail)
 /* Re-enable this code and remove the temporary code below after fixing rawls for GAWB-2933
     val proxyEmail = WorkbenchEmail(s"foo_$userId@${googleServicesConfig.appsDomain}")
 */
@@ -555,10 +558,11 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
 
     val defaultUserId = WorkbenchUserId("newuser")
     val defaultUserEmail = WorkbenchEmail("newuser@new.com")
-    val defaultUser = WorkbenchUser(defaultUserId, defaultUserEmail)
+    val createDefaultUser = CreateWorkbenchUser(defaultUserId, GoogleSubjectId(defaultUserId.value), defaultUserEmail)
+    val defaultUser = WorkbenchUser(defaultUserId, None, defaultUserEmail)
 
     // create a user
-    val newUser = service.createUser(defaultUser).futureValue
+    val newUser = service.createUser(createDefaultUser).futureValue
     newUser shouldBe UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
 
     // create a pet service account
@@ -580,10 +584,11 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
 
     val defaultUserId = WorkbenchUserId("newuser")
     val defaultUserEmail = WorkbenchEmail("newuser@new.com")
-    val defaultUser = WorkbenchUser(defaultUserId, defaultUserEmail)
+    val createDefaultUser = CreateWorkbenchUser(defaultUserId, GoogleSubjectId(defaultUserId.value), defaultUserEmail)
+    val defaultUser = WorkbenchUser(defaultUserId, None, defaultUserEmail)
 
     // create a user
-    val newUser = service.createUser(defaultUser).futureValue
+    val newUser = service.createUser(createDefaultUser).futureValue
     newUser shouldBe UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
 
     // create a pet service account
@@ -613,10 +618,11 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
 
     val defaultUserId = WorkbenchUserId("newuser")
     val defaultUserEmail = WorkbenchEmail("newuser@new.com")
-    val defaultUser = WorkbenchUser(defaultUserId, defaultUserEmail)
+    val createDefaultUser = CreateWorkbenchUser(defaultUserId, GoogleSubjectId(defaultUserId.value), defaultUserEmail)
+    val defaultUser = WorkbenchUser(defaultUserId, None, defaultUserEmail)
 
     // create a user
-    val newUser = service.createUser(defaultUser).futureValue
+    val newUser = service.createUser(createDefaultUser).futureValue
     newUser shouldBe UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
 
     // create a pet service account

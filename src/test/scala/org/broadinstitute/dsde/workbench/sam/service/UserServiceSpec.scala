@@ -1,28 +1,33 @@
-package org.broadinstitute.dsde.workbench.sam.service
+package org.broadinstitute.dsde.workbench.sam
+package service
 
 import java.net.URI
 import java.util.UUID
 
+import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import com.typesafe.config.ConfigFactory
 import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.TestSupport
+import org.broadinstitute.dsde.workbench.sam.Generator._
 import org.broadinstitute.dsde.workbench.sam.config.{DirectoryConfig, PetServiceAccountConfig, SchemaLockConfig}
-import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
 import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryDAO, LdapDirectoryDAO}
-import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, UserStatus, UserStatusDetails, UserStatusInfo, UserStatusDiagnostics}
+import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
+import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
+import org.broadinstitute.dsde.workbench.sam.service.UserService._
 import org.mockito.ArgumentMatchers._
 import org.mockito.Mockito._
 import org.scalatest.concurrent.ScalaFutures
-import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FlatSpec, Matchers}
 import org.scalatest.mockito.MockitoSugar
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FlatSpec, Matchers}
+import TestSupport.eqThrowable
+import org.broadinstitute.dsde.workbench.sam.api.CreateWorkbenchUser
 
-import scala.concurrent.{ExecutionContext, Future}
-import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.duration._
+import scala.concurrent.{ExecutionContext, Future}
 
 /**
   * Created by rtitle on 10/6/17.
@@ -32,9 +37,10 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
 
   override implicit val patienceConfig = PatienceConfig(timeout = scaled(5.seconds))
 
-  val defaultUserId = WorkbenchUserId("newuser")
+  val defaultUserId = genWorkbenchUserId(System.currentTimeMillis())
+  val defaultGoogleSubjectId = GoogleSubjectId(defaultUserId.value)
   val defaultUserEmail = WorkbenchEmail("newuser@new.com")
-  val defaultUser = WorkbenchUser(defaultUserId, defaultUserEmail)
+  val defaultUser = CreateWorkbenchUser(defaultUserId, defaultGoogleSubjectId, defaultUserEmail)
   val userInfo = UserInfo(OAuth2BearerToken("token"), WorkbenchUserId(UUID.randomUUID().toString), WorkbenchEmail("user@company.com"), 0)
 
   lazy val config = ConfigFactory.load()
@@ -74,10 +80,10 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
     // create a user
     val newUser = service.createUser(defaultUser).futureValue
     newUser shouldBe UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
-    verify(googleExtensions).onUserCreate(defaultUser)
+    verify(googleExtensions).onUserCreate(WorkbenchUser(defaultUser.id, Some(defaultUser.googleSubjectId), defaultUser.email))
 
     // check ldap
-    dirDAO.loadUser(defaultUserId).futureValue shouldBe Some(defaultUser)
+    dirDAO.loadUser(defaultUserId).futureValue shouldBe Some(WorkbenchUser(defaultUser.id, Some(defaultUser.googleSubjectId), defaultUser.email))
     dirDAO.isEnabled(defaultUserId).futureValue shouldBe true
     dirDAO.loadGroup(service.cloudExtensions.allUsersGroupName).futureValue shouldBe
       Some(BasicWorkbenchGroup(service.cloudExtensions.allUsersGroupName, Set(defaultUserId), service.cloudExtensions.getOrCreateAllUsersGroup(dirDAO).futureValue.email))
@@ -155,5 +161,63 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
 
     // check ldap
     dirDAO.loadUser(defaultUserId).futureValue shouldBe None
+  }
+
+  it should "generate unique identifier properly" in {
+    val current = 1534253386722L
+    val res = genWorkbenchUserId(current).value
+    res.length shouldBe(21)
+    res.substring(0, current.toString.length) shouldBe("2534253386722")
+
+    // validate when currentMillis doesn't start
+    val current2 = 25342533867225L
+    val res2 = genWorkbenchUserId(current2).value
+    res2.substring(0, current2.toString.length) shouldBe("25342533867225")
+  }
+
+  /**
+    * GoogleSubjectId    Email
+    *    no              no      ---> We've never seen this user before, create a new user
+    */
+  "UserService registerUser" should "create new user when there's no existing subject for a given googleSubjectId and email" in{
+    val user = genCreateWorkbenchUserAPI.sample.get
+    service.registerUser(user).futureValue
+    val res = dirDAO.loadUser(user.id).futureValue
+    res shouldBe Some(WorkbenchUser(user.id, Some(user.googleSubjectId), user.email))
+  }
+
+  /**
+    * GoogleSubjectId    Email
+    *      no             yes      ---> Someone invited this user previous and we have a record for this user already. We just need to update GoogleSubjetId field for this user.
+    */
+  it should "update googleSubjectId when there's no existing subject for a given googleSubjectId and but there is one for email" in{
+    val user = genCreateWorkbenchUserAPI.sample.get
+    dirDAO.createUser(WorkbenchUser(user.id, None, user.email))
+    service.registerUser(user).futureValue
+    val res = dirDAO.loadUser(user.id).futureValue
+    res shouldBe Some(WorkbenchUser(user.id, Some(user.googleSubjectId), user.email))
+  }
+
+  /**
+    * GoogleSubjectId    Email
+    *      no             yes      ---> Someone invited this user previous and we have a record for this user already. We just need to update GoogleSubjetId field for this user.
+    */
+  it should "return BadRequest when there's no existing subject for a given googleSubjectId and but there is one for email, and the returned subject is not a regular user" in{
+    val user = genCreateWorkbenchUserAPI.sample.get.copy(email = genNonPetEmail.sample.get)
+    val group = genBasicWorkbenchGroup.sample.get.copy(email = user.email)
+    dirDAO.createGroup(group).futureValue
+    val res = service.registerUser(user).failed.futureValue
+    res === new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"$user is not a regular user. Please use a different endpoint")) shouldBe true
+  }
+
+  /**
+    * GoogleSubjectId    Email
+    *      yes            skip    ---> User exists. Do nothing.
+    */
+  it should "return conflict when there's an existing subject for a given googleSubjectId" in{
+    val user = genCreateWorkbenchUserAPI.sample.get
+    dirDAO.createUser(WorkbenchUser(user.id, Some(user.googleSubjectId), user.email)).futureValue
+    val res = service.registerUser(user).failed.futureValue
+    res === new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"user ${user} already exists")) shouldBe true
   }
 }

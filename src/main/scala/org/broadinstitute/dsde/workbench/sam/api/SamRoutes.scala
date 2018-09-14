@@ -18,7 +18,7 @@ import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.config.SwaggerConfig
 import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.service.{ManagedGroupService, ResourceService, StatusService, UserService}
-
+import SamRoutes._
 import scala.concurrent.{ExecutionContext, Future}
 
 /**
@@ -33,17 +33,6 @@ abstract class SamRoutes(val resourceService: ResourceService, val userService: 
     statusRoutes ~
     pathPrefix("register") { userRoutes } ~
     pathPrefix("api") { resourceRoutes ~ adminUserRoutes ~ extensionRoutes ~ groupRoutes }
-  }
-
-  private val myExceptionHandler = {
-    import org.broadinstitute.dsde.workbench.model.ErrorReportJsonSupport._
-
-    ExceptionHandler {
-      case withErrorReport: WorkbenchExceptionWithErrorReport =>
-        complete(withErrorReport.errorReport.statusCode.getOrElse(StatusCodes.InternalServerError), withErrorReport.errorReport)
-      case e: Throwable =>
-        complete(StatusCodes.InternalServerError, ErrorReport(e))
-    }
   }
 
   // basis for logRequestResult lifted from http://stackoverflow.com/questions/32475471/how-does-one-log-akka-http-client-requests
@@ -75,3 +64,15 @@ abstract class SamRoutes(val resourceService: ResourceService, val userService: 
 
 }
 
+object SamRoutes{
+  protected[sam] val myExceptionHandler = {
+    import org.broadinstitute.dsde.workbench.model.ErrorReportJsonSupport._
+
+    ExceptionHandler {
+      case withErrorReport: WorkbenchExceptionWithErrorReport =>
+        complete(withErrorReport.errorReport.statusCode.getOrElse(StatusCodes.InternalServerError), withErrorReport.errorReport)
+      case e: Throwable =>
+        complete(StatusCodes.InternalServerError, ErrorReport(e))
+    }
+  }
+}

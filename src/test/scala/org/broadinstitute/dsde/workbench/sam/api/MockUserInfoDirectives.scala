@@ -1,4 +1,6 @@
-package org.broadinstitute.dsde.workbench.sam.api
+package org.broadinstitute.dsde.workbench.sam
+package api
+
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import akka.http.scaladsl.server.Directive1
 import akka.http.scaladsl.server.Directives.provide
@@ -7,7 +9,7 @@ import org.broadinstitute.dsde.workbench.model.{UserInfo, WorkbenchEmail, Workbe
 /**
   * Created by dvoet on 6/7/17.
   */
-trait MockUserInfoDirectives extends UserInfoDirectives {
+trait MockUserInfoDirectives extends StandardUserInfoDirectives {
   val userInfo: UserInfo
   val petSAdomain = "\\S+@\\S+\\.iam\\.gserviceaccount\\.com".r
 
