@@ -95,6 +95,10 @@ package object config {
 
   val jsonFactory = JacksonFactory.getDefaultInstance
 
+  implicit val serviceAccountConfigReader: ValueReader[ServiceAccountConfig] = ValueReader.relative { config =>
+    ServiceAccountConfig(config.getString("pathToPem"), config.getString("serviceAccountClientId"))
+  }
+
   implicit val googleServicesConfigReader: ValueReader[GoogleServicesConfig] = ValueReader.relative { config =>
     GoogleServicesConfig(
       config.getString("appName"),
@@ -117,7 +121,8 @@ package object config {
       config.getInt("groupSync.workerCount"),
       config.getString("notifications.topicName"),
       config.as[GoogleKeyCacheConfig]("googleKeyCache"),
-      config.as[Option[String]]("resourceNamePrefix")
+      config.as[Option[String]]("resourceNamePrefix"),
+      config.as[Option[Seq[ServiceAccountConfig]]]("adminSdkServiceAccounts").getOrElse(Seq.empty)
     )
   }
 

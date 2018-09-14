@@ -11,10 +11,11 @@ import com.typesafe.scalalogging.LazyLogging
 import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import javax.net.SocketFactory
 import javax.net.ssl.SSLContext
+
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
 import org.broadinstitute.dsde.workbench.google.GoogleCredentialModes.Pem
-import org.broadinstitute.dsde.workbench.google.{HttpGoogleDirectoryDAO, HttpGoogleIamDAO, HttpGoogleProjectDAO, HttpGooglePubSubDAO, HttpGoogleStorageDAO}
+import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, HttpGoogleDirectoryDAO, HttpGoogleIamDAO, HttpGoogleProjectDAO, HttpGooglePubSubDAO, HttpGoogleStorageDAO}
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException}
 import org.broadinstitute.dsde.workbench.sam.api.{SamRoutes, StandardUserInfoDirectives}
 import org.broadinstitute.dsde.workbench.sam.config._
@@ -24,6 +25,7 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam._
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.broadinstitute.dsde.workbench.sam.service._
+import org.broadinstitute.dsde.workbench.util.DelegatePool
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
@@ -63,7 +65,16 @@ object Boot extends App with LazyLogging {
     val cloudExt = googleServicesConfigOption match {
       case Some(googleServicesConfig) =>
         val petServiceAccountConfig = config.as[PetServiceAccountConfig]("petServiceAccount")
-        val googleDirectoryDAO = new HttpGoogleDirectoryDAO(googleServicesConfig.appName, Pem(WorkbenchEmail(googleServicesConfig.serviceAccountClientId), new File(googleServicesConfig.pemFile), Option(googleServicesConfig.subEmail)), "google")
+
+        val googleDirDaos = (if (googleServicesConfig.adminSdkServiceAccounts.isEmpty) {
+          Seq(ServiceAccountConfig(googleServicesConfig.pemFile, googleServicesConfig.serviceAccountClientId))
+        } else {
+          googleServicesConfig.adminSdkServiceAccounts
+        }).map { serviceAccountConfig =>
+          new HttpGoogleDirectoryDAO(googleServicesConfig.appName, Pem(WorkbenchEmail(serviceAccountConfig.serviceAccountClientId), new File(serviceAccountConfig.pemFile), Option(googleServicesConfig.subEmail)), "google")
+        }
+
+        val googleDirectoryDAO = DelegatePool[GoogleDirectoryDAO](googleDirDaos)
         val googleIamDAO = new HttpGoogleIamDAO(googleServicesConfig.appName, Pem(WorkbenchEmail(googleServicesConfig.serviceAccountClientId), new File(googleServicesConfig.pemFile)), "google")
         val googlePubSubDAO = new HttpGooglePubSubDAO(googleServicesConfig.appName, Pem(WorkbenchEmail(googleServicesConfig.serviceAccountClientId), new File(googleServicesConfig.pemFile)), "google", googleServicesConfig.groupSyncPubSubProject)
         val googleStorageDAO = new HttpGoogleStorageDAO(googleServicesConfig.appName, Pem(WorkbenchEmail(googleServicesConfig.serviceAccountClientId), new File(googleServicesConfig.pemFile)), "google")

@@ -28,5 +28,8 @@ case class GoogleServicesConfig(appName: String,
                                 groupSyncWorkerCount: Int,
                                 notificationTopic: String,
                                 googleKeyCacheConfig: GoogleKeyCacheConfig,
-                                resourceNamePrefix: Option[String]
+                                resourceNamePrefix: Option[String],
+                                adminSdkServiceAccounts: Seq[ServiceAccountConfig]
                                )
+
+case class ServiceAccountConfig(pemFile: String, serviceAccountClientId: String)
