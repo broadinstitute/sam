@@ -460,10 +460,9 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
      * Subject IDs are 22 numeric characters, so "pet-${subjectId}" fulfills these requirements.
      */
     val serviceAccountName = s"${googleServicesConfig.resourceNamePrefix.getOrElse("")}pet-${user.id.value}"
-
-    // Display names have a max length of 100 characters
     val displayName = s"Pet Service Account for user [${user.email.value}]"
 
+    // Display names have a max length of 100 characters
     (ServiceAccountName(serviceAccountName), ServiceAccountDisplayName(displayName.take(100)))
   }
 
