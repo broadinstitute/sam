@@ -1,5 +1,6 @@
 package org.broadinstitute.dsde.workbench.sam.config
 
+import cats.data.NonEmptyList
 import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.model.google.GoogleProject
 
@@ -29,7 +30,7 @@ case class GoogleServicesConfig(appName: String,
                                 notificationTopic: String,
                                 googleKeyCacheConfig: GoogleKeyCacheConfig,
                                 resourceNamePrefix: Option[String],
-                                adminSdkServiceAccounts: Seq[ServiceAccountConfig]
+                                adminSdkServiceAccounts: Option[NonEmptyList[ServiceAccountConfig]]
                                )
 
-case class ServiceAccountConfig(pemFile: String, serviceAccountClientId: String)
+case class ServiceAccountConfig(json: String)

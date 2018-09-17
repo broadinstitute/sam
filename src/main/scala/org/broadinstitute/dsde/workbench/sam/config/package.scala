@@ -1,5 +1,6 @@
 package org.broadinstitute.dsde.workbench.sam
 
+import cats.data.NonEmptyList
 import com.google.api.client.json.jackson2.JacksonFactory
 import com.typesafe.config.ConfigException.WrongType
 import com.typesafe.config._
@@ -96,7 +97,17 @@ package object config {
   val jsonFactory = JacksonFactory.getDefaultInstance
 
   implicit val serviceAccountConfigReader: ValueReader[ServiceAccountConfig] = ValueReader.relative { config =>
-    ServiceAccountConfig(config.getString("pathToPem"), config.getString("serviceAccountClientId"))
+    ServiceAccountConfig(config.root().render(ConfigRenderOptions.concise))
+  }
+
+  implicit def nonEmptyListReader[A](implicit valueReader: ValueReader[List[A]]): ValueReader[Option[NonEmptyList[A]]] = new ValueReader[Option[NonEmptyList[A]]] {
+    def read(config: Config, path: String): Option[NonEmptyList[A]] = {
+      if (config.hasPath(path)) {
+        NonEmptyList.fromList(valueReader.read(config, path))
+      } else {
+        None
+      }
+    }
   }
 
   implicit val googleServicesConfigReader: ValueReader[GoogleServicesConfig] = ValueReader.relative { config =>
@@ -122,7 +133,7 @@ package object config {
       config.getString("notifications.topicName"),
       config.as[GoogleKeyCacheConfig]("googleKeyCache"),
       config.as[Option[String]]("resourceNamePrefix"),
-      config.as[Option[Seq[ServiceAccountConfig]]]("adminSdkServiceAccounts").getOrElse(Seq.empty)
+      config.as[Option[NonEmptyList[ServiceAccountConfig]]]("adminSdkServiceAccounts")
     )
   }
 

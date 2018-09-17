@@ -46,7 +46,7 @@ scalacOptions ++= Seq(
   "-Xlint:stars-align", // Pattern sequence wildcard must align with sequence component.
   "-Xlint:type-parameter-shadow", // A local type parameter shadows a type already in scope.
 //  "-Xlint:unsound-match",              // Pattern match may not be typesafe.
-  "-Ypartial-unification",             // Enable partial unification in type constructor inference
+  "-Ypartial-unification", // Enable partial unification in type constructor inference
   "-Ywarn-dead-code", // Warn when dead code is identified.
   "-Ywarn-extra-implicit", // Warn when more than one implicit parameter section is defined.
   "-Ywarn-inaccessible", // Warn about inaccessible types in method signatures.

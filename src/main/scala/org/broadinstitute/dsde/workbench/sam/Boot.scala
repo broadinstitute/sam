@@ -12,9 +12,10 @@ import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import javax.net.SocketFactory
 import javax.net.ssl.SSLContext
 
+import cats.data.NonEmptyList
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
-import org.broadinstitute.dsde.workbench.google.GoogleCredentialModes.Pem
+import org.broadinstitute.dsde.workbench.google.GoogleCredentialModes.{Json, Pem}
 import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, HttpGoogleDirectoryDAO, HttpGoogleIamDAO, HttpGoogleProjectDAO, HttpGooglePubSubDAO, HttpGoogleStorageDAO}
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException}
 import org.broadinstitute.dsde.workbench.sam.api.{SamRoutes, StandardUserInfoDirectives}
@@ -66,12 +67,11 @@ object Boot extends App with LazyLogging {
       case Some(googleServicesConfig) =>
         val petServiceAccountConfig = config.as[PetServiceAccountConfig]("petServiceAccount")
 
-        val googleDirDaos = (if (googleServicesConfig.adminSdkServiceAccounts.isEmpty) {
-          Seq(ServiceAccountConfig(googleServicesConfig.pemFile, googleServicesConfig.serviceAccountClientId))
-        } else {
-          googleServicesConfig.adminSdkServiceAccounts
-        }).map { serviceAccountConfig =>
-          new HttpGoogleDirectoryDAO(googleServicesConfig.appName, Pem(WorkbenchEmail(serviceAccountConfig.serviceAccountClientId), new File(serviceAccountConfig.pemFile), Option(googleServicesConfig.subEmail)), "google")
+        val googleDirDaos = (googleServicesConfig.adminSdkServiceAccounts match {
+          case None => NonEmptyList.one(Pem(WorkbenchEmail(googleServicesConfig.serviceAccountClientId), new File(googleServicesConfig.pemFile), Option(googleServicesConfig.subEmail)))
+          case Some(accounts) => accounts.map(account => Json(account.json))
+        }).map { credentials =>
+          new HttpGoogleDirectoryDAO(googleServicesConfig.appName, credentials, "google")
         }
 
         val googleDirectoryDAO = DelegatePool[GoogleDirectoryDAO](googleDirDaos)

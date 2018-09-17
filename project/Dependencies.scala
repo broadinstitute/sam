@@ -8,7 +8,7 @@ object Dependencies {
   val scalaTestV    = "3.0.1"
   val scalaCheckV    = "1.14.0"
 
-  val workbenchUtilV   = "0.3-cbf4c08-SNAP"
+  val workbenchUtilV   = "0.3-02330fe-SNAP"
   val workbenchModelV  = "0.12-a19203d"
   val workbenchGoogleV = "0.16-f2a0020"
   val workbenchNotificationsV = "0.1-f2a0020"
