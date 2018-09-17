@@ -1091,6 +1091,28 @@ paths:
       tags:
         - Resources
 
+  /api/v1/invite/user/?email={inviteeEmail}:
+    post:
+      summary: create current user in the system using login credentials
+      parameters:
+        - in: path
+          description: email for the user you want to invite
+          name: inviteeEmail
+          required: true
+          type: string
+      responses:
+        201:
+          description: 'user successfully created'
+          schema:
+            $ref: '#/definitions/UserStatusDetails'
+        409:
+          description: user already exists
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      operationId: inviteUser
+      tags:
+      - Users
+
   /register/user/v1:
     get:
       summary: gets the registration status of the logged in user
@@ -1504,6 +1526,19 @@ definitions:
       enabled:
         type: boolean
         description: true if the user is enabled in ldap
+
+  UserStatusDetails:
+    description: ''
+    required:
+      - userSubjectId
+      - userEmail
+    properties:
+      userSubjectId:
+        type: string
+        description: user id
+      userEmail:
+        type: string
+        description: user email
 
   UserStatusDiagnostics:
     description: ''

@@ -6,10 +6,11 @@ import akka.http.scaladsl.model.headers.{OAuth2BearerToken, RawHeader}
 import akka.http.scaladsl.server.Directives.{complete, handleExceptions}
 import akka.http.scaladsl.server.MissingHeaderRejection
 import akka.http.scaladsl.testkit.ScalatestRouteTest
+import cats.kernel.Eq
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountDisplayName, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.sam.Generator._
-import org.broadinstitute.dsde.workbench.sam.TestSupport.eqThrowable
+import org.broadinstitute.dsde.workbench.sam.TestSupport.eqWorkbenchExceptionErrorReport
 import org.broadinstitute.dsde.workbench.sam.api.SamRoutes.myExceptionHandler
 import org.broadinstitute.dsde.workbench.sam.api.StandardUserInfoDirectives._
 import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryDAO, MockDirectoryDAO}
@@ -75,8 +76,8 @@ class StandardUserInfoDirectivesSpec extends PropertyBasedTesting with Scalatest
       (token: OAuth2BearerToken, email: WorkbenchEmail) =>
         val directoryDAO = new MockDirectoryDAO()
         val googleSubjectId = GoogleSubjectId(genRandom(System.currentTimeMillis()))
-        val res = getUserInfo(token, googleSubjectId, email, 10L, directoryDAO).failed.futureValue
-        res === new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"google subject Id $googleSubjectId not found in sam")) shouldBe(true)
+        val res = getUserInfo(token, googleSubjectId, email, 10L, directoryDAO).failed.futureValue.asInstanceOf[WorkbenchExceptionWithErrorReport]
+        Eq[WorkbenchExceptionWithErrorReport].eqv(res, new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"google subject Id $googleSubjectId not found in sam"))) shouldBe(true)
     }
   }
 
@@ -85,8 +86,8 @@ class StandardUserInfoDirectivesSpec extends PropertyBasedTesting with Scalatest
       (token: OAuth2BearerToken, email: WorkbenchEmail) =>
         val directoryDAO = new MockDirectoryDAO()
         val googleSubjectId = GoogleSubjectId(genRandom(System.currentTimeMillis()))
-        val res = getUserInfo(token, googleSubjectId, email, 10L, directoryDAO).failed.futureValue
-        res === new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"google subject Id $googleSubjectId not found in sam")) shouldBe(true)
+        val res = getUserInfo(token, googleSubjectId, email, 10L, directoryDAO).failed.futureValue.asInstanceOf[WorkbenchExceptionWithErrorReport]
+        Eq[WorkbenchExceptionWithErrorReport].eqv(res, new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"google subject Id $googleSubjectId not found in sam"))) shouldBe(true)
     }
   }
 
@@ -97,8 +98,9 @@ class StandardUserInfoDirectivesSpec extends PropertyBasedTesting with Scalatest
         val gSid = GoogleSubjectId(serviceSubjectId.value)
         val uid = genWorkbenchUserId(System.currentTimeMillis())
         directoryDAO.createPetServiceAccount(PetServiceAccount(PetServiceAccountId(uid, GoogleProject("")), ServiceAccount(serviceSubjectId, email, ServiceAccountDisplayName("")))).futureValue
-        val res = getUserInfo(token, gSid, email, 10L, directoryDAO).failed.futureValue
-        res === new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"subjectId $gSid is not a WorkbenchUser")) shouldBe(true)
+        val res = getUserInfo(token, gSid, email, 10L, directoryDAO).failed.futureValue.asInstanceOf[WorkbenchExceptionWithErrorReport]
+
+        Eq[WorkbenchExceptionWithErrorReport].eqv(res, new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"subjectId $gSid is not a WorkbenchUser"))) shouldBe(true)
     }
   }
 

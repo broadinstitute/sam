@@ -32,7 +32,7 @@ abstract class SamRoutes(val resourceService: ResourceService, val userService: 
     swaggerRoutes ~
     statusRoutes ~
     pathPrefix("register") { userRoutes } ~
-    pathPrefix("api") { resourceRoutes ~ adminUserRoutes ~ extensionRoutes ~ groupRoutes }
+    pathPrefix("api") { inviteRoute ~ resourceRoutes ~ adminUserRoutes ~ extensionRoutes ~ groupRoutes }
   }
 
   // basis for logRequestResult lifted from http://stackoverflow.com/questions/32475471/how-does-one-log-akka-http-client-requests
