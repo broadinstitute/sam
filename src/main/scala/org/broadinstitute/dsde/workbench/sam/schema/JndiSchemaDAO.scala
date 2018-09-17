@@ -145,7 +145,7 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig, val schemaLo
     if(remainingAttempts == 0) { throw new WorkbenchException(s"Operation timed out. Could not acquire schema lock before timeout...") }
     else {
       logger.info("Waiting for schema lock...")
-      Thread.sleep(schemaLockConfig.recheckTimeInterval * 100) //change this to 1k
+      Thread.sleep(schemaLockConfig.recheckTimeInterval * 100L) //change this to 1k
       readSchemaStatus().flatMap {
         case Wait => waitForSchemaLock(remainingAttempts - 1)
         case s: SchemaStatus => Future.successful(s)

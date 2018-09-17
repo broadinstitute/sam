@@ -70,9 +70,9 @@ object SamRoutes{
 
     ExceptionHandler {
       case withErrorReport: WorkbenchExceptionWithErrorReport =>
-        complete(withErrorReport.errorReport.statusCode.getOrElse(StatusCodes.InternalServerError), withErrorReport.errorReport)
+        complete((withErrorReport.errorReport.statusCode.getOrElse(StatusCodes.InternalServerError), withErrorReport.errorReport))
       case e: Throwable =>
-        complete(StatusCodes.InternalServerError, ErrorReport(e))
+        complete((StatusCodes.InternalServerError, ErrorReport(e)))
     }
   }
 }

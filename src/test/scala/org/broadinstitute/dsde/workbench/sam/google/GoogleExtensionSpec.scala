@@ -1,7 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.google
 
 import java.net.URI
-import java.util.{Date, UUID}
+import java.util.{Date, GregorianCalendar, UUID}
 
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
@@ -115,7 +115,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
           when(mockAccessPolicyDAO.loadPolicy(p.id)).thenReturn(Future.successful(Option(testPolicy)))
       }
       when(mockDirectoryDAO.updateSynchronizedDate(any[WorkbenchGroupIdentity])).thenReturn(Future.successful(()))
-      when(mockDirectoryDAO.getSynchronizedDate(any[WorkbenchGroupIdentity])).thenReturn(Future.successful(Some(new Date(2017, 11, 22))))
+      when(mockDirectoryDAO.getSynchronizedDate(any[WorkbenchGroupIdentity])).thenReturn(Future.successful(Some((new GregorianCalendar(2017, 11, 22).getTime()))))
       when(mockDirectoryDAO.readProxyGroup(WorkbenchUserId("addError"))).thenReturn(Future.successful(Some(WorkbenchEmail(addErrorProxyEmail))))
       when(mockDirectoryDAO.readProxyGroup(WorkbenchUserId("inSamUser"))).thenReturn(Future.successful(Some(WorkbenchEmail(inSamUserProxyEmail))))
       when(mockDirectoryDAO.readProxyGroup(WorkbenchUserId("inGoogleUser"))).thenReturn(Future.successful(Some(WorkbenchEmail(inGoogleUserProxyEmail))))

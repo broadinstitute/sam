@@ -8,7 +8,9 @@ import javax.naming.directory._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Try
 
-@deprecated(message = "use LdapSupport instead", since = "unknown")
+// comment out deprecation annotation since it's still actively used in `JndiSchemaDao` and that's not going to be changed anytime soon
+//@deprecated(message = "use LdapSupport instead", since = "unknown")
+// new code should use LdapSupport instead
 trait JndiSupport {
   private val batchSize = 1000
 

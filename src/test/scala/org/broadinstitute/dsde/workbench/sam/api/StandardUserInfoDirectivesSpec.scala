@@ -9,15 +9,15 @@ import akka.http.scaladsl.testkit.ScalatestRouteTest
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountDisplayName, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.sam.Generator._
+import org.broadinstitute.dsde.workbench.sam.TestSupport.eqThrowable
+import org.broadinstitute.dsde.workbench.sam.api.SamRoutes.myExceptionHandler
 import org.broadinstitute.dsde.workbench.sam.api.StandardUserInfoDirectives._
 import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryDAO, MockDirectoryDAO}
-import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, UserService}
-import org.scalatest.concurrent.ScalaFutures
+import org.broadinstitute.dsde.workbench.sam.service.CloudExtensions
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
+import org.scalatest.concurrent.ScalaFutures
 
 import scala.concurrent.ExecutionContext
-import TestSupport.eqThrowable
-import org.broadinstitute.dsde.workbench.sam.api.SamRoutes.myExceptionHandler
 
 class StandardUserInfoDirectivesSpec extends PropertyBasedTesting with ScalatestRouteTest with ScalaFutures{
   def directives: StandardUserInfoDirectives = new StandardUserInfoDirectives {

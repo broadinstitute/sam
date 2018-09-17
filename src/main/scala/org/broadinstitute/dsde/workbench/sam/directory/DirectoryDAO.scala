@@ -2,9 +2,9 @@ package org.broadinstitute.dsde.workbench.sam.directory
 
 import java.util.Date
 
-import org.broadinstitute.dsde.workbench.model.google._
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, ResourceId}
+import org.broadinstitute.dsde.workbench.model.google._
+import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
 
 import scala.concurrent.Future
 
