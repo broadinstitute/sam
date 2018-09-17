@@ -463,9 +463,8 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
 
     // Display names have a max length of 100 characters
     val displayName = s"Pet Service Account for user [${user.email.value}]"
-    val trimmedDisplayName = displayName.take(100)
 
-    (ServiceAccountName(serviceAccountName), ServiceAccountDisplayName(trimmedDisplayName))
+    (ServiceAccountName(serviceAccountName), ServiceAccountDisplayName(displayName.take(100)))
   }
 
   override def fireAndForgetNotifications[T <: Notification](notifications: Set[T]): Unit = {
