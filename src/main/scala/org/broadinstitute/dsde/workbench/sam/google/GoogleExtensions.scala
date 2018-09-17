@@ -460,9 +460,12 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
      * Subject IDs are 22 numeric characters, so "pet-${subjectId}" fulfills these requirements.
      */
     val serviceAccountName = s"${googleServicesConfig.resourceNamePrefix.getOrElse("")}pet-${user.id.value}"
-    val displayName = s"Pet Service Account for user [${user.email.value}]"
 
-    (ServiceAccountName(serviceAccountName), ServiceAccountDisplayName(displayName))
+    // Display names have a max length of 100 characters
+    val displayName = s"Pet Service Account for user [${user.email.value}]"
+    val trimmedDisplayName = displayName.substring(0, Math.min(displayName.length, 100))
+
+    (ServiceAccountName(serviceAccountName), ServiceAccountDisplayName(trimmedDisplayName))
   }
 
   override def fireAndForgetNotifications[T <: Notification](notifications: Set[T]): Unit = {
