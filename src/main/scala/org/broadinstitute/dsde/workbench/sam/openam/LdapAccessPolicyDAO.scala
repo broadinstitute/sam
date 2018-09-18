@@ -18,7 +18,7 @@ import scala.concurrent.{ExecutionContext, Future}
 class LdapAccessPolicyDAO(protected val ldapConnectionPool: LDAPConnectionPool, protected val directoryConfig: DirectoryConfig)(implicit executionContext: ExecutionContext) extends AccessPolicyDAO with DirectorySubjectNameSupport with LdapSupport {
   override def createResourceType(resourceTypeName: ResourceTypeName): Future[ResourceTypeName] = Future {
     ldapConnectionPool.add(resourceTypeDn(resourceTypeName),
-      new Attribute("objectclass", Seq("top", ObjectClass.resourceType).asJava),
+      new Attribute("objectclass", List("top", ObjectClass.resourceType).asJava),
       new Attribute(Attr.ou, "resources")
     )
     resourceTypeName
@@ -27,8 +27,8 @@ class LdapAccessPolicyDAO(protected val ldapConnectionPool: LDAPConnectionPool, 
   }
 
   override def createResource(resource: Resource): Future[Resource] = Future {
-    val attributes = Seq(
-      new Attribute("objectclass", Seq("top", ObjectClass.resource).asJava),
+    val attributes = List(
+      new Attribute("objectclass", List("top", ObjectClass.resource).asJava),
       new Attribute(Attr.resourceType, resource.resourceTypeName.value)
     ) ++
       maybeAttribute(Attr.authDomain, resource.authDomain.map(_.value))
@@ -45,20 +45,15 @@ class LdapAccessPolicyDAO(protected val ldapConnectionPool: LDAPConnectionPool, 
     ldapConnectionPool.delete(resourceDn(resource))
   }
 
-  override def loadResourceAuthDomain(resource: Resource): Future[Set[WorkbenchGroupName]] = Future {
-    ldapSearchStream(resourceDn(resource), SearchScope.BASE, Filter.createEqualityFilter("objectclass", ObjectClass.resource))(unmarshalResource).toSet[Resource].flatMap(_.authDomain)
-  }
-
-  private def unmarshalResource(entry:Entry): Resource = {
-    val resourceId = ResourceId(getAttribute(entry, Attr.resourceId).get)
-    val resourceTypeName = ResourceTypeName(getAttribute(entry, Attr.resourceType).get)
-    val authDomain = getAttributes(entry, Attr.authDomain).getOrElse(Set.empty).toSet.map(g => WorkbenchGroupName(g))
-
-    Resource(resourceTypeName, resourceId, authDomain)
+  override def loadResourceAuthDomain(resource: Resource): Future[Set[WorkbenchGroupName]] = {
+    Option(ldapConnectionPool.getEntry(resourceDn(resource)): SearchResultEntry) match {
+      case None => Future.failed(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"$resource auth domain not found")))
+      case Some(r) => Future.successful(getAttributes(r, Attr.authDomain).getOrElse(Set.empty).toSet.map(g => WorkbenchGroupName(g)))
+    }
   }
 
   override def createPolicy(policy: AccessPolicy): Future[AccessPolicy] = Future {
-    val attributes = Seq(
+    val attributes = List(
       new Attribute("objectclass", "top", ObjectClass.policy),
       new Attribute(Attr.cn, policy.id.accessPolicyName.value),
       new Attribute(Attr.email, policy.email.value),
@@ -116,7 +111,7 @@ class LdapAccessPolicyDAO(protected val ldapConnectionPool: LDAPConnectionPool, 
     val entry = ldapConnectionPool.getEntry(userDn(userId), Attr.memberOf)
     val groupDns = getAttributes(entry, Attr.memberOf).getOrElse(Set.empty).toSet
 
-    val policyDnPattern = dnMatcher(Seq(Attr.policy, Attr.resourceId), resourceTypeDn(resourceTypeName))
+    val policyDnPattern = dnMatcher(List(Attr.policy, Attr.resourceId), resourceTypeDn(resourceTypeName))
 
     groupDns.collect {
       case policyDnPattern(policyName, resourceId) => ResourceIdAndPolicyName(ResourceId(resourceId), AccessPolicyName(policyName))

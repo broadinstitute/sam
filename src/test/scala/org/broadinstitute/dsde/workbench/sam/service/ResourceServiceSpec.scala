@@ -311,6 +311,14 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     }
   }
 
+  "Loading an auth domain" should "fail when the resource does not exist" in {
+    val e = intercept[WorkbenchExceptionWithErrorReport] {
+      runAndWait(constrainableService.loadResourceAuthDomain(Resource(constrainableResourceType.name, ResourceId(UUID.randomUUID().toString))))
+    }
+
+    e.getMessage should include ("not found")
+  }
+
   "Creating a resource that has 0 constrainable action patterns" should "fail when an auth domain is provided" in {
     defaultResourceType.isAuthDomainConstrainable shouldEqual false
     runAndWait(service.createResourceType(defaultResourceType))
