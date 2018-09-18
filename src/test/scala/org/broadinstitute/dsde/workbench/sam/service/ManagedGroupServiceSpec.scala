@@ -65,7 +65,8 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     val policies = runAndWait(policyDAO.listAccessPolicies(resource))
     policies.map(_.id.accessPolicyName.value) shouldEqual expectedPolicies.map(_.value)
     expectedPolicies.foreach { policyName =>
-      runAndWait(policyDAO.loadPolicy(ResourceAndPolicyName(resource, policyName))) shouldBe a[Some[AccessPolicy]] //TODO: fix "Type parameter should not be specified because it will be erased at runtime, please use _ instead.  Note that in future version of ScalaTest this will give a compiler error."
+      val res = policyDAO.loadPolicy(ResourceAndPolicyName(resource, policyName)).futureValue
+      res.isInstanceOf[Some[AccessPolicy]] shouldBe true
     }
   }
 

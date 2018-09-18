@@ -3,11 +3,11 @@ import java.util.Date
 
 import akka.http.scaladsl.model.StatusCodes
 import com.unboundid.ldap.sdk._
-import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{ServiceAccount, ServiceAccountDisplayName, ServiceAccountSubjectId}
+import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
-import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, ResourceId}
+import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO.{Attr, ObjectClass}
 import org.broadinstitute.dsde.workbench.sam.util.LdapSupport
 

@@ -12,7 +12,7 @@ import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAcc
 import org.broadinstitute.dsde.workbench.util.FutureSupport
 import spray.json._
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.Future
 import scala.concurrent.duration.{FiniteDuration, _}
 import scala.language.postfixOps
 
@@ -24,12 +24,12 @@ object GoogleKeyCacheMonitorSupervisor {
   case object Init extends GoogleKeyCacheMonitorSupervisorMessage
   case object Start extends GoogleKeyCacheMonitorSupervisorMessage
 
-  def props(pollInterval: FiniteDuration, pollIntervalJitter: FiniteDuration, pubSubDao: GooglePubSubDAO, googleIamDAO: GoogleIamDAO, pubSubTopicName: String, pubSubSubscriptionName: String, projectServiceAccount: WorkbenchEmail, workerCount: Int, googleKeyCache: GoogleKeyCache)(implicit executionContext: ExecutionContext): Props = {
+  def props(pollInterval: FiniteDuration, pollIntervalJitter: FiniteDuration, pubSubDao: GooglePubSubDAO, googleIamDAO: GoogleIamDAO, pubSubTopicName: String, pubSubSubscriptionName: String, projectServiceAccount: WorkbenchEmail, workerCount: Int, googleKeyCache: GoogleKeyCache): Props = {
     Props(new GoogleKeyCacheMonitorSupervisor(pollInterval, pollIntervalJitter, pubSubDao, googleIamDAO, pubSubTopicName, pubSubSubscriptionName, projectServiceAccount, workerCount, googleKeyCache))
   }
 }
 
-class GoogleKeyCacheMonitorSupervisor(val pollInterval: FiniteDuration, pollIntervalJitter: FiniteDuration, pubSubDao: GooglePubSubDAO, googleIamDAO: GoogleIamDAO, pubSubTopicName: String, pubSubSubscriptionName: String, projectServiceAccount: WorkbenchEmail, workerCount: Int, googleKeyCache: GoogleKeyCache)(implicit executionContext: ExecutionContext) extends Actor with LazyLogging {
+class GoogleKeyCacheMonitorSupervisor(val pollInterval: FiniteDuration, pollIntervalJitter: FiniteDuration, pubSubDao: GooglePubSubDAO, googleIamDAO: GoogleIamDAO, pubSubTopicName: String, pubSubSubscriptionName: String, projectServiceAccount: WorkbenchEmail, workerCount: Int, googleKeyCache: GoogleKeyCache) extends Actor with LazyLogging {
   import GoogleKeyCacheMonitorSupervisor._
   import context._
 
@@ -72,12 +72,12 @@ class GoogleKeyCacheMonitorSupervisor(val pollInterval: FiniteDuration, pollInte
 object GoogleKeyCacheMonitor {
   case object StartMonitorPass
 
-  def props(pollInterval: FiniteDuration, pollIntervalJitter: FiniteDuration, pubSubDao: GooglePubSubDAO, googleIamDAO: GoogleIamDAO, pubSubSubscriptionName: String, googleKeyCache: GoogleKeyCache)(implicit executionContext: ExecutionContext): Props = {
+  def props(pollInterval: FiniteDuration, pollIntervalJitter: FiniteDuration, pubSubDao: GooglePubSubDAO, googleIamDAO: GoogleIamDAO, pubSubSubscriptionName: String, googleKeyCache: GoogleKeyCache): Props = {
     Props(new GoogleKeyCacheMonitorActor(pollInterval, pollIntervalJitter, pubSubDao, googleIamDAO, pubSubSubscriptionName, googleKeyCache))
   }
 }
 
-class GoogleKeyCacheMonitorActor(val pollInterval: FiniteDuration, pollIntervalJitter: FiniteDuration, pubSubDao: GooglePubSubDAO, googleIamDAO: GoogleIamDAO, pubSubSubscriptionName: String, googleKeyCache: GoogleKeyCache)(implicit executionContext: ExecutionContext) extends Actor with LazyLogging with FutureSupport {
+class GoogleKeyCacheMonitorActor(val pollInterval: FiniteDuration, pollIntervalJitter: FiniteDuration, pubSubDao: GooglePubSubDAO, googleIamDAO: GoogleIamDAO, pubSubSubscriptionName: String, googleKeyCache: GoogleKeyCache) extends Actor with LazyLogging with FutureSupport {
   import GoogleKeyCacheMonitor._
   import context._
 
