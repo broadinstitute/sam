@@ -399,7 +399,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
       runAndWait(ge.getSynchronizedState(groupName)) should equal(None)
       runAndWait(ge.synchronizeGroupMembers(groupName))
       val maybeSyncResponse = runAndWait(ge.getSynchronizedState(groupName))
-      maybeSyncResponse should equal(Some(email))
+      maybeSyncResponse.map(_.email) should equal(Some(email))
     } finally {
       runAndWait(dirDAO.deleteGroup(groupName))
     }
