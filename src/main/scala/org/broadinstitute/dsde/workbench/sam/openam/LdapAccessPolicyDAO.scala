@@ -46,7 +46,7 @@ class LdapAccessPolicyDAO(protected val ldapConnectionPool: LDAPConnectionPool, 
   }
 
   override def loadResourceAuthDomain(resource: Resource): Future[Set[WorkbenchGroupName]] = {
-    Option(ldapConnectionPool.getEntry(resourceDn(resource)): SearchResultEntry) match {
+    Future(Option(ldapConnectionPool.getEntry(resourceDn(resource)))).flatMap {
       case None => Future.failed(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"$resource auth domain not found")))
       case Some(r) => Future.successful(getAttributes(r, Attr.authDomain).getOrElse(Set.empty).toSet.map(g => WorkbenchGroupName(g)))
     }
