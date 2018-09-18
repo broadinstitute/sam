@@ -35,7 +35,7 @@ object SamJsonSupport {
 
   implicit val ResourceIdFormat = ValueObjectFormat(ResourceId)
 
-  implicit val ResourceFormat = jsonFormat2(Resource)
+  implicit val ResourceFormat = jsonFormat3(Resource)
 
   implicit val AccessPolicyMembershipFormat = jsonFormat3(AccessPolicyMembership)
 
@@ -79,7 +79,7 @@ case class ResourceRole(roleName: ResourceRoleName, actions: Set[ResourceAction]
 
 case class ResourceTypeName(value: String) extends ValueObject
 
-case class Resource(resourceTypeName: ResourceTypeName, resourceId: ResourceId)
+case class Resource(resourceTypeName: ResourceTypeName, resourceId: ResourceId, authDomain: Set[WorkbenchGroupName] = Set.empty)
 case class ResourceType(name: ResourceTypeName, actionPatterns: Set[ResourceActionPattern], roles: Set[ResourceRole], ownerRoleName: ResourceRoleName, reuseIds: Boolean = false) {
   // Ideally we'd just store this boolean in a lazy val, but this will upset the spray/akka json serializers
   // I can't imagine a scenario where we have enough action patterns that would make this def discernibly slow though
