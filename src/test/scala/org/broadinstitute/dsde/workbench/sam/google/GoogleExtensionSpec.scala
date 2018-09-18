@@ -1,7 +1,6 @@
 package org.broadinstitute.dsde.workbench.sam.google
 
 import java.net.URI
-import java.text.SimpleDateFormat
 import java.util.{Date, UUID}
 
 import akka.actor.ActorSystem
@@ -397,14 +396,10 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val email = WorkbenchEmail("foo@bar.com")
     runAndWait(dirDAO.createGroup(BasicWorkbenchGroup(groupName, Set(), email)))
     try {
+      runAndWait(ge.getSynchronizedState(groupName)) should equal(None)
       runAndWait(ge.synchronizeGroupMembers(groupName))
-      val gsr = runAndWait(ge.getSynchronizedState(groupName)).get
-
-      val dateFormat = "EEE MMM dd HH:mm:ss zzz yyyy"
-      val syncDate = new SimpleDateFormat(dateFormat).parse(gsr.lastSyncDate)
-      syncDate.getTime should equal (new Date().getTime +- 1.second.toMillis)
-
-      gsr.email should equal (email)
+      val maybeSyncResponse = runAndWait(ge.getSynchronizedState(groupName))
+      maybeSyncResponse.map(_.email) should equal(Some(email))
     } finally {
       runAndWait(dirDAO.deleteGroup(groupName))
     }

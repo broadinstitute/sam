@@ -1,5 +1,6 @@
 package org.broadinstitute.dsde.workbench.sam.config
 
+import cats.data.NonEmptyList
 import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.model.google.GoogleProject
 
@@ -28,5 +29,8 @@ case class GoogleServicesConfig(appName: String,
                                 groupSyncWorkerCount: Int,
                                 notificationTopic: String,
                                 googleKeyCacheConfig: GoogleKeyCacheConfig,
-                                resourceNamePrefix: Option[String]
+                                resourceNamePrefix: Option[String],
+                                adminSdkServiceAccounts: Option[NonEmptyList[ServiceAccountConfig]]
                                )
+
+case class ServiceAccountConfig(json: String)
