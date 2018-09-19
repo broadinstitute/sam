@@ -9,7 +9,7 @@ import org.broadinstitute.dsde.workbench.google.GoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.google.mock.MockGoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{ServiceAccount, ServiceAccountSubjectId}
-import org.broadinstitute.dsde.workbench.sam.TestSupport.{genSamDependencies, genSamRoutes, eqWorkbenchExceptionErrorReport}
+import org.broadinstitute.dsde.workbench.sam.TestSupport.{genSamDependencies, genSamRoutes}
 import org.broadinstitute.dsde.workbench.sam.api.StandardUserInfoDirectives._
 import org.broadinstitute.dsde.workbench.sam.directory.MockDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._

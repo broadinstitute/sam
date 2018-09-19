@@ -43,7 +43,7 @@ object Generator {
 
   val genCreateWorkbenchUser = for{
     email <- genNonPetEmail
-    userId <- Gen.posNum[Int].map(x => genWorkbenchUserId(System.currentTimeMillis() + x))
+    userId = genWorkbenchUserId(System.currentTimeMillis())
   }yield CreateWorkbenchUser(userId, GoogleSubjectId(userId.value), email)
 
   val genInviteUser = for{

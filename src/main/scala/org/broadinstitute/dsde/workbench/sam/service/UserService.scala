@@ -19,8 +19,13 @@ import scala.concurrent.{ExecutionContext, Future}
 class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExtensions)(implicit val executionContext: ExecutionContext) extends LazyLogging {
 
   def createUser(user: CreateWorkbenchUser): Future[UserStatus] = for {
+      allUsersGroup <- cloudExtensions.getOrCreateAllUsersGroup(directoryDAO)
       createdUser <- registerUser(user)
-      res <- provisionUser(createdUser)
+      _ <- directoryDAO.enableIdentity(createdUser.id)
+      _ <- directoryDAO.addGroupMember(allUsersGroup.id, createdUser.id)
+      _ <- cloudExtensions.onUserCreate(createdUser)
+      userStatus <- getUserStatus(createdUser.id)
+      res <- userStatus.toRight(new WorkbenchException("getUserStatus returned None after user was created")).fold(Future.failed, Future.successful)
     } yield res
 
   def inviteUser(invitee: InviteUser): Future[UserStatusDetails] = for {
@@ -31,16 +36,6 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
       }
     } yield UserStatusDetails(createdUser.id, createdUser.email)
 
-  protected[service] def provisionUser(user: WorkbenchUser): Future[UserStatus] = {
-    for {
-      allUsersGroup <- cloudExtensions.getOrCreateAllUsersGroup(directoryDAO)
-      _ <- directoryDAO.enableIdentity(user.id)
-      _ <- directoryDAO.addGroupMember(allUsersGroup.id, user.id)
-      _ <- cloudExtensions.onUserCreate(user)
-      userStatus <- getUserStatus(user.id)
-      res <- userStatus.toRight(new WorkbenchException("getUserStatus returned None after user was created")).fold(Future.failed, Future.successful)
-    } yield res
-  }
   /**
     * If googleSubjectId exists in ldap, return 409; else if email also exists, we lookup pre-created user record and update
     * its googleSubjectId field; otherwise, we create a new user

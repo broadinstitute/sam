@@ -1091,7 +1091,7 @@ paths:
       tags:
         - Resources
 
-  /api/v1/invite/user/?email={inviteeEmail}:
+  /api/v1/invite/user/{inviteeEmail}:
     post:
       summary: create current user in the system using login credentials
       parameters:
