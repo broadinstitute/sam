@@ -192,7 +192,7 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
     */
   it should "update googleSubjectId when there's no existing subject for a given googleSubjectId and but there is one for email" in{
     val user = genCreateWorkbenchUserAPI.sample.get
-    dirDAO.createUser(WorkbenchUser(user.id, None, user.email))
+    dirDAO.createUser(WorkbenchUser(user.id, None, user.email)).futureValue
     service.registerUser(user).futureValue
     val res = dirDAO.loadUser(user.id).futureValue
     res shouldBe Some(WorkbenchUser(user.id, Some(user.googleSubjectId), user.email))
