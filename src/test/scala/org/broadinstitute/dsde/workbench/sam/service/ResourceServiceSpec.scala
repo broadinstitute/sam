@@ -27,10 +27,14 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
   val config = ConfigFactory.load()
   val directoryConfig = config.as[DirectoryConfig]("directory")
   val schemaLockConfig = config.as[SchemaLockConfig]("schemaLock")
+  //Note: we intentionally use the Managed Group resource type loaded from reference.conf for the tests here.
+  private val realResourceTypes = config.as[Map[String, ResourceType]]("resourceTypes").values.toSet
+  private val realResourceTypeMap = realResourceTypes.map(rt => rt.name -> rt).toMap
+
   val dirURI = new URI(directoryConfig.directoryUrl)
   val connectionPool = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
   val dirDAO = new LdapDirectoryDAO(connectionPool, directoryConfig)
-  val policyDAO = new LdapAccessPolicyDAO(connectionPool, directoryConfig)
+  val policyDAO = new LdapAccessPolicyDAO(connectionPool, directoryConfig, realResourceTypeMap)
   val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
   private val dummyUserInfo = UserInfo(OAuth2BearerToken("token"), WorkbenchUserId("userid"), WorkbenchEmail("user@company.com"), 0)
@@ -52,9 +56,6 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
   )
   private val constrainablePolicyMembership = AccessPolicyMembership(Set(dummyUserInfo.userEmail), Set(constrainableViewAction), Set(constrainableReaderRoleName))
 
-  //Note: we intentionally use the Managed Group resource type loaded from reference.conf for the tests here.
-  private val realResourceTypes = config.as[Map[String, ResourceType]]("resourceTypes").values.toSet
-  private val realResourceTypeMap = realResourceTypes.map(rt => rt.name -> rt).toMap
   private val managedGroupResourceType = realResourceTypeMap.getOrElse(ResourceTypeName("managed-group"), throw new Error("Failed to load managed-group resource type from reference.conf"))
 
   private val emailDomain = "example.com"
@@ -573,7 +574,10 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     runAndWait(service.overwritePolicy(otherResourceType, AccessPolicyName("in-it"), resource3, AccessPolicyMembership(Set(dummyUserInfo.userEmail), Set(ResourceAction("alter_policies")), Set.empty)))
     runAndWait(service.overwritePolicy(otherResourceType, AccessPolicyName("not-in-it"), resource3, AccessPolicyMembership(Set.empty, Set(ResourceAction("alter_policies")), Set.empty)))
 
-    assertResult(Set(ResourceIdAndPolicyName(resource1.resourceId, AccessPolicyName(defaultResourceType.ownerRoleName.value)), ResourceIdAndPolicyName(resource2.resourceId, AccessPolicyName(defaultResourceType.ownerRoleName.value)), ResourceIdAndPolicyName(resource1.resourceId, AccessPolicyName("in-it")))) {
+    assertResult(Set(
+      ResourceIdAndPolicyName(resource1.resourceId, AccessPolicyName(defaultResourceType.ownerRoleName.value), Set.empty, Set.empty),
+      ResourceIdAndPolicyName(resource2.resourceId, AccessPolicyName(defaultResourceType.ownerRoleName.value), Set.empty, Set.empty),
+      ResourceIdAndPolicyName(resource1.resourceId, AccessPolicyName("in-it"), Set.empty, Set.empty))) {
       runAndWait(service.listUserAccessPolicies(defaultResourceType, dummyUserInfo))
     }
   }
@@ -594,7 +598,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     }
 
     runAndWait(service.addSubjectToPolicy(ResourceAndPolicyName(resource, policyName), otherUserInfo.userId))
-    assertResult(Set(ResourceIdAndPolicyName(resource.resourceId, policyName))) {
+    assertResult(Set(ResourceIdAndPolicyName(resource.resourceId, policyName, Set.empty, Set.empty))) {
       runAndWait(service.listUserAccessPolicies(defaultResourceType, otherUserInfo))
     }
 

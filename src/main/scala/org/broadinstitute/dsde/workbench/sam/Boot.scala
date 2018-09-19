@@ -56,12 +56,12 @@ object Boot extends App with LazyLogging {
     val port = if (dirURI.getPort > 0) dirURI.getPort else defaultPort
     val ldapConnectionPool = new LDAPConnectionPool(new LDAPConnection(socketFactory, dirURI.getHost, port, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
 
-    val accessPolicyDAO = new LdapAccessPolicyDAO(ldapConnectionPool, directoryConfig)
     val directoryDAO = new LdapDirectoryDAO(ldapConnectionPool, directoryConfig)
     val schemaDAO = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
     val resourceTypes = config.as[Map[String, ResourceType]]("resourceTypes").values.toSet
     val resourceTypeMap = resourceTypes.map(rt => rt.name -> rt).toMap
+    val accessPolicyDAO = new LdapAccessPolicyDAO(ldapConnectionPool, directoryConfig, resourceTypeMap)
 
     val cloudExt = googleServicesConfigOption match {
       case Some(googleServicesConfig) =>

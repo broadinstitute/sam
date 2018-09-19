@@ -48,7 +48,7 @@ class LdapDirectoryDAO(protected val ldapConnectionPool: LDAPConnectionPool, pro
   private def unmarshalGroup(results: Entry) = {
     val cn = getAttribute(results, Attr.cn).getOrElse(throw new WorkbenchException(s"${Attr.cn} attribute missing: ${results.getDN}"))
     val email = getAttribute(results, Attr.email).getOrElse(throw new WorkbenchException(s"${Attr.email} attribute missing: ${results.getDN}"))
-    val memberDns = getAttributes(results, Attr.uniqueMember).getOrElse(Set.empty).toSet
+    val memberDns = getAttributes(results, Attr.uniqueMember)
 
     BasicWorkbenchGroup(WorkbenchGroupName(cn), memberDns.map(dnToSubject), WorkbenchEmail(email))
   }

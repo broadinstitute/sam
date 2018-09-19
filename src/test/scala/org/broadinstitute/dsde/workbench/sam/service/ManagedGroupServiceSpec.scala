@@ -32,10 +32,14 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
   private val config = ConfigFactory.load()
   val directoryConfig = config.as[DirectoryConfig]("directory")
   val schemaLockConfig = ConfigFactory.load().as[SchemaLockConfig]("schemaLock")
+  //Note: we intentionally use the Managed Group resource type loaded from reference.conf for the tests here.
+  private val resourceTypes = config.as[Map[String, ResourceType]]("resourceTypes").values.toSet
+  private val resourceTypeMap = resourceTypes.map(rt => rt.name -> rt).toMap
+
   val dirURI = new URI(directoryConfig.directoryUrl)
   val connectionPool = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
   val dirDAO = new LdapDirectoryDAO(connectionPool, directoryConfig)
-  val policyDAO = new LdapAccessPolicyDAO(connectionPool, directoryConfig)
+  val policyDAO = new LdapAccessPolicyDAO(connectionPool, directoryConfig, resourceTypeMap)
   val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
   private val resourceId = ResourceId("myNewGroup")
@@ -43,9 +47,6 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
   private val adminPolicy = ResourceAndPolicyName(expectedResource, ManagedGroupService.adminPolicyName)
   private val memberPolicy = ResourceAndPolicyName(expectedResource, ManagedGroupService.memberPolicyName)
 
-  //Note: we intentionally use the Managed Group resource type loaded from reference.conf for the tests here.
-  private val resourceTypes = config.as[Map[String, ResourceType]]("resourceTypes").values.toSet
-  private val resourceTypeMap = resourceTypes.map(rt => rt.name -> rt).toMap
   private val managedGroupResourceType = resourceTypeMap.getOrElse(ResourceTypeName("managed-group"), throw new Error("Failed to load managed-group resource type from reference.conf"))
   private val testDomain = "example.com"
 

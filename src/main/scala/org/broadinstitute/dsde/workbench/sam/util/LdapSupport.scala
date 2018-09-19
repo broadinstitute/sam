@@ -54,7 +54,7 @@ trait LdapSupport {
     Option(results.getAttribute(key)).map(_.getValue)
   }
 
-  protected def getAttributes(results: Entry, key: String): Option[TraversableOnce[String]] = {
-    Option(results.getAttribute(key)).map(_.getValues)
+  protected def getAttributes(results: Entry, key: String): Set[String] = {
+    Option(results.getAttribute(key)).map(_.getValues.toSet).getOrElse(Set.empty)
   }
 }

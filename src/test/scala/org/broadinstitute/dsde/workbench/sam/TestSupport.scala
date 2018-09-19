@@ -1,5 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam
 
+import java.net.URI
+
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.headers.RawHeader
 import akka.stream.Materializer
@@ -45,6 +47,10 @@ object TestSupport extends TestSupport{
   val googleServicesConfig = config.as[GoogleServicesConfig]("googleServices")
   val configResourceTypes = config.as[Map[String, ResourceType]]("resourceTypes").values.map(rt => rt.name -> rt).toMap
   val defaultUserEmail = WorkbenchEmail("newuser@new.com")
+  val directoryConfig = config.as[DirectoryConfig]("directory")
+  val schemaLockConfig = config.as[SchemaLockConfig]("schemaLock")
+  val dirURI = new URI(directoryConfig.directoryUrl)
+
   def proxyEmail(workbenchUserId: WorkbenchUserId) = WorkbenchEmail(s"PROXY_$workbenchUserId@${googleServicesConfig.appsDomain}")
   def googleSubjectIdHeaderWithId(googleSubjectId: GoogleSubjectId) = RawHeader(googleSubjectIdHeader, googleSubjectId.value)
   def genGoogleSubjectId(): GoogleSubjectId = GoogleSubjectId(genRandom(System.currentTimeMillis()))

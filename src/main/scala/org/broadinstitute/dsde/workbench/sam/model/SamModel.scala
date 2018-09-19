@@ -41,7 +41,7 @@ object SamJsonSupport {
 
   implicit val AccessPolicyResponseEntryFormat = jsonFormat3(AccessPolicyResponseEntry)
 
-  implicit val ResourceIdAndPolicyNameFormat = jsonFormat2(ResourceIdAndPolicyName)
+  implicit val ResourceIdAndPolicyNameFormat = jsonFormat4(ResourceIdAndPolicyName)
 
   implicit val ResourceAndPolicyNameFormat = jsonFormat2(ResourceAndPolicyName)
 
@@ -88,7 +88,7 @@ case class ResourceType(name: ResourceTypeName, actionPatterns: Set[ResourceActi
 
 case class ResourceId(value: String) extends ValueObject
 
-case class ResourceIdAndPolicyName(resourceId: ResourceId, accessPolicyName: AccessPolicyName)
+final case class ResourceIdAndPolicyName(resourceId: ResourceId, accessPolicyName: AccessPolicyName, authDomains: Set[WorkbenchGroupName], authDomainsUserNotAMemberOf: Set[WorkbenchGroupName])
 case class ResourceAndPolicyName(resource: Resource, accessPolicyName: AccessPolicyName) extends WorkbenchGroupIdentity {
   override def toString: String = s"${accessPolicyName.value}.${resource.resourceId.value}.${resource.resourceTypeName.value}"
 }
