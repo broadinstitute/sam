@@ -69,7 +69,7 @@ object Boot extends App with LazyLogging {
 
         val googleDirDaos = (googleServicesConfig.adminSdkServiceAccounts match {
           case None => NonEmptyList.one(Pem(WorkbenchEmail(googleServicesConfig.serviceAccountClientId), new File(googleServicesConfig.pemFile), Option(googleServicesConfig.subEmail)))
-          case Some(accounts) => accounts.map(account => Json(account.json))
+          case Some(accounts) => accounts.map(account => Json(account.json, Option(googleServicesConfig.subEmail)))
         }).map { credentials =>
           new HttpGoogleDirectoryDAO(googleServicesConfig.appName, credentials, "google")
         }
