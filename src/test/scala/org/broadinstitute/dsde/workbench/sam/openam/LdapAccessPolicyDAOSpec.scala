@@ -4,21 +4,21 @@ import java.util.UUID
 
 import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchGroupName, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.sam.Generator._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.TestSupport._
 import org.broadinstitute.dsde.workbench.sam.directory._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
-import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FlatSpec, Matchers}
+import org.scalatest._
 
 import scala.concurrent.ExecutionContext.Implicits.global
-
 /**
   * Created by dvoet on 6/26/17.
   */
 class LdapAccessPolicyDAOSpec extends FlatSpec with Matchers with TestSupport with BeforeAndAfter with BeforeAndAfterAll {
   private val connectionPool = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
-  val dao = new LdapAccessPolicyDAO(connectionPool, directoryConfig, configResourceTypes)
+  val dao = new LdapAccessPolicyDAO(connectionPool, directoryConfig)
   val dirDao = new LdapDirectoryDAO(connectionPool, directoryConfig)
   val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
@@ -48,12 +48,12 @@ class LdapAccessPolicyDAOSpec extends FlatSpec with Matchers with TestSupport wi
     val policy2 = AccessPolicy(ResourceAndPolicyName(Resource(typeName1, ResourceId("resource")), AccessPolicyName("role1-b")), policy2Group.members, policy2Group.email, Set(ResourceRoleName("role1")), Set(ResourceAction("action3"), ResourceAction("action4")))
     val policy3 = AccessPolicy(ResourceAndPolicyName(Resource(typeName2, ResourceId("resource")), AccessPolicyName("role1-a")), policy3Group.members, policy3Group.email, Set(ResourceRoleName("role1")), Set(ResourceAction("action1"), ResourceAction("action2")))
 
-    runAndWait(dao.createResourceType(typeName1))
-    runAndWait(dao.createResourceType(typeName2))
+    dao.createResourceType(typeName1).unsafeRunSync()
+    dao.createResourceType(typeName2).unsafeRunSync()
 
-    runAndWait(dao.createResource(policy1.id.resource))
+    dao.createResource(policy1.id.resource).unsafeRunSync()
     //policy2's resource already exists
-    runAndWait(dao.createResource(policy3.id.resource))
+    dao.createResource(policy3.id.resource).unsafeRunSync()
 
     assertResult(Seq.empty) {
       runAndWait(dao.listAccessPolicies(policy1.id.resource)).toSeq
@@ -86,5 +86,17 @@ class LdapAccessPolicyDAOSpec extends FlatSpec with Matchers with TestSupport wi
     }
 
     runAndWait(dao.deletePolicy(policy3))
+  }
+
+  "LdapAccessPolicyDAO listUserPolicyResponse" should "return UserPolicyResponse" in {
+    val policy = genPolicy.sample.get
+    val res = for{
+      _ <- dao.createResourceType(policy.id.resource.resourceTypeName)
+      _ <- dao.createResourceType(policy.id.resource.resourceTypeName)
+      _ <- dao.createResource(policy.id.resource)
+      r <- dao.listResourceWithAuthdomains(policy.id.resource.resourceTypeName, Set(policy.id.resource.resourceId))
+    } yield r
+
+    res.unsafeRunSync() shouldBe(Set(Resource(policy.id.resource.resourceTypeName, policy.id.resource.resourceId, policy.id.resource.authDomain)))
   }
 }

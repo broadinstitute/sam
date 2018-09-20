@@ -348,14 +348,14 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     runAndWait(dao.createGroup(group1))
     runAndWait(dao.createGroup(group2))
 
-    val policyDAO = new LdapAccessPolicyDAO(connectionPool, directoryConfig, TestSupport.configResourceTypes)
+    val policyDAO = new LdapAccessPolicyDAO(connectionPool, directoryConfig)
 
     val typeName1 = ResourceTypeName(UUID.randomUUID().toString)
 
     val policy1 = AccessPolicy(ResourceAndPolicyName(Resource(typeName1, ResourceId("resource")), AccessPolicyName("role1-a")), Set(userId), WorkbenchEmail("p1@example.com"), Set(ResourceRoleName("role1")), Set(ResourceAction("action1"), ResourceAction("action2")))
 
-    runAndWait(policyDAO.createResourceType(typeName1))
-    runAndWait(policyDAO.createResource(policy1.id.resource))
+    policyDAO.createResourceType(typeName1).unsafeRunSync()
+    policyDAO.createResource(policy1.id.resource).unsafeRunSync()
     runAndWait(policyDAO.createPolicy(policy1))
 
     assert(runAndWait(dao.isGroupMember(group1.id, userId)))

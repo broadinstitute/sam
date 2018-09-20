@@ -4,18 +4,24 @@ package service
 import java.net.URI
 import java.util.UUID
 
+import org.scalatest.concurrent.PatienceConfiguration.Timeout
+import org.scalatest.time.{Seconds, Span}
+
+import scala.concurrent.Future
+
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import com.typesafe.config.ConfigFactory
 import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.config.{DirectoryConfig, SchemaLockConfig, _}
 import org.broadinstitute.dsde.workbench.sam.directory.LdapDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, LdapAccessPolicyDAO}
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
+import Generator._
+import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FlatSpec, Matchers}
 
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -23,7 +29,7 @@ import scala.concurrent.ExecutionContext.Implicits.global
 /**
   * Created by dvoet on 6/27/17.
   */
-class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with BeforeAndAfter with BeforeAndAfterAll {
+class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with TestSupport with BeforeAndAfter with BeforeAndAfterAll {
   val config = ConfigFactory.load()
   val directoryConfig = config.as[DirectoryConfig]("directory")
   val schemaLockConfig = config.as[SchemaLockConfig]("schemaLock")
@@ -34,7 +40,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
   val dirURI = new URI(directoryConfig.directoryUrl)
   val connectionPool = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
   val dirDAO = new LdapDirectoryDAO(connectionPool, directoryConfig)
-  val policyDAO = new LdapAccessPolicyDAO(connectionPool, directoryConfig, realResourceTypeMap)
+  val policyDAO = new LdapAccessPolicyDAO(connectionPool, directoryConfig)
   val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
   private val dummyUserInfo = UserInfo(OAuth2BearerToken("token"), WorkbenchUserId("userid"), WorkbenchEmail("user@company.com"), 0)
@@ -49,7 +55,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
   private val constrainableResourceTypeActions = Set(constrainableViewAction)
   private val constrainableReaderRoleName = ResourceRoleName("constrainable_reader")
   private val constrainableResourceType = ResourceType(
-    ResourceTypeName(UUID.randomUUID().toString),
+    genResourceTypeNameExcludeManagedGroup.sample.get,
     constrainableActionPatterns,
     Set(ResourceRole(constrainableReaderRoleName, constrainableResourceTypeActions)),
     constrainableReaderRoleName
@@ -128,7 +134,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     val resourceName = ResourceId("resource")
     val resource = Resource(defaultResourceType.name, resourceName)
 
-    runAndWait(service.createResourceType(defaultResourceType))
+    service.createResourceType(defaultResourceType).unsafeRunSync()
 
     runAndWait(service.createResource(defaultResourceType, resourceName, dummyUserInfo))
 
@@ -149,7 +155,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     val resourceName1 = ResourceId("resource1")
     val resourceName2 = ResourceId("resource2")
 
-    runAndWait(service.createResourceType(defaultResourceType))
+    service.createResourceType(defaultResourceType).unsafeRunSync()
     runAndWait(service.createResource(defaultResourceType, resourceName1, dummyUserInfo))
 
     val policies2 = runAndWait(service.createResource(defaultResourceType, resourceName2, dummyUserInfo))
@@ -176,7 +182,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     val group = BasicWorkbenchGroup(WorkbenchGroupName("g"), Set(user.id), WorkbenchEmail("foo@bar.com"))
     runAndWait(dirDAO.createGroup(group))
 
-    runAndWait(service.createResourceType(defaultResourceType))
+    service.createResourceType(defaultResourceType).unsafeRunSync()
     val resource = runAndWait(service.createResource(defaultResourceType, resourceName1, dummyUserInfo))
     val nonOwnerAction = ResourceAction("non_owner_action")
     runAndWait(service.overwritePolicy(defaultResourceType, AccessPolicyName("new_policy"), resource, AccessPolicyMembership(Set(group.email), Set(nonOwnerAction), Set.empty)))
@@ -194,7 +200,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     val resourceType = ResourceType(ResourceTypeName(UUID.randomUUID().toString), Set(SamResourceActionPatterns.delete, ResourceActionPattern("view", "", false)), Set(ResourceRole(ownerRoleName, Set(ResourceAction("delete"), ResourceAction("view")))), ownerRoleName)
     val resourceName = ResourceId("resource")
 
-    runAndWait(service.createResourceType(resourceType))
+    service.createResourceType(resourceType).unsafeRunSync()
     runAndWait(service.createResource(resourceType, resourceName, dummyUserInfo))
 
     val exception = intercept[WorkbenchExceptionWithErrorReport] {
@@ -213,7 +219,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     val resourceType = ResourceType(ResourceTypeName(UUID.randomUUID().toString), Set(SamResourceActionPatterns.delete, ResourceActionPattern("view", "", false)), Set(ResourceRole(ownerRoleName, Set(ResourceAction("delete"), ResourceAction("view")))), ownerRoleName)
     val resourceName = ResourceId("resource")
 
-    runAndWait(service.createResourceType(resourceType))
+    service.createResourceType(resourceType).unsafeRunSync()
 
     val policyMembership = AccessPolicyMembership(Set(dummyUserInfo.userEmail), Set(ResourceAction("view")), Set(ownerRoleName))
     val policyName = AccessPolicyName("foo")
@@ -231,7 +237,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     val resourceType = ResourceType(ResourceTypeName(UUID.randomUUID().toString), Set(SamResourceActionPatterns.delete, ResourceActionPattern("view", "", false)), Set(ResourceRole(ownerRoleName, Set(ResourceAction("delete"), ResourceAction("view")))), ownerRoleName)
     val resourceName = ResourceId("resource")
 
-    runAndWait(service.createResourceType(resourceType))
+    service.createResourceType(resourceType).unsafeRunSync()
 
     val exception1 = intercept[WorkbenchExceptionWithErrorReport] {
       runAndWait(service.createResource(resourceType, resourceName, Map(AccessPolicyName("foo") -> AccessPolicyMembership(Set.empty, Set.empty, Set(ownerRoleName))), Set.empty, dummyUserInfo))
@@ -253,7 +259,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
 
   "Creating a resource that has at least 1 constrainable action pattern" should "succeed when no auth domain is provided" in {
     constrainableResourceType.isAuthDomainConstrainable shouldEqual true
-    runAndWait(constrainableService.createResourceType(constrainableResourceType))
+    constrainableService.createResourceType(constrainableResourceType).unsafeRunSync()
 
     val resource = runAndWait(service.createResource(constrainableResourceType, ResourceId(UUID.randomUUID().toString), dummyUserInfo))
     assertResourceExists(resource, constrainableResourceType, policyDAO)
@@ -261,9 +267,9 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
 
   it should "succeed when at least 1 valid auth domain group is provided" in {
     constrainableResourceType.isAuthDomainConstrainable shouldEqual true
-    runAndWait(constrainableService.createResourceType(constrainableResourceType))
+    constrainableService.createResourceType(constrainableResourceType).unsafeRunSync()
 
-    runAndWait(constrainableService.createResourceType(managedGroupResourceType))
+    constrainableService.createResourceType(managedGroupResourceType).unsafeRunSync()
     val managedGroupName = "fooGroup"
     val secondMGroupName = "barGroup"
     runAndWait(managedGroupService.createManagedGroup(ResourceId(managedGroupName), dummyUserInfo))
@@ -279,9 +285,9 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
 
   it should "fail when at least 1 of the auth domain groups does not exist" in {
     constrainableResourceType.isAuthDomainConstrainable shouldEqual true
-    runAndWait(constrainableService.createResourceType(constrainableResourceType))
+    constrainableService.createResourceType(constrainableResourceType).unsafeRunSync()
 
-    runAndWait(constrainableService.createResourceType(managedGroupResourceType))
+    constrainableService.createResourceType(managedGroupResourceType).unsafeRunSync()
     val managedGroupName = "fooGroup"
     runAndWait(managedGroupService.createManagedGroup(ResourceId(managedGroupName), dummyUserInfo))
     val nonExistentGroup = WorkbenchGroupName("aBadGroup")
@@ -295,12 +301,12 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
 
   it should "fail when user does not have access to at least 1 of the auth domain groups" in {
     constrainableResourceType.isAuthDomainConstrainable shouldEqual true
-    runAndWait(constrainableService.createResourceType(constrainableResourceType))
+    constrainableService.createResourceType(constrainableResourceType).unsafeRunSync()
 
     val bender = UserInfo(OAuth2BearerToken("token"), WorkbenchUserId("Bender"), WorkbenchEmail("bender@planex.com"), 0)
     runAndWait(dirDAO.createUser(WorkbenchUser(bender.userId, None, bender.userEmail)))
 
-    runAndWait(constrainableService.createResourceType(managedGroupResourceType))
+    constrainableService.createResourceType(managedGroupResourceType).unsafeRunSync()
     val managedGroupName1 = "firstGroup"
     runAndWait(managedGroupService.createManagedGroup(ResourceId(managedGroupName1), dummyUserInfo))
     val managedGroupName2 = "benderIsGreat"
@@ -323,9 +329,9 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
 
   "Creating a resource that has 0 constrainable action patterns" should "fail when an auth domain is provided" in {
     defaultResourceType.isAuthDomainConstrainable shouldEqual false
-    runAndWait(service.createResourceType(defaultResourceType))
+    service.createResourceType(defaultResourceType).unsafeRunSync()
 
-    runAndWait(constrainableService.createResourceType(managedGroupResourceType))
+    constrainableService.createResourceType(managedGroupResourceType).unsafeRunSync()
     val managedGroupName = "fooGroup"
     runAndWait(managedGroupService.createManagedGroup(ResourceId(managedGroupName), dummyUserInfo))
 
@@ -342,7 +348,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     val resourceName = ResourceId("resource")
     val resource = Resource(defaultResourceType.name, resourceName)
 
-    runAndWait(service.createResourceType(defaultResourceType))
+    service.createResourceType(defaultResourceType).unsafeRunSync()
     runAndWait(service.createResource(defaultResourceType, resourceName, dummyUserInfo))
 
     val roles = runAndWait(service.listUserResourceRoles(resource, dummyUserInfo))
@@ -365,7 +371,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
   "policyDao.listAccessPolicies" should "list policies for a newly created resource" in {
     val resource = Resource(defaultResourceType.name, ResourceId("my-resource"))
 
-    runAndWait(service.createResourceType(defaultResourceType))
+    service.createResourceType(defaultResourceType).unsafeRunSync()
     runAndWait(service.createResource(defaultResourceType, resource.resourceId, dummyUserInfo))
 
     val policies = runAndWait(policyDAO.listAccessPolicies(resource)).map(_.copy(email=WorkbenchEmail("policy-randomuuid@example.com")))
@@ -379,7 +385,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     val forcedEmail = WorkbenchEmail("policy-randomuuid@example.com")
     val expectedPolicy = AccessPolicyResponseEntry(AccessPolicyName(ownerRole.roleName.value), AccessPolicyMembership(Set(dummyUserInfo.userEmail), Set.empty, Set(ownerRole.roleName)), forcedEmail)
 
-    runAndWait(service.createResourceType(defaultResourceType))
+    service.createResourceType(defaultResourceType).unsafeRunSync()
     runAndWait(service.createResource(defaultResourceType, resource.resourceId, dummyUserInfo))
 
     val policies = runAndWait(service.listResourcePolicies(resource)).map(_.copy(email = forcedEmail))
@@ -392,7 +398,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     val forcedEmail = WorkbenchEmail("policy-randomuuid@example.com")
     val expectedPolicy = AccessPolicyResponseEntry(AccessPolicyName(ownerRole.roleName.value), AccessPolicyMembership(Set(dummyUserInfo.userEmail), Set.empty, Set(ownerRole.roleName)), forcedEmail)
 
-    runAndWait(service.createResourceType(defaultResourceType))
+    service.createResourceType(defaultResourceType).unsafeRunSync()
     runAndWait(service.createResource(defaultResourceType, resource.resourceId, dummyUserInfo))
 
     val policies = runAndWait(service.listResourcePolicies(resource)).map(_.copy(email = forcedEmail))
@@ -402,7 +408,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
   "overwritePolicy" should "succeed with a valid request" in {
     val resource = Resource(defaultResourceType.name, ResourceId("my-resource"))
 
-    runAndWait(service.createResourceType(defaultResourceType))
+    service.createResourceType(defaultResourceType).unsafeRunSync()
     runAndWait(service.createResource(defaultResourceType, resource.resourceId, dummyUserInfo))
 
     val group = BasicWorkbenchGroup(WorkbenchGroupName("foo"), Set.empty, toEmail(resource.resourceTypeName.value, resource.resourceId.value, "foo"))
@@ -419,7 +425,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     val rt = ResourceType(ResourceTypeName(UUID.randomUUID().toString), Set(ResourceActionPattern("foo-.+-bar", "", false)), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("foo-biz-bar")))), ResourceRoleName("owner"))
     val resource = Resource(rt.name, ResourceId("my-resource"))
 
-    runAndWait(service.createResourceType(rt))
+    service.createResourceType(rt).unsafeRunSync()
     runAndWait(service.createResource(rt, resource.resourceId, dummyUserInfo))
 
     val actions = Set(ResourceAction("foo-bang-bar"))
@@ -437,7 +443,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
   it should "fail when given an invalid action" in {
     val resource = Resource(defaultResourceType.name, ResourceId("my-resource"))
 
-    runAndWait(service.createResourceType(defaultResourceType))
+    service.createResourceType(defaultResourceType).unsafeRunSync()
     runAndWait(service.createResource(defaultResourceType, resource.resourceId, dummyUserInfo))
 
     val group = BasicWorkbenchGroup(WorkbenchGroupName("foo"), Set.empty, toEmail(resource.resourceTypeName.value, resource.resourceId.value, "foo"))
@@ -458,7 +464,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     val rt = ResourceType(ResourceTypeName(UUID.randomUUID().toString), Set(ResourceActionPattern("foo-.+-bar", "", false)), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("foo-biz-bar")))), ResourceRoleName("owner"))
     val resource = Resource(rt.name, ResourceId("my-resource"))
 
-    runAndWait(service.createResourceType(rt))
+    service.createResourceType(rt).unsafeRunSync()
     runAndWait(service.createResource(rt, resource.resourceId, dummyUserInfo))
 
     val exception = intercept[WorkbenchExceptionWithErrorReport] {
@@ -471,7 +477,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
   it should "fail when given an invalid role" in {
     val resource = Resource(defaultResourceType.name, ResourceId("my-resource"))
 
-    runAndWait(service.createResourceType(defaultResourceType))
+    service.createResourceType(defaultResourceType).unsafeRunSync()
     runAndWait(service.createResource(defaultResourceType, resource.resourceId, dummyUserInfo))
 
     val group = BasicWorkbenchGroup(WorkbenchGroupName("foo"), Set.empty, toEmail(resource.resourceTypeName.value, resource.resourceId.value, "foo"))
@@ -491,7 +497,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
   it should "fail when given an invalid member email" in {
     val resource = Resource(defaultResourceType.name, ResourceId("my-resource"))
 
-    runAndWait(service.createResourceType(defaultResourceType))
+    service.createResourceType(defaultResourceType).unsafeRunSync()
     runAndWait(service.createResource(defaultResourceType, resource.resourceId, dummyUserInfo))
 
     val group = BasicWorkbenchGroup(WorkbenchGroupName("foo"), Set.empty, toEmail(resource.resourceTypeName.value, resource.resourceId.value, "foo"))
@@ -511,7 +517,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
   "deleteResource" should "delete the resource" in {
     val resource = Resource(defaultResourceType.name, ResourceId("my-resource"))
 
-    runAndWait(service.createResourceType(defaultResourceType))
+    service.createResourceType(defaultResourceType).unsafeRunSync()
     runAndWait(service.createResource(defaultResourceType, resource.resourceId, dummyUserInfo))
 
     assert(runAndWait(policyDAO.listAccessPolicies(resource)).nonEmpty)
@@ -526,7 +532,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
 
     defaultResourceType.reuseIds shouldEqual false
 
-    runAndWait(service.createResourceType(defaultResourceType))
+    service.createResourceType(defaultResourceType).unsafeRunSync()
     runAndWait(service.createResource(defaultResourceType, resource.resourceId, dummyUserInfo))
     runAndWait(service.deleteResource(resource))
 
@@ -541,7 +547,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     reusableResourceType.reuseIds shouldEqual true
     val localService = new ResourceService(Map(reusableResourceType.name -> reusableResourceType), policyDAO, dirDAO, NoExtensions, "example.com")
 
-    runAndWait(localService.createResourceType(reusableResourceType))
+    localService.createResourceType(reusableResourceType).unsafeRunSync()
 
     val resource = Resource(reusableResourceType.name, ResourceId("my-resource"))
 
@@ -561,8 +567,8 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     val resource3 = Resource(otherResourceType.name, ResourceId("my-resource1"))
     val resource4 = Resource(otherResourceType.name, ResourceId("my-resource2"))
 
-    runAndWait(service.createResourceType(defaultResourceType))
-    runAndWait(service.createResourceType(otherResourceType))
+    service.createResourceType(defaultResourceType).unsafeRunSync()
+    service.createResourceType(otherResourceType).unsafeRunSync()
 
     runAndWait(service.createResource(defaultResourceType, resource1.resourceId, dummyUserInfo))
     runAndWait(service.createResource(defaultResourceType, resource2.resourceId, dummyUserInfo))
@@ -575,11 +581,50 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
     runAndWait(service.overwritePolicy(otherResourceType, AccessPolicyName("not-in-it"), resource3, AccessPolicyMembership(Set.empty, Set(ResourceAction("alter_policies")), Set.empty)))
 
     assertResult(Set(
-      ResourceIdAndPolicyName(resource1.resourceId, AccessPolicyName(defaultResourceType.ownerRoleName.value), Set.empty, Set.empty),
-      ResourceIdAndPolicyName(resource2.resourceId, AccessPolicyName(defaultResourceType.ownerRoleName.value), Set.empty, Set.empty),
-      ResourceIdAndPolicyName(resource1.resourceId, AccessPolicyName("in-it"), Set.empty, Set.empty))) {
-      runAndWait(service.listUserAccessPolicies(defaultResourceType, dummyUserInfo))
+      UserPolicyResponse(resource1.resourceId, AccessPolicyName(defaultResourceType.ownerRoleName.value), Set.empty, Set.empty),
+      UserPolicyResponse(resource2.resourceId, AccessPolicyName(defaultResourceType.ownerRoleName.value), Set.empty, Set.empty),
+      UserPolicyResponse(resource1.resourceId, AccessPolicyName("in-it"), Set.empty, Set.empty))) {
+      service.listUserAccessPolicies(defaultResourceType.name, dummyUserInfo.userId).unsafeRunSync()
     }
+  }
+
+  it should "list required authDomains if constrainable" in {
+    val policy = (AccessPolicy.id composeLens ResourceAndPolicyName.resource composeLens Resource.resourceTypeName).set(constrainableResourceType.name)(genPolicy.sample.get)
+    val resource = policy.id.resource
+    val viewPolicyName = AccessPolicyName(constrainableReaderRoleName.value)
+
+    val res = for{
+      _ <- constrainableService.createResourceType(constrainableResourceType).unsafeToFuture()
+      _ <- constrainableService.createResourceType(managedGroupResourceType).unsafeToFuture()  // make sure managed groups in auth domain set are created. dummyUserInfo will be member of the created resourceId
+      _ <- Future.traverse(resource.authDomain)(a => managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))
+      // create resource that dummyUserInfo is a member of for constrainableResourceType
+      _ <- constrainableService.createResource(constrainableResourceType, resource.resourceId, Map(viewPolicyName -> constrainablePolicyMembership), resource.authDomain, dummyUserInfo)
+      r <- constrainableService.listUserAccessPolicies(constrainableResourceType.name, dummyUserInfo.userId).unsafeToFuture()
+    } yield r
+
+    val expected = Set(UserPolicyResponse(resource.resourceId, viewPolicyName, resource.authDomain, Set.empty))
+    res.futureValue(Timeout(Span(10, Seconds))) shouldBe expected
+  }
+
+  it should "list required authDomains and authDomains user is not a member of if constrainable" in {
+    val user = genUserInfo.sample.get
+    val policy = (AccessPolicy.id composeLens ResourceAndPolicyName.resource composeLens Resource.resourceTypeName).set(constrainableResourceType.name)(genPolicy.sample.get)
+    val resource = policy.id.resource
+    val viewPolicyName = AccessPolicyName(constrainableReaderRoleName.value)
+
+    val res = for{
+      _ <- constrainableService.createResourceType(constrainableResourceType).unsafeToFuture()
+      _ <- constrainableService.createResourceType(managedGroupResourceType).unsafeToFuture()
+      _ <- Future.traverse(resource.authDomain)(a => managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))
+      // create resource that dummyUserInfo is a member of for constrainableResourceType
+      _ <- constrainableService.createResource(constrainableResourceType, resource.resourceId, Map(viewPolicyName -> constrainablePolicyMembership), resource.authDomain, dummyUserInfo)
+      _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
+      _ <- constrainableService.createPolicy(policy.id, policy.members + user.userId, policy.roles, policy.actions)
+      r <- constrainableService.listUserAccessPolicies(constrainableResourceType.name, user.userId).unsafeToFuture()
+    } yield r
+
+    val expected = Set(UserPolicyResponse(resource.resourceId, policy.id.accessPolicyName, resource.authDomain, resource.authDomain))
+    res.futureValue(Timeout(Span(10, Seconds))) shouldBe expected
   }
 
   "add/remove SubjectToPolicy" should "add/remove subject and tolerate prior (non)existence" in {
@@ -589,17 +634,17 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
 
     runAndWait(dirDAO.createUser(WorkbenchUser(otherUserInfo.userId, None, otherUserInfo.userEmail)))
 
-    runAndWait(service.createResourceType(defaultResourceType))
+    service.createResourceType(defaultResourceType).unsafeRunSync()
     runAndWait(service.createResource(defaultResourceType, resource.resourceId, dummyUserInfo))
 
     // assert baseline
     assertResult(Set.empty) {
-      runAndWait(service.listUserAccessPolicies(defaultResourceType, otherUserInfo))
+      service.listUserAccessPolicies(defaultResourceType.name, otherUserInfo.userId).unsafeRunSync()
     }
 
     runAndWait(service.addSubjectToPolicy(ResourceAndPolicyName(resource, policyName), otherUserInfo.userId))
-    assertResult(Set(ResourceIdAndPolicyName(resource.resourceId, policyName, Set.empty, Set.empty))) {
-      runAndWait(service.listUserAccessPolicies(defaultResourceType, otherUserInfo))
+    assertResult(Set(UserPolicyResponse(resource.resourceId, policyName, Set.empty, Set.empty))) {
+      service.listUserAccessPolicies(defaultResourceType.name, otherUserInfo.userId).unsafeRunSync()
     }
 
     // add a second time to make sure no exception is thrown
@@ -608,7 +653,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with TestSupport with B
 
     runAndWait(service.removeSubjectFromPolicy(ResourceAndPolicyName(resource, policyName), otherUserInfo.userId))
     assertResult(Set.empty) {
-      runAndWait(service.listUserAccessPolicies(defaultResourceType, otherUserInfo))
+      service.listUserAccessPolicies(defaultResourceType.name, otherUserInfo.userId).unsafeRunSync()
     }
 
     // remove a second time to make sure no exception is thrown

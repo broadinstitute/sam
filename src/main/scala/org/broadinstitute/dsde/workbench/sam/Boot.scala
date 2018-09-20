@@ -61,7 +61,7 @@ object Boot extends App with LazyLogging {
 
     val resourceTypes = config.as[Map[String, ResourceType]]("resourceTypes").values.toSet
     val resourceTypeMap = resourceTypes.map(rt => rt.name -> rt).toMap
-    val accessPolicyDAO = new LdapAccessPolicyDAO(ldapConnectionPool, directoryConfig, resourceTypeMap)
+    val accessPolicyDAO = new LdapAccessPolicyDAO(ldapConnectionPool, directoryConfig)
 
     val cloudExt = googleServicesConfigOption match {
       case Some(googleServicesConfig) =>
@@ -114,7 +114,7 @@ object Boot extends App with LazyLogging {
           throw t
       }
 
-      _ <- Future.traverse(resourceTypes.map(_.name)) { accessPolicyDAO.createResourceType } recover {
+      _ <- Future.traverse(resourceTypes.map(_.name)) { x => accessPolicyDAO.createResourceType(x).unsafeToFuture() } recover {
         case t: Throwable =>
           logger.error("FATAL - unable to init resource types", t)
           throw t

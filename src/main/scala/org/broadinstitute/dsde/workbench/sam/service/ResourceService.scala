@@ -3,6 +3,9 @@ package org.broadinstitute.dsde.workbench.sam.service
 import java.util.UUID
 
 import akka.http.scaladsl.model.StatusCodes
+import cats.data.EitherT
+import cats.effect.IO
+import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam._
@@ -28,7 +31,7 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     Future.successful(resourceTypes.get(name))
   }
 
-  def createResourceType(resourceType: ResourceType): Future[ResourceTypeName] = {
+  def createResourceType(resourceType: ResourceType): IO[ResourceTypeName] = {
     accessPolicyDAO.createResourceType(resourceType.name)
   }
 
@@ -76,7 +79,7 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     */
   private def persistResource(resourceType: ResourceType, resourceId: ResourceId, policies: Set[ValidatableAccessPolicy], authDomain: Set[WorkbenchGroupName]) = {
     for {
-      resource <- accessPolicyDAO.createResource(Resource(resourceType.name, resourceId, authDomain))
+      resource <- accessPolicyDAO.createResource(Resource(resourceType.name, resourceId, authDomain)).unsafeToFuture()
       _ <- Future.traverse(policies)(createOrUpdatePolicy(resource, _))
     } yield resource
   }
@@ -123,7 +126,7 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
   }
 
   def loadResourceAuthDomain(resource: Resource): Future[Set[WorkbenchGroupName]] = {
-    accessPolicyDAO.loadResourceAuthDomain(resource)
+    accessPolicyDAO.loadResourceAuthDomain(resource).unsafeToFuture()
   }
 
   def createPolicy(resourceAndPolicyName: ResourceAndPolicyName, members: Set[WorkbenchSubject], roles: Set[ResourceRoleName], actions: Set[ResourceAction]): Future[AccessPolicy] = {
@@ -134,9 +137,28 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     accessPolicyDAO.createPolicy(AccessPolicy(resourceAndPolicyName, members, email, roles, actions))
   }
 
-  def listUserAccessPolicies(resourceType: ResourceType, userInfo: UserInfo): Future[Set[ResourceIdAndPolicyName]] = {
-    accessPolicyDAO.listAccessPolicies(resourceType.name, userInfo.userId)
-  }
+  def listUserAccessPolicies(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId): IO[Set[UserPolicyResponse]] = for{
+      rt <- IO.fromEither(resourceTypes.get(resourceTypeName).toRight(new WorkbenchException(s"missing configration for resourceType ${resourceTypeName}")))
+      isConstrained = rt.isAuthDomainConstrainable
+      ridAndPolcyName <- accessPolicyDAO.listAccessPolicies(resourceTypeName, userId) // List all policies of a given resourceType the user is a member of
+      rids = ridAndPolcyName.map(_.resourceId)
+      resources <- accessPolicyDAO.listResourceWithAuthdomains(resourceTypeName, rids)
+      authDomainMap = resources.map(x => x.resourceId -> x.authDomain).toMap
+      results = ridAndPolcyName.toList.map{
+        rnp =>
+          if(!isConstrained)
+            EitherT.fromEither[IO](UserPolicyResponse(rnp.resourceId, rnp.accessPolicyName, Set.empty, Set.empty).asRight[String])
+          else{
+            for{
+              authDomains <- EitherT.fromEither[IO](authDomainMap.get(rnp.resourceId).toRight(s"no auth domain found for ${rnp.resourceId}"))
+              allAuthDomainResourcesUserIsMemberOf <- if(authDomains.nonEmpty) accessPolicyDAO.listAccessPolicies(ManagedGroupService.managedGroupTypeName, userId).attemptT.leftMap(_.getLocalizedMessage) else EitherT.fromEither[IO](Set.empty[ResourceIdAndPolicyName].asRight[String])
+              userNotMemberOf = authDomains.filterNot(x => allAuthDomainResourcesUserIsMemberOf.map(_.resourceId).contains(ResourceId(x.value)))
+            } yield UserPolicyResponse(rnp.resourceId, rnp.accessPolicyName, authDomains, userNotMemberOf)
+          }
+      }
+      r <- results.parSequence.value
+      rr <- IO.fromEither(r.leftMap(s => new WorkbenchException(s)))
+    } yield rr.toSet
 
   // IF Resource ID reuse is allowed (as defined by the Resource Type), then we can delete the resource
   // ELSE Resource ID reuse is not allowed, and we enforce this by deleting all policies associated with the Resource,
