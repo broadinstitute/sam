@@ -4,13 +4,14 @@ package api
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.headers.{OAuth2BearerToken, RawHeader}
+import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{ServiceAccount, ServiceAccountSubjectId}
-import org.broadinstitute.dsde.workbench.model.{PetServiceAccount, PetServiceAccountId, UserInfo, WorkbenchEmail}
+import org.broadinstitute.dsde.workbench.sam.Generator.genInviteUser
+import org.broadinstitute.dsde.workbench.sam.api.StandardUserInfoDirectives._
 import org.broadinstitute.dsde.workbench.sam.directory.MockDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.{NoExtensions, StatusService, UserService}
-import StandardUserInfoDirectives._
 
 /**
   * Created by dvoet on 6/7/17.
@@ -36,6 +37,17 @@ class UserRoutesV1Spec extends UserRoutesSpecHelper{
 
     Post("/register/user/v1/").withHeaders(header) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Conflict
+    }
+  }
+
+  "POST /api/v1/invite/user/{invitee's email}" should "create user" in{
+    val invitee = genInviteUser.sample.get
+
+    val (user, headers, _, routes) = createTestUser() //create a valid user that can invite someone
+    Post(s"/api/v1/invite/user/${invitee.inviteeEmail}").withHeaders(headers) ~> routes.route ~> check{
+      status shouldEqual StatusCodes.Created
+      val res = responseAs[UserStatusDetails]
+      res.userEmail shouldBe invitee.inviteeEmail
     }
   }
 

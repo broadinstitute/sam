@@ -27,8 +27,10 @@ trait StandardUserInfoDirectives extends UserInfoDirectives {
     ) tflatMap {
     case (token, googleSubjectId, expiresIn, email) =>
       onSuccess(Try(expiresIn.toLong).fold[Future[UserInfo]](
-        t => Future.failed(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"expiresIn $expiresIn can't be converted to Long because  of $t"))),
-        l => getUserInfo(OAuth2BearerToken(token), GoogleSubjectId(googleSubjectId), WorkbenchEmail(email), l, directoryDAO)))
+        t =>
+          Future.failed(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"expiresIn $expiresIn can't be converted to Long because  of $t"))),
+        l =>
+          getUserInfo(OAuth2BearerToken(token), GoogleSubjectId(googleSubjectId), WorkbenchEmail(email), l, directoryDAO)))
   }
 
   def requireCreateUser: Directive1[CreateWorkbenchUser] = (

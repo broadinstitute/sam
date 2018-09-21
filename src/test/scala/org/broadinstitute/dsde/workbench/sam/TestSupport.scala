@@ -20,7 +20,7 @@ import org.broadinstitute.dsde.workbench.sam.service.UserService._
 import org.scalatest.prop.{Configuration, PropertyChecks}
 import org.scalatest.{FlatSpec, Matchers}
 import StandardUserInfoDirectives._
-import org.scalactic.Equality
+import cats.kernel.Eq
 
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Awaitable, ExecutionContext}
@@ -37,8 +37,8 @@ trait PropertyBasedTesting extends FlatSpec with PropertyChecks with Configurati
 }
 
 object TestSupport extends TestSupport{
-  implicit val eqThrowable: Equality[Throwable] = new Equality[Throwable]{
-    override def areEqual(a: Throwable, b: Any): Boolean = b.isInstanceOf[Throwable] && a.getMessage == b.asInstanceOf[Throwable].getMessage
+  implicit val eqWorkbenchExceptionErrorReport: Eq[WorkbenchExceptionWithErrorReport] = new Eq[WorkbenchExceptionWithErrorReport]{
+    override def eqv(x: WorkbenchExceptionWithErrorReport, y: WorkbenchExceptionWithErrorReport): Boolean = x.errorReport.statusCode == y.errorReport.statusCode && x.errorReport.message == y.errorReport.message
   }
   val config = ConfigFactory.load()
   val petServiceAccountConfig = config.as[PetServiceAccountConfig]("petServiceAccount")
@@ -88,6 +88,8 @@ object TestSupport extends TestSupport{
     override val googleExtensions: GoogleExtensions = if(samDependencies.cloudExtensions.isInstanceOf[GoogleExtensions]) samDependencies.cloudExtensions.asInstanceOf[GoogleExtensions] else null
     val googleKeyCache = if(samDependencies.cloudExtensions.isInstanceOf[GoogleExtensions])samDependencies.cloudExtensions.asInstanceOf[GoogleExtensions].googleKeyCache else null
   }
+
+  def genSamRoutesWithDefault(implicit system: ActorSystem, executionContext: ExecutionContext, materializer: Materializer): SamRoutes = genSamRoutes(genSamDependencies())
 }
 
 final case class SamDependencies(resourceService: ResourceService, userService: UserService, statusService: StatusService, managedGroupService: ManagedGroupService, directoryDAO: MockDirectoryDAO, val cloudExtensions: CloudExtensions)

@@ -3,7 +3,7 @@ package org.broadinstitute.dsde.workbench.sam
 import akka.http.scaladsl.model.headers.{OAuth2BearerToken, RawHeader}
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.api.CreateWorkbenchUser
+import org.broadinstitute.dsde.workbench.sam.api.{CreateWorkbenchUser, InviteUser}
 import org.scalacheck._
 import org.broadinstitute.dsde.workbench.sam.api.StandardUserInfoDirectives._
 import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
@@ -41,10 +41,15 @@ object Generator {
     expires <- Gen.calendar.map(_.getTimeInMillis)
   } yield UserInfo(token, genWorkbenchUserId(System.currentTimeMillis()), email, expires)
 
-  val genCreateWorkbenchUserAPI = for{
+  val genCreateWorkbenchUser = for{
     email <- genNonPetEmail
     userId = genWorkbenchUserId(System.currentTimeMillis())
   }yield CreateWorkbenchUser(userId, GoogleSubjectId(userId.value), email)
+
+  val genInviteUser = for{
+    email <- genNonPetEmail
+    userId = genWorkbenchUserId(System.currentTimeMillis())
+  }yield InviteUser(userId, email)
 
   val genWorkbenchGroupName = Gen.alphaStr.map(x => WorkbenchGroupName(s"s$x")) //prepending `s` just so this won't be an empty string
   val genGoogleProject = Gen.alphaStr.map(x => GoogleProject(s"s$x")) //prepending `s` just so this won't be an empty string
@@ -62,5 +67,5 @@ object Generator {
 
   implicit val arbNonPetEmail: Arbitrary[WorkbenchEmail] = Arbitrary(genNonPetEmail)
   implicit val arbOAuth2BearerToken: Arbitrary[OAuth2BearerToken] = Arbitrary(genOAuth2BearerToken)
-  implicit val arbCreateWorkbenchUserAPI: Arbitrary[CreateWorkbenchUser] = Arbitrary(genCreateWorkbenchUserAPI)
+  implicit val arbCreateWorkbenchUserAPI: Arbitrary[CreateWorkbenchUser] = Arbitrary(genCreateWorkbenchUser)
 }

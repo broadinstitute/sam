@@ -8,10 +8,9 @@ import javax.naming.NameNotFoundException
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.commons.codec.binary.Hex
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.api.CreateWorkbenchUser
+import org.broadinstitute.dsde.workbench.sam.api.{CreateWorkbenchUser, InviteUser}
 import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model._
-
 import scala.concurrent.{ExecutionContext, Future}
 
 /**
@@ -19,18 +18,23 @@ import scala.concurrent.{ExecutionContext, Future}
   */
 class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExtensions)(implicit val executionContext: ExecutionContext) extends LazyLogging {
 
-  def createUser(user: CreateWorkbenchUser): Future[UserStatus] = {
-    for {
+  def createUser(user: CreateWorkbenchUser): Future[UserStatus] = for {
       allUsersGroup <- cloudExtensions.getOrCreateAllUsersGroup(directoryDAO)
       createdUser <- registerUser(user)
       _ <- directoryDAO.enableIdentity(createdUser.id)
       _ <- directoryDAO.addGroupMember(allUsersGroup.id, createdUser.id)
       _ <- cloudExtensions.onUserCreate(createdUser)
       userStatus <- getUserStatus(createdUser.id)
-    } yield {
-      userStatus.getOrElse(throw new WorkbenchException("getUserStatus returned None after user was created"))
-    }
-  }
+      res <- userStatus.toRight(new WorkbenchException("getUserStatus returned None after user was created")).fold(Future.failed, Future.successful)
+    } yield res
+
+  def inviteUser(invitee: InviteUser): Future[UserStatusDetails] = for {
+      existingSubject <- directoryDAO.loadSubjectFromEmail(invitee.inviteeEmail)
+      createdUser <- existingSubject match{
+        case None => directoryDAO.createUser(WorkbenchUser(invitee.inviteeId, None, invitee.inviteeEmail))
+        case Some(__) => Future.failed(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"email ${invitee.inviteeEmail} already exists")))
+      }
+    } yield UserStatusDetails(createdUser.id, createdUser.email)
 
   /**
     * If googleSubjectId exists in ldap, return 409; else if email also exists, we lookup pre-created user record and update

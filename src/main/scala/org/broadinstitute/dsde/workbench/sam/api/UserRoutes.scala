@@ -9,6 +9,7 @@ import org.broadinstitute.dsde.workbench.model.google.GoogleProject
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.service.UserService
+import org.broadinstitute.dsde.workbench.sam.service.UserService.genWorkbenchUserId
 
 import scala.concurrent.ExecutionContext
 
@@ -21,7 +22,32 @@ trait UserRoutes extends UserInfoDirectives {
 
   def userRoutes: server.Route =
     pathPrefix("user") {
-        (pathPrefix("v1") | pathEndOrSingleSlash) {
+      (pathPrefix("v1") | pathEndOrSingleSlash) {
+        pathEndOrSingleSlash {
+          post {
+            requireCreateUser { createUser =>
+              complete {
+                userService.createUser(createUser).map(userStatus => StatusCodes.Created -> userStatus)
+              }
+            }
+          } ~ requireUserInfo { user =>
+            get {
+              parameter("userDetailsOnly".?) { userDetailsOnly =>
+                complete {
+                  userService.getUserStatus(user.userId, userDetailsOnly.exists(_.equalsIgnoreCase("true"))).map {
+                    statusOption =>
+                      statusOption
+                        .map { status => StatusCodes.OK -> Option(status)
+                        }
+                        .getOrElse(StatusCodes.NotFound -> None)
+                  }
+                }
+              }
+            }
+          }
+        }
+      } ~ pathPrefix("v2") {
+        pathPrefix("self") {
           pathEndOrSingleSlash {
             post {
               requireCreateUser { createUser =>
@@ -29,56 +55,35 @@ trait UserRoutes extends UserInfoDirectives {
                   userService.createUser(createUser).map(userStatus => StatusCodes.Created -> userStatus)
                 }
               }
-            } ~ requireUserInfo { user =>
+            }
+          } ~ requireUserInfo { user =>
+            path("info") {
               get {
-                parameter("userDetailsOnly".?) { userDetailsOnly =>
+                complete {
+                  userService.getUserStatusInfo(user.userId).map { statusOption =>
+                    statusOption
+                      .map { status => StatusCodes.OK -> Option(status)
+                      }
+                      .getOrElse(StatusCodes.NotFound -> None)
+                  }
+                }
+              }
+            } ~
+              path("diagnostics") {
+                get {
                   complete {
-                    userService.getUserStatus(user.userId, userDetailsOnly.exists(_.equalsIgnoreCase("true"))).map { statusOption =>
-                      statusOption.map { status =>
-                        StatusCodes.OK -> Option(status)
-                      }.getOrElse(StatusCodes.NotFound -> None)
+                    userService.getUserStatusDiagnostics(user.userId).map { statusOption =>
+                      statusOption
+                        .map { status => StatusCodes.OK -> Option(status)
+                        }
+                        .getOrElse(StatusCodes.NotFound -> None)
                     }
                   }
                 }
               }
-            }
           }
-        } ~ pathPrefix("v2") {
-              pathPrefix("self") {
-                pathEndOrSingleSlash {
-                  post {
-                    requireCreateUser { createUser =>
-                      complete {
-                        userService.createUser(createUser).map(userStatus => StatusCodes.Created -> userStatus)
-                      }
-                    }
-                  }
-                }~ requireUserInfo {user =>
-                    path("info") {
-                      get {
-                        complete {
-                          userService.getUserStatusInfo(user.userId).map { statusOption =>
-                            statusOption.map { status =>
-                              StatusCodes.OK -> Option(status)
-                            }.getOrElse(StatusCodes.NotFound -> None)
-                          }
-                        }
-                      }
-                    } ~
-                    path("diagnostics") {
-                      get {
-                        complete {
-                          userService.getUserStatusDiagnostics(user.userId).map { statusOption =>
-                            statusOption.map { status =>
-                              StatusCodes.OK -> Option(status)
-                            }.getOrElse(StatusCodes.NotFound -> None)
-                          }
-                        }
-                      }
-                    }
-                }
-            }
-          }
+        }
+      }
     }
 
   def adminUserRoutes: server.Route =
@@ -89,68 +94,93 @@ trait UserRoutes extends UserInfoDirectives {
             path("email" / Segment) { email =>
               complete {
                 userService.getUserStatusFromEmail(WorkbenchEmail(email)).map { statusOption =>
-                  statusOption.map { status =>
-                    StatusCodes.OK -> Option(status)
-                  }.getOrElse(StatusCodes.NotFound -> None)
+                  statusOption
+                    .map { status => StatusCodes.OK -> Option(status)
+                    }
+                    .getOrElse(StatusCodes.NotFound -> None)
                 }
               }
             } ~
-            pathPrefix(Segment) { userId =>
-              pathEnd {
-                delete {
-                  complete {
-                    userService.deleteUser(WorkbenchUserId(userId), userInfo).map(_ => StatusCodes.OK)
-                  }
-                } ~
-                get {
-                  complete {
-                    userService.getUserStatus(WorkbenchUserId(userId)).map { statusOption =>
-                      statusOption.map { status =>
-                        StatusCodes.OK -> Option(status)
-                      }.getOrElse(StatusCodes.NotFound -> None)
-                    }
-                  }
-                }
-              } ~
-              pathPrefix("enable") {
-                pathEndOrSingleSlash {
-                  put {
-                    complete {
-                      userService.enableUser(WorkbenchUserId(userId), userInfo).map { statusOption =>
-                        statusOption.map { status =>
-                          StatusCodes.OK -> Option(status)
-                        }.getOrElse(StatusCodes.NotFound -> None)
-                      }
-                    }
-                  }
-                }
-              } ~
-              pathPrefix("disable") {
-                pathEndOrSingleSlash {
-                  put {
-                    complete {
-                      userService.disableUser(WorkbenchUserId(userId), userInfo).map { statusOption =>
-                        statusOption.map { status =>
-                          StatusCodes.OK -> Option(status)
-                        }.getOrElse(StatusCodes.NotFound -> None)
-                      }
-                    }
-                  }
-                }
-              } ~
-              pathPrefix("petServiceAccount") {
-                path(Segment) { project =>
+              pathPrefix(Segment) { userId =>
+                pathEnd {
                   delete {
                     complete {
-                      cloudExtensions.deleteUserPetServiceAccount(WorkbenchUserId(userId), GoogleProject(project)).map(_ => StatusCodes.NoContent)
+                      userService.deleteUser(WorkbenchUserId(userId), userInfo).map(_ => StatusCodes.OK)
+                    }
+                  } ~
+                    get {
+                      complete {
+                        userService.getUserStatus(WorkbenchUserId(userId)).map { statusOption =>
+                          statusOption
+                            .map { status => StatusCodes.OK -> Option(status)
+                            }
+                            .getOrElse(StatusCodes.NotFound -> None)
+                        }
+                      }
+                    }
+                } ~
+                  pathPrefix("enable") {
+                    pathEndOrSingleSlash {
+                      put {
+                        complete {
+                          userService.enableUser(WorkbenchUserId(userId), userInfo).map { statusOption =>
+                            statusOption
+                              .map { status => StatusCodes.OK -> Option(status)
+                              }
+                              .getOrElse(StatusCodes.NotFound -> None)
+                          }
+                        }
+                      }
+                    }
+                  } ~
+                  pathPrefix("disable") {
+                    pathEndOrSingleSlash {
+                      put {
+                        complete {
+                          userService.disableUser(WorkbenchUserId(userId), userInfo).map { statusOption =>
+                            statusOption
+                              .map { status => StatusCodes.OK -> Option(status)
+                              }
+                              .getOrElse(StatusCodes.NotFound -> None)
+                          }
+                        }
+                      }
+                    }
+                  } ~
+                  pathPrefix("petServiceAccount") {
+                    path(Segment) { project =>
+                      delete {
+                        complete {
+                          cloudExtensions
+                            .deleteUserPetServiceAccount(WorkbenchUserId(userId), GoogleProject(project))
+                            .map(_ => StatusCodes.NoContent)
+                        }
+                      }
                     }
                   }
-                }
+              }
+          }
+        }
+      }
+    }
+
+  val inviteRoute: server.Route = pathPrefix("v1"){
+    pathPrefix("invite") {
+      pathPrefix("user") {
+        post {
+          requireUserInfo { userInfo =>
+            path(Remaining) { email =>
+              complete {
+                userService
+                  .inviteUser(InviteUser(genWorkbenchUserId(System.currentTimeMillis()), WorkbenchEmail(email)))
+                  .map(userStatus => StatusCodes.Created -> userStatus)
               }
             }
           }
         }
       }
     }
+  }
 }
 
+final case class InviteUser(inviteeId: WorkbenchUserId, inviteeEmail: WorkbenchEmail)
