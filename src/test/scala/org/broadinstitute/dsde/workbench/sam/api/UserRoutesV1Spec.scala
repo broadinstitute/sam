@@ -44,7 +44,7 @@ class UserRoutesV1Spec extends UserRoutesSpecHelper{
     val invitee = genInviteUser.sample.get
 
     val (user, headers, _, routes) = createTestUser() //create a valid user that can invite someone
-    Post(s"/api/v1/invite/users/${invitee.inviteeEmail}").withHeaders(headers) ~> routes.route ~> check{
+    Post(s"/api/users/v1/invite/${invitee.inviteeEmail}").withHeaders(headers) ~> routes.route ~> check{
       status shouldEqual StatusCodes.Created
       val res = responseAs[UserStatusDetails]
       res.userEmail shouldBe invitee.inviteeEmail
