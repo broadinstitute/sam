@@ -7,6 +7,7 @@ import akka.http.scaladsl.model.headers.{OAuth2BearerToken, RawHeader}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{ServiceAccount, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.sam.Generator.genInviteUser
+import org.broadinstitute.dsde.workbench.sam.TestSupport.genSamRoutes
 import org.broadinstitute.dsde.workbench.sam.api.StandardUserInfoDirectives._
 import org.broadinstitute.dsde.workbench.sam.directory.MockDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
@@ -182,11 +183,16 @@ class UserRoutesV1Spec extends UserRoutesSpecHelper{
 
   "GET /api/users/v1/{email}" should "return the subject id, google subject id, and email for a user" in {
     val (user, headers, samDep, routes) = createTestUser()
-    val googleSubjectIdHeader = TestSupport.googleSubjectIdHeaderWithId(user.googleSubjectId.get)
 
     Get(s"/api/users/v1/${user.email.value}").withHeaders(headers) ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK
       responseAs[UserIdInfo] shouldEqual UserIdInfo(user.id, user.email, user.googleSubjectId)
+    }
+  }
+
+  it should "return 404 when the user is not registered" in withDefaultRoutes { routes =>
+    Get(s"/api/users/v1/doesntexist@foo.bar").withHeaders(headers) ~> routes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
     }
   }
 }
