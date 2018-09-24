@@ -1509,6 +1509,22 @@ definitions:
         type: object
         description: Map[String, SubsystemStatus]
 
+  UserIdInfo:
+    description: ''
+    required:
+      - userSubjectId
+      - userEmail
+    properties:
+      userSubjectId:
+        type: string
+        description: user id
+      userEmail:
+        type: string
+        description: user email
+      googleSubjectId:
+        type: string
+        description: google subject id
+
   UserInfo:
     description: the user's details
     required:
@@ -1563,22 +1579,6 @@ definitions:
       userEmail:
         type: string
         description: user email
-
-  UserIdInfo:
-    description: ''
-    required:
-      - userSubjectId
-      - userEmail
-    properties:
-      userSubjectId:
-        type: string
-        description: user id
-      userEmail:
-        type: string
-        description: user email
-      googleSubjectId:
-        type: string
-        description: google subject id
 
   UserStatusDiagnostics:
     description: ''
