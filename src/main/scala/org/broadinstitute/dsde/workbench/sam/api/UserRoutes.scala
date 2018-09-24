@@ -164,6 +164,20 @@ trait UserRoutes extends UserInfoDirectives {
       }
     }
 
+  val apiUserRoutes: server.Route = pathPrefix("user"){
+    pathPrefix("v1") {
+      get {
+        requireUserInfo { userInfo =>
+          pathPrefix(Remaining) { email =>
+            complete {
+              userService.getUserIdInfoFromEmail(WorkbenchEmail(email))
+            }
+          }
+        }
+      }
+    }
+  }
+
   val inviteRoute: server.Route = pathPrefix("v1"){
     pathPrefix("invite") {
       pathPrefix("user") {

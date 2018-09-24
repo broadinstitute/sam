@@ -179,4 +179,14 @@ class UserRoutesV1Spec extends UserRoutesSpecHelper{
       status shouldEqual StatusCodes.Forbidden
     }
   }
+
+  "GET /api/user/v1/{email}" should "return the subject id, google subject id, and email for a user" in {
+    val (user, headers, samDep, routes) = createTestUser()
+    val googleSubjectIdHeader = TestSupport.googleSubjectIdHeaderWithId(user.googleSubjectId.get)
+
+    Get(s"/api/user/v1/${user.email.value}").withHeaders(headers) ~> routes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[UserIdInfo] shouldEqual UserIdInfo(user.id, user.email, user.googleSubjectId)
+    }
+  }
 }
