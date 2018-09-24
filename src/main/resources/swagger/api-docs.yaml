@@ -1091,7 +1091,7 @@ paths:
       tags:
         - Resources
 
-  /api/user/v1/{email}:
+  /api/users/v1/{email}:
     get:
       summary: Query for the user's subject IDs
       responses:
@@ -1115,7 +1115,7 @@ paths:
       tags:
         - Users
 
-  /api/v1/invite/user/{inviteeEmail}:
+  /api/users/v1/invite/{inviteeEmail}:
     post:
       summary: create current user in the system using login credentials
       parameters:
