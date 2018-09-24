@@ -1096,7 +1096,7 @@ paths:
       summary: Query for the user's subject IDs
       responses:
         200:
-          description: true if the user may perform the action, false if they may not or the resource does not exist
+          description: user details
           schema:
             $ref: '#/definitions/UserIdInfo'
         404:
