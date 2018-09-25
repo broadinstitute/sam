@@ -23,6 +23,8 @@ import org.scalatest.prop.{Configuration, PropertyChecks}
 import org.scalatest.{FlatSpec, Matchers}
 import StandardUserInfoDirectives._
 import cats.kernel.Eq
+import org.scalatest.concurrent.PatienceConfiguration.Timeout
+import org.scalatest.time.{Seconds, Span}
 
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Awaitable, ExecutionContext}
@@ -32,6 +34,7 @@ import scala.concurrent.{Await, Awaitable, ExecutionContext}
   */
 trait TestSupport{
   def runAndWait[T](f: Awaitable[T]): T = Await.result(f, Duration.Inf)
+  implicit val futureTimeout = Timeout(Span(10, Seconds))
 }
 
 trait PropertyBasedTesting extends FlatSpec with PropertyChecks with Configuration with Matchers {

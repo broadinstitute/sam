@@ -1,8 +1,11 @@
 package org.broadinstitute.dsde.workbench.sam.openam
 
 import java.util.UUID
-
+import cats.implicits._
 import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
+import org.scalatest.concurrent.ScalaFutures
+
+import scala.concurrent.Future
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchGroupName, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.Generator._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
@@ -12,25 +15,17 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.scalatest._
 
-import scala.concurrent.ExecutionContext.Implicits.global
 /**
   * Created by dvoet on 6/26/17.
   */
-class LdapAccessPolicyDAOSpec extends FlatSpec with Matchers with TestSupport with BeforeAndAfter with BeforeAndAfterAll {
+class LdapAccessPolicyDAOSpec extends AsyncFlatSpec with ScalaFutures with Matchers with TestSupport with BeforeAndAfter with BeforeAndAfterAll {
   private val connectionPool = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
   val dao = new LdapAccessPolicyDAO(connectionPool, directoryConfig)
   val dirDao = new LdapDirectoryDAO(connectionPool, directoryConfig)
   val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
-  override protected def beforeAll(): Unit = {
-    super.beforeAll()
-    runAndWait(schemaDao.init())
-  }
-
-  before {
-    runAndWait(schemaDao.clearDatabase())
-    runAndWait(schemaDao.createOrgUnits())
-  }
+  // before() doesn't seem to work well with AsyncFlatSpec
+  def setup(): Future[Unit] = schemaDao.init() <* schemaDao.clearDatabase() <* schemaDao.createOrgUnits()
 
   def toEmail(resourceType: String, resourceId: String, policyName: String) = {
     WorkbenchEmail(s"policy-$resourceType-$resourceId-$policyName@dev.test.firecloud.org")
@@ -48,55 +43,56 @@ class LdapAccessPolicyDAOSpec extends FlatSpec with Matchers with TestSupport wi
     val policy2 = AccessPolicy(ResourceAndPolicyName(Resource(typeName1, ResourceId("resource")), AccessPolicyName("role1-b")), policy2Group.members, policy2Group.email, Set(ResourceRoleName("role1")), Set(ResourceAction("action3"), ResourceAction("action4")))
     val policy3 = AccessPolicy(ResourceAndPolicyName(Resource(typeName2, ResourceId("resource")), AccessPolicyName("role1-a")), policy3Group.members, policy3Group.email, Set(ResourceRoleName("role1")), Set(ResourceAction("action1"), ResourceAction("action2")))
 
-    dao.createResourceType(typeName1).unsafeRunSync()
-    dao.createResourceType(typeName2).unsafeRunSync()
 
-    dao.createResource(policy1.id.resource).unsafeRunSync()
-    //policy2's resource already exists
-    dao.createResource(policy3.id.resource).unsafeRunSync()
+    for{
+      _ <- setup()
+      _ <- dao.createResourceType(typeName1).unsafeToFuture()
+      _ <- dao.createResourceType(typeName2).unsafeToFuture()
+      _ <- dao.createResource(policy1.id.resource).unsafeToFuture()
+      //policy2's resource already exists
+      _ <- dao.createResource(policy3.id.resource).unsafeToFuture()
 
-    assertResult(Seq.empty) {
-      runAndWait(dao.listAccessPolicies(policy1.id.resource)).toSeq
-      runAndWait(dao.listAccessPolicies(policy2.id.resource)).toSeq
-      runAndWait(dao.listAccessPolicies(policy3.id.resource)).toSeq
+      ls1 <- dao.listAccessPolicies(policy1.id.resource)
+      ls2 <- dao.listAccessPolicies(policy2.id.resource)
+      ls3 <- dao.listAccessPolicies(policy3.id.resource)
+
+      _ <- dao.createPolicy(policy1)
+      _ <- dao.createPolicy(policy2)
+      _ <- dao.createPolicy(policy3)
+
+      lsPolicy1 <- dao.listAccessPolicies(policy1.id.resource)
+      lsPolicy3 <- dao.listAccessPolicies(policy3.id.resource)
+
+      _ <- dao.deletePolicy(policy1)
+      lsAfterDeletePolicy1 <- dao.listAccessPolicies(policy1.id.resource)
+
+      _ <- dao.deletePolicy(policy2)
+      lsAfterDeletePolicy2 <- dao.listAccessPolicies(policy1.id.resource)
+
+      _ <- dao.deletePolicy(policy3)
+      ls3AfterDeletePolicy3 <- dao.listAccessPolicies(policy3.id.resource)
+    } yield{
+      ls1 shouldBe(Set.empty)
+      ls2 shouldBe(Set.empty)
+      ls3 shouldBe(Set.empty)
+
+      lsPolicy1 should contain theSameElementsAs (Seq(policy1, policy2))
+      lsPolicy3 shouldBe(Set(policy3))
+      lsAfterDeletePolicy1 shouldBe Set(policy2)
+      lsAfterDeletePolicy2 shouldBe Set.empty
+      ls3AfterDeletePolicy3 shouldBe Set.empty
     }
-
-    runAndWait(dao.createPolicy(policy1))
-    runAndWait(dao.createPolicy(policy2))
-    runAndWait(dao.createPolicy(policy3))
-
-    assertResult(Seq(policy1, policy2)) {
-      runAndWait(dao.listAccessPolicies(policy1.id.resource)).toSeq
-    }
-
-    assertResult(Seq(policy3)) {
-      runAndWait(dao.listAccessPolicies(policy3.id.resource)).toSeq
-    }
-
-    runAndWait(dao.deletePolicy(policy1))
-
-    assertResult(Seq(policy2)) {
-      runAndWait(dao.listAccessPolicies(policy1.id.resource)).toSeq
-    }
-
-    runAndWait(dao.deletePolicy(policy2))
-
-    assertResult(Seq.empty) {
-      runAndWait(dao.listAccessPolicies(policy1.id.resource)).toSeq
-    }
-
-    runAndWait(dao.deletePolicy(policy3))
   }
 
   "LdapAccessPolicyDAO listUserPolicyResponse" should "return UserPolicyResponse" in {
     val policy = genPolicy.sample.get
     val res = for{
-      _ <- dao.createResourceType(policy.id.resource.resourceTypeName)
-      _ <- dao.createResourceType(policy.id.resource.resourceTypeName)
-      _ <- dao.createResource(policy.id.resource)
-      r <- dao.listResourceWithAuthdomains(policy.id.resource.resourceTypeName, Set(policy.id.resource.resourceId))
+      _ <- setup()
+      _ <- dao.createResourceType(policy.id.resource.resourceTypeName).unsafeToFuture()
+      _ <- dao.createResource(policy.id.resource).unsafeToFuture()
+      r <- dao.listResourceWithAuthdomains(policy.id.resource.resourceTypeName, Set(policy.id.resource.resourceId)).unsafeToFuture()
     } yield r
 
-    res.unsafeRunSync() shouldBe(Set(Resource(policy.id.resource.resourceTypeName, policy.id.resource.resourceId, policy.id.resource.authDomain)))
+    res.map(x => x shouldBe(Set(Resource(policy.id.resource.resourceTypeName, policy.id.resource.resourceId, policy.id.resource.authDomain))))
   }
 }
