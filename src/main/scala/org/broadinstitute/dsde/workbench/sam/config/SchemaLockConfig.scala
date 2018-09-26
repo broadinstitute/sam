@@ -10,10 +10,8 @@ package org.broadinstitute.dsde.workbench.sam.config
   * @param recheckTimeInterval The number of seconds to wait before retrying the lock (should be less than or equal to maxTimeToWait)
   * @param maxTimeToWait The number of seconds to wait before giving up
   * @param instanceId The id of the instance that is dealing with the lock
-  * @param schemaVersion The version of the schema, to be incremented each time the schema changes
   */
 case class SchemaLockConfig(lockSchemaOnBoot: Boolean,
                             recheckTimeInterval: Int,
                             maxTimeToWait: Int,
-                            instanceId: String,
-                            schemaVersion: Int)
+                            instanceId: String)

@@ -42,8 +42,7 @@ class JndiSchemaDAOSpec extends FlatSpec with Matchers with TestSupport with Bef
   }
 
   it should "not update the schema when trying to apply an out-of-date version" taggedAs SchemaInit in {
-    val schemaLockConfigChanged = schemaLockConfig.copy(schemaVersion = schemaLockConfig.schemaVersion - 1)
-    val schemaDaoOlder = new JndiSchemaDAO(directoryConfig, schemaLockConfigChanged)
+    val schemaDaoOlder = new JndiSchemaDAO(directoryConfig, schemaLockConfig, JndiSchemaDAO.schemaVersion-1)
 
     //First check to make sure that the schema can be applied
     Await.result(schemaDaoOlder.readSchemaStatus(), Duration.Inf) shouldEqual Proceed

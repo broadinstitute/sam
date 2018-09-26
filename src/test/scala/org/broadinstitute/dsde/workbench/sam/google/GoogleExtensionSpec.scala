@@ -119,6 +119,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
         case p: AccessPolicy =>
           when(mockAccessPolicyDAO.loadPolicy(p.id)).thenReturn(IO.pure(Option(testPolicy)))
       }
+      when(mockDirectoryDAO.loadGroup(ge.allUsersGroupName)).thenReturn(Future.successful(Option(BasicWorkbenchGroup(ge.allUsersGroupName, Set.empty, ge.allUsersGroupEmail))))
       when(mockDirectoryDAO.updateSynchronizedDate(any[WorkbenchGroupIdentity])).thenReturn(Future.successful(()))
       when(mockDirectoryDAO.getSynchronizedDate(any[WorkbenchGroupIdentity])).thenReturn(Future.successful(Some((new GregorianCalendar(2017, 11, 22).getTime()))))
       when(mockDirectoryDAO.readProxyGroup(WorkbenchUserId("addError"))).thenReturn(Future.successful(Some(WorkbenchEmail(addErrorProxyEmail))))
@@ -128,11 +129,17 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
 
       val subGroups = Seq(inSamSubGroup, inGoogleSubGroup, inBothSubGroup)
       subGroups.foreach { g => when(mockDirectoryDAO.loadSubjectEmail(g.id)).thenReturn(Future.successful(Option(g.email))) }
+      when(mockDirectoryDAO.loadSubjectEmail(ge.allUsersGroupName)).thenReturn(Future.successful(Option(ge.allUsersGroupEmail)))
 
-      val added = Seq(inSamSubGroup.email, WorkbenchEmail(inSamUserProxyEmail))
+      val added = Seq(inSamSubGroup.email, WorkbenchEmail(inSamUserProxyEmail)) ++ (target match {
+        case _: BasicWorkbenchGroup => Seq.empty
+        case _: AccessPolicy => Set(ge.allUsersGroupEmail)
+      })
+
       val removed = Seq(inGoogleSubGroup.email, WorkbenchEmail(inGoogleUserProxyEmail))
 
       when(mockGoogleDirectoryDAO.listGroupMembers(target.email)).thenReturn(Future.successful(Option(Seq(WorkbenchEmail(inGoogleUserProxyEmail).value, WorkbenchEmail(inBothUserProxyEmail).value.toLowerCase, inGoogleSubGroup.email.value, inBothSubGroup.email.value, removeError))))
+      when(mockGoogleDirectoryDAO.listGroupMembers(ge.allUsersGroupEmail)).thenReturn(Future.successful(Option(Seq.empty)))
       when(mockGoogleDirectoryDAO.addMemberToGroup(any[WorkbenchEmail], any[WorkbenchEmail])).thenReturn(Future.successful(()))
       when(mockGoogleDirectoryDAO.removeMemberFromGroup(any[WorkbenchEmail], any[WorkbenchEmail])).thenReturn(Future.successful(()))
 

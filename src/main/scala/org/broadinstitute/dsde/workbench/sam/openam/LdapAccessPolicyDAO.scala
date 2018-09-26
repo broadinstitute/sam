@@ -81,7 +81,8 @@ class LdapAccessPolicyDAO(protected val ldapConnectionPool: LDAPConnectionPool, 
     ) ++
       maybeAttribute(Attr.action, policy.actions.map(_.value)) ++
       maybeAttribute(Attr.role, policy.roles.map(_.value)) ++
-      maybeAttribute(Attr.uniqueMember, policy.members.map(subjectDn))
+      maybeAttribute(Attr.uniqueMember, policy.members.map(subjectDn)) ++
+      maybeAttribute(Attr.isPublic, policy.isPublic.map(_.toString).toSet)
 
     cs.evalOn(blockingEc)(IO(ldapConnectionPool.add(policyDn(
       FullyQualifiedPolicyId(
@@ -107,6 +108,7 @@ class LdapAccessPolicyDAO(protected val ldapConnectionPool: LDAPConnectionPool, 
     val members = getAttributes(entry, Attr.uniqueMember).map(dnToSubject)
     val roles = getAttributes(entry, Attr.role).map(r => ResourceRoleName(r))
     val actions = getAttributes(entry, Attr.action).map(a => ResourceAction(a))
+    val isPublic = Option(entry.getAttribute(Attr.isPublic)).map(_.getValueAsBoolean.booleanValue())
 
     val email = WorkbenchEmail(getAttribute(entry, Attr.email).get)
 
@@ -161,31 +163,49 @@ class LdapAccessPolicyDAO(protected val ldapConnectionPool: LDAPConnectionPool, 
     } yield Resource(resourceTypeName, ResourceId(resourceId), authDomains)
   }
 
+  override def listPublicAccessPolicies(resourceTypeName: ResourceTypeName): IO[Stream[ResourceIdAndPolicyName]] = IO(
+    ldapSearchStream(resourceTypeDn(resourceTypeName), SearchScope.SUB, Filter.createANDFilter(Filter.createEqualityFilter("objectclass", ObjectClass.policy), Filter.createEqualityFilter(Attr.isPublic, "true"))) { entry =>
+      val policy = unmarshalAccessPolicy(entry)
+      ResourceIdAndPolicyName(policy.id.resource.resourceId, policy.id.accessPolicyName)
+    }
+  )
+
+  override def listPublicAccessPolicies(resource: FullyQualifiedResourceId): IO[Stream[AccessPolicy]] = {
+    cs.evalOn(blockingEc)(
+      IO(
+        ldapSearchStream(
+          resourceDn(resource),
+          SearchScope.SUB,
+          Filter.createANDFilter(
+            Filter.createEqualityFilter("objectclass", ObjectClass.policy),
+            Filter.createEqualityFilter(Attr.isPublic, "true"))
+        )(unmarshalAccessPolicy)))
+  }
+
   override def listAccessPolicies(resource: FullyQualifiedResourceId): IO[Set[AccessPolicy]] = cs.evalOn(blockingEc)(IO(
     ldapSearchStream(resourceDn(resource), SearchScope.SUB, Filter.createEqualityFilter("objectclass", ObjectClass.policy))(unmarshalAccessPolicy).toSet
   ))
 
-  override def listAccessPoliciesForUser(
-      resource: FullyQualifiedResourceId, user: WorkbenchUserId): IO[Set[AccessPolicy]] = for {
-      entry <- cs.evalOn(blockingEc)(IO(ldapConnectionPool.getEntry(subjectDn(user), Attr.memberOf)))
-      members <- IO.pure(Option(entry).map(e => getAttributes(e, Attr.memberOf).toList))
-      accessPolicies <- members.traverse{
-        policyStrs =>
-          val fullyQualifiedPolicyIds = policyStrs.mapFilter{
-            str =>
-              for{
-                subject <- Either.catchNonFatal(dnToSubject(str)).toOption
-                fullyQualifiedPolicyId <- subject match {
-                  case sub: FullyQualifiedPolicyId if sub.resource.resourceId == resource.resourceId && sub.resource.resourceTypeName == resource.resourceTypeName => Some(sub)
-                  case _ => None
-                }
-              } yield fullyQualifiedPolicyId
-          }
-          val filters = fullyQualifiedPolicyIds.grouped(batchSize).map(
-            batch => Filter.createORFilter(batch.map(r => Filter.createEqualityFilter(Attr.policy, r.accessPolicyName.value)).asJava)).toSeq
-          cs.evalOn(blockingEc)(IO(ldapSearchStream(resourceDn(resource), SearchScope.SUB, filters: _*)(unmarshalAccessPolicy).toSet))
-      }
-    } yield accessPolicies.getOrElse(Set.empty)
+  override def listAccessPoliciesForUser(resource: FullyQualifiedResourceId, user: WorkbenchUserId): IO[Set[AccessPolicy]] = for {
+    entry <- cs.evalOn(blockingEc)(IO(ldapConnectionPool.getEntry(subjectDn(user), Attr.memberOf)))
+    members <- IO.pure(Option(entry).map(e => getAttributes(e, Attr.memberOf).toList))
+    accessPolicies <- members.traverse{
+      policyStrs =>
+        val fullyQualifiedPolicyIds = policyStrs.mapFilter{
+          str =>
+            for{
+              subject <- Either.catchNonFatal(dnToSubject(str)).toOption
+              fullyQualifiedPolicyId <- subject match {
+                case sub: FullyQualifiedPolicyId if sub.resource.resourceId == resource.resourceId && sub.resource.resourceTypeName == resource.resourceTypeName => Some(sub)
+                case _ => None
+              }
+            } yield fullyQualifiedPolicyId
+        }
+        val filters = fullyQualifiedPolicyIds.grouped(batchSize).map(
+          batch => Filter.createORFilter(batch.map(r => Filter.createEqualityFilter(Attr.policy, r.accessPolicyName.value)).asJava)).toSeq
+        cs.evalOn(blockingEc)(IO(ldapSearchStream(resourceDn(resource), SearchScope.SUB, filters: _*)(unmarshalAccessPolicy).toSet))
+    }
+  } yield accessPolicies.getOrElse(Set.empty)
 
   override def listFlattenedPolicyMembers(policyId: FullyQualifiedPolicyId): IO[Set[WorkbenchUserId]] = cs.evalOn(blockingEc)(
     IO(ldapSearchStream(peopleOu, SearchScope.ONE, Filter.createEqualityFilter(Attr.memberOf, policyDn(policyId)))(unmarshalUser).map(_.id).toSet)
@@ -196,5 +216,18 @@ class LdapAccessPolicyDAO(protected val ldapConnectionPool: LDAPConnectionPool, 
     val email = getAttribute(entry, Attr.email).getOrElse(throw new WorkbenchException(s"${Attr.email} attribute missing"))
 
     WorkbenchUser(WorkbenchUserId(uid), getAttribute(entry, Attr.googleSubjectId).map(GoogleSubjectId), WorkbenchEmail(email))
+  }
+
+  override def setPolicyIsPublic(policyId: FullyQualifiedPolicyId, isPublic: Boolean): IO[Unit] = {
+    cs.evalOn(blockingEc)(
+        IO(
+          ldapConnectionPool.modify(
+            policyDn(policyId),
+            new Modification(ModificationType.REPLACE, Attr.isPublic, isPublic.toString))).void)
+      .recoverWith {
+        case ldape: LDAPException if ldape.getResultCode == ResultCode.NO_SUCH_OBJECT =>
+          IO.raiseError(
+            new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "policy does not exist")))
+      }
   }
 }

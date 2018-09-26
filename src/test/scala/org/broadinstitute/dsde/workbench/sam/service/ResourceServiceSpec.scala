@@ -15,6 +15,7 @@ import org.broadinstitute.dsde.workbench.sam.Generator._
 import org.broadinstitute.dsde.workbench.sam.TestSupport.blockingEc
 import org.broadinstitute.dsde.workbench.sam.config.{DirectoryConfig, SchemaLockConfig, _}
 import org.broadinstitute.dsde.workbench.sam.directory.LdapDirectoryDAO
+import org.broadinstitute.dsde.workbench.sam.model
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, LdapAccessPolicyDAO}
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
@@ -151,6 +152,56 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     }
   }
 
+  it should "set public policies" in {
+    val resourceName = ResourceId("resource")
+    val resource = FullyQualifiedResourceId(defaultResourceType.name, resourceName)
+
+    service.createResourceType(defaultResourceType).unsafeRunSync()
+
+    runAndWait(service.createResource(defaultResourceType, resourceName, dummyUserInfo))
+
+    val policyToUpdate = constructExpectedPolicies(defaultResourceType, resource).head.id
+
+    service.isPublic(policyToUpdate).unsafeRunSync() should equal(false)
+
+    service.setPublic(policyToUpdate, true).unsafeRunSync()
+    service.isPublic(policyToUpdate).unsafeRunSync() should equal(true)
+
+    service.setPublic(policyToUpdate, false).unsafeRunSync()
+    service.isPublic(policyToUpdate).unsafeRunSync() should equal(false)
+
+    //cleanup
+    runAndWait(service.deleteResource(resource))
+  }
+
+  it should "fail to set public policies on auth domained resources" in {
+    constrainableResourceType.isAuthDomainConstrainable shouldEqual true
+    constrainableService.createResourceType(constrainableResourceType).unsafeRunSync()
+
+    constrainableService.createResourceType(managedGroupResourceType).unsafeRunSync()
+
+    val resourceName = ResourceId("resource")
+    val resource = FullyQualifiedResourceId(constrainableResourceType.name, resourceName)
+
+    constrainableService.createResourceType(constrainableResourceType).unsafeRunSync()
+    val managedGroupResource = managedGroupService.createManagedGroup(ResourceId("ad"), dummyUserInfo).futureValue
+
+    val ownerRoleName = constrainableReaderRoleName
+    val policyMembership = AccessPolicyMembership(Set(dummyUserInfo.userEmail), Set(constrainableViewAction), Set(ownerRoleName))
+    val policyName = AccessPolicyName("foo")
+
+    val testResource = runAndWait(constrainableService.createResource(constrainableResourceType, resourceName, Map(policyName -> policyMembership), Set(WorkbenchGroupName(managedGroupResource.resourceId.value)), dummyUserInfo.userId))
+
+    val policyToUpdate = FullyQualifiedPolicyId(testResource.fullyQualifiedId, policyName)
+    constrainableService.isPublic(policyToUpdate).unsafeRunSync() should equal(false)
+
+    val err = intercept[WorkbenchExceptionWithErrorReport] {
+      constrainableService.setPublic(policyToUpdate, true).unsafeRunSync()
+    }
+
+    err.errorReport.statusCode should equal(Some(StatusCodes.BadRequest))
+  }
+
   "listUserResourceActions" should "list the user's actions for a resource" in {
     val otherRoleName = ResourceRoleName("other")
     val resourceName1 = ResourceId("resource1")
@@ -195,6 +246,24 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     }
 
     assert(service.policyEvaluatorService.hasPermission(FullyQualifiedResourceId(defaultResourceType.name, resourceName1), nonOwnerAction, userInfo.userId).unsafeRunSync())
+  }
+
+  it should "list public policies" in {
+    val otherRoleName = ResourceRoleName("other")
+    val resourceName2 = ResourceId("resource2")
+
+    service.createResourceType(defaultResourceType).unsafeRunSync()
+
+    val policies2 = runAndWait(service.createResource(defaultResourceType, resourceName2, dummyUserInfo))
+
+    policyDAO.createPolicy(AccessPolicy(
+      model.FullyQualifiedPolicyId(policies2.fullyQualifiedId, AccessPolicyName(otherRoleName.value)), Set.empty, WorkbenchEmail("a@b.c"), Set(otherRoleName), Set.empty, Some(true))).unsafeRunSync()
+
+    assertResult(defaultResourceTypeActions) {
+      service.policyEvaluatorService.listUserResourceActions(FullyQualifiedResourceId(defaultResourceType.name, resourceName2), dummyUserInfo.userId).unsafeRunSync()
+    }
+
+    assert(service.policyEvaluatorService.hasPermission(FullyQualifiedResourceId(defaultResourceType.name, resourceName2), ResourceAction("non_owner_action"), dummyUserInfo.userId).unsafeRunSync())
   }
 
   "createResource" should "detect conflict on create" in {
@@ -601,7 +670,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     }
 
     runAndWait(service.addSubjectToPolicy(FullyQualifiedPolicyId(resource, policyName), otherUserInfo.userId))
-    assertResult(Set(UserPolicyResponse(resource.resourceId, policyName, Set.empty, Set.empty))) {
+    assertResult(Set(UserPolicyResponse(resource.resourceId, policyName, Set.empty, Set.empty, false))) {
       service.policyEvaluatorService.listUserAccessPolicies(defaultResourceType.name, otherUserInfo.userId).unsafeRunSync()
     }
 
@@ -616,5 +685,47 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
 
     // remove a second time to make sure no exception is thrown
     runAndWait(service.removeSubjectFromPolicy(FullyQualifiedPolicyId(resource, policyName), otherUserInfo.userId))
+  }
+
+  "initResourceTypes" should "do the happy path" in {
+    val adminResType = ResourceType(SamResourceTypes.resourceTypeAdminName,
+      Set(SamResourceActionPatterns.alterPolicies, SamResourceActionPatterns.readPolicies),
+      Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.alterPolicies, SamResourceActions.readPolicies))),
+      ResourceRoleName("owner"))
+
+    val service = new ResourceService(Map(adminResType.name -> adminResType, defaultResourceType.name -> defaultResourceType), policyEvaluatorService, policyDAO, dirDAO, NoExtensions, emailDomain)
+
+    val init = service.initResourceTypes().unsafeRunSync()
+    init should contain theSameElementsAs(Set(adminResType, defaultResourceType))
+
+    // assert a resource was not created for SamResourceTypes.resourceTypeAdmin
+    policyDAO.listAccessPolicies(
+      FullyQualifiedResourceId(SamResourceTypes.resourceTypeAdminName, ResourceId(SamResourceTypes.resourceTypeAdminName.value))).unsafeRunSync() should equal(Set.empty)
+
+    // assert a resource was created for defaultResourceType
+    val resourceAndPolicyName = model.FullyQualifiedPolicyId(
+      FullyQualifiedResourceId(adminResType.name, ResourceId(defaultResourceType.name.value)), AccessPolicyName("owner"))
+    val policy = policyDAO.loadPolicy(resourceAndPolicyName).unsafeRunSync()
+    policy.map(_.copy(email = WorkbenchEmail(""))) should equal(Some(AccessPolicy(resourceAndPolicyName, Set.empty, WorkbenchEmail(""), Set(ResourceRoleName("owner")), Set.empty)))
+
+    // add a user to the policy and verify
+    policyDAO.overwritePolicy(policy.get.copy(members = Set(dummyUserInfo.userId))).unsafeRunSync()
+    val policy2 = policyDAO.loadPolicy(resourceAndPolicyName).unsafeRunSync()
+    policy2.map(_.copy(email = WorkbenchEmail(""))) should equal(Some(AccessPolicy(resourceAndPolicyName, Set(dummyUserInfo.userId), WorkbenchEmail(""), Set(ResourceRoleName("owner")), Set.empty)))
+
+    // call it again to ensure it does not fail
+    service.initResourceTypes().unsafeRunSync()
+
+    // verify the policy has not changed
+    val policy3 = policyDAO.loadPolicy(resourceAndPolicyName).unsafeRunSync()
+    policy3.map(_.copy(email = WorkbenchEmail(""))) should equal(Some(AccessPolicy(resourceAndPolicyName, Set(dummyUserInfo.userId), WorkbenchEmail(""), Set(ResourceRoleName("owner")), Set.empty)))
+  }
+
+  it should "fail if resourceTypeAdmin not defined" in {
+    val service = new ResourceService(Map(defaultResourceType.name -> defaultResourceType), policyEvaluatorService, policyDAO, dirDAO, NoExtensions, emailDomain)
+
+    intercept[WorkbenchException] {
+      service.initResourceTypes().unsafeRunSync()
+    }
   }
 }

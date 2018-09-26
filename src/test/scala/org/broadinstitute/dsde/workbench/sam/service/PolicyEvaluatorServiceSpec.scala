@@ -218,7 +218,7 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
       _ <- IO.fromFuture(IO(constrainableService.createPolicy(policy.id, policy.members + user.userId, policy.roles, policy.actions)))
       r <- constrainableService.policyEvaluatorService.listUserAccessPolicies(constrainableResourceType.name, user.userId)
     } yield {
-      val expected = Set(UserPolicyResponse(resource.resourceId, policy.id.accessPolicyName, resource.authDomain, resource.authDomain))
+      val expected = Set(UserPolicyResponse(resource.resourceId, policy.id.accessPolicyName, resource.authDomain, resource.authDomain, false))
       r shouldBe(expected)
     }
 
@@ -274,9 +274,9 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
       r <- service.policyEvaluatorService.listUserAccessPolicies(defaultResourceType.name, dummyUserInfo.userId).unsafeToFuture()
     } yield {
       assertResult(Set(
-        UserPolicyResponse(resource1.resourceId, AccessPolicyName(defaultResourceType.ownerRoleName.value), Set.empty, Set.empty),
-        UserPolicyResponse(resource2.resourceId, AccessPolicyName(defaultResourceType.ownerRoleName.value), Set.empty, Set.empty),
-        UserPolicyResponse(resource1.resourceId, AccessPolicyName("in-it"), Set.empty, Set.empty)))(r)
+        UserPolicyResponse(resource1.resourceId, AccessPolicyName(defaultResourceType.ownerRoleName.value), Set.empty, Set.empty, false),
+        UserPolicyResponse(resource2.resourceId, AccessPolicyName(defaultResourceType.ownerRoleName.value), Set.empty, Set.empty, false),
+        UserPolicyResponse(resource1.resourceId, AccessPolicyName("in-it"), Set.empty, Set.empty, false)))(r)
     }
   }
 
@@ -295,7 +295,7 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
       _ <- IO.fromFuture(IO(constrainableService.createResource(constrainableResourceType, resource.resourceId, Map(viewPolicyName -> constrainablePolicyMembership), resource.authDomain, dummyUserInfo.userId)))
       r <- constrainableService.policyEvaluatorService.listUserAccessPolicies(constrainableResourceType.name, dummyUserInfo.userId)
     } yield {
-      val expected = Set(UserPolicyResponse(resource.resourceId, viewPolicyName, Set.empty, Set.empty))
+      val expected = Set(UserPolicyResponse(resource.resourceId, viewPolicyName, Set.empty, Set.empty, false))
       r shouldBe(expected)
     }
 
@@ -316,7 +316,7 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
       _ <- IO.fromFuture(IO(constrainableService.createResource(constrainableResourceType, resource.resourceId, Map(viewPolicyName -> constrainablePolicyMembership), resource.authDomain, dummyUserInfo.userId)))
       r <- constrainableService.policyEvaluatorService.listUserAccessPolicies(constrainableResourceType.name, dummyUserInfo.userId)
     } yield {
-      val expected = Set(UserPolicyResponse(resource.resourceId, viewPolicyName, resource.authDomain, Set.empty))
+      val expected = Set(UserPolicyResponse(resource.resourceId, viewPolicyName, resource.authDomain, Set.empty, false))
       r shouldBe(expected)
     }
 
@@ -340,7 +340,7 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
       _ <- IO.fromFuture(IO(constrainableService.createPolicy(policy.id, policy.members + user.userId, policy.roles, policy.actions)))
       r <- constrainableService.policyEvaluatorService.listUserAccessPolicies(constrainableResourceType.name, user.userId)
     } yield {
-      val expected = Set(UserPolicyResponse(resource.resourceId, policy.id.accessPolicyName, resource.authDomain, resource.authDomain))
+      val expected = Set(UserPolicyResponse(resource.resourceId, policy.id.accessPolicyName, resource.authDomain, resource.authDomain, false))
       r shouldBe(expected)
     }
 

@@ -10,6 +10,7 @@ import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport.{genGoogleSubjectId, _}
 import org.broadinstitute.dsde.workbench.sam.directory.MockDirectoryDAO
+import org.broadinstitute.dsde.workbench.sam.model
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.MockAccessPolicyDAO
@@ -17,6 +18,7 @@ import org.broadinstitute.dsde.workbench.sam.service._
 import org.scalatest.{AppendedClues, FlatSpec, Matchers}
 import spray.json.DefaultJsonProtocol._
 import spray.json.{JsBoolean, JsValue}
+import org.broadinstitute.dsde.workbench.sam.model.RootPrimitiveJsonSupport._
 
 import scala.collection.concurrent.TrieMap
 
@@ -36,7 +38,27 @@ class ResourceRoutesV1Spec extends FlatSpec with Matchers with ScalatestRouteTes
 
     val sharePolicy = ResourceActionPattern("share_policy::.+", "", false)
     val readPolicy = ResourceActionPattern("read_policy::.+", "", false)
+
+    val setPublic = ResourceActionPattern("set_public", "", false)
+    val setPolicyPublic = ResourceActionPattern("set_public::.+", "", false)
   }
+
+  private val resourceTypeAdmin = ResourceType(
+    ResourceTypeName("resource_type_admin"),
+    Set(
+      SamResourceActionPatterns.alterPolicies,
+      SamResourceActionPatterns.readPolicies,
+      SamResourceActionPatterns.sharePolicy,
+      SamResourceActionPatterns.readPolicy,
+      SamResourceActionPatterns.setPublic,
+      SamResourceActionPatterns.setPolicyPublic
+    ),
+    Set(
+      ResourceRole(
+        ResourceRoleName("owner"),
+        Set(SamResourceActions.alterPolicies, SamResourceActions.readPolicies, SamResourceActions.setPublic))),
+    ResourceRoleName("owner")
+  )
 
   private def createSamRoutes(resourceTypes: Map[ResourceTypeName, ResourceType], userInfo: UserInfo = defaultUserInfo) = {
     val accessPolicyDAO = new MockAccessPolicyDAO()
@@ -621,6 +643,32 @@ class ResourceRoutesV1Spec extends FlatSpec with Matchers with ScalatestRouteTes
     //Read the policies
     Get(s"/api/resources/v1/${resourceType.name}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
+      responseAs[List[UserPolicyResponse]].size should equal(1)
+    }
+  }
+
+  it should "list public policies" in {
+    val resourceType = ResourceType(
+      ResourceTypeName("rt"),
+      Set(SamResourceActionPatterns.alterPolicies, SamResourceActionPatterns.readPolicies),
+      Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.alterPolicies, SamResourceActions.readPolicies))),
+      ResourceRoleName("owner"))
+
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType, resourceTypeAdmin.name -> resourceTypeAdmin))
+
+    samRoutes.resourceService.initResourceTypes().unsafeRunSync()
+    runAndWait(samRoutes.resourceService.addSubjectToPolicy(model.FullyQualifiedPolicyId(model.FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(resourceType.name.value)), AccessPolicyName("owner")), samRoutes.userInfo.userId))
+
+    val resourceId = ResourceId("foo")
+    val policyName = AccessPolicyName("bar")
+    val members = AccessPolicyMembership(Set.empty, Set.empty, Set.empty)
+    createUserResourcePolicy(members, resourceType, samRoutes, resourceId, policyName)
+    samRoutes.resourceService.setPublic(model.FullyQualifiedPolicyId(model.FullyQualifiedResourceId(resourceType.name, resourceId), policyName), true).unsafeRunSync()
+
+    //Read the policies
+    Get(s"/api/resources/v1/${resourceType.name}") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[List[UserPolicyResponse]].size should equal(2) withClue responsePayloadClue(responseAs[String])
     }
   }
 
@@ -797,6 +845,167 @@ class ResourceRoutesV1Spec extends FlatSpec with Matchers with ScalatestRouteTes
 
     Delete(s"/api/resources/v1/${resourceType.name}/foo/policies/${resourceType.ownerRoleName}/memberEmails/${testUser.userEmail}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
+    }
+  }
+
+  "GET /api/resources/v1/{resourceType}/{resourceId}/policies/{policyName}/public" should "200 if user has read_policies" in {
+    val resourceType = ResourceType(
+      ResourceTypeName("rt"),
+      Set(SamResourceActionPatterns.readPolicies),
+      Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.readPolicies))),
+      ResourceRoleName("owner"))
+
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType, resourceTypeAdmin.name -> resourceTypeAdmin))
+
+    samRoutes.resourceService.initResourceTypes().unsafeRunSync()
+
+    val resourceId = ResourceId("foo")
+    runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, samRoutes.userInfo))
+
+    Get(s"/api/resources/v1/${resourceType.name}/${resourceId.value}/policies/${resourceType.ownerRoleName.value}/public") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK withClue responsePayloadClue(responseAs[String])
+      responseAs[Boolean] should equal(false)
+    }
+  }
+
+  it should "200 if user has read_policy::" in {
+    val resourceType = ResourceType(
+      ResourceTypeName("rt"),
+      Set(SamResourceActionPatterns.readPolicy),
+      Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.readPolicy(AccessPolicyName("owner"))))),
+      ResourceRoleName("owner"))
+
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType, resourceTypeAdmin.name -> resourceTypeAdmin))
+
+    samRoutes.resourceService.initResourceTypes().unsafeRunSync()
+
+    val resourceId = ResourceId("foo")
+    runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, samRoutes.userInfo))
+
+    Get(s"/api/resources/v1/${resourceType.name}/${resourceId.value}/policies/${resourceType.ownerRoleName.value}/public") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK withClue responsePayloadClue(responseAs[String])
+      responseAs[Boolean] should equal(false)
+    }
+  }
+
+  it should "403 if user cannot read policies" in {
+    val resourceType = ResourceType(
+      ResourceTypeName("rt"),
+      Set(SamResourceActionPatterns.delete),
+      Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.delete))),
+      ResourceRoleName("owner"))
+
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType, resourceTypeAdmin.name -> resourceTypeAdmin))
+
+    samRoutes.resourceService.initResourceTypes().unsafeRunSync()
+
+    val resourceId = ResourceId("foo")
+    runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, samRoutes.userInfo))
+
+    Get(s"/api/resources/v1/${resourceType.name}/${resourceId.value}/policies/${resourceType.ownerRoleName.value}/public") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Forbidden withClue responsePayloadClue(responseAs[String])
+    }
+  }
+
+  "PUT /api/resources/v1/{resourceType}/{resourceId}/policies/{policyName}/public" should "204 if user has alter_policies and set_public" in {
+    val resourceType = ResourceType(
+      ResourceTypeName("rt"),
+      Set(SamResourceActionPatterns.alterPolicies, SamResourceActionPatterns.readPolicies),
+      Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.alterPolicies, SamResourceActions.readPolicies))),
+      ResourceRoleName("owner"))
+
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType, resourceTypeAdmin.name -> resourceTypeAdmin))
+
+    samRoutes.resourceService.initResourceTypes().unsafeRunSync()
+    runAndWait(samRoutes.resourceService.addSubjectToPolicy(
+      model.FullyQualifiedPolicyId(
+        model.FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(resourceType.name.value)), AccessPolicyName(resourceTypeAdmin.ownerRoleName.value)), samRoutes.userInfo.userId))
+
+    val resourceId = ResourceId("foo")
+    runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, samRoutes.userInfo))
+
+    Put(s"/api/resources/v1/${resourceType.name}/${resourceId.value}/policies/${resourceType.ownerRoleName.value}/public", true) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent withClue responsePayloadClue(responseAs[String])
+    }
+  }
+
+  it should "204 if user has share_policy:: and set_public::" in {
+    val resourceType = ResourceType(
+      ResourceTypeName("rt"),
+      Set(SamResourceActionPatterns.sharePolicy, SamResourceActionPatterns.readPolicies),
+      Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.sharePolicy(AccessPolicyName("owner")), SamResourceActions.readPolicies))),
+      ResourceRoleName("owner"))
+
+    val resourceTypeAdmin = ResourceType(
+      ResourceTypeName("resource_type_admin"),
+      Set(
+        SamResourceActionPatterns.alterPolicies,
+        SamResourceActionPatterns.readPolicies,
+        SamResourceActionPatterns.sharePolicy,
+        SamResourceActionPatterns.readPolicy,
+        SamResourceActionPatterns.setPublic,
+        SamResourceActionPatterns.setPolicyPublic
+      ),
+      Set(
+        ResourceRole(
+          ResourceRoleName("owner"),
+          Set(SamResourceActions.alterPolicies, SamResourceActions.readPolicies, SamResourceActions.setPublicPolicy(AccessPolicyName("owner"))))),
+      ResourceRoleName("owner")
+    )
+
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType, resourceTypeAdmin.name -> resourceTypeAdmin))
+
+    samRoutes.resourceService.initResourceTypes().unsafeRunSync()
+    runAndWait(samRoutes.resourceService.addSubjectToPolicy(
+      model.FullyQualifiedPolicyId(
+        model.FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(resourceType.name.value)), AccessPolicyName(resourceTypeAdmin.ownerRoleName.value)), samRoutes.userInfo.userId))
+
+    val resourceId = ResourceId("foo")
+    runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, samRoutes.userInfo))
+
+    Put(s"/api/resources/v1/${resourceType.name}/${resourceId.value}/policies/${resourceType.ownerRoleName.value}/public", true) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent withClue responsePayloadClue(responseAs[String])
+    }
+  }
+
+  it should "403 if user does not have policy access" in {
+    val resourceType = ResourceType(
+      ResourceTypeName("rt"),
+      Set(SamResourceActionPatterns.readPolicies),
+      Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.readPolicies))),
+      ResourceRoleName("owner"))
+
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType, resourceTypeAdmin.name -> resourceTypeAdmin))
+
+    samRoutes.resourceService.initResourceTypes().unsafeRunSync()
+    runAndWait(samRoutes.resourceService.addSubjectToPolicy(
+      model.FullyQualifiedPolicyId(
+        model.FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(resourceType.name.value)), AccessPolicyName(resourceTypeAdmin.ownerRoleName.value)), samRoutes.userInfo.userId))
+
+    val resourceId = ResourceId("foo")
+    runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, samRoutes.userInfo))
+
+    Put(s"/api/resources/v1/${resourceType.name}/${resourceId.value}/policies/${resourceType.ownerRoleName.value}/public", true) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Forbidden withClue responsePayloadClue(responseAs[String])
+    }
+  }
+
+  it should "404 if user does not have set public access" in {
+    val resourceType = ResourceType(
+      ResourceTypeName("rt"),
+      Set(SamResourceActionPatterns.alterPolicies, SamResourceActionPatterns.readPolicies),
+      Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.alterPolicies, SamResourceActions.readPolicies))),
+      ResourceRoleName("owner"))
+
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType, resourceTypeAdmin.name -> resourceTypeAdmin))
+
+    samRoutes.resourceService.initResourceTypes().unsafeRunSync()
+
+    val resourceId = ResourceId("foo")
+    runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, samRoutes.userInfo))
+
+    Put(s"/api/resources/v1/${resourceType.name}/${resourceId.value}/policies/${resourceType.ownerRoleName.value}/public", true) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NotFound withClue responsePayloadClue(responseAs[String])
     }
   }
 }

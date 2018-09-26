@@ -87,10 +87,40 @@ class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdenti
 
   }
 
+  override def setPolicyIsPublic(resourceAndPolicyName: FullyQualifiedPolicyId, isPublic: Boolean): IO[Unit] = {
+    val maybePolicy = policies.find {
+      case (`resourceAndPolicyName`, policy: AccessPolicy) => true
+      case _ => false
+    }
+
+    maybePolicy match {
+      case Some((_, policy: AccessPolicy)) =>
+        val newPolicy = policy.copy(isPublic = Option(isPublic))
+        IO(policies.put(resourceAndPolicyName, newPolicy))
+      case _ => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "policy does not exist")))
+    }
+  }
+
+  override def listPublicAccessPolicies(resourceTypeName: ResourceTypeName): IO[Stream[ResourceIdAndPolicyName]] = {
+    IO.pure(
+      policies.collect {
+        case (_, policy: AccessPolicy) if policy.isPublic.contains(true) => ResourceIdAndPolicyName(policy.id.resource.resourceId, policy.id.accessPolicyName)
+      }.toStream
+    )
+  }
+
   override def listFlattenedPolicyMembers(policyIdentity: FullyQualifiedPolicyId): IO[Set[WorkbenchUserId]] = IO.pure(Set.empty)
 
   override def listResourceWithAuthdomains(
       resourceTypeName: ResourceTypeName,
       resourceId: Set[ResourceId])
     : IO[Set[Resource]] = IO.pure(Set.empty)
+
+  override def listPublicAccessPolicies(resource: FullyQualifiedResourceId): IO[Stream[AccessPolicy]] = {
+    IO.pure(
+      policies.collect {
+        case (_, policy: AccessPolicy) if policy.isPublic.contains(true) => policy
+      }.toStream
+    )
+  }
 }

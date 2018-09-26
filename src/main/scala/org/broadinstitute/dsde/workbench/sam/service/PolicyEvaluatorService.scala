@@ -72,14 +72,15 @@ class PolicyEvaluatorService(
             case Some(authDomains) =>
               val userNotMemberOf = authDomains.filterNot(x =>
                 allAuthDomainResourcesUserIsMemberOf.map(_.resourceId).contains(ResourceId(x.value)))
-              Some(UserPolicyResponse(rnp.resourceId, rnp.accessPolicyName, authDomains, userNotMemberOf))
+              Some(UserPolicyResponse(rnp.resourceId, rnp.accessPolicyName, authDomains, userNotMemberOf, false))
             case None =>
               logger.error(s"ldap has corrupted data. ${rnp.resourceId} should have auth domains defined")
               none[UserPolicyResponse]
           }
-        } else UserPolicyResponse(rnp.resourceId, rnp.accessPolicyName, Set.empty, Set.empty).some
+        } else UserPolicyResponse(rnp.resourceId, rnp.accessPolicyName, Set.empty, Set.empty, false).some
       }
-    } yield results.flatten
+      publicPolicies <- accessPolicyDAO.listPublicAccessPolicies(resourceTypeName)
+    } yield results.flatten ++ publicPolicies.map(p => UserPolicyResponse(p.resourceId, p.accessPolicyName, Set.empty, Set.empty, public = true))
 
   def listUserManagedGroups(userId: WorkbenchUserId): IO[Set[ResourceIdAndPolicyName]] =
     for {

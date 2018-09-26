@@ -128,7 +128,7 @@ object Boot extends App with LazyLogging {
           val (sRoutes, userService, resourceService, statusService) = createSamRoutes(cloudExtention, accessPolicyDao)
 
           for{
-            _ <- resourceTypes.toList.parTraverse(rt => accessPolicyDao.createResourceType(rt.name)).handleErrorWith{
+            _ <- resourceService.initResourceTypes().handleErrorWith{
               case t: Throwable => IO(logger.error("FATAL - failure starting http server", t)) *> IO.raiseError(t)
             }
 
