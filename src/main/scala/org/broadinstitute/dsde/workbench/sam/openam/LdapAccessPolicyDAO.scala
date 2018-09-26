@@ -17,12 +17,12 @@ import org.broadinstitute.dsde.workbench.sam.util.LdapSupport
 import scala.collection.JavaConverters._
 import scala.concurrent.{ExecutionContext, Future}
 
-class LdapAccessPolicyDAO(protected val ldapConnectionPool: LDAPConnectionPool, protected val directoryConfig: DirectoryConfig)(implicit executionContext: ExecutionContext) extends AccessPolicyDAO with DirectorySubjectNameSupport with LdapSupport {
-  implicit val cs = IO.contextShift(executionContext)
+class LdapAccessPolicyDAO(protected val ldapConnectionPool: LDAPConnectionPool, protected val directoryConfig: DirectoryConfig, blockingEc: ExecutionContext)(implicit executionContext: ExecutionContext) extends AccessPolicyDAO with DirectorySubjectNameSupport with LdapSupport {
+  val cs = IO.contextShift(executionContext)
 
   override def createResourceType(resourceTypeName: ResourceTypeName): IO[ResourceTypeName] = {
     for{
-      _ <- runBlocking(IO(ldapConnectionPool.add(resourceTypeDn(resourceTypeName),
+      _ <- cs.evalOn(blockingEc)(IO(ldapConnectionPool.add(resourceTypeDn(resourceTypeName),
         new Attribute("objectclass", List("top", ObjectClass.resourceType).asJava),
         new Attribute(Attr.ou, "resources"))
       )).void.recover{
@@ -37,27 +37,25 @@ class LdapAccessPolicyDAO(protected val ldapConnectionPool: LDAPConnectionPool, 
       new Attribute(Attr.resourceType, resource.resourceTypeName.value)
     ) ++ maybeAttribute(Attr.authDomain, resource.authDomain.map(_.value))
 
-    runBlocking(IO(ldapConnectionPool.add(resourceDn(resource), attributes.asJava))).recoverWith{
+    cs.evalOn(blockingEc)(IO(ldapConnectionPool.add(resourceDn(resource), attributes.asJava))).recoverWith{
       case ldape: LDAPException if ldape.getResultCode == ResultCode.ENTRY_ALREADY_EXISTS =>
         IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, "A resource of this type and name already exists")))
     }.map(_ => resource)
   }
 
   // TODO: Method is not tested.  To test properly, we'll probably need a loadResource or getResource method
-  override def deleteResource(resource: Resource): Future[Unit] = Future {
-    ldapConnectionPool.delete(resourceDn(resource))
-  }
+  override def deleteResource(resource: Resource): IO[Unit] = IO(ldapConnectionPool.delete(resourceDn(resource)))
 
   override def loadResourceAuthDomain(resource: Resource): IO[Set[WorkbenchGroupName]] = {
-    runBlocking((IO(Option(ldapConnectionPool.getEntry(resourceDn(resource)))))).flatMap {
+    cs.evalOn(blockingEc)((IO(Option(ldapConnectionPool.getEntry(resourceDn(resource)))))).flatMap {
       case None =>
-        IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"$resource auth domain not found")))
+        IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Resource $resource not found")))
       case Some(r) =>
         IO(getAttributes(r, Attr.authDomain).map(WorkbenchGroupName))
     }
   }
 
-  override def createPolicy(policy: AccessPolicy): Future[AccessPolicy] = Future {
+  override def createPolicy(policy: AccessPolicy): IO[AccessPolicy] = {
     val attributes = List(
       new Attribute("objectclass", "top", ObjectClass.policy),
       new Attribute(Attr.cn, policy.id.accessPolicyName.value),
@@ -70,8 +68,7 @@ class LdapAccessPolicyDAO(protected val ldapConnectionPool: LDAPConnectionPool, 
       maybeAttribute(Attr.role, policy.roles.map(_.value)) ++
       maybeAttribute(Attr.uniqueMember, policy.members.map(subjectDn))
 
-    ldapConnectionPool.add(policyDn(policy.id), attributes.asJava)
-    policy
+    IO(ldapConnectionPool.add(policyDn(policy.id), attributes.asJava)).map(_ => policy)
   }
 
   private def maybeAttribute(attr: String, values: Set[String]): Option[Attribute] = values.toSeq match {
@@ -113,9 +110,9 @@ class LdapAccessPolicyDAO(protected val ldapConnectionPool: LDAPConnectionPool, 
   }
 
   override def listAccessPolicies(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId): IO[Set[ResourceIdAndPolicyName]] = {
-    val policyDnPattern = dnMatcher(Seq(Attr.policy, Attr.resourceId), resourceTypeDn(resourceTypeName))
     for{
-      entry <- runBlocking(IO(ldapConnectionPool.getEntry(userDn(userId), Attr.memberOf)))
+      policyDnPattern <- IO(dnMatcher(Seq(Attr.policy, Attr.resourceId), resourceTypeDn(resourceTypeName)))
+      entry <- cs.evalOn(blockingEc)(IO(ldapConnectionPool.getEntry(userDn(userId), Attr.memberOf)))
     } yield {
       val groupDns = Option(entry).flatMap(e => Option(getAttributes(e, Attr.memberOf))).getOrElse(Set.empty)
       groupDns.collect{case policyDnPattern(policyName, resourceId) => ResourceIdAndPolicyName(ResourceId(resourceId), AccessPolicyName(policyName))}
@@ -126,12 +123,12 @@ class LdapAccessPolicyDAO(protected val ldapConnectionPool: LDAPConnectionPool, 
     val filters = resourceId.grouped(batchSize).map(
       batch =>
         Filter.createORFilter(
-          batch.map(r => Filter.createANDFilter(Filter.createEqualityFilter(Attr.resourceId, r.value), Filter.createNOTFilter(Filter.createPresenceFilter(Attr.policy)))
+          batch.map(r => Filter.createANDFilter(Filter.createEqualityFilter(Attr.resourceId, r.value), Filter.createEqualityFilter(Attr.objectClass, ObjectClass.resource))
           ).asJava)).toSeq
 
     for{
-      stream <- runBlocking(IO(ldapSearchStream(resourcesOu, SearchScope.SUB, filters:_*)(et => unmarshalResourceAuthDomain(et, resourceTypeName))))
-      res <- IO.fromEither(stream.toList.parSequence.leftMap(s => new WorkbenchException(s)))
+      stream <- cs.evalOn(blockingEc)(IO(ldapSearchStream(resourceTypeDn(resourceTypeName), SearchScope.ONE, filters:_*)(et => unmarshalResourceAuthDomain(et, resourceTypeName))))
+      res <- IO.fromEither(stream.parSequence.leftMap(s => new WorkbenchException(s)))
     } yield res.toSet
   }
 

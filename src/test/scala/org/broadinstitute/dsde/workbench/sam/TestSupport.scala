@@ -1,6 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam
 
 import java.net.URI
+import java.util.concurrent.Executors
 
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.headers.RawHeader
@@ -42,6 +43,8 @@ trait PropertyBasedTesting extends FlatSpec with PropertyChecks with Configurati
 }
 
 object TestSupport extends TestSupport{
+  private val executor = Executors.newCachedThreadPool()
+  val blockingEc = ExecutionContext.fromExecutor(executor)
   implicit val eqWorkbenchExceptionErrorReport: Eq[WorkbenchExceptionWithErrorReport] = new Eq[WorkbenchExceptionWithErrorReport]{
     override def eqv(x: WorkbenchExceptionWithErrorReport, y: WorkbenchExceptionWithErrorReport): Boolean = x.errorReport.statusCode == y.errorReport.statusCode && x.errorReport.message == y.errorReport.message
   }

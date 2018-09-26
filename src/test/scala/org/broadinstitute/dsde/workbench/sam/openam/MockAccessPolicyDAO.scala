@@ -25,7 +25,7 @@ class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdenti
     resource
   }
 
-  override def deleteResource(resource: Resource): Future[Unit] = Future {
+  override def deleteResource(resource: Resource): IO[Unit] = IO {
     val toRemove = policies.collect {
       case (riapn@ResourceAndPolicyName(`resource`, _), policy: AccessPolicy) => riapn
     }.toSet
@@ -35,7 +35,7 @@ class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdenti
 
   override def loadResourceAuthDomain(resource: Resource): IO[Set[WorkbenchGroupName]] = IO.pure(Set.empty)
 
-  override def createPolicy(policy: AccessPolicy): Future[AccessPolicy] = Future {
+  override def createPolicy(policy: AccessPolicy): IO[AccessPolicy] = IO {
     policies += policy.id -> policy
     policy
   }
@@ -60,7 +60,7 @@ class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdenti
     }
   }
 
-  override def overwritePolicy(newPolicy: AccessPolicy): Future[AccessPolicy] = createPolicy(newPolicy)
+  override def overwritePolicy(newPolicy: AccessPolicy): Future[AccessPolicy] = createPolicy(newPolicy).unsafeToFuture()
 
   override def listAccessPolicies(resource: Resource): Future[Set[AccessPolicy]] = Future {
     policies.collect {

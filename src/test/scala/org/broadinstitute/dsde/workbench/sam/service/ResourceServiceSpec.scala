@@ -23,7 +23,7 @@ import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import Generator._
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FlatSpec, Matchers}
-
+import org.broadinstitute.dsde.workbench.sam.TestSupport.blockingEc
 import scala.concurrent.ExecutionContext.Implicits.global
 
 /**
@@ -40,7 +40,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
   val dirURI = new URI(directoryConfig.directoryUrl)
   val connectionPool = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
   val dirDAO = new LdapDirectoryDAO(connectionPool, directoryConfig)
-  val policyDAO = new LdapAccessPolicyDAO(connectionPool, directoryConfig)
+  val policyDAO = new LdapAccessPolicyDAO(connectionPool, directoryConfig, blockingEc)
   val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
   private val dummyUserInfo = UserInfo(OAuth2BearerToken("token"), WorkbenchUserId("userid"), WorkbenchEmail("user@company.com"), 0)
@@ -160,7 +160,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
 
     val policies2 = runAndWait(service.createResource(defaultResourceType, resourceName2, dummyUserInfo))
 
-    runAndWait(policyDAO.createPolicy(AccessPolicy(ResourceAndPolicyName(policies2, AccessPolicyName(otherRoleName.value)), Set(dummyUserInfo.userId), WorkbenchEmail("a@b.c"), Set(otherRoleName), Set.empty)))
+    policyDAO.createPolicy(AccessPolicy(ResourceAndPolicyName(policies2, AccessPolicyName(otherRoleName.value)), Set(dummyUserInfo.userId), WorkbenchEmail("a@b.c"), Set(otherRoleName), Set.empty)).unsafeRunSync()
 
     assertResult(defaultResourceType.roles.filter(_.roleName.equals(ResourceRoleName("owner"))).head.actions) {
       runAndWait(service.listUserResourceActions(Resource(defaultResourceType.name, resourceName1), dummyUserInfo))

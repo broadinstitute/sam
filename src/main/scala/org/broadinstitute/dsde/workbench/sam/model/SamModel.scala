@@ -91,7 +91,7 @@ object SamResourceActions {
 @Lenses case class ResourceId(value: String) extends ValueObject
 
 @Lenses final case class ResourceIdAndPolicyName(resourceId: ResourceId, accessPolicyName: AccessPolicyName)
-@Lenses final case class UserPolicyResponse(resourceId: ResourceId, accessPolicyName: AccessPolicyName, authDomains: Set[WorkbenchGroupName], authDomainsUserNotAMemberOf: Set[WorkbenchGroupName])
+@Lenses final case class UserPolicyResponse(resourceId: ResourceId, accessPolicyName: AccessPolicyName, authDomains: Set[WorkbenchGroupName], missingAuthDomains: Set[WorkbenchGroupName])
 @Lenses case class ResourceAndPolicyName(resource: Resource, accessPolicyName: AccessPolicyName) extends WorkbenchGroupIdentity {
   override def toString: String = s"${accessPolicyName.value}.${resource.resourceId.value}.${resource.resourceTypeName.value}"
 }

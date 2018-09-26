@@ -1,6 +1,8 @@
 package org.broadinstitute.dsde.workbench.sam.openam
 
 import java.util.UUID
+
+import cats.effect.IO
 import cats.implicits._
 import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import org.scalatest.concurrent.ScalaFutures
@@ -20,7 +22,7 @@ import org.scalatest._
   */
 class LdapAccessPolicyDAOSpec extends AsyncFlatSpec with ScalaFutures with Matchers with TestSupport with BeforeAndAfter with BeforeAndAfterAll {
   private val connectionPool = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
-  val dao = new LdapAccessPolicyDAO(connectionPool, directoryConfig)
+  val dao = new LdapAccessPolicyDAO(connectionPool, directoryConfig, blockingEc)
   val dirDao = new LdapDirectoryDAO(connectionPool, directoryConfig)
   val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
@@ -56,9 +58,9 @@ class LdapAccessPolicyDAOSpec extends AsyncFlatSpec with ScalaFutures with Match
       ls2 <- dao.listAccessPolicies(policy2.id.resource)
       ls3 <- dao.listAccessPolicies(policy3.id.resource)
 
-      _ <- dao.createPolicy(policy1)
-      _ <- dao.createPolicy(policy2)
-      _ <- dao.createPolicy(policy3)
+      _ <- dao.createPolicy(policy1).unsafeToFuture()
+      _ <- dao.createPolicy(policy2).unsafeToFuture()
+      _ <- dao.createPolicy(policy3).unsafeToFuture()
 
       lsPolicy1 <- dao.listAccessPolicies(policy1.id.resource)
       lsPolicy3 <- dao.listAccessPolicies(policy3.id.resource)
@@ -87,12 +89,12 @@ class LdapAccessPolicyDAOSpec extends AsyncFlatSpec with ScalaFutures with Match
   "LdapAccessPolicyDAO listUserPolicyResponse" should "return UserPolicyResponse" in {
     val policy = genPolicy.sample.get
     val res = for{
-      _ <- setup()
-      _ <- dao.createResourceType(policy.id.resource.resourceTypeName).unsafeToFuture()
-      _ <- dao.createResource(policy.id.resource).unsafeToFuture()
-      r <- dao.listResourceWithAuthdomains(policy.id.resource.resourceTypeName, Set(policy.id.resource.resourceId)).unsafeToFuture()
+      _ <- IO.fromFuture(IO(setup()))
+      _ <- dao.createResourceType(policy.id.resource.resourceTypeName)
+      i <- dao.createResource(policy.id.resource)
+      r <- dao.listResourceWithAuthdomains(policy.id.resource.resourceTypeName, Set(policy.id.resource.resourceId))
     } yield r
 
-    res.map(x => x shouldBe(Set(Resource(policy.id.resource.resourceTypeName, policy.id.resource.resourceId, policy.id.resource.authDomain))))
+    res.unsafeToFuture().map(x => x shouldBe(Set(Resource(policy.id.resource.resourceTypeName, policy.id.resource.resourceId, policy.id.resource.authDomain))))
   }
 }

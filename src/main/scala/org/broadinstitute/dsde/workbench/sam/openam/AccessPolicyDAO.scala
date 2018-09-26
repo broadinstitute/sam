@@ -13,10 +13,10 @@ trait AccessPolicyDAO {
   def createResourceType(resourceTypeName: ResourceTypeName): IO[ResourceTypeName]
 
   def createResource(resource: Resource): IO[Resource]
-  def deleteResource(resource: Resource): Future[Unit]
+  def deleteResource(resource: Resource): IO[Unit]
   def loadResourceAuthDomain(resource: Resource): IO[Set[WorkbenchGroupName]]
 
-  def createPolicy(policy: AccessPolicy): Future[AccessPolicy]
+  def createPolicy(policy: AccessPolicy): IO[AccessPolicy]
   def deletePolicy(policy: AccessPolicy): Future[Unit]
   def loadPolicy(resourceAndPolicyName: ResourceAndPolicyName): Future[Option[AccessPolicy]]
   def overwritePolicy(newPolicy: AccessPolicy): Future[AccessPolicy]

@@ -3,7 +3,6 @@ package org.broadinstitute.dsde.workbench.sam.service
 import java.util.UUID
 
 import akka.http.scaladsl.model.StatusCodes
-import cats.data.EitherT
 import cats.effect.IO
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
@@ -134,7 +133,7 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
   }
 
   def createPolicy(resourceAndPolicyName: ResourceAndPolicyName, members: Set[WorkbenchSubject], email: WorkbenchEmail, roles: Set[ResourceRoleName], actions: Set[ResourceAction]): Future[AccessPolicy] = {
-    accessPolicyDAO.createPolicy(AccessPolicy(resourceAndPolicyName, members, email, roles, actions))
+    accessPolicyDAO.createPolicy(AccessPolicy(resourceAndPolicyName, members, email, roles, actions)).unsafeToFuture()
   }
 
   def listUserAccessPolicies(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId): IO[Set[UserPolicyResponse]] = for{
@@ -142,23 +141,24 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
       isConstrained = rt.isAuthDomainConstrainable
       ridAndPolcyName <- accessPolicyDAO.listAccessPolicies(resourceTypeName, userId) // List all policies of a given resourceType the user is a member of
       rids = ridAndPolcyName.map(_.resourceId)
-      resources <- accessPolicyDAO.listResourceWithAuthdomains(resourceTypeName, rids)
+
+
+      resources <- if(isConstrained) accessPolicyDAO.listResourceWithAuthdomains(resourceTypeName, rids) else IO.pure(Set.empty)
       authDomainMap = resources.map(x => x.resourceId -> x.authDomain).toMap
+
+      allAuthDomainResourcesUserIsMemberOf <- if(isConstrained) accessPolicyDAO.listAccessPolicies(ManagedGroupService.managedGroupTypeName, userId) else IO.pure(Set.empty[ResourceIdAndPolicyName])
+
       results = ridAndPolcyName.toList.map{
         rnp =>
-          if(!isConstrained)
-            EitherT.fromEither[IO](UserPolicyResponse(rnp.resourceId, rnp.accessPolicyName, Set.empty, Set.empty).asRight[String])
-          else{
+          if(isConstrained){
             for{
-              authDomains <- EitherT.fromEither[IO](authDomainMap.get(rnp.resourceId).toRight(s"no auth domain found for ${rnp.resourceId}"))
-              allAuthDomainResourcesUserIsMemberOf <- if(authDomains.nonEmpty) accessPolicyDAO.listAccessPolicies(ManagedGroupService.managedGroupTypeName, userId).attemptT.leftMap(_.getLocalizedMessage) else EitherT.fromEither[IO](Set.empty[ResourceIdAndPolicyName].asRight[String])
+              authDomains <- authDomainMap.get(rnp.resourceId).toRight(s"no auth domain found for ${rnp.resourceId}")
               userNotMemberOf = authDomains.filterNot(x => allAuthDomainResourcesUserIsMemberOf.map(_.resourceId).contains(ResourceId(x.value)))
             } yield UserPolicyResponse(rnp.resourceId, rnp.accessPolicyName, authDomains, userNotMemberOf)
-          }
+          } else UserPolicyResponse(rnp.resourceId, rnp.accessPolicyName, Set.empty, Set.empty).asRight[String]
       }
-      r <- results.parSequence.value
-      rr <- IO.fromEither(r.leftMap(s => new WorkbenchException(s)))
-    } yield rr.toSet
+      listUserPolicyResponse <- IO.fromEither(results.parSequence.leftMap(s => new WorkbenchException(s)))
+    } yield listUserPolicyResponse.toSet
 
   // IF Resource ID reuse is allowed (as defined by the Resource Type), then we can delete the resource
   // ELSE Resource ID reuse is not allowed, and we enforce this by deleting all policies associated with the Resource,
@@ -176,7 +176,7 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
 
   private def maybeDeleteResource(resource: Resource): Future[Unit] = {
     resourceTypes.get(resource.resourceTypeName) match {
-      case Some(resourceType) if resourceType.reuseIds => accessPolicyDAO.deleteResource(resource)
+      case Some(resourceType) if resourceType.reuseIds => accessPolicyDAO.deleteResource(resource).unsafeToFuture()
       case _ => Future.successful(())
     }
   }

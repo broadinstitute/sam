@@ -44,7 +44,7 @@ object Dependencies {
 
   val catseffect: ModuleID =  "org.typelevel" %% "cats-effect" % catsEffectVersion
   val monocle: ModuleID = "com.github.julien-truffaut" %%  "monocle-core"  % monocleVersion
-  val mococleMacro: ModuleID = "com.github.julien-truffaut" %%  "monocle-macro" % monocleVersion
+  val monocleMacro: ModuleID = "com.github.julien-truffaut" %%  "monocle-macro" % monocleVersion
 
   val scalaTest: ModuleID =       "org.scalatest" %% "scalatest"    % scalaTestV % "test"
   val mockito: ModuleID =         "org.mockito"    % "mockito-core" % "2.7.22"   % "test"
@@ -85,7 +85,7 @@ object Dependencies {
 
     catseffect,
     monocle,
-    mococleMacro,
+    monocleMacro,
 
     scalaTest,
     mockito,
