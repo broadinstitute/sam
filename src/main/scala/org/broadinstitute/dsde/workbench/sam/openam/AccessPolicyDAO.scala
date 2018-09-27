@@ -17,12 +17,12 @@ trait AccessPolicyDAO {
   def loadResourceAuthDomain(resource: Resource): IO[Set[WorkbenchGroupName]]
 
   def createPolicy(policy: AccessPolicy): IO[AccessPolicy]
-  def deletePolicy(policy: AccessPolicy): Future[Unit]
+  def deletePolicy(policy: AccessPolicy): IO[Unit]
   def loadPolicy(resourceAndPolicyName: ResourceAndPolicyName): Future[Option[AccessPolicy]]
   def overwritePolicy(newPolicy: AccessPolicy): Future[AccessPolicy]
   def listResourceWithAuthdomains(resourceTypeName: ResourceTypeName, resourceId: Set[ResourceId]): IO[Set[Resource]]
   def listAccessPolicies(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId): IO[Set[ResourceIdAndPolicyName]]
-  def listAccessPolicies(resource: Resource): Future[Set[AccessPolicy]]
+  def listAccessPolicies(resource: Resource): IO[Set[AccessPolicy]]
   def listAccessPoliciesForUser(resource: Resource, user: WorkbenchUserId): Future[Set[AccessPolicy]]
   def listFlattenedPolicyMembers(resourceAndPolicyName: ResourceAndPolicyName): Future[Set[WorkbenchUserId]]
 }

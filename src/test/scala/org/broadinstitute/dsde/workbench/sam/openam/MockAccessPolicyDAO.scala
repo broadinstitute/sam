@@ -40,7 +40,7 @@ class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdenti
     policy
   }
 
-  override def deletePolicy(policy: AccessPolicy): Future[Unit] = Future {
+  override def deletePolicy(policy: AccessPolicy): IO[Unit] = IO {
     policies -= policy.id
   }
 
@@ -57,12 +57,12 @@ class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdenti
         case Seq(policy) => Option(policy)
         case _ => throw new WorkbenchException(s"More than one policy found for ${resourceAndPolicyName.accessPolicyName}")
       }
-    }
+    }.unsafeToFuture()
   }
 
   override def overwritePolicy(newPolicy: AccessPolicy): Future[AccessPolicy] = createPolicy(newPolicy).unsafeToFuture()
 
-  override def listAccessPolicies(resource: Resource): Future[Set[AccessPolicy]] = Future {
+  override def listAccessPolicies(resource: Resource): IO[Set[AccessPolicy]] = IO {
     policies.collect {
       case (riapn@ResourceAndPolicyName(`resource`, _), policy: AccessPolicy) => policy
     }.toSet

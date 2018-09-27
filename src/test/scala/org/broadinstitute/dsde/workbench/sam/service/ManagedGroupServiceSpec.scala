@@ -63,7 +63,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
   def makeResourceType(resourceType: ResourceType): ResourceTypeName = resourceService.createResourceType(resourceType).unsafeRunSync()
 
   def assertPoliciesOnResource(resource: Resource, policyDAO: AccessPolicyDAO = policyDAO, expectedPolicies: Set[AccessPolicyName] = Set(ManagedGroupService.adminPolicyName, ManagedGroupService.memberPolicyName)) = {
-    val policies = runAndWait(policyDAO.listAccessPolicies(resource))
+    val policies = policyDAO.listAccessPolicies(resource).unsafeRunSync()
     policies.map(_.id.accessPolicyName.value) shouldEqual expectedPolicies.map(_.value)
     expectedPolicies.foreach { policyName =>
       val res = policyDAO.loadPolicy(ResourceAndPolicyName(resource, policyName)).futureValue
@@ -92,7 +92,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
 
   "ManagedGroupService create" should "create a managed group with admin and member policies" in {
     assertMakeGroup()
-    val policies = runAndWait(policyDAO.listAccessPolicies(expectedResource))
+    val policies = policyDAO.listAccessPolicies(expectedResource).unsafeRunSync()
     policies.map(_.id.accessPolicyName.value) shouldEqual Set("admin", "member", "admin-notifier")
   }
 
@@ -174,7 +174,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     assertMakeGroup(managedGroupService = managedGroupService)
     runAndWait(managedGroupService.deleteManagedGroup(resourceId))
     verify(mockGoogleExtensions).onGroupDelete(groupEmail)
-    runAndWait(policyDAO.listAccessPolicies(expectedResource)) shouldEqual Set.empty
+    policyDAO.listAccessPolicies(expectedResource).unsafeRunSync() shouldEqual Set.empty
     runAndWait(policyDAO.loadPolicy(adminPolicy)) shouldEqual None
     runAndWait(policyDAO.loadPolicy(memberPolicy)) shouldEqual None
   }

@@ -76,9 +76,9 @@ class LdapAccessPolicyDAO(protected val ldapConnectionPool: LDAPConnectionPool, 
     case _ => Option(new Attribute(attr, values.asJava))
   }
 
-  override def deletePolicy(policy: AccessPolicy): Future[Unit] = Future {
+  override def deletePolicy(policy: AccessPolicy): IO[Unit] = IO(
     ldapConnectionPool.delete(policyDn(policy.id))
-  }
+  )
 
   override def loadPolicy(resourceAndPolicyName: ResourceAndPolicyName): Future[Option[AccessPolicy]] = Future {
     Option(ldapConnectionPool.getEntry(policyDn(resourceAndPolicyName))).map(unmarshalAccessPolicy)
@@ -139,9 +139,9 @@ class LdapAccessPolicyDAO(protected val ldapConnectionPool: LDAPConnectionPool, 
     } yield Resource(resourceTypeName, ResourceId(resourceId), authDomains)
   }
 
-  override def listAccessPolicies(resource: Resource): Future[Set[AccessPolicy]] = Future {
+  override def listAccessPolicies(resource: Resource): IO[Set[AccessPolicy]] = IO(
     ldapSearchStream(resourceDn(resource), SearchScope.SUB, Filter.createEqualityFilter("objectclass", ObjectClass.policy))(unmarshalAccessPolicy).toSet
-  }
+  )
 
   override def listAccessPoliciesForUser(resource: Resource, user: WorkbenchUserId): Future[Set[AccessPolicy]] = Future {
     val result = for {

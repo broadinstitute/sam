@@ -46,21 +46,21 @@ class LdapAccessPolicyDAOSpec extends AsyncFlatSpec with ScalaFutures with Match
     val policy3 = AccessPolicy(ResourceAndPolicyName(Resource(typeName2, ResourceId("resource")), AccessPolicyName("role1-a")), policy3Group.members, policy3Group.email, Set(ResourceRoleName("role1")), Set(ResourceAction("action1"), ResourceAction("action2")))
 
 
-    for{
-      _ <- setup()
-      _ <- dao.createResourceType(typeName1).unsafeToFuture()
-      _ <- dao.createResourceType(typeName2).unsafeToFuture()
-      _ <- dao.createResource(policy1.id.resource).unsafeToFuture()
+    val res = for{
+      _ <- IO.fromFuture(IO(setup()))
+      _ <- dao.createResourceType(typeName1)
+      _ <- dao.createResourceType(typeName2)
+      _ <- dao.createResource(policy1.id.resource)
       //policy2's resource already exists
-      _ <- dao.createResource(policy3.id.resource).unsafeToFuture()
+      _ <- dao.createResource(policy3.id.resource)
 
       ls1 <- dao.listAccessPolicies(policy1.id.resource)
       ls2 <- dao.listAccessPolicies(policy2.id.resource)
       ls3 <- dao.listAccessPolicies(policy3.id.resource)
 
-      _ <- dao.createPolicy(policy1).unsafeToFuture()
-      _ <- dao.createPolicy(policy2).unsafeToFuture()
-      _ <- dao.createPolicy(policy3).unsafeToFuture()
+      _ <- dao.createPolicy(policy1)
+      _ <- dao.createPolicy(policy2)
+      _ <- dao.createPolicy(policy3)
 
       lsPolicy1 <- dao.listAccessPolicies(policy1.id.resource)
       lsPolicy3 <- dao.listAccessPolicies(policy3.id.resource)
@@ -84,6 +84,8 @@ class LdapAccessPolicyDAOSpec extends AsyncFlatSpec with ScalaFutures with Match
       lsAfterDeletePolicy2 shouldBe Set.empty
       ls3AfterDeletePolicy3 shouldBe Set.empty
     }
+
+    res.unsafeToFuture()
   }
 
   "LdapAccessPolicyDAO listUserPolicyResponse" should "return UserPolicyResponse" in {

@@ -19,6 +19,7 @@ import scala.util.Success
   * Created by mbemis on 5/22/17.
   */
 class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceType], private val accessPolicyDAO: AccessPolicyDAO, private val directoryDAO: DirectoryDAO, private val cloudExtensions: CloudExtensions, private val emailDomain: String)(implicit val executionContext: ExecutionContext) extends LazyLogging {
+  implicit val cs = IO.contextShift(executionContext) //for running IOs in paralell
 
   private case class ValidatableAccessPolicy(policyName: AccessPolicyName, emailsToSubjects: Map[WorkbenchEmail, Option[WorkbenchSubject]], roles: Set[ResourceRoleName], actions: Set[ResourceAction])
 
@@ -166,10 +167,10 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
   //      preventing a new Resource with the same ID from being created
   def deleteResource(resource: Resource): Future[Unit] = {
     for {
-      policiesToDelete <- accessPolicyDAO.listAccessPolicies(resource)
+      policiesToDelete <- accessPolicyDAO.listAccessPolicies(resource).unsafeToFuture()
       // remove from cloud extensions first so a failure there does not leave ldap in a bad state
       _ <- Future.traverse(policiesToDelete) { policy => cloudExtensions.onGroupDelete(policy.email) }
-      _ <- Future.traverse(policiesToDelete) {accessPolicyDAO.deletePolicy}
+      _ <- policiesToDelete.toList.map(accessPolicyDAO.deletePolicy).parSequence.unsafeToFuture()
       _ <- maybeDeleteResource(resource)
     } yield ()
   }
@@ -335,7 +336,7 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
   }
 
   def listResourcePolicies(resource: Resource): Future[Set[AccessPolicyResponseEntry]] = {
-    accessPolicyDAO.listAccessPolicies(resource).flatMap { policies =>
+    accessPolicyDAO.listAccessPolicies(resource).unsafeToFuture().flatMap { policies =>
       Future.sequence(policies.map { policy =>
         loadAccessPolicyWithEmails(policy).map { membership =>
           AccessPolicyResponseEntry(policy.id.accessPolicyName, membership, policy.email)
