@@ -19,6 +19,7 @@ import org.broadinstitute.dsde.workbench.sam.config.SwaggerConfig
 import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.service.{ManagedGroupService, ResourceService, StatusService, UserService}
 import SamRoutes._
+import com.newrelic.api.agent.Trace
 import scala.concurrent.{ExecutionContext, Future}
 
 /**
@@ -28,6 +29,7 @@ abstract class SamRoutes(val resourceService: ResourceService, val userService: 
   extends LazyLogging
   with ResourceRoutes with UserRoutes with SwaggerRoutes with StatusRoutes with ExtensionRoutes with ManagedGroupRoutes {
 
+  @Trace(dispatcher=true)
   def route: server.Route = (logRequestResult & handleExceptions(myExceptionHandler)) {
     swaggerRoutes ~
     statusRoutes ~

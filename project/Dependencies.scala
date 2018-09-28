@@ -9,6 +9,7 @@ object Dependencies {
   val scalaCheckV    = "1.14.0"
 
   val workbenchUtilV   = "0.3-2771e2d"
+  val workbenchMetricsV   = "0.4-9583a98-SNAP"
   val workbenchModelV  = "0.12-a19203d"
   val workbenchGoogleV = "0.16-0245949"
   val workbenchNotificationsV = "0.1-f2a0020"
@@ -49,7 +50,8 @@ object Dependencies {
 
   // All of workbench-libs pull in Akka; exclude it since we provide our own Akka dependency.
   // workbench-google pulls in workbench-{util, model, metrics}; exclude them so we can control the library versions individually.
-  val workbenchUtil: ModuleID =      "org.broadinstitute.dsde.workbench" %% "workbench-util"   % workbenchUtilV
+  val workbenchMetrics: ModuleID = "org.broadinstitute.dsde.workbench" %% "workbench-metrics"  % workbenchMetricsV excludeAll(excludeWorkbenchUtil)
+  val workbenchUtil: ModuleID =      "org.broadinstitute.dsde.workbench" %% "workbench-util"   % workbenchUtilV excludeAll(excludeWorkbenchMetrics)
   val workbenchModel: ModuleID =     "org.broadinstitute.dsde.workbench" %% "workbench-model"  % workbenchModelV
   val workbenchGoogle: ModuleID =    "org.broadinstitute.dsde.workbench" %% "workbench-google" % workbenchGoogleV excludeAll(excludeWorkbenchUtil, excludeWorkbenchModel)
   val workbenchNotifications: ModuleID =  "org.broadinstitute.dsde.workbench" %% "workbench-notifications" % workbenchNotificationsV excludeAll(excludeWorkbenchGoogle, excludeWorkbenchModel)
@@ -90,6 +92,7 @@ object Dependencies {
     workbenchGoogle,
     workbenchNotifications,
     workbenchGoogleTests,
+    workbenchMetrics,
 
     unboundid
   )
