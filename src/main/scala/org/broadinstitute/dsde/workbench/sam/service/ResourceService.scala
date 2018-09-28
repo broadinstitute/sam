@@ -140,8 +140,8 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
   def listUserAccessPolicies(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId): IO[Set[UserPolicyResponse]] = for{
       rt <- IO.fromEither(resourceTypes.get(resourceTypeName).toRight(new WorkbenchException(s"missing configration for resourceType ${resourceTypeName}")))
       isConstrained = rt.isAuthDomainConstrainable
-      ridAndPolcyName <- accessPolicyDAO.listAccessPolicies(resourceTypeName, userId) // List all policies of a given resourceType the user is a member of
-      rids = ridAndPolcyName.map(_.resourceId)
+      ridAndPolicyName <- accessPolicyDAO.listAccessPolicies(resourceTypeName, userId) // List all policies of a given resourceType the user is a member of
+      rids = ridAndPolicyName.map(_.resourceId)
 
 
       resources <- if(isConstrained) accessPolicyDAO.listResourceWithAuthdomains(resourceTypeName, rids) else IO.pure(Set.empty)
@@ -149,17 +149,20 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
 
       allAuthDomainResourcesUserIsMemberOf <- if(isConstrained) accessPolicyDAO.listAccessPolicies(ManagedGroupService.managedGroupTypeName, userId) else IO.pure(Set.empty[ResourceIdAndPolicyName])
 
-      results = ridAndPolcyName.toList.map{
+      results = ridAndPolicyName.map{
         rnp =>
           if(isConstrained){
-            for{
-              authDomains <- authDomainMap.get(rnp.resourceId).toRight(s"no auth domain found for ${rnp.resourceId}")
-              userNotMemberOf = authDomains.filterNot(x => allAuthDomainResourcesUserIsMemberOf.map(_.resourceId).contains(ResourceId(x.value)))
-            } yield UserPolicyResponse(rnp.resourceId, rnp.accessPolicyName, authDomains, userNotMemberOf)
-          } else UserPolicyResponse(rnp.resourceId, rnp.accessPolicyName, Set.empty, Set.empty).asRight[String]
+            authDomainMap.get(rnp.resourceId) match{
+              case Some(authDomains) =>
+                val userNotMemberOf = authDomains.filterNot(x => allAuthDomainResourcesUserIsMemberOf.map(_.resourceId).contains(ResourceId(x.value)))
+                Some(UserPolicyResponse(rnp.resourceId, rnp.accessPolicyName, authDomains, userNotMemberOf))
+              case None =>
+                logger.error(s"ldap has corrupted data. ${rnp.resourceId} should have auth domains defined")
+                none[UserPolicyResponse]
+            }
+          } else UserPolicyResponse(rnp.resourceId, rnp.accessPolicyName, Set.empty, Set.empty).some
       }
-      listUserPolicyResponse <- IO.fromEither(results.parSequence.leftMap(s => new WorkbenchException(s)))
-    } yield listUserPolicyResponse.toSet
+    } yield results.flatten
 
   // IF Resource ID reuse is allowed (as defined by the Resource Type), then we can delete the resource
   // ELSE Resource ID reuse is not allowed, and we enforce this by deleting all policies associated with the Resource,

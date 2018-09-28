@@ -62,9 +62,8 @@ object Boot extends App with LazyLogging {
 
     val resourceTypes = config.as[Map[String, ResourceType]]("resourceTypes").values.toSet
     val resourceTypeMap = resourceTypes.map(rt => rt.name -> rt).toMap
-    def accessPolicyDAO(blockingEc: ExecutionContext) = new LdapAccessPolicyDAO(ldapConnectionPool, directoryConfig, blockingEc)
 
-    def cloudExt(accessPolicyDAO: AccessPolicyDAO) = googleServicesConfigOption match {
+    def createCloudExt(accessPolicyDAO: AccessPolicyDAO) = googleServicesConfigOption match {
       case Some(googleServicesConfig) =>
         val petServiceAccountConfig = config.as[PetServiceAccountConfig]("petServiceAccount")
 
@@ -88,7 +87,7 @@ object Boot extends App with LazyLogging {
     }
 
 
-    def samRoutes(cloudExtensions: CloudExtensions, accessPolicyDAO: AccessPolicyDAO): (SamRoutes, UserService, ResourceService, StatusService) = {
+    def createSamRoutes(cloudExtensions: CloudExtensions, accessPolicyDAO: AccessPolicyDAO): (SamRoutes, UserService, ResourceService, StatusService) = {
       // TODO - https://broadinstitute.atlassian.net/browse/GAWB-3603
       // This should JUST get the value from "emailDomain", but for now we're keeping the backwards compatibility code to
       // fall back to getting the "googleServices.appsDomain"
@@ -99,14 +98,14 @@ object Boot extends App with LazyLogging {
       val statusService = new StatusService(directoryDAO, cloudExtensions, 10 seconds)
       val managedGroupService = new ManagedGroupService(resourceService, resourceTypeMap, accessPolicyDAO, directoryDAO, cloudExtensions, emailDomain)
 
-      val samR = cloudExtensions match {
+      val samRoutes = cloudExtensions match {
         case googleExt: GoogleExtensions => new SamRoutes(resourceService, userService, statusService, managedGroupService, config.as[SwaggerConfig]("swagger"), directoryDAO) with StandardUserInfoDirectives with GoogleExtensionRoutes {
             val googleExtensions = googleExt
             val cloudExtensions = googleExt
           }
         case _ => new SamRoutes(resourceService, userService, statusService, managedGroupService, config.as[SwaggerConfig]("swagger"), directoryDAO) with StandardUserInfoDirectives with NoExtensionRoutes
       }
-      (samR, userService, resourceService, statusService)
+      (samRoutes, userService, resourceService, statusService)
     }
 
     for {
@@ -122,12 +121,12 @@ object Boot extends App with LazyLogging {
       io = ExecutionContexts.blockingThreadPool.use{
         blockingEc =>
           implicit val cs = IO.contextShift(scala.concurrent.ExecutionContext.Implicits.global)
-          val accessPolicyD = accessPolicyDAO(blockingEc)
-          val cloudExtention = cloudExt(accessPolicyD)
-          val (sRoutes, userService, resourceService, statusService) = samRoutes(cloudExtention, accessPolicyD)
+          val accessPolicyDao = new LdapAccessPolicyDAO(ldapConnectionPool, directoryConfig, blockingEc)
+          val cloudExtention = createCloudExt(accessPolicyDao)
+          val (sRoutes, userService, resourceService, statusService) = createSamRoutes(cloudExtention, accessPolicyDao)
 
           for{
-            _ <- resourceTypes.toList.map(rt => accessPolicyD.createResourceType(rt.name)).parSequence.handleErrorWith{
+            _ <- resourceTypes.toList.map(rt => accessPolicyDao.createResourceType(rt.name)).parSequence.handleErrorWith{
               case t: Throwable => IO(logger.error("FATAL - failure starting http server", t)) *> IO.raiseError(t)
             }
 
