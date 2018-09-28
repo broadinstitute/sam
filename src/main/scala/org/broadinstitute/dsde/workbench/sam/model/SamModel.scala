@@ -113,3 +113,8 @@ ldap but it felt unnatural.
 @Lenses case class ManagedGroupAccessInstructions(value: String) extends ValueObject
 
 @Lenses case class GroupSyncResponse(lastSyncDate: String, email: WorkbenchEmail)
+
+object SamLenses{
+  val resourceInAccessPolicy = AccessPolicy.id composeLens ResourceAndPolicyName.resource
+  val resourceTypeNameInAccessPolicy = resourceInAccessPolicy composeLens Resource.resourceTypeName
+}

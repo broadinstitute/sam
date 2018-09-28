@@ -588,8 +588,27 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     }
   }
 
+  it should "return no auth domains where there is a resource in a constrainable type but does not have any auth domains" in {
+    val policyWithConstrainable = SamLenses.resourceTypeNameInAccessPolicy.set(constrainableResourceType.name)(genPolicy.sample.get)
+    val policy = (SamLenses.resourceInAccessPolicy composeLens Resource.authDomain).set(Set.empty)(policyWithConstrainable)
+    val resource = policy.id.resource
+    val viewPolicyName = AccessPolicyName(constrainableReaderRoleName.value)
+
+    val res = for{
+      _ <- constrainableService.createResourceType(constrainableResourceType).unsafeToFuture()
+      _ <- constrainableService.createResourceType(managedGroupResourceType).unsafeToFuture()  // make sure managed groups in auth domain set are created. dummyUserInfo will be member of the created resourceId
+      _ <- Future.traverse(resource.authDomain)(a => managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))
+      // create resource that dummyUserInfo is a member of for constrainableResourceType
+      _ <- constrainableService.createResource(constrainableResourceType, resource.resourceId, Map(viewPolicyName -> constrainablePolicyMembership), resource.authDomain, dummyUserInfo)
+      r <- constrainableService.listUserAccessPolicies(constrainableResourceType.name, dummyUserInfo.userId).unsafeToFuture()
+    } yield r
+
+    val expected = Set(UserPolicyResponse(resource.resourceId, viewPolicyName, Set.empty, Set.empty))
+    res.futureValue(Timeout(Span(10, Seconds))) shouldBe expected
+  }
+
   it should "list required authDomains if constrainable" in {
-    val policy = (AccessPolicy.id composeLens ResourceAndPolicyName.resource composeLens Resource.resourceTypeName).set(constrainableResourceType.name)(genPolicy.sample.get)
+    val policy = SamLenses.resourceTypeNameInAccessPolicy.set(constrainableResourceType.name)(genPolicy.sample.get)
     val resource = policy.id.resource
     val viewPolicyName = AccessPolicyName(constrainableReaderRoleName.value)
 
@@ -608,7 +627,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
 
   it should "list required authDomains and authDomains user is not a member of if constrainable" in {
     val user = genUserInfo.sample.get
-    val policy = (AccessPolicy.id composeLens ResourceAndPolicyName.resource composeLens Resource.resourceTypeName).set(constrainableResourceType.name)(genPolicy.sample.get)
+    val policy = SamLenses.resourceTypeNameInAccessPolicy.set(constrainableResourceType.name)(genPolicy.sample.get)
     val resource = policy.id.resource
     val viewPolicyName = AccessPolicyName(constrainableReaderRoleName.value)
 

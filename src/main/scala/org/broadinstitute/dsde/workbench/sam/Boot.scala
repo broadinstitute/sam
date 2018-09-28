@@ -30,7 +30,7 @@ import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.ExecutionContexts
 import org.broadinstitute.dsde.workbench.util.DelegatePool
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.language.postfixOps
 
@@ -126,7 +126,7 @@ object Boot extends App with LazyLogging {
           val (sRoutes, userService, resourceService, statusService) = createSamRoutes(cloudExtention, accessPolicyDao)
 
           for{
-            _ <- resourceTypes.toList.map(rt => accessPolicyDao.createResourceType(rt.name)).parSequence.handleErrorWith{
+            _ <- resourceTypes.toList.parTraverse(rt => accessPolicyDao.createResourceType(rt.name)).handleErrorWith{
               case t: Throwable => IO(logger.error("FATAL - failure starting http server", t)) *> IO.raiseError(t)
             }
 

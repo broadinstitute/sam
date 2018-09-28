@@ -93,7 +93,7 @@ class LdapAccessPolicyDAOSpec extends AsyncFlatSpec with ScalaFutures with Match
     val res = for{
       _ <- IO.fromFuture(IO(setup()))
       _ <- dao.createResourceType(policy.id.resource.resourceTypeName)
-      i <- dao.createResource(policy.id.resource)
+      _ <- dao.createResource(policy.id.resource)
       r <- dao.listResourceWithAuthdomains(policy.id.resource.resourceTypeName, Set(policy.id.resource.resourceId))
     } yield r
 
