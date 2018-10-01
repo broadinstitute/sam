@@ -3,11 +3,12 @@
 configure.rb
 /config/
 
-# sbt specific
+# build specific
 .sbtopts
 .cache/
 .history/
 .lib/
+.bloop/
 dist/*
 target/
 lib_managed/
