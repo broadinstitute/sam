@@ -29,7 +29,7 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
     validateGroupName(groupId.value)
     for {
       managedGroup <- resourceService.createResource(managedGroupType, groupId, Map(adminPolicy, memberPolicy, adminNotificationPolicy), Set.empty, userInfo)
-      policies <- accessPolicyDAO.listAccessPolicies(managedGroup)
+      policies <- accessPolicyDAO.listAccessPolicies(managedGroup).unsafeToFuture()
       workbenchGroup <- createAggregateGroup(managedGroup, policies, accessInstructionsOpt)
       _ <- cloudExtensions.publishGroup(workbenchGroup.id)
     } yield managedGroup
@@ -88,7 +88,7 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
 
   def listGroups(userId: WorkbenchUserId): Future[Set[ManagedGroupMembershipEntry]] = {
     for {
-      ripns <- accessPolicyDAO.listAccessPolicies(ManagedGroupService.managedGroupTypeName, userId)
+      ripns <- accessPolicyDAO.listAccessPolicies(ManagedGroupService.managedGroupTypeName, userId).unsafeToFuture()
       emailLookup <- directoryDAO.batchLoadGroupEmail(ripns.map(ripn => WorkbenchGroupName(ripn.resourceId.value)))
     } yield {
       val emailLookupMap = emailLookup.toMap

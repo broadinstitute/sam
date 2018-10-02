@@ -60,14 +60,14 @@ class MockAccessPolicyDAOSpec extends FlatSpec with Matchers with TestSupport wi
     val shared = sharedFixtures
     val dirURI = new URI(directoryConfig.directoryUrl)
     val connectionPool = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
-    val ldapPolicyDao = new LdapAccessPolicyDAO(connectionPool, directoryConfig)
+    val ldapPolicyDao = new LdapAccessPolicyDAO(connectionPool, directoryConfig, TestSupport.blockingEc)
     val ldapDirDao = new LdapDirectoryDAO(connectionPool, directoryConfig)
     val allUsersGroup: WorkbenchGroup = TestSupport.runAndWait(NoExtensions.getOrCreateAllUsersGroup(ldapDirDao))
 
     val resourceService = new ResourceService(shared.resourceTypes, ldapPolicyDao, ldapDirDao, NoExtensions, shared.emailDomain)
     val userService = new UserService(ldapDirDao, NoExtensions)
     val managedGroupService = new ManagedGroupService(resourceService, shared.resourceTypes, ldapPolicyDao, ldapDirDao, NoExtensions, shared.emailDomain)
-    shared.resourceTypes foreach {case (_, resourceType) => runAndWait(resourceService.createResourceType(resourceType)) }
+    shared.resourceTypes foreach {case (_, resourceType) => resourceService.createResourceType(resourceType).unsafeRunSync() }
   }
 
   def mockServicesFixture = new {

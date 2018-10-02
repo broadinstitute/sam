@@ -1,5 +1,8 @@
 package org.broadinstitute.dsde.workbench.sam
 
+import java.net.URI
+import java.util.concurrent.Executors
+
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.headers.RawHeader
 import akka.stream.Materializer
@@ -21,6 +24,8 @@ import org.scalatest.prop.{Configuration, PropertyChecks}
 import org.scalatest.{FlatSpec, Matchers}
 import StandardUserInfoDirectives._
 import cats.kernel.Eq
+import org.scalatest.concurrent.PatienceConfiguration.Timeout
+import org.scalatest.time.{Seconds, Span}
 
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Awaitable, ExecutionContext}
@@ -30,6 +35,7 @@ import scala.concurrent.{Await, Awaitable, ExecutionContext}
   */
 trait TestSupport{
   def runAndWait[T](f: Awaitable[T]): T = Await.result(f, Duration.Inf)
+  implicit val futureTimeout = Timeout(Span(10, Seconds))
 }
 
 trait PropertyBasedTesting extends FlatSpec with PropertyChecks with Configuration with Matchers {
@@ -37,6 +43,8 @@ trait PropertyBasedTesting extends FlatSpec with PropertyChecks with Configurati
 }
 
 object TestSupport extends TestSupport{
+  private val executor = Executors.newCachedThreadPool()
+  val blockingEc = ExecutionContext.fromExecutor(executor)
   implicit val eqWorkbenchExceptionErrorReport: Eq[WorkbenchExceptionWithErrorReport] = new Eq[WorkbenchExceptionWithErrorReport]{
     override def eqv(x: WorkbenchExceptionWithErrorReport, y: WorkbenchExceptionWithErrorReport): Boolean = x.errorReport.statusCode == y.errorReport.statusCode && x.errorReport.message == y.errorReport.message
   }
@@ -45,6 +53,10 @@ object TestSupport extends TestSupport{
   val googleServicesConfig = config.as[GoogleServicesConfig]("googleServices")
   val configResourceTypes = config.as[Map[String, ResourceType]]("resourceTypes").values.map(rt => rt.name -> rt).toMap
   val defaultUserEmail = WorkbenchEmail("newuser@new.com")
+  val directoryConfig = config.as[DirectoryConfig]("directory")
+  val schemaLockConfig = config.as[SchemaLockConfig]("schemaLock")
+  val dirURI = new URI(directoryConfig.directoryUrl)
+
   def proxyEmail(workbenchUserId: WorkbenchUserId) = WorkbenchEmail(s"PROXY_$workbenchUserId@${googleServicesConfig.appsDomain}")
   def googleSubjectIdHeaderWithId(googleSubjectId: GoogleSubjectId) = RawHeader(googleSubjectIdHeader, googleSubjectId.value)
   def genGoogleSubjectId(): GoogleSubjectId = GoogleSubjectId(genRandom(System.currentTimeMillis()))

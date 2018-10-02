@@ -1,5 +1,6 @@
 package org.broadinstitute.dsde.workbench.sam.openam
 import akka.http.scaladsl.model.StatusCodes
+import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.model._
@@ -14,11 +15,9 @@ import scala.concurrent.Future
   */
 class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdentity, WorkbenchGroup] = new TrieMap()) extends AccessPolicyDAO {
 
-  override def createResourceType(resourceTypeName: ResourceTypeName): Future[ResourceTypeName] = Future {
-    resourceTypeName
-  }
+  override def createResourceType(resourceTypeName: ResourceTypeName): IO[ResourceTypeName] = IO.pure(resourceTypeName)
 
-  override def createResource(resource: Resource): Future[Resource] = Future {
+  override def createResource(resource: Resource): IO[Resource] = IO {
     if (policies.exists {
       case (ResourceAndPolicyName(`resource`, _), _) => true
       case _ => false
@@ -26,7 +25,7 @@ class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdenti
     resource
   }
 
-  override def deleteResource(resource: Resource): Future[Unit] = Future {
+  override def deleteResource(resource: Resource): IO[Unit] = IO {
     val toRemove = policies.collect {
       case (riapn@ResourceAndPolicyName(`resource`, _), policy: AccessPolicy) => riapn
     }.toSet
@@ -34,18 +33,18 @@ class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdenti
     policies -- toRemove
   }
 
-  override def loadResourceAuthDomain(resource: Resource): Future[Set[WorkbenchGroupName]] = Future.successful(Set.empty)
+  override def loadResourceAuthDomain(resource: Resource): IO[Set[WorkbenchGroupName]] = IO.pure(Set.empty)
 
-  override def createPolicy(policy: AccessPolicy): Future[AccessPolicy] = Future {
+  override def createPolicy(policy: AccessPolicy): IO[AccessPolicy] = IO {
     policies += policy.id -> policy
     policy
   }
 
-  override def deletePolicy(policy: AccessPolicy): Future[Unit] = Future {
+  override def deletePolicy(policy: AccessPolicy): IO[Unit] = IO {
     policies -= policy.id
   }
 
-  override def listAccessPolicies(resourceTypeName: ResourceTypeName, user: WorkbenchUserId): Future[Set[ResourceIdAndPolicyName]] = Future {
+  override def listAccessPolicies(resourceTypeName: ResourceTypeName, user: WorkbenchUserId): IO[Set[ResourceIdAndPolicyName]] = IO {
     policies.collect {
       case (riapn@ResourceAndPolicyName(Resource(`resourceTypeName`, _, _), _), accessPolicy) if accessPolicy.members.contains(user) => ResourceIdAndPolicyName(riapn.resource.resourceId, riapn.accessPolicyName)
     }.toSet
@@ -58,12 +57,12 @@ class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdenti
         case Seq(policy) => Option(policy)
         case _ => throw new WorkbenchException(s"More than one policy found for ${resourceAndPolicyName.accessPolicyName}")
       }
-    }
+    }.unsafeToFuture()
   }
 
-  override def overwritePolicy(newPolicy: AccessPolicy): Future[AccessPolicy] = createPolicy(newPolicy)
+  override def overwritePolicy(newPolicy: AccessPolicy): Future[AccessPolicy] = createPolicy(newPolicy).unsafeToFuture()
 
-  override def listAccessPolicies(resource: Resource): Future[Set[AccessPolicy]] = Future {
+  override def listAccessPolicies(resource: Resource): IO[Set[AccessPolicy]] = IO {
     policies.collect {
       case (riapn@ResourceAndPolicyName(`resource`, _), policy: AccessPolicy) => policy
     }.toSet
@@ -79,4 +78,8 @@ class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdenti
   override def listFlattenedPolicyMembers(resourceAndPolicyName: ResourceAndPolicyName): Future[Set[WorkbenchUserId]] = {
     Future.successful(Set.empty)
   }
+  override def listResourceWithAuthdomains(
+      resourceTypeName: ResourceTypeName,
+      resourceId: Set[ResourceId])
+    : IO[Set[Resource]] = IO.pure(Set.empty)
 }

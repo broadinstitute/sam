@@ -20,6 +20,7 @@ import scala.util.{Failure, Success, Try}
 object JndiSchemaDAO {
   object Attr {
     val resourceId = "resourceId"
+    val objectClass = "objectclass"
     val resourceType = "resourceType"
     val subject = "subject"
     val action = "action"

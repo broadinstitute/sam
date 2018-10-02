@@ -12,6 +12,8 @@ object Dependencies {
   val workbenchModelV  = "0.12-a19203d"
   val workbenchGoogleV = "0.16-0245949"
   val workbenchNotificationsV = "0.1-f2a0020"
+  val monocleVersion = "1.5.0-cats"
+  val catsEffectVersion = "1.0.0"
 
   val excludeAkkaActor =        ExclusionRule(organization = "com.typesafe.akka", name = "akka-actor_2.12")
   val excludeWorkbenchUtil =    ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-util_2.12")
@@ -40,7 +42,9 @@ object Dependencies {
 
   val googleOAuth2: ModuleID = "com.google.auth" % "google-auth-library-oauth2-http" % "0.9.0"
 
-  val cats: ModuleID =              "org.typelevel"       %% "cats-core"                  % "1.3.1"
+  val catseffect: ModuleID =  "org.typelevel" %% "cats-effect" % catsEffectVersion
+  val monocle: ModuleID = "com.github.julien-truffaut" %%  "monocle-core"  % monocleVersion
+  val monocleMacro: ModuleID = "com.github.julien-truffaut" %%  "monocle-macro" % monocleVersion
 
   val scalaTest: ModuleID =       "org.scalatest" %% "scalatest"    % scalaTestV % "test"
   val mockito: ModuleID =         "org.mockito"    % "mockito-core" % "2.7.22"   % "test"
@@ -79,7 +83,9 @@ object Dependencies {
 
     googleOAuth2,
 
-    cats,
+    catseffect,
+    monocle,
+    monocleMacro,
 
     scalaTest,
     mockito,
