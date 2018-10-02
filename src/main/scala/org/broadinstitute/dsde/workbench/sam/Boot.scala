@@ -33,20 +33,20 @@ import org.broadinstitute.dsde.workbench.util.DelegatePool
 import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.language.postfixOps
+import scala.concurrent.ExecutionContext.Implicits.global
 
 object Boot extends App with LazyLogging {
 
-  private def startup(): Unit = {
+  private def startup(): Future[Unit] = {
     val config = ConfigFactory.load()
-
-    val directoryConfig = config.as[DirectoryConfig]("directory")
-    val googleServicesConfigOption = config.getAs[GoogleServicesConfig]("googleServices")
-    val schemaLockConfig = config.as[SchemaLockConfig]("schemaLock")
 
     // we need an ActorSystem to host our application in
     implicit val system = ActorSystem("sam")
     implicit val materializer = ActorMaterializer()
-    import scala.concurrent.ExecutionContext.Implicits.global
+
+    val directoryConfig = config.as[DirectoryConfig]("directory")
+    val googleServicesConfigOption = config.getAs[GoogleServicesConfig]("googleServices")
+    val schemaLockConfig = config.as[SchemaLockConfig]("schemaLock")
 
     val dirURI = new URI(directoryConfig.directoryUrl)
     val (socketFactory, defaultPort) = dirURI.getScheme.toLowerCase match {
@@ -132,9 +132,11 @@ object Boot extends App with LazyLogging {
 
             _ <- IO.fromFuture(IO(cloudExtention.onBoot(SamApplication(userService, resourceService, statusService))))
 
-            _ <- IO.fromFuture(IO(Http().bindAndHandle(sRoutes.route, "0.0.0.0", 8080))).handleErrorWith{
+            binding <- IO.fromFuture(IO(Http().bindAndHandle(sRoutes.route, "0.0.0.0", 8080))).handleErrorWith{
               case t: Throwable => IO(logger.error("FATAL - failure starting http server", t)) *> IO.raiseError(t)
             }
+            _ <- IO.fromFuture(IO(binding.whenTerminated))
+            _ <- IO(system.terminate())
           } yield ()
       }
 
