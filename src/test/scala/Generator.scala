@@ -47,6 +47,12 @@ object Generator {
     userId = genWorkbenchUserId(System.currentTimeMillis())
   }yield CreateWorkbenchUser(userId, GoogleSubjectId(userId.value), email)
 
+  val genWorkbenchUser = for{
+    email <- genNonPetEmail
+    userId = genWorkbenchUserId(System.currentTimeMillis())
+    googleSubjectId <- Gen.option[GoogleSubjectId](Gen.const(GoogleSubjectId(userId.value)))
+  } yield WorkbenchUser(userId, googleSubjectId, email)
+
   val genInviteUser = for{
     email <- genNonPetEmail
     userId = genWorkbenchUserId(System.currentTimeMillis())
@@ -81,13 +87,18 @@ object Generator {
     authDomains <- genAuthDomains
   } yield Resource(resourceType, id, authDomains)
 
-  val genResourceAndPolicyName: Gen[ResourceAndPolicyName] = for{
-    r <- genResource
+  val genResourceIdentity: Gen[FullyQualifiedResourceId] = for{
+    resourceType <- genResourceTypeName
+    id <- genResourceId
+  } yield model.FullyQualifiedResourceId(resourceType, id)
+
+  val genPolicyIdentity: Gen[FullyQualifiedPolicyId] = for{
+    r <- genResourceIdentity
     policyName <- genAccessPolicyName
-  } yield ResourceAndPolicyName(r, policyName)
+  } yield FullyQualifiedPolicyId(r, policyName)
 
   val genPolicy: Gen[AccessPolicy] = for{
-    id <- genResourceAndPolicyName
+    id <- genPolicyIdentity
     members <- Gen.listOf(genWorkbenchSubject).map(_.toSet)
     email <- genNonPetEmail
     roles <- Gen.listOf(genRoleName).map(_.toSet)

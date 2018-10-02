@@ -4,7 +4,7 @@ package openam
 import java.util.Date
 
 import akka.http.scaladsl.model.StatusCodes
-import cats.effect.IO
+import cats.effect.{ContextShift, IO}
 import cats.implicits._
 import com.unboundid.ldap.sdk._
 import org.broadinstitute.dsde.workbench.model._
@@ -16,10 +16,9 @@ import org.broadinstitute.dsde.workbench.sam.util.LdapSupport
 import cats.implicits._
 
 import scala.collection.JavaConverters._
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.ExecutionContext
 
-class LdapAccessPolicyDAO(protected val ldapConnectionPool: LDAPConnectionPool, protected val directoryConfig: DirectoryConfig, blockingEc: ExecutionContext)(implicit executionContext: ExecutionContext) extends AccessPolicyDAO with DirectorySubjectNameSupport with LdapSupport {
-  val cs = IO.contextShift(executionContext)
+class LdapAccessPolicyDAO(protected val ldapConnectionPool: LDAPConnectionPool, protected val directoryConfig: DirectoryConfig, blockingEc: ExecutionContext)(implicit cs: ContextShift[IO]) extends AccessPolicyDAO with DirectorySubjectNameSupport with LdapSupport {
 
   override def createResourceType(resourceTypeName: ResourceTypeName): IO[ResourceTypeName] = {
     for{
@@ -38,16 +37,16 @@ class LdapAccessPolicyDAO(protected val ldapConnectionPool: LDAPConnectionPool, 
       new Attribute(Attr.resourceType, resource.resourceTypeName.value)
     ) ++ maybeAttribute(Attr.authDomain, resource.authDomain.map(_.value))
 
-    cs.evalOn(blockingEc)(IO(ldapConnectionPool.add(resourceDn(resource), attributes.asJava))).recoverWith{
+    cs.evalOn(blockingEc)(IO(ldapConnectionPool.add(resourceDn(FullyQualifiedResourceId(resource.resourceTypeName, resource.resourceId)), attributes.asJava))).recoverWith{
       case ldape: LDAPException if ldape.getResultCode == ResultCode.ENTRY_ALREADY_EXISTS =>
         IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, "A resource of this type and name already exists")))
     }.map(_ => resource)
   }
 
   // TODO: Method is not tested.  To test properly, we'll probably need a loadResource or getResource method
-  override def deleteResource(resource: Resource): IO[Unit] = IO(ldapConnectionPool.delete(resourceDn(resource)))
+  override def deleteResource(resource: FullyQualifiedResourceId): IO[Unit] = IO(ldapConnectionPool.delete(resourceDn(resource)))
 
-  override def loadResourceAuthDomain(resource: Resource): IO[Set[WorkbenchGroupName]] = {
+  override def loadResourceAuthDomain(resource: FullyQualifiedResourceId): IO[Set[WorkbenchGroupName]] = {
     cs.evalOn(blockingEc)((IO(Option(ldapConnectionPool.getEntry(resourceDn(resource)))))).flatMap {
       case None =>
         IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Resource $resource not found")))
@@ -66,9 +65,9 @@ class LdapAccessPolicyDAO(protected val ldapConnectionPool: LDAPConnectionPool, 
     }
   }
 
-  override def listResourcesConstrainedByGroup(groupId: WorkbenchGroupIdentity): Future[Set[Resource]] = for {
-    res <- Future(ldapSearchStream(resourcesOu, SearchScope.SUB, Filter.createEqualityFilter(Attr.authDomain, groupId.toString))(unmarshalResource))
-    r <- res.parSequence.fold(err => Future.failed(new WorkbenchException(err)), r => Future.successful(r.toSet))
+  override def listResourcesConstrainedByGroup(groupId: WorkbenchGroupIdentity): IO[Set[Resource]] = for {
+    res <- cs.evalOn(blockingEc)(IO(ldapSearchStream(resourcesOu, SearchScope.SUB, Filter.createEqualityFilter(Attr.authDomain, groupId.toString))(unmarshalResource)))
+    r <- res.parSequence.fold(err => IO.raiseError(new WorkbenchException(err)), r => IO.pure(r.toSet))
   } yield r
 
   override def createPolicy(policy: AccessPolicy): IO[AccessPolicy] = {
@@ -84,7 +83,9 @@ class LdapAccessPolicyDAO(protected val ldapConnectionPool: LDAPConnectionPool, 
       maybeAttribute(Attr.role, policy.roles.map(_.value)) ++
       maybeAttribute(Attr.uniqueMember, policy.members.map(subjectDn))
 
-    IO(ldapConnectionPool.add(policyDn(policy.id), attributes.asJava)).map(_ => policy)
+    cs.evalOn(blockingEc)(IO(ldapConnectionPool.add(policyDn(
+      FullyQualifiedPolicyId(
+        FullyQualifiedResourceId(policy.id.resource.resourceTypeName, policy.id.resource.resourceId), policy.id.accessPolicyName)), attributes.asJava)).map(_ => policy))
   }
 
   private def maybeAttribute(attr: String, values: Set[String]): Option[Attribute] = values.toSeq match {
@@ -92,43 +93,42 @@ class LdapAccessPolicyDAO(protected val ldapConnectionPool: LDAPConnectionPool, 
     case _ => Option(new Attribute(attr, values.asJava))
   }
 
-  override def deletePolicy(policy: AccessPolicy): IO[Unit] = IO(
-    ldapConnectionPool.delete(policyDn(policy.id))
-  )
+  override def deletePolicy(policy: FullyQualifiedPolicyId): IO[Unit] = cs.evalOn(blockingEc)(IO(
+    ldapConnectionPool.delete(policyDn(policy))))
 
-  override def loadPolicy(resourceAndPolicyName: ResourceAndPolicyName): Future[Option[AccessPolicy]] = Future {
-    Option(ldapConnectionPool.getEntry(policyDn(resourceAndPolicyName))).map(unmarshalAccessPolicy)
+  override def loadPolicy(resourceAndPolicyName: FullyQualifiedPolicyId): IO[Option[AccessPolicy]] = cs.evalOn(blockingEc) {
+    IO(Option(ldapConnectionPool.getEntry(policyDn(resourceAndPolicyName))).map(unmarshalAccessPolicy))
   }
 
   private def unmarshalAccessPolicy(entry: Entry): AccessPolicy = {
     val policyName = getAttribute(entry, Attr.policy).get
     val resourceTypeName = ResourceTypeName(getAttribute(entry, Attr.resourceType).get)
     val resourceId = ResourceId(getAttribute(entry, Attr.resourceId).get)
-    val resource = Resource(resourceTypeName, resourceId)
     val members = getAttributes(entry, Attr.uniqueMember).map(dnToSubject)
     val roles = getAttributes(entry, Attr.role).map(r => ResourceRoleName(r))
     val actions = getAttributes(entry, Attr.action).map(a => ResourceAction(a))
 
     val email = WorkbenchEmail(getAttribute(entry, Attr.email).get)
 
-    AccessPolicy(ResourceAndPolicyName(resource, AccessPolicyName(policyName)), members, email, roles, actions)
+    AccessPolicy(
+      FullyQualifiedPolicyId(FullyQualifiedResourceId(resourceTypeName, resourceId), AccessPolicyName(policyName)), members, email, roles, actions)
   }
 
-  override def overwritePolicyMembers(id: ResourceAndPolicyName, memberList: Set[WorkbenchSubject]): Future[Unit] = Future {
+  override def overwritePolicyMembers(id: FullyQualifiedPolicyId, memberList: Set[WorkbenchSubject]): IO[Unit] = {
     val memberMod = new Modification(ModificationType.REPLACE, Attr.uniqueMember, memberList.map(subjectDn).toArray:_*)
 
-    ldapConnectionPool.modify(policyDn(id), memberMod)
+    cs.evalOn(blockingEc)(IO(ldapConnectionPool.modify(policyDn(id), memberMod)))
   }
 
-  override def overwritePolicy(newPolicy: AccessPolicy): Future[AccessPolicy] = Future {
+  override def overwritePolicy(newPolicy: AccessPolicy): IO[AccessPolicy] = {
     val memberMod = new Modification(ModificationType.REPLACE, Attr.uniqueMember, newPolicy.members.map(subjectDn).toArray:_*)
     val actionMod = new Modification(ModificationType.REPLACE, Attr.action, newPolicy.actions.map(_.value).toArray:_*)
     val roleMod = new Modification(ModificationType.REPLACE, Attr.role, newPolicy.roles.map(_.value).toArray:_*)
     val dateMod = new Modification(ModificationType.REPLACE, Attr.groupUpdatedTimestamp, formattedDate(new Date()))
 
-    ldapConnectionPool.modify(policyDn(newPolicy.id), memberMod, actionMod, roleMod, dateMod)
-
-    newPolicy
+    val ridPolicyName = FullyQualifiedPolicyId(
+      FullyQualifiedResourceId(newPolicy.id.resource.resourceTypeName, newPolicy.id.resource.resourceId), newPolicy.id.accessPolicyName)
+    cs.evalOn(blockingEc)(IO(ldapConnectionPool.modify(policyDn(ridPolicyName), memberMod, actionMod, roleMod, dateMod))) *> newPolicy.pure[IO]
   }
 
   override def listAccessPolicies(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId): IO[Set[ResourceIdAndPolicyName]] = {
@@ -161,27 +161,35 @@ class LdapAccessPolicyDAO(protected val ldapConnectionPool: LDAPConnectionPool, 
     } yield Resource(resourceTypeName, ResourceId(resourceId), authDomains)
   }
 
-  override def listAccessPolicies(resource: Resource): IO[Set[AccessPolicy]] = IO(
+  override def listAccessPolicies(resource: FullyQualifiedResourceId): IO[Set[AccessPolicy]] = cs.evalOn(blockingEc)(IO(
     ldapSearchStream(resourceDn(resource), SearchScope.SUB, Filter.createEqualityFilter("objectclass", ObjectClass.policy))(unmarshalAccessPolicy).toSet
-  )
+  ))
 
-  override def listAccessPoliciesForUser(resource: Resource, user: WorkbenchUserId): Future[Set[AccessPolicy]] = Future {
-    val result = for {
-      entry <- Option(ldapConnectionPool.getEntry(subjectDn(user), Attr.memberOf))
-      members = getAttributes(entry, Attr.memberOf)
-      memberOfDns <- if(members.isEmpty) None else Some(members)
-    } yield {
-      val memberOfSubjects = memberOfDns.map(dnToSubject)
-      memberOfSubjects.collect {
-        case ripn@ResourceAndPolicyName(`resource`, _) => unmarshalAccessPolicy(ldapConnectionPool.getEntry(subjectDn(ripn)))
+  override def listAccessPoliciesForUser(
+      resource: FullyQualifiedResourceId, user: WorkbenchUserId): IO[Set[AccessPolicy]] = for {
+      entry <- cs.evalOn(blockingEc)(IO(ldapConnectionPool.getEntry(subjectDn(user), Attr.memberOf)))
+      members <- IO.pure(Option(entry).map(e => getAttributes(e, Attr.memberOf).toList))
+      accessPolicies <- members.traverse{
+        policyStrs =>
+          val fullyQualifiedPolicyIds = policyStrs.mapFilter{
+            str =>
+              for{
+                subject <- Either.catchNonFatal(dnToSubject(str)).toOption
+                fullyQualifiedPolicyId <- subject match {
+                  case sub: FullyQualifiedPolicyId if sub.resource.resourceId == resource.resourceId && sub.resource.resourceTypeName == resource.resourceTypeName => Some(sub)
+                  case _ => None
+                }
+              } yield fullyQualifiedPolicyId
+          }
+          val filters = fullyQualifiedPolicyIds.grouped(batchSize).map(
+            batch => Filter.createORFilter(batch.map(r => Filter.createEqualityFilter(Attr.policy, r.accessPolicyName.value)).asJava)).toSeq
+          cs.evalOn(blockingEc)(IO(ldapSearchStream(resourceDn(resource), SearchScope.SUB, filters: _*)(unmarshalAccessPolicy).toSet))
       }
-    }
-    result.getOrElse(Set.empty)
-  }
+    } yield accessPolicies.getOrElse(Set.empty)
 
-  override def listFlattenedPolicyMembers(resourceAndPolicyName: ResourceAndPolicyName): Future[Set[WorkbenchUserId]] = Future {
-    ldapSearchStream(peopleOu, SearchScope.ONE, Filter.createEqualityFilter(Attr.memberOf, policyDn(resourceAndPolicyName)))(unmarshalUser).map(_.id).toSet
-  }
+  override def listFlattenedPolicyMembers(policyId: FullyQualifiedPolicyId): IO[Set[WorkbenchUserId]] = cs.evalOn(blockingEc)(
+    IO(ldapSearchStream(peopleOu, SearchScope.ONE, Filter.createEqualityFilter(Attr.memberOf, policyDn(policyId)))(unmarshalUser).map(_.id).toSet)
+  )
 
   private def unmarshalUser(entry: Entry): WorkbenchUser = {
     val uid = getAttribute(entry, Attr.uid).getOrElse(throw new WorkbenchException(s"${Attr.uid} attribute missing"))

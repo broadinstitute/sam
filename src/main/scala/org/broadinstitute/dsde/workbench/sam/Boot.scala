@@ -43,6 +43,7 @@ object Boot extends App with LazyLogging {
     // we need an ActorSystem to host our application in
     implicit val system = ActorSystem("sam")
     implicit val materializer = ActorMaterializer()
+    implicit val cs = IO.contextShift(scala.concurrent.ExecutionContext.global)
 
     val directoryConfig = config.as[DirectoryConfig]("directory")
     val googleServicesConfigOption = config.getAs[GoogleServicesConfig]("googleServices")
