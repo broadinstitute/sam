@@ -62,11 +62,6 @@ object Dependencies {
   val rootDependencies = Seq(
     // proactively pull in latest versions of Jackson libs, instead of relying on the versions
     // specified as transitive dependencies, due to OWASP DependencyCheck warnings for earlier versions.
-
-    jacksonAnnotations,
-    jacksonDatabind,
-    jacksonCore,
-
     logbackClassic,
     ravenLogback,
     scalaLogging,
