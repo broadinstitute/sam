@@ -2,7 +2,7 @@ import Dependencies._
 import Merging._
 import Testing._
 import Version._
-import com.lucidchart.sbt.scalafmt.ScalafmtCorePlugin.autoImport.{scalafmtOnCompile, scalafmtVersion}
+import com.lucidchart.sbt.scalafmt.ScalafmtCorePlugin.autoImport.scalafmtOnCompile
 import sbt.Keys._
 import sbt._
 import sbtassembly.AssemblyPlugin.autoImport._

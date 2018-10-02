@@ -8,8 +8,13 @@ object Testing {
   val validDirectoryUrlSetting = validDirectoryUrl := {
     val setting = sys.props.getOrElse("directory.url", "")
     if (setting.length == 0) {
-      val log = streams.value.log
-      log.error("directory.url not set")
+      Def.taskDyn{
+        streams.map{
+          str =>
+            str.log.error("directory.url not set")
+        }
+      }
+
       sys.exit()
     }
   }
@@ -17,8 +22,12 @@ object Testing {
   val validDirectoryPasswordSetting = validDirectoryPassword := {
     val setting = sys.props.getOrElse("directory.password", "")
     if (setting.length == 0) {
-      val log = streams.value.log
-      log.error("directory.password not set")
+      Def.taskDyn{
+        streams.map{
+          str =>
+            str.log.error("directory.password not set")
+        }
+      }
       sys.exit()
     }
   }
@@ -61,8 +70,8 @@ object Testing {
 
     parallelExecution in Test := false,
 	
-    (test in Test) <<= (test in Test) dependsOn(validDirectoryUrl, validDirectoryPassword),
-    (testOnly in Test) <<= (testOnly in Test) dependsOn(validDirectoryUrl, validDirectoryPassword)
+    (test in Test) := ((test in Test).dependsOn(validDirectoryUrl, validDirectoryPassword)).value,
+    (testOnly in Test) := ((testOnly in Test) dependsOn(validDirectoryUrl, validDirectoryPassword)).inputTaskValue.evaluated
 
   )
 

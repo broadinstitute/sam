@@ -15,11 +15,13 @@ before_install:
   - sh docker/run-opendj.sh start
 
 script:
-  - SBT_OPTS=-Xmx3g sbt clean -Denv.type=test -Ddirectory.url=ldap://localhost:3389 -Ddirectory.password=testtesttest "test-only -- -n org.broadinstitute.tags.SchemaInit"
+  - export SBT_OPTS="-J-Xmx3g -Denv.type=test -Ddirectory.url=ldap://localhost:3389 -Ddirectory.password=testtesttest"
+  - sbt clean "testOnly -- -n org.broadinstitute.tags.SchemaInit"
   - docker restart opendj
   - sleep 40
-  - SBT_OPTS=-Xmx3g sbt coverage -Denv.type=test -Ddirectory.url=ldap://localhost:3389 -Ddirectory.password=testtesttest "test-only -- -l org.broadinstitute.tags.SchemaInit" coverageReport
+  - sbt coverage "testOnly -- -l org.broadinstitute.tags.SchemaInit" coverageReport
 
 after_success:
-  - SBT_OPTS=-Xmx3g sbt coveralls
+  - export SBT_OPTS="-J-Xmx3g"
+  - sbt coveralls
   - sh docker/run-opendj.sh stop
