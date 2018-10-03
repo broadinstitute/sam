@@ -3,6 +3,8 @@ package org.broadinstitute.dsde.workbench.sam.service
 import java.util.UUID
 
 import akka.http.scaladsl.model.StatusCodes
+import cats.effect.IO
+import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam._
@@ -17,6 +19,7 @@ import scala.util.Success
   * Created by mbemis on 5/22/17.
   */
 class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceType], private val accessPolicyDAO: AccessPolicyDAO, private val directoryDAO: DirectoryDAO, private val cloudExtensions: CloudExtensions, private val emailDomain: String)(implicit val executionContext: ExecutionContext) extends LazyLogging {
+  implicit val cs = IO.contextShift(executionContext) //for running IOs in paralell
 
   private case class ValidatableAccessPolicy(policyName: AccessPolicyName, emailsToSubjects: Map[WorkbenchEmail, Option[WorkbenchSubject]], roles: Set[ResourceRoleName], actions: Set[ResourceAction])
 
@@ -28,7 +31,7 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     Future.successful(resourceTypes.get(name))
   }
 
-  def createResourceType(resourceType: ResourceType): Future[ResourceTypeName] = {
+  def createResourceType(resourceType: ResourceType): IO[ResourceTypeName] = {
     accessPolicyDAO.createResourceType(resourceType.name)
   }
 
@@ -76,7 +79,7 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     */
   private def persistResource(resourceType: ResourceType, resourceId: ResourceId, policies: Set[ValidatableAccessPolicy], authDomain: Set[WorkbenchGroupName]) = {
     for {
-      resource <- accessPolicyDAO.createResource(Resource(resourceType.name, resourceId, authDomain))
+      resource <- accessPolicyDAO.createResource(Resource(resourceType.name, resourceId, authDomain)).unsafeToFuture()
       _ <- Future.traverse(policies)(createOrUpdatePolicy(resource, _))
     } yield resource
   }
@@ -123,7 +126,7 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
   }
 
   def loadResourceAuthDomain(resource: Resource): Future[Set[WorkbenchGroupName]] = {
-    accessPolicyDAO.loadResourceAuthDomain(resource)
+    accessPolicyDAO.loadResourceAuthDomain(resource).unsafeToFuture()
   }
 
   def createPolicy(resourceAndPolicyName: ResourceAndPolicyName, members: Set[WorkbenchSubject], roles: Set[ResourceRoleName], actions: Set[ResourceAction]): Future[AccessPolicy] = {
@@ -131,12 +134,35 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
   }
 
   def createPolicy(resourceAndPolicyName: ResourceAndPolicyName, members: Set[WorkbenchSubject], email: WorkbenchEmail, roles: Set[ResourceRoleName], actions: Set[ResourceAction]): Future[AccessPolicy] = {
-    accessPolicyDAO.createPolicy(AccessPolicy(resourceAndPolicyName, members, email, roles, actions))
+    accessPolicyDAO.createPolicy(AccessPolicy(resourceAndPolicyName, members, email, roles, actions)).unsafeToFuture()
   }
 
-  def listUserAccessPolicies(resourceType: ResourceType, userInfo: UserInfo): Future[Set[ResourceIdAndPolicyName]] = {
-    accessPolicyDAO.listAccessPolicies(resourceType.name, userInfo.userId)
-  }
+  def listUserAccessPolicies(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId): IO[Set[UserPolicyResponse]] = for{
+      rt <- IO.fromEither(resourceTypes.get(resourceTypeName).toRight(new WorkbenchException(s"missing configration for resourceType ${resourceTypeName}")))
+      isConstrained = rt.isAuthDomainConstrainable
+      ridAndPolicyName <- accessPolicyDAO.listAccessPolicies(resourceTypeName, userId) // List all policies of a given resourceType the user is a member of
+      rids = ridAndPolicyName.map(_.resourceId)
+
+
+      resources <- if(isConstrained) accessPolicyDAO.listResourceWithAuthdomains(resourceTypeName, rids) else IO.pure(Set.empty)
+      authDomainMap = resources.map(x => x.resourceId -> x.authDomain).toMap
+
+      allAuthDomainResourcesUserIsMemberOf <- if(isConstrained) accessPolicyDAO.listAccessPolicies(ManagedGroupService.managedGroupTypeName, userId) else IO.pure(Set.empty[ResourceIdAndPolicyName])
+
+      results = ridAndPolicyName.map{
+        rnp =>
+          if(isConstrained){
+            authDomainMap.get(rnp.resourceId) match{
+              case Some(authDomains) =>
+                val userNotMemberOf = authDomains.filterNot(x => allAuthDomainResourcesUserIsMemberOf.map(_.resourceId).contains(ResourceId(x.value)))
+                Some(UserPolicyResponse(rnp.resourceId, rnp.accessPolicyName, authDomains, userNotMemberOf))
+              case None =>
+                logger.error(s"ldap has corrupted data. ${rnp.resourceId} should have auth domains defined")
+                none[UserPolicyResponse]
+            }
+          } else UserPolicyResponse(rnp.resourceId, rnp.accessPolicyName, Set.empty, Set.empty).some
+      }
+    } yield results.flatten
 
   // IF Resource ID reuse is allowed (as defined by the Resource Type), then we can delete the resource
   // ELSE Resource ID reuse is not allowed, and we enforce this by deleting all policies associated with the Resource,
@@ -144,17 +170,17 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
   //      preventing a new Resource with the same ID from being created
   def deleteResource(resource: Resource): Future[Unit] = {
     for {
-      policiesToDelete <- accessPolicyDAO.listAccessPolicies(resource)
+      policiesToDelete <- accessPolicyDAO.listAccessPolicies(resource).unsafeToFuture()
       // remove from cloud extensions first so a failure there does not leave ldap in a bad state
       _ <- Future.traverse(policiesToDelete) { policy => cloudExtensions.onGroupDelete(policy.email) }
-      _ <- Future.traverse(policiesToDelete) {accessPolicyDAO.deletePolicy}
+      _ <- policiesToDelete.toList.parTraverse(accessPolicyDAO.deletePolicy).unsafeToFuture()
       _ <- maybeDeleteResource(resource)
     } yield ()
   }
 
   private def maybeDeleteResource(resource: Resource): Future[Unit] = {
     resourceTypes.get(resource.resourceTypeName) match {
-      case Some(resourceType) if resourceType.reuseIds => accessPolicyDAO.deleteResource(resource)
+      case Some(resourceType) if resourceType.reuseIds => accessPolicyDAO.deleteResource(resource).unsafeToFuture()
       case _ => Future.successful(())
     }
   }
@@ -313,7 +339,7 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
   }
 
   def listResourcePolicies(resource: Resource): Future[Set[AccessPolicyResponseEntry]] = {
-    accessPolicyDAO.listAccessPolicies(resource).flatMap { policies =>
+    accessPolicyDAO.listAccessPolicies(resource).unsafeToFuture().flatMap { policies =>
       Future.sequence(policies.map { policy =>
         loadAccessPolicyWithEmails(policy).map { membership =>
           AccessPolicyResponseEntry(policy.id.accessPolicyName, membership, policy.email)

@@ -47,7 +47,7 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
           withResourceType(ResourceTypeName(resourceTypeName)) { resourceType =>
             pathEndOrSingleSlash {
               get {
-                complete(resourceService.listUserAccessPolicies(resourceType, userInfo))
+                complete(resourceService.listUserAccessPolicies(resourceType.name, userInfo.userId).unsafeToFuture())
               } ~
               post {
                 entity(as[CreateResourceRequest]) { createResourceRequest =>

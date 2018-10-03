@@ -6,9 +6,10 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.api.{CreateWorkbenchUser, InviteUser}
 import org.scalacheck._
 import org.broadinstitute.dsde.workbench.sam.api.StandardUserInfoDirectives._
-import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
+import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.UserService
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
+import SamResourceActions._
 
 object Generator {
   val genNonPetEmail: Gen[WorkbenchEmail] = Gen.alphaStr.map(x => WorkbenchEmail(s"t$x@gmail.com"))
@@ -65,7 +66,37 @@ object Generator {
     email <- genNonPetEmail
   } yield BasicWorkbenchGroup(id, subject, email)
 
+  val genResourceTypeName: Gen[ResourceTypeName] = Gen.oneOf("workspace", "managed-group", "workflow-collection", "caas", "billing-project", "notebook-cluster", "cloud-extension", "dockstore-tool").map(ResourceTypeName.apply)
+  val genResourceTypeNameExcludeManagedGroup: Gen[ResourceTypeName] = Gen.oneOf("workspace", "workflow-collection", "caas", "billing-project", "notebook-cluster", "cloud-extension", "dockstore-tool").map(ResourceTypeName.apply)
+  val genResourceId : Gen[ResourceId] = Gen.uuid.map(x => ResourceId(x.toString))
+  val genAccessPolicyName : Gen[AccessPolicyName] = Gen.oneOf("member", "admin", "admin-notifier").map(AccessPolicyName.apply) //there might be possible values
+  def genAuthDomains: Gen[Set[WorkbenchGroupName]] = Gen.listOfN[ResourceId](3, genResourceId).map(x => x.map(v => WorkbenchGroupName(v.value)).toSet) //make it a list of 3 items so that unit test won't time out
+  val genNonEmptyAuthDomains: Gen[Set[WorkbenchGroupName]] = Gen.nonEmptyListOf[ResourceId](genResourceId).map(x => x.map(v => WorkbenchGroupName(v.value)).toSet)
+  val genRoleName: Gen[ResourceRoleName] = Gen.oneOf("owner", "admin").map(ResourceRoleName.apply) //there might be possible values
+  val genResourceAction: Gen[ResourceAction] = Gen.oneOf(readPolicies, alterPolicies, delete, notifyAdmins, setAccessInstructions)
+
+  val genResource: Gen[Resource] = for{
+    resourceType <- genResourceTypeName
+    id <- genResourceId
+    authDomains <- genAuthDomains
+  } yield Resource(resourceType, id, authDomains)
+
+  val genResourceAndPolicyName: Gen[ResourceAndPolicyName] = for{
+    r <- genResource
+    policyName <- genAccessPolicyName
+  } yield ResourceAndPolicyName(r, policyName)
+
+  val genPolicy: Gen[AccessPolicy] = for{
+    id <- genResourceAndPolicyName
+    members <- Gen.listOf(genWorkbenchSubject).map(_.toSet)
+    email <- genNonPetEmail
+    roles <- Gen.listOf(genRoleName).map(_.toSet)
+    actions <- Gen.listOf(genResourceAction).map(_.toSet)
+  } yield AccessPolicy(id, members, email, roles, actions)
+
   implicit val arbNonPetEmail: Arbitrary[WorkbenchEmail] = Arbitrary(genNonPetEmail)
   implicit val arbOAuth2BearerToken: Arbitrary[OAuth2BearerToken] = Arbitrary(genOAuth2BearerToken)
-  implicit val arbCreateWorkbenchUserAPI: Arbitrary[CreateWorkbenchUser] = Arbitrary(genCreateWorkbenchUser)
+  implicit val arbCreateWorkbenchUser: Arbitrary[CreateWorkbenchUser] = Arbitrary(genCreateWorkbenchUser)
+  implicit val arbPolicy: Arbitrary[AccessPolicy] = Arbitrary(genPolicy)
+  implicit val arbResource: Arbitrary[Resource] = Arbitrary(genResource)
 }

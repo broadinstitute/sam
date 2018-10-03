@@ -59,3 +59,8 @@ scalacOptions ++= Seq(
 
 scalacOptions in (Compile, console) --= Seq("-Ywarn-unused:imports", "-Xfatal-warnings")
 scalacOptions in Test -= "-Ywarn-dead-code" // due to https://github.com/mockito/mockito-scala#notes
+
+addCompilerPlugin("com.olegpy" %% "better-monadic-for" % "0.2.4")
+addCompilerPlugin("org.scalamacros" %% "paradise" % "2.1.0" cross CrossVersion.full)
+
+bloopAggregateSourceDependencies in Global := true

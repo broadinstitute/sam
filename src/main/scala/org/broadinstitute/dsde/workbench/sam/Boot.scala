@@ -6,13 +6,14 @@ import java.net.URI
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import akka.stream.ActorMaterializer
+import cats.data.NonEmptyList
+import cats.effect.IO
+import cats.implicits._
 import com.typesafe.config.ConfigFactory
 import com.typesafe.scalalogging.LazyLogging
 import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import javax.net.SocketFactory
 import javax.net.ssl.SSLContext
-
-import cats.data.NonEmptyList
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
 import org.broadinstitute.dsde.workbench.google.GoogleCredentialModes.{Json, Pem}
@@ -26,26 +27,26 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam._
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.broadinstitute.dsde.workbench.sam.service._
+import org.broadinstitute.dsde.workbench.sam.util.ExecutionContexts
 import org.broadinstitute.dsde.workbench.util.DelegatePool
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.language.postfixOps
+import scala.concurrent.ExecutionContext.Implicits.global
 
 object Boot extends App with LazyLogging {
 
-  private def startup(): Unit = {
-
+  private def startup(): Future[Unit] = {
     val config = ConfigFactory.load()
-
-    val directoryConfig = config.as[DirectoryConfig]("directory")
-    val googleServicesConfigOption = config.getAs[GoogleServicesConfig]("googleServices")
-    val schemaLockConfig = config.as[SchemaLockConfig]("schemaLock")
 
     // we need an ActorSystem to host our application in
     implicit val system = ActorSystem("sam")
     implicit val materializer = ActorMaterializer()
-    import scala.concurrent.ExecutionContext.Implicits.global
+
+    val directoryConfig = config.as[DirectoryConfig]("directory")
+    val googleServicesConfigOption = config.getAs[GoogleServicesConfig]("googleServices")
+    val schemaLockConfig = config.as[SchemaLockConfig]("schemaLock")
 
     val dirURI = new URI(directoryConfig.directoryUrl)
     val (socketFactory, defaultPort) = dirURI.getScheme.toLowerCase match {
@@ -56,14 +57,13 @@ object Boot extends App with LazyLogging {
     val port = if (dirURI.getPort > 0) dirURI.getPort else defaultPort
     val ldapConnectionPool = new LDAPConnectionPool(new LDAPConnection(socketFactory, dirURI.getHost, port, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
 
-    val accessPolicyDAO = new LdapAccessPolicyDAO(ldapConnectionPool, directoryConfig)
     val directoryDAO = new LdapDirectoryDAO(ldapConnectionPool, directoryConfig)
     val schemaDAO = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
     val resourceTypes = config.as[Map[String, ResourceType]]("resourceTypes").values.toSet
     val resourceTypeMap = resourceTypes.map(rt => rt.name -> rt).toMap
 
-    val cloudExt = googleServicesConfigOption match {
+    def createCloudExt(accessPolicyDAO: AccessPolicyDAO) = googleServicesConfigOption match {
       case Some(googleServicesConfig) =>
         val petServiceAccountConfig = config.as[PetServiceAccountConfig]("petServiceAccount")
 
@@ -86,51 +86,62 @@ object Boot extends App with LazyLogging {
       case None => NoExtensions
     }
 
-    // TODO - https://broadinstitute.atlassian.net/browse/GAWB-3603
-    // This should JUST get the value from "emailDomain", but for now we're keeping the backwards compatibility code to
-    // fall back to getting the "googleServices.appsDomain"
-    val emailDomain = config.as[Option[String]]("emailDomain").getOrElse(config.getString("googleServices.appsDomain"))
 
-    val resourceService = new ResourceService(resourceTypeMap, accessPolicyDAO, directoryDAO, cloudExt, emailDomain)
-    val userService = new UserService(directoryDAO, cloudExt)
-    val statusService = new StatusService(directoryDAO, cloudExt, 10 seconds)
-    val managedGroupService = new ManagedGroupService(resourceService, resourceTypeMap, accessPolicyDAO, directoryDAO, cloudExt, emailDomain)
+    def createSamRoutes(cloudExtensions: CloudExtensions, accessPolicyDAO: AccessPolicyDAO): (SamRoutes, UserService, ResourceService, StatusService) = {
+      // TODO - https://broadinstitute.atlassian.net/browse/GAWB-3603
+      // This should JUST get the value from "emailDomain", but for now we're keeping the backwards compatibility code to
+      // fall back to getting the "googleServices.appsDomain"
+      val emailDomain = config.as[Option[String]]("emailDomain").getOrElse(config.getString("googleServices.appsDomain"))
 
-    val samRoutes = cloudExt match {
-      case googleExt: GoogleExtensions => new SamRoutes(resourceService, userService, statusService, managedGroupService, config.as[SwaggerConfig]("swagger"), directoryDAO) with StandardUserInfoDirectives with GoogleExtensionRoutes {
-        val googleExtensions = googleExt
-        val cloudExtensions = googleExt
+      val resourceService = new ResourceService(resourceTypeMap, accessPolicyDAO, directoryDAO, cloudExtensions, emailDomain)
+      val userService = new UserService(directoryDAO, cloudExtensions)
+      val statusService = new StatusService(directoryDAO, cloudExtensions, 10 seconds)
+      val managedGroupService = new ManagedGroupService(resourceService, resourceTypeMap, accessPolicyDAO, directoryDAO, cloudExtensions, emailDomain)
+
+      val samRoutes = cloudExtensions match {
+        case googleExt: GoogleExtensions => new SamRoutes(resourceService, userService, statusService, managedGroupService, config.as[SwaggerConfig]("swagger"), directoryDAO) with StandardUserInfoDirectives with GoogleExtensionRoutes {
+            val googleExtensions = googleExt
+            val cloudExtensions = googleExt
+          }
+        case _ => new SamRoutes(resourceService, userService, statusService, managedGroupService, config.as[SwaggerConfig]("swagger"), directoryDAO) with StandardUserInfoDirectives with NoExtensionRoutes
       }
-      case _ => new SamRoutes(resourceService, userService, statusService, managedGroupService, config.as[SwaggerConfig]("swagger"), directoryDAO) with StandardUserInfoDirectives with NoExtensionRoutes
+      (samRoutes, userService, resourceService, statusService)
     }
 
     for {
-      _ <- schemaDAO.init() recover {
+      _ <- schemaDAO.init().recoverWith{
         case e: WorkbenchException =>
           logger.error("FATAL - could not update schema to latest version. Is the schema lock stuck? See documentation here for more information: [link]")
-          throw e
+          Future.failed(e)
         case t: Throwable =>
           logger.error("FATAL - could not init ldap schema", t)
-          throw t
+          Future.failed(t)
       }
 
-      _ <- Future.traverse(resourceTypes.map(_.name)) { accessPolicyDAO.createResourceType } recover {
-        case t: Throwable =>
-          logger.error("FATAL - unable to init resource types", t)
-          throw t
+      io = ExecutionContexts.blockingThreadPool.use{
+        blockingEc =>
+          implicit val cs = IO.contextShift(scala.concurrent.ExecutionContext.Implicits.global)
+          val accessPolicyDao = new LdapAccessPolicyDAO(ldapConnectionPool, directoryConfig, blockingEc)
+          val cloudExtention = createCloudExt(accessPolicyDao)
+          val (sRoutes, userService, resourceService, statusService) = createSamRoutes(cloudExtention, accessPolicyDao)
+
+          for{
+            _ <- resourceTypes.toList.parTraverse(rt => accessPolicyDao.createResourceType(rt.name)).handleErrorWith{
+              case t: Throwable => IO(logger.error("FATAL - failure starting http server", t)) *> IO.raiseError(t)
+            }
+
+            _ <- IO.fromFuture(IO(cloudExtention.onBoot(SamApplication(userService, resourceService, statusService))))
+
+            binding <- IO.fromFuture(IO(Http().bindAndHandle(sRoutes.route, "0.0.0.0", 8080))).handleErrorWith{
+              case t: Throwable => IO(logger.error("FATAL - failure starting http server", t)) *> IO.raiseError(t)
+            }
+            _ <- IO.fromFuture(IO(binding.whenTerminated))
+            _ <- IO(system.terminate())
+          } yield ()
       }
 
-      _ <- cloudExt.onBoot(SamApplication(userService, resourceService, statusService))
-
-      _ <- Http().bindAndHandle(samRoutes.route, "0.0.0.0", 8080) recover {
-        case t: Throwable =>
-          logger.error("FATAL - failure starting http server", t)
-          throw t
-      }
-
-    } yield {
-
-    }
+      _ <- io.unsafeToFuture()
+    } yield ()
   }
 
   startup()

@@ -2,7 +2,7 @@ import Dependencies._
 import Merging._
 import Testing._
 import Version._
-import com.lucidchart.sbt.scalafmt.ScalafmtCorePlugin.autoImport.{scalafmtOnCompile, scalafmtVersion}
+import com.lucidchart.sbt.scalafmt.ScalafmtCorePlugin.autoImport.scalafmtOnCompile
 import sbt.Keys._
 import sbt._
 import sbtassembly.AssemblyPlugin.autoImport._
@@ -39,7 +39,7 @@ object Settings {
   val commonSettings =
     commonBuildSettings ++ commonAssemblySettings ++ commonTestSettings ++ List(
     organization  := "org.broadinstitute.dsde.workbench",
-    scalaVersion  := "2.12.6",
+    scalaVersion  := "2.12.7",
     resolvers ++= commonResolvers,
     scalacOptions ++= commonCompilerSettings
   )

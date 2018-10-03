@@ -4,13 +4,11 @@ import java.net.URI
 import java.util.UUID
 
 import akka.http.scaladsl.model.StatusCodes
-import com.typesafe.config.ConfigFactory
 import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
-import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountDisplayName, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.sam.TestSupport
-import org.broadinstitute.dsde.workbench.sam.config.{DirectoryConfig, SchemaLockConfig}
+import org.broadinstitute.dsde.workbench.sam.TestSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.LdapAccessPolicyDAO
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
@@ -22,8 +20,6 @@ import scala.concurrent.ExecutionContext.Implicits.global
   * Created by dvoet on 5/30/17.
   */
 class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with BeforeAndAfter with BeforeAndAfterAll {
-  val directoryConfig = ConfigFactory.load().as[DirectoryConfig]("directory")
-  val schemaLockConfig = ConfigFactory.load().as[SchemaLockConfig]("schemaLock")
   val dirURI = new URI(directoryConfig.directoryUrl)
   val connectionPool = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
   val dao = new LdapDirectoryDAO(connectionPool, directoryConfig)
@@ -352,15 +348,15 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     runAndWait(dao.createGroup(group1))
     runAndWait(dao.createGroup(group2))
 
-    val policyDAO = new LdapAccessPolicyDAO(connectionPool, directoryConfig)
+    val policyDAO = new LdapAccessPolicyDAO(connectionPool, directoryConfig, TestSupport.blockingEc)
 
     val typeName1 = ResourceTypeName(UUID.randomUUID().toString)
 
     val policy1 = AccessPolicy(ResourceAndPolicyName(Resource(typeName1, ResourceId("resource")), AccessPolicyName("role1-a")), Set(userId), WorkbenchEmail("p1@example.com"), Set(ResourceRoleName("role1")), Set(ResourceAction("action1"), ResourceAction("action2")))
 
-    runAndWait(policyDAO.createResourceType(typeName1))
-    runAndWait(policyDAO.createResource(policy1.id.resource))
-    runAndWait(policyDAO.createPolicy(policy1))
+    policyDAO.createResourceType(typeName1).unsafeRunSync()
+    policyDAO.createResource(policy1.id.resource).unsafeRunSync()
+    policyDAO.createPolicy(policy1).unsafeRunSync()
 
     assert(runAndWait(dao.isGroupMember(group1.id, userId)))
     assert(!runAndWait(dao.isGroupMember(group2.id, userId)))

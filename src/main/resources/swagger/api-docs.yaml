@@ -1393,6 +1393,14 @@ definitions:
       accessPolicyName:
         type: string
         description: User's policy for the resource
+      authDomains:
+        type: array
+        items:
+          type: string
+      missingAuthDomains:
+        type: array
+        items:
+          type: string
 
   ResourceRole:
     type: object

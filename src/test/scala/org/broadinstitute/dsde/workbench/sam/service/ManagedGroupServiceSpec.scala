@@ -32,10 +32,14 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
   private val config = ConfigFactory.load()
   val directoryConfig = config.as[DirectoryConfig]("directory")
   val schemaLockConfig = ConfigFactory.load().as[SchemaLockConfig]("schemaLock")
+  //Note: we intentionally use the Managed Group resource type loaded from reference.conf for the tests here.
+  private val resourceTypes = config.as[Map[String, ResourceType]]("resourceTypes").values.toSet
+  private val resourceTypeMap = resourceTypes.map(rt => rt.name -> rt).toMap
+
   val dirURI = new URI(directoryConfig.directoryUrl)
   val connectionPool = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
   val dirDAO = new LdapDirectoryDAO(connectionPool, directoryConfig)
-  val policyDAO = new LdapAccessPolicyDAO(connectionPool, directoryConfig)
+  val policyDAO = new LdapAccessPolicyDAO(connectionPool, directoryConfig, TestSupport.blockingEc)
   val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
   private val resourceId = ResourceId("myNewGroup")
@@ -43,9 +47,6 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
   private val adminPolicy = ResourceAndPolicyName(expectedResource, ManagedGroupService.adminPolicyName)
   private val memberPolicy = ResourceAndPolicyName(expectedResource, ManagedGroupService.memberPolicyName)
 
-  //Note: we intentionally use the Managed Group resource type loaded from reference.conf for the tests here.
-  private val resourceTypes = config.as[Map[String, ResourceType]]("resourceTypes").values.toSet
-  private val resourceTypeMap = resourceTypes.map(rt => rt.name -> rt).toMap
   private val managedGroupResourceType = resourceTypeMap.getOrElse(ResourceTypeName("managed-group"), throw new Error("Failed to load managed-group resource type from reference.conf"))
   private val testDomain = "example.com"
 
@@ -59,10 +60,10 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     runAndWait(schemaDao.init())
   }
 
-  def makeResourceType(resourceType: ResourceType): ResourceTypeName = runAndWait(resourceService.createResourceType(resourceType))
+  def makeResourceType(resourceType: ResourceType): ResourceTypeName = resourceService.createResourceType(resourceType).unsafeRunSync()
 
   def assertPoliciesOnResource(resource: Resource, policyDAO: AccessPolicyDAO = policyDAO, expectedPolicies: Set[AccessPolicyName] = Set(ManagedGroupService.adminPolicyName, ManagedGroupService.memberPolicyName)) = {
-    val policies = runAndWait(policyDAO.listAccessPolicies(resource))
+    val policies = policyDAO.listAccessPolicies(resource).unsafeRunSync()
     policies.map(_.id.accessPolicyName.value) shouldEqual expectedPolicies.map(_.value)
     expectedPolicies.foreach { policyName =>
       val res = policyDAO.loadPolicy(ResourceAndPolicyName(resource, policyName)).futureValue
@@ -91,7 +92,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
 
   "ManagedGroupService create" should "create a managed group with admin and member policies" in {
     assertMakeGroup()
-    val policies = runAndWait(policyDAO.listAccessPolicies(expectedResource))
+    val policies = policyDAO.listAccessPolicies(expectedResource).unsafeRunSync()
     policies.map(_.id.accessPolicyName.value) shouldEqual Set("admin", "member", "admin-notifier")
   }
 
@@ -173,7 +174,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     assertMakeGroup(managedGroupService = managedGroupService)
     runAndWait(managedGroupService.deleteManagedGroup(resourceId))
     verify(mockGoogleExtensions).onGroupDelete(groupEmail)
-    runAndWait(policyDAO.listAccessPolicies(expectedResource)) shouldEqual Set.empty
+    policyDAO.listAccessPolicies(expectedResource).unsafeRunSync() shouldEqual Set.empty
     runAndWait(policyDAO.loadPolicy(adminPolicy)) shouldEqual None
     runAndWait(policyDAO.loadPolicy(memberPolicy)) shouldEqual None
   }

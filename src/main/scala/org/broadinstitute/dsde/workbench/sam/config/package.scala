@@ -28,7 +28,7 @@ package object config {
       val uqPath = unquoteAndEscape(path)
       ResourceRole(
         ResourceRoleName(uqPath),
-        config.as[Set[String]](s"$uqPath.roleActions").map(ResourceAction)
+        config.as[Set[String]](s"$uqPath.roleActions").map(ResourceAction.apply)
       )
     }
   }

@@ -1,12 +1,12 @@
 import sbt.Keys._
-import sbt._
-
+import sbt.Setting
+import sys.process._
 
 object Version {
   val baseModelVersion = "0.1"
 
   def getVersionString = {
-    def getLastModelCommitFromGit = { s"""git rev-parse --short HEAD""" !! }
+    def getLastModelCommitFromGit = { s"""git rev-parse --short HEAD""".!! }
 
     // either specify git model hash as an env var or derive it
     // if building from the broadinstitute/scala-baseimage docker image use env var
