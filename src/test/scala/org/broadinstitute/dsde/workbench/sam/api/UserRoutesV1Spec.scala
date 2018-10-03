@@ -7,7 +7,6 @@ import akka.http.scaladsl.model.headers.{OAuth2BearerToken, RawHeader}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{ServiceAccount, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.sam.Generator.genInviteUser
-import org.broadinstitute.dsde.workbench.sam.TestSupport.genSamRoutes
 import org.broadinstitute.dsde.workbench.sam.api.StandardUserInfoDirectives._
 import org.broadinstitute.dsde.workbench.sam.directory.MockDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
@@ -190,7 +189,9 @@ class UserRoutesV1Spec extends UserRoutesSpecHelper{
     }
   }
 
-  it should "return 404 when the user is not registered" in withDefaultRoutes { routes =>
+  it should "return 404 when the user is not registered" in {
+    val (user, headers, samDep, routes) = createTestUser()
+
     Get(s"/api/users/v1/doesntexist@foo.bar").withHeaders(headers) ~> routes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }

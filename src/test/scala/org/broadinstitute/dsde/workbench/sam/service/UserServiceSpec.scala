@@ -266,6 +266,6 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
 
     // get user status id info (both subject ids and email)
     val info = service.getUserIdInfoFromEmail(defaultUserEmail).futureValue
-    info shouldBe Some(UserIdInfo(defaultUserId, defaultUserEmail, Some(defaultGoogleSubjectId)))
+    info shouldBe Right(Some(UserIdInfo(defaultUserId, defaultUserEmail, Some(defaultGoogleSubjectId))))
   }
 }

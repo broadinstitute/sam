@@ -111,14 +111,15 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
     }
   }
 
-  def getUserIdInfoFromEmail(email: WorkbenchEmail): Future[Option[UserIdInfo]] = {
+  def getUserIdInfoFromEmail(email: WorkbenchEmail): Future[Either[Unit, Option[UserIdInfo]]] = {
     directoryDAO.loadSubjectFromEmail(email).flatMap {
       // don't attempt to handle groups or service accounts - just users
       case Some(user:WorkbenchUserId) => directoryDAO.loadUser(user).map {
-        case Some(loadedUser) => Option(UserIdInfo(loadedUser.id, loadedUser.email, loadedUser.googleSubjectId))
-        case _ => None
+        case Some(loadedUser) => Right(Option(UserIdInfo(loadedUser.id, loadedUser.email, loadedUser.googleSubjectId)))
+        case _ => Left(())
       }
-      case _ => Future.successful(None)
+      case Some(_:WorkbenchGroupName) => Future.successful(Right(None))
+      case _ => Future.successful(Left(()))
     }
   }
 

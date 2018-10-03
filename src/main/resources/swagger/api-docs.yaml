@@ -1099,6 +1099,8 @@ paths:
           description: user details
           schema:
             $ref: '#/definitions/UserIdInfo'
+        204:
+          description: the email is recognized as a group, not a user
         404:
           description: User not found
         500:
