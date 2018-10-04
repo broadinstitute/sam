@@ -255,4 +255,17 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
     val updated = dirDAO.loadUser(user.id).futureValue
     updated shouldBe Some(WorkbenchUser(user.id, Some(user.googleSubjectId), user.email))
   }
+
+  "UserService getUserIdInfoFromEmail" should "return the email along with the userSubjectId and googleSubjectId" in {
+    // user doesn't exist yet
+    service.getUserStatusDiagnostics(defaultUserId).futureValue shouldBe None
+
+    // create a user
+    val newUser = service.createUser(defaultUser).futureValue
+    newUser shouldBe UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
+
+    // get user status id info (both subject ids and email)
+    val info = service.getUserIdInfoFromEmail(defaultUserEmail).futureValue
+    info shouldBe Right(Some(UserIdInfo(defaultUserId, defaultUserEmail, Some(defaultGoogleSubjectId))))
+  }
 }

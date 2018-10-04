@@ -1091,7 +1091,33 @@ paths:
       tags:
         - Resources
 
-  /api/v1/invite/user/{inviteeEmail}:
+  /api/users/v1/{email}:
+    get:
+      summary: Query for the user's subject IDs
+      responses:
+        200:
+          description: user details
+          schema:
+            $ref: '#/definitions/UserIdInfo'
+        204:
+          description: the email is recognized as a group, not a user
+        404:
+          description: User not found
+        500:
+          description: Internal Error
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      parameters:
+        - in: path
+          description: Email of the user
+          name: email
+          required: true
+          type: string
+      operationId: getUserIds
+      tags:
+        - Users
+
+  /api/users/v1/invite/{inviteeEmail}:
     post:
       summary: create current user in the system using login credentials
       parameters:
@@ -1492,6 +1518,22 @@ definitions:
       systems:
         type: object
         description: Map[String, SubsystemStatus]
+
+  UserIdInfo:
+    description: ''
+    required:
+      - userSubjectId
+      - userEmail
+    properties:
+      userSubjectId:
+        type: string
+        description: user id
+      userEmail:
+        type: string
+        description: user email
+      googleSubjectId:
+        type: string
+        description: google subject id
 
   UserInfo:
     description: the user's details

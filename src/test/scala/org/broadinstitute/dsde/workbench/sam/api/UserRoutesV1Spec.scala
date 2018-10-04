@@ -40,11 +40,11 @@ class UserRoutesV1Spec extends UserRoutesSpecHelper{
     }
   }
 
-  "POST /api/v1/invite/user/{invitee's email}" should "create user" in{
+  "POST /api/users/v1/invite/{invitee's email}" should "create user" in{
     val invitee = genInviteUser.sample.get
 
     val (user, headers, _, routes) = createTestUser() //create a valid user that can invite someone
-    Post(s"/api/v1/invite/user/${invitee.inviteeEmail}").withHeaders(headers) ~> routes.route ~> check{
+    Post(s"/api/users/v1/invite/${invitee.inviteeEmail}").withHeaders(headers) ~> routes.route ~> check{
       status shouldEqual StatusCodes.Created
       val res = responseAs[UserStatusDetails]
       res.userEmail shouldBe invitee.inviteeEmail
@@ -177,6 +177,23 @@ class UserRoutesV1Spec extends UserRoutesSpecHelper{
   it should "not allow a non-admin to delete a pet" in withAdminRoutes { (samRoutes, _) =>
     Delete(s"/api/admin/user/$defaultUserId/petServiceAccount/myproject").withHeaders(adminHeaders) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Forbidden
+    }
+  }
+
+  "GET /api/users/v1/{email}" should "return the subject id, google subject id, and email for a user" in {
+    val (user, headers, samDep, routes) = createTestUser()
+
+    Get(s"/api/users/v1/${user.email.value}").withHeaders(headers) ~> routes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[UserIdInfo] shouldEqual UserIdInfo(user.id, user.email, user.googleSubjectId)
+    }
+  }
+
+  it should "return 404 when the user is not registered" in {
+    val (user, headers, samDep, routes) = createTestUser()
+
+    Get(s"/api/users/v1/doesntexist@foo.bar").withHeaders(headers) ~> routes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
     }
   }
 }

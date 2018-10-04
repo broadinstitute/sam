@@ -31,8 +31,10 @@ object SamJsonSupport {
 
   implicit val UserStatusInfoFormat = jsonFormat3(UserStatusInfo.apply)
 
-  implicit val UserStatusDiagnosticsFormat = jsonFormat3(UserStatusDiagnostics.apply)
+  implicit val UserIdInfoFormat = jsonFormat3(UserIdInfo.apply)
 
+  implicit val UserStatusDiagnosticsFormat = jsonFormat3(UserStatusDiagnostics.apply)
+  
   implicit val AccessPolicyNameFormat = ValueObjectFormat(AccessPolicyName.apply)
 
   implicit val ResourceIdFormat = ValueObjectFormat(ResourceId.apply)
@@ -68,6 +70,7 @@ object SamResourceActions {
 }
 
 @Lenses case class UserStatusDetails(userSubjectId: WorkbenchUserId, userEmail: WorkbenchEmail) //for backwards compatibility to old API
+@Lenses case class UserIdInfo(userSubjectId: WorkbenchUserId, userEmail: WorkbenchEmail, googleSubjectId: Option[GoogleSubjectId])
 @Lenses case class UserStatus(userInfo: UserStatusDetails, enabled: Map[String, Boolean])
 @Lenses case class UserStatusInfo(userSubjectId: String, userEmail: String, enabled: Boolean)
 @Lenses case class UserStatusDiagnostics(enabled: Boolean, inAllUsersGroup: Boolean, inGoogleProxyGroup: Boolean)
