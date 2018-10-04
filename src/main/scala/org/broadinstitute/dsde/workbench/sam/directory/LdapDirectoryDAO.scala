@@ -226,8 +226,16 @@ class LdapDirectoryDAO(protected val ldapConnectionPool: LDAPConnectionPool, pro
     groupsOption.getOrElse(Set.empty)
   }
 
-  override def listFlattenedGroupUsers(groupId: WorkbenchGroupIdentity): Future[Set[WorkbenchUserId]] = Future {
-    ldapSearchStream(peopleOu, SearchScope.SUB, Filter.createEqualityFilter(Attr.memberOf, groupDn(groupId)))(unmarshalUser).map(_.id).toSet
+  override def listIntersectionGroupUsers(groupIds: Set[WorkbenchGroupIdentity]): Future[Set[WorkbenchUserId]] = Future {
+    ldapSearchStream(directoryConfig.baseDn, SearchScope.SUB, Filter.createANDFilter(groupIds.map(groupId =>
+      Filter.createEqualityFilter(Attr.memberOf, groupDn(groupId))).asJava))(unmarshalUserOption).collect { case Some(user) => user.id }.toSet
+  }
+
+  private def unmarshalUserOption(results: Entry): Option[WorkbenchUser] = {
+    for {
+      uid <- getAttribute(results, Attr.uid)
+      email <- getAttribute(results, Attr.email)
+    } yield WorkbenchUser(WorkbenchUserId(uid), getAttribute(results, Attr.googleSubjectId).map(GoogleSubjectId), WorkbenchEmail(email))
   }
 
   override def listAncestorGroups(groupId: WorkbenchGroupIdentity): Future[Set[WorkbenchGroupIdentity]] = Future {

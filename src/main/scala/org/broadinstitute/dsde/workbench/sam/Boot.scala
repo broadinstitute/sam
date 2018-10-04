@@ -82,7 +82,7 @@ object Boot extends App with LazyLogging {
         val googleKeyCache = new GoogleKeyCache(googleIamDAO, googleStorageDAO, googlePubSubDAO, googleServicesConfig, petServiceAccountConfig)
         val notificationDAO = new PubSubNotificationDAO(googlePubSubDAO, googleServicesConfig.notificationTopic)
 
-        new GoogleExtensions(directoryDAO, accessPolicyDAO, googleDirectoryDAO, googlePubSubDAO, googleIamDAO, googleStorageDAO, googleProjectDAO, googleKeyCache, notificationDAO, googleServicesConfig, petServiceAccountConfig, resourceTypeMap(CloudExtensions.resourceTypeName))
+        new GoogleExtensions(directoryDAO, accessPolicyDAO, googleDirectoryDAO, googlePubSubDAO, googleIamDAO, googleStorageDAO, googleProjectDAO, googleKeyCache, notificationDAO, googleServicesConfig, petServiceAccountConfig, resourceTypeMap)
       case None => NoExtensions
     }
 

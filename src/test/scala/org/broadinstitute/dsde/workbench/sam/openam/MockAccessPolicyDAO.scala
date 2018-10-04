@@ -35,6 +35,8 @@ class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdenti
 
   override def loadResourceAuthDomain(resource: Resource): IO[Set[WorkbenchGroupName]] = IO.pure(Set.empty)
 
+  override def listResourcesConstrainedByGroup(groupId: WorkbenchGroupIdentity): Future[Set[Resource]] = Future.successful(Set.empty)
+
   override def createPolicy(policy: AccessPolicy): IO[AccessPolicy] = IO {
     policies += policy.id -> policy
     policy

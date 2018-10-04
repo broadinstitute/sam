@@ -183,44 +183,6 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     }
   }
 
-  it should "list flattened group users" in {
-    val userId1 = WorkbenchUserId(UUID.randomUUID().toString)
-    val user1 = WorkbenchUser(userId1, None, WorkbenchEmail("foo@bar.com"))
-    val userId2 = WorkbenchUserId(UUID.randomUUID().toString)
-    val user2 = WorkbenchUser(userId2, None, WorkbenchEmail("foo@bar.com"))
-    val userId3 = WorkbenchUserId(UUID.randomUUID().toString)
-    val user3 = WorkbenchUser(userId3, None, WorkbenchEmail("foo@bar.com"))
-
-    val groupName1 = WorkbenchGroupName(UUID.randomUUID().toString)
-    val group1 = BasicWorkbenchGroup(groupName1, Set(userId1), WorkbenchEmail("g1@example.com"))
-
-    val groupName2 = WorkbenchGroupName(UUID.randomUUID().toString)
-    val group2 = BasicWorkbenchGroup(groupName2, Set(userId2, groupName1), WorkbenchEmail("g2@example.com"))
-
-    val groupName3 = WorkbenchGroupName(UUID.randomUUID().toString)
-    val group3 = BasicWorkbenchGroup(groupName3, Set(userId3, groupName2), WorkbenchEmail("g3@example.com"))
-
-    runAndWait(dao.createUser(user1))
-    runAndWait(dao.createUser(user2))
-    runAndWait(dao.createUser(user3))
-    runAndWait(dao.createGroup(group1))
-    runAndWait(dao.createGroup(group2))
-    runAndWait(dao.createGroup(group3))
-
-    try {
-      assertResult(Set(userId1, userId2, userId3)) {
-        runAndWait(dao.listFlattenedGroupUsers(groupName3))
-      }
-    } finally {
-      runAndWait(dao.deleteUser(userId1))
-      runAndWait(dao.deleteUser(userId2))
-      runAndWait(dao.deleteUser(userId3))
-      runAndWait(dao.deleteGroup(groupName3))
-      runAndWait(dao.deleteGroup(groupName2))
-      runAndWait(dao.deleteGroup(groupName1))
-    }
-  }
-
   it should "list group ancestors" in {
     val groupName1 = WorkbenchGroupName(UUID.randomUUID().toString)
     val group1 = BasicWorkbenchGroup(groupName1, Set(), WorkbenchEmail("g1@example.com"))
@@ -267,10 +229,6 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     runAndWait(dao.addGroupMember(groupName1, groupName3))
 
     try {
-      assertResult(Set(userId)) {
-        runAndWait(dao.listFlattenedGroupUsers(groupName3))
-      }
-
       assertResult(Set(groupName1, groupName2, groupName3)) {
         runAndWait(dao.listUsersGroups(userId))
       }

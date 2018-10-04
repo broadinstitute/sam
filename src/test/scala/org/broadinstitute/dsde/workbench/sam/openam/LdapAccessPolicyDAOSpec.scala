@@ -88,6 +88,23 @@ class LdapAccessPolicyDAOSpec extends AsyncFlatSpec with ScalaFutures with Match
     res.unsafeToFuture()
   }
 
+  it should "list the resources constrained by the given managed group" in {
+    val authDomain = WorkbenchGroupName("authDomain")
+    val resourceTypeName = ResourceTypeName(UUID.randomUUID().toString)
+    val resource1 = Resource(resourceTypeName, ResourceId("rid1"), Set(authDomain))
+    val resource2 = Resource(resourceTypeName, ResourceId("rid2"), Set(authDomain))
+
+    val res = for {
+      _ <- dao.createResourceType(resourceTypeName)
+      _ <- dao.createResource(resource1)
+      _ <- dao.createResource(resource2)
+      resources <- IO.fromFuture(IO(dao.listResourcesConstrainedByGroup(authDomain)))
+    } yield {
+      resources should contain theSameElementsAs Set(resource1, resource2)
+    }
+    res.unsafeToFuture
+  }
+
   "LdapAccessPolicyDAO listUserPolicyResponse" should "return UserPolicyResponse" in {
     val policy = genPolicy.sample.get
     val res = for{
