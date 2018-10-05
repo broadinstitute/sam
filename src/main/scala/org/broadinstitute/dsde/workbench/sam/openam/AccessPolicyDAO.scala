@@ -1,7 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.openam
 
 import cats.effect.IO
-import org.broadinstitute.dsde.workbench.model.{WorkbenchGroupName, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.model.{WorkbenchGroupIdentity, WorkbenchGroupName, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.model._
 
 import scala.concurrent.Future
@@ -15,6 +15,7 @@ trait AccessPolicyDAO {
   def createResource(resource: Resource): IO[Resource]
   def deleteResource(resource: Resource): IO[Unit]
   def loadResourceAuthDomain(resource: Resource): IO[Set[WorkbenchGroupName]]
+  def listResourcesConstrainedByGroup(groupId: WorkbenchGroupIdentity): Future[Set[Resource]]
 
   def createPolicy(policy: AccessPolicy): IO[AccessPolicy]
   def deletePolicy(policy: AccessPolicy): IO[Unit]

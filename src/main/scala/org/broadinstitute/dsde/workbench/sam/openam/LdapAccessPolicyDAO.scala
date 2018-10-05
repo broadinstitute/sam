@@ -13,6 +13,7 @@ import org.broadinstitute.dsde.workbench.sam.directory.DirectorySubjectNameSuppo
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO.{Attr, ObjectClass}
 import org.broadinstitute.dsde.workbench.sam.util.LdapSupport
+import cats.implicits._
 
 import scala.collection.JavaConverters._
 import scala.concurrent.{ExecutionContext, Future}
@@ -54,6 +55,21 @@ class LdapAccessPolicyDAO(protected val ldapConnectionPool: LDAPConnectionPool, 
         IO(getAttributes(r, Attr.authDomain).map(WorkbenchGroupName))
     }
   }
+
+  private def unmarshalResource(results: Entry): Either[String, Resource] = {
+    for {
+      resourceTypeName <- getAttribute(results, Attr.resourceType).toRight(s"${Attr.resourceType} attribute missing")
+      resourceId <- getAttribute(results, Attr.resourceId).toRight(s"${Attr.resourceId} attribute missing")
+    } yield {
+      val authDomain =  getAttributes(results, Attr.authDomain).map(g => WorkbenchGroupName(g)).toSet
+      Resource(ResourceTypeName(resourceTypeName), ResourceId(resourceId), authDomain)
+    }
+  }
+
+  override def listResourcesConstrainedByGroup(groupId: WorkbenchGroupIdentity): Future[Set[Resource]] = for {
+    res <- Future(ldapSearchStream(resourcesOu, SearchScope.SUB, Filter.createEqualityFilter(Attr.authDomain, groupId.toString))(unmarshalResource))
+    r <- res.parSequence.fold(err => Future.failed(new WorkbenchException(err)), r => Future.successful(r.toSet))
+  } yield r
 
   override def createPolicy(policy: AccessPolicy): IO[AccessPolicy] = {
     val attributes = List(

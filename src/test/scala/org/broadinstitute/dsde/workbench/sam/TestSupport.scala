@@ -86,7 +86,7 @@ object TestSupport extends TestSupport{
       notificationDAO,
       googleServicesConfig,
       petServiceAccountConfig,
-      configResourceTypes(CloudExtensions.resourceTypeName)))
+      resourceTypes))
     val mockResourceService = new ResourceService(resourceTypes, policyDAO, directoryDAO, googleExt, "example.com")
     val mockManagedGroupService = new ManagedGroupService(mockResourceService, resourceTypes, policyDAO, directoryDAO, googleExt, "example.com")
 

@@ -247,11 +247,13 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
   private def createOrUpdatePolicy(resource: Resource, policy: ValidatableAccessPolicy): Future[AccessPolicy] = {
     val resourceAndPolicyName = ResourceAndPolicyName(resource, policy.policyName)
     val workbenchSubjects = policy.emailsToSubjects.values.flatten.toSet
+
     accessPolicyDAO.loadPolicy(resourceAndPolicyName).flatMap {
       case None => createPolicy(resourceAndPolicyName, workbenchSubjects, generateGroupEmail(), policy.roles, policy.actions)
       case Some(accessPolicy) => accessPolicyDAO.overwritePolicy(AccessPolicy(resourceAndPolicyName, workbenchSubjects, accessPolicy.email, policy.roles, policy.actions))
     } andThen {
-      case Success(policy) => fireGroupUpdateNotification(policy.id)
+      case Success(policy) =>
+        fireGroupUpdateNotification(policy.id)
     }
   }
 

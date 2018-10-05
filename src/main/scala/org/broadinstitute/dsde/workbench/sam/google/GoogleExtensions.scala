@@ -5,6 +5,8 @@ import java.util.Date
 
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
+//import cats.effect.IO
+//import cats.implicits._
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import com.google.api.client.googleapis.json.GoogleJsonResponseException
 import com.google.auth.oauth2.ServiceAccountCredentials
@@ -38,7 +40,7 @@ object GoogleExtensions {
   val getPetPrivateKeyAction = ResourceAction("get_pet_private_key")
 }
 
-class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: AccessPolicyDAO, val googleDirectoryDAO: GoogleDirectoryDAO, val googlePubSubDAO: GooglePubSubDAO, val googleIamDAO: GoogleIamDAO, val googleStorageDAO: GoogleStorageDAO, val googleProjectDAO: GoogleProjectDAO, val googleKeyCache: GoogleKeyCache, val notificationDAO: NotificationDAO, val googleServicesConfig: GoogleServicesConfig, val petServiceAccountConfig: PetServiceAccountConfig, extensionResourceType: ResourceType)(implicit val system: ActorSystem, executionContext: ExecutionContext) extends LazyLogging with FutureSupport with CloudExtensions with Retry {
+class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: AccessPolicyDAO, val googleDirectoryDAO: GoogleDirectoryDAO, val googlePubSubDAO: GooglePubSubDAO, val googleIamDAO: GoogleIamDAO, val googleStorageDAO: GoogleStorageDAO, val googleProjectDAO: GoogleProjectDAO, val googleKeyCache: GoogleKeyCache, val notificationDAO: NotificationDAO, val googleServicesConfig: GoogleServicesConfig, val petServiceAccountConfig: PetServiceAccountConfig, val resourceTypes: Map[ResourceTypeName, ResourceType])(implicit val system: ActorSystem, executionContext: ExecutionContext) extends LazyLogging with FutureSupport with CloudExtensions with Retry {
 
   private val maxGroupEmailLength = 64
 
@@ -86,7 +88,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
       this
     ))
 
-
+    val extensionResourceType = resourceTypes.getOrElse(CloudExtensions.resourceTypeName, throw new Exception(s"${CloudExtensions.resourceTypeName} resource type not found"))
     val ownerGoogleSubjectId = GoogleSubjectId(googleServicesConfig.serviceAccountClientId)
     for {
       user <- directoryDAO.loadSubjectFromGoogleSubjectId(ownerGoogleSubjectId)
@@ -119,6 +121,10 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
   }
 
   override def onGroupUpdate(groupIdentities: Seq[WorkbenchGroupIdentity]): Future[Unit] = {
+    onGroupUpdateRecursive(groupIdentities, Seq.empty)
+  }
+
+  private def onGroupUpdateRecursive(groupIdentities: Seq[WorkbenchGroupIdentity], visitedGroups: Seq[WorkbenchGroupIdentity]): Future[Unit] = {
     for {
       idsAndSyncDates <- Future.traverse(groupIdentities) { id => directoryDAO.getSynchronizedDate(id).map(dateOption => id -> dateOption) }
       // only sync groups that have already been synchronized
@@ -127,6 +133,17 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
         case (rpn: ResourceAndPolicyName, Some(_)) => rpn.toJson.compactPrint
       }
       _ <- googlePubSubDAO.publishMessages(googleServicesConfig.groupSyncTopic, messagesForIdsWithSyncDates)
+      ancestorGroups <- Future.traverse(groupIdentities) { id => directoryDAO.listAncestorGroups(id) }
+      managedGroupIds = (ancestorGroups.flatten ++ groupIdentities).filterNot(visitedGroups.contains).collect { case ResourceAndPolicyName(Resource(ResourceTypeName("managed-group"), id, _), _) => id }
+      _ <- Future.traverse(managedGroupIds)(id => onManagedGroupUpdate(id, visitedGroups ++ groupIdentities ++ ancestorGroups.flatten))
+    } yield ()
+  }
+
+  private def onManagedGroupUpdate(groupId: ResourceId, visitedGroups: Seq[WorkbenchGroupIdentity]): Future[Unit] = {
+    for {
+      resources <- accessPolicyDAO.listResourcesConstrainedByGroup(WorkbenchGroupName(groupId.value))
+      policies <- Future.traverse(resources) { resource => accessPolicyDAO.listAccessPolicies(resource).unsafeToFuture }
+      _ <- onGroupUpdateRecursive(policies.flatten.map(_.id).toList, visitedGroups)
     } yield ()
   }
 
@@ -403,6 +420,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
         }
       )
     }
+
     if(visitedGroups.contains(groupId)) {
       Future.successful(Map.empty)
     } else {
@@ -413,6 +431,15 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
         }
 
         group = groupOption.getOrElse(throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"$groupId not found")))
+
+        members <- group match {
+          case accessPolicy: AccessPolicy => if (isConstrainable(accessPolicy.id.resource, accessPolicy)) {
+            calculateIntersectionGroup(accessPolicy.id.resource, accessPolicy)
+          } else {
+            Future.successful(accessPolicy.members)
+          }
+          case group: BasicWorkbenchGroup => Future.successful(group.members)
+        }
 
         subGroupSyncs <- Future.traverse(group.members) {
           case subGroup: WorkbenchGroupIdentity =>
@@ -427,7 +454,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
           case None => googleDirectoryDAO.createGroup(groupId.toString, group.email, Option(googleDirectoryDAO.lockedDownGroupSettings)) map (_ => Set.empty[String])
           case Some(members) => Future.successful(members.map(_.toLowerCase).toSet)
         }
-        samMemberEmails <- Future.traverse(group.members) {
+        samMemberEmails <- Future.traverse(members) {
           case group: WorkbenchGroupIdentity => directoryDAO.loadSubjectEmail(group)
 
           // use proxy group email instead of user's actual email
@@ -447,6 +474,32 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
       } yield {
         Map(group.email -> Seq(addTrials, removeTrials).flatten) ++ subGroupSyncs.flatten
       }
+    }
+  }
+
+  private def isConstrainable(resource: Resource, accessPolicy: AccessPolicy): Boolean = {
+    resourceTypes.get(resource.resourceTypeName) match {
+      case Some(resourceType) => resourceType.actionPatterns.exists { actionPattern =>
+        actionPattern.authDomainConstrainable &&
+          (accessPolicy.actions.exists(actionPattern.matches) ||
+            accessPolicy.roles.exists { accessPolicyRole =>
+              resourceType.roles.exists {
+                case resourceTypeRole@ResourceRole(`accessPolicyRole`, _) => resourceTypeRole.actions.exists(actionPattern.matches)
+                case _ => false
+              }
+            })
+      }
+      case None =>
+        throw new Exception(s"Invalid resource type specified. ${resource.resourceTypeName} is not a recognized resource type.")
+    }
+  }
+
+  private def calculateIntersectionGroup(resource: Resource, policy: AccessPolicy): Future[Set[WorkbenchUserId]] = {
+    for {
+      groups <- accessPolicyDAO.loadResourceAuthDomain(resource).unsafeToFuture
+      members <- directoryDAO.listIntersectionGroupUsers(groups.asInstanceOf[Set[WorkbenchGroupIdentity]] + policy.id)
+    } yield {
+      members
     }
   }
 
