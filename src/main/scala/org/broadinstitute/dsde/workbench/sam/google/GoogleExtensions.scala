@@ -121,6 +121,10 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
   }
 
   override def onGroupUpdate(groupIdentities: Seq[WorkbenchGroupIdentity]): Future[Unit] = {
+    onGroupUpdateRecursive(groupIdentities, Seq.empty)
+  }
+
+  private def onGroupUpdateRecursive(groupIdentities: Seq[WorkbenchGroupIdentity], visitedGroups: Seq[WorkbenchGroupIdentity]): Future[Unit] = {
     for {
       idsAndSyncDates <- Future.traverse(groupIdentities) { id => directoryDAO.getSynchronizedDate(id).map(dateOption => id -> dateOption) }
       // only sync groups that have already been synchronized
@@ -130,16 +134,16 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
       }
       _ <- googlePubSubDAO.publishMessages(googleServicesConfig.groupSyncTopic, messagesForIdsWithSyncDates)
       ancestorGroups <- Future.traverse(groupIdentities) { id => directoryDAO.listAncestorGroups(id) }
-      managedGroupIds = (ancestorGroups.flatten ++ groupIdentities).collect { case ResourceAndPolicyName(Resource(ResourceTypeName("managed-group"), id, _), _) => id }
-      _ <- Future.traverse(managedGroupIds)(onManagedGroupUpdate)
+      managedGroupIds = (ancestorGroups.flatten ++ groupIdentities).filterNot(visitedGroups.contains).collect { case ResourceAndPolicyName(Resource(ResourceTypeName("managed-group"), id, _), _) => id }
+      _ <- Future.traverse(managedGroupIds)(id => onManagedGroupUpdate(id, visitedGroups ++ groupIdentities ++ ancestorGroups.flatten))
     } yield ()
   }
 
-  private def onManagedGroupUpdate(groupId: ResourceId): Future[Unit] = {
+  private def onManagedGroupUpdate(groupId: ResourceId, visitedGroups: Seq[WorkbenchGroupIdentity]): Future[Unit] = {
     for {
       resources <- accessPolicyDAO.listResourcesConstrainedByGroup(WorkbenchGroupName(groupId.value))
       policies <- Future.traverse(resources) { resource => accessPolicyDAO.listAccessPolicies(resource).unsafeToFuture }
-      _ <- onGroupUpdate(policies.flatten.map(_.id).toList)
+      _ <- onGroupUpdateRecursive(policies.flatten.map(_.id).toList, visitedGroups)
     } yield ()
   }
 

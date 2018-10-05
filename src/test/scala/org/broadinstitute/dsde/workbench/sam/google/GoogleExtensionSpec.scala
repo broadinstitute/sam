@@ -685,6 +685,41 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     verify(mockGooglePubSubDAO, times(2)).publishMessages(any[String], any[Seq[String]])
   }
 
+  it should "break out of the loop" in {
+    val mockDirectoryDAO = mock[DirectoryDAO]
+    val mockAccessPolicyDAO = mock[AccessPolicyDAO]
+    val mockGooglePubSubDAO = mock[MockGooglePubSubDAO]
+    val googleExtensions = new GoogleExtensions(mockDirectoryDAO, mockAccessPolicyDAO, null, mockGooglePubSubDAO, null, null, null, null, null, googleServicesConfig, null, configResourceTypes)
+
+    val managedGroupId = "managedGroupId"
+    val subGroupId = "subGroupId"
+    val managedGroupRPN = ResourceAndPolicyName(Resource(ResourceTypeName("managed-group"), ResourceId(managedGroupId)), AccessPolicyName("managedGroup"))
+
+    val resource = Resource(ResourceTypeName("resource"), ResourceId("rid"), Set(WorkbenchGroupName(managedGroupId)))
+    val ownerRPN = ResourceAndPolicyName(resource, AccessPolicyName("owner"))
+    val readerRPN = ResourceAndPolicyName(resource, AccessPolicyName("reader"))
+    val ownerPolicy = AccessPolicy(ownerRPN, Set.empty, WorkbenchEmail("owner@example.com"), Set.empty, Set.empty)
+    val readerPolicy = AccessPolicy(readerRPN, Set.empty, WorkbenchEmail("reader@example.com"), Set.empty, Set.empty)
+
+    // mock responses for onGroupUpdate
+    when(mockDirectoryDAO.listAncestorGroups(any[ResourceAndPolicyName])).thenReturn(Future.successful(Set.empty.asInstanceOf[Set[WorkbenchGroupIdentity]]))
+    when(mockDirectoryDAO.getSynchronizedDate(any[ResourceAndPolicyName])).thenReturn(Future.successful(Some(new GregorianCalendar(2018, 8, 26).getTime())))
+    when(mockGooglePubSubDAO.publishMessages(any[String], any[Seq[String]])).thenReturn(Future.successful(()))
+
+    // mock ancestor call to establish nested group structure for owner policy and subgroup in managed group
+    when(mockDirectoryDAO.listAncestorGroups(WorkbenchGroupName(subGroupId))).thenReturn(Future.successful(Set(managedGroupRPN).asInstanceOf[Set[WorkbenchGroupIdentity]]))
+    when(mockDirectoryDAO.listAncestorGroups(ownerRPN)).thenReturn(Future.successful(Set(managedGroupRPN).asInstanceOf[Set[WorkbenchGroupIdentity]]))
+
+    // mock responses for onManagedGroupUpdate
+    when(mockAccessPolicyDAO.listResourcesConstrainedByGroup(WorkbenchGroupName(managedGroupId))).thenReturn(Future.successful(Set(resource)))
+    when(mockAccessPolicyDAO.listAccessPolicies(resource)).thenReturn(IO.pure(Set(ownerPolicy, readerPolicy)))
+
+    runAndWait(googleExtensions.onGroupUpdate(Seq(WorkbenchGroupName(subGroupId))))
+
+    // once when updating the subgroup, and once when updating the policies constrained by the managed group
+    verify(mockGooglePubSubDAO, times(2)).publishMessages(any[String], any[Seq[String]])
+  }
+
   private def setupGoogleKeyCacheTests: (GoogleExtensions, UserService) = {
     implicit val patienceConfig = PatienceConfig(1 second)
     val dirDAO = new LdapDirectoryDAO(connectionPool, directoryConfig)
