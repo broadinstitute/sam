@@ -204,12 +204,14 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
       val user = UserPool.chooseStudent
 
       withCleanBillingProject(UserPool.chooseProjectOwner, List(user.email)) { project =>
-        val key1 = Sam.user.petServiceAccountKey(project)(user.makeAuthToken)
-        val key2 = Sam.user.petServiceAccountKey(project)(user.makeAuthToken)
+        withCleanUp {
+          val key1 = Sam.user.petServiceAccountKey(project)(user.makeAuthToken)
+          val key2 = Sam.user.petServiceAccountKey(project)(user.makeAuthToken)
 
-        key1 shouldBe key2
+          key1 shouldBe key2
 
-        register cleanUp Sam.user.deletePetServiceAccountKey(project, getFieldFromJson(key1, "private_key_id"))(user.makeAuthToken)
+          register cleanUp Sam.user.deletePetServiceAccountKey(project, getFieldFromJson(key1, "private_key_id"))(user.makeAuthToken)
+        }
       }
     }
 
@@ -217,14 +219,16 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
       val user = UserPool.chooseStudent
 
       withCleanBillingProject(UserPool.chooseProjectOwner, List(user.email)) { project =>
+        withCleanUp {
 
-        val key1 = Sam.user.petServiceAccountKey(project)(user.makeAuthToken)
-        Sam.user.deletePetServiceAccountKey(project, getFieldFromJson(key1, "private_key_id"))(user.makeAuthToken)
+          val key1 = Sam.user.petServiceAccountKey(project)(user.makeAuthToken)
+          Sam.user.deletePetServiceAccountKey(project, getFieldFromJson(key1, "private_key_id"))(user.makeAuthToken)
 
-        val key2 = Sam.user.petServiceAccountKey(project)(user.makeAuthToken)
-        register cleanUp Sam.user.deletePetServiceAccountKey(project, getFieldFromJson(key2, "private_key_id"))(user.makeAuthToken)
+          val key2 = Sam.user.petServiceAccountKey(project)(user.makeAuthToken)
+          register cleanUp Sam.user.deletePetServiceAccountKey(project, getFieldFromJson(key2, "private_key_id"))(user.makeAuthToken)
 
-        key1 shouldNot be(key2)
+          key1 shouldNot be(key2)
+        }
       }
     }
 
@@ -237,24 +241,26 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
       //this must use a GPAlloc'd project to avoid deleting the pet for a shared project, which
       //may have unexpected side effects
       withCleanBillingProject(user) { projectName =>
-        val petSaKeyOriginal = Sam.user.petServiceAccountKey(projectName)(user.makeAuthToken)
-        val petSaEmailOriginal = getFieldFromJson(petSaKeyOriginal, "client_email")
-        val petSaKeyIdOriginal = getFieldFromJson(petSaKeyOriginal, "private_key_id")
-        val petSaName = petSaEmailOriginal.split('@').head
+        withCleanUp {
+          val petSaKeyOriginal = Sam.user.petServiceAccountKey(projectName)(user.makeAuthToken)
+          val petSaEmailOriginal = getFieldFromJson(petSaKeyOriginal, "client_email")
+          val petSaKeyIdOriginal = getFieldFromJson(petSaKeyOriginal, "private_key_id")
+          val petSaName = petSaEmailOriginal.split('@').head
 
-        register cleanUp Sam.user.deletePetServiceAccountKey(projectName, petSaKeyIdOriginal)(user.makeAuthToken)
+          register cleanUp Sam.user.deletePetServiceAccountKey(projectName, petSaKeyIdOriginal)(user.makeAuthToken)
 
-        //act as a rogue process and delete the pet SA without telling sam
-        Await.result(googleIamDAO.removeServiceAccount(GoogleProject(projectName), ServiceAccountName(petSaName)), Duration.Inf)
+          //act as a rogue process and delete the pet SA without telling sam
+          Await.result(googleIamDAO.removeServiceAccount(GoogleProject(projectName), ServiceAccountName(petSaName)), Duration.Inf)
 
-        val petSaKeyNew = Sam.user.petServiceAccountKey(projectName)(user.makeAuthToken)
-        val petSaEmailNew = getFieldFromJson(petSaKeyNew, "client_email")
-        val petSaKeyIdNew = getFieldFromJson(petSaKeyNew, "private_key_id")
+          val petSaKeyNew = Sam.user.petServiceAccountKey(projectName)(user.makeAuthToken)
+          val petSaEmailNew = getFieldFromJson(petSaKeyNew, "client_email")
+          val petSaKeyIdNew = getFieldFromJson(petSaKeyNew, "private_key_id")
 
-        register cleanUp Sam.user.deletePetServiceAccountKey(projectName, petSaKeyIdNew)(user.makeAuthToken)
+          register cleanUp Sam.user.deletePetServiceAccountKey(projectName, petSaKeyIdNew)(user.makeAuthToken)
 
-        petSaEmailOriginal should equal(petSaEmailNew) //sanity check to make sure the SA is the same
-        petSaKeyIdOriginal should not equal petSaKeyIdNew //make sure we were able to generate a new key and that a new one was returned
+          petSaEmailOriginal should equal(petSaEmailNew) //sanity check to make sure the SA is the same
+          petSaKeyIdOriginal should not equal petSaKeyIdNew //make sure we were able to generate a new key and that a new one was returned
+        }
       }
     }
 
