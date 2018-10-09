@@ -664,6 +664,40 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     res.futureValue(Timeout(Span(10, Seconds))) shouldBe expected
   }
 
+  it should "list required authDomains and missing authDomains if user is a member of a universal policy" in {
+    val user = genUserInfo.sample.get
+    val policy = SamLenses.resourceTypeNameInAccessPolicy.set(constrainableResourceType.name)(genPolicy.sample.get)
+    val resource = policy.id.resource
+    val viewPolicyName = AccessPolicyName(constrainableReaderRoleName.value)
+
+    val policy2WithResourceType = SamLenses.resourceTypeNameInAccessPolicy.set(managedGroupResourceType.name)(genPolicy.sample.get)
+    val policy2 = SamLenses.accessPolicyNameInAccessPolicy.set(ManagedGroupService.adminNotifierPolicyName)(policy2WithResourceType)
+    val resource2 = policy2.id.resource
+
+    val res = for {
+      _ <- constrainableService.createResourceType(constrainableResourceType).unsafeToFuture()
+      _ <- constrainableService.createResourceType(managedGroupResourceType).unsafeToFuture()
+      _ <- Future.traverse(resource.authDomain)(a =>
+        managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))
+      _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
+      // create resource that dummyUserInfo is a member of for constrainableResourceType
+      _ <- constrainableService.createResource(
+        constrainableResourceType,
+        resource.resourceId,
+        Map(viewPolicyName -> constrainablePolicyMembership),
+        resource.authDomain,
+        dummyUserInfo)
+      _ <- policyDAO.createResource(resource2).unsafeToFuture()
+      _ <- policyDAO.createPolicy(AccessPolicy(policy2.id, Set(user.userId), user.userEmail, policy2.roles, policy2.actions)).unsafeToFuture()
+      _ <- constrainableService.createPolicy(policy.id, policy.members + user.userId, policy.roles, policy.actions)
+      r <- constrainableService.listUserAccessPolicies(constrainableResourceType.name, user.userId).unsafeToFuture()
+    } yield r
+
+    val expected =
+      Set(UserPolicyResponse(resource.resourceId, policy.id.accessPolicyName, resource.authDomain, resource.authDomain))
+    res.futureValue(Timeout(Span(10, Seconds))) shouldBe expected
+  }
+
   "add/remove SubjectToPolicy" should "add/remove subject and tolerate prior (non)existence" in {
     val resource = Resource(defaultResourceType.name, ResourceId("my-resource"))
     val policyName = AccessPolicyName(defaultResourceType.ownerRoleName.value)
