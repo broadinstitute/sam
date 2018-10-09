@@ -2,10 +2,10 @@ import Dependencies._
 import Merging._
 import Testing._
 import Version._
-import com.lucidchart.sbt.scalafmt.ScalafmtCorePlugin.autoImport.scalafmtOnCompile
 import sbt.Keys._
 import sbt._
 import sbtassembly.AssemblyPlugin.autoImport._
+import org.scalafmt.sbt.ScalafmtPlugin.autoImport.scalafmtOnCompile
 
 object Settings {
   val artifactory = "https://artifactory.broadinstitute.org/artifactory/"
