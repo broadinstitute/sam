@@ -95,7 +95,7 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
       // This will silently ignore any group where the email could not be loaded. This can happen when a
       // managed group is in an inconsistent state (partially created/deleted or created incorrectly).
       // It also includes only admin and member policies
-      ripns.filter(ripn => Seq(ManagedGroupService.adminPolicyName, ManagedGroupService.memberPolicyName).contains(ripn.accessPolicyName)).flatMap { ripn =>
+      ripns.filter(ripn => ManagedGroupService.userMemberShipPolicyNames.contains(ripn.accessPolicyName)).flatMap { ripn =>
         emailLookupMap.get(WorkbenchGroupName(ripn.resourceId.value)).map(email => ManagedGroupMembershipEntry(ripn.resourceId, ripn.accessPolicyName, email))
       }
     }
@@ -169,6 +169,7 @@ object ManagedGroupService {
   val adminPolicyName: ManagedGroupPolicyName = new AccessPolicyName(adminValue) with AllowedManagedGroupPolicyName
   val memberPolicyName: ManagedGroupPolicyName = new AccessPolicyName(memberValue) with AllowedManagedGroupPolicyName
   val adminNotifierPolicyName: ManagedGroupPolicyName = new AccessPolicyName(adminNotifierValue) with AllowedManagedGroupPolicyName
+  val userMemberShipPolicyNames: Set[AccessPolicyName] = Set(adminPolicyName, memberPolicyName)
 
   def getPolicyName(policyName: String): ManagedGroupPolicyName = {
     policyName match {

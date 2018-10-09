@@ -147,8 +147,8 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
       resources <- if(isConstrained) accessPolicyDAO.listResourceWithAuthdomains(resourceTypeName, rids) else IO.pure(Set.empty)
       authDomainMap = resources.map(x => x.resourceId -> x.authDomain).toMap
 
-      allAuthDomainResourcesUserIsMemberOf <- if(isConstrained) accessPolicyDAO.listAccessPolicies(ManagedGroupService.managedGroupTypeName, userId) else IO.pure(Set.empty[ResourceIdAndPolicyName])
-
+      allAuthDomain <- if(isConstrained) accessPolicyDAO.listAccessPolicies(ManagedGroupService.managedGroupTypeName, userId) else IO.pure(Set.empty[ResourceIdAndPolicyName])
+      allAuthDomainResourcesUserIsMemberOf = allAuthDomain.filter(x => ManagedGroupService.userMemberShipPolicyNames.contains(x.accessPolicyName))
       results = ridAndPolicyName.map{
         rnp =>
           if(isConstrained){
