@@ -13,7 +13,7 @@ import org.broadinstitute.dsde.workbench.sam.config.{DirectoryConfig, SchemaLock
 import org.broadinstitute.dsde.workbench.sam.directory._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
-import org.broadinstitute.dsde.workbench.sam.service.{ManagedGroupService, NoExtensions, ResourceService, UserService}
+import org.broadinstitute.dsde.workbench.sam.service._
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FlatSpec, Matchers}
 
 import scala.collection.concurrent.TrieMap
@@ -64,9 +64,10 @@ class MockAccessPolicyDAOSpec extends FlatSpec with Matchers with TestSupport wi
     val ldapDirDao = new LdapDirectoryDAO(connectionPool, directoryConfig)
     val allUsersGroup: WorkbenchGroup = TestSupport.runAndWait(NoExtensions.getOrCreateAllUsersGroup(ldapDirDao))
 
-    val resourceService = new ResourceService(shared.resourceTypes, ldapPolicyDao, ldapDirDao, NoExtensions, shared.emailDomain)
+    val policyEvaluatorService = PolicyEvaluatorService(shared.resourceTypes, ldapPolicyDao)
+    val resourceService = new ResourceService(shared.resourceTypes, policyEvaluatorService, ldapPolicyDao, ldapDirDao, NoExtensions, shared.emailDomain)
     val userService = new UserService(ldapDirDao, NoExtensions)
-    val managedGroupService = new ManagedGroupService(resourceService, shared.resourceTypes, ldapPolicyDao, ldapDirDao, NoExtensions, shared.emailDomain)
+    val managedGroupService = new ManagedGroupService(resourceService, policyEvaluatorService, shared.resourceTypes, ldapPolicyDao, ldapDirDao, NoExtensions, shared.emailDomain)
     shared.resourceTypes foreach {case (_, resourceType) => resourceService.createResourceType(resourceType).unsafeRunSync() }
   }
 
@@ -76,9 +77,10 @@ class MockAccessPolicyDAOSpec extends FlatSpec with Matchers with TestSupport wi
     val mockPolicyDAO = new MockAccessPolicyDAO(shared.groups)
     val allUsersGroup: WorkbenchGroup = TestSupport.runAndWait(NoExtensions.getOrCreateAllUsersGroup(mockDirDao))
 
-    val resourceService = new ResourceService(shared.resourceTypes, mockPolicyDAO, mockDirDao, NoExtensions, shared.emailDomain)
+    val policyEvaluatorService = PolicyEvaluatorService(shared.resourceTypes, mockPolicyDAO)
+    val resourceService = new ResourceService(shared.resourceTypes, policyEvaluatorService, mockPolicyDAO, mockDirDao, NoExtensions, shared.emailDomain)
     val userService = new UserService(mockDirDao, NoExtensions)
-    val managedGroupService = new ManagedGroupService(resourceService, shared.resourceTypes, mockPolicyDAO, mockDirDao, NoExtensions, shared.emailDomain)
+    val managedGroupService = new ManagedGroupService(resourceService, policyEvaluatorService, shared.resourceTypes, mockPolicyDAO, mockDirDao, NoExtensions, shared.emailDomain)
   }
 
   "JndiAccessPolicyDao and MockAccessPolicyDao" should "return the same results for the same methods" in {

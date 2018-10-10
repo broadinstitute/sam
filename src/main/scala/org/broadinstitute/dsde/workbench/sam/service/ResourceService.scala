@@ -18,7 +18,7 @@ import scala.util.Success
 /**
   * Created by mbemis on 5/22/17.
   */
-class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceType], private val accessPolicyDAO: AccessPolicyDAO, private val directoryDAO: DirectoryDAO, private val cloudExtensions: CloudExtensions, private val emailDomain: String)(implicit val executionContext: ExecutionContext) extends LazyLogging {
+class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceType], private[service] val policyEvaluatorService: PolicyEvaluatorService, private val accessPolicyDAO: AccessPolicyDAO, private val directoryDAO: DirectoryDAO, private val cloudExtensions: CloudExtensions, private val emailDomain: String)(implicit val executionContext: ExecutionContext) extends LazyLogging {
   implicit val cs = IO.contextShift(executionContext) //for running IOs in paralell
 
   private case class ValidatableAccessPolicy(policyName: AccessPolicyName, emailsToSubjects: Map[WorkbenchEmail, Option[WorkbenchSubject]], roles: Set[ResourceRoleName], actions: Set[ResourceAction])
@@ -46,7 +46,7 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
   def createResource(resourceType: ResourceType, resourceId: ResourceId, userInfo: UserInfo): Future[Resource] = {
     val ownerRole = resourceType.roles.find(_.roleName == resourceType.ownerRoleName).getOrElse(throw new WorkbenchException(s"owner role ${resourceType.ownerRoleName} does not exist in $resourceType"))
     val defaultPolicies: Map[AccessPolicyName, AccessPolicyMembership] = Map(AccessPolicyName(ownerRole.roleName.value) -> AccessPolicyMembership(Set(userInfo.userEmail), Set.empty, Set(ownerRole.roleName)))
-    createResource(resourceType, resourceId, defaultPolicies, Set.empty, userInfo)
+    createResource(resourceType, resourceId, defaultPolicies, Set.empty, userInfo.userId)
   }
 
   /**
@@ -58,9 +58,9 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     * @param userInfo
     * @return Future[Resource]
     */
-  def createResource(resourceType: ResourceType, resourceId: ResourceId, policiesMap: Map[AccessPolicyName, AccessPolicyMembership], authDomain: Set[WorkbenchGroupName], userInfo: UserInfo): Future[Resource] = {
+  def createResource(resourceType: ResourceType, resourceId: ResourceId, policiesMap: Map[AccessPolicyName, AccessPolicyMembership], authDomain: Set[WorkbenchGroupName], userId: WorkbenchUserId): Future[Resource] = {
     makeValidatablePolicies(policiesMap).flatMap { policies =>
-      validateCreateResource(resourceType, resourceId, policies, authDomain, userInfo).flatMap {
+      validateCreateResource(resourceType, resourceId, policies, authDomain, userId).flatMap {
         case Seq() => persistResource(resourceType, resourceId, policies, authDomain)
         case errorReports: Seq[ErrorReport] => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "Cannot create resource", errorReports))
       }
@@ -84,11 +84,11 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     } yield resource
   }
 
-  private def validateCreateResource(resourceType: ResourceType, resourceId: ResourceId, policies: Set[ValidatableAccessPolicy], authDomain: Set[WorkbenchGroupName], userInfo: UserInfo) = {
+  private def validateCreateResource(resourceType: ResourceType, resourceId: ResourceId, policies: Set[ValidatableAccessPolicy], authDomain: Set[WorkbenchGroupName], userId: WorkbenchUserId) = {
     for {
       ownerPolicyErrors <- Future.successful(validateOwnerPolicyExists(resourceType, policies))
       policyErrors <- Future.successful(policies.flatMap(policy => validatePolicy(resourceType, policy)))
-      authDomainErrors <- validateAuthDomain(resourceType, authDomain, userInfo)
+      authDomainErrors <- validateAuthDomain(resourceType, authDomain, userId)
     } yield (ownerPolicyErrors ++ policyErrors ++ authDomainErrors).toSeq
   }
 
@@ -99,8 +99,8 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     }
   }
 
-  private def validateAuthDomain(resourceType: ResourceType, authDomain: Set[WorkbenchGroupName], userInfo: UserInfo): Future[Option[ErrorReport]] = {
-    validateAuthDomainPermissions(authDomain, userInfo).map { permissionsErrors =>
+  private def validateAuthDomain(resourceType: ResourceType, authDomain: Set[WorkbenchGroupName], userId: WorkbenchUserId): Future[Option[ErrorReport]] = {
+    validateAuthDomainPermissions(authDomain, userId).map { permissionsErrors =>
       val constrainableErrors = validateAuthDomainConstraints(resourceType, authDomain).toSeq
       val errors = constrainableErrors ++ permissionsErrors.flatten
       if (errors.nonEmpty) {
@@ -109,10 +109,10 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     }
   }
 
-  private def validateAuthDomainPermissions(authDomain: Set[WorkbenchGroupName], userInfo: UserInfo): Future[Set[Option[ErrorReport]]] = {
+  private def validateAuthDomainPermissions(authDomain: Set[WorkbenchGroupName], userId: WorkbenchUserId): Future[Set[Option[ErrorReport]]] = {
     Future.traverse(authDomain) { groupName =>
       val resource = Resource(ManagedGroupService.managedGroupTypeName, ResourceId(groupName.value))
-      hasPermission(resource, ManagedGroupService.useAction, userInfo).map {
+      policyEvaluatorService.hasPermission(resource, ManagedGroupService.useAction, userId).map {
         case false => Option(ErrorReport(s"You do not have access to $groupName or $groupName does not exist"))
         case _ => None
       }
@@ -137,33 +137,6 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     accessPolicyDAO.createPolicy(AccessPolicy(resourceAndPolicyName, members, email, roles, actions)).unsafeToFuture()
   }
 
-  def listUserAccessPolicies(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId): IO[Set[UserPolicyResponse]] = for{
-      rt <- IO.fromEither(resourceTypes.get(resourceTypeName).toRight(new WorkbenchException(s"missing configration for resourceType ${resourceTypeName}")))
-      isConstrained = rt.isAuthDomainConstrainable
-      ridAndPolicyName <- accessPolicyDAO.listAccessPolicies(resourceTypeName, userId) // List all policies of a given resourceType the user is a member of
-      rids = ridAndPolicyName.map(_.resourceId)
-
-
-      resources <- if(isConstrained) accessPolicyDAO.listResourceWithAuthdomains(resourceTypeName, rids) else IO.pure(Set.empty)
-      authDomainMap = resources.map(x => x.resourceId -> x.authDomain).toMap
-
-      allAuthDomain <- if(isConstrained) accessPolicyDAO.listAccessPolicies(ManagedGroupService.managedGroupTypeName, userId) else IO.pure(Set.empty[ResourceIdAndPolicyName])
-
-      allAuthDomainResourcesUserIsMemberOf = allAuthDomain.filter(x => ManagedGroupService.userMemberShipPolicyNames.contains(x.accessPolicyName))
-      results = ridAndPolicyName.map{
-        rnp =>
-          if(isConstrained){
-            authDomainMap.get(rnp.resourceId) match{
-              case Some(authDomains) =>
-                val userNotMemberOf = authDomains.filterNot(x => allAuthDomainResourcesUserIsMemberOf.map(_.resourceId).contains(ResourceId(x.value)))
-                Some(UserPolicyResponse(rnp.resourceId, rnp.accessPolicyName, authDomains, userNotMemberOf))
-              case None =>
-                logger.error(s"ldap has corrupted data. ${rnp.resourceId} should have auth domains defined")
-                none[UserPolicyResponse]
-            }
-          } else UserPolicyResponse(rnp.resourceId, rnp.accessPolicyName, Set.empty, Set.empty).some
-      }
-    } yield results.flatten
 
   // IF Resource ID reuse is allowed (as defined by the Resource Type), then we can delete the resource
   // ELSE Resource ID reuse is not allowed, and we enforce this by deleting all policies associated with the Resource,
@@ -183,29 +156,6 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     resourceTypes.get(resource.resourceTypeName) match {
       case Some(resourceType) if resourceType.reuseIds => accessPolicyDAO.deleteResource(resource).unsafeToFuture()
       case _ => Future.successful(())
-    }
-  }
-
-  def hasPermission(resource: Resource, action: ResourceAction, userInfo: UserInfo): Future[Boolean] = {
-    listUserResourceActions(resource, userInfo).map { _.contains(action) }
-  }
-
-  def listUserResourceActions(resource: Resource, userInfo: UserInfo): Future[Set[ResourceAction]] = {
-    def roleActions(resourceTypeOption: Option[ResourceType], resourceRoleName: ResourceRoleName) = {
-      val maybeActions = for {
-        resourceType <- resourceTypeOption
-        role <- resourceType.roles.find(_.roleName == resourceRoleName)
-      } yield {
-        role.actions
-      }
-      maybeActions.getOrElse(Set.empty)
-    }
-
-    for {
-      resourceType <- getResourceType(resource.resourceTypeName)
-      policies <- listResourceAccessPoliciesForUser(resource, userInfo)
-    } yield {
-      policies.flatMap(policy => policy.actions ++ policy.roles.flatMap(roleActions(resourceType, _)))
     }
   }
 

@@ -22,8 +22,8 @@ import scala.concurrent.ExecutionContext
 /**
   * Created by dvoet on 7/14/17.
   */
-class TestSamRoutes(resourceService: ResourceService, userService: UserService, statusService: StatusService, managedGroupService: ManagedGroupService, val userInfo: UserInfo, directoryDAO: MockDirectoryDAO, val cloudExtensions: CloudExtensions = NoExtensions)(implicit override val system: ActorSystem, override val materializer: Materializer, override val executionContext: ExecutionContext)
-  extends SamRoutes(resourceService, userService, statusService, managedGroupService, SwaggerConfig("", ""), directoryDAO) with MockUserInfoDirectives with ExtensionRoutes with ScalaFutures {
+class TestSamRoutes(resourceService: ResourceService, policyEvaluatorService: PolicyEvaluatorService, userService: UserService, statusService: StatusService, managedGroupService: ManagedGroupService, val userInfo: UserInfo, directoryDAO: MockDirectoryDAO, val cloudExtensions: CloudExtensions = NoExtensions)(implicit override val system: ActorSystem, override val materializer: Materializer, override val executionContext: ExecutionContext)
+  extends SamRoutes(resourceService, userService, statusService, managedGroupService, SwaggerConfig("", ""), directoryDAO, policyEvaluatorService) with MockUserInfoDirectives with ExtensionRoutes with ScalaFutures {
 
   def extensionRoutes: server.Route = reject
   def mockDirectoryDao: MockDirectoryDAO = directoryDAO
@@ -41,9 +41,10 @@ object TestSamRoutes {
     val policyDAO = new MockAccessPolicyDAO(groups)
 
     val emailDomain = "example.com"
-    val mockResourceService = new ResourceService(resourceTypes, policyDAO, directoryDAO, NoExtensions, emailDomain)
+    val policyEvaluatorService = PolicyEvaluatorService(resourceTypes, policyDAO)
+    val mockResourceService = new ResourceService(resourceTypes, policyEvaluatorService, policyDAO, directoryDAO, NoExtensions, emailDomain)
     val mockUserService = new UserService(directoryDAO, NoExtensions)
-    val mockManagedGroupService = new ManagedGroupService(mockResourceService, resourceTypes, policyDAO, directoryDAO, NoExtensions, emailDomain)
+    val mockManagedGroupService = new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, policyDAO, directoryDAO, NoExtensions, emailDomain)
     TestSupport.runAndWait(mockUserService.createUser(
       CreateWorkbenchUser(userInfo.userId, defaultGoogleSubjectId, userInfo.userEmail)))
     val allUsersGroup = TestSupport.runAndWait(NoExtensions.getOrCreateAllUsersGroup(directoryDAO))
@@ -51,6 +52,6 @@ object TestSamRoutes {
 
     val mockStatusService = new StatusService(directoryDAO, NoExtensions)
 
-    new TestSamRoutes(mockResourceService, mockUserService, mockStatusService, mockManagedGroupService, userInfo, directoryDAO)
+    new TestSamRoutes(mockResourceService, policyEvaluatorService, mockUserService, mockStatusService, mockManagedGroupService, userInfo, directoryDAO)
   }
 }

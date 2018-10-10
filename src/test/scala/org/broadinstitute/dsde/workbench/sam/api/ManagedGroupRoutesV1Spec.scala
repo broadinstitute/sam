@@ -65,7 +65,7 @@ class ManagedGroupRoutesV1Spec extends FlatSpec with Matchers with ScalatestRout
     runAndWait(samRoutes.userService.createUser(
       CreateWorkbenchUser(userInfo.userId, GoogleSubjectId(genRandom(System.currentTimeMillis())), userInfo.userEmail)))
     val email = userInfo.userEmail
-    val routes = new TestSamRoutes(samRoutes.resourceService, samRoutes.userService, samRoutes.statusService, samRoutes.managedGroupService, userInfo, samRoutes.mockDirectoryDao)
+    val routes = new TestSamRoutes(samRoutes.resourceService, samRoutes.policyEvaluatorService, samRoutes.userService, samRoutes.statusService, samRoutes.managedGroupService, userInfo, samRoutes.mockDirectoryDao)
   }
 
   def setGroupMembers(samRoutes: TestSamRoutes, members: Set[WorkbenchEmail], expectedStatus: StatusCode): Unit = {
@@ -79,7 +79,7 @@ class ManagedGroupRoutesV1Spec extends FlatSpec with Matchers with ScalatestRout
     assertGetGroup(defaultRoutes)
 
     val theDude = UserInfo(OAuth2BearerToken("tokenDude"), WorkbenchUserId("ElDudarino"), WorkbenchEmail("ElDudarino@example.com"), 0)
-    val dudesRoutes = new TestSamRoutes(defaultRoutes.resourceService, defaultRoutes.userService, defaultRoutes.statusService, defaultRoutes.managedGroupService, theDude, defaultRoutes.mockDirectoryDao)
+    val dudesRoutes = new TestSamRoutes(defaultRoutes.resourceService, defaultRoutes.policyEvaluatorService, defaultRoutes.userService, defaultRoutes.statusService, defaultRoutes.managedGroupService, theDude, defaultRoutes.mockDirectoryDao)
 
     body(dudesRoutes)
   }
@@ -97,7 +97,7 @@ class ManagedGroupRoutesV1Spec extends FlatSpec with Matchers with ScalatestRout
 
     val newGuyEmail = WorkbenchEmail("newGuy@organization.org")
     val newGuy = UserInfo(OAuth2BearerToken("newToken"), WorkbenchUserId("NewGuy"), newGuyEmail, 0)
-    val newGuyRoutes = new TestSamRoutes(samRoutes.resourceService, samRoutes.userService, samRoutes.statusService, samRoutes.managedGroupService, newGuy, samRoutes.mockDirectoryDao)
+    val newGuyRoutes = new TestSamRoutes(samRoutes.resourceService, samRoutes.policyEvaluatorService, samRoutes.userService, samRoutes.statusService, samRoutes.managedGroupService, newGuy, samRoutes.mockDirectoryDao)
 
     assertCreateGroup(samRoutes)
     assertGetGroup(samRoutes)
@@ -123,7 +123,7 @@ class ManagedGroupRoutesV1Spec extends FlatSpec with Matchers with ScalatestRout
 
     val newGuyEmail = WorkbenchEmail("newGuy@organization.org")
     val newGuy = UserInfo(OAuth2BearerToken("newToken"), WorkbenchUserId("NewGuy"), newGuyEmail, 0)
-    val newGuyRoutes = new TestSamRoutes(samRoutes.resourceService, samRoutes.userService, samRoutes.statusService, samRoutes.managedGroupService, newGuy, samRoutes.mockDirectoryDao)
+    val newGuyRoutes = new TestSamRoutes(samRoutes.resourceService, samRoutes.policyEvaluatorService, samRoutes.userService, samRoutes.statusService, samRoutes.managedGroupService, newGuy, samRoutes.mockDirectoryDao)
 
 
     Get(s"/api/groups/v1/$groupId") ~> newGuyRoutes.route ~> check {
@@ -394,7 +394,7 @@ class ManagedGroupRoutesV1Spec extends FlatSpec with Matchers with ScalatestRout
 
     val newGuyEmail = WorkbenchEmail("newGuy@organization.org")
     val newGuy = UserInfo(OAuth2BearerToken("newToken"), WorkbenchUserId("NewGuy"), newGuyEmail, 0)
-    val newGuyRoutes = new TestSamRoutes(samRoutes.resourceService, samRoutes.userService, samRoutes.statusService, samRoutes.managedGroupService, newGuy, samRoutes.mockDirectoryDao)
+    val newGuyRoutes = new TestSamRoutes(samRoutes.resourceService, samRoutes.policyEvaluatorService, samRoutes.userService, samRoutes.statusService, samRoutes.managedGroupService, newGuy, samRoutes.mockDirectoryDao)
 
 
     val members = Set(newGuyEmail)

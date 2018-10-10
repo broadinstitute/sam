@@ -26,7 +26,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
       requireUserInfo { userInfo =>
         path("petServiceAccount" / Segment / Segment ) { (project, userEmail) =>
           get {
-            requireAction(Resource(CloudExtensions.resourceTypeName, GoogleExtensions.resourceId), GoogleExtensions.getPetPrivateKeyAction, userInfo) {
+            requireAction(Resource(CloudExtensions.resourceTypeName, GoogleExtensions.resourceId), GoogleExtensions.getPetPrivateKeyAction, userInfo.userId) {
               complete {
                 import spray.json._
                 googleExtensions.getPetServiceAccountKey(WorkbenchEmail(userEmail), GoogleProject(project)) map {

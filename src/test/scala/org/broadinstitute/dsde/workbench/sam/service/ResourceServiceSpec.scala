@@ -4,26 +4,22 @@ package service
 import java.net.URI
 import java.util.UUID
 
-import org.scalatest.concurrent.PatienceConfiguration.Timeout
-import org.scalatest.time.{Seconds, Span}
-
-import scala.concurrent.Future
-
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import com.typesafe.config.ConfigFactory
 import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.model._
+import org.broadinstitute.dsde.workbench.sam.Generator._
+import org.broadinstitute.dsde.workbench.sam.TestSupport.blockingEc
 import org.broadinstitute.dsde.workbench.sam.config.{DirectoryConfig, SchemaLockConfig, _}
 import org.broadinstitute.dsde.workbench.sam.directory.LdapDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, LdapAccessPolicyDAO}
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
-import Generator._
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FlatSpec, Matchers}
-import org.broadinstitute.dsde.workbench.sam.TestSupport.blockingEc
+
 import scala.concurrent.ExecutionContext.Implicits.global
 
 /**
@@ -65,11 +61,13 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
   private val managedGroupResourceType = realResourceTypeMap.getOrElse(ResourceTypeName("managed-group"), throw new Error("Failed to load managed-group resource type from reference.conf"))
 
   private val emailDomain = "example.com"
-  private val service = new ResourceService(Map(defaultResourceType.name -> defaultResourceType, otherResourceType.name -> otherResourceType), policyDAO, dirDAO, NoExtensions, emailDomain)
+  private val policyEvaluatorService = PolicyEvaluatorService(Map(defaultResourceType.name -> defaultResourceType, otherResourceType.name -> otherResourceType), policyDAO)
+  private val service = new ResourceService(Map(defaultResourceType.name -> defaultResourceType, otherResourceType.name -> otherResourceType), policyEvaluatorService, policyDAO, dirDAO, NoExtensions, emailDomain)
   private val constrainableResourceTypes = Map(constrainableResourceType.name -> constrainableResourceType, managedGroupResourceType.name -> managedGroupResourceType)
-  private val constrainableService = new ResourceService(constrainableResourceTypes, policyDAO, dirDAO, NoExtensions, emailDomain)
+  private val constrainablePolicyEvaluatorService = PolicyEvaluatorService(constrainableResourceTypes, policyDAO)
+  private val constrainableService = new ResourceService(constrainableResourceTypes, constrainablePolicyEvaluatorService, policyDAO, dirDAO, NoExtensions, emailDomain)
 
-  val managedGroupService = new ManagedGroupService(constrainableService, constrainableResourceTypes, policyDAO, dirDAO, NoExtensions, emailDomain)
+  val managedGroupService = new ManagedGroupService(constrainableService, constrainablePolicyEvaluatorService, constrainableResourceTypes, policyDAO, dirDAO, NoExtensions, emailDomain)
 
   private object SamResourceActionPatterns {
     val readPolicies = ResourceActionPattern("read_policies", "", false)
@@ -163,16 +161,16 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     policyDAO.createPolicy(AccessPolicy(ResourceAndPolicyName(policies2, AccessPolicyName(otherRoleName.value)), Set(dummyUserInfo.userId), WorkbenchEmail("a@b.c"), Set(otherRoleName), Set.empty)).unsafeRunSync()
 
     assertResult(defaultResourceType.roles.filter(_.roleName.equals(ResourceRoleName("owner"))).head.actions) {
-      runAndWait(service.listUserResourceActions(Resource(defaultResourceType.name, resourceName1), dummyUserInfo))
+      runAndWait(service.policyEvaluatorService.listUserResourceActions(Resource(defaultResourceType.name, resourceName1), dummyUserInfo.userId))
     }
 
     assertResult(defaultResourceTypeActions) {
-      runAndWait(service.listUserResourceActions(Resource(defaultResourceType.name, resourceName2), dummyUserInfo))
+      runAndWait(service.policyEvaluatorService.listUserResourceActions(Resource(defaultResourceType.name, resourceName2), dummyUserInfo.userId))
     }
 
-    assert(!runAndWait(service.hasPermission(Resource(defaultResourceType.name, resourceName1), ResourceAction("non_owner_action"), dummyUserInfo)))
-    assert(runAndWait(service.hasPermission(Resource(defaultResourceType.name, resourceName2), ResourceAction("non_owner_action"), dummyUserInfo)))
-    assert(!runAndWait(service.hasPermission(Resource(defaultResourceType.name, ResourceId("doesnotexist")), ResourceAction("view"), dummyUserInfo)))
+    assert(!runAndWait(service.policyEvaluatorService.hasPermission(Resource(defaultResourceType.name, resourceName1), ResourceAction("non_owner_action"), dummyUserInfo.userId)))
+    assert(runAndWait(service.policyEvaluatorService.hasPermission(Resource(defaultResourceType.name, resourceName2), ResourceAction("non_owner_action"), dummyUserInfo.userId)))
+    assert(!runAndWait(service.policyEvaluatorService.hasPermission(Resource(defaultResourceType.name, ResourceId("doesnotexist")), ResourceAction("view"), dummyUserInfo.userId)))
   }
 
   it should "list the user's actions for a resource with nested groups" in {
@@ -189,10 +187,10 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
 
     val userInfo = UserInfo(OAuth2BearerToken(""), user.id, user.email, 0)
     assertResult(Set(ResourceAction("non_owner_action"))) {
-      runAndWait(service.listUserResourceActions(Resource(defaultResourceType.name, resourceName1), userInfo))
+      runAndWait(service.policyEvaluatorService.listUserResourceActions(Resource(defaultResourceType.name, resourceName1), userInfo.userId))
     }
 
-    assert(runAndWait(service.hasPermission(Resource(defaultResourceType.name, resourceName1), nonOwnerAction, userInfo)))
+    assert(runAndWait(service.policyEvaluatorService.hasPermission(Resource(defaultResourceType.name, resourceName1), nonOwnerAction, userInfo.userId)))
   }
 
   "createResource" should "detect conflict on create" in {
@@ -224,7 +222,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     val policyMembership = AccessPolicyMembership(Set(dummyUserInfo.userEmail), Set(ResourceAction("view")), Set(ownerRoleName))
     val policyName = AccessPolicyName("foo")
 
-    runAndWait(service.createResource(resourceType, resourceName, Map(policyName -> policyMembership), Set.empty, dummyUserInfo))
+    runAndWait(service.createResource(resourceType, resourceName, Map(policyName -> policyMembership), Set.empty, dummyUserInfo.userId))
 
     val policies = runAndWait(service.listResourcePolicies(Resource(resourceType.name, resourceName)))
     assertResult(Set(AccessPolicyResponseEntry(policyName, policyMembership, WorkbenchEmail("")))) {
@@ -240,13 +238,13 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     service.createResourceType(resourceType).unsafeRunSync()
 
     val exception1 = intercept[WorkbenchExceptionWithErrorReport] {
-      runAndWait(service.createResource(resourceType, resourceName, Map(AccessPolicyName("foo") -> AccessPolicyMembership(Set.empty, Set.empty, Set(ownerRoleName))), Set.empty, dummyUserInfo))
+      runAndWait(service.createResource(resourceType, resourceName, Map(AccessPolicyName("foo") -> AccessPolicyMembership(Set.empty, Set.empty, Set(ownerRoleName))), Set.empty, dummyUserInfo.userId))
     }
 
     exception1.errorReport.statusCode shouldEqual Option(StatusCodes.BadRequest)
 
     val exception2 = intercept[WorkbenchExceptionWithErrorReport] {
-      runAndWait(service.createResource(resourceType, resourceName, Map(AccessPolicyName("foo") -> AccessPolicyMembership(Set(dummyUserInfo.userEmail), Set.empty, Set.empty)), Set.empty, dummyUserInfo))
+      runAndWait(service.createResource(resourceType, resourceName, Map(AccessPolicyName("foo") -> AccessPolicyMembership(Set(dummyUserInfo.userEmail), Set.empty, Set.empty)), Set.empty, dummyUserInfo.userId))
     }
 
     exception2.errorReport.statusCode shouldEqual Option(StatusCodes.BadRequest)
@@ -277,7 +275,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
 
     val authDomain = Set(WorkbenchGroupName(managedGroupName), WorkbenchGroupName(secondMGroupName))
     val viewPolicyName = AccessPolicyName(constrainableReaderRoleName.value)
-    val resource = runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId(UUID.randomUUID().toString), Map(viewPolicyName -> constrainablePolicyMembership), authDomain, dummyUserInfo))
+    val resource = runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId(UUID.randomUUID().toString), Map(viewPolicyName -> constrainablePolicyMembership), authDomain, dummyUserInfo.userId))
     val storedAuthDomain = runAndWait(constrainableService.loadResourceAuthDomain(resource))
 
     storedAuthDomain shouldEqual authDomain
@@ -295,7 +293,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     val authDomain = Set(WorkbenchGroupName(managedGroupName), nonExistentGroup)
     val viewPolicyName = AccessPolicyName(constrainableReaderRoleName.value)
     intercept[WorkbenchExceptionWithErrorReport] {
-      runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId(UUID.randomUUID().toString), Map(viewPolicyName -> constrainablePolicyMembership), authDomain, dummyUserInfo))
+      runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId(UUID.randomUUID().toString), Map(viewPolicyName -> constrainablePolicyMembership), authDomain, dummyUserInfo.userId))
     }
   }
 
@@ -315,7 +313,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     val authDomain = Set(WorkbenchGroupName(managedGroupName1), WorkbenchGroupName(managedGroupName2))
     val viewPolicyName = AccessPolicyName(constrainableReaderRoleName.value)
     intercept[WorkbenchExceptionWithErrorReport] {
-      runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId(UUID.randomUUID().toString), Map(viewPolicyName -> constrainablePolicyMembership), authDomain, dummyUserInfo))
+      runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId(UUID.randomUUID().toString), Map(viewPolicyName -> constrainablePolicyMembership), authDomain, dummyUserInfo.userId))
     }
   }
 
@@ -340,7 +338,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
 
     val authDomain = Set(WorkbenchGroupName(managedGroupName))
     intercept[WorkbenchExceptionWithErrorReport] {
-      runAndWait(service.createResource(defaultResourceType, ResourceId(UUID.randomUUID().toString), Map(policyName -> policyMembership), authDomain, dummyUserInfo))
+      runAndWait(service.createResource(defaultResourceType, ResourceId(UUID.randomUUID().toString), Map(policyName -> policyMembership), authDomain, dummyUserInfo.userId))
     }
   }
 
@@ -563,7 +561,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
   it should "allow a new resource to be created with the same name as the deleted resource if 'reuseIds' is true for the Resource Type" in {
     val reusableResourceType = defaultResourceType.copy(reuseIds = true)
     reusableResourceType.reuseIds shouldEqual true
-    val localService = new ResourceService(Map(reusableResourceType.name -> reusableResourceType), policyDAO, dirDAO, NoExtensions, "example.com")
+    val localService = new ResourceService(Map(reusableResourceType.name -> reusableResourceType), null, policyDAO, dirDAO, NoExtensions, "example.com")
 
     localService.createResourceType(reusableResourceType).unsafeRunSync()
 
@@ -579,125 +577,6 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     policyDAO.listAccessPolicies(resource).unsafeRunSync() should not be empty
   }
 
-  "listUserAccessPolicies" should "list user's access policies but not others" in {
-    val resource1 = Resource(defaultResourceType.name, ResourceId("my-resource1"))
-    val resource2 = Resource(defaultResourceType.name, ResourceId("my-resource2"))
-    val resource3 = Resource(otherResourceType.name, ResourceId("my-resource1"))
-    val resource4 = Resource(otherResourceType.name, ResourceId("my-resource2"))
-
-    service.createResourceType(defaultResourceType).unsafeRunSync()
-    service.createResourceType(otherResourceType).unsafeRunSync()
-
-    runAndWait(service.createResource(defaultResourceType, resource1.resourceId, dummyUserInfo))
-    runAndWait(service.createResource(defaultResourceType, resource2.resourceId, dummyUserInfo))
-    runAndWait(service.createResource(otherResourceType, resource3.resourceId, dummyUserInfo))
-    runAndWait(service.createResource(otherResourceType, resource4.resourceId, dummyUserInfo))
-
-    runAndWait(service.overwritePolicy(defaultResourceType, AccessPolicyName("in-it"), resource1, AccessPolicyMembership(Set(dummyUserInfo.userEmail), Set(ResourceAction("alter_policies")), Set.empty)))
-    runAndWait(service.overwritePolicy(defaultResourceType, AccessPolicyName("not-in-it"), resource1, AccessPolicyMembership(Set.empty, Set(ResourceAction("alter_policies")), Set.empty)))
-    runAndWait(service.overwritePolicy(otherResourceType, AccessPolicyName("in-it"), resource3, AccessPolicyMembership(Set(dummyUserInfo.userEmail), Set(ResourceAction("alter_policies")), Set.empty)))
-    runAndWait(service.overwritePolicy(otherResourceType, AccessPolicyName("not-in-it"), resource3, AccessPolicyMembership(Set.empty, Set(ResourceAction("alter_policies")), Set.empty)))
-
-    assertResult(Set(
-      UserPolicyResponse(resource1.resourceId, AccessPolicyName(defaultResourceType.ownerRoleName.value), Set.empty, Set.empty),
-      UserPolicyResponse(resource2.resourceId, AccessPolicyName(defaultResourceType.ownerRoleName.value), Set.empty, Set.empty),
-      UserPolicyResponse(resource1.resourceId, AccessPolicyName("in-it"), Set.empty, Set.empty))) {
-      service.listUserAccessPolicies(defaultResourceType.name, dummyUserInfo.userId).unsafeRunSync()
-    }
-  }
-
-  it should "return no auth domains where there is a resource in a constrainable type but does not have any auth domains" in {
-    val policyWithConstrainable = SamLenses.resourceTypeNameInAccessPolicy.set(constrainableResourceType.name)(genPolicy.sample.get)
-    val policy = (SamLenses.resourceInAccessPolicy composeLens Resource.authDomain).set(Set.empty)(policyWithConstrainable)
-    val resource = policy.id.resource
-    val viewPolicyName = AccessPolicyName(constrainableReaderRoleName.value)
-
-    val res = for{
-      _ <- constrainableService.createResourceType(constrainableResourceType).unsafeToFuture()
-      _ <- constrainableService.createResourceType(managedGroupResourceType).unsafeToFuture()  // make sure managed groups in auth domain set are created. dummyUserInfo will be member of the created resourceId
-      _ <- Future.traverse(resource.authDomain)(a => managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))
-      // create resource that dummyUserInfo is a member of for constrainableResourceType
-      _ <- constrainableService.createResource(constrainableResourceType, resource.resourceId, Map(viewPolicyName -> constrainablePolicyMembership), resource.authDomain, dummyUserInfo)
-      r <- constrainableService.listUserAccessPolicies(constrainableResourceType.name, dummyUserInfo.userId).unsafeToFuture()
-    } yield r
-
-    val expected = Set(UserPolicyResponse(resource.resourceId, viewPolicyName, Set.empty, Set.empty))
-    res.futureValue(Timeout(Span(10, Seconds))) shouldBe expected
-  }
-
-  it should "list required authDomains if constrainable" in {
-    val policy = SamLenses.resourceTypeNameInAccessPolicy.set(constrainableResourceType.name)(genPolicy.sample.get)
-    val resource = policy.id.resource
-    val viewPolicyName = AccessPolicyName(constrainableReaderRoleName.value)
-
-    val res = for{
-      _ <- constrainableService.createResourceType(constrainableResourceType).unsafeToFuture()
-      _ <- constrainableService.createResourceType(managedGroupResourceType).unsafeToFuture()  // make sure managed groups in auth domain set are created. dummyUserInfo will be member of the created resourceId
-      _ <- Future.traverse(resource.authDomain)(a => managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))
-      // create resource that dummyUserInfo is a member of for constrainableResourceType
-      _ <- constrainableService.createResource(constrainableResourceType, resource.resourceId, Map(viewPolicyName -> constrainablePolicyMembership), resource.authDomain, dummyUserInfo)
-      r <- constrainableService.listUserAccessPolicies(constrainableResourceType.name, dummyUserInfo.userId).unsafeToFuture()
-    } yield r
-
-    val expected = Set(UserPolicyResponse(resource.resourceId, viewPolicyName, resource.authDomain, Set.empty))
-    res.futureValue(Timeout(Span(10, Seconds))) shouldBe expected
-  }
-
-  it should "list required authDomains and authDomains user is not a member of if constrainable" in {
-    val user = genUserInfo.sample.get
-    val policy = SamLenses.resourceTypeNameInAccessPolicy.set(constrainableResourceType.name)(genPolicy.sample.get)
-    val resource = policy.id.resource
-    val viewPolicyName = AccessPolicyName(constrainableReaderRoleName.value)
-
-    val res = for{
-      _ <- constrainableService.createResourceType(constrainableResourceType).unsafeToFuture()
-      _ <- constrainableService.createResourceType(managedGroupResourceType).unsafeToFuture()
-      _ <- Future.traverse(resource.authDomain)(a => managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))
-      // create resource that dummyUserInfo is a member of for constrainableResourceType
-      _ <- constrainableService.createResource(constrainableResourceType, resource.resourceId, Map(viewPolicyName -> constrainablePolicyMembership), resource.authDomain, dummyUserInfo)
-      _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
-      _ <- constrainableService.createPolicy(policy.id, policy.members + user.userId, policy.roles, policy.actions)
-      r <- constrainableService.listUserAccessPolicies(constrainableResourceType.name, user.userId).unsafeToFuture()
-    } yield r
-
-    val expected = Set(UserPolicyResponse(resource.resourceId, policy.id.accessPolicyName, resource.authDomain, resource.authDomain))
-    res.futureValue(Timeout(Span(10, Seconds))) shouldBe expected
-  }
-
-  it should "list required authDomains and missing authDomains if user is a member of a universal policy" in {
-    val user = genUserInfo.sample.get
-    val policy = SamLenses.resourceTypeNameInAccessPolicy.set(constrainableResourceType.name)(genPolicy.sample.get)
-    val resource = policy.id.resource
-    val viewPolicyName = AccessPolicyName(constrainableReaderRoleName.value)
-
-    val policy2WithResourceType = SamLenses.resourceTypeNameInAccessPolicy.set(managedGroupResourceType.name)(genPolicy.sample.get)
-    val policy2 = SamLenses.accessPolicyNameInAccessPolicy.set(ManagedGroupService.adminNotifierPolicyName)(policy2WithResourceType)
-    val resource2 = policy2.id.resource
-
-    val res = for {
-      _ <- constrainableService.createResourceType(constrainableResourceType).unsafeToFuture()
-      _ <- constrainableService.createResourceType(managedGroupResourceType).unsafeToFuture()
-      _ <- Future.traverse(resource.authDomain)(a =>
-        managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))
-      _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
-      // create resource that dummyUserInfo is a member of for constrainableResourceType
-      _ <- constrainableService.createResource(
-        constrainableResourceType,
-        resource.resourceId,
-        Map(viewPolicyName -> constrainablePolicyMembership),
-        resource.authDomain,
-        dummyUserInfo)
-      _ <- policyDAO.createResource(resource2).unsafeToFuture()
-      _ <- policyDAO.createPolicy(AccessPolicy(policy2.id, Set(user.userId), user.userEmail, policy2.roles, policy2.actions)).unsafeToFuture()
-      _ <- constrainableService.createPolicy(policy.id, policy.members + user.userId, policy.roles, policy.actions)
-      r <- constrainableService.listUserAccessPolicies(constrainableResourceType.name, user.userId).unsafeToFuture()
-    } yield r
-
-    val expected =
-      Set(UserPolicyResponse(resource.resourceId, policy.id.accessPolicyName, resource.authDomain, resource.authDomain))
-    res.futureValue(Timeout(Span(10, Seconds))) shouldBe expected
-  }
-
   "add/remove SubjectToPolicy" should "add/remove subject and tolerate prior (non)existence" in {
     val resource = Resource(defaultResourceType.name, ResourceId("my-resource"))
     val policyName = AccessPolicyName(defaultResourceType.ownerRoleName.value)
@@ -710,12 +589,12 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
 
     // assert baseline
     assertResult(Set.empty) {
-      service.listUserAccessPolicies(defaultResourceType.name, otherUserInfo.userId).unsafeRunSync()
+      service.policyEvaluatorService.listUserAccessPolicies(defaultResourceType.name, otherUserInfo.userId).unsafeRunSync()
     }
 
     runAndWait(service.addSubjectToPolicy(ResourceAndPolicyName(resource, policyName), otherUserInfo.userId))
     assertResult(Set(UserPolicyResponse(resource.resourceId, policyName, Set.empty, Set.empty))) {
-      service.listUserAccessPolicies(defaultResourceType.name, otherUserInfo.userId).unsafeRunSync()
+      service.policyEvaluatorService.listUserAccessPolicies(defaultResourceType.name, otherUserInfo.userId).unsafeRunSync()
     }
 
     // add a second time to make sure no exception is thrown
@@ -724,7 +603,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
 
     runAndWait(service.removeSubjectFromPolicy(ResourceAndPolicyName(resource, policyName), otherUserInfo.userId))
     assertResult(Set.empty) {
-      service.listUserAccessPolicies(defaultResourceType.name, otherUserInfo.userId).unsafeRunSync()
+      service.policyEvaluatorService.listUserAccessPolicies(defaultResourceType.name, otherUserInfo.userId).unsafeRunSync()
     }
 
     // remove a second time to make sure no exception is thrown

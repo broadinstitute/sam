@@ -93,17 +93,18 @@ object Boot extends App with LazyLogging {
       // fall back to getting the "googleServices.appsDomain"
       val emailDomain = config.as[Option[String]]("emailDomain").getOrElse(config.getString("googleServices.appsDomain"))
 
-      val resourceService = new ResourceService(resourceTypeMap, accessPolicyDAO, directoryDAO, cloudExtensions, emailDomain)
+      val policyEvaluatorService = PolicyEvaluatorService(resourceTypeMap, accessPolicyDAO)
+      val resourceService = new ResourceService(resourceTypeMap, policyEvaluatorService, accessPolicyDAO, directoryDAO, cloudExtensions, emailDomain)
       val userService = new UserService(directoryDAO, cloudExtensions)
       val statusService = new StatusService(directoryDAO, cloudExtensions, 10 seconds)
-      val managedGroupService = new ManagedGroupService(resourceService, resourceTypeMap, accessPolicyDAO, directoryDAO, cloudExtensions, emailDomain)
+      val managedGroupService = new ManagedGroupService(resourceService, policyEvaluatorService, resourceTypeMap, accessPolicyDAO, directoryDAO, cloudExtensions, emailDomain)
 
       val samRoutes = cloudExtensions match {
-        case googleExt: GoogleExtensions => new SamRoutes(resourceService, userService, statusService, managedGroupService, config.as[SwaggerConfig]("swagger"), directoryDAO) with StandardUserInfoDirectives with GoogleExtensionRoutes {
+        case googleExt: GoogleExtensions => new SamRoutes(resourceService, userService, statusService, managedGroupService, config.as[SwaggerConfig]("swagger"), directoryDAO, policyEvaluatorService) with StandardUserInfoDirectives with GoogleExtensionRoutes {
             val googleExtensions = googleExt
             val cloudExtensions = googleExt
           }
-        case _ => new SamRoutes(resourceService, userService, statusService, managedGroupService, config.as[SwaggerConfig]("swagger"), directoryDAO) with StandardUserInfoDirectives with NoExtensionRoutes
+        case _ => new SamRoutes(resourceService, userService, statusService, managedGroupService, config.as[SwaggerConfig]("swagger"), directoryDAO, policyEvaluatorService) with StandardUserInfoDirectives with NoExtensionRoutes
       }
       (samRoutes, userService, resourceService, statusService)
     }

@@ -3,8 +3,8 @@ package org.broadinstitute.dsde.workbench.sam.api
 import akka.actor.ActorSystem
 import akka.event.Logging.LogLevel
 import akka.event.{Logging, LoggingAdapter}
-import akka.http.scaladsl.model._
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
+import akka.http.scaladsl.model._
 import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.RouteResult.Complete
@@ -15,16 +15,17 @@ import akka.stream.scaladsl.Sink
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchExceptionWithErrorReport}
 import org.broadinstitute.dsde.workbench.sam._
+import org.broadinstitute.dsde.workbench.sam.api.SamRoutes._
 import org.broadinstitute.dsde.workbench.sam.config.SwaggerConfig
 import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
-import org.broadinstitute.dsde.workbench.sam.service.{ManagedGroupService, ResourceService, StatusService, UserService}
-import SamRoutes._
+import org.broadinstitute.dsde.workbench.sam.service._
+
 import scala.concurrent.{ExecutionContext, Future}
 
 /**
   * Created by dvoet on 5/17/17.
   */
-abstract class SamRoutes(val resourceService: ResourceService, val userService: UserService, val statusService: StatusService, val managedGroupService: ManagedGroupService, val swaggerConfig: SwaggerConfig, val directoryDAO: DirectoryDAO)(implicit val system: ActorSystem, val materializer: Materializer, val executionContext: ExecutionContext)
+abstract class SamRoutes(val resourceService: ResourceService, val userService: UserService, val statusService: StatusService, val managedGroupService: ManagedGroupService, val swaggerConfig: SwaggerConfig, val directoryDAO: DirectoryDAO, val policyEvaluatorService: PolicyEvaluatorService)(implicit val system: ActorSystem, val materializer: Materializer, val executionContext: ExecutionContext)
   extends LazyLogging
   with ResourceRoutes with UserRoutes with SwaggerRoutes with StatusRoutes with ExtensionRoutes with ManagedGroupRoutes {
 
