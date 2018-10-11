@@ -1435,11 +1435,11 @@ definitions:
       accessPolicyName:
         type: string
         description: User's policy for the resource
-      authDomains:
+      authDomainGroups:
         type: array
         items:
           type: string
-      missingAuthDomains:
+      missingAuthDomainGroups:
         type: array
         items:
           type: string

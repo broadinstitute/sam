@@ -87,13 +87,14 @@ object TestSupport extends TestSupport{
       googleServicesConfig,
       petServiceAccountConfig,
       resourceTypes))
-    val mockResourceService = new ResourceService(resourceTypes, policyDAO, directoryDAO, googleExt, "example.com")
-    val mockManagedGroupService = new ManagedGroupService(mockResourceService, resourceTypes, policyDAO, directoryDAO, googleExt, "example.com")
+    val policyEvaluatorService = PolicyEvaluatorService(resourceTypes, policyDAO)
+    val mockResourceService = new ResourceService(resourceTypes, policyEvaluatorService, policyDAO, directoryDAO, googleExt, "example.com")
+    val mockManagedGroupService = new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, policyDAO, directoryDAO, googleExt, "example.com")
 
-    SamDependencies(mockResourceService, new UserService(directoryDAO, googleExt), new StatusService(directoryDAO, googleExt), mockManagedGroupService, directoryDAO, googleExt)
+    SamDependencies(mockResourceService, policyEvaluatorService, new UserService(directoryDAO, googleExt), new StatusService(directoryDAO, googleExt), mockManagedGroupService, directoryDAO, googleExt)
   }
 
-  def genSamRoutes(samDependencies: SamDependencies)(implicit system: ActorSystem, executionContext: ExecutionContext, materializer: Materializer): SamRoutes = new SamRoutes(samDependencies.resourceService, samDependencies.userService, samDependencies.statusService, samDependencies.managedGroupService, null, samDependencies.directoryDAO)
+  def genSamRoutes(samDependencies: SamDependencies)(implicit system: ActorSystem, executionContext: ExecutionContext, materializer: Materializer): SamRoutes = new SamRoutes(samDependencies.resourceService, samDependencies.userService, samDependencies.statusService, samDependencies.managedGroupService, null, samDependencies.directoryDAO, samDependencies.policyEvaluatorService)
     with StandardUserInfoDirectives
     with GoogleExtensionRoutes {
     override val cloudExtensions: CloudExtensions = samDependencies.cloudExtensions
@@ -104,4 +105,4 @@ object TestSupport extends TestSupport{
   def genSamRoutesWithDefault(implicit system: ActorSystem, executionContext: ExecutionContext, materializer: Materializer): SamRoutes = genSamRoutes(genSamDependencies())
 }
 
-final case class SamDependencies(resourceService: ResourceService, userService: UserService, statusService: StatusService, managedGroupService: ManagedGroupService, directoryDAO: MockDirectoryDAO, val cloudExtensions: CloudExtensions)
+final case class SamDependencies(resourceService: ResourceService, policyEvaluatorService: PolicyEvaluatorService, userService: UserService, statusService: StatusService, managedGroupService: ManagedGroupService, directoryDAO: MockDirectoryDAO, val cloudExtensions: CloudExtensions)

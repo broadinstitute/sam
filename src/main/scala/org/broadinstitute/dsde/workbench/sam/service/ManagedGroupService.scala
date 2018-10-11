@@ -15,7 +15,7 @@ import scala.concurrent.Future
 /**
   * Created by gpolumbo on 2/21/2018.
   */
-class ManagedGroupService(private val resourceService: ResourceService, private val resourceTypes: Map[ResourceTypeName, ResourceType], private val accessPolicyDAO: AccessPolicyDAO, private val directoryDAO: DirectoryDAO, private val cloudExtensions: CloudExtensions, private val emailDomain: String) extends LazyLogging {
+class ManagedGroupService(private val resourceService: ResourceService, private val policyEvaluatorService: PolicyEvaluatorService, private val resourceTypes: Map[ResourceTypeName, ResourceType], private val accessPolicyDAO: AccessPolicyDAO, private val directoryDAO: DirectoryDAO, private val cloudExtensions: CloudExtensions, private val emailDomain: String) extends LazyLogging {
 
   def managedGroupType: ResourceType = resourceTypes.getOrElse(ManagedGroupService.managedGroupTypeName, throw new WorkbenchException(s"resource type ${ManagedGroupService.managedGroupTypeName.value} not found"))
 
@@ -28,7 +28,7 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
 
     validateGroupName(groupId.value)
     for {
-      managedGroup <- resourceService.createResource(managedGroupType, groupId, Map(adminPolicy, memberPolicy, adminNotificationPolicy), Set.empty, userInfo)
+      managedGroup <- resourceService.createResource(managedGroupType, groupId, Map(adminPolicy, memberPolicy, adminNotificationPolicy), Set.empty, userInfo.userId)
       policies <- accessPolicyDAO.listAccessPolicies(managedGroup).unsafeToFuture()
       workbenchGroup <- createAggregateGroup(managedGroup, policies, accessInstructionsOpt)
       _ <- cloudExtensions.publishGroup(workbenchGroup.id)
@@ -88,14 +88,14 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
 
   def listGroups(userId: WorkbenchUserId): Future[Set[ManagedGroupMembershipEntry]] = {
     for {
-      ripns <- accessPolicyDAO.listAccessPolicies(ManagedGroupService.managedGroupTypeName, userId).unsafeToFuture()
+      ripns <- policyEvaluatorService.listUserManagedGroups(userId).unsafeToFuture()
       emailLookup <- directoryDAO.batchLoadGroupEmail(ripns.map(ripn => WorkbenchGroupName(ripn.resourceId.value)))
     } yield {
       val emailLookupMap = emailLookup.toMap
       // This will silently ignore any group where the email could not be loaded. This can happen when a
       // managed group is in an inconsistent state (partially created/deleted or created incorrectly).
       // It also includes only admin and member policies
-      ripns.filter(ripn => Seq(ManagedGroupService.adminPolicyName, ManagedGroupService.memberPolicyName).contains(ripn.accessPolicyName)).flatMap { ripn =>
+      ripns.flatMap { ripn =>
         emailLookupMap.get(WorkbenchGroupName(ripn.resourceId.value)).map(email => ManagedGroupMembershipEntry(ripn.resourceId, ripn.accessPolicyName, email))
       }
     }
@@ -169,6 +169,7 @@ object ManagedGroupService {
   val adminPolicyName: ManagedGroupPolicyName = new AccessPolicyName(adminValue) with AllowedManagedGroupPolicyName
   val memberPolicyName: ManagedGroupPolicyName = new AccessPolicyName(memberValue) with AllowedManagedGroupPolicyName
   val adminNotifierPolicyName: ManagedGroupPolicyName = new AccessPolicyName(adminNotifierValue) with AllowedManagedGroupPolicyName
+  val userMembershipPolicyNames: Set[AccessPolicyName] = Set(adminPolicyName, memberPolicyName)
 
   def getPolicyName(policyName: String): ManagedGroupPolicyName = {
     policyName match {

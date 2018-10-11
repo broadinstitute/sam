@@ -514,7 +514,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
 
     val ge = new GoogleExtensions(mockDirectoryDAO, mockAccessPolicyDAO, mockGoogleDirectoryDAO, mockGooglePubSubDAO, mockGoogleIamDAO, mockGoogleStorageDAO, null, googleKeyCache, notificationDAO, googleServicesConfig, petServiceAccountConfig, configResourceTypes)
 
-    val app = SamApplication(new UserService(mockDirectoryDAO, ge), new ResourceService(configResourceTypes, mockAccessPolicyDAO, mockDirectoryDAO, ge, "example.com"), null)
+    val app = SamApplication(new UserService(mockDirectoryDAO, ge), new ResourceService(configResourceTypes, null, mockAccessPolicyDAO, mockDirectoryDAO, ge, "example.com"), null)
     val resourceAndPolicyName = ResourceAndPolicyName(Resource(CloudExtensions.resourceTypeName, GoogleExtensions.resourceId), AccessPolicyName("owner"))
 
     runAndWait(mockDirectoryDAO.loadUser(WorkbenchUserId(googleServicesConfig.serviceAccountClientId))) shouldBe None
@@ -886,8 +886,9 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val emailDomain = "example.com"
 
     val googleExtensions = new GoogleExtensions(dirDAO, policyDAO, null, null, null, null, null, null, null, googleServicesConfig, petServiceAccountConfig, constrainableResourceTypes)
-    val constrainableService = new ResourceService(constrainableResourceTypes, policyDAO, dirDAO, NoExtensions, emailDomain)
-    val managedGroupService = new ManagedGroupService(constrainableService, constrainableResourceTypes, policyDAO, dirDAO, NoExtensions, emailDomain)
+    val constrainablePolicyEvaluatorService = PolicyEvaluatorService(constrainableResourceTypes, policyDAO)
+    val constrainableService = new ResourceService(constrainableResourceTypes, constrainablePolicyEvaluatorService, policyDAO, dirDAO, NoExtensions, emailDomain)
+    val managedGroupService = new ManagedGroupService(constrainableService, constrainablePolicyEvaluatorService, constrainableResourceTypes, policyDAO, dirDAO, NoExtensions, emailDomain)
 
     constrainableService.createResourceType(constrainableResourceType).unsafeRunSync
     constrainableService.createResourceType(managedGroupResourceType).unsafeRunSync
@@ -910,7 +911,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     runAndWait(managedGroupService.addSubjectToPolicy(ResourceId(managedGroupId), ManagedGroupService.memberPolicyName, inBothUser.userId))
 
     val accessPolicyMap = Map(AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembership(Set(inPolicyUser.userEmail, inBothUser.userEmail), constrainableRole.actions, Set(constrainableRole.roleName)))
-    val resource = runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId("rid"), accessPolicyMap, Set(WorkbenchGroupName(managedGroupId)), inBothUser))
+    val resource = runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId("rid"), accessPolicyMap, Set(WorkbenchGroupName(managedGroupId)), inBothUser.userId))
 
     val accessPolicy = runAndWait(constrainableService.overwritePolicy(constrainableResourceType, AccessPolicyName("ap"), resource, AccessPolicyMembership(Set(inPolicyUser.userEmail, inBothUser.userEmail), Set.empty, Set.empty)))
 
@@ -950,7 +951,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     runAndWait(managedGroupService.addSubjectToPolicy(ResourceId(managedGroupId), ManagedGroupService.memberPolicyName, inBothSubGroup.id))
 
     val accessPolicyMap = Map(AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembership(Set(superAdminOwner.userEmail), Set.empty, Set(constrainableRole.roleName)))
-    val resource = runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId("rid"), accessPolicyMap, Set(WorkbenchGroupName(managedGroupId)), superAdminOwner))
+    val resource = runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId("rid"), accessPolicyMap, Set(WorkbenchGroupName(managedGroupId)), superAdminOwner.userId))
 
     // Access policy that intersection group will be calculated for
     val accessPolicy = runAndWait(constrainableService.overwritePolicy(constrainableResourceType, AccessPolicyName("ap"), resource, AccessPolicyMembership(Set(inPolicySubGroup.email, inBothSubGroup.email), Set.empty, Set.empty)))
@@ -969,7 +970,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     runAndWait(dirDAO.createUser(WorkbenchUser(inBothUser.userId, Some(TestSupport.genGoogleSubjectId()), inBothUser.userEmail)))
 
     val accessPolicyMap = Map(AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembership(Set(inPolicyUser.userEmail, inBothUser.userEmail), constrainableRole.actions, Set(constrainableRole.roleName)))
-    val resource = runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId("rid"), accessPolicyMap, Set.empty, inBothUser))
+    val resource = runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId("rid"), accessPolicyMap, Set.empty, inBothUser.userId))
 
     val accessPolicy = runAndWait(constrainableService.overwritePolicy(constrainableResourceType, AccessPolicyName("ap"), resource, AccessPolicyMembership(Set(inPolicyUser.userEmail, inBothUser.userEmail), Set.empty, Set.empty)))
 
@@ -991,7 +992,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     runAndWait(managedGroupService.createManagedGroup(ResourceId(managedGroupId), inAuthDomainUser))
 
     val accessPolicyMap = Map(AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembership(Set(inPolicyUser.userEmail), constrainableRole.actions, Set(constrainableRole.roleName)))
-    val resource = runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId("rid"), accessPolicyMap, Set(WorkbenchGroupName(managedGroupId)), inAuthDomainUser))
+    val resource = runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId("rid"), accessPolicyMap, Set(WorkbenchGroupName(managedGroupId)), inAuthDomainUser.userId))
 
     val accessPolicy = runAndWait(constrainableService.overwritePolicy(constrainableResourceType, AccessPolicyName("ap"), resource, AccessPolicyMembership(Set(inPolicyUser.userEmail), Set.empty, Set.empty)))
 
@@ -1010,7 +1011,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
 
     val accessPolicyMap = Map(AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembership(Set(inPolicyUser.userEmail), constrainableRole.actions, Set(constrainableRole.roleName)),
       AccessPolicyName("emptyPolicy") -> AccessPolicyMembership(Set.empty, Set.empty, Set.empty))
-    val resource = runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId("rid"), accessPolicyMap, Set.empty, inBothUser))
+    val resource = runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId("rid"), accessPolicyMap, Set.empty, inBothUser.userId))
 
     val accessPolicy = runAndWait(constrainableService.overwritePolicy(constrainableResourceType, AccessPolicyName("ap"), resource, AccessPolicyMembership(Set.empty, Set.empty, Set.empty)))
 
@@ -1026,7 +1027,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     runAndWait(dirDAO.createUser(WorkbenchUser(dummyUserInfo.userId, Some(TestSupport.genGoogleSubjectId()), dummyUserInfo.userEmail)))
 
     val accessPolicyMap = Map(AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembership(Set(dummyUserInfo.userEmail), Set.empty, Set(constrainableRole.roleName)))
-    val resource = runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId("rid"), accessPolicyMap, Set.empty, dummyUserInfo))
+    val resource = runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId("rid"), accessPolicyMap, Set.empty, dummyUserInfo.userId))
 
     val accessPolicy = runAndWait(constrainableService.overwritePolicy(constrainableResourceType, AccessPolicyName("ap"), resource, AccessPolicyMembership(Set.empty, constrainableRole.actions, Set(constrainableRole.roleName))))
 
@@ -1042,7 +1043,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     runAndWait(dirDAO.createUser(WorkbenchUser(dummyUserInfo.userId, Some(TestSupport.genGoogleSubjectId()), dummyUserInfo.userEmail)))
 
     val accessPolicyMap = Map(AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembership(Set(dummyUserInfo.userEmail), Set.empty, Set(constrainableRole.roleName)))
-    val resource = runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId("rid"), accessPolicyMap, Set.empty, dummyUserInfo))
+    val resource = runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId("rid"), accessPolicyMap, Set.empty, dummyUserInfo.userId))
 
     val accessPolicy = runAndWait(constrainableService.overwritePolicy(constrainableResourceType, AccessPolicyName("ap"), resource, AccessPolicyMembership(Set.empty, Set.empty, Set(constrainableRole.roleName))))
 
@@ -1058,7 +1059,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     runAndWait(dirDAO.createUser(WorkbenchUser(dummyUserInfo.userId, Some(TestSupport.genGoogleSubjectId()), dummyUserInfo.userEmail)))
 
     val accessPolicyMap = Map(AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembership(Set(dummyUserInfo.userEmail), Set.empty, Set(constrainableRole.roleName)))
-    val resource = runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId("rid"), accessPolicyMap, Set.empty, dummyUserInfo))
+    val resource = runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId("rid"), accessPolicyMap, Set.empty, dummyUserInfo.userId))
 
     val accessPolicy = runAndWait(constrainableService.overwritePolicy(constrainableResourceType, AccessPolicyName("ap"), resource, AccessPolicyMembership(Set.empty, constrainableRole.actions, Set.empty)))
 
@@ -1074,7 +1075,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     runAndWait(dirDAO.createUser(WorkbenchUser(dummyUserInfo.userId, Some(TestSupport.genGoogleSubjectId()), dummyUserInfo.userEmail)))
 
     val accessPolicyMap = Map(AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembership(Set(dummyUserInfo.userEmail), Set.empty, Set(constrainableRole.roleName)))
-    val resource = runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId("rid"), accessPolicyMap, Set.empty, dummyUserInfo))
+    val resource = runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId("rid"), accessPolicyMap, Set.empty, dummyUserInfo.userId))
 
     val accessPolicy = runAndWait(constrainableService.overwritePolicy(constrainableResourceType, AccessPolicyName("ap"), resource, AccessPolicyMembership(Set.empty, Set.empty, Set.empty)))
 
@@ -1109,7 +1110,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     constrainableService.createResourceType(nonConstrainableResourceType).unsafeRunSync
 
     val accessPolicyMap = Map(AccessPolicyName(nonConstrainableRole.roleName.value) -> AccessPolicyMembership(Set(dummyUserInfo.userEmail), nonConstrainableRole.actions, Set(nonConstrainableRole.roleName)))
-    val resource = runAndWait(constrainableService.createResource(nonConstrainableResourceType, ResourceId("rid"), accessPolicyMap, Set.empty, dummyUserInfo))
+    val resource = runAndWait(constrainableService.createResource(nonConstrainableResourceType, ResourceId("rid"), accessPolicyMap, Set.empty, dummyUserInfo.userId))
 
     val accessPolicy = runAndWait(constrainableService.overwritePolicy(nonConstrainableResourceType, AccessPolicyName("ap"), resource, AccessPolicyMembership(Set.empty, Set.empty, Set.empty)))
 

@@ -50,8 +50,9 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
   private val managedGroupResourceType = resourceTypeMap.getOrElse(ResourceTypeName("managed-group"), throw new Error("Failed to load managed-group resource type from reference.conf"))
   private val testDomain = "example.com"
 
-  private val resourceService = new ResourceService(resourceTypeMap, policyDAO, dirDAO, NoExtensions, testDomain)
-  private val managedGroupService = new ManagedGroupService(resourceService, resourceTypeMap, policyDAO, dirDAO, NoExtensions, testDomain)
+  private val policyEvaluatorService = PolicyEvaluatorService(resourceTypeMap, policyDAO)
+  private val resourceService = new ResourceService(resourceTypeMap, policyEvaluatorService, policyDAO, dirDAO, NoExtensions, testDomain)
+  private val managedGroupService = new ManagedGroupService(resourceService, policyEvaluatorService, resourceTypeMap, policyDAO, dirDAO, NoExtensions, testDomain)
 
   private val dummyUserInfo = UserInfo(OAuth2BearerToken("token"), WorkbenchUserId("userid"), WorkbenchEmail("user@company.com"), 0)
 
@@ -110,7 +111,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
 
   it should "sync the new group with Google" in {
     val mockGoogleExtensions = mock[GoogleExtensions]
-    val managedGroupService = new ManagedGroupService(resourceService, resourceTypeMap, policyDAO, dirDAO, mockGoogleExtensions, testDomain)
+    val managedGroupService = new ManagedGroupService(resourceService, null, resourceTypeMap, policyDAO, dirDAO, mockGoogleExtensions, testDomain)
     val groupName = WorkbenchGroupName(resourceId.value)
 
     when(mockGoogleExtensions.publishGroup(groupName)).thenReturn(Future.successful(()))
@@ -169,7 +170,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     val mockGoogleExtensions = mock[GoogleExtensions]
     when(mockGoogleExtensions.onGroupDelete(groupEmail)).thenReturn(Future.successful(()))
     when(mockGoogleExtensions.publishGroup(WorkbenchGroupName(resourceId.value))).thenReturn(Future.successful(()))
-    val managedGroupService = new ManagedGroupService(resourceService, resourceTypeMap, policyDAO, dirDAO, mockGoogleExtensions, testDomain)
+    val managedGroupService = new ManagedGroupService(resourceService, null, resourceTypeMap, policyDAO, dirDAO, mockGoogleExtensions, testDomain)
 
     assertMakeGroup(managedGroupService = managedGroupService)
     runAndWait(managedGroupService.deleteManagedGroup(resourceId))
@@ -328,8 +329,8 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     makeResourceType(newResourceType)
     val resTypes = resourceTypeMap + (newResourceType.name -> newResourceType)
 
-    val resService = new ResourceService(resTypes, policyDAO, dirDAO, NoExtensions, testDomain)
-    val mgService = new ManagedGroupService(resService, resTypes, policyDAO, dirDAO, NoExtensions, testDomain)
+    val resService = new ResourceService(resTypes, policyEvaluatorService, policyDAO, dirDAO, NoExtensions, testDomain)
+    val mgService = new ManagedGroupService(resService, policyEvaluatorService, resTypes, policyDAO, dirDAO, NoExtensions, testDomain)
 
     val user1 = UserInfo(OAuth2BearerToken("token1"), WorkbenchUserId("userId1"), WorkbenchEmail("user1@company.com"), 0)
     val user2 = UserInfo(OAuth2BearerToken("token2"), WorkbenchUserId("userId2"), WorkbenchEmail("user2@company.com"), 0)
