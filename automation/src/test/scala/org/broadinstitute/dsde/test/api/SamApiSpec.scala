@@ -1,8 +1,6 @@
 package org.broadinstitute.dsde.test.api
 
-//import java.io.File
 
-///import akka.actor.ActorSystem
 import org.broadinstitute.dsde.test.SamConfig
 import org.broadinstitute.dsde.workbench.service.{Orchestration, RestException, Sam, Thurloe}
 import org.broadinstitute.dsde.workbench.auth.{AuthToken, ServiceAccountAuthTokenFromJson, ServiceAccountAuthTokenFromPem}
@@ -15,10 +13,10 @@ import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAcc
 import org.scalatest.concurrent.{Eventually, ScalaFutures}
 import org.scalatest.time.{Seconds, Span}
 import org.scalatest.{FreeSpec, Matchers}
-//import org.broadinstitute.dsde.workbench.google._
 
 import scala.concurrent.{Await, ExecutionContext, ExecutionContextExecutor}
 import scala.concurrent.duration.Duration
+import scala.concurrent.duration._
 
 class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaFutures with CleanUp with Eventually {
   implicit override val patienceConfig: PatienceConfig = PatienceConfig(timeout = scaled(Span(5, Seconds)))
@@ -367,84 +365,56 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
     }
 
     "should synchronize groups with Google" in {
+      def waitForGoogle = Thread.sleep(30.seconds.toMillis)
+
       val Seq(user1: Credentials, user2: Credentials, user3: Credentials) = UserPool.chooseStudents(3)
-//      val admin: Credentials = UserPool.chooseAdmin
-//      val adminAuthToken = admin.makeAuthToken
 
       implicit val ec: ExecutionContextExecutor = ExecutionContext.global
-
       val managedGroupId = "fooGroup"
       val adminPolicy = "admin"
-      val emailDomain = "dev.test.firecloud.org"
-
       val user1AuthToken = user1.makeAuthToken()
+
+      val Seq(user1Proxy: WorkbenchEmail, user2Proxy: WorkbenchEmail, user3Proxy: WorkbenchEmail) = Seq(user1, user2, user3).map(user => Sam.user.proxyGroup(user.email)(user1AuthToken))
 
       try {
         Sam.user.createGroup(managedGroupId)(user1AuthToken)
+        waitForGoogle
         Sam.user.setPolicyMembers(managedGroupId, adminPolicy, Set(user1.email, user2.email))(user1AuthToken)
 
         Sam.user.syncPolicy("managed-group", managedGroupId, adminPolicy)(user1AuthToken)
+        waitForGoogle
+
         // check that google has users 1 and 2 in it
+        val policies = Sam.user.listResourcePolicies("managed-group", managedGroupId)(user1AuthToken)
 
-        googleDirectoryDAO.listGroupMembers(WorkbenchEmail(managedGroupId + "@" + emailDomain)).map { membersOpt =>
-          membersOpt.get should contain theSameElementsAs Set(user1.email, user2.email)
+        val policyEmail = for {
+          policy <- policies.asInstanceOf[Set[Map[String, Map[String, List[String]]]]] if policy.getOrElse("policy", Map.empty).getOrElse("memberEmails", List.empty).nonEmpty
+        } yield {
+          policy.asInstanceOf[Map[String, String]].getOrElse("email", "")
         }
 
-        Sam.user.addUser(managedGroupId, adminPolicy, user3.email)(user1AuthToken)
+        // Only one policy should be non empty
+        assert(policyEmail.size == 1)
+
+        val firstCheckOpt = Await.result(googleDirectoryDAO.listGroupMembers(WorkbenchEmail(policyEmail.head)), 5.minutes)
+        firstCheckOpt.getOrElse(fail(s"$managedGroupId not found")) should contain theSameElementsAs Set(user1Proxy.value, user2Proxy.value)
+
+        Sam.user.addUserToPolicy(managedGroupId, adminPolicy, user3.email)(user1AuthToken)
+        waitForGoogle
+
         // check that google has users 1, 2, and 3 in it
+        val secondCheckOpt = Await.result(googleDirectoryDAO.listGroupMembers(WorkbenchEmail(policyEmail.head)), 5.minutes)
+        secondCheckOpt.getOrElse(fail(s"$managedGroupId not found")) should contain theSameElementsAs Set(user1Proxy.value, user2Proxy.value, user3Proxy.value)
 
-        googleDirectoryDAO.listGroupMembers(WorkbenchEmail(managedGroupId + "@" + emailDomain)).map { membersOpt =>
-          membersOpt.get should contain theSameElementsAs Set(user1.email, user2.email, user3.email)
-        }
+        Sam.user.removeUserFromPolicy(managedGroupId, adminPolicy, user2.email)(user1AuthToken)
+        waitForGoogle
 
-        Sam.user.deleteUser(managedGroupId, adminPolicy, user2.email)(user1AuthToken)
         // check that google has users 1 and 3 in it
-
-        googleDirectoryDAO.listGroupMembers(WorkbenchEmail(managedGroupId + "@" + emailDomain)).map { membersOpt =>
-          membersOpt.get should contain theSameElementsAs Set(user1.email, user3.email)
-        }
+        val thirdCheckOpt = Await.result(googleDirectoryDAO.listGroupMembers(WorkbenchEmail(policyEmail.head)), 5.minutes)
+        thirdCheckOpt.getOrElse(fail(s"$managedGroupId not found")) should contain theSameElementsAs Set(user1Proxy.value, user3Proxy.value)
       } finally {
         Sam.user.deleteGroup(managedGroupId)(user1AuthToken)
       }
-
-
-
-
-
-
-
-
-
-
-
-
-
-      //      googleDirectoryDAO.listGroupMembers(managedGroupId + emailDomain).flatMap { membersOpt =>
-      //        membersOpt.map(_ should contain theSameElementsAs Set(user1.email, user2.email))
-      //      }
-      //
-
-      // start off with users 1 and 2 in the google group
-      // then add user 3 to the google group and make sure the group now contains users 1, 2, 3
-      // next remove user 2 from the google group and make sure the group now contains users 1, 3
-
-      // okay so sam functions that need to be exposed are...
-      // well the managed group needs to be created, so:           POST api/groups/v1/{groupName}? is it different for managed groups? -- NOPE! just use this endpoint!
-      // -- how do we make the group with the two users in it already?
-      // -- could use PUT api/groups/v1/{groupName}/{policyName}
-      // -- then could list the policy users with GET api/groups/v1/{groupName}/{policyName}
-      // then i've gotta make that group be synced with google so: POST api/google/v1/group/{groupName}/sync... wait this or /api/google/v1/resource/{resourceTypeName}/{resourceId}/{policyName}/sync ???
-      // -- i think the group sync endpoint doesn't exist, so just the standard policy sync here
-      // -- no biggie, just use the same policyName that we're adding and removing the users from anyways
-      // then want to add a user so:                               PUT api/groups/v1/{groupName}/{policyName}/{email}
-      // and then also delete the user so:                         DELETE api/groups/v1/{groupName}/{policyName}/{email}
-
-      // also need to figure out how to actually check with google? i honestly have no idea...
-      // think that i want to call the googledirectoryDao and see what it says. not sure if i should put this implementation in the sam lib though, maybe in the google one?
-      // -- is it already readily available or do i need to change workbench libs? i think i can get it from here if i include it in the google dao workbench lib
-      // should ask doge about this... want to put it in the right place, plus need to make sure this is the right way to check what google has
-
-      // is there any synchronization/waiting that i need to do here? i don't see it in any other tests, but doesn't mean it's not necessary...
     }
   }
 
