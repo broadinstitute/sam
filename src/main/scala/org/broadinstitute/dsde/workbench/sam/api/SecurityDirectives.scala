@@ -7,6 +7,7 @@ import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchExceptionW
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.model.{FullyQualifiedResourceId, ResourceAction}
 import org.broadinstitute.dsde.workbench.sam.service.PolicyEvaluatorService
+import ImplicitConversions.ioOnSuccessMagnet
 
 trait SecurityDirectives {
   def policyEvaluatorService: PolicyEvaluatorService
@@ -15,7 +16,7 @@ trait SecurityDirectives {
 
   def requireOneOfAction(resource: FullyQualifiedResourceId, requestedActions: Set[ResourceAction], userId: WorkbenchUserId): Directive0 = {
     Directives.mapInnerRoute { innerRoute =>
-      onSuccess(policyEvaluatorService.listUserResourceActions(resource, userId).unsafeToFuture()) { actions =>
+      onSuccess(policyEvaluatorService.listUserResourceActions(resource, userId)) { actions =>
         if(actions.intersect(requestedActions).nonEmpty) innerRoute
         else if (actions.isEmpty) Directives.failWith(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Resource ${resource.resourceTypeName.value}/${resource.resourceId.value} not found")))
         else Directives.failWith(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden, s"You may not perform any of ${requestedActions.mkString("[", ", ", "]").toString.toUpperCase} on ${resource.resourceTypeName.value}/${resource.resourceId.value}")))

@@ -14,6 +14,7 @@ import org.broadinstitute.dsde.workbench.sam.service.ResourceService
 import spray.json.DefaultJsonProtocol._
 import spray.json.JsBoolean
 import scala.concurrent.ExecutionContext
+import ImplicitConversions.ioOnSuccessMagnet
 
 /**
   * Created by mbemis on 5/22/17.
@@ -23,7 +24,7 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
   val resourceService: ResourceService
 
   def withResourceType(name: ResourceTypeName): Directive1[ResourceType] = {
-    onSuccess(resourceService.getResourceType(name).unsafeToFuture()).map {
+    onSuccess(resourceService.getResourceType(name)).map {
       case Some(resourceType) => resourceType
       case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"resource type ${name.value} not found"))
     }
@@ -35,7 +36,7 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
         pathEndOrSingleSlash {
           get {
             complete {
-              resourceService.getResourceTypes().map(typeMap => StatusCodes.OK -> typeMap.values.toSet).unsafeToFuture()
+              resourceService.getResourceTypes().map(typeMap => StatusCodes.OK -> typeMap.values.toSet)
             }
           }
         }
@@ -76,7 +77,7 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
                 pathPrefix(Segment) { action =>
                   pathEndOrSingleSlash {
                     get {
-                      complete(policyEvaluatorService.hasPermission(FullyQualifiedResourceId(resourceType.name, ResourceId(resourceId)), ResourceAction(action), userInfo.userId).unsafeToFuture().map { hasPermission =>
+                      complete(policyEvaluatorService.hasPermission(FullyQualifiedResourceId(resourceType.name, ResourceId(resourceId)), ResourceAction(action), userInfo.userId).map { hasPermission =>
                         StatusCodes.OK -> JsBoolean(hasPermission)
                       })
                     }
