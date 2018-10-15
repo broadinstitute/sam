@@ -3,14 +3,11 @@ package org.broadinstitute.dsde.workbench.sam.openam
 import java.net.URI
 
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
-import cats.effect.IO
-import com.typesafe.config.ConfigFactory
 import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
-import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.api.CreateWorkbenchUser
-import org.broadinstitute.dsde.workbench.sam.config.{DirectoryConfig, SchemaLockConfig}
+import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
 import org.broadinstitute.dsde.workbench.sam.directory._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
@@ -26,11 +23,9 @@ import scala.language.reflectiveCalls
   * Created by dvoet on 6/26/17.
   */
 class MockAccessPolicyDAOSpec extends FlatSpec with Matchers with TestSupport with BeforeAndAfter with BeforeAndAfterAll {
-  val directoryConfig: DirectoryConfig = ConfigFactory.load().as[DirectoryConfig]("directory")
-  val schemaLockConfig = ConfigFactory.load().as[SchemaLockConfig]("schemaLock")
+  val directoryConfig: DirectoryConfig = TestSupport.appConfig.directoryConfig
+  val schemaLockConfig = TestSupport.appConfig.schemaLockConfig
   val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
-  implicit val cs = IO.contextShift(scala.concurrent.ExecutionContext.global)
-
   private val dummyUserInfo = UserInfo(OAuth2BearerToken("token"), WorkbenchUserId("userid"), WorkbenchEmail("user@company.com"), 0)
 
   override protected def beforeAll(): Unit = {
@@ -63,10 +58,10 @@ class MockAccessPolicyDAOSpec extends FlatSpec with Matchers with TestSupport wi
     val dirURI = new URI(directoryConfig.directoryUrl)
     val connectionPool = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
     val ldapPolicyDao = new LdapAccessPolicyDAO(connectionPool, directoryConfig, TestSupport.blockingEc)
-    val ldapDirDao = new LdapDirectoryDAO(connectionPool, directoryConfig)
+    val ldapDirDao = new LdapDirectoryDAO(connectionPool, directoryConfig, TestSupport.blockingEc)
     val allUsersGroup: WorkbenchGroup = TestSupport.runAndWait(NoExtensions.getOrCreateAllUsersGroup(ldapDirDao))
 
-    val policyEvaluatorService = PolicyEvaluatorService(shared.resourceTypes, ldapPolicyDao)
+    val policyEvaluatorService = PolicyEvaluatorService(shared.emailDomain, shared.resourceTypes, ldapPolicyDao)
     val resourceService = new ResourceService(shared.resourceTypes, policyEvaluatorService, ldapPolicyDao, ldapDirDao, NoExtensions, shared.emailDomain)
     val userService = new UserService(ldapDirDao, NoExtensions)
     val managedGroupService = new ManagedGroupService(resourceService, policyEvaluatorService, shared.resourceTypes, ldapPolicyDao, ldapDirDao, NoExtensions, shared.emailDomain)
@@ -79,7 +74,7 @@ class MockAccessPolicyDAOSpec extends FlatSpec with Matchers with TestSupport wi
     val mockPolicyDAO = new MockAccessPolicyDAO(shared.groups)
     val allUsersGroup: WorkbenchGroup = TestSupport.runAndWait(NoExtensions.getOrCreateAllUsersGroup(mockDirDao))
 
-    val policyEvaluatorService = PolicyEvaluatorService(shared.resourceTypes, mockPolicyDAO)
+    val policyEvaluatorService = PolicyEvaluatorService(shared.emailDomain, shared.resourceTypes, mockPolicyDAO)
     val resourceService = new ResourceService(shared.resourceTypes, policyEvaluatorService, mockPolicyDAO, mockDirDao, NoExtensions, shared.emailDomain)
     val userService = new UserService(mockDirDao, NoExtensions)
     val managedGroupService = new ManagedGroupService(resourceService, policyEvaluatorService, shared.resourceTypes, mockPolicyDAO, mockDirDao, NoExtensions, shared.emailDomain)

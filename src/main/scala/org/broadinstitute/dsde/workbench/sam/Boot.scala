@@ -1,26 +1,25 @@
 package org.broadinstitute.dsde.workbench.sam
 
-import java.io.File
+import java.io.{File, FileInputStream}
 import java.net.URI
 
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import akka.stream.ActorMaterializer
 import cats.data.NonEmptyList
-import cats.effect.IO
+import cats.effect.{ExitCode, IO, IOApp}
 import cats.implicits._
 import com.typesafe.config.ConfigFactory
 import com.typesafe.scalalogging.LazyLogging
 import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import javax.net.SocketFactory
 import javax.net.ssl.SSLContext
-import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
 import org.broadinstitute.dsde.workbench.google.GoogleCredentialModes.{Json, Pem}
 import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, HttpGoogleDirectoryDAO, HttpGoogleIamDAO, HttpGoogleProjectDAO, HttpGooglePubSubDAO, HttpGoogleStorageDAO}
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException}
 import org.broadinstitute.dsde.workbench.sam.api.{SamRoutes, StandardUserInfoDirectives}
-import org.broadinstitute.dsde.workbench.sam.config._
+import org.broadinstitute.dsde.workbench.sam.config.{AppConfig, DirectoryConfig, GoogleConfig, SwaggerConfig}
 import org.broadinstitute.dsde.workbench.sam.directory._
 import org.broadinstitute.dsde.workbench.sam.google.{GoogleExtensionRoutes, GoogleExtensions, GoogleKeyCache}
 import org.broadinstitute.dsde.workbench.sam.model._
@@ -30,25 +29,78 @@ import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.ExecutionContexts
 import org.broadinstitute.dsde.workbench.util.DelegatePool
 
-import scala.concurrent.Future
-import scala.concurrent.duration._
-import scala.language.postfixOps
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.duration._
 
-object Boot extends App with LazyLogging {
+object Boot extends IOApp with LazyLogging {
 
-  private def startup(): Future[Unit] = {
-    val config = ConfigFactory.load()
+  def run(args: List[String]): IO[ExitCode] =
+    startup() *> ExitCode.Success.pure[IO]
+
+  private def startup(): IO[Unit] = {
 
     // we need an ActorSystem to host our application in
     implicit val system = ActorSystem("sam")
     implicit val materializer = ActorMaterializer()
-    implicit val cs = IO.contextShift(scala.concurrent.ExecutionContext.global)
 
-    val directoryConfig = config.as[DirectoryConfig]("directory")
-    val googleServicesConfigOption = config.getAs[GoogleServicesConfig]("googleServices")
-    val schemaLockConfig = config.as[SchemaLockConfig]("schemaLock")
+    val config = ConfigFactory.load()
+    val appConfig = AppConfig.readConfig(config)
 
+    val schemaDAO = new JndiSchemaDAO(appConfig.directoryConfig, appConfig.schemaLockConfig)
+
+    val resourceTypeMap = appConfig.resourceTypes.map(rt => rt.name -> rt).toMap
+
+    val appDependencies = createAppDependencies(appConfig, resourceTypeMap)
+
+    appDependencies.use { dependencies =>
+      for {
+        _ <- IO.fromFuture(IO(schemaDAO.init())).onError {
+          case e: WorkbenchException =>
+            IO(logger.error("FATAL - could not update schema to latest version. Is the schema lock stuck?")) *> IO
+              .raiseError(e)
+          case t: Throwable =>
+            IO(logger.error("FATAL - could not init ldap schema", t)) *> IO.raiseError(t)
+        }
+        _ <- dependencies.samApplication.resourceService.initResourceTypes().onError {
+          case t: Throwable => IO(logger.error("FATAL - failure starting http server", t)) *> IO.raiseError(t)
+        }
+
+        _ <- dependencies.policyEvaluatorService.initPolicy()
+
+        _ <- dependencies.cloudExtensions.onBoot(dependencies.samApplication)
+
+        binding <- IO.fromFuture(IO(Http().bindAndHandle(dependencies.samRoutes.route, "0.0.0.0", 8080))).onError {
+          case t: Throwable => IO(logger.error("FATAL - failure starting http server", t)) *> IO.raiseError(t)
+        }
+        _ <- IO.fromFuture(IO(binding.whenTerminated))
+        _ <- IO(system.terminate())
+      } yield ()
+    }
+  }
+
+  private[sam] def createAppDependencies(appConfig: AppConfig, resourceTypeMap: Map[ResourceTypeName, ResourceType])(implicit actorSystem: ActorSystem, materializer: ActorMaterializer): cats.effect.Resource[IO, AppDependencies] = for {
+    ldapConnectionPool <- createLdapConnectionPool(appConfig.directoryConfig)
+    blockingEc <- ExecutionContexts.blockingThreadPool
+    accessPolicyDao = new LdapAccessPolicyDAO(ldapConnectionPool, appConfig.directoryConfig, blockingEc)
+    directoryDAO = new LdapDirectoryDAO(ldapConnectionPool, appConfig.directoryConfig, blockingEc)
+  } yield {
+    val cloudExt: CloudExtensions = appConfig.googleConfig match{
+      case Some(config) => createGoogleCloudExt(accessPolicyDao, directoryDAO, config, resourceTypeMap)
+      case None => NoExtensions
+    }
+    createAppDependencies(
+      appConfig.swaggerConfig,
+      appConfig.emailDomain,
+      resourceTypeMap,
+      cloudExt,
+      accessPolicyDao,
+      directoryDAO
+    )
+  }
+
+  private[sam] def readFile(path: String): cats.effect.Resource[IO, FileInputStream] = cats.effect.Resource.make(IO(new FileInputStream(path)))(inputStream => IO(inputStream.close()))
+
+  private[sam] def createLdapConnectionPool(directoryConfig: DirectoryConfig): cats.effect.Resource[IO, LDAPConnectionPool] = {
     val dirURI = new URI(directoryConfig.directoryUrl)
     val (socketFactory, defaultPort) = dirURI.getScheme.toLowerCase match {
       case "ldaps" => (SSLContext.getDefault.getSocketFactory, 636)
@@ -56,97 +108,110 @@ object Boot extends App with LazyLogging {
       case unsupported => throw new WorkbenchException(s"unsupported directory url scheme: $unsupported")
     }
     val port = if (dirURI.getPort > 0) dirURI.getPort else defaultPort
-    val ldapConnectionPool = new LDAPConnectionPool(new LDAPConnection(socketFactory, dirURI.getHost, port, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
-
-    val directoryDAO = new LdapDirectoryDAO(ldapConnectionPool, directoryConfig)
-    val schemaDAO = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
-
-    val resourceTypes = config.as[Map[String, ResourceType]]("resourceTypes").values.toSet
-    val resourceTypeMap = resourceTypes.map(rt => rt.name -> rt).toMap
-
-    def createCloudExt(accessPolicyDAO: AccessPolicyDAO) = googleServicesConfigOption match {
-      case Some(googleServicesConfig) =>
-        val petServiceAccountConfig = config.as[PetServiceAccountConfig]("petServiceAccount")
-
-        val googleDirDaos = (googleServicesConfig.adminSdkServiceAccounts match {
-          case None => NonEmptyList.one(Pem(WorkbenchEmail(googleServicesConfig.serviceAccountClientId), new File(googleServicesConfig.pemFile), Option(googleServicesConfig.subEmail)))
-          case Some(accounts) => accounts.map(account => Json(account.json, Option(googleServicesConfig.subEmail)))
-        }).map { credentials =>
-          new HttpGoogleDirectoryDAO(googleServicesConfig.appName, credentials, "google")
-        }
-
-        val googleDirectoryDAO = DelegatePool[GoogleDirectoryDAO](googleDirDaos)
-        val googleIamDAO = new HttpGoogleIamDAO(googleServicesConfig.appName, Pem(WorkbenchEmail(googleServicesConfig.serviceAccountClientId), new File(googleServicesConfig.pemFile)), "google")
-        val googlePubSubDAO = new HttpGooglePubSubDAO(googleServicesConfig.appName, Pem(WorkbenchEmail(googleServicesConfig.serviceAccountClientId), new File(googleServicesConfig.pemFile)), "google", googleServicesConfig.groupSyncPubSubProject)
-        val googleStorageDAO = new HttpGoogleStorageDAO(googleServicesConfig.appName, Pem(WorkbenchEmail(googleServicesConfig.serviceAccountClientId), new File(googleServicesConfig.pemFile)), "google")
-        val googleProjectDAO = new HttpGoogleProjectDAO(googleServicesConfig.appName, Pem(googleServicesConfig.billingPemEmail, new File(googleServicesConfig.pathToBillingPem), Option(googleServicesConfig.billingEmail)), "google")
-        val googleKeyCache = new GoogleKeyCache(googleIamDAO, googleStorageDAO, googlePubSubDAO, googleServicesConfig, petServiceAccountConfig)
-        val notificationDAO = new PubSubNotificationDAO(googlePubSubDAO, googleServicesConfig.notificationTopic)
-
-        new GoogleExtensions(directoryDAO, accessPolicyDAO, googleDirectoryDAO, googlePubSubDAO, googleIamDAO, googleStorageDAO, googleProjectDAO, googleKeyCache, notificationDAO, googleServicesConfig, petServiceAccountConfig, resourceTypeMap)
-      case None => NoExtensions
-    }
-
-    //TODO(Qi): reorganzie this a bit after https://github.com/broadinstitute/sam/pull/230
-    def createSamRoutes(cloudExtensions: CloudExtensions, accessPolicyDAO: AccessPolicyDAO): (SamRoutes, UserService, ResourceService, StatusService, PolicyEvaluatorService) = {
-      // TODO - https://broadinstitute.atlassian.net/browse/GAWB-3603
-      // This should JUST get the value from "emailDomain", but for now we're keeping the backwards compatibility code to
-      // fall back to getting the "googleServices.appsDomain"
-      val emailDomain = config.as[Option[String]]("emailDomain").getOrElse(config.getString("googleServices.appsDomain"))
-
-      val policyEvaluatorService = PolicyEvaluatorService(resourceTypeMap, accessPolicyDAO)
-      val resourceService = new ResourceService(resourceTypeMap, policyEvaluatorService, accessPolicyDAO, directoryDAO, cloudExtensions, emailDomain)
-      val userService = new UserService(directoryDAO, cloudExtensions)
-      val statusService = new StatusService(directoryDAO, cloudExtensions, 10 seconds)
-      val managedGroupService = new ManagedGroupService(resourceService, policyEvaluatorService, resourceTypeMap, accessPolicyDAO, directoryDAO, cloudExtensions, emailDomain)
-
-      val samRoutes = cloudExtensions match {
-        case googleExt: GoogleExtensions => new SamRoutes(resourceService, userService, statusService, managedGroupService, config.as[SwaggerConfig]("swagger"), directoryDAO, policyEvaluatorService) with StandardUserInfoDirectives with GoogleExtensionRoutes {
-            val googleExtensions = googleExt
-            val cloudExtensions = googleExt
-          }
-        case _ => new SamRoutes(resourceService, userService, statusService, managedGroupService, config.as[SwaggerConfig]("swagger"), directoryDAO, policyEvaluatorService) with StandardUserInfoDirectives with NoExtensionRoutes
-      }
-      (samRoutes, userService, resourceService, statusService, policyEvaluatorService)
-    }
-
-    for {
-      _ <- schemaDAO.init().recoverWith{
-        case e: WorkbenchException =>
-          logger.error("FATAL - could not update schema to latest version. Is the schema lock stuck? See documentation here for more information: [link]")
-          Future.failed(e)
-        case t: Throwable =>
-          logger.error("FATAL - could not init ldap schema", t)
-          Future.failed(t)
-      }
-
-      io = ExecutionContexts.blockingThreadPool.use{
-        blockingEc =>
-          implicit val cs = IO.contextShift(scala.concurrent.ExecutionContext.Implicits.global)
-          val accessPolicyDao = new LdapAccessPolicyDAO(ldapConnectionPool, directoryConfig, blockingEc)
-          val cloudExtension = createCloudExt(accessPolicyDao)
-          val (sRoutes, userService, resourceService, statusService, policyService) = createSamRoutes(cloudExtension, accessPolicyDao)
-
-          for{
-            _ <- resourceService.initResourceTypes().handleErrorWith{
-              case t: Throwable => IO(logger.error("FATAL - failure starting http server", t)) *> IO.raiseError(t)
-            }
-
-            _ <- policyService.initPolicy()
-
-            _ <- IO.fromFuture(IO(cloudExtension.onBoot(SamApplication(userService, resourceService, statusService))))
-
-            binding <- IO.fromFuture(IO(Http().bindAndHandle(sRoutes.route, "0.0.0.0", 8080))).handleErrorWith{
-              case t: Throwable => IO(logger.error("FATAL - failure starting http server", t)) *> IO.raiseError(t)
-            }
-            _ <- IO.fromFuture(IO(binding.whenTerminated))
-            _ <- IO(system.terminate())
-          } yield ()
-      }
-
-      _ <- io.unsafeToFuture()
-    } yield ()
+    cats.effect.Resource.make(IO(new LDAPConnectionPool(
+      new LDAPConnection(socketFactory, dirURI.getHost, port, directoryConfig.user, directoryConfig.password),
+      directoryConfig.connectionPoolSize
+    )))(ldapConnection => IO(ldapConnection.close()))
   }
 
-  startup()
+  private[sam] def createGoogleCloudExt(
+      accessPolicyDAO: AccessPolicyDAO,
+      directoryDAO: DirectoryDAO,
+      config: GoogleConfig,
+      resourceTypeMap: Map[ResourceTypeName, ResourceType])(implicit actorSystem: ActorSystem): GoogleExtensions = {
+    val googleDirDaos = (config.googleServicesConfig.adminSdkServiceAccounts match {
+      case None =>
+        NonEmptyList.one(
+          Pem(
+            WorkbenchEmail(config.googleServicesConfig.serviceAccountClientId),
+            new File(config.googleServicesConfig.pemFile),
+            Option(config.googleServicesConfig.subEmail)
+          ))
+      case Some(accounts) => accounts.map(account => Json(account.json, Option(config.googleServicesConfig.subEmail)))
+    }).map { credentials => new HttpGoogleDirectoryDAO(config.googleServicesConfig.appName, credentials, "google")
+    }
+
+    val googleDirectoryDAO = DelegatePool[GoogleDirectoryDAO](googleDirDaos)
+    val googleIamDAO = new HttpGoogleIamDAO(
+      config.googleServicesConfig.appName,
+      Pem(WorkbenchEmail(config.googleServicesConfig.serviceAccountClientId), new File(config.googleServicesConfig.pemFile)),
+      "google"
+    )
+    val googlePubSubDAO = new HttpGooglePubSubDAO(
+      config.googleServicesConfig.appName,
+      Pem(WorkbenchEmail(config.googleServicesConfig.serviceAccountClientId), new File(config.googleServicesConfig.pemFile)),
+      "google",
+      config.googleServicesConfig.groupSyncPubSubProject
+    )
+    val googleStorageDAO = new HttpGoogleStorageDAO(
+      config.googleServicesConfig.appName,
+      Pem(WorkbenchEmail(config.googleServicesConfig.serviceAccountClientId), new File(config.googleServicesConfig.pemFile)),
+      "google"
+    )
+    val googleProjectDAO = new HttpGoogleProjectDAO(
+      config.googleServicesConfig.appName,
+      Pem(
+        config.googleServicesConfig.billingPemEmail,
+        new File(config.googleServicesConfig.pathToBillingPem),
+        Option(config.googleServicesConfig.billingEmail)),
+      "google"
+    )
+    val googleKeyCache = new GoogleKeyCache(googleIamDAO, googleStorageDAO, googlePubSubDAO, config.googleServicesConfig, config.petServiceAccountConfig)
+    val notificationDAO = new PubSubNotificationDAO(googlePubSubDAO, config.googleServicesConfig.notificationTopic)
+
+    new GoogleExtensions(
+      directoryDAO,
+      accessPolicyDAO,
+      googleDirectoryDAO,
+      googlePubSubDAO,
+      googleIamDAO,
+      googleStorageDAO,
+      googleProjectDAO,
+      googleKeyCache,
+      notificationDAO,
+      config.googleServicesConfig,
+      config.petServiceAccountConfig,
+      resourceTypeMap
+    )
+  }
+
+  private[sam] def createAppDependencies(
+      swaggerConfig: SwaggerConfig,
+      emailDomain: String,
+      resourceTypeMap: Map[ResourceTypeName, ResourceType],
+      cloudExtensions: CloudExtensions,
+      accessPolicyDAO: AccessPolicyDAO,
+      directoryDAO: DirectoryDAO)(
+      implicit actorSystem: ActorSystem,
+      actorMaterializer: ActorMaterializer): AppDependencies = {
+    val policyEvaluatorService = PolicyEvaluatorService(emailDomain, resourceTypeMap, accessPolicyDAO)
+    val resourceService = new ResourceService(resourceTypeMap, policyEvaluatorService, accessPolicyDAO, directoryDAO, cloudExtensions, emailDomain)
+    val userService = new UserService(directoryDAO, cloudExtensions)
+    val statusService = new StatusService(directoryDAO, cloudExtensions, 10 seconds)
+    val managedGroupService =
+      new ManagedGroupService(resourceService, policyEvaluatorService, resourceTypeMap, accessPolicyDAO, directoryDAO, cloudExtensions, emailDomain)
+    val samApplication = SamApplication(userService, resourceService, statusService)
+
+    cloudExtensions match {
+      case googleExt: GoogleExtensions =>
+        val routes = new SamRoutes(resourceService, userService, statusService, managedGroupService, swaggerConfig, directoryDAO, policyEvaluatorService)
+        with StandardUserInfoDirectives with GoogleExtensionRoutes {
+          val googleExtensions = googleExt
+          val cloudExtensions = googleExt
+        }
+        AppDependencies(routes, samApplication, googleExt, directoryDAO, accessPolicyDAO, policyEvaluatorService)
+      case _ =>
+        val routes = new SamRoutes(resourceService, userService, statusService, managedGroupService, swaggerConfig, directoryDAO, policyEvaluatorService)
+        with StandardUserInfoDirectives with NoExtensionRoutes
+        AppDependencies(routes, samApplication, NoExtensions, directoryDAO, accessPolicyDAO, policyEvaluatorService)
+    }
+  }
 }
+
+final case class AppDependencies(
+    samRoutes: SamRoutes,
+    samApplication: SamApplication,
+    cloudExtensions: CloudExtensions,
+    directoryDAO: DirectoryDAO,
+    accessPolicyDAO: AccessPolicyDAO,
+    policyEvaluatorService: PolicyEvaluatorService)

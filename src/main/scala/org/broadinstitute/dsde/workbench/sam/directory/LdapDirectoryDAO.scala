@@ -2,9 +2,11 @@ package org.broadinstitute.dsde.workbench.sam.directory
 import java.util.Date
 
 import akka.http.scaladsl.model.StatusCodes
+import cats.effect.IO
+import cats.implicits._
 import com.unboundid.ldap.sdk._
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.model.google.{ServiceAccount, ServiceAccountDisplayName, ServiceAccountSubjectId}
+import org.broadinstitute.dsde.workbench.model.google._
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
 import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
@@ -15,7 +17,9 @@ import scala.collection.JavaConverters._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success, Try}
 
-class LdapDirectoryDAO(protected val ldapConnectionPool: LDAPConnectionPool, protected val directoryConfig: DirectoryConfig)(implicit executionContext: ExecutionContext) extends DirectoryDAO with DirectorySubjectNameSupport with LdapSupport {
+// use ExecutionContexts.blockingThreadPool for blockingEc
+class LdapDirectoryDAO(protected val ldapConnectionPool: LDAPConnectionPool, protected val directoryConfig: DirectoryConfig, protected val ecForLdapBlockingIO: ExecutionContext)(implicit executionContext: ExecutionContext) extends DirectoryDAO with DirectorySubjectNameSupport with LdapSupport {
+  implicit val cs = IO.contextShift(executionContext)
 
   override def createGroup(group: BasicWorkbenchGroup, accessInstructionsOpt: Option[String] = None): Future[BasicWorkbenchGroup] = Future {
     val membersAttribute = if (group.members.isEmpty) None else Option(new Attribute(Attr.uniqueMember, group.members.map(subject => subjectDn(subject)).asJava))
@@ -39,13 +43,11 @@ class LdapDirectoryDAO(protected val ldapConnectionPool: LDAPConnectionPool, pro
       throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"group name ${group.id.value} already exists"))
   }
 
-  override def loadGroup(groupName: WorkbenchGroupName): Future[Option[BasicWorkbenchGroup]] = Future {
-    Option(ldapConnectionPool.getEntry(groupDn(groupName))) map { results =>
-      unmarshalGroup(results)
-    }
+  override def loadGroup(groupName: WorkbenchGroupName): IO[Option[BasicWorkbenchGroup]] = cs.evalOn(ecForLdapBlockingIO) {
+    IO(Option(ldapConnectionPool.getEntry(groupDn(groupName))) map(unmarshalGroup))
   }
 
-  private def unmarshalGroup(results: Entry) = {
+  private def unmarshalGroup(results: Entry): BasicWorkbenchGroup = {
     val cn = getAttribute(results, Attr.cn).getOrElse(throw new WorkbenchException(s"${Attr.cn} attribute missing: ${results.getDN}"))
     val email = getAttribute(results, Attr.email).getOrElse(throw new WorkbenchException(s"${Attr.email} attribute missing: ${results.getDN}"))
     val memberDns = getAttributes(results, Attr.uniqueMember)
@@ -89,7 +91,7 @@ class LdapDirectoryDAO(protected val ldapConnectionPool: LDAPConnectionPool, pro
     }
   }
 
-  private def groupUpdatedModification = {
+  private def groupUpdatedModification: Modification = {
     new Modification(ModificationType.REPLACE, Attr.groupUpdatedTimestamp, formattedDate(new Date()))
   }
 
@@ -133,8 +135,8 @@ class LdapDirectoryDAO(protected val ldapConnectionPool: LDAPConnectionPool, pro
     }.getOrElse(throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"$groupId not found")))
   }
 
-  override def loadSubjectFromEmail(email: WorkbenchEmail): Future[Option[WorkbenchSubject]] = Future {
-    ldapConnectionPool.search(directoryConfig.baseDn, SearchScope.SUB, Filter.createEqualityFilter(Attr.email, email.value)).getSearchEntries.asScala match {
+  override def loadSubjectFromEmail(email: WorkbenchEmail): IO[Option[WorkbenchSubject]] = {
+    cs.evalOn(ecForLdapBlockingIO)(IO(ldapConnectionPool.search(directoryConfig.baseDn, SearchScope.SUB, Filter.createEqualityFilter(Attr.email, email.value)).getSearchEntries.asScala)).map{
       case Seq() => None
       case Seq(subject) => Option(dnToSubject(subject.getDN))
       case subjects => throw new WorkbenchException(s"Database error: email $email refers to too many subjects: ${subjects.map(_.getDN)}")
@@ -173,9 +175,7 @@ class LdapDirectoryDAO(protected val ldapConnectionPool: LDAPConnectionPool, pro
     }
   }
 
-  override def loadUser(userId: WorkbenchUserId): Future[Option[WorkbenchUser]] = Future {
-    loadUserInternal(userId)
-  }
+  override def loadUser(userId: WorkbenchUserId): IO[Option[WorkbenchUser]] = cs.evalOn(ecForLdapBlockingIO)(IO(loadUserInternal(userId)))
 
   private def loadUserInternal(userId: WorkbenchUserId) = {
     Option(ldapConnectionPool.getEntry(userDn(userId))) map { results =>
@@ -235,17 +235,15 @@ class LdapDirectoryDAO(protected val ldapConnectionPool: LDAPConnectionPool, pro
     listMemberOfGroups(groupDn(groupId))
   }
 
-  override def enableIdentity(subject: WorkbenchSubject): Future[Unit] = Future {
-    try {
-      ldapConnectionPool.modify(directoryConfig.enabledUsersGroupDn, new Modification(ModificationType.ADD, Attr.member, subjectDn(subject)))
-    } catch {
-      case ldape: LDAPException if ldape.getResultCode == ResultCode.NO_SUCH_OBJECT =>
-        ldapConnectionPool.add(directoryConfig.enabledUsersGroupDn,
-          new Attribute("objectclass", Seq("top", "groupofnames").asJava),
-          new Attribute(Attr.member, subjectDn(subject))
-        )
-      case ldape: LDAPException if ldape.getResultCode == ResultCode.ATTRIBUTE_OR_VALUE_EXISTS =>
-    }
+  override def enableIdentity(subject: WorkbenchSubject): IO[Unit] = cs.evalOn(ecForLdapBlockingIO)(
+    IO(ldapConnectionPool.modify(directoryConfig.enabledUsersGroupDn, new Modification(ModificationType.ADD, Attr.member, subjectDn(subject)))).void
+  ).recoverWith{
+    case ldape: LDAPException if ldape.getResultCode == ResultCode.NO_SUCH_OBJECT =>
+      cs.evalOn(ecForLdapBlockingIO)(IO(ldapConnectionPool.add(directoryConfig.enabledUsersGroupDn,
+        new Attribute("objectclass", Seq("top", "groupofnames").asJava),
+        new Attribute(Attr.member, subjectDn(subject))
+      ))).void
+    case ldape: LDAPException if ldape.getResultCode == ResultCode.ATTRIBUTE_OR_VALUE_EXISTS => IO.unit
   }
 
   override def disableIdentity(subject: WorkbenchSubject): Future[Unit] = Future {
@@ -256,32 +254,31 @@ class LdapDirectoryDAO(protected val ldapConnectionPool: LDAPConnectionPool, pro
     }
   }
 
-  override def isEnabled(subject: WorkbenchSubject): Future[Boolean] = Future {
+  override def isEnabled(subject: WorkbenchSubject): IO[Boolean] = for {
+    entry <- cs.evalOn(ecForLdapBlockingIO)(IO(ldapConnectionPool.getEntry(directoryConfig.enabledUsersGroupDn, Attr.member)))
+  } yield {
     val result = for {
-      entry <- Option(ldapConnectionPool.getEntry(directoryConfig.enabledUsersGroupDn, Attr.member))
-      members <- Option(entry.getAttributeValues(Attr.member))
-    } yield {
-      members.contains(subjectDn(subject))
-    }
+      e <- Option(entry)
+      members <- Option(e.getAttributeValues(Attr.member))
+    } yield members.contains(subjectDn(subject))
     result.getOrElse(false)
   }
 
-  override def getUserFromPetServiceAccount(petSA: ServiceAccountSubjectId): Future[Option[WorkbenchUser]] = {
+  override def getUserFromPetServiceAccount(petSA: ServiceAccountSubjectId): IO[Option[WorkbenchUser]] = {
     loadSubjectFromGoogleSubjectId(GoogleSubjectId(petSA.value)).map{
       case Some(PetServiceAccountId(userId, _)) => loadUserInternal(userId)
       case _ => None
     }
   }
 
-  override def createPetServiceAccount(petServiceAccount: PetServiceAccount): Future[PetServiceAccount] = Future {
+  override def createPetServiceAccount(petServiceAccount: PetServiceAccount): IO[PetServiceAccount] = {
     val attributes = createPetServiceAccountAttributes(petServiceAccount) ++
       Seq(new Attribute("objectclass", Seq("top", ObjectClass.petServiceAccount).asJava), new Attribute(Attr.project, petServiceAccount.id.project.value))
 
-    ldapConnectionPool.add(petDn(petServiceAccount.id), attributes:_*)
-    petServiceAccount
-  }.recover {
-    case ldape: LDAPException if ldape.getResultCode == ResultCode.ENTRY_ALREADY_EXISTS =>
-      throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"identity with id ${petServiceAccount.id} already exists"))
+    cs.evalOn(ecForLdapBlockingIO)(IO(ldapConnectionPool.add(petDn(petServiceAccount.id), attributes:_*))).handleErrorWith{
+      case ldape: LDAPException if ldape.getResultCode == ResultCode.ENTRY_ALREADY_EXISTS =>
+        IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"identity with id ${petServiceAccount.id} already exists")))
+    } .map(_ => petServiceAccount)
   }
 
   private def createPetServiceAccountAttributes(petServiceAccount: PetServiceAccount) = {
@@ -303,8 +300,8 @@ class LdapDirectoryDAO(protected val ldapConnectionPool: LDAPConnectionPool, pro
     attributes ++ displayNameAttribute
   }
 
-  override def loadPetServiceAccount(petServiceAccountId: PetServiceAccountId): Future[Option[PetServiceAccount]] = Future {
-    Option(ldapConnectionPool.getEntry(petDn(petServiceAccountId))).map(unmarshalPetServiceAccount)
+  override def loadPetServiceAccount(petServiceAccountId: PetServiceAccountId): IO[Option[PetServiceAccount]] = cs.evalOn(ecForLdapBlockingIO) {
+    IO(Option(ldapConnectionPool.getEntry(petDn(petServiceAccountId))).map(unmarshalPetServiceAccount))
   }
 
   private def unmarshalPetServiceAccount(entry: Entry): PetServiceAccount = {
@@ -323,12 +320,11 @@ class LdapDirectoryDAO(protected val ldapConnectionPool: LDAPConnectionPool, pro
     ldapSearchStream(userDn(userId), SearchScope.SUB, Filter.createEqualityFilter("objectclass", ObjectClass.petServiceAccount))(unmarshalPetServiceAccount)
   }
 
-  override def updatePetServiceAccount(petServiceAccount: PetServiceAccount): Future[PetServiceAccount] = Future {
+  override def updatePetServiceAccount(petServiceAccount: PetServiceAccount): IO[PetServiceAccount] = {
     val modifications = createPetServiceAccountAttributes(petServiceAccount).map { attribute =>
       new Modification(ModificationType.REPLACE, attribute.getName, attribute.getRawValues)
     }
-    ldapConnectionPool.modify(petDn(petServiceAccount.id), modifications.asJava)
-    petServiceAccount
+    cs.evalOn(ecForLdapBlockingIO)(IO(ldapConnectionPool.modify(petDn(petServiceAccount.id), modifications.asJava))) *> IO.pure(petServiceAccount)
   }
 
   override def getManagedGroupAccessInstructions(groupName: WorkbenchGroupName): Future[Option[String]] = {
@@ -338,20 +334,21 @@ class LdapDirectoryDAO(protected val ldapConnectionPool: LDAPConnectionPool, pro
     }
   }
 
-  override def setManagedGroupAccessInstructions(groupName: WorkbenchGroupName, accessInstructions: String): Future[Unit] = Future {
-    ldapConnectionPool.modify(groupDn(groupName), new Modification(ModificationType.REPLACE, Attr.accessInstructions, accessInstructions))
-  }
+  override def setManagedGroupAccessInstructions(groupName: WorkbenchGroupName, accessInstructions: String): IO[Unit] =
+    cs.evalOn(ecForLdapBlockingIO)(IO(
+      ldapConnectionPool.modify(groupDn(groupName), new Modification(ModificationType.REPLACE, Attr.accessInstructions, accessInstructions))
+    ))
 
-  override def loadSubjectFromGoogleSubjectId(googleSubjectId: GoogleSubjectId): Future[Option[WorkbenchSubject]] =
+  override def loadSubjectFromGoogleSubjectId(googleSubjectId: GoogleSubjectId): IO[Option[WorkbenchSubject]] =
     for{
-      entries <- Future{ldapConnectionPool.search(peopleOu, SearchScope.SUB, Filter.createEqualityFilter(Attr.googleSubjectId, googleSubjectId.value)).getSearchEntries.asScala}
+      entries <- cs.evalOn(ecForLdapBlockingIO)(IO(ldapConnectionPool.search(peopleOu, SearchScope.SUB, Filter.createEqualityFilter(Attr.googleSubjectId, googleSubjectId.value)).getSearchEntries.asScala))
       res <- entries match {
-        case Seq() => Future.successful(None)
-        case Seq(subject) => Future.successful(Try(dnToSubject(subject.getDN)).toOption)
-        case subjects => Future.failed(new WorkbenchException(s"Database error: googleSubjectId $googleSubjectId refers to too many subjects: ${subjects.map(_.getDN)}"))
+        case Seq() => IO.pure(None)
+        case Seq(subject) => IO.pure(Try(dnToSubject(subject.getDN)).toOption)
+        case subjects => IO.raiseError(new WorkbenchException(s"Database error: googleSubjectId $googleSubjectId refers to too many subjects: ${subjects.map(_.getDN)}"))
       }
     } yield res
 
-  override def setGoogleSubjectId(userId: WorkbenchUserId, googleSubjectId: GoogleSubjectId): Future[Unit] =
-    Future{ldapConnectionPool.modify(userDn(userId), new Modification(ModificationType.ADD, Attr.googleSubjectId, googleSubjectId.value))}
+  override def setGoogleSubjectId(userId: WorkbenchUserId, googleSubjectId: GoogleSubjectId): IO[Unit] =
+    cs.evalOn(ecForLdapBlockingIO)(IO(ldapConnectionPool.modify(userDn(userId), new Modification(ModificationType.ADD, Attr.googleSubjectId, googleSubjectId.value))))
 }

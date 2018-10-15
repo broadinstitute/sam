@@ -6,25 +6,27 @@ import java.util.concurrent.Executors
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.headers.RawHeader
 import akka.stream.Materializer
+import cats.effect.IO
+import cats.kernel.Eq
 import com.typesafe.config.ConfigFactory
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
 import org.broadinstitute.dsde.workbench.google.mock.{MockGoogleDirectoryDAO, MockGoogleIamDAO, MockGooglePubSubDAO, MockGoogleStorageDAO}
 import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleIamDAO}
 import org.broadinstitute.dsde.workbench.model._
+import org.broadinstitute.dsde.workbench.sam.api.StandardUserInfoDirectives._
 import org.broadinstitute.dsde.workbench.sam.api._
-import org.broadinstitute.dsde.workbench.sam.config.{GoogleServicesConfig, PetServiceAccountConfig, _}
+import org.broadinstitute.dsde.workbench.sam.config.AppConfig._
+import org.broadinstitute.dsde.workbench.sam.config._
 import org.broadinstitute.dsde.workbench.sam.directory.MockDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.google.{GoogleExtensionRoutes, GoogleExtensions, GoogleKeyCache}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, MockAccessPolicyDAO}
-import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
-import org.scalatest.prop.{Configuration, PropertyChecks}
-import org.scalatest.{FlatSpec, Matchers}
-import StandardUserInfoDirectives._
-import cats.kernel.Eq
+import org.broadinstitute.dsde.workbench.sam.service._
+import org.scalatest.Matchers
 import org.scalatest.concurrent.PatienceConfiguration.Timeout
+import org.scalatest.prop.{Configuration, PropertyChecks}
 import org.scalatest.time.{Seconds, Span}
 
 import scala.concurrent.duration.Duration
@@ -36,9 +38,14 @@ import scala.concurrent.{Await, Awaitable, ExecutionContext}
 trait TestSupport{
   def runAndWait[T](f: Awaitable[T]): T = Await.result(f, Duration.Inf)
   implicit val futureTimeout = Timeout(Span(10, Seconds))
+  implicit val cs = IO.contextShift(scala.concurrent.ExecutionContext.global)
+  implicit val timer = IO.timer(scala.concurrent.ExecutionContext.global)
+  implicit val eqWorkbenchException: Eq[WorkbenchException] = new Eq[WorkbenchException]{
+    override def eqv(x: WorkbenchException, y: WorkbenchException): Boolean = x.getMessage == y.getMessage
+  }
 }
 
-trait PropertyBasedTesting extends FlatSpec with PropertyChecks with Configuration with Matchers {
+trait PropertyBasedTesting extends PropertyChecks with Configuration with Matchers {
   implicit override val generatorDrivenConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(minSuccessful = 3)
 }
 
@@ -49,8 +56,9 @@ object TestSupport extends TestSupport{
     override def eqv(x: WorkbenchExceptionWithErrorReport, y: WorkbenchExceptionWithErrorReport): Boolean = x.errorReport.statusCode == y.errorReport.statusCode && x.errorReport.message == y.errorReport.message
   }
   val config = ConfigFactory.load()
-  val petServiceAccountConfig = config.as[PetServiceAccountConfig]("petServiceAccount")
-  val googleServicesConfig = config.as[GoogleServicesConfig]("googleServices")
+  val appConfig = AppConfig.readConfig(config)
+  val petServiceAccountConfig = appConfig.googleConfig.get.petServiceAccountConfig
+  val googleServicesConfig = appConfig.googleConfig.get.googleServicesConfig
   val configResourceTypes = config.as[Map[String, ResourceType]]("resourceTypes").values.map(rt => rt.name -> rt).toMap
   val defaultUserEmail = WorkbenchEmail("newuser@new.com")
   val directoryConfig = config.as[DirectoryConfig]("directory")
@@ -87,7 +95,7 @@ object TestSupport extends TestSupport{
       googleServicesConfig,
       petServiceAccountConfig,
       resourceTypes))
-    val policyEvaluatorService = PolicyEvaluatorService(resourceTypes, policyDAO)
+    val policyEvaluatorService = PolicyEvaluatorService(appConfig.emailDomain, resourceTypes, policyDAO)
     val mockResourceService = new ResourceService(resourceTypes, policyEvaluatorService, policyDAO, directoryDAO, googleExt, "example.com")
     val mockManagedGroupService = new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, policyDAO, directoryDAO, googleExt, "example.com")
 
@@ -100,7 +108,7 @@ object TestSupport extends TestSupport{
     override val cloudExtensions: CloudExtensions = samDependencies.cloudExtensions
     override val googleExtensions: GoogleExtensions = if(samDependencies.cloudExtensions.isInstanceOf[GoogleExtensions]) samDependencies.cloudExtensions.asInstanceOf[GoogleExtensions] else null
     val googleKeyCache = if(samDependencies.cloudExtensions.isInstanceOf[GoogleExtensions])samDependencies.cloudExtensions.asInstanceOf[GoogleExtensions].googleKeyCache else null
-  }
+}
 
   def genSamRoutesWithDefault(implicit system: ActorSystem, executionContext: ExecutionContext, materializer: Materializer): SamRoutes = genSamRoutes(genSamDependencies())
 }

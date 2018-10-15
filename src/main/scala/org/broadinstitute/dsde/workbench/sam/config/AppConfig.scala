@@ -1,4 +1,4 @@
-package org.broadinstitute.dsde.workbench.sam
+package org.broadinstitute.dsde.workbench.sam.config
 
 import cats.data.NonEmptyList
 import com.google.api.client.json.jackson2.JacksonFactory
@@ -9,11 +9,14 @@ import net.ceedubs.ficus.readers.ValueReader
 import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.model.google._
 import org.broadinstitute.dsde.workbench.sam.model._
-
+import DistributedLockConfig.distributedLockConfigReader
+import GoogleServicesConfig.googleServicesConfigReader
 /**
   * Created by dvoet on 7/18/17.
   */
-package object config {
+final case class AppConfig(emailDomain: String, directoryConfig: DirectoryConfig, schemaLockConfig: SchemaLockConfig, distributedLockConfig: DistributedLockConfig, swaggerConfig: SwaggerConfig, googleConfig: Option[GoogleConfig], resourceTypes: Set[ResourceType])
+
+object AppConfig {
   implicit val swaggerReader: ValueReader[SwaggerConfig] = ValueReader.relative { config =>
     SwaggerConfig(
       config.getString("googleClientId"),
@@ -96,10 +99,6 @@ package object config {
 
   val jsonFactory = JacksonFactory.getDefaultInstance
 
-  implicit val serviceAccountConfigReader: ValueReader[ServiceAccountConfig] = ValueReader.relative { config =>
-    ServiceAccountConfig(config.root().render(ConfigRenderOptions.concise))
-  }
-
   implicit def nonEmptyListReader[A](implicit valueReader: ValueReader[List[A]]): ValueReader[Option[NonEmptyList[A]]] = new ValueReader[Option[NonEmptyList[A]]] {
     def read(config: Config, path: String): Option[NonEmptyList[A]] = {
       if (config.hasPath(path)) {
@@ -110,32 +109,6 @@ package object config {
     }
   }
 
-  implicit val googleServicesConfigReader: ValueReader[GoogleServicesConfig] = ValueReader.relative { config =>
-    GoogleServicesConfig(
-      config.getString("appName"),
-      config.getString("appsDomain"),
-      config.getString("environment"),
-      config.getString("pathToPem"),
-      config.getString("serviceAccountClientId"),
-      WorkbenchEmail(config.getString("serviceAccountClientEmail")),
-      GoogleProject(config.getString("serviceAccountClientProject")),
-      WorkbenchEmail(config.getString("subEmail")),
-      WorkbenchEmail(config.getString("projectServiceAccount")),
-      config.getString("billing.pathToBillingPem"),
-      WorkbenchEmail(config.getString("billing.billingPemEmail")),
-      WorkbenchEmail(config.getString("billing.billingEmail")),
-      config.getString("groupSync.pubSubProject"),
-      org.broadinstitute.dsde.workbench.util.toScalaDuration(config.getDuration("groupSync.pollInterval")),
-      org.broadinstitute.dsde.workbench.util.toScalaDuration(config.getDuration("groupSync.pollJitter")),
-      config.getString("groupSync.pubSubTopic"),
-      config.getString("groupSync.pubSubSubscription"),
-      config.getInt("groupSync.workerCount"),
-      config.getString("notifications.topicName"),
-      config.as[GoogleKeyCacheConfig]("googleKeyCache"),
-      config.as[Option[String]]("resourceNamePrefix"),
-      config.as[Option[NonEmptyList[ServiceAccountConfig]]]("adminSdkServiceAccounts")
-    )
-  }
 
   implicit val petServiceAccountConfigReader: ValueReader[PetServiceAccountConfig] = ValueReader.relative { config =>
     PetServiceAccountConfig(
@@ -144,26 +117,30 @@ package object config {
     )
   }
 
-  implicit val googleKeyCacheConfigReader: ValueReader[GoogleKeyCacheConfig] = ValueReader.relative { config =>
-    GoogleKeyCacheConfig(
-      GcsBucketName(config.getString("bucketName")),
-      config.getInt("activeKeyMaxAge"),
-      config.getInt("retiredKeyMaxAge"),
-      config.getString("monitor.pubSubProject"),
-      org.broadinstitute.dsde.workbench.util.toScalaDuration(config.getDuration("monitor.pollInterval")),
-      org.broadinstitute.dsde.workbench.util.toScalaDuration(config.getDuration("monitor.pollJitter")),
-      config.getString("monitor.pubSubTopic"),
-      config.getString("monitor.pubSubSubscription"),
-      config.getInt("monitor.workerCount")
-    )
-  }
-
-  implicit val schemaLockConfig: ValueReader[SchemaLockConfig] = ValueReader.relative { config =>
+  implicit val schemaLockConfigReader: ValueReader[SchemaLockConfig] = ValueReader.relative { config =>
     SchemaLockConfig(
       config.getBoolean("lockSchemaOnBoot"),
       config.getInt("recheckTimeInterval"),
       config.getInt("maxTimeToWait"),
       config.getString("instanceId")
     )
+  }
+
+  def readConfig(config: Config): AppConfig = {
+    val directoryConfig = config.as[DirectoryConfig]("directory")
+    val googleConfigOption = for{
+      googleServices <- config.getAs[GoogleServicesConfig]("googleServices")
+    } yield GoogleConfig(googleServices, config.as[PetServiceAccountConfig]("petServiceAccount"))
+
+    val schemaLockConfig = config.as[SchemaLockConfig]("schemaLock")
+    val distributedLockConfig = config.as[DistributedLockConfig]("distributedLock")
+    val swaggerConfig = config.as[SwaggerConfig]("swagger")
+    // TODO - https://broadinstitute.atlassian.net/browse/GAWB-3603
+    // This should JUST get the value from "emailDomain", but for now we're keeping the backwards compatibility code to
+    // fall back to getting the "googleServices.appsDomain"
+    val emailDomain = config.as[Option[String]]("emailDomain").getOrElse(config.getString("googleServices.appsDomain"))
+    val resourceTypes = config.as[Map[String, ResourceType]]("resourceTypes").values.toSet
+
+    AppConfig(emailDomain, directoryConfig, schemaLockConfig, distributedLockConfig, swaggerConfig, googleConfigOption, resourceTypes)
   }
 }

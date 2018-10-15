@@ -1,6 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.service
 
 import akka.http.scaladsl.model.StatusCodes
+import cats.effect.IO
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam._
@@ -71,7 +72,7 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
   }
 
   // Per dvoet, when asking for a group, we will just return the group email
-  def loadManagedGroup(groupId: ResourceId): Future[Option[WorkbenchEmail]] = {
+  def loadManagedGroup(groupId: ResourceId): IO[Option[WorkbenchEmail]] = {
     directoryDAO.loadGroup(WorkbenchGroupName(groupId.value)).map(_.map(_.email))
   }
 
@@ -154,7 +155,7 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
     directoryDAO.getManagedGroupAccessInstructions(WorkbenchGroupName(groupId.value))
   }
 
-  def setAccessInstructions(groupId: ResourceId, accessInstructions: String): Future[Unit] = {
+  def setAccessInstructions(groupId: ResourceId, accessInstructions: String): IO[Unit] = {
     directoryDAO.setManagedGroupAccessInstructions(WorkbenchGroupName(groupId.value), accessInstructions)
   }
 }

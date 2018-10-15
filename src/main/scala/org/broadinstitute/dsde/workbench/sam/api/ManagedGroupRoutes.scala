@@ -5,6 +5,7 @@ import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.Route
+import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam._
@@ -94,9 +95,9 @@ trait ManagedGroupRoutes extends UserInfoDirectives with SecurityDirectives with
 
   private def handleGetGroup(resourceId: ResourceId): Route = {
     complete (
-      managedGroupService.loadManagedGroup(resourceId).map {
-        case Some(response) => StatusCodes.OK -> response
-        case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "group not found"))
+      managedGroupService.loadManagedGroup(resourceId).flatMap {
+        case Some(response) => IO.pure(StatusCodes.OK -> response)
+        case None => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "group not found")))
       }
     )
   }

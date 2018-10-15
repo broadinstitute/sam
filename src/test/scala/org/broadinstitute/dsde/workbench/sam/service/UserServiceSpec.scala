@@ -6,12 +6,12 @@ import java.util.UUID
 
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
-import com.typesafe.config.ConfigFactory
+import cats.kernel.Eq
 import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
-import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.Generator._
-import org.broadinstitute.dsde.workbench.sam.config.{DirectoryConfig, PetServiceAccountConfig, SchemaLockConfig}
+import org.broadinstitute.dsde.workbench.sam.TestSupport.eqWorkbenchExceptionErrorReport
+import org.broadinstitute.dsde.workbench.sam.api.{CreateWorkbenchUser, InviteUser}
 import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryDAO, LdapDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
 import org.broadinstitute.dsde.workbench.sam.model._
@@ -22,9 +22,6 @@ import org.mockito.Mockito._
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.mockito.MockitoSugar
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FlatSpec, Matchers}
-import TestSupport.eqWorkbenchExceptionErrorReport
-import cats.kernel.Eq
-import org.broadinstitute.dsde.workbench.sam.api.{CreateWorkbenchUser, InviteUser}
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
@@ -44,13 +41,12 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
   val defaultUser = CreateWorkbenchUser(defaultUserId, defaultGoogleSubjectId, defaultUserEmail)
   val userInfo = UserInfo(OAuth2BearerToken("token"), WorkbenchUserId(UUID.randomUUID().toString), WorkbenchEmail("user@company.com"), 0)
 
-  lazy val config = ConfigFactory.load()
-  lazy val directoryConfig = config.as[DirectoryConfig]("directory")
-  lazy val schemaLockConfig = ConfigFactory.load().as[SchemaLockConfig]("schemaLock")
-  lazy val petServiceAccountConfig = config.as[PetServiceAccountConfig]("petServiceAccount")
+  lazy val directoryConfig = TestSupport.appConfig.directoryConfig
+  lazy val schemaLockConfig = TestSupport.appConfig.schemaLockConfig
+  lazy val petServiceAccountConfig = TestSupport.appConfig.googleConfig.get.petServiceAccountConfig
   lazy val dirURI = new URI(directoryConfig.directoryUrl)
   lazy val connectionPool = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
-  lazy val dirDAO = new LdapDirectoryDAO(connectionPool, directoryConfig)
+  lazy val dirDAO = new LdapDirectoryDAO(connectionPool, directoryConfig, TestSupport.blockingEc)
   lazy val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
   var service: UserService = _
@@ -84,9 +80,9 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
     verify(googleExtensions).onUserCreate(WorkbenchUser(defaultUser.id, Some(defaultUser.googleSubjectId), defaultUser.email))
 
     // check ldap
-    dirDAO.loadUser(defaultUserId).futureValue shouldBe Some(WorkbenchUser(defaultUser.id, Some(defaultUser.googleSubjectId), defaultUser.email))
-    dirDAO.isEnabled(defaultUserId).futureValue shouldBe true
-    dirDAO.loadGroup(service.cloudExtensions.allUsersGroupName).futureValue shouldBe
+    dirDAO.loadUser(defaultUserId).unsafeRunSync() shouldBe Some(WorkbenchUser(defaultUser.id, Some(defaultUser.googleSubjectId), defaultUser.email))
+    dirDAO.isEnabled(defaultUserId).unsafeRunSync() shouldBe true
+    dirDAO.loadGroup(service.cloudExtensions.allUsersGroupName).unsafeRunSync() shouldBe
       Some(BasicWorkbenchGroup(service.cloudExtensions.allUsersGroupName, Set(defaultUserId), service.cloudExtensions.getOrCreateAllUsersGroup(dirDAO).futureValue.email))
   }
 
@@ -108,14 +104,14 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
 
   it should "get user status info" in {
     // user doesn't exist yet
-    service.getUserStatusInfo(defaultUserId).futureValue shouldBe None
+    service.getUserStatusInfo(defaultUserId).unsafeRunSync() shouldBe None
 
     // create a user
     val newUser = service.createUser(defaultUser).futureValue
     newUser shouldBe UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
 
     // get user status info (id, email, ldap)
-    val info = service.getUserStatusInfo(defaultUserId).futureValue
+    val info = service.getUserStatusInfo(defaultUserId).unsafeRunSync()
     info shouldBe Some(UserStatusInfo(defaultUserId.value, defaultUserEmail.value, true))
   }
 
@@ -142,14 +138,14 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
     newUser shouldBe UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
 
     // it should be enabled
-    dirDAO.isEnabled(defaultUserId).futureValue shouldBe true
+    dirDAO.isEnabled(defaultUserId).unsafeRunSync() shouldBe true
 
     // disable the user
     val response = service.disableUser(defaultUserId, userInfo).futureValue
     response shouldBe Some(UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> false, "allUsersGroup" -> true, "google" -> true)))
 
     // check ldap
-    dirDAO.isEnabled(defaultUserId).futureValue shouldBe false
+    dirDAO.isEnabled(defaultUserId).unsafeRunSync() shouldBe false
   }
 
   it should "delete a user" in {
@@ -161,7 +157,7 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
     service.deleteUser(defaultUserId, userInfo).futureValue
 
     // check ldap
-    dirDAO.loadUser(defaultUserId).futureValue shouldBe None
+    dirDAO.loadUser(defaultUserId).unsafeRunSync() shouldBe None
   }
 
   it should "generate unique identifier properly" in {
@@ -183,7 +179,7 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
   "UserService registerUser" should "create new user when there's no existing subject for a given googleSubjectId and email" in{
     val user = genCreateWorkbenchUser.sample.get
     service.registerUser(user).futureValue
-    val res = dirDAO.loadUser(user.id).futureValue
+    val res = dirDAO.loadUser(user.id).unsafeRunSync()
     res shouldBe Some(WorkbenchUser(user.id, Some(user.googleSubjectId), user.email))
   }
 
@@ -195,7 +191,7 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
     val user = genCreateWorkbenchUser.sample.get
     dirDAO.createUser(WorkbenchUser(user.id, None, user.email)).futureValue
     service.registerUser(user).futureValue
-    val res = dirDAO.loadUser(user.id).futureValue
+    val res = dirDAO.loadUser(user.id).unsafeRunSync()
     res shouldBe Some(WorkbenchUser(user.id, Some(user.googleSubjectId), user.email))
   }
 
@@ -225,7 +221,7 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
   "UserService inviteUser" should "create a new user" in{
     val user = genInviteUser.sample.get
     service.inviteUser(user).futureValue
-    val res = dirDAO.loadUser(user.inviteeId).futureValue
+    val res = dirDAO.loadUser(user.inviteeId).unsafeRunSync()
     res shouldBe Some(WorkbenchUser(user.inviteeId, None, user.inviteeEmail))
   }
 
@@ -248,11 +244,11 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
   "invite user and then create user with same email" should "update googleSubjectId for this user" in {
     val user = genCreateWorkbenchUser.sample.get
     service.inviteUser(InviteUser(user.id, user.email)).futureValue
-    val res = dirDAO.loadUser(user.id).futureValue
+    val res = dirDAO.loadUser(user.id).unsafeRunSync()
     res shouldBe Some(WorkbenchUser(user.id, None, user.email))
 
     service.createUser(user).futureValue
-    val updated = dirDAO.loadUser(user.id).futureValue
+    val updated = dirDAO.loadUser(user.id).unsafeRunSync()
     updated shouldBe Some(WorkbenchUser(user.id, Some(user.googleSubjectId), user.email))
   }
 

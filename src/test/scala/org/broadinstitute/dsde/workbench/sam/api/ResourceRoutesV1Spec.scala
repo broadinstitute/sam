@@ -65,9 +65,9 @@ class ResourceRoutesV1Spec extends FlatSpec with Matchers with ScalatestRouteTes
   private def createSamRoutes(resourceTypes: Map[ResourceTypeName, ResourceType], userInfo: UserInfo = defaultUserInfo) = {
     val accessPolicyDAO = new MockAccessPolicyDAO()
     val directoryDAO = new MockDirectoryDAO()
-    val policyEvaluatorService = PolicyEvaluatorService(resourceTypes, accessPolicyDAO)
-
     val emailDomain = "example.com"
+
+    val policyEvaluatorService = PolicyEvaluatorService(emailDomain, resourceTypes, accessPolicyDAO)
     val mockResourceService = new ResourceService(resourceTypes, policyEvaluatorService, accessPolicyDAO, directoryDAO, NoExtensions, emailDomain)
     val mockUserService = new UserService(directoryDAO, NoExtensions)
     val mockStatusService = new StatusService(directoryDAO, NoExtensions)
@@ -1169,7 +1169,7 @@ class ResourceRoutesV1Spec extends FlatSpec with Matchers with ScalatestRouteTes
     val resourceId = ResourceId("foo")
     runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, samRoutes.userInfo))
 
-    val user = runAndWait(samRoutes.directoryDAO.loadUser(samRoutes.userInfo.userId)).get
+    val user = samRoutes.directoryDAO.loadUser(samRoutes.userInfo.userId).unsafeRunSync().get
     val userIdInfo = UserIdInfo(user.id, user.email, user.googleSubjectId)
 
     Get(s"/api/resources/v1/${resourceType.name}/${resourceId.value}/allUsers") ~> samRoutes.route ~> check {
@@ -1234,7 +1234,7 @@ class ResourceRoutesV1Spec extends FlatSpec with Matchers with ScalatestRouteTes
     val resourceId = ResourceId("foo")
     runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, samRoutes.userInfo))
 
-    val user = runAndWait(samRoutes.directoryDAO.loadUser(samRoutes.userInfo.userId)).get
+    val user = samRoutes.directoryDAO.loadUser(samRoutes.userInfo.userId).unsafeRunSync().get
     val userIdInfo = UserIdInfo(user.id, user.email, user.googleSubjectId)
 
     Get(s"/api/resources/v1/${resourceType.name}/${resourceId.value}/allUsers") ~> samRoutes.route ~> check {

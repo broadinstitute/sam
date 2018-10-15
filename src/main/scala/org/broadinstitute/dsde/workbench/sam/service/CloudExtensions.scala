@@ -4,6 +4,7 @@ import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directives._
+import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model.Notifications.Notification
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.GoogleProject
@@ -25,7 +26,7 @@ trait CloudExtensions {
   // this is temporary until we get the admin group rolled into a sam group
   def isWorkbenchAdmin(memberEmail: WorkbenchEmail): Future[Boolean]
 
-  def onBoot(samApplication: SamApplication)(implicit system: ActorSystem): Future[Unit]
+  def onBoot(samApplication: SamApplication)(implicit system: ActorSystem): IO[Unit]
 
   def publishGroup(id: WorkbenchGroupName): Future[Unit]
 
@@ -64,7 +65,7 @@ trait CloudExtensions {
 trait NoExtensions extends CloudExtensions {
   override def isWorkbenchAdmin(memberEmail: WorkbenchEmail): Future[Boolean] = Future.successful(true)
 
-  override def onBoot(samApplication: SamApplication)(implicit system: ActorSystem): Future[Unit] = Future.successful(())
+  override def onBoot(samApplication: SamApplication)(implicit system: ActorSystem): IO[Unit] = IO.unit
 
   override def publishGroup(id: WorkbenchGroupName): Future[Unit] = Future.successful(())
 

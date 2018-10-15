@@ -6,21 +6,18 @@ import java.util.UUID
 
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
-import cats.effect.IO
-import com.typesafe.config.ConfigFactory
 import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.Generator._
 import org.broadinstitute.dsde.workbench.sam.TestSupport.blockingEc
-import org.broadinstitute.dsde.workbench.sam.config.{DirectoryConfig, SchemaLockConfig, _}
 import org.broadinstitute.dsde.workbench.sam.directory.LdapDirectoryDAO
-import org.broadinstitute.dsde.workbench.sam.model
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, LdapAccessPolicyDAO}
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FlatSpec, Matchers}
+import org.broadinstitute.dsde.workbench.sam.config.AppConfig.resourceTypeReader
 
 import scala.concurrent.ExecutionContext.Implicits.global
 
@@ -28,18 +25,16 @@ import scala.concurrent.ExecutionContext.Implicits.global
   * Created by dvoet on 6/27/17.
   */
 class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with TestSupport with BeforeAndAfter with BeforeAndAfterAll {
-  implicit val cs = IO.contextShift(scala.concurrent.ExecutionContext.global)
-  val config = ConfigFactory.load()
-  val directoryConfig = config.as[DirectoryConfig]("directory")
-  val schemaLockConfig = config.as[SchemaLockConfig]("schemaLock")
+  val directoryConfig = TestSupport.directoryConfig
+  val schemaLockConfig = TestSupport.schemaLockConfig
   //Note: we intentionally use the Managed Group resource type loaded from reference.conf for the tests here.
-  private val realResourceTypes = config.as[Map[String, ResourceType]]("resourceTypes").values.toSet
+  private val realResourceTypes = TestSupport.appConfig.resourceTypes
   private val realResourceTypeMap = realResourceTypes.map(rt => rt.name -> rt).toMap
 
   val dirURI = new URI(directoryConfig.directoryUrl)
   val connectionPool = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
-  val dirDAO = new LdapDirectoryDAO(connectionPool, directoryConfig)
-  val policyDAO = new LdapAccessPolicyDAO(connectionPool, directoryConfig, blockingEc)(cs)
+  val dirDAO = new LdapDirectoryDAO(connectionPool, directoryConfig, blockingEc)
+  val policyDAO = new LdapAccessPolicyDAO(connectionPool, directoryConfig, blockingEc)
   val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
   private val dummyUserInfo = UserInfo(OAuth2BearerToken("token"), WorkbenchUserId("userid"), WorkbenchEmail("user@company.com"), 0)
@@ -64,10 +59,10 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
   private val managedGroupResourceType = realResourceTypeMap.getOrElse(ResourceTypeName("managed-group"), throw new Error("Failed to load managed-group resource type from reference.conf"))
 
   private val emailDomain = "example.com"
-  private val policyEvaluatorService = PolicyEvaluatorService(Map(defaultResourceType.name -> defaultResourceType, otherResourceType.name -> otherResourceType, managedGroupResourceType.name -> managedGroupResourceType), policyDAO)
+  private val policyEvaluatorService = PolicyEvaluatorService(emailDomain, Map(defaultResourceType.name -> defaultResourceType, otherResourceType.name -> otherResourceType, managedGroupResourceType.name -> managedGroupResourceType), policyDAO)
   private val service = new ResourceService(Map(defaultResourceType.name -> defaultResourceType, otherResourceType.name -> otherResourceType, managedGroupResourceType.name -> managedGroupResourceType), policyEvaluatorService, policyDAO, dirDAO, NoExtensions, emailDomain)
   private val constrainableResourceTypes = Map(constrainableResourceType.name -> constrainableResourceType, managedGroupResourceType.name -> managedGroupResourceType)
-  private val constrainablePolicyEvaluatorService = PolicyEvaluatorService(constrainableResourceTypes, policyDAO)
+  private val constrainablePolicyEvaluatorService = PolicyEvaluatorService(emailDomain, constrainableResourceTypes, policyDAO)
   private val constrainableService = new ResourceService(constrainableResourceTypes, constrainablePolicyEvaluatorService, policyDAO, dirDAO, NoExtensions, emailDomain)
 
   val managedGroupService = new ManagedGroupService(constrainableService, constrainablePolicyEvaluatorService, constrainableResourceTypes, policyDAO, dirDAO, NoExtensions, emailDomain)
@@ -105,7 +100,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
   }
 
   "ResourceType config" should "allow constraining policies to an auth domain" in {
-    val resourceTypes = config.as[Map[String, ResourceType]]("testStuff.resourceTypes").values.toSet
+    val resourceTypes = TestSupport.config.as[Map[String, ResourceType]]("testStuff.resourceTypes").values.toSet
     val rt = resourceTypes.find(_.name == ResourceTypeName("testType")).getOrElse(fail("Missing test resource type, please check src/test/resources/reference.conf"))
     val constrainedAction = rt.actionPatterns.find(_.value == "alter_policies").getOrElse(fail("Missing action pattern, please check src/test/resources/reference.conf"))
     constrainedAction.authDomainConstrainable shouldEqual true
@@ -116,15 +111,15 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     // In src/main/resources/reference.conf we define ResourceTypes and their permissible ActionPatterns
     // Then, in src/test/resources/reference.conf we concatenate value(s) to already defined objects and arrays
     // This mimics behavior from sam.conf, which is why we're testing here.
-    val resourceTypes = config.as[Map[String, ResourceType]]("resourceTypes").values.toSet
+    val resourceTypes = TestSupport.appConfig.resourceTypes
     val rt = resourceTypes.find(_.name == ResourceTypeName("billing-project")).getOrElse(fail("Missing resource type, please check src/main/resources/reference.conf"))
     rt.actionPatterns should contain (ResourceActionPattern("delete", "", false))
   }
 
   // https://broadinstitute.atlassian.net/browse/GAWB-3589
   it should "allow me to specify actionPatterns as Array[String] or Array[Object] until GAWB-3589 is resolved" in {
-    val testResourceTypes = config.as[Map[String, ResourceType]]("testStuff.resourceTypes").values.toSet
-    val realResourceTypes = config.as[Map[String, ResourceType]]("resourceTypes").values.toSet
+    val testResourceTypes = TestSupport.config.as[Map[String, ResourceType]]("testStuff.resourceTypes").values.toSet
+    val realResourceTypes = TestSupport.config.as[Map[String, ResourceType]]("resourceTypes").values.toSet
     val testType = testResourceTypes.find(_.name == ResourceTypeName("testType")).getOrElse(fail("Missing test resource type, please check src/test/resources/reference.conf"))
     val billingProjectType = realResourceTypes.find(_.name == ResourceTypeName("billing-project")).getOrElse(fail("Missing billing-project resource type, please check src/main/resources/reference.conf"))
     // Note src/test/resources/reference.conf where we append either objects or strings to the actionPatterns fields for the two resourceTypes
@@ -735,7 +730,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     service.createResourceType(defaultResourceType).unsafeRunSync()
     runAndWait(service.createResource(defaultResourceType, resource.resourceId, dummyUserInfo))
 
-    val dummyUserIdInfo = runAndWait(dirDAO.loadUser(dummyUserInfo.userId)).map { user => UserIdInfo(user.id, user.email, user.googleSubjectId) }.get
+    val dummyUserIdInfo = dirDAO.loadUser(dummyUserInfo.userId).unsafeRunSync().map { user => UserIdInfo(user.id, user.email, user.googleSubjectId) }.get
     val user1 = UserIdInfo(WorkbenchUserId("user1"), WorkbenchEmail("user1@fake.com"), None)
     val user2 = UserIdInfo(WorkbenchUserId("user2"), WorkbenchEmail("user2@fake.com"), None)
     val user3 = UserIdInfo(WorkbenchUserId("user3"), WorkbenchEmail("user3@fake.com"), None)

@@ -3,6 +3,7 @@ package org.broadinstitute.dsde.workbench.sam.directory
 import java.util.Date
 
 import akka.http.scaladsl.model.StatusCodes
+import cats.effect.IO
 import cats.implicits._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.ServiceAccountSubjectId
@@ -41,7 +42,7 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     group
   }
 
-  override def loadGroup(groupName: WorkbenchGroupName): Future[Option[BasicWorkbenchGroup]] = Future {
+  override def loadGroup(groupName: WorkbenchGroupName): IO[Option[BasicWorkbenchGroup]] = IO {
     groups.get(groupName).map(_.asInstanceOf[BasicWorkbenchGroup])
   }
 
@@ -84,7 +85,7 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     groups.getOrElse(groupId, BasicWorkbenchGroup(null, Set.empty, WorkbenchEmail("g1@example.com"))).members.contains(member)
   }
 
-  override def loadSubjectFromEmail(email: WorkbenchEmail): Future[Option[WorkbenchSubject]] = Future {
+  override def loadSubjectFromEmail(email: WorkbenchEmail): IO[Option[WorkbenchSubject]] = IO {
     Option(usersWithEmails.getOrElse(email, groupsWithEmails.getOrElse(email, petsWithEmails.getOrElse(email, null))))
   }
 
@@ -99,7 +100,7 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     user
   }
 
-  override def loadUser(userId: WorkbenchUserId): Future[Option[WorkbenchUser]] = Future {
+  override def loadUser(userId: WorkbenchUserId): IO[Option[WorkbenchUser]] = IO {
     users.get(userId)
   }
 
@@ -154,17 +155,17 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     listSubjectsGroups(groupName, Set.empty).map(_.id)
   }
 
-  override def enableIdentity(subject: WorkbenchSubject): Future[Unit] = Future.successful(enabledUsers += ((subject, ())))
+  override def enableIdentity(subject: WorkbenchSubject): IO[Unit] = IO.pure(enabledUsers += ((subject, ())))
 
   override def disableIdentity(subject: WorkbenchSubject): Future[Unit] = Future {
     enabledUsers -= subject
   }
 
-  override def isEnabled(subject: WorkbenchSubject): Future[Boolean] = Future {
+  override def isEnabled(subject: WorkbenchSubject): IO[Boolean] = IO {
     enabledUsers.contains(subject)
   }
 
-  override def loadGroupEmail(groupName: WorkbenchGroupName): Future[Option[WorkbenchEmail]] = loadGroup(groupName).map(_.map(_.email))
+  override def loadGroupEmail(groupName: WorkbenchGroupName): Future[Option[WorkbenchEmail]] = loadGroup(groupName).unsafeToFuture().map(_.map(_.email))
 
   override def batchLoadGroupEmail(groupNames: Set[WorkbenchGroupName]): Future[Seq[(WorkbenchGroupName, WorkbenchEmail)]] = Future.traverse(groupNames.toSeq) { name =>
     loadGroupEmail(name).map { y =>
@@ -172,17 +173,17 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     }
   }
 
-  override def createPetServiceAccount(petServiceAccount: PetServiceAccount): Future[PetServiceAccount] = Future {
+  override def createPetServiceAccount(petServiceAccount: PetServiceAccount): IO[PetServiceAccount] = {
     if (petServiceAccountsByUser.keySet.contains(petServiceAccount.id)) {
-      throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"pet service account ${petServiceAccount.id} already exists"))
+      IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"pet service account ${petServiceAccount.id} already exists")))
     }
     petServiceAccountsByUser += petServiceAccount.id -> petServiceAccount
     petsWithEmails += petServiceAccount.serviceAccount.email -> petServiceAccount.id
     usersWithGoogleSubjectIds += GoogleSubjectId(petServiceAccount.serviceAccount.subjectId.value) -> petServiceAccount.id
-    petServiceAccount
+    IO.pure(petServiceAccount)
   }
 
-  override def loadPetServiceAccount(petServiceAccountUniqueId: PetServiceAccountId): Future[Option[PetServiceAccount]] = Future {
+  override def loadPetServiceAccount(petServiceAccountUniqueId: PetServiceAccountId): IO[Option[PetServiceAccount]] = IO {
     petServiceAccountsByUser.get(petServiceAccountUniqueId)
   }
 
@@ -223,18 +224,18 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     Future.successful(groups.get(WorkbenchGroupName(groupId.toString)).map(_.email))
   }
 
-  override def getUserFromPetServiceAccount(petSAId: ServiceAccountSubjectId): Future[Option[WorkbenchUser]] = {
+  override def getUserFromPetServiceAccount(petSAId: ServiceAccountSubjectId): IO[Option[WorkbenchUser]] = {
     val userIds = petServiceAccountsByUser.toSeq.collect {
       case (PetServiceAccountId(userId, _), petSA) if petSA.serviceAccount.subjectId == petSAId => userId
     }
     userIds match {
-      case Seq() => Future.successful(None)
+      case Seq() => IO.pure(None)
       case Seq(userId) => loadUser(userId)
-      case _ => Future.failed(new WorkbenchException(s"id $petSAId refers to too many subjects: $userIds"))
+      case _ => IO.raiseError(new WorkbenchException(s"id $petSAId refers to too many subjects: $userIds"))
     }
   }
 
-  override def updatePetServiceAccount(petServiceAccount: PetServiceAccount): Future[PetServiceAccount] = Future {
+  override def updatePetServiceAccount(petServiceAccount: PetServiceAccount): IO[PetServiceAccount] = IO {
     petServiceAccountsByUser.update(petServiceAccount.id, petServiceAccount)
     petServiceAccount
   }
@@ -246,9 +247,9 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
       throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "group not found"))
   }
 
-  override def setManagedGroupAccessInstructions(groupName: WorkbenchGroupName, accessInstructions: String): Future[Unit] = Future {
+  override def setManagedGroupAccessInstructions(groupName: WorkbenchGroupName, accessInstructions: String): IO[Unit] = {
     groupAccessInstructions += groupName -> accessInstructions
-    Future.successful(())
+    IO.pure(())
   }
 
   private def addUserAttribute(userId: WorkbenchUserId, attrId: String, value: Any): Future[Unit] = {
@@ -267,16 +268,16 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     Future.successful(value)
   }
 
-  override def loadSubjectFromGoogleSubjectId(googleSubjectId: GoogleSubjectId): Future[Option[WorkbenchSubject]] = {
+  override def loadSubjectFromGoogleSubjectId(googleSubjectId: GoogleSubjectId): IO[Option[WorkbenchSubject]] = {
     val res = for{
       uid <- usersWithGoogleSubjectIds.get(googleSubjectId)
     } yield uid
-   res.traverse(Future.successful)
+   res.traverse(IO.pure)
   }
 
-  override def setGoogleSubjectId(userId: WorkbenchUserId, googleSubjectId: GoogleSubjectId): Future[Unit] = {
-    users.get(userId).fold[Future[Unit]](Future.successful(new Exception(s"user $userId not found")))(
-      u => Future.successful(users + (userId -> u.copy(googleSubjectId = Some(googleSubjectId))))
+  override def setGoogleSubjectId(userId: WorkbenchUserId, googleSubjectId: GoogleSubjectId): IO[Unit] = {
+    users.get(userId).fold[IO[Unit]](IO.pure(new Exception(s"user $userId not found")))(
+      u => IO.pure(users + (userId -> u.copy(googleSubjectId = Some(googleSubjectId))))
     )
   }
 }

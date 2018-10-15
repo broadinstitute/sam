@@ -89,7 +89,7 @@ class UserRoutesV2Spec extends UserRoutesSpecHelper {
       RawHeader(expiresInHeader, "1000")
     )
     //create a PET service account owned by test user
-    runAndWait(samDep.directoryDAO.createPetServiceAccount(PetServiceAccount(PetServiceAccountId(user.id, null), ServiceAccount(ServiceAccountSubjectId(user.googleSubjectId.get.value), WorkbenchEmail(petEmail), null))))
+    samDep.directoryDAO.createPetServiceAccount(PetServiceAccount(PetServiceAccountId(user.id, null), ServiceAccount(ServiceAccountSubjectId(user.googleSubjectId.get.value), WorkbenchEmail(petEmail), null))).unsafeRunSync()
 
     Get("/register/user/v2/self/info").withHeaders(headers) ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK

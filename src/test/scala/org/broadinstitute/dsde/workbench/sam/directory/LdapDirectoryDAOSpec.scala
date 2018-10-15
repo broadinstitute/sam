@@ -4,7 +4,6 @@ import java.net.URI
 import java.util.UUID
 
 import akka.http.scaladsl.model.StatusCodes
-import cats.effect.IO
 import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountDisplayName, ServiceAccountSubjectId}
@@ -21,11 +20,9 @@ import scala.concurrent.ExecutionContext.Implicits.global
   * Created by dvoet on 5/30/17.
   */
 class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with BeforeAndAfter with BeforeAndAfterAll {
-  implicit val cs = IO.contextShift(scala.concurrent.ExecutionContext.global)
-
   val dirURI = new URI(directoryConfig.directoryUrl)
   val connectionPool = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
-  val dao = new LdapDirectoryDAO(connectionPool, directoryConfig)
+  val dao = new LdapDirectoryDAO(connectionPool, directoryConfig, TestSupport.blockingEc)
   val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
   override protected def beforeAll(): Unit = {
@@ -44,7 +41,7 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     val group = BasicWorkbenchGroup(groupName, Set.empty, WorkbenchEmail("john@doe.org"))
 
     assertResult(None) {
-      runAndWait(dao.loadGroup(group.id))
+      dao.loadGroup(group.id).unsafeRunSync()
     }
 
     assertResult(group) {
@@ -57,13 +54,13 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     assert(conflict.errorReport.statusCode.contains(StatusCodes.Conflict))
 
     assertResult(Some(group)) {
-      runAndWait(dao.loadGroup(group.id))
+      dao.loadGroup(group.id).unsafeRunSync()
     }
 
     runAndWait(dao.deleteGroup(group.id))
 
     assertResult(None) {
-      runAndWait(dao.loadGroup(group.id))
+      dao.loadGroup(group.id).unsafeRunSync()
     }
   }
 
@@ -72,7 +69,7 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     val user = WorkbenchUser(userId, None, WorkbenchEmail("foo@bar.com"))
 
     assertResult(None) {
-      runAndWait(dao.loadUser(user.id))
+      dao.loadUser(user.id).unsafeRunSync()
     }
 
     assertResult(user) {
@@ -80,13 +77,13 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     }
 
     assertResult(Some(user)) {
-      runAndWait(dao.loadUser(user.id))
+      dao.loadUser(user.id).unsafeRunSync()
     }
 
     runAndWait(dao.deleteUser(user.id))
 
     assertResult(None) {
-      runAndWait(dao.loadUser(user.id))
+      dao.loadUser(user.id).unsafeRunSync()
     }
   }
 
@@ -122,7 +119,7 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     }
 
     assertResult(None) {
-      runAndWait(dao.loadPetServiceAccount(petServiceAccount.id))
+      dao.loadPetServiceAccount(petServiceAccount.id).unsafeRunSync()
     }
 
     assertResult(Seq()) {
@@ -130,11 +127,11 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     }
 
     assertResult(petServiceAccount) {
-      runAndWait(dao.createPetServiceAccount(petServiceAccount))
+      dao.createPetServiceAccount(petServiceAccount).unsafeRunSync()
     }
 
     assertResult(Some(petServiceAccount)) {
-      runAndWait(dao.loadPetServiceAccount(petServiceAccount.id))
+      dao.loadPetServiceAccount(petServiceAccount.id).unsafeRunSync()
     }
 
     assertResult(Seq(petServiceAccount)) {
@@ -143,17 +140,17 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
 
     val updatedPetSA = petServiceAccount.copy(serviceAccount = ServiceAccount(ServiceAccountSubjectId(UUID.randomUUID().toString), WorkbenchEmail("foo@bar.com"), ServiceAccountDisplayName("qqq")))
     assertResult(updatedPetSA) {
-      runAndWait(dao.updatePetServiceAccount(updatedPetSA))
+      dao.updatePetServiceAccount(updatedPetSA).unsafeRunSync()
     }
 
     assertResult(Some(updatedPetSA)) {
-      runAndWait(dao.loadPetServiceAccount(petServiceAccount.id))
+      dao.loadPetServiceAccount(petServiceAccount.id).unsafeRunSync()
     }
 
     runAndWait(dao.deletePetServiceAccount(petServiceAccount.id))
 
     assertResult(None) {
-      runAndWait(dao.loadPetServiceAccount(petServiceAccount.id))
+      dao.loadPetServiceAccount(petServiceAccount.id).unsafeRunSync()
     }
 
     assertResult(Seq()) {
@@ -267,25 +264,25 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
       runAndWait(dao.addGroupMember(groupName1, userId))
 
       assertResult(Some(group1.copy(members = Set(userId)))) {
-        runAndWait(dao.loadGroup(groupName1))
+        dao.loadGroup(groupName1).unsafeRunSync()
       }
 
       runAndWait(dao.addGroupMember(groupName1, groupName2))
 
       assertResult(Some(group1.copy(members = Set(userId, groupName2)))) {
-        runAndWait(dao.loadGroup(groupName1))
+        dao.loadGroup(groupName1).unsafeRunSync()
       }
 
       runAndWait(dao.removeGroupMember(groupName1, userId))
 
       assertResult(Some(group1.copy(members = Set(groupName2)))) {
-        runAndWait(dao.loadGroup(groupName1))
+        dao.loadGroup(groupName1).unsafeRunSync()
       }
 
       runAndWait(dao.removeGroupMember(groupName1, groupName2))
 
       assertResult(Some(group1)) {
-        runAndWait(dao.loadGroup(groupName1))
+        dao.loadGroup(groupName1).unsafeRunSync()
       }
 
     } finally {
@@ -348,16 +345,16 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     val serviceAccount = ServiceAccount(ServiceAccountSubjectId("09834572039847519384"), WorkbenchEmail("foo@sa.com"), ServiceAccountDisplayName("blarg"))
     val pet = PetServiceAccount(PetServiceAccountId(userId, GoogleProject("foo")), serviceAccount)
 
-    runAndWait(dao.loadPetServiceAccount(pet.id)) shouldBe None
-    runAndWait(dao.createPetServiceAccount(pet)) shouldBe pet
-    runAndWait(dao.loadPetServiceAccount(pet.id)) shouldBe Some(pet)
-    runAndWait(dao.getUserFromPetServiceAccount(serviceAccount.subjectId)) shouldBe Some(user)
+    dao.loadPetServiceAccount(pet.id).unsafeRunSync() shouldBe None
+    dao.createPetServiceAccount(pet).unsafeRunSync() shouldBe pet
+    dao.loadPetServiceAccount(pet.id).unsafeRunSync() shouldBe Some(pet)
+    dao.getUserFromPetServiceAccount(serviceAccount.subjectId).unsafeRunSync() shouldBe Some(user)
 
     // uid that does not exist
-    runAndWait(dao.getUserFromPetServiceAccount(ServiceAccountSubjectId("asldkasfa"))) shouldBe None
+    dao.getUserFromPetServiceAccount(ServiceAccountSubjectId("asldkasfa")).unsafeRunSync() shouldBe None
 
     // uid that does exist but is not a pet
-    runAndWait(dao.getUserFromPetServiceAccount(ServiceAccountSubjectId(user.id.value))) shouldBe None
+    dao.getUserFromPetServiceAccount(ServiceAccountSubjectId(user.id.value)).unsafeRunSync() shouldBe None
   }
 
   "JndiDirectoryDAO safeDelete" should "prevent deleting groups that are sub-groups of other groups" in {
@@ -368,11 +365,11 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     val parentGroup = BasicWorkbenchGroup(parentGroupName, Set(childGroupName), WorkbenchEmail("walter@hollywood-lanes.com"))
 
     assertResult(None) {
-      runAndWait(dao.loadGroup(childGroupName))
+      dao.loadGroup(childGroupName).unsafeRunSync()
     }
 
     assertResult(None) {
-      runAndWait(dao.loadGroup(parentGroupName))
+      dao.loadGroup(parentGroupName).unsafeRunSync()
     }
 
     assertResult(childGroup) {
@@ -384,11 +381,11 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     }
 
     assertResult(Some(childGroup)) {
-      runAndWait(dao.loadGroup(childGroupName))
+      dao.loadGroup(childGroupName).unsafeRunSync()
     }
 
     assertResult(Some(parentGroup)) {
-      runAndWait(dao.loadGroup(parentGroupName))
+      dao.loadGroup(parentGroupName).unsafeRunSync()
     }
 
     intercept[WorkbenchExceptionWithErrorReport] {
@@ -396,11 +393,11 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     }
 
     assertResult(Some(childGroup)) {
-      runAndWait(dao.loadGroup(childGroupName))
+      dao.loadGroup(childGroupName).unsafeRunSync()
     }
 
     assertResult(Some(parentGroup)) {
-      runAndWait(dao.loadGroup(parentGroupName))
+      dao.loadGroup(parentGroupName).unsafeRunSync()
     }
   }
 
@@ -409,7 +406,7 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     val user = WorkbenchUser(userId, None, WorkbenchEmail("foo@bar.com"))
 
     assertResult(None) {
-      runAndWait(dao.loadUser(user.id))
+      dao.loadUser(user.id).unsafeRunSync()
     }
 
     runAndWait(dao.loadSubjectEmail(userId)) shouldEqual None
@@ -420,7 +417,7 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     val user = WorkbenchUser(userId, None, WorkbenchEmail("foo@bar.com"))
 
     assertResult(None) {
-      runAndWait(dao.loadUser(user.id))
+      dao.loadUser(user.id).unsafeRunSync()
     }
 
     assertResult(user) {
@@ -428,7 +425,7 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     }
 
     assertResult(Some(user)) {
-      runAndWait(dao.loadUser(user.id))
+      dao.loadUser(user.id).unsafeRunSync()
     }
 
     assertResult(Some(user.email)) {
