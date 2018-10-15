@@ -62,6 +62,7 @@ render_configs() {
     original_dir=$WORKING_DIR
     cd ../..
     docker pull broadinstitute/dsde-toolbox:dev
+
     docker run -it --rm -e VAULT_TOKEN=${VAULT_TOKEN} \
         -e ENVIRONMENT=${ENV} -e ROOT_DIR=${WORKING_DIR} -v $PWD/firecloud-automated-testing/configs:/input -v $PWD/$SCRIPT_ROOT:/output \
         -e OUT_PATH=/output/src/test/resources -e INPUT_PATH=/input -e LOCAL_UI=$LOCAL_UI -e FC_INSTANCE=$FC_INSTANCE \
@@ -72,6 +73,13 @@ render_configs() {
         -e ENVIRONMENT=${ENV} -e ROOT_DIR=${WORKING_DIR} -v $PWD/firecloud-automated-testing/configs/$SERVICE:/input -v $PWD/$SCRIPT_ROOT:/output \
         -e OUT_PATH=/output/src/test/resources -e INPUT_PATH=/input -e LOCAL_UI=$LOCAL_UI -e FC_INSTANCE=$FC_INSTANCE \
         broadinstitute/dsde-toolbox:dev render-templates.sh
+
+    # copy files under extra
+    docker run -it --rm -e VAULT_TOKEN=${VAULT_TOKEN} \
+        -e ENVIRONMENT=${ENV} -e ROOT_DIR=${WORKING_DIR} -v $PWD/firecloud-automated-testing/configs/$SERVICE/extra:/input/extra -v $PWD/$SCRIPT_ROOT:/output \
+        -e OUT_PATH=/output/src/test/resources/extra -e INPUT_PATH=/input/extra -e LOCAL_UI=$LOCAL_UI -e FC_INSTANCE=$FC_INSTANCE \
+        broadinstitute/dsde-toolbox:dev render-templates.sh
+
     cd $original_dir
 }
 

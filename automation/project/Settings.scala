@@ -22,8 +22,10 @@ object Settings {
     "-deprecation",
     "-feature",
     "-encoding", "utf8",
+    "-language:postfixOps",
     "-target:jvm-1.8",
-    "-Xmax-classfile-name", "100"
+    "-Xmax-classfile-name", "100",
+    "-Ypartial-unification" // Enable partial unification in type constructor inference
   )
 
   // test parameters explanation:
@@ -39,7 +41,7 @@ object Settings {
   //common settings for all sbt subprojects
   val commonSettings =
     commonBuildSettings ++ testSettings ++ List(
-    organization  := "org.broadinstitute.d sde.firecloud",
+    organization  := "org.broadinstitute.dsde.firecloud",
     scalaVersion  := "2.12.7",
     resolvers ++= commonResolvers,
     scalacOptions ++= commonCompilerSettings

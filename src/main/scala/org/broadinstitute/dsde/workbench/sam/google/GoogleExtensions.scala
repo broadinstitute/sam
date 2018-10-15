@@ -9,10 +9,19 @@ import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import cats.effect.IO
 import com.google.api.client.googleapis.json.GoogleJsonResponseException
 import com.google.auth.oauth2.ServiceAccountCredentials
+import com.google.rpc.Code
 import com.typesafe.scalalogging.LazyLogging
-import io.grpc.Status.Code
 import org.broadinstitute.dsde.workbench.dataaccess.NotificationDAO
-import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleIamDAO, GoogleProjectDAO, GooglePubSubDAO, GoogleStorageDAO}
+import org.broadinstitute.dsde.workbench.google.util.{DistributedLock, LockPath}
+import org.broadinstitute.dsde.workbench.google.{
+  CollectionName,
+  Document,
+  GoogleDirectoryDAO,
+  GoogleIamDAO,
+  GoogleProjectDAO,
+  GooglePubSubDAO,
+  GoogleStorageDAO
+}
 import org.broadinstitute.dsde.workbench.model.Notifications.Notification
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport.WorkbenchGroupNameFormat
 import org.broadinstitute.dsde.workbench.model._
@@ -31,6 +40,7 @@ import org.broadinstitute.dsde.workbench.util.{FutureSupport, Retry}
 import spray.json._
 
 import scala.collection.JavaConverters._
+import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success, Try}
 
@@ -40,6 +50,7 @@ object GoogleExtensions {
 }
 
 class GoogleExtensions(
+    distributedLock: DistributedLock[IO],
     directoryDAO: DirectoryDAO,
     val accessPolicyDAO: AccessPolicyDAO,
     val googleDirectoryDAO: GoogleDirectoryDAO,
@@ -301,13 +312,8 @@ class GoogleExtensions(
       }
     } yield pet
 
-    createPet.unsafeToFuture() recoverWith {
-      case gjre: GoogleJsonResponseException if gjre.getDetails.getCode == StatusCodes.Conflict.intValue =>
-        googleIamDAO.findServiceAccount(project, petSaName).map { saOpt =>
-          val sa = saOpt.getOrElse(throw new WorkbenchException(s"Could not create pet service account for user [${user.email}]"))
-          PetServiceAccount(PetServiceAccountId(user.id, project), sa)
-        }
-    }
+    val lock = LockPath(CollectionName(s"${project.value}-createPet"), Document(user.id.value), 30 seconds)
+    distributedLock.withLock(lock).use(_ => createPet).unsafeToFuture()
   }
 
   def getPetServiceAccountKey(userEmail: WorkbenchEmail, project: GoogleProject): Future[Option[String]] =
@@ -362,7 +368,7 @@ class GoogleExtensions(
 
     retryExponentially(whenCreating)(() => {
       googleProjectDAO.pollOperation(operationId).map { operation =>
-        if (operation.getDone && Option(operation.getError).exists(_.getCode.intValue() == Code.ALREADY_EXISTS.value())) true
+        if (operation.getDone && Option(operation.getError).exists(_.getCode.intValue() == Code.ALREADY_EXISTS.getNumber)) true
         else if (operation.getDone && Option(operation.getError).isEmpty) true
         else if (operation.getDone && Option(operation.getError).isDefined)
           throw new WorkbenchException(s"project creation failed with error ${operation.getError.getMessage}")

@@ -1,6 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam
 
 import java.net.URI
+import java.time.Instant
 import java.util.concurrent.Executors
 
 import akka.actor.ActorSystem
@@ -8,11 +9,13 @@ import akka.http.scaladsl.model.headers.RawHeader
 import akka.stream.Materializer
 import cats.effect.IO
 import cats.kernel.Eq
+import com.google.cloud.firestore.{DocumentSnapshot, Firestore, Transaction}
 import com.typesafe.config.ConfigFactory
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
 import org.broadinstitute.dsde.workbench.google.mock.{MockGoogleDirectoryDAO, MockGoogleIamDAO, MockGooglePubSubDAO, MockGoogleStorageDAO}
-import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleIamDAO}
+import org.broadinstitute.dsde.workbench.google.util.DistributedLock
+import org.broadinstitute.dsde.workbench.google.{CollectionName, Document, GoogleDirectoryDAO, GoogleFirestoreOps, GoogleIamDAO}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.api.StandardUserInfoDirectives._
 import org.broadinstitute.dsde.workbench.sam.api._
@@ -30,6 +33,7 @@ import org.scalatest.prop.{Configuration, PropertyChecks}
 import org.scalatest.time.{Seconds, Span}
 
 import scala.concurrent.duration.Duration
+import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.{Await, Awaitable, ExecutionContext}
 
 /**
@@ -40,9 +44,7 @@ trait TestSupport{
   implicit val futureTimeout = Timeout(Span(10, Seconds))
   implicit val cs = IO.contextShift(scala.concurrent.ExecutionContext.global)
   implicit val timer = IO.timer(scala.concurrent.ExecutionContext.global)
-  implicit val eqWorkbenchException: Eq[WorkbenchException] = new Eq[WorkbenchException]{
-    override def eqv(x: WorkbenchException, y: WorkbenchException): Boolean = x.getMessage == y.getMessage
-  }
+  implicit val eqWorkbenchException: Eq[WorkbenchException] = (x: WorkbenchException, y: WorkbenchException) => x.getMessage == y.getMessage
 }
 
 trait PropertyBasedTesting extends PropertyChecks with Configuration with Matchers {
@@ -52,9 +54,9 @@ trait PropertyBasedTesting extends PropertyChecks with Configuration with Matche
 object TestSupport extends TestSupport{
   private val executor = Executors.newCachedThreadPool()
   val blockingEc = ExecutionContext.fromExecutor(executor)
-  implicit val eqWorkbenchExceptionErrorReport: Eq[WorkbenchExceptionWithErrorReport] = new Eq[WorkbenchExceptionWithErrorReport]{
-    override def eqv(x: WorkbenchExceptionWithErrorReport, y: WorkbenchExceptionWithErrorReport): Boolean = x.errorReport.statusCode == y.errorReport.statusCode && x.errorReport.message == y.errorReport.message
-  }
+  implicit val eqWorkbenchExceptionErrorReport: Eq[WorkbenchExceptionWithErrorReport] =
+    (x: WorkbenchExceptionWithErrorReport, y: WorkbenchExceptionWithErrorReport) =>
+      x.errorReport.statusCode == y.errorReport.statusCode && x.errorReport.message == y.errorReport.message
   val config = ConfigFactory.load()
   val appConfig = AppConfig.readConfig(config)
   val petServiceAccountConfig = appConfig.googleConfig.get.petServiceAccountConfig
@@ -65,6 +67,7 @@ object TestSupport extends TestSupport{
   val schemaLockConfig = config.as[SchemaLockConfig]("schemaLock")
   val dirURI = new URI(directoryConfig.directoryUrl)
 
+  val testDistributedLock = DistributedLock[IO]("", appConfig.distributedLockConfig, TestGoogleFirestore)
   def proxyEmail(workbenchUserId: WorkbenchUserId) = WorkbenchEmail(s"PROXY_$workbenchUserId@${googleServicesConfig.appsDomain}")
   def googleSubjectIdHeaderWithId(googleSubjectId: GoogleSubjectId) = RawHeader(googleSubjectIdHeader, googleSubjectId.value)
   def genGoogleSubjectId(): GoogleSubjectId = GoogleSubjectId(genRandom(System.currentTimeMillis()))
@@ -73,7 +76,7 @@ object TestSupport extends TestSupport{
   val defaultEmailHeader = RawHeader(emailHeader, defaultUserEmail.value)
   def genDefaultEmailHeader(workbenchEmail: WorkbenchEmail) = RawHeader(emailHeader, workbenchEmail.value)
 
-  def genSamDependencies(resourceTypes: Map[ResourceTypeName, ResourceType] = Map.empty, googIamDAO: Option[GoogleIamDAO] = None, googleServicesConfig: GoogleServicesConfig = googleServicesConfig, cloudExtensions: Option[CloudExtensions] = None, googleDirectoryDAO: Option[GoogleDirectoryDAO] = None, policyAccessDAO: Option[AccessPolicyDAO] = None)(implicit system: ActorSystem, executionContext: ExecutionContext) = {
+  def genSamDependencies(resourceTypes: Map[ResourceTypeName, ResourceType] = Map.empty, googIamDAO: Option[GoogleIamDAO] = None, googleServicesConfig: GoogleServicesConfig = googleServicesConfig, cloudExtensions: Option[CloudExtensions] = None, googleDirectoryDAO: Option[GoogleDirectoryDAO] = None, policyAccessDAO: Option[AccessPolicyDAO] = None)(implicit system: ActorSystem) = {
     val googleDirectoryDAO = new MockGoogleDirectoryDAO()
     val directoryDAO = new MockDirectoryDAO()
     val googleIamDAO = googIamDAO.getOrElse(new MockGoogleIamDAO())
@@ -83,6 +86,7 @@ object TestSupport extends TestSupport{
     val notificationDAO = new PubSubNotificationDAO(pubSubDAO, "foo")
     val cloudKeyCache = new GoogleKeyCache(googleIamDAO, googleStorageDAO, pubSubDAO, googleServicesConfig, petServiceAccountConfig)
     val googleExt = cloudExtensions.getOrElse(new GoogleExtensions(
+      testDistributedLock,
       directoryDAO,
       policyDAO,
       googleDirectoryDAO,
@@ -102,15 +106,30 @@ object TestSupport extends TestSupport{
     SamDependencies(mockResourceService, policyEvaluatorService, new UserService(directoryDAO, googleExt), new StatusService(directoryDAO, googleExt), mockManagedGroupService, directoryDAO, policyDAO, googleExt)
   }
 
-  def genSamRoutes(samDependencies: SamDependencies)(implicit system: ActorSystem, executionContext: ExecutionContext, materializer: Materializer): SamRoutes = new SamRoutes(samDependencies.resourceService, samDependencies.userService, samDependencies.statusService, samDependencies.managedGroupService, null, samDependencies.directoryDAO, samDependencies.policyEvaluatorService)
+  def genSamRoutes(samDependencies: SamDependencies)(implicit system: ActorSystem, materializer: Materializer): SamRoutes = new SamRoutes(samDependencies.resourceService, samDependencies.userService, samDependencies.statusService, samDependencies.managedGroupService, null, samDependencies.directoryDAO, samDependencies.policyEvaluatorService)
     with StandardUserInfoDirectives
     with GoogleExtensionRoutes {
-    override val cloudExtensions: CloudExtensions = samDependencies.cloudExtensions
-    override val googleExtensions: GoogleExtensions = if(samDependencies.cloudExtensions.isInstanceOf[GoogleExtensions]) samDependencies.cloudExtensions.asInstanceOf[GoogleExtensions] else null
-    val googleKeyCache = if(samDependencies.cloudExtensions.isInstanceOf[GoogleExtensions])samDependencies.cloudExtensions.asInstanceOf[GoogleExtensions].googleKeyCache else null
-}
+      override val cloudExtensions: CloudExtensions = samDependencies.cloudExtensions
+      override val googleExtensions: GoogleExtensions = if(samDependencies.cloudExtensions.isInstanceOf[GoogleExtensions]) samDependencies.cloudExtensions.asInstanceOf[GoogleExtensions] else null
+      val googleKeyCache = if(samDependencies.cloudExtensions.isInstanceOf[GoogleExtensions])samDependencies.cloudExtensions.asInstanceOf[GoogleExtensions].googleKeyCache else null
+  }
 
-  def genSamRoutesWithDefault(implicit system: ActorSystem, executionContext: ExecutionContext, materializer: Materializer): SamRoutes = genSamRoutes(genSamDependencies())
+  def genSamRoutesWithDefault(implicit system: ActorSystem, materializer: Materializer): SamRoutes = genSamRoutes(genSamDependencies())
 }
 
 final case class SamDependencies(resourceService: ResourceService, policyEvaluatorService: PolicyEvaluatorService, userService: UserService, statusService: StatusService, managedGroupService: ManagedGroupService, directoryDAO: MockDirectoryDAO, policyDao: AccessPolicyDAO, val cloudExtensions: CloudExtensions)
+
+object TestGoogleFirestore extends GoogleFirestoreOps[IO]{
+  override def set(
+      collectionName: CollectionName,
+      document: Document,
+      dataMap: Map[String, Any])
+    : IO[Instant] = ???
+  override def get(
+      collectionName: CollectionName,
+      document: Document)
+    : IO[DocumentSnapshot] = ???
+  override def transaction[A](
+      ops: (Firestore, Transaction) => IO[A])
+    : IO[A] = IO.unit.map(_.asInstanceOf[A]) //create a transaction always finishes so that retrieving lock alway succeeds
+}

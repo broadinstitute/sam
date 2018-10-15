@@ -18,7 +18,7 @@ final case class GoogleServicesConfig(
     appsDomain: String,
     environment: String,
     pemFile: String,
-    serviceAccountCredentialJsonPath: ServiceAccountCredentialJsonPath,
+    firestoreServiceAccountJsonPath: FirestoreServiceAccountJsonPath,
     serviceAccountClientId: String,
     serviceAccountClientEmail: WorkbenchEmail,
     serviceAccountClientProject: GoogleProject,
@@ -36,7 +36,8 @@ final case class GoogleServicesConfig(
     notificationTopic: String,
     googleKeyCacheConfig: GoogleKeyCacheConfig,
     resourceNamePrefix: Option[String],
-    adminSdkServiceAccounts: Option[NonEmptyList[ServiceAccountConfig]])
+    adminSdkServiceAccounts: Option[NonEmptyList[ServiceAccountConfig]]
+)
 
 object GoogleServicesConfig {
   implicit val googleKeyCacheConfigReader: ValueReader[GoogleKeyCacheConfig] = ValueReader.relative { config =>
@@ -63,8 +64,7 @@ object GoogleServicesConfig {
       config.getString("appsDomain"),
       config.getString("environment"),
       config.getString("pathToPem"),
-      ServiceAccountCredentialJsonPath("pathToCredentialJson"),
-//      ServiceAccountCredentialJsonPath(config.getString("pathToCredentialJson")),
+      FirestoreServiceAccountJsonPath(config.getString("pathToFirestoreCredentialJson")),
       config.getString("serviceAccountClientId"),
       WorkbenchEmail(config.getString("serviceAccountClientEmail")),
       GoogleProject(config.getString("serviceAccountClientProject")),
@@ -88,6 +88,5 @@ object GoogleServicesConfig {
 }
 
 final case class ServiceAccountConfig(json: String)
-final case class ServiceAccountCredentialJsonPath(asString: String)
-
+final case class FirestoreServiceAccountJsonPath(asString: String)
 final case class GoogleConfig(googleServicesConfig: GoogleServicesConfig, petServiceAccountConfig: PetServiceAccountConfig)
