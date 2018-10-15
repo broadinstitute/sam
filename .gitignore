@@ -77,4 +77,4 @@ crashlytics-build.properties
 
 ### Automation things
 automation/report.xml
-
+automation/test-reports/

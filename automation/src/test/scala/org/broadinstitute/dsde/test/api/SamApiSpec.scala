@@ -1,4 +1,4 @@
-package org.broadinstitute.dsde.test.api
+package org.broadinstitute.dsde.workbench.test.api
 
 
 import java.util.UUID
@@ -8,6 +8,8 @@ import akka.testkit.TestKitBase
 import org.broadinstitute.dsde.test.SamConfig
 import org.broadinstitute.dsde.workbench.service._
 import org.broadinstitute.dsde.workbench.service.SamModel._
+import org.broadinstitute.dsde.workbench.test.SamConfig
+import org.broadinstitute.dsde.workbench.service.{Orchestration, RestException, Sam, Thurloe}
 import org.broadinstitute.dsde.workbench.auth.{AuthToken, ServiceAccountAuthTokenFromJson, ServiceAccountAuthTokenFromPem}
 import org.broadinstitute.dsde.workbench.config.{Credentials, ServiceTestConfig, UserPool}
 import org.broadinstitute.dsde.workbench.model._
