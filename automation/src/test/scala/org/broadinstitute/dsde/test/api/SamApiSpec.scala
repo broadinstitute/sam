@@ -1,6 +1,7 @@
 package org.broadinstitute.dsde.test.api
 
 
+import akka.testkit.TestKit
 import org.broadinstitute.dsde.test.SamConfig
 import org.broadinstitute.dsde.workbench.service.{Orchestration, RestException, Sam, Thurloe}
 import org.broadinstitute.dsde.workbench.auth.{AuthToken, ServiceAccountAuthTokenFromJson, ServiceAccountAuthTokenFromPem}
@@ -365,8 +366,6 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
     }
 
     "should synchronize groups with Google" in {
-      def waitForGoogle = Thread.sleep(30.seconds.toMillis)
-
       val Seq(user1: Credentials, user2: Credentials, user3: Credentials) = UserPool.chooseStudents(3)
 
       implicit val ec: ExecutionContextExecutor = ExecutionContext.global
@@ -378,40 +377,37 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
 
       try {
         Sam.user.createGroup(managedGroupId)(user1AuthToken)
-        waitForGoogle
         Sam.user.setPolicyMembers(managedGroupId, adminPolicy, Set(user1.email, user2.email))(user1AuthToken)
 
-        Sam.user.syncPolicy("managed-group", managedGroupId, adminPolicy)(user1AuthToken)
-        waitForGoogle
-
-        // check that google has users 1 and 2 in it
         val policies = Sam.user.listResourcePolicies("managed-group", managedGroupId)(user1AuthToken)
-
         val policyEmail = for {
           policy <- policies.asInstanceOf[Set[Map[String, Map[String, List[String]]]]] if policy.getOrElse("policy", Map.empty).getOrElse("memberEmails", List.empty).nonEmpty
         } yield {
           policy.asInstanceOf[Map[String, String]].getOrElse("email", "")
         }
+        assert(policyEmail.size == 1) // Only one policy should be non empty
 
-        // Only one policy should be non empty
-        assert(policyEmail.size == 1)
-
-        val firstCheckOpt = Await.result(googleDirectoryDAO.listGroupMembers(WorkbenchEmail(policyEmail.head)), 5.minutes)
-        firstCheckOpt.getOrElse(fail(s"$managedGroupId not found")) should contain theSameElementsAs Set(user1Proxy.value, user2Proxy.value)
+        // check that google has users 1 and 2 in it
+        TestKit.awaitCond(
+          Await.result(googleDirectoryDAO.listGroupMembers(WorkbenchEmail(policyEmail.head)), 5.minutes)
+            .getOrElse(Set.empty).toSet == Set(user1Proxy.value, user2Proxy.value),
+          5.minutes, 5.seconds)
 
         Sam.user.addUserToPolicy(managedGroupId, adminPolicy, user3.email)(user1AuthToken)
-        waitForGoogle
 
         // check that google has users 1, 2, and 3 in it
-        val secondCheckOpt = Await.result(googleDirectoryDAO.listGroupMembers(WorkbenchEmail(policyEmail.head)), 5.minutes)
-        secondCheckOpt.getOrElse(fail(s"$managedGroupId not found")) should contain theSameElementsAs Set(user1Proxy.value, user2Proxy.value, user3Proxy.value)
+        TestKit.awaitCond(
+          Await.result(googleDirectoryDAO.listGroupMembers(WorkbenchEmail(policyEmail.head)), 5.minutes)
+            .getOrElse(Set.empty).toSet == Set(user1Proxy.value, user2Proxy.value, user3Proxy.value),
+          5.minutes, 5.seconds)
 
         Sam.user.removeUserFromPolicy(managedGroupId, adminPolicy, user2.email)(user1AuthToken)
-        waitForGoogle
 
         // check that google has users 1 and 3 in it
-        val thirdCheckOpt = Await.result(googleDirectoryDAO.listGroupMembers(WorkbenchEmail(policyEmail.head)), 5.minutes)
-        thirdCheckOpt.getOrElse(fail(s"$managedGroupId not found")) should contain theSameElementsAs Set(user1Proxy.value, user3Proxy.value)
+        TestKit.awaitCond(
+          Await.result(googleDirectoryDAO.listGroupMembers(WorkbenchEmail(policyEmail.head)), 5.minutes)
+            .getOrElse(Set.empty).toSet == Set(user1Proxy.value, user3Proxy.value),
+          5.minutes, 5.seconds)
       } finally {
         Sam.user.deleteGroup(managedGroupId)(user1AuthToken)
       }
