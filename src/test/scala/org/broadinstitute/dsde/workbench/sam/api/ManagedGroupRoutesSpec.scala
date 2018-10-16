@@ -1,19 +1,25 @@
 package org.broadinstitute.dsde.workbench.sam
 package api
 
+import akka.actor.ActorSystem
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import akka.http.scaladsl.model.{StatusCode, StatusCodes}
 import akka.http.scaladsl.testkit.ScalatestRouteTest
+import akka.stream.Materializer
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.api.ManagedGroupRoutesSpec._
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
+import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.openam.MockAccessPolicyDAO
 import org.broadinstitute.dsde.workbench.sam.service.ManagedGroupService
 import org.broadinstitute.dsde.workbench.sam.service.UserService.genRandom
 import org.scalatest.{BeforeAndAfter, FlatSpec, Matchers}
 import spray.json.DefaultJsonProtocol._
 
+import scala.collection.concurrent.TrieMap
+import scala.concurrent.ExecutionContext
 import scala.language.reflectiveCalls
 
 /**
@@ -49,7 +55,6 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
 
   def assertGetGroup(samRoutes: TestSamRoutes, groupId: String = groupId) = {
     Get(s"/api/group/$groupId") ~> samRoutes.route ~> check {
-      val expectedResource = Resource(ManagedGroupService.managedGroupTypeName, ResourceId(groupId))
       status shouldEqual StatusCodes.OK
     }
   }
@@ -228,8 +233,7 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
   }
 
   it should "fail with 404 when the group does not exist" in {
-    val samRoutes = TestSamRoutes(resourceTypes)
-
+    val samRoutes = createSamRoutesWithResource(resourceTypes, Resource(ManagedGroupService.managedGroupTypeName, ResourceId("foo"), Set.empty))
 
     Get(s"/api/group/$groupId/member") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
@@ -283,7 +287,7 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
   }
 
   it should "fail with 404 when the group does not exist" in {
-    val samRoutes = TestSamRoutes(resourceTypes)
+    val samRoutes = createSamRoutesWithResource(resourceTypes, Resource(ManagedGroupService.managedGroupTypeName, ResourceId("foo"), Set.empty))
 
     val newGuy = makeOtherUser(samRoutes)
 
@@ -341,7 +345,7 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
   }
 
   it should "fail with 404 when the group does not exist" in {
-    val samRoutes = TestSamRoutes(resourceTypes)
+    val samRoutes = createSamRoutesWithResource(resourceTypes, Resource(ManagedGroupService.managedGroupTypeName, ResourceId("foo"), Set.empty))
 
     Get(s"/api/group/$groupId/admin") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
@@ -390,7 +394,7 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
   }
 
   it should "fail with 404 when the group does not exist" in {
-    val samRoutes = TestSamRoutes(resourceTypes)
+    val samRoutes = createSamRoutesWithResource(resourceTypes, Resource(ManagedGroupService.managedGroupTypeName, ResourceId("foo"), Set.empty))
 
     val newGuyEmail = WorkbenchEmail("newGuy@organization.org")
     val newGuy = UserInfo(OAuth2BearerToken("newToken"), WorkbenchUserId("NewGuy"), newGuyEmail, 0)
@@ -442,9 +446,9 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
   }
 
   it should "respond with 404 when the group does not exist" in {
-    val samRoutes = TestSamRoutes(resourceTypes)
-    val newGuy = makeOtherUser(samRoutes)
+    val samRoutes = createSamRoutesWithResource(resourceTypes, Resource(ManagedGroupService.managedGroupTypeName, ResourceId("foo"), Set.empty))
 
+    val newGuy = makeOtherUser(samRoutes)
 
     Put(s"/api/group/$groupId/admin/${newGuy.email}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
@@ -513,9 +517,7 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
   }
 
   it should "respond with 404 when the group does not exist" in {
-    val samRoutes = TestSamRoutes(resourceTypes)
-
-
+    val samRoutes = createSamRoutesWithResource(resourceTypes, Resource(ManagedGroupService.managedGroupTypeName, ResourceId("foo"), Set.empty))
     Delete(s"/api/group/$groupId/admin/${samRoutes.userInfo.userEmail}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
@@ -601,7 +603,11 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
   }
 
   it should "fail with 404 when the group does not exist" in {
-    val samRoutes = TestSamRoutes(resourceTypes)
+    val groups = TrieMap.empty[WorkbenchGroupIdentity, WorkbenchGroup]
+    val policyDao = new MockAccessPolicyDAO(groups)
+    val samRoutes = TestSamRoutes(resourceTypes, policyAccessDAO = Some(policyDao), policies = Some(groups))
+
+    policyDao.createResource(Resource(ManagedGroupService.managedGroupTypeName, ResourceId("foo"), Set.empty)).unsafeRunSync()
 
     Get(s"/api/group/$groupId/admin") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
@@ -697,10 +703,21 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
   }
 
   it should "fail with 404 when group does not exist" in {
-    val samRoutes = TestSamRoutes(resourceTypes)
+    val samRoutes = createSamRoutesWithResource(resourceTypes, Resource(ManagedGroupService.managedGroupTypeName, ResourceId("foo"), Set.empty))
 
     Post(s"/api/group/$groupId/requestAccess") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
+  }
+}
+
+object ManagedGroupRoutesSpec{
+  def createSamRoutesWithResource(resourceTypeMap: Map[ResourceTypeName, ResourceType], resource: Resource)(implicit sysmtem: ActorSystem, materializer: Materializer, ec: ExecutionContext): TestSamRoutes ={
+    val groups = TrieMap.empty[WorkbenchGroupIdentity, WorkbenchGroup]
+    val policyDao = new MockAccessPolicyDAO(groups)
+    val samRoutes = TestSamRoutes(resourceTypeMap, policyAccessDAO = Some(policyDao), policies = Some(groups))
+
+    policyDao.createResource(resource).unsafeRunSync()
+    samRoutes
   }
 }

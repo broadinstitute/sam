@@ -5,15 +5,16 @@ import akka.http.scaladsl.server.Directives.onSuccess
 import akka.http.scaladsl.server.{Directive0, Directives}
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchExceptionWithErrorReport, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam._
-import org.broadinstitute.dsde.workbench.sam.model.{Resource, ResourceAction}
+import org.broadinstitute.dsde.workbench.sam.model.{FullyQualifiedResourceId, ResourceAction}
 import org.broadinstitute.dsde.workbench.sam.service.PolicyEvaluatorService
+import ImplicitConversions.ioOnSuccessMagnet
 
 trait SecurityDirectives {
   def policyEvaluatorService: PolicyEvaluatorService
 
-  def requireAction(resource: Resource, action: ResourceAction, userId: WorkbenchUserId): Directive0 = requireOneOfAction(resource, Set(action), userId)
+  def requireAction(resource: FullyQualifiedResourceId, action: ResourceAction, userId: WorkbenchUserId): Directive0 = requireOneOfAction(resource, Set(action), userId)
 
-  def requireOneOfAction(resource: Resource, requestedActions: Set[ResourceAction], userId: WorkbenchUserId): Directive0 = {
+  def requireOneOfAction(resource: FullyQualifiedResourceId, requestedActions: Set[ResourceAction], userId: WorkbenchUserId): Directive0 = {
     Directives.mapInnerRoute { innerRoute =>
       onSuccess(policyEvaluatorService.listUserResourceActions(resource, userId)) { actions =>
         if(actions.intersect(requestedActions).nonEmpty) innerRoute

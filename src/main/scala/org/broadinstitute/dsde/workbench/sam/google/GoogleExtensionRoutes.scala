@@ -9,9 +9,9 @@ import org.broadinstitute.dsde.workbench.model.google._
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchEmail, WorkbenchExceptionWithErrorReport, WorkbenchUser}
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.api.{ExtensionRoutes, SecurityDirectives, UserInfoDirectives}
-import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.CloudExtensions
+import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import spray.json.DefaultJsonProtocol._
 import spray.json.JsString
 
@@ -26,7 +26,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
       requireUserInfo { userInfo =>
         path("petServiceAccount" / Segment / Segment ) { (project, userEmail) =>
           get {
-            requireAction(Resource(CloudExtensions.resourceTypeName, GoogleExtensions.resourceId), GoogleExtensions.getPetPrivateKeyAction, userInfo.userId) {
+            requireAction(FullyQualifiedResourceId(CloudExtensions.resourceTypeName, GoogleExtensions.resourceId), GoogleExtensions.getPetPrivateKeyAction, userInfo.userId) {
               complete {
                 import spray.json._
                 googleExtensions.getPetServiceAccountKey(WorkbenchEmail(userEmail), GoogleProject(project)) map {
@@ -119,20 +119,20 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
         } ~
         pathPrefix("resource") {
           path(Segment / Segment / Segment / "sync") { (resourceTypeName, resourceId, accessPolicyName) =>
-            val resource = Resource(ResourceTypeName(resourceTypeName), ResourceId(resourceId))
-            val resourceAndPolicyName = ResourceAndPolicyName(resource, AccessPolicyName(accessPolicyName))
+            val resource = FullyQualifiedResourceId(ResourceTypeName(resourceTypeName), ResourceId(resourceId))
+            val policyId = FullyQualifiedPolicyId(resource, AccessPolicyName(accessPolicyName))
             pathEndOrSingleSlash {
               post {
                 complete {
                   import GoogleModelJsonSupport._
-                  googleExtensions.synchronizeGroupMembers(resourceAndPolicyName).map { syncReport =>
+                  googleExtensions.synchronizeGroupMembers(policyId).map { syncReport =>
                     StatusCodes.OK -> syncReport
                   }
                 }
               } ~
               get {
                 complete {
-                  googleExtensions.getSynchronizedState(resourceAndPolicyName).map {
+                  googleExtensions.getSynchronizedState(policyId).map {
                     case Some(syncState) => StatusCodes.OK -> Option(syncState)
                     case None => StatusCodes.NoContent -> None
                   }

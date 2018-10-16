@@ -23,7 +23,7 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, LdapAccessPolicyDAO, MockAccessPolicyDAO}
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.broadinstitute.dsde.workbench.sam.service._
-import org.broadinstitute.dsde.workbench.sam.{TestSupport, _}
+import org.broadinstitute.dsde.workbench.sam.{TestSupport, model, _}
 import org.mockito.ArgumentMatcher
 import org.mockito.ArgumentMatchers._
 import org.mockito.Mockito._
@@ -102,7 +102,9 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val removeError = "removeError@foo.bar"
 
     val testGroup = BasicWorkbenchGroup(groupName, Set(inSamSubGroup.id, inBothSubGroup.id, inSamUserId, inBothUserId, addError), groupEmail)
-    val testPolicy = AccessPolicy(ResourceAndPolicyName(Resource(ResourceTypeName("workspace"), ResourceId("rid")), AccessPolicyName("ap")), Set(inSamSubGroup.id, inBothSubGroup.id, inSamUserId, inBothUserId, addError), groupEmail, Set.empty, Set.empty)
+    val testPolicy = AccessPolicy(
+      model.FullyQualifiedPolicyId(
+        FullyQualifiedResourceId(ResourceTypeName("workspace"), ResourceId("rid")), AccessPolicyName("ap")), Set(inSamSubGroup.id, inBothSubGroup.id, inSamUserId, inBothUserId, addError), groupEmail, Set.empty, Set.empty)
 
     Seq(testGroup, testPolicy).foreach { target =>
       val mockAccessPolicyDAO = mock[AccessPolicyDAO]
@@ -115,7 +117,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
         case g: BasicWorkbenchGroup =>
           when(mockDirectoryDAO.loadGroup(g.id)).thenReturn(Future.successful(Option(testGroup)))
         case p: AccessPolicy =>
-          when(mockAccessPolicyDAO.loadPolicy(p.id)).thenReturn(Future.successful(Option(testPolicy)))
+          when(mockAccessPolicyDAO.loadPolicy(p.id)).thenReturn(IO.pure(Option(testPolicy)))
       }
       when(mockDirectoryDAO.updateSynchronizedDate(any[WorkbenchGroupIdentity])).thenReturn(Future.successful(()))
       when(mockDirectoryDAO.getSynchronizedDate(any[WorkbenchGroupIdentity])).thenReturn(Future.successful(Some((new GregorianCalendar(2017, 11, 22).getTime()))))
@@ -205,7 +207,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     // Set up constrained policy
     val managedGroupId = WorkbenchGroupName("authDomainGroup")
     val resource = Resource(constrainableResourceType.name, ResourceId("rid"), Set(managedGroupId))
-    val rpn = ResourceAndPolicyName(resource, AccessPolicyName("ap"))
+    val rpn = FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("ap"))
     val testPolicy = AccessPolicy(rpn, Set(policyOnlySamUserId, intersectionSamUserId, authorizedGoogleUserId, policyOnlySamSubGroup.id, intersectionSamSubGroup.id, authorizedGoogleSubGroup.id, addError), WorkbenchEmail("testPolicy@example.com"), Set(constrainableRole.roleName), constrainableRole.actions)
 
     val mockAccessPolicyDAO = mock[AccessPolicyDAO]
@@ -213,8 +215,8 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val mockGoogleDirectoryDAO = mock[GoogleDirectoryDAO]
     val ge = new GoogleExtensions(mockDirectoryDAO, mockAccessPolicyDAO, mockGoogleDirectoryDAO, null, null, null,null, null, null, googleServicesConfig, petServiceAccountConfig, constrainableResourceTypes)
 
-    when(mockAccessPolicyDAO.loadPolicy(testPolicy.id)).thenReturn(Future.successful(Option(testPolicy)))
-    when(mockAccessPolicyDAO.loadResourceAuthDomain(resource)).thenReturn(IO.pure(Set(managedGroupId)))
+    when(mockAccessPolicyDAO.loadPolicy(testPolicy.id)).thenReturn(IO.pure(Option(testPolicy)))
+    when(mockAccessPolicyDAO.loadResourceAuthDomain(resource.fullyQualifiedId)).thenReturn(IO.pure(Set(managedGroupId)))
 
     when(mockDirectoryDAO.listIntersectionGroupUsers(Set(managedGroupId, testPolicy.id))).thenReturn(Future.successful(Set(intersectionSamUserId, authorizedGoogleUserId, subIntersectionSamGroupUserId, subAuthorizedGoogleGroupUserId, addError)))
 
@@ -515,10 +517,10 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val ge = new GoogleExtensions(mockDirectoryDAO, mockAccessPolicyDAO, mockGoogleDirectoryDAO, mockGooglePubSubDAO, mockGoogleIamDAO, mockGoogleStorageDAO, null, googleKeyCache, notificationDAO, googleServicesConfig, petServiceAccountConfig, configResourceTypes)
 
     val app = SamApplication(new UserService(mockDirectoryDAO, ge), new ResourceService(configResourceTypes, null, mockAccessPolicyDAO, mockDirectoryDAO, ge, "example.com"), null)
-    val resourceAndPolicyName = ResourceAndPolicyName(Resource(CloudExtensions.resourceTypeName, GoogleExtensions.resourceId), AccessPolicyName("owner"))
+    val resourceAndPolicyName = FullyQualifiedPolicyId(FullyQualifiedResourceId(CloudExtensions.resourceTypeName, GoogleExtensions.resourceId), AccessPolicyName("owner"))
 
     runAndWait(mockDirectoryDAO.loadUser(WorkbenchUserId(googleServicesConfig.serviceAccountClientId))) shouldBe None
-    runAndWait(mockAccessPolicyDAO.loadPolicy(resourceAndPolicyName)) shouldBe None
+    mockAccessPolicyDAO.loadPolicy(resourceAndPolicyName).unsafeRunSync() shouldBe None
 
     runAndWait(ge.onBoot(app))
 
@@ -526,7 +528,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val owner = runAndWait(mockDirectoryDAO.loadUser(uid)).get
     owner.googleSubjectId shouldBe Some(GoogleSubjectId(googleServicesConfig.serviceAccountClientId))
     owner.email shouldBe googleServicesConfig.serviceAccountClientEmail
-    val res = runAndWait(mockAccessPolicyDAO.loadPolicy(resourceAndPolicyName)).get
+    val res = mockAccessPolicyDAO.loadPolicy(resourceAndPolicyName).unsafeRunSync().get
     res.id shouldBe resourceAndPolicyName
     res.members shouldBe Set(owner.id)
     res.roles shouldBe Set(ResourceRoleName("owner"))
@@ -629,21 +631,22 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
 
     val managedGroupId = "managedGroupId"
 
-    val managedGroupRPN = ResourceAndPolicyName(Resource(ResourceTypeName("managed-group"), ResourceId(managedGroupId)), AccessPolicyName("managedGroup"))
+    val managedGroupRPN = FullyQualifiedPolicyId(
+      FullyQualifiedResourceId(ResourceTypeName("managed-group"), ResourceId(managedGroupId)), AccessPolicyName("managedGroup"))
     val resource = Resource(ResourceTypeName("resource"), ResourceId("rid"), Set(WorkbenchGroupName(managedGroupId)))
-    val ownerRPN = ResourceAndPolicyName(resource, AccessPolicyName("owner"))
-    val readerRPN = ResourceAndPolicyName(resource, AccessPolicyName("reader"))
+    val ownerRPN = FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("owner"))
+    val readerRPN = FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("reader"))
     val ownerPolicy = AccessPolicy(ownerRPN, Set.empty, WorkbenchEmail("owner@example.com"), Set.empty, Set.empty)
     val readerPolicy = AccessPolicy(readerRPN, Set.empty, WorkbenchEmail("reader@example.com"), Set.empty, Set.empty)
 
     // mock responses for onGroupUpdate
-    when(mockDirectoryDAO.listAncestorGroups(any[ResourceAndPolicyName])).thenReturn(Future.successful(Set.empty.asInstanceOf[Set[WorkbenchGroupIdentity]]))
-    when(mockDirectoryDAO.getSynchronizedDate(any[ResourceAndPolicyName])).thenReturn(Future.successful(Some(new GregorianCalendar(2018, 8, 26).getTime())))
+    when(mockDirectoryDAO.listAncestorGroups(any[FullyQualifiedPolicyId])).thenReturn(Future.successful(Set.empty.asInstanceOf[Set[WorkbenchGroupIdentity]]))
+    when(mockDirectoryDAO.getSynchronizedDate(any[FullyQualifiedPolicyId])).thenReturn(Future.successful(Some(new GregorianCalendar(2018, 8, 26).getTime())))
     when(mockGooglePubSubDAO.publishMessages(any[String], any[Seq[String]])).thenReturn(Future.successful(()))
 
     // mock responses for onManagedGroupUpdate
-    when(mockAccessPolicyDAO.listResourcesConstrainedByGroup(WorkbenchGroupName(managedGroupId))).thenReturn(Future.successful(Set(resource)))
-    when(mockAccessPolicyDAO.listAccessPolicies(resource)).thenReturn(IO.pure(Set(ownerPolicy, readerPolicy)))
+    when(mockAccessPolicyDAO.listResourcesConstrainedByGroup(WorkbenchGroupName(managedGroupId))).thenReturn(IO.pure(Set(resource)))
+    when(mockAccessPolicyDAO.listAccessPolicies(resource.fullyQualifiedId)).thenReturn(IO.pure(Set(ownerPolicy, readerPolicy)))
 
     runAndWait(googleExtensions.onGroupUpdate(Seq(managedGroupRPN)))
 
@@ -659,25 +662,26 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
 
     val managedGroupId = "managedGroupId"
     val subGroupId = "subGroupId"
-    val managedGroupRPN = ResourceAndPolicyName(Resource(ResourceTypeName("managed-group"), ResourceId(managedGroupId)), AccessPolicyName("managedGroup"))
+    val managedGroupRPN = FullyQualifiedPolicyId(
+      FullyQualifiedResourceId(ResourceTypeName("managed-group"), ResourceId(managedGroupId)), AccessPolicyName("managedGroup"))
 
     val resource = Resource(ResourceTypeName("resource"), ResourceId("rid"), Set(WorkbenchGroupName(managedGroupId)))
-    val ownerRPN = ResourceAndPolicyName(resource, AccessPolicyName("owner"))
-    val readerRPN = ResourceAndPolicyName(resource, AccessPolicyName("reader"))
+    val ownerRPN = FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("owner"))
+    val readerRPN = FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("reader"))
     val ownerPolicy = AccessPolicy(ownerRPN, Set.empty, WorkbenchEmail("owner@example.com"), Set.empty, Set.empty)
     val readerPolicy = AccessPolicy(readerRPN, Set.empty, WorkbenchEmail("reader@example.com"), Set.empty, Set.empty)
 
     // mock responses for onGroupUpdate
-    when(mockDirectoryDAO.listAncestorGroups(any[ResourceAndPolicyName])).thenReturn(Future.successful(Set.empty.asInstanceOf[Set[WorkbenchGroupIdentity]]))
-    when(mockDirectoryDAO.getSynchronizedDate(any[ResourceAndPolicyName])).thenReturn(Future.successful(Some(new GregorianCalendar(2018, 8, 26).getTime())))
+    when(mockDirectoryDAO.listAncestorGroups(any[FullyQualifiedPolicyId])).thenReturn(Future.successful(Set.empty.asInstanceOf[Set[WorkbenchGroupIdentity]]))
+    when(mockDirectoryDAO.getSynchronizedDate(any[FullyQualifiedPolicyId])).thenReturn(Future.successful(Some(new GregorianCalendar(2018, 8, 26).getTime())))
     when(mockGooglePubSubDAO.publishMessages(any[String], any[Seq[String]])).thenReturn(Future.successful(()))
 
     // mock ancestor call to establish subgroup relationship to managed group
     when(mockDirectoryDAO.listAncestorGroups(WorkbenchGroupName(subGroupId))).thenReturn(Future.successful(Set(managedGroupRPN).asInstanceOf[Set[WorkbenchGroupIdentity]]))
 
     // mock responses for onManagedGroupUpdate
-    when(mockAccessPolicyDAO.listResourcesConstrainedByGroup(WorkbenchGroupName(managedGroupId))).thenReturn(Future.successful(Set(resource)))
-    when(mockAccessPolicyDAO.listAccessPolicies(resource)).thenReturn(IO.pure(Set(ownerPolicy, readerPolicy)))
+    when(mockAccessPolicyDAO.listResourcesConstrainedByGroup(WorkbenchGroupName(managedGroupId))).thenReturn(IO.pure(Set(resource)))
+    when(mockAccessPolicyDAO.listAccessPolicies(resource.fullyQualifiedId)).thenReturn(IO.pure(Set(ownerPolicy, readerPolicy)))
 
     runAndWait(googleExtensions.onGroupUpdate(Seq(WorkbenchGroupName(subGroupId))))
 
@@ -693,17 +697,18 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
 
     val managedGroupId = "managedGroupId"
     val subGroupId = "subGroupId"
-    val managedGroupRPN = ResourceAndPolicyName(Resource(ResourceTypeName("managed-group"), ResourceId(managedGroupId)), AccessPolicyName("managedGroup"))
+    val managedGroupRPN = FullyQualifiedPolicyId(
+      FullyQualifiedResourceId(ResourceTypeName("managed-group"), ResourceId(managedGroupId)), AccessPolicyName("managedGroup"))
 
     val resource = Resource(ResourceTypeName("resource"), ResourceId("rid"), Set(WorkbenchGroupName(managedGroupId)))
-    val ownerRPN = ResourceAndPolicyName(resource, AccessPolicyName("owner"))
-    val readerRPN = ResourceAndPolicyName(resource, AccessPolicyName("reader"))
+    val ownerRPN = FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("owner"))
+    val readerRPN = FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("reader"))
     val ownerPolicy = AccessPolicy(ownerRPN, Set.empty, WorkbenchEmail("owner@example.com"), Set.empty, Set.empty)
     val readerPolicy = AccessPolicy(readerRPN, Set.empty, WorkbenchEmail("reader@example.com"), Set.empty, Set.empty)
 
     // mock responses for onGroupUpdate
-    when(mockDirectoryDAO.listAncestorGroups(any[ResourceAndPolicyName])).thenReturn(Future.successful(Set.empty.asInstanceOf[Set[WorkbenchGroupIdentity]]))
-    when(mockDirectoryDAO.getSynchronizedDate(any[ResourceAndPolicyName])).thenReturn(Future.successful(Some(new GregorianCalendar(2018, 8, 26).getTime())))
+    when(mockDirectoryDAO.listAncestorGroups(any[FullyQualifiedPolicyId])).thenReturn(Future.successful(Set.empty.asInstanceOf[Set[WorkbenchGroupIdentity]]))
+    when(mockDirectoryDAO.getSynchronizedDate(any[FullyQualifiedPolicyId])).thenReturn(Future.successful(Some(new GregorianCalendar(2018, 8, 26).getTime())))
     when(mockGooglePubSubDAO.publishMessages(any[String], any[Seq[String]])).thenReturn(Future.successful(()))
 
     // mock ancestor call to establish nested group structure for owner policy and subgroup in managed group
@@ -711,8 +716,8 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     when(mockDirectoryDAO.listAncestorGroups(ownerRPN)).thenReturn(Future.successful(Set(managedGroupRPN).asInstanceOf[Set[WorkbenchGroupIdentity]]))
 
     // mock responses for onManagedGroupUpdate
-    when(mockAccessPolicyDAO.listResourcesConstrainedByGroup(WorkbenchGroupName(managedGroupId))).thenReturn(Future.successful(Set(resource)))
-    when(mockAccessPolicyDAO.listAccessPolicies(resource)).thenReturn(IO.pure(Set(ownerPolicy, readerPolicy)))
+    when(mockAccessPolicyDAO.listResourcesConstrainedByGroup(WorkbenchGroupName(managedGroupId))).thenReturn(IO.pure(Set(resource)))
+    when(mockAccessPolicyDAO.listAccessPolicies(resource.fullyQualifiedId)).thenReturn(IO.pure(Set(ownerPolicy, readerPolicy)))
 
     runAndWait(googleExtensions.onGroupUpdate(Seq(WorkbenchGroupName(subGroupId))))
 
@@ -855,6 +860,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     * the ResourceService and clears the database
     */
   private def initPrivateTest: (DirectoryDAO, GoogleExtensions, ResourceService, ManagedGroupService, ResourceType, ResourceRole) = {
+    implicit val cs = IO.contextShift(scala.concurrent.ExecutionContext.global)
     //Note: we intentionally use the Managed Group resource type loaded from reference.conf for the tests here.
     val realResourceTypes = config.as[Map[String, ResourceType]]("resourceTypes").values.toSet
     val realResourceTypeMap = realResourceTypes.map(rt => rt.name -> rt).toMap
@@ -913,10 +919,10 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val accessPolicyMap = Map(AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembership(Set(inPolicyUser.userEmail, inBothUser.userEmail), constrainableRole.actions, Set(constrainableRole.roleName)))
     val resource = runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId("rid"), accessPolicyMap, Set(WorkbenchGroupName(managedGroupId)), inBothUser.userId))
 
-    val accessPolicy = runAndWait(constrainableService.overwritePolicy(constrainableResourceType, AccessPolicyName("ap"), resource, AccessPolicyMembership(Set(inPolicyUser.userEmail, inBothUser.userEmail), Set.empty, Set.empty)))
+    val accessPolicy = runAndWait(constrainableService.overwritePolicy(constrainableResourceType, AccessPolicyName("ap"), resource.fullyQualifiedId, AccessPolicyMembership(Set(inPolicyUser.userEmail, inBothUser.userEmail), Set.empty, Set.empty)))
 
     val calculateIntersectionGroup = PrivateMethod[Future[Set[WorkbenchUserId]]]('calculateIntersectionGroup)
-    val intersectionGroup = runAndWait(ge invokePrivate calculateIntersectionGroup(resource, accessPolicy))
+    val intersectionGroup = runAndWait(ge invokePrivate calculateIntersectionGroup(resource.fullyQualifiedId, accessPolicy))
     intersectionGroup shouldEqual Set(inBothUser.userId)
   }
 
@@ -954,10 +960,10 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val resource = runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId("rid"), accessPolicyMap, Set(WorkbenchGroupName(managedGroupId)), superAdminOwner.userId))
 
     // Access policy that intersection group will be calculated for
-    val accessPolicy = runAndWait(constrainableService.overwritePolicy(constrainableResourceType, AccessPolicyName("ap"), resource, AccessPolicyMembership(Set(inPolicySubGroup.email, inBothSubGroup.email), Set.empty, Set.empty)))
+    val accessPolicy = runAndWait(constrainableService.overwritePolicy(constrainableResourceType, AccessPolicyName("ap"), resource.fullyQualifiedId, AccessPolicyMembership(Set(inPolicySubGroup.email, inBothSubGroup.email), Set.empty, Set.empty)))
 
     val calculateIntersectionGroup = PrivateMethod[Future[Set[WorkbenchUserId]]]('calculateIntersectionGroup)
-    val intersectionGroup = runAndWait(ge invokePrivate calculateIntersectionGroup(resource, accessPolicy))
+    val intersectionGroup = runAndWait(ge invokePrivate calculateIntersectionGroup(resource.fullyQualifiedId, accessPolicy))
     intersectionGroup shouldEqual Set(inBothSubGroupUser.userId)
   }
 
@@ -972,10 +978,10 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val accessPolicyMap = Map(AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembership(Set(inPolicyUser.userEmail, inBothUser.userEmail), constrainableRole.actions, Set(constrainableRole.roleName)))
     val resource = runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId("rid"), accessPolicyMap, Set.empty, inBothUser.userId))
 
-    val accessPolicy = runAndWait(constrainableService.overwritePolicy(constrainableResourceType, AccessPolicyName("ap"), resource, AccessPolicyMembership(Set(inPolicyUser.userEmail, inBothUser.userEmail), Set.empty, Set.empty)))
+    val accessPolicy = runAndWait(constrainableService.overwritePolicy(constrainableResourceType, AccessPolicyName("ap"), resource.fullyQualifiedId, AccessPolicyMembership(Set(inPolicyUser.userEmail, inBothUser.userEmail), Set.empty, Set.empty)))
 
     val calculateIntersectionGroup = PrivateMethod[Future[Set[WorkbenchUserId]]]('calculateIntersectionGroup)
-    val intersectionGroup = runAndWait(ge invokePrivate calculateIntersectionGroup(resource, accessPolicy))
+    val intersectionGroup = runAndWait(ge invokePrivate calculateIntersectionGroup(resource.fullyQualifiedId, accessPolicy))
     intersectionGroup shouldEqual Set(inBothUser.userId, inPolicyUser.userId)
   }
 
@@ -994,10 +1000,10 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val accessPolicyMap = Map(AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembership(Set(inPolicyUser.userEmail), constrainableRole.actions, Set(constrainableRole.roleName)))
     val resource = runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId("rid"), accessPolicyMap, Set(WorkbenchGroupName(managedGroupId)), inAuthDomainUser.userId))
 
-    val accessPolicy = runAndWait(constrainableService.overwritePolicy(constrainableResourceType, AccessPolicyName("ap"), resource, AccessPolicyMembership(Set(inPolicyUser.userEmail), Set.empty, Set.empty)))
+    val accessPolicy = runAndWait(constrainableService.overwritePolicy(constrainableResourceType, AccessPolicyName("ap"), resource.fullyQualifiedId, AccessPolicyMembership(Set(inPolicyUser.userEmail), Set.empty, Set.empty)))
 
     val calculateIntersectionGroup = PrivateMethod[Future[Set[WorkbenchUserId]]]('calculateIntersectionGroup)
-    val intersectionGroup = runAndWait(ge invokePrivate calculateIntersectionGroup(resource, accessPolicy))
+    val intersectionGroup = runAndWait(ge invokePrivate calculateIntersectionGroup(resource.fullyQualifiedId, accessPolicy))
     intersectionGroup shouldEqual Set.empty
   }
 
@@ -1013,10 +1019,10 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
       AccessPolicyName("emptyPolicy") -> AccessPolicyMembership(Set.empty, Set.empty, Set.empty))
     val resource = runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId("rid"), accessPolicyMap, Set.empty, inBothUser.userId))
 
-    val accessPolicy = runAndWait(constrainableService.overwritePolicy(constrainableResourceType, AccessPolicyName("ap"), resource, AccessPolicyMembership(Set.empty, Set.empty, Set.empty)))
+    val accessPolicy = runAndWait(constrainableService.overwritePolicy(constrainableResourceType, AccessPolicyName("ap"), resource.fullyQualifiedId, AccessPolicyMembership(Set.empty, Set.empty, Set.empty)))
 
     val calculateIntersectionGroup = PrivateMethod[Future[Set[WorkbenchUserId]]]('calculateIntersectionGroup)
-    val intersectionGroup = runAndWait(ge invokePrivate calculateIntersectionGroup(resource, accessPolicy))
+    val intersectionGroup = runAndWait(ge invokePrivate calculateIntersectionGroup(resource.fullyQualifiedId, accessPolicy))
     intersectionGroup shouldEqual Set.empty
   }
 
@@ -1029,10 +1035,10 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val accessPolicyMap = Map(AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembership(Set(dummyUserInfo.userEmail), Set.empty, Set(constrainableRole.roleName)))
     val resource = runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId("rid"), accessPolicyMap, Set.empty, dummyUserInfo.userId))
 
-    val accessPolicy = runAndWait(constrainableService.overwritePolicy(constrainableResourceType, AccessPolicyName("ap"), resource, AccessPolicyMembership(Set.empty, constrainableRole.actions, Set(constrainableRole.roleName))))
+    val accessPolicy = runAndWait(constrainableService.overwritePolicy(constrainableResourceType, AccessPolicyName("ap"), resource.fullyQualifiedId, AccessPolicyMembership(Set.empty, constrainableRole.actions, Set(constrainableRole.roleName))))
 
     val isConstrainable = PrivateMethod[Boolean]('isConstrainable)
-    val constrained = ge invokePrivate isConstrainable(resource, accessPolicy)
+    val constrained = ge invokePrivate isConstrainable(resource.fullyQualifiedId, accessPolicy)
     constrained shouldEqual true
   }
 
@@ -1045,10 +1051,10 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val accessPolicyMap = Map(AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembership(Set(dummyUserInfo.userEmail), Set.empty, Set(constrainableRole.roleName)))
     val resource = runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId("rid"), accessPolicyMap, Set.empty, dummyUserInfo.userId))
 
-    val accessPolicy = runAndWait(constrainableService.overwritePolicy(constrainableResourceType, AccessPolicyName("ap"), resource, AccessPolicyMembership(Set.empty, Set.empty, Set(constrainableRole.roleName))))
+    val accessPolicy = runAndWait(constrainableService.overwritePolicy(constrainableResourceType, AccessPolicyName("ap"), resource.fullyQualifiedId, AccessPolicyMembership(Set.empty, Set.empty, Set(constrainableRole.roleName))))
 
     val isConstrainable = PrivateMethod[Boolean]('isConstrainable)
-    val constrained = ge invokePrivate isConstrainable(resource, accessPolicy)
+    val constrained = ge invokePrivate isConstrainable(resource.fullyQualifiedId, accessPolicy)
     constrained shouldEqual true
   }
 
@@ -1061,10 +1067,10 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val accessPolicyMap = Map(AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembership(Set(dummyUserInfo.userEmail), Set.empty, Set(constrainableRole.roleName)))
     val resource = runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId("rid"), accessPolicyMap, Set.empty, dummyUserInfo.userId))
 
-    val accessPolicy = runAndWait(constrainableService.overwritePolicy(constrainableResourceType, AccessPolicyName("ap"), resource, AccessPolicyMembership(Set.empty, constrainableRole.actions, Set.empty)))
+    val accessPolicy = runAndWait(constrainableService.overwritePolicy(constrainableResourceType, AccessPolicyName("ap"), resource.fullyQualifiedId, AccessPolicyMembership(Set.empty, constrainableRole.actions, Set.empty)))
 
     val isConstrainable = PrivateMethod[Boolean]('isConstrainable)
-    val constrained = ge invokePrivate isConstrainable(resource, accessPolicy)
+    val constrained = ge invokePrivate isConstrainable(resource.fullyQualifiedId, accessPolicy)
     constrained shouldEqual true
   }
 
@@ -1077,10 +1083,10 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val accessPolicyMap = Map(AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembership(Set(dummyUserInfo.userEmail), Set.empty, Set(constrainableRole.roleName)))
     val resource = runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId("rid"), accessPolicyMap, Set.empty, dummyUserInfo.userId))
 
-    val accessPolicy = runAndWait(constrainableService.overwritePolicy(constrainableResourceType, AccessPolicyName("ap"), resource, AccessPolicyMembership(Set.empty, Set.empty, Set.empty)))
+    val accessPolicy = runAndWait(constrainableService.overwritePolicy(constrainableResourceType, AccessPolicyName("ap"), resource.fullyQualifiedId, AccessPolicyMembership(Set.empty, Set.empty, Set.empty)))
 
     val isConstrainable = PrivateMethod[Boolean]('isConstrainable)
-    val constrained = ge invokePrivate isConstrainable(resource, accessPolicy)
+    val constrained = ge invokePrivate isConstrainable(resource.fullyQualifiedId, accessPolicy)
     constrained shouldEqual false
   }
 
@@ -1112,10 +1118,10 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val accessPolicyMap = Map(AccessPolicyName(nonConstrainableRole.roleName.value) -> AccessPolicyMembership(Set(dummyUserInfo.userEmail), nonConstrainableRole.actions, Set(nonConstrainableRole.roleName)))
     val resource = runAndWait(constrainableService.createResource(nonConstrainableResourceType, ResourceId("rid"), accessPolicyMap, Set.empty, dummyUserInfo.userId))
 
-    val accessPolicy = runAndWait(constrainableService.overwritePolicy(nonConstrainableResourceType, AccessPolicyName("ap"), resource, AccessPolicyMembership(Set.empty, Set.empty, Set.empty)))
+    val accessPolicy = runAndWait(constrainableService.overwritePolicy(nonConstrainableResourceType, AccessPolicyName("ap"), resource.fullyQualifiedId, AccessPolicyMembership(Set.empty, Set.empty, Set.empty)))
 
     val isConstrainable = PrivateMethod[Boolean]('isConstrainable)
-    val constrained = ge invokePrivate isConstrainable(resource, accessPolicy)
+    val constrained = ge invokePrivate isConstrainable(resource.fullyQualifiedId, accessPolicy)
     constrained shouldEqual false
   }
 }

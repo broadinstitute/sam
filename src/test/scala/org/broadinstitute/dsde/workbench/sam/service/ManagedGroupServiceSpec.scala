@@ -4,6 +4,7 @@ import java.net.URI
 import java.util.UUID
 
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
+import cats.effect.IO
 import com.typesafe.config.ConfigFactory
 import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import net.ceedubs.ficus.Ficus._
@@ -28,6 +29,7 @@ import scala.concurrent.Future
   */
 class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport with MockitoSugar
   with BeforeAndAfter with BeforeAndAfterAll with ScalaFutures with OptionValues {
+  implicit val cs = IO.contextShift(scala.concurrent.ExecutionContext.global)
 
   private val config = ConfigFactory.load()
   val directoryConfig = config.as[DirectoryConfig]("directory")
@@ -43,9 +45,9 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
   val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
   private val resourceId = ResourceId("myNewGroup")
-  private val expectedResource = Resource(ManagedGroupService.managedGroupTypeName, resourceId)
-  private val adminPolicy = ResourceAndPolicyName(expectedResource, ManagedGroupService.adminPolicyName)
-  private val memberPolicy = ResourceAndPolicyName(expectedResource, ManagedGroupService.memberPolicyName)
+  private val expectedResource = FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, resourceId)
+  private val adminPolicy = FullyQualifiedPolicyId(expectedResource, ManagedGroupService.adminPolicyName)
+  private val memberPolicy = FullyQualifiedPolicyId(expectedResource, ManagedGroupService.memberPolicyName)
 
   private val managedGroupResourceType = resourceTypeMap.getOrElse(ResourceTypeName("managed-group"), throw new Error("Failed to load managed-group resource type from reference.conf"))
   private val testDomain = "example.com"
@@ -63,20 +65,20 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
 
   def makeResourceType(resourceType: ResourceType): ResourceTypeName = resourceService.createResourceType(resourceType).unsafeRunSync()
 
-  def assertPoliciesOnResource(resource: Resource, policyDAO: AccessPolicyDAO = policyDAO, expectedPolicies: Set[AccessPolicyName] = Set(ManagedGroupService.adminPolicyName, ManagedGroupService.memberPolicyName)) = {
+  def assertPoliciesOnResource(resource: FullyQualifiedResourceId, policyDAO: AccessPolicyDAO = policyDAO, expectedPolicies: Set[AccessPolicyName] = Set(ManagedGroupService.adminPolicyName, ManagedGroupService.memberPolicyName)) = {
     val policies = policyDAO.listAccessPolicies(resource).unsafeRunSync()
     policies.map(_.id.accessPolicyName.value) shouldEqual expectedPolicies.map(_.value)
     expectedPolicies.foreach { policyName =>
-      val res = policyDAO.loadPolicy(ResourceAndPolicyName(resource, policyName)).futureValue
+      val res = policyDAO.loadPolicy(FullyQualifiedPolicyId(resource, policyName)).unsafeRunSync()
       res.isInstanceOf[Some[AccessPolicy]] shouldBe true
     }
   }
 
   def assertMakeGroup(groupId: String = resourceId.value, managedGroupService: ManagedGroupService = managedGroupService, policyDAO: AccessPolicyDAO = policyDAO): Resource = {
     val resource: Resource = makeGroup(groupId, managedGroupService)
-    val intendedResource = Resource(ManagedGroupService.managedGroupTypeName, ResourceId(groupId))
+    val intendedResource = Resource(ManagedGroupService.managedGroupTypeName, ResourceId(groupId), Set.empty)
     resource shouldEqual intendedResource
-    assertPoliciesOnResource(resource, expectedPolicies = Set(ManagedGroupService.adminPolicyName, ManagedGroupService.memberPolicyName, ManagedGroupService.adminNotifierPolicyName))
+    assertPoliciesOnResource(resource.fullyQualifiedId, expectedPolicies = Set(ManagedGroupService.adminPolicyName, ManagedGroupService.memberPolicyName, ManagedGroupService.adminNotifierPolicyName))
     resource
   }
 
@@ -176,8 +178,8 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     runAndWait(managedGroupService.deleteManagedGroup(resourceId))
     verify(mockGoogleExtensions).onGroupDelete(groupEmail)
     policyDAO.listAccessPolicies(expectedResource).unsafeRunSync() shouldEqual Set.empty
-    runAndWait(policyDAO.loadPolicy(adminPolicy)) shouldEqual None
-    runAndWait(policyDAO.loadPolicy(memberPolicy)) shouldEqual None
+    policyDAO.loadPolicy(adminPolicy).unsafeRunSync() shouldEqual None
+    policyDAO.loadPolicy(memberPolicy).unsafeRunSync() shouldEqual None
   }
 
   it should "fail if the managed group is a sub group of any other workbench group" in {

@@ -7,32 +7,45 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.AccessPolicyDAO
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.ExecutionContext
 
 class PolicyEvaluatorService(
     private val resourceTypes: Map[ResourceTypeName, ResourceType],
     private val accessPolicyDAO: AccessPolicyDAO)(implicit val executionContext: ExecutionContext)
     extends LazyLogging {
-  def hasPermission(resource: Resource, action: ResourceAction, userId: WorkbenchUserId): Future[Boolean] =
+  def hasPermission(resource: FullyQualifiedResourceId, action: ResourceAction, userId: WorkbenchUserId): IO[Boolean] =
     listUserResourceActions(resource, userId).map { _.contains(action) }
 
-  def listUserResourceActions(resource: Resource, userId: WorkbenchUserId): Future[Set[ResourceAction]] = {
-    def roleActions(resourceTypeOption: Option[ResourceType], resourceRoleName: ResourceRoleName) = {
-      val maybeActions = for {
-        resourceType <- resourceTypeOption
-        role <- resourceType.roles.find(_.roleName == resourceRoleName)
-      } yield {
-        role.actions
+  def listUserResourceActions(resource: FullyQualifiedResourceId, userId: WorkbenchUserId): IO[Set[ResourceAction]] = {
+    def allActions(policy: AccessPolicy, resourceType: ResourceType): Set[ResourceAction] = {
+      val roleActions = policy.roles.flatMap{
+        role =>
+          resourceType.roles.filter(_.roleName == role).flatMap(_.actions)
       }
-      maybeActions.getOrElse(Set.empty)
-    }
 
-    val resourceType = resourceTypes.get(resource.resourceTypeName)
-    for {
-      policies <- accessPolicyDAO.listAccessPoliciesForUser(resource, userId)
-    } yield {
-      policies.flatMap(policy => policy.actions ++ policy.roles.flatMap(roleActions(resourceType, _)))
+      policy.actions ++ roleActions
     }
+    for{
+      rt <- IO.fromEither[ResourceType](resourceTypes.get(resource.resourceTypeName).toRight(new WorkbenchException(s"missing configuration for resourceType ${resource.resourceTypeName}")))
+      isConstrained = rt.isAuthDomainConstrainable
+
+      policiesForResource <- accessPolicyDAO.listAccessPoliciesForUser(resource, userId)
+      allPolicyActions = policiesForResource.flatMap(p => allActions(p, rt))
+      res <- if(isConstrained) {
+        for{
+          authDomains <- accessPolicyDAO.loadResourceAuthDomain(resource)
+          policiesUserIsMemberOf <- accessPolicyDAO.listAccessPolicies(ManagedGroupService.managedGroupTypeName, userId)
+        } yield {
+          val isUserMemberOfAllAuthDomains = authDomains.subsetOf(policiesUserIsMemberOf.map(x => WorkbenchGroupName(x.resourceId.value)))
+          if(isUserMemberOfAllAuthDomains){
+            allPolicyActions
+          } else {
+            val constrainableActions = rt.actionPatterns.map(_.value)
+            allPolicyActions.filterNot(x => constrainableActions.contains(x.value))
+          }
+        }
+      } else allPolicyActions.pure[IO]
+    } yield res
   }
 
   def listUserAccessPolicies(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId): IO[Set[UserPolicyResponse]] =

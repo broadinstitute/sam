@@ -4,6 +4,7 @@ import java.net.URI
 import java.util.UUID
 
 import akka.http.scaladsl.model.StatusCodes
+import cats.effect.IO
 import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountDisplayName, ServiceAccountSubjectId}
@@ -20,6 +21,8 @@ import scala.concurrent.ExecutionContext.Implicits.global
   * Created by dvoet on 5/30/17.
   */
 class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with BeforeAndAfter with BeforeAndAfterAll {
+  implicit val cs = IO.contextShift(scala.concurrent.ExecutionContext.global)
+
   val dirURI = new URI(directoryConfig.directoryUrl)
   val connectionPool = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
   val dao = new LdapDirectoryDAO(connectionPool, directoryConfig)
@@ -310,10 +313,12 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
 
     val typeName1 = ResourceTypeName(UUID.randomUUID().toString)
 
-    val policy1 = AccessPolicy(ResourceAndPolicyName(Resource(typeName1, ResourceId("resource")), AccessPolicyName("role1-a")), Set(userId), WorkbenchEmail("p1@example.com"), Set(ResourceRoleName("role1")), Set(ResourceAction("action1"), ResourceAction("action2")))
+    val resource = Resource(typeName1, ResourceId("resource"), Set.empty)
+    val policy1 = AccessPolicy(
+      FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("role1-a")), Set(userId), WorkbenchEmail("p1@example.com"), Set(ResourceRoleName("role1")), Set(ResourceAction("action1"), ResourceAction("action2")))
 
     policyDAO.createResourceType(typeName1).unsafeRunSync()
-    policyDAO.createResource(policy1.id.resource).unsafeRunSync()
+    policyDAO.createResource(resource).unsafeRunSync()
     policyDAO.createPolicy(policy1).unsafeRunSync()
 
     assert(runAndWait(dao.isGroupMember(group1.id, userId)))

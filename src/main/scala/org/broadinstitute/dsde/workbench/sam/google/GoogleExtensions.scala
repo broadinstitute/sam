@@ -22,7 +22,6 @@ import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.api.CreateWorkbenchUser
 import org.broadinstitute.dsde.workbench.sam.config.{GoogleServicesConfig, PetServiceAccountConfig}
 import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
-import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport.ResourceAndPolicyNameFormat
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.AccessPolicyDAO
 import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, SamApplication}
@@ -30,7 +29,7 @@ import org.broadinstitute.dsde.workbench.util.health.{HealthMonitor, SubsystemSt
 import org.broadinstitute.dsde.workbench.util.{FutureSupport, Retry}
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
 import spray.json._
-
+import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import scala.collection.JavaConverters._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success, Try}
@@ -130,19 +129,19 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
       // only sync groups that have already been synchronized
       messagesForIdsWithSyncDates = idsAndSyncDates.collect {
         case (gn: WorkbenchGroupName, Some(_)) => gn.toJson.compactPrint
-        case (rpn: ResourceAndPolicyName, Some(_)) => rpn.toJson.compactPrint
+        case (rpn: FullyQualifiedPolicyId, Some(_)) => rpn.toJson.compactPrint
       }
       _ <- googlePubSubDAO.publishMessages(googleServicesConfig.groupSyncTopic, messagesForIdsWithSyncDates)
       ancestorGroups <- Future.traverse(groupIdentities) { id => directoryDAO.listAncestorGroups(id) }
-      managedGroupIds = (ancestorGroups.flatten ++ groupIdentities).filterNot(visitedGroups.contains).collect { case ResourceAndPolicyName(Resource(ResourceTypeName("managed-group"), id, _), _) => id }
+      managedGroupIds = (ancestorGroups.flatten ++ groupIdentities).filterNot(visitedGroups.contains).collect { case FullyQualifiedPolicyId(FullyQualifiedResourceId(ResourceTypeName("managed-group"), id), _) => id }
       _ <- Future.traverse(managedGroupIds)(id => onManagedGroupUpdate(id, visitedGroups ++ groupIdentities ++ ancestorGroups.flatten))
     } yield ()
   }
 
   private def onManagedGroupUpdate(groupId: ResourceId, visitedGroups: Seq[WorkbenchGroupIdentity]): Future[Unit] = {
     for {
-      resources <- accessPolicyDAO.listResourcesConstrainedByGroup(WorkbenchGroupName(groupId.value))
-      policies <- Future.traverse(resources) { resource => accessPolicyDAO.listAccessPolicies(resource).unsafeToFuture }
+      resources <- accessPolicyDAO.listResourcesConstrainedByGroup(WorkbenchGroupName(groupId.value)).unsafeToFuture()
+      policies <- Future.traverse(resources) { resource => accessPolicyDAO.listAccessPolicies(resource.fullyQualifiedId).unsafeToFuture }
       _ <- onGroupUpdateRecursive(policies.flatten.map(_.id).toList, visitedGroups)
     } yield ()
   }
@@ -427,7 +426,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
       for {
         groupOption <- groupId match {
           case basicGroupName: WorkbenchGroupName => directoryDAO.loadGroup(basicGroupName)
-          case rpn: ResourceAndPolicyName => accessPolicyDAO.loadPolicy(rpn)
+          case rpn: FullyQualifiedPolicyId => accessPolicyDAO.loadPolicy(rpn).unsafeToFuture()
         }
 
         group = groupOption.getOrElse(throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"$groupId not found")))
@@ -477,7 +476,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
     }
   }
 
-  private def isConstrainable(resource: Resource, accessPolicy: AccessPolicy): Boolean = {
+  private def isConstrainable(resource: FullyQualifiedResourceId, accessPolicy: AccessPolicy): Boolean = {
     resourceTypes.get(resource.resourceTypeName) match {
       case Some(resourceType) => resourceType.actionPatterns.exists { actionPattern =>
         actionPattern.authDomainConstrainable &&
@@ -494,7 +493,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
     }
   }
 
-  private def calculateIntersectionGroup(resource: Resource, policy: AccessPolicy): Future[Set[WorkbenchUserId]] = {
+  private def calculateIntersectionGroup(resource: FullyQualifiedResourceId, policy: AccessPolicy): Future[Set[WorkbenchUserId]] = {
     for {
       groups <- accessPolicyDAO.loadResourceAuthDomain(resource).unsafeToFuture
       members <- directoryDAO.listIntersectionGroupUsers(groups.asInstanceOf[Set[WorkbenchGroupIdentity]] + policy.id)

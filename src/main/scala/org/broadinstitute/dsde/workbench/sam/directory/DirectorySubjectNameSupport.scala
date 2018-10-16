@@ -24,22 +24,22 @@ trait DirectorySubjectNameSupport {
   protected def groupDn(groupId: WorkbenchGroupIdentity) = {
     groupId match {
       case WorkbenchGroupName(name) => s"cn=$name,$groupsOu"
-      case rpn: ResourceAndPolicyName => policyDn(rpn)
+      case rpn: FullyQualifiedPolicyId => policyDn(rpn)
       case _ => throw new WorkbenchException(s"unexpected WorkbenchGroupIdentity $groupId")
     }
   }
   protected def userDn(samUserId: WorkbenchUserId) = s"uid=${samUserId.value},$peopleOu"
   protected def petDn(petServiceAccountId: PetServiceAccountId) = s"${Attr.project}=${petServiceAccountId.project.value},${userDn(petServiceAccountId.userId)}"
   protected def resourceTypeDn(resourceTypeName: ResourceTypeName) = s"${Attr.resourceType}=${resourceTypeName.value},$resourcesOu"
-  protected def resourceDn(resource: Resource) = s"${Attr.resourceId}=${resource.resourceId.value},${resourceTypeDn(resource.resourceTypeName)}"
+  protected def resourceDn(resource: FullyQualifiedResourceId) = s"${Attr.resourceId}=${resource.resourceId.value},${resourceTypeDn(resource.resourceTypeName)}"
   protected def schemaLockDn(schemaVersion: Int) = s"schemaVersion=$schemaVersion,$schemaLockOu"
-  protected def policyDn(resourceAndPolicyName: ResourceAndPolicyName): String = s"${Attr.policy}=${resourceAndPolicyName.accessPolicyName.value},${resourceDn(resourceAndPolicyName.resource)}"
+  protected def policyDn(policyId: FullyQualifiedPolicyId): String = s"${Attr.policy}=${policyId.accessPolicyName.value},${resourceDn(FullyQualifiedResourceId(policyId.resource.resourceTypeName, policyId.resource.resourceId))}"
 
   protected def subjectDn(subject: WorkbenchSubject) = subject match {
     case g: WorkbenchGroupName => groupDn(g)
     case u: WorkbenchUserId => userDn(u)
     case s: PetServiceAccountId => petDn(s)
-    case rpn: ResourceAndPolicyName => policyDn(rpn)
+    case rpn: FullyQualifiedPolicyId => policyDn(rpn)
     case _ => throw new WorkbenchException(s"unexpected subject [$subject]")
   }
 
@@ -67,7 +67,8 @@ trait DirectorySubjectNameSupport {
       case groupMatcher(cn) => WorkbenchGroupName(cn)
       case personMatcher(uid) => WorkbenchUserId(uid)
       case petMatcher(petProject, userUid) => PetServiceAccountId(WorkbenchUserId(userUid), GoogleProject(petProject))
-      case policyMatcher(policyName, resourceId, resourceTypeName) => ResourceAndPolicyName(Resource(ResourceTypeName(resourceTypeName), ResourceId(resourceId)), AccessPolicyName(policyName))
+      case policyMatcher(policyName, resourceId, resourceTypeName) => FullyQualifiedPolicyId(
+        FullyQualifiedResourceId(ResourceTypeName(resourceTypeName), ResourceId(resourceId)), AccessPolicyName(policyName))
       case _ => throw new WorkbenchException(s"unexpected dn [$dn]")
     }
   }
@@ -75,7 +76,7 @@ trait DirectorySubjectNameSupport {
   protected def dnToGroupIdentity(dn:String): WorkbenchGroupIdentity = {
     dnToSubject(dn) match {
       case gn: WorkbenchGroupName => gn
-      case policy: ResourceAndPolicyName => policy
+      case policy: FullyQualifiedPolicyId => policy
       case _ => throw new WorkbenchException(s"not a group dn [$dn]")
     }
   }

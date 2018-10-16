@@ -14,6 +14,7 @@ import org.broadinstitute.dsde.workbench.sam.service.ResourceService
 import spray.json.DefaultJsonProtocol._
 import spray.json.JsBoolean
 import scala.concurrent.ExecutionContext
+import ImplicitConversions.ioOnSuccessMagnet
 
 /**
   * Created by mbemis on 5/22/17.
@@ -60,12 +61,12 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
             } ~
             pathPrefix(Segment) { resourceId =>
 
-              val resource = Resource(resourceType.name, ResourceId(resourceId))
+              val resource = FullyQualifiedResourceId(resourceType.name, ResourceId(resourceId))
 
               pathEndOrSingleSlash {
                 delete {
                   requireAction(resource, SamResourceActions.delete, userInfo.userId) {
-                    complete(resourceService.deleteResource(Resource(resourceType.name, ResourceId(resourceId))).map(_ => StatusCodes.NoContent))
+                    complete(resourceService.deleteResource(FullyQualifiedResourceId(resourceType.name, ResourceId(resourceId))).map(_ => StatusCodes.NoContent))
                   }
                 } ~
                 post {
@@ -76,7 +77,7 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
                 pathPrefix(Segment) { action =>
                   pathEndOrSingleSlash {
                     get {
-                      complete(policyEvaluatorService.hasPermission(Resource(resourceType.name, ResourceId(resourceId)), ResourceAction(action), userInfo.userId).map { hasPermission =>
+                      complete(policyEvaluatorService.hasPermission(FullyQualifiedResourceId(resourceType.name, ResourceId(resourceId)), ResourceAction(action), userInfo.userId).map { hasPermission =>
                         StatusCodes.OK -> JsBoolean(hasPermission)
                       })
                     }
@@ -87,14 +88,15 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
                 pathEndOrSingleSlash {
                   get {
                     requireAction(resource, SamResourceActions.readPolicies, userInfo.userId) {
-                      complete(resourceService.listResourcePolicies(Resource(resourceType.name, ResourceId(resourceId))).map { response =>
+                      complete(resourceService.listResourcePolicies(FullyQualifiedResourceId(resourceType.name, ResourceId(resourceId))).map { response =>
                         StatusCodes.OK -> response
                       })
                     }
                   }
                 } ~
                   pathPrefix(Segment) { policyName =>
-                    val resourceAndPolicyName = ResourceAndPolicyName(Resource(resourceType.name, ResourceId(resourceId)), AccessPolicyName(policyName))
+                    val resourceAndPolicyName =
+                      FullyQualifiedPolicyId(FullyQualifiedResourceId(resourceType.name, ResourceId(resourceId)), AccessPolicyName(policyName))
                     pathEndOrSingleSlash {
                       get {
                         requireOneOfAction(resource, Set(SamResourceActions.readPolicies, SamResourceActions.readPolicy(resourceAndPolicyName.accessPolicyName)), userInfo.userId) {
@@ -107,7 +109,7 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
                       put {
                         requireAction(resource, SamResourceActions.alterPolicies, userInfo.userId) {
                           entity(as[AccessPolicyMembership]) { membershipUpdate =>
-                            complete(resourceService.overwritePolicy(resourceType, AccessPolicyName(policyName), Resource(resourceType.name, ResourceId(resourceId)), membershipUpdate).map(_ => StatusCodes.Created))
+                            complete(resourceService.overwritePolicy(resourceType, AccessPolicyName(policyName), FullyQualifiedResourceId(resourceType.name, ResourceId(resourceId)), membershipUpdate).map(_ => StatusCodes.Created))
                           }
                         }
                       }
@@ -117,7 +119,7 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
                         put {
                           requireOneOfAction(resource, Set(SamResourceActions.alterPolicies, SamResourceActions.sharePolicy(AccessPolicyName(policyName))), userInfo.userId) {
                             entity(as[Set[WorkbenchEmail]]) { membersList =>
-                              complete(resourceService.overwritePolicyMembers(resourceType, AccessPolicyName(policyName), Resource(resourceType.name, ResourceId(resourceId)), membersList).map(_ => StatusCodes.NoContent))
+                              complete(resourceService.overwritePolicyMembers(resourceType, AccessPolicyName(policyName), FullyQualifiedResourceId(resourceType.name, ResourceId(resourceId)), membersList).map(_ => StatusCodes.NoContent))
                             }
                           }
                         }
@@ -142,7 +144,7 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
               pathPrefix("roles") {
                 pathEndOrSingleSlash {
                   get {
-                    complete(resourceService.listUserResourceRoles(Resource(resourceType.name, ResourceId(resourceId)), userInfo).map { roles =>
+                    complete(resourceService.listUserResourceRoles(FullyQualifiedResourceId(resourceType.name, ResourceId(resourceId)), userInfo).map { roles =>
                       StatusCodes.OK -> roles
                     })
                   }

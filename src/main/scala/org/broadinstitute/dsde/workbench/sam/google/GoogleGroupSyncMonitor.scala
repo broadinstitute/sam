@@ -9,10 +9,11 @@ import org.broadinstitute.dsde.workbench.google.GooglePubSubDAO
 import org.broadinstitute.dsde.workbench.google.GooglePubSubDAO.PubSubMessage
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam._
-import org.broadinstitute.dsde.workbench.sam.model.ResourceAndPolicyName
+import org.broadinstitute.dsde.workbench.sam.model.FullyQualifiedPolicyId
 import org.broadinstitute.dsde.workbench.util.FutureSupport
 import spray.json._
 
+import scala.concurrent.Future
 import scala.concurrent.duration.{FiniteDuration, _}
 import scala.language.postfixOps
 import scala.util.Try
@@ -144,14 +145,14 @@ class GoogleGroupSyncMonitorActor(val pollInterval: FiniteDuration, pollInterval
     case x => logger.info(s"unhandled $x")
   }
 
-  private def acknowledgeMessage(ackId: String) = {
+  private def acknowledgeMessage(ackId: String): Future[Unit] = {
     pubSubDao.acknowledgeMessagesById(pubSubSubscriptionName, Seq(ackId))
   }
 
-  private def parseMessage(message: PubSubMessage) = {
+  private def parseMessage(message: PubSubMessage): WorkbenchGroupIdentity = {
     (Try {
-      import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport.ResourceAndPolicyNameFormat
-      message.contents.parseJson.convertTo[ResourceAndPolicyName]
+      import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport.PolicyIdentityFormat
+      message.contents.parseJson.convertTo[FullyQualifiedPolicyId]
     } recover {
       case _: DeserializationException =>
         import WorkbenchIdentityJsonSupport.WorkbenchGroupNameFormat

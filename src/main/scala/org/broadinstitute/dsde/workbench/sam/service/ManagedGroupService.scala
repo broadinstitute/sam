@@ -29,7 +29,7 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
     validateGroupName(groupId.value)
     for {
       managedGroup <- resourceService.createResource(managedGroupType, groupId, Map(adminPolicy, memberPolicy, adminNotificationPolicy), Set.empty, userInfo.userId)
-      policies <- accessPolicyDAO.listAccessPolicies(managedGroup).unsafeToFuture()
+      policies <- accessPolicyDAO.listAccessPolicies(managedGroup.fullyQualifiedId).unsafeToFuture()
       workbenchGroup <- createAggregateGroup(managedGroup, policies, accessInstructionsOpt)
       _ <- cloudExtensions.publishGroup(workbenchGroup.id)
     } yield managedGroup
@@ -40,7 +40,7 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
     val workbenchGroupName = WorkbenchGroupName(resource.resourceId.value)
     val groupMembers: Set[WorkbenchSubject] = componentPolicies.collect {
       // collect only member and admin policies
-      case AccessPolicy(id@ResourceAndPolicyName(_, ManagedGroupService.memberPolicyName | ManagedGroupService.adminPolicyName), _, _, _, _) => id
+      case AccessPolicy(id @ FullyQualifiedPolicyId(_, ManagedGroupService.memberPolicyName | ManagedGroupService.adminPolicyName), _, _, _, _) => id
     }
     directoryDAO.createGroup(BasicWorkbenchGroup(workbenchGroupName, groupMembers, email), accessInstructionsOpt)
   }
@@ -81,7 +81,7 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
       // so failures there do not leave ldap in a bad state
       // resourceService.deleteResource also does cloudExtensions.onGroupDelete first thing
       _ <- cloudExtensions.onGroupDelete(WorkbenchEmail(constructEmail(groupId.value)))
-      _ <- resourceService.deleteResource(Resource(managedGroupType.name, groupId))
+      _ <- resourceService.deleteResource(FullyQualifiedResourceId(managedGroupType.name, groupId))
       _ <- directoryDAO.deleteGroup(WorkbenchGroupName(groupId.value))
     } yield ()
   }
@@ -102,16 +102,18 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
   }
 
   def listPolicyMemberEmails(resourceId: ResourceId, policyName: ManagedGroupPolicyName): Future[Set[WorkbenchEmail]] = {
-    val resourceAndPolicyName = ResourceAndPolicyName(Resource(ManagedGroupService.managedGroupTypeName, resourceId), policyName)
-    accessPolicyDAO.loadPolicy(resourceAndPolicyName) flatMap {
+    val policyIdentity =
+      FullyQualifiedPolicyId(FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, resourceId), policyName)
+    accessPolicyDAO.loadPolicy(policyIdentity).unsafeToFuture() flatMap {
       case Some(policy) => directoryDAO.loadSubjectEmails(policy.members)
-      case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Group or policy could not be found: $resourceAndPolicyName"))
+      case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Group or policy could not be found: $policyIdentity"))
     }
   }
 
   def overwritePolicyMemberEmails(resourceId: ResourceId, policyName: ManagedGroupPolicyName, emails: Set[WorkbenchEmail]): Future[AccessPolicy] = {
-    val resourceAndPolicyName = ResourceAndPolicyName(Resource(ManagedGroupService.managedGroupTypeName, resourceId), policyName)
-    accessPolicyDAO.loadPolicy(resourceAndPolicyName).flatMap {
+    val resourceAndPolicyName =
+      FullyQualifiedPolicyId(FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, resourceId), policyName)
+    accessPolicyDAO.loadPolicy(resourceAndPolicyName).unsafeToFuture().flatMap {
       case Some(policy) => {
         val updatedPolicy = AccessPolicyMembership(emails, policy.actions, policy.roles)
         resourceService.overwritePolicy(managedGroupType, resourceAndPolicyName.accessPolicyName, resourceAndPolicyName.resource, updatedPolicy)
@@ -121,12 +123,14 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
   }
 
   def addSubjectToPolicy(resourceId: ResourceId, policyName: ManagedGroupPolicyName, subject: WorkbenchSubject): Future[Unit] = {
-    val resourceAndPolicyName = ResourceAndPolicyName(Resource(ManagedGroupService.managedGroupTypeName, resourceId), policyName)
+    val resourceAndPolicyName =
+      FullyQualifiedPolicyId(FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, resourceId), policyName)
     resourceService.addSubjectToPolicy(resourceAndPolicyName, subject)
   }
 
   def removeSubjectFromPolicy(resourceId: ResourceId, policyName: ManagedGroupPolicyName, subject: WorkbenchSubject): Future[Unit] = {
-    val resourceAndPolicyName = ResourceAndPolicyName(Resource(ManagedGroupService.managedGroupTypeName, resourceId), policyName)
+    val resourceAndPolicyName =
+      FullyQualifiedPolicyId(FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, resourceId), policyName)
     resourceService.removeSubjectFromPolicy(resourceAndPolicyName, subject)
   }
 
@@ -135,8 +139,9 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
       case Some(accessInstructions) =>
         Future.failed(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"Please follow special access instructions: $accessInstructions")))
       case None =>
-        val resourceAndPolicyName = ResourceAndPolicyName(Resource(ManagedGroupService.managedGroupTypeName, resourceId), ManagedGroupService.adminPolicyName)
-        accessPolicyDAO.listFlattenedPolicyMembers(resourceAndPolicyName).map { users =>
+        val resourceAndPolicyName = FullyQualifiedPolicyId(
+          FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, resourceId), ManagedGroupService.adminPolicyName)
+        accessPolicyDAO.listFlattenedPolicyMembers(resourceAndPolicyName).unsafeToFuture().map { users =>
           val notifications = users.map { recipientUserId =>
             Notifications.GroupAccessRequestNotification(recipientUserId, WorkbenchGroupName(resourceId.value).value, users, requesterUserId)
           }
@@ -179,9 +184,6 @@ object ManagedGroupService {
       case _ => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "Policy name for managed groups must be one of: [\"admins\", \"members\"]"))
     }
   }
-
-  def makeMembershipPolicyNames(r: Resource): Set[ResourceAndPolicyName] =
-    Set(adminPolicyName, memberPolicyName).map(ResourceAndPolicyName(r, _))
 
   type MangedGroupRoleName = ResourceRoleName with AllowedManagedGroupRoleName
   // In lieu of an Enumeration, this trait is being used to ensure that we can only have these Roles in a Managed Group

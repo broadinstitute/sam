@@ -3,6 +3,7 @@ package org.broadinstitute.dsde.workbench.sam.openam
 import java.net.URI
 
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
+import cats.effect.IO
 import com.typesafe.config.ConfigFactory
 import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import net.ceedubs.ficus.Ficus._
@@ -28,6 +29,7 @@ class MockAccessPolicyDAOSpec extends FlatSpec with Matchers with TestSupport wi
   val directoryConfig: DirectoryConfig = ConfigFactory.load().as[DirectoryConfig]("directory")
   val schemaLockConfig = ConfigFactory.load().as[SchemaLockConfig]("schemaLock")
   val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
+  implicit val cs = IO.contextShift(scala.concurrent.ExecutionContext.global)
 
   private val dummyUserInfo = UserInfo(OAuth2BearerToken("token"), WorkbenchUserId("userid"), WorkbenchEmail("user@company.com"), 0)
 
@@ -92,7 +94,8 @@ class MockAccessPolicyDAOSpec extends FlatSpec with Matchers with TestSupport wi
     runAndWait(mock.userService.createUser(dummyUser))
 
     val groupName = "fooGroup"
-    val intendedResource = Resource(ManagedGroupService.managedGroupTypeName, ResourceId(groupName))
+
+    val intendedResource = Resource(ManagedGroupService.managedGroupTypeName, ResourceId(groupName), Set.empty)
     runAndWait(jndi.managedGroupService.createManagedGroup(ResourceId(groupName), dummyUserInfo)) shouldEqual intendedResource
     runAndWait(mock.managedGroupService.createManagedGroup(ResourceId(groupName), dummyUserInfo)) shouldEqual intendedResource
 

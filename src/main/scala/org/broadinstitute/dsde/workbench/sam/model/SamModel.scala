@@ -39,7 +39,7 @@ object SamJsonSupport {
 
   implicit val ResourceIdFormat = ValueObjectFormat(ResourceId.apply)
 
-  implicit val ResourceFormat = jsonFormat3(Resource.apply)
+  implicit val ResourceIdentityFormat = jsonFormat2(FullyQualifiedResourceId.apply)
 
   implicit val AccessPolicyMembershipFormat = jsonFormat3(AccessPolicyMembership.apply)
 
@@ -47,7 +47,7 @@ object SamJsonSupport {
 
   implicit val UserPolicyResponseFormat = jsonFormat4(UserPolicyResponse.apply)
 
-  implicit val ResourceAndPolicyNameFormat = jsonFormat2(ResourceAndPolicyName.apply)
+  implicit val PolicyIdentityFormat = jsonFormat2(FullyQualifiedPolicyId.apply)
 
   implicit val ManagedGroupMembershipEntryFormat = jsonFormat3(ManagedGroupMembershipEntry.apply)
 
@@ -84,7 +84,10 @@ object SamResourceActions {
 
 @Lenses case class ResourceTypeName(value: String) extends ValueObject
 
-@Lenses case class Resource(resourceTypeName: ResourceTypeName, resourceId: ResourceId, authDomain: Set[WorkbenchGroupName] = Set.empty)
+@Lenses final case class FullyQualifiedResourceId(resourceTypeName: ResourceTypeName, resourceId: ResourceId)
+@Lenses final case class Resource(resourceTypeName: ResourceTypeName, resourceId: ResourceId, authDomain: Set[WorkbenchGroupName]){
+  val fullyQualifiedId = FullyQualifiedResourceId(resourceTypeName, resourceId)
+}
 @Lenses case class ResourceType(name: ResourceTypeName, actionPatterns: Set[ResourceActionPattern], roles: Set[ResourceRole], ownerRoleName: ResourceRoleName, reuseIds: Boolean = false) {
   // Ideally we'd just store this boolean in a lazy val, but this will upset the spray/akka json serializers
   // I can't imagine a scenario where we have enough action patterns that would make this def discernibly slow though
@@ -92,10 +95,9 @@ object SamResourceActions {
 }
 
 @Lenses case class ResourceId(value: String) extends ValueObject
-
 @Lenses final case class ResourceIdAndPolicyName(resourceId: ResourceId, accessPolicyName: AccessPolicyName)
 @Lenses final case class UserPolicyResponse(resourceId: ResourceId, accessPolicyName: AccessPolicyName, authDomainGroups: Set[WorkbenchGroupName], missingAuthDomainGroups: Set[WorkbenchGroupName])
-@Lenses case class ResourceAndPolicyName(resource: Resource, accessPolicyName: AccessPolicyName) extends WorkbenchGroupIdentity {
+@Lenses final case class FullyQualifiedPolicyId(resource: FullyQualifiedResourceId, accessPolicyName: AccessPolicyName) extends WorkbenchGroupIdentity {
   override def toString: String = s"${accessPolicyName.value}.${resource.resourceId.value}.${resource.resourceTypeName.value}"
 }
 @Lenses case class AccessPolicyName(value: String) extends ValueObject
@@ -106,7 +108,7 @@ Note that AccessPolicy IS A group, does not have a group. This makes the ldap qu
 and thus resources much easier. We tried modeling with a "has a" relationship in code but a "is a" relationship in
 ldap but it felt unnatural.
  */
-@Lenses case class AccessPolicy(id: ResourceAndPolicyName, members: Set[WorkbenchSubject], email: WorkbenchEmail, roles: Set[ResourceRoleName], actions: Set[ResourceAction]) extends WorkbenchGroup
+@Lenses case class AccessPolicy(id: FullyQualifiedPolicyId, members: Set[WorkbenchSubject], email: WorkbenchEmail, roles: Set[ResourceRoleName], actions: Set[ResourceAction]) extends WorkbenchGroup
 @Lenses case class AccessPolicyMembership(memberEmails: Set[WorkbenchEmail], actions: Set[ResourceAction], roles: Set[ResourceRoleName])
 @Lenses case class AccessPolicyResponseEntry(policyName: AccessPolicyName, policy: AccessPolicyMembership, email: WorkbenchEmail)
 
@@ -118,7 +120,6 @@ ldap but it felt unnatural.
 @Lenses case class GroupSyncResponse(lastSyncDate: String, email: WorkbenchEmail)
 
 object SamLenses{
-  val resourceInAccessPolicy = AccessPolicy.id composeLens ResourceAndPolicyName.resource
-  val resourceTypeNameInAccessPolicy = resourceInAccessPolicy composeLens Resource.resourceTypeName
-  val accessPolicyNameInAccessPolicy = AccessPolicy.id composeLens ResourceAndPolicyName.accessPolicyName
+  val resourceIdentityAccessPolicy = AccessPolicy.id composeLens FullyQualifiedPolicyId.resource
+  val resourceTypeNameInAccessPolicy = resourceIdentityAccessPolicy composeLens FullyQualifiedResourceId.resourceTypeName
 }
