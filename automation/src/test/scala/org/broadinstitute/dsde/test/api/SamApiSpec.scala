@@ -375,42 +375,40 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
 
       val Seq(user1Proxy: WorkbenchEmail, user2Proxy: WorkbenchEmail, user3Proxy: WorkbenchEmail) = Seq(user1, user2, user3).map(user => Sam.user.proxyGroup(user.email)(user1AuthToken))
 
-      try {
-        Sam.user.createGroup(managedGroupId)(user1AuthToken)
-        Sam.user.setPolicyMembers(managedGroupId, adminPolicy, Set(user1.email, user2.email))(user1AuthToken)
+      Sam.user.createGroup(managedGroupId)(user1AuthToken)
+      register cleanUp Sam.user.deleteGroup(managedGroupId)(user1AuthToken)
 
-        val policies = Sam.user.listResourcePolicies("managed-group", managedGroupId)(user1AuthToken)
-        val policyEmail = for {
-          policy <- policies.asInstanceOf[Set[Map[String, Map[String, List[String]]]]] if policy.getOrElse("policy", Map.empty).getOrElse("memberEmails", List.empty).nonEmpty
-        } yield {
-          policy.asInstanceOf[Map[String, String]].getOrElse("email", "")
-        }
-        assert(policyEmail.size == 1) // Only one policy should be non empty
+      Sam.user.setPolicyMembers(managedGroupId, adminPolicy, Set(user1.email, user2.email))(user1AuthToken)
 
-        // check that google has users 1 and 2 in it
-        TestKit.awaitCond(
-          Await.result(googleDirectoryDAO.listGroupMembers(WorkbenchEmail(policyEmail.head)), 5.minutes)
-            .getOrElse(Set.empty).toSet == Set(user1Proxy.value, user2Proxy.value),
-          5.minutes, 5.seconds)
-
-        Sam.user.addUserToPolicy(managedGroupId, adminPolicy, user3.email)(user1AuthToken)
-
-        // check that google has users 1, 2, and 3 in it
-        TestKit.awaitCond(
-          Await.result(googleDirectoryDAO.listGroupMembers(WorkbenchEmail(policyEmail.head)), 5.minutes)
-            .getOrElse(Set.empty).toSet == Set(user1Proxy.value, user2Proxy.value, user3Proxy.value),
-          5.minutes, 5.seconds)
-
-        Sam.user.removeUserFromPolicy(managedGroupId, adminPolicy, user2.email)(user1AuthToken)
-
-        // check that google has users 1 and 3 in it
-        TestKit.awaitCond(
-          Await.result(googleDirectoryDAO.listGroupMembers(WorkbenchEmail(policyEmail.head)), 5.minutes)
-            .getOrElse(Set.empty).toSet == Set(user1Proxy.value, user3Proxy.value),
-          5.minutes, 5.seconds)
-      } finally {
-        Sam.user.deleteGroup(managedGroupId)(user1AuthToken)
+      val policies = Sam.user.listResourcePolicies("managed-group", managedGroupId)(user1AuthToken)
+      val policyEmail = for {
+        policy <- policies.asInstanceOf[Set[Map[String, Map[String, List[String]]]]] if policy.getOrElse("policy", Map.empty).getOrElse("memberEmails", List.empty).nonEmpty
+      } yield {
+        policy.asInstanceOf[Map[String, String]].getOrElse("email", "")
       }
+      assert(policyEmail.size == 1) // Only one policy should be non empty
+
+      // check that google has users 1 and 2 in it
+      TestKit.awaitCond(
+        Await.result(googleDirectoryDAO.listGroupMembers(WorkbenchEmail(policyEmail.head)), 5.minutes)
+          .getOrElse(Set.empty).toSet == Set(user1Proxy.value, user2Proxy.value),
+        5.minutes, 5.seconds)
+
+      Sam.user.addUserToPolicy(managedGroupId, adminPolicy, user3.email)(user1AuthToken)
+
+      // check that google has users 1, 2, and 3 in it
+      TestKit.awaitCond(
+        Await.result(googleDirectoryDAO.listGroupMembers(WorkbenchEmail(policyEmail.head)), 5.minutes)
+          .getOrElse(Set.empty).toSet == Set(user1Proxy.value, user2Proxy.value, user3Proxy.value),
+        5.minutes, 5.seconds)
+
+      Sam.user.removeUserFromPolicy(managedGroupId, adminPolicy, user2.email)(user1AuthToken)
+
+      // check that google has users 1 and 3 in it
+      TestKit.awaitCond(
+        Await.result(googleDirectoryDAO.listGroupMembers(WorkbenchEmail(policyEmail.head)), 5.minutes)
+          .getOrElse(Set.empty).toSet == Set(user1Proxy.value, user3Proxy.value),
+          5.minutes, 5.seconds)
     }
   }
 
