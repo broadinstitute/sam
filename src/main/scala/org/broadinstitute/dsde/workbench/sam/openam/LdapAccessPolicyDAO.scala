@@ -223,7 +223,7 @@ class LdapAccessPolicyDAO(protected val ldapConnectionPool: LDAPConnectionPool, 
   override def setPolicyIsPublic(policyId: FullyQualifiedPolicyId, public: Boolean): IO[Unit] = {
     val dateMod = new Modification(ModificationType.REPLACE, Attr.groupUpdatedTimestamp, formattedDate(new Date()))
     val publicMod = new Modification(ModificationType.REPLACE, Attr.public, public.toString)
-    
+
     cs.evalOn(blockingEc)(IO(ldapConnectionPool.modify( policyDn(policyId), dateMod, publicMod)).void).recoverWith {
       case ldape: LDAPException if ldape.getResultCode == ResultCode.NO_SUCH_OBJECT =>
         IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "policy does not exist")))

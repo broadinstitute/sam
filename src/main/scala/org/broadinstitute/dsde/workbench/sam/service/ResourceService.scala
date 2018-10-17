@@ -232,8 +232,9 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
   /**
     * Overwrites the policy if it already exists or creates a new policy entry if it does not exist.
     * Triggers update to Google Group upon successfully updating the policy.
-    * Note:  This method DOES NOT validate the policy and should probably not be called directly unless you know the
+    * Note: This method DOES NOT validate the policy and should probably not be called directly unless you know the
     * contents are valid.  To validate and save the policy, use overwritePolicy()
+    * Note: this function DOES NOT update the email or public fields of a policy
     * @param resource
     * @param policy
     * @return
@@ -242,9 +243,9 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     val workbenchSubjects = policy.emailsToSubjects.values.flatten.toSet
     accessPolicyDAO.loadPolicy(policyIdentity).unsafeToFuture().flatMap {
       case None => createPolicy(policyIdentity, workbenchSubjects, generateGroupEmail(), policy.roles, policy.actions)
-      case Some(accessPolicy) => accessPolicyDAO.overwritePolicy(AccessPolicy(policyIdentity, workbenchSubjects, accessPolicy.email, policy.roles, policy.actions, public = false)).unsafeToFuture()
+      case Some(accessPolicy) => accessPolicyDAO.overwritePolicy(AccessPolicy(policyIdentity, workbenchSubjects, accessPolicy.email, policy.roles, policy.actions, accessPolicy.public)).unsafeToFuture()
     } andThen {
-      case Success(policy) => fireGroupUpdateNotification(policyIdentity)
+      case Success(_) => fireGroupUpdateNotification(policyIdentity)
     }
   }
 
@@ -369,17 +370,26 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     }
   }
 
-  def setPublic(resourceAndPolicyName: FullyQualifiedPolicyId, isPublic: Boolean): IO[Unit] = {
+  /**
+    * Sets the public field of a policy. Raises an error if the policy has an auth domain and public == true.
+    * Triggers update to Google Group upon successfully updating the policy.
+    *
+    * @param policyId the fully qualified id of the policy
+    * @param public true to make the policy public, false to make it private
+    * @return
+    */
+  def setPublic(policyId: FullyQualifiedPolicyId, public: Boolean): IO[Unit] = {
     for {
-      authDomain <- accessPolicyDAO.loadResourceAuthDomain(resourceAndPolicyName.resource)
-      _ <- if (authDomain.isEmpty) {
-        accessPolicyDAO.setPolicyIsPublic(resourceAndPolicyName, isPublic)
+      authDomain <- accessPolicyDAO.loadResourceAuthDomain(policyId.resource)
+      _ <- if (!public || authDomain.isEmpty) {
+        accessPolicyDAO.setPolicyIsPublic(policyId, public)
       } else {
         // resources with auth domains logically can't have public policies but also technically allowing them poses a problem
         // because the logic for public resources is different. However, sharing with the auth domain should have the
         // exact same effect as making a policy public: anyone in the auth domain can access.
         IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "Cannot make auth domain protected resources public. Share directly with auth domain groups instead.")))
       }
+    _ <- IO.fromFuture(IO(fireGroupUpdateNotification(policyId)))
     } yield ()
   }
 }
