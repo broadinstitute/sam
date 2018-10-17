@@ -95,7 +95,7 @@ class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdenti
 
     maybePolicy match {
       case Some((_, policy: AccessPolicy)) =>
-        val newPolicy = policy.copy(isPublic = Option(isPublic))
+        val newPolicy = policy.copy(public = isPublic)
         IO(policies.put(resourceAndPolicyName, newPolicy))
       case _ => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "policy does not exist")))
     }
@@ -104,7 +104,7 @@ class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdenti
   override def listPublicAccessPolicies(resourceTypeName: ResourceTypeName): IO[Stream[ResourceIdAndPolicyName]] = {
     IO.pure(
       policies.collect {
-        case (_, policy: AccessPolicy) if policy.isPublic.contains(true) => ResourceIdAndPolicyName(policy.id.resource.resourceId, policy.id.accessPolicyName)
+        case (_, policy: AccessPolicy) if policy.public => ResourceIdAndPolicyName(policy.id.resource.resourceId, policy.id.accessPolicyName)
       }.toStream
     )
   }
@@ -119,7 +119,7 @@ class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdenti
   override def listPublicAccessPolicies(resource: FullyQualifiedResourceId): IO[Stream[AccessPolicy]] = {
     IO.pure(
       policies.collect {
-        case (_, policy: AccessPolicy) if policy.isPublic.contains(true) => policy
+        case (_, policy: AccessPolicy) if policy.public => policy
       }.toStream
     )
   }

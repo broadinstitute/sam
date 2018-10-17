@@ -164,7 +164,7 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
   }
 
   def createPolicy(policyIdentity: FullyQualifiedPolicyId, members: Set[WorkbenchSubject], email: WorkbenchEmail, roles: Set[ResourceRoleName], actions: Set[ResourceAction]): Future[AccessPolicy] = {
-    accessPolicyDAO.createPolicy(AccessPolicy(policyIdentity, members, email, roles, actions)).unsafeToFuture()
+    accessPolicyDAO.createPolicy(AccessPolicy(policyIdentity, members, email, roles, actions, public = false)).unsafeToFuture()
   }
 
   // IF Resource ID reuse is allowed (as defined by the Resource Type), then we can delete the resource
@@ -242,7 +242,7 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     val workbenchSubjects = policy.emailsToSubjects.values.flatten.toSet
     accessPolicyDAO.loadPolicy(policyIdentity).unsafeToFuture().flatMap {
       case None => createPolicy(policyIdentity, workbenchSubjects, generateGroupEmail(), policy.roles, policy.actions)
-      case Some(accessPolicy) => accessPolicyDAO.overwritePolicy(AccessPolicy(policyIdentity, workbenchSubjects, accessPolicy.email, policy.roles, policy.actions)).unsafeToFuture()
+      case Some(accessPolicy) => accessPolicyDAO.overwritePolicy(AccessPolicy(policyIdentity, workbenchSubjects, accessPolicy.email, policy.roles, policy.actions, public = false)).unsafeToFuture()
     } andThen {
       case Success(policy) => fireGroupUpdateNotification(policyIdentity)
     }
@@ -365,7 +365,7 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
   def isPublic(resourceAndPolicyName: FullyQualifiedPolicyId): IO[Boolean] = {
     accessPolicyDAO.loadPolicy(resourceAndPolicyName).map {
       case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "policy not found"))
-      case Some(accessPolicy) => accessPolicy.isPublic.getOrElse(false)
+      case Some(accessPolicy) => accessPolicy.public
     }
   }
 

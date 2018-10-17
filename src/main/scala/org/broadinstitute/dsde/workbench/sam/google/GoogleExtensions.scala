@@ -427,9 +427,9 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
         groupOption <- groupId match {
           case basicGroupName: WorkbenchGroupName => directoryDAO.loadGroup(basicGroupName)
           case rpn: FullyQualifiedPolicyId => accessPolicyDAO.loadPolicy(rpn).unsafeToFuture().map(_.map { loadedPolicy =>
-            if (loadedPolicy.isPublic.contains(true)) {
+            if (loadedPolicy.public) {
               // include all users group when synchronizing a public policy
-              loadedPolicy.copy(members = loadedPolicy.members + allUsersGroupName)
+              AccessPolicy.members.modify(_ + allUsersGroupName)(loadedPolicy)
             } else {
               loadedPolicy
             }

@@ -104,7 +104,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val testGroup = BasicWorkbenchGroup(groupName, Set(inSamSubGroup.id, inBothSubGroup.id, inSamUserId, inBothUserId, addError), groupEmail)
     val testPolicy = AccessPolicy(
       model.FullyQualifiedPolicyId(
-        FullyQualifiedResourceId(ResourceTypeName("workspace"), ResourceId("rid")), AccessPolicyName("ap")), Set(inSamSubGroup.id, inBothSubGroup.id, inSamUserId, inBothUserId, addError), groupEmail, Set.empty, Set.empty, isPublic = Some(true))
+        FullyQualifiedResourceId(ResourceTypeName("workspace"), ResourceId("rid")), AccessPolicyName("ap")), Set(inSamSubGroup.id, inBothSubGroup.id, inSamUserId, inBothUserId, addError), groupEmail, Set.empty, Set.empty, public = true)
 
     Seq(testGroup, testPolicy).foreach { target =>
       val mockAccessPolicyDAO = mock[AccessPolicyDAO]
@@ -215,7 +215,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val managedGroupId = WorkbenchGroupName("authDomainGroup")
     val resource = Resource(constrainableResourceType.name, ResourceId("rid"), Set(managedGroupId))
     val rpn = FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("ap"))
-    val testPolicy = AccessPolicy(rpn, Set(policyOnlySamUserId, intersectionSamUserId, authorizedGoogleUserId, policyOnlySamSubGroup.id, intersectionSamSubGroup.id, authorizedGoogleSubGroup.id, addError), WorkbenchEmail("testPolicy@example.com"), Set(constrainableRole.roleName), constrainableRole.actions)
+    val testPolicy = AccessPolicy(rpn, Set(policyOnlySamUserId, intersectionSamUserId, authorizedGoogleUserId, policyOnlySamSubGroup.id, intersectionSamSubGroup.id, authorizedGoogleSubGroup.id, addError), WorkbenchEmail("testPolicy@example.com"), Set(constrainableRole.roleName), constrainableRole.actions, public = false)
 
     val mockAccessPolicyDAO = mock[AccessPolicyDAO]
     val mockDirectoryDAO = mock[DirectoryDAO]
@@ -643,8 +643,8 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val resource = Resource(ResourceTypeName("resource"), ResourceId("rid"), Set(WorkbenchGroupName(managedGroupId)))
     val ownerRPN = FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("owner"))
     val readerRPN = FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("reader"))
-    val ownerPolicy = AccessPolicy(ownerRPN, Set.empty, WorkbenchEmail("owner@example.com"), Set.empty, Set.empty)
-    val readerPolicy = AccessPolicy(readerRPN, Set.empty, WorkbenchEmail("reader@example.com"), Set.empty, Set.empty)
+    val ownerPolicy = AccessPolicy(ownerRPN, Set.empty, WorkbenchEmail("owner@example.com"), Set.empty, Set.empty, public = false)
+    val readerPolicy = AccessPolicy(readerRPN, Set.empty, WorkbenchEmail("reader@example.com"), Set.empty, Set.empty, public = false)
 
     // mock responses for onGroupUpdate
     when(mockDirectoryDAO.listAncestorGroups(any[FullyQualifiedPolicyId])).thenReturn(Future.successful(Set.empty.asInstanceOf[Set[WorkbenchGroupIdentity]]))
@@ -675,8 +675,8 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val resource = Resource(ResourceTypeName("resource"), ResourceId("rid"), Set(WorkbenchGroupName(managedGroupId)))
     val ownerRPN = FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("owner"))
     val readerRPN = FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("reader"))
-    val ownerPolicy = AccessPolicy(ownerRPN, Set.empty, WorkbenchEmail("owner@example.com"), Set.empty, Set.empty)
-    val readerPolicy = AccessPolicy(readerRPN, Set.empty, WorkbenchEmail("reader@example.com"), Set.empty, Set.empty)
+    val ownerPolicy = AccessPolicy(ownerRPN, Set.empty, WorkbenchEmail("owner@example.com"), Set.empty, Set.empty, public = false)
+    val readerPolicy = AccessPolicy(readerRPN, Set.empty, WorkbenchEmail("reader@example.com"), Set.empty, Set.empty, public = false)
 
     // mock responses for onGroupUpdate
     when(mockDirectoryDAO.listAncestorGroups(any[FullyQualifiedPolicyId])).thenReturn(Future.successful(Set.empty.asInstanceOf[Set[WorkbenchGroupIdentity]]))
@@ -710,8 +710,8 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val resource = Resource(ResourceTypeName("resource"), ResourceId("rid"), Set(WorkbenchGroupName(managedGroupId)))
     val ownerRPN = FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("owner"))
     val readerRPN = FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("reader"))
-    val ownerPolicy = AccessPolicy(ownerRPN, Set.empty, WorkbenchEmail("owner@example.com"), Set.empty, Set.empty)
-    val readerPolicy = AccessPolicy(readerRPN, Set.empty, WorkbenchEmail("reader@example.com"), Set.empty, Set.empty)
+    val ownerPolicy = AccessPolicy(ownerRPN, Set.empty, WorkbenchEmail("owner@example.com"), Set.empty, Set.empty, public = false)
+    val readerPolicy = AccessPolicy(readerRPN, Set.empty, WorkbenchEmail("reader@example.com"), Set.empty, Set.empty, public = false)
 
     // mock responses for onGroupUpdate
     when(mockDirectoryDAO.listAncestorGroups(any[FullyQualifiedPolicyId])).thenReturn(Future.successful(Set.empty.asInstanceOf[Set[WorkbenchGroupIdentity]]))

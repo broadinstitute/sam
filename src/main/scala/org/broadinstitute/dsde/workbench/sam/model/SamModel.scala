@@ -123,7 +123,7 @@ Note that AccessPolicy IS A group, does not have a group. This makes the ldap qu
 and thus resources much easier. We tried modeling with a "has a" relationship in code but a "is a" relationship in
 ldap but it felt unnatural.
  */
-@Lenses case class AccessPolicy(id: FullyQualifiedPolicyId, members: Set[WorkbenchSubject], email: WorkbenchEmail, roles: Set[ResourceRoleName], actions: Set[ResourceAction], isPublic: Option[Boolean] = None) extends WorkbenchGroup
+@Lenses case class AccessPolicy(id: FullyQualifiedPolicyId, members: Set[WorkbenchSubject], email: WorkbenchEmail, roles: Set[ResourceRoleName], actions: Set[ResourceAction], public: Boolean) extends WorkbenchGroup
 @Lenses case class AccessPolicyMembership(memberEmails: Set[WorkbenchEmail], actions: Set[ResourceAction], roles: Set[ResourceRoleName])
 @Lenses case class AccessPolicyResponseEntry(policyName: AccessPolicyName, policy: AccessPolicyMembership, email: WorkbenchEmail)
 

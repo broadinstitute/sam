@@ -48,7 +48,7 @@ object JndiSchemaDAO {
     val project = "project"
     val proxyEmail = "proxyEmail"
     val authDomain = "authDomain"
-    val isPublic = "isPublic"
+    val public = "public"
   }
 
   object ObjectClass {
@@ -332,7 +332,7 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig, val schemaLo
     createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.6", Attr.role, "the roles for the policy, if any", false)
     createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.7", Attr.policy, "the policy name", true, equality = Option("caseIgnoreMatch"))
     createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.9", Attr.authDomain, "auth domain constraining resource", false)
-    createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.10", Attr.isPublic, "boolean attribute marking a policy as public", false, syntax = Option("1.3.6.1.4.1.1466.115.121.1.7"), equality = Option("booleanMatch"))
+    createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.10", Attr.public, "boolean attribute marking a policy as public", false, syntax = Option("1.3.6.1.4.1.1466.115.121.1.7"), equality = Option("booleanMatch"))
 
     val policyAttrs = new BasicAttributes(true) // Ignore case
     policyAttrs.put("NUMERICOID", "1.3.6.1.4.1.18060.0.4.3.2.0")
@@ -352,7 +352,7 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig, val schemaLo
     val policyMay = new BasicAttribute("MAY")
     policyMay.add(Attr.action)
     policyMay.add(Attr.role)
-    policyMay.add(Attr.isPublic)
+    policyMay.add(Attr.public)
     policyAttrs.put(policyMay)
 
     val resourceTypeAttrs = new BasicAttributes(true) // Ignore case
@@ -404,7 +404,7 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig, val schemaLo
     Try { schema.destroySubcontext("AttributeDefinition/" + Attr.role) }
     Try { schema.destroySubcontext("AttributeDefinition/" + Attr.policy) }
     Try { schema.destroySubcontext("AttributeDefinition/" + Attr.authDomain) }
-    Try { schema.destroySubcontext("AttributeDefinition/" + Attr.isPublic) }
+    Try { schema.destroySubcontext("AttributeDefinition/" + Attr.public) }
   }
 
   private def createOrgUnit(dn: String): Future[Unit] = withContext { ctx =>

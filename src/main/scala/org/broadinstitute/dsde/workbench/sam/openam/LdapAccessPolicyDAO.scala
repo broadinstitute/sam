@@ -81,8 +81,8 @@ class LdapAccessPolicyDAO(protected val ldapConnectionPool: LDAPConnectionPool, 
     ) ++
       maybeAttribute(Attr.action, policy.actions.map(_.value)) ++
       maybeAttribute(Attr.role, policy.roles.map(_.value)) ++
-      maybeAttribute(Attr.uniqueMember, policy.members.map(subjectDn)) ++
-      maybeAttribute(Attr.isPublic, policy.isPublic.map(_.toString).toSet)
+      maybeAttribute(Attr.uniqueMember, policy.members.map(subjectDn)) :+
+      new Attribute(Attr.public, policy.public.toString)
 
     cs.evalOn(blockingEc)(IO(ldapConnectionPool.add(policyDn(
       FullyQualifiedPolicyId(
@@ -108,18 +108,19 @@ class LdapAccessPolicyDAO(protected val ldapConnectionPool: LDAPConnectionPool, 
     val members = getAttributes(entry, Attr.uniqueMember).map(dnToSubject)
     val roles = getAttributes(entry, Attr.role).map(r => ResourceRoleName(r))
     val actions = getAttributes(entry, Attr.action).map(a => ResourceAction(a))
-    val isPublic = Option(entry.getAttribute(Attr.isPublic)).map(_.getValueAsBoolean.booleanValue())
+    val public = Option(entry.getAttribute(Attr.public)).map(_.getValueAsBoolean.booleanValue())
 
     val email = WorkbenchEmail(getAttribute(entry, Attr.email).get)
 
     AccessPolicy(
-      FullyQualifiedPolicyId(FullyQualifiedResourceId(resourceTypeName, resourceId), AccessPolicyName(policyName)), members, email, roles, actions, isPublic)
+      FullyQualifiedPolicyId(FullyQualifiedResourceId(resourceTypeName, resourceId), AccessPolicyName(policyName)), members, email, roles, actions, public.contains(true))
   }
 
   override def overwritePolicyMembers(id: FullyQualifiedPolicyId, memberList: Set[WorkbenchSubject]): IO[Unit] = {
     val memberMod = new Modification(ModificationType.REPLACE, Attr.uniqueMember, memberList.map(subjectDn).toArray:_*)
+    val dateMod = new Modification(ModificationType.REPLACE, Attr.groupUpdatedTimestamp, formattedDate(new Date()))
 
-    cs.evalOn(blockingEc)(IO(ldapConnectionPool.modify(policyDn(id), memberMod)))
+    cs.evalOn(blockingEc)(IO(ldapConnectionPool.modify(policyDn(id), memberMod, dateMod)))
   }
 
   override def overwritePolicy(newPolicy: AccessPolicy): IO[AccessPolicy] = {
@@ -127,10 +128,11 @@ class LdapAccessPolicyDAO(protected val ldapConnectionPool: LDAPConnectionPool, 
     val actionMod = new Modification(ModificationType.REPLACE, Attr.action, newPolicy.actions.map(_.value).toArray:_*)
     val roleMod = new Modification(ModificationType.REPLACE, Attr.role, newPolicy.roles.map(_.value).toArray:_*)
     val dateMod = new Modification(ModificationType.REPLACE, Attr.groupUpdatedTimestamp, formattedDate(new Date()))
+    val publicMod = new Modification(ModificationType.REPLACE, Attr.public, newPolicy.public.toString)
 
     val ridPolicyName = FullyQualifiedPolicyId(
       FullyQualifiedResourceId(newPolicy.id.resource.resourceTypeName, newPolicy.id.resource.resourceId), newPolicy.id.accessPolicyName)
-    cs.evalOn(blockingEc)(IO(ldapConnectionPool.modify(policyDn(ridPolicyName), memberMod, actionMod, roleMod, dateMod))) *> newPolicy.pure[IO]
+    cs.evalOn(blockingEc)(IO(ldapConnectionPool.modify(policyDn(ridPolicyName), memberMod, actionMod, roleMod, dateMod, publicMod))) *> newPolicy.pure[IO]
   }
 
   override def listAccessPolicies(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId): IO[Set[ResourceIdAndPolicyName]] = {
@@ -164,7 +166,7 @@ class LdapAccessPolicyDAO(protected val ldapConnectionPool: LDAPConnectionPool, 
   }
 
   override def listPublicAccessPolicies(resourceTypeName: ResourceTypeName): IO[Stream[ResourceIdAndPolicyName]] = IO(
-    ldapSearchStream(resourceTypeDn(resourceTypeName), SearchScope.SUB, Filter.createANDFilter(Filter.createEqualityFilter("objectclass", ObjectClass.policy), Filter.createEqualityFilter(Attr.isPublic, "true"))) { entry =>
+    ldapSearchStream(resourceTypeDn(resourceTypeName), SearchScope.SUB, Filter.createANDFilter(Filter.createEqualityFilter("objectclass", ObjectClass.policy), Filter.createEqualityFilter(Attr.public, "true"))) { entry =>
       val policy = unmarshalAccessPolicy(entry)
       ResourceIdAndPolicyName(policy.id.resource.resourceId, policy.id.accessPolicyName)
     }
@@ -178,7 +180,7 @@ class LdapAccessPolicyDAO(protected val ldapConnectionPool: LDAPConnectionPool, 
           SearchScope.SUB,
           Filter.createANDFilter(
             Filter.createEqualityFilter("objectclass", ObjectClass.policy),
-            Filter.createEqualityFilter(Attr.isPublic, "true"))
+            Filter.createEqualityFilter(Attr.public, "true"))
         )(unmarshalAccessPolicy)))
   }
 
@@ -218,16 +220,13 @@ class LdapAccessPolicyDAO(protected val ldapConnectionPool: LDAPConnectionPool, 
     WorkbenchUser(WorkbenchUserId(uid), getAttribute(entry, Attr.googleSubjectId).map(GoogleSubjectId), WorkbenchEmail(email))
   }
 
-  override def setPolicyIsPublic(policyId: FullyQualifiedPolicyId, isPublic: Boolean): IO[Unit] = {
-    cs.evalOn(blockingEc)(
-        IO(
-          ldapConnectionPool.modify(
-            policyDn(policyId),
-            new Modification(ModificationType.REPLACE, Attr.isPublic, isPublic.toString))).void)
-      .recoverWith {
-        case ldape: LDAPException if ldape.getResultCode == ResultCode.NO_SUCH_OBJECT =>
-          IO.raiseError(
-            new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "policy does not exist")))
-      }
+  override def setPolicyIsPublic(policyId: FullyQualifiedPolicyId, public: Boolean): IO[Unit] = {
+    val dateMod = new Modification(ModificationType.REPLACE, Attr.groupUpdatedTimestamp, formattedDate(new Date()))
+    val publicMod = new Modification(ModificationType.REPLACE, Attr.public, public.toString)
+    
+    cs.evalOn(blockingEc)(IO(ldapConnectionPool.modify( policyDn(policyId), dateMod, publicMod)).void).recoverWith {
+      case ldape: LDAPException if ldape.getResultCode == ResultCode.NO_SUCH_OBJECT =>
+        IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "policy does not exist")))
+    }
   }
 }

@@ -315,7 +315,7 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
 
     val resource = Resource(typeName1, ResourceId("resource"), Set.empty)
     val policy1 = AccessPolicy(
-      FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("role1-a")), Set(userId), WorkbenchEmail("p1@example.com"), Set(ResourceRoleName("role1")), Set(ResourceAction("action1"), ResourceAction("action2")))
+      FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("role1-a")), Set(userId), WorkbenchEmail("p1@example.com"), Set(ResourceRoleName("role1")), Set(ResourceAction("action1"), ResourceAction("action2")), public = false)
 
     policyDAO.createResourceType(typeName1).unsafeRunSync()
     policyDAO.createResource(resource).unsafeRunSync()
