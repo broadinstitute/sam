@@ -22,14 +22,14 @@ class PolicyEvaluatorService(
         role =>
           resourceType.roles.filter(_.roleName == role).flatMap(_.actions)
       }
-
       policy.actions ++ roleActions
     }
+
     for{
       rt <- IO.fromEither[ResourceType](resourceTypes.get(resource.resourceTypeName).toRight(new WorkbenchException(s"missing configuration for resourceType ${resource.resourceTypeName}")))
       isConstrained = rt.isAuthDomainConstrainable
 
-      policiesForResource <- accessPolicyDAO.listAccessPoliciesForUser(resource, userId)
+      policiesForResource <- listResourceAccessPoliciesForUser(resource, userId)
       allPolicyActions = policiesForResource.flatMap(p => allActions(p, rt))
       res <- if(isConstrained) {
         for{
@@ -86,6 +86,12 @@ class PolicyEvaluatorService(
     for {
       ripns <- accessPolicyDAO.listAccessPolicies(ManagedGroupService.managedGroupTypeName, userId)
     } yield ripns.filter(ripn => ManagedGroupService.userMembershipPolicyNames.contains(ripn.accessPolicyName))
+
+  def listResourceAccessPoliciesForUser(resource: FullyQualifiedResourceId, userId: WorkbenchUserId): IO[Set[AccessPolicy]] =
+    for {
+      policies <- accessPolicyDAO.listAccessPoliciesForUser(resource, userId)
+      publicPolicies <- accessPolicyDAO.listPublicAccessPolicies(resource)
+    } yield policies ++ publicPolicies
 }
 
 object PolicyEvaluatorService {

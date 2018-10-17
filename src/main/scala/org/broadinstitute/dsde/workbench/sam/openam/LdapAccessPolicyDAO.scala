@@ -113,7 +113,7 @@ class LdapAccessPolicyDAO(protected val ldapConnectionPool: LDAPConnectionPool, 
     val email = WorkbenchEmail(getAttribute(entry, Attr.email).get)
 
     AccessPolicy(
-      FullyQualifiedPolicyId(FullyQualifiedResourceId(resourceTypeName, resourceId), AccessPolicyName(policyName)), members, email, roles, actions)
+      FullyQualifiedPolicyId(FullyQualifiedResourceId(resourceTypeName, resourceId), AccessPolicyName(policyName)), members, email, roles, actions, isPublic)
   }
 
   override def overwritePolicyMembers(id: FullyQualifiedPolicyId, memberList: Set[WorkbenchSubject]): IO[Unit] = {

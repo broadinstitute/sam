@@ -76,13 +76,13 @@ class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdenti
 
   override def listAccessPolicies(resource: FullyQualifiedResourceId): IO[Set[AccessPolicy]] = IO {
     policies.collect {
-      case (riapn @ FullyQualifiedPolicyId(`resource`, _), policy: AccessPolicy) => policy
+      case (FullyQualifiedPolicyId(`resource`, _), policy: AccessPolicy) => policy
     }.toSet
   }
 
   override def listAccessPoliciesForUser(resource: FullyQualifiedResourceId, user: WorkbenchUserId): IO[Set[AccessPolicy]] = IO {
     policies.collect {
-      case (_, policy: AccessPolicy) if policy.members.contains(user) => policy
+      case (FullyQualifiedPolicyId(`resource`, _), policy: AccessPolicy) if policy.members.contains(user) => policy
     }.toSet
 
   }

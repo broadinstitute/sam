@@ -124,15 +124,15 @@ object Boot extends App with LazyLogging {
         blockingEc =>
           implicit val cs = IO.contextShift(scala.concurrent.ExecutionContext.Implicits.global)
           val accessPolicyDao = new LdapAccessPolicyDAO(ldapConnectionPool, directoryConfig, blockingEc)
-          val cloudExtention = createCloudExt(accessPolicyDao)
-          val (sRoutes, userService, resourceService, statusService) = createSamRoutes(cloudExtention, accessPolicyDao)
+          val cloudExtension = createCloudExt(accessPolicyDao)
+          val (sRoutes, userService, resourceService, statusService) = createSamRoutes(cloudExtension, accessPolicyDao)
 
           for{
             _ <- resourceService.initResourceTypes().handleErrorWith{
               case t: Throwable => IO(logger.error("FATAL - failure starting http server", t)) *> IO.raiseError(t)
             }
 
-            _ <- IO.fromFuture(IO(cloudExtention.onBoot(SamApplication(userService, resourceService, statusService))))
+            _ <- IO.fromFuture(IO(cloudExtension.onBoot(SamApplication(userService, resourceService, statusService))))
 
             binding <- IO.fromFuture(IO(Http().bindAndHandle(sRoutes.route, "0.0.0.0", 8080))).handleErrorWith{
               case t: Throwable => IO(logger.error("FATAL - failure starting http server", t)) *> IO.raiseError(t)

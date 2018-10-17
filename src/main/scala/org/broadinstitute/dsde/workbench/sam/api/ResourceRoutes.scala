@@ -142,14 +142,14 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
                     } ~
                     pathPrefix("public") {
                       pathEndOrSingleSlash {
-                        requireOneOfAction(resource, Set(SamResourceActions.readPolicies, SamResourceActions.readPolicy(resourceAndPolicyName.accessPolicyName)), userInfo.userId) {
-                          get {
+                        get {
+                          requireOneOfAction(resource, Set(SamResourceActions.readPolicies, SamResourceActions.readPolicy(resourceAndPolicyName.accessPolicyName)), userInfo.userId) {
                             complete(resourceService.isPublic(resourceAndPolicyName))
                           }
                         } ~
-                        requireOneOfAction(resource, Set(SamResourceActions.alterPolicies, SamResourceActions.sharePolicy(resourceAndPolicyName.accessPolicyName)), userInfo.userId) {
-                          requireOneOfAction(FullyQualifiedResourceId(SamResourceTypes.resourceTypeAdminName, ResourceId(resourceType.name.value)), Set(SamResourceActions.setPublic, SamResourceActions.setPublicPolicy(resourceAndPolicyName.accessPolicyName)), userInfo.userId) {
-                            put {
+                        put {
+                          requireOneOfAction(resource, Set(SamResourceActions.alterPolicies, SamResourceActions.sharePolicy(resourceAndPolicyName.accessPolicyName)), userInfo.userId) {
+                            requireOneOfAction(FullyQualifiedResourceId(SamResourceTypes.resourceTypeAdminName, ResourceId(resourceType.name.value)), Set(SamResourceActions.setPublic, SamResourceActions.setPublicPolicy(resourceAndPolicyName.accessPolicyName)), userInfo.userId) {
                               entity(as[Boolean]) { isPublic =>
                                 complete(resourceService.setPublic(resourceAndPolicyName, isPublic).unsafeToFuture().map(_ => StatusCodes.NoContent))
                               }

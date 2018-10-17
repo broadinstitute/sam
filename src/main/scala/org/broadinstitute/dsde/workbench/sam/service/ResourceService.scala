@@ -189,16 +189,9 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
   }
 
   def listUserResourceRoles(resource: FullyQualifiedResourceId, userInfo: UserInfo): Future[Set[ResourceRoleName]] = {
-    listResourceAccessPoliciesForUser(resource, userInfo).map { matchingPolicies =>
+    policyEvaluatorService.listResourceAccessPoliciesForUser(resource, userInfo.userId).map { matchingPolicies =>
       matchingPolicies.flatMap(_.roles)
     }.unsafeToFuture()
-  }
-
-  private def listResourceAccessPoliciesForUser(resource: FullyQualifiedResourceId, userInfo: UserInfo): IO[Set[AccessPolicy]] = {
-    for {
-      policies <- accessPolicyDAO.listAccessPoliciesForUser(resource, userInfo.userId)
-      publicPolicies <- accessPolicyDAO.listPublicAccessPolicies(resource)
-    } yield policies ++ publicPolicies
   }
 
   /**
