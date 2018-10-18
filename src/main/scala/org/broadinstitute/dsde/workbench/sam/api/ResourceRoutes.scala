@@ -151,7 +151,7 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
                           requireOneOfAction(resource, Set(SamResourceActions.alterPolicies, SamResourceActions.sharePolicy(resourceAndPolicyName.accessPolicyName)), userInfo.userId) {
                             requireOneOfAction(FullyQualifiedResourceId(SamResourceTypes.resourceTypeAdminName, ResourceId(resourceType.name.value)), Set(SamResourceActions.setPublic, SamResourceActions.setPublicPolicy(resourceAndPolicyName.accessPolicyName)), userInfo.userId) {
                               entity(as[Boolean]) { isPublic =>
-                                complete(resourceService.setPublic(resourceAndPolicyName, isPublic).unsafeToFuture().map(_ => StatusCodes.NoContent))
+                                complete(resourceService.setPublic(resourceAndPolicyName, isPublic).map(_ => StatusCodes.NoContent))
                               }
                             }
                           }

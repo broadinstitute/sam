@@ -364,9 +364,9 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
   private def generateGroupEmail() = WorkbenchEmail(s"policy-${UUID.randomUUID}@$emailDomain")
 
   def isPublic(resourceAndPolicyName: FullyQualifiedPolicyId): IO[Boolean] = {
-    accessPolicyDAO.loadPolicy(resourceAndPolicyName).map {
-      case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "policy not found"))
-      case Some(accessPolicy) => accessPolicy.public
+    accessPolicyDAO.loadPolicy(resourceAndPolicyName).flatMap {
+      case None => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "policy not found")))
+      case Some(accessPolicy) => IO.pure(accessPolicy.public)
     }
   }
 
