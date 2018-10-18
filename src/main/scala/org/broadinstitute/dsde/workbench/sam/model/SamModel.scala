@@ -2,7 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.model
 
 import monocle.macros.Lenses
 import org.broadinstitute.dsde.workbench.model._
-import spray.json.DefaultJsonProtocol
+import spray.json.{DefaultJsonProtocol, JsValue, RootJsonFormat}
 
 /**
   * Created by dvoet on 5/26/17.
@@ -34,7 +34,7 @@ object SamJsonSupport {
   implicit val UserIdInfoFormat = jsonFormat3(UserIdInfo.apply)
 
   implicit val UserStatusDiagnosticsFormat = jsonFormat3(UserStatusDiagnostics.apply)
-  
+
   implicit val AccessPolicyNameFormat = ValueObjectFormat(AccessPolicyName.apply)
 
   implicit val ResourceIdFormat = ValueObjectFormat(ResourceId.apply)
@@ -45,7 +45,7 @@ object SamJsonSupport {
 
   implicit val AccessPolicyResponseEntryFormat = jsonFormat3(AccessPolicyResponseEntry.apply)
 
-  implicit val UserPolicyResponseFormat = jsonFormat4(UserPolicyResponse.apply)
+  implicit val UserPolicyResponseFormat = jsonFormat5(UserPolicyResponse.apply)
 
   implicit val PolicyIdentityFormat = jsonFormat2(FullyQualifiedPolicyId.apply)
 
@@ -56,6 +56,15 @@ object SamJsonSupport {
   implicit val GroupSyncResponseFormat = jsonFormat2(GroupSyncResponse.apply)
 
   implicit val CreateResourceRequestFormat = jsonFormat3(CreateResourceRequest.apply)
+
+}
+
+object RootPrimitiveJsonSupport {
+  implicit val rootBooleanJsonFormat: RootJsonFormat[Boolean] = new RootJsonFormat[Boolean] {
+    import DefaultJsonProtocol.BooleanJsonFormat
+    override def write(obj: Boolean): JsValue = BooleanJsonFormat.write(obj)
+    override def read(json: JsValue): Boolean = BooleanJsonFormat.read(json)
+  }
 }
 
 object SamResourceActions {
@@ -64,9 +73,15 @@ object SamResourceActions {
   val delete = ResourceAction("delete")
   val notifyAdmins = ResourceAction("notify_admins")
   val setAccessInstructions = ResourceAction("set_access_instructions")
+  val setPublic = ResourceAction("set_public")
 
   def sharePolicy(policy: AccessPolicyName) = ResourceAction(s"share_policy::${policy.value}")
   def readPolicy(policy: AccessPolicyName) = ResourceAction(s"read_policy::${policy.value}")
+  def setPublicPolicy(policy: AccessPolicyName) = ResourceAction(s"set_public::${policy.value}")
+}
+
+object SamResourceTypes {
+  val resourceTypeAdminName = ResourceTypeName("resource_type_admin")
 }
 
 @Lenses case class UserStatusDetails(userSubjectId: WorkbenchUserId, userEmail: WorkbenchEmail) //for backwards compatibility to old API
@@ -96,7 +111,7 @@ object SamResourceActions {
 
 @Lenses case class ResourceId(value: String) extends ValueObject
 @Lenses final case class ResourceIdAndPolicyName(resourceId: ResourceId, accessPolicyName: AccessPolicyName)
-@Lenses final case class UserPolicyResponse(resourceId: ResourceId, accessPolicyName: AccessPolicyName, authDomainGroups: Set[WorkbenchGroupName], missingAuthDomainGroups: Set[WorkbenchGroupName])
+@Lenses final case class UserPolicyResponse(resourceId: ResourceId, accessPolicyName: AccessPolicyName, authDomainGroups: Set[WorkbenchGroupName], missingAuthDomainGroups: Set[WorkbenchGroupName], public: Boolean)
 @Lenses final case class FullyQualifiedPolicyId(resource: FullyQualifiedResourceId, accessPolicyName: AccessPolicyName) extends WorkbenchGroupIdentity {
   override def toString: String = s"${accessPolicyName.value}.${resource.resourceId.value}.${resource.resourceTypeName.value}"
 }
@@ -108,7 +123,7 @@ Note that AccessPolicy IS A group, does not have a group. This makes the ldap qu
 and thus resources much easier. We tried modeling with a "has a" relationship in code but a "is a" relationship in
 ldap but it felt unnatural.
  */
-@Lenses case class AccessPolicy(id: FullyQualifiedPolicyId, members: Set[WorkbenchSubject], email: WorkbenchEmail, roles: Set[ResourceRoleName], actions: Set[ResourceAction]) extends WorkbenchGroup
+@Lenses case class AccessPolicy(id: FullyQualifiedPolicyId, members: Set[WorkbenchSubject], email: WorkbenchEmail, roles: Set[ResourceRoleName], actions: Set[ResourceAction], public: Boolean) extends WorkbenchGroup
 @Lenses case class AccessPolicyMembership(memberEmails: Set[WorkbenchEmail], actions: Set[ResourceAction], roles: Set[ResourceRoleName])
 @Lenses case class AccessPolicyResponseEntry(policyName: AccessPolicyName, policy: AccessPolicyMembership, email: WorkbenchEmail)
 

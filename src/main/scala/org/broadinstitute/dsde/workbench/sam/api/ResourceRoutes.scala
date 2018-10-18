@@ -9,6 +9,7 @@ import akka.http.scaladsl.server.Directives._
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchEmail, WorkbenchExceptionWithErrorReport}
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
+import org.broadinstitute.dsde.workbench.sam.model.RootPrimitiveJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.ResourceService
 import spray.json.DefaultJsonProtocol._
@@ -133,6 +134,24 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
                               } ~
                               delete {
                                 complete(resourceService.removeSubjectFromPolicy(resourceAndPolicyName, subject).map(_ => StatusCodes.NoContent))
+                              }
+                            }
+                          }
+                        }
+                      }
+                    } ~
+                    pathPrefix("public") {
+                      pathEndOrSingleSlash {
+                        get {
+                          requireOneOfAction(resource, Set(SamResourceActions.readPolicies, SamResourceActions.readPolicy(resourceAndPolicyName.accessPolicyName)), userInfo.userId) {
+                            complete(resourceService.isPublic(resourceAndPolicyName))
+                          }
+                        } ~
+                        put {
+                          requireOneOfAction(resource, Set(SamResourceActions.alterPolicies, SamResourceActions.sharePolicy(resourceAndPolicyName.accessPolicyName)), userInfo.userId) {
+                            requireOneOfAction(FullyQualifiedResourceId(SamResourceTypes.resourceTypeAdminName, ResourceId(resourceType.name.value)), Set(SamResourceActions.setPublic, SamResourceActions.setPublicPolicy(resourceAndPolicyName.accessPolicyName)), userInfo.userId) {
+                              entity(as[Boolean]) { isPublic =>
+                                complete(resourceService.setPublic(resourceAndPolicyName, isPublic).map(_ => StatusCodes.NoContent))
                               }
                             }
                           }

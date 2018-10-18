@@ -22,14 +22,14 @@ class PolicyEvaluatorService(
         role =>
           resourceType.roles.filter(_.roleName == role).flatMap(_.actions)
       }
-
       policy.actions ++ roleActions
     }
+
     for{
       rt <- IO.fromEither[ResourceType](resourceTypes.get(resource.resourceTypeName).toRight(new WorkbenchException(s"missing configuration for resourceType ${resource.resourceTypeName}")))
       isConstrained = rt.isAuthDomainConstrainable
 
-      policiesForResource <- accessPolicyDAO.listAccessPoliciesForUser(resource, userId)
+      policiesForResource <- listResourceAccessPoliciesForUser(resource, userId)
       allPolicyActions = policiesForResource.flatMap(p => allActions(p, rt))
       res <- if(isConstrained) {
         for{
@@ -72,19 +72,26 @@ class PolicyEvaluatorService(
             case Some(authDomains) =>
               val userNotMemberOf = authDomains.filterNot(x =>
                 allAuthDomainResourcesUserIsMemberOf.map(_.resourceId).contains(ResourceId(x.value)))
-              Some(UserPolicyResponse(rnp.resourceId, rnp.accessPolicyName, authDomains, userNotMemberOf))
+              Some(UserPolicyResponse(rnp.resourceId, rnp.accessPolicyName, authDomains, userNotMemberOf, false))
             case None =>
               logger.error(s"ldap has corrupted data. ${rnp.resourceId} should have auth domains defined")
               none[UserPolicyResponse]
           }
-        } else UserPolicyResponse(rnp.resourceId, rnp.accessPolicyName, Set.empty, Set.empty).some
+        } else UserPolicyResponse(rnp.resourceId, rnp.accessPolicyName, Set.empty, Set.empty, false).some
       }
-    } yield results.flatten
+      publicPolicies <- accessPolicyDAO.listPublicAccessPolicies(resourceTypeName)
+    } yield results.flatten ++ publicPolicies.map(p => UserPolicyResponse(p.resourceId, p.accessPolicyName, Set.empty, Set.empty, public = true))
 
   def listUserManagedGroups(userId: WorkbenchUserId): IO[Set[ResourceIdAndPolicyName]] =
     for {
       ripns <- accessPolicyDAO.listAccessPolicies(ManagedGroupService.managedGroupTypeName, userId)
     } yield ripns.filter(ripn => ManagedGroupService.userMembershipPolicyNames.contains(ripn.accessPolicyName))
+
+  def listResourceAccessPoliciesForUser(resource: FullyQualifiedResourceId, userId: WorkbenchUserId): IO[Set[AccessPolicy]] =
+    for {
+      policies <- accessPolicyDAO.listAccessPoliciesForUser(resource, userId)
+      publicPolicies <- accessPolicyDAO.listPublicAccessPolicies(resource)
+    } yield policies ++ publicPolicies
 }
 
 object PolicyEvaluatorService {

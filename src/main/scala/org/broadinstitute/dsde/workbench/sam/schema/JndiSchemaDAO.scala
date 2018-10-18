@@ -18,6 +18,12 @@ import scala.util.{Failure, Success, Try}
   * Created by mbemis on 10/3/17.
   */
 object JndiSchemaDAO {
+  /**
+    * This is the version of the schema reflected by this code. Update this when adding code that updates the schema.
+    * If schemaVersion is not updated your changes may not be applied.
+    */
+  val schemaVersion = 3
+
   object Attr {
     val resourceId = "resourceId"
     val objectClass = "objectclass"
@@ -42,6 +48,7 @@ object JndiSchemaDAO {
     val project = "project"
     val proxyEmail = "proxyEmail"
     val authDomain = "authDomain"
+    val public = "public"
   }
 
   object ObjectClass {
@@ -62,7 +69,7 @@ object SchemaStatus {
   case object Ignore extends SchemaStatus
 }
 
-class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig, val schemaLockConfig: SchemaLockConfig)(implicit executionContext: ExecutionContext) extends JndiSupport with DirectorySubjectNameSupport with LazyLogging {
+class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig, val schemaLockConfig: SchemaLockConfig, val schemaVersion: Int = JndiSchemaDAO.schemaVersion)(implicit executionContext: ExecutionContext) extends JndiSupport with DirectorySubjectNameSupport with LazyLogging {
 
   def init(): Future[Unit] = {
     if(schemaLockConfig.lockSchemaOnBoot) { initWithSchemaLock() }
@@ -106,13 +113,13 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig, val schemaLo
     val myAttrs = new BasicAttributes(true)
     myAttrs.put("completed", true.toString)
 
-    logger.info(s"Schema successfully updated to version [${schemaLockConfig.schemaVersion}]")
+    logger.info(s"Schema successfully updated to version [${schemaVersion}]")
 
-    ctx.modifyAttributes(schemaLockDn(schemaLockConfig.schemaVersion), DirContext.REPLACE_ATTRIBUTE, myAttrs)
+    ctx.modifyAttributes(schemaLockDn(schemaVersion), DirContext.REPLACE_ATTRIBUTE, myAttrs)
   }
 
   def readSchemaStatus(): Future[SchemaStatus] = withContext { ctx =>
-    val attributes = Try { ctx.getAttributes(schemaLockDn(schemaLockConfig.schemaVersion)) }
+    val attributes = Try { ctx.getAttributes(schemaLockDn(schemaVersion)) }
 
     attributes match {
       case Success(attrs) =>
@@ -163,14 +170,14 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig, val schemaLo
         val oc = new BasicAttribute("objectclass")
         Seq("top", "schemaVersion").foreach(oc.add)
         myAttrs.put(oc)
-        myAttrs.put("schemaVersion", schemaLockConfig.schemaVersion.toString)
+        myAttrs.put("schemaVersion", schemaVersion.toString)
         myAttrs.put("completed", false.toString)
         myAttrs.put("instanceId", schemaLockConfig.instanceId)
 
         myAttrs
       }
     }
-    ctx.bind(schemaLockDn(schemaLockConfig.schemaVersion), resourceContext)
+    ctx.bind(schemaLockDn(schemaVersion), resourceContext)
   }
   } match {
     case Failure(e: NameAlreadyBoundException) =>
@@ -325,6 +332,7 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig, val schemaLo
     createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.6", Attr.role, "the roles for the policy, if any", false)
     createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.7", Attr.policy, "the policy name", true, equality = Option("caseIgnoreMatch"))
     createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.9", Attr.authDomain, "auth domain constraining resource", false)
+    createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.10", Attr.public, "boolean attribute marking a policy as public", false, syntax = Option("1.3.6.1.4.1.1466.115.121.1.7"), equality = Option("booleanMatch"))
 
     val policyAttrs = new BasicAttributes(true) // Ignore case
     policyAttrs.put("NUMERICOID", "1.3.6.1.4.1.18060.0.4.3.2.0")
@@ -344,6 +352,7 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig, val schemaLo
     val policyMay = new BasicAttribute("MAY")
     policyMay.add(Attr.action)
     policyMay.add(Attr.role)
+    policyMay.add(Attr.public)
     policyAttrs.put(policyMay)
 
     val resourceTypeAttrs = new BasicAttributes(true) // Ignore case
@@ -395,6 +404,7 @@ class JndiSchemaDAO(protected val directoryConfig: DirectoryConfig, val schemaLo
     Try { schema.destroySubcontext("AttributeDefinition/" + Attr.role) }
     Try { schema.destroySubcontext("AttributeDefinition/" + Attr.policy) }
     Try { schema.destroySubcontext("AttributeDefinition/" + Attr.authDomain) }
+    Try { schema.destroySubcontext("AttributeDefinition/" + Attr.public) }
   }
 
   private def createOrgUnit(dn: String): Future[Unit] = withContext { ctx =>

@@ -103,7 +103,7 @@ object Generator {
     email <- genNonPetEmail
     roles <- Gen.listOf(genRoleName).map(_.toSet)
     actions <- Gen.listOf(genResourceAction).map(_.toSet)
-  } yield AccessPolicy(id, members, email, roles, actions)
+  } yield AccessPolicy(id, members, email, roles, actions, public = false)
 
   implicit val arbNonPetEmail: Arbitrary[WorkbenchEmail] = Arbitrary(genNonPetEmail)
   implicit val arbOAuth2BearerToken: Arbitrary[OAuth2BearerToken] = Arbitrary(genOAuth2BearerToken)

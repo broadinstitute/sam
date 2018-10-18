@@ -39,11 +39,11 @@ class LdapAccessPolicyDAOSpec extends AsyncFlatSpec with ScalaFutures with Match
     val resource3 = Resource(typeName2, ResourceId("resource"), Set.empty)
 
     val policy1 = AccessPolicy(
-      FullyQualifiedPolicyId(resource1.fullyQualifiedId, AccessPolicyName("role1-a")), policy1Group.members, policy1Group.email, Set(ResourceRoleName("role1")), Set(ResourceAction("action1"), ResourceAction("action2")))
+      FullyQualifiedPolicyId(resource1.fullyQualifiedId, AccessPolicyName("role1-a")), policy1Group.members, policy1Group.email, Set(ResourceRoleName("role1")), Set(ResourceAction("action1"), ResourceAction("action2")), public = false)
     val policy2 = AccessPolicy(
-      FullyQualifiedPolicyId(resource2.fullyQualifiedId, AccessPolicyName("role1-b")), policy2Group.members, policy2Group.email, Set(ResourceRoleName("role1")), Set(ResourceAction("action3"), ResourceAction("action4")))
+      FullyQualifiedPolicyId(resource2.fullyQualifiedId, AccessPolicyName("role1-b")), policy2Group.members, policy2Group.email, Set(ResourceRoleName("role1")), Set(ResourceAction("action3"), ResourceAction("action4")), public = false)
     val policy3 = AccessPolicy(
-      FullyQualifiedPolicyId(resource3.fullyQualifiedId, AccessPolicyName("role1-a")), policy3Group.members, policy3Group.email, Set(ResourceRoleName("role1")), Set(ResourceAction("action1"), ResourceAction("action2")))
+      FullyQualifiedPolicyId(resource3.fullyQualifiedId, AccessPolicyName("role1-a")), policy3Group.members, policy3Group.email, Set(ResourceRoleName("role1")), Set(ResourceAction("action1"), ResourceAction("action2")), public = false)
 
 
     val res = for{

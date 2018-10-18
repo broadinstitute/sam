@@ -163,8 +163,7 @@ package object config {
       config.getBoolean("lockSchemaOnBoot"),
       config.getInt("recheckTimeInterval"),
       config.getInt("maxTimeToWait"),
-      config.getString("instanceId"),
-      config.getInt("schemaVersion")
+      config.getString("instanceId")
     )
   }
 }

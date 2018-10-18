@@ -31,6 +31,36 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     IO.pure(resourceTypes.get(name))
   }
 
+  /**
+    * Creates each resource type in ldap and creates a resource for each with the resource type SamResourceTypes.resourceTypeAdmin.
+    *
+    * This will fail if SamResourceTypes.resourceTypeAdmin does not exist in resourceTypes
+    */
+  def initResourceTypes(): IO[Iterable[ResourceType]] = {
+    resourceTypes.get(SamResourceTypes.resourceTypeAdminName) match {
+      case None => IO.raiseError(new WorkbenchException(s"Could not initialize resource types because ${SamResourceTypes.resourceTypeAdminName.value} does not exist."))
+      case Some(resourceTypeAdmin) =>
+        for {
+          // make sure resource type admin is added first because the rest depends on it
+          createdAdminType <- createResourceType(resourceTypeAdmin)
+
+          result <- resourceTypes.values.toList.filterNot(_.name == SamResourceTypes.resourceTypeAdminName).parTraverse { rt =>
+            for {
+              _ <- createResourceType(rt)
+              policy = ValidatableAccessPolicy(AccessPolicyName(resourceTypeAdmin.ownerRoleName.value), Map.empty, Set(resourceTypeAdmin.ownerRoleName), Set.empty)
+              // note that this skips all validations and just creates a resource with owner policies with no members
+              // it will require someone with direct ldap access to bootstrap
+              _ <- IO.fromFuture(IO(persistResource(resourceTypeAdmin, ResourceId(rt.name.value), Set(policy), Set.empty))).recover {
+                case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode.contains(StatusCodes.Conflict) =>
+                  // ok if the resource already exists
+                  Resource(rt.name, ResourceId(rt.name.value), Set.empty)
+              }
+            } yield rt
+          }
+        } yield result :+ resourceTypeAdmin
+    }
+  }
+
   def createResourceType(resourceType: ResourceType): IO[ResourceTypeName] = {
     accessPolicyDAO.createResourceType(resourceType.name)
   }
@@ -134,7 +164,7 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
   }
 
   def createPolicy(policyIdentity: FullyQualifiedPolicyId, members: Set[WorkbenchSubject], email: WorkbenchEmail, roles: Set[ResourceRoleName], actions: Set[ResourceAction]): Future[AccessPolicy] = {
-    accessPolicyDAO.createPolicy(AccessPolicy(policyIdentity, members, email, roles, actions)).unsafeToFuture()
+    accessPolicyDAO.createPolicy(AccessPolicy(policyIdentity, members, email, roles, actions, public = false)).unsafeToFuture()
   }
 
   // IF Resource ID reuse is allowed (as defined by the Resource Type), then we can delete the resource
@@ -159,13 +189,9 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
   }
 
   def listUserResourceRoles(resource: FullyQualifiedResourceId, userInfo: UserInfo): Future[Set[ResourceRoleName]] = {
-    listResourceAccessPoliciesForUser(resource, userInfo).map { matchingPolicies =>
+    policyEvaluatorService.listResourceAccessPoliciesForUser(resource, userInfo.userId).map { matchingPolicies =>
       matchingPolicies.flatMap(_.roles)
     }.unsafeToFuture()
-  }
-
-  private def listResourceAccessPoliciesForUser(resource: FullyQualifiedResourceId, userInfo: UserInfo): IO[Set[AccessPolicy]] = {
-    accessPolicyDAO.listAccessPoliciesForUser(resource, userInfo.userId)
   }
 
   /**
@@ -206,8 +232,9 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
   /**
     * Overwrites the policy if it already exists or creates a new policy entry if it does not exist.
     * Triggers update to Google Group upon successfully updating the policy.
-    * Note:  This method DOES NOT validate the policy and should probably not be called directly unless you know the
+    * Note: This method DOES NOT validate the policy and should probably not be called directly unless you know the
     * contents are valid.  To validate and save the policy, use overwritePolicy()
+    * Note: this function DOES NOT update the email or public fields of a policy
     * @param resource
     * @param policy
     * @return
@@ -216,9 +243,9 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     val workbenchSubjects = policy.emailsToSubjects.values.flatten.toSet
     accessPolicyDAO.loadPolicy(policyIdentity).unsafeToFuture().flatMap {
       case None => createPolicy(policyIdentity, workbenchSubjects, generateGroupEmail(), policy.roles, policy.actions)
-      case Some(accessPolicy) => accessPolicyDAO.overwritePolicy(AccessPolicy(policyIdentity, workbenchSubjects, accessPolicy.email, policy.roles, policy.actions)).unsafeToFuture()
+      case Some(accessPolicy) => accessPolicyDAO.overwritePolicy(AccessPolicy(policyIdentity, workbenchSubjects, accessPolicy.email, policy.roles, policy.actions, accessPolicy.public)).unsafeToFuture()
     } andThen {
-      case Success(policy) => fireGroupUpdateNotification(policyIdentity)
+      case Success(_) => fireGroupUpdateNotification(policyIdentity)
     }
   }
 
@@ -335,4 +362,34 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
   }
 
   private def generateGroupEmail() = WorkbenchEmail(s"policy-${UUID.randomUUID}@$emailDomain")
+
+  def isPublic(resourceAndPolicyName: FullyQualifiedPolicyId): IO[Boolean] = {
+    accessPolicyDAO.loadPolicy(resourceAndPolicyName).flatMap {
+      case None => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "policy not found")))
+      case Some(accessPolicy) => IO.pure(accessPolicy.public)
+    }
+  }
+
+  /**
+    * Sets the public field of a policy. Raises an error if the policy has an auth domain and public == true.
+    * Triggers update to Google Group upon successfully updating the policy.
+    *
+    * @param policyId the fully qualified id of the policy
+    * @param public true to make the policy public, false to make it private
+    * @return
+    */
+  def setPublic(policyId: FullyQualifiedPolicyId, public: Boolean): IO[Unit] = {
+    for {
+      authDomain <- accessPolicyDAO.loadResourceAuthDomain(policyId.resource)
+      _ <- if (!public || authDomain.isEmpty) {
+        accessPolicyDAO.setPolicyIsPublic(policyId, public)
+      } else {
+        // resources with auth domains logically can't have public policies but also technically allowing them poses a problem
+        // because the logic for public resources is different. However, sharing with the auth domain should have the
+        // exact same effect as making a policy public: anyone in the auth domain can access.
+        IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "Cannot make auth domain protected resources public. Share directly with auth domain groups instead.")))
+      }
+    _ <- IO.fromFuture(IO(fireGroupUpdateNotification(policyId)))
+    } yield ()
+  }
 }
