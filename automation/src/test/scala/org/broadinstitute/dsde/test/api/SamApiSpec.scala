@@ -1,13 +1,16 @@
 package org.broadinstitute.dsde.test.api
 
 
-import akka.testkit.TestKit
+import java.util.UUID
+
+import akka.actor.ActorSystem
+import akka.testkit.TestKitBase
 import org.broadinstitute.dsde.test.SamConfig
 import org.broadinstitute.dsde.workbench.service.{Orchestration, RestException, Sam, Thurloe}
 import org.broadinstitute.dsde.workbench.auth.{AuthToken, ServiceAccountAuthTokenFromJson, ServiceAccountAuthTokenFromPem}
 import org.broadinstitute.dsde.workbench.config.{Credentials, ServiceTestConfig, UserPool}
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.dao.Google.{googleIamDAO, googleDirectoryDAO}
+import org.broadinstitute.dsde.workbench.dao.Google.{googleDirectoryDAO, googleIamDAO}
 import org.broadinstitute.dsde.workbench.fixture.BillingFixtures
 import org.broadinstitute.dsde.workbench.service.test.CleanUp
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccountName}
@@ -19,8 +22,9 @@ import scala.concurrent.{Await, ExecutionContext, ExecutionContextExecutor}
 import scala.concurrent.duration.Duration
 import scala.concurrent.duration._
 
-class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaFutures with CleanUp with Eventually {
+class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaFutures with CleanUp with Eventually with TestKitBase {
   implicit override val patienceConfig: PatienceConfig = PatienceConfig(timeout = scaled(Span(5, Seconds)))
+  implicit lazy val system = ActorSystem()
 
   val gcsConfig = SamConfig.GCS
 
@@ -366,49 +370,50 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
     }
 
     "should synchronize groups with Google" in {
-      val Seq(user1: Credentials, user2: Credentials, user3: Credentials) = UserPool.chooseStudents(3)
-
       implicit val ec: ExecutionContextExecutor = ExecutionContext.global
-      val managedGroupId = "fooGroup"
-      val adminPolicy = "admin"
+      val managedGroupId = UUID.randomUUID.toString
+      val adminPolicyName = "admin"
+      val Seq(user1: Credentials, user2: Credentials, user3: Credentials) = UserPool.chooseStudents(3)
       val user1AuthToken = user1.makeAuthToken()
-
       val Seq(user1Proxy: WorkbenchEmail, user2Proxy: WorkbenchEmail, user3Proxy: WorkbenchEmail) = Seq(user1, user2, user3).map(user => Sam.user.proxyGroup(user.email)(user1AuthToken))
 
       Sam.user.createGroup(managedGroupId)(user1AuthToken)
       register cleanUp Sam.user.deleteGroup(managedGroupId)(user1AuthToken)
 
-      Sam.user.setPolicyMembers(managedGroupId, adminPolicy, Set(user1.email, user2.email))(user1AuthToken)
-
       val policies = Sam.user.listResourcePolicies("managed-group", managedGroupId)(user1AuthToken)
       val policyEmail = for {
-        policy <- policies.asInstanceOf[Set[Map[String, Map[String, List[String]]]]] if policy.getOrElse("policy", Map.empty).getOrElse("memberEmails", List.empty).nonEmpty
+        policy <- policies if policy.policy.memberEmails.nonEmpty
       } yield {
-        policy.asInstanceOf[Map[String, String]].getOrElse("email", "")
+        policy.email
       }
-      assert(policyEmail.size == 1) // Only one policy should be non empty
+      assert(policyEmail.size == 1) // Only the admin policy should be non-empty after creation
 
-      // check that google has users 1 and 2 in it
-      TestKit.awaitCond(
-        Await.result(googleDirectoryDAO.listGroupMembers(WorkbenchEmail(policyEmail.head)), 5.minutes)
-          .getOrElse(Set.empty).toSet == Set(user1Proxy.value, user2Proxy.value),
+      // The admin policy should contain only the user that created the group
+      awaitAssert(
+        Await.result(googleDirectoryDAO.listGroupMembers(policyEmail.head), 5.minutes)
+          .getOrElse(Set.empty) should contain theSameElementsAs Set(user1Proxy.value),
         5.minutes, 5.seconds)
 
-      Sam.user.addUserToPolicy(managedGroupId, adminPolicy, user3.email)(user1AuthToken)
-
-      // check that google has users 1, 2, and 3 in it
-      TestKit.awaitCond(
-        Await.result(googleDirectoryDAO.listGroupMembers(WorkbenchEmail(policyEmail.head)), 5.minutes)
-          .getOrElse(Set.empty).toSet == Set(user1Proxy.value, user2Proxy.value, user3Proxy.value),
+      // Change the membership of the admin policy to include users 1 and 2
+      Sam.user.setPolicyMembers(managedGroupId, adminPolicyName, Set(user1.email, user2.email))(user1AuthToken)
+      awaitAssert(
+        Await.result(googleDirectoryDAO.listGroupMembers(policyEmail.head), 5.minutes)
+          .getOrElse(Set.empty) should contain theSameElementsAs Set(user1Proxy.value, user2Proxy.value),
         5.minutes, 5.seconds)
 
-      Sam.user.removeUserFromPolicy(managedGroupId, adminPolicy, user2.email)(user1AuthToken)
+      // Add user 3 to the admin policy
+      Sam.user.addUserToPolicy(managedGroupId, adminPolicyName, user3.email)(user1AuthToken)
+      awaitAssert(
+        Await.result(googleDirectoryDAO.listGroupMembers(policyEmail.head), 5.minutes)
+          .getOrElse(Set.empty) should contain theSameElementsAs Set(user1Proxy.value, user2Proxy.value, user3Proxy.value),
+        5.minutes, 5.seconds)
 
-      // check that google has users 1 and 3 in it
-      TestKit.awaitCond(
-        Await.result(googleDirectoryDAO.listGroupMembers(WorkbenchEmail(policyEmail.head)), 5.minutes)
-          .getOrElse(Set.empty).toSet == Set(user1Proxy.value, user3Proxy.value),
-          5.minutes, 5.seconds)
+      // Remove user 2 from the admin policy
+      Sam.user.removeUserFromPolicy(managedGroupId, adminPolicyName, user2.email)(user1AuthToken)
+      awaitAssert(
+        Await.result(googleDirectoryDAO.listGroupMembers(policyEmail.head), 5.minutes)
+          .getOrElse(Set.empty) should contain theSameElementsAs Set(user1Proxy.value, user3Proxy.value),
+        5.minutes, 5.seconds)
     }
   }
 
