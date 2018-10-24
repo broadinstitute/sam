@@ -41,6 +41,9 @@ class ResourceRoutesV1Spec extends FlatSpec with Matchers with ScalatestRouteTes
 
     val setPublic = ResourceActionPattern("set_public", "", false)
     val setPolicyPublic = ResourceActionPattern("set_public::.+", "", false)
+
+    val use = ResourceActionPattern("use", "", true)
+    val readAuthDomain = ResourceActionPattern("read_auth_domain", "", true)
   }
 
   private val resourceTypeAdmin = ResourceType(
@@ -1007,6 +1010,150 @@ class ResourceRoutesV1Spec extends FlatSpec with Matchers with ScalatestRouteTes
     Put(s"/api/resources/v1/${resourceType.name}/${resourceId.value}/policies/${resourceType.ownerRoleName.value}/public", true) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound withClue responsePayloadClue(responseAs[String])
     }
+  }
+
+  "GET /api/resources/v1/{resourceType}/{resourceId}/authDomain" should "200 with auth domain if auth domain is set and user has read_auth_domain" in {
+    val managedGroupResourceType = initManagedGroupResourceType()
+
+    val authDomain = "authDomain"
+    val resourceType = ResourceType(
+      ResourceTypeName("rt"),
+      Set(SamResourceActionPatterns.readAuthDomain, SamResourceActionPatterns.use),
+      Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.readAuthDomain, ManagedGroupService.useAction))),
+      ResourceRoleName("owner")
+    )
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType, resourceTypeAdmin.name -> resourceTypeAdmin, managedGroupResourceType.name -> managedGroupResourceType))
+
+    samRoutes.resourceService.initResourceTypes().unsafeRunSync()
+    runAndWait(samRoutes.managedGroupService.createManagedGroup(ResourceId(authDomain), defaultUserInfo))
+
+    val resourceId = ResourceId("foo")
+    val policiesMap = Map(AccessPolicyName("ap") -> AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set(SamResourceActions.readAuthDomain, ManagedGroupService.useAction), Set(ResourceRoleName("owner"))))
+    runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, policiesMap, Set(WorkbenchGroupName(authDomain)), defaultUserInfo.userId))
+
+    Get(s"/api/resources/v1/${resourceType.name}/${resourceId.value}/authDomain") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[Set[String]] shouldEqual Set(authDomain)
+    }
+  }
+
+  it should "200 with an empty set when the user has read_auth_domain but there is no auth domain set" in {
+    val managedGroupResourceType = initManagedGroupResourceType()
+
+    val resourceType = ResourceType(
+      ResourceTypeName("rt"),
+      Set(SamResourceActionPatterns.readAuthDomain, SamResourceActionPatterns.use),
+      Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.readAuthDomain, ManagedGroupService.useAction))),
+      ResourceRoleName("owner")
+    )
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType, resourceTypeAdmin.name -> resourceTypeAdmin, managedGroupResourceType.name -> managedGroupResourceType))
+
+    samRoutes.resourceService.initResourceTypes().unsafeRunSync()
+
+    val resourceId = ResourceId("foo")
+    val policiesMap = Map(AccessPolicyName("ap") -> AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set(SamResourceActions.readAuthDomain, ManagedGroupService.useAction), Set(ResourceRoleName("owner"))))
+    runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, policiesMap, Set.empty, defaultUserInfo.userId))
+
+    Get(s"/api/resources/v1/${resourceType.name}/${resourceId.value}/authDomain") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[Set[String]] shouldEqual Set.empty
+    }
+  }
+
+  it should "403 when user does not have read_auth_domain" in {
+    val managedGroupResourceType = initManagedGroupResourceType()
+
+    val authDomain = "authDomain"
+    val resourceType = ResourceType(
+      ResourceTypeName("rt"),
+      Set(SamResourceActionPatterns.use),
+      Set(ResourceRole(ResourceRoleName("owner"), Set(ManagedGroupService.useAction))),
+      ResourceRoleName("owner")
+    )
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType, resourceTypeAdmin.name -> resourceTypeAdmin, managedGroupResourceType.name -> managedGroupResourceType))
+
+    samRoutes.resourceService.initResourceTypes().unsafeRunSync()
+    runAndWait(samRoutes.managedGroupService.createManagedGroup(ResourceId(authDomain), defaultUserInfo))
+
+    val resourceId = ResourceId("foo")
+    val policiesMap = Map(AccessPolicyName("ap") -> AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set(ManagedGroupService.useAction), Set(ResourceRoleName("owner"))))
+    runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, policiesMap, Set(WorkbenchGroupName(authDomain)), defaultUserInfo.userId))
+
+    Get(s"/api/resources/v1/${resourceType.name}/${resourceId.value}/authDomain") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Forbidden
+    }
+  }
+
+  it should "404 when resource or resource type is not found" in {
+    val managedGroupResourceType = initManagedGroupResourceType()
+
+    val authDomain = "authDomain"
+    val resourceType = ResourceType(
+      ResourceTypeName("rt"),
+      Set(SamResourceActionPatterns.readAuthDomain, SamResourceActionPatterns.use),
+      Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.readAuthDomain, ManagedGroupService.useAction))),
+      ResourceRoleName("owner")
+    )
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType, resourceTypeAdmin.name -> resourceTypeAdmin, managedGroupResourceType.name -> managedGroupResourceType))
+
+    samRoutes.resourceService.initResourceTypes().unsafeRunSync()
+    runAndWait(samRoutes.managedGroupService.createManagedGroup(ResourceId(authDomain), defaultUserInfo))
+
+    val resourceId = ResourceId("foo")
+    val policiesMap = Map(AccessPolicyName("ap") -> AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set(SamResourceActions.readAuthDomain, ManagedGroupService.useAction), Set(ResourceRoleName("owner"))))
+    runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, policiesMap, Set(WorkbenchGroupName(authDomain)), defaultUserInfo.userId))
+
+    Get(s"/api/resources/v1/fakeResourceTypeName/$resourceId/authDomain") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
+    }
+
+    Get(s"/api/resources/v1/${resourceType.name}/fakeResourceId/authDomain") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
+    }
+  }
+
+  it should "404 when the user is not a member of any policy on the resource" in {
+    val managedGroupResourceType = initManagedGroupResourceType()
+
+    val authDomain = "authDomain"
+    val resourceType = ResourceType(
+      ResourceTypeName("rt"),
+      Set(SamResourceActionPatterns.readAuthDomain, SamResourceActionPatterns.use),
+      Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.readAuthDomain, ManagedGroupService.useAction))),
+      ResourceRoleName("owner")
+    )
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType, resourceTypeAdmin.name -> resourceTypeAdmin, managedGroupResourceType.name -> managedGroupResourceType))
+
+    samRoutes.resourceService.initResourceTypes().unsafeRunSync()
+    runAndWait(samRoutes.managedGroupService.createManagedGroup(ResourceId(authDomain), defaultUserInfo))
+
+    val resourceId = ResourceId("foo")
+    val policiesMap = Map(AccessPolicyName("ap") -> AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set(SamResourceActions.readAuthDomain, ManagedGroupService.useAction), Set(ResourceRoleName("owner"))))
+    runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, policiesMap, Set(WorkbenchGroupName(authDomain)), defaultUserInfo.userId))
+
+    Get(s"/api/resources/v1/${resourceType.name}/${resourceId.value}/authDomain") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[Set[String]] shouldEqual Set(authDomain)
+    }
+
+    val otherUserSamRoutes = TestSamRoutes(Map(resourceType.name -> resourceType), UserInfo(OAuth2BearerToken("accessToken"), WorkbenchUserId("user2"), WorkbenchEmail("user2@example.com"), 0))
+
+    Get(s"/api/resources/v1/${resourceType.name}/${resourceId.value}/authDomain") ~> otherUserSamRoutes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
+    }
+  }
+
+  private def initManagedGroupResourceType(): ResourceType = {
+    val accessPolicyNames = Set(ManagedGroupService.adminPolicyName, ManagedGroupService.memberPolicyName, ManagedGroupService.adminNotifierPolicyName)
+    val policyActions: Set[ResourceAction] = accessPolicyNames.flatMap(policyName => Set(SamResourceActions.sharePolicy(policyName), SamResourceActions.readPolicy(policyName)))
+    val resourceActions = Set(ResourceAction("delete"), ResourceAction("notify_admins"), ResourceAction("set_access_instructions"), ManagedGroupService.useAction) union policyActions
+    val resourceActionPatterns = resourceActions.map(action => ResourceActionPattern(action.value, "", false))
+    val defaultOwnerRole = ResourceRole(ManagedGroupService.adminRoleName, resourceActions)
+    val defaultMemberRole = ResourceRole(ManagedGroupService.memberRoleName, Set.empty)
+    val defaultAdminNotifierRole = ResourceRole(ManagedGroupService.adminNotifierRoleName, Set(ResourceAction("notify_admins")))
+    val defaultRoles = Set(defaultOwnerRole, defaultMemberRole, defaultAdminNotifierRole)
+
+    ResourceType(ManagedGroupService.managedGroupTypeName, resourceActionPatterns, defaultRoles, ManagedGroupService.adminRoleName)
   }
 }
 

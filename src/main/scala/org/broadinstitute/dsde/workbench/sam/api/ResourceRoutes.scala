@@ -85,6 +85,17 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
                   }
                 }
               } ~
+              pathPrefix("authDomain") {
+                pathEndOrSingleSlash {
+                  get {
+                    requireAction(resource, SamResourceActions.readAuthDomain, userInfo.userId) {
+                      complete(resourceService.loadResourceAuthDomain(resource).map { response =>
+                        StatusCodes.OK -> response
+                      })
+                    }
+                  }
+                }
+              } ~
               pathPrefix("policies") {
                 pathEndOrSingleSlash {
                   get {

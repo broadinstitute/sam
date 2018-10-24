@@ -840,6 +840,39 @@ paths:
       tags:
         - Resources
 
+  /api/resources/v1/{resourceTypeName}/{resourceId}/authDomain:
+    get:
+      summary: List the groups in the Auth Domain for a resource
+      responses:
+        200:
+          description: List of groups that compose the Auth Domain for this resource. Empty if an Auth Domain has not been set
+          schema:
+            type: array
+            items:
+              type: string
+        403:
+          description: You do not have permission to perform this action on the resource
+        404:
+          description: Resource type or resource does not exist or you are not a member of any policy on the resource
+        500:
+          description: Internal Error
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      parameters:
+        - in: path
+          description: Type of resource
+          name: resourceTypeName
+          required: true
+          type: string
+        - in: path
+          description: Id of resource
+          name: resourceId
+          required: true
+          type: string
+      operationId: getAuthDomain
+      tags:
+        - Resources
+
   /api/resources/v1/{resourceTypeName}/{resourceId}/policies:
     get:
       summary: List the policies for a resource
