@@ -117,7 +117,7 @@ paths:
         403:
           description: You do not have admin privileges
         500:
-          description: Internal Error
+          description: Internal Server Error
           schema:
             $ref: '#/definitions/ErrorReport'
       parameters:
@@ -139,7 +139,7 @@ paths:
         403:
           description: You do not have admin privileges
         500:
-          description: Internal Error
+          description: Internal Server Error
           schema:
             $ref: '#/definitions/ErrorReport'
       parameters:
@@ -167,7 +167,7 @@ paths:
             items:
               $ref: '#/definitions/ResourceType'
         500:
-          description: Internal Error
+          description: Internal Server Error
           schema:
             $ref: '#/definitions/ErrorReport'
       summary: Lists available resource types
@@ -186,7 +186,7 @@ paths:
             items:
               $ref: '#/definitions/ManagedGroupMembershipEntry'
         500:
-          description: Internal Error
+          description: Internal Server Error
           schema:
             $ref: '#/definitions/ErrorReport'
       operationId: listGroupMemberships
@@ -205,7 +205,7 @@ paths:
         404:
           description: Group could not be found or you do not have the required permissions on this group
         500:
-          description: Internal Error
+          description: Internal Server Error
           schema:
             $ref: '#/definitions/ErrorReport'
       parameters:
@@ -225,7 +225,7 @@ paths:
         409:
           description: Group already exists
         500:
-          description: Internal Error
+          description: Internal Server Error
           schema:
             $ref: '#/definitions/ErrorReport'
       parameters:
@@ -245,7 +245,7 @@ paths:
         404:
           description: Group could not be found or you do not have the required permissions on this group
         500:
-          description: Internal Error
+          description: Internal Server Error
           schema:
             $ref: '#/definitions/ErrorReport'
       parameters:
@@ -267,7 +267,7 @@ paths:
         404:
           description: Group could not be found or you do not have the required permissions on this group
         500:
-          description: Internal Error
+          description: Internal Server Error
           schema:
             $ref: '#/definitions/ErrorReport'
       parameters:
@@ -287,7 +287,7 @@ paths:
         204:
           description: Successfully set access instructions
         500:
-          description: Internal Error
+          description: Internal Server Error
           schema:
             $ref: '#/definitions/ErrorReport'
       parameters:
@@ -311,7 +311,7 @@ paths:
         404:
           description: Group could not be found or you do not have the required permissions on this group
         500:
-          description: Internal Error
+          description: Internal Server Error
           schema:
             $ref: '#/definitions/ErrorReport'
       parameters:
@@ -335,7 +335,7 @@ paths:
         404:
           description: Group could not be found or you do not have the required permissions on this group
         500:
-          description: Internal Error
+          description: Internal Server Error
           schema:
             $ref: '#/definitions/ErrorReport'
       parameters:
@@ -361,7 +361,7 @@ paths:
         404:
           description: Group does not exist or you are not a member of the policy for the group
         500:
-          description: Internal Error
+          description: Internal Server Error
           schema:
             $ref: '#/definitions/ErrorReport'
       parameters:
@@ -399,7 +399,7 @@ paths:
         404:
           description: Group does not exist, policy does not exist, or subject with specified email was not found
         500:
-          description: Internal Error
+          description: Internal Server Error
           schema:
             $ref: '#/definitions/ErrorReport'
       parameters:
@@ -432,7 +432,7 @@ paths:
         404:
           description: Group does not exist or policy does not exist
         500:
-          description: Internal Error
+          description: Internal Server Error
           schema:
             $ref: '#/definitions/ErrorReport'
       parameters:
@@ -456,32 +456,6 @@ paths:
       tags:
         - Group
 
-  /api/google/v1/group/{groupName}/sync:
-    post:
-      summary: Synchronize a managed-group with google group
-      responses:
-        200:
-          description: Successfully synchronized group
-          schema:
-            $ref: '#/definitions/SyncReport'
-        404:
-          description: Group could not be found
-          schema:
-            $ref: '#/definitions/ErrorReport'
-        500:
-          description: Internal Error
-          schema:
-            $ref: '#/definitions/ErrorReport'
-      parameters:
-        - in: path
-          description: Name of group
-          name: groupName
-          required: true
-          type: string
-      operationId: syncManagedGroup
-      tags:
-        - Google
-
   /api/google/v1/petServiceAccount/{project}/{userEmail}:
     get:
       summary: gets a key for the user's pet service account, get_pet_private_key action on cloud-extension/google required
@@ -499,7 +473,7 @@ paths:
           schema:
             $ref: '#/definitions/ErrorReport'
         500:
-          description: Internal Error
+          description: Internal Server Error
           schema:
             $ref: '#/definitions/ErrorReport'
       parameters:
@@ -526,7 +500,7 @@ paths:
           schema:
             type: string
         500:
-          description: Internal Error
+          description: Internal Server Error
           schema:
             $ref: '#/definitions/ErrorReport'
       parameters:
@@ -546,7 +520,7 @@ paths:
         200:
           description: 'json format key for a pet service account, see https://cloud.google.com/iam/docs/creating-managing-service-account-keys'
         500:
-          description: Internal Error
+          description: Internal Server Error
           schema:
             $ref: '#/definitions/ErrorReport'
       operationId: getArbitraryPetServiceAccountKey
@@ -562,7 +536,7 @@ paths:
           schema:
             type: string
         500:
-          description: Internal Error
+          description: Internal Server Error
           schema:
             $ref: '#/definitions/ErrorReport'
       parameters:
@@ -583,7 +557,7 @@ paths:
         200:
           description: 'json format key for a pet service account, see https://cloud.google.com/iam/docs/creating-managing-service-account-keys'
         500:
-          description: Internal Error
+          description: Internal Server Error
           schema:
             $ref: '#/definitions/ErrorReport'
       parameters:
@@ -603,7 +577,7 @@ paths:
         204:
           description: 'user pet service account'
         500:
-          description: Internal Error
+          description: Internal Server Error
           schema:
             $ref: '#/definitions/ErrorReport'
       parameters:
@@ -630,7 +604,7 @@ paths:
           schema:
             type: string
         500:
-          description: Internal Error
+          description: Internal Server Error
           schema:
             $ref: '#/definitions/ErrorReport'
       parameters:
@@ -660,7 +634,7 @@ paths:
         404:
           description: 'user not found'
         500:
-          description: Internal Error
+          description: Internal Server Error
           schema:
             $ref: '#/definitions/ErrorReport'
       parameters:
@@ -682,7 +656,7 @@ paths:
           schema:
             $ref: '#/definitions/SyncReport'
         500:
-          description: Internal Error
+          description: Internal Server Error
           schema:
             $ref: '#/definitions/ErrorReport'
       parameters:
@@ -769,7 +743,7 @@ paths:
           schema:
             $ref: '#/definitions/ErrorReport'
         500:
-          description: Internal Error
+          description: Internal Server Error
           schema:
             $ref: '#/definitions/ErrorReport'
       parameters:
@@ -822,7 +796,7 @@ paths:
           schema:
             $ref: '#/definitions/ErrorReport'
         500:
-          description: Internal Error
+          description: Internal Server Error
           schema:
             $ref: '#/definitions/ErrorReport'
       parameters:
@@ -855,7 +829,7 @@ paths:
         404:
           description: Resource type or resource does not exist or you are not a member of any policy on the resource
         500:
-          description: Internal Error
+          description: Internal Server Error
           schema:
             $ref: '#/definitions/ErrorReport'
       parameters:
@@ -888,7 +862,7 @@ paths:
         404:
           description: Resource type does not exist or you are not a member of any policy on the resource
         500:
-          description: Internal Error
+          description: Internal Server Error
           schema:
             $ref: '#/definitions/ErrorReport'
       parameters:
@@ -919,7 +893,7 @@ paths:
         404:
           description: Resource type does not exist or you are not a member of any policy on the resource or the policy does not exist
         500:
-          description: Internal Error
+          description: Internal Server Error
           schema:
             $ref: '#/definitions/ErrorReport'
       parameters:
@@ -951,7 +925,7 @@ paths:
         404:
           description: Resource type does not exist or you are not a member of any policy on the resource
         500:
-          description: Internal Error
+          description: Internal Server Error
           schema:
             $ref: '#/definitions/ErrorReport'
       parameters:
@@ -993,7 +967,7 @@ paths:
         404:
           description: Resource type does not exist, you are not a member of any policy on the resource, or a member was not found
         500:
-          description: Internal Error
+          description: Internal Server Error
           schema:
             $ref: '#/definitions/ErrorReport'
       parameters:
@@ -1035,7 +1009,7 @@ paths:
         404:
           description: Resource type does not exist, you are not a member of any policy on the resource, or user was not found
         500:
-          description: Internal Error
+          description: Internal Server Error
           schema:
             $ref: '#/definitions/ErrorReport'
       parameters:
@@ -1074,7 +1048,7 @@ paths:
         404:
           description: Resource type does not exist, you are not a member of any policy on the resource, or user was not found
         500:
-          description: Internal Error
+          description: Internal Server Error
           schema:
             $ref: '#/definitions/ErrorReport'
       parameters:
@@ -1115,7 +1089,7 @@ paths:
         404:
           description: Resource type, resource, or policy do not exist
         500:
-          description: Internal Error
+          description: Internal Server Error
           schema:
             $ref: '#/definitions/ErrorReport'
       operationId: getPolicyPublic
@@ -1131,7 +1105,7 @@ paths:
         404:
           description: Resource type does not exist, you are not a member of any policy on the resource, or user is not permitted to set the public flag on resources of this type
         500:
-          description: Internal Error
+          description: Internal Server Error
           schema:
             $ref: '#/definitions/ErrorReport'
       parameters:
@@ -1173,7 +1147,7 @@ paths:
         404:
           description: Resource type does not exist
         500:
-          description: Internal Error
+          description: Internal Server Error
           schema:
             $ref: '#/definitions/ErrorReport'
       parameters:
@@ -1200,7 +1174,7 @@ paths:
           schema:
             type: boolean
         500:
-          description: Internal Error
+          description: Internal Server Error
           schema:
             $ref: '#/definitions/ErrorReport'
       parameters:
@@ -1236,7 +1210,7 @@ paths:
         404:
           description: User not found
         500:
-          description: Internal Error
+          description: Internal Server Error
           schema:
             $ref: '#/definitions/ErrorReport'
       parameters:
