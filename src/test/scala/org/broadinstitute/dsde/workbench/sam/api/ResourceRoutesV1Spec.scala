@@ -1155,5 +1155,21 @@ class ResourceRoutesV1Spec extends FlatSpec with Matchers with ScalatestRouteTes
 
     ResourceType(ManagedGroupService.managedGroupTypeName, resourceActionPatterns, defaultRoles, ManagedGroupService.adminRoleName)
   }
+
+  "GET /api/resources/v1/{resourceTypeName}/{resourceId}/allUsers" should "200 with all users list when user has list_all_users" in {
+
+  }
+
+  it should "403 when user does not have list_all_users action" in {
+
+  }
+
+  it should "404 when resource or resourceType does not exist" in {
+
+  }
+
+  it should "404 when user is not in any of the policies on the resource" in {
+
+  }
 }
 

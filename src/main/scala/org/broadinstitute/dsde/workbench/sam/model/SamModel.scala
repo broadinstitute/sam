@@ -75,6 +75,7 @@ object SamResourceActions {
   val setAccessInstructions = ResourceAction("set_access_instructions")
   val setPublic = ResourceAction("set_public")
   val readAuthDomain = ResourceAction("read_auth_domain")
+  val listAllUsers = ResourceAction("list_all_users")
 
   def sharePolicy(policy: AccessPolicyName) = ResourceAction(s"share_policy::${policy.value}")
   def readPolicy(policy: AccessPolicyName) = ResourceAction(s"read_policy::${policy.value}")

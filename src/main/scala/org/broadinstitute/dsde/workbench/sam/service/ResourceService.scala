@@ -392,4 +392,14 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     _ <- IO.fromFuture(IO(fireGroupUpdateNotification(policyId)))
     } yield ()
   }
+
+  def listResourceUsers(resourceId: FullyQualifiedResourceId): Future[Set[UserIdInfo]] = {
+    for {
+      accessPolicies <- accessPolicyDAO.listAccessPolicies(resourceId).unsafeToFuture()
+      members <- Future.traverse(accessPolicies) (accessPolicy => accessPolicyDAO.listFlattenedPolicyMembers(accessPolicy.id).unsafeToFuture())
+      workbenchUsers <- directoryDAO.loadUsers(members.flatten)
+    } yield {
+      workbenchUsers.map(user => UserIdInfo(user.id, user.email, user.googleSubjectId)).toSet
+    }
+  }
 }
