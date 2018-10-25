@@ -36,7 +36,7 @@ class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdenti
   }
 
   override def loadResourceAuthDomain(resource: FullyQualifiedResourceId): IO[Set[WorkbenchGroupName]] = IO.fromEither(resources.get(resource)
-    .toRight(new Exception(s"no resource $resource found in mock policy dao $resources")).map(_.authDomain))
+    .toRight(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"no resource $resource found in mock policy dao $resources"))).map(_.authDomain))
 
   override def listResourcesConstrainedByGroup(groupId: WorkbenchGroupIdentity): IO[Set[Resource]] = IO.pure(Set.empty)
 
