@@ -393,7 +393,7 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     } yield ()
   }
 
-  def listResourceUsers(resourceId: FullyQualifiedResourceId): Future[Set[UserIdInfo]] = {
+  def listAllFlattenedResourceUsers(resourceId: FullyQualifiedResourceId): Future[Set[UserIdInfo]] = {
     for {
       accessPolicies <- accessPolicyDAO.listAccessPolicies(resourceId).unsafeToFuture()
       members <- Future.traverse(accessPolicies) (accessPolicy => accessPolicyDAO.listFlattenedPolicyMembers(accessPolicy.id).unsafeToFuture())

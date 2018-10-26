@@ -728,4 +728,41 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
       service.initResourceTypes().unsafeRunSync()
     }
   }
+
+  "listAllFlattenedResourceUsers" should "return a flattened list of all of the users in any of a resource's policies" in {
+    val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId(UUID.randomUUID().toString))
+
+    service.createResourceType(defaultResourceType).unsafeRunSync()
+    runAndWait(service.createResource(defaultResourceType, resource.resourceId, dummyUserInfo))
+
+    val dummyUserIdInfo = runAndWait(dirDAO.loadUser(dummyUserInfo.userId)).map { user => UserIdInfo(user.id, user.email, user.googleSubjectId) }.get
+    val user1 = UserIdInfo(WorkbenchUserId("user1"), WorkbenchEmail("user1@fake.com"), None)
+    val user2 = UserIdInfo(WorkbenchUserId("user2"), WorkbenchEmail("user2@fake.com"), None)
+    val user3 = UserIdInfo(WorkbenchUserId("user3"), WorkbenchEmail("user3@fake.com"), None)
+    val user4 = UserIdInfo(WorkbenchUserId("user4"), WorkbenchEmail("user4@fake.com"), None)
+    val user5 = UserIdInfo(WorkbenchUserId("user5"), WorkbenchEmail("user5@fake.com"), None)
+    val user6 = UserIdInfo(WorkbenchUserId("user6"), WorkbenchEmail("user6@fake.com"), None)
+
+    runAndWait(dirDAO.createUser(WorkbenchUser(user1.userSubjectId, None, user1.userEmail)))
+    runAndWait(dirDAO.createUser(WorkbenchUser(user2.userSubjectId, None, user2.userEmail)))
+    runAndWait(dirDAO.createUser(WorkbenchUser(user3.userSubjectId, None, user3.userEmail)))
+    runAndWait(dirDAO.createUser(WorkbenchUser(user4.userSubjectId, None, user4.userEmail)))
+    runAndWait(dirDAO.createUser(WorkbenchUser(user5.userSubjectId, None, user5.userEmail)))
+    runAndWait(dirDAO.createUser(WorkbenchUser(user6.userSubjectId, None, user6.userEmail)))
+
+    val ownerPolicy = FullyQualifiedPolicyId(resource, AccessPolicyName("owner"))
+    runAndWait(service.addSubjectToPolicy(ownerPolicy, user1.userSubjectId))
+    runAndWait(service.addSubjectToPolicy(ownerPolicy, user2.userSubjectId))
+
+    val group1 = BasicWorkbenchGroup(WorkbenchGroupName("group1"), Set(user3.userSubjectId, user4.userSubjectId), WorkbenchEmail("group1@fake.com"))
+    val subGroup = BasicWorkbenchGroup(WorkbenchGroupName("subGroup"), Set(user6.userSubjectId), WorkbenchEmail("subgroup@fake.com"))
+    val group2 = BasicWorkbenchGroup(WorkbenchGroupName("group2"), Set(user5.userSubjectId, subGroup.id), WorkbenchEmail("group2@fake.com"))
+
+    runAndWait(dirDAO.createGroup(group1))
+    runAndWait(dirDAO.createGroup(subGroup))
+    runAndWait(dirDAO.createGroup(group2))
+    runAndWait(service.createPolicy(FullyQualifiedPolicyId(resource, AccessPolicyName("reader")), Set(group1.id, group2.id), Set.empty, Set.empty))
+
+    runAndWait(service.listAllFlattenedResourceUsers(resource)) should contain theSameElementsAs Set(dummyUserIdInfo, user1, user2, user3, user4, user5, user6)
+  }
 }

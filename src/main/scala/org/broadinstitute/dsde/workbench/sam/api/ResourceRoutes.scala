@@ -109,6 +109,11 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
                 pathEndOrSingleSlash {
                   getUserResourceRoles(resource, userInfo)
                 }
+              } ~
+              pathPrefix("allUsers") {
+                pathEndOrSingleSlash {
+                  getAllResourceUsers(resource, userInfo)
+                }
               }
             }
           }
@@ -243,6 +248,16 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
       complete(resourceService.listUserResourceRoles(resource, userInfo).map { roles =>
         StatusCodes.OK -> roles
       })
+    }
+  }
+
+  def getAllResourceUsers(resource: FullyQualifiedResourceId, userInfo: UserInfo): server.Route = {
+    get {
+      requireOneOfAction(resource, Set(SamResourceActions.readPolicies), userInfo.userId) {
+        complete(resourceService.listAllFlattenedResourceUsers(resource).map { allUsers =>
+          StatusCodes.OK -> allUsers
+        })
+      }
     }
   }
 }
