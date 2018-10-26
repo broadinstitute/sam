@@ -87,7 +87,7 @@ object Boot extends App with LazyLogging {
       case None => NoExtensions
     }
 
-    //TODO: reorganzie this a bit after https://github.com/broadinstitute/sam/pull/230
+    //TODO(Qi): reorganzie this a bit after https://github.com/broadinstitute/sam/pull/230
     def createSamRoutes(cloudExtensions: CloudExtensions, accessPolicyDAO: AccessPolicyDAO): (SamRoutes, UserService, ResourceService, StatusService, PolicyEvaluatorService) = {
       // TODO - https://broadinstitute.atlassian.net/browse/GAWB-3603
       // This should JUST get the value from "emailDomain", but for now we're keeping the backwards compatibility code to

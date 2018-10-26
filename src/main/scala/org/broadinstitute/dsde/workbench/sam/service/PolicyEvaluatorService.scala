@@ -18,9 +18,9 @@ class PolicyEvaluatorService(
     val policyName = AccessPolicyName("admin-notifier-set-public")
     accessPolicyDAO.createPolicy(AccessPolicy(
       FullyQualifiedPolicyId(FullyQualifiedResourceId(SamResourceTypes.resourceTypeAdminName, ResourceId("managed-group")), policyName),
-      Set.empty, //TODO: question: what should memebers be?
-      WorkbenchEmail("dummy@gmail.com"),
-      Set.empty, //TODO: what's right value for ResourceRoleName?
+      Set.empty,
+      WorkbenchEmail("dummy@gmail.com"), //TODO(Qi): make this valid google email domain after https://github.com/broadinstitute/sam/pull/230
+      Set.empty,
       Set(SamResourceActions.setPublicPolicy(policyName)),
       true
     )).void.recover{
