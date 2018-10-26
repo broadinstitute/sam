@@ -763,6 +763,6 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     runAndWait(dirDAO.createGroup(group2))
     runAndWait(service.createPolicy(FullyQualifiedPolicyId(resource, AccessPolicyName("reader")), Set(group1.id, group2.id), Set.empty, Set.empty))
 
-    runAndWait(service.listAllFlattenedResourceUsers(resource)) should contain theSameElementsAs Set(dummyUserIdInfo, user1, user2, user3, user4, user5, user6)
+    service.listAllFlattenedResourceUsers(resource).unsafeRunSync() should contain theSameElementsAs Set(dummyUserIdInfo, user1, user2, user3, user4, user5, user6)
   }
 }

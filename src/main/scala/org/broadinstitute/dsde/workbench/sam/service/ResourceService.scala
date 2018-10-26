@@ -393,11 +393,11 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     } yield ()
   }
 
-  def listAllFlattenedResourceUsers(resourceId: FullyQualifiedResourceId): Future[Set[UserIdInfo]] = {
+  def listAllFlattenedResourceUsers(resourceId: FullyQualifiedResourceId): IO[Set[UserIdInfo]] = {
     for {
-      accessPolicies <- accessPolicyDAO.listAccessPolicies(resourceId).unsafeToFuture()
-      members <- Future.traverse(accessPolicies) (accessPolicy => accessPolicyDAO.listFlattenedPolicyMembers(accessPolicy.id).unsafeToFuture())
-      workbenchUsers <- directoryDAO.loadUsers(members.flatten)
+      accessPolicies <- accessPolicyDAO.listAccessPolicies(resourceId)
+      members <- accessPolicies.toList.parTraverse(accessPolicy => accessPolicyDAO.listFlattenedPolicyMembers(accessPolicy.id))
+      workbenchUsers <- IO.fromFuture(IO(directoryDAO.loadUsers(members.toSet.flatten)))
     } yield {
       workbenchUsers.map(user => UserIdInfo(user.id, user.email, user.googleSubjectId)).toSet
     }
