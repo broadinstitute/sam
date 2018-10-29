@@ -23,8 +23,9 @@ class PolicyEvaluatorService(
       Set.empty,
       Set(SamResourceActions.setPublicPolicy(policyName)),
       true
-    )).void.recover{
-      case ldape: LDAPException if ldape.getResultCode == ResultCode.ENTRY_ALREADY_EXISTS => ()
+    )).void.recoverWith{
+      case ldape: LDAPException if ldape.getResultCode == ResultCode.ENTRY_ALREADY_EXISTS =>
+        IO(logger.debug(s"$policyName has already created"))
     }
   }
 
