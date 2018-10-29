@@ -25,7 +25,7 @@ class PolicyEvaluatorService(
       true
     )).void.recoverWith{
       case ldape: LDAPException if ldape.getResultCode == ResultCode.ENTRY_ALREADY_EXISTS =>
-        IO(logger.debug(s"$policyName has already created"))
+        IO(logger.debug(s"$policyName has already been created"))
     }
   }
 
