@@ -21,7 +21,8 @@ import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, MockAccess
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
 import org.scalatest.prop.{Configuration, PropertyChecks}
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.{FlatSpec, Matchers, OneInstancePerTest, Suite}
+import org.scalatest.mockito.MockitoSugar
 import StandardUserInfoDirectives._
 import cats.kernel.Eq
 import org.scalatest.concurrent.PatienceConfiguration.Timeout
@@ -106,3 +107,11 @@ object TestSupport extends TestSupport{
 }
 
 final case class SamDependencies(resourceService: ResourceService, policyEvaluatorService: PolicyEvaluatorService, userService: UserService, statusService: StatusService, managedGroupService: ManagedGroupService, directoryDAO: MockDirectoryDAO, policyDao: AccessPolicyDAO, val cloudExtensions: CloudExtensions)
+
+/**
+  * Convenience mash-up of MockitoSugar and OneInstancePerTest. Mockito mocks are stateful and
+  * therefore must not be shared between tests. Using OneInstancePerTest creates test case isolation
+  * whice allowing mocks to be instance variables as opposed to the extra ceremony of fixture
+  * factory functions.
+  */
+trait MockitoSafety extends MockitoSugar with OneInstancePerTest { self: Suite => }

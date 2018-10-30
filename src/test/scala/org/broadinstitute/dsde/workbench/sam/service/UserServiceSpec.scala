@@ -20,7 +20,6 @@ import org.broadinstitute.dsde.workbench.sam.service.UserService._
 import org.mockito.ArgumentMatchers._
 import org.mockito.Mockito._
 import org.scalatest.concurrent.ScalaFutures
-import org.scalatest.mockito.MockitoSugar
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FlatSpec, Matchers}
 import TestSupport.eqWorkbenchExceptionErrorReport
 import cats.kernel.Eq
@@ -33,7 +32,7 @@ import scala.concurrent.{ExecutionContext, Future}
 /**
   * Created by rtitle on 10/6/17.
   */
-class UserServiceSpec extends FlatSpec with Matchers with TestSupport with MockitoSugar
+class UserServiceSpec extends FlatSpec with Matchers with TestSupport with MockitoSafety
   with BeforeAndAfter with BeforeAndAfterAll with ScalaFutures {
 
   override implicit val patienceConfig = PatienceConfig(timeout = scaled(5.seconds))

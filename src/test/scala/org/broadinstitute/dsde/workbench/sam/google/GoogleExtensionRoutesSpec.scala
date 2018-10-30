@@ -19,7 +19,6 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.mockito.ArgumentMatchers._
 import org.mockito.Mockito._
-import org.scalatest.mockito.MockitoSugar
 import org.scalatest.{FlatSpec, Matchers}
 import org.broadinstitute.dsde.workbench.sam.api.StandardUserInfoDirectives._
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
@@ -235,7 +234,7 @@ class GoogleExtensionRoutesSpec extends GoogleExtensionRoutesSpecHelper with Sca
   }
 }
 
-trait GoogleExtensionRoutesSpecHelper extends FlatSpec with Matchers with ScalatestRouteTest with TestSupport with MockitoSugar{
+trait GoogleExtensionRoutesSpecHelper extends FlatSpec with Matchers with ScalatestRouteTest with TestSupport with MockitoSafety {
   val defaultUserId = genWorkbenchUserId(System.currentTimeMillis())
   val defaultUserEmail = genNonPetEmail.sample.get
   /* Re-enable this code and remove the temporary code below after fixing rawls for GAWB-2933

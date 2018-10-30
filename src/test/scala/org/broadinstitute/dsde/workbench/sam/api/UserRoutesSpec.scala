@@ -16,7 +16,6 @@ import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.UserService.genRandom
 import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, NoExtensions, StatusService, UserService}
-import org.scalatest.mockito.MockitoSugar
 import org.scalatest.{FlatSpec, Matchers}
 
 import scala.concurrent.Future
@@ -165,7 +164,7 @@ class UserRoutesSpec extends UserRoutesSpecHelper {
   }
 }
 
-trait UserRoutesSpecHelper extends FlatSpec with Matchers with ScalatestRouteTest with MockitoSugar with TestSupport{
+trait UserRoutesSpecHelper extends FlatSpec with Matchers with ScalatestRouteTest with MockitoSafety with TestSupport{
   val defaultUserId = WorkbenchUserId("newuser")
   val defaultUserEmail = WorkbenchEmail("newuser@new.com")
 
