@@ -44,7 +44,7 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
           // make sure resource type admin is added first because the rest depends on it
           createdAdminType <- createResourceType(resourceTypeAdmin)
 
-          result <- resourceTypes.values.toList.filterNot(_.name == SamResourceTypes.resourceTypeAdminName).parTraverse { rt =>
+          result <- resourceTypes.values.filterNot(_.name == SamResourceTypes.resourceTypeAdminName).toList.parTraverse { rt =>
             for {
               _ <- createResourceType(rt)
               policy = ValidatableAccessPolicy(AccessPolicyName(resourceTypeAdmin.ownerRoleName.value), Map.empty, Set(resourceTypeAdmin.ownerRoleName), Set.empty)

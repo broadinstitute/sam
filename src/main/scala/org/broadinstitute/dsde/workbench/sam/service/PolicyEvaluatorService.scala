@@ -3,6 +3,7 @@ package org.broadinstitute.dsde.workbench.sam.service
 import cats.effect.IO
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
+import com.unboundid.ldap.sdk.{LDAPException, ResultCode}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.AccessPolicyDAO
@@ -13,6 +14,21 @@ class PolicyEvaluatorService(
     private val resourceTypes: Map[ResourceTypeName, ResourceType],
     private val accessPolicyDAO: AccessPolicyDAO)(implicit val executionContext: ExecutionContext)
     extends LazyLogging {
+  def initPolicy(): IO[Unit] = {
+    val policyName = AccessPolicyName("admin-notifier-set-public")
+    accessPolicyDAO.createPolicy(AccessPolicy(
+      FullyQualifiedPolicyId(FullyQualifiedResourceId(SamResourceTypes.resourceTypeAdminName, ResourceId("managed-group")), policyName),
+      Set.empty,
+      WorkbenchEmail("dummy@gmail.com"), //TODO(Qi): make this valid google email domain after https://github.com/broadinstitute/sam/pull/230
+      Set.empty,
+      Set(SamResourceActions.setPublicPolicy(policyName)),
+      true
+    )).void.recoverWith{
+      case ldape: LDAPException if ldape.getResultCode == ResultCode.ENTRY_ALREADY_EXISTS =>
+        IO(logger.debug(s"$policyName has already been created"))
+    }
+  }
+
   def hasPermission(resource: FullyQualifiedResourceId, action: ResourceAction, userId: WorkbenchUserId): IO[Boolean] =
     listUserResourceActions(resource, userId).map { _.contains(action) }
 

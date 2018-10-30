@@ -87,8 +87,8 @@ object Boot extends App with LazyLogging {
       case None => NoExtensions
     }
 
-
-    def createSamRoutes(cloudExtensions: CloudExtensions, accessPolicyDAO: AccessPolicyDAO): (SamRoutes, UserService, ResourceService, StatusService) = {
+    //TODO(Qi): reorganzie this a bit after https://github.com/broadinstitute/sam/pull/230
+    def createSamRoutes(cloudExtensions: CloudExtensions, accessPolicyDAO: AccessPolicyDAO): (SamRoutes, UserService, ResourceService, StatusService, PolicyEvaluatorService) = {
       // TODO - https://broadinstitute.atlassian.net/browse/GAWB-3603
       // This should JUST get the value from "emailDomain", but for now we're keeping the backwards compatibility code to
       // fall back to getting the "googleServices.appsDomain"
@@ -107,7 +107,7 @@ object Boot extends App with LazyLogging {
           }
         case _ => new SamRoutes(resourceService, userService, statusService, managedGroupService, config.as[SwaggerConfig]("swagger"), directoryDAO, policyEvaluatorService) with StandardUserInfoDirectives with NoExtensionRoutes
       }
-      (samRoutes, userService, resourceService, statusService)
+      (samRoutes, userService, resourceService, statusService, policyEvaluatorService)
     }
 
     for {
@@ -125,12 +125,14 @@ object Boot extends App with LazyLogging {
           implicit val cs = IO.contextShift(scala.concurrent.ExecutionContext.Implicits.global)
           val accessPolicyDao = new LdapAccessPolicyDAO(ldapConnectionPool, directoryConfig, blockingEc)
           val cloudExtension = createCloudExt(accessPolicyDao)
-          val (sRoutes, userService, resourceService, statusService) = createSamRoutes(cloudExtension, accessPolicyDao)
+          val (sRoutes, userService, resourceService, statusService, policyService) = createSamRoutes(cloudExtension, accessPolicyDao)
 
           for{
             _ <- resourceService.initResourceTypes().handleErrorWith{
               case t: Throwable => IO(logger.error("FATAL - failure starting http server", t)) *> IO.raiseError(t)
             }
+
+            _ <- policyService.initPolicy()
 
             _ <- IO.fromFuture(IO(cloudExtension.onBoot(SamApplication(userService, resourceService, statusService))))
 
