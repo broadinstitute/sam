@@ -72,8 +72,8 @@ object Generator {
     email <- genNonPetEmail
   } yield BasicWorkbenchGroup(id, subject, email)
 
-  val genResourceTypeName: Gen[ResourceTypeName] = Gen.oneOf("workspace", "managed-group", "workflow-collection", "caas", "billing-project", "notebook-cluster", "cloud-extension", "dockstore-tool").map(ResourceTypeName.apply)
-  val genResourceTypeNameExcludeManagedGroup: Gen[ResourceTypeName] = Gen.oneOf("workspace", "workflow-collection", "caas", "billing-project", "notebook-cluster", "cloud-extension", "dockstore-tool").map(ResourceTypeName.apply)
+  val genResourceTypeName: Gen[ResourceTypeName] = Gen.oneOf("workspace", "managed-group", "workflow-collection", "caas", "billing-project", "notebook-cluster", "cloud-extension", "dockstore-tool", "entity-collection").map(ResourceTypeName.apply)
+  val genResourceTypeNameExcludeManagedGroup: Gen[ResourceTypeName] = Gen.oneOf("workspace", "workflow-collection", "caas", "billing-project", "notebook-cluster", "cloud-extension", "dockstore-tool", "entity-collection").map(ResourceTypeName.apply)
   val genResourceId : Gen[ResourceId] = Gen.uuid.map(x => ResourceId(x.toString))
   val genAccessPolicyName : Gen[AccessPolicyName] = Gen.oneOf("member", "admin", "admin-notifier").map(AccessPolicyName.apply) //there might be possible values
   def genAuthDomains: Gen[Set[WorkbenchGroupName]] = Gen.listOfN[ResourceId](3, genResourceId).map(x => x.map(v => WorkbenchGroupName(v.value)).toSet) //make it a list of 3 items so that unit test won't time out
