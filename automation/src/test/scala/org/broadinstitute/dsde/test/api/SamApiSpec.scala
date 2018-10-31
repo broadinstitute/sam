@@ -421,6 +421,103 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
           .getOrElse(Set.empty) should contain theSameElementsAs Set(user1Proxy.value, user3Proxy.value),
         5.minutes, 5.seconds)
     }
+
+    "should only synchronize the intersection group for policies constrained by auth domains" in {
+      implicit val ec: ExecutionContextExecutor = ExecutionContext.global
+      val authDomainId = UUID.randomUUID.toString
+      val Seq(inPolicyUser: Credentials, inAuthDomainUser: Credentials, inBothUser: Credentials) = UserPool.chooseStudents(3)
+      val inBothUserAuthToken = inBothUser.makeAuthToken()
+      val Seq(inPolicyUserProxy: WorkbenchEmail, inAuthDomainUserProxy: WorkbenchEmail, inBothUserProxy: WorkbenchEmail) = Seq(inPolicyUser, inAuthDomainUser, inBothUser).map {
+        user => Sam.user.proxyGroup(user.email)(inBothUserAuthToken)
+      }
+
+      Sam.user.createGroup(authDomainId)(inBothUserAuthToken)
+      register cleanUp Sam.user.deleteGroup(authDomainId)(inBothUserAuthToken)
+
+      val authDomainPolicies = Sam.user.listResourcePolicies("managed-group", authDomainId)(inBothUserAuthToken)
+      val authDomainAdminEmail = for {
+        policy <- authDomainPolicies if policy.policy.memberEmails.nonEmpty
+      } yield {
+        policy.email
+      }
+      assert(authDomainAdminEmail.size == 1) // Only the admin policy should be non-empty after creation
+
+      // make sure group has been created properly
+      awaitAssert(
+        Await.result(googleDirectoryDAO.listGroupMembers(authDomainAdminEmail.head), 5.minutes)
+          .getOrElse(Set.empty) should contain theSameElementsAs Set(inBothUserProxy.value),
+        1.minutes, 5.seconds)
+
+      Sam.user.setPolicyMembers(authDomainId, "admin", Set(inAuthDomainUser.email, inAuthDomainUser.email))(inBothUserAuthToken)
+      awaitAssert(
+        Await.result(googleDirectoryDAO.listGroupMembers(authDomainAdminEmail.head), 5.minutes)
+          .getOrElse(Set.empty) should contain theSameElementsAs Set(inBothUserProxy.value, inAuthDomainUserProxy.value),
+        1.minutes, 5.seconds)
+
+      val resourceTypeName = "workspace"
+      val resourceId = UUID.randomUUID.toString
+      val policies = Map("owner" -> AccessPolicyMembership(Set(WorkbenchEmail(inPolicyUser.email), WorkbenchEmail(inBothUser.email)), Set.empty, Set.empty))
+      val resourceRequest = CreateResourceRequest(resourceId, policies, Set.empty)
+
+      Sam.user.createResource(resourceTypeName, resourceRequest)(inBothUserAuthToken)
+      register cleanUp Sam.user.deleteResource(resourceTypeName, resourceId)(inBothUserAuthToken)
+
+      Sam.user.syncPolicy(resourceTypeName, resourceId, "owner")(inBothUserAuthToken)
+
+      val resourcePolicies = Sam.user.listResourcePolicies(resourceTypeName, resourceId)(inBothUserAuthToken)
+      val resourceOwnerEmail = for {
+        policy <- resourcePolicies if policy.policy.memberEmails.nonEmpty
+      } yield {
+        policy.email
+      }
+      assert(resourceOwnerEmail.size == 1) // Only the owner policy should be non-empty after creation
+
+      awaitAssert(
+        Await.result(googleDirectoryDAO.listGroupMembers(resourceOwnerEmail.head), 5.minutes)
+          .getOrElse(Set.empty) should contain theSameElementsAs Set(inBothUserProxy.value),
+        1.minutes, 5.seconds)
+      // create resource with authDomain as it's auth domain                        POST /api/resources/v1/{resourceTypeName}
+      // update policy of resource so membership is inPolicyUser and inBothUser     Sam.user.setPolicyMembers(resourceId, policyName, Set[users])
+      // sync policy with google                                                    POST /api/google/v1/resource/{resourceTypeName}/{resourceId}/{policyName}/sync
+      // check that google only knows about inBothUser
+    }
+
+    "should synchronize the all users group for public policies" in {
+      val resourceId = UUID.randomUUID.toString
+      val Seq(user1: Credentials, user2: Credentials) = UserPool.chooseStudents(2)
+      val user1AuthToken = user1.makeAuthToken()
+      val Seq(user1Proxy: WorkbenchEmail, user2Proxy: WorkbenchEmail) = Seq(user1, user2).map(user => Sam.user.proxyGroup(user.email)(user1AuthToken))
+
+      val resourceTypeName = "workspace"
+      val ownerPolicyName = "owner"
+      val readerPolicyName = "reader"
+
+      val policies = Map(ownerPolicyName -> AccessPolicyMembership(Set(WorkbenchEmail(user1.email)), Set.empty, Set.empty), readerPolicyName -> AccessPolicyMembership(Set(WorkbenchEmail(user2.email)), Set.empty, Set.empty))
+      val resourceRequest = CreateResourceRequest(resourceId, policies, Set.empty)
+
+      Sam.user.createResource(resourceTypeName, resourceRequest)(user1AuthToken)
+      register cleanUp Sam.user.deleteResource(resourceTypeName, resourceId)(user1AuthToken)
+
+      Sam.user.makePolicyPublic(resourceTypeName, resourceId, ownerPolicyName)(user1AuthToken)
+      Sam.user.syncPolicy(resourceTypeName, resourceId, ownerPolicyName)(user1AuthToken)
+
+      val resourcePolicies = Sam.user.listResourcePolicies(resourceTypeName, resourceId)(user1AuthToken)
+      val resourceOwnerEmail = for {
+        policy <- resourcePolicies if policy.policy.memberEmails.nonEmpty
+      } yield {
+        policy.email
+      }
+      assert(resourceOwnerEmail.size == 1) // Only the owner policy should be non-empty after creation
+
+      awaitAssert(
+        Await.result(googleDirectoryDAO.listGroupMembers(resourceOwnerEmail.head), 5.minutes)
+          .getOrElse(Set.empty) should contain theSameElementsAs Set(user1Proxy.value, user2Proxy.value),
+        5.minutes, 5.seconds)
+      // create default resource                               POST /api/resources/v1/{resourceTypeName}/{resourceId} // alternatively, just use the other resource creation endpoint
+      // set resource/specific policy to be public             PUT  /api/resources/v1/{resourceTypeName}/{resourceId}/policies/{policyName}/public
+      // synchronize that policy or resource with google       POST /api/google/v1/resource/{resourceTypeName}/{resourceId}/{policyName}/sync
+      // check that google knows about the all users group... honestly not sure what this will look like... just the group's email? probably
+    }
   }
 
   private def getFieldFromJson(jsonKey: String, field: String): String = {
