@@ -11,6 +11,7 @@ import org.broadinstitute.dsde.workbench.sam.openam.AccessPolicyDAO
 import scala.concurrent.ExecutionContext
 
 class PolicyEvaluatorService(
+    private val emailDomain: String,
     private val resourceTypes: Map[ResourceTypeName, ResourceType],
     private val accessPolicyDAO: AccessPolicyDAO)(implicit val executionContext: ExecutionContext)
     extends LazyLogging {
@@ -19,7 +20,7 @@ class PolicyEvaluatorService(
     accessPolicyDAO.createPolicy(AccessPolicy(
       FullyQualifiedPolicyId(FullyQualifiedResourceId(SamResourceTypes.resourceTypeAdminName, ResourceId("managed-group")), policyName),
       Set.empty,
-      WorkbenchEmail("dummy@gmail.com"), //TODO(Qi): make this valid google email domain after https://github.com/broadinstitute/sam/pull/230
+      WorkbenchEmail(s"dummy@$emailDomain"),
       Set.empty,
       Set(SamResourceActions.setPublicPolicy(policyName)),
       true
@@ -111,7 +112,7 @@ class PolicyEvaluatorService(
 }
 
 object PolicyEvaluatorService {
-  def apply(resourceTypes: Map[ResourceTypeName, ResourceType], accessPolicyDAO: AccessPolicyDAO)(
+  def apply(emailDomain: String, resourceTypes: Map[ResourceTypeName, ResourceType], accessPolicyDAO: AccessPolicyDAO)(
       implicit executionContext: ExecutionContext): PolicyEvaluatorService =
-    new PolicyEvaluatorService(resourceTypes, accessPolicyDAO)
+    new PolicyEvaluatorService(emailDomain, resourceTypes, accessPolicyDAO)
 }

@@ -9,9 +9,9 @@ import org.broadinstitute.dsde.workbench.model.google._
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchEmail, WorkbenchExceptionWithErrorReport, WorkbenchUser}
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.api.{ExtensionRoutes, SecurityDirectives, UserInfoDirectives}
+import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.CloudExtensions
-import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import spray.json.DefaultJsonProtocol._
 import spray.json.JsString
 

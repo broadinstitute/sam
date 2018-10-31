@@ -12,14 +12,15 @@ object Dependencies {
   val workbenchModelV  = "0.12-a19203d"
   val workbenchGoogleV = "0.16-0245949"
   val workbenchNotificationsV = "0.1-f2a0020"
-  val monocleVersion = "1.5.0-cats"
-  val catsEffectVersion = "1.0.0"
+  val monocleVersion = "1.5.1-cats"
 
   val excludeAkkaActor =        ExclusionRule(organization = "com.typesafe.akka", name = "akka-actor_2.12")
   val excludeWorkbenchUtil =    ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-util_2.12")
   val excludeWorkbenchModel =   ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-model_2.12")
   val excludeWorkbenchMetrics = ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-metrics_2.12")
   val excludeWorkbenchGoogle =  ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-google_2.12")
+
+  val catseffect: ModuleID =  "org.typelevel" %% "cats-effect" % "1.0.0" //TODO: remove this once workbenchGoogleV is upgrade
 
   val jacksonAnnotations: ModuleID = "com.fasterxml.jackson.core" % "jackson-annotations" % jacksonV
   val jacksonDatabind: ModuleID =    "com.fasterxml.jackson.core" % "jackson-databind"    % jacksonV
@@ -42,7 +43,6 @@ object Dependencies {
 
   val googleOAuth2: ModuleID = "com.google.auth" % "google-auth-library-oauth2-http" % "0.9.0"
 
-  val catseffect: ModuleID =  "org.typelevel" %% "cats-effect" % catsEffectVersion
   val monocle: ModuleID = "com.github.julien-truffaut" %%  "monocle-core"  % monocleVersion
   val monocleMacro: ModuleID = "com.github.julien-truffaut" %%  "monocle-macro" % monocleVersion
 

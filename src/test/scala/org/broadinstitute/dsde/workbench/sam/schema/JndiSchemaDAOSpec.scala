@@ -1,22 +1,19 @@
 package org.broadinstitute.dsde.workbench.sam.schema
 
-import com.typesafe.config.ConfigFactory
-import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
-import org.broadinstitute.dsde.workbench.sam.config.{DirectoryConfig, SchemaLockConfig}
 import org.broadinstitute.dsde.workbench.sam.schema.SchemaStatus._
-import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FlatSpec, Matchers, Tag}
+import org.scalatest.{Ignore => _, _}
 
-import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Await
+import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.Duration
 
 /**
   * Created by mbemis on 3/12/18.
   */
 class JndiSchemaDAOSpec extends FlatSpec with Matchers with TestSupport with BeforeAndAfter with BeforeAndAfterAll {
-  val directoryConfig = ConfigFactory.load().as[DirectoryConfig]("directory")
-  val schemaLockConfig = ConfigFactory.load().as[SchemaLockConfig]("schemaLock")
+  val directoryConfig = TestSupport.appConfig.directoryConfig
+  val schemaLockConfig = TestSupport.appConfig.schemaLockConfig
   val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
   override protected def beforeAll(): Unit = {

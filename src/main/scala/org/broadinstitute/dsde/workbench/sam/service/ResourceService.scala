@@ -251,7 +251,7 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
 
   private def mapEmailsToSubjects(workbenchEmails: Set[WorkbenchEmail]): Future[Map[WorkbenchEmail, Option[WorkbenchSubject]]] = {
     val eventualSubjects = workbenchEmails.map { workbenchEmail =>
-      directoryDAO.loadSubjectFromEmail(workbenchEmail).map(workbenchEmail -> _)
+      directoryDAO.loadSubjectFromEmail(workbenchEmail).unsafeToFuture().map(workbenchEmail -> _)
     }
 
     Future.sequence(eventualSubjects).map(_.toMap)

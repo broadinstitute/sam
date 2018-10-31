@@ -2,6 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.directory
 
 import java.util.Date
 
+import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google._
 import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
@@ -13,7 +14,7 @@ import scala.concurrent.Future
   */
 trait DirectoryDAO {
   def createGroup(group: BasicWorkbenchGroup, accessInstructionsOpt: Option[String] = None): Future[BasicWorkbenchGroup]
-  def loadGroup(groupName: WorkbenchGroupName): Future[Option[BasicWorkbenchGroup]]
+  def loadGroup(groupName: WorkbenchGroupName): IO[Option[BasicWorkbenchGroup]]
   def loadGroups(groupNames: Set[WorkbenchGroupName]): Future[Seq[BasicWorkbenchGroup]]
   def loadGroupEmail(groupName: WorkbenchGroupName): Future[Option[WorkbenchEmail]]
   def batchLoadGroupEmail(groupNames: Set[WorkbenchGroupName]): Future[Seq[(WorkbenchGroupName, WorkbenchEmail)]]
@@ -32,13 +33,13 @@ trait DirectoryDAO {
   def getSynchronizedDate(groupId: WorkbenchGroupIdentity): Future[Option[Date]]
   def getSynchronizedEmail(groupId: WorkbenchGroupIdentity): Future[Option[WorkbenchEmail]]
 
-  def loadSubjectFromEmail(email: WorkbenchEmail): Future[Option[WorkbenchSubject]]
+  def loadSubjectFromEmail(email: WorkbenchEmail): IO[Option[WorkbenchSubject]]
   def loadSubjectEmail(subject: WorkbenchSubject): Future[Option[WorkbenchEmail]]
   def loadSubjectEmails(subjects: Set[WorkbenchSubject]): Future[Set[WorkbenchEmail]]
-  def loadSubjectFromGoogleSubjectId(googleSubjectId: GoogleSubjectId): Future[Option[WorkbenchSubject]]
+  def loadSubjectFromGoogleSubjectId(googleSubjectId: GoogleSubjectId): IO[Option[WorkbenchSubject]]
 
   def createUser(user: WorkbenchUser): Future[WorkbenchUser]
-  def loadUser(userId: WorkbenchUserId): Future[Option[WorkbenchUser]]
+  def loadUser(userId: WorkbenchUserId): IO[Option[WorkbenchUser]]
   def loadUsers(userIds: Set[WorkbenchUserId]): Future[Seq[WorkbenchUser]]
   def deleteUser(userId: WorkbenchUserId): Future[Unit]
   def addProxyGroup(userId: WorkbenchUserId, proxyEmail: WorkbenchEmail): Future[Unit]
@@ -48,17 +49,17 @@ trait DirectoryDAO {
   def listIntersectionGroupUsers(groupId: Set[WorkbenchGroupIdentity]): Future[Set[WorkbenchUserId]]
   def listAncestorGroups(groupId: WorkbenchGroupIdentity): Future[Set[WorkbenchGroupIdentity]]
 
-  def enableIdentity(subject: WorkbenchSubject): Future[Unit]
+  def enableIdentity(subject: WorkbenchSubject): IO[Unit]
   def disableIdentity(subject: WorkbenchSubject): Future[Unit]
-  def isEnabled(subject: WorkbenchSubject): Future[Boolean]
+  def isEnabled(subject: WorkbenchSubject): IO[Boolean]
 
-  def getUserFromPetServiceAccount(petSA: ServiceAccountSubjectId):Future[Option[WorkbenchUser]]
-  def createPetServiceAccount(petServiceAccount: PetServiceAccount): Future[PetServiceAccount]
-  def loadPetServiceAccount(petServiceAccountId: PetServiceAccountId): Future[Option[PetServiceAccount]]
+  def getUserFromPetServiceAccount(petSA: ServiceAccountSubjectId):IO[Option[WorkbenchUser]]
+  def createPetServiceAccount(petServiceAccount: PetServiceAccount): IO[PetServiceAccount]
+  def loadPetServiceAccount(petServiceAccountId: PetServiceAccountId): IO[Option[PetServiceAccount]]
   def deletePetServiceAccount(petServiceAccountId: PetServiceAccountId): Future[Unit]
   def getAllPetServiceAccountsForUser(userId: WorkbenchUserId): Future[Seq[PetServiceAccount]]
-  def updatePetServiceAccount(petServiceAccount: PetServiceAccount): Future[PetServiceAccount]
+  def updatePetServiceAccount(petServiceAccount: PetServiceAccount): IO[PetServiceAccount]
   def getManagedGroupAccessInstructions(groupName: WorkbenchGroupName): Future[Option[String]]
-  def setManagedGroupAccessInstructions(groupName: WorkbenchGroupName, accessInstructions: String): Future[Unit]
-  def setGoogleSubjectId(userId: WorkbenchUserId, googleSubjectId: GoogleSubjectId): Future[Unit]
+  def setManagedGroupAccessInstructions(groupName: WorkbenchGroupName, accessInstructions: String): IO[Unit]
+  def setGoogleSubjectId(userId: WorkbenchUserId, googleSubjectId: GoogleSubjectId): IO[Unit]
 }

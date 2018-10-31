@@ -5,9 +5,8 @@ import java.util.Date
 
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
-//import cats.effect.IO
-//import cats.implicits._
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
+import cats.effect.IO
 import com.google.api.client.googleapis.json.GoogleJsonResponseException
 import com.google.auth.oauth2.ServiceAccountCredentials
 import com.typesafe.scalalogging.LazyLogging
@@ -22,14 +21,15 @@ import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.api.CreateWorkbenchUser
 import org.broadinstitute.dsde.workbench.sam.config.{GoogleServicesConfig, PetServiceAccountConfig}
 import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
+import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.AccessPolicyDAO
+import org.broadinstitute.dsde.workbench.sam.service.UserService._
 import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, SamApplication}
 import org.broadinstitute.dsde.workbench.util.health.{HealthMonitor, SubsystemStatus, Subsystems}
 import org.broadinstitute.dsde.workbench.util.{FutureSupport, Retry}
-import org.broadinstitute.dsde.workbench.sam.service.UserService._
 import spray.json._
-import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
+
 import scala.collection.JavaConverters._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success, Try}
@@ -39,7 +39,7 @@ object GoogleExtensions {
   val getPetPrivateKeyAction = ResourceAction("get_pet_private_key")
 }
 
-class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: AccessPolicyDAO, val googleDirectoryDAO: GoogleDirectoryDAO, val googlePubSubDAO: GooglePubSubDAO, val googleIamDAO: GoogleIamDAO, val googleStorageDAO: GoogleStorageDAO, val googleProjectDAO: GoogleProjectDAO, val googleKeyCache: GoogleKeyCache, val notificationDAO: NotificationDAO, val googleServicesConfig: GoogleServicesConfig, val petServiceAccountConfig: PetServiceAccountConfig, val resourceTypes: Map[ResourceTypeName, ResourceType])(implicit val system: ActorSystem, executionContext: ExecutionContext) extends LazyLogging with FutureSupport with CloudExtensions with Retry {
+class GoogleExtensions(directoryDAO: DirectoryDAO, val accessPolicyDAO: AccessPolicyDAO, val googleDirectoryDAO: GoogleDirectoryDAO, val googlePubSubDAO: GooglePubSubDAO, val googleIamDAO: GoogleIamDAO, val googleStorageDAO: GoogleStorageDAO, val googleProjectDAO: GoogleProjectDAO, val googleKeyCache: GoogleKeyCache, val notificationDAO: NotificationDAO, val googleServicesConfig: GoogleServicesConfig, val petServiceAccountConfig: PetServiceAccountConfig, val resourceTypes: Map[ResourceTypeName, ResourceType])(implicit val system: ActorSystem, executionContext: ExecutionContext) extends LazyLogging with FutureSupport with CloudExtensions with Retry {
 
   private val maxGroupEmailLength = 64
 
@@ -76,7 +76,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
     googleDirectoryDAO.isGroupMember(WorkbenchEmail(s"fc-admins@${googleServicesConfig.appsDomain}"), memberEmail) recoverWith { case t => throw new WorkbenchException("Unable to query for admin status.", t) }
   }
 
-  override def onBoot(samApplication: SamApplication)(implicit system: ActorSystem): Future[Unit] = {
+  override def onBoot(samApplication: SamApplication)(implicit system: ActorSystem): IO[Unit] = {
     system.actorOf(GoogleGroupSyncMonitorSupervisor.props(
       googleServicesConfig.groupSyncPollInterval,
       googleServicesConfig.groupSyncPollJitter,
@@ -94,21 +94,21 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
 
       subject <- directoryDAO.loadSubjectFromGoogleSubjectId(GoogleSubjectId(googleServicesConfig.serviceAccountClientId)) //dirty temporary code TODO: this call should be removed after https://broadinstitute.atlassian.net/browse/GAWB-3747
       serviceAccountUserInfo <- subject match{
-        case Some(uid: WorkbenchUserId) => Future.successful(UserInfo(OAuth2BearerToken(""), uid, googleServicesConfig.serviceAccountClientEmail, 0))
-        case Some(_) => Future.failed(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"subjectId in configration ${googleServicesConfig.serviceAccountClientId} is not a valid user")))
-        case None => Future.successful(UserInfo(OAuth2BearerToken(""), genWorkbenchUserId(System.currentTimeMillis()), googleServicesConfig.serviceAccountClientEmail, 0))
+        case Some(uid: WorkbenchUserId) => IO.pure(UserInfo(OAuth2BearerToken(""), uid, googleServicesConfig.serviceAccountClientEmail, 0))
+        case Some(_) => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"subjectId in configration ${googleServicesConfig.serviceAccountClientId} is not a valid user")))
+        case None => IO.pure(UserInfo(OAuth2BearerToken(""), genWorkbenchUserId(System.currentTimeMillis()), googleServicesConfig.serviceAccountClientEmail, 0))
       }
-      _ <- samApplication.userService.createUser(
+      _ <- IO.fromFuture(IO(samApplication.userService.createUser(
         CreateWorkbenchUser(serviceAccountUserInfo.userId, GoogleSubjectId(googleServicesConfig.serviceAccountClientId), serviceAccountUserInfo.userEmail)) recover {
         case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode == Option(StatusCodes.Conflict) =>
-      }
+      }))
 
-      _ <- samApplication.resourceService.createResourceType(extensionResourceType).unsafeToFuture()
+      _ <- samApplication.resourceService.createResourceType(extensionResourceType)
 
-      _ <- samApplication.resourceService.createResource(extensionResourceType, GoogleExtensions.resourceId, serviceAccountUserInfo) recover {
-        case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode == Option(StatusCodes.Conflict) =>
+      _ <- IO.fromFuture(IO(samApplication.resourceService.createResource(extensionResourceType, GoogleExtensions.resourceId, serviceAccountUserInfo))) handleErrorWith {
+        case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode == Option(StatusCodes.Conflict) => IO.unit
       }
-      _ <- googleKeyCache.onBoot()
+      _ <- IO.fromFuture(IO(googleKeyCache.onBoot()))
     } yield ()
   }
 
@@ -213,7 +213,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
 
   def deleteUserPetServiceAccount(userId: WorkbenchUserId, project: GoogleProject): Future[Boolean] = {
     for {
-      maybePet <- directoryDAO.loadPetServiceAccount(PetServiceAccountId(userId, project))
+      maybePet <- directoryDAO.loadPetServiceAccount(PetServiceAccountId(userId, project)).unsafeToFuture()
       deletedSomething <- maybePet match {
         case Some(pet) =>
           for {
@@ -228,44 +228,41 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
 
   def createUserPetServiceAccount(user: WorkbenchUser, project: GoogleProject): Future[PetServiceAccount] = {
     val (petSaName, petSaDisplayName) = toPetSAFromUser(user)
-
     // The normal situation is that the pet either exists in both ldap and google or neither.
     // Sometimes, especially in tests, the pet may be removed from ldap, but not google or the other way around.
     // This code is a little extra complicated to detect the cases when a pet does not exist in google, ldap or both
     // and do the right thing.
-    val pet = for {
-      maybeServiceAccount <- googleIamDAO.findServiceAccount(project, petSaName)
+    val createPet = for {
+      maybeServiceAccount <- IO.fromFuture(IO(googleIamDAO.findServiceAccount(project, petSaName)))
       maybePet <- directoryDAO.loadPetServiceAccount(PetServiceAccountId(user.id, project))
 
       serviceAccount <- maybeServiceAccount match {
         // SA does not exist in google, create it and add it to the proxy group
-        case None => for {
-          sa <- googleIamDAO.createServiceAccount(project, petSaName, petSaDisplayName)
-          r <- withProxyEmail(user.id){proxyEmail => googleDirectoryDAO.addMemberToGroup(proxyEmail, sa.email)}
-        } yield sa
-
+        case None =>
+          for {
+            sa <- IO.fromFuture(IO(googleIamDAO.createServiceAccount(project, petSaName, petSaDisplayName)))
+            r <- IO.fromFuture(IO(withProxyEmail(user.id){proxyEmail => googleDirectoryDAO.addMemberToGroup(proxyEmail, sa.email)}))
+          } yield sa
         // SA already exists in google, use it
-        case Some(sa) => Future.successful(sa)
+        case Some(sa) => IO.pure(sa)
       }
       pet <- (maybePet, maybeServiceAccount) match {
         // pet does not exist in ldap, create it and enable the identity
-        case (None, _) => for {
-          p <- directoryDAO.createPetServiceAccount(PetServiceAccount(PetServiceAccountId(user.id, project), serviceAccount))
-          _ <- directoryDAO.enableIdentity(p.id)
-        } yield p
-
+        case (None, _) =>
+          for {
+            p <- directoryDAO.createPetServiceAccount(PetServiceAccount(PetServiceAccountId(user.id, project), serviceAccount))
+            _ <- directoryDAO.enableIdentity(p.id)
+          } yield p
         // pet already exists in ldap, but a new SA was created so update ldap with new SA info
-        case (Some(p), None) => directoryDAO.updatePetServiceAccount(p.copy(serviceAccount = serviceAccount))
+        case (Some(p), None) =>
+          directoryDAO.updatePetServiceAccount(p.copy(serviceAccount = serviceAccount))
 
         // everything already existed
-        case (Some(p), Some(_)) => Future.successful(p)
+        case (Some(p), Some(_)) => IO.pure(p)
       }
     } yield pet
 
-    // In the case of high concurrency, the above code may find that there is no pet SA and then try to create one, getting
-    // a 409 Conflict in Google if another call has since created it. This recoverWith will catch that case and return the
-    // newly-created pet SA instead of simply failing.
-    pet recoverWith {
+    createPet.unsafeToFuture() recoverWith {
       case gjre: GoogleJsonResponseException if gjre.getDetails.getCode == StatusCodes.Conflict.intValue =>
         googleIamDAO.findServiceAccount(project, petSaName).map { saOpt =>
           val sa = saOpt.getOrElse(throw new WorkbenchException(s"Could not create pet service account for user [${user.email}]"))
@@ -276,7 +273,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
 
   def getPetServiceAccountKey(userEmail: WorkbenchEmail, project: GoogleProject): Future[Option[String]] = {
     for {
-      subject <- directoryDAO.loadSubjectFromEmail(userEmail)
+      subject <- directoryDAO.loadSubjectFromEmail(userEmail).unsafeToFuture()
       key <- subject match {
         case Some(userId: WorkbenchUserId) => getPetServiceAccountKey(WorkbenchUser(userId, None, userEmail), project).map(Option(_))
         case _ => Future.successful(None)
@@ -348,7 +345,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
 
   def removePetServiceAccountKey(userId: WorkbenchUserId, project: GoogleProject, keyId: ServiceAccountKeyId): Future[Unit] = {
     for {
-      maybePet <- directoryDAO.loadPetServiceAccount(PetServiceAccountId(userId, project))
+      maybePet <- directoryDAO.loadPetServiceAccount(PetServiceAccountId(userId, project)).unsafeToFuture()
       result <- maybePet match {
         case Some(pet) => googleKeyCache.removeKey(pet, keyId)
         case None => Future.successful(())
@@ -358,7 +355,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
 
   private def enablePetServiceAccount(petServiceAccount: PetServiceAccount): Future[Unit] = {
     for {
-      _ <- directoryDAO.enableIdentity(petServiceAccount.id)
+      _ <- directoryDAO.enableIdentity(petServiceAccount.id).unsafeToFuture()
       _ <- withProxyEmail(petServiceAccount.id.userId) { proxyEmail => googleDirectoryDAO.addMemberToGroup(proxyEmail, petServiceAccount.serviceAccount.email) }
     } yield ()
   }
@@ -425,7 +422,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
     } else {
       for {
         groupOption <- groupId match {
-          case basicGroupName: WorkbenchGroupName => directoryDAO.loadGroup(basicGroupName)
+          case basicGroupName: WorkbenchGroupName => directoryDAO.loadGroup(basicGroupName).unsafeToFuture()
           case rpn: FullyQualifiedPolicyId => accessPolicyDAO.loadPolicy(rpn).unsafeToFuture().map(_.map { loadedPolicy =>
             if (loadedPolicy.public) {
               // include all users group when synchronizing a public policy
@@ -530,7 +527,7 @@ class GoogleExtensions(val directoryDAO: DirectoryDAO, val accessPolicyDAO: Acce
   }
 
   override def getUserProxy(userEmail: WorkbenchEmail): Future[Option[WorkbenchEmail]] = {
-    directoryDAO.loadSubjectFromEmail(userEmail).flatMap {
+    directoryDAO.loadSubjectFromEmail(userEmail).unsafeToFuture().flatMap {
       case Some(user: WorkbenchUserId) => getUserProxy(user)
       case Some(pet: PetServiceAccountId) => getUserProxy(pet.userId)
       case _ => Future.successful(None)

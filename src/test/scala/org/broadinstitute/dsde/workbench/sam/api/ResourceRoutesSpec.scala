@@ -5,18 +5,15 @@ import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import akka.http.scaladsl.testkit.ScalatestRouteTest
-import com.typesafe.config.ConfigFactory
-import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.model.ErrorReportJsonSupport._
-import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
-import org.broadinstitute.dsde.workbench.sam.config._
+import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.directory.MockDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.MockAccessPolicyDAO
-import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.service.UserService.genRandom
+import org.broadinstitute.dsde.workbench.sam.service._
 import org.scalatest.{AppendedClues, FlatSpec, Matchers}
 import spray.json.DefaultJsonProtocol._
 import spray.json.{JsBoolean, JsValue}
@@ -31,8 +28,8 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
   val defaultUserInfo = UserInfo(OAuth2BearerToken("accessToken"), WorkbenchUserId("user1"), WorkbenchEmail("user1@example.com"), 0)
   def defaultGoogleSubjectId = GoogleSubjectId(genRandom(System.currentTimeMillis()))
 
-  private val config = ConfigFactory.load()
-  private val resourceTypes = config.as[Map[String, ResourceType]]("resourceTypes").values.toSet
+  private val config = TestSupport.config
+  private val resourceTypes = TestSupport.appConfig.resourceTypes
   private val resourceTypeMap = resourceTypes.map(rt => rt.name -> rt).toMap
   private val managedGroupResourceType = resourceTypeMap.getOrElse(ResourceTypeName("managed-group"), throw new Error("Failed to load managed-group resource type from reference.conf"))
 
@@ -49,8 +46,8 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     val accessPolicyDAO = new MockAccessPolicyDAO()
     val directoryDAO = new MockDirectoryDAO()
 
-    val policyEvaluatorService = PolicyEvaluatorService(resourceTypes, accessPolicyDAO)
     val emailDomain = "example.com"
+    val policyEvaluatorService = PolicyEvaluatorService(emailDomain, resourceTypes, accessPolicyDAO)
     val mockResourceService = new ResourceService(resourceTypes, policyEvaluatorService, accessPolicyDAO, directoryDAO, NoExtensions, emailDomain)
     val mockUserService = new UserService(directoryDAO, NoExtensions)
     val mockStatusService = new StatusService(directoryDAO, NoExtensions)

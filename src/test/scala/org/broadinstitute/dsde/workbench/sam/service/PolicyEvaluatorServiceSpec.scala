@@ -22,8 +22,7 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
   val connectionPool = new LDAPConnectionPool(
     new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password),
     directoryConfig.connectionPoolSize)
-  val dirDAO = new LdapDirectoryDAO(connectionPool, directoryConfig)
-  implicit val cs = IO.contextShift(scala.concurrent.ExecutionContext.global)
+  val dirDAO = new LdapDirectoryDAO(connectionPool, directoryConfig, blockingEc)
   val policyDAO = new LdapAccessPolicyDAO(connectionPool, directoryConfig, blockingEc)
   val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
@@ -82,6 +81,7 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
 
   private val emailDomain = "example.com"
   private val policyEvaluatorService = PolicyEvaluatorService(
+    emailDomain,
     Map(defaultResourceType.name -> defaultResourceType, otherResourceType.name -> otherResourceType),
     policyDAO)
   private val service = new ResourceService(
@@ -96,7 +96,7 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
   private val constrainableResourceTypes = Map(
     constrainableResourceType.name -> constrainableResourceType,
     managedGroupResourceType.name -> managedGroupResourceType)
-  private val constrainablePolicyEvaluatorService = PolicyEvaluatorService(constrainableResourceTypes, policyDAO)
+  private val constrainablePolicyEvaluatorService = PolicyEvaluatorService(emailDomain, constrainableResourceTypes, policyDAO)
   private val constrainableService = new ResourceService(
     constrainableResourceTypes,
     constrainablePolicyEvaluatorService,

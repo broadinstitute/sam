@@ -4,6 +4,7 @@ import cats.data.NonEmptyList
 import org.scalatest.{FlatSpec, Matchers}
 import com.typesafe.config._
 import net.ceedubs.ficus.Ficus._
+import org.broadinstitute.dsde.workbench.sam.config.AppConfig.nonEmptyListReader
 
 class NonEmptyListConfigReaderSpec extends FlatSpec with Matchers {
   "NonEmptyListConfigReader" should "read missing list" in {

@@ -4,13 +4,9 @@ import java.net.URI
 import java.util.UUID
 
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
-import cats.effect.IO
-import com.typesafe.config.ConfigFactory
 import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
-import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
-import org.broadinstitute.dsde.workbench.sam.config._
 import org.broadinstitute.dsde.workbench.sam.directory.LdapDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
 import org.broadinstitute.dsde.workbench.sam.model._
@@ -29,18 +25,15 @@ import scala.concurrent.Future
   */
 class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport with MockitoSugar
   with BeforeAndAfter with BeforeAndAfterAll with ScalaFutures with OptionValues {
-  implicit val cs = IO.contextShift(scala.concurrent.ExecutionContext.global)
-
-  private val config = ConfigFactory.load()
-  val directoryConfig = config.as[DirectoryConfig]("directory")
-  val schemaLockConfig = ConfigFactory.load().as[SchemaLockConfig]("schemaLock")
+  val directoryConfig = TestSupport.appConfig.directoryConfig
+  val schemaLockConfig = TestSupport.appConfig.schemaLockConfig
   //Note: we intentionally use the Managed Group resource type loaded from reference.conf for the tests here.
-  private val resourceTypes = config.as[Map[String, ResourceType]]("resourceTypes").values.toSet
+  private val resourceTypes = TestSupport.appConfig.resourceTypes
   private val resourceTypeMap = resourceTypes.map(rt => rt.name -> rt).toMap
 
   val dirURI = new URI(directoryConfig.directoryUrl)
   val connectionPool = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
-  val dirDAO = new LdapDirectoryDAO(connectionPool, directoryConfig)
+  val dirDAO = new LdapDirectoryDAO(connectionPool, directoryConfig, TestSupport.blockingEc)
   val policyDAO = new LdapAccessPolicyDAO(connectionPool, directoryConfig, TestSupport.blockingEc)
   val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
@@ -52,7 +45,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
   private val managedGroupResourceType = resourceTypeMap.getOrElse(ResourceTypeName("managed-group"), throw new Error("Failed to load managed-group resource type from reference.conf"))
   private val testDomain = "example.com"
 
-  private val policyEvaluatorService = PolicyEvaluatorService(resourceTypeMap, policyDAO)
+  private val policyEvaluatorService = PolicyEvaluatorService(testDomain, resourceTypeMap, policyDAO)
   private val resourceService = new ResourceService(resourceTypeMap, policyEvaluatorService, policyDAO, dirDAO, NoExtensions, testDomain)
   private val managedGroupService = new ManagedGroupService(resourceService, policyEvaluatorService, resourceTypeMap, policyDAO, dirDAO, NoExtensions, testDomain)
 
@@ -101,13 +94,13 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
 
   it should "create a workbenchGroup with the same name as the Managed Group" in {
     assertMakeGroup()
-    val samGroup: Option[BasicWorkbenchGroup] = runAndWait(dirDAO.loadGroup(WorkbenchGroupName(resourceId.value)))
+    val samGroup: Option[BasicWorkbenchGroup] = dirDAO.loadGroup(WorkbenchGroupName(resourceId.value)).unsafeRunSync()
     samGroup.value.id.value shouldEqual resourceId.value
   }
 
   it should "create a workbenchGroup with 2 member WorkbenchSubjects" in {
     assertMakeGroup()
-    val samGroup: Option[BasicWorkbenchGroup] = runAndWait(dirDAO.loadGroup(WorkbenchGroupName(resourceId.value)))
+    val samGroup: Option[BasicWorkbenchGroup] = dirDAO.loadGroup(WorkbenchGroupName(resourceId.value)).unsafeRunSync()
     samGroup.value.members shouldEqual Set(adminPolicy, memberPolicy)
   }
 
@@ -128,7 +121,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
       runAndWait(managedGroupService.createManagedGroup(ResourceId(groupName), dummyUserInfo))
     }
     exception.getMessage should include ("A resource of this type and name already exists")
-    runAndWait(managedGroupService.loadManagedGroup(resourceId)) shouldEqual None
+    managedGroupService.loadManagedGroup(resourceId).unsafeRunSync() shouldEqual None
   }
 
   it should "succeed after a managed group with the same name has been deleted" in {
@@ -146,7 +139,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
       assertMakeGroup(groupName)
     }
     exception.getMessage should include (s"must be $maxLen characters or fewer")
-    runAndWait(managedGroupService.loadManagedGroup(resourceId)) shouldEqual None
+    managedGroupService.loadManagedGroup(resourceId).unsafeRunSync() shouldEqual None
   }
 
   it should "fail when the group name has invalid characters" in {
@@ -155,12 +148,12 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
       assertMakeGroup(groupName)
     }
     exception.getMessage should include ("Group name may only contain alphanumeric characters, underscores, and dashes")
-    runAndWait(managedGroupService.loadManagedGroup(resourceId)) shouldEqual None
+    managedGroupService.loadManagedGroup(resourceId).unsafeRunSync() shouldEqual None
   }
 
   "ManagedGroupService get" should "return the Managed Group resource" in {
     assertMakeGroup()
-    val maybeEmail = runAndWait(managedGroupService.loadManagedGroup(resourceId))
+    val maybeEmail = managedGroupService.loadManagedGroup(resourceId).unsafeRunSync()
     maybeEmail.value.value shouldEqual s"${resourceId.value}@$testDomain"
   }
 
@@ -190,14 +183,14 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     runAndWait(dirDAO.createGroup(parentGroup)) shouldEqual parentGroup
 
     // using .get on an option here because if the Option is None and this throws an exception, that's fine
-    runAndWait(dirDAO.loadGroup(parentGroup.id)).get.members shouldEqual Set(managedGroupName)
+    dirDAO.loadGroup(parentGroup.id).unsafeRunSync().get.members shouldEqual Set(managedGroupName)
 
     intercept[WorkbenchExceptionWithErrorReport] {
       runAndWait(managedGroupService.deleteManagedGroup(managedGroup.resourceId))
     }
 
-    runAndWait(managedGroupService.loadManagedGroup(managedGroup.resourceId)) shouldNot be (None)
-    runAndWait(dirDAO.loadGroup(parentGroup.id)).get.members shouldEqual Set(managedGroupName)
+    managedGroupService.loadManagedGroup(managedGroup.resourceId).unsafeRunSync() shouldNot be (None)
+    dirDAO.loadGroup(parentGroup.id).unsafeRunSync().get.members shouldEqual Set(managedGroupName)
   }
 
   "ManagedGroupService listPolicyMemberEmails" should "return a list of email addresses for the groups admin policy" in {
@@ -377,7 +370,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     val managedGroup = assertMakeGroup()
     val instructions = "Test Instructions"
 
-    runAndWait(managedGroupService.setAccessInstructions(managedGroup.resourceId, instructions))
+    managedGroupService.setAccessInstructions(managedGroup.resourceId, instructions).unsafeRunSync()
     runAndWait(managedGroupService.getAccessInstructions(managedGroup.resourceId)).getOrElse(None) shouldEqual instructions
   }
 
@@ -399,7 +392,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     val instructions = "Test Instructions"
 
     runAndWait(managedGroupService.getAccessInstructions(managedGroup.resourceId)) shouldEqual None
-    runAndWait(managedGroupService.setAccessInstructions(managedGroup.resourceId, instructions))
+    managedGroupService.setAccessInstructions(managedGroup.resourceId, instructions).unsafeRunSync()
     runAndWait(managedGroupService.getAccessInstructions(managedGroup.resourceId)).getOrElse(None) shouldEqual instructions
   }
 
@@ -412,7 +405,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     runAndWait(managedGroupService.getAccessInstructions(managedGroup.resourceId)).getOrElse(None) shouldEqual instructions
 
     val newInstructions = "Much better instructions"
-    runAndWait(managedGroupService.setAccessInstructions(managedGroup.resourceId, newInstructions))
+    managedGroupService.setAccessInstructions(managedGroup.resourceId, newInstructions).unsafeRunSync()
     runAndWait(managedGroupService.getAccessInstructions(managedGroup.resourceId)).getOrElse(None) shouldEqual newInstructions
   }
 }

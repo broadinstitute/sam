@@ -5,7 +5,6 @@ import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.headers.RawHeader
 import akka.http.scaladsl.testkit.ScalatestRouteTest
-import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.google.GoogleIamDAO
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.model._
@@ -13,7 +12,7 @@ import org.broadinstitute.dsde.workbench.model.google._
 import org.broadinstitute.dsde.workbench.sam.Generator._
 import org.broadinstitute.dsde.workbench.sam.TestSupport.{genSamDependencies, genSamRoutes, _}
 import org.broadinstitute.dsde.workbench.sam.api.SamRoutes
-import org.broadinstitute.dsde.workbench.sam.config.{GoogleServicesConfig, _}
+import org.broadinstitute.dsde.workbench.sam.config.GoogleServicesConfig
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
@@ -244,7 +243,7 @@ trait GoogleExtensionRoutesSpecHelper extends FlatSpec with Matchers with Scalat
   val defaultUserProxyEmail = WorkbenchEmail(s"PROXY_$defaultUserId@${googleServicesConfig.appsDomain}")
   /**/
 
-  val configResourceTypes = config.as[Map[String, ResourceType]]("resourceTypes").values.map(rt => rt.name -> rt).toMap
+  val configResourceTypes = TestSupport.configResourceTypes
 
   def createTestUser(resourceTypes: Map[ResourceTypeName, ResourceType] = Map.empty[ResourceTypeName, ResourceType],
                              googIamDAO: Option[GoogleIamDAO] = None,
@@ -303,7 +302,7 @@ trait GoogleExtensionRoutesSpecHelper extends FlatSpec with Matchers with Scalat
     )
 
     val userInfo = UserInfo(genOAuth2BearerToken.sample.get, user.id, email, 0)
-    runAndWait(samDeps.cloudExtensions.asInstanceOf[GoogleExtensions].onBoot(SamApplication(samDeps.userService, samDeps.resourceService, samDeps.statusService)))
+    samDeps.cloudExtensions.asInstanceOf[GoogleExtensions].onBoot(SamApplication(samDeps.userService, samDeps.resourceService, samDeps.statusService)).unsafeRunSync()
     (userInfo.copy(userId = user.id), routes, expectedJson, headers)
   }
 }

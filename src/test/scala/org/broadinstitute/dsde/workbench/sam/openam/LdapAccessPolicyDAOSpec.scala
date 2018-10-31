@@ -21,7 +21,6 @@ import org.scalatest.concurrent.ScalaFutures
   * Created by dvoet on 6/26/17.
   */
 class LdapAccessPolicyDAOSpec extends AsyncFlatSpec with ScalaFutures with Matchers with TestSupport with BeforeAndAfter with BeforeAndAfterAll {
-
   def toEmail(resourceType: String, resourceId: String, policyName: String) = {
     WorkbenchEmail(s"policy-$resourceType-$resourceId-$policyName@dev.test.firecloud.org")
   }
@@ -142,7 +141,7 @@ object LdapAccessPolicyDAOSpec{
 
   private val connectionPool = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
   val dao = new LdapAccessPolicyDAO(connectionPool, directoryConfig, blockingEc)
-  val dirDao = new LdapDirectoryDAO(connectionPool, directoryConfig)
+  val dirDao = new LdapDirectoryDAO(connectionPool, directoryConfig, blockingEc)
   val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
   // before() doesn't seem to work well with AsyncFlatSpec
