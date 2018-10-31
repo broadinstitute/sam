@@ -10,7 +10,6 @@ import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport.{genGoogleSubjectId, _}
 import org.broadinstitute.dsde.workbench.sam.directory.MockDirectoryDAO
-import org.broadinstitute.dsde.workbench.sam.model
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.MockAccessPolicyDAO
@@ -1154,6 +1153,100 @@ class ResourceRoutesV1Spec extends FlatSpec with Matchers with ScalatestRouteTes
     val defaultRoles = Set(defaultOwnerRole, defaultMemberRole, defaultAdminNotifierRole)
 
     ResourceType(ManagedGroupService.managedGroupTypeName, resourceActionPatterns, defaultRoles, ManagedGroupService.adminRoleName)
+  }
+
+  "GET /api/resources/v1/{resourceTypeName}/{resourceId}/allUsers" should "200 with all users list when user has read_policies action" in {
+    val resourceType = ResourceType(
+      ResourceTypeName("rt"),
+      Set(SamResourceActionPatterns.readPolicies),
+      Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.readPolicies))),
+      ResourceRoleName("owner")
+    )
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType, resourceTypeAdmin.name -> resourceTypeAdmin))
+
+    samRoutes.resourceService.initResourceTypes().unsafeRunSync()
+
+    val resourceId = ResourceId("foo")
+    runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, samRoutes.userInfo))
+
+    val user = runAndWait(samRoutes.directoryDAO.loadUser(samRoutes.userInfo.userId)).get
+    val userIdInfo = UserIdInfo(user.id, user.email, user.googleSubjectId)
+
+    Get(s"/api/resources/v1/${resourceType.name}/${resourceId.value}/allUsers") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[Set[UserIdInfo]] shouldEqual Set(userIdInfo)
+    }
+  }
+
+  it should "403 when user does not have read_policies action" in {
+    val resourceType = ResourceType(
+      ResourceTypeName("rt"),
+      Set.empty,
+      Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.readAuthDomain))), // any action except read_policies
+      ResourceRoleName("owner")
+    )
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType, resourceTypeAdmin.name -> resourceTypeAdmin))
+
+    samRoutes.resourceService.initResourceTypes().unsafeRunSync()
+
+    val resourceId = ResourceId("foo")
+    runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, samRoutes.userInfo))
+
+    Get(s"/api/resources/v1/${resourceType.name}/${resourceId.value}/allUsers") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Forbidden
+    }
+  }
+
+  it should "404 when resource or resourceType does not exist" in {
+    val resourceType = ResourceType(
+      ResourceTypeName("rt"),
+      Set(SamResourceActionPatterns.readPolicies),
+      Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.readPolicies))),
+      ResourceRoleName("owner")
+    )
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType, resourceTypeAdmin.name -> resourceTypeAdmin))
+
+    samRoutes.resourceService.initResourceTypes().unsafeRunSync()
+
+    val resourceId = ResourceId("foo")
+    runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, samRoutes.userInfo))
+
+    Get(s"/api/resources/v1/fakeResourceTypeName/${resourceId.value}/allUsers") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
+    }
+
+    Get(s"/api/resources/v1/${resourceType.name}/fakeResourceId/allUsers") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
+    }
+  }
+
+  it should "404 when user is not in any of the policies on the resource" in {
+    val resourceType = ResourceType(
+      ResourceTypeName("rt"),
+      Set(SamResourceActionPatterns.readPolicies),
+      Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.readPolicies))),
+      ResourceRoleName("owner")
+    )
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType, resourceTypeAdmin.name -> resourceTypeAdmin))
+
+    samRoutes.resourceService.initResourceTypes().unsafeRunSync()
+
+    val resourceId = ResourceId("foo")
+    runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, samRoutes.userInfo))
+
+    val user = runAndWait(samRoutes.directoryDAO.loadUser(samRoutes.userInfo.userId)).get
+    val userIdInfo = UserIdInfo(user.id, user.email, user.googleSubjectId)
+
+    Get(s"/api/resources/v1/${resourceType.name}/${resourceId.value}/allUsers") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[Set[UserIdInfo]] shouldEqual Set(userIdInfo)
+    }
+
+    val otherUserSamRoutes = TestSamRoutes(Map(resourceType.name -> resourceType), UserInfo(OAuth2BearerToken("accessToken"), WorkbenchUserId("user2"), WorkbenchEmail("user2@example.com"), 0))
+
+    Get(s"/api/resources/v1/${resourceType.name}/${resourceId.value}/allUsers") ~> otherUserSamRoutes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
+    }
   }
 }
 
