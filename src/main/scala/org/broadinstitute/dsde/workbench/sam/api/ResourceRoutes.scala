@@ -17,11 +17,12 @@ import spray.json.JsBoolean
 
 import scala.concurrent.ExecutionContext
 import ImplicitConversions.ioOnSuccessMagnet
+import com.typesafe.scalalogging.LazyLogging
 
 /**
   * Created by mbemis on 5/22/17.
   */
-trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with SamModelDirectives {
+trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with SamModelDirectives with LazyLogging {
   implicit val executionContext: ExecutionContext
   val resourceService: ResourceService
 
@@ -130,6 +131,7 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
   def postResource(resourceType: ResourceType, userInfo: UserInfo): server.Route = {
     post {
       entity(as[CreateResourceRequest]) { createResourceRequest =>
+        logger.info(s"From Sam, CREATE RESOURCE REQUEST: $createResourceRequest")
         if (resourceType.reuseIds) {
           throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "this api may not be used for resource types that allow id reuse"))
         }

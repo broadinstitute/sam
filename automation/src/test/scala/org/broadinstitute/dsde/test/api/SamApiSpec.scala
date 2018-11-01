@@ -516,7 +516,7 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
       // create default resource                               POST /api/resources/v1/{resourceTypeName}/{resourceId} // alternatively, just use the other resource creation endpoint
       // set resource/specific policy to be public             PUT  /api/resources/v1/{resourceTypeName}/{resourceId}/policies/{policyName}/public
       // synchronize that policy or resource with google       POST /api/google/v1/resource/{resourceTypeName}/{resourceId}/{policyName}/sync
-      // check that google knows about the all users group... honestly not sure what this will look like... just the group's email? probably
+      // check that google knows about the all users group... honestly not sure what this will look like... just the group's email? can figure out based on test failure
     }
   }
 
