@@ -484,39 +484,66 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
 
     "should synchronize the all users group for public policies" in {
       val resourceId = UUID.randomUUID.toString
+      val admin = UserPool.chooseAdmin
       val Seq(user1: Credentials, user2: Credentials) = UserPool.chooseStudents(2)
+      val adminAuthToken = admin.makeAuthToken()
       val user1AuthToken = user1.makeAuthToken()
-      val Seq(user1Proxy: WorkbenchEmail, user2Proxy: WorkbenchEmail) = Seq(user1, user2).map(user => Sam.user.proxyGroup(user.email)(user1AuthToken))
+      val Seq(adminProxy: WorkbenchEmail, user1Proxy: WorkbenchEmail, user2Proxy: WorkbenchEmail) = Seq(admin, user1, user2).map(user => Sam.user.proxyGroup(user.email)(adminAuthToken))
 
-      val resourceTypeName = "workspace"
-      val ownerPolicyName = "owner"
-      val readerPolicyName = "reader"
+      val resourceTypeName = "managed-group"
+      val adminPolicyName = "admin"
+      val memberPolicyName = "member"
 
-      val policies = Map(ownerPolicyName -> AccessPolicyMembership(Set(WorkbenchEmail(user1.email)), Set.empty, Set.empty), readerPolicyName -> AccessPolicyMembership(Set(WorkbenchEmail(user2.email)), Set.empty, Set.empty))
-      val resourceRequest = CreateResourceRequest(resourceId, policies, Set.empty)
+      Sam.user.createGroup(resourceId)(adminAuthToken)
+      register cleanUp Sam.user.deleteGroup(resourceId)(adminAuthToken)
 
-      Sam.user.createResource(resourceTypeName, resourceRequest)(user1AuthToken)
-      register cleanUp Sam.user.deleteResource(resourceTypeName, resourceId)(user1AuthToken)
+      val policies = Sam.user.listResourcePolicies(resourceTypeName, resourceId)(adminAuthToken)
+      val adminPolicy = policies.filter(_.policyName equals "admin").last
+      val memberPolicy = policies.filter(_.policyName equals "member").last
 
-      Sam.user.makePolicyPublic(resourceTypeName, resourceId, ownerPolicyName)(user1AuthToken)
-      Sam.user.syncPolicy(resourceTypeName, resourceId, ownerPolicyName)(user1AuthToken)
+      // The admin policy should contain only the user that created the group
+      awaitAssert(
+        Await.result(googleDirectoryDAO.listGroupMembers(adminPolicy.email), 5.minutes)
+          .getOrElse(Set.empty) should contain theSameElementsAs Set(adminProxy.value),
+        1.minutes, 5.seconds)
 
-      val resourcePolicies = Sam.user.listResourcePolicies(resourceTypeName, resourceId)(user1AuthToken)
-      val resourceOwnerEmail = for {
-        policy <- resourcePolicies if policy.policy.memberEmails.nonEmpty
-      } yield {
-        policy.email
-      }
-      assert(resourceOwnerEmail.size == 1) // Only the owner policy should be non-empty after creation
+      // Change the membership of the admin policy to include users 1 and 2
+      Sam.user.setPolicyMembers(resourceId, memberPolicyName, Set(user2.email))(adminAuthToken)
+      awaitAssert(
+        Await.result(googleDirectoryDAO.listGroupMembers(memberPolicy.email), 5.minutes)
+          .getOrElse(Set.empty) should contain theSameElementsAs Set(user2Proxy.value),
+        1.minutes, 5.seconds)
+
+      val adminPolicyMembership = AccessPolicyMembership(Set(WorkbenchEmail(admin.email)), Set("set_public"), Set("owner"))
+
+      Sam.user.makePolicyPublic(resourceTypeName, resourceId, "admin-notifier")(adminAuthToken)
 
       awaitAssert(
-        Await.result(googleDirectoryDAO.listGroupMembers(resourceOwnerEmail.head), 5.minutes)
+        Await.result(googleDirectoryDAO.listGroupMembers(adminPolicy.email), 5.minutes)
           .getOrElse(Set.empty) should contain theSameElementsAs Set(user1Proxy.value, user2Proxy.value),
-        5.minutes, 5.seconds)
-      // create default resource                               POST /api/resources/v1/{resourceTypeName}/{resourceId} // alternatively, just use the other resource creation endpoint
-      // set resource/specific policy to be public             PUT  /api/resources/v1/{resourceTypeName}/{resourceId}/policies/{policyName}/public
-      // synchronize that policy or resource with google       POST /api/google/v1/resource/{resourceTypeName}/{resourceId}/{policyName}/sync
-      // check that google knows about the all users group... honestly not sure what this will look like... just the group's email? can figure out based on test failure
+        1.minutes, 5.seconds)
+
+      //      val policies = Map(ownerPolicyName -> AccessPolicyMembership(Set(WorkbenchEmail(user1.email)), Set.empty, Set.empty), readerPolicyName -> AccessPolicyMembership(Set(WorkbenchEmail(user2.email)), Set.empty, Set.empty))
+      //      val resourceRequest = CreateResourceRequest(resourceId, policies, Set.empty)
+      //
+      //      Sam.user.createResource(resourceTypeName, resourceRequest)(user1AuthToken)
+      //      register cleanUp Sam.user.deleteResource(resourceTypeName, resourceId)(user1AuthToken)
+      //
+      //      Sam.user.syncPolicy(resourceTypeName, resourceId, ownerPolicyName)(user1AuthToken)
+      //
+      //      val resourcePolicies = Sam.user.listResourcePolicies(resourceTypeName, resourceId)(user1AuthToken)
+      //      val resourceOwnerEmail = for {
+      //        policy <- resourcePolicies if policy.policy.memberEmails.nonEmpty
+      //      } yield {
+      //        policy.email
+      //      }
+      //      assert(resourceOwnerEmail.size == 1) // Only the owner policy should be non-empty after creation
+      //
+      //      // create default resource                               POST /api/resources/v1/{resourceTypeName}/{resourceId} // alternatively, just use the other resource creation endpoint
+      //      // set resource/specific policy to be public             PUT  /api/resources/v1/{resourceTypeName}/{resourceId}/policies/{policyName}/public
+      //      // synchronize that policy or resource with google       POST /api/google/v1/resource/{resourceTypeName}/{resourceId}/{policyName}/sync
+      //      // check that google knows about the all users group... honestly not sure what this will look like... just the group's email? can figure out based on test failure
+      //    }
     }
   }
 
