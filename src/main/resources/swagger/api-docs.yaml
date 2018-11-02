@@ -847,6 +847,39 @@ paths:
       tags:
         - Resources
 
+  /api/resources/v1/{resourceTypeName}/{resourceId}/allUsers:
+    get:
+      summary: List all of the members of a resource
+      responses:
+        200:
+          description: List of users in all policies on this resource
+          schema:
+            type: array
+            items:
+              type: string
+        403:
+          description: You do not have permission to perform this action on the resource
+        404:
+          description: Resource type or resource does not exist or you are not a member of any policy on the resource
+        500:
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      parameters:
+      - in: path
+        description: Type of resource
+        name: resourceTypeName
+        required: true
+        type: string
+      - in: path
+        description: Id of resource
+        name: resourceId
+        required: true
+        type: string
+      operationId: getAllResourceUsers
+      tags:
+      - Resources
+
   /api/resources/v1/{resourceTypeName}/{resourceId}/policies:
     get:
       summary: List the policies for a resource
