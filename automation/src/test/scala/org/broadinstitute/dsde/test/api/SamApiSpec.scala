@@ -427,7 +427,7 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
       val authDomainId = UUID.randomUUID.toString
       val Seq(inPolicyUser: Credentials, inAuthDomainUser: Credentials, inBothUser: Credentials) = UserPool.chooseStudents(3)
       val inBothUserAuthToken = inBothUser.makeAuthToken()
-      val Seq(inPolicyUserProxy: WorkbenchEmail, inAuthDomainUserProxy: WorkbenchEmail, inBothUserProxy: WorkbenchEmail) = Seq(inPolicyUser, inAuthDomainUser, inBothUser).map {
+      val Seq(inAuthDomainUserProxy: WorkbenchEmail, inBothUserProxy: WorkbenchEmail) = Seq(inAuthDomainUser, inBothUser).map {
         user => Sam.user.proxyGroup(user.email)(inBothUserAuthToken)
       }
 
@@ -481,73 +481,34 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
 
     "should synchronize the all users group for public policies" in {
       val resourceId = UUID.randomUUID.toString
-      val admin = UserPool.chooseAdmin
-      val Seq(user1: Credentials, user2: Credentials) = UserPool.chooseStudents(2)
-      val adminAuthToken = admin.makeAuthToken()
+      val user1 = UserPool.chooseStudent
       val user1AuthToken = user1.makeAuthToken()
-      val Seq(adminProxy: WorkbenchEmail, user1Proxy: WorkbenchEmail, user2Proxy: WorkbenchEmail) = Seq(admin, user1, user2).map(user => Sam.user.proxyGroup(user.email)(adminAuthToken))
+      val user1Proxy = Sam.user.proxyGroup(user1.email)(user1AuthToken)
+      val allUsersGroupEmail = Sam.user.getGroupEmail("All_Users")(user1AuthToken)
 
-      val resourceTypeName = "resource_type_admin"
-      val ownerPolicyName = "owner"
-      val readerPolicyName = "reader"
+      val resourceTypeName = "managed-group"
+      val adminPolicyName = "admin"
+      val adminNotifierPolicyName = "admin-notifier"
 
-      val policies = Map(ownerPolicyName -> AccessPolicyMembership(Set(user1.email), Set("set_public"), Set("owner")), readerPolicyName -> AccessPolicyMembership(Set(user2.email), Set.empty, Set.empty))
-      val resourceRequest = CreateResourceRequest(resourceId, policies, Set.empty)
+      Sam.user.createGroup(resourceId)(user1AuthToken)
+      register cleanUp Sam.user.deleteGroup(resourceId)(user1AuthToken)
 
-      Sam.user.createResource(resourceTypeName, resourceRequest)(user1AuthToken)
-      register cleanUp Sam.user.deleteResource(resourceTypeName, resourceId)(user1AuthToken)
+      val policies = Sam.user.listResourcePolicies(resourceTypeName, resourceId)(user1AuthToken)
+      val adminPolicy = policies.filter(_.policyName equals adminPolicyName).last
+      val adminNotifierPolicy = policies.filter(_.policyName equals adminNotifierPolicyName).last
 
-      Sam.user.syncResourcePolicy(resourceTypeName, resourceId, ownerPolicyName)(user1AuthToken)
+      awaitAssert(
+        Await.result(googleDirectoryDAO.listGroupMembers(adminPolicy.email), 5.minutes)
+          .getOrElse(Set.empty) should contain theSameElementsAs Set(user1Proxy.value),
+        1.minutes, 5.seconds)
 
-      Sam.user.makeResourcePolicyPublic(resourceTypeName, resourceId, ownerPolicyName)(user1AuthToken)
+      Sam.user.syncResourcePolicy(resourceTypeName, resourceId, adminNotifierPolicyName)(user1AuthToken)
+      Sam.user.makeResourcePolicyPublic(resourceTypeName, resourceId, adminNotifierPolicyName, true)(user1AuthToken)
 
-//      //val policies = Sam.user.listResourcePolicies(resourceTypeName, resourceId)(adminAuthToken)
-//      println(policies)
-//      val adminPolicy = policies.filter(_.policyName equals "admin").last
-//      val memberPolicy = policies.filter(_.policyName equals "member").last
-//      val adminNotifierPolicy = policies.filter(_.policyName equals "admin-notifier").last
-
-      // The admin policy should contain only the user that created the group
-//      awaitAssert(
-//        Await.result(googleDirectoryDAO.listGroupMembers(adminPolicy.email), 5.minutes)
-//          .getOrElse(Set.empty) should contain theSameElementsAs Set(adminProxy.value),
-//        1.minutes, 5.seconds)
-//
-//      // Change the membership of the admin policy to include users 1 and 2
-//      Sam.user.setManagedGroupPolicyMembers(resourceId, memberPolicyName, Set(user2.email))(adminAuthToken)
-//      awaitAssert(
-//        Await.result(googleDirectoryDAO.listGroupMembers(memberPolicy.email), 5.minutes)
-//          .getOrElse(Set.empty) should contain theSameElementsAs Set(user2Proxy.value),
-//        1.minutes, 5.seconds)
-//
-//      println(Sam.user.listResourcePolicies(resourceTypeName, resourceId)(adminAuthToken))
-//
-////      val adminPolicyMembership = AccessPolicyMembership(Set(WorkbenchEmail(admin.email)), Set("set_public"), Set("owner"))
-//
-//      Sam.user.makeResourcePolicyPublic(resourceTypeName, resourceId, "admin-notifier")(adminAuthToken)
-//
-//      awaitAssert(
-//        Await.result(googleDirectoryDAO.listGroupMembers(adminPolicy.email), 5.minutes)
-//          .getOrElse(Set.empty) should contain theSameElementsAs Set(user1Proxy.value, user2Proxy.value),
-//        1.minutes, 5.seconds)
-
-      //
-      //
-      //      Sam.user.syncPolicy(resourceTypeName, resourceId, ownerPolicyName)(user1AuthToken)
-      //
-      //      val resourcePolicies = Sam.user.listResourcePolicies(resourceTypeName, resourceId)(user1AuthToken)
-      //      val resourceOwnerEmail = for {
-      //        policy <- resourcePolicies if policy.policy.memberEmails.nonEmpty
-      //      } yield {
-      //        policy.email
-      //      }
-      //      assert(resourceOwnerEmail.size == 1) // Only the owner policy should be non-empty after creation
-      //
-      //      // create default resource                               POST /api/resources/v1/{resourceTypeName}/{resourceId} // alternatively, just use the other resource creation endpoint
-      //      // set resource/specific policy to be public             PUT  /api/resources/v1/{resourceTypeName}/{resourceId}/policies/{policyName}/public
-      //      // synchronize that policy or resource with google       POST /api/google/v1/resource/{resourceTypeName}/{resourceId}/{policyName}/sync
-      //      // check that google knows about the all users group... honestly not sure what this will look like... just the group's email? can figure out based on test failure
-      //    }
+      awaitAssert(
+        Await.result(googleDirectoryDAO.listGroupMembers(adminNotifierPolicy.email), 5.minutes)
+          .getOrElse(Set.empty) should contain theSameElementsAs Set(allUsersGroupEmail.value),
+        1.minutes, 5.seconds)
     }
   }
 
