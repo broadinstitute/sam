@@ -401,21 +401,21 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
         5.minutes, 5.seconds)
 
       // Change the membership of the admin policy to include users 1 and 2
-      Sam.user.setPolicyMembers(managedGroupId, adminPolicyName, Set(user1.email, user2.email))(user1AuthToken)
+      Sam.user.setManagedGroupPolicyMembers(managedGroupId, adminPolicyName, Set(user1.email, user2.email))(user1AuthToken)
       awaitAssert(
         Await.result(googleDirectoryDAO.listGroupMembers(policyEmail.head), 5.minutes)
           .getOrElse(Set.empty) should contain theSameElementsAs Set(user1Proxy.value, user2Proxy.value),
         5.minutes, 5.seconds)
 
       // Add user 3 to the admin policy
-      Sam.user.addUserToPolicy(managedGroupId, adminPolicyName, user3.email)(user1AuthToken)
+      Sam.user.addUserToManagedGroupPolicy(managedGroupId, adminPolicyName, user3.email)(user1AuthToken)
       awaitAssert(
         Await.result(googleDirectoryDAO.listGroupMembers(policyEmail.head), 5.minutes)
           .getOrElse(Set.empty) should contain theSameElementsAs Set(user1Proxy.value, user2Proxy.value, user3Proxy.value),
         5.minutes, 5.seconds)
 
       // Remove user 2 from the admin policy
-      Sam.user.removeUserFromPolicy(managedGroupId, adminPolicyName, user2.email)(user1AuthToken)
+      Sam.user.removeUserFromManagedGroupPolicy(managedGroupId, adminPolicyName, user2.email)(user1AuthToken)
       awaitAssert(
         Await.result(googleDirectoryDAO.listGroupMembers(policyEmail.head), 5.minutes)
           .getOrElse(Set.empty) should contain theSameElementsAs Set(user1Proxy.value, user3Proxy.value),
@@ -440,15 +440,14 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
       } yield {
         policy.email
       }
-      assert(authDomainAdminEmail.size == 1) // Only the admin policy should be non-empty after creation
+      assert(authDomainAdminEmail.size == 1)
 
-      // make sure group has been created properly
       awaitAssert(
         Await.result(googleDirectoryDAO.listGroupMembers(authDomainAdminEmail.head), 5.minutes)
           .getOrElse(Set.empty) should contain theSameElementsAs Set(inBothUserProxy.value),
         1.minutes, 5.seconds)
 
-      Sam.user.setPolicyMembers(authDomainId, "admin", Set(inAuthDomainUser.email, inAuthDomainUser.email))(inBothUserAuthToken)
+      Sam.user.setManagedGroupPolicyMembers(authDomainId, "admin", Set(inAuthDomainUser.email, inBothUser.email))(inBothUserAuthToken)
       awaitAssert(
         Await.result(googleDirectoryDAO.listGroupMembers(authDomainAdminEmail.head), 5.minutes)
           .getOrElse(Set.empty) should contain theSameElementsAs Set(inBothUserProxy.value, inAuthDomainUserProxy.value),
@@ -456,13 +455,14 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
 
       val resourceTypeName = "workspace"
       val resourceId = UUID.randomUUID.toString
-      val policies = Map("owner" -> AccessPolicyMembership(Set(WorkbenchEmail(inPolicyUser.email), WorkbenchEmail(inBothUser.email)), Set.empty, Set.empty))
-      val resourceRequest = CreateResourceRequest(resourceId, policies, Set.empty)
+      val policies = Map("owner" -> AccessPolicyMembership(Set(inBothUser.email), Set.empty, Set("owner")))
+      val resourceRequest = CreateResourceRequest(resourceId, policies, Set(authDomainId))
 
       Sam.user.createResource(resourceTypeName, resourceRequest)(inBothUserAuthToken)
       register cleanUp Sam.user.deleteResource(resourceTypeName, resourceId)(inBothUserAuthToken)
 
-      Sam.user.syncPolicy(resourceTypeName, resourceId, "owner")(inBothUserAuthToken)
+      // have to do this before adding second user to policy because the sync endpoint doesn't call onGroupUpdate, it directly calls synchronizeGroupMembers, which means that intersection group is never calculated...
+      Sam.user.syncResourcePolicy(resourceTypeName, resourceId, "owner")(inBothUserAuthToken)
 
       val resourcePolicies = Sam.user.listResourcePolicies(resourceTypeName, resourceId)(inBothUserAuthToken)
       val resourceOwnerEmail = for {
@@ -470,16 +470,13 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
       } yield {
         policy.email
       }
-      assert(resourceOwnerEmail.size == 1) // Only the owner policy should be non-empty after creation
+      assert(resourceOwnerEmail.size == 1)
 
+      Sam.user.addUserToResourcePolicy(resourceTypeName, resourceId, "owner", inPolicyUser.email)(inBothUserAuthToken)
       awaitAssert(
         Await.result(googleDirectoryDAO.listGroupMembers(resourceOwnerEmail.head), 5.minutes)
           .getOrElse(Set.empty) should contain theSameElementsAs Set(inBothUserProxy.value),
         1.minutes, 5.seconds)
-      // create resource with authDomain as it's auth domain                        POST /api/resources/v1/{resourceTypeName}
-      // update policy of resource so membership is inPolicyUser and inBothUser     Sam.user.setPolicyMembers(resourceId, policyName, Set[users])
-      // sync policy with google                                                    POST /api/google/v1/resource/{resourceTypeName}/{resourceId}/{policyName}/sync
-      // check that google only knows about inBothUser
     }
 
     "should synchronize the all users group for public policies" in {
@@ -490,44 +487,51 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
       val user1AuthToken = user1.makeAuthToken()
       val Seq(adminProxy: WorkbenchEmail, user1Proxy: WorkbenchEmail, user2Proxy: WorkbenchEmail) = Seq(admin, user1, user2).map(user => Sam.user.proxyGroup(user.email)(adminAuthToken))
 
-      val resourceTypeName = "managed-group"
-      val adminPolicyName = "admin"
-      val memberPolicyName = "member"
+      val resourceTypeName = "resource_type_admin"
+      val ownerPolicyName = "owner"
+      val readerPolicyName = "reader"
 
-      Sam.user.createGroup(resourceId)(adminAuthToken)
-      register cleanUp Sam.user.deleteGroup(resourceId)(adminAuthToken)
+      val policies = Map(ownerPolicyName -> AccessPolicyMembership(Set(user1.email), Set("set_public"), Set("owner")), readerPolicyName -> AccessPolicyMembership(Set(user2.email), Set.empty, Set.empty))
+      val resourceRequest = CreateResourceRequest(resourceId, policies, Set.empty)
 
-      val policies = Sam.user.listResourcePolicies(resourceTypeName, resourceId)(adminAuthToken)
-      val adminPolicy = policies.filter(_.policyName equals "admin").last
-      val memberPolicy = policies.filter(_.policyName equals "member").last
+      Sam.user.createResource(resourceTypeName, resourceRequest)(user1AuthToken)
+      register cleanUp Sam.user.deleteResource(resourceTypeName, resourceId)(user1AuthToken)
+
+      Sam.user.syncResourcePolicy(resourceTypeName, resourceId, ownerPolicyName)(user1AuthToken)
+
+      Sam.user.makeResourcePolicyPublic(resourceTypeName, resourceId, ownerPolicyName)(user1AuthToken)
+
+//      //val policies = Sam.user.listResourcePolicies(resourceTypeName, resourceId)(adminAuthToken)
+//      println(policies)
+//      val adminPolicy = policies.filter(_.policyName equals "admin").last
+//      val memberPolicy = policies.filter(_.policyName equals "member").last
+//      val adminNotifierPolicy = policies.filter(_.policyName equals "admin-notifier").last
 
       // The admin policy should contain only the user that created the group
-      awaitAssert(
-        Await.result(googleDirectoryDAO.listGroupMembers(adminPolicy.email), 5.minutes)
-          .getOrElse(Set.empty) should contain theSameElementsAs Set(adminProxy.value),
-        1.minutes, 5.seconds)
+//      awaitAssert(
+//        Await.result(googleDirectoryDAO.listGroupMembers(adminPolicy.email), 5.minutes)
+//          .getOrElse(Set.empty) should contain theSameElementsAs Set(adminProxy.value),
+//        1.minutes, 5.seconds)
+//
+//      // Change the membership of the admin policy to include users 1 and 2
+//      Sam.user.setManagedGroupPolicyMembers(resourceId, memberPolicyName, Set(user2.email))(adminAuthToken)
+//      awaitAssert(
+//        Await.result(googleDirectoryDAO.listGroupMembers(memberPolicy.email), 5.minutes)
+//          .getOrElse(Set.empty) should contain theSameElementsAs Set(user2Proxy.value),
+//        1.minutes, 5.seconds)
+//
+//      println(Sam.user.listResourcePolicies(resourceTypeName, resourceId)(adminAuthToken))
+//
+////      val adminPolicyMembership = AccessPolicyMembership(Set(WorkbenchEmail(admin.email)), Set("set_public"), Set("owner"))
+//
+//      Sam.user.makeResourcePolicyPublic(resourceTypeName, resourceId, "admin-notifier")(adminAuthToken)
+//
+//      awaitAssert(
+//        Await.result(googleDirectoryDAO.listGroupMembers(adminPolicy.email), 5.minutes)
+//          .getOrElse(Set.empty) should contain theSameElementsAs Set(user1Proxy.value, user2Proxy.value),
+//        1.minutes, 5.seconds)
 
-      // Change the membership of the admin policy to include users 1 and 2
-      Sam.user.setPolicyMembers(resourceId, memberPolicyName, Set(user2.email))(adminAuthToken)
-      awaitAssert(
-        Await.result(googleDirectoryDAO.listGroupMembers(memberPolicy.email), 5.minutes)
-          .getOrElse(Set.empty) should contain theSameElementsAs Set(user2Proxy.value),
-        1.minutes, 5.seconds)
-
-      val adminPolicyMembership = AccessPolicyMembership(Set(WorkbenchEmail(admin.email)), Set("set_public"), Set("owner"))
-
-      Sam.user.makePolicyPublic(resourceTypeName, resourceId, "admin-notifier")(adminAuthToken)
-
-      awaitAssert(
-        Await.result(googleDirectoryDAO.listGroupMembers(adminPolicy.email), 5.minutes)
-          .getOrElse(Set.empty) should contain theSameElementsAs Set(user1Proxy.value, user2Proxy.value),
-        1.minutes, 5.seconds)
-
-      //      val policies = Map(ownerPolicyName -> AccessPolicyMembership(Set(WorkbenchEmail(user1.email)), Set.empty, Set.empty), readerPolicyName -> AccessPolicyMembership(Set(WorkbenchEmail(user2.email)), Set.empty, Set.empty))
-      //      val resourceRequest = CreateResourceRequest(resourceId, policies, Set.empty)
       //
-      //      Sam.user.createResource(resourceTypeName, resourceRequest)(user1AuthToken)
-      //      register cleanUp Sam.user.deleteResource(resourceTypeName, resourceId)(user1AuthToken)
       //
       //      Sam.user.syncPolicy(resourceTypeName, resourceId, ownerPolicyName)(user1AuthToken)
       //
