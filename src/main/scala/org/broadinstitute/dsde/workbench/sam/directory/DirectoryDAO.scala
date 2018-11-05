@@ -13,7 +13,7 @@ import scala.concurrent.Future
   * Created by dvoet on 5/26/17.
   */
 trait DirectoryDAO {
-  def createGroup(group: BasicWorkbenchGroup, accessInstructionsOpt: Option[String] = None): Future[BasicWorkbenchGroup]
+  def createGroup(group: BasicWorkbenchGroup, accessInstructionsOpt: Option[String] = None): IO[BasicWorkbenchGroup]
   def loadGroup(groupName: WorkbenchGroupName): IO[Option[BasicWorkbenchGroup]]
   def loadGroups(groupNames: Set[WorkbenchGroupName]): Future[Seq[BasicWorkbenchGroup]]
   def loadGroupEmail(groupName: WorkbenchGroupName): Future[Option[WorkbenchEmail]]
@@ -27,7 +27,7 @@ trait DirectoryDAO {
   /**
     * @return true if the subject was removed, false if it was already gone
     */
-  def removeGroupMember(groupId: WorkbenchGroupIdentity, removeMember: WorkbenchSubject): Future[Boolean]
+  def removeGroupMember(groupId: WorkbenchGroupIdentity, removeMember: WorkbenchSubject): IO[Boolean]
   def isGroupMember(groupId: WorkbenchGroupIdentity, member: WorkbenchSubject): Future[Boolean]
   def updateSynchronizedDate(groupId: WorkbenchGroupIdentity): Future[Unit]
   def getSynchronizedDate(groupId: WorkbenchGroupIdentity): Future[Option[Date]]
@@ -38,7 +38,7 @@ trait DirectoryDAO {
   def loadSubjectEmails(subjects: Set[WorkbenchSubject]): Future[Set[WorkbenchEmail]]
   def loadSubjectFromGoogleSubjectId(googleSubjectId: GoogleSubjectId): IO[Option[WorkbenchSubject]]
 
-  def createUser(user: WorkbenchUser): Future[WorkbenchUser]
+  def createUser(user: WorkbenchUser): IO[WorkbenchUser]
   def loadUser(userId: WorkbenchUserId): IO[Option[WorkbenchUser]]
   def loadUsers(userIds: Set[WorkbenchUserId]): Future[Seq[WorkbenchUser]]
   def deleteUser(userId: WorkbenchUserId): Future[Unit]

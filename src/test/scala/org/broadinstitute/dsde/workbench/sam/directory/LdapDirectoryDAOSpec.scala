@@ -45,11 +45,11 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     }
 
     assertResult(group) {
-      runAndWait(dao.createGroup(group))
+      dao.createGroup(group).unsafeRunSync()
     }
 
     val conflict = intercept[WorkbenchExceptionWithErrorReport] {
-      runAndWait(dao.createGroup(group))
+      dao.createGroup(group).unsafeRunSync()
     }
     assert(conflict.errorReport.statusCode.contains(StatusCodes.Conflict))
 
@@ -73,7 +73,7 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     }
 
     assertResult(user) {
-      runAndWait(dao.createUser(user))
+      dao.createUser(user).unsafeRunSync()
     }
 
     assertResult(Some(user)) {
@@ -92,7 +92,7 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     val user = WorkbenchUser(userId, None, WorkbenchEmail("foo@bar.com"))
 
     assertResult(user) {
-      runAndWait(dao.createUser(user))
+      dao.createUser(user).unsafeRunSync()
     }
 
     assertResult(None) {
@@ -115,7 +115,7 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     val petServiceAccount = PetServiceAccount(PetServiceAccountId(userId, project), serviceAccount)
 
     assertResult(user) {
-      runAndWait(dao.createUser(user))
+      dao.createUser(user).unsafeRunSync()
     }
 
     assertResult(None) {
@@ -168,9 +168,9 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     val groupName2 = WorkbenchGroupName(UUID.randomUUID().toString)
     val group2 = BasicWorkbenchGroup(groupName2, Set(groupName1), WorkbenchEmail("g2@example.com"))
 
-    runAndWait(dao.createUser(user))
-    runAndWait(dao.createGroup(group1))
-    runAndWait(dao.createGroup(group2))
+    dao.createUser(user).unsafeRunSync()
+    dao.createGroup(group1).unsafeRunSync()
+    dao.createGroup(group2).unsafeRunSync()
 
     try {
       assertResult(Set(groupName1, groupName2)) {
@@ -193,9 +193,9 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     val groupName3 = WorkbenchGroupName(UUID.randomUUID().toString)
     val group3 = BasicWorkbenchGroup(groupName3, Set(groupName2), WorkbenchEmail("g3@example.com"))
 
-    runAndWait(dao.createGroup(group1))
-    runAndWait(dao.createGroup(group2))
-    runAndWait(dao.createGroup(group3))
+    dao.createGroup(group1).unsafeRunSync()
+    dao.createGroup(group2).unsafeRunSync()
+    dao.createGroup(group3).unsafeRunSync()
 
     try {
       assertResult(Set(groupName2, groupName3)) {
@@ -221,10 +221,10 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     val groupName3 = WorkbenchGroupName(UUID.randomUUID().toString)
     val group3 = BasicWorkbenchGroup(groupName3, Set(groupName2), WorkbenchEmail("g3@example.com"))
 
-    runAndWait(dao.createUser(user))
-    runAndWait(dao.createGroup(group1))
-    runAndWait(dao.createGroup(group2))
-    runAndWait(dao.createGroup(group3))
+    dao.createUser(user).unsafeRunSync()
+    dao.createGroup(group1).unsafeRunSync()
+    dao.createGroup(group2).unsafeRunSync()
+    dao.createGroup(group3).unsafeRunSync()
 
     runAndWait(dao.addGroupMember(groupName1, groupName3))
 
@@ -238,7 +238,7 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
       }
     } finally {
       runAndWait(dao.deleteUser(userId))
-      runAndWait(dao.removeGroupMember(groupName1, groupName3))
+      dao.removeGroupMember(groupName1, groupName3).unsafeRunSync()
       runAndWait(dao.deleteGroup(groupName3))
       runAndWait(dao.deleteGroup(groupName2))
       runAndWait(dao.deleteGroup(groupName1))
@@ -255,9 +255,9 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     val groupName2 = WorkbenchGroupName(UUID.randomUUID().toString)
     val group2 = BasicWorkbenchGroup(groupName2, Set.empty, WorkbenchEmail("g2@example.com"))
 
-    runAndWait(dao.createUser(user))
-    runAndWait(dao.createGroup(group1))
-    runAndWait(dao.createGroup(group2))
+    dao.createUser(user).unsafeRunSync()
+    dao.createGroup(group1).unsafeRunSync()
+    dao.createGroup(group2).unsafeRunSync()
 
     try {
 
@@ -273,13 +273,13 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
         dao.loadGroup(groupName1).unsafeRunSync()
       }
 
-      runAndWait(dao.removeGroupMember(groupName1, userId))
+      dao.removeGroupMember(groupName1, userId).unsafeRunSync()
 
       assertResult(Some(group1.copy(members = Set(groupName2)))) {
         dao.loadGroup(groupName1).unsafeRunSync()
       }
 
-      runAndWait(dao.removeGroupMember(groupName1, groupName2))
+      dao.removeGroupMember(groupName1, groupName2).unsafeRunSync()
 
       assertResult(Some(group1)) {
         dao.loadGroup(groupName1).unsafeRunSync()
@@ -302,9 +302,9 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     val groupName2 = WorkbenchGroupName(UUID.randomUUID().toString)
     val group2 = BasicWorkbenchGroup(groupName2, Set.empty, WorkbenchEmail("g2@example.com"))
 
-    runAndWait(dao.createUser(user))
-    runAndWait(dao.createGroup(group1))
-    runAndWait(dao.createGroup(group2))
+    dao.createUser(user).unsafeRunSync()
+    dao.createGroup(group1).unsafeRunSync()
+    dao.createGroup(group2).unsafeRunSync()
 
     val policyDAO = new LdapAccessPolicyDAO(connectionPool, directoryConfig, TestSupport.blockingEc)
 
@@ -330,8 +330,8 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     val groupName1 = WorkbenchGroupName(UUID.randomUUID().toString)
     val group1 = BasicWorkbenchGroup(groupName1, Set(userId), WorkbenchEmail("g1@example.com"))
 
-    runAndWait(dao.createUser(user))
-    runAndWait(dao.createGroup(group1))
+    dao.createUser(user).unsafeRunSync()
+    dao.createGroup(group1).unsafeRunSync()
 
     assert(runAndWait(dao.isGroupMember(WorkbenchGroupName(group1.id.value.toUpperCase), userId)))
   }
@@ -340,7 +340,7 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     val userId = WorkbenchUserId(UUID.randomUUID().toString)
     val user = WorkbenchUser(userId, None, WorkbenchEmail("foo@bar.com"))
 
-    runAndWait(dao.createUser(user))
+    dao.createUser(user).unsafeRunSync()
 
     val serviceAccount = ServiceAccount(ServiceAccountSubjectId("09834572039847519384"), WorkbenchEmail("foo@sa.com"), ServiceAccountDisplayName("blarg"))
     val pet = PetServiceAccount(PetServiceAccountId(userId, GoogleProject("foo")), serviceAccount)
@@ -373,11 +373,11 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     }
 
     assertResult(childGroup) {
-      runAndWait(dao.createGroup(childGroup))
+      dao.createGroup(childGroup).unsafeRunSync()
     }
 
     assertResult(parentGroup) {
-      runAndWait(dao.createGroup(parentGroup))
+      dao.createGroup(parentGroup).unsafeRunSync()
     }
 
     assertResult(Some(childGroup)) {
@@ -421,7 +421,7 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     }
 
     assertResult(user) {
-      runAndWait(dao.createUser(user))
+      dao.createUser(user).unsafeRunSync()
     }
 
     assertResult(Some(user)) {

@@ -317,7 +317,7 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
   }
 
   def removeSubjectFromPolicy(policyIdentity: FullyQualifiedPolicyId, subject: WorkbenchSubject): Future[Unit] = {
-    directoryDAO.removeGroupMember(policyIdentity, subject).map(_ => ()) andThen {
+    directoryDAO.removeGroupMember(policyIdentity, subject).void.unsafeToFuture() andThen {
       case Success(_) => fireGroupUpdateNotification(policyIdentity)
     }
   }

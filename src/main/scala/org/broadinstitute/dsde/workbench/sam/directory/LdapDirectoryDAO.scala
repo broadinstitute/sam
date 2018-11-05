@@ -21,7 +21,7 @@ import scala.util.{Failure, Success, Try}
 class LdapDirectoryDAO(protected val ldapConnectionPool: LDAPConnectionPool, protected val directoryConfig: DirectoryConfig, protected val ecForLdapBlockingIO: ExecutionContext)(implicit executionContext: ExecutionContext) extends DirectoryDAO with DirectorySubjectNameSupport with LdapSupport {
   implicit val cs = IO.contextShift(executionContext)
 
-  override def createGroup(group: BasicWorkbenchGroup, accessInstructionsOpt: Option[String] = None): Future[BasicWorkbenchGroup] = Future {
+  override def createGroup(group: BasicWorkbenchGroup, accessInstructionsOpt: Option[String] = None): IO[BasicWorkbenchGroup] = {
     val membersAttribute = if (group.members.isEmpty) None else Option(new Attribute(Attr.uniqueMember, group.members.map(subject => subjectDn(subject)).asJava))
 
     val accessInstructionsAttr = accessInstructionsOpt.collect {
@@ -35,12 +35,10 @@ class LdapDirectoryDAO(protected val ldapConnectionPool: LDAPConnectionPool, pro
     ) ++ membersAttribute ++
       accessInstructionsAttr
 
-    ldapConnectionPool.add(groupDn(group.id), attributes.asJava)
-
-    group
-  }.recover {
-    case ldape: LDAPException if ldape.getResultCode == ResultCode.ENTRY_ALREADY_EXISTS =>
-      throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"group name ${group.id.value} already exists"))
+    cs.evalOn(ecForLdapBlockingIO)(IO(ldapConnectionPool.add(groupDn(group.id), attributes.asJava))).adaptError {
+      case ldape: LDAPException if ldape.getResultCode == ResultCode.ENTRY_ALREADY_EXISTS =>
+        new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"group name ${group.id.value} already exists"))
+    } *> IO.pure(group)
   }
 
   override def loadGroup(groupName: WorkbenchGroupName): IO[Option[BasicWorkbenchGroup]] = cs.evalOn(ecForLdapBlockingIO) {
@@ -95,16 +93,16 @@ class LdapDirectoryDAO(protected val ldapConnectionPool: LDAPConnectionPool, pro
     new Modification(ModificationType.REPLACE, Attr.groupUpdatedTimestamp, formattedDate(new Date()))
   }
 
-  override def removeGroupMember(groupId: WorkbenchGroupIdentity, removeMember: WorkbenchSubject): Future[Boolean] = Future {
-    Try {
+  override def removeGroupMember(groupId: WorkbenchGroupIdentity, removeMember: WorkbenchSubject): IO[Boolean] = {
+    cs.evalOn(ecForLdapBlockingIO)(IO(
       ldapConnectionPool.modify(groupDn(groupId),
         new Modification(ModificationType.DELETE, Attr.uniqueMember, subjectDn(removeMember)),
         groupUpdatedModification
       )
-    } match {
-      case Success(_) => true
-      case Failure(ldape: LDAPException) if ldape.getResultCode == ResultCode.NO_SUCH_ATTRIBUTE => false
-      case Failure(regrets) => throw regrets
+    )).attempt.flatMap{
+      case Right(_) => IO.pure(true)
+      case Left(ldape: LDAPException) if ldape.getResultCode == ResultCode.NO_SUCH_ATTRIBUTE => IO.pure(false)
+      case Left(regrets) => IO.raiseError(regrets)
     }
   }
 
@@ -158,7 +156,7 @@ class LdapDirectoryDAO(protected val ldapConnectionPool: LDAPConnectionPool, pro
     } yield (userEmails ++ groupEmails).toSet
   }
 
-  override def createUser(user: WorkbenchUser): Future[WorkbenchUser] = {
+  override def createUser(user: WorkbenchUser): IO[WorkbenchUser] = {
     val attrs = List(
       new Attribute(Attr.email, user.email.value),
       new Attribute(Attr.sn, user.id.value),
@@ -166,13 +164,11 @@ class LdapDirectoryDAO(protected val ldapConnectionPool: LDAPConnectionPool, pro
       new Attribute(Attr.uid, user.id.value),
       new Attribute("objectclass", Seq("top", "workbenchPerson").asJava)
     ) ++ user.googleSubjectId.map(gsid => List(new Attribute(Attr.googleSubjectId, gsid.value))).getOrElse(List.empty)
-    Future {
-      ldapConnectionPool.add(userDn(user.id), attrs: _*)
-      user
-    }.recoverWith {
+
+    cs.evalOn(ecForLdapBlockingIO)(IO(ldapConnectionPool.add(userDn(user.id), attrs: _*))).adaptError{
       case ldape: LDAPException if ldape.getResultCode == ResultCode.ENTRY_ALREADY_EXISTS =>
-        Future.failed(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"identity with id ${user.id} already exists")))
-    }
+       new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"identity with id ${user.id} already exists"))
+    } *> IO.pure(user)
   }
 
   override def loadUser(userId: WorkbenchUserId): IO[Option[WorkbenchUser]] = cs.evalOn(ecForLdapBlockingIO)(IO(loadUserInternal(userId)))

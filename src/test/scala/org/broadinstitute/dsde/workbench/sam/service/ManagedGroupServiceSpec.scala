@@ -83,7 +83,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
   before {
     runAndWait(schemaDao.clearDatabase())
     runAndWait(schemaDao.createOrgUnits())
-    runAndWait(dirDAO.createUser(WorkbenchUser(dummyUserInfo.userId, Some(TestSupport.genGoogleSubjectId()), dummyUserInfo.userEmail)))
+    dirDAO.createUser(WorkbenchUser(dummyUserInfo.userId, Some(TestSupport.genGoogleSubjectId()), dummyUserInfo.userEmail)).unsafeRunSync()
   }
 
   "ManagedGroupService create" should "create a managed group with admin and member policies" in {
@@ -180,7 +180,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     val managedGroupName = WorkbenchGroupName(managedGroup.resourceId.value)
     val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName("parentGroup"), Set(managedGroupName), WorkbenchEmail("foo@foo.gov"))
 
-    runAndWait(dirDAO.createGroup(parentGroup)) shouldEqual parentGroup
+    dirDAO.createGroup(parentGroup).unsafeRunSync() shouldEqual parentGroup
 
     // using .get on an option here because if the Option is None and this throws an exception, that's fine
     dirDAO.loadGroup(parentGroup.id).unsafeRunSync().get.members shouldEqual Set(managedGroupName)
@@ -209,9 +209,9 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     val dummyAdmin = WorkbenchUser(dummyUserInfo.userId, None, dummyUserInfo.userEmail)
     val otherAdmin = WorkbenchUser(WorkbenchUserId("admin2"), None, WorkbenchEmail("admin2@foo.test"))
     val someGroupEmail = WorkbenchEmail("someGroup@some.org")
-    runAndWait(dirDAO.createUser(otherAdmin))
+    dirDAO.createUser(otherAdmin).unsafeRunSync()
     val managedGroup = assertMakeGroup()
-    runAndWait(dirDAO.createGroup(BasicWorkbenchGroup(WorkbenchGroupName("someGroup"), Set.empty, someGroupEmail)))
+    dirDAO.createGroup(BasicWorkbenchGroup(WorkbenchGroupName("someGroup"), Set.empty, someGroupEmail)).unsafeRunSync()
 
     runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName)) shouldEqual Set(dummyAdmin.email)
 
@@ -240,8 +240,8 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
 
     val someUser = WorkbenchUser(WorkbenchUserId("someUser"), None, WorkbenchEmail("someUser@foo.test"))
     val someGroupEmail = WorkbenchEmail("someGroup@some.org")
-    runAndWait(dirDAO.createUser(someUser))
-    runAndWait(dirDAO.createGroup(BasicWorkbenchGroup(WorkbenchGroupName("someGroup"), Set.empty, someGroupEmail)))
+    dirDAO.createUser(someUser).unsafeRunSync()
+    dirDAO.createGroup(BasicWorkbenchGroup(WorkbenchGroupName("someGroup"), Set.empty, someGroupEmail)).unsafeRunSync()
 
     runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.memberPolicyName)) shouldEqual Set()
 
@@ -259,7 +259,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     runAndWait(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName)) shouldEqual Set(adminUser.email)
 
     val someUser = WorkbenchUser(WorkbenchUserId("someUser"), None, WorkbenchEmail("someUser@foo.test"))
-    runAndWait(dirDAO.createUser(someUser))
+    dirDAO.createUser(someUser).unsafeRunSync()
     runAndWait(managedGroupService.addSubjectToPolicy(managedGroup.resourceId, ManagedGroupService.adminPolicyName, someUser.id))
 
     val expectedEmails = Set(adminUser.email, someUser.email)
@@ -329,8 +329,8 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
 
     val user1 = UserInfo(OAuth2BearerToken("token1"), WorkbenchUserId("userId1"), WorkbenchEmail("user1@company.com"), 0)
     val user2 = UserInfo(OAuth2BearerToken("token2"), WorkbenchUserId("userId2"), WorkbenchEmail("user2@company.com"), 0)
-    runAndWait(dirDAO.createUser(WorkbenchUser(user1.userId, None, user1.userEmail)))
-    runAndWait(dirDAO.createUser(WorkbenchUser(user2.userId, None, user2.userEmail)))
+    dirDAO.createUser(WorkbenchUser(user1.userId, None, user1.userEmail)).unsafeRunSync()
+    dirDAO.createUser(WorkbenchUser(user2.userId, None, user2.userEmail)).unsafeRunSync()
 
     val user1Groups = Set("foo", "bar", "baz")
     val user2Groups = Set("qux", "quux")

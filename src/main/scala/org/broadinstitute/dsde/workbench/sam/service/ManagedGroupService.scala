@@ -31,12 +31,12 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
     for {
       managedGroup <- resourceService.createResource(managedGroupType, groupId, Map(adminPolicy, memberPolicy, adminNotificationPolicy), Set.empty, userInfo.userId)
       policies <- accessPolicyDAO.listAccessPolicies(managedGroup.fullyQualifiedId).unsafeToFuture()
-      workbenchGroup <- createAggregateGroup(managedGroup, policies, accessInstructionsOpt)
+      workbenchGroup <- createAggregateGroup(managedGroup, policies, accessInstructionsOpt).unsafeToFuture()
       _ <- cloudExtensions.publishGroup(workbenchGroup.id)
     } yield managedGroup
   }
 
-  private def createAggregateGroup(resource: Resource, componentPolicies: Set[AccessPolicy], accessInstructionsOpt: Option[String]): Future[BasicWorkbenchGroup] = {
+  private def createAggregateGroup(resource: Resource, componentPolicies: Set[AccessPolicy], accessInstructionsOpt: Option[String]): IO[BasicWorkbenchGroup] = {
     val email = WorkbenchEmail(constructEmail(resource.resourceId.value))
     val workbenchGroupName = WorkbenchGroupName(resource.resourceId.value)
     val groupMembers: Set[WorkbenchSubject] = componentPolicies.collect {

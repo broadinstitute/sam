@@ -33,14 +33,14 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
 
   private val groupAccessInstructions: mutable.Map[WorkbenchGroupName, String] = new TrieMap()
 
-  override def createGroup(group: BasicWorkbenchGroup, accessInstruction: Option[String] = None): Future[BasicWorkbenchGroup] = Future {
+  override def createGroup(group: BasicWorkbenchGroup, accessInstruction: Option[String] = None): IO[BasicWorkbenchGroup] =
     if (groups.keySet.contains(group.id)) {
-      throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"group ${group.id} already exists"))
+      IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"group ${group.id} already exists")))
+    } else {
+      groups += group.id -> group
+      groupsWithEmails += group.email -> group.id
+      IO.pure(group)
     }
-    groups += group.id -> group
-    groupsWithEmails += group.email -> group.id
-    group
-  }
 
   override def loadGroup(groupName: WorkbenchGroupName): IO[Option[BasicWorkbenchGroup]] = IO {
     groups.get(groupName).map(_.asInstanceOf[BasicWorkbenchGroup])
@@ -70,7 +70,7 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     true
   }
 
-  override def removeGroupMember(groupName: WorkbenchGroupIdentity, removeMember: WorkbenchSubject): Future[Boolean] = Future {
+  override def removeGroupMember(groupName: WorkbenchGroupIdentity, removeMember: WorkbenchSubject): IO[Boolean] = IO {
     val group = groups(groupName)
     val updatedGroup = group match {
       case g: BasicWorkbenchGroup => g.copy(members = group.members - removeMember)
@@ -89,16 +89,16 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     Option(usersWithEmails.getOrElse(email, groupsWithEmails.getOrElse(email, petsWithEmails.getOrElse(email, null))))
   }
 
-  override def createUser(user: WorkbenchUser): Future[WorkbenchUser] = Future {
+  override def createUser(user: WorkbenchUser): IO[WorkbenchUser] =
     if (users.keySet.contains(user.id)) {
-      throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"user ${user.id} already exists"))
-    }
-    users += user.id -> user
-    usersWithEmails += user.email -> user.id
-    user.googleSubjectId.map(gid => usersWithGoogleSubjectIds += gid -> user.id)
+      IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"user ${user.id} already exists")))
+    } else {
+      users += user.id -> user
+      usersWithEmails += user.email -> user.id
+      user.googleSubjectId.map(gid => usersWithGoogleSubjectIds += gid -> user.id)
 
-    user
-  }
+      IO.pure(user)
+    }
 
   override def loadUser(userId: WorkbenchUserId): IO[Option[WorkbenchUser]] = IO {
     users.get(userId)

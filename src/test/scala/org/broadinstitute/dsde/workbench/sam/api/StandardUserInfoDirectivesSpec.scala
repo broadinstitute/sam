@@ -42,7 +42,7 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
       val directoryDAO = new MockDirectoryDAO()
       val googleSubjectId = GoogleSubjectId(genRandom(System.currentTimeMillis()))
       val uid = genWorkbenchUserId(System.currentTimeMillis())
-      directoryDAO.createUser(WorkbenchUser(uid, Some(googleSubjectId), email)).futureValue
+      directoryDAO.createUser(WorkbenchUser(uid, Some(googleSubjectId), email)).unsafeRunSync()
       val res = getUserInfo(token, googleSubjectId, email, 10L, directoryDAO).unsafeRunSync()
       res should be (UserInfo(token, uid, email, 10L))
     }
@@ -53,7 +53,7 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
       (serviceSubjectId: ServiceAccountSubjectId, googleSubjectId: GoogleSubjectId, token: OAuth2BearerToken, email: WorkbenchEmail) =>
       val directoryDAO = new MockDirectoryDAO()
       val uid = genWorkbenchUserId(System.currentTimeMillis())
-      directoryDAO.createUser(WorkbenchUser(uid, Some(googleSubjectId), email)).futureValue
+      directoryDAO.createUser(WorkbenchUser(uid, Some(googleSubjectId), email)).unsafeRunSync()
       directoryDAO.createPetServiceAccount(PetServiceAccount(PetServiceAccountId(uid, GoogleProject("")), ServiceAccount(serviceSubjectId, email, ServiceAccountDisplayName("")))).unsafeRunSync()
       val res = getUserInfo(token, googleSubjectId, email, 10L, directoryDAO).unsafeRunSync()
       res should be (UserInfo(token, uid, email, 10L))
@@ -66,7 +66,7 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
       val directoryDAO = new MockDirectoryDAO()
       val gSid = GoogleSubjectId(serviceSubjectId.value)
       val uid = genWorkbenchUserId(System.currentTimeMillis())
-      directoryDAO.createUser(WorkbenchUser(uid, Some(gSid), email)).futureValue
+      directoryDAO.createUser(WorkbenchUser(uid, Some(gSid), email)).unsafeRunSync()
       val res = getUserInfo(token, gSid, email, 10L, directoryDAO).unsafeRunSync()
       res should be (UserInfo(token, uid, email, 10L))
     }
