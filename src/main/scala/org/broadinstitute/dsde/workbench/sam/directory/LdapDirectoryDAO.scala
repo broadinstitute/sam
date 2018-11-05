@@ -151,7 +151,7 @@ class LdapDirectoryDAO(protected val ldapConnectionPool: LDAPConnectionPool, pro
     val users = loadUsers(subjects collect { case userId: WorkbenchUserId => userId })
     val groups = loadGroups(subjects collect { case groupName: WorkbenchGroupName => groupName })
     for {
-      userEmails <- users.map(_.map(_.email))
+      userEmails <- users.unsafeToFuture().map(_.map(_.email))
       groupEmails <- groups.map(_.map(_.email))
     } yield (userEmails ++ groupEmails).toSet
   }
@@ -174,21 +174,24 @@ class LdapDirectoryDAO(protected val ldapConnectionPool: LDAPConnectionPool, pro
   override def loadUser(userId: WorkbenchUserId): IO[Option[WorkbenchUser]] = cs.evalOn(ecForLdapBlockingIO)(IO(loadUserInternal(userId)))
 
   private def loadUserInternal(userId: WorkbenchUserId) = {
-    Option(ldapConnectionPool.getEntry(userDn(userId))) map { results =>
-      unmarshalUser(results)
+    Option(ldapConnectionPool.getEntry(userDn(userId))) flatMap { results =>
+      unmarshalUser(results).toOption
     }
   }
 
-  private def unmarshalUser(results: Entry): WorkbenchUser = {
-    val uid = getAttribute(results, Attr.uid).getOrElse(throw new WorkbenchException(s"${Attr.uid} attribute missing"))
-    val email = getAttribute(results, Attr.email).getOrElse(throw new WorkbenchException(s"${Attr.email} attribute missing"))
-
-    WorkbenchUser(WorkbenchUserId(uid), getAttribute(results, Attr.googleSubjectId).map(GoogleSubjectId), WorkbenchEmail(email))
+  private def unmarshalUser(results: Entry): Either[String, WorkbenchUser] = {
+    for{
+      uid <- getAttribute(results, Attr.uid).toRight(s"${Attr.uid} attribute missing")
+      email <- getAttribute(results, Attr.email).toRight(s"${Attr.email} attribute missing")
+    } yield WorkbenchUser(WorkbenchUserId(uid), getAttribute(results, Attr.googleSubjectId).map(GoogleSubjectId), WorkbenchEmail(email))
   }
 
-  override def loadUsers(userIds: Set[WorkbenchUserId]): Future[Seq[WorkbenchUser]] = Future {
+  override def loadUsers(userIds: Set[WorkbenchUserId]): IO[Stream[WorkbenchUser]] = {
     val filters = userIds.grouped(batchSize).map(batch => Filter.createORFilter(batch.map(g => Filter.createEqualityFilter(Attr.uid, g.value)).asJava)).toSeq
-    ldapSearchStream(peopleOu, SearchScope.ONE, filters:_*)(unmarshalUser)
+    for{
+      streamOfEither <- cs.evalOn(ecForLdapBlockingIO)(IO(ldapSearchStream(peopleOu, SearchScope.ONE, filters:_*)(unmarshalUser)))
+      res <- streamOfEither.parSequence.fold(err => IO.raiseError(new WorkbenchException(err)), r => IO.pure(r))
+    } yield res
   }
 
   override def deleteUser(userId: WorkbenchUserId): Future[Unit] = Future {

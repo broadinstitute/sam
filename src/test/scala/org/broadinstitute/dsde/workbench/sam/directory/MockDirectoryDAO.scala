@@ -104,8 +104,8 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     users.get(userId)
   }
 
-  override def loadUsers(userIds: Set[WorkbenchUserId]): Future[Seq[WorkbenchUser]] = Future {
-    users.filterKeys(userIds).values.toSeq
+  override def loadUsers(userIds: Set[WorkbenchUserId]): IO[Stream[WorkbenchUser]] = IO {
+    users.filterKeys(userIds).values.toStream
   }
 
   override def deleteUser(userId: WorkbenchUserId): Future[Unit] = Future {

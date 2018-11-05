@@ -40,7 +40,7 @@ trait DirectoryDAO {
 
   def createUser(user: WorkbenchUser): IO[WorkbenchUser]
   def loadUser(userId: WorkbenchUserId): IO[Option[WorkbenchUser]]
-  def loadUsers(userIds: Set[WorkbenchUserId]): Future[Seq[WorkbenchUser]]
+  def loadUsers(userIds: Set[WorkbenchUserId]): IO[Stream[WorkbenchUser]]
   def deleteUser(userId: WorkbenchUserId): Future[Unit]
   def addProxyGroup(userId: WorkbenchUserId, proxyEmail: WorkbenchEmail): Future[Unit]
   def readProxyGroup(userId: WorkbenchUserId): Future[Option[WorkbenchEmail]]

@@ -327,7 +327,7 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     val groups = policy.members.collect { case groupName: WorkbenchGroupName => groupName }
 
     for {
-      userEmails <- directoryDAO.loadUsers(users)
+      userEmails <- directoryDAO.loadUsers(users).unsafeToFuture()
       groupEmails <- directoryDAO.loadGroups(groups)
     } yield AccessPolicyMembership(userEmails.toSet[WorkbenchUser].map(_.email) ++ groupEmails.map(_.email), policy.actions, policy.roles)
   }
@@ -397,7 +397,7 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     for {
       accessPolicies <- accessPolicyDAO.listAccessPolicies(resourceId)
       members <- accessPolicies.toList.parTraverse(accessPolicy => accessPolicyDAO.listFlattenedPolicyMembers(accessPolicy.id))
-      workbenchUsers <- IO.fromFuture(IO(directoryDAO.loadUsers(members.toSet.flatten)))
+      workbenchUsers <- directoryDAO.loadUsers(members.toSet.flatten)
     } yield {
       workbenchUsers.map(user => UserIdInfo(user.id, user.email, user.googleSubjectId)).toSet
     }
