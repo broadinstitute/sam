@@ -71,7 +71,7 @@ class LdapDirectoryDAO(protected val ldapConnectionPool: LDAPConnectionPool, pro
   override def deleteGroup(groupName: WorkbenchGroupName): Future[Unit] = {
     listAncestorGroups(groupName).map { ancestors =>
       if (ancestors.nonEmpty) {
-        throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"group ${groupName.value} cannot be deleted because it is a member of at least 1 other group"))
+        throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"group ${groupName.value} cannot be deleted because it is a member of at least 1 other group: ${ancestors.mkString(", ")}"))
       } else {
         ldapConnectionPool.delete(groupDn(groupName))
       }
