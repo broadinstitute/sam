@@ -187,7 +187,7 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     petServiceAccountsByUser.get(petServiceAccountUniqueId)
   }
 
-  override def deletePetServiceAccount(petServiceAccountUniqueId: PetServiceAccountId): Future[Unit] = Future {
+  override def deletePetServiceAccount(petServiceAccountUniqueId: PetServiceAccountId): IO[Unit] = IO {
     petServiceAccountsByUser -= petServiceAccountUniqueId
   }
 
@@ -238,11 +238,11 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     petServiceAccount
   }
 
-  override def getManagedGroupAccessInstructions(groupName: WorkbenchGroupName): Future[Option[String]] = Future {
+  override def getManagedGroupAccessInstructions(groupName: WorkbenchGroupName): IO[Option[String]] = {
     if (groups.contains(groupName))
-      groupAccessInstructions.get(groupName)
+      IO.pure(groupAccessInstructions.get(groupName))
     else
-      throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "group not found"))
+      IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "group not found")))
   }
 
   override def setManagedGroupAccessInstructions(groupName: WorkbenchGroupName, accessInstructions: String): IO[Unit] = {

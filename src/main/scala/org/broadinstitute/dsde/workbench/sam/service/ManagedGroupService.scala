@@ -135,6 +135,7 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
     resourceService.removeSubjectFromPolicy(resourceAndPolicyName, subject)
   }
 
+<<<<<<< HEAD
   def requestAccess(resourceId: ResourceId, requesterUserId: WorkbenchUserId): Future[Unit] = {
     def extractGoogleSubjectId(requesterUser: Option[WorkbenchUser]) = {
       (for { u <- requesterUser; s <- u.googleSubjectId } yield s) match {
@@ -144,14 +145,18 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
       }
     }
 
+=======
+  def requestAccess(resourceId: ResourceId, requesterUserId: WorkbenchUserId): IO[Unit] = {
+>>>>>>> use OptionT
     getAccessInstructions(resourceId).flatMap {
       case Some(accessInstructions) =>
-        Future.failed(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"Please follow special access instructions: $accessInstructions")))
+        IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"Please follow special access instructions: $accessInstructions")))
       case None =>
         // Thurloe is the thing that sends the emails and it knows only about google subject ids, not internal sam user ids
         // so we have to do some conversion here which makes the code look less straight forward
         val resourceAndAdminPolicyName = FullyQualifiedPolicyId(
           FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, resourceId), ManagedGroupService.adminPolicyName)
+<<<<<<< HEAD
 
         val notificationIO = for {
           requesterUser <- directoryDAO.loadUser(requesterUserId)
@@ -162,6 +167,11 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
         } yield {
           val notifications = adminUserIds.map { recipientUserId =>
             Notifications.GroupAccessRequestNotification(recipientUserId, WorkbenchGroupName(resourceId.value).value, adminUserIds, requesterSubjectId)
+=======
+        accessPolicyDAO.listFlattenedPolicyMembers(resourceAndPolicyName).map { users =>
+          val notifications = users.map { recipientUserId =>
+            Notifications.GroupAccessRequestNotification(recipientUserId, WorkbenchGroupName(resourceId.value).value, users, requesterUserId)
+>>>>>>> use OptionT
           }
           cloudExtensions.fireAndForgetNotifications(notifications)
         }
@@ -170,7 +180,7 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
     }
   }
 
-  def getAccessInstructions(groupId: ResourceId): Future[Option[String]] = {
+  def getAccessInstructions(groupId: ResourceId): IO[Option[String]] = {
     directoryDAO.getManagedGroupAccessInstructions(WorkbenchGroupName(groupId.value))
   }
 

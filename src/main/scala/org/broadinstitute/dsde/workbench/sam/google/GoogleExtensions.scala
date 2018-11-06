@@ -197,7 +197,7 @@ class GoogleExtensions(directoryDAO: DirectoryDAO, val accessPolicyDAO: AccessPo
     for {
       _ <- withProxyEmail(userId) { googleDirectoryDAO.deleteGroup }
       _ <- forAllPets(userId) { pet => googleIamDAO.removeServiceAccount(pet.id.project, toAccountName(pet.serviceAccount.email)) }
-      _ <- forAllPets(userId) { pet => directoryDAO.deletePetServiceAccount(pet.id) }
+      _ <- forAllPets(userId) { pet => directoryDAO.deletePetServiceAccount(pet.id).unsafeToFuture() }
     } yield ()
   }
 
@@ -209,19 +209,19 @@ class GoogleExtensions(directoryDAO: DirectoryDAO, val accessPolicyDAO: AccessPo
   def createUserPetServiceAccount(user: WorkbenchUser): Future[PetServiceAccount] = createUserPetServiceAccount(user, petServiceAccountConfig.googleProject)
 
   @deprecated("Use new two-argument version of this function", "Sam Phase 3")
-  def deleteUserPetServiceAccount(userId: WorkbenchUserId): Future[Boolean] = deleteUserPetServiceAccount(userId, petServiceAccountConfig.googleProject)
+  def deleteUserPetServiceAccount(userId: WorkbenchUserId): Future[Boolean] = deleteUserPetServiceAccount(userId, petServiceAccountConfig.googleProject).unsafeToFuture() //TODO: shall we delete these deprecated methods
 
-  def deleteUserPetServiceAccount(userId: WorkbenchUserId, project: GoogleProject): Future[Boolean] = {
+  def deleteUserPetServiceAccount(userId: WorkbenchUserId, project: GoogleProject): IO[Boolean] = {
     for {
-      maybePet <- directoryDAO.loadPetServiceAccount(PetServiceAccountId(userId, project)).unsafeToFuture()
+      maybePet <- directoryDAO.loadPetServiceAccount(PetServiceAccountId(userId, project))
       deletedSomething <- maybePet match {
         case Some(pet) =>
           for {
             _ <- directoryDAO.deletePetServiceAccount(PetServiceAccountId(userId, project))
-            _ <- googleIamDAO.removeServiceAccount(project, toAccountName(pet.serviceAccount.email))
+            _ <- IO.fromFuture(IO(googleIamDAO.removeServiceAccount(project, toAccountName(pet.serviceAccount.email))))
           } yield true
 
-        case  None => Future.successful(false) // didn't find the pet, nothing to delete
+        case  None => IO.pure(false) // didn't find the pet, nothing to delete
       }
     } yield deletedSomething
   }
@@ -376,7 +376,7 @@ class GoogleExtensions(directoryDAO: DirectoryDAO, val accessPolicyDAO: AccessPo
     // disable the pet service account
       _ <- disablePetServiceAccount(petServiceAccount)
       // remove the LDAP record for the pet service account
-      _ <- directoryDAO.deletePetServiceAccount(petServiceAccount.id)
+      _ <- directoryDAO.deletePetServiceAccount(petServiceAccount.id).unsafeToFuture()
       // remove the service account itself in Google
       _ <- googleIamDAO.removeServiceAccount(petServiceAccountConfig.googleProject, toAccountName(petServiceAccount.serviceAccount.email))
     } yield ()

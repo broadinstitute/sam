@@ -373,18 +373,18 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     val instructions = "Test Instructions"
 
     managedGroupService.setAccessInstructions(managedGroup.resourceId, instructions).unsafeRunSync()
-    runAndWait(managedGroupService.getAccessInstructions(managedGroup.resourceId)).getOrElse(None) shouldEqual instructions
+    managedGroupService.getAccessInstructions(managedGroup.resourceId).unsafeRunSync().getOrElse(None) shouldEqual instructions
   }
 
   it should "return None when access instructions have not been set" in {
     val managedGroup = assertMakeGroup()
 
-    runAndWait(managedGroupService.getAccessInstructions(managedGroup.resourceId)) shouldEqual None
+    managedGroupService.getAccessInstructions(managedGroup.resourceId).unsafeRunSync() shouldEqual None
   }
 
   it should "throw an exception if the group is not found" in {
     val exception = intercept[WorkbenchExceptionWithErrorReport] {
-      runAndWait(managedGroupService.getAccessInstructions(ResourceId("Nonexistent Group")))
+      managedGroupService.getAccessInstructions(ResourceId("Nonexistent Group")).unsafeRunSync()
     }
     exception.getMessage should include ("not found")
   }
@@ -393,9 +393,9 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     val managedGroup = assertMakeGroup()
     val instructions = "Test Instructions"
 
-    runAndWait(managedGroupService.getAccessInstructions(managedGroup.resourceId)) shouldEqual None
+    managedGroupService.getAccessInstructions(managedGroup.resourceId).unsafeRunSync() shouldEqual None
     managedGroupService.setAccessInstructions(managedGroup.resourceId, instructions).unsafeRunSync()
-    runAndWait(managedGroupService.getAccessInstructions(managedGroup.resourceId)).getOrElse(None) shouldEqual instructions
+    managedGroupService.getAccessInstructions(managedGroup.resourceId).unsafeRunSync().getOrElse(None) shouldEqual instructions
   }
 
   it should "modify the current access instructions" in {
@@ -404,11 +404,11 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     val instructions = "Test Instructions"
     val managedGroup = runAndWait(managedGroupService.createManagedGroup(ResourceId(resourceId.value), dummyUserInfo, Option(instructions)))
 
-    runAndWait(managedGroupService.getAccessInstructions(managedGroup.resourceId)).getOrElse(None) shouldEqual instructions
+    managedGroupService.getAccessInstructions(managedGroup.resourceId).unsafeRunSync().getOrElse(None) shouldEqual instructions
 
     val newInstructions = "Much better instructions"
     managedGroupService.setAccessInstructions(managedGroup.resourceId, newInstructions).unsafeRunSync()
-    runAndWait(managedGroupService.getAccessInstructions(managedGroup.resourceId)).getOrElse(None) shouldEqual newInstructions
+    managedGroupService.getAccessInstructions(managedGroup.resourceId).unsafeRunSync().getOrElse(None) shouldEqual newInstructions
   }
 
   "ManagedGroupService requestAccess" should "send notifications" in {

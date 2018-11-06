@@ -57,10 +57,10 @@ trait DirectoryDAO {
   def getUserFromPetServiceAccount(petSA: ServiceAccountSubjectId):IO[Option[WorkbenchUser]]
   def createPetServiceAccount(petServiceAccount: PetServiceAccount): IO[PetServiceAccount]
   def loadPetServiceAccount(petServiceAccountId: PetServiceAccountId): IO[Option[PetServiceAccount]]
-  def deletePetServiceAccount(petServiceAccountId: PetServiceAccountId): Future[Unit]
+  def deletePetServiceAccount(petServiceAccountId: PetServiceAccountId): IO[Unit]
   def getAllPetServiceAccountsForUser(userId: WorkbenchUserId): Future[Seq[PetServiceAccount]]
   def updatePetServiceAccount(petServiceAccount: PetServiceAccount): IO[PetServiceAccount]
-  def getManagedGroupAccessInstructions(groupName: WorkbenchGroupName): Future[Option[String]]
+  def getManagedGroupAccessInstructions(groupName: WorkbenchGroupName): IO[Option[String]]
   def setManagedGroupAccessInstructions(groupName: WorkbenchGroupName, accessInstructions: String): IO[Unit]
   def setGoogleSubjectId(userId: WorkbenchUserId, googleSubjectId: GoogleSubjectId): IO[Unit]
 }
