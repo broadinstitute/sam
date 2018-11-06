@@ -57,8 +57,8 @@ class PolicyEvaluatorService(
           if(isUserMemberOfAllAuthDomains){
             allPolicyActions
           } else {
-            val constrainableActions = rt.actionPatterns.map(_.value)
-            allPolicyActions.filterNot(x => constrainableActions.contains(x.value))
+            val constrainableActions = rt.actionPatterns.filter(_.authDomainConstrainable)
+            allPolicyActions.filterNot(x => constrainableActions.exists(_.matches(x)))
           }
         }
       } else allPolicyActions.pure[IO]
