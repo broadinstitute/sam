@@ -48,23 +48,27 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
     *      yes            skip    ---> User exists. Do nothing.
     *      yes            skip    ---> User exists. Do nothing.
     */
-  protected[service] def registerUser(user: CreateWorkbenchUser): IO[WorkbenchUser] = for{
-    existingSubFromGoogleSubjectId <- directoryDAO.loadSubjectFromGoogleSubjectId(user.googleSubjectId)
-    user <- existingSubFromGoogleSubjectId match{
-      case Some(_) => IO.raiseError[WorkbenchUser](new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"user ${user} already exists")))
-      case None => for{
-        subjectFromEmail <- directoryDAO.loadSubjectFromEmail(user.email)
-        updated <- subjectFromEmail match{
-          case Some(uid : WorkbenchUserId) =>
-            directoryDAO.setGoogleSubjectId(uid, user.googleSubjectId).map(_ => WorkbenchUser(uid, Some(user.googleSubjectId), user.email))
-          case Some(sub) =>
-            //We don't support inviting a group account or pet service account
-            IO.raiseError[WorkbenchUser](new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"$user is not a regular user. Please use a different endpoint")))
-          case None => directoryDAO.createUser(WorkbenchUser(WorkbenchUserId(user.googleSubjectId.value), Some(user.googleSubjectId), user.email)) //For completely new users, we still use googleSubjectId as their userId
-        }
-      } yield updated
-    }
-  } yield user
+  protected[service] def registerUser(user: CreateWorkbenchUser): IO[WorkbenchUser] =
+    for {
+      existingSubFromGoogleSubjectId <- directoryDAO.loadSubjectFromGoogleSubjectId(user.googleSubjectId)
+      user <- existingSubFromGoogleSubjectId match {
+        case Some(_) => IO.raiseError[WorkbenchUser](new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"user ${user} already exists")))
+        case None =>
+          for {
+            subjectFromEmail <- directoryDAO.loadSubjectFromEmail(user.email)
+            updated <- subjectFromEmail match {
+              case Some(uid: WorkbenchUserId) =>
+                directoryDAO.setGoogleSubjectId(uid, user.googleSubjectId).map(_ => WorkbenchUser(uid, Some(user.googleSubjectId), user.email))
+              case Some(sub) =>
+                //We don't support inviting a group account or pet service account
+                IO.raiseError[WorkbenchUser](
+                  new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"$user is not a regular user. Please use a different endpoint")))
+              case None =>
+                directoryDAO.createUser(WorkbenchUser(WorkbenchUserId(user.googleSubjectId.value), Some(user.googleSubjectId), user.email)) //For completely new users, we still use googleSubjectId as their userId
+            }
+          } yield updated
+      }
+    } yield user
 
   def getSubjectFromEmail(email: WorkbenchEmail): Future[Option[WorkbenchSubject]] = directoryDAO.loadSubjectFromEmail(email).unsafeToFuture()
 

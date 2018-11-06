@@ -94,16 +94,17 @@ class LdapDirectoryDAO(protected val ldapConnectionPool: LDAPConnectionPool, pro
   }
 
   override def removeGroupMember(groupId: WorkbenchGroupIdentity, removeMember: WorkbenchSubject): IO[Boolean] = {
-    cs.evalOn(ecForLdapBlockingIO)(IO(
-      ldapConnectionPool.modify(groupDn(groupId),
-        new Modification(ModificationType.DELETE, Attr.uniqueMember, subjectDn(removeMember)),
-        groupUpdatedModification
-      )
-    )).attempt.flatMap{
-      case Right(_) => IO.pure(true)
-      case Left(ldape: LDAPException) if ldape.getResultCode == ResultCode.NO_SUCH_ATTRIBUTE => IO.pure(false)
-      case Left(regrets) => IO.raiseError(regrets)
-    }
+    cs.evalOn(ecForLdapBlockingIO)(
+        IO(
+          ldapConnectionPool
+            .modify(groupDn(groupId), new Modification(ModificationType.DELETE, Attr.uniqueMember, subjectDn(removeMember)), groupUpdatedModification)
+        ))
+      .attempt
+      .flatMap {
+        case Right(_) => IO.pure(true)
+        case Left(ldape: LDAPException) if ldape.getResultCode == ResultCode.NO_SUCH_ATTRIBUTE => IO.pure(false)
+        case Left(regrets) => IO.raiseError(regrets)
+      }
   }
 
   override def isGroupMember(groupId: WorkbenchGroupIdentity, member: WorkbenchSubject): Future[Boolean] = Future {
@@ -165,9 +166,9 @@ class LdapDirectoryDAO(protected val ldapConnectionPool: LDAPConnectionPool, pro
       new Attribute("objectclass", Seq("top", "workbenchPerson").asJava)
     ) ++ user.googleSubjectId.map(gsid => List(new Attribute(Attr.googleSubjectId, gsid.value))).getOrElse(List.empty)
 
-    cs.evalOn(ecForLdapBlockingIO)(IO(ldapConnectionPool.add(userDn(user.id), attrs: _*))).adaptError{
+    cs.evalOn(ecForLdapBlockingIO)(IO(ldapConnectionPool.add(userDn(user.id), attrs: _*))).adaptError {
       case ldape: LDAPException if ldape.getResultCode == ResultCode.ENTRY_ALREADY_EXISTS =>
-       new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"identity with id ${user.id} already exists"))
+        new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"identity with id ${user.id} already exists"))
     } *> IO.pure(user)
   }
 
@@ -179,17 +180,16 @@ class LdapDirectoryDAO(protected val ldapConnectionPool: LDAPConnectionPool, pro
     }
   }
 
-  private def unmarshalUser(results: Entry): Either[String, WorkbenchUser] = {
-    for{
+  private def unmarshalUser(results: Entry): Either[String, WorkbenchUser] =
+    for {
       uid <- getAttribute(results, Attr.uid).toRight(s"${Attr.uid} attribute missing")
       email <- getAttribute(results, Attr.email).toRight(s"${Attr.email} attribute missing")
     } yield WorkbenchUser(WorkbenchUserId(uid), getAttribute(results, Attr.googleSubjectId).map(GoogleSubjectId), WorkbenchEmail(email))
-  }
 
   override def loadUsers(userIds: Set[WorkbenchUserId]): IO[Stream[WorkbenchUser]] = {
     val filters = userIds.grouped(batchSize).map(batch => Filter.createORFilter(batch.map(g => Filter.createEqualityFilter(Attr.uid, g.value)).asJava)).toSeq
-    for{
-      streamOfEither <- cs.evalOn(ecForLdapBlockingIO)(IO(ldapSearchStream(peopleOu, SearchScope.ONE, filters:_*)(unmarshalUser)))
+    for {
+      streamOfEither <- cs.evalOn(ecForLdapBlockingIO)(IO(ldapSearchStream(peopleOu, SearchScope.ONE, filters: _*)(unmarshalUser)))
       res <- streamOfEither.parSequence.fold(err => IO.raiseError(new WorkbenchException(err)), r => IO.pure(r))
     } yield res
   }
