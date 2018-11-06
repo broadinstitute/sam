@@ -124,7 +124,7 @@ class LdapAccessPolicyDAOSpec extends AsyncFlatSpec with ScalaFutures with Match
     val policy = AccessPolicy.members.modify(_ + user.id)(policyWithResource)
     val res = for{
       _ <- setup()
-      _ <- IO.fromFuture(IO(dirDao.createUser(user)))
+      _ <- dirDao.createUser(user)
       _ <- dao.createResourceType(policy.id.resource.resourceTypeName)
       _ <- dao.createResource(resource)
       _ <- dao.createPolicy(policy)

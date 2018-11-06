@@ -128,7 +128,7 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
       _ <- IO.fromFuture(IO(schemaDao.init()))
       _ <- IO.fromFuture(IO(schemaDao.clearDatabase()))
       _ <- IO.fromFuture(IO(schemaDao.createOrgUnits()))
-      _ <- IO.fromFuture(IO(dirDAO.createUser(WorkbenchUser(dummyUserInfo.userId, Some(TestSupport.genGoogleSubjectId()), dummyUserInfo.userEmail))))
+      _ <- dirDAO.createUser(WorkbenchUser(dummyUserInfo.userId, Some(TestSupport.genGoogleSubjectId()), dummyUserInfo.userEmail))
     } yield ()
   }
 
@@ -143,7 +143,7 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
     val policy = SamLenses.resourceIdentityAccessPolicy.set(resource.fullyQualifiedId)(policyExcludeAction)
 
     val res = for{
-      _ <- IO.fromFuture(IO(dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))))
+      _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
       _ <- policyDAO.createResourceType(policy.id.resource.resourceTypeName)
       _ <- policyDAO.createResource(resource)
       _ <- policyDAO.createPolicy(policy)
@@ -165,7 +165,7 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
     val policy = SamLenses.resourceIdentityAccessPolicy.set(resource.fullyQualifiedId)(policyExcludeAction)
 
     val res = for{
-      _ <- IO.fromFuture(IO(dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))))
+      _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
       _ <- policyDAO.createResourceType(policy.id.resource.resourceTypeName)
       _ <- policyDAO.createResource(resource)
       _ <- policyDAO.createPolicy(policy)
@@ -188,7 +188,7 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
 
     val res = for{
       _ <- setup()
-      _ <- IO.fromFuture(IO(dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))))
+      _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
       _ <- policyDAO.createResourceType(policy.id.resource.resourceTypeName)
       _ <- policyDAO.createResource(resource)
       _ <- policyDAO.createPolicy(policy)
@@ -214,7 +214,7 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
       _ <- resource.authDomain.toList.parTraverse(a => IO.fromFuture(IO(managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))))
       // create resource that dummyUserInfo is a member of for constrainableResourceType
       _ <- IO.fromFuture(IO(constrainableService.createResource(constrainableResourceType, resource.resourceId, Map(viewPolicyName -> constrainablePolicyMembership), resource.authDomain, dummyUserInfo.userId)))
-      _ <- IO.fromFuture(IO(dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))))
+      _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
       _ <- IO.fromFuture(IO(constrainableService.createPolicy(policy.id, policy.members + user.userId, policy.roles, policy.actions)))
       r <- constrainableService.policyEvaluatorService.listUserAccessPolicies(constrainableResourceType.name, user.userId)
     } yield {
@@ -235,7 +235,7 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
     val policy = AccessPolicy.actions.modify(_ + action)(policyWithResource)
 
     val res = for{
-      _ <- IO.fromFuture(IO(dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))))
+      _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
       _ <- policyDAO.createResourceType(policy.id.resource.resourceTypeName)
       _ <- policyDAO.createResourceType(managedGroupResourceType.name)
       _ <- policyDAO.createResource(resource)
@@ -336,7 +336,7 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
       _ <- resource.authDomain.toList.parTraverse(a => IO.fromFuture(IO(managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))))
       // create resource that dummyUserInfo is a member of for constrainableResourceType
       _ <- IO.fromFuture(IO(constrainableService.createResource(constrainableResourceType, resource.resourceId, Map(viewPolicyName -> constrainablePolicyMembership), resource.authDomain, dummyUserInfo.userId)))
-      _ <- IO.fromFuture(IO(dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))))
+      _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
       _ <- IO.fromFuture(IO(constrainableService.createPolicy(policy.id, policy.members + user.userId, policy.roles, policy.actions)))
       r <- constrainableService.policyEvaluatorService.listUserAccessPolicies(constrainableResourceType.name, user.userId)
     } yield {

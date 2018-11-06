@@ -84,7 +84,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
   before {
     runAndWait(schemaDao.clearDatabase())
     runAndWait(schemaDao.createOrgUnits())
-    runAndWait(dirDAO.createUser(WorkbenchUser(dummyUserInfo.userId, Some(TestSupport.genGoogleSubjectId()), dummyUserInfo.userEmail)))
+    dirDAO.createUser(WorkbenchUser(dummyUserInfo.userId, Some(TestSupport.genGoogleSubjectId()), dummyUserInfo.userEmail)).unsafeRunSync()
   }
 
   def toEmail(resourceType: String, resourceName: String, policyName: String) = {
@@ -226,9 +226,9 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
   it should "list the user's actions for a resource with nested groups" in {
     val resourceName1 = ResourceId("resource1")
 
-    val user = runAndWait(dirDAO.createUser(WorkbenchUser(WorkbenchUserId("asdfawefawea"), None, WorkbenchEmail("asdfawefawea@foo.bar"))))
+    val user = dirDAO.createUser(WorkbenchUser(WorkbenchUserId("asdfawefawea"), None, WorkbenchEmail("asdfawefawea@foo.bar"))).unsafeRunSync()
     val group = BasicWorkbenchGroup(WorkbenchGroupName("g"), Set(user.id), WorkbenchEmail("foo@bar.com"))
-    runAndWait(dirDAO.createGroup(group))
+    dirDAO.createGroup(group).unsafeRunSync()
 
     service.createResourceType(defaultResourceType).unsafeRunSync()
     val resource = runAndWait(service.createResource(defaultResourceType, resourceName1, dummyUserInfo))
@@ -371,7 +371,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     constrainableService.createResourceType(constrainableResourceType).unsafeRunSync()
 
     val bender = UserInfo(OAuth2BearerToken("token"), WorkbenchUserId("Bender"), WorkbenchEmail("bender@planex.com"), 0)
-    runAndWait(dirDAO.createUser(WorkbenchUser(bender.userId, None, bender.userEmail)))
+    dirDAO.createUser(WorkbenchUser(bender.userId, None, bender.userEmail)).unsafeRunSync()
 
     constrainableService.createResourceType(managedGroupResourceType).unsafeRunSync()
     val managedGroupName1 = "firstGroup"
@@ -654,7 +654,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     val policyName = AccessPolicyName(defaultResourceType.ownerRoleName.value)
     val otherUserInfo = UserInfo(OAuth2BearerToken("token"), WorkbenchUserId("otheruserid"), WorkbenchEmail("otheruser@company.com"), 0)
 
-    runAndWait(dirDAO.createUser(WorkbenchUser(otherUserInfo.userId, None, otherUserInfo.userEmail)))
+    dirDAO.createUser(WorkbenchUser(otherUserInfo.userId, None, otherUserInfo.userEmail)).unsafeRunSync()
 
     service.createResourceType(defaultResourceType).unsafeRunSync()
     runAndWait(service.createResource(defaultResourceType, resource.resourceId, dummyUserInfo))
@@ -738,12 +738,12 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     val user5 = UserIdInfo(WorkbenchUserId("user5"), WorkbenchEmail("user5@fake.com"), None)
     val user6 = UserIdInfo(WorkbenchUserId("user6"), WorkbenchEmail("user6@fake.com"), None)
 
-    runAndWait(dirDAO.createUser(WorkbenchUser(user1.userSubjectId, None, user1.userEmail)))
-    runAndWait(dirDAO.createUser(WorkbenchUser(user2.userSubjectId, None, user2.userEmail)))
-    runAndWait(dirDAO.createUser(WorkbenchUser(user3.userSubjectId, None, user3.userEmail)))
-    runAndWait(dirDAO.createUser(WorkbenchUser(user4.userSubjectId, None, user4.userEmail)))
-    runAndWait(dirDAO.createUser(WorkbenchUser(user5.userSubjectId, None, user5.userEmail)))
-    runAndWait(dirDAO.createUser(WorkbenchUser(user6.userSubjectId, None, user6.userEmail)))
+    dirDAO.createUser(WorkbenchUser(user1.userSubjectId, None, user1.userEmail)).unsafeRunSync()
+    dirDAO.createUser(WorkbenchUser(user2.userSubjectId, None, user2.userEmail)).unsafeRunSync()
+    dirDAO.createUser(WorkbenchUser(user3.userSubjectId, None, user3.userEmail)).unsafeRunSync()
+    dirDAO.createUser(WorkbenchUser(user4.userSubjectId, None, user4.userEmail)).unsafeRunSync()
+    dirDAO.createUser(WorkbenchUser(user5.userSubjectId, None, user5.userEmail)).unsafeRunSync()
+    dirDAO.createUser(WorkbenchUser(user6.userSubjectId, None, user6.userEmail)).unsafeRunSync()
 
     val ownerPolicy = FullyQualifiedPolicyId(resource, AccessPolicyName("owner"))
     runAndWait(service.addSubjectToPolicy(ownerPolicy, user1.userSubjectId))
@@ -753,9 +753,9 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     val subGroup = BasicWorkbenchGroup(WorkbenchGroupName("subGroup"), Set(user6.userSubjectId), WorkbenchEmail("subgroup@fake.com"))
     val group2 = BasicWorkbenchGroup(WorkbenchGroupName("group2"), Set(user5.userSubjectId, subGroup.id), WorkbenchEmail("group2@fake.com"))
 
-    runAndWait(dirDAO.createGroup(group1))
-    runAndWait(dirDAO.createGroup(subGroup))
-    runAndWait(dirDAO.createGroup(group2))
+    dirDAO.createGroup(group1).unsafeRunSync()
+    dirDAO.createGroup(subGroup).unsafeRunSync()
+    dirDAO.createGroup(group2).unsafeRunSync()
     runAndWait(service.createPolicy(FullyQualifiedPolicyId(resource, AccessPolicyName("reader")), Set(group1.id, group2.id), Set.empty, Set.empty))
 
     service.listAllFlattenedResourceUsers(resource).unsafeRunSync() should contain theSameElementsAs Set(dummyUserIdInfo, user1, user2, user3, user4, user5, user6)

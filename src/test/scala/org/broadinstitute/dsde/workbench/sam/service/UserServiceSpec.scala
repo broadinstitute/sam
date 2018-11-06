@@ -178,7 +178,7 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
     */
   "UserService registerUser" should "create new user when there's no existing subject for a given googleSubjectId and email" in{
     val user = genCreateWorkbenchUser.sample.get
-    service.registerUser(user).futureValue
+    service.registerUser(user).unsafeRunSync()
     val res = dirDAO.loadUser(user.id).unsafeRunSync()
     res shouldBe Some(WorkbenchUser(user.id, Some(user.googleSubjectId), user.email))
   }
@@ -189,8 +189,8 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
     */
   it should "update googleSubjectId when there's no existing subject for a given googleSubjectId and but there is one for email" in{
     val user = genCreateWorkbenchUser.sample.get
-    dirDAO.createUser(WorkbenchUser(user.id, None, user.email)).futureValue
-    service.registerUser(user).futureValue
+    dirDAO.createUser(WorkbenchUser(user.id, None, user.email)).unsafeRunSync()
+    service.registerUser(user).unsafeRunSync()
     val res = dirDAO.loadUser(user.id).unsafeRunSync()
     res shouldBe Some(WorkbenchUser(user.id, Some(user.googleSubjectId), user.email))
   }
@@ -202,8 +202,8 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
   it should "return BadRequest when there's no existing subject for a given googleSubjectId and but there is one for email, and the returned subject is not a regular user" in{
     val user = genCreateWorkbenchUser.sample.get.copy(email = genNonPetEmail.sample.get)
     val group = genBasicWorkbenchGroup.sample.get.copy(email = user.email)
-    dirDAO.createGroup(group).futureValue
-    val res = service.registerUser(user).failed.futureValue.asInstanceOf[WorkbenchExceptionWithErrorReport]
+    dirDAO.createGroup(group).unsafeRunSync()
+    val res = service.registerUser(user).attempt.unsafeRunSync().swap.toOption.get.asInstanceOf[WorkbenchExceptionWithErrorReport]
     Eq[WorkbenchExceptionWithErrorReport].eqv(res, new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"$user is not a regular user. Please use a different endpoint"))) shouldBe true
   }
 
@@ -213,14 +213,14 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
     */
   it should "return conflict when there's an existing subject for a given googleSubjectId" in{
     val user = genCreateWorkbenchUser.sample.get
-    dirDAO.createUser(WorkbenchUser(user.id, Some(user.googleSubjectId), user.email)).futureValue
-    val res = service.registerUser(user).failed.futureValue.asInstanceOf[WorkbenchExceptionWithErrorReport]
+    dirDAO.createUser(WorkbenchUser(user.id, Some(user.googleSubjectId), user.email)).unsafeRunSync()
+    val res = service.registerUser(user).attempt.unsafeRunSync().swap.toOption.get.asInstanceOf[WorkbenchExceptionWithErrorReport]
     Eq[WorkbenchExceptionWithErrorReport].eqv(res, new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"user ${user} already exists"))) shouldBe true
   }
 
   "UserService inviteUser" should "create a new user" in{
     val user = genInviteUser.sample.get
-    service.inviteUser(user).futureValue
+    service.inviteUser(user).unsafeRunSync()
     val res = dirDAO.loadUser(user.inviteeId).unsafeRunSync()
     res shouldBe Some(WorkbenchUser(user.inviteeId, None, user.inviteeEmail))
   }
@@ -228,22 +228,22 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
   it should "return conflict when there's an existing subject for a given userId" in{
     val user = genInviteUser.sample.get
     val email = genNonPetEmail.sample.get
-    dirDAO.createUser(WorkbenchUser(user.inviteeId, None, email)).futureValue
-    val res = service.inviteUser(user).failed.futureValue.asInstanceOf[WorkbenchExceptionWithErrorReport]
+    dirDAO.createUser(WorkbenchUser(user.inviteeId, None, email)).unsafeRunSync()
+    val res = service.inviteUser(user).attempt.unsafeRunSync().swap.toOption.get.asInstanceOf[WorkbenchExceptionWithErrorReport]
     Eq[WorkbenchExceptionWithErrorReport].eqv(res, new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"identity with id ${user.inviteeId} already exists"))) shouldBe true
   }
 
   it should "return conflict when there's an existing subject for a given email" in{
     val user = genInviteUser.sample.get
     val userId = genWorkbenchUserId(System.currentTimeMillis())
-    dirDAO.createUser(WorkbenchUser(userId, None, user.inviteeEmail)).futureValue
-    val res = service.inviteUser(user).failed.futureValue.asInstanceOf[WorkbenchExceptionWithErrorReport]
+    dirDAO.createUser(WorkbenchUser(userId, None, user.inviteeEmail)).unsafeRunSync()
+    val res = service.inviteUser(user).attempt.unsafeRunSync().swap.toOption.get.asInstanceOf[WorkbenchExceptionWithErrorReport]
     Eq[WorkbenchExceptionWithErrorReport].eqv(res, new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"email ${user.inviteeEmail} already exists"))) shouldBe true
   }
 
   "invite user and then create user with same email" should "update googleSubjectId for this user" in {
     val user = genCreateWorkbenchUser.sample.get
-    service.inviteUser(InviteUser(user.id, user.email)).futureValue
+    service.inviteUser(InviteUser(user.id, user.email)).unsafeRunSync()
     val res = dirDAO.loadUser(user.id).unsafeRunSync()
     res shouldBe Some(WorkbenchUser(user.id, None, user.email))
 

@@ -22,7 +22,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
 
   def createUser(user: CreateWorkbenchUser): Future[UserStatus] = for {
       allUsersGroup <- cloudExtensions.getOrCreateAllUsersGroup(directoryDAO)
-      createdUser <- registerUser(user)
+      createdUser <- registerUser(user).unsafeToFuture()
       _ <- directoryDAO.enableIdentity(createdUser.id).unsafeToFuture()
       _ <- directoryDAO.addGroupMember(allUsersGroup.id, createdUser.id)
       _ <- cloudExtensions.onUserCreate(createdUser)
@@ -30,11 +30,11 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
       res <- userStatus.toRight(new WorkbenchException("getUserStatus returned None after user was created")).fold(Future.failed, Future.successful)
     } yield res
 
-  def inviteUser(invitee: InviteUser): Future[UserStatusDetails] = for {
-      existingSubject <- directoryDAO.loadSubjectFromEmail(invitee.inviteeEmail).unsafeToFuture()
+  def inviteUser(invitee: InviteUser): IO[UserStatusDetails] = for {
+      existingSubject <- directoryDAO.loadSubjectFromEmail(invitee.inviteeEmail)
       createdUser <- existingSubject match{
         case None => directoryDAO.createUser(WorkbenchUser(invitee.inviteeId, None, invitee.inviteeEmail))
-        case Some(__) => Future.failed(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"email ${invitee.inviteeEmail} already exists")))
+        case Some(__) => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"email ${invitee.inviteeEmail} already exists")))
       }
     } yield UserStatusDetails(createdUser.id, createdUser.email)
 
@@ -48,23 +48,27 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
     *      yes            skip    ---> User exists. Do nothing.
     *      yes            skip    ---> User exists. Do nothing.
     */
-  protected[service] def registerUser(user: CreateWorkbenchUser): Future[WorkbenchUser] = for{
-    existingSubFromGoogleSubjectId <- directoryDAO.loadSubjectFromGoogleSubjectId(user.googleSubjectId).unsafeToFuture()
-    user <- existingSubFromGoogleSubjectId match{
-      case Some(_) => Future.failed[WorkbenchUser](new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"user ${user} already exists")))
-      case None => for{
-        subjectFromEmail <- directoryDAO.loadSubjectFromEmail(user.email).unsafeToFuture()
-        updated <- subjectFromEmail match{
-          case Some(uid : WorkbenchUserId) =>
-            directoryDAO.setGoogleSubjectId(uid, user.googleSubjectId).map(_ => WorkbenchUser(uid, Some(user.googleSubjectId), user.email)).unsafeToFuture()
-          case Some(sub) =>
-            //We don't support inviting a group account or pet service account
-            Future.failed[WorkbenchUser](new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"$user is not a regular user. Please use a different endpoint")))
-          case None => directoryDAO.createUser(WorkbenchUser(WorkbenchUserId(user.googleSubjectId.value), Some(user.googleSubjectId), user.email)) //For completely new users, we still use googleSubjectId as their userId
-        }
-      } yield updated
-    }
-  } yield user
+  protected[service] def registerUser(user: CreateWorkbenchUser): IO[WorkbenchUser] =
+    for {
+      existingSubFromGoogleSubjectId <- directoryDAO.loadSubjectFromGoogleSubjectId(user.googleSubjectId)
+      user <- existingSubFromGoogleSubjectId match {
+        case Some(_) => IO.raiseError[WorkbenchUser](new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"user ${user} already exists")))
+        case None =>
+          for {
+            subjectFromEmail <- directoryDAO.loadSubjectFromEmail(user.email)
+            updated <- subjectFromEmail match {
+              case Some(uid: WorkbenchUserId) =>
+                directoryDAO.setGoogleSubjectId(uid, user.googleSubjectId).map(_ => WorkbenchUser(uid, Some(user.googleSubjectId), user.email))
+              case Some(sub) =>
+                //We don't support inviting a group account or pet service account
+                IO.raiseError[WorkbenchUser](
+                  new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"$user is not a regular user. Please use a different endpoint")))
+              case None =>
+                directoryDAO.createUser(WorkbenchUser(WorkbenchUserId(user.googleSubjectId.value), Some(user.googleSubjectId), user.email)) //For completely new users, we still use googleSubjectId as their userId
+            }
+          } yield updated
+      }
+    } yield user
 
   def getSubjectFromEmail(email: WorkbenchEmail): Future[Option[WorkbenchSubject]] = directoryDAO.loadSubjectFromEmail(email).unsafeToFuture()
 
@@ -163,7 +167,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
   def deleteUser(userId: WorkbenchUserId, userInfo: UserInfo): Future[Unit] = {
     for {
       allUsersGroup <- cloudExtensions.getOrCreateAllUsersGroup(directoryDAO)
-      _ <- directoryDAO.removeGroupMember(allUsersGroup.id, userId)
+      _ <- directoryDAO.removeGroupMember(allUsersGroup.id, userId).unsafeToFuture()
       _ <- cloudExtensions.onUserDelete(userId)
       deleteResult <- directoryDAO.deleteUser(userId)
     } yield deleteResult
