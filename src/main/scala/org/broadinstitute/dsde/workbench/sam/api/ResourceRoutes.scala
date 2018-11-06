@@ -17,12 +17,11 @@ import spray.json.JsBoolean
 
 import scala.concurrent.ExecutionContext
 import ImplicitConversions.ioOnSuccessMagnet
-import com.typesafe.scalalogging.LazyLogging
 
 /**
   * Created by mbemis on 5/22/17.
   */
-trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with SamModelDirectives with LazyLogging {
+trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with SamModelDirectives {
   implicit val executionContext: ExecutionContext
   val resourceService: ResourceService
 

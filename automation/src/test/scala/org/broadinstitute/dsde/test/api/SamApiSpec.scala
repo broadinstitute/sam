@@ -377,7 +377,6 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
     }
 
     "should synchronize groups with Google" in {
-      implicit val ec: ExecutionContextExecutor = ExecutionContext.global
       val managedGroupId = UUID.randomUUID.toString
       val adminPolicyName = "admin"
       val Seq(user1: Credentials, user2: Credentials, user3: Credentials) = UserPool.chooseStudents(3)
@@ -422,7 +421,6 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
     }
 
     "should only synchronize the intersection group for policies constrained by auth domains" in {
-      implicit val ec: ExecutionContextExecutor = ExecutionContext.global
       val authDomainId = UUID.randomUUID.toString
       val Seq(inPolicyUser: Credentials, inAuthDomainUser: Credentials, inBothUser: Credentials) = UserPool.chooseStudents(3)
       val inBothUserAuthToken = inBothUser.makeAuthToken()
@@ -430,6 +428,7 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
         user => Sam.user.proxyGroup(user.email)(inBothUserAuthToken)
       }
 
+      // Create group that will act as auth domain
       Sam.user.createGroup(authDomainId)(inBothUserAuthToken)
       register cleanUp Sam.user.deleteGroup(authDomainId)(inBothUserAuthToken)
 
@@ -444,13 +443,13 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
       awaitAssert(
         Await.result(googleDirectoryDAO.listGroupMembers(authDomainAdminEmail.head), 5.minutes)
           .getOrElse(Set.empty) should contain theSameElementsAs Set(inBothUserProxy.value),
-        1.minutes, 5.seconds)
+        5.minutes, 5.seconds)
 
       Sam.user.setPolicyMembers(authDomainId, "admin", Set(inAuthDomainUser.email, inBothUser.email))(inBothUserAuthToken)
       awaitAssert(
         Await.result(googleDirectoryDAO.listGroupMembers(authDomainAdminEmail.head), 5.minutes)
           .getOrElse(Set.empty) should contain theSameElementsAs Set(inBothUserProxy.value, inAuthDomainUserProxy.value),
-        1.minutes, 5.seconds)
+        5.minutes, 5.seconds)
 
       val resourceTypeName = "workspace"
       val resourceId = UUID.randomUUID.toString
@@ -458,23 +457,23 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
       val policies = Map(ownerPolicyName -> AccessPolicyMembership(Set(inBothUser.email), Set.empty, Set(ownerPolicyName)))
       val resourceRequest = CreateResourceRequest(resourceId, policies, Set(authDomainId))
 
+      // Create constrained resource
       Sam.user.createResource(resourceTypeName, resourceRequest)(inBothUserAuthToken)
       register cleanUp Sam.user.deleteResource(resourceTypeName, resourceId)(inBothUserAuthToken)
 
-      // have to do this before adding second user to policy because the sync endpoint doesn't call onGroupUpdate, it directly calls synchronizeGroupMembers, which means that intersection group is never calculated...
-      Sam.user.syncResourcePolicy(resourceTypeName, resourceId, ownerPolicyName)(inBothUserAuthToken)
-
+      Sam.user.addUserToResourcePolicy(resourceTypeName, resourceId, ownerPolicyName, inPolicyUser.email)(inBothUserAuthToken)
       val resourcePolicies = Sam.user.listResourcePolicies(resourceTypeName, resourceId)(inBothUserAuthToken)
       val resourceOwnerEmail = resourcePolicies.collect {
         case SamModel.AccessPolicyResponseEntry(_, policy, email) if policy.memberEmails.nonEmpty => email
       }
       assert(resourceOwnerEmail.size == 1)
+      Sam.user.syncResourcePolicy(resourceTypeName, resourceId, ownerPolicyName)(inBothUserAuthToken)
 
-      Sam.user.addUserToResourcePolicy(resourceTypeName, resourceId, ownerPolicyName, inPolicyUser.email)(inBothUserAuthToken)
+      // Google should only know about the user that is in both the auth domain group and the constrained policy
       awaitAssert(
         Await.result(googleDirectoryDAO.listGroupMembers(resourceOwnerEmail.head), 5.minutes)
           .getOrElse(Set.empty) should contain theSameElementsAs Set(inBothUserProxy.value),
-        1.minutes, 5.seconds)
+        5.minutes, 5.seconds)
     }
 
     "should synchronize the all users group for public policies" in {
@@ -498,7 +497,7 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
       awaitAssert(
         Await.result(googleDirectoryDAO.listGroupMembers(adminPolicy.email), 5.minutes)
           .getOrElse(Set.empty) should contain theSameElementsAs Set(user1Proxy.value),
-        1.minutes, 5.seconds)
+        5.minutes, 5.seconds)
 
       Sam.user.syncResourcePolicy(resourceTypeName, resourceId, adminNotifierPolicyName)(user1AuthToken)
       Sam.user.makeResourcePolicyPublic(resourceTypeName, resourceId, adminNotifierPolicyName, true)(user1AuthToken)
@@ -506,7 +505,7 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
       awaitAssert(
         Await.result(googleDirectoryDAO.listGroupMembers(adminNotifierPolicy.email), 5.minutes)
           .getOrElse(Set.empty) should contain theSameElementsAs Set(allUsersGroupEmail.value),
-        1.minutes, 5.seconds)
+        5.minutes, 5.seconds)
     }
   }
 
