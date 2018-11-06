@@ -409,7 +409,7 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
       dao.loadUser(user.id).unsafeRunSync()
     }
 
-    runAndWait(dao.loadSubjectEmail(userId)) shouldEqual None
+    dao.loadSubjectEmail(userId).unsafeRunSync()shouldEqual None
   }
 
   it should "succeed if the user has been created" in {
@@ -429,7 +429,7 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     }
 
     assertResult(Some(user.email)) {
-      runAndWait(dao.loadSubjectEmail(userId))
+      dao.loadSubjectEmail(userId).unsafeRunSync()
     }
   }
 }

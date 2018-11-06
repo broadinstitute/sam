@@ -458,13 +458,13 @@ class GoogleExtensions(directoryDAO: DirectoryDAO, val accessPolicyDAO: AccessPo
           case Some(members) => Future.successful(members.map(_.toLowerCase).toSet)
         }
         samMemberEmails <- Future.traverse(members) {
-          case group: WorkbenchGroupIdentity => directoryDAO.loadSubjectEmail(group)
+          case group: WorkbenchGroupIdentity => directoryDAO.loadSubjectEmail(group).unsafeToFuture()
 
           // use proxy group email instead of user's actual email
           case userSubjectId: WorkbenchUserId => getUserProxy(userSubjectId)
 
           // not sure why this next case would happen but if a petSA is in a group just use its email
-          case petSA: PetServiceAccountId => directoryDAO.loadSubjectEmail(petSA)
+          case petSA: PetServiceAccountId => directoryDAO.loadSubjectEmail(petSA).unsafeToFuture()
         }.map(_.collect { case Some(email) => email.value.toLowerCase })
 
         toAdd = samMemberEmails -- googleMemberEmails

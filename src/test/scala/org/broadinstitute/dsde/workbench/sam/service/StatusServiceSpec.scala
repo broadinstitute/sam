@@ -1,6 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.service
 
 import akka.actor.ActorSystem
+import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException, WorkbenchGroupName}
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryDAO, MockDirectoryDAO}
@@ -48,7 +49,7 @@ class StatusServiceSpec extends FreeSpec with Matchers with BeforeAndAfterAll wi
 
   private def failingOpenDJ = {
     val service = new StatusService(new MockDirectoryDAO {
-      override def loadGroupEmail(groupName: WorkbenchGroupName): Future[Option[WorkbenchEmail]] = Future.failed(new WorkbenchException("bad opendj"))
+      override def loadGroupEmail(groupName: WorkbenchGroupName): IO[Option[WorkbenchEmail]] = IO.raiseError(new WorkbenchException("bad opendj"))
     }, NoExtensions)
     service
   }

@@ -185,8 +185,8 @@ class LdapAccessPolicyDAO(protected val ldapConnectionPool: LDAPConnectionPool, 
         )(unmarshalAccessPolicy)))
   }
 
-  override def listAccessPolicies(resource: FullyQualifiedResourceId): IO[Set[AccessPolicy]] = cs.evalOn(ecForLdapBlockingIO)(IO(
-    ldapSearchStream(resourceDn(resource), SearchScope.SUB, Filter.createEqualityFilter("objectclass", ObjectClass.policy))(unmarshalAccessPolicy).toSet
+  override def listAccessPolicies(resource: FullyQualifiedResourceId): IO[Stream[AccessPolicy]] = cs.evalOn(ecForLdapBlockingIO)(IO(
+    ldapSearchStream(resourceDn(resource), SearchScope.SUB, Filter.createEqualityFilter("objectclass", ObjectClass.policy))(unmarshalAccessPolicy)
   ))
 
   override def listAccessPoliciesForUser(resource: FullyQualifiedResourceId, user: WorkbenchUserId): IO[Set[AccessPolicy]] = for {

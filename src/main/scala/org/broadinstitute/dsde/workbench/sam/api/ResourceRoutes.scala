@@ -174,7 +174,7 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
     get {
       requireAction(resource, SamResourceActions.readPolicies, userInfo.userId) {
         complete(resourceService.listResourcePolicies(resource).map { response =>
-          StatusCodes.OK -> response
+          StatusCodes.OK -> response.toSet
         })
       }
     }

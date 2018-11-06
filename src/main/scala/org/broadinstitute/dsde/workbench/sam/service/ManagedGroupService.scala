@@ -31,7 +31,7 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
     for {
       managedGroup <- resourceService.createResource(managedGroupType, groupId, Map(adminPolicy, memberPolicy, adminNotificationPolicy), Set.empty, userInfo.userId)
       policies <- accessPolicyDAO.listAccessPolicies(managedGroup.fullyQualifiedId).unsafeToFuture()
-      workbenchGroup <- createAggregateGroup(managedGroup, policies, accessInstructionsOpt).unsafeToFuture()
+      workbenchGroup <- createAggregateGroup(managedGroup, policies.toSet, accessInstructionsOpt).unsafeToFuture()
       _ <- cloudExtensions.publishGroup(workbenchGroup.id)
     } yield managedGroup
   }
@@ -87,9 +87,9 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
     } yield ()
   }
 
-  def listGroups(userId: WorkbenchUserId): Future[Set[ManagedGroupMembershipEntry]] = {
+  def listGroups(userId: WorkbenchUserId): IO[Set[ManagedGroupMembershipEntry]] = {
     for {
-      managedGroupsWithRole <- policyEvaluatorService.listUserManagedGroupsWithRole(userId).unsafeToFuture()
+      managedGroupsWithRole <- policyEvaluatorService.listUserManagedGroupsWithRole(userId)
       emailLookup <- directoryDAO.batchLoadGroupEmail(managedGroupsWithRole.map(_.groupName))
     } yield {
       val emailLookupMap = emailLookup.toMap
@@ -102,12 +102,12 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
     }
   }
 
-  def listPolicyMemberEmails(resourceId: ResourceId, policyName: ManagedGroupPolicyName): Future[Set[WorkbenchEmail]] = {
+  def listPolicyMemberEmails(resourceId: ResourceId, policyName: ManagedGroupPolicyName): IO[Stream[WorkbenchEmail]] = {
     val policyIdentity =
       FullyQualifiedPolicyId(FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, resourceId), policyName)
-    accessPolicyDAO.loadPolicy(policyIdentity).unsafeToFuture() flatMap {
+    accessPolicyDAO.loadPolicy(policyIdentity) flatMap {
       case Some(policy) => directoryDAO.loadSubjectEmails(policy.members)
-      case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Group or policy could not be found: $policyIdentity"))
+      case None => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Group or policy could not be found: $policyIdentity")))
     }
   }
 

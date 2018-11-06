@@ -3,6 +3,7 @@ package org.broadinstitute.dsde.workbench.sam.service
 import akka.actor.ActorSystem
 import akka.pattern.ask
 import akka.util.Timeout
+import cats.effect.IO
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model.WorkbenchGroupName
 import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
@@ -23,10 +24,10 @@ class StatusService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudEx
   def getStatus(): Future[StatusCheckResponse] = (healthMonitor ? GetCurrentStatus).asInstanceOf[Future[StatusCheckResponse]]
 
   private def checkStatus(): Map[Subsystem, Future[SubsystemStatus]] = {
-    cloudExtensions.checkStatus + (OpenDJ -> checkOpenDJ(cloudExtensions.allUsersGroupName))
+    cloudExtensions.checkStatus + (OpenDJ -> checkOpenDJ(cloudExtensions.allUsersGroupName).unsafeToFuture())
   }
 
-  private def checkOpenDJ(groupToLoad: WorkbenchGroupName): Future[SubsystemStatus] = {
+  private def checkOpenDJ(groupToLoad: WorkbenchGroupName): IO[SubsystemStatus] = {
     logger.info("checking opendj connection")
     directoryDAO.loadGroupEmail(groupToLoad).map {
       case Some(_) => HealthMonitor.OkStatus
