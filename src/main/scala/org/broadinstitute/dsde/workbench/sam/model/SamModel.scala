@@ -2,6 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.model
 
 import monocle.macros.Lenses
 import org.broadinstitute.dsde.workbench.model._
+import org.broadinstitute.dsde.workbench.sam.service.ManagedGroupService.MangedGroupRoleName
 import spray.json.{DefaultJsonProtocol, JsValue, RootJsonFormat}
 
 /**
@@ -130,6 +131,7 @@ ldap but it felt unnatural.
 
 @Lenses case class BasicWorkbenchGroup(id: WorkbenchGroupName, members: Set[WorkbenchSubject], email: WorkbenchEmail) extends WorkbenchGroup
 
+@Lenses case class ManagedGroupAndRole(groupName: WorkbenchGroupName, role: MangedGroupRoleName)
 @Lenses case class ManagedGroupMembershipEntry(groupName: ResourceId, role: AccessPolicyName, groupEmail: WorkbenchEmail)
 @Lenses case class ManagedGroupAccessInstructions(value: String) extends ValueObject
 

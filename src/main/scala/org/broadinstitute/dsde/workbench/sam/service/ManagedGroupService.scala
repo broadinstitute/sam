@@ -89,15 +89,15 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
 
   def listGroups(userId: WorkbenchUserId): Future[Set[ManagedGroupMembershipEntry]] = {
     for {
-      ripns <- policyEvaluatorService.listUserManagedGroups(userId).unsafeToFuture()
-      emailLookup <- directoryDAO.batchLoadGroupEmail(ripns.map(ripn => WorkbenchGroupName(ripn.resourceId.value)))
+      managedGroupsWithRole <- policyEvaluatorService.listUserManagedGroupsWithRole(userId).unsafeToFuture()
+      emailLookup <- directoryDAO.batchLoadGroupEmail(managedGroupsWithRole.map(_.groupName))
     } yield {
       val emailLookupMap = emailLookup.toMap
       // This will silently ignore any group where the email could not be loaded. This can happen when a
       // managed group is in an inconsistent state (partially created/deleted or created incorrectly).
       // It also includes only admin and member policies
-      ripns.flatMap { ripn =>
-        emailLookupMap.get(WorkbenchGroupName(ripn.resourceId.value)).map(email => ManagedGroupMembershipEntry(ripn.resourceId, ripn.accessPolicyName, email))
+      managedGroupsWithRole.flatMap { groupAndRole =>
+        emailLookupMap.get(groupAndRole.groupName).map(email => ManagedGroupMembershipEntry(ResourceId(groupAndRole.groupName.value), AccessPolicyName(groupAndRole.role.value), email))
       }
     }
   }
