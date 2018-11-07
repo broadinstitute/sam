@@ -3,6 +3,7 @@ package org.broadinstitute.dsde.workbench.sam.service
 import java.net.URI
 import java.util.UUID
 
+import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import org.broadinstitute.dsde.workbench.model._
@@ -12,6 +13,7 @@ import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, LdapAccessPolicyDAO}
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
+import org.mockito.ArgumentMatchers
 import org.mockito.Mockito.{verify, when}
 import org.scalatest._
 import org.scalatest.concurrent.ScalaFutures
@@ -407,5 +409,37 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     val newInstructions = "Much better instructions"
     managedGroupService.setAccessInstructions(managedGroup.resourceId, newInstructions).unsafeRunSync()
     runAndWait(managedGroupService.getAccessInstructions(managedGroup.resourceId)).getOrElse(None) shouldEqual newInstructions
+  }
+
+  "ManagedGroupService requestAccess" should "send notifications" in {
+    val mockCloudExtension = mock[CloudExtensions]
+    when(mockCloudExtension.publishGroup(ArgumentMatchers.any[WorkbenchGroupName])).thenReturn(Future.successful(()))
+    val testManagedGroupService = new ManagedGroupService(resourceService, policyEvaluatorService, resourceTypeMap, policyDAO, dirDAO, mockCloudExtension, testDomain)
+
+    assertMakeGroup(groupId = resourceId.value, managedGroupService = testManagedGroupService)
+
+    val requester = dirDAO.createUser(WorkbenchUser(WorkbenchUserId("userId1"), Some(GoogleSubjectId("this subject id is different that the user id")), WorkbenchEmail("user1@company.com"))).futureValue
+    val adminGoogleSubjectId = WorkbenchUserId(dirDAO.loadUser(dummyUserInfo.userId).unsafeRunSync().flatMap(_.googleSubjectId).getOrElse(fail("could not find admin google subject id")).value)
+
+    val expectedNotificationMessages = Set(
+      Notifications.GroupAccessRequestNotification(
+        adminGoogleSubjectId,
+        WorkbenchGroupName(resourceId.value).value,
+        Set(adminGoogleSubjectId),
+        requester.googleSubjectId.map(id => WorkbenchUserId(id.value)).getOrElse(fail("no requester google subject id"))
+      ))
+
+    testManagedGroupService.requestAccess(resourceId, requester.id).futureValue
+
+    verify(mockCloudExtension).fireAndForgetNotifications(expectedNotificationMessages)
+  }
+
+  it should "throw an error if access instructions exist" in {
+    assertMakeGroup(groupId = resourceId.value)
+    managedGroupService.setAccessInstructions(resourceId, "instructions").unsafeRunSync()
+    val error = intercept[WorkbenchExceptionWithErrorReport] {
+      runAndWait(managedGroupService.requestAccess(resourceId, dummyUserInfo.userId))
+    }
+    error.errorReport.statusCode should be(Some(StatusCodes.BadRequest))
   }
 }

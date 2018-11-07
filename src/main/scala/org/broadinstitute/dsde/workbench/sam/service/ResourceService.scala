@@ -399,9 +399,9 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     for {
       accessPolicies <- accessPolicyDAO.listAccessPolicies(resourceId)
       members <- accessPolicies.toList.parTraverse(accessPolicy => accessPolicyDAO.listFlattenedPolicyMembers(accessPolicy.id))
-      workbenchUsers <- directoryDAO.loadUsers(members.toSet.flatten)
+      workbenchUsers = members.flatten.toSet
     } yield {
-      workbenchUsers.map(user => UserIdInfo(user.id, user.email, user.googleSubjectId)).toSet
+      workbenchUsers.map(user => UserIdInfo(user.id, user.email, user.googleSubjectId))
     }
   }
 }

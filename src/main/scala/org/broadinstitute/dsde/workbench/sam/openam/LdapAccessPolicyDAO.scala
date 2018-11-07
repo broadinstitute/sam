@@ -210,8 +210,8 @@ class LdapAccessPolicyDAO(protected val ldapConnectionPool: LDAPConnectionPool, 
     }
   } yield accessPolicies.getOrElse(Set.empty)
 
-  override def listFlattenedPolicyMembers(policyId: FullyQualifiedPolicyId): IO[Set[WorkbenchUserId]] = cs.evalOn(ecForLdapBlockingIO)(
-    IO(ldapSearchStream(peopleOu, SearchScope.ONE, Filter.createEqualityFilter(Attr.memberOf, policyDn(policyId)))(unmarshalUser).map(_.id).toSet)
+  override def listFlattenedPolicyMembers(policyId: FullyQualifiedPolicyId): IO[Set[WorkbenchUser]] = cs.evalOn(ecForLdapBlockingIO)(
+    IO(ldapSearchStream(peopleOu, SearchScope.ONE, Filter.createEqualityFilter(Attr.memberOf, policyDn(policyId)))(unmarshalUser).toSet)
   )
 
   private def unmarshalUser(entry: Entry): WorkbenchUser = {
