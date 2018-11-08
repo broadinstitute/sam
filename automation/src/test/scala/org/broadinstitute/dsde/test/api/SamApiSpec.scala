@@ -6,7 +6,8 @@ import java.util.UUID
 import akka.actor.ActorSystem
 import akka.testkit.TestKitBase
 import org.broadinstitute.dsde.test.SamConfig
-import org.broadinstitute.dsde.workbench.service.{Orchestration, RestException, Sam, Thurloe}
+import org.broadinstitute.dsde.workbench.service._
+import org.broadinstitute.dsde.workbench.service.SamModel._
 import org.broadinstitute.dsde.workbench.auth.{AuthToken, ServiceAccountAuthTokenFromJson, ServiceAccountAuthTokenFromPem}
 import org.broadinstitute.dsde.workbench.config.{Credentials, ServiceTestConfig, UserPool}
 import org.broadinstitute.dsde.workbench.model._
@@ -376,7 +377,6 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
     }
 
     "should synchronize groups with Google" in {
-      implicit val ec: ExecutionContextExecutor = ExecutionContext.global
       val managedGroupId = UUID.randomUUID.toString
       val adminPolicyName = "admin"
       val Seq(user1: Credentials, user2: Credentials, user3: Credentials) = UserPool.chooseStudents(3)
@@ -387,10 +387,8 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
       register cleanUp Sam.user.deleteGroup(managedGroupId)(user1AuthToken)
 
       val policies = Sam.user.listResourcePolicies("managed-group", managedGroupId)(user1AuthToken)
-      val policyEmail = for {
-        policy <- policies if policy.policy.memberEmails.nonEmpty
-      } yield {
-        policy.email
+      val policyEmail = policies.collect {
+        case SamModel.AccessPolicyResponseEntry(_, policy, email) if policy.memberEmails.nonEmpty => email
       }
       assert(policyEmail.size == 1) // Only the admin policy should be non-empty after creation
 
@@ -419,6 +417,94 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
       awaitAssert(
         Await.result(googleDirectoryDAO.listGroupMembers(policyEmail.head), 5.minutes)
           .getOrElse(Set.empty) should contain theSameElementsAs Set(user1Proxy.value, user3Proxy.value),
+        5.minutes, 5.seconds)
+    }
+
+    "should only synchronize the intersection group for policies constrained by auth domains" in {
+      val authDomainId = UUID.randomUUID.toString
+      val Seq(inPolicyUser: Credentials, inAuthDomainUser: Credentials, inBothUser: Credentials) = UserPool.chooseStudents(3)
+      val inBothUserAuthToken = inBothUser.makeAuthToken()
+      val Seq(inAuthDomainUserProxy: WorkbenchEmail, inBothUserProxy: WorkbenchEmail) = Seq(inAuthDomainUser, inBothUser).map {
+        user => Sam.user.proxyGroup(user.email)(inBothUserAuthToken)
+      }
+
+      // Create group that will act as auth domain
+      Sam.user.createGroup(authDomainId)(inBothUserAuthToken)
+      register cleanUp Sam.user.deleteGroup(authDomainId)(inBothUserAuthToken)
+
+      val authDomainPolicies = Sam.user.listResourcePolicies("managed-group", authDomainId)(inBothUserAuthToken)
+      val authDomainAdminEmail = for {
+        policy <- authDomainPolicies if policy.policy.memberEmails.nonEmpty
+      } yield {
+        policy.email
+      }
+      assert(authDomainAdminEmail.size == 1)
+
+      awaitAssert(
+        Await.result(googleDirectoryDAO.listGroupMembers(authDomainAdminEmail.head), 5.minutes)
+          .getOrElse(Set.empty) should contain theSameElementsAs Set(inBothUserProxy.value),
+        5.minutes, 5.seconds)
+
+      Sam.user.setPolicyMembers(authDomainId, "admin", Set(inAuthDomainUser.email, inBothUser.email))(inBothUserAuthToken)
+      awaitAssert(
+        Await.result(googleDirectoryDAO.listGroupMembers(authDomainAdminEmail.head), 5.minutes)
+          .getOrElse(Set.empty) should contain theSameElementsAs Set(inBothUserProxy.value, inAuthDomainUserProxy.value),
+        5.minutes, 5.seconds)
+
+      val resourceTypeName = "workspace"
+      val resourceId = UUID.randomUUID.toString
+      val ownerPolicyName = "owner"
+      val policies = Map(ownerPolicyName -> AccessPolicyMembership(Set(inBothUser.email), Set.empty, Set(ownerPolicyName)))
+      val resourceRequest = CreateResourceRequest(resourceId, policies, Set(authDomainId))
+
+      // Create constrained resource
+      Sam.user.createResource(resourceTypeName, resourceRequest)(inBothUserAuthToken)
+      register cleanUp Sam.user.deleteResource(resourceTypeName, resourceId)(inBothUserAuthToken)
+
+      Sam.user.addUserToResourcePolicy(resourceTypeName, resourceId, ownerPolicyName, inPolicyUser.email)(inBothUserAuthToken)
+      val resourcePolicies = Sam.user.listResourcePolicies(resourceTypeName, resourceId)(inBothUserAuthToken)
+      val resourceOwnerEmail = resourcePolicies.collect {
+        case SamModel.AccessPolicyResponseEntry(_, policy, email) if policy.memberEmails.nonEmpty => email
+      }
+      assert(resourceOwnerEmail.size == 1)
+      Sam.user.syncResourcePolicy(resourceTypeName, resourceId, ownerPolicyName)(inBothUserAuthToken)
+
+      // Google should only know about the user that is in both the auth domain group and the constrained policy
+      awaitAssert(
+        Await.result(googleDirectoryDAO.listGroupMembers(resourceOwnerEmail.head), 5.minutes)
+          .getOrElse(Set.empty) should contain theSameElementsAs Set(inBothUserProxy.value),
+        5.minutes, 5.seconds)
+    }
+
+    "should synchronize the all users group for public policies" in {
+      val resourceId = UUID.randomUUID.toString
+      val user1 = UserPool.chooseStudent
+      val user1AuthToken = user1.makeAuthToken()
+      val user1Proxy = Sam.user.proxyGroup(user1.email)(user1AuthToken)
+      val allUsersGroupEmail = Sam.user.getGroupEmail("All_Users")(user1AuthToken)
+
+      val resourceTypeName = "managed-group"
+      val adminPolicyName = "admin"
+      val adminNotifierPolicyName = "admin-notifier"
+
+      Sam.user.createGroup(resourceId)(user1AuthToken)
+      register cleanUp Sam.user.deleteGroup(resourceId)(user1AuthToken)
+
+      val policies = Sam.user.listResourcePolicies(resourceTypeName, resourceId)(user1AuthToken)
+      val adminPolicy = policies.filter(_.policyName equals adminPolicyName).last
+      val adminNotifierPolicy = policies.filter(_.policyName equals adminNotifierPolicyName).last
+
+      awaitAssert(
+        Await.result(googleDirectoryDAO.listGroupMembers(adminPolicy.email), 5.minutes)
+          .getOrElse(Set.empty) should contain theSameElementsAs Set(user1Proxy.value),
+        5.minutes, 5.seconds)
+
+      Sam.user.syncResourcePolicy(resourceTypeName, resourceId, adminNotifierPolicyName)(user1AuthToken)
+      Sam.user.makeResourcePolicyPublic(resourceTypeName, resourceId, adminNotifierPolicyName, true)(user1AuthToken)
+
+      awaitAssert(
+        Await.result(googleDirectoryDAO.listGroupMembers(adminNotifierPolicy.email), 5.minutes)
+          .getOrElse(Set.empty) should contain theSameElementsAs Set(allUsersGroupEmail.value),
         5.minutes, 5.seconds)
     }
   }

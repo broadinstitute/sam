@@ -22,7 +22,7 @@ class PolicyEvaluatorService(
       Set.empty,
       WorkbenchEmail(s"dummy@$emailDomain"),
       Set.empty,
-      Set(SamResourceActions.setPublicPolicy(policyName)),
+      Set(SamResourceActions.setPublicPolicy(ManagedGroupService.adminNotifierPolicyName)),
       true
     )).void.recoverWith{
       case ldape: LDAPException if ldape.getResultCode == ResultCode.ENTRY_ALREADY_EXISTS =>

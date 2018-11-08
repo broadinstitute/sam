@@ -14,7 +14,7 @@ trait ValueObject {
 case class ValueObjectFormat[T <: ValueObject](create: String => T) extends RootJsonFormat[T] {
   def read(obj: JsValue): T = obj match {
     case JsString(value) => create(value)
-    case _ => throw new DeserializationException("could not deserialize user object")
+    case _ => throw new DeserializationException(s"could not deserialize value object $obj")
   }
 
   def write(obj: T): JsValue = JsString(obj.value)
