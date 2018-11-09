@@ -764,7 +764,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
   "loadAccessPolicyWithEmails" should "get emails for users, groups and policies" in {
     service.createResourceType(defaultResourceType).unsafeRunSync()
 
-    val testGroup = dirDAO.createGroup(BasicWorkbenchGroup(WorkbenchGroupName("mygroup"), Set.empty, WorkbenchEmail("group@a.com"))).futureValue
+    val testGroup = dirDAO.createGroup(BasicWorkbenchGroup(WorkbenchGroupName("mygroup"), Set.empty, WorkbenchEmail("group@a.com"))).unsafeRunSync()
 
     val res1 = service.createResource(defaultResourceType, ResourceId("resource1"), dummyUserInfo).futureValue
     val testPolicy = service.listResourcePolicies(res1.fullyQualifiedId).futureValue.head

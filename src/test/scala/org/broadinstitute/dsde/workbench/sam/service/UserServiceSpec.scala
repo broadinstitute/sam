@@ -225,7 +225,7 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
     val expectedAccessPolicyId = genPolicyIdentity.sample.get
     val expectedGroupName = genWorkbenchGroupName.sample.get
 
-    dirDAO.createUser(WorkbenchUser(user.id, None, user.email)).futureValue
+    dirDAO.createUser(WorkbenchUser(user.id, None, user.email)).unsafeRunSync()
 
     val accessPolicyDAO = new LdapAccessPolicyDAO(connectionPool, directoryConfig, TestSupport.blockingEc)
     val createPolicy = for {
@@ -236,10 +236,10 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
 
     createPolicy.unsafeRunSync()
 
-    dirDAO.createGroup(BasicWorkbenchGroup(expectedGroupName, Set(user.id), WorkbenchEmail("bar"))).futureValue
-    dirDAO.createGroup(BasicWorkbenchGroup(genWorkbenchGroupName.sample.get, Set(expectedGroupName), WorkbenchEmail("baz"))).futureValue
+    dirDAO.createGroup(BasicWorkbenchGroup(expectedGroupName, Set(user.id), WorkbenchEmail("bar"))).unsafeRunSync()
+    dirDAO.createGroup(BasicWorkbenchGroup(genWorkbenchGroupName.sample.get, Set(expectedGroupName), WorkbenchEmail("baz"))).unsafeRunSync()
 
-    service.registerUser(user).futureValue
+    service.registerUser(user).unsafeRunSync()
 
     // a little fancyness to ignore the order of the groups passed to onGroupUpdate
     verify(googleExtensions).onGroupUpdate(argThat((actual: Seq[WorkbenchGroupIdentity]) => actual.toSet equals Set(expectedGroupName, expectedAccessPolicyId)))
