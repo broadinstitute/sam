@@ -5,25 +5,22 @@ import java.util.UUID
 
 import akka.actor.ActorSystem
 import akka.testkit.TestKitBase
-import org.broadinstitute.dsde.test.SamConfig
-import org.broadinstitute.dsde.workbench.service._
-import org.broadinstitute.dsde.workbench.service.SamModel._
-import org.broadinstitute.dsde.workbench.test.SamConfig
-import org.broadinstitute.dsde.workbench.service.{Orchestration, RestException, Sam, Thurloe}
 import org.broadinstitute.dsde.workbench.auth.{AuthToken, ServiceAccountAuthTokenFromJson, ServiceAccountAuthTokenFromPem}
-import org.broadinstitute.dsde.workbench.config.{Credentials, ServiceTestConfig, UserPool}
-import org.broadinstitute.dsde.workbench.model._
+import org.broadinstitute.dsde.workbench.config.{Credentials, UserPool}
 import org.broadinstitute.dsde.workbench.dao.Google.{googleDirectoryDAO, googleIamDAO}
 import org.broadinstitute.dsde.workbench.fixture.BillingFixtures
-import org.broadinstitute.dsde.workbench.service.test.CleanUp
+import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccountName}
+import org.broadinstitute.dsde.workbench.service.SamModel._
+import org.broadinstitute.dsde.workbench.service.test.CleanUp
+import org.broadinstitute.dsde.workbench.service.{Orchestration, Sam, Thurloe, _}
+import org.broadinstitute.dsde.workbench.test.SamConfig
 import org.scalatest.concurrent.{Eventually, ScalaFutures}
 import org.scalatest.time.{Seconds, Span}
 import org.scalatest.{FreeSpec, Matchers}
 
-import scala.concurrent.{Await, ExecutionContext, ExecutionContextExecutor}
-import scala.concurrent.duration.Duration
-import scala.concurrent.duration._
+import scala.concurrent.Await
+import scala.concurrent.duration.{Duration, _}
 
 class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaFutures with CleanUp with Eventually with TestKitBase {
   implicit override val patienceConfig: PatienceConfig = PatienceConfig(timeout = scaled(Span(5, Seconds)))

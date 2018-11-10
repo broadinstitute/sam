@@ -12,6 +12,7 @@ import org.scalatest.{AsyncFlatSpec, Matchers}
 import org.broadinstitute.dsde.workbench.test.Generators.genLockPath
 import org.broadinstitute.dsde.workbench.test.SamConfig.GCS
 
+import scala.concurrent.ExecutionContext.Implicits.global
 import scala.collection.JavaConverters._
 import scala.concurrent.duration._
 
