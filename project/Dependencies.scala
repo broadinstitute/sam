@@ -10,7 +10,7 @@ object Dependencies {
 
   val workbenchUtilV   = "0.4-8d718f2"
   val workbenchModelV  = "0.12-a19203d"
-  val workbenchGoogleV = "0.17-b9cbfa5-SNAP"
+  val workbenchGoogleV = "0.17-0ea6d23-SNAP"
   val workbenchNotificationsV = "0.1-f2a0020"
   val monocleVersion = "1.5.1-cats"
 //  val grpcVersion = "1.15.0"
