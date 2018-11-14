@@ -266,7 +266,7 @@ class GoogleExtensions(distributedLock: DistributedLock[IO],  directoryDAO: Dire
 
     // googleServicesConfig.resourceNamePrefix is an environment specific variable passed in https://github.com/broadinstitute/firecloud-develop/blob/fade9286ff0aec8449121ed201ebc44c8a4d57dd/run-context/fiab/configs/sam/docker-compose.yaml.ctmpl#L24
     // Use resourceNamePrefix to avoid collision between different fiab environments (we share same firestore for fiabs)
-    val lock = LockPath(CollectionName(s"${project.value}-createPet"), Document(user.id.value), 10 seconds)
+    val lock = LockPath(CollectionName(s"${project.value}-createPet"), Document(user.id.value), 30 seconds)
     distributedLock.withLock(lock).use(_ => createPet).unsafeToFuture()
   }
 
