@@ -1,4 +1,4 @@
-FROM iflavoursbv/sbt-openjdk-8-alpine
+FROM bigtruedata/sbt
 
 COPY src /app/src
 COPY test.sh /app

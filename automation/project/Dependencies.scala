@@ -8,8 +8,8 @@ object Dependencies {
   val akkaHttpV = "10.0.10"
 
   val workbenchModelV  = "0.13-7e86fba"
-  val workbenchGoogleV = "0.17-0ea6d23-SNAP"
-  val workbenchServiceTestV = "0.15-0ea6d23-SNAP"
+  val workbenchGoogleV = "0.18-36b9cda"
+  val workbenchServiceTestV = "0.15-36b9cda"
 
   val workbenchModel: ModuleID = "org.broadinstitute.dsde.workbench" %% "workbench-model" % workbenchModelV
   val excludeWorkbenchModel = ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-model_" + scalaV)
@@ -43,7 +43,6 @@ object Dependencies {
     "org.specs2"          %%  "specs2-core"   % "3.8.6"  % "test",
     "org.scalatest"       %%  "scalatest"     % "3.0.1"   % "test",
     "org.scalacheck"      %%  "scalacheck"    % "1.14.0" % "test",
-    "org.seleniumhq.selenium" % "selenium-java" % "3.8.1" % "test",
     "com.typesafe.scala-logging" %% "scala-logging" % "3.5.0",
 
     workbenchServiceTest,
