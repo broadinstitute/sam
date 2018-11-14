@@ -29,6 +29,11 @@ class DistributedLockSpec extends AsyncFlatSpec with Matchers {
     DistributedLock("samServiceTest", config, googeFireStoreOps)
   }
 
+  "config file" should "exist" in {
+    new java.io.File(GCS.pathToSamTestFirestoreAccountPath).exists shouldBe true
+    new java.io.File(GCS.pathToSamTestFirestoreAccountPath+"2").exists shouldBe false
+  }
+
   "acquireLock" should "succeed if a lock can be retrieved" in {
     val lockPath = genLockPath.sample.get
     val res = lockResource.use { lock =>
