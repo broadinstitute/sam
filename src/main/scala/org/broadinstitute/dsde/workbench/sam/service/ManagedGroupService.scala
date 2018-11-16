@@ -89,15 +89,15 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
 
   def listGroups(userId: WorkbenchUserId): Future[Set[ManagedGroupMembershipEntry]] = {
     for {
-      ripns <- policyEvaluatorService.listUserManagedGroups(userId).unsafeToFuture()
-      emailLookup <- directoryDAO.batchLoadGroupEmail(ripns.map(ripn => WorkbenchGroupName(ripn.resourceId.value)))
+      managedGroupsWithRole <- policyEvaluatorService.listUserManagedGroupsWithRole(userId).unsafeToFuture()
+      emailLookup <- directoryDAO.batchLoadGroupEmail(managedGroupsWithRole.map(_.groupName))
     } yield {
       val emailLookupMap = emailLookup.toMap
       // This will silently ignore any group where the email could not be loaded. This can happen when a
       // managed group is in an inconsistent state (partially created/deleted or created incorrectly).
       // It also includes only admin and member policies
-      ripns.flatMap { ripn =>
-        emailLookupMap.get(WorkbenchGroupName(ripn.resourceId.value)).map(email => ManagedGroupMembershipEntry(ripn.resourceId, ripn.accessPolicyName, email))
+      managedGroupsWithRole.flatMap { groupAndRole =>
+        emailLookupMap.get(groupAndRole.groupName).map(email => ManagedGroupMembershipEntry(ResourceId(groupAndRole.groupName.value), AccessPolicyName(groupAndRole.role.value), email))
       }
     }
   }
@@ -136,18 +136,37 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
   }
 
   def requestAccess(resourceId: ResourceId, requesterUserId: WorkbenchUserId): Future[Unit] = {
+    def extractGoogleSubjectId(requesterUser: Option[WorkbenchUser]) = {
+      (for { u <- requesterUser; s <- u.googleSubjectId } yield s) match {
+        case Some(subjectId) => IO.pure(WorkbenchUserId(subjectId.value))
+        // don't know how a user would get this far without getting a subject id
+        case None => IO.raiseError(new WorkbenchException(s"unable to find subject id for $requesterUserId"))
+      }
+    }
+
     getAccessInstructions(resourceId).flatMap {
       case Some(accessInstructions) =>
         Future.failed(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"Please follow special access instructions: $accessInstructions")))
       case None =>
-        val resourceAndPolicyName = FullyQualifiedPolicyId(
+        // Thurloe is the thing that sends the emails and it knows only about google subject ids, not internal sam user ids
+        // so we have to do some conversion here which makes the code look less straight forward
+        val resourceAndAdminPolicyName = FullyQualifiedPolicyId(
           FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, resourceId), ManagedGroupService.adminPolicyName)
-        accessPolicyDAO.listFlattenedPolicyMembers(resourceAndPolicyName).unsafeToFuture().map { users =>
-          val notifications = users.map { recipientUserId =>
-            Notifications.GroupAccessRequestNotification(recipientUserId, WorkbenchGroupName(resourceId.value).value, users, requesterUserId)
+
+        val notificationIO = for {
+          requesterUser <- directoryDAO.loadUser(requesterUserId)
+          requesterSubjectId <- extractGoogleSubjectId(requesterUser)
+          admins <- accessPolicyDAO.listFlattenedPolicyMembers(resourceAndAdminPolicyName)
+          // ignore any admin that does not have a google subject id (they have not registered yet anyway)
+          adminUserIds = admins.flatMap { admin => admin.googleSubjectId.map(id => WorkbenchUserId(id.value)) }
+        } yield {
+          val notifications = adminUserIds.map { recipientUserId =>
+            Notifications.GroupAccessRequestNotification(recipientUserId, WorkbenchGroupName(resourceId.value).value, adminUserIds, requesterSubjectId)
           }
           cloudExtensions.fireAndForgetNotifications(notifications)
         }
+
+        notificationIO.unsafeToFuture()
     }
   }
 

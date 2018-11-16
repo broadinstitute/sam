@@ -2,6 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.model
 
 import monocle.macros.Lenses
 import org.broadinstitute.dsde.workbench.model._
+import org.broadinstitute.dsde.workbench.sam.service.ManagedGroupService.MangedGroupRoleName
 import spray.json.{DefaultJsonProtocol, JsValue, RootJsonFormat}
 
 /**
@@ -85,55 +86,56 @@ object SamResourceTypes {
   val resourceTypeAdminName = ResourceTypeName("resource_type_admin")
 }
 
-@Lenses case class UserStatusDetails(userSubjectId: WorkbenchUserId, userEmail: WorkbenchEmail) //for backwards compatibility to old API
-@Lenses case class UserIdInfo(userSubjectId: WorkbenchUserId, userEmail: WorkbenchEmail, googleSubjectId: Option[GoogleSubjectId])
-@Lenses case class UserStatus(userInfo: UserStatusDetails, enabled: Map[String, Boolean])
-@Lenses case class UserStatusInfo(userSubjectId: String, userEmail: String, enabled: Boolean)
-@Lenses case class UserStatusDiagnostics(enabled: Boolean, inAllUsersGroup: Boolean, inGoogleProxyGroup: Boolean)
+@Lenses final case class UserStatusDetails(userSubjectId: WorkbenchUserId, userEmail: WorkbenchEmail) //for backwards compatibility to old API
+@Lenses final case class UserIdInfo(userSubjectId: WorkbenchUserId, userEmail: WorkbenchEmail, googleSubjectId: Option[GoogleSubjectId])
+@Lenses final case class UserStatus(userInfo: UserStatusDetails, enabled: Map[String, Boolean])
+@Lenses final case class UserStatusInfo(userSubjectId: String, userEmail: String, enabled: Boolean)
+@Lenses final case class UserStatusDiagnostics(enabled: Boolean, inAllUsersGroup: Boolean, inGoogleProxyGroup: Boolean)
 
-@Lenses case class ResourceActionPattern(value: String, description: String, authDomainConstrainable: Boolean) {
+@Lenses final case class ResourceActionPattern(value: String, description: String, authDomainConstrainable: Boolean) {
   def matches(other: ResourceAction) = value.r.pattern.matcher(other.value).matches()
 }
-@Lenses case class ResourceAction(value: String) extends ValueObject
+@Lenses final case class ResourceAction(value: String) extends ValueObject
 @Lenses case class ResourceRoleName(value: String) extends ValueObject
-@Lenses case class ResourceRole(roleName: ResourceRoleName, actions: Set[ResourceAction])
+@Lenses final case class ResourceRole(roleName: ResourceRoleName, actions: Set[ResourceAction])
 
-@Lenses case class ResourceTypeName(value: String) extends ValueObject
+@Lenses final case class ResourceTypeName(value: String) extends ValueObject
 
 @Lenses final case class FullyQualifiedResourceId(resourceTypeName: ResourceTypeName, resourceId: ResourceId)
 @Lenses final case class Resource(resourceTypeName: ResourceTypeName, resourceId: ResourceId, authDomain: Set[WorkbenchGroupName]){
   val fullyQualifiedId = FullyQualifiedResourceId(resourceTypeName, resourceId)
 }
-@Lenses case class ResourceType(name: ResourceTypeName, actionPatterns: Set[ResourceActionPattern], roles: Set[ResourceRole], ownerRoleName: ResourceRoleName, reuseIds: Boolean = false) {
+@Lenses final case class ResourceType(name: ResourceTypeName, actionPatterns: Set[ResourceActionPattern], roles: Set[ResourceRole], ownerRoleName: ResourceRoleName, reuseIds: Boolean = false) {
   // Ideally we'd just store this boolean in a lazy val, but this will upset the spray/akka json serializers
   // I can't imagine a scenario where we have enough action patterns that would make this def discernibly slow though
   def isAuthDomainConstrainable: Boolean = actionPatterns.exists(_.authDomainConstrainable)
 }
 
-@Lenses case class ResourceId(value: String) extends ValueObject
+@Lenses final case class ResourceId(value: String) extends ValueObject
 @Lenses final case class ResourceIdAndPolicyName(resourceId: ResourceId, accessPolicyName: AccessPolicyName)
 @Lenses final case class UserPolicyResponse(resourceId: ResourceId, accessPolicyName: AccessPolicyName, authDomainGroups: Set[WorkbenchGroupName], missingAuthDomainGroups: Set[WorkbenchGroupName], public: Boolean)
 @Lenses final case class FullyQualifiedPolicyId(resource: FullyQualifiedResourceId, accessPolicyName: AccessPolicyName) extends WorkbenchGroupIdentity {
   override def toString: String = s"${accessPolicyName.value}.${resource.resourceId.value}.${resource.resourceTypeName.value}"
 }
 @Lenses case class AccessPolicyName(value: String) extends ValueObject
-@Lenses case class CreateResourceRequest(resourceId: ResourceId, policies: Map[AccessPolicyName, AccessPolicyMembership], authDomain: Set[WorkbenchGroupName])
+@Lenses final case class CreateResourceRequest(resourceId: ResourceId, policies: Map[AccessPolicyName, AccessPolicyMembership], authDomain: Set[WorkbenchGroupName])
 
 /*
 Note that AccessPolicy IS A group, does not have a group. This makes the ldap query to list all a user's policies
 and thus resources much easier. We tried modeling with a "has a" relationship in code but a "is a" relationship in
 ldap but it felt unnatural.
  */
-@Lenses case class AccessPolicy(id: FullyQualifiedPolicyId, members: Set[WorkbenchSubject], email: WorkbenchEmail, roles: Set[ResourceRoleName], actions: Set[ResourceAction], public: Boolean) extends WorkbenchGroup
-@Lenses case class AccessPolicyMembership(memberEmails: Set[WorkbenchEmail], actions: Set[ResourceAction], roles: Set[ResourceRoleName])
-@Lenses case class AccessPolicyResponseEntry(policyName: AccessPolicyName, policy: AccessPolicyMembership, email: WorkbenchEmail)
+@Lenses final case class AccessPolicy(id: FullyQualifiedPolicyId, members: Set[WorkbenchSubject], email: WorkbenchEmail, roles: Set[ResourceRoleName], actions: Set[ResourceAction], public: Boolean) extends WorkbenchGroup
+@Lenses final case class AccessPolicyMembership(memberEmails: Set[WorkbenchEmail], actions: Set[ResourceAction], roles: Set[ResourceRoleName])
+@Lenses final case class AccessPolicyResponseEntry(policyName: AccessPolicyName, policy: AccessPolicyMembership, email: WorkbenchEmail)
 
-@Lenses case class BasicWorkbenchGroup(id: WorkbenchGroupName, members: Set[WorkbenchSubject], email: WorkbenchEmail) extends WorkbenchGroup
+@Lenses final case class BasicWorkbenchGroup(id: WorkbenchGroupName, members: Set[WorkbenchSubject], email: WorkbenchEmail) extends WorkbenchGroup
 
-@Lenses case class ManagedGroupMembershipEntry(groupName: ResourceId, role: AccessPolicyName, groupEmail: WorkbenchEmail)
-@Lenses case class ManagedGroupAccessInstructions(value: String) extends ValueObject
+@Lenses final case class ManagedGroupAndRole(groupName: WorkbenchGroupName, role: MangedGroupRoleName)
+@Lenses final case class ManagedGroupMembershipEntry(groupName: ResourceId, role: AccessPolicyName, groupEmail: WorkbenchEmail)
+@Lenses final case class ManagedGroupAccessInstructions(value: String) extends ValueObject
 
-@Lenses case class GroupSyncResponse(lastSyncDate: String, email: WorkbenchEmail)
+@Lenses final case class GroupSyncResponse(lastSyncDate: String, email: WorkbenchEmail)
 
 object SamLenses{
   val resourceIdentityAccessPolicy = AccessPolicy.id composeLens FullyQualifiedPolicyId.resource

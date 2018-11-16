@@ -1174,7 +1174,7 @@ class ResourceRoutesV1Spec extends FlatSpec with Matchers with ScalatestRouteTes
 
     Get(s"/api/resources/v1/${resourceType.name}/${resourceId.value}/allUsers") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
-      responseAs[Set[UserIdInfo]] shouldEqual Set(userIdInfo)
+      responseAs[Set[UserIdInfo]].map(_.userSubjectId) shouldEqual Set(userIdInfo.userSubjectId)
     }
   }
 
@@ -1239,7 +1239,7 @@ class ResourceRoutesV1Spec extends FlatSpec with Matchers with ScalatestRouteTes
 
     Get(s"/api/resources/v1/${resourceType.name}/${resourceId.value}/allUsers") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
-      responseAs[Set[UserIdInfo]] shouldEqual Set(userIdInfo)
+      responseAs[Set[UserIdInfo]].map(_.userSubjectId) shouldEqual Set(userIdInfo.userSubjectId)
     }
 
     val otherUserSamRoutes = TestSamRoutes(Map(resourceType.name -> resourceType), UserInfo(OAuth2BearerToken("accessToken"), WorkbenchUserId("user2"), WorkbenchEmail("user2@example.com"), 0))

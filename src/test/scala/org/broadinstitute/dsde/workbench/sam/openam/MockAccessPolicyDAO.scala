@@ -111,12 +111,12 @@ class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdenti
 
   // current implementation returns only the WorkbenchUserIds in this policy. it does not fully mock the behavior of LdapAccessPolicyDAO.
   // this function previously just returned an empty set and this is sufficient for the test I'm using it in (as of 10/25/18), so good enough for now
-  override def listFlattenedPolicyMembers(policyIdentity: FullyQualifiedPolicyId): IO[Set[WorkbenchUserId]] = IO {
+  override def listFlattenedPolicyMembers(policyIdentity: FullyQualifiedPolicyId): IO[Set[WorkbenchUser]] = IO {
     val members = policies.collect {
       case (`policyIdentity`, policy: AccessPolicy) => policy.members
     }
     members.flatten.collect {
-      case u: WorkbenchUserId => u
+      case u: WorkbenchUserId => WorkbenchUser(u, Some(GoogleSubjectId(u.value)), WorkbenchEmail("dummy"))
     }.toSet
   }
 

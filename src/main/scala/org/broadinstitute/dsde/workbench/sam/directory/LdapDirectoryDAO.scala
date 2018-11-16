@@ -215,6 +215,12 @@ class LdapDirectoryDAO(protected val ldapConnectionPool: LDAPConnectionPool, pro
     listMemberOfGroups(userDn(userId))
   }
 
+  override def listUserDirectMemberships(userId: WorkbenchUserId): IO[Stream[WorkbenchGroupIdentity]] = {
+    cs.evalOn(ecForLdapBlockingIO)(IO(ldapSearchStream(directoryConfig.baseDn, SearchScope.SUB, Filter.createEqualityFilter(Attr.uniqueMember, userDn(userId))) { entry =>
+      dnToGroupIdentity(entry.getDN)
+    }))
+  }
+
   private def listMemberOfGroups(dn: String) = {
     val groupsOption = for {
       entry <- Option(ldapConnectionPool.getEntry(dn, Attr.memberOf))

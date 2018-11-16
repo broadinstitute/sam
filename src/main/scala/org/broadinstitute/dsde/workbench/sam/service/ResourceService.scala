@@ -322,14 +322,16 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     }
   }
 
-  private def loadAccessPolicyWithEmails(policy: AccessPolicy): Future[AccessPolicyMembership] = {
+  private[service] def loadAccessPolicyWithEmails(policy: AccessPolicy): Future[AccessPolicyMembership] = {
     val users = policy.members.collect { case userId: WorkbenchUserId => userId }
     val groups = policy.members.collect { case groupName: WorkbenchGroupName => groupName }
+    val policyMembers = policy.members.collect { case policyId: FullyQualifiedPolicyId => policyId }
 
     for {
       userEmails <- directoryDAO.loadUsers(users).unsafeToFuture()
       groupEmails <- directoryDAO.loadGroups(groups)
-    } yield AccessPolicyMembership(userEmails.toSet[WorkbenchUser].map(_.email) ++ groupEmails.map(_.email), policy.actions, policy.roles)
+      policyEmails <- policyMembers.toList.parTraverse(accessPolicyDAO.loadPolicy(_)).unsafeToFuture()
+    } yield AccessPolicyMembership(userEmails.toSet[WorkbenchUser].map(_.email) ++ groupEmails.map(_.email) ++ policyEmails.flatMap(_.map(_.email)), policy.actions, policy.roles)
   }
 
   def listResourcePolicies(resource: FullyQualifiedResourceId): Future[Set[AccessPolicyResponseEntry]] = {
@@ -397,9 +399,9 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     for {
       accessPolicies <- accessPolicyDAO.listAccessPolicies(resourceId)
       members <- accessPolicies.toList.parTraverse(accessPolicy => accessPolicyDAO.listFlattenedPolicyMembers(accessPolicy.id))
-      workbenchUsers <- directoryDAO.loadUsers(members.toSet.flatten)
+      workbenchUsers = members.flatten.toSet
     } yield {
-      workbenchUsers.map(user => UserIdInfo(user.id, user.email, user.googleSubjectId)).toSet
+      workbenchUsers.map(user => UserIdInfo(user.id, user.email, user.googleSubjectId))
     }
   }
 }

@@ -1,5 +1,4 @@
-package org.broadinstitute.dsde.workbench.sam
-package service
+package org.broadinstitute.dsde.workbench.sam.service
 
 import java.net.URI
 import java.util.UUID
@@ -10,6 +9,7 @@ import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.Generator._
+import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.TestSupport.blockingEc
 import org.broadinstitute.dsde.workbench.sam.directory.LdapDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model._
@@ -20,6 +20,7 @@ import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FlatSpec, Matchers}
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig.resourceTypeReader
 
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.duration._
 
 /**
   * Created by dvoet on 6/27/17.
@@ -252,7 +253,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     val policies2 = runAndWait(service.createResource(defaultResourceType, resourceName2, dummyUserInfo))
 
     policyDAO.createPolicy(AccessPolicy(
-      model.FullyQualifiedPolicyId(policies2.fullyQualifiedId, AccessPolicyName(otherRoleName.value)), Set.empty, WorkbenchEmail("a@b.c"), Set(otherRoleName), Set.empty, public = true)).unsafeRunSync()
+      FullyQualifiedPolicyId(policies2.fullyQualifiedId, AccessPolicyName(otherRoleName.value)), Set.empty, WorkbenchEmail("a@b.c"), Set(otherRoleName), Set.empty, public = true)).unsafeRunSync()
 
     assertResult(defaultResourceTypeActions) {
       service.policyEvaluatorService.listUserResourceActions(FullyQualifiedResourceId(defaultResourceType.name, resourceName2), dummyUserInfo.userId).unsafeRunSync()
@@ -698,7 +699,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
       FullyQualifiedResourceId(SamResourceTypes.resourceTypeAdminName, ResourceId(SamResourceTypes.resourceTypeAdminName.value))).unsafeRunSync() should equal(Set.empty)
 
     // assert a resource was created for defaultResourceType
-    val resourceAndPolicyName = model.FullyQualifiedPolicyId(
+    val resourceAndPolicyName = FullyQualifiedPolicyId(
       FullyQualifiedResourceId(adminResType.name, ResourceId(defaultResourceType.name.value)), AccessPolicyName("owner"))
     val policy = policyDAO.loadPolicy(resourceAndPolicyName).unsafeRunSync()
     policy.map(_.copy(email = WorkbenchEmail(""))) should equal(Some(AccessPolicy(resourceAndPolicyName, Set.empty, WorkbenchEmail(""), Set(ResourceRoleName("owner")), Set.empty, public = false)))
@@ -759,5 +760,32 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     runAndWait(service.createPolicy(FullyQualifiedPolicyId(resource, AccessPolicyName("reader")), Set(group1.id, group2.id), Set.empty, Set.empty))
 
     service.listAllFlattenedResourceUsers(resource).unsafeRunSync() should contain theSameElementsAs Set(dummyUserIdInfo, user1, user2, user3, user4, user5, user6)
+  }
+
+  "loadAccessPolicyWithEmails" should "get emails for users, groups and policies" in {
+    val testResult = for {
+      _ <- service.createResourceType(defaultResourceType).unsafeToFuture()
+
+      testGroup <- dirDAO.createGroup(BasicWorkbenchGroup(WorkbenchGroupName("mygroup"), Set.empty, WorkbenchEmail("group@a.com"))).unsafeToFuture()
+
+      res1 <- service.createResource(defaultResourceType, ResourceId("resource1"), dummyUserInfo)
+      testPolicy <- service.listResourcePolicies(res1.fullyQualifiedId).map(_.head)
+
+      res2 <- service.createResource(defaultResourceType, ResourceId("resource2"), dummyUserInfo)
+
+      newPolicy <- policyDAO.createPolicy(AccessPolicy(
+        FullyQualifiedPolicyId(res2.fullyQualifiedId, AccessPolicyName("foo")), Set(testGroup.id, dummyUserInfo.userId, FullyQualifiedPolicyId(res1.fullyQualifiedId, testPolicy.policyName)), WorkbenchEmail("a@b.c"), Set.empty, Set.empty, public = false)).unsafeToFuture()
+
+      membership <- service.loadAccessPolicyWithEmails(newPolicy)
+    } yield {
+      membership.memberEmails should contain theSameElementsAs Set(
+        testGroup.email,
+        dummyUserInfo.userEmail,
+        testPolicy.email
+      )
+    }
+
+    implicit val patienceConfig = PatienceConfig(5.seconds)
+    testResult.futureValue
   }
 }

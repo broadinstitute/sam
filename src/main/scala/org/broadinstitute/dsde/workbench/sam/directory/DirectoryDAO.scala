@@ -46,6 +46,7 @@ trait DirectoryDAO {
   def readProxyGroup(userId: WorkbenchUserId): Future[Option[WorkbenchEmail]]
 
   def listUsersGroups(userId: WorkbenchUserId): Future[Set[WorkbenchGroupIdentity]]
+  def listUserDirectMemberships(userId: WorkbenchUserId): IO[Stream[WorkbenchGroupIdentity]]
   def listIntersectionGroupUsers(groupId: Set[WorkbenchGroupIdentity]): Future[Set[WorkbenchUserId]]
   def listAncestorGroups(groupId: WorkbenchGroupIdentity): Future[Set[WorkbenchGroupIdentity]]
 

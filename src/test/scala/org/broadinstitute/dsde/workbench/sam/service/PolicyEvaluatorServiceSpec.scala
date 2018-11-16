@@ -62,8 +62,10 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
   )
 
   private val constrainableActionPatterns = Set(
-    ResourceActionPattern("constrainable_view", "Can be constrained by an auth domain", true))
+    ResourceActionPattern("constrainable_view", "Can be constrained by an auth domain", true),
+    ResourceActionPattern("unconstrainable_view", "Not constrained by an auth domain", false))
   private val constrainableViewAction = ResourceAction("constrainable_view")
+  private val unconstrainableViewAction = ResourceAction("unconstrainable_view")
   private val constrainableResourceTypeActions = Set(constrainableViewAction)
   private val constrainableReaderRoleName = ResourceRoleName("constrainable_reader")
   private val constrainableResourceType = ResourceType(
@@ -225,11 +227,11 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
     res.unsafeToFuture()
   }
 
-  it should "return true if given action is allowed for a user and resource is constrained by auth domains and user is a member of all requried auth domains" in {
+  it should "return true if given action is allowed for a user, action is constrained by auth domains, user is a member of all required auth domains" in {
     val user = genUserInfo.sample.get
-    val samplePolicy = genPolicy.sample.get
-    val action = genResourceAction.sample.get
-    val resource = genResource.sample.get.copy(resourceTypeName = defaultResourceType.name)
+    val samplePolicy = SamLenses.resourceTypeNameInAccessPolicy.modify(_ => constrainableResourceType.name)(genPolicy.sample.get)
+    val action = constrainableViewAction
+    val resource = genResource.sample.get.copy(resourceTypeName = constrainableResourceType.name)
     val policyWithUser = AccessPolicy.members.modify(_ + user.userId)(samplePolicy)
     val policyWithResource = SamLenses.resourceIdentityAccessPolicy.set(resource.fullyQualifiedId)(policyWithUser)
     val policy = AccessPolicy.actions.modify(_ + action)(policyWithResource)
@@ -243,7 +245,86 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
       _ <- resource.authDomain.toList.parTraverse{
         authDomain => IO.fromFuture(IO(managedGroupService.createManagedGroup(ResourceId(authDomain.value), user)))
       }
-      r <- service.policyEvaluatorService.hasPermission(policy.id.resource, action, user.userId)
+      r <- constrainableService.policyEvaluatorService.hasPermission(policy.id.resource, action, user.userId)
+    } yield {
+      r shouldBe(true)
+    }
+
+    res.unsafeToFuture()
+  }
+
+  it should "return true if given action is allowed for a user, action is constrained by auth domains, resource has no auth domain" in {
+    val user = genUserInfo.sample.get
+    val samplePolicy = SamLenses.resourceTypeNameInAccessPolicy.modify(_ => constrainableResourceType.name)(genPolicy.sample.get)
+    val action = constrainableViewAction
+    val resource = genResource.sample.get.copy(resourceTypeName = constrainableResourceType.name, authDomain = Set.empty)
+    val policyWithUser = AccessPolicy.members.modify(_ + user.userId)(samplePolicy)
+    val policyWithResource = SamLenses.resourceIdentityAccessPolicy.set(resource.fullyQualifiedId)(policyWithUser)
+    val policy = AccessPolicy.actions.modify(_ + action)(policyWithResource)
+
+    val res = for{
+      _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
+      _ <- policyDAO.createResourceType(policy.id.resource.resourceTypeName)
+      _ <- policyDAO.createResourceType(managedGroupResourceType.name)
+      _ <- policyDAO.createResource(resource)
+      _ <- policyDAO.createPolicy(policy)
+      r <- constrainableService.policyEvaluatorService.hasPermission(policy.id.resource, action, user.userId)
+    } yield {
+      r shouldBe(true)
+    }
+
+    res.unsafeToFuture()
+  }
+
+  it should "return false if given action is allowed for a user, action is constrained by auth domains, user is NOT a member of auth domain" in {
+    val user = genUserInfo.sample.get
+    val probeUser = genUserInfo.sample.get
+    val samplePolicy = SamLenses.resourceTypeNameInAccessPolicy.modify(_ => constrainableResourceType.name)(genPolicy.sample.get)
+    val action = constrainableViewAction
+    val resource = genResource.sample.get.copy(resourceTypeName = constrainableResourceType.name)
+    val policyWithUser = AccessPolicy.members.modify(_ + probeUser.userId)(samplePolicy)
+    val policyWithResource = SamLenses.resourceIdentityAccessPolicy.set(resource.fullyQualifiedId)(policyWithUser)
+    val policy = AccessPolicy.actions.modify(_ + action)(policyWithResource)
+
+    val res = for{
+      _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
+      _ <- dirDAO.createUser(WorkbenchUser(probeUser.userId, Some(GoogleSubjectId(probeUser.userId.value)), probeUser.userEmail))
+      _ <- policyDAO.createResourceType(policy.id.resource.resourceTypeName)
+      _ <- policyDAO.createResourceType(managedGroupResourceType.name)
+      _ <- policyDAO.createResource(resource)
+      _ <- policyDAO.createPolicy(policy)
+      _ <- resource.authDomain.toList.parTraverse{
+        authDomain => IO.fromFuture(IO(managedGroupService.createManagedGroup(ResourceId(authDomain.value), user)))
+      }
+      r <- constrainableService.policyEvaluatorService.hasPermission(policy.id.resource, action, probeUser.userId)
+    } yield {
+      r shouldBe(false)
+    }
+
+    res.unsafeToFuture()
+  }
+
+  it should "return true if given action is allowed for a user, action is NOT constrained by auth domains, user is not a member of auth domain" in {
+    val user = genUserInfo.sample.get
+    val probeUser = genUserInfo.sample.get
+    val samplePolicy = SamLenses.resourceTypeNameInAccessPolicy.modify(_ => constrainableResourceType.name)(genPolicy.sample.get)
+    val action = unconstrainableViewAction
+    val resource = genResource.sample.get.copy(resourceTypeName = constrainableResourceType.name)
+    val policyWithUser = AccessPolicy.members.modify(_ + probeUser.userId)(samplePolicy)
+    val policyWithResource = SamLenses.resourceIdentityAccessPolicy.set(resource.fullyQualifiedId)(policyWithUser)
+    val policy = AccessPolicy.actions.modify(_ + action)(policyWithResource)
+
+    val res = for{
+      _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
+      _ <- dirDAO.createUser(WorkbenchUser(probeUser.userId, Some(GoogleSubjectId(probeUser.userId.value)), probeUser.userEmail))
+      _ <- policyDAO.createResourceType(policy.id.resource.resourceTypeName)
+      _ <- policyDAO.createResourceType(managedGroupResourceType.name)
+      _ <- policyDAO.createResource(resource)
+      _ <- policyDAO.createPolicy(policy)
+      _ <- resource.authDomain.toList.parTraverse{
+        authDomain => IO.fromFuture(IO(managedGroupService.createManagedGroup(ResourceId(authDomain.value), user)))
+      }
+      r <- constrainableService.policyEvaluatorService.hasPermission(policy.id.resource, action, probeUser.userId)
     } yield {
       r shouldBe(true)
     }

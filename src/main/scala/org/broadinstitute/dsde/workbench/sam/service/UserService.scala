@@ -58,7 +58,12 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
             subjectFromEmail <- directoryDAO.loadSubjectFromEmail(user.email)
             updated <- subjectFromEmail match {
               case Some(uid: WorkbenchUserId) =>
-                directoryDAO.setGoogleSubjectId(uid, user.googleSubjectId).map(_ => WorkbenchUser(uid, Some(user.googleSubjectId), user.email))
+                for {
+                  groups <- directoryDAO.listUserDirectMemberships(uid)
+                  _ <- directoryDAO.setGoogleSubjectId(uid, user.googleSubjectId)
+                  _ <- IO.fromFuture(IO(cloudExtensions.onGroupUpdate(groups)))
+                } yield WorkbenchUser(uid, Some(user.googleSubjectId), user.email)
+
               case Some(sub) =>
                 //We don't support inviting a group account or pet service account
                 IO.raiseError[WorkbenchUser](
