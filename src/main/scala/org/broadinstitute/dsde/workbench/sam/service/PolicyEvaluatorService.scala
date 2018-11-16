@@ -79,13 +79,13 @@ class PolicyEvaluatorService(
       else IO.pure(Set.empty)
       authDomainMap = resources.map(x => x.resourceId -> x.authDomain).toMap
 
-      userMangedGroups <- if (isConstrained) listUserManagedGroups(userId) else IO.pure(Set.empty[WorkbenchGroupName])
+      userManagedGroups <- if (isConstrained) listUserManagedGroups(userId) else IO.pure(Set.empty[WorkbenchGroupName])
 
       results = ridAndPolicyName.map { rnp =>
         if (isConstrained) {
           authDomainMap.get(rnp.resourceId) match {
             case Some(resourceAuthDomains) =>
-              val userNotMemberOf = resourceAuthDomains -- userMangedGroups
+              val userNotMemberOf = resourceAuthDomains -- userManagedGroups
               Some(UserPolicyResponse(rnp.resourceId, rnp.accessPolicyName, resourceAuthDomains, userNotMemberOf, false))
             case None =>
               logger.error(s"ldap has corrupted data. ${rnp.resourceId} should have auth domains defined")
