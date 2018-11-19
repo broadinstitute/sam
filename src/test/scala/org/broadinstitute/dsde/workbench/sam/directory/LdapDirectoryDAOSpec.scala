@@ -7,7 +7,7 @@ import akka.http.scaladsl.model.StatusCodes
 import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountDisplayName, ServiceAccountSubjectId}
-import org.broadinstitute.dsde.workbench.sam.TestSupport
+import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport}
 import org.broadinstitute.dsde.workbench.sam.TestSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.LdapAccessPolicyDAO
@@ -147,7 +147,7 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
       dao.loadPetServiceAccount(petServiceAccount.id).unsafeRunSync()
     }
 
-    runAndWait(dao.deletePetServiceAccount(petServiceAccount.id))
+    dao.deletePetServiceAccount(petServiceAccount.id).unsafeRunSync()
 
     assertResult(None) {
       dao.loadPetServiceAccount(petServiceAccount.id).unsafeRunSync()
@@ -409,7 +409,7 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
       dao.loadUser(user.id).unsafeRunSync()
     }
 
-    runAndWait(dao.loadSubjectEmail(userId)) shouldEqual None
+    dao.loadSubjectEmail(userId).unsafeRunSync()shouldEqual None
   }
 
   it should "succeed if the user has been created" in {
@@ -429,8 +429,38 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     }
 
     assertResult(Some(user.email)) {
-      runAndWait(dao.loadSubjectEmail(userId))
+      dao.loadSubjectEmail(userId).unsafeRunSync()
     }
+  }
+
+  "loadSubjectFromEmail" should "be able to load subject given an email" in {
+    val user1 = Generator.genWorkbenchUser.sample.get
+    val user2 = user1.copy(id = WorkbenchUserId(user1.id.value + "2"))
+    val res = for {
+      _ <- dao.createUser(user1)
+      email1 <- dao.loadSubjectEmail(user1.id)
+      email2 <- dao.loadSubjectEmail(user2.id)
+    } yield {
+      email1 shouldEqual(Some(user1.email))
+      email2 shouldEqual(None)
+    }
+    res.unsafeRunSync()
+  }
+
+  "loadSubjectFromGoogleSubjectId" should "be able to load subject given an google subject Id" in {
+    val user = Generator.genWorkbenchUser.sample.get
+    val user1 = user.copy(googleSubjectId = Some(GoogleSubjectId(user.id.value)))
+    val user2 = user1.copy(googleSubjectId = Some(GoogleSubjectId(user.id.value + "2")))
+
+    val res = for {
+      _ <- dao.createUser(user1)
+      subject1 <- dao.loadSubjectFromGoogleSubjectId(user1.googleSubjectId.get)
+      subject2 <- dao.loadSubjectFromGoogleSubjectId(user2.googleSubjectId.get)
+    } yield {
+      subject1 shouldEqual(Some(user1.id))
+      subject2 shouldEqual(None)
+    }
+    res.unsafeRunSync()
   }
 }
 

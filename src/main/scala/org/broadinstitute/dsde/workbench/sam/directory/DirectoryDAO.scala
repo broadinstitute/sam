@@ -15,9 +15,9 @@ import scala.concurrent.Future
 trait DirectoryDAO {
   def createGroup(group: BasicWorkbenchGroup, accessInstructionsOpt: Option[String] = None): IO[BasicWorkbenchGroup]
   def loadGroup(groupName: WorkbenchGroupName): IO[Option[BasicWorkbenchGroup]]
-  def loadGroups(groupNames: Set[WorkbenchGroupName]): Future[Seq[BasicWorkbenchGroup]]
-  def loadGroupEmail(groupName: WorkbenchGroupName): Future[Option[WorkbenchEmail]]
-  def batchLoadGroupEmail(groupNames: Set[WorkbenchGroupName]): Future[Seq[(WorkbenchGroupName, WorkbenchEmail)]]
+  def loadGroups(groupNames: Set[WorkbenchGroupName]): IO[Stream[BasicWorkbenchGroup]]
+  def loadGroupEmail(groupName: WorkbenchGroupName): IO[Option[WorkbenchEmail]]
+  def batchLoadGroupEmail(groupNames: Set[WorkbenchGroupName]): IO[Stream[(WorkbenchGroupName, WorkbenchEmail)]]
   def deleteGroup(groupName: WorkbenchGroupName): Future[Unit]
 
   /**
@@ -34,8 +34,8 @@ trait DirectoryDAO {
   def getSynchronizedEmail(groupId: WorkbenchGroupIdentity): Future[Option[WorkbenchEmail]]
 
   def loadSubjectFromEmail(email: WorkbenchEmail): IO[Option[WorkbenchSubject]]
-  def loadSubjectEmail(subject: WorkbenchSubject): Future[Option[WorkbenchEmail]]
-  def loadSubjectEmails(subjects: Set[WorkbenchSubject]): Future[Set[WorkbenchEmail]]
+  def loadSubjectEmail(subject: WorkbenchSubject): IO[Option[WorkbenchEmail]]
+  def loadSubjectEmails(subjects: Set[WorkbenchSubject]): IO[Stream[WorkbenchEmail]]
   def loadSubjectFromGoogleSubjectId(googleSubjectId: GoogleSubjectId): IO[Option[WorkbenchSubject]]
 
   def createUser(user: WorkbenchUser): IO[WorkbenchUser]
@@ -57,10 +57,10 @@ trait DirectoryDAO {
   def getUserFromPetServiceAccount(petSA: ServiceAccountSubjectId):IO[Option[WorkbenchUser]]
   def createPetServiceAccount(petServiceAccount: PetServiceAccount): IO[PetServiceAccount]
   def loadPetServiceAccount(petServiceAccountId: PetServiceAccountId): IO[Option[PetServiceAccount]]
-  def deletePetServiceAccount(petServiceAccountId: PetServiceAccountId): Future[Unit]
+  def deletePetServiceAccount(petServiceAccountId: PetServiceAccountId): IO[Unit]
   def getAllPetServiceAccountsForUser(userId: WorkbenchUserId): Future[Seq[PetServiceAccount]]
   def updatePetServiceAccount(petServiceAccount: PetServiceAccount): IO[PetServiceAccount]
-  def getManagedGroupAccessInstructions(groupName: WorkbenchGroupName): Future[Option[String]]
+  def getManagedGroupAccessInstructions(groupName: WorkbenchGroupName): IO[Option[String]]
   def setManagedGroupAccessInstructions(groupName: WorkbenchGroupName, accessInstructions: String): IO[Unit]
   def setGoogleSubjectId(userId: WorkbenchUserId, googleSubjectId: GoogleSubjectId): IO[Unit]
 }

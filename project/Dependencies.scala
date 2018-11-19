@@ -13,6 +13,7 @@ object Dependencies {
   val workbenchGoogleV = "0.16-0245949"
   val workbenchNotificationsV = "0.1-f2a0020"
   val monocleVersion = "1.5.1-cats"
+  val newRelicVersion = "4.6.0"
 
   val excludeAkkaActor =        ExclusionRule(organization = "com.typesafe.akka", name = "akka-actor_2.12")
   val excludeWorkbenchUtil =    ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-util_2.12")
@@ -21,6 +22,7 @@ object Dependencies {
   val excludeWorkbenchGoogle =  ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-google_2.12")
 
   val catseffect: ModuleID =  "org.typelevel" %% "cats-effect" % "1.0.0" //TODO: remove this once workbenchGoogleV is upgrade
+  val newRelic: ModuleID = "com.newrelic.agent.java" % "newrelic-api" % newRelicVersion
 
   val jacksonAnnotations: ModuleID = "com.fasterxml.jackson.core" % "jackson-annotations" % jacksonV
   val jacksonDatabind: ModuleID =    "com.fasterxml.jackson.core" % "jackson-databind"    % jacksonV
@@ -81,6 +83,7 @@ object Dependencies {
     catseffect,
     monocle,
     monocleMacro,
+    newRelic,
 
     scalaTest,
     mockito,

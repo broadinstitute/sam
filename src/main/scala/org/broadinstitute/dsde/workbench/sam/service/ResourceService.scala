@@ -322,34 +322,33 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     }
   }
 
-  private[service] def loadAccessPolicyWithEmails(policy: AccessPolicy): Future[AccessPolicyMembership] = {
+  private[service] def loadAccessPolicyWithEmails(policy: AccessPolicy): IO[AccessPolicyMembership] = {
     val users = policy.members.collect { case userId: WorkbenchUserId => userId }
     val groups = policy.members.collect { case groupName: WorkbenchGroupName => groupName }
     val policyMembers = policy.members.collect { case policyId: FullyQualifiedPolicyId => policyId }
 
     for {
-      userEmails <- directoryDAO.loadUsers(users).unsafeToFuture()
+      userEmails <- directoryDAO.loadUsers(users)
       groupEmails <- directoryDAO.loadGroups(groups)
-      policyEmails <- policyMembers.toList.parTraverse(accessPolicyDAO.loadPolicy(_)).unsafeToFuture()
+      policyEmails <- policyMembers.toList.parTraverse(accessPolicyDAO.loadPolicy(_))
     } yield AccessPolicyMembership(userEmails.toSet[WorkbenchUser].map(_.email) ++ groupEmails.map(_.email) ++ policyEmails.flatMap(_.map(_.email)), policy.actions, policy.roles)
   }
 
-  def listResourcePolicies(resource: FullyQualifiedResourceId): Future[Set[AccessPolicyResponseEntry]] = {
-    accessPolicyDAO.listAccessPolicies(resource).unsafeToFuture().flatMap { policies =>
-      Future.sequence(policies.map { policy =>
+  def listResourcePolicies(resource: FullyQualifiedResourceId): IO[Stream[AccessPolicyResponseEntry]] = {
+    accessPolicyDAO.listAccessPolicies(resource).flatMap { policies =>
+      policies.parTraverse { policy =>
         loadAccessPolicyWithEmails(policy).map { membership =>
           AccessPolicyResponseEntry(policy.id.accessPolicyName, membership, policy.email)
         }
-      })
+      }
     }
   }
 
-  def loadResourcePolicy(policyIdentity: FullyQualifiedPolicyId): Future[Option[AccessPolicyMembership]] = {
-    accessPolicyDAO.loadPolicy(policyIdentity).unsafeToFuture().flatMap {
-      case Some(policy) => loadAccessPolicyWithEmails(policy).map(Option(_))
-      case None => Future.successful(None)
-    }
-  }
+  def loadResourcePolicy(policyIdentity: FullyQualifiedPolicyId): IO[Option[AccessPolicyMembership]] =
+    for {
+      policy <- accessPolicyDAO.loadPolicy(policyIdentity)
+      res <- policy.traverse(p => loadAccessPolicyWithEmails(p))
+    } yield res
 
   private def makeValidatablePolicies(policies: Map[AccessPolicyName, AccessPolicyMembership]): Future[Set[ValidatableAccessPolicy]] = {
     Future.traverse(policies.toList){

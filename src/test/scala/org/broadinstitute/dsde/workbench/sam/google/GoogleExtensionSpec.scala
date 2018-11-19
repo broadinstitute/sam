@@ -123,8 +123,8 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
       when(mockDirectoryDAO.readProxyGroup(WorkbenchUserId("inBothUser"))).thenReturn(Future.successful(Some(WorkbenchEmail(inBothUserProxyEmail))))
 
       val subGroups = Seq(inSamSubGroup, inGoogleSubGroup, inBothSubGroup)
-      subGroups.foreach { g => when(mockDirectoryDAO.loadSubjectEmail(g.id)).thenReturn(Future.successful(Option(g.email))) }
-      when(mockDirectoryDAO.loadSubjectEmail(ge.allUsersGroupName)).thenReturn(Future.successful(Option(ge.allUsersGroupEmail)))
+      subGroups.foreach { g => when(mockDirectoryDAO.loadSubjectEmail(g.id)).thenReturn(IO.pure(Option(g.email))) }
+      when(mockDirectoryDAO.loadSubjectEmail(ge.allUsersGroupName)).thenReturn(IO.pure(Option(ge.allUsersGroupEmail)))
 
       val added = Seq(inSamSubGroup.email, WorkbenchEmail(inSamUserProxyEmail)) ++ (target match {
         case _: BasicWorkbenchGroup => Seq.empty
@@ -322,7 +322,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     petSaResponse2 shouldBe petServiceAccount
 
     // delete the pet service account
-    googleExtensions.deleteUserPetServiceAccount(newUser.userInfo.userSubjectId, googleProject).futureValue shouldBe true
+    googleExtensions.deleteUserPetServiceAccount(newUser.userInfo.userSubjectId, googleProject).unsafeRunSync() shouldBe true
 
     // the user should still exist in LDAP
     dirDAO.loadUser(defaultUserId).unsafeRunSync() shouldBe Some(defaultUser)
@@ -648,7 +648,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
 
     // mock responses for onManagedGroupUpdate
     when(mockAccessPolicyDAO.listResourcesConstrainedByGroup(WorkbenchGroupName(managedGroupId))).thenReturn(IO.pure(Set(resource)))
-    when(mockAccessPolicyDAO.listAccessPolicies(resource.fullyQualifiedId)).thenReturn(IO.pure(Set(ownerPolicy, readerPolicy)))
+    when(mockAccessPolicyDAO.listAccessPolicies(resource.fullyQualifiedId)).thenReturn(IO.pure(Stream(ownerPolicy, readerPolicy)))
 
     runAndWait(googleExtensions.onGroupUpdate(Seq(managedGroupRPN)))
 
@@ -683,7 +683,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
 
     // mock responses for onManagedGroupUpdate
     when(mockAccessPolicyDAO.listResourcesConstrainedByGroup(WorkbenchGroupName(managedGroupId))).thenReturn(IO.pure(Set(resource)))
-    when(mockAccessPolicyDAO.listAccessPolicies(resource.fullyQualifiedId)).thenReturn(IO.pure(Set(ownerPolicy, readerPolicy)))
+    when(mockAccessPolicyDAO.listAccessPolicies(resource.fullyQualifiedId)).thenReturn(IO.pure(Stream(ownerPolicy, readerPolicy)))
 
     runAndWait(googleExtensions.onGroupUpdate(Seq(WorkbenchGroupName(subGroupId))))
 
@@ -719,7 +719,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
 
     // mock responses for onManagedGroupUpdate
     when(mockAccessPolicyDAO.listResourcesConstrainedByGroup(WorkbenchGroupName(managedGroupId))).thenReturn(IO.pure(Set(resource)))
-    when(mockAccessPolicyDAO.listAccessPolicies(resource.fullyQualifiedId)).thenReturn(IO.pure(Set(ownerPolicy, readerPolicy)))
+    when(mockAccessPolicyDAO.listAccessPolicies(resource.fullyQualifiedId)).thenReturn(IO.pure(Stream(ownerPolicy, readerPolicy)))
 
     runAndWait(googleExtensions.onGroupUpdate(Seq(WorkbenchGroupName(subGroupId))))
 

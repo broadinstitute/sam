@@ -74,10 +74,10 @@ class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdenti
     }
   }
 
-  override def listAccessPolicies(resource: FullyQualifiedResourceId): IO[Set[AccessPolicy]] = IO {
+  override def listAccessPolicies(resource: FullyQualifiedResourceId): IO[Stream[AccessPolicy]] = IO {
     policies.collect {
       case (FullyQualifiedPolicyId(`resource`, _), policy: AccessPolicy) => policy
-    }.toSet
+    }.toStream
   }
 
   override def listAccessPoliciesForUser(resource: FullyQualifiedResourceId, user: WorkbenchUserId): IO[Set[AccessPolicy]] = IO {

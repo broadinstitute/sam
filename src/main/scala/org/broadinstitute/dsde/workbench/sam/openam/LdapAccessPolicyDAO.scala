@@ -23,7 +23,7 @@ class LdapAccessPolicyDAO(protected val ldapConnectionPool: LDAPConnectionPool, 
 
   override def createResourceType(resourceTypeName: ResourceTypeName): IO[ResourceTypeName] = {
     for{
-      _ <- cs.evalOn(ecForLdapBlockingIO)(IO(ldapConnectionPool.add(resourceTypeDn(resourceTypeName),
+      _ <- executeLdap(IO(ldapConnectionPool.add(resourceTypeDn(resourceTypeName),
         new Attribute("objectclass", List("top", ObjectClass.resourceType).asJava),
         new Attribute(Attr.ou, "resources"))
       )).void.recover{
@@ -38,7 +38,7 @@ class LdapAccessPolicyDAO(protected val ldapConnectionPool: LDAPConnectionPool, 
       new Attribute(Attr.resourceType, resource.resourceTypeName.value)
     ) ++ maybeAttribute(Attr.authDomain, resource.authDomain.map(_.value))
 
-    cs.evalOn(ecForLdapBlockingIO)(IO(ldapConnectionPool.add(resourceDn(FullyQualifiedResourceId(resource.resourceTypeName, resource.resourceId)), attributes.asJava))).recoverWith{
+    executeLdap(IO(ldapConnectionPool.add(resourceDn(FullyQualifiedResourceId(resource.resourceTypeName, resource.resourceId)), attributes.asJava))).recoverWith{
       case ldape: LDAPException if ldape.getResultCode == ResultCode.ENTRY_ALREADY_EXISTS =>
         IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, "A resource of this type and name already exists")))
     }.map(_ => resource)
@@ -48,7 +48,7 @@ class LdapAccessPolicyDAO(protected val ldapConnectionPool: LDAPConnectionPool, 
   override def deleteResource(resource: FullyQualifiedResourceId): IO[Unit] = IO(ldapConnectionPool.delete(resourceDn(resource)))
 
   override def loadResourceAuthDomain(resource: FullyQualifiedResourceId): IO[Set[WorkbenchGroupName]] = {
-    cs.evalOn(ecForLdapBlockingIO)((IO(Option(ldapConnectionPool.getEntry(resourceDn(resource)))))).flatMap {
+    executeLdap((IO(Option(ldapConnectionPool.getEntry(resourceDn(resource)))))).flatMap {
       case None =>
         IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Resource $resource not found")))
       case Some(r) =>
@@ -67,7 +67,7 @@ class LdapAccessPolicyDAO(protected val ldapConnectionPool: LDAPConnectionPool, 
   }
 
   override def listResourcesConstrainedByGroup(groupId: WorkbenchGroupIdentity): IO[Set[Resource]] = for {
-    res <- cs.evalOn(ecForLdapBlockingIO)(IO(ldapSearchStream(resourcesOu, SearchScope.SUB, Filter.createEqualityFilter(Attr.authDomain, groupId.toString))(unmarshalResource)))
+    res <- executeLdap(IO(ldapSearchStream(resourcesOu, SearchScope.SUB, Filter.createEqualityFilter(Attr.authDomain, groupId.toString))(unmarshalResource)))
     r <- res.parSequence.fold(err => IO.raiseError(new WorkbenchException(err)), r => IO.pure(r.toSet))
   } yield r
 
@@ -85,7 +85,7 @@ class LdapAccessPolicyDAO(protected val ldapConnectionPool: LDAPConnectionPool, 
       maybeAttribute(Attr.uniqueMember, policy.members.map(subjectDn)) :+
       new Attribute(Attr.public, policy.public.toString)
 
-    cs.evalOn(ecForLdapBlockingIO)(IO(ldapConnectionPool.add(policyDn(
+    executeLdap(IO(ldapConnectionPool.add(policyDn(
       FullyQualifiedPolicyId(
         FullyQualifiedResourceId(policy.id.resource.resourceTypeName, policy.id.resource.resourceId), policy.id.accessPolicyName)), attributes.asJava)).map(_ => policy))
   }
@@ -95,12 +95,12 @@ class LdapAccessPolicyDAO(protected val ldapConnectionPool: LDAPConnectionPool, 
     case _ => Option(new Attribute(attr, values.asJava))
   }
 
-  override def deletePolicy(policy: FullyQualifiedPolicyId): IO[Unit] = cs.evalOn(ecForLdapBlockingIO)(IO(
+  override def deletePolicy(policy: FullyQualifiedPolicyId): IO[Unit] = executeLdap(IO(
     ldapConnectionPool.delete(policyDn(policy))))
 
-  override def loadPolicy(resourceAndPolicyName: FullyQualifiedPolicyId): IO[Option[AccessPolicy]] = cs.evalOn(ecForLdapBlockingIO) {
+  override def loadPolicy(resourceAndPolicyName: FullyQualifiedPolicyId): IO[Option[AccessPolicy]] = executeLdap(
     IO(Option(ldapConnectionPool.getEntry(policyDn(resourceAndPolicyName))).map(unmarshalAccessPolicy))
-  }
+  )
 
   private def unmarshalAccessPolicy(entry: Entry): AccessPolicy = {
     val policyName = getAttribute(entry, Attr.policy).get
@@ -121,7 +121,7 @@ class LdapAccessPolicyDAO(protected val ldapConnectionPool: LDAPConnectionPool, 
     val memberMod = new Modification(ModificationType.REPLACE, Attr.uniqueMember, memberList.map(subjectDn).toArray:_*)
     val dateMod = new Modification(ModificationType.REPLACE, Attr.groupUpdatedTimestamp, formattedDate(new Date()))
 
-    cs.evalOn(ecForLdapBlockingIO)(IO(ldapConnectionPool.modify(policyDn(id), memberMod, dateMod)))
+    executeLdap(IO(ldapConnectionPool.modify(policyDn(id), memberMod, dateMod)))
   }
 
   override def overwritePolicy(newPolicy: AccessPolicy): IO[AccessPolicy] = {
@@ -133,13 +133,13 @@ class LdapAccessPolicyDAO(protected val ldapConnectionPool: LDAPConnectionPool, 
 
     val ridPolicyName = FullyQualifiedPolicyId(
       FullyQualifiedResourceId(newPolicy.id.resource.resourceTypeName, newPolicy.id.resource.resourceId), newPolicy.id.accessPolicyName)
-    cs.evalOn(ecForLdapBlockingIO)(IO(ldapConnectionPool.modify(policyDn(ridPolicyName), memberMod, actionMod, roleMod, dateMod, publicMod))) *> newPolicy.pure[IO]
+    executeLdap(IO(ldapConnectionPool.modify(policyDn(ridPolicyName), memberMod, actionMod, roleMod, dateMod, publicMod))) *> newPolicy.pure[IO]
   }
 
   override def listAccessPolicies(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId): IO[Set[ResourceIdAndPolicyName]] = {
     for{
       policyDnPattern <- IO(dnMatcher(Seq(Attr.policy, Attr.resourceId), resourceTypeDn(resourceTypeName)))
-      entry <- cs.evalOn(ecForLdapBlockingIO)(IO(ldapConnectionPool.getEntry(userDn(userId), Attr.memberOf)))
+      entry <- executeLdap(IO(ldapConnectionPool.getEntry(userDn(userId), Attr.memberOf)))
     } yield {
       val groupDns = Option(entry).flatMap(e => Option(getAttributes(e, Attr.memberOf))).getOrElse(Set.empty)
       groupDns.collect{case policyDnPattern(policyName, resourceId) => ResourceIdAndPolicyName(ResourceId(resourceId), AccessPolicyName(policyName))}
@@ -154,7 +154,7 @@ class LdapAccessPolicyDAO(protected val ldapConnectionPool: LDAPConnectionPool, 
           ).asJava)).toSeq
 
     for{
-      stream <- cs.evalOn(ecForLdapBlockingIO)(IO(ldapSearchStream(resourceTypeDn(resourceTypeName), SearchScope.ONE, filters:_*)(et => unmarshalResourceAuthDomain(et, resourceTypeName))))
+      stream <- executeLdap(IO(ldapSearchStream(resourceTypeDn(resourceTypeName), SearchScope.ONE, filters:_*)(et => unmarshalResourceAuthDomain(et, resourceTypeName))))
       res <- IO.fromEither(stream.parSequence.leftMap(s => new WorkbenchException(s)))
     } yield res.toSet
   }
@@ -174,7 +174,7 @@ class LdapAccessPolicyDAO(protected val ldapConnectionPool: LDAPConnectionPool, 
   )
 
   override def listPublicAccessPolicies(resource: FullyQualifiedResourceId): IO[Stream[AccessPolicy]] = {
-    cs.evalOn(ecForLdapBlockingIO)(
+    executeLdap(
       IO(
         ldapSearchStream(
           resourceDn(resource),
@@ -185,12 +185,12 @@ class LdapAccessPolicyDAO(protected val ldapConnectionPool: LDAPConnectionPool, 
         )(unmarshalAccessPolicy)))
   }
 
-  override def listAccessPolicies(resource: FullyQualifiedResourceId): IO[Set[AccessPolicy]] = cs.evalOn(ecForLdapBlockingIO)(IO(
-    ldapSearchStream(resourceDn(resource), SearchScope.SUB, Filter.createEqualityFilter("objectclass", ObjectClass.policy))(unmarshalAccessPolicy).toSet
+  override def listAccessPolicies(resource: FullyQualifiedResourceId): IO[Stream[AccessPolicy]] = executeLdap(IO(
+    ldapSearchStream(resourceDn(resource), SearchScope.SUB, Filter.createEqualityFilter("objectclass", ObjectClass.policy))(unmarshalAccessPolicy)
   ))
 
   override def listAccessPoliciesForUser(resource: FullyQualifiedResourceId, user: WorkbenchUserId): IO[Set[AccessPolicy]] = for {
-    entry <- cs.evalOn(ecForLdapBlockingIO)(IO(ldapConnectionPool.getEntry(subjectDn(user), Attr.memberOf)))
+    entry <- executeLdap(IO(ldapConnectionPool.getEntry(subjectDn(user), Attr.memberOf)))
     members <- IO.pure(Option(entry).map(e => getAttributes(e, Attr.memberOf).toList))
     accessPolicies <- members.traverse{
       policyStrs =>
@@ -206,11 +206,11 @@ class LdapAccessPolicyDAO(protected val ldapConnectionPool: LDAPConnectionPool, 
         }
         val filters = fullyQualifiedPolicyIds.grouped(batchSize).map(
           batch => Filter.createORFilter(batch.map(r => Filter.createEqualityFilter(Attr.policy, r.accessPolicyName.value)).asJava)).toSeq
-        cs.evalOn(ecForLdapBlockingIO)(IO(ldapSearchStream(resourceDn(resource), SearchScope.SUB, filters: _*)(unmarshalAccessPolicy).toSet))
+        executeLdap(IO(ldapSearchStream(resourceDn(resource), SearchScope.SUB, filters: _*)(unmarshalAccessPolicy).toSet))
     }
   } yield accessPolicies.getOrElse(Set.empty)
 
-  override def listFlattenedPolicyMembers(policyId: FullyQualifiedPolicyId): IO[Set[WorkbenchUser]] = cs.evalOn(ecForLdapBlockingIO)(
+  override def listFlattenedPolicyMembers(policyId: FullyQualifiedPolicyId): IO[Set[WorkbenchUser]] = executeLdap(
     IO(ldapSearchStream(peopleOu, SearchScope.ONE, Filter.createEqualityFilter(Attr.memberOf, policyDn(policyId)))(unmarshalUser).toSet)
   )
 
@@ -225,9 +225,11 @@ class LdapAccessPolicyDAO(protected val ldapConnectionPool: LDAPConnectionPool, 
     val dateMod = new Modification(ModificationType.REPLACE, Attr.groupUpdatedTimestamp, formattedDate(new Date()))
     val publicMod = new Modification(ModificationType.REPLACE, Attr.public, public.toString)
 
-    cs.evalOn(ecForLdapBlockingIO)(IO(ldapConnectionPool.modify( policyDn(policyId), dateMod, publicMod)).void).recoverWith {
+    executeLdap(IO(ldapConnectionPool.modify( policyDn(policyId), dateMod, publicMod)).void).recoverWith {
       case ldape: LDAPException if ldape.getResultCode == ResultCode.NO_SUCH_OBJECT =>
         IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "policy does not exist")))
     }
   }
+
+  private def executeLdap[A](ioa: IO[A]): IO[A] = cs.evalOn(ecForLdapBlockingIO)(ioa)
 }

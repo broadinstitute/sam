@@ -5,6 +5,7 @@ import java.util.UUID
 
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
+import cats.effect.IO
 import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.model._
@@ -96,7 +97,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     val role = resourceType.roles.find(_.roleName == resourceType.ownerRoleName).get
     val initialMembers = if(role.roleName.equals(resourceType.ownerRoleName)) Set(dummyUserInfo.userId.asInstanceOf[WorkbenchSubject]) else Set[WorkbenchSubject]()
     val group = BasicWorkbenchGroup(WorkbenchGroupName(role.roleName.value), initialMembers, toEmail(resource.resourceTypeName.value, resource.resourceId.value, role.roleName.value))
-    Set(AccessPolicy(
+    Stream(AccessPolicy(
       FullyQualifiedPolicyId(resource, AccessPolicyName(role.roleName.value)), group.members, group.email, Set(role.roleName), Set.empty, public = false))
   }
 
@@ -143,7 +144,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     //cleanup
     runAndWait(service.deleteResource(resource))
 
-    assertResult(Set.empty) {
+    assertResult(Stream.empty) {
       policyDAO.listAccessPolicies(resource).unsafeRunSync()
     }
   }
@@ -293,8 +294,8 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
 
     runAndWait(service.createResource(resourceType, resourceName, Map(policyName -> policyMembership), Set.empty, dummyUserInfo.userId))
 
-    val policies = runAndWait(service.listResourcePolicies(FullyQualifiedResourceId(resourceType.name, resourceName)))
-    assertResult(Set(AccessPolicyResponseEntry(policyName, policyMembership, WorkbenchEmail("")))) {
+    val policies = service.listResourcePolicies(FullyQualifiedResourceId(resourceType.name, resourceName)).unsafeRunSync()
+    assertResult(Stream(AccessPolicyResponseEntry(policyName, policyMembership, WorkbenchEmail("")))) {
       policies.map(_.copy(email = WorkbenchEmail("")))
     }
   }
@@ -322,7 +323,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
   private def assertResourceExists(
       resource: FullyQualifiedResourceId, resourceType: ResourceType, policyDao: AccessPolicyDAO) = {
     val resultingPolicies = policyDao.listAccessPolicies(resource).unsafeRunSync().map(_.copy(email = WorkbenchEmail("policy-randomuuid@example.com")))
-    resultingPolicies shouldEqual constructExpectedPolicies(resourceType, resource)
+    resultingPolicies should contain theSameElementsAs constructExpectedPolicies(resourceType, resource)
   }
 
   "Creating a resource that has at least 1 constrainable action pattern" should "succeed when no auth domain is provided" in {
@@ -455,8 +456,8 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     service.createResourceType(defaultResourceType).unsafeRunSync()
     runAndWait(service.createResource(defaultResourceType, resource.resourceId, dummyUserInfo))
 
-    val policies = runAndWait(service.listResourcePolicies(resource)).map(_.copy(email = forcedEmail))
-    policies shouldEqual Set(expectedPolicy)
+    val policies = service.listResourcePolicies(resource).unsafeRunSync().map(_.copy(email = forcedEmail))
+    policies should contain theSameElementsAs Set(expectedPolicy)
   }
 
   it should "list policies for a newly created resource with the member email addresses if the User has been added" in {
@@ -468,8 +469,8 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     service.createResourceType(defaultResourceType).unsafeRunSync()
     runAndWait(service.createResource(defaultResourceType, resource.resourceId, dummyUserInfo))
 
-    val policies = runAndWait(service.listResourcePolicies(resource)).map(_.copy(email = forcedEmail))
-    policies shouldEqual Set(expectedPolicy)
+    val policies = service.listResourcePolicies(resource).unsafeRunSync().map(_.copy(email = forcedEmail))
+    policies should contain theSameElementsAs Set(expectedPolicy)
   }
 
   "overwritePolicy" should "succeed with a valid request" in {
@@ -696,7 +697,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
 
     // assert a resource was not created for SamResourceTypes.resourceTypeAdmin
     policyDAO.listAccessPolicies(
-      FullyQualifiedResourceId(SamResourceTypes.resourceTypeAdminName, ResourceId(SamResourceTypes.resourceTypeAdminName.value))).unsafeRunSync() should equal(Set.empty)
+      FullyQualifiedResourceId(SamResourceTypes.resourceTypeAdminName, ResourceId(SamResourceTypes.resourceTypeAdminName.value))).unsafeRunSync() should equal(Stream.empty)
 
     // assert a resource was created for defaultResourceType
     val resourceAndPolicyName = FullyQualifiedPolicyId(
@@ -764,17 +765,17 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
 
   "loadAccessPolicyWithEmails" should "get emails for users, groups and policies" in {
     val testResult = for {
-      _ <- service.createResourceType(defaultResourceType).unsafeToFuture()
+      _ <- service.createResourceType(defaultResourceType)
 
-      testGroup <- dirDAO.createGroup(BasicWorkbenchGroup(WorkbenchGroupName("mygroup"), Set.empty, WorkbenchEmail("group@a.com"))).unsafeToFuture()
+      testGroup <- dirDAO.createGroup(BasicWorkbenchGroup(WorkbenchGroupName("mygroup"), Set.empty, WorkbenchEmail("group@a.com")))
 
-      res1 <- service.createResource(defaultResourceType, ResourceId("resource1"), dummyUserInfo)
+      res1 <- IO.fromFuture(IO(service.createResource(defaultResourceType, ResourceId("resource1"), dummyUserInfo)))
       testPolicy <- service.listResourcePolicies(res1.fullyQualifiedId).map(_.head)
 
-      res2 <- service.createResource(defaultResourceType, ResourceId("resource2"), dummyUserInfo)
+      res2 <- IO.fromFuture(IO(service.createResource(defaultResourceType, ResourceId("resource2"), dummyUserInfo)))
 
       newPolicy <- policyDAO.createPolicy(AccessPolicy(
-        FullyQualifiedPolicyId(res2.fullyQualifiedId, AccessPolicyName("foo")), Set(testGroup.id, dummyUserInfo.userId, FullyQualifiedPolicyId(res1.fullyQualifiedId, testPolicy.policyName)), WorkbenchEmail("a@b.c"), Set.empty, Set.empty, public = false)).unsafeToFuture()
+        FullyQualifiedPolicyId(res2.fullyQualifiedId, AccessPolicyName("foo")), Set(testGroup.id, dummyUserInfo.userId, FullyQualifiedPolicyId(res1.fullyQualifiedId, testPolicy.policyName)), WorkbenchEmail("a@b.c"), Set.empty, Set.empty, public = false))
 
       membership <- service.loadAccessPolicyWithEmails(newPolicy)
     } yield {
@@ -786,6 +787,6 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     }
 
     implicit val patienceConfig = PatienceConfig(5.seconds)
-    testResult.futureValue
+    testResult.unsafeRunSync()
   }
 }

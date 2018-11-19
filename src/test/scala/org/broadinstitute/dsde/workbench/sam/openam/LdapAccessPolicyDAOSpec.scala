@@ -73,15 +73,15 @@ class LdapAccessPolicyDAOSpec extends AsyncFlatSpec with ScalaFutures with Match
       _ <- dao.deletePolicy(policy3.id)
       ls3AfterDeletePolicy3 <- dao.listAccessPolicies(policy3.id.resource)
     } yield{
-      ls1 shouldBe(Set.empty)
-      ls2 shouldBe(Set.empty)
-      ls3 shouldBe(Set.empty)
+      ls1 shouldBe(Stream.empty)
+      ls2 shouldBe(Stream.empty)
+      ls3 shouldBe(Stream.empty)
 
       lsPolicy1 should contain theSameElementsAs (Seq(policy1, policy2))
-      lsPolicy3 shouldBe(Set(policy3))
-      lsAfterDeletePolicy1 shouldBe Set(policy2)
-      lsAfterDeletePolicy2 shouldBe Set.empty
-      ls3AfterDeletePolicy3 shouldBe Set.empty
+      lsPolicy3 shouldBe(Stream(policy3))
+      lsAfterDeletePolicy1 shouldBe Stream(policy2)
+      lsAfterDeletePolicy2 shouldBe Stream.empty
+      ls3AfterDeletePolicy3 shouldBe Stream.empty
     }
 
     res.unsafeToFuture()

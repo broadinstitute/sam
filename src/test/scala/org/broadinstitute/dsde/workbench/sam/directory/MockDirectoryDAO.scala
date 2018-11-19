@@ -14,12 +14,14 @@ import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO.Attr
 import scala.collection.concurrent.TrieMap
 import scala.collection.mutable
 import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.Future
+import scala.concurrent.{ExecutionContext, Future}
 
 /**
   * Created by mbemis on 6/23/17.
   */
 class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, WorkbenchGroup] = new TrieMap()) extends DirectoryDAO {
+  implicit val cs = IO.contextShift(ExecutionContext.global)
+
   private val groupSynchronizedDates: mutable.Map[WorkbenchGroupIdentity, Date] = new TrieMap()
   private val users: mutable.Map[WorkbenchUserId, WorkbenchUser] = new TrieMap()
   private val userAttributes: mutable.Map[WorkbenchUserId, mutable.Map[String, Any]] = new TrieMap()
@@ -46,8 +48,8 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     groups.get(groupName).map(_.asInstanceOf[BasicWorkbenchGroup])
   }
 
-  override def loadGroups(groupNames: Set[WorkbenchGroupName]): Future[Seq[BasicWorkbenchGroup]] = Future {
-    groups.filterKeys(groupNames.map(_.asInstanceOf[WorkbenchGroupIdentity])).values.map(_.asInstanceOf[BasicWorkbenchGroup]).toSeq
+  override def loadGroups(groupNames: Set[WorkbenchGroupName]): IO[Stream[BasicWorkbenchGroup]] = IO {
+    groups.filterKeys(groupNames.map(_.asInstanceOf[WorkbenchGroupIdentity])).values.map(_.asInstanceOf[BasicWorkbenchGroup]).toStream
   }
 
   override def deleteGroup(groupName: WorkbenchGroupName): Future[Unit] = {
@@ -165,12 +167,10 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     enabledUsers.contains(subject)
   }
 
-  override def loadGroupEmail(groupName: WorkbenchGroupName): Future[Option[WorkbenchEmail]] = loadGroup(groupName).unsafeToFuture().map(_.map(_.email))
+  override def loadGroupEmail(groupName: WorkbenchGroupName): IO[Option[WorkbenchEmail]] = loadGroup(groupName).map(_.map(_.email))
 
-  override def batchLoadGroupEmail(groupNames: Set[WorkbenchGroupName]): Future[Seq[(WorkbenchGroupName, WorkbenchEmail)]] = Future.traverse(groupNames.toSeq) { name =>
-    loadGroupEmail(name).map { y =>
-      name -> y.get
-    }
+  override def batchLoadGroupEmail(groupNames: Set[WorkbenchGroupName]): IO[Stream[(WorkbenchGroupName, WorkbenchEmail)]] = groupNames.toStream.parTraverse { name =>
+    loadGroupEmail(name).map { y => (name -> y.get)}
   }
 
   override def createPetServiceAccount(petServiceAccount: PetServiceAccount): IO[PetServiceAccount] = {
@@ -187,7 +187,7 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     petServiceAccountsByUser.get(petServiceAccountUniqueId)
   }
 
-  override def deletePetServiceAccount(petServiceAccountUniqueId: PetServiceAccountId): Future[Unit] = Future {
+  override def deletePetServiceAccount(petServiceAccountUniqueId: PetServiceAccountId): IO[Unit] = IO {
     petServiceAccountsByUser -= petServiceAccountUniqueId
   }
 
@@ -202,7 +202,7 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     Future.successful(())
   }
 
-  override def loadSubjectEmail(subject: WorkbenchSubject): Future[Option[WorkbenchEmail]] = Future {
+  override def loadSubjectEmail(subject: WorkbenchSubject): IO[Option[WorkbenchEmail]] = IO {
     subject match {
       case id: WorkbenchUserId => users.get(id).map(_.email)
       case id: WorkbenchGroupIdentity => groups.get(id).map(_.email)
@@ -210,11 +210,9 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     }
   }
 
-  override def loadSubjectEmails(subjects: Set[WorkbenchSubject]): Future[Set[WorkbenchEmail]] = {
-    Future.traverse(subjects) { subject =>
+  override def loadSubjectEmails(subjects: Set[WorkbenchSubject]): IO[Stream[WorkbenchEmail]] = subjects.toStream.parTraverse { subject =>
       loadSubjectEmail(subject).map(_.get)
     }
-  }
 
   override def getSynchronizedDate(groupId: WorkbenchGroupIdentity): Future[Option[Date]] = {
     Future.successful(groupSynchronizedDates.get(groupId))
@@ -240,11 +238,11 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     petServiceAccount
   }
 
-  override def getManagedGroupAccessInstructions(groupName: WorkbenchGroupName): Future[Option[String]] = Future {
+  override def getManagedGroupAccessInstructions(groupName: WorkbenchGroupName): IO[Option[String]] = {
     if (groups.contains(groupName))
-      groupAccessInstructions.get(groupName)
+      IO.pure(groupAccessInstructions.get(groupName))
     else
-      throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "group not found"))
+      IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "group not found")))
   }
 
   override def setManagedGroupAccessInstructions(groupName: WorkbenchGroupName, accessInstructions: String): IO[Unit] = {
