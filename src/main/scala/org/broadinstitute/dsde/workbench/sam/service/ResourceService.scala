@@ -356,7 +356,7 @@ class ResourceService(
     } else None
   }
 
-  private def fireGroupUpdateNotification(groupId: WorkbenchGroupIdentity) =
+  private def fireGroupUpdateNotification(groupId: WorkbenchGroupIdentity): Future[Unit] =
     cloudExtensions.onGroupUpdate(Seq(groupId)) recover {
       case t: Throwable =>
         logger.error(s"error calling cloudExtensions.onGroupUpdate for $groupId", t)
@@ -364,7 +364,7 @@ class ResourceService(
     }
 
   def addSubjectToPolicy(policyIdentity: FullyQualifiedPolicyId, subject: WorkbenchSubject): Future[Unit] =
-    directoryDAO.addGroupMember(policyIdentity, subject).map(_ => ()) andThen {
+    directoryDAO.addGroupMember(policyIdentity, subject).unsafeToFuture().map(_ => ()) andThen {
       case Success(_) => fireGroupUpdateNotification(policyIdentity)
     }
 

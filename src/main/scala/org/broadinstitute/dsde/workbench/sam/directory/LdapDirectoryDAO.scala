@@ -16,7 +16,7 @@ import org.broadinstitute.dsde.workbench.sam.util.{LdapSupport, NewRelicMetrics}
 
 import scala.collection.JavaConverters._
 import scala.concurrent.{ExecutionContext, Future}
-import scala.util.{Failure, Success, Try}
+import scala.util.Try
 
 // use ExecutionContexts.blockingThreadPool for blockingEc
 class LdapDirectoryDAO(
@@ -86,25 +86,29 @@ class LdapDirectoryDAO(
   override def batchLoadGroupEmail(groupNames: Set[WorkbenchGroupName]): IO[Stream[(WorkbenchGroupName, WorkbenchEmail)]] =
     loadGroups(groupNames).map(_.map(g => g.id -> g.email))
 
-  override def deleteGroup(groupName: WorkbenchGroupName): Future[Unit] =
-    listAncestorGroups(groupName).map { ancestors =>
-      if (ancestors.nonEmpty) {
-        throw new WorkbenchExceptionWithErrorReport(
-          ErrorReport(StatusCodes.Conflict, s"group ${groupName.value} cannot be deleted because it is a member of at least 1 other group"))
+  override def deleteGroup(groupName: WorkbenchGroupName): IO[Unit] =
+    for {
+      ancestors <- listAncestorGroups(groupName)
+      res <- if (ancestors.nonEmpty) {
+        IO.raiseError(
+          new WorkbenchExceptionWithErrorReport(
+            ErrorReport(StatusCodes.Conflict, s"group ${groupName.value} cannot be deleted because it is a member of at least 1 other group")))
       } else {
-        ldapConnectionPool.delete(groupDn(groupName))
+        executeLdap(IO(ldapConnectionPool.delete(groupDn(groupName))).void)
       }
-    }
+    } yield res
 
-  override def addGroupMember(groupId: WorkbenchGroupIdentity, addMember: WorkbenchSubject): Future[Boolean] = Future {
-    Try {
-      ldapConnectionPool.modify(groupDn(groupId), new Modification(ModificationType.ADD, Attr.uniqueMember, subjectDn(addMember)), groupUpdatedModification)
-    } match {
-      case Success(_) => true
-      case Failure(ldape: LDAPException) if ldape.getResultCode == ResultCode.ATTRIBUTE_OR_VALUE_EXISTS => false
-      case Failure(regrets) => throw regrets
-    }
-  }
+  override def addGroupMember(groupId: WorkbenchGroupIdentity, addMember: WorkbenchSubject): IO[Boolean] =
+    executeLdap(
+      IO(
+        ldapConnectionPool
+          .modify(groupDn(groupId), new Modification(ModificationType.ADD, Attr.uniqueMember, subjectDn(addMember)), groupUpdatedModification)
+      )).attempt
+      .flatMap {
+        case Right(_) => IO.pure(true)
+        case Left(ldape: LDAPException) if ldape.getResultCode == ResultCode.ATTRIBUTE_OR_VALUE_EXISTS => IO.pure(false)
+        case Left(regrets) => IO.raiseError(regrets)
+      }
 
   private def groupUpdatedModification: Modification =
     new Modification(ModificationType.REPLACE, Attr.groupUpdatedTimestamp, formattedDate(new Date()))
@@ -235,9 +239,7 @@ class LdapDirectoryDAO(
     }
   }
 
-  override def listUsersGroups(userId: WorkbenchUserId): Future[Set[WorkbenchGroupIdentity]] = Future {
-    listMemberOfGroups(userDn(userId))
-  }
+  override def listUsersGroups(userId: WorkbenchUserId): IO[Set[WorkbenchGroupIdentity]] = listMemberOfGroups(userDn(userId))
 
   override def listUserDirectMemberships(userId: WorkbenchUserId): IO[Stream[WorkbenchGroupIdentity]] =
     cs.evalOn(ecForLdapBlockingIO)(
@@ -245,14 +247,14 @@ class LdapDirectoryDAO(
         dnToGroupIdentity(entry.getDN)
       }))
 
-  private def listMemberOfGroups(dn: String) = {
-    val groupsOption = for {
-      entry <- Option(ldapConnectionPool.getEntry(dn, Attr.memberOf))
-      memberOf <- Option(entry.getAttributeValues(Attr.memberOf))
+  private def listMemberOfGroups(dn: String): IO[Set[WorkbenchGroupIdentity]] = {
+    val groupsOptionT = for {
+      entry <- OptionT(IO(ldapConnectionPool.getEntry(dn, Attr.memberOf)).map(Option(_)))
+      memberOf <- OptionT.fromOption[IO](Option(entry.getAttributeValues(Attr.memberOf)))
     } yield {
       memberOf.toSet.map(dnToGroupIdentity)
     }
-    groupsOption.getOrElse(Set.empty)
+    groupsOptionT.fold(Set.empty[WorkbenchGroupIdentity])(identity)
   }
 
   override def listIntersectionGroupUsers(groupIds: Set[WorkbenchGroupIdentity]): Future[Set[WorkbenchUserId]] = Future {
@@ -263,9 +265,7 @@ class LdapDirectoryDAO(
     )(getAttribute(_, Attr.uid)).flatten.map(WorkbenchUserId).toSet
   }
 
-  override def listAncestorGroups(groupId: WorkbenchGroupIdentity): Future[Set[WorkbenchGroupIdentity]] = Future {
-    listMemberOfGroups(groupDn(groupId))
-  }
+  override def listAncestorGroups(groupId: WorkbenchGroupIdentity): IO[Set[WorkbenchGroupIdentity]] = listMemberOfGroups(groupDn(groupId))
 
   override def enableIdentity(subject: WorkbenchSubject): IO[Unit] =
     executeLdap(

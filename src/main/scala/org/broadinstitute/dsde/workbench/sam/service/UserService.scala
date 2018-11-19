@@ -25,7 +25,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
       allUsersGroup <- cloudExtensions.getOrCreateAllUsersGroup(directoryDAO)
       createdUser <- registerUser(user).unsafeToFuture()
       _ <- directoryDAO.enableIdentity(createdUser.id).unsafeToFuture()
-      _ <- directoryDAO.addGroupMember(allUsersGroup.id, createdUser.id)
+      _ <- directoryDAO.addGroupMember(allUsersGroup.id, createdUser.id).unsafeToFuture()
       _ <- cloudExtensions.onUserCreate(createdUser)
       userStatus <- getUserStatus(createdUser.id)
       res <- userStatus.toRight(new WorkbenchException("getUserStatus returned None after user was created")).fold(Future.failed, Future.successful)

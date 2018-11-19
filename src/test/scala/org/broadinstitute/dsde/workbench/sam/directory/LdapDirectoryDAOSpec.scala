@@ -57,7 +57,7 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
       dao.loadGroup(group.id).unsafeRunSync()
     }
 
-    runAndWait(dao.deleteGroup(group.id))
+    dao.deleteGroup(group.id).unsafeRunSync()
 
     assertResult(None) {
       dao.loadGroup(group.id).unsafeRunSync()
@@ -174,12 +174,12 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
 
     try {
       assertResult(Set(groupName1, groupName2)) {
-        runAndWait(dao.listUsersGroups(userId))
+        dao.listUsersGroups(userId).unsafeRunSync()
       }
     } finally {
       runAndWait(dao.deleteUser(userId))
-      runAndWait(dao.deleteGroup(groupName2))
-      runAndWait(dao.deleteGroup(groupName1))
+      dao.deleteGroup(groupName2).unsafeRunSync()
+      dao.deleteGroup(groupName1).unsafeRunSync()
     }
   }
 
@@ -199,12 +199,12 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
 
     try {
       assertResult(Set(groupName2, groupName3)) {
-        runAndWait(dao.listAncestorGroups(groupName1))
+        dao.listAncestorGroups(groupName1).unsafeRunSync()
       }
     } finally {
-      runAndWait(dao.deleteGroup(groupName3))
-      runAndWait(dao.deleteGroup(groupName2))
-      runAndWait(dao.deleteGroup(groupName1))
+      dao.deleteGroup(groupName3).unsafeRunSync()
+      dao.deleteGroup(groupName2).unsafeRunSync()
+      dao.deleteGroup(groupName1).unsafeRunSync()
     }
   }
 
@@ -226,22 +226,22 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     dao.createGroup(group2).unsafeRunSync()
     dao.createGroup(group3).unsafeRunSync()
 
-    runAndWait(dao.addGroupMember(groupName1, groupName3))
+    dao.addGroupMember(groupName1, groupName3).unsafeRunSync()
 
     try {
       assertResult(Set(groupName1, groupName2, groupName3)) {
-        runAndWait(dao.listUsersGroups(userId))
+        dao.listUsersGroups(userId).unsafeRunSync()
       }
 
       assertResult(Set(groupName1, groupName2, groupName3)) {
-        runAndWait(dao.listAncestorGroups(groupName3))
+        dao.listAncestorGroups(groupName3).unsafeRunSync()
       }
     } finally {
       runAndWait(dao.deleteUser(userId))
       dao.removeGroupMember(groupName1, groupName3).unsafeRunSync()
-      runAndWait(dao.deleteGroup(groupName3))
-      runAndWait(dao.deleteGroup(groupName2))
-      runAndWait(dao.deleteGroup(groupName1))
+      dao.deleteGroup(groupName3).unsafeRunSync()
+      dao.deleteGroup(groupName2).unsafeRunSync()
+      dao.deleteGroup(groupName1).unsafeRunSync()
     }
   }
 
@@ -261,13 +261,13 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
 
     try {
 
-      runAndWait(dao.addGroupMember(groupName1, userId))
+      dao.addGroupMember(groupName1, userId).unsafeRunSync()
 
       assertResult(Some(group1.copy(members = Set(userId)))) {
         dao.loadGroup(groupName1).unsafeRunSync()
       }
 
-      runAndWait(dao.addGroupMember(groupName1, groupName2))
+      dao.addGroupMember(groupName1, groupName2).unsafeRunSync()
 
       assertResult(Some(group1.copy(members = Set(userId, groupName2)))) {
         dao.loadGroup(groupName1).unsafeRunSync()
@@ -287,8 +287,8 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
 
     } finally {
       runAndWait(dao.deleteUser(userId))
-      runAndWait(dao.deleteGroup(groupName1))
-      runAndWait(dao.deleteGroup(groupName2))
+      dao.deleteGroup(groupName1).unsafeRunSync()
+      dao.deleteGroup(groupName2).unsafeRunSync()
     }
   }
 
@@ -389,7 +389,7 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     }
 
     intercept[WorkbenchExceptionWithErrorReport] {
-      runAndWait(dao.deleteGroup(childGroupName))
+      dao.deleteGroup(childGroupName).unsafeRunSync()
     }
 
     assertResult(Some(childGroup)) {
