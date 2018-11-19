@@ -135,9 +135,8 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
     resourceService.removeSubjectFromPolicy(resourceAndPolicyName, subject)
   }
 
-<<<<<<< HEAD
-  def requestAccess(resourceId: ResourceId, requesterUserId: WorkbenchUserId): Future[Unit] = {
-    def extractGoogleSubjectId(requesterUser: Option[WorkbenchUser]) = {
+  def requestAccess(resourceId: ResourceId, requesterUserId: WorkbenchUserId): IO[Unit] = {
+    def extractGoogleSubjectId(requesterUser: Option[WorkbenchUser]): IO[WorkbenchUserId] = {
       (for { u <- requesterUser; s <- u.googleSubjectId } yield s) match {
         case Some(subjectId) => IO.pure(WorkbenchUserId(subjectId.value))
         // don't know how a user would get this far without getting a subject id
@@ -145,38 +144,29 @@ class ManagedGroupService(private val resourceService: ResourceService, private 
       }
     }
 
-=======
-  def requestAccess(resourceId: ResourceId, requesterUserId: WorkbenchUserId): IO[Unit] = {
->>>>>>> use OptionT
     getAccessInstructions(resourceId).flatMap {
       case Some(accessInstructions) =>
-        IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"Please follow special access instructions: $accessInstructions")))
+        IO.raiseError(
+          new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"Please follow special access instructions: $accessInstructions")))
       case None =>
         // Thurloe is the thing that sends the emails and it knows only about google subject ids, not internal sam user ids
         // so we have to do some conversion here which makes the code look less straight forward
-        val resourceAndAdminPolicyName = FullyQualifiedPolicyId(
-          FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, resourceId), ManagedGroupService.adminPolicyName)
-<<<<<<< HEAD
+        val resourceAndAdminPolicyName =
+          FullyQualifiedPolicyId(FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, resourceId), ManagedGroupService.adminPolicyName)
 
-        val notificationIO = for {
+        for {
           requesterUser <- directoryDAO.loadUser(requesterUserId)
           requesterSubjectId <- extractGoogleSubjectId(requesterUser)
           admins <- accessPolicyDAO.listFlattenedPolicyMembers(resourceAndAdminPolicyName)
           // ignore any admin that does not have a google subject id (they have not registered yet anyway)
-          adminUserIds = admins.flatMap { admin => admin.googleSubjectId.map(id => WorkbenchUserId(id.value)) }
-        } yield {
-          val notifications = adminUserIds.map { recipientUserId =>
-            Notifications.GroupAccessRequestNotification(recipientUserId, WorkbenchGroupName(resourceId.value).value, adminUserIds, requesterSubjectId)
-=======
-        accessPolicyDAO.listFlattenedPolicyMembers(resourceAndPolicyName).map { users =>
-          val notifications = users.map { recipientUserId =>
-            Notifications.GroupAccessRequestNotification(recipientUserId, WorkbenchGroupName(resourceId.value).value, users, requesterUserId)
->>>>>>> use OptionT
+          adminUserIds = admins.flatMap { admin => admin.googleSubjectId.map(id => WorkbenchUserId(id.value))
           }
+        } yield {
+            val notifications = adminUserIds.map { recipientUserId =>
+              Notifications.GroupAccessRequestNotification(recipientUserId, WorkbenchGroupName(resourceId.value).value, adminUserIds, requesterSubjectId)
+            }
           cloudExtensions.fireAndForgetNotifications(notifications)
         }
-
-        notificationIO.unsafeToFuture()
     }
   }
 

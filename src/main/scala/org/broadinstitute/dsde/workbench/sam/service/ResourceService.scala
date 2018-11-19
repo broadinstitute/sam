@@ -322,11 +322,7 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     }
   }
 
-<<<<<<< HEAD
-  private[service] def loadAccessPolicyWithEmails(policy: AccessPolicy): Future[AccessPolicyMembership] = {
-=======
-  private def loadAccessPolicyWithEmails(policy: AccessPolicy): IO[AccessPolicyMembership] = {
->>>>>>> more Future to IO
+  private[service] def loadAccessPolicyWithEmails(policy: AccessPolicy): IO[AccessPolicyMembership] = {
     val users = policy.members.collect { case userId: WorkbenchUserId => userId }
     val groups = policy.members.collect { case groupName: WorkbenchGroupName => groupName }
     val policyMembers = policy.members.collect { case policyId: FullyQualifiedPolicyId => policyId }
@@ -334,7 +330,7 @@ class ResourceService(private val resourceTypes: Map[ResourceTypeName, ResourceT
     for {
       userEmails <- directoryDAO.loadUsers(users)
       groupEmails <- directoryDAO.loadGroups(groups)
-      policyEmails <- policyMembers.toList.parTraverse(accessPolicyDAO.loadPolicy(_)).unsafeToFuture()
+      policyEmails <- policyMembers.toList.parTraverse(accessPolicyDAO.loadPolicy(_))
     } yield AccessPolicyMembership(userEmails.toSet[WorkbenchUser].map(_.email) ++ groupEmails.map(_.email) ++ policyEmails.flatMap(_.map(_.email)), policy.actions, policy.roles)
   }
 

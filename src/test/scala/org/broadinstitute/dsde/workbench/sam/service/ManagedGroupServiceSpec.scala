@@ -429,7 +429,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
         requester.googleSubjectId.map(id => WorkbenchUserId(id.value)).getOrElse(fail("no requester google subject id"))
       ))
 
-    testManagedGroupService.requestAccess(resourceId, requester.id).futureValue
+    testManagedGroupService.requestAccess(resourceId, requester.id).unsafeRunSync()
 
     verify(mockCloudExtension).fireAndForgetNotifications(expectedNotificationMessages)
   }
@@ -438,7 +438,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     assertMakeGroup(groupId = resourceId.value)
     managedGroupService.setAccessInstructions(resourceId, "instructions").unsafeRunSync()
     val error = intercept[WorkbenchExceptionWithErrorReport] {
-      runAndWait(managedGroupService.requestAccess(resourceId, dummyUserInfo.userId))
+      managedGroupService.requestAccess(resourceId, dummyUserInfo.userId).unsafeRunSync()
     }
     error.errorReport.statusCode should be(Some(StatusCodes.BadRequest))
   }

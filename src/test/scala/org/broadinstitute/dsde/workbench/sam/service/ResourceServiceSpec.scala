@@ -5,6 +5,7 @@ import java.util.UUID
 
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
+import cats.effect.IO
 import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.model._
@@ -764,17 +765,17 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
 
   "loadAccessPolicyWithEmails" should "get emails for users, groups and policies" in {
     val testResult = for {
-      _ <- service.createResourceType(defaultResourceType).unsafeToFuture()
+      _ <- service.createResourceType(defaultResourceType)
 
-      testGroup <- dirDAO.createGroup(BasicWorkbenchGroup(WorkbenchGroupName("mygroup"), Set.empty, WorkbenchEmail("group@a.com"))).unsafeToFuture()
+      testGroup <- dirDAO.createGroup(BasicWorkbenchGroup(WorkbenchGroupName("mygroup"), Set.empty, WorkbenchEmail("group@a.com")))
 
-      res1 <- service.createResource(defaultResourceType, ResourceId("resource1"), dummyUserInfo)
+      res1 <- IO.fromFuture(IO(service.createResource(defaultResourceType, ResourceId("resource1"), dummyUserInfo)))
       testPolicy <- service.listResourcePolicies(res1.fullyQualifiedId).map(_.head)
 
-      res2 <- service.createResource(defaultResourceType, ResourceId("resource2"), dummyUserInfo)
+      res2 <- IO.fromFuture(IO(service.createResource(defaultResourceType, ResourceId("resource2"), dummyUserInfo)))
 
       newPolicy <- policyDAO.createPolicy(AccessPolicy(
-        FullyQualifiedPolicyId(res2.fullyQualifiedId, AccessPolicyName("foo")), Set(testGroup.id, dummyUserInfo.userId, FullyQualifiedPolicyId(res1.fullyQualifiedId, testPolicy.policyName)), WorkbenchEmail("a@b.c"), Set.empty, Set.empty, public = false)).unsafeToFuture()
+        FullyQualifiedPolicyId(res2.fullyQualifiedId, AccessPolicyName("foo")), Set(testGroup.id, dummyUserInfo.userId, FullyQualifiedPolicyId(res1.fullyQualifiedId, testPolicy.policyName)), WorkbenchEmail("a@b.c"), Set.empty, Set.empty, public = false))
 
       membership <- service.loadAccessPolicyWithEmails(newPolicy)
     } yield {
@@ -786,6 +787,6 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     }
 
     implicit val patienceConfig = PatienceConfig(5.seconds)
-    testResult.futureValue
+    testResult.unsafeRunSync()
   }
 }
