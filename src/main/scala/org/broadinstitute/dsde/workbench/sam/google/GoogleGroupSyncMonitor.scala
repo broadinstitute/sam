@@ -19,19 +19,35 @@ import scala.language.postfixOps
 import scala.util.Try
 
 /**
- * Created by dvoet on 12/6/16.
- */
+  * Created by dvoet on 12/6/16.
+  */
 object GoogleGroupSyncMonitorSupervisor {
   sealed trait GoogleGroupSyncMonitorSupervisorMessage
   case object Init extends GoogleGroupSyncMonitorSupervisorMessage
   case object Start extends GoogleGroupSyncMonitorSupervisorMessage
 
-  def props(pollInterval: FiniteDuration, pollIntervalJitter: FiniteDuration, pubSubDao: GooglePubSubDAO, pubSubTopicName: String, pubSubSubscriptionName: String, workerCount: Int, googleExtensions: GoogleExtensions): Props = {
-    Props(new GoogleGroupSyncMonitorSupervisor(pollInterval, pollIntervalJitter, pubSubDao, pubSubTopicName, pubSubSubscriptionName, workerCount, googleExtensions))
-  }
+  def props(
+      pollInterval: FiniteDuration,
+      pollIntervalJitter: FiniteDuration,
+      pubSubDao: GooglePubSubDAO,
+      pubSubTopicName: String,
+      pubSubSubscriptionName: String,
+      workerCount: Int,
+      googleExtensions: GoogleExtensions): Props =
+    Props(
+      new GoogleGroupSyncMonitorSupervisor(pollInterval, pollIntervalJitter, pubSubDao, pubSubTopicName, pubSubSubscriptionName, workerCount, googleExtensions))
 }
 
-class GoogleGroupSyncMonitorSupervisor(val pollInterval: FiniteDuration, pollIntervalJitter: FiniteDuration, pubSubDao: GooglePubSubDAO, pubSubTopicName: String, pubSubSubscriptionName: String, workerCount: Int, googleExtensions: GoogleExtensions) extends Actor with LazyLogging {
+class GoogleGroupSyncMonitorSupervisor(
+    val pollInterval: FiniteDuration,
+    pollIntervalJitter: FiniteDuration,
+    pubSubDao: GooglePubSubDAO,
+    pubSubTopicName: String,
+    pubSubSubscriptionName: String,
+    workerCount: Int,
+    googleExtensions: GoogleExtensions)
+    extends Actor
+    with LazyLogging {
   import GoogleGroupSyncMonitorSupervisor._
   import context._
 
@@ -39,16 +55,15 @@ class GoogleGroupSyncMonitorSupervisor(val pollInterval: FiniteDuration, pollInt
 
   override def receive = {
     case Init => init pipeTo self
-    case Start => for(i <- 1 to workerCount) startOne()
+    case Start => for (i <- 1 to workerCount) startOne()
     case Status.Failure(t) => logger.error("error initializing google group sync monitor", t)
   }
 
-  def init = {
+  def init =
     for {
       _ <- pubSubDao.createTopic(pubSubTopicName)
       _ <- pubSubDao.createSubscription(pubSubTopicName, pubSubSubscriptionName)
     } yield Start
-  }
 
   def startOne(): Unit = {
     logger.info("starting GoogleGroupSyncMonitorActor")
@@ -74,12 +89,24 @@ object GoogleGroupSyncMonitor {
   final case class ReportMessage(value: Map[WorkbenchEmail, Seq[SyncReportItem]], ackId: String) extends SynchronizGroupMembersResult(ackId = ackId)
   final case class FailToSynchronize(t: Throwable, ackId: String) extends SynchronizGroupMembersResult(ackId = ackId)
 
-  def props(pollInterval: FiniteDuration, pollIntervalJitter: FiniteDuration, pubSubDao: GooglePubSubDAO, pubSubSubscriptionName: String, googleExtensions: GoogleExtensions): Props = {
+  def props(
+      pollInterval: FiniteDuration,
+      pollIntervalJitter: FiniteDuration,
+      pubSubDao: GooglePubSubDAO,
+      pubSubSubscriptionName: String,
+      googleExtensions: GoogleExtensions): Props =
     Props(new GoogleGroupSyncMonitorActor(pollInterval, pollIntervalJitter, pubSubDao, pubSubSubscriptionName, googleExtensions))
-  }
 }
 
-class GoogleGroupSyncMonitorActor(val pollInterval: FiniteDuration, pollIntervalJitter: FiniteDuration, pubSubDao: GooglePubSubDAO, pubSubSubscriptionName: String, googleExtensions: GoogleExtensions) extends Actor with LazyLogging with FutureSupport {
+class GoogleGroupSyncMonitorActor(
+    val pollInterval: FiniteDuration,
+    pollIntervalJitter: FiniteDuration,
+    pubSubDao: GooglePubSubDAO,
+    pubSubSubscriptionName: String,
+    googleExtensions: GoogleExtensions)
+    extends Actor
+    with LazyLogging
+    with FutureSupport {
   import GoogleGroupSyncMonitor._
   import context._
 
@@ -102,7 +129,10 @@ class GoogleGroupSyncMonitorActor(val pollInterval: FiniteDuration, pollInterval
       logger.debug(s"received sync message: $message")
       val groupId: WorkbenchGroupIdentity = parseMessage(message)
 
-      googleExtensions.synchronizeGroupMembers(groupId).toTry.map(sr => sr.fold(t=> FailToSynchronize(t, message.ackId),x => ReportMessage(x, message.ackId))) pipeTo self
+      googleExtensions
+        .synchronizeGroupMembers(groupId)
+        .toTry
+        .map(sr => sr.fold(t => FailToSynchronize(t, message.ackId), x => ReportMessage(x, message.ackId))) pipeTo self
 
     case None =>
       // there was no message to wait and try again
@@ -145,11 +175,10 @@ class GoogleGroupSyncMonitorActor(val pollInterval: FiniteDuration, pollInterval
     case x => logger.info(s"unhandled $x")
   }
 
-  private def acknowledgeMessage(ackId: String): Future[Unit] = {
+  private def acknowledgeMessage(ackId: String): Future[Unit] =
     pubSubDao.acknowledgeMessagesById(pubSubSubscriptionName, Seq(ackId))
-  }
 
-  private def parseMessage(message: PubSubMessage): WorkbenchGroupIdentity = {
+  private def parseMessage(message: PubSubMessage): WorkbenchGroupIdentity =
     (Try {
       import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport.PolicyIdentityFormat
       message.contents.parseJson.convertTo[FullyQualifiedPolicyId]
@@ -158,7 +187,6 @@ class GoogleGroupSyncMonitorActor(val pollInterval: FiniteDuration, pollInterval
         import WorkbenchIdentityJsonSupport.WorkbenchGroupNameFormat
         message.contents.parseJson.convertTo[WorkbenchGroupName]
     }).get
-  }
 
   override val supervisorStrategy =
     OneForOneStrategy() {

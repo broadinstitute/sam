@@ -15,7 +15,12 @@ import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.language.postfixOps
 
-class StatusService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExtensions, initialDelay: FiniteDuration = Duration.Zero, pollInterval: FiniteDuration = 1 minute)(implicit system: ActorSystem, executionContext: ExecutionContext) extends LazyLogging {
+class StatusService(
+    val directoryDAO: DirectoryDAO,
+    val cloudExtensions: CloudExtensions,
+    initialDelay: FiniteDuration = Duration.Zero,
+    pollInterval: FiniteDuration = 1 minute)(implicit system: ActorSystem, executionContext: ExecutionContext)
+    extends LazyLogging {
   implicit val askTimeout = Timeout(5 seconds)
 
   private val healthMonitor = system.actorOf(HealthMonitor.props(cloudExtensions.allSubSystems + OpenDJ)(checkStatus _))
@@ -23,9 +28,8 @@ class StatusService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudEx
 
   def getStatus(): Future[StatusCheckResponse] = (healthMonitor ? GetCurrentStatus).asInstanceOf[Future[StatusCheckResponse]]
 
-  private def checkStatus(): Map[Subsystem, Future[SubsystemStatus]] = {
+  private def checkStatus(): Map[Subsystem, Future[SubsystemStatus]] =
     cloudExtensions.checkStatus + (OpenDJ -> checkOpenDJ(cloudExtensions.allUsersGroupName).unsafeToFuture())
-  }
 
   private def checkOpenDJ(groupToLoad: WorkbenchGroupName): IO[SubsystemStatus] = {
     logger.info("checking opendj connection")

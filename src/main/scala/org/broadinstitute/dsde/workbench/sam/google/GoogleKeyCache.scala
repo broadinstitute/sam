@@ -18,30 +18,41 @@ import scala.concurrent.{ExecutionContext, Future}
 /**
   * Created by mbemis on 1/10/18.
   */
-class GoogleKeyCache(val googleIamDAO: GoogleIamDAO, val googleStorageDAO: GoogleStorageDAO, val googlePubSubDAO: GooglePubSubDAO, val googleServicesConfig: GoogleServicesConfig, val petServiceAccountConfig: PetServiceAccountConfig)(implicit val executionContext: ExecutionContext) extends KeyCache {
+class GoogleKeyCache(
+    val googleIamDAO: GoogleIamDAO,
+    val googleStorageDAO: GoogleStorageDAO,
+    val googlePubSubDAO: GooglePubSubDAO,
+    val googleServicesConfig: GoogleServicesConfig,
+    val petServiceAccountConfig: PetServiceAccountConfig)(implicit val executionContext: ExecutionContext)
+    extends KeyCache {
   val keyPathPattern = """([^\/]+)\/([^\/]+)\/([^\/]+)""".r
 
   override def onBoot()(implicit system: ActorSystem): Future[Unit] = {
-    system.actorOf(GoogleKeyCacheMonitorSupervisor.props(
-      googleServicesConfig.googleKeyCacheConfig.monitorPollInterval,
-      googleServicesConfig.googleKeyCacheConfig.monitorPollJitter,
-      googlePubSubDAO,
-      googleIamDAO,
-      googleServicesConfig.googleKeyCacheConfig.monitorTopic,
-      googleServicesConfig.googleKeyCacheConfig.monitorSubscription,
-      googleServicesConfig.projectServiceAccount,
-      googleServicesConfig.googleKeyCacheConfig.monitorWorkerCount,
-      this
-    ))
+    system.actorOf(
+      GoogleKeyCacheMonitorSupervisor.props(
+        googleServicesConfig.googleKeyCacheConfig.monitorPollInterval,
+        googleServicesConfig.googleKeyCacheConfig.monitorPollJitter,
+        googlePubSubDAO,
+        googleIamDAO,
+        googleServicesConfig.googleKeyCacheConfig.monitorTopic,
+        googleServicesConfig.googleKeyCacheConfig.monitorSubscription,
+        googleServicesConfig.projectServiceAccount,
+        googleServicesConfig.googleKeyCacheConfig.monitorWorkerCount,
+        this
+      ))
 
     googleStorageDAO.createBucket(googleServicesConfig.serviceAccountClientProject, googleServicesConfig.googleKeyCacheConfig.bucketName).recover {
       case t: GoogleJsonResponseException if t.getDetails.getMessage.contains("You already own this bucket") && t.getDetails.getCode == 409 => ()
-    } flatMap { _ => googleStorageDAO.setBucketLifecycle(googleServicesConfig.googleKeyCacheConfig.bucketName, googleServicesConfig.googleKeyCacheConfig.retiredKeyMaxAge) }
+    } flatMap { _ =>
+      googleStorageDAO.setBucketLifecycle(googleServicesConfig.googleKeyCacheConfig.bucketName, googleServicesConfig.googleKeyCacheConfig.retiredKeyMaxAge)
+    }
   }
 
   override def getKey(pet: PetServiceAccount): Future[String] = {
     val retrievedKeys = for {
-      keyObjects <- googleStorageDAO.listObjectsWithPrefix(googleServicesConfig.googleKeyCacheConfig.bucketName, keyNamePrefix(pet.id.project, pet.serviceAccount.email))
+      keyObjects <- googleStorageDAO.listObjectsWithPrefix(
+        googleServicesConfig.googleKeyCacheConfig.bucketName,
+        keyNamePrefix(pet.id.project, pet.serviceAccount.email))
       keys <- googleIamDAO.listUserManagedServiceAccountKeys(pet.id.project, pet.serviceAccount.email).map(_.toList)
       cleanedKeyObjects <- cleanupUnknownKeys(pet, keyObjects, keys)
     } yield (cleanedKeyObjects, keys)
@@ -53,23 +64,30 @@ class GoogleKeyCache(val googleIamDAO: GoogleIamDAO, val googleStorageDAO: Googl
     }
   }
 
-  override def removeKey(pet: PetServiceAccount, keyId: ServiceAccountKeyId): Future[Unit] = {
+  override def removeKey(pet: PetServiceAccount, keyId: ServiceAccountKeyId): Future[Unit] =
     for {
       _ <- googleStorageDAO.removeObject(googleServicesConfig.googleKeyCacheConfig.bucketName, keyNameFull(pet.id.project, pet.serviceAccount.email, keyId))
       _ <- googleIamDAO.removeServiceAccountKey(pet.id.project, pet.serviceAccount.email, keyId)
     } yield ()
-  }
 
   private[google] def keyNamePrefix(project: GoogleProject, saEmail: WorkbenchEmail) = s"${project.value}/${saEmail.value}"
-  private def keyNameFull(project: GoogleProject, saEmail: WorkbenchEmail, keyId: ServiceAccountKeyId) = GcsObjectName(s"${keyNamePrefix(project, saEmail)}/${keyId.value}")
+  private def keyNameFull(project: GoogleProject, saEmail: WorkbenchEmail, keyId: ServiceAccountKeyId) =
+    GcsObjectName(s"${keyNamePrefix(project, saEmail)}/${keyId.value}")
 
   private def furnishNewKey(pet: PetServiceAccount): Future[String] = {
     val keyFuture = for {
       key <- OptionT.liftF(googleIamDAO.createServiceAccountKey(pet.id.project, pet.serviceAccount.email) recover {
-        case e: GoogleJsonResponseException if e.getDetails.getCode == StatusCodes.TooManyRequests.intValue => throw new WorkbenchException("You have reached the 10 key limit on service accounts. Please remove one to create another.")
+        case e: GoogleJsonResponseException if e.getDetails.getCode == StatusCodes.TooManyRequests.intValue =>
+          throw new WorkbenchException("You have reached the 10 key limit on service accounts. Please remove one to create another.")
       })
       decodedKey <- OptionT.fromOption[Future](key.privateKeyData.decode)
-      _ <- OptionT.liftF(googleStorageDAO.storeObject(googleServicesConfig.googleKeyCacheConfig.bucketName, keyNameFull(pet.id.project, pet.serviceAccount.email, key.id), new ByteArrayInputStream(decodedKey.getBytes), "text/plain"))
+      _ <- OptionT.liftF(
+        googleStorageDAO.storeObject(
+          googleServicesConfig.googleKeyCacheConfig.bucketName,
+          keyNameFull(pet.id.project, pet.serviceAccount.email, key.id),
+          new ByteArrayInputStream(decodedKey.getBytes),
+          "text/plain"
+        ))
     } yield decodedKey
 
     keyFuture.value.map(_.getOrElse(throw new WorkbenchException("Unable to furnish new key")))
@@ -84,7 +102,7 @@ class GoogleKeyCache(val googleIamDAO: GoogleIamDAO, val googleStorageDAO: Googl
     //The key may exist in the Google bucket cache, but could have been deleted from the SA directly
     val keyExistsForSA = serviceAccountKeys.exists(_.id.value.contentEquals(keyId))
 
-    if(keyRetired || !keyExistsForSA) {
+    if (keyRetired || !keyExistsForSA) {
       furnishNewKey(pet)
     } else {
       googleStorageDAO.getObject(googleServicesConfig.googleKeyCacheConfig.bucketName, mostRecentKey).flatMap {
@@ -94,15 +112,20 @@ class GoogleKeyCache(val googleIamDAO: GoogleIamDAO, val googleStorageDAO: Googl
     }
   }
 
-  private def cleanupUnknownKeys(pet: PetServiceAccount, cachedKeyObjects: List[GcsObjectName], serviceAccountKeys: List[ServiceAccountKey]): Future[List[GcsObjectName]] = {
+  private def cleanupUnknownKeys(
+      pet: PetServiceAccount,
+      cachedKeyObjects: List[GcsObjectName],
+      serviceAccountKeys: List[ServiceAccountKey]): Future[List[GcsObjectName]] = {
     val cachedKeyIds = cachedKeyObjects.map(_.value).collect { case keyPathPattern(_, _, keyId) => ServiceAccountKeyId(keyId) }
     val unknownKeyIds: Set[ServiceAccountKeyId] = serviceAccountKeys.map(_.id).toSet -- cachedKeyIds.toSet
     val knownKeyCachedObjects = cachedKeyObjects.filter { cachedObject =>
       serviceAccountKeys.exists(key => cachedObject.value.endsWith(key.id.value))
     }
 
-    Future.traverse(unknownKeyIds) { keyId =>
-      googleIamDAO.removeServiceAccountKey(pet.id.project, pet.serviceAccount.email, keyId)
-    }.map(_ => knownKeyCachedObjects)
+    Future
+      .traverse(unknownKeyIds) { keyId =>
+        googleIamDAO.removeServiceAccountKey(pet.id.project, pet.serviceAccount.email, keyId)
+      }
+      .map(_ => knownKeyCachedObjects)
   }
 }

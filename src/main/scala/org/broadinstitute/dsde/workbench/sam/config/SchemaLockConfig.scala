@@ -3,7 +3,6 @@ package org.broadinstitute.dsde.workbench.sam.config
 /**
   * Created by mbemis on 2/27/18.
   */
-
 /**
   * Schema lock configuration.
   * @param lockSchemaOnBoot Set to false to disable schema locking altogether
@@ -11,7 +10,4 @@ package org.broadinstitute.dsde.workbench.sam.config
   * @param maxTimeToWait The number of seconds to wait before giving up
   * @param instanceId The id of the instance that is dealing with the lock
   */
-case class SchemaLockConfig(lockSchemaOnBoot: Boolean,
-                            recheckTimeInterval: Int,
-                            maxTimeToWait: Int,
-                            instanceId: String)
+case class SchemaLockConfig(lockSchemaOnBoot: Boolean, recheckTimeInterval: Int, maxTimeToWait: Int, instanceId: String)

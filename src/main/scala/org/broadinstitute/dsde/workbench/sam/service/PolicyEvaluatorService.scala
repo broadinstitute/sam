@@ -17,17 +17,21 @@ class PolicyEvaluatorService(
     extends LazyLogging {
   def initPolicy(): IO[Unit] = {
     val policyName = AccessPolicyName("admin-notifier-set-public")
-    accessPolicyDAO.createPolicy(AccessPolicy(
-      FullyQualifiedPolicyId(FullyQualifiedResourceId(SamResourceTypes.resourceTypeAdminName, ResourceId("managed-group")), policyName),
-      Set.empty,
-      WorkbenchEmail(s"dummy@$emailDomain"),
-      Set.empty,
-      Set(SamResourceActions.setPublicPolicy(ManagedGroupService.adminNotifierPolicyName)),
-      true
-    )).void.recoverWith{
-      case ldape: LDAPException if ldape.getResultCode == ResultCode.ENTRY_ALREADY_EXISTS =>
-        IO(logger.debug(s"$policyName has already been created"))
-    }
+    accessPolicyDAO
+      .createPolicy(
+        AccessPolicy(
+          FullyQualifiedPolicyId(FullyQualifiedResourceId(SamResourceTypes.resourceTypeAdminName, ResourceId("managed-group")), policyName),
+          Set.empty,
+          WorkbenchEmail(s"dummy@$emailDomain"),
+          Set.empty,
+          Set(SamResourceActions.setPublicPolicy(ManagedGroupService.adminNotifierPolicyName)),
+          true
+        ))
+      .void
+      .recoverWith {
+        case ldape: LDAPException if ldape.getResultCode == ResultCode.ENTRY_ALREADY_EXISTS =>
+          IO(logger.debug(s"$policyName has already been created"))
+      }
   }
 
   def hasPermission(resource: FullyQualifiedResourceId, action: ResourceAction, userId: WorkbenchUserId): IO[Boolean] =
@@ -35,26 +39,26 @@ class PolicyEvaluatorService(
 
   def listUserResourceActions(resource: FullyQualifiedResourceId, userId: WorkbenchUserId): IO[Set[ResourceAction]] = {
     def allActions(policy: AccessPolicy, resourceType: ResourceType): Set[ResourceAction] = {
-      val roleActions = policy.roles.flatMap{
-        role =>
-          resourceType.roles.filter(_.roleName == role).flatMap(_.actions)
+      val roleActions = policy.roles.flatMap { role =>
+        resourceType.roles.filter(_.roleName == role).flatMap(_.actions)
       }
       policy.actions ++ roleActions
     }
 
-    for{
-      rt <- IO.fromEither[ResourceType](resourceTypes.get(resource.resourceTypeName).toRight(new WorkbenchException(s"missing configuration for resourceType ${resource.resourceTypeName}")))
+    for {
+      rt <- IO.fromEither[ResourceType](
+        resourceTypes.get(resource.resourceTypeName).toRight(new WorkbenchException(s"missing configuration for resourceType ${resource.resourceTypeName}")))
       isConstrained = rt.isAuthDomainConstrainable
 
       policiesForResource <- listResourceAccessPoliciesForUser(resource, userId)
       allPolicyActions = policiesForResource.flatMap(p => allActions(p, rt))
-      res <- if(isConstrained) {
-        for{
+      res <- if (isConstrained) {
+        for {
           authDomains <- accessPolicyDAO.loadResourceAuthDomain(resource)
           groupsUserIsMemberOf <- listUserManagedGroups(userId)
         } yield {
           val isUserMemberOfAllAuthDomains = authDomains.subsetOf(groupsUserIsMemberOf)
-          if(isUserMemberOfAllAuthDomains){
+          if (isUserMemberOfAllAuthDomains) {
             allPolicyActions
           } else {
             val constrainableActions = rt.actionPatterns.filter(_.authDomainConstrainable)
@@ -100,17 +104,17 @@ class PolicyEvaluatorService(
     for {
       ripns <- accessPolicyDAO.listAccessPolicies(ManagedGroupService.managedGroupTypeName, userId)
     } yield {
-      ripns.filter(ripn => ManagedGroupService.userMembershipPolicyNames.contains(ripn.accessPolicyName))
+      ripns
+        .filter(ripn => ManagedGroupService.userMembershipPolicyNames.contains(ripn.accessPolicyName))
         .map(p => ManagedGroupAndRole(WorkbenchGroupName(p.resourceId.value), ManagedGroupService.getRoleName(p.accessPolicyName.value)))
     }
 
-  def listUserManagedGroups(userId: WorkbenchUserId): IO[Set[WorkbenchGroupName]] = {
+  def listUserManagedGroups(userId: WorkbenchUserId): IO[Set[WorkbenchGroupName]] =
     for {
       policies <- listUserManagedGroupsWithRole(userId)
     } yield {
       policies.map(_.groupName)
     }
-  }
 
   def listResourceAccessPoliciesForUser(resource: FullyQualifiedResourceId, userId: WorkbenchUserId): IO[Set[AccessPolicy]] =
     for {

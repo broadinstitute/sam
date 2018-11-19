@@ -13,32 +13,32 @@ import scala.concurrent.duration.FiniteDuration
 /**
   * Created by mbemis on 8/17/17.
   */
-final case class GoogleServicesConfig(appName: String,
-                                appsDomain: String,
-                                environment: String,
-                                pemFile: String,
-                                serviceAccountCredentialJsonPath: ServiceAccountCredentialJsonPath,
-                                serviceAccountClientId: String,
-                                serviceAccountClientEmail: WorkbenchEmail,
-                                serviceAccountClientProject: GoogleProject,
-                                subEmail: WorkbenchEmail,
-                                projectServiceAccount: WorkbenchEmail,
-                                pathToBillingPem: String,
-                                billingPemEmail: WorkbenchEmail,
-                                billingEmail: WorkbenchEmail,
-                                groupSyncPubSubProject: String,
-                                groupSyncPollInterval: FiniteDuration,
-                                groupSyncPollJitter: FiniteDuration,
-                                groupSyncTopic: String,
-                                groupSyncSubscription: String,
-                                groupSyncWorkerCount: Int,
-                                notificationTopic: String,
-                                googleKeyCacheConfig: GoogleKeyCacheConfig,
-                                resourceNamePrefix: Option[String],
-                                adminSdkServiceAccounts: Option[NonEmptyList[ServiceAccountConfig]]
-                               )
+final case class GoogleServicesConfig(
+    appName: String,
+    appsDomain: String,
+    environment: String,
+    pemFile: String,
+    serviceAccountCredentialJsonPath: ServiceAccountCredentialJsonPath,
+    serviceAccountClientId: String,
+    serviceAccountClientEmail: WorkbenchEmail,
+    serviceAccountClientProject: GoogleProject,
+    subEmail: WorkbenchEmail,
+    projectServiceAccount: WorkbenchEmail,
+    pathToBillingPem: String,
+    billingPemEmail: WorkbenchEmail,
+    billingEmail: WorkbenchEmail,
+    groupSyncPubSubProject: String,
+    groupSyncPollInterval: FiniteDuration,
+    groupSyncPollJitter: FiniteDuration,
+    groupSyncTopic: String,
+    groupSyncSubscription: String,
+    groupSyncWorkerCount: Int,
+    notificationTopic: String,
+    googleKeyCacheConfig: GoogleKeyCacheConfig,
+    resourceNamePrefix: Option[String],
+    adminSdkServiceAccounts: Option[NonEmptyList[ServiceAccountConfig]])
 
-object GoogleServicesConfig{
+object GoogleServicesConfig {
   implicit val googleKeyCacheConfigReader: ValueReader[GoogleKeyCacheConfig] = ValueReader.relative { config =>
     GoogleKeyCacheConfig(
       GcsBucketName(config.getString("bucketName")),

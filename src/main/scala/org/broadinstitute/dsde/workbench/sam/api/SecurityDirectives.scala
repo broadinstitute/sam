@@ -12,15 +12,23 @@ import ImplicitConversions.ioOnSuccessMagnet
 trait SecurityDirectives {
   def policyEvaluatorService: PolicyEvaluatorService
 
-  def requireAction(resource: FullyQualifiedResourceId, action: ResourceAction, userId: WorkbenchUserId): Directive0 = requireOneOfAction(resource, Set(action), userId)
+  def requireAction(resource: FullyQualifiedResourceId, action: ResourceAction, userId: WorkbenchUserId): Directive0 =
+    requireOneOfAction(resource, Set(action), userId)
 
-  def requireOneOfAction(resource: FullyQualifiedResourceId, requestedActions: Set[ResourceAction], userId: WorkbenchUserId): Directive0 = {
+  def requireOneOfAction(resource: FullyQualifiedResourceId, requestedActions: Set[ResourceAction], userId: WorkbenchUserId): Directive0 =
     Directives.mapInnerRoute { innerRoute =>
       onSuccess(policyEvaluatorService.listUserResourceActions(resource, userId)) { actions =>
-        if(actions.intersect(requestedActions).nonEmpty) innerRoute
-        else if (actions.isEmpty) Directives.failWith(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Resource ${resource.resourceTypeName.value}/${resource.resourceId.value} not found")))
-        else Directives.failWith(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden, s"You may not perform any of ${requestedActions.mkString("[", ", ", "]").toString.toUpperCase} on ${resource.resourceTypeName.value}/${resource.resourceId.value}")))
+        if (actions.intersect(requestedActions).nonEmpty) innerRoute
+        else if (actions.isEmpty)
+          Directives.failWith(
+            new WorkbenchExceptionWithErrorReport(
+              ErrorReport(StatusCodes.NotFound, s"Resource ${resource.resourceTypeName.value}/${resource.resourceId.value} not found")))
+        else
+          Directives.failWith(
+            new WorkbenchExceptionWithErrorReport(ErrorReport(
+              StatusCodes.Forbidden,
+              s"You may not perform any of ${requestedActions.mkString("[", ", ", "]").toString.toUpperCase} on ${resource.resourceTypeName.value}/${resource.resourceId.value}"
+            )))
       }
     }
-  }
 }

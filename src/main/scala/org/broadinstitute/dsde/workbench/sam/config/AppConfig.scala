@@ -11,10 +11,18 @@ import org.broadinstitute.dsde.workbench.model.google._
 import org.broadinstitute.dsde.workbench.sam.model._
 import DistributedLockConfig.distributedLockConfigReader
 import GoogleServicesConfig.googleServicesConfigReader
+
 /**
   * Created by dvoet on 7/18/17.
   */
-final case class AppConfig(emailDomain: String, directoryConfig: DirectoryConfig, schemaLockConfig: SchemaLockConfig, distributedLockConfig: DistributedLockConfig, swaggerConfig: SwaggerConfig, googleConfig: Option[GoogleConfig], resourceTypes: Set[ResourceType])
+final case class AppConfig(
+    emailDomain: String,
+    directoryConfig: DirectoryConfig,
+    schemaLockConfig: SchemaLockConfig,
+    distributedLockConfig: DistributedLockConfig,
+    swaggerConfig: SwaggerConfig,
+    googleConfig: Option[GoogleConfig],
+    resourceTypes: Set[ResourceType])
 
 object AppConfig {
   implicit val swaggerReader: ValueReader[SwaggerConfig] = ValueReader.relative { config =>
@@ -65,9 +73,8 @@ object AppConfig {
     }
   }
 
-  private def getActionPatternObjects(config: Config, path: String): Set[ResourceActionPattern] = {
+  private def getActionPatternObjects(config: Config, path: String): Set[ResourceActionPattern] =
     config.as[Map[String, ResourceActionPattern]](path).values.toSet
-  }
 
   // See: https://broadinstitute.atlassian.net/browse/GAWB-3589
   // actionPatterns used to be defined as an Array[String], but they're transitioning to be Array[Object]
@@ -75,7 +82,7 @@ object AppConfig {
   // Attempt to parse actionPatterns:
   // 1. as Option[Set[String]]
   // 2. IF that is the WrongType THEN try to parse as Map[String, ResourceActionPattern]]
-  private def getActionPatterns(config: Config, path: String): Set[ResourceActionPattern] = {
+  private def getActionPatterns(config: Config, path: String): Set[ResourceActionPattern] =
     try {
       config.as[Option[Set[String]]](path) match {
         case Some(s) => s.map(ResourceActionPattern(_, "", false))
@@ -84,7 +91,6 @@ object AppConfig {
     } catch {
       case ex: WrongType => getActionPatternObjects(config, path)
     }
-  }
 
   implicit val directoryConfigReader: ValueReader[DirectoryConfig] = ValueReader.relative { config =>
     DirectoryConfig(
@@ -99,16 +105,15 @@ object AppConfig {
 
   val jsonFactory = JacksonFactory.getDefaultInstance
 
-  implicit def nonEmptyListReader[A](implicit valueReader: ValueReader[List[A]]): ValueReader[Option[NonEmptyList[A]]] = new ValueReader[Option[NonEmptyList[A]]] {
-    def read(config: Config, path: String): Option[NonEmptyList[A]] = {
-      if (config.hasPath(path)) {
-        NonEmptyList.fromList(valueReader.read(config, path))
-      } else {
-        None
-      }
+  implicit def nonEmptyListReader[A](implicit valueReader: ValueReader[List[A]]): ValueReader[Option[NonEmptyList[A]]] =
+    new ValueReader[Option[NonEmptyList[A]]] {
+      def read(config: Config, path: String): Option[NonEmptyList[A]] =
+        if (config.hasPath(path)) {
+          NonEmptyList.fromList(valueReader.read(config, path))
+        } else {
+          None
+        }
     }
-  }
-
 
   implicit val petServiceAccountConfigReader: ValueReader[PetServiceAccountConfig] = ValueReader.relative { config =>
     PetServiceAccountConfig(
@@ -128,7 +133,7 @@ object AppConfig {
 
   def readConfig(config: Config): AppConfig = {
     val directoryConfig = config.as[DirectoryConfig]("directory")
-    val googleConfigOption = for{
+    val googleConfigOption = for {
       googleServices <- config.getAs[GoogleServicesConfig]("googleServices")
     } yield GoogleConfig(googleServices, config.as[PetServiceAccountConfig]("petServiceAccount"))
 

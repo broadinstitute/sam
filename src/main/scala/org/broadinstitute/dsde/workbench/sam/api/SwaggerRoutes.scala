@@ -20,8 +20,8 @@ trait SwaggerRoutes {
   val swaggerRoutes: server.Route = {
     path("") {
       get {
-        parameter("url") {urlparam =>
-          extractUri {uri =>
+        parameter("url") { urlparam =>
+          extractUri { uri =>
             redirect(uri.withRawQueryString(""), StatusCodes.MovedPermanently)
           }
         } ~
@@ -55,14 +55,15 @@ trait SwaggerRoutes {
 
     mapResponseEntity { entityFromJar =>
       entityFromJar.transformDataBytes(Flow.fromFunction[ByteString, ByteString] { original: ByteString =>
-        ByteString(original.utf8String
-          .replace("your-client-id", swaggerConfig.googleClientId)
-          .replace("your-realms", swaggerConfig.realm)
-          .replace("your-app-name", swaggerConfig.realm)
-          .replace("scopeSeparator: \",\"", "scopeSeparator: \" \"")
-          .replace("jsonEditor: false,", "jsonEditor: false," + swaggerOptions)
-          .replace("url = \"http://petstore.swagger.io/v2/swagger.json\";", "url = '/api-docs.yaml';")
-        )})
+        ByteString(
+          original.utf8String
+            .replace("your-client-id", swaggerConfig.googleClientId)
+            .replace("your-realms", swaggerConfig.realm)
+            .replace("your-app-name", swaggerConfig.realm)
+            .replace("scopeSeparator: \",\"", "scopeSeparator: \" \"")
+            .replace("jsonEditor: false,", "jsonEditor: false," + swaggerOptions)
+            .replace("url = \"http://petstore.swagger.io/v2/swagger.json\";", "url = '/api-docs.yaml';"))
+      })
     } {
       getFromResource(swaggerUiPath + "/index.html")
     }

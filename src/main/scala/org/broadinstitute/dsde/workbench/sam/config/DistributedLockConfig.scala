@@ -5,7 +5,7 @@ import scala.concurrent.duration.{Duration, FiniteDuration}
 
 final case class DistributedLockConfig(retryInterval: FiniteDuration, maxRetry: Int)
 
-object DistributedLockConfig{
+object DistributedLockConfig {
   implicit val distributedLockConfigReader: ValueReader[DistributedLockConfig] = ValueReader.relative { config =>
     val retryInterval = config.getDuration("retryInterval")
 

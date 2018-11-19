@@ -24,12 +24,41 @@ object GoogleKeyCacheMonitorSupervisor {
   case object Init extends GoogleKeyCacheMonitorSupervisorMessage
   case object Start extends GoogleKeyCacheMonitorSupervisorMessage
 
-  def props(pollInterval: FiniteDuration, pollIntervalJitter: FiniteDuration, pubSubDao: GooglePubSubDAO, googleIamDAO: GoogleIamDAO, pubSubTopicName: String, pubSubSubscriptionName: String, projectServiceAccount: WorkbenchEmail, workerCount: Int, googleKeyCache: GoogleKeyCache): Props = {
-    Props(new GoogleKeyCacheMonitorSupervisor(pollInterval, pollIntervalJitter, pubSubDao, googleIamDAO, pubSubTopicName, pubSubSubscriptionName, projectServiceAccount, workerCount, googleKeyCache))
-  }
+  def props(
+      pollInterval: FiniteDuration,
+      pollIntervalJitter: FiniteDuration,
+      pubSubDao: GooglePubSubDAO,
+      googleIamDAO: GoogleIamDAO,
+      pubSubTopicName: String,
+      pubSubSubscriptionName: String,
+      projectServiceAccount: WorkbenchEmail,
+      workerCount: Int,
+      googleKeyCache: GoogleKeyCache): Props =
+    Props(
+      new GoogleKeyCacheMonitorSupervisor(
+        pollInterval,
+        pollIntervalJitter,
+        pubSubDao,
+        googleIamDAO,
+        pubSubTopicName,
+        pubSubSubscriptionName,
+        projectServiceAccount,
+        workerCount,
+        googleKeyCache))
 }
 
-class GoogleKeyCacheMonitorSupervisor(val pollInterval: FiniteDuration, pollIntervalJitter: FiniteDuration, pubSubDao: GooglePubSubDAO, googleIamDAO: GoogleIamDAO, pubSubTopicName: String, pubSubSubscriptionName: String, projectServiceAccount: WorkbenchEmail, workerCount: Int, googleKeyCache: GoogleKeyCache) extends Actor with LazyLogging {
+class GoogleKeyCacheMonitorSupervisor(
+    val pollInterval: FiniteDuration,
+    pollIntervalJitter: FiniteDuration,
+    pubSubDao: GooglePubSubDAO,
+    googleIamDAO: GoogleIamDAO,
+    pubSubTopicName: String,
+    pubSubSubscriptionName: String,
+    projectServiceAccount: WorkbenchEmail,
+    workerCount: Int,
+    googleKeyCache: GoogleKeyCache)
+    extends Actor
+    with LazyLogging {
   import GoogleKeyCacheMonitorSupervisor._
   import context._
 
@@ -37,20 +66,22 @@ class GoogleKeyCacheMonitorSupervisor(val pollInterval: FiniteDuration, pollInte
 
   override def receive = {
     case Init => init pipeTo self
-    case Start => for(i <- 1 to workerCount) startOne()
+    case Start => for (i <- 1 to workerCount) startOne()
     case Status.Failure(t) => logger.error("error initializing google key cache monitor", t)
   }
 
   def topicToFullPath(topicName: String) = s"projects/${googleKeyCache.googleServicesConfig.serviceAccountClientProject}/topics/${topicName}"
 
-  def init = {
+  def init =
     for {
       _ <- pubSubDao.createTopic(pubSubTopicName)
       _ <- pubSubDao.createSubscription(pubSubTopicName, pubSubSubscriptionName)
       _ <- pubSubDao.setTopicIamPermissions(pubSubTopicName, Map(projectServiceAccount -> "roles/pubsub.publisher"))
-      _ <- googleKeyCache.googleStorageDAO.setObjectChangePubSubTrigger(googleKeyCache.googleServicesConfig.googleKeyCacheConfig.bucketName, topicToFullPath(pubSubTopicName), List("OBJECT_DELETE"))
+      _ <- googleKeyCache.googleStorageDAO.setObjectChangePubSubTrigger(
+        googleKeyCache.googleServicesConfig.googleKeyCacheConfig.bucketName,
+        topicToFullPath(pubSubTopicName),
+        List("OBJECT_DELETE"))
     } yield Start
-  }
 
   def startOne(): Unit = {
     logger.info("starting GoogleKeyCacheMonitorActor")
@@ -72,12 +103,26 @@ class GoogleKeyCacheMonitorSupervisor(val pollInterval: FiniteDuration, pollInte
 object GoogleKeyCacheMonitor {
   case object StartMonitorPass
 
-  def props(pollInterval: FiniteDuration, pollIntervalJitter: FiniteDuration, pubSubDao: GooglePubSubDAO, googleIamDAO: GoogleIamDAO, pubSubSubscriptionName: String, googleKeyCache: GoogleKeyCache): Props = {
+  def props(
+      pollInterval: FiniteDuration,
+      pollIntervalJitter: FiniteDuration,
+      pubSubDao: GooglePubSubDAO,
+      googleIamDAO: GoogleIamDAO,
+      pubSubSubscriptionName: String,
+      googleKeyCache: GoogleKeyCache): Props =
     Props(new GoogleKeyCacheMonitorActor(pollInterval, pollIntervalJitter, pubSubDao, googleIamDAO, pubSubSubscriptionName, googleKeyCache))
-  }
 }
 
-class GoogleKeyCacheMonitorActor(val pollInterval: FiniteDuration, pollIntervalJitter: FiniteDuration, pubSubDao: GooglePubSubDAO, googleIamDAO: GoogleIamDAO, pubSubSubscriptionName: String, googleKeyCache: GoogleKeyCache) extends Actor with LazyLogging with FutureSupport {
+class GoogleKeyCacheMonitorActor(
+    val pollInterval: FiniteDuration,
+    pollIntervalJitter: FiniteDuration,
+    pubSubDao: GooglePubSubDAO,
+    googleIamDAO: GoogleIamDAO,
+    pubSubSubscriptionName: String,
+    googleKeyCache: GoogleKeyCache)
+    extends Actor
+    with LazyLogging
+    with FutureSupport {
   import GoogleKeyCacheMonitor._
   import context._
 
@@ -117,7 +162,7 @@ class GoogleKeyCacheMonitorActor(val pollInterval: FiniteDuration, pollIntervalJ
     case x => logger.info(s"unhandled $x")
   }
 
-  private def removeServiceAccountKey(project: GoogleProject, serviceAccountEmail: WorkbenchEmail, keyId: ServiceAccountKeyId) = {
+  private def removeServiceAccountKey(project: GoogleProject, serviceAccountEmail: WorkbenchEmail, keyId: ServiceAccountKeyId) =
     googleIamDAO.findServiceAccount(project, serviceAccountEmail).recover {
       case t: GoogleJsonResponseException if t.getStatusCode == 403 =>
         logger.warn(s"could not remove service account key due to 403 error, project $project, sa email $serviceAccountEmail, sa key id $keyId", t)
@@ -126,11 +171,9 @@ class GoogleKeyCacheMonitorActor(val pollInterval: FiniteDuration, pollIntervalJ
       case None => Future.successful(()) // service account does not exist or no access
       case Some(_) => googleIamDAO.removeServiceAccountKey(project, serviceAccountEmail, keyId)
     }
-  }
 
-  private def acknowledgeMessage(ackId: String) = {
+  private def acknowledgeMessage(ackId: String) =
     pubSubDao.acknowledgeMessagesById(pubSubSubscriptionName, Seq(ackId))
-  }
 
   private def parseMessage(message: PubSubMessage) = {
     val objectIdPattern = """"([^/]+)/([^/]+)/([^/]+)"""".r
