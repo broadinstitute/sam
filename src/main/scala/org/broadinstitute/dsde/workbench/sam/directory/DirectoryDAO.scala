@@ -24,6 +24,7 @@ trait DirectoryDAO {
     * @return true if the subject was added, false if it was already there
     */
   def addGroupMember(groupId: WorkbenchGroupIdentity, addMember: WorkbenchSubject): Future[Boolean]
+
   /**
     * @return true if the subject was removed, false if it was already gone
     */
@@ -54,7 +55,7 @@ trait DirectoryDAO {
   def disableIdentity(subject: WorkbenchSubject): Future[Unit]
   def isEnabled(subject: WorkbenchSubject): IO[Boolean]
 
-  def getUserFromPetServiceAccount(petSA: ServiceAccountSubjectId):IO[Option[WorkbenchUser]]
+  def getUserFromPetServiceAccount(petSA: ServiceAccountSubjectId): IO[Option[WorkbenchUser]]
   def createPetServiceAccount(petServiceAccount: PetServiceAccount): IO[PetServiceAccount]
   def loadPetServiceAccount(petServiceAccountId: PetServiceAccountId): IO[Option[PetServiceAccount]]
   def deletePetServiceAccount(petServiceAccountId: PetServiceAccountId): IO[Unit]

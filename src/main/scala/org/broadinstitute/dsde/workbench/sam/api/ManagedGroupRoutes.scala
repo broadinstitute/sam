@@ -33,54 +33,44 @@ trait ManagedGroupRoutes extends UserInfoDirectives with SecurityDirectives with
         pathEndOrSingleSlash {
           get {
             handleGetGroup(managedGroup.resourceId)
-          } ~
-          post {
+          } ~ post {
             handleCreateGroup(managedGroup.resourceId, userInfo)
-          } ~
-          delete {
+          } ~ delete {
             handleDeleteGroup(managedGroup, userInfo)
           }
-        } ~
-        pathPrefix("requestAccess") {
+        } ~ pathPrefix("requestAccess") {
           post {
             handleRequestAccess(managedGroup, userInfo)
           }
-        } ~
-        path("accessInstructions") {
+        } ~ path("accessInstructions") {
           put {
             entity(as[ManagedGroupAccessInstructions]) { accessInstructions =>
               handleSetAccessInstructions(managedGroup, accessInstructions, userInfo)
             }
-          } ~
-          get {
+          } ~ get {
             handleGetAccessInstructions(managedGroup)
           }
-        } ~
-        pathPrefix(Segment) { policyName =>
+        } ~ pathPrefix(Segment) { policyName =>
           val accessPolicyName = ManagedGroupService.getPolicyName(policyName)
 
           pathEndOrSingleSlash {
             get {
               handleListEmails(managedGroup, accessPolicyName, userInfo)
-            } ~
-            put {
+            } ~ put {
               handleOverwriteEmails(managedGroup, accessPolicyName, userInfo)
             }
-          } ~
-          pathPrefix(Segment) { email =>
+          } ~ pathPrefix(Segment) { email =>
             pathEndOrSingleSlash {
               put {
                 handleAddEmailToPolicy(managedGroup, accessPolicyName, email, userInfo)
-              } ~
-              delete {
+              } ~ delete {
                 handleDeleteEmailFromPolicy(managedGroup, accessPolicyName, email, userInfo)
               }
             }
           }
         }
       }
-    } ~
-    (pathPrefix("groups" / "v1") | pathPrefix("groups")) {
+    } ~ (pathPrefix("groups" / "v1") | pathPrefix("groups")) {
       pathEndOrSingleSlash {
         get {
           handleListGroups(userInfo)
@@ -89,38 +79,33 @@ trait ManagedGroupRoutes extends UserInfoDirectives with SecurityDirectives with
     }
   }
 
-  private def handleListGroups(userInfo: UserInfo): Route = {
+  private def handleListGroups(userInfo: UserInfo): Route =
     complete(managedGroupService.listGroups(userInfo.userId).map(StatusCodes.OK -> _))
-  }
 
-  private def handleGetGroup(resourceId: ResourceId): Route = {
-    complete (
+  private def handleGetGroup(resourceId: ResourceId): Route =
+    complete(
       managedGroupService.loadManagedGroup(resourceId).flatMap {
         case Some(response) => IO.pure(StatusCodes.OK -> response)
         case None => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "group not found")))
       }
     )
-  }
 
-  private def handleCreateGroup(resourceId: ResourceId, userInfo: UserInfo): Route = {
+  private def handleCreateGroup(resourceId: ResourceId, userInfo: UserInfo): Route =
     complete(managedGroupService.createManagedGroup(resourceId, userInfo).map(_ => StatusCodes.Created))
-  }
 
-  private def handleDeleteGroup(managedGroup: FullyQualifiedResourceId, userInfo: UserInfo): Route = {
+  private def handleDeleteGroup(managedGroup: FullyQualifiedResourceId, userInfo: UserInfo): Route =
     requireAction(managedGroup, SamResourceActions.delete, userInfo.userId) {
       complete(managedGroupService.deleteManagedGroup(managedGroup.resourceId).map(_ => StatusCodes.NoContent))
     }
-  }
 
-  private def handleListEmails(managedGroup: FullyQualifiedResourceId, accessPolicyName: ManagedGroupPolicyName, userInfo: UserInfo): Route = {
+  private def handleListEmails(managedGroup: FullyQualifiedResourceId, accessPolicyName: ManagedGroupPolicyName, userInfo: UserInfo): Route =
     requireAction(managedGroup, SamResourceActions.readPolicy(accessPolicyName), userInfo.userId) {
       complete(
         managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, accessPolicyName).map(x => StatusCodes.OK -> x.toSet)
       )
     }
-  }
 
-  private def handleOverwriteEmails(managedGroup: FullyQualifiedResourceId, accessPolicyName: ManagedGroupPolicyName, userInfo: UserInfo): Route = {
+  private def handleOverwriteEmails(managedGroup: FullyQualifiedResourceId, accessPolicyName: ManagedGroupPolicyName, userInfo: UserInfo): Route =
     requireAction(managedGroup, SamResourceActions.sharePolicy(accessPolicyName), userInfo.userId) {
       entity(as[Set[WorkbenchEmail]]) { members =>
         complete(
@@ -128,9 +113,12 @@ trait ManagedGroupRoutes extends UserInfoDirectives with SecurityDirectives with
         )
       }
     }
-  }
 
-  private def handleAddEmailToPolicy(managedGroup: FullyQualifiedResourceId, accessPolicyName: ManagedGroupPolicyName, email: String, userInfo: UserInfo): Route = {
+  private def handleAddEmailToPolicy(
+      managedGroup: FullyQualifiedResourceId,
+      accessPolicyName: ManagedGroupPolicyName,
+      email: String,
+      userInfo: UserInfo): Route =
     requireAction(managedGroup, SamResourceActions.sharePolicy(accessPolicyName), userInfo.userId) {
       withSubject(WorkbenchEmail(email)) { subject =>
         complete(
@@ -138,9 +126,12 @@ trait ManagedGroupRoutes extends UserInfoDirectives with SecurityDirectives with
         )
       }
     }
-  }
 
-  private def handleDeleteEmailFromPolicy(managedGroup: FullyQualifiedResourceId, accessPolicyName: ManagedGroupPolicyName, email: String, userInfo: UserInfo): Route = {
+  private def handleDeleteEmailFromPolicy(
+      managedGroup: FullyQualifiedResourceId,
+      accessPolicyName: ManagedGroupPolicyName,
+      email: String,
+      userInfo: UserInfo): Route =
     requireAction(managedGroup, SamResourceActions.sharePolicy(accessPolicyName), userInfo.userId) {
       withSubject(WorkbenchEmail(email)) { subject =>
         complete(
@@ -148,30 +139,29 @@ trait ManagedGroupRoutes extends UserInfoDirectives with SecurityDirectives with
         )
       }
     }
-  }
 
-  private def handleRequestAccess(managedGroup: FullyQualifiedResourceId, userInfo: UserInfo): Route = {
+  private def handleRequestAccess(managedGroup: FullyQualifiedResourceId, userInfo: UserInfo): Route =
     requireAction(managedGroup, SamResourceActions.notifyAdmins, userInfo.userId) {
       complete(
         managedGroupService.requestAccess(managedGroup.resourceId, userInfo.userId).map(_ => StatusCodes.NoContent)
       )
     }
-  }
 
-  private def handleSetAccessInstructions(managedGroup: FullyQualifiedResourceId, accessInstructions: ManagedGroupAccessInstructions, userInfo: UserInfo): Route = {
+  private def handleSetAccessInstructions(
+      managedGroup: FullyQualifiedResourceId,
+      accessInstructions: ManagedGroupAccessInstructions,
+      userInfo: UserInfo): Route =
     requireAction(managedGroup, SamResourceActions.setAccessInstructions, userInfo.userId) {
       complete(
         managedGroupService.setAccessInstructions(managedGroup.resourceId, accessInstructions.value).map(_ => StatusCodes.NoContent)
       )
     }
-  }
 
-  private def handleGetAccessInstructions(managedGroup: FullyQualifiedResourceId): Route = {
+  private def handleGetAccessInstructions(managedGroup: FullyQualifiedResourceId): Route =
     complete(
       managedGroupService.getAccessInstructions(managedGroup.resourceId).map {
         case Some(accessInstructions) => StatusCodes.OK -> Option(accessInstructions)
         case None => StatusCodes.NoContent -> None
       }
     )
-  }
 }

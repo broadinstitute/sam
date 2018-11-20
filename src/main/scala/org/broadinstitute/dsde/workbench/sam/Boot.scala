@@ -16,7 +16,14 @@ import javax.net.SocketFactory
 import javax.net.ssl.SSLContext
 import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
 import org.broadinstitute.dsde.workbench.google.GoogleCredentialModes.{Json, Pem}
-import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, HttpGoogleDirectoryDAO, HttpGoogleIamDAO, HttpGoogleProjectDAO, HttpGooglePubSubDAO, HttpGoogleStorageDAO}
+import org.broadinstitute.dsde.workbench.google.{
+  GoogleDirectoryDAO,
+  HttpGoogleDirectoryDAO,
+  HttpGoogleIamDAO,
+  HttpGoogleProjectDAO,
+  HttpGooglePubSubDAO,
+  HttpGoogleStorageDAO
+}
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException}
 import org.broadinstitute.dsde.workbench.sam.api.{SamRoutes, StandardUserInfoDirectives}
 import org.broadinstitute.dsde.workbench.sam.config.{AppConfig, DirectoryConfig, GoogleConfig, SwaggerConfig}
@@ -78,27 +85,31 @@ object Boot extends IOApp with LazyLogging {
     }
   }
 
-  private[sam] def createAppDependencies(appConfig: AppConfig, resourceTypeMap: Map[ResourceTypeName, ResourceType])(implicit actorSystem: ActorSystem, materializer: ActorMaterializer): cats.effect.Resource[IO, AppDependencies] = for {
-    ldapConnectionPool <- createLdapConnectionPool(appConfig.directoryConfig)
-    blockingEc <- ExecutionContexts.blockingThreadPool
-    accessPolicyDao = new LdapAccessPolicyDAO(ldapConnectionPool, appConfig.directoryConfig, blockingEc)
-    directoryDAO = new LdapDirectoryDAO(ldapConnectionPool, appConfig.directoryConfig, blockingEc)
-  } yield {
-    val cloudExt: CloudExtensions = appConfig.googleConfig match{
-      case Some(config) => createGoogleCloudExt(accessPolicyDao, directoryDAO, config, resourceTypeMap)
-      case None => NoExtensions
+  private[sam] def createAppDependencies(appConfig: AppConfig, resourceTypeMap: Map[ResourceTypeName, ResourceType])(
+      implicit actorSystem: ActorSystem,
+      materializer: ActorMaterializer): cats.effect.Resource[IO, AppDependencies] =
+    for {
+      ldapConnectionPool <- createLdapConnectionPool(appConfig.directoryConfig)
+      blockingEc <- ExecutionContexts.blockingThreadPool
+      accessPolicyDao = new LdapAccessPolicyDAO(ldapConnectionPool, appConfig.directoryConfig, blockingEc)
+      directoryDAO = new LdapDirectoryDAO(ldapConnectionPool, appConfig.directoryConfig, blockingEc)
+    } yield {
+      val cloudExt: CloudExtensions = appConfig.googleConfig match {
+        case Some(config) => createGoogleCloudExt(accessPolicyDao, directoryDAO, config, resourceTypeMap)
+        case None => NoExtensions
+      }
+      createAppDependencies(
+        appConfig.swaggerConfig,
+        appConfig.emailDomain,
+        resourceTypeMap,
+        cloudExt,
+        accessPolicyDao,
+        directoryDAO
+      )
     }
-    createAppDependencies(
-      appConfig.swaggerConfig,
-      appConfig.emailDomain,
-      resourceTypeMap,
-      cloudExt,
-      accessPolicyDao,
-      directoryDAO
-    )
-  }
 
-  private[sam] def readFile(path: String): cats.effect.Resource[IO, FileInputStream] = cats.effect.Resource.make(IO(new FileInputStream(path)))(inputStream => IO(inputStream.close()))
+  private[sam] def readFile(path: String): cats.effect.Resource[IO, FileInputStream] =
+    cats.effect.Resource.make(IO(new FileInputStream(path)))(inputStream => IO(inputStream.close()))
 
   private[sam] def createLdapConnectionPool(directoryConfig: DirectoryConfig): cats.effect.Resource[IO, LDAPConnectionPool] = {
     val dirURI = new URI(directoryConfig.directoryUrl)
@@ -108,10 +119,12 @@ object Boot extends IOApp with LazyLogging {
       case unsupported => throw new WorkbenchException(s"unsupported directory url scheme: $unsupported")
     }
     val port = if (dirURI.getPort > 0) dirURI.getPort else defaultPort
-    cats.effect.Resource.make(IO(new LDAPConnectionPool(
-      new LDAPConnection(socketFactory, dirURI.getHost, port, directoryConfig.user, directoryConfig.password),
-      directoryConfig.connectionPoolSize
-    )))(ldapConnection => IO(ldapConnection.close()))
+    cats.effect.Resource.make(
+      IO(
+        new LDAPConnectionPool(
+          new LDAPConnection(socketFactory, dirURI.getHost, port, directoryConfig.user, directoryConfig.password),
+          directoryConfig.connectionPoolSize
+        )))(ldapConnection => IO(ldapConnection.close()))
   }
 
   private[sam] def createGoogleCloudExt(
@@ -128,7 +141,8 @@ object Boot extends IOApp with LazyLogging {
             Option(config.googleServicesConfig.subEmail)
           ))
       case Some(accounts) => accounts.map(account => Json(account.json, Option(config.googleServicesConfig.subEmail)))
-    }).map { credentials => new HttpGoogleDirectoryDAO(config.googleServicesConfig.appName, credentials, "google")
+    }).map { credentials =>
+      new HttpGoogleDirectoryDAO(config.googleServicesConfig.appName, credentials, "google")
     }
 
     val googleDirectoryDAO = DelegatePool[GoogleDirectoryDAO](googleDirDaos)
@@ -181,9 +195,7 @@ object Boot extends IOApp with LazyLogging {
       resourceTypeMap: Map[ResourceTypeName, ResourceType],
       cloudExtensions: CloudExtensions,
       accessPolicyDAO: AccessPolicyDAO,
-      directoryDAO: DirectoryDAO)(
-      implicit actorSystem: ActorSystem,
-      actorMaterializer: ActorMaterializer): AppDependencies = {
+      directoryDAO: DirectoryDAO)(implicit actorSystem: ActorSystem, actorMaterializer: ActorMaterializer): AppDependencies = {
     val policyEvaluatorService = PolicyEvaluatorService(emailDomain, resourceTypeMap, accessPolicyDAO)
     val resourceService = new ResourceService(resourceTypeMap, policyEvaluatorService, accessPolicyDAO, directoryDAO, cloudExtensions, emailDomain)
     val userService = new UserService(directoryDAO, cloudExtensions)

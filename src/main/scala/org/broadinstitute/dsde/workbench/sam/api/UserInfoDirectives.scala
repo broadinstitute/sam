@@ -9,8 +9,8 @@ import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
 
 /**
- * Directives to get user information.
- */
+  * Directives to get user information.
+  */
 trait UserInfoDirectives {
   val directoryDAO: DirectoryDAO
   val cloudExtensions: CloudExtensions
@@ -19,13 +19,12 @@ trait UserInfoDirectives {
 
   def requireCreateUser: Directive1[CreateWorkbenchUser]
 
-  def asWorkbenchAdmin(userInfo: UserInfo): Directive0 = {
+  def asWorkbenchAdmin(userInfo: UserInfo): Directive0 =
     Directives.mapInnerRoute { r =>
       onSuccess(cloudExtensions.isWorkbenchAdmin(userInfo.userEmail)) { isAdmin =>
         if (!isAdmin) Directives.failWith(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden, "You must be an admin.")))
         else r
       }
     }
-  }
 
 }

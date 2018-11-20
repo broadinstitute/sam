@@ -34,12 +34,12 @@ trait UserRoutes extends UserInfoDirectives {
             get {
               parameter("userDetailsOnly".?) { userDetailsOnly =>
                 complete {
-                  userService.getUserStatus(user.userId, userDetailsOnly.exists(_.equalsIgnoreCase("true"))).map {
-                    statusOption =>
-                      statusOption
-                        .map { status => StatusCodes.OK -> Option(status)
-                        }
-                        .getOrElse(StatusCodes.NotFound -> None)
+                  userService.getUserStatus(user.userId, userDetailsOnly.exists(_.equalsIgnoreCase("true"))).map { statusOption =>
+                    statusOption
+                      .map { status =>
+                        StatusCodes.OK -> Option(status)
+                      }
+                      .getOrElse(StatusCodes.NotFound -> None)
                   }
                 }
               }
@@ -62,7 +62,8 @@ trait UserRoutes extends UserInfoDirectives {
                 complete {
                   userService.getUserStatusInfo(user.userId).map { statusOption =>
                     statusOption
-                      .map { status => StatusCodes.OK -> Option(status)
+                      .map { status =>
+                        StatusCodes.OK -> Option(status)
                       }
                       .getOrElse(StatusCodes.NotFound -> None)
                   }
@@ -74,7 +75,8 @@ trait UserRoutes extends UserInfoDirectives {
                   complete {
                     userService.getUserStatusDiagnostics(user.userId).map { statusOption =>
                       statusOption
-                        .map { status => StatusCodes.OK -> Option(status)
+                        .map { status =>
+                          StatusCodes.OK -> Option(status)
                         }
                         .getOrElse(StatusCodes.NotFound -> None)
                     }
@@ -95,7 +97,8 @@ trait UserRoutes extends UserInfoDirectives {
               complete {
                 userService.getUserStatusFromEmail(WorkbenchEmail(email)).map { statusOption =>
                   statusOption
-                    .map { status => StatusCodes.OK -> Option(status)
+                    .map { status =>
+                      StatusCodes.OK -> Option(status)
                     }
                     .getOrElse(StatusCodes.NotFound -> None)
                 }
@@ -112,7 +115,8 @@ trait UserRoutes extends UserInfoDirectives {
                       complete {
                         userService.getUserStatus(WorkbenchUserId(userId)).map { statusOption =>
                           statusOption
-                            .map { status => StatusCodes.OK -> Option(status)
+                            .map { status =>
+                              StatusCodes.OK -> Option(status)
                             }
                             .getOrElse(StatusCodes.NotFound -> None)
                         }
@@ -125,7 +129,8 @@ trait UserRoutes extends UserInfoDirectives {
                         complete {
                           userService.enableUser(WorkbenchUserId(userId), userInfo).map { statusOption =>
                             statusOption
-                              .map { status => StatusCodes.OK -> Option(status)
+                              .map { status =>
+                                StatusCodes.OK -> Option(status)
                               }
                               .getOrElse(StatusCodes.NotFound -> None)
                           }
@@ -139,7 +144,8 @@ trait UserRoutes extends UserInfoDirectives {
                         complete {
                           userService.disableUser(WorkbenchUserId(userId), userInfo).map { statusOption =>
                             statusOption
-                              .map { status => StatusCodes.OK -> Option(status)
+                              .map { status =>
+                                StatusCodes.OK -> Option(status)
                               }
                               .getOrElse(StatusCodes.NotFound -> None)
                           }
@@ -164,7 +170,7 @@ trait UserRoutes extends UserInfoDirectives {
       }
     }
 
-  val apiUserRoutes: server.Route = pathPrefix("users"){
+  val apiUserRoutes: server.Route = pathPrefix("users") {
     pathPrefix("v1") {
       requireUserInfo { userInfo =>
         get {
@@ -180,17 +186,17 @@ trait UserRoutes extends UserInfoDirectives {
             }
           }
         } ~
-        pathPrefix("invite") {
-          post {
-            path(Segment) { inviteeEmail =>
-              complete {
-                userService
-                  .inviteUser(InviteUser(genWorkbenchUserId(System.currentTimeMillis()), WorkbenchEmail(inviteeEmail)))
-                  .map(userStatus => StatusCodes.Created -> userStatus)
+          pathPrefix("invite") {
+            post {
+              path(Segment) { inviteeEmail =>
+                complete {
+                  userService
+                    .inviteUser(InviteUser(genWorkbenchUserId(System.currentTimeMillis()), WorkbenchEmail(inviteeEmail)))
+                    .map(userStatus => StatusCodes.Created -> userStatus)
+                }
               }
             }
           }
-        }
       }
     }
   }

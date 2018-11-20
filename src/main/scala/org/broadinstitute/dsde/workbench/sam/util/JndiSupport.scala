@@ -40,17 +40,20 @@ trait JndiSupport {
     * @tparam R type of results
     * @return aggregated results of calling op for each batch
     */
-  def batchedLoad[T, R](url: String, user: String, password: String)(input: Seq[T])(op: (Seq[T]) => (InitialDirContext) => Seq[R])(implicit executionContext: ExecutionContext): Future[Seq[R]] = {
+  def batchedLoad[T, R](url: String, user: String, password: String)(input: Seq[T])(op: (Seq[T]) => (InitialDirContext) => Seq[R])(
+      implicit executionContext: ExecutionContext): Future[Seq[R]] =
     if (input.isEmpty) {
       Future.successful(Seq.empty)
     } else {
-      Future.sequence(input.grouped(batchSize).map { batch =>
-        withContext(url, user, password)(op(batch))
-      }).map(_.flatten.toSeq)
+      Future
+        .sequence(input.grouped(batchSize).map { batch =>
+          withContext(url, user, password)(op(batch))
+        })
+        .map(_.flatten.toSeq)
     }
-  }
 
-  protected def withContext[T](url: String, user: String, password: String)(op: InitialDirContext => T)(implicit executionContext: ExecutionContext): Future[T] = Future {
+  protected def withContext[T](url: String, user: String, password: String)(op: InitialDirContext => T)(
+      implicit executionContext: ExecutionContext): Future[T] = Future {
     val ctx = getContext(url, user, password)
     val t = Try(op(ctx))
     ctx.close()
@@ -65,6 +68,7 @@ trait JndiSupport {
     * @return object that can be used to safely handle and close NamingEnumeration
     */
   protected implicit class NamingEnumCloser[T](results: NamingEnumeration[T]) {
+
     /**
       * copy results enum into a Seq then close the enum
       * @return results
@@ -72,7 +76,7 @@ trait JndiSupport {
     def extractResultsAndClose: Seq[T] = {
       import scala.collection.JavaConverters._
       try {
-        Seq(results.asScala.toSeq:_*)
+        Seq(results.asScala.toSeq: _*)
       } finally {
         results.close()
       }
@@ -81,8 +85,8 @@ trait JndiSupport {
 }
 
 /**
- * this does nothing but throw new OperationNotSupportedException but makes extending classes nice
- */
+  * this does nothing but throw new OperationNotSupportedException but makes extending classes nice
+  */
 trait BaseDirContext extends DirContext {
   override def getAttributes(name: Name): Attributes = throw new OperationNotSupportedException
   override def getAttributes(name: String): Attributes = throw new OperationNotSupportedException
@@ -102,14 +106,18 @@ trait BaseDirContext extends DirContext {
   override def rebind(name: String, obj: scala.Any, attrs: Attributes): Unit = throw new OperationNotSupportedException
   override def bind(name: Name, obj: scala.Any, attrs: Attributes): Unit = throw new OperationNotSupportedException
   override def bind(name: String, obj: scala.Any, attrs: Attributes): Unit = throw new OperationNotSupportedException
-  override def search(name: Name, matchingAttributes: Attributes, attributesToReturn: Array[String]): NamingEnumeration[SearchResult] = throw new OperationNotSupportedException
-  override def search(name: String, matchingAttributes: Attributes, attributesToReturn: Array[String]): NamingEnumeration[SearchResult] = throw new OperationNotSupportedException
+  override def search(name: Name, matchingAttributes: Attributes, attributesToReturn: Array[String]): NamingEnumeration[SearchResult] =
+    throw new OperationNotSupportedException
+  override def search(name: String, matchingAttributes: Attributes, attributesToReturn: Array[String]): NamingEnumeration[SearchResult] =
+    throw new OperationNotSupportedException
   override def search(name: Name, matchingAttributes: Attributes): NamingEnumeration[SearchResult] = throw new OperationNotSupportedException
   override def search(name: String, matchingAttributes: Attributes): NamingEnumeration[SearchResult] = throw new OperationNotSupportedException
   override def search(name: Name, filter: String, cons: SearchControls): NamingEnumeration[SearchResult] = throw new OperationNotSupportedException
   override def search(name: String, filter: String, cons: SearchControls): NamingEnumeration[SearchResult] = throw new OperationNotSupportedException
-  override def search(name: Name, filterExpr: String, filterArgs: Array[AnyRef], cons: SearchControls): NamingEnumeration[SearchResult] = throw new OperationNotSupportedException
-  override def search(name: String, filterExpr: String, filterArgs: Array[AnyRef], cons: SearchControls): NamingEnumeration[SearchResult] = throw new OperationNotSupportedException
+  override def search(name: Name, filterExpr: String, filterArgs: Array[AnyRef], cons: SearchControls): NamingEnumeration[SearchResult] =
+    throw new OperationNotSupportedException
+  override def search(name: String, filterExpr: String, filterArgs: Array[AnyRef], cons: SearchControls): NamingEnumeration[SearchResult] =
+    throw new OperationNotSupportedException
   override def getNameInNamespace: String = throw new OperationNotSupportedException
   override def addToEnvironment(propName: String, propVal: scala.Any): AnyRef = throw new OperationNotSupportedException
   override def rename(oldName: Name, newName: Name): Unit = throw new OperationNotSupportedException

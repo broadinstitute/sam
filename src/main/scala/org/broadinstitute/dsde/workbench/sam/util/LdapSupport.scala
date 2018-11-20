@@ -24,16 +24,15 @@ trait LdapSupport {
     * @tparam T
     * @return
     */
-  protected def ldapSearchStream[T](baseDn: String, searchScope: SearchScope, filters: Filter*)(unmarshaller: Entry => T): Stream[T] = {
+  protected def ldapSearchStream[T](baseDn: String, searchScope: SearchScope, filters: Filter*)(unmarshaller: Entry => T): Stream[T] =
     filters.flatMap { filter =>
       val search = new SearchRequest(baseDn, searchScope, filter)
       val entrySource = new LDAPEntrySource(ldapConnectionPool.getConnection, search, true)
       ldapEntrySourceStream(entrySource)(unmarshaller)
     }.toStream
-  }
 
   // this is the magic recursive stream generator
-  private def ldapEntrySourceStream[T](entrySource: LDAPEntrySource)(unmarshaller: Entry => T): Stream[T] = {
+  private def ldapEntrySourceStream[T](entrySource: LDAPEntrySource)(unmarshaller: Entry => T): Stream[T] =
     Try(Option(entrySource.nextEntry)) match {
       case Success(None) =>
         // reached the last element, Stream.empty terminates the stream
@@ -44,17 +43,16 @@ trait LdapSupport {
         // (streams are smart and lazily evaluate the second parameter)
         Stream.cons(unmarshaller(next), ldapEntrySourceStream(entrySource)(unmarshaller))
 
-      case Failure(ldape: EntrySourceException) if ldape.getCause.isInstanceOf[LDAPException] &&
-        ldape.getCause.asInstanceOf[LDAPException].getResultCode == ResultCode.NO_SUCH_OBJECT => Stream.empty // the base dn does not exist, treat as empty search
+      case Failure(ldape: EntrySourceException)
+          if ldape.getCause.isInstanceOf[LDAPException] &&
+            ldape.getCause.asInstanceOf[LDAPException].getResultCode == ResultCode.NO_SUCH_OBJECT =>
+        Stream.empty // the base dn does not exist, treat as empty search
       case Failure(regrets) => throw regrets
     }
-  }
 
-  protected def getAttribute(results: Entry, key: String): Option[String] = {
+  protected def getAttribute(results: Entry, key: String): Option[String] =
     Option(results.getAttribute(key)).map(_.getValue)
-  }
 
-  protected def getAttributes(results: Entry, key: String): Set[String] = {
+  protected def getAttributes(results: Entry, key: String): Set[String] =
     Option(results.getAttribute(key)).map(_.getValues.toSet).getOrElse(Set.empty)
-  }
 }

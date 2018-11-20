@@ -8,8 +8,6 @@ import spray.json.{DefaultJsonProtocol, JsValue, RootJsonFormat}
 /**
   * Created by dvoet on 5/26/17.
   */
-
-
 object SamJsonSupport {
   import DefaultJsonProtocol._
   import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
@@ -102,10 +100,15 @@ object SamResourceTypes {
 @Lenses final case class ResourceTypeName(value: String) extends ValueObject
 
 @Lenses final case class FullyQualifiedResourceId(resourceTypeName: ResourceTypeName, resourceId: ResourceId)
-@Lenses final case class Resource(resourceTypeName: ResourceTypeName, resourceId: ResourceId, authDomain: Set[WorkbenchGroupName]){
+@Lenses final case class Resource(resourceTypeName: ResourceTypeName, resourceId: ResourceId, authDomain: Set[WorkbenchGroupName]) {
   val fullyQualifiedId = FullyQualifiedResourceId(resourceTypeName, resourceId)
 }
-@Lenses final case class ResourceType(name: ResourceTypeName, actionPatterns: Set[ResourceActionPattern], roles: Set[ResourceRole], ownerRoleName: ResourceRoleName, reuseIds: Boolean = false) {
+@Lenses final case class ResourceType(
+    name: ResourceTypeName,
+    actionPatterns: Set[ResourceActionPattern],
+    roles: Set[ResourceRole],
+    ownerRoleName: ResourceRoleName,
+    reuseIds: Boolean = false) {
   // Ideally we'd just store this boolean in a lazy val, but this will upset the spray/akka json serializers
   // I can't imagine a scenario where we have enough action patterns that would make this def discernibly slow though
   def isAuthDomainConstrainable: Boolean = actionPatterns.exists(_.authDomainConstrainable)
@@ -113,19 +116,34 @@ object SamResourceTypes {
 
 @Lenses final case class ResourceId(value: String) extends ValueObject
 @Lenses final case class ResourceIdAndPolicyName(resourceId: ResourceId, accessPolicyName: AccessPolicyName)
-@Lenses final case class UserPolicyResponse(resourceId: ResourceId, accessPolicyName: AccessPolicyName, authDomainGroups: Set[WorkbenchGroupName], missingAuthDomainGroups: Set[WorkbenchGroupName], public: Boolean)
+@Lenses final case class UserPolicyResponse(
+    resourceId: ResourceId,
+    accessPolicyName: AccessPolicyName,
+    authDomainGroups: Set[WorkbenchGroupName],
+    missingAuthDomainGroups: Set[WorkbenchGroupName],
+    public: Boolean)
 @Lenses final case class FullyQualifiedPolicyId(resource: FullyQualifiedResourceId, accessPolicyName: AccessPolicyName) extends WorkbenchGroupIdentity {
   override def toString: String = s"${accessPolicyName.value}.${resource.resourceId.value}.${resource.resourceTypeName.value}"
 }
 @Lenses case class AccessPolicyName(value: String) extends ValueObject
-@Lenses final case class CreateResourceRequest(resourceId: ResourceId, policies: Map[AccessPolicyName, AccessPolicyMembership], authDomain: Set[WorkbenchGroupName])
+@Lenses final case class CreateResourceRequest(
+    resourceId: ResourceId,
+    policies: Map[AccessPolicyName, AccessPolicyMembership],
+    authDomain: Set[WorkbenchGroupName])
 
 /*
 Note that AccessPolicy IS A group, does not have a group. This makes the ldap query to list all a user's policies
 and thus resources much easier. We tried modeling with a "has a" relationship in code but a "is a" relationship in
 ldap but it felt unnatural.
  */
-@Lenses final case class AccessPolicy(id: FullyQualifiedPolicyId, members: Set[WorkbenchSubject], email: WorkbenchEmail, roles: Set[ResourceRoleName], actions: Set[ResourceAction], public: Boolean) extends WorkbenchGroup
+@Lenses final case class AccessPolicy(
+    id: FullyQualifiedPolicyId,
+    members: Set[WorkbenchSubject],
+    email: WorkbenchEmail,
+    roles: Set[ResourceRoleName],
+    actions: Set[ResourceAction],
+    public: Boolean)
+    extends WorkbenchGroup
 @Lenses final case class AccessPolicyMembership(memberEmails: Set[WorkbenchEmail], actions: Set[ResourceAction], roles: Set[ResourceRoleName])
 @Lenses final case class AccessPolicyResponseEntry(policyName: AccessPolicyName, policy: AccessPolicyMembership, email: WorkbenchEmail)
 
@@ -137,7 +155,7 @@ ldap but it felt unnatural.
 
 @Lenses final case class GroupSyncResponse(lastSyncDate: String, email: WorkbenchEmail)
 
-object SamLenses{
+object SamLenses {
   val resourceIdentityAccessPolicy = AccessPolicy.id composeLens FullyQualifiedPolicyId.resource
   val resourceTypeNameInAccessPolicy = resourceIdentityAccessPolicy composeLens FullyQualifiedResourceId.resourceTypeName
 }

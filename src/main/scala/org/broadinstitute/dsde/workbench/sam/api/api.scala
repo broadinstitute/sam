@@ -11,8 +11,9 @@ package object api {
     Marshaller(implicit ec => (x => m(x.unsafeToFuture())))
 }
 
-object ImplicitConversions{
+object ImplicitConversions {
   import scala.language.implicitConversions
 
-  implicit def ioOnSuccessMagnet[A](ioa: IO[A])(implicit tupler: Tupler[A]): OnSuccessMagnet { type Out = tupler.Out } = OnSuccessMagnet.apply(ioa.unsafeToFuture())
+  implicit def ioOnSuccessMagnet[A](ioa: IO[A])(implicit tupler: Tupler[A]): OnSuccessMagnet { type Out = tupler.Out } =
+    OnSuccessMagnet.apply(ioa.unsafeToFuture())
 }
