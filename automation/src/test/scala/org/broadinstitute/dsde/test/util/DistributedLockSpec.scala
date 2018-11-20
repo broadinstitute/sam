@@ -87,7 +87,7 @@ class DistributedLockSpec extends AsyncFlatSpec with Matchers {
             .realTime(TimeUnit.MILLISECONDS)
         }
       } yield {
-        aquireTime - current should be > lockPathWithPrefix.expiresIn.toMillis
+        acquireTime - current should be > lockPathWithPrefix.expiresIn.toMillis
       }
     }
 
