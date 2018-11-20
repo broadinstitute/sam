@@ -220,7 +220,8 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
           Set(SamResourceActions.setPublic, SamResourceActions.setPublicPolicy(policyId.accessPolicyName)),
           userInfo.userId
         ) {
-          entity(as[Boolean]) { isPublic => complete(resourceService.setPublic(policyId, isPublic).map(_ => StatusCodes.NoContent))
+          entity(as[Boolean]) { isPublic =>
+            complete(resourceService.setPublic(policyId, isPublic).map(_ => StatusCodes.NoContent))
           }
         }
       }

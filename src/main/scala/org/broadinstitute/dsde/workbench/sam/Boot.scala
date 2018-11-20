@@ -85,33 +85,6 @@ object Boot extends IOApp with LazyLogging {
     }
   }
 
-<<<<<<< HEAD
-  private[sam] def createAppDependencies(appConfig: AppConfig, resourceTypeMap: Map[ResourceTypeName, ResourceType])(
-      implicit actorSystem: ActorSystem,
-      materializer: ActorMaterializer): cats.effect.Resource[IO, AppDependencies] =
-    for {
-      ldapConnectionPool <- createLdapConnectionPool(appConfig.directoryConfig)
-      blockingEc <- ExecutionContexts.blockingThreadPool
-      accessPolicyDao = new LdapAccessPolicyDAO(ldapConnectionPool, appConfig.directoryConfig, blockingEc)
-      directoryDAO = new LdapDirectoryDAO(ldapConnectionPool, appConfig.directoryConfig, blockingEc)
-    } yield {
-      val cloudExt: CloudExtensions = appConfig.googleConfig match {
-        case Some(config) => createGoogleCloudExt(accessPolicyDao, directoryDAO, config, resourceTypeMap)
-        case None => NoExtensions
-      }
-      createAppDependencies(
-        appConfig.swaggerConfig,
-        appConfig.emailDomain,
-        resourceTypeMap,
-        cloudExt,
-        accessPolicyDao,
-        directoryDAO
-      )
-    }
-
-  private[sam] def readFile(path: String): cats.effect.Resource[IO, FileInputStream] =
-    cats.effect.Resource.make(IO(new FileInputStream(path)))(inputStream => IO(inputStream.close()))
-
   private[sam] def createLdapConnectionPool(directoryConfig: DirectoryConfig): cats.effect.Resource[IO, LDAPConnectionPool] = {
     val dirURI = new URI(directoryConfig.directoryUrl)
     val (socketFactory, defaultPort) = dirURI.getScheme.toLowerCase match {
