@@ -9,8 +9,10 @@ import net.ceedubs.ficus.readers.ValueReader
 import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.model.google._
 import org.broadinstitute.dsde.workbench.sam.model._
-import DistributedLockConfig.distributedLockConfigReader
 import GoogleServicesConfig.googleServicesConfigReader
+import org.broadinstitute.dsde.workbench.google.util.DistributedLockConfig
+
+import scala.concurrent.duration.Duration
 
 /**
   * Created by dvoet on 7/18/17.
@@ -128,6 +130,15 @@ object AppConfig {
       config.getInt("recheckTimeInterval"),
       config.getInt("maxTimeToWait"),
       config.getString("instanceId")
+    )
+  }
+
+  implicit val distributedLockConfigReader: ValueReader[DistributedLockConfig] = ValueReader.relative { config =>
+    val retryInterval = config.getDuration("retryInterval")
+
+    DistributedLockConfig(
+      Duration.fromNanos(retryInterval.toNanos),
+      config.getInt("maxRetry")
     )
   }
 

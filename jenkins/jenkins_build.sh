@@ -1,5 +1,6 @@
 #!/bin/bash
 
+
 set -eux
 SVCACCT_FILE="dspci-wb-gcr-service-account.json"
 GCR_SVCACCT_VAULT="secret/dsde/dsp-techops/common/$SVCACCT_FILE"

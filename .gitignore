@@ -75,7 +75,9 @@ crashlytics-build.properties
 
 *.pid
 
+newrelic-agent-4.6.0.jar
+
 ### Automation things
 automation/report.xml
-
-newrelic-agent-4.6.0.jar
+automation/test-reports/
+automation/src/test/resources/

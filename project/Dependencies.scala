@@ -5,12 +5,12 @@ object Dependencies {
   val akkaHttpV = "10.1.3"
   val jacksonV = "2.9.5"
   val scalaLoggingV = "3.5.0"
-  val scalaTestV    = "3.0.1"
+  val scalaTestV    = "3.0.5"
   val scalaCheckV    = "1.14.0"
 
-  val workbenchUtilV   = "0.3-2771e2d"
-  val workbenchModelV  = "0.12-a19203d"
-  val workbenchGoogleV = "0.16-0245949"
+  val workbenchUtilV   = "0.5-6942040"
+  val workbenchModelV  = "0.13-7e86fba"
+  val workbenchGoogleV = "0.18-6942040"
   val workbenchNotificationsV = "0.1-f2a0020"
   val monocleVersion = "1.5.1-cats"
   val newRelicVersion = "4.6.0"
@@ -21,9 +21,7 @@ object Dependencies {
   val excludeWorkbenchMetrics = ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-metrics_2.12")
   val excludeWorkbenchGoogle =  ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-google_2.12")
 
-  val catseffect: ModuleID =  "org.typelevel" %% "cats-effect" % "1.0.0" //TODO: remove this once workbenchGoogleV is upgrade
   val newRelic: ModuleID = "com.newrelic.agent.java" % "newrelic-api" % newRelicVersion
-
   val jacksonAnnotations: ModuleID = "com.fasterxml.jackson.core" % "jackson-annotations" % jacksonV
   val jacksonDatabind: ModuleID =    "com.fasterxml.jackson.core" % "jackson-databind"    % jacksonV
   val jacksonCore: ModuleID =        "com.fasterxml.jackson.core" % "jackson-core"        % jacksonV
@@ -57,7 +55,7 @@ object Dependencies {
   // workbench-google pulls in workbench-{util, model, metrics}; exclude them so we can control the library versions individually.
   val workbenchUtil: ModuleID =      "org.broadinstitute.dsde.workbench" %% "workbench-util"   % workbenchUtilV
   val workbenchModel: ModuleID =     "org.broadinstitute.dsde.workbench" %% "workbench-model"  % workbenchModelV
-  val workbenchGoogle: ModuleID =    "org.broadinstitute.dsde.workbench" %% "workbench-google" % workbenchGoogleV excludeAll(excludeWorkbenchUtil, excludeWorkbenchModel)
+  val workbenchGoogle: ModuleID =    "org.broadinstitute.dsde.workbench" %% "workbench-google" % workbenchGoogleV
   val workbenchNotifications: ModuleID =  "org.broadinstitute.dsde.workbench" %% "workbench-notifications" % workbenchNotificationsV excludeAll(excludeWorkbenchGoogle, excludeWorkbenchModel)
   val workbenchGoogleTests: ModuleID =    "org.broadinstitute.dsde.workbench" %% "workbench-google" % workbenchGoogleV % "test" classifier "tests" excludeAll(excludeWorkbenchUtil, excludeWorkbenchModel)
 
@@ -80,7 +78,6 @@ object Dependencies {
 
     googleOAuth2,
 
-    catseffect,
     monocle,
     monocleMacro,
     newRelic,

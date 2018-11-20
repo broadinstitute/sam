@@ -8,8 +8,8 @@ object Dependencies {
   val akkaHttpV = "10.0.10"
 
   val workbenchModelV  = "0.13-7e86fba"
-  val workbenchGoogleV = "0.16-847c3ff"
-  val workbenchServiceTestV = "0.15-7e86fba"
+  val workbenchGoogleV = "0.18-6942040"
+  val workbenchServiceTestV = "0.15-6942040"
 
   val workbenchModel: ModuleID = "org.broadinstitute.dsde.workbench" %% "workbench-model" % workbenchModelV
   val excludeWorkbenchModel = ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-model_" + scalaV)
@@ -34,15 +34,13 @@ object Dependencies {
     "com.google.api-client" % "google-api-client" % "1.22.0" excludeAll (
       ExclusionRule("com.google.guava", "guava-jdk5"),
       ExclusionRule("org.apache.httpcomponents", "httpclient")),
-    "org.webjars"           %  "swagger-ui"    % "2.2.5",
     "com.typesafe.akka"   %%  "akka-http-core"     % akkaHttpV,
     "com.typesafe.akka"   %%  "akka-stream-testkit" % akkaV,
     "com.typesafe.akka"   %%  "akka-http"           % akkaHttpV,
     "com.typesafe.akka"   %%  "akka-testkit"        % akkaV     % "test",
     "com.typesafe.akka"   %%  "akka-slf4j"          % akkaV,
-    "org.specs2"          %%  "specs2-core"   % "3.8.6"  % "test",
-    "org.scalatest"       %%  "scalatest"     % "3.0.1"   % "test",
-    "org.seleniumhq.selenium" % "selenium-java" % "3.8.1" % "test",
+    "org.scalatest"       %%  "scalatest"     % "3.0.5"   % "test",
+    "org.scalacheck"      %%  "scalacheck"    % "1.14.0" % "test",
     "com.typesafe.scala-logging" %% "scala-logging" % "3.5.0",
 
     workbenchServiceTest,
