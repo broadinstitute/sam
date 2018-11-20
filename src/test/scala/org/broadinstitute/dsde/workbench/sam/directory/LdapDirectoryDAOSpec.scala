@@ -435,6 +435,20 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
 
   "loadSubjectFromEmail" should "be able to load subject given an email" in {
     val user1 = Generator.genWorkbenchUser.sample.get
+    val user2 = user1.copy(email = WorkbenchEmail(user1.email.value + "2"))
+    val res = for {
+      _ <- dao.createUser(user1)
+      subject1 <- dao.loadSubjectFromEmail(user1.email)
+      subject2 <- dao.loadSubjectFromEmail(user2.email)
+    } yield {
+      subject1 shouldEqual(Some(user1.id))
+      subject2 shouldEqual(None)
+    }
+    res.unsafeRunSync()
+  }
+
+  "loadSubjectEmail" should "be able to load subject given an email" in {
+    val user1 = Generator.genWorkbenchUser.sample.get
     val user2 = user1.copy(id = WorkbenchUserId(user1.id.value + "2"))
     val res = for {
       _ <- dao.createUser(user1)
