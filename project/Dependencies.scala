@@ -10,7 +10,8 @@ object Dependencies {
 
   val workbenchUtilV   = "0.5-6942040"
   val workbenchModelV  = "0.13-7e86fba"
-  val workbenchGoogleV = "0.18-052aa82"
+  val workbenchGoogleV = "0.18-8328aae"
+  val workbenchGoogle2V = "0.1-8328aae"
   val workbenchNotificationsV = "0.1-f2a0020"
   val monocleVersion = "1.5.1-cats"
   val newRelicVersion = "4.6.0"
@@ -42,6 +43,7 @@ object Dependencies {
   val scalaCheck: ModuleID =        "org.scalacheck"      %%  "scalacheck"           % scalaCheckV % "test"
 
   val googleOAuth2: ModuleID = "com.google.auth" % "google-auth-library-oauth2-http" % "0.9.0"
+  val googleStorage: ModuleID = "com.google.apis" % "google-api-services-storage" % "v1-rev20181013-1.27.0" //force this version
 
   val monocle: ModuleID = "com.github.julien-truffaut" %%  "monocle-core"  % monocleVersion
   val monocleMacro: ModuleID = "com.github.julien-truffaut" %%  "monocle-macro" % monocleVersion
@@ -57,8 +59,11 @@ object Dependencies {
   val workbenchUtil: ModuleID =      "org.broadinstitute.dsde.workbench" %% "workbench-util"   % workbenchUtilV
   val workbenchModel: ModuleID =     "org.broadinstitute.dsde.workbench" %% "workbench-model"  % workbenchModelV
   val workbenchGoogle: ModuleID =    "org.broadinstitute.dsde.workbench" %% "workbench-google" % workbenchGoogleV
+  val workbenchGoogle2: ModuleID =    "org.broadinstitute.dsde.workbench" %% "workbench-google2" % workbenchGoogle2V
   val workbenchNotifications: ModuleID =  "org.broadinstitute.dsde.workbench" %% "workbench-notifications" % workbenchNotificationsV excludeAll(excludeWorkbenchGoogle, excludeWorkbenchModel)
   val workbenchGoogleTests: ModuleID =    "org.broadinstitute.dsde.workbench" %% "workbench-google" % workbenchGoogleV % "test" classifier "tests" excludeAll(excludeWorkbenchUtil, excludeWorkbenchModel)
+  val workbenchGoogle2Tests: ModuleID =    "org.broadinstitute.dsde.workbench" %% "workbench-google2" % workbenchGoogle2V % "test" classifier "tests" excludeAll(excludeWorkbenchUtil, excludeWorkbenchModel)
+  val googleStorageLocal: ModuleID = "com.google.cloud" % "google-cloud-nio" % "0.71.0-alpha" % "test" //needed for mocking google cloud storage
 
   val rootDependencies = Seq(
     // proactively pull in latest versions of Jackson libs, instead of relying on the versions
@@ -78,6 +83,7 @@ object Dependencies {
     akkaHttpTestKit,
 
     googleOAuth2,
+    googleStorage,
 
     monocle,
     monocleMacro,
@@ -90,8 +96,11 @@ object Dependencies {
     workbenchUtil,
     workbenchModel,
     workbenchGoogle,
+    workbenchGoogle2,
     workbenchNotifications,
     workbenchGoogleTests,
+    workbenchGoogle2Tests,
+    googleStorageLocal,
 
     unboundid,
     ehcache

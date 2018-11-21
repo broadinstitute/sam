@@ -4,11 +4,13 @@ configure.rb
 /config/
 
 # build specific
+env.properties
 .sbtopts
 .cache/
 .history/
 .lib/
 .bloop/
+.metals/
 dist/*
 target/
 lib_managed/
@@ -18,6 +20,7 @@ project/plugins/project/
 docker/stand-alone/server.crt
 docker/stand-alone/server.key
 docker/stand-alone/ca-bundle.crt
+sam-assembly-*-SNAPSHOT.jar
 
 # Scala-IDE specific
 .scala_dependencies

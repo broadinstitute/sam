@@ -7,7 +7,6 @@ import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import akka.stream.ActorMaterializer
 import cats.data.NonEmptyList
-import cats.effect.internals.IOContextShift
 import cats.effect.{ExitCode, IO, IOApp, Timer}
 import cats.implicits._
 import com.typesafe.config.ConfigFactory
@@ -17,8 +16,20 @@ import javax.net.SocketFactory
 import javax.net.ssl.SSLContext
 import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
 import org.broadinstitute.dsde.workbench.google.GoogleCredentialModes.{Json, Pem}
-import org.broadinstitute.dsde.workbench.google.util.DistributedLock
-import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleFirestoreOpsInterpreters, HttpGoogleDirectoryDAO, HttpGoogleIamDAO, HttpGoogleProjectDAO, HttpGooglePubSubDAO, HttpGoogleStorageDAO}
+import org.broadinstitute.dsde.workbench.google2.util.DistributedLock
+import org.broadinstitute.dsde.workbench.google.{
+  GoogleDirectoryDAO,
+  HttpGoogleDirectoryDAO,
+  HttpGoogleIamDAO,
+  HttpGoogleProjectDAO,
+  HttpGooglePubSubDAO,
+  HttpGoogleStorageDAO
+}
+import org.broadinstitute.dsde.workbench.google2.{
+  GoogleStorageService,
+  GoogleFirestoreInterpreter,
+  GoogleStorageInterpreter
+}
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException, WorkbenchSubject}
 import org.broadinstitute.dsde.workbench.sam.api.{SamRoutes, StandardUserInfoDirectives}
 import org.broadinstitute.dsde.workbench.sam.config.{AppConfig, GoogleConfig}
@@ -101,7 +112,10 @@ object Boot extends IOApp with LazyLogging {
       })(ldapConnection => IO(ldapConnection.close()))
   }
 
-  private[sam] def createMemberOfCache(cacheName: String, maxEntries: Long, timeToLive: java.time.Duration): cats.effect.Resource[IO, Cache[WorkbenchSubject, Set[String]]] = {
+  private[sam] def createMemberOfCache(
+      cacheName: String,
+      maxEntries: Long,
+      timeToLive: java.time.Duration): cats.effect.Resource[IO, Cache[WorkbenchSubject, Set[String]]] = {
     val cacheManager = CacheManagerBuilder.newCacheManagerBuilder
       .withCache(
         cacheName,
@@ -121,7 +135,10 @@ object Boot extends IOApp with LazyLogging {
     }
   }
 
-  private[sam] def createResourceCache(cacheName: String, maxEntries: Long, timeToLive: java.time.Duration): cats.effect.Resource[IO, Cache[FullyQualifiedResourceId, Resource]] = {
+  private[sam] def createResourceCache(
+      cacheName: String,
+      maxEntries: Long,
+      timeToLive: java.time.Duration): cats.effect.Resource[IO, Cache[FullyQualifiedResourceId, Resource]] = {
     val cacheManager = CacheManagerBuilder.newCacheManagerBuilder
       .withCache(
         cacheName,
@@ -155,21 +172,26 @@ object Boot extends IOApp with LazyLogging {
       // of an api call. They are meant to partition resources so that background processes can't crowd our api calls.
       backgroundLdapConnectionPool <- createLdapConnectionPool(appConfig.directoryConfig.directoryUrl, appConfig.directoryConfig.user, appConfig.directoryConfig.password, appConfig.directoryConfig.backgroundConnectionPoolSize, "background")
       backgroundLdapExecutionContext <- ExecutionContexts.fixedThreadPool[IO](appConfig.directoryConfig.backgroundConnectionPoolSize)
-      backgroundAccessPolicyDao = new LdapAccessPolicyDAO(backgroundLdapConnectionPool, appConfig.directoryConfig, backgroundLdapExecutionContext, memberOfCache, resourceCache)(IOContextShift(backgroundLdapExecutionContext))
+      backgroundAccessPolicyDao = new LdapAccessPolicyDAO(backgroundLdapConnectionPool, appConfig.directoryConfig, backgroundLdapExecutionContext, memberOfCache, resourceCache)(IO.contextShift(backgroundLdapExecutionContext))
       backgroundDirectoryDAO = new LdapDirectoryDAO(backgroundLdapConnectionPool, appConfig.directoryConfig, backgroundLdapExecutionContext, memberOfCache)(backgroundLdapExecutionContext, implicitly[Timer[IO]])
 
+      blockingEc <- ExecutionContexts.fixedThreadPool[IO](24)
       appDependencies <- appConfig.googleConfig match {
         case Some(config) =>
           for {
-            googleFire <- GoogleFirestoreOpsInterpreters.firestore[IO](config.googleServicesConfig.firestoreServiceAccountJsonPath.asString)
+            googleFire <- GoogleFirestoreInterpreter.firestore[IO](
+              config.googleServicesConfig.serviceAccountCredentialJson.firestoreServiceAccountJsonPath.asString)
+            googleStorage <- GoogleStorageInterpreter.storage[IO](
+              config.googleServicesConfig.serviceAccountCredentialJson.defaultServiceAccountJsonPath.asString)
           } yield {
-            val ioFireStore = GoogleFirestoreOpsInterpreters.ioFirestore(googleFire)
+            val ioFireStore = GoogleFirestoreInterpreter[IO](googleFire)
             // googleServicesConfig.resourceNamePrefix is an environment specific variable passed in https://github.com/broadinstitute/firecloud-develop/blob/fade9286ff0aec8449121ed201ebc44c8a4d57dd/run-context/fiab/configs/sam/docker-compose.yaml.ctmpl#L24
             // Use resourceNamePrefix to avoid collision between different fiab environments (we share same firestore for fiabs)
             val lock =
               DistributedLock[IO](s"sam-${config.googleServicesConfig.resourceNamePrefix.getOrElse("local")}", appConfig.distributedLockConfig, ioFireStore)
+            val newGoogleStorage = GoogleStorageInterpreter[IO](googleStorage, blockingEc)
             val resourceTypeMap = appConfig.resourceTypes.map(rt => rt.name -> rt).toMap
-            val cloudExtension = createGoogleCloudExt(accessPolicyDao, directoryDAO, config, resourceTypeMap, lock)
+            val cloudExtension = createGoogleCloudExt(accessPolicyDao, directoryDAO, config, resourceTypeMap, lock, newGoogleStorage)
             val googleGroupSynchronizer = new GoogleGroupSynchronizer(backgroundDirectoryDAO, backgroundAccessPolicyDao, cloudExtension.googleDirectoryDAO, cloudExtension, resourceTypeMap)(backgroundLdapExecutionContext)
             val cloudExtensionsInitializer = new GoogleExtensionsInitializer(cloudExtension, googleGroupSynchronizer)
             createAppDepenciesWithSamRoutes(appConfig, cloudExtensionsInitializer, accessPolicyDao, directoryDAO)
@@ -183,7 +205,8 @@ object Boot extends IOApp with LazyLogging {
       directoryDAO: DirectoryDAO,
       config: GoogleConfig,
       resourceTypeMap: Map[ResourceTypeName, ResourceType],
-      distributedLock: DistributedLock[IO])(implicit actorSystem: ActorSystem): GoogleExtensions = {
+      distributedLock: DistributedLock[IO],
+      googleStorageNew: GoogleStorageService[IO])(implicit actorSystem: ActorSystem): GoogleExtensions = {
     val googleDirDaos = (config.googleServicesConfig.adminSdkServiceAccounts match {
       case None =>
         NonEmptyList.one(
@@ -222,7 +245,15 @@ object Boot extends IOApp with LazyLogging {
         Option(config.googleServicesConfig.billingEmail)),
       "google"
     )
-    val googleKeyCache = new GoogleKeyCache(googleIamDAO, googleStorageDAO, googlePubSubDAO, config.googleServicesConfig, config.petServiceAccountConfig)
+    val googleKeyCache =
+      new GoogleKeyCache(
+        distributedLock,
+        googleIamDAO,
+        googleStorageDAO,
+        googleStorageNew,
+        googlePubSubDAO,
+        config.googleServicesConfig,
+        config.petServiceAccountConfig)
     val notificationDAO = new PubSubNotificationDAO(googlePubSubDAO, config.googleServicesConfig.notificationTopic)
 
     new GoogleExtensions(

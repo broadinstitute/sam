@@ -65,7 +65,7 @@ trait LdapSupport extends DirectorySubjectNameSupport {
   protected def getAttributes(results: Entry, key: String): Set[String] =
     Option(results.getAttribute(key)).map(_.getValues.toSet).getOrElse(Set.empty)
 
-  protected def ldapLoadMemberOf(subject: WorkbenchSubject): IO[Set[String]] = {
+  protected def ldapLoadMemberOf(subject: WorkbenchSubject): IO[Set[String]] =
     Option(memberOfCache.get(subject)) match {
       case None =>
         for {
@@ -78,11 +78,9 @@ trait LdapSupport extends DirectorySubjectNameSupport {
 
       case Some(memberOfs) => IO.pure(memberOfs)
     }
-  }
 
-  def evictIsMemberOfCache(subject: WorkbenchSubject): IO[Unit] = {
+  def evictIsMemberOfCache(subject: WorkbenchSubject): IO[Unit] =
     IO.pure(memberOfCache.remove(subject))
-  }
 
   protected def executeLdap[A](ioa: IO[A]): IO[A] = cs.evalOn(ecForLdapBlockingIO)(ioa)
 }

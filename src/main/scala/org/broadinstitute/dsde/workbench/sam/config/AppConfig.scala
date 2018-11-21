@@ -10,7 +10,7 @@ import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.model.google._
 import org.broadinstitute.dsde.workbench.sam.model._
 import GoogleServicesConfig.googleServicesConfigReader
-import org.broadinstitute.dsde.workbench.google.util.DistributedLockConfig
+import org.broadinstitute.dsde.workbench.google2.util.DistributedLockConfig
 
 import scala.concurrent.duration.Duration
 

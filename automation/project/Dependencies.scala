@@ -8,13 +8,16 @@ object Dependencies {
   val akkaHttpV = "10.0.10"
 
   val workbenchModelV  = "0.13-7e86fba"
-  val workbenchGoogleV = "0.18-6942040"
-  val workbenchServiceTestV = "0.16-f6491ba"
+
+  val workbenchGoogleV = "0.18-8328aae"
+  val workbenchGoogle2V = "0.1-8328aae"
+  val workbenchServiceTestV = "0.16-8328aae"
 
   val workbenchModel: ModuleID = "org.broadinstitute.dsde.workbench" %% "workbench-model" % workbenchModelV
   val excludeWorkbenchModel = ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-model_" + scalaV)
 
   val workbenchGoogle: ModuleID = "org.broadinstitute.dsde.workbench" %% "workbench-google" % workbenchGoogleV excludeAll excludeWorkbenchModel
+  val workbenchGoogle2: ModuleID = "org.broadinstitute.dsde.workbench" %% "workbench-google2" % workbenchGoogleV2 excludeAll excludeWorkbenchModel
   val excludeWorkbenchGoogle = ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-google_" + scalaV)
 
   val workbenchServiceTest: ModuleID = "org.broadinstitute.dsde.workbench" %% "workbench-service-test" % workbenchServiceTestV % "test" classifier "tests" excludeAll (excludeWorkbenchGoogle, excludeWorkbenchModel)
@@ -46,6 +49,7 @@ object Dependencies {
     workbenchServiceTest,
     workbenchModel,
     workbenchGoogle,
+    workbenchGoogle2,
 
 
     // required by workbenchGoogle

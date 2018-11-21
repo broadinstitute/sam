@@ -33,16 +33,15 @@ trait SecurityDirectives {
       }
     }
 
-  private def listActions(resource: FullyQualifiedResourceId, userId: WorkbenchUserId, requestedActions: Set[ResourceAction]): IO[Set[ResourceAction]] = {
+  private def listActions(resource: FullyQualifiedResourceId, userId: WorkbenchUserId, requestedActions: Set[ResourceAction]): IO[Set[ResourceAction]] =
     // this is optimized for the case where the user has permission since that is the usual case
     // if the first attempt shows the user does not have permission, force a second attempt
     for {
       actionsAttempt1 <- policyEvaluatorService.listUserResourceActions(resource, userId, force = false)
-      actionsAttempt2 <- if (hasAccess(requestedActions, actionsAttempt1)) IO.pure(actionsAttempt1) else policyEvaluatorService.listUserResourceActions(resource, userId, force = true)
+      actionsAttempt2 <- if (hasAccess(requestedActions, actionsAttempt1)) IO.pure(actionsAttempt1)
+      else policyEvaluatorService.listUserResourceActions(resource, userId, force = true)
     } yield actionsAttempt2
-  }
 
-  private def hasAccess(requestedActions: Set[ResourceAction], actions: Set[ResourceAction]): Boolean = {
+  private def hasAccess(requestedActions: Set[ResourceAction], actions: Set[ResourceAction]): Boolean =
     actions.intersect(requestedActions).nonEmpty
-  }
 }
