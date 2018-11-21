@@ -17,8 +17,18 @@ import javax.net.ssl.SSLContext
 import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
 import org.broadinstitute.dsde.workbench.google.GoogleCredentialModes.{Json, Pem}
 import org.broadinstitute.dsde.workbench.google.util.DistributedLock
-import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleFirestoreOpsInterpreters, HttpGoogleDirectoryDAO, HttpGoogleIamDAO, HttpGoogleProjectDAO, HttpGooglePubSubDAO, HttpGoogleStorageDAO}
-import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException, WorkbenchSubject}
+import org.broadinstitute.dsde.workbench.google.{
+  GoogleDirectoryDAO,
+  GoogleFirestoreInterpreter,
+  GoogleStorageInterpreter,
+  GoogleStorageService,
+  HttpGoogleDirectoryDAO,
+  HttpGoogleIamDAO,
+  HttpGoogleProjectDAO,
+  HttpGooglePubSubDAO,
+  HttpGoogleStorageDAO
+}
+import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException}
 import org.broadinstitute.dsde.workbench.sam.api.{SamRoutes, StandardUserInfoDirectives}
 import org.broadinstitute.dsde.workbench.sam.config.{AppConfig, DirectoryConfig, GoogleConfig}
 import org.broadinstitute.dsde.workbench.sam.directory._
@@ -147,15 +157,19 @@ object Boot extends IOApp with LazyLogging {
       appDependencies <- appConfig.googleConfig match {
         case Some(config) =>
           for {
-            googleFire <- GoogleFirestoreOpsInterpreters.firestore[IO](config.googleServicesConfig.firestoreServiceAccountJsonPath.asString)
+            googleFire <- GoogleFirestoreInterpreter.firestore[IO](
+              config.googleServicesConfig.serviceAccountCredentialJson.firestoreServiceAccountJsonPath.asString)
+            googleStorage <- GoogleStorageInterpreter.storage[IO](
+              config.googleServicesConfig.serviceAccountCredentialJson.defaultServiceAccountJsonPath.asString)
           } yield {
-            val ioFireStore = GoogleFirestoreOpsInterpreters.ioFirestore(googleFire)
+            val ioFireStore = GoogleFirestoreInterpreter[IO](googleFire)
             // googleServicesConfig.resourceNamePrefix is an environment specific variable passed in https://github.com/broadinstitute/firecloud-develop/blob/fade9286ff0aec8449121ed201ebc44c8a4d57dd/run-context/fiab/configs/sam/docker-compose.yaml.ctmpl#L24
             // Use resourceNamePrefix to avoid collision between different fiab environments (we share same firestore for fiabs)
             val lock =
               DistributedLock[IO](s"sam-${config.googleServicesConfig.resourceNamePrefix.getOrElse("local")}", appConfig.distributedLockConfig, ioFireStore)
+            val newGoogleStorage = GoogleStorageInterpreter[IO](googleStorage, blockingEc)
             val resourceTypeMap = appConfig.resourceTypes.map(rt => rt.name -> rt).toMap
-            val cloudExtension = createGoogleCloudExt(accessPolicyDao, directoryDAO, config, resourceTypeMap, lock)
+            val cloudExtension = createGoogleCloudExt(accessPolicyDao, directoryDAO, config, resourceTypeMap, lock, newGoogleStorage)
             createAppDepenciesWithSamRoutes(appConfig, cloudExtension, accessPolicyDao, directoryDAO)
           }
         case None => cats.effect.Resource.pure[IO, AppDependencies](createAppDepenciesWithSamRoutes(appConfig, NoExtensions, accessPolicyDao, directoryDAO))
@@ -167,7 +181,8 @@ object Boot extends IOApp with LazyLogging {
       directoryDAO: DirectoryDAO,
       config: GoogleConfig,
       resourceTypeMap: Map[ResourceTypeName, ResourceType],
-      distributedLock: DistributedLock[IO])(implicit actorSystem: ActorSystem): GoogleExtensions = {
+      distributedLock: DistributedLock[IO],
+      googleStorageNew: GoogleStorageService[IO])(implicit actorSystem: ActorSystem): GoogleExtensions = {
     val googleDirDaos = (config.googleServicesConfig.adminSdkServiceAccounts match {
       case None =>
         NonEmptyList.one(
@@ -206,7 +221,8 @@ object Boot extends IOApp with LazyLogging {
         Option(config.googleServicesConfig.billingEmail)),
       "google"
     )
-    val googleKeyCache = new GoogleKeyCache(googleIamDAO, googleStorageDAO, googlePubSubDAO, config.googleServicesConfig, config.petServiceAccountConfig)
+    val googleKeyCache =
+      new GoogleKeyCache(distributedLock, googleIamDAO, googleStorageDAO, googleStorageNew, googlePubSubDAO, config.googleServicesConfig, config.petServiceAccountConfig)
     val notificationDAO = new PubSubNotificationDAO(googlePubSubDAO, config.googleServicesConfig.notificationTopic)
 
     new GoogleExtensions(

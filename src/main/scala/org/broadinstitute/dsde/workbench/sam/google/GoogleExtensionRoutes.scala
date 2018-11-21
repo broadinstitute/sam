@@ -77,7 +77,9 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                       // parse json to ensure it is json and tells akka http the right content-type
                       googleExtensions
                         .getPetServiceAccountKey(WorkbenchUser(userInfo.userId, None, userInfo.userEmail), GoogleProject(project))
-                        .map(key => StatusCodes.OK -> key.parseJson)
+                        .map { key =>
+                          StatusCodes.OK -> key.parseJson
+                        }
                     }
                   } ~
                     path(Segment) { keyId =>

@@ -18,7 +18,7 @@ final case class GoogleServicesConfig(
     appsDomain: String,
     environment: String,
     pemFile: String,
-    firestoreServiceAccountJsonPath: FirestoreServiceAccountJsonPath,
+    serviceAccountCredentialJson: ServiceAccountCredentialJson,
     serviceAccountClientId: String,
     serviceAccountClientEmail: WorkbenchEmail,
     serviceAccountClientProject: GoogleProject,
@@ -59,12 +59,17 @@ object GoogleServicesConfig {
   }
 
   implicit val googleServicesConfigReader: ValueReader[GoogleServicesConfig] = ValueReader.relative { config =>
+    val jsonCredentials = ServiceAccountCredentialJson(
+      FirestoreServiceAccountJsonPath(config.getString("pathToFirestoreCredentialJson")),
+      DefaultServiceAccountJsonPath(config.getString("pathToDefaultCredentialJson"))
+    )
+
     GoogleServicesConfig(
       config.getString("appName"),
       config.getString("appsDomain"),
       config.getString("environment"),
       config.getString("pathToPem"),
-      FirestoreServiceAccountJsonPath(config.getString("pathToFirestoreCredentialJson")),
+      jsonCredentials,
       config.getString("serviceAccountClientId"),
       WorkbenchEmail(config.getString("serviceAccountClientEmail")),
       GoogleProject(config.getString("serviceAccountClientProject")),
@@ -87,6 +92,10 @@ object GoogleServicesConfig {
   }
 }
 
-final case class ServiceAccountConfig(json: String)
-final case class FirestoreServiceAccountJsonPath(asString: String)
+final case class ServiceAccountConfig(json: String) extends AnyVal
+final case class FirestoreServiceAccountJsonPath(asString: String) extends AnyVal
+final case class DefaultServiceAccountJsonPath(asString: String) extends AnyVal
+final case class ServiceAccountCredentialJson(
+    firestoreServiceAccountJsonPath: FirestoreServiceAccountJsonPath,
+    defaultServiceAccountJsonPath: DefaultServiceAccountJsonPath)
 final case class GoogleConfig(googleServicesConfig: GoogleServicesConfig, petServiceAccountConfig: PetServiceAccountConfig)
