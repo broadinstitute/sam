@@ -447,7 +447,7 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     res.unsafeRunSync()
   }
 
-  "loadSubjectEmail" should "be able to load subject given an email" in {
+  "loadSubjectEmail" should "be able to load a subject's email" in {
     val user1 = Generator.genWorkbenchUser.sample.get
     val user2 = user1.copy(id = WorkbenchUserId(user1.id.value + "2"))
     val res = for {
