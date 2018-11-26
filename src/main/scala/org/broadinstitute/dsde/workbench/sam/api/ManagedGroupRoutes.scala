@@ -44,7 +44,8 @@ trait ManagedGroupRoutes extends UserInfoDirectives with SecurityDirectives with
           }
         } ~ path("accessInstructions") {
           put {
-            entity(as[ManagedGroupAccessInstructions]) { accessInstructions => handleSetAccessInstructions(managedGroup, accessInstructions, userInfo)
+            entity(as[ManagedGroupAccessInstructions]) { accessInstructions =>
+              handleSetAccessInstructions(managedGroup, accessInstructions, userInfo)
             }
           } ~ get {
             handleGetAccessInstructions(managedGroup)

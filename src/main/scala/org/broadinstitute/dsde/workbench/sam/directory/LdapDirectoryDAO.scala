@@ -157,11 +157,11 @@ class LdapDirectoryDAO(
       entry <- OptionT(
         executeLdap(IO(ldapConnectionPool.search(directoryConfig.baseDn, SearchScope.SUB, Filter.createEqualityFilter(Attr.email, email.value))))
           .map(Option.apply))
-      res <- Option(entry.getSearchEntries).map(_.asScala) match {
-        case None => OptionT.none[IO, WorkbenchSubject]
-        case Some(Seq()) => OptionT.none[IO, WorkbenchSubject]
-        case Some(Seq(subject)) => OptionT.some[IO](dnToSubject(subject.getDN))
-        case Some(subjects) =>
+      entries <- OptionT.fromOption[IO](Option(entry.getSearchEntries))
+      res <- entries.asScala match {
+        case Seq() => OptionT.none[IO, WorkbenchSubject]
+        case Seq(subject) => OptionT.liftF(IO(dnToSubject(subject.getDN))) //dnToSubject may throw
+        case subjects =>
           OptionT.liftF(
             IO.raiseError[WorkbenchSubject](new WorkbenchException(s"Database error: email $email refers to too many subjects: ${subjects.map(_.getDN)}")))
       }

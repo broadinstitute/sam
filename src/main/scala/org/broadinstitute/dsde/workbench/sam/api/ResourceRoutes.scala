@@ -153,7 +153,8 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
   def getResourceAuthDomain(resource: FullyQualifiedResourceId, userInfo: UserInfo): server.Route =
     get {
       requireAction(resource, SamResourceActions.readAuthDomain, userInfo.userId) {
-        complete(resourceService.loadResourceAuthDomain(resource).map { response => StatusCodes.OK -> response
+        complete(resourceService.loadResourceAuthDomain(resource).map { response =>
+          StatusCodes.OK -> response
         })
       }
     }
@@ -161,7 +162,8 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
   def getResourcePolicies(resource: FullyQualifiedResourceId, userInfo: UserInfo): server.Route =
     get {
       requireAction(resource, SamResourceActions.readPolicies, userInfo.userId) {
-        complete(resourceService.listResourcePolicies(resource).map { response => StatusCodes.OK -> response.toSet
+        complete(resourceService.listResourcePolicies(resource).map { response =>
+          StatusCodes.OK -> response.toSet
         })
       }
     }
@@ -229,14 +231,16 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
 
   def getUserResourceRoles(resource: FullyQualifiedResourceId, userInfo: UserInfo): server.Route =
     get {
-      complete(resourceService.listUserResourceRoles(resource, userInfo).map { roles => StatusCodes.OK -> roles
+      complete(resourceService.listUserResourceRoles(resource, userInfo).map { roles =>
+        StatusCodes.OK -> roles
       })
     }
 
   def getAllResourceUsers(resource: FullyQualifiedResourceId, userInfo: UserInfo): server.Route =
     get {
       requireAction(resource, SamResourceActions.readPolicies, userInfo.userId) {
-        complete(resourceService.listAllFlattenedResourceUsers(resource).map { allUsers => StatusCodes.OK -> allUsers
+        complete(resourceService.listAllFlattenedResourceUsers(resource).map { allUsers =>
+          StatusCodes.OK -> allUsers
         })
       }
     }
