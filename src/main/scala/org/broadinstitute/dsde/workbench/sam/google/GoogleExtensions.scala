@@ -173,7 +173,7 @@ class GoogleExtensions(
       }
       _ <- googlePubSubDAO.publishMessages(googleServicesConfig.groupSyncTopic, messagesForIdsWithSyncDates)
       ancestorGroups <- Future.traverse(groupIdentities) { id =>
-        directoryDAO.listAncestorGroups(id)
+        directoryDAO.listAncestorGroups(id).unsafeToFuture()
       }
       managedGroupIds = (ancestorGroups.flatten ++ groupIdentities).filterNot(visitedGroups.contains).collect {
         case FullyQualifiedPolicyId(FullyQualifiedResourceId(ResourceTypeName("managed-group"), id), _) => id

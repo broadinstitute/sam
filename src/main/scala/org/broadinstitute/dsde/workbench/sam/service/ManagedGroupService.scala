@@ -101,7 +101,7 @@ class ManagedGroupService(
       // resourceService.deleteResource also does cloudExtensions.onGroupDelete first thing
       _ <- cloudExtensions.onGroupDelete(WorkbenchEmail(constructEmail(groupId.value)))
       _ <- resourceService.deleteResource(FullyQualifiedResourceId(managedGroupType.name, groupId))
-      _ <- directoryDAO.deleteGroup(WorkbenchGroupName(groupId.value))
+      _ <- directoryDAO.deleteGroup(WorkbenchGroupName(groupId.value)).unsafeToFuture()
     } yield ()
 
   def listGroups(userId: WorkbenchUserId): IO[Set[ManagedGroupMembershipEntry]] =

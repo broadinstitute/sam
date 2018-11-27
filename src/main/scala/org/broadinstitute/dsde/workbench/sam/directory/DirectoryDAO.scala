@@ -18,12 +18,12 @@ trait DirectoryDAO {
   def loadGroups(groupNames: Set[WorkbenchGroupName]): IO[Stream[BasicWorkbenchGroup]]
   def loadGroupEmail(groupName: WorkbenchGroupName): IO[Option[WorkbenchEmail]]
   def batchLoadGroupEmail(groupNames: Set[WorkbenchGroupName]): IO[Stream[(WorkbenchGroupName, WorkbenchEmail)]]
-  def deleteGroup(groupName: WorkbenchGroupName): Future[Unit]
+  def deleteGroup(groupName: WorkbenchGroupName): IO[Unit]
 
   /**
     * @return true if the subject was added, false if it was already there
     */
-  def addGroupMember(groupId: WorkbenchGroupIdentity, addMember: WorkbenchSubject): Future[Boolean]
+  def addGroupMember(groupId: WorkbenchGroupIdentity, addMember: WorkbenchSubject): IO[Boolean]
 
   /**
     * @return true if the subject was removed, false if it was already gone
@@ -46,10 +46,10 @@ trait DirectoryDAO {
   def addProxyGroup(userId: WorkbenchUserId, proxyEmail: WorkbenchEmail): Future[Unit]
   def readProxyGroup(userId: WorkbenchUserId): Future[Option[WorkbenchEmail]]
 
-  def listUsersGroups(userId: WorkbenchUserId): Future[Set[WorkbenchGroupIdentity]]
+  def listUsersGroups(userId: WorkbenchUserId): IO[Set[WorkbenchGroupIdentity]]
   def listUserDirectMemberships(userId: WorkbenchUserId): IO[Stream[WorkbenchGroupIdentity]]
   def listIntersectionGroupUsers(groupId: Set[WorkbenchGroupIdentity]): Future[Set[WorkbenchUserId]]
-  def listAncestorGroups(groupId: WorkbenchGroupIdentity): Future[Set[WorkbenchGroupIdentity]]
+  def listAncestorGroups(groupId: WorkbenchGroupIdentity): IO[Set[WorkbenchGroupIdentity]]
 
   def enableIdentity(subject: WorkbenchSubject): IO[Unit]
   def disableIdentity(subject: WorkbenchSubject): Future[Unit]

@@ -52,7 +52,7 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     groups.filterKeys(groupNames.map(_.asInstanceOf[WorkbenchGroupIdentity])).values.map(_.asInstanceOf[BasicWorkbenchGroup]).toStream
   }
 
-  override def deleteGroup(groupName: WorkbenchGroupName): Future[Unit] = {
+  override def deleteGroup(groupName: WorkbenchGroupName): IO[Unit] = {
     listAncestorGroups(groupName).map { ancestors =>
       if (ancestors.nonEmpty)
         throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"group ${groupName.value} cannot be deleted because it is a member of at least 1 other group"))
@@ -61,7 +61,7 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     }
   }
 
-  override def addGroupMember(groupName: WorkbenchGroupIdentity, addMember: WorkbenchSubject): Future[Boolean] = Future {
+  override def addGroupMember(groupName: WorkbenchGroupIdentity, addMember: WorkbenchSubject): IO[Boolean] = IO {
     val group = groups(groupName)
     val updatedGroup = group match {
       case g: BasicWorkbenchGroup => g.copy(members = group.members + addMember)
@@ -118,7 +118,7 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
 
   override def readProxyGroup(userId: WorkbenchUserId): Future[Option[WorkbenchEmail]] = readUserAttribute[WorkbenchEmail](userId, Attr.proxyEmail)
 
-  override def listUsersGroups(userId: WorkbenchUserId): Future[Set[WorkbenchGroupIdentity]] = Future {
+  override def listUsersGroups(userId: WorkbenchUserId): IO[Set[WorkbenchGroupIdentity]] = IO {
     listSubjectsGroups(userId, Set.empty).map(_.id)
   }
 
@@ -153,7 +153,7 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     }
   }
 
-  override def listAncestorGroups(groupName: WorkbenchGroupIdentity): Future[Set[WorkbenchGroupIdentity]] = Future {
+  override def listAncestorGroups(groupName: WorkbenchGroupIdentity): IO[Set[WorkbenchGroupIdentity]] = IO {
     listSubjectsGroups(groupName, Set.empty).map(_.id)
   }
 
