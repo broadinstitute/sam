@@ -6,7 +6,8 @@ import java.util.Date
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
-import cats.effect.IO
+import cats.effect.{ContextShift, IO}
+import cats.implicits._
 import com.google.api.client.googleapis.json.GoogleJsonResponseException
 import com.google.auth.oauth2.ServiceAccountCredentials
 import com.google.rpc.Code
@@ -62,7 +63,7 @@ class GoogleExtensions(
     val notificationDAO: NotificationDAO,
     val googleServicesConfig: GoogleServicesConfig,
     val petServiceAccountConfig: PetServiceAccountConfig,
-    val resourceTypes: Map[ResourceTypeName, ResourceType])(implicit val system: ActorSystem, executionContext: ExecutionContext)
+    val resourceTypes: Map[ResourceTypeName, ResourceType])(implicit val system: ActorSystem, executionContext: ExecutionContext, cs: ContextShift[IO])
     extends LazyLogging
     with FutureSupport
     with CloudExtensions
@@ -254,7 +255,7 @@ class GoogleExtensions(
     googleDirectoryDAO.deleteGroup(groupEmail)
 
   @deprecated("Use new two-argument version of this function", "Sam Phase 3")
-  def createUserPetServiceAccount(user: WorkbenchUser): Future[PetServiceAccount] = createUserPetServiceAccount(user, petServiceAccountConfig.googleProject)
+  def createUserPetServiceAccount(user: WorkbenchUser): Future[PetServiceAccount] = createUserPetServiceAccount(user, petServiceAccountConfig.googleProject).unsafeToFuture()
 
   @deprecated("Use new two-argument version of this function", "Sam Phase 3")
   def deleteUserPetServiceAccount(userId: WorkbenchUserId): Future[Boolean] =
@@ -274,16 +275,14 @@ class GoogleExtensions(
       }
     } yield deletedSomething
 
-  def createUserPetServiceAccount(user: WorkbenchUser, project: GoogleProject): Future[PetServiceAccount] = {
+  def createUserPetServiceAccount(user: WorkbenchUser, project: GoogleProject): IO[PetServiceAccount] = {
     val (petSaName, petSaDisplayName) = toPetSAFromUser(user)
     // The normal situation is that the pet either exists in both ldap and google or neither.
     // Sometimes, especially in tests, the pet may be removed from ldap, but not google or the other way around.
     // This code is a little extra complicated to detect the cases when a pet does not exist in google, ldap or both
     // and do the right thing.
     val createPet = for {
-      maybeServiceAccount <- IO.fromFuture(IO(googleIamDAO.findServiceAccount(project, petSaName)))
-      maybePet <- directoryDAO.loadPetServiceAccount(PetServiceAccountId(user.id, project))
-
+      (maybePet, maybeServiceAccount) <- retrievePetAndSA(user.id, petSaName, project)
       serviceAccount <- maybeServiceAccount match {
         // SA does not exist in google, create it and add it to the proxy group
         case None =>
@@ -313,7 +312,21 @@ class GoogleExtensions(
     } yield pet
 
     val lock = LockPath(CollectionName(s"${project.value}-createPet"), Document(user.id.value), 30 seconds)
-    distributedLock.withLock(lock).use(_ => createPet).unsafeToFuture()
+
+    for {
+      (pet, sa) <- retrievePetAndSA(user.id, petSaName, project) //I'm loving better-monadic-for
+      shouldLock = !(pet.isDefined && sa.isDefined) // if either is not defined, we need to lock and potentially create them; else we return the pet
+      p <- if (shouldLock) distributedLock.withLock(lock).use(_ => createPet) else pet.get.pure[IO]
+    } yield p
+  }
+
+  private def retrievePetAndSA(
+      userId: WorkbenchUserId,
+      petServiceAccountName: ServiceAccountName,
+      project: GoogleProject): IO[(Option[PetServiceAccount], Option[ServiceAccount])] = {
+    val serviceAccount = IO.fromFuture(IO(googleIamDAO.findServiceAccount(project, petServiceAccountName)))
+    val pet = directoryDAO.loadPetServiceAccount(PetServiceAccountId(userId, project))
+    (pet, serviceAccount).parTupled
   }
 
   def getPetServiceAccountKey(userEmail: WorkbenchEmail, project: GoogleProject): Future[Option[String]] =
@@ -327,7 +340,7 @@ class GoogleExtensions(
 
   def getPetServiceAccountKey(user: WorkbenchUser, project: GoogleProject): Future[String] =
     for {
-      pet <- createUserPetServiceAccount(user, project)
+      pet <- createUserPetServiceAccount(user, project).unsafeToFuture()
       key <- googleKeyCache.getKey(pet)
     } yield key
 

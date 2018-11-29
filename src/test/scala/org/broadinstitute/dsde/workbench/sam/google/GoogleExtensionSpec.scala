@@ -295,7 +295,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val defaultUser = WorkbenchUser(createDefaultUser.id, Some(createDefaultUser.googleSubjectId), createDefaultUser.email)
     // create a pet service account
     val googleProject = GoogleProject("testproject")
-    val petServiceAccount = googleExtensions.createUserPetServiceAccount(defaultUser, googleProject).futureValue
+    val petServiceAccount = googleExtensions.createUserPetServiceAccount(defaultUser, googleProject).unsafeRunSync()
 
     petServiceAccount.serviceAccount.email.value should endWith(s"@${googleProject.value}.iam.gserviceaccount.com")
 
@@ -318,7 +318,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     mockGoogleDirectoryDAO.groups(defaultUserProxyEmail) shouldBe Set(defaultUserEmail, petServiceAccount.serviceAccount.email)
 
     // create one again, it should work
-    val petSaResponse2 = googleExtensions.createUserPetServiceAccount(defaultUser, googleProject).futureValue
+    val petSaResponse2 = googleExtensions.createUserPetServiceAccount(defaultUser, googleProject).unsafeRunSync()
     petSaResponse2 shouldBe petServiceAccount
 
     // delete the pet service account
@@ -375,7 +375,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     newUser shouldBe UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
 
     // create a pet service account
-    val petServiceAccount = googleExtensions.createUserPetServiceAccount(defaultUser, googleProject).futureValue
+    val petServiceAccount = googleExtensions.createUserPetServiceAccount(defaultUser, googleProject).unsafeRunSync()
     petServiceAccount.serviceAccount shouldBe serviceAccount
 
   }
@@ -390,13 +390,13 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val defaultUser = WorkbenchUser(createDefaultUser.id, None, createDefaultUser.email)
     // create a pet service account
     val googleProject = GoogleProject("testproject")
-    val petServiceAccount = googleExtensions.createUserPetServiceAccount(defaultUser, googleProject).futureValue
+    val petServiceAccount = googleExtensions.createUserPetServiceAccount(defaultUser, googleProject).unsafeRunSync()
 
     import org.broadinstitute.dsde.workbench.model.google.toAccountName
     mockGoogleIamDAO.removeServiceAccount(googleProject, toAccountName(petServiceAccount.serviceAccount.email)).futureValue
     mockGoogleIamDAO.findServiceAccount(googleProject, petServiceAccount.serviceAccount.email).futureValue shouldBe None
 
-    val petServiceAccount2 = googleExtensions.createUserPetServiceAccount(defaultUser, googleProject).futureValue
+    val petServiceAccount2 = googleExtensions.createUserPetServiceAccount(defaultUser, googleProject).unsafeRunSync()
     petServiceAccount.serviceAccount shouldNot equal(petServiceAccount2.serviceAccount)
     mockGoogleIamDAO.findServiceAccount(googleProject, petServiceAccount.serviceAccount.email).futureValue shouldBe Some(petServiceAccount2.serviceAccount)
   }
@@ -764,7 +764,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
 
     // create a pet service account
     val googleProject = GoogleProject("testproject")
-    val petServiceAccount = googleExtensions.createUserPetServiceAccount(defaultUser, googleProject).futureValue
+    val petServiceAccount = googleExtensions.createUserPetServiceAccount(defaultUser, googleProject).unsafeRunSync()
 
     //get a key, which should create a brand new one
     val firstKey = runAndWait(googleExtensions.getPetServiceAccountKey(defaultUser, googleProject))
@@ -790,7 +790,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
 
     // create a pet service account
     val googleProject = GoogleProject("testproject")
-    val petServiceAccount = googleExtensions.createUserPetServiceAccount(defaultUser, googleProject).futureValue
+    val petServiceAccount = googleExtensions.createUserPetServiceAccount(defaultUser, googleProject).unsafeRunSync()
 
     //get a key, which should create a brand new one
     val firstKey = runAndWait(googleExtensions.getPetServiceAccountKey(defaultUser, googleProject))
@@ -824,7 +824,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
 
     // create a pet service account
     val googleProject = GoogleProject("testproject")
-    val petServiceAccount = googleExtensions.createUserPetServiceAccount(defaultUser, googleProject).futureValue
+    val petServiceAccount = googleExtensions.createUserPetServiceAccount(defaultUser, googleProject).unsafeRunSync()
 
     //get a key, which should create a brand new one
     val firstKey = runAndWait(googleExtensions.getPetServiceAccountKey(defaultUser, googleProject))
