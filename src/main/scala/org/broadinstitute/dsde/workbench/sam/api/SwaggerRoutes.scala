@@ -33,6 +33,11 @@ trait SwaggerRoutes {
           getFromResource("swagger/api-docs.yaml")
         }
       } ~
+      path("api-docs.json") {
+        get {
+          getFromResource("swagger/api-docs.json")
+        }
+      } ~
       // We have to be explicit about the paths here since we're matching at the root URL and we don't
       // want to catch all paths lest we circumvent Spray's not-found and method-not-allowed error
       // messages.

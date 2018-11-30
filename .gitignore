@@ -13,6 +13,7 @@ dist/*
 target/
 lib_managed/
 src_managed/
+src/main/resources/swagger/api-docs.json
 project/boot/
 project/plugins/project/
 docker/stand-alone/server.crt

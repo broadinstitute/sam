@@ -91,9 +91,12 @@ function make_jar()
     echo "building jar..."
     OPENDJ=$(bash ./docker/run-opendj.sh start jenkins | tail -n1)
     echo $OPENDJ
-    
+
     # Get the last commit hash of the model directory and set it as an environment variable
     GIT_MODEL_HASH=$(git log -n 1 --pretty=format:%h)
+
+    # create Swagger API JSON from YAML
+    docker run --rm -i mikefarah/yq yq r - -j < src/main/resources/swagger/api-docs.yaml > src/main/resources/swagger/api-docs.json
 
     # make jar.  cache sbt dependencies.
     set +e # Turn off error detection so that opendj has a chance to get stopped before exiting
