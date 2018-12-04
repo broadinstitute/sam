@@ -52,7 +52,7 @@ class LdapDirectoryDAO(
   override def loadGroup(groupName: WorkbenchGroupName): IO[Option[BasicWorkbenchGroup]] = {
     val res = for {
       entry <- OptionT(executeLdap(IO(ldapConnectionPool.getEntry(groupDn(groupName)))).map(Option.apply))
-      r <- OptionT.liftF(IO(unmarshalGroupThrow(entry)))
+      r <- OptionT.liftF(unmarshalGroupThrow(entry))
     } yield r
 
     res.value
@@ -65,12 +65,12 @@ class LdapDirectoryDAO(
       memberDns = getAttributes(results, Attr.uniqueMember)
     } yield BasicWorkbenchGroup(WorkbenchGroupName(cn), memberDns.map(dnToSubject), WorkbenchEmail(email))
 
-  private def unmarshalGroupThrow(results: Entry): BasicWorkbenchGroup = unmarshalGroup(results).fold(s => throw new WorkbenchException(s), identity)
+  private def unmarshalGroupThrow(results: Entry): IO[BasicWorkbenchGroup] = IO(unmarshalGroup(results).fold(s => throw new WorkbenchException(s), identity))
 
-  override def loadGroups(groupNames: Set[WorkbenchGroupName]): IO[Stream[BasicWorkbenchGroup]] = {
+  override def loadGroups(groupNames: Set[WorkbenchGroupName]): fs2.Stream[IO, BasicWorkbenchGroup] = {
     val filters = groupNames.grouped(batchSize).map(batch => Filter.createORFilter(batch.map(g => Filter.createEqualityFilter(Attr.cn, g.value)).asJava)).toSeq
 
-    executeLdap(IO(ldapSearchStream(groupsOu, SearchScope.SUB, filters: _*)(unmarshalGroupThrow)))
+    ldapSearchStream(groupsOu, SearchScope.SUB, filters: _*)(unmarshalGroupThrow)
   }
 
   override def loadGroupEmail(groupName: WorkbenchGroupName): IO[Option[WorkbenchEmail]] = {
@@ -83,8 +83,8 @@ class LdapDirectoryDAO(
     res.value
   }
 
-  override def batchLoadGroupEmail(groupNames: Set[WorkbenchGroupName]): IO[Stream[(WorkbenchGroupName, WorkbenchEmail)]] =
-    loadGroups(groupNames).map(_.map(g => g.id -> g.email))
+  override def batchLoadGroupEmail(groupNames: Set[WorkbenchGroupName]): fs2.Stream[IO, (WorkbenchGroupName, WorkbenchEmail)] =
+    loadGroups(groupNames).map(g => g.id -> g.email)
 
   override def deleteGroup(groupName: WorkbenchGroupName): IO[Unit] =
     for {
@@ -178,13 +178,10 @@ class LdapDirectoryDAO(
       Option(entry).flatMap(e => Option(e.getAttributeValue(Attr.email))).map(WorkbenchEmail)
     }
 
-  override def loadSubjectEmails(subjects: Set[WorkbenchSubject]): IO[Stream[WorkbenchEmail]] = {
+  override def loadSubjectEmails(subjects: Set[WorkbenchSubject]): fs2.Stream[IO, WorkbenchEmail] = {
     val users = loadUsers(subjects collect { case userId: WorkbenchUserId => userId })
     val groups = loadGroups(subjects collect { case groupName: WorkbenchGroupName => groupName })
-    for {
-      userEmails <- users.map(_.map(_.email))
-      groupEmails <- groups.map(_.map(_.email))
-    } yield userEmails ++ groupEmails
+    users.map(_.email) ++ groups.map(_.email)
   }
 
   override def createUser(user: WorkbenchUser): IO[WorkbenchUser] = {
@@ -215,11 +212,11 @@ class LdapDirectoryDAO(
       email <- getAttribute(results, Attr.email).toRight(s"${Attr.email} attribute missing")
     } yield WorkbenchUser(WorkbenchUserId(uid), getAttribute(results, Attr.googleSubjectId).map(GoogleSubjectId), WorkbenchEmail(email))
 
-  private def unmarshalUserThrow(results: Entry): WorkbenchUser = unmarshalUser(results).fold(s => throw new WorkbenchException(s), identity)
+  private def unmarshalUserThrow(results: Entry): IO[WorkbenchUser] = IO(unmarshalUser(results).fold(s => throw new WorkbenchException(s), identity))
 
-  override def loadUsers(userIds: Set[WorkbenchUserId]): IO[Stream[WorkbenchUser]] = {
+  override def loadUsers(userIds: Set[WorkbenchUserId]): fs2.Stream[IO, WorkbenchUser] = {
     val filters = userIds.grouped(batchSize).map(batch => Filter.createORFilter(batch.map(g => Filter.createEqualityFilter(Attr.uid, g.value)).asJava)).toSeq
-    executeLdap(IO(ldapSearchStream(peopleOu, SearchScope.ONE, filters: _*)(unmarshalUserThrow)))
+    ldapSearchStream(peopleOu, SearchScope.ONE, filters: _*)(unmarshalUserThrow)
   }
 
   override def deleteUser(userId: WorkbenchUserId): Future[Unit] = Future {
@@ -241,11 +238,10 @@ class LdapDirectoryDAO(
 
   override def listUsersGroups(userId: WorkbenchUserId): IO[Set[WorkbenchGroupIdentity]] = listMemberOfGroups(userDn(userId))
 
-  override def listUserDirectMemberships(userId: WorkbenchUserId): IO[Stream[WorkbenchGroupIdentity]] =
-    cs.evalOn(ecForLdapBlockingIO)(
-      IO(ldapSearchStream(directoryConfig.baseDn, SearchScope.SUB, Filter.createEqualityFilter(Attr.uniqueMember, userDn(userId))) { entry =>
-        dnToGroupIdentity(entry.getDN)
-      }))
+  override def listUserDirectMemberships(userId: WorkbenchUserId): fs2.Stream[IO, WorkbenchGroupIdentity] =
+    ldapSearchStream(directoryConfig.baseDn, SearchScope.SUB, Filter.createEqualityFilter(Attr.uniqueMember, userDn(userId))) { entry =>
+      IO(dnToGroupIdentity(entry.getDN))
+    }
 
   private def listMemberOfGroups(dn: String): IO[Set[WorkbenchGroupIdentity]] = {
     val groupsOptionT = for {
@@ -257,12 +253,15 @@ class LdapDirectoryDAO(
     groupsOptionT.fold(Set.empty[WorkbenchGroupIdentity])(identity)
   }
 
-  override def listIntersectionGroupUsers(groupIds: Set[WorkbenchGroupIdentity]): Future[Set[WorkbenchUserId]] = Future {
+  override def listIntersectionGroupUsers(groupIds: Set[WorkbenchGroupIdentity]): IO[Set[WorkbenchUserId]] = {
     ldapSearchStream(
       directoryConfig.baseDn,
       SearchScope.SUB,
       Filter.createANDFilter(groupIds.map(groupId => Filter.createEqualityFilter(Attr.memberOf, groupDn(groupId))).asJava)
-    )(getAttribute(_, Attr.uid)).flatten.map(WorkbenchUserId).toSet
+    )(entry => IO.pure(getAttribute(entry, Attr.uid))).flatMap {
+      case None => fs2.Stream.empty
+      case Some(userId) => fs2.Stream(WorkbenchUserId(userId))
+    }.compile.to[Set]
   }
 
   override def listAncestorGroups(groupId: WorkbenchGroupIdentity): IO[Set[WorkbenchGroupIdentity]] = listMemberOfGroups(groupDn(groupId))
@@ -336,11 +335,16 @@ class LdapDirectoryDAO(
     attributes ++ displayNameAttribute
   }
 
-  override def loadPetServiceAccount(petServiceAccountId: PetServiceAccountId): IO[Option[PetServiceAccount]] = executeLdap {
-    IO(Option(ldapConnectionPool.getEntry(petDn(petServiceAccountId))).map(unmarshalPetServiceAccount))
+  override def loadPetServiceAccount(petServiceAccountId: PetServiceAccountId): IO[Option[PetServiceAccount]] = {
+    for {
+      entry <- executeLdap {
+        IO(ldapConnectionPool.getEntry(petDn(petServiceAccountId)))
+      }
+      pet <- Option(entry).traverse(unmarshalPetServiceAccount)
+    } yield pet
   }
 
-  private def unmarshalPetServiceAccount(entry: Entry): PetServiceAccount = {
+  private def unmarshalPetServiceAccount(entry: Entry): IO[PetServiceAccount] = IO {
     val uid = getAttribute(entry, Attr.uid).getOrElse(throw new WorkbenchException(s"${Attr.uid} attribute missing"))
     val email = getAttribute(entry, Attr.email).getOrElse(throw new WorkbenchException(s"${Attr.email} attribute missing"))
     val displayName = getAttribute(entry, Attr.givenName).getOrElse("")
@@ -354,8 +358,8 @@ class LdapDirectoryDAO(
   override def deletePetServiceAccount(petServiceAccountId: PetServiceAccountId): IO[Unit] =
     executeLdap(IO(ldapConnectionPool.delete(petDn(petServiceAccountId))))
 
-  override def getAllPetServiceAccountsForUser(userId: WorkbenchUserId): Future[Seq[PetServiceAccount]] = Future {
-    ldapSearchStream(userDn(userId), SearchScope.SUB, Filter.createEqualityFilter("objectclass", ObjectClass.petServiceAccount))(unmarshalPetServiceAccount)
+  override def getAllPetServiceAccountsForUser(userId: WorkbenchUserId): Future[Seq[PetServiceAccount]] = {
+    ldapSearchStream(userDn(userId), SearchScope.SUB, Filter.createEqualityFilter("objectclass", ObjectClass.petServiceAccount))(unmarshalPetServiceAccount).compile.to[Seq].unsafeToFuture()
   }
 
   override def updatePetServiceAccount(petServiceAccount: PetServiceAccount): IO[PetServiceAccount] = {
@@ -399,6 +403,4 @@ class LdapDirectoryDAO(
 
   override def setGoogleSubjectId(userId: WorkbenchUserId, googleSubjectId: GoogleSubjectId): IO[Unit] =
     executeLdap(IO(ldapConnectionPool.modify(userDn(userId), new Modification(ModificationType.ADD, Attr.googleSubjectId, googleSubjectId.value))))
-
-  private def executeLdap[A](ioa: IO[A]): IO[A] = cs.evalOn(ecForLdapBlockingIO)(ioa)
 }

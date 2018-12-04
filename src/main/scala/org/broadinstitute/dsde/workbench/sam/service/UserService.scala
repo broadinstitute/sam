@@ -62,7 +62,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
             updated <- subjectFromEmail match {
               case Some(uid: WorkbenchUserId) =>
                 for {
-                  groups <- directoryDAO.listUserDirectMemberships(uid)
+                  groups <- directoryDAO.listUserDirectMemberships(uid).compile.toList
                   _ <- directoryDAO.setGoogleSubjectId(uid, user.googleSubjectId)
                   _ <- IO.fromFuture(IO(cloudExtensions.onGroupUpdate(groups)))
                 } yield WorkbenchUser(uid, Some(user.googleSubjectId), user.email)

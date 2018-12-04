@@ -201,12 +201,12 @@ class ResourceService(
   //      preventing a new Resource with the same ID from being created
   def deleteResource(resource: FullyQualifiedResourceId): Future[Unit] =
     for {
-      policiesToDelete <- accessPolicyDAO.listAccessPolicies(resource).unsafeToFuture()
+      policiesToDelete <- accessPolicyDAO.listAccessPolicies(resource).compile.toList.unsafeToFuture()
       // remove from cloud extensions first so a failure there does not leave ldap in a bad state
       _ <- Future.traverse(policiesToDelete) { policy =>
         cloudExtensions.onGroupDelete(policy.email)
       }
-      _ <- policiesToDelete.toList.parTraverse(p => accessPolicyDAO.deletePolicy(p.id)).unsafeToFuture()
+      _ <- policiesToDelete.parTraverse(p => accessPolicyDAO.deletePolicy(p.id)).unsafeToFuture()
       _ <- maybeDeleteResource(resource)
     } yield ()
 
@@ -379,8 +379,8 @@ class ResourceService(
     val policyMembers = policy.members.collect { case policyId: FullyQualifiedPolicyId => policyId }
 
     for {
-      userEmails <- directoryDAO.loadUsers(users)
-      groupEmails <- directoryDAO.loadGroups(groups)
+      userEmails <- directoryDAO.loadUsers(users).compile.toList
+      groupEmails <- directoryDAO.loadGroups(groups).compile.toList
       policyEmails <- policyMembers.toList.parTraverse(accessPolicyDAO.loadPolicy(_))
     } yield
       AccessPolicyMembership(
@@ -389,14 +389,14 @@ class ResourceService(
         policy.roles)
   }
 
-  def listResourcePolicies(resource: FullyQualifiedResourceId): IO[Stream[AccessPolicyResponseEntry]] =
-    accessPolicyDAO.listAccessPolicies(resource).flatMap { policies =>
-      policies.parTraverse { policy =>
-        loadAccessPolicyWithEmails(policy).map { membership =>
-          AccessPolicyResponseEntry(policy.id.accessPolicyName, membership, policy.email)
-        }
-      }
+  def listResourcePolicies(resource: FullyQualifiedResourceId): fs2.Stream[IO, AccessPolicyResponseEntry] = {
+    for {
+      policy <- accessPolicyDAO.listAccessPolicies(resource)
+      membership <- fs2.Stream.eval(loadAccessPolicyWithEmails(policy))
+    } yield {
+      AccessPolicyResponseEntry(policy.id.accessPolicyName, membership, policy.email)
     }
+  }
 
   def loadResourcePolicy(policyIdentity: FullyQualifiedPolicyId): IO[Option[AccessPolicyMembership]] =
     for {
@@ -448,12 +448,14 @@ class ResourceService(
       _ <- IO.fromFuture(IO(fireGroupUpdateNotification(policyId)))
     } yield ()
 
-  def listAllFlattenedResourceUsers(resourceId: FullyQualifiedResourceId): IO[Set[UserIdInfo]] =
-    for {
-      accessPolicies <- accessPolicyDAO.listAccessPolicies(resourceId)
-      members <- accessPolicies.toList.parTraverse(accessPolicy => accessPolicyDAO.listFlattenedPolicyMembers(accessPolicy.id))
-      workbenchUsers = members.flatten.toSet
+  def listAllFlattenedResourceUsers(resourceId: FullyQualifiedResourceId): IO[Set[UserIdInfo]] = {
+    val userStream = for {
+      accessPolicy <- accessPolicyDAO.listAccessPolicies(resourceId)
+      member <- accessPolicyDAO.listFlattenedPolicyMembers(accessPolicy.id)
     } yield {
-      workbenchUsers.map(user => UserIdInfo(user.id, user.email, user.googleSubjectId))
+      UserIdInfo(member.id, member.email, member.googleSubjectId)
     }
+
+    userStream.compile.to[Set]
+  }
 }

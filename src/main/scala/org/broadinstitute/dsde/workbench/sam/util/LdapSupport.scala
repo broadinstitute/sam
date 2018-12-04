@@ -1,12 +1,17 @@
 package org.broadinstitute.dsde.workbench.sam.util
 
+import cats.effect.{ContextShift, IO}
 import com.unboundid.ldap.sdk._
 
-import scala.util.{Failure, Success, Try}
+import scala.concurrent.ExecutionContext
 
 trait LdapSupport {
   protected val ldapConnectionPool: LDAPConnectionPool
   protected val batchSize = 1000
+  protected val ecForLdapBlockingIO: ExecutionContext
+  implicit protected val cs: ContextShift[IO]
+
+  protected def executeLdap[A](ioa: IO[A]): IO[A] = cs.evalOn(ecForLdapBlockingIO)(ioa)
 
   /**
     * Call this to perform an ldap search.
@@ -24,31 +29,36 @@ trait LdapSupport {
     * @tparam T
     * @return
     */
-  protected def ldapSearchStream[T](baseDn: String, searchScope: SearchScope, filters: Filter*)(unmarshaller: Entry => T): Stream[T] =
-    filters.flatMap { filter =>
-      val search = new SearchRequest(baseDn, searchScope, filter)
-      val entrySource = new LDAPEntrySource(ldapConnectionPool.getConnection, search, true)
-      ldapEntrySourceStream(entrySource)(unmarshaller)
-    }.toStream
-
-  // this is the magic recursive stream generator
-  private def ldapEntrySourceStream[T](entrySource: LDAPEntrySource)(unmarshaller: Entry => T): Stream[T] =
-    Try(Option(entrySource.nextEntry)) match {
-      case Success(None) =>
-        // reached the last element, Stream.empty terminates the stream
-        Stream.empty
-
-      case Success(Some(next)) =>
-        // next element exists, return a Stream starting with unmarshalled next followed by the rest of the stream
-        // (streams are smart and lazily evaluate the second parameter)
-        Stream.cons(unmarshaller(next), ldapEntrySourceStream(entrySource)(unmarshaller))
-
-      case Failure(ldape: EntrySourceException)
-          if ldape.getCause.isInstanceOf[LDAPException] &&
-            ldape.getCause.asInstanceOf[LDAPException].getResultCode == ResultCode.NO_SUCH_OBJECT =>
-        Stream.empty // the base dn does not exist, treat as empty search
-      case Failure(regrets) => throw regrets
+  protected def ldapSearchStream[T](baseDn: String, searchScope: SearchScope, filters: Filter*)(unmarshaller: Entry => IO[T]): fs2.Stream[IO, T] = {
+    for {
+      filter <- fs2.Stream(filters:_*)
+      entry <- ldapSearch(baseDn, searchScope, filter)
+      unmarshalled <- fs2.Stream.eval(unmarshaller(entry))
+    } yield {
+      unmarshalled
     }
+  }
+
+  private def ldapSearch(baseDn: String, searchScope: SearchScope, filter: Filter): fs2.Stream[IO, Entry] = {
+    val search = new SearchRequest(baseDn, searchScope, filter)
+    for {
+      entrySource <- fs2.Stream.eval(executeLdap(IO(
+        new LDAPEntrySource(ldapConnectionPool.getConnection, search, true))))
+
+      entry <- fs2.Stream.unfoldEval[IO, LDAPEntrySource, Entry](entrySource) { entrySourceInner =>
+        nextEntry(entrySourceInner).map(_.map(entry => (entry, entrySourceInner)))
+      }
+    } yield entry
+  }
+
+  private def nextEntry(entrySource: LDAPEntrySource): IO[Option[Entry]] = {
+    executeLdap(IO(Option(entrySource.nextEntry))).handleErrorWith {
+      case ldape: EntrySourceException
+        if ldape.getCause.isInstanceOf[LDAPException] &&
+          ldape.getCause.asInstanceOf[LDAPException].getResultCode == ResultCode.NO_SUCH_OBJECT =>
+        IO.pure(None)
+    }
+  }
 
   protected def getAttribute(results: Entry, key: String): Option[String] =
     Option(results.getAttribute(key)).map(_.getValue)

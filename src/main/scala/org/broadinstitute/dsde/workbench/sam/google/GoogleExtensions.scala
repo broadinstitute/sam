@@ -182,14 +182,17 @@ class GoogleExtensions(
       _ <- Future.traverse(managedGroupIds)(id => onManagedGroupUpdate(id, visitedGroups ++ groupIdentities ++ ancestorGroups.flatten))
     } yield ()
 
-  private def onManagedGroupUpdate(groupId: ResourceId, visitedGroups: Seq[WorkbenchGroupIdentity]): Future[Unit] =
+  private def onManagedGroupUpdate(groupId: ResourceId, visitedGroups: Seq[WorkbenchGroupIdentity]): Future[Unit] = {
+    val policyIdStream = for {
+      resource <- accessPolicyDAO.listResourcesConstrainedByGroup(WorkbenchGroupName(groupId.value))
+      policy <- accessPolicyDAO.listAccessPolicies(resource.fullyQualifiedId)
+    } yield policy.id
+
     for {
-      resources <- accessPolicyDAO.listResourcesConstrainedByGroup(WorkbenchGroupName(groupId.value)).unsafeToFuture()
-      policies <- Future.traverse(resources) { resource =>
-        accessPolicyDAO.listAccessPolicies(resource.fullyQualifiedId).unsafeToFuture
-      }
-      _ <- onGroupUpdateRecursive(policies.flatten.map(_.id).toList, visitedGroups)
+      policyIds <- policyIdStream.compile.toList.unsafeToFuture()
+      _ <- onGroupUpdateRecursive(policyIds, visitedGroups)
     } yield ()
+  }
 
   override def onUserCreate(user: WorkbenchUser): Future[Unit] = {
     val proxyEmail = toProxyFromUser(user.id)
@@ -560,13 +563,15 @@ class GoogleExtensions(
         throw new Exception(s"Invalid resource type specified. ${resource.resourceTypeName} is not a recognized resource type.")
     }
 
-  private def calculateIntersectionGroup(resource: FullyQualifiedResourceId, policy: AccessPolicy): Future[Set[WorkbenchUserId]] =
-    for {
-      groups <- accessPolicyDAO.loadResourceAuthDomain(resource).unsafeToFuture
+  private def calculateIntersectionGroup(resource: FullyQualifiedResourceId, policy: AccessPolicy): Future[Set[WorkbenchUserId]] = {
+    val resultIO = for {
+      groups <- accessPolicyDAO.loadResourceAuthDomain(resource)
       members <- directoryDAO.listIntersectionGroupUsers(groups.asInstanceOf[Set[WorkbenchGroupIdentity]] + policy.id)
     } yield {
       members
     }
+    resultIO.unsafeToFuture()
+  }
 
   private[google] def toPetSAFromUser(user: WorkbenchUser): (ServiceAccountName, ServiceAccountDisplayName) = {
     /*

@@ -15,9 +15,9 @@ import scala.concurrent.Future
 trait DirectoryDAO {
   def createGroup(group: BasicWorkbenchGroup, accessInstructionsOpt: Option[String] = None): IO[BasicWorkbenchGroup]
   def loadGroup(groupName: WorkbenchGroupName): IO[Option[BasicWorkbenchGroup]]
-  def loadGroups(groupNames: Set[WorkbenchGroupName]): IO[Stream[BasicWorkbenchGroup]]
+  def loadGroups(groupNames: Set[WorkbenchGroupName]): fs2.Stream[IO, BasicWorkbenchGroup]
   def loadGroupEmail(groupName: WorkbenchGroupName): IO[Option[WorkbenchEmail]]
-  def batchLoadGroupEmail(groupNames: Set[WorkbenchGroupName]): IO[Stream[(WorkbenchGroupName, WorkbenchEmail)]]
+  def batchLoadGroupEmail(groupNames: Set[WorkbenchGroupName]): fs2.Stream[IO, (WorkbenchGroupName, WorkbenchEmail)]
   def deleteGroup(groupName: WorkbenchGroupName): IO[Unit]
 
   /**
@@ -36,19 +36,19 @@ trait DirectoryDAO {
 
   def loadSubjectFromEmail(email: WorkbenchEmail): IO[Option[WorkbenchSubject]]
   def loadSubjectEmail(subject: WorkbenchSubject): IO[Option[WorkbenchEmail]]
-  def loadSubjectEmails(subjects: Set[WorkbenchSubject]): IO[Stream[WorkbenchEmail]]
+  def loadSubjectEmails(subjects: Set[WorkbenchSubject]): fs2.Stream[IO, WorkbenchEmail]
   def loadSubjectFromGoogleSubjectId(googleSubjectId: GoogleSubjectId): IO[Option[WorkbenchSubject]]
 
   def createUser(user: WorkbenchUser): IO[WorkbenchUser]
   def loadUser(userId: WorkbenchUserId): IO[Option[WorkbenchUser]]
-  def loadUsers(userIds: Set[WorkbenchUserId]): IO[Stream[WorkbenchUser]]
+  def loadUsers(userIds: Set[WorkbenchUserId]): fs2.Stream[IO, WorkbenchUser]
   def deleteUser(userId: WorkbenchUserId): Future[Unit]
   def addProxyGroup(userId: WorkbenchUserId, proxyEmail: WorkbenchEmail): Future[Unit]
   def readProxyGroup(userId: WorkbenchUserId): Future[Option[WorkbenchEmail]]
 
   def listUsersGroups(userId: WorkbenchUserId): IO[Set[WorkbenchGroupIdentity]]
-  def listUserDirectMemberships(userId: WorkbenchUserId): IO[Stream[WorkbenchGroupIdentity]]
-  def listIntersectionGroupUsers(groupId: Set[WorkbenchGroupIdentity]): Future[Set[WorkbenchUserId]]
+  def listUserDirectMemberships(userId: WorkbenchUserId): fs2.Stream[IO, WorkbenchGroupIdentity]
+  def listIntersectionGroupUsers(groupId: Set[WorkbenchGroupIdentity]): IO[Set[WorkbenchUserId]]
   def listAncestorGroups(groupId: WorkbenchGroupIdentity): IO[Set[WorkbenchGroupIdentity]]
 
   def enableIdentity(subject: WorkbenchSubject): IO[Unit]

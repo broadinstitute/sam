@@ -101,7 +101,7 @@ trait ManagedGroupRoutes extends UserInfoDirectives with SecurityDirectives with
   private def handleListEmails(managedGroup: FullyQualifiedResourceId, accessPolicyName: ManagedGroupPolicyName, userInfo: UserInfo): Route =
     requireAction(managedGroup, SamResourceActions.readPolicy(accessPolicyName), userInfo.userId) {
       complete(
-        managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, accessPolicyName).map(x => StatusCodes.OK -> x.toSet)
+        managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, accessPolicyName).compile.to[Set].map(x => StatusCodes.OK -> x)
       )
     }
 

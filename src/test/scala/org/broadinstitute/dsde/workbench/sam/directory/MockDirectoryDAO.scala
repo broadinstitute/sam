@@ -48,8 +48,8 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     groups.get(groupName).map(_.asInstanceOf[BasicWorkbenchGroup])
   }
 
-  override def loadGroups(groupNames: Set[WorkbenchGroupName]): IO[Stream[BasicWorkbenchGroup]] = IO {
-    groups.filterKeys(groupNames.map(_.asInstanceOf[WorkbenchGroupIdentity])).values.map(_.asInstanceOf[BasicWorkbenchGroup]).toStream
+  override def loadGroups(groupNames: Set[WorkbenchGroupName]): fs2.Stream[IO, BasicWorkbenchGroup] = {
+    fs2.Stream(groups.filterKeys(groupNames.map(_.asInstanceOf[WorkbenchGroupIdentity])).values.map(_.asInstanceOf[BasicWorkbenchGroup]).toSeq:_*)
   }
 
   override def deleteGroup(groupName: WorkbenchGroupName): IO[Unit] = {
@@ -106,9 +106,7 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     users.get(userId)
   }
 
-  override def loadUsers(userIds: Set[WorkbenchUserId]): IO[Stream[WorkbenchUser]] = IO {
-    users.filterKeys(userIds).values.toStream
-  }
+  override def loadUsers(userIds: Set[WorkbenchUserId]): fs2.Stream[IO, WorkbenchUser] = fs2.Stream(users.filterKeys(userIds).values.toSeq:_*)
 
   override def deleteUser(userId: WorkbenchUserId): Future[Unit] = Future {
     users -= userId
@@ -135,7 +133,7 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     }
   }
 
-  override def listIntersectionGroupUsers(groupIds: Set[WorkbenchGroupIdentity]): Future[Set[WorkbenchUserId]] = Future {
+  override def listIntersectionGroupUsers(groupIds: Set[WorkbenchGroupIdentity]): IO[Set[WorkbenchUserId]] = IO {
     groupIds.flatMap(groupId => listGroupUsers(groupId, Set.empty))
   }
 
@@ -169,8 +167,11 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
 
   override def loadGroupEmail(groupName: WorkbenchGroupName): IO[Option[WorkbenchEmail]] = loadGroup(groupName).map(_.map(_.email))
 
-  override def batchLoadGroupEmail(groupNames: Set[WorkbenchGroupName]): IO[Stream[(WorkbenchGroupName, WorkbenchEmail)]] = groupNames.toStream.parTraverse { name =>
-    loadGroupEmail(name).map { y => (name -> y.get)}
+  override def batchLoadGroupEmail(groupNames: Set[WorkbenchGroupName]): fs2.Stream[IO, (WorkbenchGroupName, WorkbenchEmail)] = {
+    for {
+      groupName <- fs2.Stream(groupNames.toSeq:_*)
+      groupEmail <- fs2.Stream.eval(loadGroupEmail(groupName))
+    } yield groupName -> groupEmail.get
   }
 
   override def createPetServiceAccount(petServiceAccount: PetServiceAccount): IO[PetServiceAccount] = {
@@ -210,9 +211,14 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     }
   }
 
-  override def loadSubjectEmails(subjects: Set[WorkbenchSubject]): IO[Stream[WorkbenchEmail]] = subjects.toStream.parTraverse { subject =>
-      loadSubjectEmail(subject).map(_.get)
+  override def loadSubjectEmails(subjects: Set[WorkbenchSubject]): fs2.Stream[IO, WorkbenchEmail] = {
+    for {
+      subject <- fs2.Stream(subjects.toSeq:_*)
+      emailOption <- fs2.Stream.eval(loadSubjectEmail(subject))
+    } yield {
+      emailOption.get
     }
+  }
 
   override def getSynchronizedDate(groupId: WorkbenchGroupIdentity): Future[Option[Date]] = {
     Future.successful(groupSynchronizedDates.get(groupId))
@@ -279,7 +285,7 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     )
   }
 
-  override def listUserDirectMemberships(userId: WorkbenchUserId): IO[Stream[WorkbenchGroupIdentity]] = {
-    IO.pure(groups.filter { case (_, group) => group.members.contains(userId) }.keys.toStream)
+  override def listUserDirectMemberships(userId: WorkbenchUserId): fs2.Stream[IO, WorkbenchGroupIdentity] = {
+    fs2.Stream(groups.filter { case (_, group) => group.members.contains(userId) }.keys.toSeq:_*)
   }
 }

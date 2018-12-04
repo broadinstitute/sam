@@ -49,7 +49,7 @@ class ManagedGroupService(
         Map(adminPolicy, memberPolicy, adminNotificationPolicy),
         Set.empty,
         userInfo.userId)
-      policies <- accessPolicyDAO.listAccessPolicies(managedGroup.fullyQualifiedId).unsafeToFuture()
+      policies <- accessPolicyDAO.listAccessPolicies(managedGroup.fullyQualifiedId).compile.toList.unsafeToFuture()
       workbenchGroup <- createAggregateGroup(managedGroup, policies.toSet, accessInstructionsOpt).unsafeToFuture()
       _ <- cloudExtensions.publishGroup(workbenchGroup.id)
     } yield managedGroup
@@ -107,7 +107,7 @@ class ManagedGroupService(
   def listGroups(userId: WorkbenchUserId): IO[Set[ManagedGroupMembershipEntry]] =
     for {
       managedGroupsWithRole <- policyEvaluatorService.listUserManagedGroupsWithRole(userId)
-      emailLookup <- directoryDAO.batchLoadGroupEmail(managedGroupsWithRole.map(_.groupName))
+      emailLookup <- directoryDAO.batchLoadGroupEmail(managedGroupsWithRole.map(_.groupName)).compile.toList
     } yield {
       val emailLookupMap = emailLookup.toMap
       // This will silently ignore any group where the email could not be loaded. This can happen when a
@@ -120,13 +120,18 @@ class ManagedGroupService(
       }
     }
 
-  def listPolicyMemberEmails(resourceId: ResourceId, policyName: ManagedGroupPolicyName): IO[Stream[WorkbenchEmail]] = {
+  def listPolicyMemberEmails(resourceId: ResourceId, policyName: ManagedGroupPolicyName): fs2.Stream[IO, WorkbenchEmail] = {
     val policyIdentity =
       FullyQualifiedPolicyId(FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, resourceId), policyName)
-    accessPolicyDAO.loadPolicy(policyIdentity) flatMap {
-      case Some(policy) => directoryDAO.loadSubjectEmails(policy.members)
-      case None =>
-        IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Group or policy could not be found: $policyIdentity")))
+
+    for {
+      policyOption <- fs2.Stream.eval(accessPolicyDAO.loadPolicy(policyIdentity))
+      email <- policyOption match {
+        case Some(policy) => directoryDAO.loadSubjectEmails(policy.members)
+        case None => fs2.Stream.raiseError[IO](new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Group or policy could not be found: $policyIdentity")))
+      }
+    } yield {
+      email
     }
   }
 
@@ -175,7 +180,7 @@ class ManagedGroupService(
         for {
           requesterUser <- directoryDAO.loadUser(requesterUserId)
           requesterSubjectId <- extractGoogleSubjectId(requesterUser)
-          admins <- accessPolicyDAO.listFlattenedPolicyMembers(resourceAndAdminPolicyName)
+          admins <- accessPolicyDAO.listFlattenedPolicyMembers(resourceAndAdminPolicyName).compile.to[Set]
           // ignore any admin that does not have a google subject id (they have not registered yet anyway)
           adminUserIds = admins.flatMap { admin =>
             admin.googleSubjectId.map(id => WorkbenchUserId(id.value))

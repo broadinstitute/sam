@@ -79,7 +79,7 @@ class PolicyEvaluatorService(
       ridAndPolicyName <- accessPolicyDAO.listAccessPolicies(resourceTypeName, userId) // List all policies of a given resourceType the user is a member of
       rids = ridAndPolicyName.map(_.resourceId)
 
-      resources <- if (isConstrained) accessPolicyDAO.listResourceWithAuthdomains(resourceTypeName, rids)
+      resources <- if (isConstrained) accessPolicyDAO.listResourceWithAuthdomains(resourceTypeName, rids).compile.toList
       else IO.pure(Set.empty)
       authDomainMap = resources.map(x => x.resourceId -> x.authDomain).toMap
 
@@ -97,7 +97,7 @@ class PolicyEvaluatorService(
           }
         } else UserPolicyResponse(rnp.resourceId, rnp.accessPolicyName, Set.empty, Set.empty, false).some
       }
-      publicPolicies <- accessPolicyDAO.listPublicAccessPolicies(resourceTypeName)
+      publicPolicies <- accessPolicyDAO.listPublicAccessPolicies(resourceTypeName).compile.toList
     } yield results.flatten ++ publicPolicies.map(p => UserPolicyResponse(p.resourceId, p.accessPolicyName, Set.empty, Set.empty, public = true))
 
   def listUserManagedGroupsWithRole(userId: WorkbenchUserId): IO[Set[ManagedGroupAndRole]] =
@@ -117,10 +117,7 @@ class PolicyEvaluatorService(
     }
 
   def listResourceAccessPoliciesForUser(resource: FullyQualifiedResourceId, userId: WorkbenchUserId): IO[Set[AccessPolicy]] =
-    for {
-      policies <- accessPolicyDAO.listAccessPoliciesForUser(resource, userId)
-      publicPolicies <- accessPolicyDAO.listPublicAccessPolicies(resource)
-    } yield policies ++ publicPolicies
+    (accessPolicyDAO.listAccessPoliciesForUser(resource, userId) ++ accessPolicyDAO.listPublicAccessPolicies(resource)).compile.to[Set]
 }
 
 object PolicyEvaluatorService {

@@ -38,7 +38,7 @@ class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdenti
   override def loadResourceAuthDomain(resource: FullyQualifiedResourceId): IO[Set[WorkbenchGroupName]] = IO.fromEither(resources.get(resource)
     .toRight(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"no resource $resource found in mock policy dao $resources"))).map(_.authDomain))
 
-  override def listResourcesConstrainedByGroup(groupId: WorkbenchGroupIdentity): IO[Set[Resource]] = IO.pure(Set.empty)
+  override def listResourcesConstrainedByGroup(groupId: WorkbenchGroupIdentity): fs2.Stream[IO, Resource] = fs2.Stream.empty
 
   override def createPolicy(policy: AccessPolicy): IO[AccessPolicy] = IO {
     policies += policy.id -> policy
@@ -56,8 +56,8 @@ class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdenti
   }
 
   override def loadPolicy(policyIdentity: FullyQualifiedPolicyId): IO[Option[AccessPolicy]] = {
-    listAccessPolicies(policyIdentity.resource).map { policies =>
-      policies.filter(_.id.accessPolicyName == policyIdentity.accessPolicyName).toSeq match {
+    listAccessPolicies(policyIdentity.resource).compile.toList.map { policies =>
+      policies.filter(_.id.accessPolicyName == policyIdentity.accessPolicyName) match {
         case Seq() => None
         case Seq(policy) => Option(policy)
         case _ => throw new WorkbenchException(s"More than one policy found for ${policyIdentity.accessPolicyName}")
@@ -74,18 +74,17 @@ class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdenti
     }
   }
 
-  override def listAccessPolicies(resource: FullyQualifiedResourceId): IO[Stream[AccessPolicy]] = IO {
+  override def listAccessPolicies(resource: FullyQualifiedResourceId): fs2.Stream[IO, AccessPolicy] = fs2.Stream(
     policies.collect {
       case (FullyQualifiedPolicyId(`resource`, _), policy: AccessPolicy) => policy
-    }.toStream
-  }
+    }.toSeq:_*
+  )
 
-  override def listAccessPoliciesForUser(resource: FullyQualifiedResourceId, user: WorkbenchUserId): IO[Set[AccessPolicy]] = IO {
+  override def listAccessPoliciesForUser(resource: FullyQualifiedResourceId, user: WorkbenchUserId): fs2.Stream[IO, AccessPolicy] = fs2.Stream (
     policies.collect {
       case (FullyQualifiedPolicyId(`resource`, _), policy: AccessPolicy) if policy.members.contains(user) => policy
-    }.toSet
-
-  }
+    }.toSeq:_*
+  )
 
   override def setPolicyIsPublic(resourceAndPolicyName: FullyQualifiedPolicyId, isPublic: Boolean): IO[Unit] = {
     val maybePolicy = policies.find {
@@ -101,35 +100,36 @@ class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdenti
     }
   }
 
-  override def listPublicAccessPolicies(resourceTypeName: ResourceTypeName): IO[Stream[ResourceIdAndPolicyName]] = {
-    IO.pure(
+  override def listPublicAccessPolicies(resourceTypeName: ResourceTypeName): fs2.Stream[IO, ResourceIdAndPolicyName] = {
+    fs2.Stream(
       policies.collect {
         case (_, policy: AccessPolicy) if policy.public => ResourceIdAndPolicyName(policy.id.resource.resourceId, policy.id.accessPolicyName)
-      }.toStream
+      }.toSeq:_*
     )
   }
 
   // current implementation returns only the WorkbenchUserIds in this policy. it does not fully mock the behavior of LdapAccessPolicyDAO.
   // this function previously just returned an empty set and this is sufficient for the test I'm using it in (as of 10/25/18), so good enough for now
-  override def listFlattenedPolicyMembers(policyIdentity: FullyQualifiedPolicyId): IO[Set[WorkbenchUser]] = IO {
+  override def listFlattenedPolicyMembers(policyIdentity: FullyQualifiedPolicyId): fs2.Stream[IO, WorkbenchUser] = {
+
     val members = policies.collect {
       case (`policyIdentity`, policy: AccessPolicy) => policy.members
     }
-    members.flatten.collect {
+    fs2.Stream(members.flatten.collect {
       case u: WorkbenchUserId => WorkbenchUser(u, Some(GoogleSubjectId(u.value)), WorkbenchEmail("dummy"))
-    }.toSet
+    }.toSeq:_*)
   }
 
   override def listResourceWithAuthdomains(
       resourceTypeName: ResourceTypeName,
       resourceId: Set[ResourceId])
-    : IO[Set[Resource]] = IO.pure(Set.empty)
+    : fs2.Stream[IO, Resource] = fs2.Stream.empty
 
-  override def listPublicAccessPolicies(resource: FullyQualifiedResourceId): IO[Stream[AccessPolicy]] = {
-    IO.pure(
+  override def listPublicAccessPolicies(resource: FullyQualifiedResourceId): fs2.Stream[IO, AccessPolicy] = {
+    fs2.Stream(
       policies.collect {
         case (_, policy: AccessPolicy) if policy.public => policy
-      }.toStream
+      }.toSeq:_*
     )
   }
 }

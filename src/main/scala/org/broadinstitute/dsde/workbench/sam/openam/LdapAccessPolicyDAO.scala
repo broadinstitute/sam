@@ -22,7 +22,7 @@ import scala.concurrent.ExecutionContext
 class LdapAccessPolicyDAO(
     protected val ldapConnectionPool: LDAPConnectionPool,
     protected val directoryConfig: DirectoryConfig,
-    ecForLdapBlockingIO: ExecutionContext)(implicit cs: ContextShift[IO])
+    protected val ecForLdapBlockingIO: ExecutionContext)(implicit protected val cs: ContextShift[IO])
     extends AccessPolicyDAO
     with DirectorySubjectNameSupport
     with LdapSupport {
@@ -64,20 +64,25 @@ class LdapAccessPolicyDAO(
         IO(getAttributes(r, Attr.authDomain).map(WorkbenchGroupName))
     }
 
-  private def unmarshalResource(results: Entry): Either[String, Resource] =
-    for {
+  private def unmarshalResource(results: Entry): IO[Either[String, Resource]] = {
+    val result = for {
       resourceTypeName <- getAttribute(results, Attr.resourceType).toRight(s"${Attr.resourceType} attribute missing")
       resourceId <- getAttribute(results, Attr.resourceId).toRight(s"${Attr.resourceId} attribute missing")
     } yield {
       val authDomain = getAttributes(results, Attr.authDomain).map(g => WorkbenchGroupName(g)).toSet
       Resource(ResourceTypeName(resourceTypeName), ResourceId(resourceId), authDomain)
     }
+    IO.pure(result)
+  }
 
-  override def listResourcesConstrainedByGroup(groupId: WorkbenchGroupIdentity): IO[Set[Resource]] =
+  override def listResourcesConstrainedByGroup(groupId: WorkbenchGroupIdentity): fs2.Stream[IO, Resource] =
     for {
-      res <- executeLdap(IO(ldapSearchStream(resourcesOu, SearchScope.SUB, Filter.createEqualityFilter(Attr.authDomain, groupId.toString))(unmarshalResource)))
-      r <- res.parSequence.fold(err => IO.raiseError(new WorkbenchException(err)), r => IO.pure(r.toSet))
-    } yield r
+      resourceOrError <- ldapSearchStream(resourcesOu, SearchScope.SUB, Filter.createEqualityFilter(Attr.authDomain, groupId.toString))(unmarshalResource)
+      resource <- resourceOrError match {
+        case Right(value) => fs2.Stream(value)
+        case Left(error) => fs2.Stream.raiseError[IO](new WorkbenchException(error))
+      }
+    } yield resource
 
   override def createPolicy(policy: AccessPolicy): IO[AccessPolicy] = {
     val attributes = List(
@@ -108,11 +113,16 @@ class LdapAccessPolicyDAO(
 
   override def deletePolicy(policy: FullyQualifiedPolicyId): IO[Unit] = executeLdap(IO(ldapConnectionPool.delete(policyDn(policy))))
 
-  override def loadPolicy(resourceAndPolicyName: FullyQualifiedPolicyId): IO[Option[AccessPolicy]] = executeLdap(
-    IO(Option(ldapConnectionPool.getEntry(policyDn(resourceAndPolicyName))).map(unmarshalAccessPolicy))
-  )
+  override def loadPolicy(resourceAndPolicyName: FullyQualifiedPolicyId): IO[Option[AccessPolicy]] = {
+    for {
+      entry <- executeLdap(IO(ldapConnectionPool.getEntry(policyDn(resourceAndPolicyName))))
+      policy <- Option(entry).traverse(unmarshalAccessPolicy)
+    } yield {
+      policy
+    }
+  }
 
-  private def unmarshalAccessPolicy(entry: Entry): AccessPolicy = {
+  private def unmarshalAccessPolicy(entry: Entry): IO[AccessPolicy] = IO {
     val policyName = getAttribute(entry, Attr.policy).get
     val resourceTypeName = ResourceTypeName(getAttribute(entry, Attr.resourceType).get)
     val resourceId = ResourceId(getAttribute(entry, Attr.resourceId).get)
@@ -161,7 +171,7 @@ class LdapAccessPolicyDAO(
       groupDns.collect { case policyDnPattern(policyName, resourceId) => ResourceIdAndPolicyName(ResourceId(resourceId), AccessPolicyName(policyName)) }
     }
 
-  override def listResourceWithAuthdomains(resourceTypeName: ResourceTypeName, resourceId: Set[ResourceId]): IO[Set[Resource]] = {
+  override def listResourceWithAuthdomains(resourceTypeName: ResourceTypeName, resourceId: Set[ResourceId]): fs2.Stream[IO, Resource] = {
     val filters = resourceId
       .grouped(batchSize)
       .map(batch =>
@@ -171,54 +181,52 @@ class LdapAccessPolicyDAO(
           .asJava))
       .toSeq
 
-    for {
-      stream <- executeLdap(
-        IO(ldapSearchStream(resourceTypeDn(resourceTypeName), SearchScope.ONE, filters: _*)(et => unmarshalResourceAuthDomain(et, resourceTypeName))))
-      res <- IO.fromEither(stream.parSequence.leftMap(s => new WorkbenchException(s)))
-    } yield res.toSet
+    ldapSearchStream(resourceTypeDn(resourceTypeName), SearchScope.ONE, filters: _*)(et => unmarshalResourceAuthDomain(et, resourceTypeName))
   }
 
-  private def unmarshalResourceAuthDomain(entry: Entry, resourceTypeName: ResourceTypeName): Either[String, Resource] = {
+  private def unmarshalResourceAuthDomain(entry: Entry, resourceTypeName: ResourceTypeName): IO[Resource] = {
     val authDomains = getAttributes(entry, Attr.authDomain).map(WorkbenchGroupName)
-    for {
-      resourceId <- getAttribute(entry, Attr.resourceId).toRight(s"${entry.getDN} attribute missing: ${Attr.resourceId}. ")
-    } yield Resource(resourceTypeName, ResourceId(resourceId), authDomains)
+    val resourceIdOption = getAttribute(entry, Attr.resourceId)
+    resourceIdOption match {
+      case None => IO.raiseError(new WorkbenchException(s"${entry.getDN} attribute missing: ${Attr.resourceId}."))
+      case Some(resourceId) => IO.pure(Resource(resourceTypeName, ResourceId(resourceId), authDomains))
+    }
   }
 
-  override def listPublicAccessPolicies(resourceTypeName: ResourceTypeName): IO[Stream[ResourceIdAndPolicyName]] = IO(
+  override def listPublicAccessPolicies(resourceTypeName: ResourceTypeName): fs2.Stream[IO, ResourceIdAndPolicyName] =
     ldapSearchStream(
       resourceTypeDn(resourceTypeName),
       SearchScope.SUB,
       Filter.createANDFilter(Filter.createEqualityFilter("objectclass", ObjectClass.policy), Filter.createEqualityFilter(Attr.public, "true"))
     ) { entry =>
-      val policy = unmarshalAccessPolicy(entry)
-      ResourceIdAndPolicyName(policy.id.resource.resourceId, policy.id.accessPolicyName)
+      for {
+        policy <- unmarshalAccessPolicy(entry)
+      } yield {
+        ResourceIdAndPolicyName(policy.id.resource.resourceId, policy.id.accessPolicyName)
+      }
     }
-  )
 
-  override def listPublicAccessPolicies(resource: FullyQualifiedResourceId): IO[Stream[AccessPolicy]] =
-    executeLdap(
-      IO(
-        ldapSearchStream(
-          resourceDn(resource),
-          SearchScope.SUB,
-          Filter.createANDFilter(Filter.createEqualityFilter("objectclass", ObjectClass.policy), Filter.createEqualityFilter(Attr.public, "true"))
-        )(unmarshalAccessPolicy)))
+  override def listPublicAccessPolicies(resource: FullyQualifiedResourceId): fs2.Stream[IO, AccessPolicy] =
+    ldapSearchStream(
+      resourceDn(resource),
+      SearchScope.SUB,
+      Filter.createANDFilter(Filter.createEqualityFilter("objectclass", ObjectClass.policy), Filter.createEqualityFilter(Attr.public, "true"))
+    )(unmarshalAccessPolicy)
 
-  override def listAccessPolicies(resource: FullyQualifiedResourceId): IO[Stream[AccessPolicy]] =
-    executeLdap(
-      IO(
-        ldapSearchStream(resourceDn(resource), SearchScope.SUB, Filter.createEqualityFilter("objectclass", ObjectClass.policy))(unmarshalAccessPolicy)
-      ))
+  override def listAccessPolicies(resource: FullyQualifiedResourceId): fs2.Stream[IO, AccessPolicy] =
+    ldapSearchStream(resourceDn(resource), SearchScope.SUB, Filter.createEqualityFilter("objectclass", ObjectClass.policy))(unmarshalAccessPolicy)
 
-  override def listAccessPoliciesForUser(resource: FullyQualifiedResourceId, user: WorkbenchUserId): IO[Set[AccessPolicy]] =
+  override def listAccessPoliciesForUser(resource: FullyQualifiedResourceId, user: WorkbenchUserId): fs2.Stream[IO, AccessPolicy] =
     for {
-      entry <- executeLdap(IO(ldapConnectionPool.getEntry(subjectDn(user), Attr.memberOf)))
-      members <- IO.pure(Option(entry).map(e => getAttributes(e, Attr.memberOf).toList))
-      accessPolicies <- members.traverse { policyStrs =>
-        val fullyQualifiedPolicyIds = policyStrs.mapFilter { str =>
+      entry <- fs2.Stream.eval(executeLdap(IO(ldapConnectionPool.getEntry(subjectDn(user), Attr.memberOf))))
+      memberOfDns <- Option(entry) match {
+        case None => fs2.Stream.empty
+        case Some(e) => fs2.Stream(getAttributes(e, Attr.memberOf).toList)
+      }
+      accessPolicies <- {
+        val fullyQualifiedPolicyIds = memberOfDns.mapFilter { memberOfDn =>
           for {
-            subject <- Either.catchNonFatal(dnToSubject(str)).toOption
+            subject <- Either.catchNonFatal(dnToSubject(memberOfDn)).toOption
             fullyQualifiedPolicyId <- subject match {
               case sub: FullyQualifiedPolicyId
                   if sub.resource.resourceId == resource.resourceId && sub.resource.resourceTypeName == resource.resourceTypeName =>
@@ -231,15 +239,14 @@ class LdapAccessPolicyDAO(
           .grouped(batchSize)
           .map(batch => Filter.createORFilter(batch.map(r => Filter.createEqualityFilter(Attr.policy, r.accessPolicyName.value)).asJava))
           .toSeq
-        executeLdap(IO(ldapSearchStream(resourceDn(resource), SearchScope.SUB, filters: _*)(unmarshalAccessPolicy).toSet))
+        ldapSearchStream(resourceDn(resource), SearchScope.SUB, filters: _*)(unmarshalAccessPolicy)
       }
-    } yield accessPolicies.getOrElse(Set.empty)
+    } yield accessPolicies
 
-  override def listFlattenedPolicyMembers(policyId: FullyQualifiedPolicyId): IO[Set[WorkbenchUser]] = executeLdap(
-    IO(ldapSearchStream(peopleOu, SearchScope.ONE, Filter.createEqualityFilter(Attr.memberOf, policyDn(policyId)))(unmarshalUser).toSet)
-  )
+  override def listFlattenedPolicyMembers(policyId: FullyQualifiedPolicyId): fs2.Stream[IO, WorkbenchUser] =
+    ldapSearchStream(peopleOu, SearchScope.ONE, Filter.createEqualityFilter(Attr.memberOf, policyDn(policyId)))(unmarshalUser)
 
-  private def unmarshalUser(entry: Entry): WorkbenchUser = {
+  private def unmarshalUser(entry: Entry): IO[WorkbenchUser] = IO {
     val uid = getAttribute(entry, Attr.uid).getOrElse(throw new WorkbenchException(s"${Attr.uid} attribute missing"))
     val email = getAttribute(entry, Attr.email).getOrElse(throw new WorkbenchException(s"${Attr.email} attribute missing"))
 
@@ -255,6 +262,4 @@ class LdapAccessPolicyDAO(
         IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "policy does not exist")))
     }
   }
-
-  private def executeLdap[A](ioa: IO[A]): IO[A] = cs.evalOn(ecForLdapBlockingIO)(ioa)
 }

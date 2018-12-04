@@ -23,11 +23,8 @@ import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, LdapAccess
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.{TestSupport, model, _}
-import org.mockito.ArgumentMatcher
-import org.mockito.ArgumentMatchers._
-import org.mockito.Mockito._
 import org.scalatest.concurrent.ScalaFutures
-import org.scalatest.mockito.MockitoSugar
+import org.mockito.{ArgumentMatcher, ArgumentMatchersSugar, MockitoSugar}
 import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers, PrivateMethodTester}
 
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -36,7 +33,7 @@ import scala.concurrent.duration._
 import scala.language.postfixOps
 import scala.util.{Success, Try}
 
-class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with FlatSpecLike with Matchers with TestSupport with MockitoSugar with ScalaFutures with BeforeAndAfterAll with PrivateMethodTester {
+class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with FlatSpecLike with Matchers with TestSupport with MockitoSugar with ArgumentMatchersSugar with ScalaFutures with BeforeAndAfterAll with PrivateMethodTester {
   def this() = this(ActorSystem("GoogleGroupSyncMonitorSpec"))
 
   override def beforeAll(): Unit = {
@@ -220,7 +217,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     when(mockAccessPolicyDAO.loadPolicy(testPolicy.id)).thenReturn(IO.pure(Option(testPolicy)))
     when(mockAccessPolicyDAO.loadResourceAuthDomain(resource.fullyQualifiedId)).thenReturn(IO.pure(Set(managedGroupId)))
 
-    when(mockDirectoryDAO.listIntersectionGroupUsers(Set(managedGroupId, testPolicy.id))).thenReturn(Future.successful(Set(intersectionSamUserId, authorizedGoogleUserId, subIntersectionSamGroupUserId, subAuthorizedGoogleGroupUserId, addError)))
+    when(mockDirectoryDAO.listIntersectionGroupUsers(Set(managedGroupId, testPolicy.id))).thenReturn(IO.pure(Set(intersectionSamUserId, authorizedGoogleUserId, subIntersectionSamGroupUserId, subAuthorizedGoogleGroupUserId, addError)))
 
     when(mockDirectoryDAO.updateSynchronizedDate(any[WorkbenchGroupIdentity])).thenReturn(Future.successful(()))
     when(mockDirectoryDAO.getSynchronizedDate(any[WorkbenchGroupIdentity])).thenReturn(Future.successful(Some(new GregorianCalendar(2017, 11, 22).getTime())))
@@ -593,7 +590,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val allUsersGroupMatcher = new ArgumentMatcher[BasicWorkbenchGroup] {
       override def matches(group: BasicWorkbenchGroup): Boolean = group.id == allUsersGroup.id
     }
-    when(mockDirectoryDAO.createGroup(argThat(allUsersGroupMatcher), isNull())).thenReturn(IO.pure(allUsersGroup))
+    when(mockDirectoryDAO.createGroup(argThat(allUsersGroupMatcher), any[Option[String]])).thenReturn(IO.pure(allUsersGroup))
 
     when(mockDirectoryDAO.addProxyGroup(userId, proxyEmail)).thenReturn(Future.successful(()))
     when(mockGoogleDirectoryDAO.getGoogleGroup(any[WorkbenchEmail])).thenReturn(Future.successful(None))
@@ -646,9 +643,8 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     when(mockDirectoryDAO.getSynchronizedDate(any[FullyQualifiedPolicyId])).thenReturn(Future.successful(Some(new GregorianCalendar(2018, 8, 26).getTime())))
     when(mockGooglePubSubDAO.publishMessages(any[String], any[Seq[String]])).thenReturn(Future.successful(()))
 
-    // mock responses for onManagedGroupUpdate
-    when(mockAccessPolicyDAO.listResourcesConstrainedByGroup(WorkbenchGroupName(managedGroupId))).thenReturn(IO.pure(Set(resource)))
-    when(mockAccessPolicyDAO.listAccessPolicies(resource.fullyQualifiedId)).thenReturn(IO.pure(Stream(ownerPolicy, readerPolicy)))
+    when(mockAccessPolicyDAO.listResourcesConstrainedByGroup(WorkbenchGroupName(managedGroupId))).thenReturn(fs2.Stream(resource).covary[IO])
+    when(mockAccessPolicyDAO.listAccessPolicies(resource.fullyQualifiedId)).thenReturn(fs2.Stream(ownerPolicy, readerPolicy).covary[IO])
 
     runAndWait(googleExtensions.onGroupUpdate(Seq(managedGroupRPN)))
 
@@ -682,8 +678,8 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     when(mockDirectoryDAO.listAncestorGroups(WorkbenchGroupName(subGroupId))).thenReturn(IO.pure(Set(managedGroupRPN).asInstanceOf[Set[WorkbenchGroupIdentity]]))
 
     // mock responses for onManagedGroupUpdate
-    when(mockAccessPolicyDAO.listResourcesConstrainedByGroup(WorkbenchGroupName(managedGroupId))).thenReturn(IO.pure(Set(resource)))
-    when(mockAccessPolicyDAO.listAccessPolicies(resource.fullyQualifiedId)).thenReturn(IO.pure(Stream(ownerPolicy, readerPolicy)))
+    when(mockAccessPolicyDAO.listResourcesConstrainedByGroup(WorkbenchGroupName(managedGroupId))).thenReturn(fs2.Stream(resource))
+    when(mockAccessPolicyDAO.listAccessPolicies(resource.fullyQualifiedId)).thenReturn(fs2.Stream(ownerPolicy, readerPolicy))
 
     runAndWait(googleExtensions.onGroupUpdate(Seq(WorkbenchGroupName(subGroupId))))
 
@@ -718,8 +714,8 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     when(mockDirectoryDAO.listAncestorGroups(ownerRPN)).thenReturn(IO.pure(Set(managedGroupRPN).asInstanceOf[Set[WorkbenchGroupIdentity]]))
 
     // mock responses for onManagedGroupUpdate
-    when(mockAccessPolicyDAO.listResourcesConstrainedByGroup(WorkbenchGroupName(managedGroupId))).thenReturn(IO.pure(Set(resource)))
-    when(mockAccessPolicyDAO.listAccessPolicies(resource.fullyQualifiedId)).thenReturn(IO.pure(Stream(ownerPolicy, readerPolicy)))
+    when(mockAccessPolicyDAO.listResourcesConstrainedByGroup(WorkbenchGroupName(managedGroupId))).thenReturn(fs2.Stream(resource))
+    when(mockAccessPolicyDAO.listAccessPolicies(resource.fullyQualifiedId)).thenReturn(fs2.Stream(ownerPolicy, readerPolicy))
 
     runAndWait(googleExtensions.onGroupUpdate(Seq(WorkbenchGroupName(subGroupId))))
 

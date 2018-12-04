@@ -47,9 +47,10 @@ object Dependencies {
   val monocleMacro: ModuleID = "com.github.julien-truffaut" %%  "monocle-macro" % monocleVersion
 
   val scalaTest: ModuleID =       "org.scalatest" %% "scalatest"    % scalaTestV % "test"
-  val mockito: ModuleID =         "org.mockito"    % "mockito-core" % "2.7.22"   % "test"
+  val mockito: ModuleID =         "org.mockito" %% "mockito-scala" % "1.0.5" % "test"
 
   val unboundid: ModuleID = "com.unboundid" % "unboundid-ldapsdk" % "4.0.6"
+  val fs2: ModuleID = "co.fs2" %% "fs2-core" % "1.0.1"
 
   // All of workbench-libs pull in Akka; exclude it since we provide our own Akka dependency.
   // workbench-google pulls in workbench-{util, model, metrics}; exclude them so we can control the library versions individually.
@@ -92,6 +93,7 @@ object Dependencies {
     workbenchNotifications,
     workbenchGoogleTests,
 
-    unboundid
+    unboundid,
+    fs2
   )
 }

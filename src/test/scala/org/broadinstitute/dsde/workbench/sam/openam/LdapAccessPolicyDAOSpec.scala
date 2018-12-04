@@ -53,25 +53,25 @@ class LdapAccessPolicyDAOSpec extends AsyncFlatSpec with ScalaFutures with Match
       //policy2's resource already exists
       _ <- dao.createResource(resource3)
 
-      ls1 <- dao.listAccessPolicies(policy1.id.resource)
-      ls2 <- dao.listAccessPolicies(policy2.id.resource)
-      ls3 <- dao.listAccessPolicies(policy3.id.resource)
+      ls1 <- dao.listAccessPolicies(policy1.id.resource).compile.toList
+      ls2 <- dao.listAccessPolicies(policy2.id.resource).compile.toList
+      ls3 <- dao.listAccessPolicies(policy3.id.resource).compile.toList
 
       _ <- dao.createPolicy(policy1)
       _ <- dao.createPolicy(policy2)
       _ <- dao.createPolicy(policy3)
 
-      lsPolicy1 <- dao.listAccessPolicies(policy1.id.resource)
-      lsPolicy3 <- dao.listAccessPolicies(policy3.id.resource)
+      lsPolicy1 <- dao.listAccessPolicies(policy1.id.resource).compile.toList
+      lsPolicy3 <- dao.listAccessPolicies(policy3.id.resource).compile.toList
 
       _ <- dao.deletePolicy(policy1.id)
-      lsAfterDeletePolicy1 <- dao.listAccessPolicies(policy1.id.resource)
+      lsAfterDeletePolicy1 <- dao.listAccessPolicies(policy1.id.resource).compile.toList
 
       _ <- dao.deletePolicy(policy2.id)
-      lsAfterDeletePolicy2 <- dao.listAccessPolicies(policy1.id.resource)
+      lsAfterDeletePolicy2 <- dao.listAccessPolicies(policy1.id.resource).compile.toList
 
       _ <- dao.deletePolicy(policy3.id)
-      ls3AfterDeletePolicy3 <- dao.listAccessPolicies(policy3.id.resource)
+      ls3AfterDeletePolicy3 <- dao.listAccessPolicies(policy3.id.resource).compile.toList
     } yield{
       ls1 shouldBe(Stream.empty)
       ls2 shouldBe(Stream.empty)
@@ -97,7 +97,7 @@ class LdapAccessPolicyDAOSpec extends AsyncFlatSpec with ScalaFutures with Match
       _ <- dao.createResourceType(resourceTypeName)
       _ <- dao.createResource(resource1)
       _ <- dao.createResource(resource2)
-      resources <- dao.listResourcesConstrainedByGroup(authDomain)
+      resources <- dao.listResourcesConstrainedByGroup(authDomain).compile.toList
     } yield {
       resources should contain theSameElementsAs Set(resource1, resource2)
     }
@@ -111,10 +111,10 @@ class LdapAccessPolicyDAOSpec extends AsyncFlatSpec with ScalaFutures with Match
       _ <- setup()
       _ <- dao.createResourceType(resource.resourceTypeName)
       _ <- dao.createResource(resource)
-      r <- dao.listResourceWithAuthdomains(resource.resourceTypeName, Set(resource.resourceId))
+      r <- dao.listResourceWithAuthdomains(resource.resourceTypeName, Set(resource.resourceId)).compile.toList
     } yield r
 
-    res.unsafeToFuture().map(x => x shouldBe(Set(Resource(policy.id.resource.resourceTypeName, policy.id.resource.resourceId, resource.authDomain))))
+    res.unsafeToFuture().map(x => x should contain theSameElementsAs Set(Resource(policy.id.resource.resourceTypeName, policy.id.resource.resourceId, resource.authDomain)))
   }
 
   "listAccessPolicies" should "return all ResourceIdAndPolicyName user is a member of" in{
@@ -131,7 +131,7 @@ class LdapAccessPolicyDAOSpec extends AsyncFlatSpec with ScalaFutures with Match
       resources <- dao.listAccessPolicies(policy.id.resource.resourceTypeName, user.id)
     } yield resources
 
-    res.unsafeToFuture().map(x => x shouldBe(Set(ResourceIdAndPolicyName(policy.id.resource.resourceId, policy.id.accessPolicyName))))
+    res.unsafeToFuture().map(x => x should contain theSameElementsAs Set(ResourceIdAndPolicyName(policy.id.resource.resourceId, policy.id.accessPolicyName)))
   }
 }
 

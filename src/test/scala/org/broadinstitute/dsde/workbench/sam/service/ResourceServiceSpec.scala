@@ -138,14 +138,14 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     runAndWait(service.createResource(defaultResourceType, resourceName, dummyUserInfo))
 
     assertResult(constructExpectedPolicies(defaultResourceType, resource)) {
-      policyDAO.listAccessPolicies(resource).unsafeRunSync().map(_.copy(email=WorkbenchEmail("policy-randomuuid@example.com")))
+      policyDAO.listAccessPolicies(resource).compile.toList.unsafeRunSync().map(_.copy(email=WorkbenchEmail("policy-randomuuid@example.com")))
     }
 
     //cleanup
     runAndWait(service.deleteResource(resource))
 
     assertResult(Stream.empty) {
-      policyDAO.listAccessPolicies(resource).unsafeRunSync()
+      policyDAO.listAccessPolicies(resource).compile.toList.unsafeRunSync()
     }
   }
 
@@ -294,7 +294,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
 
     runAndWait(service.createResource(resourceType, resourceName, Map(policyName -> policyMembership), Set.empty, dummyUserInfo.userId))
 
-    val policies = service.listResourcePolicies(FullyQualifiedResourceId(resourceType.name, resourceName)).unsafeRunSync()
+    val policies = service.listResourcePolicies(FullyQualifiedResourceId(resourceType.name, resourceName)).compile.toList.unsafeRunSync()
     assertResult(Stream(AccessPolicyResponseEntry(policyName, policyMembership, WorkbenchEmail("")))) {
       policies.map(_.copy(email = WorkbenchEmail("")))
     }
@@ -322,7 +322,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
 
   private def assertResourceExists(
       resource: FullyQualifiedResourceId, resourceType: ResourceType, policyDao: AccessPolicyDAO) = {
-    val resultingPolicies = policyDao.listAccessPolicies(resource).unsafeRunSync().map(_.copy(email = WorkbenchEmail("policy-randomuuid@example.com")))
+    val resultingPolicies = policyDao.listAccessPolicies(resource).compile.toList.unsafeRunSync().map(_.copy(email = WorkbenchEmail("policy-randomuuid@example.com")))
     resultingPolicies should contain theSameElementsAs constructExpectedPolicies(resourceType, resource)
   }
 
@@ -442,7 +442,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     service.createResourceType(defaultResourceType).unsafeRunSync()
     runAndWait(service.createResource(defaultResourceType, resource.resourceId, dummyUserInfo))
 
-    val policies = policyDAO.listAccessPolicies(resource).unsafeRunSync().map(_.copy(email=WorkbenchEmail("policy-randomuuid@example.com")))
+    val policies = policyDAO.listAccessPolicies(resource).compile.toList.unsafeRunSync().map(_.copy(email=WorkbenchEmail("policy-randomuuid@example.com")))
 
     constructExpectedPolicies(defaultResourceType, resource) should contain theSameElementsAs(policies)
   }
@@ -456,7 +456,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     service.createResourceType(defaultResourceType).unsafeRunSync()
     runAndWait(service.createResource(defaultResourceType, resource.resourceId, dummyUserInfo))
 
-    val policies = service.listResourcePolicies(resource).unsafeRunSync().map(_.copy(email = forcedEmail))
+    val policies = service.listResourcePolicies(resource).compile.toList.unsafeRunSync().map(_.copy(email = forcedEmail))
     policies should contain theSameElementsAs Set(expectedPolicy)
   }
 
@@ -469,7 +469,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     service.createResourceType(defaultResourceType).unsafeRunSync()
     runAndWait(service.createResource(defaultResourceType, resource.resourceId, dummyUserInfo))
 
-    val policies = service.listResourcePolicies(resource).unsafeRunSync().map(_.copy(email = forcedEmail))
+    val policies = service.listResourcePolicies(resource).compile.toList.unsafeRunSync().map(_.copy(email = forcedEmail))
     policies should contain theSameElementsAs Set(expectedPolicy)
   }
 
@@ -485,7 +485,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
 
     runAndWait(service.overwritePolicy(defaultResourceType, newPolicy.id.accessPolicyName, newPolicy.id.resource, AccessPolicyMembership(Set.empty, Set(ResourceAction("non_owner_action")), Set.empty)))
 
-    val policies = policyDAO.listAccessPolicies(resource).unsafeRunSync().map(_.copy(email=WorkbenchEmail("policy-randomuuid@example.com")))
+    val policies = policyDAO.listAccessPolicies(resource).compile.toList.unsafeRunSync().map(_.copy(email=WorkbenchEmail("policy-randomuuid@example.com")))
 
     assert(policies.contains(newPolicy))
   }
@@ -504,7 +504,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
 
     runAndWait(service.overwritePolicyMembers(defaultResourceType, newPolicy.id.accessPolicyName, newPolicy.id.resource, Set.empty))
 
-    val policies = policyDAO.listAccessPolicies(resource).unsafeRunSync().map(_.copy(email=WorkbenchEmail("policy-randomuuid@example.com")))
+    val policies = policyDAO.listAccessPolicies(resource).compile.toList.unsafeRunSync().map(_.copy(email=WorkbenchEmail("policy-randomuuid@example.com")))
 
     assert(policies.contains(newPolicy))
   }
@@ -524,7 +524,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
       newPolicy.actions
     }
 
-    val policies = policyDAO.listAccessPolicies(resource).unsafeRunSync()
+    val policies = policyDAO.listAccessPolicies(resource).compile.toList.unsafeRunSync()
 
     assert(policies.contains(newPolicy))
   }
@@ -544,7 +544,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
 
     assert(exception.getMessage.contains("invalid action"))
 
-    val policies = policyDAO.listAccessPolicies(resource).unsafeRunSync()
+    val policies = policyDAO.listAccessPolicies(resource).compile.toList.unsafeRunSync()
 
     assert(!policies.contains(newPolicy))
   }
@@ -579,7 +579,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
 
     assert(exception.getMessage.contains("invalid role"))
 
-    val policies = policyDAO.listAccessPolicies(resource).unsafeRunSync()
+    val policies = policyDAO.listAccessPolicies(resource).compile.toList.unsafeRunSync()
 
     assert(!policies.contains(newPolicy))
   }
@@ -599,7 +599,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
 
     assert(exception.getMessage.contains("invalid member email"))
 
-    val policies = policyDAO.listAccessPolicies(resource).unsafeRunSync()
+    val policies = policyDAO.listAccessPolicies(resource).compile.toList.unsafeRunSync()
 
     assert(!policies.contains(newPolicy))
   }
@@ -610,11 +610,11 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     service.createResourceType(defaultResourceType).unsafeRunSync()
     runAndWait(service.createResource(defaultResourceType, resource.resourceId, dummyUserInfo))
 
-    assert(policyDAO.listAccessPolicies(resource).unsafeRunSync().nonEmpty)
+    assert(policyDAO.listAccessPolicies(resource).compile.toList.unsafeRunSync().nonEmpty)
 
     runAndWait(service.deleteResource(resource))
 
-    assert(policyDAO.listAccessPolicies(resource).unsafeRunSync().isEmpty)
+    assert(policyDAO.listAccessPolicies(resource).compile.toList.unsafeRunSync().isEmpty)
   }
 
   it should "not allow a new resource to be created with the same name as the deleted resource if 'reuseIds' is false for the Resource Type" in {
@@ -642,13 +642,13 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     val resource = FullyQualifiedResourceId(reusableResourceType.name, ResourceId("my-resource"))
 
     runAndWait(localService.createResource(reusableResourceType, resource.resourceId, dummyUserInfo))
-    policyDAO.listAccessPolicies(resource).unsafeRunSync() should not be empty
+    policyDAO.listAccessPolicies(resource).compile.toList.unsafeRunSync() should not be empty
 
     runAndWait(localService.deleteResource(resource))
-    policyDAO.listAccessPolicies(resource).unsafeRunSync() shouldBe empty
+    policyDAO.listAccessPolicies(resource).compile.toList.unsafeRunSync() shouldBe empty
 
     runAndWait(localService.createResource(reusableResourceType, resource.resourceId, dummyUserInfo))
-    policyDAO.listAccessPolicies(resource).unsafeRunSync() should not be empty
+    policyDAO.listAccessPolicies(resource).compile.toList.unsafeRunSync() should not be empty
   }
 
   "add/remove SubjectToPolicy" should "add/remove subject and tolerate prior (non)existence" in {
@@ -697,7 +697,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
 
     // assert a resource was not created for SamResourceTypes.resourceTypeAdmin
     policyDAO.listAccessPolicies(
-      FullyQualifiedResourceId(SamResourceTypes.resourceTypeAdminName, ResourceId(SamResourceTypes.resourceTypeAdminName.value))).unsafeRunSync() should equal(Stream.empty)
+      FullyQualifiedResourceId(SamResourceTypes.resourceTypeAdminName, ResourceId(SamResourceTypes.resourceTypeAdminName.value))).compile.toList.unsafeRunSync() should equal(Stream.empty)
 
     // assert a resource was created for defaultResourceType
     val resourceAndPolicyName = FullyQualifiedPolicyId(
@@ -770,7 +770,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
       testGroup <- dirDAO.createGroup(BasicWorkbenchGroup(WorkbenchGroupName("mygroup"), Set.empty, WorkbenchEmail("group@a.com")))
 
       res1 <- IO.fromFuture(IO(service.createResource(defaultResourceType, ResourceId("resource1"), dummyUserInfo)))
-      testPolicy <- service.listResourcePolicies(res1.fullyQualifiedId).map(_.head)
+      testPolicy <- service.listResourcePolicies(res1.fullyQualifiedId).compile.toList.map(_.head)
 
       res2 <- IO.fromFuture(IO(service.createResource(defaultResourceType, ResourceId("resource2"), dummyUserInfo)))
 
