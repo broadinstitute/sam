@@ -214,7 +214,7 @@ class LdapAccessPolicyDAO(
   override def listAccessPoliciesForUser(resource: FullyQualifiedResourceId, user: WorkbenchUserId): IO[Set[AccessPolicy]] = {
     for {
       resourcePolicies <- listAccessPolicies(resource)
-      accessiblePolicies <- resourcePolicies.traverse { policy =>
+      accessiblePolicies <- resourcePolicies.parTraverse { policy =>
         executeLdap(IO(ldapSearchStream(subjectDn(user), SearchScope.BASE, Filter.createEqualityFilter(Attr.memberOf, subjectDn(policy.id)))(_ => policy)))
       }
     } yield {
