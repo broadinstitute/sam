@@ -211,29 +211,38 @@ class LdapAccessPolicyDAO(
         ldapSearchStream(resourceDn(resource), SearchScope.SUB, Filter.createEqualityFilter("objectclass", ObjectClass.policy))(unmarshalAccessPolicy)
       ))
 
-  override def listAccessPoliciesForUser(resource: FullyQualifiedResourceId, user: WorkbenchUserId): IO[Set[AccessPolicy]] =
+  override def listAccessPoliciesForUser(resource: FullyQualifiedResourceId, user: WorkbenchUserId): IO[Set[AccessPolicy]] = {
     for {
-      entry <- executeLdap(IO(ldapConnectionPool.getEntry(subjectDn(user), Attr.memberOf)))
-      members <- IO.pure(Option(entry).map(e => getAttributes(e, Attr.memberOf).toList))
-      accessPolicies <- members.traverse { policyStrs =>
-        val fullyQualifiedPolicyIds = policyStrs.mapFilter { str =>
-          for {
-            subject <- Either.catchNonFatal(dnToSubject(str)).toOption
-            fullyQualifiedPolicyId <- subject match {
-              case sub: FullyQualifiedPolicyId
-                  if sub.resource.resourceId == resource.resourceId && sub.resource.resourceTypeName == resource.resourceTypeName =>
-                Some(sub)
-              case _ => None
-            }
-          } yield fullyQualifiedPolicyId
-        }
-        val filters = fullyQualifiedPolicyIds
-          .grouped(batchSize)
-          .map(batch => Filter.createORFilter(batch.map(r => Filter.createEqualityFilter(Attr.policy, r.accessPolicyName.value)).asJava))
-          .toSeq
-        executeLdap(IO(ldapSearchStream(resourceDn(resource), SearchScope.SUB, filters: _*)(unmarshalAccessPolicy).toSet))
+      resourcePolicies <- listAccessPolicies(resource)
+      accessiblePolicies <- resourcePolicies.traverse { policy =>
+        executeLdap(IO(ldapSearchStream(subjectDn(user), SearchScope.BASE, Filter.createEqualityFilter(Attr.memberOf, subjectDn(policy.id)))(_ => policy)))
       }
-    } yield accessPolicies.getOrElse(Set.empty)
+    } yield {
+      accessiblePolicies.flatten.toSet
+    }
+//    for {
+//      entry <- executeLdap(IO(ldapConnectionPool.getEntry(subjectDn(user), Attr.memberOf)))
+//      members <- IO.pure(Option(entry).map(e => getAttributes(e, Attr.memberOf).toList))
+//      accessPolicies <- members.traverse { policyStrs =>
+//        val fullyQualifiedPolicyIds = policyStrs.mapFilter { str =>
+//          for {
+//            subject <- Either.catchNonFatal(dnToSubject(str)).toOption
+//            fullyQualifiedPolicyId <- subject match {
+//              case sub: FullyQualifiedPolicyId
+//                  if sub.resource.resourceId == resource.resourceId && sub.resource.resourceTypeName == resource.resourceTypeName =>
+//                Some(sub)
+//              case _ => None
+//            }
+//          } yield fullyQualifiedPolicyId
+//        }
+//        val filters = fullyQualifiedPolicyIds
+//          .grouped(batchSize)
+//          .map(batch => Filter.createORFilter(batch.map(r => Filter.createEqualityFilter(Attr.policy, r.accessPolicyName.value)).asJava))
+//          .toSeq
+//        executeLdap(IO(ldapSearchStream(resourceDn(resource), SearchScope.SUB, filters: _*)(unmarshalAccessPolicy).toSet))
+//      }
+//    } yield accessPolicies.getOrElse(Set.empty)
+  }
 
   override def listFlattenedPolicyMembers(policyId: FullyQualifiedPolicyId): IO[Set[WorkbenchUser]] = executeLdap(
     IO(ldapSearchStream(peopleOu, SearchScope.ONE, Filter.createEqualityFilter(Attr.memberOf, policyDn(policyId)))(unmarshalUser).toSet)
