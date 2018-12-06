@@ -26,6 +26,7 @@ class StatusRouteSpec extends FlatSpec with Matchers with ScalatestRouteTest wit
     eventually {
       Get("/version") ~> samRoutes.route ~> check {
         status shouldEqual StatusCodes.OK
+        responseAs[String] should include("n/a")
       }
     }
   }
