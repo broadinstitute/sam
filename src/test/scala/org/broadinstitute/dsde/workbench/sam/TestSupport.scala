@@ -56,17 +56,29 @@ trait PropertyBasedTesting extends PropertyChecks with Configuration with Matche
 object TestSupport extends TestSupport {
   private val executor = Executors.newCachedThreadPool()
   val blockingEc = ExecutionContext.fromExecutor(executor)
-  def testCache: Cache[WorkbenchSubject, Set[String]] = {
+  def testMemberOfCache: Cache[WorkbenchSubject, Set[String]] = {
     val cacheManager = CacheManagerBuilder.newCacheManagerBuilder
       .withCache(
-        "test",
+        "test-memberof",
         CacheConfigurationBuilder
           .newCacheConfigurationBuilder(classOf[WorkbenchSubject], classOf[Set[String]], ResourcePoolsBuilder.heap(10))
           .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(java.time.Duration.ofMillis(0)))
       )
       .build
     cacheManager.init()
-    cacheManager.getCache("test", classOf[WorkbenchSubject], classOf[Set[String]])
+    cacheManager.getCache("test-memberof", classOf[WorkbenchSubject], classOf[Set[String]])
+  }
+  def testResourceCache: Cache[FullyQualifiedResourceId, Resource] = {
+    val cacheManager = CacheManagerBuilder.newCacheManagerBuilder
+      .withCache(
+        "test-resource",
+        CacheConfigurationBuilder
+          .newCacheConfigurationBuilder(classOf[FullyQualifiedResourceId], classOf[Resource], ResourcePoolsBuilder.heap(100))
+          .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(java.time.Duration.ofMillis(1000)))
+      )
+      .build
+    cacheManager.init()
+    cacheManager.getCache("test-resource", classOf[FullyQualifiedResourceId], classOf[Resource])
   }
 
   implicit val eqWorkbenchExceptionErrorReport: Eq[WorkbenchExceptionWithErrorReport] =

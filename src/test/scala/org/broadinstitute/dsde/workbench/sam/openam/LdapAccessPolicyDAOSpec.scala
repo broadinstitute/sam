@@ -84,7 +84,7 @@ class LdapAccessPolicyDAOSpec extends AsyncFlatSpec with ScalaFutures with Match
       ls3AfterDeletePolicy3 shouldBe Stream.empty
     }
 
-    res.unsafeToFuture()
+    res.unsafeRunSync()
   }
 
   it should "list the resources constrained by the given managed group" in {
@@ -101,7 +101,7 @@ class LdapAccessPolicyDAOSpec extends AsyncFlatSpec with ScalaFutures with Match
     } yield {
       resources should contain theSameElementsAs Set(resource1, resource2)
     }
-    res.unsafeToFuture
+    res.unsafeRunSync()
   }
 
   "LdapAccessPolicyDAO listUserPolicyResponse" should "return UserPolicyResponse" in {
@@ -111,10 +111,13 @@ class LdapAccessPolicyDAOSpec extends AsyncFlatSpec with ScalaFutures with Match
       _ <- setup()
       _ <- dao.createResourceType(resource.resourceTypeName)
       _ <- dao.createResource(resource)
-      r <- dao.listResourceWithAuthdomains(resource.resourceTypeName, Set(resource.resourceId))
-    } yield r
+      r <- dao.listResourcesWithAuthdomains(resource.resourceTypeName, Set(resource.resourceId))
+      cached <- dao.listResourcesWithAuthdomains(resource.resourceTypeName, Set(resource.resourceId))
+    } yield (r, cached)
 
-    res.unsafeToFuture().map(x => x shouldBe(Set(Resource(policy.id.resource.resourceTypeName, policy.id.resource.resourceId, resource.authDomain))))
+    val (firstResponse, secondResponse) =  res.unsafeRunSync()
+    firstResponse shouldBe(Set(Resource(policy.id.resource.resourceTypeName, policy.id.resource.resourceId, resource.authDomain)))
+    secondResponse shouldBe firstResponse
   }
 
   "listAccessPolicies" should "return all ResourceIdAndPolicyName user is a member of" in{
@@ -131,7 +134,7 @@ class LdapAccessPolicyDAOSpec extends AsyncFlatSpec with ScalaFutures with Match
       resources <- dao.listAccessPolicies(policy.id.resource.resourceTypeName, user.id)
     } yield resources
 
-    res.unsafeToFuture().map(x => x shouldBe(Set(ResourceIdAndPolicyName(policy.id.resource.resourceId, policy.id.accessPolicyName))))
+    res.unsafeRunSync() shouldBe(Set(ResourceIdAndPolicyName(policy.id.resource.resourceId, policy.id.accessPolicyName)))
   }
 }
 
@@ -140,8 +143,8 @@ object LdapAccessPolicyDAOSpec{
   import scala.concurrent.ExecutionContext.Implicits.global
 
   private val connectionPool = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
-  val dao = new LdapAccessPolicyDAO(connectionPool, directoryConfig, blockingEc, TestSupport.testCache)
-  val dirDao = new LdapDirectoryDAO(connectionPool, directoryConfig, blockingEc, TestSupport.testCache)
+  val dao = new LdapAccessPolicyDAO(connectionPool, directoryConfig, blockingEc, TestSupport.testMemberOfCache, TestSupport.testResourceCache)
+  val dirDao = new LdapDirectoryDAO(connectionPool, directoryConfig, blockingEc, TestSupport.testMemberOfCache)
   val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
   // before() doesn't seem to work well with AsyncFlatSpec

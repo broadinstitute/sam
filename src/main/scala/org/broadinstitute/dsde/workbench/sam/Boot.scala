@@ -29,7 +29,7 @@ import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.util.{DelegatePool, ExecutionContexts}
 import org.ehcache.Cache
-import org.ehcache.config.builders.ExpiryPolicyBuilder
+import org.ehcache.config.builders.{CacheConfigurationBuilder, CacheManagerBuilder, ExpiryPolicyBuilder, ResourcePoolsBuilder}
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
@@ -95,11 +95,7 @@ object Boot extends IOApp with LazyLogging {
         )))(ldapConnection => IO(ldapConnection.close()))
   }
 
-  private[sam] def createCache(cacheName: String, maxEntries: Long, timeToLive: FiniteDuration): cats.effect.Resource[IO, Cache[WorkbenchSubject, Set[String]]] = {
-    import org.ehcache.config.builders.CacheConfigurationBuilder
-    import org.ehcache.config.builders.CacheManagerBuilder
-    import org.ehcache.config.builders.ResourcePoolsBuilder
-
+  private[sam] def createMemberOfCache(cacheName: String, maxEntries: Long, timeToLive: FiniteDuration): cats.effect.Resource[IO, Cache[WorkbenchSubject, Set[String]]] = {
     val cacheManager = CacheManagerBuilder.newCacheManagerBuilder
       .withCache(
         cacheName,
@@ -119,13 +115,34 @@ object Boot extends IOApp with LazyLogging {
     }
   }
 
+  private[sam] def createResourceCache(cacheName: String, maxEntries: Long, timeToLive: FiniteDuration): cats.effect.Resource[IO, Cache[FullyQualifiedResourceId, Resource]] = {
+    val cacheManager = CacheManagerBuilder.newCacheManagerBuilder
+      .withCache(
+        cacheName,
+        CacheConfigurationBuilder
+          .newCacheConfigurationBuilder(classOf[FullyQualifiedResourceId], classOf[Resource], ResourcePoolsBuilder.heap(maxEntries))
+          .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(java.time.Duration.ofNanos(timeToLive.toNanos)))
+      )
+      .build
+
+    cats.effect.Resource.make {
+      IO {
+        cacheManager.init()
+        cacheManager.getCache(cacheName, classOf[FullyQualifiedResourceId], classOf[Resource])
+      }
+    } { _ =>
+      IO(cacheManager.close())
+    }
+  }
+
   private[sam] def createAppDependencies(
       appConfig: AppConfig)(implicit actorSystem: ActorSystem, actorMaterializer: ActorMaterializer): cats.effect.Resource[IO, AppDependencies] =
     for {
       ldapConnectionPool <- createLdapConnectionPool(appConfig.directoryConfig)
-      memberOfCache <- createCache("memberof", 100, 5 minutes)
+      memberOfCache <- createMemberOfCache("memberof", 100, 5 minutes)
+      resourceCache <- createResourceCache("resource", 10000, 60 minutes)
       blockingEc <- ExecutionContexts.cachedThreadPool[IO]
-      accessPolicyDao = new LdapAccessPolicyDAO(ldapConnectionPool, appConfig.directoryConfig, blockingEc, memberOfCache)
+      accessPolicyDao = new LdapAccessPolicyDAO(ldapConnectionPool, appConfig.directoryConfig, blockingEc, memberOfCache, resourceCache)
       directoryDAO = new LdapDirectoryDAO(ldapConnectionPool, appConfig.directoryConfig, blockingEc, memberOfCache)
       appDependencies <- appConfig.googleConfig match {
         case Some(config) =>

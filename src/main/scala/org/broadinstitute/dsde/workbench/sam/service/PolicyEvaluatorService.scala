@@ -100,7 +100,7 @@ class PolicyEvaluatorService(
       ridAndPolicyName <- accessPolicyDAO.listAccessPolicies(resourceTypeName, userId) // List all policies of a given resourceType the user is a member of
       rids = ridAndPolicyName.map(_.resourceId)
 
-      resources <- if (isConstrained) accessPolicyDAO.listResourceWithAuthdomains(resourceTypeName, rids)
+      resources <- if (isConstrained) accessPolicyDAO.listResourcesWithAuthdomains(resourceTypeName, rids)
       else IO.pure(Set.empty)
       authDomainMap = resources.map(x => x.resourceId -> x.authDomain).toMap
 

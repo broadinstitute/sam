@@ -120,7 +120,7 @@ class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdenti
     }.toSet
   }
 
-  override def listResourceWithAuthdomains(
+  override def listResourcesWithAuthdomains(
       resourceTypeName: ResourceTypeName,
       resourceId: Set[ResourceId])
     : IO[Set[Resource]] = IO.pure(Set.empty)

@@ -35,8 +35,8 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
 
   val dirURI = new URI(directoryConfig.directoryUrl)
   val connectionPool = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
-  val dirDAO = new LdapDirectoryDAO(connectionPool, directoryConfig, blockingEc, TestSupport.testCache)
-  val policyDAO = new LdapAccessPolicyDAO(connectionPool, directoryConfig, blockingEc, TestSupport.testCache)
+  val dirDAO = new LdapDirectoryDAO(connectionPool, directoryConfig, blockingEc, TestSupport.testMemberOfCache)
+  val policyDAO = new LdapAccessPolicyDAO(connectionPool, directoryConfig, blockingEc, TestSupport.testMemberOfCache, TestSupport.testResourceCache)
   val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
   private val dummyUserInfo = UserInfo(OAuth2BearerToken("token"), WorkbenchUserId("userid"), WorkbenchEmail("user@company.com"), 0)

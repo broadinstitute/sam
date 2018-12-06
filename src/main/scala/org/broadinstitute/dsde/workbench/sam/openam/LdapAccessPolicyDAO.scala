@@ -24,7 +24,8 @@ class LdapAccessPolicyDAO(
     protected val ldapConnectionPool: LDAPConnectionPool,
     protected val directoryConfig: DirectoryConfig,
     protected val ecForLdapBlockingIO: ExecutionContext,
-    protected val memberOfCache: Cache[WorkbenchSubject, Set[String]])(implicit protected val cs: ContextShift[IO])
+    protected val memberOfCache: Cache[WorkbenchSubject, Set[String]],
+    protected val resourceCache: Cache[FullyQualifiedResourceId, Resource])(implicit protected val cs: ContextShift[IO])
     extends AccessPolicyDAO
     with DirectorySubjectNameSupport
     with LdapSupport {
@@ -162,8 +163,15 @@ class LdapAccessPolicyDAO(
       groupDns.collect { case policyDnPattern(policyName, resourceId) => ResourceIdAndPolicyName(ResourceId(resourceId), AccessPolicyName(policyName)) }
     }
 
-  override def listResourceWithAuthdomains(resourceTypeName: ResourceTypeName, resourceId: Set[ResourceId]): IO[Set[Resource]] = {
-    val filters = resourceId
+  override def listResourcesWithAuthdomains(resourceTypeName: ResourceTypeName, resourceIds: Set[ResourceId]): IO[Set[Resource]] = {
+    val cachedResources = for {
+      resourceId <- resourceIds
+      cachedResource <- Option(resourceCache.get(FullyQualifiedResourceId(resourceTypeName, resourceId)))
+    } yield {
+      cachedResource
+    }
+
+    val filters = (resourceIds -- cachedResources.map(_.resourceId))
       .grouped(batchSize)
       .map(batch =>
         Filter.createORFilter(batch
@@ -175,8 +183,11 @@ class LdapAccessPolicyDAO(
     for {
       stream <- executeLdap(
         IO(ldapSearchStream(resourceTypeDn(resourceTypeName), SearchScope.ONE, filters: _*)(et => unmarshalResourceAuthDomain(et, resourceTypeName))))
-      res <- IO.fromEither(stream.parSequence.leftMap(s => new WorkbenchException(s)))
-    } yield res.toSet
+      loadedResources <- IO.fromEither(stream.parSequence.leftMap(s => new WorkbenchException(s)))
+    } yield {
+      resourceCache.putAll(loadedResources.map(resource => resource.fullyQualifiedId -> resource).toMap.asJava)
+      loadedResources.toSet ++ cachedResources
+    }
   }
 
   private def unmarshalResourceAuthDomain(entry: Entry, resourceTypeName: ResourceTypeName): Either[String, Resource] = {

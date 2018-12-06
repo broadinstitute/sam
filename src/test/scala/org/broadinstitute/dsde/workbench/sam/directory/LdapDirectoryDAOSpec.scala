@@ -22,7 +22,7 @@ import scala.concurrent.ExecutionContext.Implicits.global
 class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with BeforeAndAfter with BeforeAndAfterAll {
   val dirURI = new URI(directoryConfig.directoryUrl)
   val connectionPool = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
-  val dao = new LdapDirectoryDAO(connectionPool, directoryConfig, TestSupport.blockingEc, TestSupport.testCache)
+  val dao = new LdapDirectoryDAO(connectionPool, directoryConfig, TestSupport.blockingEc, TestSupport.testMemberOfCache)
   val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
   override protected def beforeAll(): Unit = {
@@ -306,7 +306,7 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     dao.createGroup(group1).unsafeRunSync()
     dao.createGroup(group2).unsafeRunSync()
 
-    val policyDAO = new LdapAccessPolicyDAO(connectionPool, directoryConfig, TestSupport.blockingEc, TestSupport.testCache)
+    val policyDAO = new LdapAccessPolicyDAO(connectionPool, directoryConfig, TestSupport.blockingEc, TestSupport.testMemberOfCache, TestSupport.testResourceCache)
 
     val typeName1 = ResourceTypeName(UUID.randomUUID().toString)
 
