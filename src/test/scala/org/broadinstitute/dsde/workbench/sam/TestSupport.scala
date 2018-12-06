@@ -53,20 +53,20 @@ trait PropertyBasedTesting extends PropertyChecks with Configuration with Matche
   implicit override val generatorDrivenConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(minSuccessful = 3)
 }
 
-object TestSupport extends TestSupport{
+object TestSupport extends TestSupport {
   private val executor = Executors.newCachedThreadPool()
   val blockingEc = ExecutionContext.fromExecutor(executor)
-  def testCache: Cache[String, Set[String]] = {
+  def testCache: Cache[WorkbenchSubject, Set[String]] = {
     val cacheManager = CacheManagerBuilder.newCacheManagerBuilder
       .withCache(
         "test",
         CacheConfigurationBuilder
-          .newCacheConfigurationBuilder(classOf[String], classOf[Set[String]], ResourcePoolsBuilder.heap(10))
+          .newCacheConfigurationBuilder(classOf[WorkbenchSubject], classOf[Set[String]], ResourcePoolsBuilder.heap(10))
           .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(java.time.Duration.ofMillis(0)))
       )
       .build
     cacheManager.init()
-    cacheManager.getCache("test", classOf[String], classOf[Set[String]])
+    cacheManager.getCache("test", classOf[WorkbenchSubject], classOf[Set[String]])
   }
 
   implicit val eqWorkbenchExceptionErrorReport: Eq[WorkbenchExceptionWithErrorReport] =

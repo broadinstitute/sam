@@ -18,7 +18,7 @@ import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
 import org.broadinstitute.dsde.workbench.google.GoogleCredentialModes.{Json, Pem}
 import org.broadinstitute.dsde.workbench.google.util.DistributedLock
 import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleFirestoreOpsInterpreters, HttpGoogleDirectoryDAO, HttpGoogleIamDAO, HttpGoogleProjectDAO, HttpGooglePubSubDAO, HttpGoogleStorageDAO}
-import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException}
+import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException, WorkbenchSubject}
 import org.broadinstitute.dsde.workbench.sam.api.{SamRoutes, StandardUserInfoDirectives}
 import org.broadinstitute.dsde.workbench.sam.config.{AppConfig, DirectoryConfig, GoogleConfig}
 import org.broadinstitute.dsde.workbench.sam.directory._
@@ -95,7 +95,7 @@ object Boot extends IOApp with LazyLogging {
         )))(ldapConnection => IO(ldapConnection.close()))
   }
 
-  private[sam] def createCache(cacheName: String, maxEntries: Long, timeToLive: FiniteDuration): cats.effect.Resource[IO, Cache[String, Set[String]]] = {
+  private[sam] def createCache(cacheName: String, maxEntries: Long, timeToLive: FiniteDuration): cats.effect.Resource[IO, Cache[WorkbenchSubject, Set[String]]] = {
     import org.ehcache.config.builders.CacheConfigurationBuilder
     import org.ehcache.config.builders.CacheManagerBuilder
     import org.ehcache.config.builders.ResourcePoolsBuilder
@@ -104,7 +104,7 @@ object Boot extends IOApp with LazyLogging {
       .withCache(
         cacheName,
         CacheConfigurationBuilder
-          .newCacheConfigurationBuilder(classOf[String], classOf[Set[String]], ResourcePoolsBuilder.heap(maxEntries))
+          .newCacheConfigurationBuilder(classOf[WorkbenchSubject], classOf[Set[String]], ResourcePoolsBuilder.heap(maxEntries))
           .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(java.time.Duration.ofNanos(timeToLive.toNanos)))
       )
       .build
@@ -112,7 +112,7 @@ object Boot extends IOApp with LazyLogging {
     cats.effect.Resource.make {
       IO {
         cacheManager.init()
-        cacheManager.getCache(cacheName, classOf[String], classOf[Set[String]])
+        cacheManager.getCache(cacheName, classOf[WorkbenchSubject], classOf[Set[String]])
       }
     } { _ =>
       IO(cacheManager.close())

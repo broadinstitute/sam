@@ -24,7 +24,7 @@ class LdapDirectoryDAO(
     protected val ldapConnectionPool: LDAPConnectionPool,
     protected val directoryConfig: DirectoryConfig,
     protected val ecForLdapBlockingIO: ExecutionContext,
-    protected val memberOfCache: Cache[String, Set[String]])(implicit executionContext: ExecutionContext, timer: Timer[IO])
+    protected val memberOfCache: Cache[WorkbenchSubject, Set[String]])(implicit executionContext: ExecutionContext, timer: Timer[IO])
     extends DirectoryDAO
     with DirectorySubjectNameSupport
     with LdapSupport {
@@ -129,7 +129,7 @@ class LdapDirectoryDAO(
 
   override def isGroupMember(groupId: WorkbenchGroupIdentity, member: WorkbenchSubject): IO[Boolean] = {
     for {
-      memberOf <- ldapLoadMemberOf(subjectDn(member))
+      memberOf <- ldapLoadMemberOf(member)
     } yield {
       val memberships = memberOf.map(_.toLowerCase) //toLowerCase because the dn can have varying capitalization
       memberships.contains(groupDn(groupId).toLowerCase)
@@ -239,7 +239,7 @@ class LdapDirectoryDAO(
     }
   }
 
-  override def listUsersGroups(userId: WorkbenchUserId): IO[Set[WorkbenchGroupIdentity]] = listMemberOfGroups(userDn(userId))
+  override def listUsersGroups(userId: WorkbenchUserId): IO[Set[WorkbenchGroupIdentity]] = listMemberOfGroups(userId)
 
   override def listUserDirectMemberships(userId: WorkbenchUserId): IO[Stream[WorkbenchGroupIdentity]] =
     cs.evalOn(ecForLdapBlockingIO)(
@@ -247,9 +247,9 @@ class LdapDirectoryDAO(
         dnToGroupIdentity(entry.getDN)
       }))
 
-  private def listMemberOfGroups(dn: String): IO[Set[WorkbenchGroupIdentity]] = {
+  private def listMemberOfGroups(subject: WorkbenchSubject): IO[Set[WorkbenchGroupIdentity]] = {
     for {
-      memberOf <- ldapLoadMemberOf(dn)
+      memberOf <- ldapLoadMemberOf(subject)
     } yield {
       memberOf.map(dnToGroupIdentity)
     }
@@ -263,7 +263,7 @@ class LdapDirectoryDAO(
     )(getAttribute(_, Attr.uid)).flatten.map(WorkbenchUserId).toSet
   }
 
-  override def listAncestorGroups(groupId: WorkbenchGroupIdentity): IO[Set[WorkbenchGroupIdentity]] = listMemberOfGroups(groupDn(groupId))
+  override def listAncestorGroups(groupId: WorkbenchGroupIdentity): IO[Set[WorkbenchGroupIdentity]] = listMemberOfGroups(groupId)
 
   override def enableIdentity(subject: WorkbenchSubject): IO[Unit] =
     executeLdap(

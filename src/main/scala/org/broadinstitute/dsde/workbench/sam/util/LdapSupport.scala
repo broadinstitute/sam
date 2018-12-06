@@ -2,18 +2,20 @@ package org.broadinstitute.dsde.workbench.sam.util
 
 import cats.effect.{ContextShift, IO}
 import com.unboundid.ldap.sdk._
+import org.broadinstitute.dsde.workbench.model.WorkbenchSubject
+import org.broadinstitute.dsde.workbench.sam.directory.DirectorySubjectNameSupport
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO.Attr
 import org.ehcache.Cache
 
 import scala.concurrent.ExecutionContext
 import scala.util.{Failure, Success, Try}
 
-trait LdapSupport {
+trait LdapSupport extends DirectorySubjectNameSupport {
   protected val ldapConnectionPool: LDAPConnectionPool
   protected val batchSize = 1000
   protected val ecForLdapBlockingIO: ExecutionContext
   implicit protected val cs: ContextShift[IO]
-  protected val memberOfCache: Cache[String, Set[String]]
+  protected val memberOfCache: Cache[WorkbenchSubject, Set[String]]
 
   /**
     * Call this to perform an ldap search.
@@ -63,19 +65,23 @@ trait LdapSupport {
   protected def getAttributes(results: Entry, key: String): Set[String] =
     Option(results.getAttribute(key)).map(_.getValues.toSet).getOrElse(Set.empty)
 
-  protected def ldapLoadMemberOf(dn: String): IO[Set[String]] = {
-    Option(memberOfCache.get(dn)) match {
+  protected def ldapLoadMemberOf(subject: WorkbenchSubject): IO[Set[String]] = {
+    Option(memberOfCache.get(subject)) match {
       case None =>
         for {
-          entry <- executeLdap(IO(ldapConnectionPool.getEntry(dn, Attr.memberOf)))
+          entry <- executeLdap(IO(ldapConnectionPool.getEntry(subjectDn(subject), Attr.memberOf)))
         } yield {
           val memberOfs = Option(entry).flatMap(e => Option(getAttributes(e, Attr.memberOf))).getOrElse(Set.empty)
-          memberOfCache.put(dn, memberOfs)
+          memberOfCache.put(subject, memberOfs)
           memberOfs
         }
 
       case Some(memberOfs) => IO.pure(memberOfs)
     }
+  }
+
+  def evictIsMemberOfCache(subject: WorkbenchSubject): IO[Unit] = {
+    IO.pure(memberOfCache.remove(subject))
   }
 
   protected def executeLdap[A](ioa: IO[A]): IO[A] = cs.evalOn(ecForLdapBlockingIO)(ioa)

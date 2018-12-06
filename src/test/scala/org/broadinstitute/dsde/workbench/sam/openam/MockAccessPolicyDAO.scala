@@ -132,4 +132,6 @@ class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdenti
       }.toStream
     )
   }
+
+  override def evictIsMemberOfCache(subject: WorkbenchSubject): IO[Unit] = IO.unit
 }

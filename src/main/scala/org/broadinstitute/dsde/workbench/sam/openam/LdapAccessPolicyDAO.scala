@@ -24,7 +24,7 @@ class LdapAccessPolicyDAO(
     protected val ldapConnectionPool: LDAPConnectionPool,
     protected val directoryConfig: DirectoryConfig,
     protected val ecForLdapBlockingIO: ExecutionContext,
-    protected val memberOfCache: Cache[String, Set[String]])(implicit protected val cs: ContextShift[IO])
+    protected val memberOfCache: Cache[WorkbenchSubject, Set[String]])(implicit protected val cs: ContextShift[IO])
     extends AccessPolicyDAO
     with DirectorySubjectNameSupport
     with LdapSupport {
@@ -157,7 +157,7 @@ class LdapAccessPolicyDAO(
   override def listAccessPolicies(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId): IO[Set[ResourceIdAndPolicyName]] =
     for {
       policyDnPattern <- IO(dnMatcher(Seq(Attr.policy, Attr.resourceId), resourceTypeDn(resourceTypeName)))
-      groupDns <- ldapLoadMemberOf(userDn(userId))
+      groupDns <- ldapLoadMemberOf(userId)
     } yield {
       groupDns.collect { case policyDnPattern(policyName, resourceId) => ResourceIdAndPolicyName(ResourceId(resourceId), AccessPolicyName(policyName)) }
     }
@@ -214,7 +214,7 @@ class LdapAccessPolicyDAO(
 
   override def listAccessPoliciesForUser(resource: FullyQualifiedResourceId, user: WorkbenchUserId): IO[Set[AccessPolicy]] =
     for {
-      memberOfs <- ldapLoadMemberOf(subjectDn(user))
+      memberOfs <- ldapLoadMemberOf(user)
       accessPolicies <- {
         val fullyQualifiedPolicyIds = memberOfs.toList.mapFilter { str =>
           for {

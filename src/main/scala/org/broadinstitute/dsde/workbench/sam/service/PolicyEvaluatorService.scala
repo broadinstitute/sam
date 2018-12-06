@@ -34,8 +34,20 @@ class PolicyEvaluatorService(
       }
   }
 
-  def hasPermission(resource: FullyQualifiedResourceId, action: ResourceAction, userId: WorkbenchUserId): IO[Boolean] =
-    listUserResourceActions(resource, userId).map { _.contains(action) }
+  def hasPermission(resource: FullyQualifiedResourceId, action: ResourceAction, userId: WorkbenchUserId): IO[Boolean] = {
+    def checkPermission = {
+      listUserResourceActions(resource, userId).map { _.contains(action) }
+    }
+
+    // this is optimized for the case where the user has permission since that is the usual case
+    // if the first attempt shows the user does not have permission, evict the user from the cache and attempt again
+    for {
+      attempt1 <- checkPermission
+      attempt2 <- if (attempt1) IO.pure(attempt1) else accessPolicyDAO.evictIsMemberOfCache(userId) *> checkPermission
+    } yield {
+      attempt2
+    }
+  }
 
   def listUserResourceActions(resource: FullyQualifiedResourceId, userId: WorkbenchUserId): IO[Set[ResourceAction]] = {
     def allActions(policy: AccessPolicy, resourceType: ResourceType): Set[ResourceAction] = {
