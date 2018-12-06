@@ -1,12 +1,19 @@
 package org.broadinstitute.dsde.workbench.sam.util
 
+import cats.effect.{ContextShift, IO}
 import com.unboundid.ldap.sdk._
+import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO.Attr
+import org.ehcache.Cache
 
+import scala.concurrent.ExecutionContext
 import scala.util.{Failure, Success, Try}
 
 trait LdapSupport {
   protected val ldapConnectionPool: LDAPConnectionPool
   protected val batchSize = 1000
+  protected val ecForLdapBlockingIO: ExecutionContext
+  implicit protected val cs: ContextShift[IO]
+  protected val memberOfCache: Cache[String, Set[String]]
 
   /**
     * Call this to perform an ldap search.
@@ -55,4 +62,21 @@ trait LdapSupport {
 
   protected def getAttributes(results: Entry, key: String): Set[String] =
     Option(results.getAttribute(key)).map(_.getValues.toSet).getOrElse(Set.empty)
+
+  protected def ldapLoadMemberOf(dn: String): IO[Set[String]] = {
+    Option(memberOfCache.get(dn)) match {
+      case None =>
+        for {
+          entry <- executeLdap(IO(ldapConnectionPool.getEntry(dn, Attr.memberOf)))
+        } yield {
+          val memberOfs = Option(entry).flatMap(e => Option(getAttributes(e, Attr.memberOf))).getOrElse(Set.empty)
+          memberOfCache.put(dn, memberOfs)
+          memberOfs
+        }
+
+      case Some(memberOfs) => IO.pure(memberOfs)
+    }
+  }
+
+  protected def executeLdap[A](ioa: IO[A]): IO[A] = cs.evalOn(ecForLdapBlockingIO)(ioa)
 }

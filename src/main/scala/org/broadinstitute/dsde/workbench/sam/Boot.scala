@@ -17,15 +17,7 @@ import javax.net.ssl.SSLContext
 import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
 import org.broadinstitute.dsde.workbench.google.GoogleCredentialModes.{Json, Pem}
 import org.broadinstitute.dsde.workbench.google.util.DistributedLock
-import org.broadinstitute.dsde.workbench.google.{
-  GoogleDirectoryDAO,
-  GoogleFirestoreOpsInterpreters,
-  HttpGoogleDirectoryDAO,
-  HttpGoogleIamDAO,
-  HttpGoogleProjectDAO,
-  HttpGooglePubSubDAO,
-  HttpGoogleStorageDAO
-}
+import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleFirestoreOpsInterpreters, HttpGoogleDirectoryDAO, HttpGoogleIamDAO, HttpGoogleProjectDAO, HttpGooglePubSubDAO, HttpGoogleStorageDAO}
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException}
 import org.broadinstitute.dsde.workbench.sam.api.{SamRoutes, StandardUserInfoDirectives}
 import org.broadinstitute.dsde.workbench.sam.config.{AppConfig, DirectoryConfig, GoogleConfig}
@@ -36,6 +28,8 @@ import org.broadinstitute.dsde.workbench.sam.openam._
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.util.{DelegatePool, ExecutionContexts}
+import org.ehcache.Cache
+import org.ehcache.config.builders.ExpiryPolicyBuilder
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
@@ -101,13 +95,38 @@ object Boot extends IOApp with LazyLogging {
         )))(ldapConnection => IO(ldapConnection.close()))
   }
 
+  private[sam] def createCache(cacheName: String, maxEntries: Long, timeToLive: FiniteDuration): cats.effect.Resource[IO, Cache[String, Set[String]]] = {
+    import org.ehcache.config.builders.CacheConfigurationBuilder
+    import org.ehcache.config.builders.CacheManagerBuilder
+    import org.ehcache.config.builders.ResourcePoolsBuilder
+
+    val cacheManager = CacheManagerBuilder.newCacheManagerBuilder
+      .withCache(
+        cacheName,
+        CacheConfigurationBuilder
+          .newCacheConfigurationBuilder(classOf[String], classOf[Set[String]], ResourcePoolsBuilder.heap(maxEntries))
+          .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(java.time.Duration.ofNanos(timeToLive.toNanos)))
+      )
+      .build
+
+    cats.effect.Resource.make {
+      IO {
+        cacheManager.init()
+        cacheManager.getCache(cacheName, classOf[String], classOf[Set[String]])
+      }
+    } { _ =>
+      IO(cacheManager.close())
+    }
+  }
+
   private[sam] def createAppDependencies(
       appConfig: AppConfig)(implicit actorSystem: ActorSystem, actorMaterializer: ActorMaterializer): cats.effect.Resource[IO, AppDependencies] =
     for {
       ldapConnectionPool <- createLdapConnectionPool(appConfig.directoryConfig)
+      memberOfCache <- createCache("memberof", 100, 5 minutes)
       blockingEc <- ExecutionContexts.cachedThreadPool[IO]
-      accessPolicyDao = new LdapAccessPolicyDAO(ldapConnectionPool, appConfig.directoryConfig, blockingEc)
-      directoryDAO = new LdapDirectoryDAO(ldapConnectionPool, appConfig.directoryConfig, blockingEc)
+      accessPolicyDao = new LdapAccessPolicyDAO(ldapConnectionPool, appConfig.directoryConfig, blockingEc, memberOfCache)
+      directoryDAO = new LdapDirectoryDAO(ldapConnectionPool, appConfig.directoryConfig, blockingEc, memberOfCache)
       appDependencies <- appConfig.googleConfig match {
         case Some(config) =>
           for {

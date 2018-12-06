@@ -22,8 +22,8 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
   val connectionPool = new LDAPConnectionPool(
     new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password),
     directoryConfig.connectionPoolSize)
-  val dirDAO = new LdapDirectoryDAO(connectionPool, directoryConfig, blockingEc)
-  val policyDAO = new LdapAccessPolicyDAO(connectionPool, directoryConfig, blockingEc)
+  val dirDAO = new LdapDirectoryDAO(connectionPool, directoryConfig, blockingEc, TestSupport.testCache)
+  val policyDAO = new LdapAccessPolicyDAO(connectionPool, directoryConfig, blockingEc, TestSupport.testCache)
   val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
   private val dummyUserInfo =

@@ -14,6 +14,7 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO.{Attr, ObjectClass}
 import org.broadinstitute.dsde.workbench.sam.util.LdapSupport
 import cats.implicits._
+import org.ehcache.Cache
 
 import scala.collection.JavaConverters._
 import scala.concurrent.ExecutionContext
@@ -22,7 +23,8 @@ import scala.concurrent.ExecutionContext
 class LdapAccessPolicyDAO(
     protected val ldapConnectionPool: LDAPConnectionPool,
     protected val directoryConfig: DirectoryConfig,
-    ecForLdapBlockingIO: ExecutionContext)(implicit cs: ContextShift[IO])
+    protected val ecForLdapBlockingIO: ExecutionContext,
+    protected val memberOfCache: Cache[String, Set[String]])(implicit protected val cs: ContextShift[IO])
     extends AccessPolicyDAO
     with DirectorySubjectNameSupport
     with LdapSupport {
@@ -155,9 +157,8 @@ class LdapAccessPolicyDAO(
   override def listAccessPolicies(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId): IO[Set[ResourceIdAndPolicyName]] =
     for {
       policyDnPattern <- IO(dnMatcher(Seq(Attr.policy, Attr.resourceId), resourceTypeDn(resourceTypeName)))
-      entry <- executeLdap(IO(ldapConnectionPool.getEntry(userDn(userId), Attr.memberOf)))
+      groupDns <- ldapLoadMemberOf(userDn(userId))
     } yield {
-      val groupDns = Option(entry).flatMap(e => Option(getAttributes(e, Attr.memberOf))).getOrElse(Set.empty)
       groupDns.collect { case policyDnPattern(policyName, resourceId) => ResourceIdAndPolicyName(ResourceId(resourceId), AccessPolicyName(policyName)) }
     }
 
@@ -213,10 +214,9 @@ class LdapAccessPolicyDAO(
 
   override def listAccessPoliciesForUser(resource: FullyQualifiedResourceId, user: WorkbenchUserId): IO[Set[AccessPolicy]] =
     for {
-      entry <- executeLdap(IO(ldapConnectionPool.getEntry(subjectDn(user), Attr.memberOf)))
-      members <- IO.pure(Option(entry).map(e => getAttributes(e, Attr.memberOf).toList))
-      accessPolicies <- members.traverse { policyStrs =>
-        val fullyQualifiedPolicyIds = policyStrs.mapFilter { str =>
+      memberOfs <- ldapLoadMemberOf(subjectDn(user))
+      accessPolicies <- {
+        val fullyQualifiedPolicyIds = memberOfs.toList.mapFilter { str =>
           for {
             subject <- Either.catchNonFatal(dnToSubject(str)).toOption
             fullyQualifiedPolicyId <- subject match {
@@ -233,7 +233,7 @@ class LdapAccessPolicyDAO(
           .toSeq
         executeLdap(IO(ldapSearchStream(resourceDn(resource), SearchScope.SUB, filters: _*)(unmarshalAccessPolicy).toSet))
       }
-    } yield accessPolicies.getOrElse(Set.empty)
+    } yield accessPolicies
 
   override def listFlattenedPolicyMembers(policyId: FullyQualifiedPolicyId): IO[Set[WorkbenchUser]] = executeLdap(
     IO(ldapSearchStream(peopleOu, SearchScope.ONE, Filter.createEqualityFilter(Attr.memberOf, policyDn(policyId)))(unmarshalUser).toSet)
@@ -255,6 +255,4 @@ class LdapAccessPolicyDAO(
         IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "policy does not exist")))
     }
   }
-
-  private def executeLdap[A](ioa: IO[A]): IO[A] = cs.evalOn(ecForLdapBlockingIO)(ioa)
 }

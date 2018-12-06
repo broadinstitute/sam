@@ -27,6 +27,8 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, MockAccessPolicyDAO}
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
 import org.broadinstitute.dsde.workbench.sam.service._
+import org.ehcache.Cache
+import org.ehcache.config.builders.{CacheConfigurationBuilder, CacheManagerBuilder, ExpiryPolicyBuilder, ResourcePoolsBuilder}
 import org.scalatest.Matchers
 import org.scalatest.concurrent.PatienceConfiguration.Timeout
 import org.scalatest.prop.{Configuration, PropertyChecks}
@@ -54,6 +56,19 @@ trait PropertyBasedTesting extends PropertyChecks with Configuration with Matche
 object TestSupport extends TestSupport{
   private val executor = Executors.newCachedThreadPool()
   val blockingEc = ExecutionContext.fromExecutor(executor)
+  def testCache: Cache[String, Set[String]] = {
+    val cacheManager = CacheManagerBuilder.newCacheManagerBuilder
+      .withCache(
+        "test",
+        CacheConfigurationBuilder
+          .newCacheConfigurationBuilder(classOf[String], classOf[Set[String]], ResourcePoolsBuilder.heap(10))
+          .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(java.time.Duration.ofMillis(0)))
+      )
+      .build
+    cacheManager.init()
+    cacheManager.getCache("test", classOf[String], classOf[Set[String]])
+  }
+
   implicit val eqWorkbenchExceptionErrorReport: Eq[WorkbenchExceptionWithErrorReport] =
     (x: WorkbenchExceptionWithErrorReport, y: WorkbenchExceptionWithErrorReport) =>
       x.errorReport.statusCode == y.errorReport.statusCode && x.errorReport.message == y.errorReport.message

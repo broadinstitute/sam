@@ -22,7 +22,7 @@ import scala.concurrent.ExecutionContext.Implicits.global
 class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with BeforeAndAfter with BeforeAndAfterAll {
   val dirURI = new URI(directoryConfig.directoryUrl)
   val connectionPool = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
-  val dao = new LdapDirectoryDAO(connectionPool, directoryConfig, TestSupport.blockingEc)
+  val dao = new LdapDirectoryDAO(connectionPool, directoryConfig, TestSupport.blockingEc, TestSupport.testCache)
   val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
   override protected def beforeAll(): Unit = {
@@ -306,7 +306,7 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     dao.createGroup(group1).unsafeRunSync()
     dao.createGroup(group2).unsafeRunSync()
 
-    val policyDAO = new LdapAccessPolicyDAO(connectionPool, directoryConfig, TestSupport.blockingEc)
+    val policyDAO = new LdapAccessPolicyDAO(connectionPool, directoryConfig, TestSupport.blockingEc, TestSupport.testCache)
 
     val typeName1 = ResourceTypeName(UUID.randomUUID().toString)
 
@@ -318,9 +318,9 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     policyDAO.createResource(resource).unsafeRunSync()
     policyDAO.createPolicy(policy1).unsafeRunSync()
 
-    assert(runAndWait(dao.isGroupMember(group1.id, userId)))
-    assert(!runAndWait(dao.isGroupMember(group2.id, userId)))
-    assert(runAndWait(dao.isGroupMember(policy1.id, userId)))
+    assert(dao.isGroupMember(group1.id, userId).unsafeRunSync())
+    assert(!dao.isGroupMember(group2.id, userId).unsafeRunSync())
+    assert(dao.isGroupMember(policy1.id, userId).unsafeRunSync())
   }
 
   it should "be case insensitive when checking for group membership" in {
@@ -333,7 +333,7 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     dao.createUser(user).unsafeRunSync()
     dao.createGroup(group1).unsafeRunSync()
 
-    assert(runAndWait(dao.isGroupMember(WorkbenchGroupName(group1.id.value.toUpperCase), userId)))
+    assert(dao.isGroupMember(WorkbenchGroupName(group1.id.value.toUpperCase), userId).unsafeRunSync())
   }
 
   it should "get pet for user" in {

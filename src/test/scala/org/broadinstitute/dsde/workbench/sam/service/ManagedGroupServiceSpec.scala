@@ -35,8 +35,8 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
 
   val dirURI = new URI(directoryConfig.directoryUrl)
   val connectionPool = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
-  val dirDAO = new LdapDirectoryDAO(connectionPool, directoryConfig, TestSupport.blockingEc)
-  val policyDAO = new LdapAccessPolicyDAO(connectionPool, directoryConfig, TestSupport.blockingEc)
+  val dirDAO = new LdapDirectoryDAO(connectionPool, directoryConfig, TestSupport.blockingEc, TestSupport.testCache)
+  val policyDAO = new LdapAccessPolicyDAO(connectionPool, directoryConfig, TestSupport.blockingEc, TestSupport.testCache)
   val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
   private val resourceId = ResourceId("myNewGroup")
