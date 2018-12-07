@@ -59,13 +59,25 @@ class LdapAccessPolicyDAO(
   // TODO: Method is not tested.  To test properly, we'll probably need a loadResource or getResource method
   override def deleteResource(resource: FullyQualifiedResourceId): IO[Unit] = IO(ldapConnectionPool.delete(resourceDn(resource)))
 
-  override def loadResourceAuthDomain(resource: FullyQualifiedResourceId): IO[Set[WorkbenchGroupName]] =
-    executeLdap((IO(Option(ldapConnectionPool.getEntry(resourceDn(resource)))))).flatMap {
+  override def loadResourceAuthDomain(resourceId: FullyQualifiedResourceId): IO[Set[WorkbenchGroupName]] = {
+    Option(resourceCache.get(resourceId)) match {
       case None =>
-        IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Resource $resource not found")))
-      case Some(r) =>
-        IO(getAttributes(r, Attr.authDomain).map(WorkbenchGroupName))
+        executeLdap((IO(Option(ldapConnectionPool.getEntry(resourceDn(resourceId)))))).flatMap {
+          case None =>
+            IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Resource $resourceId not found")))
+          case Some(r) =>
+            unmarshalResourceAuthDomain(r, resourceId.resourceTypeName) match {
+              case Left(error) => IO.raiseError(new WorkbenchException(error))
+              case Right(resource) => IO {
+                resourceCache.put(resourceId, resource)
+                resource.authDomain
+              }
+            }
+        }
+
+      case Some(cachedResource) => IO.pure(cachedResource.authDomain)
     }
+  }
 
   private def unmarshalResource(results: Entry): Either[String, Resource] =
     for {
