@@ -95,13 +95,13 @@ object Boot extends IOApp with LazyLogging {
         )))(ldapConnection => IO(ldapConnection.close()))
   }
 
-  private[sam] def createMemberOfCache(cacheName: String, maxEntries: Long, timeToLive: FiniteDuration): cats.effect.Resource[IO, Cache[WorkbenchSubject, Set[String]]] = {
+  private[sam] def createMemberOfCache(cacheName: String, maxEntries: Long, timeToLive: java.time.Duration): cats.effect.Resource[IO, Cache[WorkbenchSubject, Set[String]]] = {
     val cacheManager = CacheManagerBuilder.newCacheManagerBuilder
       .withCache(
         cacheName,
         CacheConfigurationBuilder
           .newCacheConfigurationBuilder(classOf[WorkbenchSubject], classOf[Set[String]], ResourcePoolsBuilder.heap(maxEntries))
-          .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(java.time.Duration.ofNanos(timeToLive.toNanos)))
+          .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(timeToLive))
       )
       .build
 
@@ -115,13 +115,13 @@ object Boot extends IOApp with LazyLogging {
     }
   }
 
-  private[sam] def createResourceCache(cacheName: String, maxEntries: Long, timeToLive: FiniteDuration): cats.effect.Resource[IO, Cache[FullyQualifiedResourceId, Resource]] = {
+  private[sam] def createResourceCache(cacheName: String, maxEntries: Long, timeToLive: java.time.Duration): cats.effect.Resource[IO, Cache[FullyQualifiedResourceId, Resource]] = {
     val cacheManager = CacheManagerBuilder.newCacheManagerBuilder
       .withCache(
         cacheName,
         CacheConfigurationBuilder
           .newCacheConfigurationBuilder(classOf[FullyQualifiedResourceId], classOf[Resource], ResourcePoolsBuilder.heap(maxEntries))
-          .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(java.time.Duration.ofNanos(timeToLive.toNanos)))
+          .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(timeToLive))
       )
       .build
 
@@ -139,8 +139,8 @@ object Boot extends IOApp with LazyLogging {
       appConfig: AppConfig)(implicit actorSystem: ActorSystem, actorMaterializer: ActorMaterializer): cats.effect.Resource[IO, AppDependencies] =
     for {
       ldapConnectionPool <- createLdapConnectionPool(appConfig.directoryConfig)
-      memberOfCache <- createMemberOfCache("memberof", 100, 5 minutes)
-      resourceCache <- createResourceCache("resource", 10000, 60 minutes)
+      memberOfCache <- createMemberOfCache("memberof", appConfig.directoryConfig.memberOfCache.maxEntries, appConfig.directoryConfig.memberOfCache.timeToLive)
+      resourceCache <- createResourceCache("resource", appConfig.directoryConfig.resourceCache.maxEntries, appConfig.directoryConfig.resourceCache.timeToLive)
       blockingEc <- ExecutionContexts.cachedThreadPool[IO]
       accessPolicyDao = new LdapAccessPolicyDAO(ldapConnectionPool, appConfig.directoryConfig, blockingEc, memberOfCache, resourceCache)
       directoryDAO = new LdapDirectoryDAO(ldapConnectionPool, appConfig.directoryConfig, blockingEc, memberOfCache)
