@@ -13,6 +13,7 @@ import org.broadinstitute.dsde.workbench.sam.directory._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.LdapAccessPolicyDAOSpec._
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
+import org.ehcache.config.builders.{CacheConfigurationBuilder, CacheManagerBuilder, ExpiryPolicyBuilder, ResourcePoolsBuilder}
 import org.scalatest._
 import org.scalatest.concurrent.ScalaFutures
 
@@ -20,7 +21,7 @@ import org.scalatest.concurrent.ScalaFutures
 /**
   * Created by dvoet on 6/26/17.
   */
-class LdapAccessPolicyDAOSpec extends AsyncFlatSpec with ScalaFutures with Matchers with TestSupport with BeforeAndAfter with BeforeAndAfterAll {
+class LdapAccessPolicyDAOSpec extends FlatSpec with ScalaFutures with Matchers with TestSupport with BeforeAndAfter with BeforeAndAfterAll {
   def toEmail(resourceType: String, resourceId: String, policyName: String) = {
     WorkbenchEmail(s"policy-$resourceType-$resourceId-$policyName@dev.test.firecloud.org")
   }
@@ -105,18 +106,25 @@ class LdapAccessPolicyDAOSpec extends AsyncFlatSpec with ScalaFutures with Match
   }
 
   "LdapAccessPolicyDAO listUserPolicyResponse" should "return UserPolicyResponse" in {
+    val cache = createResourceCache("test-resource-cache-1")
+    val testDao = new LdapAccessPolicyDAO(connectionPool, directoryConfig, blockingEc, TestSupport.testMemberOfCache, cache)
     val resource = genResource.sample.get
+    val cachedResource = genResource.sample.get.copy(resourceTypeName = resource.resourceTypeName)
+    cache.put(cachedResource.fullyQualifiedId, cachedResource)
     val policy = SamLenses.resourceIdentityAccessPolicy.set(resource.fullyQualifiedId)(genPolicy.sample.get)
     val res = for{
       _ <- setup()
-      _ <- dao.createResourceType(resource.resourceTypeName)
-      _ <- dao.createResource(resource)
-      r <- dao.listResourcesWithAuthdomains(resource.resourceTypeName, Set(resource.resourceId))
-      cached <- dao.listResourcesWithAuthdomains(resource.resourceTypeName, Set(resource.resourceId))
+      _ <- testDao.createResourceType(resource.resourceTypeName)
+      _ <- testDao.createResource(resource)
+      // put cachedResource in ldap with different auth domains so we are sure we don't actually look it up
+      _ <- testDao.createResource(Resource.authDomain.set(genAuthDomains.sample.get)(cachedResource))
+      resourceIds = Set(resource.resourceId, cachedResource.resourceId)
+      r <- testDao.listResourcesWithAuthdomains(resource.resourceTypeName, resourceIds)
+      cached <- testDao.listResourcesWithAuthdomains(resource.resourceTypeName, resourceIds)
     } yield (r, cached)
 
     val (firstResponse, secondResponse) =  res.unsafeRunSync()
-    firstResponse shouldBe(Set(Resource(policy.id.resource.resourceTypeName, policy.id.resource.resourceId, resource.authDomain)))
+    firstResponse shouldBe Set(cachedResource, Resource(policy.id.resource.resourceTypeName, policy.id.resource.resourceId, resource.authDomain))
     secondResponse shouldBe firstResponse
   }
 
@@ -134,7 +142,21 @@ class LdapAccessPolicyDAOSpec extends AsyncFlatSpec with ScalaFutures with Match
       resources <- dao.listAccessPolicies(policy.id.resource.resourceTypeName, user.id)
     } yield resources
 
-    res.unsafeRunSync() shouldBe(Set(ResourceIdAndPolicyName(policy.id.resource.resourceId, policy.id.accessPolicyName)))
+    res.unsafeRunSync() shouldBe Set(ResourceIdAndPolicyName(policy.id.resource.resourceId, policy.id.accessPolicyName))
+  }
+
+  private def createResourceCache(cacheName: String) = {
+    val cacheManager = CacheManagerBuilder.newCacheManagerBuilder
+      .withCache(
+        cacheName,
+        CacheConfigurationBuilder
+          .newCacheConfigurationBuilder(classOf[FullyQualifiedResourceId], classOf[Resource], ResourcePoolsBuilder.heap(10))
+          .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(java.time.Duration.ofMinutes(10)))
+      )
+      .build
+    cacheManager.init()
+    val cache = cacheManager.getCache(cacheName, classOf[FullyQualifiedResourceId], classOf[Resource])
+    cache
   }
 }
 

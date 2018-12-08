@@ -9,9 +9,12 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountDisplayName, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport}
 import org.broadinstitute.dsde.workbench.sam.TestSupport._
+import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.LdapAccessPolicyDAO
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
+import org.ehcache.Cache
+import org.ehcache.config.builders.{CacheConfigurationBuilder, CacheManagerBuilder, ExpiryPolicyBuilder, ResourcePoolsBuilder}
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FlatSpec, Matchers}
 
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -19,7 +22,8 @@ import scala.concurrent.ExecutionContext.Implicits.global
 /**
   * Created by dvoet on 5/30/17.
   */
-class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with BeforeAndAfter with BeforeAndAfterAll {
+class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with BeforeAndAfter with BeforeAndAfterAll with DirectorySubjectNameSupport {
+  override lazy val directoryConfig: DirectoryConfig = TestSupport.directoryConfig
   val dirURI = new URI(directoryConfig.directoryUrl)
   val connectionPool = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
   val dao = new LdapDirectoryDAO(connectionPool, directoryConfig, TestSupport.blockingEc, TestSupport.testMemberOfCache)
@@ -475,6 +479,51 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
       subject2 shouldEqual(None)
     }
     res.unsafeRunSync()
+  }
+
+  "cache" should "return existing item" in {
+    val cache: Cache[WorkbenchSubject, Set[String]] = createMemberOfCache("test-memberof-1")
+
+    val testDao = new LdapDirectoryDAO(connectionPool, directoryConfig, blockingEc, cache)
+
+    val workbenchSubject = WorkbenchUserId("snarglepup")
+    val group = WorkbenchGroupName("testgroup")
+    cache.put(workbenchSubject, Set(subjectDn(group)))
+    // note that this user and group are not even in ldap but this should work because we manually put them in the cache
+    val actual = testDao.listUsersGroups(workbenchSubject).unsafeRunSync()
+
+    actual should contain theSameElementsAs Set(group)
+  }
+
+  it should "retain non-existing item" in {
+    val cache: Cache[WorkbenchSubject, Set[String]] = createMemberOfCache("test-memberof-2")
+
+    val testDao = new LdapDirectoryDAO(connectionPool, directoryConfig, blockingEc, cache)
+
+    val workbenchSubject = WorkbenchUserId("snarglepup")
+    val group = WorkbenchGroupName("testgroup")
+
+    testDao.createUser(WorkbenchUser(workbenchSubject, None, WorkbenchEmail("foo"))).unsafeRunSync()
+    testDao.createGroup(BasicWorkbenchGroup(group, Set(workbenchSubject), WorkbenchEmail("bar"))).unsafeRunSync()
+
+    assert(!cache.containsKey(workbenchSubject))
+    val actual = testDao.listUsersGroups(workbenchSubject).unsafeRunSync()
+    actual should contain theSameElementsAs Set(group)
+    assert(cache.containsKey(workbenchSubject))
+  }
+
+  private def createMemberOfCache(cacheName: String) = {
+    val cacheManager = CacheManagerBuilder.newCacheManagerBuilder
+      .withCache(
+        cacheName,
+        CacheConfigurationBuilder
+          .newCacheConfigurationBuilder(classOf[WorkbenchSubject], classOf[Set[String]], ResourcePoolsBuilder.heap(10))
+          .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(java.time.Duration.ofMinutes(10)))
+      )
+      .build
+    cacheManager.init()
+    val cache = cacheManager.getCache(cacheName, classOf[WorkbenchSubject], classOf[Set[String]])
+    cache
   }
 }
 
