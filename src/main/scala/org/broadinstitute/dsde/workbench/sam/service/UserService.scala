@@ -86,7 +86,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
         for {
           googleStatus <- cloudExtensions.getUserStatus(user)
           allUsersGroup <- cloudExtensions.getOrCreateAllUsersGroup(directoryDAO)
-          allUsersStatus <- directoryDAO.isGroupMember(allUsersGroup.id, user.id) recover { case e: NameNotFoundException => false }
+          allUsersStatus <- directoryDAO.isGroupMember(allUsersGroup.id, user.id).unsafeToFuture() recover { case e: NameNotFoundException => false }
           ldapStatus <- directoryDAO.isEnabled(user.id).unsafeToFuture()
         } yield {
           Option(UserStatus(UserStatusDetails(user.id, user.email), Map("ldap" -> ldapStatus, "allUsersGroup" -> allUsersStatus, "google" -> googleStatus)))
@@ -112,7 +112,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
         // pulled out of for comprehension to allow concurrent execution
         val ldapStatus = directoryDAO.isEnabled(user.id).unsafeToFuture()
         val allUsersStatus = cloudExtensions.getOrCreateAllUsersGroup(directoryDAO).flatMap { allUsersGroup =>
-          directoryDAO.isGroupMember(allUsersGroup.id, user.id) recover { case e: NameNotFoundException => false }
+          directoryDAO.isGroupMember(allUsersGroup.id, user.id).unsafeToFuture() recover { case e: NameNotFoundException => false }
         }
         val googleStatus = cloudExtensions.getUserStatus(user)
 

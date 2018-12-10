@@ -29,7 +29,7 @@ trait DirectoryDAO {
     * @return true if the subject was removed, false if it was already gone
     */
   def removeGroupMember(groupId: WorkbenchGroupIdentity, removeMember: WorkbenchSubject): IO[Boolean]
-  def isGroupMember(groupId: WorkbenchGroupIdentity, member: WorkbenchSubject): Future[Boolean]
+  def isGroupMember(groupId: WorkbenchGroupIdentity, member: WorkbenchSubject): IO[Boolean]
   def updateSynchronizedDate(groupId: WorkbenchGroupIdentity): Future[Unit]
   def getSynchronizedDate(groupId: WorkbenchGroupIdentity): Future[Option[Date]]
   def getSynchronizedEmail(groupId: WorkbenchGroupIdentity): Future[Option[WorkbenchEmail]]

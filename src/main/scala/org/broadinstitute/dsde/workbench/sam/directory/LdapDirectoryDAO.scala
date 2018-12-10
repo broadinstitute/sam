@@ -13,6 +13,7 @@ import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
 import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO.{Attr, ObjectClass}
 import org.broadinstitute.dsde.workbench.sam.util.{LdapSupport, NewRelicMetrics}
+import org.ehcache.Cache
 
 import scala.collection.JavaConverters._
 import scala.concurrent.{ExecutionContext, Future}
@@ -22,7 +23,8 @@ import scala.util.Try
 class LdapDirectoryDAO(
     protected val ldapConnectionPool: LDAPConnectionPool,
     protected val directoryConfig: DirectoryConfig,
-    protected val ecForLdapBlockingIO: ExecutionContext)(implicit executionContext: ExecutionContext, timer: Timer[IO])
+    protected val ecForLdapBlockingIO: ExecutionContext,
+    protected val memberOfCache: Cache[WorkbenchSubject, Set[String]])(implicit executionContext: ExecutionContext, timer: Timer[IO])
     extends DirectoryDAO
     with DirectorySubjectNameSupport
     with LdapSupport {
@@ -125,15 +127,13 @@ class LdapDirectoryDAO(
         case Left(regrets) => IO.raiseError(regrets)
       }
 
-  override def isGroupMember(groupId: WorkbenchGroupIdentity, member: WorkbenchSubject): Future[Boolean] = Future {
-    val isMember = for {
-      entry <- Option(ldapConnectionPool.getEntry(subjectDn(member), Attr.memberOf))
-      memberOf <- Option(entry.getAttribute(Attr.memberOf))
+  override def isGroupMember(groupId: WorkbenchGroupIdentity, member: WorkbenchSubject): IO[Boolean] = {
+    for {
+      memberOf <- ldapLoadMemberOf(member)
     } yield {
-      val memberships = memberOf.getValues.map(_.toLowerCase).toSet //toLowerCase because the dn can have varying capitalization
+      val memberships = memberOf.map(_.toLowerCase) //toLowerCase because the dn can have varying capitalization
       memberships.contains(groupDn(groupId).toLowerCase)
     }
-    isMember.getOrElse(false)
   }
 
   override def updateSynchronizedDate(groupId: WorkbenchGroupIdentity): Future[Unit] = Future {
@@ -239,7 +239,7 @@ class LdapDirectoryDAO(
     }
   }
 
-  override def listUsersGroups(userId: WorkbenchUserId): IO[Set[WorkbenchGroupIdentity]] = listMemberOfGroups(userDn(userId))
+  override def listUsersGroups(userId: WorkbenchUserId): IO[Set[WorkbenchGroupIdentity]] = listMemberOfGroups(userId)
 
   override def listUserDirectMemberships(userId: WorkbenchUserId): IO[Stream[WorkbenchGroupIdentity]] =
     cs.evalOn(ecForLdapBlockingIO)(
@@ -247,14 +247,12 @@ class LdapDirectoryDAO(
         dnToGroupIdentity(entry.getDN)
       }))
 
-  private def listMemberOfGroups(dn: String): IO[Set[WorkbenchGroupIdentity]] = {
-    val groupsOptionT = for {
-      entry <- OptionT(IO(ldapConnectionPool.getEntry(dn, Attr.memberOf)).map(Option(_)))
-      memberOf <- OptionT.fromOption[IO](Option(entry.getAttributeValues(Attr.memberOf)))
+  private def listMemberOfGroups(subject: WorkbenchSubject): IO[Set[WorkbenchGroupIdentity]] = {
+    for {
+      memberOf <- ldapLoadMemberOf(subject)
     } yield {
-      memberOf.toSet.map(dnToGroupIdentity)
+      memberOf.map(dnToGroupIdentity)
     }
-    groupsOptionT.fold(Set.empty[WorkbenchGroupIdentity])(identity)
   }
 
   override def listIntersectionGroupUsers(groupIds: Set[WorkbenchGroupIdentity]): Future[Set[WorkbenchUserId]] = Future {
@@ -265,7 +263,7 @@ class LdapDirectoryDAO(
     )(getAttribute(_, Attr.uid)).flatten.map(WorkbenchUserId).toSet
   }
 
-  override def listAncestorGroups(groupId: WorkbenchGroupIdentity): IO[Set[WorkbenchGroupIdentity]] = listMemberOfGroups(groupDn(groupId))
+  override def listAncestorGroups(groupId: WorkbenchGroupIdentity): IO[Set[WorkbenchGroupIdentity]] = listMemberOfGroups(groupId)
 
   override def enableIdentity(subject: WorkbenchSubject): IO[Unit] =
     executeLdap(
@@ -399,6 +397,4 @@ class LdapDirectoryDAO(
 
   override def setGoogleSubjectId(userId: WorkbenchUserId, googleSubjectId: GoogleSubjectId): IO[Unit] =
     executeLdap(IO(ldapConnectionPool.modify(userDn(userId), new Modification(ModificationType.ADD, Attr.googleSubjectId, googleSubjectId.value))))
-
-  private def executeLdap[A](ioa: IO[A]): IO[A] = cs.evalOn(ecForLdapBlockingIO)(ioa)
 }

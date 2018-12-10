@@ -94,6 +94,10 @@ object AppConfig {
       case ex: WrongType => getActionPatternObjects(config, path)
     }
 
+  implicit val cacheConfigReader: ValueReader[CacheConfig] = ValueReader.relative { config =>
+    CacheConfig(config.getLong("maxEntries"), config.getDuration("timeToLive"))
+  }
+
   implicit val directoryConfigReader: ValueReader[DirectoryConfig] = ValueReader.relative { config =>
     DirectoryConfig(
       config.getString("url"),
@@ -101,7 +105,9 @@ object AppConfig {
       config.getString("password"),
       config.getString("baseDn"),
       config.getString("enabledUsersGroupDn"),
-      config.as[Option[Int]]("connectionPoolSize").getOrElse(20)
+      config.as[Option[Int]]("connectionPoolSize").getOrElse(20),
+      config.as[Option[CacheConfig]]("memberOfCache").getOrElse(CacheConfig(100, java.time.Duration.ofMinutes(1))),
+      config.as[Option[CacheConfig]]("resourceCache").getOrElse(CacheConfig(10000, java.time.Duration.ofHours(1)))
     )
   }
 
