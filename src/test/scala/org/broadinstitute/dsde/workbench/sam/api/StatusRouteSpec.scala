@@ -20,6 +20,17 @@ import scala.language.postfixOps
 
 class StatusRouteSpec extends FlatSpec with Matchers with ScalatestRouteTest with TestSupport {
 
+  "GET /version" should "give 200 for ok" in {
+    val samRoutes = TestSamRoutes(Map.empty)
+    implicit val patienceConfig = PatienceConfig(timeout = 1 second)
+    eventually {
+      Get("/version") ~> samRoutes.route ~> check {
+        status shouldEqual StatusCodes.OK
+        responseAs[String] should include("n/a")
+      }
+    }
+  }
+
   "GET /status" should "give 200 for ok" in {
     val samRoutes = TestSamRoutes(Map.empty)
     implicit val patienceConfig = PatienceConfig(timeout = 1 second)

@@ -1378,6 +1378,18 @@ paths:
       tags:
         - Status
       security: [] # no security
+  /version:
+    get:
+      tags:
+        - Version
+      operationId: samVersion
+      summary: Returns the currently deployed version of this service.
+      responses:
+        200:
+          description: OK
+          schema:
+            $ref: '#/definitions/SamVersion'
+      security: []
 
 ##########################################################################################
 ## DEFINITIONS
@@ -1585,6 +1597,12 @@ definitions:
       ownerRoleName:
         type: string
         description: The name of the role that can perform administrative functions on a resource of this type
+
+  SamVersion:
+    type: object
+    properties:
+      version:
+        type: string
 
   StackTraceElement:
     description: ''
