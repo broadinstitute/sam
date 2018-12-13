@@ -67,14 +67,14 @@ class GoogleKeyCache(
   }
 
   override def getKey(pet: PetServiceAccount): IO[String] = {
-    val fetchKeyObjects = googleStorageAlg
+    val fetchKeyFromCache = googleStorageAlg
       .unsafeListObjectsWithPrefix(googleServicesConfig.googleKeyCacheConfig.bucketName, keyNamePrefix(pet.id.project, pet.serviceAccount.email))
-    val fetchKeys = IO.fromFuture(IO(googleIamDAO.listUserManagedServiceAccountKeys(pet.id.project, pet.serviceAccount.email).map(_.toList)))
+    val fetchKeyFromGoogle = IO.fromFuture(IO(googleIamDAO.listUserManagedServiceAccountKeys(pet.id.project, pet.serviceAccount.email).map(_.toList)))
 
     val getKeyIO = for {
-      (keyObjects, keys) <- (fetchKeyObjects, fetchKeys).parTupled
-      cleanedKeyObjects <- IO.fromFuture(IO(cleanupUnknownKeys(pet, keyObjects, keys)))
-      key <- (cleanedKeyObjects, keys) match {
+      (keysFromCache, keysFromGoogle) <- (fetchKeyFromCache, fetchKeyFromGoogle).parTupled
+      cleanedKeyObjects <- IO.fromFuture(IO(cleanupUnknownKeys(pet, keysFromCache, keysFromGoogle)))
+      key <- (cleanedKeyObjects, keysFromGoogle) match {
         case (Nil, _) =>
           furnishNewKey(pet) //mismatch. there were no keys found in the bucket, but there may be keys on the service account
         case (_, Nil) =>
