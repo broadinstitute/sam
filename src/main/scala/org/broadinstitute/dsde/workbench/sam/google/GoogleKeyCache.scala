@@ -5,7 +5,7 @@ import java.nio.charset.Charset
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
 import cats.data.OptionT
-import cats.effect.IO
+import cats.effect.{ContextShift, IO}
 import cats.implicits._
 import com.google.api.client.googleapis.json.GoogleJsonResponseException
 import com.google.cloud.storage.{BucketInfo, StorageException}
@@ -17,6 +17,7 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GcsObjectName, GoogleProject, ServiceAccountKey, ServiceAccountKeyId}
 import org.broadinstitute.dsde.workbench.sam.config.{GoogleServicesConfig, PetServiceAccountConfig}
 import org.broadinstitute.dsde.workbench.sam.service.KeyCache
+
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -30,7 +31,7 @@ class GoogleKeyCache(
     val googleStorageAlg: GoogleStorageService[IO],
     val googlePubSubDAO: GooglePubSubDAO,
     val googleServicesConfig: GoogleServicesConfig,
-    val petServiceAccountConfig: PetServiceAccountConfig)(implicit val executionContext: ExecutionContext)
+    val petServiceAccountConfig: PetServiceAccountConfig)(implicit val executionContext: ExecutionContext, cs: ContextShift[IO])
     extends KeyCache
     with LazyLogging {
   val keyPathPattern = """([^\/]+)\/([^\/]+)\/([^\/]+)""".r
@@ -67,10 +68,7 @@ class GoogleKeyCache(
 
   override def getKey(pet: PetServiceAccount): IO[String] = {
     val getKeyIO = for {
-      keyObjects <- googleStorageAlg
-        .unsafeListObjectsWithPrefix(googleServicesConfig.googleKeyCacheConfig.bucketName, keyNamePrefix(pet.id.project, pet.serviceAccount.email))
-      keys <- IO.fromFuture(IO(googleIamDAO.listUserManagedServiceAccountKeys(pet.id.project, pet.serviceAccount.email).map(_.toList)))
-      cleanedKeyObjects <- IO.fromFuture(IO(cleanupUnknownKeys(pet, keyObjects, keys)))
+      (cleanedKeyObjects, keys) <- fetchCleanedKeyObjectsAndKeys(pet)
       res <- (cleanedKeyObjects, keys) match {
         case (Nil, _) =>
           furnishNewKey(pet) //mismatch. there were no keys found in the bucket, but there may be keys on the service account
@@ -80,8 +78,29 @@ class GoogleKeyCache(
           retrieveActiveKey(pet, keyObjects, serviceAccountKeys)
       }
     } yield res
+
     val lockPath = LockPath(CollectionName(s"${pet.id.project.value}-getKey"), Document(pet.serviceAccount.subjectId.value), 20 seconds)
-    distributedLock.withLock(lockPath).use(_ => getKeyIO)
+    for{
+      (cleanedKeyObjects, keys) <- fetchCleanedKeyObjectsAndKeys(pet)
+      key <- (cleanedKeyObjects, keys) match {
+        case (Nil, _) =>
+          distributedLock.withLock(lockPath).use(_ => getKeyIO)
+        case (_, Nil) =>
+          distributedLock.withLock(lockPath).use(_ => getKeyIO)
+        case (keyObjects, serviceAccountKeys) =>
+          retrieveActiveKey(pet, keyObjects, serviceAccountKeys)
+      }
+    } yield key
+  }
+
+  private def fetchCleanedKeyObjectsAndKeys(pet: PetServiceAccount): IO[(List[GcsObjectName], List[ServiceAccountKey])] = {
+    val fetchKeyObjects = googleStorageAlg
+      .unsafeListObjectsWithPrefix(googleServicesConfig.googleKeyCacheConfig.bucketName, keyNamePrefix(pet.id.project, pet.serviceAccount.email))
+    val fetchKeys = IO.fromFuture(IO(googleIamDAO.listUserManagedServiceAccountKeys(pet.id.project, pet.serviceAccount.email).map(_.toList)))
+    for {
+      (keyObjects, keys) <- (fetchKeyObjects, fetchKeys).parTupled
+      cleanedKeyObjects <- IO.fromFuture(IO(cleanupUnknownKeys(pet, keyObjects, keys)))
+    } yield (cleanedKeyObjects, keys)
   }
 
   override def removeKey(pet: PetServiceAccount, keyId: ServiceAccountKeyId): IO[Unit] =

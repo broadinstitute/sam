@@ -28,7 +28,7 @@ import org.broadinstitute.dsde.workbench.google.{
   HttpGooglePubSubDAO,
   HttpGoogleStorageDAO
 }
-import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException}
+import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException, WorkbenchSubject}
 import org.broadinstitute.dsde.workbench.sam.api.{SamRoutes, StandardUserInfoDirectives}
 import org.broadinstitute.dsde.workbench.sam.config.{AppConfig, DirectoryConfig, GoogleConfig}
 import org.broadinstitute.dsde.workbench.sam.directory._
