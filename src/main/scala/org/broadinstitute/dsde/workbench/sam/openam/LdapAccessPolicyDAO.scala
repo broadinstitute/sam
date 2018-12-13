@@ -69,10 +69,7 @@ class LdapAccessPolicyDAO(
             unmarshalResourceAuthDomain(r, resourceId.resourceTypeName) match {
               case Left(error) => IO.raiseError(new WorkbenchException(error))
               case Right(resource) =>
-                IO {
-                  resourceCache.put(resourceId, resource)
-                  resource.authDomain
-                }
+                IO(resourceCache.put(resourceId, resource)).as(resource.authDomain)
             }
         }
 
