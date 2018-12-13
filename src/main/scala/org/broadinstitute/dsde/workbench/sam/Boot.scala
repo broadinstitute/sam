@@ -105,7 +105,10 @@ object Boot extends IOApp with LazyLogging {
         )))(ldapConnection => IO(ldapConnection.close()))
   }
 
-  private[sam] def createMemberOfCache(cacheName: String, maxEntries: Long, timeToLive: java.time.Duration): cats.effect.Resource[IO, Cache[WorkbenchSubject, Set[String]]] = {
+  private[sam] def createMemberOfCache(
+      cacheName: String,
+      maxEntries: Long,
+      timeToLive: java.time.Duration): cats.effect.Resource[IO, Cache[WorkbenchSubject, Set[String]]] = {
     val cacheManager = CacheManagerBuilder.newCacheManagerBuilder
       .withCache(
         cacheName,
@@ -125,7 +128,10 @@ object Boot extends IOApp with LazyLogging {
     }
   }
 
-  private[sam] def createResourceCache(cacheName: String, maxEntries: Long, timeToLive: java.time.Duration): cats.effect.Resource[IO, Cache[FullyQualifiedResourceId, Resource]] = {
+  private[sam] def createResourceCache(
+      cacheName: String,
+      maxEntries: Long,
+      timeToLive: java.time.Duration): cats.effect.Resource[IO, Cache[FullyQualifiedResourceId, Resource]] = {
     val cacheManager = CacheManagerBuilder.newCacheManagerBuilder
       .withCache(
         cacheName,
@@ -222,7 +228,14 @@ object Boot extends IOApp with LazyLogging {
       "google"
     )
     val googleKeyCache =
-      new GoogleKeyCache(distributedLock, googleIamDAO, googleStorageDAO, googleStorageNew, googlePubSubDAO, config.googleServicesConfig, config.petServiceAccountConfig)
+      new GoogleKeyCache(
+        distributedLock,
+        googleIamDAO,
+        googleStorageDAO,
+        googleStorageNew,
+        googlePubSubDAO,
+        config.googleServicesConfig,
+        config.petServiceAccountConfig)
     val notificationDAO = new PubSubNotificationDAO(googlePubSubDAO, config.googleServicesConfig.notificationTopic)
 
     new GoogleExtensions(

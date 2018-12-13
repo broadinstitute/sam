@@ -67,9 +67,14 @@ class GoogleKeyCache(
   }
 
   override def getKey(pet: PetServiceAccount): IO[String] = {
+    val fetchKeyObjects = googleStorageAlg
+      .unsafeListObjectsWithPrefix(googleServicesConfig.googleKeyCacheConfig.bucketName, keyNamePrefix(pet.id.project, pet.serviceAccount.email))
+    val fetchKeys = IO.fromFuture(IO(googleIamDAO.listUserManagedServiceAccountKeys(pet.id.project, pet.serviceAccount.email).map(_.toList)))
+
     val getKeyIO = for {
-      (cleanedKeyObjects, keys) <- fetchCleanedKeyObjectsAndKeys(pet)
-      res <- (cleanedKeyObjects, keys) match {
+      (keyObjects, keys) <- (fetchKeyObjects, fetchKeys).parTupled
+      cleanedKeyObjects <- IO.fromFuture(IO(cleanupUnknownKeys(pet, keyObjects, keys)))
+      key <- (cleanedKeyObjects, keys) match {
         case (Nil, _) =>
           furnishNewKey(pet) //mismatch. there were no keys found in the bucket, but there may be keys on the service account
         case (_, Nil) =>
@@ -77,30 +82,10 @@ class GoogleKeyCache(
         case (keyObjects, serviceAccountKeys) =>
           retrieveActiveKey(pet, keyObjects, serviceAccountKeys)
       }
-    } yield res
+    } yield key
 
     val lockPath = LockPath(CollectionName(s"${pet.id.project.value}-getKey"), Document(pet.serviceAccount.subjectId.value), 20 seconds)
-    for{
-      (cleanedKeyObjects, keys) <- fetchCleanedKeyObjectsAndKeys(pet)
-      key <- (cleanedKeyObjects, keys) match {
-        case (Nil, _) =>
-          distributedLock.withLock(lockPath).use(_ => getKeyIO)
-        case (_, Nil) =>
-          distributedLock.withLock(lockPath).use(_ => getKeyIO)
-        case (keyObjects, serviceAccountKeys) =>
-          retrieveActiveKey(pet, keyObjects, serviceAccountKeys)
-      }
-    } yield key
-  }
-
-  private def fetchCleanedKeyObjectsAndKeys(pet: PetServiceAccount): IO[(List[GcsObjectName], List[ServiceAccountKey])] = {
-    val fetchKeyObjects = googleStorageAlg
-      .unsafeListObjectsWithPrefix(googleServicesConfig.googleKeyCacheConfig.bucketName, keyNamePrefix(pet.id.project, pet.serviceAccount.email))
-    val fetchKeys = IO.fromFuture(IO(googleIamDAO.listUserManagedServiceAccountKeys(pet.id.project, pet.serviceAccount.email).map(_.toList)))
-    for {
-      (keyObjects, keys) <- (fetchKeyObjects, fetchKeys).parTupled
-      cleanedKeyObjects <- IO.fromFuture(IO(cleanupUnknownKeys(pet, keyObjects, keys)))
-    } yield (cleanedKeyObjects, keys)
+    distributedLock.withLock(lockPath).use(_ => getKeyIO)
   }
 
   override def removeKey(pet: PetServiceAccount, keyId: ServiceAccountKeyId): IO[Unit] =

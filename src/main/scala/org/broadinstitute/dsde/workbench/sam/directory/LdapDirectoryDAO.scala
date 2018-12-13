@@ -127,14 +127,13 @@ class LdapDirectoryDAO(
         case Left(regrets) => IO.raiseError(regrets)
       }
 
-  override def isGroupMember(groupId: WorkbenchGroupIdentity, member: WorkbenchSubject): IO[Boolean] = {
+  override def isGroupMember(groupId: WorkbenchGroupIdentity, member: WorkbenchSubject): IO[Boolean] =
     for {
       memberOf <- ldapLoadMemberOf(member)
     } yield {
       val memberships = memberOf.map(_.toLowerCase) //toLowerCase because the dn can have varying capitalization
       memberships.contains(groupDn(groupId).toLowerCase)
     }
-  }
 
   override def updateSynchronizedDate(groupId: WorkbenchGroupIdentity): Future[Unit] = Future {
     ldapConnectionPool.modify(groupDn(groupId), new Modification(ModificationType.REPLACE, Attr.groupSynchronizedTimestamp, formattedDate(new Date())))
@@ -247,13 +246,12 @@ class LdapDirectoryDAO(
         dnToGroupIdentity(entry.getDN)
       }))
 
-  private def listMemberOfGroups(subject: WorkbenchSubject): IO[Set[WorkbenchGroupIdentity]] = {
+  private def listMemberOfGroups(subject: WorkbenchSubject): IO[Set[WorkbenchGroupIdentity]] =
     for {
       memberOf <- ldapLoadMemberOf(subject)
     } yield {
       memberOf.map(dnToGroupIdentity)
     }
-  }
 
   override def listIntersectionGroupUsers(groupIds: Set[WorkbenchGroupIdentity]): Future[Set[WorkbenchUserId]] = Future {
     ldapSearchStream(
