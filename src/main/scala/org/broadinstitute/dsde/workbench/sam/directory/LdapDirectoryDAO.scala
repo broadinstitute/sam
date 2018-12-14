@@ -256,11 +256,15 @@ class LdapDirectoryDAO(
   }
 
   override def listIntersectionGroupUsers(groupIds: Set[WorkbenchGroupIdentity]): Future[Set[WorkbenchUserId]] = Future {
-    ldapSearchStream(
-      directoryConfig.baseDn,
-      SearchScope.SUB,
-      Filter.createANDFilter(groupIds.map(groupId => Filter.createEqualityFilter(Attr.memberOf, groupDn(groupId))).asJava)
-    )(getAttribute(_, Attr.uid)).flatten.map(WorkbenchUserId).toSet
+    val flatMembers = groupIds.map { groupId =>
+      ldapSearchStream(
+        directoryConfig.baseDn,
+        SearchScope.SUB,
+        Filter.createEqualityFilter(Attr.memberOf, groupDn(groupId))
+      )(getAttribute(_, Attr.uid)).flatten.map(WorkbenchUserId).toSet
+    }
+
+    flatMembers.reduce(_ intersect _)
   }
 
   override def listAncestorGroups(groupId: WorkbenchGroupIdentity): IO[Set[WorkbenchGroupIdentity]] = listMemberOfGroups(groupId)
