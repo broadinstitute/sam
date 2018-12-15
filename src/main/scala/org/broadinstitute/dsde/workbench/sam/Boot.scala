@@ -11,7 +11,7 @@ import cats.effect.{ExitCode, IO, IOApp}
 import cats.implicits._
 import com.typesafe.config.ConfigFactory
 import com.typesafe.scalalogging.LazyLogging
-import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
+import com.unboundid.ldap.sdk._
 import javax.net.SocketFactory
 import javax.net.ssl.SSLContext
 import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
@@ -89,9 +89,11 @@ object Boot extends IOApp with LazyLogging {
     val port = if (dirURI.getPort > 0) dirURI.getPort else defaultPort
     cats.effect.Resource.make(
       IO {
+        val connectionOptions = new LDAPConnectionOptions
+        connectionOptions.setDisconnectHandler(SamLdapConnectionDisconnectHandler)
         val connectionPool = new LDAPConnectionPool(
-          new LDAPConnection(socketFactory, dirURI.getHost, port, directoryConfig.user, directoryConfig.password),
-          directoryConfig.connectionPoolSize
+          new LDAPConnection(socketFactory, connectionOptions, dirURI.getHost, port, directoryConfig.user, directoryConfig.password),
+          directoryConfig.connectionPoolSize, directoryConfig.connectionPoolSize, SamLdapConnectionPostProcessor
         )
         connectionPool.setCreateIfNecessary(false)
         connectionPool.setMaxWaitTimeMillis(30000)
@@ -267,3 +269,15 @@ final case class AppDependencies(
     directoryDAO: DirectoryDAO,
     accessPolicyDAO: AccessPolicyDAO,
     policyEvaluatorService: PolicyEvaluatorService)
+
+object SamLdapConnectionPostProcessor extends PostConnectProcessor with LazyLogging {
+  override def processPreAuthenticatedConnection(connection: LDAPConnection): Unit = logger.info(s"processPreAuthenticatedConnection -- ${connection.getConnectionID}")
+  override def processPostAuthenticatedConnection(connection: LDAPConnection): Unit = logger.info(s"processPostAuthenticatedConnection -- ${connection.getConnectionID}")
+}
+
+object SamLdapConnectionDisconnectHandler extends DisconnectHandler with LazyLogging {
+  override def handleDisconnect(
+      connection: LDAPConnection, host: String, port: Int, disconnectType: DisconnectType, message: String, cause: Throwable): Unit = {
+    logger.info(s"handleDisconnect -- ${connection.getConnectionID}", cause)
+  }
+}
