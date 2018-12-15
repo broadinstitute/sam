@@ -88,11 +88,15 @@ object Boot extends IOApp with LazyLogging {
     }
     val port = if (dirURI.getPort > 0) dirURI.getPort else defaultPort
     cats.effect.Resource.make(
-      IO(
-        new LDAPConnectionPool(
+      IO {
+        val connectionPool = new LDAPConnectionPool(
           new LDAPConnection(socketFactory, dirURI.getHost, port, directoryConfig.user, directoryConfig.password),
           directoryConfig.connectionPoolSize
-        )))(ldapConnection => IO(ldapConnection.close()))
+        )
+        connectionPool.setCreateIfNecessary(false)
+        connectionPool.setMaxWaitTimeMillis(30000)
+        connectionPool
+      })(ldapConnection => IO(ldapConnection.close()))
   }
 
   private[sam] def createMemberOfCache(cacheName: String, maxEntries: Long, timeToLive: java.time.Duration): cats.effect.Resource[IO, Cache[WorkbenchSubject, Set[String]]] = {
