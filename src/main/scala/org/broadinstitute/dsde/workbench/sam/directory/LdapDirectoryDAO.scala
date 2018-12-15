@@ -255,16 +255,32 @@ class LdapDirectoryDAO(
     }
   }
 
-  override def listIntersectionGroupUsers(groupIds: Set[WorkbenchGroupIdentity]): Future[Set[WorkbenchUserId]] = Future {
-    val flatMembers = groupIds.map { groupId =>
-      ldapSearchStream(
-        directoryConfig.baseDn,
-        SearchScope.SUB,
-        Filter.createEqualityFilter(Attr.memberOf, groupDn(groupId))
-      )(getAttribute(_, Attr.uid)).flatten.map(WorkbenchUserId).toSet
+  override def listIntersectionGroupUsers(groupIds: Set[WorkbenchGroupIdentity]): IO[Set[WorkbenchUserId]] = {
+    for {
+      flatMembers <- groupIds.toList.traverse { groupId =>
+        listFlattenedMembers(groupId)
+      }
+    } yield {
+      flatMembers.reduce(_ intersect _)
     }
+  }
 
-    flatMembers.reduce(_ intersect _)
+  def listFlattenedMembers(groupId: WorkbenchGroupIdentity, visitedGroupIds: Set[WorkbenchGroupIdentity] = Set.empty): IO[Set[WorkbenchUserId]] = {
+    for {
+      directMembers <- listDirectMembers(groupId)
+      users = directMembers.collect { case subject: WorkbenchUserId => subject }
+      subGroups = directMembers.collect { case subject: WorkbenchGroupIdentity => subject }
+      updatedVisitedGroupIds = visitedGroupIds ++ subGroups
+      nestedUsers <- (subGroups -- visitedGroupIds).toList.traverse(subGroupId => listFlattenedMembers(subGroupId, updatedVisitedGroupIds))
+    } yield {
+      users ++ nestedUsers.flatten
+    }
+  }
+
+  def listDirectMembers(groupId: WorkbenchGroupIdentity): IO[Set[WorkbenchSubject]] = {
+    executeLdap(
+      IO(getAttributes(ldapConnectionPool.getEntry(groupDn(groupId), Attr.uniqueMember), Attr.uniqueMember).map(dnToSubject))
+    )
   }
 
   override def listAncestorGroups(groupId: WorkbenchGroupIdentity): IO[Set[WorkbenchGroupIdentity]] = listMemberOfGroups(groupId)

@@ -220,7 +220,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     when(mockAccessPolicyDAO.loadPolicy(testPolicy.id)).thenReturn(IO.pure(Option(testPolicy)))
     when(mockAccessPolicyDAO.loadResourceAuthDomain(resource.fullyQualifiedId)).thenReturn(IO.pure(Set(managedGroupId)))
 
-    when(mockDirectoryDAO.listIntersectionGroupUsers(Set(managedGroupId, testPolicy.id))).thenReturn(Future.successful(Set(intersectionSamUserId, authorizedGoogleUserId, subIntersectionSamGroupUserId, subAuthorizedGoogleGroupUserId, addError)))
+    when(mockDirectoryDAO.listIntersectionGroupUsers(Set(managedGroupId, testPolicy.id))).thenReturn(IO.pure(Set(intersectionSamUserId, authorizedGoogleUserId, subIntersectionSamGroupUserId, subAuthorizedGoogleGroupUserId, addError)))
 
     when(mockDirectoryDAO.updateSynchronizedDate(any[WorkbenchGroupIdentity])).thenReturn(Future.successful(()))
     when(mockDirectoryDAO.getSynchronizedDate(any[WorkbenchGroupIdentity])).thenReturn(Future.successful(Some(new GregorianCalendar(2017, 11, 22).getTime())))
@@ -923,8 +923,8 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
 
     val accessPolicy = runAndWait(constrainableService.overwritePolicy(constrainableResourceType, AccessPolicyName("ap"), resource.fullyQualifiedId, AccessPolicyMembership(Set(inPolicyUser.userEmail, inBothUser.userEmail), Set.empty, Set.empty)))
 
-    val calculateIntersectionGroup = PrivateMethod[Future[Set[WorkbenchUserId]]]('calculateIntersectionGroup)
-    val intersectionGroup = runAndWait(ge invokePrivate calculateIntersectionGroup(resource.fullyQualifiedId, accessPolicy))
+    val calculateIntersectionGroup = PrivateMethod[IO[Set[WorkbenchUserId]]]('calculateIntersectionGroup)
+    val intersectionGroup = (ge invokePrivate calculateIntersectionGroup(resource.fullyQualifiedId, accessPolicy)).unsafeRunSync()
     intersectionGroup shouldEqual Set(inBothUser.userId)
   }
 
@@ -964,8 +964,8 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     // Access policy that intersection group will be calculated for
     val accessPolicy = runAndWait(constrainableService.overwritePolicy(constrainableResourceType, AccessPolicyName("ap"), resource.fullyQualifiedId, AccessPolicyMembership(Set(inPolicySubGroup.email, inBothSubGroup.email), Set.empty, Set.empty)))
 
-    val calculateIntersectionGroup = PrivateMethod[Future[Set[WorkbenchUserId]]]('calculateIntersectionGroup)
-    val intersectionGroup = runAndWait(ge invokePrivate calculateIntersectionGroup(resource.fullyQualifiedId, accessPolicy))
+    val calculateIntersectionGroup = PrivateMethod[IO[Set[WorkbenchUserId]]]('calculateIntersectionGroup)
+    val intersectionGroup = (ge invokePrivate calculateIntersectionGroup(resource.fullyQualifiedId, accessPolicy)).unsafeRunSync()
     intersectionGroup shouldEqual Set(inBothSubGroupUser.userId)
   }
 
@@ -982,8 +982,8 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
 
     val accessPolicy = runAndWait(constrainableService.overwritePolicy(constrainableResourceType, AccessPolicyName("ap"), resource.fullyQualifiedId, AccessPolicyMembership(Set(inPolicyUser.userEmail, inBothUser.userEmail), Set.empty, Set.empty)))
 
-    val calculateIntersectionGroup = PrivateMethod[Future[Set[WorkbenchUserId]]]('calculateIntersectionGroup)
-    val intersectionGroup = runAndWait(ge invokePrivate calculateIntersectionGroup(resource.fullyQualifiedId, accessPolicy))
+    val calculateIntersectionGroup = PrivateMethod[IO[Set[WorkbenchUserId]]]('calculateIntersectionGroup)
+    val intersectionGroup = (ge invokePrivate calculateIntersectionGroup(resource.fullyQualifiedId, accessPolicy)).unsafeRunSync()
     intersectionGroup shouldEqual Set(inBothUser.userId, inPolicyUser.userId)
   }
 
@@ -1004,8 +1004,8 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
 
     val accessPolicy = runAndWait(constrainableService.overwritePolicy(constrainableResourceType, AccessPolicyName("ap"), resource.fullyQualifiedId, AccessPolicyMembership(Set(inPolicyUser.userEmail), Set.empty, Set.empty)))
 
-    val calculateIntersectionGroup = PrivateMethod[Future[Set[WorkbenchUserId]]]('calculateIntersectionGroup)
-    val intersectionGroup = runAndWait(ge invokePrivate calculateIntersectionGroup(resource.fullyQualifiedId, accessPolicy))
+    val calculateIntersectionGroup = PrivateMethod[IO[Set[WorkbenchUserId]]]('calculateIntersectionGroup)
+    val intersectionGroup = (ge invokePrivate calculateIntersectionGroup(resource.fullyQualifiedId, accessPolicy)).unsafeRunSync()
     intersectionGroup shouldEqual Set.empty
   }
 
@@ -1023,8 +1023,8 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
 
     val accessPolicy = runAndWait(constrainableService.overwritePolicy(constrainableResourceType, AccessPolicyName("ap"), resource.fullyQualifiedId, AccessPolicyMembership(Set.empty, Set.empty, Set.empty)))
 
-    val calculateIntersectionGroup = PrivateMethod[Future[Set[WorkbenchUserId]]]('calculateIntersectionGroup)
-    val intersectionGroup = runAndWait(ge invokePrivate calculateIntersectionGroup(resource.fullyQualifiedId, accessPolicy))
+    val calculateIntersectionGroup = PrivateMethod[IO[Set[WorkbenchUserId]]]('calculateIntersectionGroup)
+    val intersectionGroup = (ge invokePrivate calculateIntersectionGroup(resource.fullyQualifiedId, accessPolicy)).unsafeRunSync()
     intersectionGroup shouldEqual Set.empty
   }
 

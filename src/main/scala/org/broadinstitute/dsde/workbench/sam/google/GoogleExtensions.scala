@@ -490,15 +490,15 @@ class GoogleExtensions(
 
         group = groupOption.getOrElse(throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"$groupId not found")))
 
-        members <- group match {
+        members <- (group match {
           case accessPolicy: AccessPolicy =>
             if (isConstrainable(accessPolicy.id.resource, accessPolicy)) {
               calculateIntersectionGroup(accessPolicy.id.resource, accessPolicy)
             } else {
-              Future.successful(accessPolicy.members)
+              IO.pure(accessPolicy.members)
             }
-          case group: BasicWorkbenchGroup => Future.successful(group.members)
-        }
+          case group: BasicWorkbenchGroup => IO.pure(group.members)
+        }).unsafeToFuture()
 
         subGroupSyncs <- Future.traverse(group.members) {
           case subGroup: WorkbenchGroupIdentity =>
@@ -560,9 +560,9 @@ class GoogleExtensions(
         throw new Exception(s"Invalid resource type specified. ${resource.resourceTypeName} is not a recognized resource type.")
     }
 
-  private def calculateIntersectionGroup(resource: FullyQualifiedResourceId, policy: AccessPolicy): Future[Set[WorkbenchUserId]] =
+  private def calculateIntersectionGroup(resource: FullyQualifiedResourceId, policy: AccessPolicy): IO[Set[WorkbenchUserId]] =
     for {
-      groups <- accessPolicyDAO.loadResourceAuthDomain(resource).unsafeToFuture
+      groups <- accessPolicyDAO.loadResourceAuthDomain(resource)
       members <- directoryDAO.listIntersectionGroupUsers(groups.asInstanceOf[Set[WorkbenchGroupIdentity]] + policy.id)
     } yield {
       members
