@@ -89,11 +89,9 @@ object Boot extends IOApp with LazyLogging {
     val port = if (dirURI.getPort > 0) dirURI.getPort else defaultPort
     cats.effect.Resource.make(
       IO {
-        val connectionOptions = new LDAPConnectionOptions
-        connectionOptions.setDisconnectHandler(SamLdapConnectionDisconnectHandler)
         val connectionPool = new LDAPConnectionPool(
-          new LDAPConnection(socketFactory, connectionOptions, dirURI.getHost, port, directoryConfig.user, directoryConfig.password),
-          directoryConfig.connectionPoolSize, directoryConfig.connectionPoolSize, SamLdapConnectionPostProcessor
+          new LDAPConnection(socketFactory, dirURI.getHost, port, directoryConfig.user, directoryConfig.password),
+          directoryConfig.connectionPoolSize, directoryConfig.connectionPoolSize
         )
         connectionPool.setCreateIfNecessary(false)
         connectionPool.setMaxWaitTimeMillis(30000)
@@ -269,15 +267,3 @@ final case class AppDependencies(
     directoryDAO: DirectoryDAO,
     accessPolicyDAO: AccessPolicyDAO,
     policyEvaluatorService: PolicyEvaluatorService)
-
-object SamLdapConnectionPostProcessor extends PostConnectProcessor with LazyLogging {
-  override def processPreAuthenticatedConnection(connection: LDAPConnection): Unit = logger.info(s"processPreAuthenticatedConnection -- ${connection.getConnectionID}")
-  override def processPostAuthenticatedConnection(connection: LDAPConnection): Unit = logger.info(s"processPostAuthenticatedConnection -- ${connection.getConnectionID}")
-}
-
-object SamLdapConnectionDisconnectHandler extends DisconnectHandler with LazyLogging {
-  override def handleDisconnect(
-      connection: LDAPConnection, host: String, port: Int, disconnectType: DisconnectType, message: String, cause: Throwable): Unit = {
-    logger.info(s"handleDisconnect -- ${connection.getConnectionID}, $disconnectType, $message", cause)
-  }
-}
