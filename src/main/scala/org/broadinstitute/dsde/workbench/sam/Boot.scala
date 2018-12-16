@@ -278,6 +278,6 @@ object SamLdapConnectionPostProcessor extends PostConnectProcessor with LazyLogg
 object SamLdapConnectionDisconnectHandler extends DisconnectHandler with LazyLogging {
   override def handleDisconnect(
       connection: LDAPConnection, host: String, port: Int, disconnectType: DisconnectType, message: String, cause: Throwable): Unit = {
-    logger.info(s"handleDisconnect -- ${connection.getConnectionID}", cause)
+    logger.info(s"handleDisconnect -- ${connection.getConnectionID}, $disconnectType, $message", cause)
   }
 }
