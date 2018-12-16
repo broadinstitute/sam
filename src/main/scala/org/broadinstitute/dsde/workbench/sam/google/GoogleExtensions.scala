@@ -14,15 +14,7 @@ import com.google.rpc.Code
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.dataaccess.NotificationDAO
 import org.broadinstitute.dsde.workbench.google.util.{DistributedLock, LockPath}
-import org.broadinstitute.dsde.workbench.google.{
-  CollectionName,
-  Document,
-  GoogleDirectoryDAO,
-  GoogleIamDAO,
-  GoogleProjectDAO,
-  GooglePubSubDAO,
-  GoogleStorageDAO
-}
+import org.broadinstitute.dsde.workbench.google.{CollectionName, Document, GoogleDirectoryDAO, GoogleIamDAO, GoogleProjectDAO, GooglePubSubDAO, GoogleStorageDAO}
 import org.broadinstitute.dsde.workbench.model.Notifications.Notification
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport.WorkbenchGroupNameFormat
 import org.broadinstitute.dsde.workbench.model._
@@ -35,7 +27,7 @@ import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.AccessPolicyDAO
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
-import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, SamApplication}
+import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, ManagedGroupService, SamApplication}
 import org.broadinstitute.dsde.workbench.util.health.{HealthMonitor, SubsystemStatus, Subsystems}
 import org.broadinstitute.dsde.workbench.util.{FutureSupport, Retry}
 import spray.json._
@@ -177,7 +169,7 @@ class GoogleExtensions(
         directoryDAO.listAncestorGroups(id).unsafeToFuture()
       }
       managedGroupIds = (ancestorGroups.flatten ++ groupIdentities).filterNot(visitedGroups.contains).collect {
-        case FullyQualifiedPolicyId(FullyQualifiedResourceId(ResourceTypeName("managed-group"), id), _) => id
+        case FullyQualifiedPolicyId(FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, id), _) => id
       }
       _ <- Future.traverse(managedGroupIds)(id => onManagedGroupUpdate(id, visitedGroups ++ groupIdentities ++ ancestorGroups.flatten))
     } yield ()
