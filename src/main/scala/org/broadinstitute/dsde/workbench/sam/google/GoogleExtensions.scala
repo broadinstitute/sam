@@ -140,11 +140,11 @@ class GoogleExtensions(
     googlePubSubDAO.publishMessages(googleServicesConfig.groupSyncTopic, Seq(id.toJson.compactPrint))
 
   override def onGroupUpdate(groupIdentities: Seq[WorkbenchGroupIdentity]): Future[Unit] =
-    onGroupUpdateRecursive(groupIdentities, Seq.empty)
+    onGroupUpdateRecursive(groupIdentities, Seq.empty).unsafeToFuture()
 
-  private def onGroupUpdateRecursive(groupIdentities: Seq[WorkbenchGroupIdentity], visitedGroups: Seq[WorkbenchGroupIdentity]): Future[Unit] =
+  private def onGroupUpdateRecursive(groupIdentities: Seq[WorkbenchGroupIdentity], visitedGroups: Seq[WorkbenchGroupIdentity]): IO[Unit] =
     for {
-      idsAndSyncDates <- Future.traverse(groupIdentities) { id =>
+      idsAndSyncDates <- groupIdentities.toList.traverse { id =>
         directoryDAO.getSynchronizedDate(id).map(dateOption => id -> dateOption)
       }
       // only sync groups that have already been synchronized
@@ -152,21 +152,21 @@ class GoogleExtensions(
         case (gn: WorkbenchGroupName, Some(_)) => gn.toJson.compactPrint
         case (rpn: FullyQualifiedPolicyId, Some(_)) => rpn.toJson.compactPrint
       }
-      _ <- googlePubSubDAO.publishMessages(googleServicesConfig.groupSyncTopic, messagesForIdsWithSyncDates)
-      ancestorGroups <- Future.traverse(groupIdentities) { id =>
-        directoryDAO.listAncestorGroups(id).unsafeToFuture()
+      _ <- IO.fromFuture(IO(googlePubSubDAO.publishMessages(googleServicesConfig.groupSyncTopic, messagesForIdsWithSyncDates)))
+      ancestorGroups <- groupIdentities.toList.traverse { id =>
+        directoryDAO.listAncestorGroups(id)
       }
       managedGroupIds = (ancestorGroups.flatten ++ groupIdentities).filterNot(visitedGroups.contains).collect {
         case FullyQualifiedPolicyId(FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, id), _) => id
       }
-      _ <- Future.traverse(managedGroupIds)(id => onManagedGroupUpdate(id, visitedGroups ++ groupIdentities ++ ancestorGroups.flatten))
+      _ <- managedGroupIds.traverse(id => onManagedGroupUpdate(id, visitedGroups ++ groupIdentities ++ ancestorGroups.flatten))
     } yield ()
 
-  private def onManagedGroupUpdate(groupId: ResourceId, visitedGroups: Seq[WorkbenchGroupIdentity]): Future[Unit] =
+  private def onManagedGroupUpdate(groupId: ResourceId, visitedGroups: Seq[WorkbenchGroupIdentity]): IO[Unit] =
     for {
-      resources <- accessPolicyDAO.listResourcesConstrainedByGroup(WorkbenchGroupName(groupId.value)).unsafeToFuture()
-      policies <- Future.traverse(resources) { resource =>
-        accessPolicyDAO.listAccessPolicies(resource.fullyQualifiedId).unsafeToFuture
+      resources <- accessPolicyDAO.listResourcesConstrainedByGroup(WorkbenchGroupName(groupId.value))
+      policies <- resources.toList.traverse { resource =>
+        accessPolicyDAO.listAccessPolicies(resource.fullyQualifiedId)
       }
       _ <- onGroupUpdateRecursive(policies.flatten.map(_.id).toList, visitedGroups)
     } yield ()
@@ -414,7 +414,7 @@ class GoogleExtensions(
       _ <- googleIamDAO.removeServiceAccount(petServiceAccountConfig.googleProject, toAccountName(petServiceAccount.serviceAccount.email))
     } yield ()
 
-  def getSynchronizedState(groupId: WorkbenchGroupIdentity): Future[Option[GroupSyncResponse]] = {
+  def getSynchronizedState(groupId: WorkbenchGroupIdentity): IO[Option[GroupSyncResponse]] = {
     val groupDate = getSynchronizedDate(groupId)
     val groupEmail = getSynchronizedEmail(groupId)
 
@@ -429,10 +429,10 @@ class GoogleExtensions(
     }
   }
 
-  def getSynchronizedDate(groupId: WorkbenchGroupIdentity): Future[Option[Date]] =
+  def getSynchronizedDate(groupId: WorkbenchGroupIdentity): IO[Option[Date]] =
     directoryDAO.getSynchronizedDate(groupId)
 
-  def getSynchronizedEmail(groupId: WorkbenchGroupIdentity): Future[Option[WorkbenchEmail]] =
+  def getSynchronizedEmail(groupId: WorkbenchGroupIdentity): IO[Option[WorkbenchEmail]] =
     directoryDAO.getSynchronizedEmail(groupId)
 
   private[google] def toPetSAFromUser(user: WorkbenchUser): (ServiceAccountName, ServiceAccountDisplayName) = {

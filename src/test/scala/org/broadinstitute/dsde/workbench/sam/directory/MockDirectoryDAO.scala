@@ -214,12 +214,12 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
       loadSubjectEmail(subject).map(_.get)
     }
 
-  override def getSynchronizedDate(groupId: WorkbenchGroupIdentity): Future[Option[Date]] = {
-    Future.successful(groupSynchronizedDates.get(groupId))
+  override def getSynchronizedDate(groupId: WorkbenchGroupIdentity): IO[Option[Date]] = {
+    IO.pure(groupSynchronizedDates.get(groupId))
   }
 
-  override def getSynchronizedEmail(groupId: WorkbenchGroupIdentity): Future[Option[WorkbenchEmail]] = {
-    Future.successful(groups.get(WorkbenchGroupName(groupId.toString)).map(_.email))
+  override def getSynchronizedEmail(groupId: WorkbenchGroupIdentity): IO[Option[WorkbenchEmail]] = {
+    IO.pure(groups.get(WorkbenchGroupName(groupId.toString)).map(_.email))
   }
 
   override def getUserFromPetServiceAccount(petSAId: ServiceAccountSubjectId): IO[Option[WorkbenchUser]] = {

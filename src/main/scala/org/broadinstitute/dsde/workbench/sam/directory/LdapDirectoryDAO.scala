@@ -140,20 +140,20 @@ class LdapDirectoryDAO(
     ldapConnectionPool.modify(groupDn(groupId), new Modification(ModificationType.REPLACE, Attr.groupSynchronizedTimestamp, formattedDate(new Date())))
   }
 
-  override def getSynchronizedDate(groupId: WorkbenchGroupIdentity): Future[Option[Date]] = Future {
-    Option(ldapConnectionPool.getEntry(groupDn(groupId), Attr.groupSynchronizedTimestamp))
+  override def getSynchronizedDate(groupId: WorkbenchGroupIdentity): IO[Option[Date]] = {
+    executeLdap(IO(Option(ldapConnectionPool.getEntry(groupDn(groupId), Attr.groupSynchronizedTimestamp))
       .map { entry =>
         Option(entry.getAttributeValue(Attr.groupSynchronizedTimestamp)).map(parseDate)
       }
-      .getOrElse(throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"$groupId not found")))
+      .getOrElse(throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"$groupId not found")))))
   }
 
-  override def getSynchronizedEmail(groupId: WorkbenchGroupIdentity): Future[Option[WorkbenchEmail]] = Future {
-    Option(ldapConnectionPool.getEntry(groupDn(groupId), Attr.email))
+  override def getSynchronizedEmail(groupId: WorkbenchGroupIdentity): IO[Option[WorkbenchEmail]] = {
+    executeLdap(IO(Option(ldapConnectionPool.getEntry(groupDn(groupId), Attr.email))
       .map { entry =>
         Option(entry.getAttributeValue(Attr.email)).map(WorkbenchEmail)
       }
-      .getOrElse(throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"$groupId not found")))
+      .getOrElse(throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"$groupId not found")))))
   }
 
   override def loadSubjectFromEmail(email: WorkbenchEmail): IO[Option[WorkbenchSubject]] = {

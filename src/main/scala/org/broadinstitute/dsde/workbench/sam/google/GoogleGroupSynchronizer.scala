@@ -67,7 +67,7 @@ class GoogleGroupSynchronizer(directoryDAO: DirectoryDAO,
 
         subGroupSyncs <- Future.traverse(group.members) {
           case subGroup: WorkbenchGroupIdentity =>
-            directoryDAO.getSynchronizedDate(subGroup).flatMap {
+            directoryDAO.getSynchronizedDate(subGroup).unsafeToFuture().flatMap {
               case None => synchronizeGroupMembers(subGroup, visitedGroups + groupId)
               case _ => Future.successful(Map.empty[WorkbenchEmail, Seq[SyncReportItem]])
             }

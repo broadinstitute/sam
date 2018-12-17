@@ -117,7 +117,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
       }
       when(mockDirectoryDAO.loadGroup(ge.allUsersGroupName)).thenReturn(IO.pure(Option(BasicWorkbenchGroup(ge.allUsersGroupName, Set.empty, ge.allUsersGroupEmail))))
       when(mockDirectoryDAO.updateSynchronizedDate(any[WorkbenchGroupIdentity])).thenReturn(Future.successful(()))
-      when(mockDirectoryDAO.getSynchronizedDate(any[WorkbenchGroupIdentity])).thenReturn(Future.successful(Some((new GregorianCalendar(2017, 11, 22).getTime()))))
+      when(mockDirectoryDAO.getSynchronizedDate(any[WorkbenchGroupIdentity])).thenReturn(IO.pure(Some((new GregorianCalendar(2017, 11, 22).getTime()))))
       when(mockDirectoryDAO.readProxyGroup(WorkbenchUserId("addError"))).thenReturn(Future.successful(Some(WorkbenchEmail(addErrorProxyEmail))))
       when(mockDirectoryDAO.readProxyGroup(WorkbenchUserId("inSamUser"))).thenReturn(Future.successful(Some(WorkbenchEmail(inSamUserProxyEmail))))
       when(mockDirectoryDAO.readProxyGroup(WorkbenchUserId("inGoogleUser"))).thenReturn(Future.successful(Some(WorkbenchEmail(inGoogleUserProxyEmail))))
@@ -225,7 +225,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     when(mockDirectoryDAO.listIntersectionGroupUsers(Set(managedGroupId, testPolicy.id))).thenReturn(IO.pure(Set(intersectionSamUserId, authorizedGoogleUserId, subIntersectionSamGroupUserId, subAuthorizedGoogleGroupUserId, addError)))
 
     when(mockDirectoryDAO.updateSynchronizedDate(any[WorkbenchGroupIdentity])).thenReturn(Future.successful(()))
-    when(mockDirectoryDAO.getSynchronizedDate(any[WorkbenchGroupIdentity])).thenReturn(Future.successful(Some(new GregorianCalendar(2017, 11, 22).getTime())))
+    when(mockDirectoryDAO.getSynchronizedDate(any[WorkbenchGroupIdentity])).thenReturn(IO.pure(Some(new GregorianCalendar(2017, 11, 22).getTime())))
 
     val added = Seq(WorkbenchEmail(intersectionSamUserProxyEmail), WorkbenchEmail(subIntersectionSamGroupUserProxyEmail))
     val removed = Seq(WorkbenchEmail(unauthorizedGoogleUserProxyEmail))
@@ -411,12 +411,12 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
 
     val ge = new GoogleExtensions(TestSupport.testDistributedLock, mockDirectoryDAO, null, null, null, null, null, null, null, null, googleServicesConfig, petServiceAccountConfig, configResourceTypes)
 
-    when(mockDirectoryDAO.getSynchronizedDate(groupName)).thenReturn(Future.successful(None))
-    runAndWait(ge.getSynchronizedDate(groupName)) shouldBe None
+    when(mockDirectoryDAO.getSynchronizedDate(groupName)).thenReturn(IO.pure(None))
+    ge.getSynchronizedDate(groupName).unsafeRunSync() shouldBe None
 
     val date = new Date()
-    when(mockDirectoryDAO.getSynchronizedDate(groupName)).thenReturn(Future.successful(Some(date)))
-    runAndWait(ge.getSynchronizedDate(groupName)) shouldBe Some(date)
+    when(mockDirectoryDAO.getSynchronizedDate(groupName)).thenReturn(IO.pure(Some(date)))
+    ge.getSynchronizedDate(groupName).unsafeRunSync() shouldBe Some(date)
   }
 
   it should "throw an exception with a NotFound error report when getting sync date for group that does not exist" in {
@@ -424,7 +424,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val ge = new GoogleExtensions(TestSupport.testDistributedLock, dirDAO, null, null, null, null, null, null, null, null, googleServicesConfig, null, configResourceTypes)
     val groupName = WorkbenchGroupName("missing-group")
     val caught: WorkbenchExceptionWithErrorReport = intercept[WorkbenchExceptionWithErrorReport] {
-      runAndWait(ge.getSynchronizedDate(groupName))
+      ge.getSynchronizedDate(groupName).unsafeRunSync()
     }
     caught.errorReport.statusCode shouldBe Some(StatusCodes.NotFound)
     caught.errorReport.message should include (groupName.toString)
@@ -436,7 +436,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val groupName = WorkbenchGroupName("group-sync")
     dirDAO.createGroup(BasicWorkbenchGroup(groupName, Set(), WorkbenchEmail(""))).unsafeRunSync()
     try {
-      runAndWait(ge.getSynchronizedDate(groupName)) shouldBe None
+      ge.getSynchronizedDate(groupName).unsafeRunSync() shouldBe None
     } finally {
       dirDAO.deleteGroup(groupName).unsafeRunSync()
     }
@@ -451,7 +451,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     dirDAO.createGroup(BasicWorkbenchGroup(groupName, Set(), WorkbenchEmail("group1@test.firecloud.org"))).unsafeRunSync()
     try {
       runAndWait(synchronizer.synchronizeGroupMembers(groupName))
-      val syncDate = runAndWait(ge.getSynchronizedDate(groupName)).get
+      val syncDate = ge.getSynchronizedDate(groupName).unsafeRunSync().get
       syncDate.getTime should equal (new Date().getTime +- 1.second.toMillis)
     } finally {
       dirDAO.deleteGroup(groupName).unsafeRunSync()
@@ -463,7 +463,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val ge = new GoogleExtensions(TestSupport.testDistributedLock, dirDAO, null, null, null, null, null, null, null, null, googleServicesConfig, null, configResourceTypes)
     val groupName = WorkbenchGroupName("missing-group")
     val caught: WorkbenchExceptionWithErrorReport = intercept[WorkbenchExceptionWithErrorReport] {
-      runAndWait(ge.getSynchronizedEmail(groupName))
+      ge.getSynchronizedEmail(groupName).unsafeRunSync()
     }
     caught.errorReport.statusCode shouldBe Some(StatusCodes.NotFound)
     caught.errorReport.message should include (groupName.toString)
@@ -476,7 +476,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val email = WorkbenchEmail("foo@bar.com")
     dirDAO.createGroup(BasicWorkbenchGroup(groupName, Set(), email)).unsafeRunSync()
     try {
-      runAndWait(ge.getSynchronizedEmail(groupName)) shouldBe Some(email)
+      ge.getSynchronizedEmail(groupName).unsafeRunSync() shouldBe Some(email)
     } finally {
       dirDAO.deleteGroup(groupName).unsafeRunSync()
     }
@@ -489,7 +489,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val email = WorkbenchEmail("foo@bar.com")
     dirDAO.createGroup(BasicWorkbenchGroup(groupName, Set(), email)).unsafeRunSync()
     try {
-      runAndWait(ge.getSynchronizedState(groupName)) shouldBe None
+      ge.getSynchronizedState(groupName).unsafeRunSync() shouldBe None
     } finally {
       dirDAO.deleteGroup(groupName).unsafeRunSync()
     }
@@ -504,9 +504,9 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val email = WorkbenchEmail("foo@bar.com")
     dirDAO.createGroup(BasicWorkbenchGroup(groupName, Set(), email)).unsafeRunSync()
     try {
-      runAndWait(ge.getSynchronizedState(groupName)) should equal(None)
+      ge.getSynchronizedState(groupName).unsafeRunSync() should equal(None)
       runAndWait(synchronizer.synchronizeGroupMembers(groupName))
-      val maybeSyncResponse = runAndWait(ge.getSynchronizedState(groupName))
+      val maybeSyncResponse = ge.getSynchronizedState(groupName).unsafeRunSync()
       maybeSyncResponse.map(_.email) should equal(Some(email))
     } finally {
       dirDAO.deleteGroup(groupName).unsafeRunSync()
@@ -650,7 +650,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
 
     // mock responses for onGroupUpdate
     when(mockDirectoryDAO.listAncestorGroups(any[FullyQualifiedPolicyId])).thenReturn(IO.pure(Set.empty.asInstanceOf[Set[WorkbenchGroupIdentity]]))
-    when(mockDirectoryDAO.getSynchronizedDate(any[FullyQualifiedPolicyId])).thenReturn(Future.successful(Some(new GregorianCalendar(2018, 8, 26).getTime())))
+    when(mockDirectoryDAO.getSynchronizedDate(any[FullyQualifiedPolicyId])).thenReturn(IO.pure(Some(new GregorianCalendar(2018, 8, 26).getTime())))
     when(mockGooglePubSubDAO.publishMessages(any[String], any[Seq[String]])).thenReturn(Future.successful(()))
 
     // mock responses for onManagedGroupUpdate
@@ -682,7 +682,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
 
     // mock responses for onGroupUpdate
     when(mockDirectoryDAO.listAncestorGroups(any[FullyQualifiedPolicyId])).thenReturn(IO.pure(Set.empty.asInstanceOf[Set[WorkbenchGroupIdentity]]))
-    when(mockDirectoryDAO.getSynchronizedDate(any[FullyQualifiedPolicyId])).thenReturn(Future.successful(Some(new GregorianCalendar(2018, 8, 26).getTime())))
+    when(mockDirectoryDAO.getSynchronizedDate(any[FullyQualifiedPolicyId])).thenReturn(IO.pure(Some(new GregorianCalendar(2018, 8, 26).getTime())))
     when(mockGooglePubSubDAO.publishMessages(any[String], any[Seq[String]])).thenReturn(Future.successful(()))
 
     // mock ancestor call to establish subgroup relationship to managed group
@@ -717,7 +717,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
 
     // mock responses for onGroupUpdate
     when(mockDirectoryDAO.listAncestorGroups(any[FullyQualifiedPolicyId])).thenReturn(IO.pure(Set.empty.asInstanceOf[Set[WorkbenchGroupIdentity]]))
-    when(mockDirectoryDAO.getSynchronizedDate(any[FullyQualifiedPolicyId])).thenReturn(Future.successful(Some(new GregorianCalendar(2018, 8, 26).getTime())))
+    when(mockDirectoryDAO.getSynchronizedDate(any[FullyQualifiedPolicyId])).thenReturn(IO.pure(Some(new GregorianCalendar(2018, 8, 26).getTime())))
     when(mockGooglePubSubDAO.publishMessages(any[String], any[Seq[String]])).thenReturn(Future.successful(()))
 
     // mock ancestor call to establish nested group structure for owner policy and subgroup in managed group

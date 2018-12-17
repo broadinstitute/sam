@@ -364,13 +364,13 @@ class ResourceService(
     }
 
   def addSubjectToPolicy(policyIdentity: FullyQualifiedPolicyId, subject: WorkbenchSubject): Future[Unit] =
-    directoryDAO.addGroupMember(policyIdentity, subject).unsafeToFuture().map(_ => ()) flatMap {
-      _ => fireGroupUpdateNotification(policyIdentity)
+    directoryDAO.addGroupMember(policyIdentity, subject).unsafeToFuture().map(_ => ()) andThen {
+      case Success(_) => fireGroupUpdateNotification(policyIdentity)
     }
 
   def removeSubjectFromPolicy(policyIdentity: FullyQualifiedPolicyId, subject: WorkbenchSubject): Future[Unit] =
-    directoryDAO.removeGroupMember(policyIdentity, subject).void.unsafeToFuture() flatMap {
-      _ => fireGroupUpdateNotification(policyIdentity)
+    directoryDAO.removeGroupMember(policyIdentity, subject).void.unsafeToFuture() andThen {
+      case Success(_) => fireGroupUpdateNotification(policyIdentity)
     }
 
   private[service] def loadAccessPolicyWithEmails(policy: AccessPolicy): IO[AccessPolicyMembership] = {
