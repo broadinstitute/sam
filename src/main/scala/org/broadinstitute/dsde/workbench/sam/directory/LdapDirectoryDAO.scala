@@ -255,23 +255,23 @@ class LdapDirectoryDAO(
     }
   }
 
-  override def listIntersectionGroupUsers(groupIds: Set[WorkbenchGroupIdentity]): IO[Set[WorkbenchUserId]] = IO {
-    ldapSearchStream(
-      directoryConfig.baseDn,
-      SearchScope.SUB,
-      Filter.createANDFilter(groupIds.map(groupId => Filter.createEqualityFilter(Attr.memberOf, groupDn(groupId))).asJava)
-    )(getAttribute(_, Attr.uid)).flatten.map(WorkbenchUserId).toSet
-  }
-
-//  override def listIntersectionGroupUsers(groupIds: Set[WorkbenchGroupIdentity]): IO[Set[WorkbenchUserId]] = {
-//    for {
-//      flatMembers <- groupIds.toList.traverse { groupId =>
-//        listFlattenedMembers(groupId)
-//      }
-//    } yield {
-//      flatMembers.reduce(_ intersect _)
-//    }
+//  override def listIntersectionGroupUsers(groupIds: Set[WorkbenchGroupIdentity]): IO[Set[WorkbenchUserId]] = IO {
+//    ldapSearchStream(
+//      directoryConfig.baseDn,
+//      SearchScope.SUB,
+//      Filter.createANDFilter(groupIds.map(groupId => Filter.createEqualityFilter(Attr.memberOf, groupDn(groupId))).asJava)
+//    )(getAttribute(_, Attr.uid)).flatten.map(WorkbenchUserId).toSet
 //  }
+
+  override def listIntersectionGroupUsers(groupIds: Set[WorkbenchGroupIdentity]): IO[Set[WorkbenchUserId]] = {
+    for {
+      flatMembers <- groupIds.toList.traverse { groupId =>
+        listFlattenedMembers(groupId)
+      }
+    } yield {
+      flatMembers.reduce(_ intersect _)
+    }
+  }
 
   def listFlattenedMembers(groupId: WorkbenchGroupIdentity, visitedGroupIds: Set[WorkbenchGroupIdentity] = Set.empty): IO[Set[WorkbenchUserId]] = {
     for {

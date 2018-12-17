@@ -103,7 +103,7 @@ class GoogleGroupSyncMonitorActor(
     pollIntervalJitter: FiniteDuration,
     pubSubDao: GooglePubSubDAO,
     pubSubSubscriptionName: String,
-    googleExtensions: GoogleGroupSynchronizer)
+    groupSynchronizer: GoogleGroupSynchronizer)
     extends Actor
     with LazyLogging
     with FutureSupport {
@@ -129,7 +129,7 @@ class GoogleGroupSyncMonitorActor(
       logger.debug(s"received sync message: $message")
       val groupId: WorkbenchGroupIdentity = parseMessage(message)
 
-      googleExtensions
+      groupSynchronizer
         .synchronizeGroupMembers(groupId)
         .toTry
         .map(sr => sr.fold(t => FailToSynchronize(t, message.ackId), x => ReportMessage(x, message.ackId))) pipeTo self
