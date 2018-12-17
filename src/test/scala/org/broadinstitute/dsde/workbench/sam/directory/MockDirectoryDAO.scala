@@ -53,7 +53,7 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
   }
 
   override def deleteGroup(groupName: WorkbenchGroupName): IO[Unit] = {
-    listParentGroups(groupName).map { ancestors =>
+    listAncestorGroups(groupName).map { ancestors =>
       if (ancestors.nonEmpty)
         throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"group ${groupName.value} cannot be deleted because it is a member of at least 1 other group"))
       else
@@ -153,7 +153,7 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     }
   }
 
-  override def listParentGroups(groupName: WorkbenchGroupIdentity): IO[Set[WorkbenchGroupIdentity]] = IO {
+  override def listAncestorGroups(groupName: WorkbenchGroupIdentity): IO[Set[WorkbenchGroupIdentity]] = IO {
     listSubjectsGroups(groupName, Set.empty).map(_.id)
   }
 

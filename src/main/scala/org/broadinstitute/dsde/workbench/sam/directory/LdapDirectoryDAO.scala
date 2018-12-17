@@ -90,8 +90,8 @@ class LdapDirectoryDAO(
 
   override def deleteGroup(groupName: WorkbenchGroupName): IO[Unit] =
     for {
-      parents <- listParentGroups(groupName)
-      res <- if (parents.nonEmpty) {
+      ancestors <- listAncestorGroups(groupName)
+      res <- if (ancestors.nonEmpty) {
         IO.raiseError(
           new WorkbenchExceptionWithErrorReport(
             ErrorReport(StatusCodes.Conflict, s"group ${groupName.value} cannot be deleted because it is a member of at least 1 other group")))
@@ -291,9 +291,7 @@ class LdapDirectoryDAO(
     )
   }
 
-  override def listParentGroups(groupId: WorkbenchGroupIdentity): IO[Set[WorkbenchGroupIdentity]] = {
-    executeLdap(IO(ldapSearchStream(directoryConfig.baseDn, SearchScope.SUB, Filter.createEqualityFilter(Attr.uniqueMember, groupDn(groupId)))(e => dnToGroupIdentity(e.getDN)).toSet))
-  }
+  override def listAncestorGroups(groupId: WorkbenchGroupIdentity): IO[Set[WorkbenchGroupIdentity]] = listMemberOfGroups(groupId)
 
   override def enableIdentity(subject: WorkbenchSubject): IO[Unit] =
     executeLdap(
