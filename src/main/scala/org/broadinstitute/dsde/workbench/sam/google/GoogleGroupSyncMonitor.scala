@@ -33,9 +33,9 @@ object GoogleGroupSyncMonitorSupervisor {
       pubSubTopicName: String,
       pubSubSubscriptionName: String,
       workerCount: Int,
-      googleExtensions: GoogleExtensions): Props =
+      groupSynchronizer: GoogleGroupSynchronizer): Props =
     Props(
-      new GoogleGroupSyncMonitorSupervisor(pollInterval, pollIntervalJitter, pubSubDao, pubSubTopicName, pubSubSubscriptionName, workerCount, googleExtensions))
+      new GoogleGroupSyncMonitorSupervisor(pollInterval, pollIntervalJitter, pubSubDao, pubSubTopicName, pubSubSubscriptionName, workerCount, groupSynchronizer))
 }
 
 class GoogleGroupSyncMonitorSupervisor(
@@ -45,7 +45,7 @@ class GoogleGroupSyncMonitorSupervisor(
     pubSubTopicName: String,
     pubSubSubscriptionName: String,
     workerCount: Int,
-    googleExtensions: GoogleExtensions)
+    groupSynchronizer: GoogleGroupSynchronizer)
     extends Actor
     with LazyLogging {
   import GoogleGroupSyncMonitorSupervisor._
@@ -67,7 +67,7 @@ class GoogleGroupSyncMonitorSupervisor(
 
   def startOne(): Unit = {
     logger.info("starting GoogleGroupSyncMonitorActor")
-    actorOf(GoogleGroupSyncMonitor.props(pollInterval, pollIntervalJitter, pubSubDao, pubSubSubscriptionName, googleExtensions))
+    actorOf(GoogleGroupSyncMonitor.props(pollInterval, pollIntervalJitter, pubSubDao, pubSubSubscriptionName, groupSynchronizer))
   }
 
   override val supervisorStrategy =
@@ -94,8 +94,8 @@ object GoogleGroupSyncMonitor {
       pollIntervalJitter: FiniteDuration,
       pubSubDao: GooglePubSubDAO,
       pubSubSubscriptionName: String,
-      googleExtensions: GoogleExtensions): Props =
-    Props(new GoogleGroupSyncMonitorActor(pollInterval, pollIntervalJitter, pubSubDao, pubSubSubscriptionName, googleExtensions))
+      groupSynchronizer: GoogleGroupSynchronizer): Props =
+    Props(new GoogleGroupSyncMonitorActor(pollInterval, pollIntervalJitter, pubSubDao, pubSubSubscriptionName, groupSynchronizer))
 }
 
 class GoogleGroupSyncMonitorActor(
@@ -103,7 +103,7 @@ class GoogleGroupSyncMonitorActor(
     pollIntervalJitter: FiniteDuration,
     pubSubDao: GooglePubSubDAO,
     pubSubSubscriptionName: String,
-    googleExtensions: GoogleExtensions)
+    googleExtensions: GoogleGroupSynchronizer)
     extends Actor
     with LazyLogging
     with FutureSupport {

@@ -26,8 +26,6 @@ trait CloudExtensions {
   // this is temporary until we get the admin group rolled into a sam group
   def isWorkbenchAdmin(memberEmail: WorkbenchEmail): Future[Boolean]
 
-  def onBoot(samApplication: SamApplication)(implicit system: ActorSystem): IO[Unit]
-
   def publishGroup(id: WorkbenchGroupName): Future[Unit]
 
   def onGroupUpdate(groupIdentities: Seq[WorkbenchGroupIdentity]): Future[Unit]
@@ -62,10 +60,13 @@ trait CloudExtensions {
   def getOrCreateAllUsersGroup(directoryDAO: DirectoryDAO)(implicit executionContext: ExecutionContext): Future[WorkbenchGroup]
 }
 
+trait CloudExtensionsInitializer {
+  def onBoot(samApplication: SamApplication)(implicit system: ActorSystem): IO[Unit]
+  def cloudExtensions: CloudExtensions
+}
+
 trait NoExtensions extends CloudExtensions {
   override def isWorkbenchAdmin(memberEmail: WorkbenchEmail): Future[Boolean] = Future.successful(true)
-
-  override def onBoot(samApplication: SamApplication)(implicit system: ActorSystem): IO[Unit] = IO.unit
 
   override def publishGroup(id: WorkbenchGroupName): Future[Unit] = Future.successful(())
 
@@ -109,6 +110,11 @@ trait NoExtensions extends CloudExtensions {
 }
 
 object NoExtensions extends NoExtensions
+
+object NoExtensionsInitializer extends CloudExtensionsInitializer {
+  override def onBoot(samApplication: SamApplication)(implicit system: ActorSystem): IO[Unit] = IO.unit
+  override val cloudExtensions: CloudExtensions = NoExtensions
+}
 
 trait NoExtensionRoutes extends ExtensionRoutes {
   def extensionRoutes: server.Route = reject

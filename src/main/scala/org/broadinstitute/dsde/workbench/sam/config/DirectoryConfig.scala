@@ -8,7 +8,8 @@ case class DirectoryConfig(directoryUrl: String,
                            password: String,
                            baseDn: String,
                            enabledUsersGroupDn: String,
-                           connectionPoolSize: Int = 20,
+                           connectionPoolSize: Int = 15,
+                           backgroundConnectionPoolSize: Int = 5,
                            memberOfCache: CacheConfig,
                            resourceCache: CacheConfig
                           )

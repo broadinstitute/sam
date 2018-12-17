@@ -21,6 +21,7 @@ import scala.concurrent.ExecutionContext
 trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with SecurityDirectives {
   implicit val executionContext: ExecutionContext
   val googleExtensions: GoogleExtensions
+  val googleGroupSynchronizer: GoogleGroupSynchronizer
 
   override def extensionRoutes: server.Route =
     (pathPrefix("google" / "v1") | pathPrefix("google")) {
@@ -138,7 +139,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                 post {
                   complete {
                     import GoogleModelJsonSupport._
-                    googleExtensions.synchronizeGroupMembers(policyId).map { syncReport =>
+                    googleGroupSynchronizer.synchronizeGroupMembers(policyId).map { syncReport =>
                       StatusCodes.OK -> syncReport
                     }
                   }
