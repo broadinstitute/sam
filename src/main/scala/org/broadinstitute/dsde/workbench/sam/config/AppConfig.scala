@@ -106,7 +106,7 @@ object AppConfig {
       config.getString("baseDn"),
       config.getString("enabledUsersGroupDn"),
       config.as[Option[Int]]("connectionPoolSize").getOrElse(15),
-      config.as[Option[Int]]("backgroundDonnectionPoolSize").getOrElse(5),
+      config.as[Option[Int]]("backgroundConnectionPoolSize").getOrElse(5),
       config.as[Option[CacheConfig]]("memberOfCache").getOrElse(CacheConfig(100, java.time.Duration.ofMinutes(1))),
       config.as[Option[CacheConfig]]("resourceCache").getOrElse(CacheConfig(10000, java.time.Duration.ofHours(1)))
     )

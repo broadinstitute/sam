@@ -7,7 +7,8 @@ import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import akka.stream.ActorMaterializer
 import cats.data.NonEmptyList
-import cats.effect.{ExitCode, IO, IOApp}
+import cats.effect.internals.IOContextShift
+import cats.effect.{ExitCode, IO, IOApp, Timer}
 import cats.implicits._
 import com.typesafe.config.ConfigFactory
 import com.typesafe.scalalogging.LazyLogging
@@ -79,7 +80,7 @@ object Boot extends IOApp with LazyLogging {
     }
   }
 
-  private[sam] def createLdapConnectionPool(directoryUrl: String, user: String, password: String, connectionPoolSize: Int): cats.effect.Resource[IO, LDAPConnectionPool] = {
+  private[sam] def createLdapConnectionPool(directoryUrl: String, user: String, password: String, connectionPoolSize: Int, name: String): cats.effect.Resource[IO, LDAPConnectionPool] = {
     val dirURI = new URI(directoryUrl)
     val (socketFactory, defaultPort) = dirURI.getScheme.toLowerCase match {
       case "ldaps" => (SSLContext.getDefault.getSocketFactory, 636)
@@ -95,6 +96,7 @@ object Boot extends IOApp with LazyLogging {
         )
         connectionPool.setCreateIfNecessary(false)
         connectionPool.setMaxWaitTimeMillis(30000)
+        connectionPool.setConnectionPoolName(name)
         connectionPool
       })(ldapConnection => IO(ldapConnection.close()))
   }
@@ -142,7 +144,7 @@ object Boot extends IOApp with LazyLogging {
   private[sam] def createAppDependencies(
       appConfig: AppConfig)(implicit actorSystem: ActorSystem, actorMaterializer: ActorMaterializer): cats.effect.Resource[IO, AppDependencies] =
     for {
-      ldapConnectionPool <- createLdapConnectionPool(appConfig.directoryConfig.directoryUrl, appConfig.directoryConfig.user, appConfig.directoryConfig.password, appConfig.directoryConfig.connectionPoolSize)
+      ldapConnectionPool <- createLdapConnectionPool(appConfig.directoryConfig.directoryUrl, appConfig.directoryConfig.user, appConfig.directoryConfig.password, appConfig.directoryConfig.connectionPoolSize, "foreground")
       memberOfCache <- createMemberOfCache("memberof", appConfig.directoryConfig.memberOfCache.maxEntries, appConfig.directoryConfig.memberOfCache.timeToLive)
       resourceCache <- createResourceCache("resource", appConfig.directoryConfig.resourceCache.maxEntries, appConfig.directoryConfig.resourceCache.timeToLive)
       ldapExecutionContext <- ExecutionContexts.fixedThreadPool[IO](appConfig.directoryConfig.connectionPoolSize)
@@ -151,10 +153,11 @@ object Boot extends IOApp with LazyLogging {
 
       // This special set of objects are for operations that happen in the background, i.e. not in the immediate service
       // of an api call. They are meant to partition resources so that background processes can't crowd our api calls.
-      backgroundLdapConnectionPool <- createLdapConnectionPool(appConfig.directoryConfig.directoryUrl, appConfig.directoryConfig.user, appConfig.directoryConfig.password, appConfig.directoryConfig.backgroundConnectionPoolSize)
+      backgroundLdapConnectionPool <- createLdapConnectionPool(appConfig.directoryConfig.directoryUrl, appConfig.directoryConfig.user, appConfig.directoryConfig.password, appConfig.directoryConfig.backgroundConnectionPoolSize, "background")
       backgroundLdapExecutionContext <- ExecutionContexts.fixedThreadPool[IO](appConfig.directoryConfig.backgroundConnectionPoolSize)
-      backgroundAccessPolicyDao = new LdapAccessPolicyDAO(backgroundLdapConnectionPool, appConfig.directoryConfig, backgroundLdapExecutionContext, memberOfCache, resourceCache)
-      backgroundDirectoryDAO = new LdapDirectoryDAO(backgroundLdapConnectionPool, appConfig.directoryConfig, backgroundLdapExecutionContext, memberOfCache)
+      backgroundContextShift = IOContextShift(backgroundLdapExecutionContext)
+      backgroundAccessPolicyDao = new LdapAccessPolicyDAO(backgroundLdapConnectionPool, appConfig.directoryConfig, backgroundLdapExecutionContext, memberOfCache, resourceCache)(backgroundContextShift)
+      backgroundDirectoryDAO = new LdapDirectoryDAO(backgroundLdapConnectionPool, appConfig.directoryConfig, backgroundLdapExecutionContext, memberOfCache)(backgroundLdapExecutionContext, implicitly[Timer[IO]])
 
       appDependencies <- appConfig.googleConfig match {
         case Some(config) =>
@@ -168,7 +171,7 @@ object Boot extends IOApp with LazyLogging {
               DistributedLock[IO](s"sam-${config.googleServicesConfig.resourceNamePrefix.getOrElse("local")}", appConfig.distributedLockConfig, ioFireStore)
             val resourceTypeMap = appConfig.resourceTypes.map(rt => rt.name -> rt).toMap
             val cloudExtension = createGoogleCloudExt(accessPolicyDao, directoryDAO, config, resourceTypeMap, lock)
-            val googleGroupSynchronizer = new GoogleGroupSynchronizer(backgroundDirectoryDAO, backgroundAccessPolicyDao, cloudExtension.googleDirectoryDAO, cloudExtension, resourceTypeMap)
+            val googleGroupSynchronizer = new GoogleGroupSynchronizer(backgroundDirectoryDAO, backgroundAccessPolicyDao, cloudExtension.googleDirectoryDAO, cloudExtension, resourceTypeMap)(backgroundLdapExecutionContext)
             val cloudExtensionsInitializer = new GoogleExtensionsInitializer(cloudExtension, googleGroupSynchronizer)
             createAppDepenciesWithSamRoutes(appConfig, cloudExtensionsInitializer, accessPolicyDao, directoryDAO)
           }
