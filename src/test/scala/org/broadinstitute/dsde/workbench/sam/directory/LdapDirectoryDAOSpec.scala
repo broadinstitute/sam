@@ -203,8 +203,8 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     dao.createGroup(group3).unsafeRunSync()
 
     try {
-      assertResult(Set(groupName2, groupName3)) {
-        dao.listAncestorGroups(groupName1).unsafeRunSync()
+      assertResult(Set(groupName2)) {
+        dao.listParentGroups(groupName1).unsafeRunSync()
       }
     } finally {
       dao.deleteGroup(groupName3).unsafeRunSync()
@@ -238,8 +238,8 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
         dao.listUsersGroups(userId).unsafeRunSync()
       }
 
-      assertResult(Set(groupName1, groupName2, groupName3)) {
-        dao.listAncestorGroups(groupName3).unsafeRunSync()
+      assertResult(Set(groupName1)) {
+        dao.listParentGroups(groupName3).unsafeRunSync()
       }
     } finally {
       runAndWait(dao.deleteUser(userId))

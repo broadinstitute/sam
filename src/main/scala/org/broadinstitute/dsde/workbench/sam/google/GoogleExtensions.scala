@@ -153,13 +153,13 @@ class GoogleExtensions(
         case (rpn: FullyQualifiedPolicyId, Some(_)) => rpn.toJson.compactPrint
       }
       _ <- googlePubSubDAO.publishMessages(googleServicesConfig.groupSyncTopic, messagesForIdsWithSyncDates)
-      ancestorGroups <- Future.traverse(groupIdentities) { id =>
-        directoryDAO.listAncestorGroups(id).unsafeToFuture()
+      parentGroups <- Future.traverse(groupIdentities) { id =>
+        directoryDAO.listParentGroups(id).unsafeToFuture()
       }
-      managedGroupIds = (ancestorGroups.flatten ++ groupIdentities).filterNot(visitedGroups.contains).collect {
+      managedGroupIds = (parentGroups.flatten ++ groupIdentities).filterNot(visitedGroups.contains).collect {
         case FullyQualifiedPolicyId(FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, id), _) => id
       }
-      _ <- Future.traverse(managedGroupIds)(id => onManagedGroupUpdate(id, visitedGroups ++ groupIdentities ++ ancestorGroups.flatten))
+      _ <- Future.traverse(managedGroupIds)(id => onManagedGroupUpdate(id, visitedGroups ++ groupIdentities ++ parentGroups.flatten))
     } yield ()
 
   private def onManagedGroupUpdate(groupId: ResourceId, visitedGroups: Seq[WorkbenchGroupIdentity]): Future[Unit] =
