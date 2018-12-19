@@ -15,5 +15,5 @@ COPY ./sam*.jar /sam
 #CMD java $JAVA_OPTS -jar $(find /sam -name 'sam*.jar')
 CMD echo $JAVA_OPTS
 CMD java -version
-CMD native-image $JAVA_OPTS -H:+ReportUnsupportedElementsAtRuntime -jar $(echo /sam/sam*.jar)
-CMD $(echo sam*.jar)
+CMD native-image $JAVA_OPTS -H:+ReportUnsupportedElementsAtRuntime -jar $(echo sam*.jar)
+CMD $(echo sam*SNAPSHOT.jar)
