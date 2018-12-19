@@ -10,5 +10,10 @@ ENV GIT_MODEL_HASH $GIT_MODEL_HASH
 RUN mkdir /sam
 COPY ./sam*.jar /sam
 
+# Build native executable https://www.graalvm.org/docs/reference-manual/aot-compilation/
 # Add Sam as a service (it will start when the container starts)
-CMD java $JAVA_OPTS -jar $(find /sam -name 'sam*.jar')
+#CMD java $JAVA_OPTS -jar $(find /sam -name 'sam*.jar')
+CMD echo $JAVA_OPTS
+CMD java -version
+CMD native-image $JAVA_OPTS -H:+ReportUnsupportedElementsAtRuntime -jar $(echo /sam/sam*.jar)
+CMD $(echo sam*.jar)

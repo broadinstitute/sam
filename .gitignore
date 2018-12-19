@@ -78,6 +78,9 @@ crashlytics-build.properties
 
 newrelic-agent-4.6.0.jar
 
+sam-assembly-*.jar
+env.properties
+
 ### Automation things
 automation/report.xml
 automation/test-reports/
