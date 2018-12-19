@@ -9,6 +9,7 @@ configure.rb
 .history/
 .lib/
 .bloop/
+.metals
 dist/*
 target/
 lib_managed/

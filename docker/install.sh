@@ -9,6 +9,7 @@ cd $SAM_DIR
 export SBT_OPTS="-Xms2g -Xmx2g -Ddirectory.url=$DIRECTORY_URL -Ddirectory.password=$DIRECTORY_PASSWORD"
 sbt "testOnly -- -l org.broadinstitute.tags.SchemaInit"
 sbt assembly
+java -version
 SAM_JAR=$(find target | grep 'sam.*\.jar')
 mv $SAM_JAR .
 sbt clean

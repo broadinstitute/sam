@@ -1,4 +1,4 @@
-FROM openjdk:8
+FROM oracle/graalvm-ce:1.0.0-rc10
 
 # To run, build jar using ./docker/build.sh
 
