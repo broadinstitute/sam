@@ -140,20 +140,20 @@ class LdapDirectoryDAO(
     ldapConnectionPool.modify(groupDn(groupId), new Modification(ModificationType.REPLACE, Attr.groupSynchronizedTimestamp, formattedDate(new Date())))
   }
 
-  override def getSynchronizedDate(groupId: WorkbenchGroupIdentity): Future[Option[Date]] = Future {
-    Option(ldapConnectionPool.getEntry(groupDn(groupId), Attr.groupSynchronizedTimestamp))
+  override def getSynchronizedDate(groupId: WorkbenchGroupIdentity): IO[Option[Date]] = {
+    executeLdap(IO(Option(ldapConnectionPool.getEntry(groupDn(groupId), Attr.groupSynchronizedTimestamp))
       .map { entry =>
         Option(entry.getAttributeValue(Attr.groupSynchronizedTimestamp)).map(parseDate)
       }
-      .getOrElse(throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"$groupId not found")))
+      .getOrElse(throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"$groupId not found")))))
   }
 
-  override def getSynchronizedEmail(groupId: WorkbenchGroupIdentity): Future[Option[WorkbenchEmail]] = Future {
-    Option(ldapConnectionPool.getEntry(groupDn(groupId), Attr.email))
+  override def getSynchronizedEmail(groupId: WorkbenchGroupIdentity): IO[Option[WorkbenchEmail]] = {
+    executeLdap(IO(Option(ldapConnectionPool.getEntry(groupDn(groupId), Attr.email))
       .map { entry =>
         Option(entry.getAttributeValue(Attr.email)).map(WorkbenchEmail)
       }
-      .getOrElse(throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"$groupId not found")))
+      .getOrElse(throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"$groupId not found")))))
   }
 
   override def loadSubjectFromEmail(email: WorkbenchEmail): IO[Option[WorkbenchSubject]] = {
@@ -255,12 +255,40 @@ class LdapDirectoryDAO(
     }
   }
 
-  override def listIntersectionGroupUsers(groupIds: Set[WorkbenchGroupIdentity]): Future[Set[WorkbenchUserId]] = Future {
-    ldapSearchStream(
-      directoryConfig.baseDn,
-      SearchScope.SUB,
-      Filter.createANDFilter(groupIds.map(groupId => Filter.createEqualityFilter(Attr.memberOf, groupDn(groupId))).asJava)
-    )(getAttribute(_, Attr.uid)).flatten.map(WorkbenchUserId).toSet
+//  override def listIntersectionGroupUsers(groupIds: Set[WorkbenchGroupIdentity]): IO[Set[WorkbenchUserId]] = IO {
+//    ldapSearchStream(
+//      directoryConfig.baseDn,
+//      SearchScope.SUB,
+//      Filter.createANDFilter(groupIds.map(groupId => Filter.createEqualityFilter(Attr.memberOf, groupDn(groupId))).asJava)
+//    )(getAttribute(_, Attr.uid)).flatten.map(WorkbenchUserId).toSet
+//  }
+
+  override def listIntersectionGroupUsers(groupIds: Set[WorkbenchGroupIdentity]): IO[Set[WorkbenchUserId]] = {
+    for {
+      flatMembers <- groupIds.toList.traverse { groupId =>
+        listFlattenedMembers(groupId)
+      }
+    } yield {
+      flatMembers.reduce(_ intersect _)
+    }
+  }
+
+  def listFlattenedMembers(groupId: WorkbenchGroupIdentity, visitedGroupIds: Set[WorkbenchGroupIdentity] = Set.empty): IO[Set[WorkbenchUserId]] = {
+    for {
+      directMembers <- listDirectMembers(groupId)
+      users = directMembers.collect { case subject: WorkbenchUserId => subject }
+      subGroups = directMembers.collect { case subject: WorkbenchGroupIdentity => subject }
+      updatedVisitedGroupIds = visitedGroupIds ++ subGroups
+      nestedUsers <- (subGroups -- visitedGroupIds).toList.traverse(subGroupId => listFlattenedMembers(subGroupId, updatedVisitedGroupIds))
+    } yield {
+      users ++ nestedUsers.flatten
+    }
+  }
+
+  def listDirectMembers(groupId: WorkbenchGroupIdentity): IO[Set[WorkbenchSubject]] = {
+    executeLdap(
+      IO(getAttributes(ldapConnectionPool.getEntry(groupDn(groupId), Attr.uniqueMember), Attr.uniqueMember).map(dnToSubject))
+    )
   }
 
   override def listAncestorGroups(groupId: WorkbenchGroupIdentity): IO[Set[WorkbenchGroupIdentity]] = listMemberOfGroups(groupId)

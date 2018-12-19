@@ -31,8 +31,8 @@ trait DirectoryDAO {
   def removeGroupMember(groupId: WorkbenchGroupIdentity, removeMember: WorkbenchSubject): IO[Boolean]
   def isGroupMember(groupId: WorkbenchGroupIdentity, member: WorkbenchSubject): IO[Boolean]
   def updateSynchronizedDate(groupId: WorkbenchGroupIdentity): Future[Unit]
-  def getSynchronizedDate(groupId: WorkbenchGroupIdentity): Future[Option[Date]]
-  def getSynchronizedEmail(groupId: WorkbenchGroupIdentity): Future[Option[WorkbenchEmail]]
+  def getSynchronizedDate(groupId: WorkbenchGroupIdentity): IO[Option[Date]]
+  def getSynchronizedEmail(groupId: WorkbenchGroupIdentity): IO[Option[WorkbenchEmail]]
 
   def loadSubjectFromEmail(email: WorkbenchEmail): IO[Option[WorkbenchSubject]]
   def loadSubjectEmail(subject: WorkbenchSubject): IO[Option[WorkbenchEmail]]
@@ -48,7 +48,7 @@ trait DirectoryDAO {
 
   def listUsersGroups(userId: WorkbenchUserId): IO[Set[WorkbenchGroupIdentity]]
   def listUserDirectMemberships(userId: WorkbenchUserId): IO[Stream[WorkbenchGroupIdentity]]
-  def listIntersectionGroupUsers(groupId: Set[WorkbenchGroupIdentity]): Future[Set[WorkbenchUserId]]
+  def listIntersectionGroupUsers(groupId: Set[WorkbenchGroupIdentity]): IO[Set[WorkbenchUserId]]
   def listAncestorGroups(groupId: WorkbenchGroupIdentity): IO[Set[WorkbenchGroupIdentity]]
 
   def enableIdentity(subject: WorkbenchSubject): IO[Unit]

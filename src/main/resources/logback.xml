@@ -60,6 +60,14 @@
         <appender-ref ref="Sentry" />
     </logger>
 
+    <!-- publishing messages can be too verbose logging -->
+    <logger name="org.broadinstitute.dsde.workbench.google.HttpGooglePubSubDAO" level="info" additivity="false">
+        <appender-ref ref="file"/>
+        <appender-ref ref="console"/>
+        <appender-ref ref="SYSLOG"/>
+        <appender-ref ref="Sentry" />
+    </logger>
+
     <root level="warn">
         <appender-ref ref="file"/>
         <appender-ref ref="console"/>

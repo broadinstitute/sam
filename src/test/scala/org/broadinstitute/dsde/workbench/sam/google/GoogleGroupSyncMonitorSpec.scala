@@ -33,7 +33,7 @@ class GoogleGroupSyncMonitorSpec(_system: ActorSystem) extends TestKit(_system) 
   "GoogleGroupSyncMonitor" should "handle sync message" in {
     implicit val patienceConfig = PatienceConfig(timeout = 1 second)
     val mockGooglePubSubDAO = new MockGooglePubSubDAO
-    val mockGoogleExtensions = mock[GoogleExtensions]
+    val mockGoogleExtensions = mock[GoogleGroupSynchronizer]
 
     val groupToSyncEmail = WorkbenchEmail("testgroup@example.com")
     val groupToSyncId = WorkbenchGroupName("testgroup")
@@ -65,7 +65,7 @@ class GoogleGroupSyncMonitorSpec(_system: ActorSystem) extends TestKit(_system) 
   it should "handle missing target group" in {
     implicit val patienceConfig = PatienceConfig(timeout = 1 second)
     val mockGooglePubSubDAO = new MockGooglePubSubDAO
-    val mockGoogleExtensions = mock[GoogleExtensions]
+    val mockGoogleExtensions = mock[GoogleGroupSynchronizer]
 
     val groupToSyncEmail = WorkbenchEmail("testgroup@example.com")
     val groupToSyncId = WorkbenchGroupName("testgroup")

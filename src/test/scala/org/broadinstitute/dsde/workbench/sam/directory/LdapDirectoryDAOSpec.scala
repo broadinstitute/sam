@@ -18,6 +18,7 @@ import org.ehcache.config.builders.{CacheConfigurationBuilder, CacheManagerBuild
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FlatSpec, Matchers}
 
 import scala.concurrent.ExecutionContext.Implicits.global
+import cats.implicits._
 
 /**
   * Created by dvoet on 5/30/17.
@@ -361,7 +362,7 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     dao.getUserFromPetServiceAccount(ServiceAccountSubjectId(user.id.value)).unsafeRunSync() shouldBe None
   }
 
-  "JndiDirectoryDAO safeDelete" should "prevent deleting groups that are sub-groups of other groups" in {
+  "LdapDirectoryDAO safeDelete" should "prevent deleting groups that are sub-groups of other groups" in {
     val childGroupName = WorkbenchGroupName(UUID.randomUUID().toString)
     val childGroup = BasicWorkbenchGroup(childGroupName, Set.empty, WorkbenchEmail("donnie@hollywood-lanes.com"))
 
@@ -405,7 +406,7 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     }
   }
 
-  "JndiDirectoryDao loadSubjectEmail" should "fail if the user has not been created" in {
+  "LdapDirectoryDao loadSubjectEmail" should "fail if the user has not been created" in {
     val userId = WorkbenchUserId(UUID.randomUUID().toString)
     val user = WorkbenchUser(userId, None, WorkbenchEmail("foo@bar.com"))
 
@@ -525,6 +526,73 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     val cache = cacheManager.getCache(cacheName, classOf[WorkbenchSubject], classOf[Set[String]])
     cache
   }
+
+  "listFlattenedMembers" should "flatten nested groups" in {
+    val genSingleUserGroup = for {
+      user <- Generator.genWorkbenchUser
+      subGroupName <- Generator.genWorkbenchGroupName
+      email <- Generator.genNonPetEmail
+    } yield {
+      BasicWorkbenchGroup(subGroupName, Set(user.id), email)
+    }
+
+    val genNestedGroupStructure = for {
+      level3 <- genSingleUserGroup
+      level2 <- genSingleUserGroup.map(BasicWorkbenchGroup.members.modify(_ + level3.id))
+      level1 <- genSingleUserGroup.map(BasicWorkbenchGroup.members.modify(_ + level2.id))
+    } yield {
+      (level1, level2, level3)
+    }
+
+    val (level1, level2, level3) = genNestedGroupStructure.sample.get
+
+    val users = level1.members.collect { case u: WorkbenchUserId => Generator.genWorkbenchUser.sample.get.copy(id = u) } ++
+      level2.members.collect { case u: WorkbenchUserId => Generator.genWorkbenchUser.sample.get.copy(id = u) } ++
+      level3.members.collect { case u: WorkbenchUserId => Generator.genWorkbenchUser.sample.get.copy(id = u) }
+
+    val actualIO = for {
+      _ <- users.toList.traverse(dao.createUser)
+      _ <- List(level3, level2, level1).traverse(dao.createGroup(_))
+      results <- dao.listFlattenedMembers(level1.id)
+    } yield {
+      results
+    }
+
+    actualIO.unsafeRunSync() should contain theSameElementsAs users.map(_.id)
+  }
+
+  it should "tolerate cyclic groups" in {
+    val genSingleUserGroup = for {
+      user <- Generator.genWorkbenchUser
+      subGroupName <- Generator.genWorkbenchGroupName
+      email <- Generator.genNonPetEmail
+    } yield {
+      BasicWorkbenchGroup(subGroupName, Set(user.id), email)
+    }
+
+    val genNestedGroupStructure = for {
+      level3 <- genSingleUserGroup
+      level2 <- genSingleUserGroup.map(BasicWorkbenchGroup.members.modify(_ + level3.id))
+      level1 <- genSingleUserGroup.map(BasicWorkbenchGroup.members.modify(_ + level2.id))
+    } yield {
+      (level1, level2, BasicWorkbenchGroup.members.modify(_ + level1.id)(level3))
+    }
+
+    val (level1, level2, level3) = genNestedGroupStructure.sample.get
+
+    val users = level1.members.collect { case u: WorkbenchUserId => Generator.genWorkbenchUser.sample.get.copy(id = u) } ++
+      level2.members.collect { case u: WorkbenchUserId => Generator.genWorkbenchUser.sample.get.copy(id = u) } ++
+      level3.members.collect { case u: WorkbenchUserId => Generator.genWorkbenchUser.sample.get.copy(id = u) }
+
+    val actualIO = for {
+      _ <- users.toList.traverse(dao.createUser)
+      _ <- List(level3, level2, level1).traverse(dao.createGroup(_))
+      results <- dao.listFlattenedMembers(level1.id)
+    } yield {
+      results
+    }
+
+    actualIO.unsafeRunSync() should contain theSameElementsAs users.map(_.id)  }
 }
 
 
