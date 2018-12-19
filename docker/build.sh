@@ -34,7 +34,7 @@ DIRECTORY_PASSWORD=${DIRECTORY_PASSWORD:-testtesttest}
 MAKE_JAR=false
 RUN_DOCKER=false
 PRINT_HELP=false
-BASE_IMAGE=broadinstitute/scala-baseimage
+BASE_IMAGE=qiannaqi/graal-sbt
 
 if [ -z "$1" ]; then
     echo "No argument supplied!"
