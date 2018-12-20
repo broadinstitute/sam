@@ -123,27 +123,27 @@ function docker_cmd()
         echo "building ${DOCKERHUB_REGISTRY}:${HASH_TAG}..."
         docker build -t $DOCKERHUB_REGISTRY:${HASH_TAG} .
 
-        echo "building ${DOCKERHUB_TESTS_REGISTRY}:${HASH_TAG}..."
-        cd automation
-        docker build -f Dockerfile-tests -t $DOCKERHUB_TESTS_REGISTRY:${HASH_TAG} .
-        cd ..
-
-        if [ $DOCKER_CMD="push" ]; then
-            echo "pushing ${DOCKERHUB_REGISTRY}:${HASH_TAG}..."
-            docker push $DOCKERHUB_REGISTRY:${HASH_TAG}
-            docker tag $DOCKERHUB_REGISTRY:${HASH_TAG} $DOCKERHUB_REGISTRY:${BRANCH}
-            docker push $DOCKERHUB_REGISTRY:${BRANCH}
-
-            echo "pushing ${DOCKERHUB_TESTS_REGISTRY}:${HASH_TAG}..."
-            docker push $DOCKERHUB_TESTS_REGISTRY:${HASH_TAG}
-            docker tag $DOCKERHUB_TESTS_REGISTRY:${HASH_TAG} $DOCKERHUB_TESTS_REGISTRY:${BRANCH}
-            docker push $DOCKERHUB_TESTS_REGISTRY:${BRANCH}
-
-            if [[ -n $GCR_REGISTRY ]]; then
-                docker tag $DOCKERHUB_REGISTRY:${HASH_TAG} $GCR_REGISTRY:${HASH_TAG}
-                gcloud docker -- push $GCR_REGISTRY:${HASH_TAG}
-            fi
-        fi
+#        echo "building ${DOCKERHUB_TESTS_REGISTRY}:${HASH_TAG}..."
+#        cd automation
+#        docker build -f Dockerfile-tests -t $DOCKERHUB_TESTS_REGISTRY:${HASH_TAG} .
+#        cd ..
+#
+#        if [ $DOCKER_CMD="push" ]; then
+#            echo "pushing ${DOCKERHUB_REGISTRY}:${HASH_TAG}..."
+#            docker push $DOCKERHUB_REGISTRY:${HASH_TAG}
+#            docker tag $DOCKERHUB_REGISTRY:${HASH_TAG} $DOCKERHUB_REGISTRY:${BRANCH}
+#            docker push $DOCKERHUB_REGISTRY:${BRANCH}
+#
+#            echo "pushing ${DOCKERHUB_TESTS_REGISTRY}:${HASH_TAG}..."
+#            docker push $DOCKERHUB_TESTS_REGISTRY:${HASH_TAG}
+#            docker tag $DOCKERHUB_TESTS_REGISTRY:${HASH_TAG} $DOCKERHUB_TESTS_REGISTRY:${BRANCH}
+#            docker push $DOCKERHUB_TESTS_REGISTRY:${BRANCH}
+#
+#            if [[ -n $GCR_REGISTRY ]]; then
+#                docker tag $DOCKERHUB_REGISTRY:${HASH_TAG} $GCR_REGISTRY:${HASH_TAG}
+#                gcloud docker -- push $GCR_REGISTRY:${HASH_TAG}
+#            fi
+#        fi
     else
         echo "Not a valid docker option!  Choose either build or push (which includes build)"
     fi

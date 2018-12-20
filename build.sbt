@@ -23,4 +23,20 @@ sys.env.getOrElse("JAVA_OPTS", "").split(" ").toSeq.map { opt =>
 addCompilerPlugin("com.olegpy" %% "better-monadic-for" % "0.2.4")
 addCompilerPlugin("org.scalamacros" %% "paradise" % "2.1.0" cross CrossVersion.full)
 
+enablePlugins(JavaAppPackaging)
+enablePlugins(DockerPlugin)
+enablePlugins(GraalVMNativeImagePlugin)
+
+// For docker setting
+mainClass in Compile := Some("org.broadinstitute.dsde.workbench.sam.Boot")
+dockerBaseImage := "oracle/graalvm-ce:1.0.0-rc10"
+graalVMNativeImageOptions := List(
+  "--no-server",
+  "-H:+ReportUnsupportedElementsAtRuntime",
+  "--allow-incomplete-classpath",
+  "--delay-class-initialization-to-runtime=org.ehcache.core.EhcacheManager,com.getsentry.raven.config.Lookup,com.getsentry.raven.dsn.Dsn,org.ehcache.core.internal.service.ServiceLocator,com.getsentry.raven.event.EventBuilder,com.getsentry.raven.config.JndiLookup,com.getsentry.raven.RavenFactory,com.getsentry.raven.environment.RavenEnvironment,io.grpc.netty.shaded.io.netty.handler.ssl.ReferenceCountedOpenSslServerContext,io.grpc.netty.shaded.io.netty.handler.ssl.ReferenceCountedOpenSslContext,com.codahale.metrics.health.HealthCheckRegistry",
+  "--report-unsupported-elements-at-runtime"
+//  "--rerun-class-initialization-at-runtime=org.httpkit.client.SslContextFactory"
+)
+
 bloopAggregateSourceDependencies in Global := true
