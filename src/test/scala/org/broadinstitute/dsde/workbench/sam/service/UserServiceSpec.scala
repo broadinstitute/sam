@@ -47,7 +47,7 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
   lazy val petServiceAccountConfig = TestSupport.appConfig.googleConfig.get.petServiceAccountConfig
   lazy val dirURI = new URI(directoryConfig.directoryUrl)
   lazy val connectionPool = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
-  lazy val dirDAO = new LdapDirectoryDAO(connectionPool, directoryConfig, TestSupport.blockingEc, TestSupport.testMemberOfCache)
+  lazy val dirDAO = new LdapDirectoryDAO(semaphore, connectionPool, directoryConfig, TestSupport.blockingEc, TestSupport.testMemberOfCache)
   lazy val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
   var service: UserService = _
@@ -227,7 +227,7 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
 
     dirDAO.createUser(WorkbenchUser(user.id, None, user.email)).unsafeRunSync()
 
-    val accessPolicyDAO = new LdapAccessPolicyDAO(connectionPool, directoryConfig, TestSupport.blockingEc, TestSupport.testMemberOfCache, TestSupport.testResourceCache)
+    val accessPolicyDAO = new LdapAccessPolicyDAO(semaphore, connectionPool, directoryConfig, TestSupport.blockingEc, TestSupport.testMemberOfCache, TestSupport.testResourceCache)
     val createPolicy = for {
       _ <- accessPolicyDAO.createResourceType(expectedAccessPolicyId.resource.resourceTypeName)
       _ <- accessPolicyDAO.createResource(Resource(expectedAccessPolicyId.resource.resourceTypeName, expectedAccessPolicyId.resource.resourceId, Set.empty))

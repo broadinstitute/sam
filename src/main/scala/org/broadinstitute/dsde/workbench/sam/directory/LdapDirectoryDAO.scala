@@ -3,6 +3,7 @@ import java.util.Date
 
 import akka.http.scaladsl.model.StatusCodes
 import cats.data.OptionT
+import cats.effect.concurrent.Semaphore
 import cats.effect.{IO, Timer}
 import cats.implicits._
 import com.unboundid.ldap.sdk._
@@ -21,6 +22,7 @@ import scala.util.Try
 
 // use ExecutionContexts.blockingThreadPool for blockingEc
 class LdapDirectoryDAO(
+    protected val semaphore: Semaphore[IO],
     protected val ldapConnectionPool: LDAPConnectionPool,
     protected val directoryConfig: DirectoryConfig,
     protected val ecForLdapBlockingIO: ExecutionContext,

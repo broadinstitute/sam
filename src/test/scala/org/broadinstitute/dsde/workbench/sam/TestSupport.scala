@@ -8,6 +8,7 @@ import akka.actor.ActorSystem
 import akka.http.scaladsl.model.headers.RawHeader
 import akka.stream.Materializer
 import cats.effect.IO
+import cats.effect.concurrent.Semaphore
 import cats.kernel.Eq
 import com.google.cloud.firestore.{DocumentSnapshot, Firestore, Transaction}
 import com.typesafe.config.ConfigFactory
@@ -47,6 +48,7 @@ trait TestSupport{
   implicit val cs = IO.contextShift(scala.concurrent.ExecutionContext.global)
   implicit val timer = IO.timer(scala.concurrent.ExecutionContext.global)
   implicit val eqWorkbenchException: Eq[WorkbenchException] = (x: WorkbenchException, y: WorkbenchException) => x.getMessage == y.getMessage
+  val semaphore = Semaphore[IO](15).unsafeRunSync()
 }
 
 trait PropertyBasedTesting extends PropertyChecks with Configuration with Matchers {

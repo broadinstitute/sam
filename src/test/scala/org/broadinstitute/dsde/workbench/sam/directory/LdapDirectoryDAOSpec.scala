@@ -27,7 +27,7 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
   override lazy val directoryConfig: DirectoryConfig = TestSupport.directoryConfig
   val dirURI = new URI(directoryConfig.directoryUrl)
   val connectionPool = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
-  val dao = new LdapDirectoryDAO(connectionPool, directoryConfig, TestSupport.blockingEc, TestSupport.testMemberOfCache)
+  val dao = new LdapDirectoryDAO(semaphore, connectionPool, directoryConfig, TestSupport.blockingEc, TestSupport.testMemberOfCache)
   val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
   override protected def beforeAll(): Unit = {
@@ -311,7 +311,7 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     dao.createGroup(group1).unsafeRunSync()
     dao.createGroup(group2).unsafeRunSync()
 
-    val policyDAO = new LdapAccessPolicyDAO(connectionPool, directoryConfig, TestSupport.blockingEc, TestSupport.testMemberOfCache, TestSupport.testResourceCache)
+    val policyDAO = new LdapAccessPolicyDAO(semaphore, connectionPool, directoryConfig, TestSupport.blockingEc, TestSupport.testMemberOfCache, TestSupport.testResourceCache)
 
     val typeName1 = ResourceTypeName(UUID.randomUUID().toString)
 
@@ -485,7 +485,7 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
   "cache" should "return existing item" in {
     val cache: Cache[WorkbenchSubject, Set[String]] = createMemberOfCache("test-memberof-1")
 
-    val testDao = new LdapDirectoryDAO(connectionPool, directoryConfig, blockingEc, cache)
+    val testDao = new LdapDirectoryDAO(semaphore, connectionPool, directoryConfig, blockingEc, cache)
 
     val workbenchSubject = WorkbenchUserId("snarglepup")
     val group = WorkbenchGroupName("testgroup")
@@ -499,7 +499,7 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
   it should "retain non-existing item" in {
     val cache: Cache[WorkbenchSubject, Set[String]] = createMemberOfCache("test-memberof-2")
 
-    val testDao = new LdapDirectoryDAO(connectionPool, directoryConfig, blockingEc, cache)
+    val testDao = new LdapDirectoryDAO(semaphore, connectionPool, directoryConfig, blockingEc, cache)
 
     val workbenchSubject = WorkbenchUserId("snarglepup")
     val group = WorkbenchGroupName("testgroup")

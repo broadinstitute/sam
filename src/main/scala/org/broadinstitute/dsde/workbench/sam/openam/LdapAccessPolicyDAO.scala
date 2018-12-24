@@ -4,6 +4,7 @@ package openam
 import java.util.Date
 
 import akka.http.scaladsl.model.StatusCodes
+import cats.effect.concurrent.Semaphore
 import cats.effect.{ContextShift, IO}
 import cats.implicits._
 import com.unboundid.ldap.sdk._
@@ -21,6 +22,7 @@ import scala.concurrent.ExecutionContext
 
 // use ExecutionContexts.blockingThreadPool for blockingEc
 class LdapAccessPolicyDAO(
+    protected val semaphore: Semaphore[IO],
     protected val ldapConnectionPool: LDAPConnectionPool,
     protected val directoryConfig: DirectoryConfig,
     protected val ecForLdapBlockingIO: ExecutionContext,

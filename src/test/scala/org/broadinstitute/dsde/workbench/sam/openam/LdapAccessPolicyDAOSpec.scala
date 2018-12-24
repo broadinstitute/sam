@@ -11,7 +11,6 @@ import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.TestSupport._
 import org.broadinstitute.dsde.workbench.sam.directory._
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.openam.LdapAccessPolicyDAOSpec._
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.ehcache.config.builders.{CacheConfigurationBuilder, CacheManagerBuilder, ExpiryPolicyBuilder, ResourcePoolsBuilder}
 import org.scalatest._
@@ -21,7 +20,17 @@ import org.scalatest.concurrent.ScalaFutures
 /**
   * Created by dvoet on 6/26/17.
   */
-class LdapAccessPolicyDAOSpec extends FlatSpec with ScalaFutures with Matchers with TestSupport with BeforeAndAfter with BeforeAndAfterAll {
+class LdapAccessPolicyDAOSpec extends FlatSpec with ScalaFutures with TestSupport with Matchers with BeforeAndAfter with BeforeAndAfterAll {
+  import scala.concurrent.ExecutionContext.Implicits.global
+
+  private val connectionPool = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
+  val dao = new LdapAccessPolicyDAO(semaphore, connectionPool, directoryConfig, blockingEc, TestSupport.testMemberOfCache, TestSupport.testResourceCache)
+  val dirDao = new LdapDirectoryDAO(semaphore, connectionPool, directoryConfig, blockingEc, TestSupport.testMemberOfCache)
+  val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
+
+  // before() doesn't seem to work well with AsyncFlatSpec
+  def setup(): IO[Unit] = IO.fromFuture(IO(schemaDao.init())) <* IO.fromFuture(IO(schemaDao.clearDatabase())) <* IO.fromFuture(IO(schemaDao.createOrgUnits()))
+
   def toEmail(resourceType: String, resourceId: String, policyName: String) = {
     WorkbenchEmail(s"policy-$resourceType-$resourceId-$policyName@dev.test.firecloud.org")
   }
@@ -107,7 +116,7 @@ class LdapAccessPolicyDAOSpec extends FlatSpec with ScalaFutures with Matchers w
 
   "LdapAccessPolicyDAO listUserPolicyResponse" should "return UserPolicyResponse" in {
     val cache = createResourceCache("test-resource-cache-1")
-    val testDao = new LdapAccessPolicyDAO(connectionPool, directoryConfig, blockingEc, TestSupport.testMemberOfCache, cache)
+    val testDao = new LdapAccessPolicyDAO(semaphore, connectionPool, directoryConfig, blockingEc, TestSupport.testMemberOfCache, cache)
     val resource = genResource.sample.get
     val cachedResource = genResource.sample.get.copy(resourceTypeName = resource.resourceTypeName)
     cache.put(cachedResource.fullyQualifiedId, cachedResource)
@@ -158,17 +167,4 @@ class LdapAccessPolicyDAOSpec extends FlatSpec with ScalaFutures with Matchers w
     val cache = cacheManager.getCache(cacheName, classOf[FullyQualifiedResourceId], classOf[Resource])
     cache
   }
-}
-
-object LdapAccessPolicyDAOSpec{
-  implicit val cs = IO.contextShift(scala.concurrent.ExecutionContext.global)
-  import scala.concurrent.ExecutionContext.Implicits.global
-
-  private val connectionPool = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
-  val dao = new LdapAccessPolicyDAO(connectionPool, directoryConfig, blockingEc, TestSupport.testMemberOfCache, TestSupport.testResourceCache)
-  val dirDao = new LdapDirectoryDAO(connectionPool, directoryConfig, blockingEc, TestSupport.testMemberOfCache)
-  val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
-
-  // before() doesn't seem to work well with AsyncFlatSpec
-  def setup(): IO[Unit] = IO.fromFuture(IO(schemaDao.init())) <* IO.fromFuture(IO(schemaDao.clearDatabase())) <* IO.fromFuture(IO(schemaDao.createOrgUnits()))
 }

@@ -7,8 +7,8 @@ import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import akka.stream.ActorMaterializer
 import cats.data.NonEmptyList
-import cats.effect.internals.IOContextShift
-import cats.effect.{ExitCode, IO, IOApp, Timer}
+import cats.effect.concurrent.Semaphore
+import cats.effect.{ExitCode, IO, IOApp}
 import cats.implicits._
 import com.typesafe.config.ConfigFactory
 import com.typesafe.scalalogging.LazyLogging
@@ -145,18 +145,12 @@ object Boot extends IOApp with LazyLogging {
       appConfig: AppConfig)(implicit actorSystem: ActorSystem, actorMaterializer: ActorMaterializer): cats.effect.Resource[IO, AppDependencies] =
     for {
       ldapConnectionPool <- createLdapConnectionPool(appConfig.directoryConfig.directoryUrl, appConfig.directoryConfig.user, appConfig.directoryConfig.password, appConfig.directoryConfig.connectionPoolSize, "foreground")
+      semaphore <- cats.effect.Resource.liftF(Semaphore[IO](appConfig.directoryConfig.connectionPoolSize.toLong))
       memberOfCache <- createMemberOfCache("memberof", appConfig.directoryConfig.memberOfCache.maxEntries, appConfig.directoryConfig.memberOfCache.timeToLive)
       resourceCache <- createResourceCache("resource", appConfig.directoryConfig.resourceCache.maxEntries, appConfig.directoryConfig.resourceCache.timeToLive)
-      ldapExecutionContext <- ExecutionContexts.fixedThreadPool[IO](appConfig.directoryConfig.connectionPoolSize)
-      accessPolicyDao = new LdapAccessPolicyDAO(ldapConnectionPool, appConfig.directoryConfig, ldapExecutionContext, memberOfCache, resourceCache)
-      directoryDAO = new LdapDirectoryDAO(ldapConnectionPool, appConfig.directoryConfig, ldapExecutionContext, memberOfCache)
-
-      // This special set of objects are for operations that happen in the background, i.e. not in the immediate service
-      // of an api call. They are meant to partition resources so that background processes can't crowd our api calls.
-      backgroundLdapConnectionPool <- createLdapConnectionPool(appConfig.directoryConfig.directoryUrl, appConfig.directoryConfig.user, appConfig.directoryConfig.password, appConfig.directoryConfig.backgroundConnectionPoolSize, "background")
-      backgroundLdapExecutionContext <- ExecutionContexts.fixedThreadPool[IO](appConfig.directoryConfig.backgroundConnectionPoolSize)
-      backgroundAccessPolicyDao = new LdapAccessPolicyDAO(backgroundLdapConnectionPool, appConfig.directoryConfig, backgroundLdapExecutionContext, memberOfCache, resourceCache)(IOContextShift(backgroundLdapExecutionContext))
-      backgroundDirectoryDAO = new LdapDirectoryDAO(backgroundLdapConnectionPool, appConfig.directoryConfig, backgroundLdapExecutionContext, memberOfCache)(backgroundLdapExecutionContext, implicitly[Timer[IO]])
+      ldapExecutionContext <- ExecutionContexts.cachedThreadPool[IO]
+      accessPolicyDao = new LdapAccessPolicyDAO(semaphore, ldapConnectionPool, appConfig.directoryConfig, ldapExecutionContext, memberOfCache, resourceCache)
+      directoryDAO = new LdapDirectoryDAO(semaphore, ldapConnectionPool, appConfig.directoryConfig, ldapExecutionContext, memberOfCache)
 
       appDependencies <- appConfig.googleConfig match {
         case Some(config) =>
@@ -170,7 +164,7 @@ object Boot extends IOApp with LazyLogging {
               DistributedLock[IO](s"sam-${config.googleServicesConfig.resourceNamePrefix.getOrElse("local")}", appConfig.distributedLockConfig, ioFireStore)
             val resourceTypeMap = appConfig.resourceTypes.map(rt => rt.name -> rt).toMap
             val cloudExtension = createGoogleCloudExt(accessPolicyDao, directoryDAO, config, resourceTypeMap, lock)
-            val googleGroupSynchronizer = new GoogleGroupSynchronizer(backgroundDirectoryDAO, backgroundAccessPolicyDao, cloudExtension.googleDirectoryDAO, cloudExtension, resourceTypeMap)(backgroundLdapExecutionContext)
+            val googleGroupSynchronizer = new GoogleGroupSynchronizer(directoryDAO, accessPolicyDao, cloudExtension.googleDirectoryDAO, cloudExtension, resourceTypeMap)
             val cloudExtensionsInitializer = new GoogleExtensionsInitializer(cloudExtension, googleGroupSynchronizer)
             createAppDepenciesWithSamRoutes(appConfig, cloudExtensionsInitializer, accessPolicyDao, directoryDAO)
           }

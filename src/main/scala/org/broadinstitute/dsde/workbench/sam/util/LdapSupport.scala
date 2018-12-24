@@ -1,5 +1,6 @@
 package org.broadinstitute.dsde.workbench.sam.util
 
+import cats.effect.concurrent.Semaphore
 import cats.effect.{ContextShift, IO}
 import com.unboundid.ldap.sdk._
 import org.broadinstitute.dsde.workbench.model.WorkbenchSubject
@@ -14,6 +15,7 @@ trait LdapSupport extends DirectorySubjectNameSupport {
   protected val ldapConnectionPool: LDAPConnectionPool
   protected val batchSize = 1000
   protected val ecForLdapBlockingIO: ExecutionContext
+  protected val semaphore: Semaphore[IO]
   implicit protected val cs: ContextShift[IO]
   protected val memberOfCache: Cache[WorkbenchSubject, Set[String]]
 
@@ -84,5 +86,9 @@ trait LdapSupport extends DirectorySubjectNameSupport {
     IO.pure(memberOfCache.remove(subject))
   }
 
-  protected def executeLdap[A](ioa: IO[A]): IO[A] = cs.evalOn(ecForLdapBlockingIO)(ioa)
+  // See Documentation for Semaphore https://typelevel.org/cats-effect/concurrency/semaphore.html
+  // The idea is to limit number of ldap queries to number of ldap connections
+  protected def executeLdap[A](ioa: IO[A]): IO[A] = cats.effect.Resource.make[IO, Unit](semaphore.acquire){
+    _ => semaphore.release
+  }.use(_ => cs.evalOn(ecForLdapBlockingIO)(ioa))
 }

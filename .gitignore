@@ -30,6 +30,8 @@ docker/stand-alone/ca-bundle.crt
 
 ## Directory-based project format:
 .idea/
+.metals/
+env.properties
 # if you remove the above rule, at least ignore the following:
 
 # User-specific stuff:
@@ -81,3 +83,5 @@ newrelic-agent-4.6.0.jar
 automation/report.xml
 automation/test-reports/
 automation/src/test/resources/
+
+*.jar
