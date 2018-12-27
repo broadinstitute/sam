@@ -14,7 +14,15 @@ import com.google.rpc.Code
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.dataaccess.NotificationDAO
 import org.broadinstitute.dsde.workbench.google.util.{DistributedLock, LockPath}
-import org.broadinstitute.dsde.workbench.google.{CollectionName, Document, GoogleDirectoryDAO, GoogleIamDAO, GoogleProjectDAO, GooglePubSubDAO, GoogleStorageDAO}
+import org.broadinstitute.dsde.workbench.google.{
+  CollectionName,
+  Document,
+  GoogleDirectoryDAO,
+  GoogleIamDAO,
+  GoogleProjectDAO,
+  GooglePubSubDAO,
+  GoogleStorageDAO
+}
 import org.broadinstitute.dsde.workbench.model.Notifications.Notification
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport.WorkbenchGroupNameFormat
 import org.broadinstitute.dsde.workbench.model._
@@ -235,7 +243,8 @@ class GoogleExtensions(
     googleDirectoryDAO.deleteGroup(groupEmail)
 
   @deprecated("Use new two-argument version of this function", "Sam Phase 3")
-  def createUserPetServiceAccount(user: WorkbenchUser): Future[PetServiceAccount] = createUserPetServiceAccount(user, petServiceAccountConfig.googleProject).unsafeToFuture()
+  def createUserPetServiceAccount(user: WorkbenchUser): Future[PetServiceAccount] =
+    createUserPetServiceAccount(user, petServiceAccountConfig.googleProject).unsafeToFuture()
 
   @deprecated("Use new two-argument version of this function", "Sam Phase 3")
   def deleteUserPetServiceAccount(userId: WorkbenchUserId): Future[Boolean] =

@@ -35,7 +35,14 @@ object GoogleGroupSyncMonitorSupervisor {
       workerCount: Int,
       groupSynchronizer: GoogleGroupSynchronizer): Props =
     Props(
-      new GoogleGroupSyncMonitorSupervisor(pollInterval, pollIntervalJitter, pubSubDao, pubSubTopicName, pubSubSubscriptionName, workerCount, groupSynchronizer))
+      new GoogleGroupSyncMonitorSupervisor(
+        pollInterval,
+        pollIntervalJitter,
+        pubSubDao,
+        pubSubTopicName,
+        pubSubSubscriptionName,
+        workerCount,
+        groupSynchronizer))
 }
 
 class GoogleGroupSyncMonitorSupervisor(

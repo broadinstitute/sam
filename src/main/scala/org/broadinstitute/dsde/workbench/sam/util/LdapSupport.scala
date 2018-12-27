@@ -67,7 +67,7 @@ trait LdapSupport extends DirectorySubjectNameSupport {
   protected def getAttributes(results: Entry, key: String): Set[String] =
     Option(results.getAttribute(key)).map(_.getValues.toSet).getOrElse(Set.empty)
 
-  protected def ldapLoadMemberOf(subject: WorkbenchSubject): IO[Set[String]] = {
+  protected def ldapLoadMemberOf(subject: WorkbenchSubject): IO[Set[String]] =
     Option(memberOfCache.get(subject)) match {
       case None =>
         for {
@@ -77,18 +77,16 @@ trait LdapSupport extends DirectorySubjectNameSupport {
           memberOfCache.put(subject, memberOfs)
           memberOfs
         }
-
       case Some(memberOfs) => IO.pure(memberOfs)
     }
-  }
 
-  def evictIsMemberOfCache(subject: WorkbenchSubject): IO[Unit] = {
+  def evictIsMemberOfCache(subject: WorkbenchSubject): IO[Unit] =
     IO.pure(memberOfCache.remove(subject))
-  }
 
   // See Documentation for Semaphore https://typelevel.org/cats-effect/concurrency/semaphore.html
   // The idea is to limit number of ldap queries to number of ldap connections
-  protected def executeLdap[A](ioa: IO[A]): IO[A] = cats.effect.Resource.make[IO, Unit](semaphore.acquire){
-    _ => semaphore.release
-  }.use(_ => cs.evalOn(ecForLdapBlockingIO)(ioa))
+  private[sam] def executeLdap[A](ioa: IO[A]): IO[A] =
+    cats.effect.Resource
+      .make[IO, Unit](semaphore.acquire)(_ => semaphore.release)
+      .use(_ => cs.evalOn(ecForLdapBlockingIO)(ioa))
 }

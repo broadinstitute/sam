@@ -18,7 +18,15 @@ import javax.net.ssl.SSLContext
 import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
 import org.broadinstitute.dsde.workbench.google.GoogleCredentialModes.{Json, Pem}
 import org.broadinstitute.dsde.workbench.google.util.DistributedLock
-import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleFirestoreOpsInterpreters, HttpGoogleDirectoryDAO, HttpGoogleIamDAO, HttpGoogleProjectDAO, HttpGooglePubSubDAO, HttpGoogleStorageDAO}
+import org.broadinstitute.dsde.workbench.google.{
+  GoogleDirectoryDAO,
+  GoogleFirestoreOpsInterpreters,
+  HttpGoogleDirectoryDAO,
+  HttpGoogleIamDAO,
+  HttpGoogleProjectDAO,
+  HttpGooglePubSubDAO,
+  HttpGoogleStorageDAO
+}
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException, WorkbenchSubject}
 import org.broadinstitute.dsde.workbench.sam.api.{SamRoutes, StandardUserInfoDirectives}
 import org.broadinstitute.dsde.workbench.sam.config.{AppConfig, GoogleConfig}
@@ -80,7 +88,12 @@ object Boot extends IOApp with LazyLogging {
     }
   }
 
-  private[sam] def createLdapConnectionPool(directoryUrl: String, user: String, password: String, connectionPoolSize: Int, name: String): cats.effect.Resource[IO, LDAPConnectionPool] = {
+  private[sam] def createLdapConnectionPool(
+      directoryUrl: String,
+      user: String,
+      password: String,
+      connectionPoolSize: Int,
+      name: String): cats.effect.Resource[IO, LDAPConnectionPool] = {
     val dirURI = new URI(directoryUrl)
     val (socketFactory, defaultPort) = dirURI.getScheme.toLowerCase match {
       case "ldaps" => (SSLContext.getDefault.getSocketFactory, 636)
@@ -88,20 +101,23 @@ object Boot extends IOApp with LazyLogging {
       case unsupported => throw new WorkbenchException(s"unsupported directory url scheme: $unsupported")
     }
     val port = if (dirURI.getPort > 0) dirURI.getPort else defaultPort
-    cats.effect.Resource.make(
-      IO {
-        val connectionPool = new LDAPConnectionPool(
-          new LDAPConnection(socketFactory, dirURI.getHost, port, user, password),
-          connectionPoolSize, connectionPoolSize
-        )
-        connectionPool.setCreateIfNecessary(false)
-        connectionPool.setMaxWaitTimeMillis(30000)
-        connectionPool.setConnectionPoolName(name)
-        connectionPool
-      })(ldapConnection => IO(ldapConnection.close()))
+    cats.effect.Resource.make(IO {
+      val connectionPool = new LDAPConnectionPool(
+        new LDAPConnection(socketFactory, dirURI.getHost, port, user, password),
+        connectionPoolSize,
+        connectionPoolSize
+      )
+      connectionPool.setCreateIfNecessary(false)
+      connectionPool.setMaxWaitTimeMillis(30000)
+      connectionPool.setConnectionPoolName(name)
+      connectionPool
+    })(ldapConnection => IO(ldapConnection.close()))
   }
 
-  private[sam] def createMemberOfCache(cacheName: String, maxEntries: Long, timeToLive: java.time.Duration): cats.effect.Resource[IO, Cache[WorkbenchSubject, Set[String]]] = {
+  private[sam] def createMemberOfCache(
+      cacheName: String,
+      maxEntries: Long,
+      timeToLive: java.time.Duration): cats.effect.Resource[IO, Cache[WorkbenchSubject, Set[String]]] = {
     val cacheManager = CacheManagerBuilder.newCacheManagerBuilder
       .withCache(
         cacheName,
@@ -121,7 +137,10 @@ object Boot extends IOApp with LazyLogging {
     }
   }
 
-  private[sam] def createResourceCache(cacheName: String, maxEntries: Long, timeToLive: java.time.Duration): cats.effect.Resource[IO, Cache[FullyQualifiedResourceId, Resource]] = {
+  private[sam] def createResourceCache(
+      cacheName: String,
+      maxEntries: Long,
+      timeToLive: java.time.Duration): cats.effect.Resource[IO, Cache[FullyQualifiedResourceId, Resource]] = {
     val cacheManager = CacheManagerBuilder.newCacheManagerBuilder
       .withCache(
         cacheName,
@@ -144,7 +163,13 @@ object Boot extends IOApp with LazyLogging {
   private[sam] def createAppDependencies(
       appConfig: AppConfig)(implicit actorSystem: ActorSystem, actorMaterializer: ActorMaterializer): cats.effect.Resource[IO, AppDependencies] =
     for {
-      ldapConnectionPool <- createLdapConnectionPool(appConfig.directoryConfig.directoryUrl, appConfig.directoryConfig.user, appConfig.directoryConfig.password, appConfig.directoryConfig.connectionPoolSize, "foreground")
+      ldapConnectionPool <- createLdapConnectionPool(
+        appConfig.directoryConfig.directoryUrl,
+        appConfig.directoryConfig.user,
+        appConfig.directoryConfig.password,
+        appConfig.directoryConfig.connectionPoolSize,
+        "foreground"
+      )
       semaphore <- cats.effect.Resource.liftF(Semaphore[IO](appConfig.directoryConfig.connectionPoolSize.toLong))
       memberOfCache <- createMemberOfCache("memberof", appConfig.directoryConfig.memberOfCache.maxEntries, appConfig.directoryConfig.memberOfCache.timeToLive)
       resourceCache <- createResourceCache("resource", appConfig.directoryConfig.resourceCache.maxEntries, appConfig.directoryConfig.resourceCache.timeToLive)
@@ -164,11 +189,13 @@ object Boot extends IOApp with LazyLogging {
               DistributedLock[IO](s"sam-${config.googleServicesConfig.resourceNamePrefix.getOrElse("local")}", appConfig.distributedLockConfig, ioFireStore)
             val resourceTypeMap = appConfig.resourceTypes.map(rt => rt.name -> rt).toMap
             val cloudExtension = createGoogleCloudExt(accessPolicyDao, directoryDAO, config, resourceTypeMap, lock)
-            val googleGroupSynchronizer = new GoogleGroupSynchronizer(directoryDAO, accessPolicyDao, cloudExtension.googleDirectoryDAO, cloudExtension, resourceTypeMap)
+            val googleGroupSynchronizer =
+              new GoogleGroupSynchronizer(directoryDAO, accessPolicyDao, cloudExtension.googleDirectoryDAO, cloudExtension, resourceTypeMap)
             val cloudExtensionsInitializer = new GoogleExtensionsInitializer(cloudExtension, googleGroupSynchronizer)
             createAppDepenciesWithSamRoutes(appConfig, cloudExtensionsInitializer, accessPolicyDao, directoryDAO)
           }
-        case None => cats.effect.Resource.pure[IO, AppDependencies](createAppDepenciesWithSamRoutes(appConfig, NoExtensionsInitializer, accessPolicyDao, directoryDAO))
+        case None =>
+          cats.effect.Resource.pure[IO, AppDependencies](createAppDepenciesWithSamRoutes(appConfig, NoExtensionsInitializer, accessPolicyDao, directoryDAO))
       }
     } yield appDependencies
 
@@ -243,11 +270,24 @@ object Boot extends IOApp with LazyLogging {
       directoryDAO: DirectoryDAO)(implicit actorSystem: ActorSystem, actorMaterializer: ActorMaterializer): AppDependencies = {
     val resourceTypeMap = config.resourceTypes.map(rt => rt.name -> rt).toMap
     val policyEvaluatorService = PolicyEvaluatorService(config.emailDomain, resourceTypeMap, accessPolicyDAO)
-    val resourceService = new ResourceService(resourceTypeMap, policyEvaluatorService, accessPolicyDAO, directoryDAO, cloudExtensionsInitializer.cloudExtensions, config.emailDomain)
+    val resourceService = new ResourceService(
+      resourceTypeMap,
+      policyEvaluatorService,
+      accessPolicyDAO,
+      directoryDAO,
+      cloudExtensionsInitializer.cloudExtensions,
+      config.emailDomain)
     val userService = new UserService(directoryDAO, cloudExtensionsInitializer.cloudExtensions)
     val statusService = new StatusService(directoryDAO, cloudExtensionsInitializer.cloudExtensions, 10 seconds)
     val managedGroupService =
-      new ManagedGroupService(resourceService, policyEvaluatorService, resourceTypeMap, accessPolicyDAO, directoryDAO, cloudExtensionsInitializer.cloudExtensions, config.emailDomain)
+      new ManagedGroupService(
+        resourceService,
+        policyEvaluatorService,
+        resourceTypeMap,
+        accessPolicyDAO,
+        directoryDAO,
+        cloudExtensionsInitializer.cloudExtensions,
+        config.emailDomain)
     val samApplication = SamApplication(userService, resourceService, statusService)
 
     cloudExtensionsInitializer match {

@@ -14,15 +14,17 @@ import org.broadinstitute.dsde.workbench.util.FutureSupport
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success, Try}
 
-class GoogleGroupSynchronizer(directoryDAO: DirectoryDAO,
-                              accessPolicyDAO: AccessPolicyDAO,
-                              googleDirectoryDAO: GoogleDirectoryDAO,
-                              googleExtensions: GoogleExtensions,
-                              resourceTypes: Map[ResourceTypeName, ResourceType])(implicit executionContext: ExecutionContext)
-  extends LazyLogging with FutureSupport {
+class GoogleGroupSynchronizer(
+    directoryDAO: DirectoryDAO,
+    accessPolicyDAO: AccessPolicyDAO,
+    googleDirectoryDAO: GoogleDirectoryDAO,
+    googleExtensions: GoogleExtensions,
+    resourceTypes: Map[ResourceTypeName, ResourceType])(implicit executionContext: ExecutionContext)
+    extends LazyLogging
+    with FutureSupport {
   def synchronizeGroupMembers(
-                               groupId: WorkbenchGroupIdentity,
-                               visitedGroups: Set[WorkbenchGroupIdentity] = Set.empty[WorkbenchGroupIdentity]): Future[Map[WorkbenchEmail, Seq[SyncReportItem]]] = {
+      groupId: WorkbenchGroupIdentity,
+      visitedGroups: Set[WorkbenchGroupIdentity] = Set.empty[WorkbenchGroupIdentity]): Future[Map[WorkbenchEmail, Seq[SyncReportItem]]] = {
     def toSyncReportItem(operation: String, email: String, result: Try[Unit]) =
       SyncReportItem(
         operation,
@@ -113,13 +115,13 @@ class GoogleGroupSynchronizer(directoryDAO: DirectoryDAO,
       case Some(resourceType) =>
         resourceType.actionPatterns.exists { actionPattern =>
           actionPattern.authDomainConstrainable &&
-            (accessPolicy.actions.exists(actionPattern.matches) ||
-              accessPolicy.roles.exists { accessPolicyRole =>
-                resourceType.roles.exists {
-                  case resourceTypeRole @ ResourceRole(`accessPolicyRole`, _) => resourceTypeRole.actions.exists(actionPattern.matches)
-                  case _ => false
-                }
-              })
+          (accessPolicy.actions.exists(actionPattern.matches) ||
+          accessPolicy.roles.exists { accessPolicyRole =>
+            resourceType.roles.exists {
+              case resourceTypeRole @ ResourceRole(`accessPolicyRole`, _) => resourceTypeRole.actions.exists(actionPattern.matches)
+              case _ => false
+            }
+          })
         }
       case None =>
         throw new WorkbenchException(s"Invalid resource type specified. ${resource.resourceTypeName} is not a recognized resource type.")
