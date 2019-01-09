@@ -12,8 +12,8 @@ import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
 import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO.{Attr, ObjectClass}
+import org.broadinstitute.dsde.workbench.sam.util.cache.Cache
 import org.broadinstitute.dsde.workbench.sam.util.{LdapSupport, NewRelicMetrics}
-import org.ehcache.Cache
 
 import scala.collection.JavaConverters._
 import scala.concurrent.{ExecutionContext, Future}
@@ -24,7 +24,7 @@ class LdapDirectoryDAO(
     protected val ldapConnectionPool: LDAPConnectionPool,
     protected val directoryConfig: DirectoryConfig,
     protected val ecForLdapBlockingIO: ExecutionContext,
-    protected val memberOfCache: Cache[WorkbenchSubject, Set[String]])(implicit executionContext: ExecutionContext, timer: Timer[IO])
+    protected val memberOfCache: Cache[IO, WorkbenchSubject, Set[String]])(implicit executionContext: ExecutionContext, timer: Timer[IO])
     extends DirectoryDAO
     with DirectorySubjectNameSupport
     with LdapSupport {

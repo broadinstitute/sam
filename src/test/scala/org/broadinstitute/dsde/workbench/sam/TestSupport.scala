@@ -29,7 +29,7 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, MockAccessPolicyDAO}
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
 import org.broadinstitute.dsde.workbench.sam.service._
-import org.ehcache.Cache
+import org.broadinstitute.dsde.workbench.sam.util.cache.{Cache, EhcacheCacheImpl}
 import org.ehcache.config.builders.{CacheConfigurationBuilder, CacheManagerBuilder, ExpiryPolicyBuilder, ResourcePoolsBuilder}
 import org.scalatest.Matchers
 import org.scalatest.concurrent.PatienceConfiguration.Timeout
@@ -58,29 +58,29 @@ trait PropertyBasedTesting extends PropertyChecks with Configuration with Matche
 object TestSupport extends TestSupport {
   private val executor = Executors.newCachedThreadPool()
   val blockingEc = ExecutionContext.fromExecutor(executor)
-  def testMemberOfCache: Cache[WorkbenchSubject, Set[String]] = {
+  def testMemberOfCache: Cache[IO, WorkbenchSubject, Set[String]] = {
     val cacheManager = CacheManagerBuilder.newCacheManagerBuilder
       .withCache(
         "test-memberof",
         CacheConfigurationBuilder
-          .newCacheConfigurationBuilder(classOf[WorkbenchSubject], classOf[Set[String]], ResourcePoolsBuilder.heap(10))
+          .newCacheConfigurationBuilder(classOf[Object], classOf[Object], ResourcePoolsBuilder.heap(10))
           .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(java.time.Duration.ofMillis(0)))
       )
       .build
     cacheManager.init()
-    cacheManager.getCache("test-memberof", classOf[WorkbenchSubject], classOf[Set[String]])
+    new EhcacheCacheImpl[WorkbenchSubject, Set[String]](cacheManager.getCache("test-memberof", classOf[Object], classOf[Object]))
   }
-  def testResourceCache: Cache[FullyQualifiedResourceId, Resource] = {
+  def testResourceCache: Cache[IO, FullyQualifiedResourceId, Resource] = {
     val cacheManager = CacheManagerBuilder.newCacheManagerBuilder
       .withCache(
         "test-resource",
         CacheConfigurationBuilder
-          .newCacheConfigurationBuilder(classOf[FullyQualifiedResourceId], classOf[Resource], ResourcePoolsBuilder.heap(100))
+          .newCacheConfigurationBuilder(classOf[Object], classOf[Object], ResourcePoolsBuilder.heap(100))
           .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(java.time.Duration.ofMillis(1000)))
       )
       .build
     cacheManager.init()
-    cacheManager.getCache("test-resource", classOf[FullyQualifiedResourceId], classOf[Resource])
+    new EhcacheCacheImpl[FullyQualifiedResourceId, Resource](cacheManager.getCache("test-resource", classOf[Object], classOf[Object]))
   }
 
   implicit val eqWorkbenchExceptionErrorReport: Eq[WorkbenchExceptionWithErrorReport] =

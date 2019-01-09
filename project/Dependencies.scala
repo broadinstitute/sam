@@ -54,6 +54,8 @@ object Dependencies {
   val unboundid: ModuleID = "com.unboundid" % "unboundid-ldapsdk" % "4.0.6"
   val ehcache: ModuleID = "org.ehcache" % "ehcache" % "3.6.2"
 
+  val jedis: ModuleID = "redis.clients" % "jedis" % "3.0.1"
+
   // All of workbench-libs pull in Akka; exclude it since we provide our own Akka dependency.
   // workbench-google pulls in workbench-{util, model, metrics}; exclude them so we can control the library versions individually.
   val workbenchUtil: ModuleID =      "org.broadinstitute.dsde.workbench" %% "workbench-util"   % workbenchUtilV
@@ -103,6 +105,7 @@ object Dependencies {
     googleStorageLocal,
 
     unboundid,
-    ehcache
+    ehcache,
+    jedis
   )
 }

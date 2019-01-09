@@ -13,12 +13,12 @@ import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.LdapAccessPolicyDAO
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
-import org.ehcache.Cache
 import org.ehcache.config.builders.{CacheConfigurationBuilder, CacheManagerBuilder, ExpiryPolicyBuilder, ResourcePoolsBuilder}
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FlatSpec, Matchers}
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import cats.implicits._
+import org.broadinstitute.dsde.workbench.sam.util.cache.EhcacheCacheImpl
 
 /**
   * Created by dvoet on 5/30/17.
@@ -483,13 +483,13 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
   }
 
   "cache" should "return existing item" in {
-    val cache: Cache[WorkbenchSubject, Set[String]] = createMemberOfCache("test-memberof-1")
+    val cache = createMemberOfCache("test-memberof-1")
 
     val testDao = new LdapDirectoryDAO(connectionPool, directoryConfig, blockingEc, cache)
 
     val workbenchSubject = WorkbenchUserId("snarglepup")
     val group = WorkbenchGroupName("testgroup")
-    cache.put(workbenchSubject, Set(subjectDn(group)))
+    cache.put(workbenchSubject, Set(subjectDn(group))).unsafeRunSync()
     // note that this user and group are not even in ldap but this should work because we manually put them in the cache
     val actual = testDao.listUsersGroups(workbenchSubject).unsafeRunSync()
 
@@ -497,7 +497,7 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
   }
 
   it should "retain non-existing item" in {
-    val cache: Cache[WorkbenchSubject, Set[String]] = createMemberOfCache("test-memberof-2")
+    val cache = createMemberOfCache("test-memberof-2")
 
     val testDao = new LdapDirectoryDAO(connectionPool, directoryConfig, blockingEc, cache)
 
@@ -507,10 +507,10 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     testDao.createUser(WorkbenchUser(workbenchSubject, None, WorkbenchEmail("foo"))).unsafeRunSync()
     testDao.createGroup(BasicWorkbenchGroup(group, Set(workbenchSubject), WorkbenchEmail("bar"))).unsafeRunSync()
 
-    assert(!cache.containsKey(workbenchSubject))
+    assert(cache.get(workbenchSubject).unsafeRunSync().isEmpty)
     val actual = testDao.listUsersGroups(workbenchSubject).unsafeRunSync()
     actual should contain theSameElementsAs Set(group)
-    assert(cache.containsKey(workbenchSubject))
+    assert(cache.get(workbenchSubject).unsafeRunSync().isDefined)
   }
 
   private def createMemberOfCache(cacheName: String) = {
@@ -518,13 +518,13 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
       .withCache(
         cacheName,
         CacheConfigurationBuilder
-          .newCacheConfigurationBuilder(classOf[WorkbenchSubject], classOf[Set[String]], ResourcePoolsBuilder.heap(10))
+          .newCacheConfigurationBuilder(classOf[Object], classOf[Object], ResourcePoolsBuilder.heap(10))
           .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(java.time.Duration.ofMinutes(10)))
       )
       .build
     cacheManager.init()
-    val cache = cacheManager.getCache(cacheName, classOf[WorkbenchSubject], classOf[Set[String]])
-    cache
+    val cache = cacheManager.getCache(cacheName, classOf[Object], classOf[Object])
+    new EhcacheCacheImpl[WorkbenchSubject, Set[String]](cache)
   }
 
   "listFlattenedMembers" should "flatten nested groups" in {

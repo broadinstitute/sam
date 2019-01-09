@@ -14,7 +14,7 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO.{Attr, ObjectClass}
 import org.broadinstitute.dsde.workbench.sam.util.LdapSupport
 import cats.implicits._
-import org.ehcache.Cache
+import org.broadinstitute.dsde.workbench.sam.util.cache.Cache
 
 import scala.collection.JavaConverters._
 import scala.concurrent.ExecutionContext
@@ -24,8 +24,8 @@ class LdapAccessPolicyDAO(
     protected val ldapConnectionPool: LDAPConnectionPool,
     protected val directoryConfig: DirectoryConfig,
     protected val ecForLdapBlockingIO: ExecutionContext,
-    protected val memberOfCache: Cache[WorkbenchSubject, Set[String]],
-    protected val resourceCache: Cache[FullyQualifiedResourceId, Resource])(implicit protected val cs: ContextShift[IO])
+    protected val memberOfCache: Cache[IO, WorkbenchSubject, Set[String]],
+    protected val resourceCache: Cache[IO, FullyQualifiedResourceId, Resource])(implicit protected val cs: ContextShift[IO])
     extends AccessPolicyDAO
     with DirectorySubjectNameSupport
     with LdapSupport {
@@ -59,8 +59,8 @@ class LdapAccessPolicyDAO(
   // TODO: Method is not tested.  To test properly, we'll probably need a loadResource or getResource method
   override def deleteResource(resource: FullyQualifiedResourceId): IO[Unit] = IO(ldapConnectionPool.delete(resourceDn(resource)))
 
-  override def loadResourceAuthDomain(resourceId: FullyQualifiedResourceId): IO[Set[WorkbenchGroupName]] =
-    Option(resourceCache.get(resourceId)) match {
+  override def loadResourceAuthDomain(resourceId: FullyQualifiedResourceId): IO[Set[WorkbenchGroupName]] = {
+    resourceCache.get(resourceId).flatMap {
       case None =>
         executeLdap((IO(Option(ldapConnectionPool.getEntry(resourceDn(resourceId)))))).flatMap {
           case None =>
@@ -75,6 +75,7 @@ class LdapAccessPolicyDAO(
 
       case Some(cachedResource) => IO.pure(cachedResource.authDomain)
     }
+  }
 
   private def unmarshalResource(results: Entry): Either[String, Resource] =
     for {
@@ -173,29 +174,22 @@ class LdapAccessPolicyDAO(
     }
 
   override def listResourcesWithAuthdomains(resourceTypeName: ResourceTypeName, resourceIds: Set[ResourceId]): IO[Set[Resource]] = {
-    val cachedResources = for {
-      resourceId <- resourceIds
-      cachedResource <- Option(resourceCache.get(FullyQualifiedResourceId(resourceTypeName, resourceId)))
-    } yield {
-      cachedResource
-    }
-
-    val filters = (resourceIds -- cachedResources.map(_.resourceId))
-      .grouped(batchSize)
-      .map(batch =>
-        Filter.createORFilter(batch
-          .map(r =>
-            Filter.createANDFilter(Filter.createEqualityFilter(Attr.resourceId, r.value), Filter.createEqualityFilter(Attr.objectClass, ObjectClass.resource)))
-          .asJava))
-      .toSeq
-
     for {
+      cachedResources <- resourceCache.getAll(resourceIds.map(resourceId => FullyQualifiedResourceId(resourceTypeName, resourceId)).toSeq:_*)
+      filters = (resourceIds -- cachedResources.keySet.map(_.resourceId))
+        .grouped(batchSize)
+        .map(batch =>
+          Filter.createORFilter(batch
+            .map(r =>
+              Filter.createANDFilter(Filter.createEqualityFilter(Attr.resourceId, r.value), Filter.createEqualityFilter(Attr.objectClass, ObjectClass.resource)))
+            .asJava))
+        .toSeq
       stream <- executeLdap(
         IO(ldapSearchStream(resourceTypeDn(resourceTypeName), SearchScope.ONE, filters: _*)(et => unmarshalResourceAuthDomain(et, resourceTypeName))))
       loadedResources <- IO.fromEither(stream.parSequence.leftMap(s => new WorkbenchException(s)))
+      _ <- loadedResources.traverse(r => resourceCache.put(r.fullyQualifiedId, r))
     } yield {
-      resourceCache.putAll(loadedResources.map(resource => resource.fullyQualifiedId -> resource).toMap.asJava)
-      loadedResources.toSet ++ cachedResources
+      loadedResources.toSet ++ cachedResources.values
     }
   }
 

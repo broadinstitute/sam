@@ -13,6 +13,7 @@ import org.broadinstitute.dsde.workbench.sam.directory._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.LdapAccessPolicyDAOSpec._
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
+import org.broadinstitute.dsde.workbench.sam.util.cache.EhcacheCacheImpl
 import org.ehcache.config.builders.{CacheConfigurationBuilder, CacheManagerBuilder, ExpiryPolicyBuilder, ResourcePoolsBuilder}
 import org.scalatest._
 import org.scalatest.concurrent.ScalaFutures
@@ -150,13 +151,13 @@ class LdapAccessPolicyDAOSpec extends FlatSpec with ScalaFutures with Matchers w
       .withCache(
         cacheName,
         CacheConfigurationBuilder
-          .newCacheConfigurationBuilder(classOf[FullyQualifiedResourceId], classOf[Resource], ResourcePoolsBuilder.heap(10))
+          .newCacheConfigurationBuilder(classOf[Object], classOf[Object], ResourcePoolsBuilder.heap(10))
           .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(java.time.Duration.ofMinutes(10)))
       )
       .build
     cacheManager.init()
-    val cache = cacheManager.getCache(cacheName, classOf[FullyQualifiedResourceId], classOf[Resource])
-    cache
+    val cache = cacheManager.getCache(cacheName, classOf[Object], classOf[Object])
+    new EhcacheCacheImpl[FullyQualifiedResourceId, Resource](cache)
   }
 }
 

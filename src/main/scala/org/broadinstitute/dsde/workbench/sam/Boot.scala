@@ -39,6 +39,7 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam._
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.broadinstitute.dsde.workbench.sam.service._
+import org.broadinstitute.dsde.workbench.sam.util.cache.EhcacheCacheInterpreters
 import org.broadinstitute.dsde.workbench.util.{DelegatePool, ExecutionContexts}
 import org.ehcache.Cache
 import org.ehcache.config.builders.{CacheConfigurationBuilder, CacheManagerBuilder, ExpiryPolicyBuilder, ResourcePoolsBuilder}
@@ -162,8 +163,8 @@ object Boot extends IOApp with LazyLogging {
       appConfig: AppConfig)(implicit actorSystem: ActorSystem, actorMaterializer: ActorMaterializer): cats.effect.Resource[IO, AppDependencies] =
     for {
       ldapConnectionPool <- createLdapConnectionPool(appConfig.directoryConfig.directoryUrl, appConfig.directoryConfig.user, appConfig.directoryConfig.password, appConfig.directoryConfig.connectionPoolSize, "foreground")
-      memberOfCache <- createMemberOfCache("memberof", appConfig.directoryConfig.memberOfCache.maxEntries, appConfig.directoryConfig.memberOfCache.timeToLive)
-      resourceCache <- createResourceCache("resource", appConfig.directoryConfig.resourceCache.maxEntries, appConfig.directoryConfig.resourceCache.timeToLive)
+      memberOfCache <- EhcacheCacheInterpreters.ioEhcache[WorkbenchSubject, Set[String]]("memberof", appConfig.directoryConfig.memberOfCache.maxEntries, appConfig.directoryConfig.memberOfCache.timeToLive)
+      resourceCache <- EhcacheCacheInterpreters.ioEhcache[FullyQualifiedResourceId, Resource]("resource", appConfig.directoryConfig.resourceCache.maxEntries, appConfig.directoryConfig.resourceCache.timeToLive)
       ldapExecutionContext <- ExecutionContexts.fixedThreadPool[IO](appConfig.directoryConfig.connectionPoolSize)
       accessPolicyDao = new LdapAccessPolicyDAO(ldapConnectionPool, appConfig.directoryConfig, ldapExecutionContext, memberOfCache, resourceCache)
       directoryDAO = new LdapDirectoryDAO(ldapConnectionPool, appConfig.directoryConfig, ldapExecutionContext, memberOfCache)
