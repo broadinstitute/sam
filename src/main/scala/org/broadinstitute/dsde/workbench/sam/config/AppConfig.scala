@@ -94,8 +94,12 @@ object AppConfig {
       case ex: WrongType => getActionPatternObjects(config, path)
     }
 
+  implicit val RedisConfigReader: ValueReader[RedisConfig] = ValueReader.relative { config =>
+    RedisConfig(config.getString("host"), config.getInt("port"))
+  }
+
   implicit val cacheConfigReader: ValueReader[CacheConfig] = ValueReader.relative { config =>
-    CacheConfig(config.getLong("maxEntries"), config.getDuration("timeToLive"))
+    CacheConfig(config.getLong("maxEntries"), config.getDuration("timeToLive"), config.as[Option[RedisConfig]]("redis"))
   }
 
   implicit val directoryConfigReader: ValueReader[DirectoryConfig] = ValueReader.relative { config =>
@@ -107,8 +111,8 @@ object AppConfig {
       config.getString("enabledUsersGroupDn"),
       config.as[Option[Int]]("connectionPoolSize").getOrElse(15),
       config.as[Option[Int]]("backgroundConnectionPoolSize").getOrElse(5),
-      config.as[Option[CacheConfig]]("memberOfCache").getOrElse(CacheConfig(100, java.time.Duration.ofMinutes(1))),
-      config.as[Option[CacheConfig]]("resourceCache").getOrElse(CacheConfig(10000, java.time.Duration.ofHours(1)))
+      config.as[Option[CacheConfig]]("memberOfCache").getOrElse(CacheConfig(100, java.time.Duration.ofMinutes(1), None)),
+      config.as[Option[CacheConfig]]("resourceCache").getOrElse(CacheConfig(10000, java.time.Duration.ofHours(1), None))
     )
   }
 

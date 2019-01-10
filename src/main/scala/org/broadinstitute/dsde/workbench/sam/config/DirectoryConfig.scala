@@ -14,4 +14,5 @@ case class DirectoryConfig(directoryUrl: String,
                            resourceCache: CacheConfig
                           )
 
-case class CacheConfig(maxEntries: Long, timeToLive: java.time.Duration)
+case class CacheConfig(maxEntries: Long, timeToLive: java.time.Duration, redis: Option[RedisConfig])
+case class RedisConfig(host: String, port: Int)

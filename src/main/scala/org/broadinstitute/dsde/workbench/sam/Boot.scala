@@ -39,10 +39,11 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam._
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.broadinstitute.dsde.workbench.sam.service._
-import org.broadinstitute.dsde.workbench.sam.util.cache.EhcacheCacheInterpreters
+import org.broadinstitute.dsde.workbench.sam.util.cache.{EhcacheCacheInterpreters, RedisCacheInterpreters}
 import org.broadinstitute.dsde.workbench.util.{DelegatePool, ExecutionContexts}
 import org.ehcache.Cache
 import org.ehcache.config.builders.{CacheConfigurationBuilder, CacheManagerBuilder, ExpiryPolicyBuilder, ResourcePoolsBuilder}
+import redis.clients.jedis.JedisPool
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
@@ -163,7 +164,15 @@ object Boot extends IOApp with LazyLogging {
       appConfig: AppConfig)(implicit actorSystem: ActorSystem, actorMaterializer: ActorMaterializer): cats.effect.Resource[IO, AppDependencies] =
     for {
       ldapConnectionPool <- createLdapConnectionPool(appConfig.directoryConfig.directoryUrl, appConfig.directoryConfig.user, appConfig.directoryConfig.password, appConfig.directoryConfig.connectionPoolSize, "foreground")
-      memberOfCache <- EhcacheCacheInterpreters.ioEhcache[WorkbenchSubject, Set[String]]("memberof", appConfig.directoryConfig.memberOfCache.maxEntries, appConfig.directoryConfig.memberOfCache.timeToLive)
+      memberOfCache <- appConfig.directoryConfig.memberOfCache.redis match {
+        case None => EhcacheCacheInterpreters.ioEhcache[WorkbenchSubject, Set[String]]("memberof", appConfig.directoryConfig.memberOfCache.maxEntries, appConfig.directoryConfig.memberOfCache.timeToLive)
+        case Some(redisConfig) => RedisCacheInterpreters.ioRedisCache[WorkbenchSubject, Set[String]](new JedisPool(redisConfig.host, redisConfig.port),
+          key => key.toString,
+          value => value.mkString("/"),
+          rawValue => rawValue.split("/").toSet,
+          appConfig.directoryConfig.memberOfCache.timeToLive.getSeconds.toInt
+        )
+      }
       resourceCache <- EhcacheCacheInterpreters.ioEhcache[FullyQualifiedResourceId, Resource]("resource", appConfig.directoryConfig.resourceCache.maxEntries, appConfig.directoryConfig.resourceCache.timeToLive)
       ldapExecutionContext <- ExecutionContexts.fixedThreadPool[IO](appConfig.directoryConfig.connectionPoolSize)
       accessPolicyDao = new LdapAccessPolicyDAO(ldapConnectionPool, appConfig.directoryConfig, ldapExecutionContext, memberOfCache, resourceCache)
