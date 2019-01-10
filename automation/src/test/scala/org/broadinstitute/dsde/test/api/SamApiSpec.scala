@@ -18,6 +18,7 @@ import org.broadinstitute.dsde.workbench.test.SamConfig
 import org.scalatest.concurrent.{Eventually, ScalaFutures}
 import org.scalatest.time.{Seconds, Span}
 import org.scalatest.{FreeSpec, Matchers}
+import org.broadinstitute.dsde.workbench.service.util.Tags
 
 import scala.concurrent.Await
 import scala.concurrent.duration.{Duration, _}
@@ -375,7 +376,7 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
       petEmail2 shouldBe petEmail1
     }
 
-    "should synchronize groups with Google" in {
+    "should synchronize groups with Google" taggedAs Tags.ExcludeInAlpha in {
       val managedGroupId = UUID.randomUUID.toString
       val adminPolicyName = "admin"
       val Seq(user1: Credentials, user2: Credentials, user3: Credentials) = UserPool.chooseStudents(3)
@@ -419,7 +420,7 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
         5.minutes, 5.seconds)
     }
 
-    "should only synchronize the intersection group for policies constrained by auth domains" in {
+    "should only synchronize the intersection group for policies constrained by auth domains" taggedAs Tags.ExcludeInAlpha in {
       val authDomainId = UUID.randomUUID.toString
       val Seq(inPolicyUser: Credentials, inAuthDomainUser: Credentials, inBothUser: Credentials) = UserPool.chooseStudents(3)
       val inBothUserAuthToken = inBothUser.makeAuthToken()
@@ -475,7 +476,7 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
         5.minutes, 5.seconds)
     }
 
-    "should synchronize the all users group for public policies" in {
+    "should synchronize the all users group for public policies" taggedAs Tags.ExcludeInAlpha in {
       val resourceId = UUID.randomUUID.toString
       val user1 = UserPool.chooseStudent
       val user1AuthToken = user1.makeAuthToken()
