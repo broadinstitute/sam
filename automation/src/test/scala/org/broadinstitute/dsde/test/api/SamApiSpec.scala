@@ -130,6 +130,15 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
         // who is my pet -> who is my user's pet -> it's me
         Sam.user.petServiceAccountEmail(projectName)(petAuthToken) shouldBe petAccountEmail
 
+        // test some permissions
+        val testId = UUID.randomUUID().toString
+        val testResourceType = "workflow-collection"
+        Sam.user.createResource(testResourceType, CreateResourceRequest(testId, Map("owner" -> AccessPolicyMembership(Set(anyUser.email), Set.empty, Set("owner"))), Set.empty))(userAuthToken)
+        val asUserPolicies = Sam.user.listResourcePolicies(testResourceType, testId)(userAuthToken)
+        val asPetPolicies = Sam.user.listResourcePolicies(testResourceType, testId)(petAuthToken)
+
+        asUserPolicies should contain theSameElementsAs asPetPolicies
+
         // clean up
 
         Sam.removePet(projectName, userStatus.userInfo)
