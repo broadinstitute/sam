@@ -166,8 +166,13 @@ object Boot extends IOApp with LazyLogging {
       ldapConnectionPool <- createLdapConnectionPool(appConfig.directoryConfig.directoryUrl, appConfig.directoryConfig.user, appConfig.directoryConfig.password, appConfig.directoryConfig.connectionPoolSize, "foreground")
       memberOfCache <- appConfig.directoryConfig.memberOfCache.redis match {
         case None => EhcacheCacheInterpreters.ioEhcache[WorkbenchSubject, Set[String]]("memberof", appConfig.directoryConfig.memberOfCache.maxEntries, appConfig.directoryConfig.memberOfCache.timeToLive)
-        case Some(redisConfig) => RedisCacheInterpreters.ioRedisCache[WorkbenchSubject, Set[String]](new JedisPool(redisConfig.host, redisConfig.port),
-          key => key.toString,
+        case Some(redisConfig) => RedisCacheInterpreters.ioRedisCache[WorkbenchSubject, Set[String]](new JedisPool(redisConfig.host, redisConfig.port), "memberof/",
+          {
+            case WorkbenchUserId(uid) => s"user/$uid"
+            case WorkbenchGroupName(groupName) => s"group/$groupName"
+            case FullyQualifiedPolicyId(resource, policyName) => s"policy/${resource.resourceTypeName.value}/${resource.resourceId.value}/${policyName.value}"
+            case unsupported => throw new WorkbenchException(s"caching not supported for workbench subject $unsupported")
+          },
           value => value.mkString("/"),
           rawValue => rawValue.split("/").toSet,
           appConfig.directoryConfig.memberOfCache.timeToLive.getSeconds.toInt

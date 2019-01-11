@@ -10,18 +10,23 @@ object RedisCacheInterpreters {
   val mgetBatchSize = 1000
 
   def ioRedisCache[K, V](jedisPool: JedisPool,
+                         keyPrefix: String,
                          serializeKey: K => String,
                          serializeValue: V => String,
                          deserializeValue: String => V,
                          timeToLiveSeconds: Int
                         ): Resource[IO, Cache[IO, K, V]] = {
-    val cache: Cache[IO, K, V] = new Cache[IO, K, V] {
+      val cache: Cache[IO, K, V] = new Cache[IO, K, V] {
       private val jedisResource = Resource.make[IO, Jedis](IO(jedisPool.getResource))(j => IO(j.close()))
+
+      def createRedisKey(key: K) = {
+        keyPrefix + serializeKey(key)
+      }
 
       override def get(key: K): IO[Option[V]] = {
         jedisResource.use { jedis =>
           for {
-            valueRaw <- IO(jedis.get(serializeKey(key)))
+            valueRaw <- IO(jedis.get(createRedisKey(key)))
           } yield {
             Option(valueRaw).map(deserializeValue)
           }
@@ -40,7 +45,7 @@ object RedisCacheInterpreters {
 
       private def fetchEntries(jedis: Jedis, keyBatch: Seq[K]): IO[Map[K, V]] = {
         IO {
-          val values = jedis.mget(keyBatch.map(serializeKey): _*).asScala
+          val values = jedis.mget(keyBatch.map(createRedisKey): _*).asScala
           val results = for {
             (key, valueRaw) <- keyBatch.zip(values)
             if valueRaw != null
@@ -52,13 +57,13 @@ object RedisCacheInterpreters {
 
       override def put(key: K, value: V): IO[Unit] = {
         jedisResource.use { jedis =>
-          IO(jedis.set(serializeKey(key), serializeValue(value), SetParams.setParams().ex(timeToLiveSeconds)))
+          IO(jedis.set(createRedisKey(key), serializeValue(value), SetParams.setParams().ex(timeToLiveSeconds)))
         }
       }
 
       override def remove(key: K): IO[Unit] = {
         jedisResource.use { jedis =>
-          IO(jedis.del(serializeKey(key)))
+          IO(jedis.del(createRedisKey(key)))
         }
       }
     }
