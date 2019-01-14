@@ -76,6 +76,13 @@ class GoogleKeyCache(
     }
 
     for {
+      x <- retrieveActiveKey()
+
+    } yield {
+
+    }
+
+    for {
       (keysFromCache, keysFromIam) <- fetchKeysFromCacheAndIam(pet)
       knownKeyCachedObjects = keysFromCache.filter { cachedObject =>
         keysFromIam.exists(key => cachedObject.value.endsWith(key.id.value))
@@ -109,6 +116,19 @@ class GoogleKeyCache(
             .unsafeGetObject(googleServicesConfig.googleKeyCacheConfig.bucketName, GcsBlobName(mostRecentKey.value))
             .flatMap(activeKeyFromCache => activeKeyFromCache.fold(createNewKey)(s => IO.pure(s)))
         } else createNewKey
+    }
+  }
+
+  private def retrieveActiveKey(pet: PetServiceAccount): IO[Option[String]] = {
+    fetchKeysFromCacheAndIam(pet).map {
+      case (keysFromCache, keysFromIam) =>
+        val mostRecentKey = keysFromCache.maxBy(_.timeCreated.toEpochMilli)
+        val mostRecentKeyExists = keysFromIam.exists(iamKey => mostRecentKey.value.endsWith(iamKey.id.value))
+        if (mostRecentKeyExists) {
+          Option(mostRecentKey.value)
+        } else {
+          None
+        }
     }
   }
 
