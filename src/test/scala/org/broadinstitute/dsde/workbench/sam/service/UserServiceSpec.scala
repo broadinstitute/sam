@@ -239,10 +239,12 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
     dirDAO.createGroup(BasicWorkbenchGroup(expectedGroupName, Set(user.id), WorkbenchEmail("bar"))).unsafeRunSync()
     dirDAO.createGroup(BasicWorkbenchGroup(genWorkbenchGroupName.sample.get, Set(expectedGroupName), WorkbenchEmail("baz"))).unsafeRunSync()
 
-    service.registerUser(user).unsafeRunSync()
+    service.createUser(user).futureValue
 
-    // a little fancyness to ignore the order of the groups passed to onGroupUpdate
-    verify(googleExtensions).onGroupUpdate(argThat((actual: Seq[WorkbenchGroupIdentity]) => actual.toSet equals Set(expectedGroupName, expectedAccessPolicyId)))
+    verify(googleExtensions).onGroupUpdate(argThat((actual: Seq[WorkbenchGroupIdentity]) => {
+      val expected: Set[WorkbenchGroupIdentity] = Set(expectedGroupName, expectedAccessPolicyId)
+      actual.toSet.intersect(expected) equals expected
+    }))
   }
 
   "UserService inviteUser" should "create a new user" in{
