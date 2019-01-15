@@ -27,6 +27,13 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
       _ <- directoryDAO.enableIdentity(createdUser.id).unsafeToFuture()
       _ <- directoryDAO.addGroupMember(allUsersGroup.id, createdUser.id).unsafeToFuture()
       _ <- cloudExtensions.onUserCreate(createdUser)
+
+      // If user was an invite and is already a member of some groups we must tell the cloud extension now that the user
+      // is registered. This must happen after cloudExtensions.onUserCreate as that is what tells the cloud extension
+      // about the user in the first place.
+      groups <- directoryDAO.listUserDirectMemberships(createdUser.id).unsafeToFuture()
+      _ <- cloudExtensions.onGroupUpdate(groups)
+
       userStatus <- getUserStatus(createdUser.id)
       res <- userStatus.toRight(new WorkbenchException("getUserStatus returned None after user was created")).fold(Future.failed, Future.successful)
     } yield res
@@ -61,11 +68,9 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
             subjectFromEmail <- directoryDAO.loadSubjectFromEmail(user.email)
             updated <- subjectFromEmail match {
               case Some(uid: WorkbenchUserId) =>
-                for {
-                  groups <- directoryDAO.listUserDirectMemberships(uid)
-                  _ <- directoryDAO.setGoogleSubjectId(uid, user.googleSubjectId)
-                  _ <- IO.fromFuture(IO(cloudExtensions.onGroupUpdate(groups)))
-                } yield WorkbenchUser(uid, Some(user.googleSubjectId), user.email)
+                directoryDAO.setGoogleSubjectId(uid, user.googleSubjectId).map { _ =>
+                  WorkbenchUser(uid, Some(user.googleSubjectId), user.email)
+                }
 
               case Some(sub) =>
                 //We don't support inviting a group account or pet service account
