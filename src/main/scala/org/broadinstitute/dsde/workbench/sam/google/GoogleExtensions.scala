@@ -157,7 +157,7 @@ class GoogleExtensions(
         directoryDAO.listAncestorGroups(id)
       }
       managedGroupIds = (ancestorGroups.flatten ++ groupIdentities).filterNot(visitedGroups.contains).collect {
-        case FullyQualifiedPolicyId(FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, id), _) => id
+        case FullyQualifiedPolicyId(FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, id), ManagedGroupService.adminPolicyName | ManagedGroupService.memberPolicyName) => id
       }
       _ <- managedGroupIds.traverse(id => onManagedGroupUpdate(id, visitedGroups ++ groupIdentities ++ ancestorGroups.flatten))
     } yield ()
@@ -177,7 +177,6 @@ class GoogleExtensions(
       _ <- googleDirectoryDAO.createGroup(user.email.value, proxyEmail, Option(googleDirectoryDAO.lockedDownGroupSettings)) recover {
         case e: GoogleJsonResponseException if e.getDetails.getCode == StatusCodes.Conflict.intValue => ()
       }
-      _ <- googleDirectoryDAO.addMemberToGroup(proxyEmail, WorkbenchEmail(user.email.value))
       allUsersGroup <- getOrCreateAllUsersGroup(directoryDAO)
       _ <- googleDirectoryDAO.addMemberToGroup(allUsersGroup.email, proxyEmail)
 
