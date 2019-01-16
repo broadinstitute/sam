@@ -109,7 +109,6 @@ object TestSupport extends TestSupport {
     val googleIamDAO = googIamDAO.getOrElse(new MockGoogleIamDAO())
     val policyDAO = policyAccessDAO.getOrElse(new MockAccessPolicyDAO())
     val pubSubDAO = new MockGooglePubSubDAO()
-    runAndWait(pubSubDAO.createTopic(googleServicesConfig.groupSyncTopic))
     val googleStorageDAO = new MockGoogleStorageDAO()
     val notificationDAO = new PubSubNotificationDAO(pubSubDAO, "foo")
     val cloudKeyCache = new GoogleKeyCache(googleIamDAO, googleStorageDAO, pubSubDAO, googleServicesConfig, petServiceAccountConfig)

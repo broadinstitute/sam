@@ -106,7 +106,6 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
       val mockDirectoryDAO = mock[DirectoryDAO]
       val mockGoogleDirectoryDAO = mock[GoogleDirectoryDAO]
       val mockGooglePubSubDAO = new MockGooglePubSubDAO
-      runAndWait(mockGooglePubSubDAO.createTopic(googleServicesConfig.groupSyncTopic))
       val ge = new GoogleExtensions(TestSupport.testDistributedLock, mockDirectoryDAO, mockAccessPolicyDAO, mockGoogleDirectoryDAO, mockGooglePubSubDAO, null, null,null, null, null, googleServicesConfig, petServiceAccountConfig, configResourceTypes)
       val synchronizer = new GoogleGroupSynchronizer(mockDirectoryDAO, mockAccessPolicyDAO, mockGoogleDirectoryDAO,ge, configResourceTypes)
 
@@ -270,7 +269,6 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val mockDirectoryDAO = new MockDirectoryDAO
     val mockGoogleDirectoryDAO = mock[GoogleDirectoryDAO]
     val mockGooglePubSubDAO = new MockGooglePubSubDAO
-    runAndWait(mockGooglePubSubDAO.createTopic(googleServicesConfig.groupSyncTopic))
     val mockGoogleIamDAO = new MockGoogleIamDAO
     val ge = new GoogleExtensions(TestSupport.testDistributedLock, mockDirectoryDAO, mockAccessPolicyDAO, mockGoogleDirectoryDAO, mockGooglePubSubDAO, mockGoogleIamDAO, null, null, null, null, googleServicesConfig, petServiceAccountConfig, configResourceTypes)
     val synchronizer = new GoogleGroupSynchronizer(mockDirectoryDAO, mockAccessPolicyDAO, mockGoogleDirectoryDAO,ge, configResourceTypes)
@@ -352,10 +350,8 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
 
     val mockGoogleIamDAO = new MockGoogleIamDAO
     val mockGoogleDirectoryDAO = new MockGoogleDirectoryDAO
-    val mockGooglePubSubDAO = new MockGooglePubSubDAO
-    runAndWait(mockGooglePubSubDAO.createTopic(googleServicesConfig.groupSyncTopic))
 
-    val googleExtensions = new GoogleExtensions(TestSupport.testDistributedLock, dirDAO, null, mockGoogleDirectoryDAO, mockGooglePubSubDAO, mockGoogleIamDAO, null, null, null, null, googleServicesConfig, petServiceAccountConfig, configResourceTypes)
+    val googleExtensions = new GoogleExtensions(TestSupport.testDistributedLock, dirDAO, null, mockGoogleDirectoryDAO, null, mockGoogleIamDAO, null, null, null, null, googleServicesConfig, petServiceAccountConfig, configResourceTypes)
     val service = new UserService(dirDAO, googleExtensions)
 
     val defaultUserId = WorkbenchUserId("newuser123")
@@ -522,7 +518,6 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val mockDirectoryDAO = new MockDirectoryDAO
     val mockGoogleDirectoryDAO = new MockGoogleDirectoryDAO
     val mockGooglePubSubDAO = new MockGooglePubSubDAO
-    runAndWait(mockGooglePubSubDAO.createTopic(googleServicesConfig.groupSyncTopic))
     val mockGoogleStorageDAO = new MockGoogleStorageDAO
     val mockGoogleIamDAO = new MockGoogleIamDAO
     val notificationDAO = new PubSubNotificationDAO(mockGooglePubSubDAO, "foo")
@@ -751,12 +746,11 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val mockGoogleIamDAO = new MockGoogleIamDAO
     val mockGoogleDirectoryDAO = new MockGoogleDirectoryDAO
     val mockGooglePubSubDAO = new MockGooglePubSubDAO
-    runAndWait(mockGooglePubSubDAO.createTopic(googleServicesConfig.groupSyncTopic))
     val mockGoogleStorageDAO = new MockGoogleStorageDAO
     val notificationDAO = new PubSubNotificationDAO(mockGooglePubSubDAO, "foo")
     val googleKeyCache = new GoogleKeyCache(mockGoogleIamDAO, mockGoogleStorageDAO, mockGooglePubSubDAO, googleServicesConfig, petServiceAccountConfig)
 
-    val googleExtensions = new GoogleExtensions(TestSupport.testDistributedLock, dirDAO, null, mockGoogleDirectoryDAO, mockGooglePubSubDAO, mockGoogleIamDAO, mockGoogleStorageDAO, null, googleKeyCache, notificationDAO, googleServicesConfig, petServiceAccountConfig, configResourceTypes)
+    val googleExtensions = new GoogleExtensions(TestSupport.testDistributedLock, dirDAO, null, mockGoogleDirectoryDAO, null, mockGoogleIamDAO, mockGoogleStorageDAO, null, googleKeyCache, notificationDAO, googleServicesConfig, petServiceAccountConfig, configResourceTypes)
     val service = new UserService(dirDAO, googleExtensions)
 
     (googleExtensions, service)
