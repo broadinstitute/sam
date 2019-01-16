@@ -66,70 +66,42 @@ class GoogleKeyCache(
   }
 
   override def getKey(pet: PetServiceAccount): IO[String] = {
-    val lockPath = LockPath(CollectionName(s"${pet.id.project.value}-getKey"), Document(pet.serviceAccount.subjectId.value), 20 seconds)
-    val createNewKeyWithLock = distributedLock.withLock(lockPath).use { _ =>
+    def maybeCreateKey(createKey: (List[GcsObjectName], List[ServiceAccountKey]) => IO[String]): IO[String] = {
       for {
-        (keysFromCache, keysFromIam) <- fetchKeysFromCacheAndIam(pet)
-        cleanedKeyObjects <- IO.fromFuture(IO(cleanupUnknownKeys(pet, keysFromCache, keysFromIam)))
-        key <- retrieveNewKey(keysFromCache, keysFromIam, furnishNewKey(pet))
+        (maybeActiveKey, keysFromCache, keysFromIam) <- retrieveActiveKey(pet)
+        activeKey <- maybeActiveKey match {
+          case Some(existingActiveKey) => IO.pure(existingActiveKey)
+          case None => createKey(keysFromCache, keysFromIam)
+        }
+      } yield activeKey
+    }
+
+    def cleanupAndCreateKey(keysFromCache: List[GcsObjectName], keysFromIam: List[ServiceAccountKey]): IO[String] = {
+      for {
+        _ <- IO.fromFuture(IO(cleanupUnknownKeys(pet, keysFromCache, keysFromIam)))
+        key <- furnishNewKey(pet)
       } yield key
     }
 
-    for {
-      x <- retrieveActiveKey()
-
-    } yield {
-
-    }
-
-    for {
-      (keysFromCache, keysFromIam) <- fetchKeysFromCacheAndIam(pet)
-      knownKeyCachedObjects = keysFromCache.filter { cachedObject =>
-        keysFromIam.exists(key => cachedObject.value.endsWith(key.id.value))
-      }
-      key <- retrieveNewKey(keysFromCache, keysFromIam, createNewKeyWithLock)
-    } yield key
+    val lockPath = LockPath(CollectionName(s"${pet.id.project.value}-getKey"), Document(pet.serviceAccount.subjectId.value), 20 seconds)
+    maybeCreateKey((_, _) =>
+      distributedLock.withLock(lockPath).use { _ => maybeCreateKey(cleanupAndCreateKey)
+    })
   }
 
-  private def fetchKeysFromCacheAndIam(pet: PetServiceAccount): IO[(List[GcsObjectName], List[ServiceAccountKey])] = {
-    val fetchKeyFromCache = googleStorageAlg
-      .unsafeListObjectsWithPrefix(googleServicesConfig.googleKeyCacheConfig.bucketName, keyNamePrefix(pet.id.project, pet.serviceAccount.email))
-    val fetchKeyFromIam = IO.fromFuture(IO(googleIamDAO.listUserManagedServiceAccountKeys(pet.id.project, pet.serviceAccount.email).map(_.toList)))
-
-    (fetchKeyFromCache, fetchKeyFromIam).parTupled
-  }
-
-  private def retrieveNewKey(keysFromCache: List[GcsObjectName], keysFromIam: List[ServiceAccountKey], createNewKey: IO[String]): IO[String] = {
-    val knownKeyCachedObjects = keysFromCache.filter { cachedObject =>
-      keysFromIam.exists(key => cachedObject.value.endsWith(key.id.value))
-    }
-    (knownKeyCachedObjects, keysFromIam) match {
-      case (Nil, _) =>
-        createNewKey //mismatch. there were no keys found in the cache, but there may be keys on the service account
-      case (_, Nil) =>
-        createNewKey //mismatch. there were no keys found on the service account, but there may be keys in the bucket
-      case (keyObjects, serviceAccountKeys) =>
-        val mostRecentKey = keysFromCache.sortBy(_.timeCreated.toEpochMilli).last
-
-        if (isKeyActive(mostRecentKey, keysFromIam)) {
+  private def retrieveActiveKey(pet: PetServiceAccount): IO[(Option[String], List[GcsObjectName], List[ServiceAccountKey])] = {
+    for {
+      keysFromCache <- googleStorageAlg.unsafeListObjectsWithPrefix(googleServicesConfig.googleKeyCacheConfig.bucketName, keyNamePrefix(pet.id.project, pet.serviceAccount.email))
+      keysFromIam <- IO.fromFuture(IO(googleIamDAO.listUserManagedServiceAccountKeys(pet.id.project, pet.serviceAccount.email).map(_.toList)))
+      maybeMostRecentKey = keysFromCache.sortBy(_.timeCreated.toEpochMilli).lastOption
+      mostRecentKey <- maybeMostRecentKey match {
+        case Some(mostRecentKey) if isKeyActive(mostRecentKey, keysFromIam) =>
           googleStorageAlg
             .unsafeGetObject(googleServicesConfig.googleKeyCacheConfig.bucketName, GcsBlobName(mostRecentKey.value))
-            .flatMap(activeKeyFromCache => activeKeyFromCache.fold(createNewKey)(s => IO.pure(s)))
-        } else createNewKey
-    }
-  }
 
-  private def retrieveActiveKey(pet: PetServiceAccount): IO[Option[String]] = {
-    fetchKeysFromCacheAndIam(pet).map {
-      case (keysFromCache, keysFromIam) =>
-        val mostRecentKey = keysFromCache.maxBy(_.timeCreated.toEpochMilli)
-        val mostRecentKeyExists = keysFromIam.exists(iamKey => mostRecentKey.value.endsWith(iamKey.id.value))
-        if (mostRecentKeyExists) {
-          Option(mostRecentKey.value)
-        } else {
-          None
-        }
-    }
+        case _ => IO.pure(None)
+      }
+    } yield (mostRecentKey, keysFromCache, keysFromIam)
   }
 
   override def removeKey(pet: PetServiceAccount, keyId: ServiceAccountKeyId): IO[Unit] =
