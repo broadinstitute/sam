@@ -611,7 +611,6 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
 
     val lockedDownGroupSettings = Option(mockGoogleDirectoryDAO.lockedDownGroupSettings)
     verify(mockGoogleDirectoryDAO).createGroup(userEmail.value, proxyEmail, lockedDownGroupSettings)
-    verify(mockGoogleDirectoryDAO).addMemberToGroup(proxyEmail, userEmail)
     verify(mockGoogleDirectoryDAO).addMemberToGroup(allUsersGroup.email, proxyEmail)
 /* Re-enable this code after fixing rawls for GAWB-2933
     verify(mockDirectoryDAO).addProxyGroup(userId, proxyEmail)
@@ -641,7 +640,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val managedGroupId = "managedGroupId"
 
     val managedGroupRPN = FullyQualifiedPolicyId(
-      FullyQualifiedResourceId(ResourceTypeName("managed-group"), ResourceId(managedGroupId)), AccessPolicyName("managedGroup"))
+      FullyQualifiedResourceId(ResourceTypeName("managed-group"), ResourceId(managedGroupId)), ManagedGroupService.memberPolicyName)
     val resource = Resource(ResourceTypeName("resource"), ResourceId("rid"), Set(WorkbenchGroupName(managedGroupId)))
     val ownerRPN = FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("owner"))
     val readerRPN = FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("reader"))
@@ -672,7 +671,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val managedGroupId = "managedGroupId"
     val subGroupId = "subGroupId"
     val managedGroupRPN = FullyQualifiedPolicyId(
-      FullyQualifiedResourceId(ResourceTypeName("managed-group"), ResourceId(managedGroupId)), AccessPolicyName("managedGroup"))
+      FullyQualifiedResourceId(ResourceTypeName("managed-group"), ResourceId(managedGroupId)), ManagedGroupService.memberPolicyName)
 
     val resource = Resource(ResourceTypeName("resource"), ResourceId("rid"), Set(WorkbenchGroupName(managedGroupId)))
     val ownerRPN = FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("owner"))
@@ -707,7 +706,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val managedGroupId = "managedGroupId"
     val subGroupId = "subGroupId"
     val managedGroupRPN = FullyQualifiedPolicyId(
-      FullyQualifiedResourceId(ResourceTypeName("managed-group"), ResourceId(managedGroupId)), AccessPolicyName("managedGroup"))
+      FullyQualifiedResourceId(ResourceTypeName("managed-group"), ResourceId(managedGroupId)), ManagedGroupService.memberPolicyName)
 
     val resource = Resource(ResourceTypeName("resource"), ResourceId("rid"), Set(WorkbenchGroupName(managedGroupId)))
     val ownerRPN = FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("owner"))

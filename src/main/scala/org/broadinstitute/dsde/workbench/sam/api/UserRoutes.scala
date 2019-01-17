@@ -191,7 +191,7 @@ trait UserRoutes extends UserInfoDirectives {
               path(Segment) { inviteeEmail =>
                 complete {
                   userService
-                    .inviteUser(InviteUser(genWorkbenchUserId(System.currentTimeMillis()), WorkbenchEmail(inviteeEmail)))
+                    .inviteUser(InviteUser(genWorkbenchUserId(System.currentTimeMillis()), WorkbenchEmail(inviteeEmail.trim)))
                     .map(userStatus => StatusCodes.Created -> userStatus)
                 }
               }

@@ -14,6 +14,7 @@ import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model._
 
 import scala.concurrent.{ExecutionContext, Future}
+import scala.util.matching.Regex
 
 /**
   * Created by dvoet on 7/14/17.
@@ -24,19 +25,19 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
     for {
       allUsersGroup <- cloudExtensions.getOrCreateAllUsersGroup(directoryDAO)
       createdUser <- registerUser(user).unsafeToFuture()
-      _ <- directoryDAO.enableIdentity(createdUser.id).unsafeToFuture()
+      _ <- enableUserInternal(createdUser)
       _ <- directoryDAO.addGroupMember(allUsersGroup.id, createdUser.id).unsafeToFuture()
-      _ <- cloudExtensions.onUserCreate(createdUser)
       userStatus <- getUserStatus(createdUser.id)
       res <- userStatus.toRight(new WorkbenchException("getUserStatus returned None after user was created")).fold(Future.failed, Future.successful)
     } yield res
 
   def inviteUser(invitee: InviteUser): IO[UserStatusDetails] =
     for {
+      _ <- UserService.validateEmailAddress(invitee.inviteeEmail)
       existingSubject <- directoryDAO.loadSubjectFromEmail(invitee.inviteeEmail)
       createdUser <- existingSubject match {
-        case None => directoryDAO.createUser(WorkbenchUser(invitee.inviteeId, None, invitee.inviteeEmail))
-        case Some(__) =>
+        case None => createUserInternal(WorkbenchUser(invitee.inviteeId, None, invitee.inviteeEmail))
+        case Some(_) =>
           IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"email ${invitee.inviteeEmail} already exists")))
       }
     } yield UserStatusDetails(createdUser.id, createdUser.email)
@@ -67,17 +68,24 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
                   _ <- IO.fromFuture(IO(cloudExtensions.onGroupUpdate(groups)))
                 } yield WorkbenchUser(uid, Some(user.googleSubjectId), user.email)
 
-              case Some(sub) =>
+              case Some(_) =>
                 //We don't support inviting a group account or pet service account
                 IO.raiseError[WorkbenchUser](
                   new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"$user is not a regular user. Please use a different endpoint")))
               case None =>
-                directoryDAO.createUser(WorkbenchUser(WorkbenchUserId(user.googleSubjectId.value), Some(user.googleSubjectId), user.email)) //For completely new users, we still use googleSubjectId as their userId
+                createUserInternal(WorkbenchUser(WorkbenchUserId(user.googleSubjectId.value), Some(user.googleSubjectId), user.email)) //For completely new users, we still use googleSubjectId as their userId
+
             }
           } yield updated
       }
     } yield user
 
+  private def createUserInternal(user: WorkbenchUser) = {
+    for {
+      createdUser <- directoryDAO.createUser(user)
+      _ <- IO.fromFuture(IO(cloudExtensions.onUserCreate(createdUser)))
+    } yield createdUser
+  }
   def getSubjectFromEmail(email: WorkbenchEmail): Future[Option[WorkbenchSubject]] = directoryDAO.loadSubjectFromEmail(email).unsafeToFuture()
 
   def getUserStatus(userId: WorkbenchUserId, userDetailsOnly: Boolean = false): Future[Option[UserStatus]] =
@@ -149,12 +157,18 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
     directoryDAO.loadUser(userId).unsafeToFuture().flatMap {
       case Some(user) =>
         for {
-          _ <- directoryDAO.enableIdentity(user.id).unsafeToFuture()
-          _ <- cloudExtensions.onUserEnable(user)
+          _ <- enableUserInternal(user)
           userStatus <- getUserStatus(userId)
         } yield userStatus
       case None => Future.successful(None)
     }
+
+  private def enableUserInternal(user: WorkbenchUser): Future[Unit] = {
+    for {
+      _ <- directoryDAO.enableIdentity(user.id).unsafeToFuture()
+      _ <- cloudExtensions.onUserEnable(user)
+    } yield ()
+  }
 
   def disableUser(userId: WorkbenchUserId, userInfo: UserInfo): Future[Option[UserStatus]] =
     directoryDAO.loadUser(userId).unsafeToFuture().flatMap {
@@ -182,6 +196,9 @@ object UserService {
 
   val random = SecureRandom.getInstance("NativePRNGNonBlocking")
 
+  // from https://www.regular-expressions.info/email.html
+  val emailRegex: Regex = "(?i)^[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}$".r
+
   // Generate a 21 digits unique identifier. First char is fixed 2
   // CurrentMillis.append(randomString)
   private[workbench] def genRandom(currentMilli: Long): String = {
@@ -198,4 +215,11 @@ object UserService {
 
   def genWorkbenchUserId(currentMilli: Long): WorkbenchUserId =
     WorkbenchUserId(genRandom(currentMilli))
+
+  def validateEmailAddress(email: WorkbenchEmail): IO[Unit] = {
+    email.value match {
+      case UserService.emailRegex() => IO.unit
+      case _ => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"invalid email address [${email.value}]")))
+    }
+  }
 }
