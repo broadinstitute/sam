@@ -5,8 +5,8 @@ import java.util.concurrent.TimeUnit
 import cats.effect.IO
 import cats.kernel.Eq
 import cats.implicits._
-import org.broadinstitute.dsde.workbench.google.GoogleFirestoreInterpreter
-import org.broadinstitute.dsde.workbench.google.util.{DistributedLock, DistributedLockConfig, FailToObtainLock}
+import org.broadinstitute.dsde.workbench.google2.GoogleFirestoreInterpreter
+import org.broadinstitute.dsde.workbench.google2.util.{DistributedLock, DistributedLockConfig, FailToObtainLock}
 import org.broadinstitute.dsde.workbench.model.WorkbenchException
 import org.scalatest.{AsyncFlatSpec, Matchers}
 import org.broadinstitute.dsde.workbench.test.Generators.genLockPath

@@ -1,7 +1,7 @@
 package org.broadinstitute.dsde.workbench.test
 
-import org.broadinstitute.dsde.workbench.google.{CollectionName, Document}
-import org.broadinstitute.dsde.workbench.google.util.LockPath
+import org.broadinstitute.dsde.workbench.google2.{CollectionName, Document}
+import org.broadinstitute.dsde.workbench.google2.util.LockPath
 import org.scalacheck.Gen
 import scala.concurrent.duration._
 
