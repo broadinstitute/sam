@@ -9,7 +9,7 @@ import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import cats.kernel.Eq
 import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.Generator._
+import org.broadinstitute.dsde.workbench.sam.Generator.{arbNonPetEmail => _, _}
 import org.broadinstitute.dsde.workbench.sam.TestSupport.eqWorkbenchExceptionErrorReport
 import org.broadinstitute.dsde.workbench.sam.api.{CreateWorkbenchUser, InviteUser}
 import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryDAO, LdapDirectoryDAO}
@@ -19,6 +19,7 @@ import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
 import org.mockito.ArgumentMatchers._
 import org.mockito.Mockito._
+import org.scalacheck.{Arbitrary, Gen}
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.mockito.MockitoSugar
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FlatSpec, Matchers}
@@ -30,10 +31,11 @@ import scala.concurrent.{ExecutionContext, Future}
 /**
   * Created by rtitle on 10/6/17.
   */
-class UserServiceSpec extends FlatSpec with Matchers with TestSupport with MockitoSugar
+class UserServiceSpec extends FlatSpec with Matchers with TestSupport with MockitoSugar with PropertyBasedTesting
   with BeforeAndAfter with BeforeAndAfterAll with ScalaFutures {
 
   override implicit val patienceConfig = PatienceConfig(timeout = scaled(5.seconds))
+  implicit override val generatorDrivenConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(minSuccessful = 100)
 
   val defaultUserId = genWorkbenchUserId(System.currentTimeMillis())
   val defaultGoogleSubjectId = GoogleSubjectId(defaultUserId.value)
@@ -265,4 +267,85 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
     val info = service.getUserIdInfoFromEmail(defaultUserEmail).futureValue
     info shouldBe Right(Some(UserIdInfo(defaultUserId, defaultUserEmail, Some(defaultGoogleSubjectId))))
   }
+
+  "UserService validateEmailAddress" should "accept valid email addresses" in {
+    import GenEmail._
+
+    val genEmail = for {
+      user <- genEmailUser
+      parts <- Gen.nonEmptyListOf(genEmailServerPart)
+      lastPart <- genEmailLastPart
+    } yield {
+      WorkbenchEmail(s"$user@${parts.mkString(".")}.$lastPart")
+    }
+    implicit val arbEmail: Arbitrary[WorkbenchEmail] = Arbitrary(genEmail)
+
+    forAll { email: WorkbenchEmail =>
+      assert(UserService.validateEmailAddress(email).attempt.unsafeRunSync().isRight)
+    }
+  }
+
+  it should "reject email addresses missing @" in {
+    import GenEmail._
+
+    val genEmail = for {
+      user <- genEmailUser
+      parts <- Gen.nonEmptyListOf(genEmailServerPart)
+      lastPart <- genEmailLastPart
+    } yield {
+      WorkbenchEmail(s"$user${parts.mkString(".")}.$lastPart")
+    }
+    implicit val arbEmail: Arbitrary[WorkbenchEmail] = Arbitrary(genEmail)
+
+    forAll { email: WorkbenchEmail =>
+      assert(UserService.validateEmailAddress(email).attempt.unsafeRunSync().isLeft)
+    }
+  }
+
+  it should "reject email addresses with bad chars" in {
+    import GenEmail._
+
+    val genEmail = for {
+      badChar <- genBadChar
+      position <- Gen.posNum[Int]
+      user <- genEmailUser
+      parts <- Gen.nonEmptyListOf(genEmailServerPart)
+      lastPart <- genEmailLastPart
+    } yield {
+      val email = s"$user@${parts.mkString(".")}.$lastPart"
+      val normalizedPosition = position % email.length
+      WorkbenchEmail(email.substring(0, normalizedPosition) + badChar + email(normalizedPosition))
+    }
+    implicit val arbEmail: Arbitrary[WorkbenchEmail] = Arbitrary(genEmail)
+
+    forAll { email: WorkbenchEmail =>
+      assert(UserService.validateEmailAddress(email).attempt.unsafeRunSync().isLeft)
+    }
+  }
+
+  it should "reject email addresses with bad server" in {
+    import GenEmail._
+
+    val genEmail = for {
+      user <- genEmailUser
+      lastPart <- genEmailLastPart
+    } yield {
+      WorkbenchEmail(s"$user@$lastPart")
+    }
+    implicit val arbEmail: Arbitrary[WorkbenchEmail] = Arbitrary(genEmail)
+
+    forAll { email: WorkbenchEmail =>
+      assert(UserService.validateEmailAddress(email).attempt.unsafeRunSync().isLeft)
+    }
+  }
+}
+
+object GenEmail {
+  val genBadChar = Gen.oneOf("!@#$^&*()=::'\"?/\\`~".toSeq)
+  val genEmailUserChar = Gen.frequency((9, Gen.alphaNumChar), (1, Gen.oneOf(Seq('.', '_', '%', '+', '-'))))
+  val genEmailUser = Gen.nonEmptyListOf(genEmailUserChar).map(_.mkString)
+
+  val genEmailServerChar = Gen.frequency((9, Gen.alphaNumChar), (1, Gen.const('-')))
+  val genEmailServerPart = Gen.nonEmptyListOf(genEmailServerChar).map(_.mkString)
+  val genEmailLastPart = Gen.listOfN(2, Gen.alphaChar).map(_.mkString)
 }

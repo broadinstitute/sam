@@ -216,10 +216,10 @@ object UserService {
   def genWorkbenchUserId(currentMilli: Long): WorkbenchUserId =
     WorkbenchUserId(genRandom(currentMilli))
 
-  def validateEmailAddress(email: WorkbenchEmail) = {
+  def validateEmailAddress(email: WorkbenchEmail): IO[Unit] = {
     email.value match {
       case UserService.emailRegex() => IO.unit
-      case _ => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "invalid email address")))
+      case _ => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"invalid email address [${email.value}]")))
     }
   }
 }
