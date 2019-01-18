@@ -35,9 +35,8 @@ class PolicyEvaluatorService(
   }
 
   def hasPermission(resource: FullyQualifiedResourceId, action: ResourceAction, userId: WorkbenchUserId): IO[Boolean] = {
-    def checkPermission(force: Boolean) = {
+    def checkPermission(force: Boolean) =
       listUserResourceActions(resource, userId, force).map { _.contains(action) }
-    }
 
     // this is optimized for the case where the user has permission since that is the usual case
     // if the first attempt shows the user does not have permission, force a second attempt

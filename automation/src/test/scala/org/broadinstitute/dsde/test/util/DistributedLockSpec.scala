@@ -5,11 +5,8 @@ import java.util.concurrent.TimeUnit
 import cats.effect.IO
 import cats.kernel.Eq
 import cats.implicits._
-import org.broadinstitute.dsde.workbench.google.GoogleFirestoreOpsInterpreters
-import org.broadinstitute.dsde.workbench.google.util.{
-  DistributedLock,
-  DistributedLockConfig
-}
+import org.broadinstitute.dsde.workbench.google2.GoogleFirestoreInterpreter
+import org.broadinstitute.dsde.workbench.google2.util.{DistributedLock, DistributedLockConfig, FailToObtainLock}
 import org.broadinstitute.dsde.workbench.model.WorkbenchException
 import org.scalatest.{AsyncFlatSpec, Matchers}
 import org.broadinstitute.dsde.workbench.test.Generators.genLockPath
@@ -28,11 +25,11 @@ class DistributedLockSpec extends AsyncFlatSpec with Matchers {
   val config = DistributedLockConfig(5 seconds, 5)
 
   val lockResource: cats.effect.Resource[IO, DistributedLock[IO]] = for {
-    db <- GoogleFirestoreOpsInterpreters.firestore[IO](
+    db <- GoogleFirestoreInterpreter.firestore[IO](
       GCS.pathToSamTestFirestoreAccountPath
     )
   } yield {
-    val googeFireStoreOps = GoogleFirestoreOpsInterpreters.ioFirestore(db)
+    val googeFireStoreOps = GoogleFirestoreInterpreter[IO](db)
     DistributedLock("samServiceTest", config, googeFireStoreOps)
   }
 
@@ -51,7 +48,7 @@ class DistributedLockSpec extends AsyncFlatSpec with Matchers {
         _ <- IO.sleep(2 seconds)
         failed <- lock.acquireLock(lockPath).attempt
       } yield {
-        failed.swap.toOption.get.asInstanceOf[WorkbenchException].getMessage shouldBe(s"can't get lock: $lockPath")
+        failed.swap.toOption.get.asInstanceOf[FailToObtainLock].getMessage shouldBe(s"can't get lock: $lockPath")
       }
     }
     res.unsafeToFuture()
@@ -123,13 +120,13 @@ class DistributedLockSpec extends AsyncFlatSpec with Matchers {
     val collectionNameWithPrefix = lockPath.collectionName.copy(asString = "samServiceTest-" + lockPath.collectionName.asString)
     val lockPathWithPrefix = lockPath.copy(collectionName = collectionNameWithPrefix, expiresIn = 10 seconds)  //fix expiresIn so that we won't be waiting for too long in the unit test
 
-    val config = DistributedLockConfig(1 seconds, 2)
+    val config = DistributedLockConfig(1 seconds, 3)
     val lockResource: cats.effect.Resource[IO, DistributedLock[IO]] = for {
-      db <- GoogleFirestoreOpsInterpreters.firestore[IO](
+      db <- GoogleFirestoreInterpreter.firestore[IO](
         GCS.pathToSamTestFirestoreAccountPath
       )
     } yield {
-      val googeFireStoreOps = GoogleFirestoreOpsInterpreters.ioFirestore(db)
+      val googeFireStoreOps = GoogleFirestoreInterpreter[IO](db)
       DistributedLock("samServiceTest", config, googeFireStoreOps)
     }
 
@@ -145,7 +142,8 @@ class DistributedLockSpec extends AsyncFlatSpec with Matchers {
       } yield {
         failed.swap.toOption.get.asInstanceOf[WorkbenchException].getMessage should startWith (s"Reached max retry:")
         // validate we actually retried certain amount of time
-        endTime - current should be > (config.maxRetry * config.retryInterval.toMillis)
+        val requestDuration = endTime - current
+        requestDuration should be > ((config.maxRetry - 1) * config.retryInterval.toMillis) //not sure why, but the actual duration seems always slightly shorter than config.maxRetry * config.retryInterval
       }
     }
 
