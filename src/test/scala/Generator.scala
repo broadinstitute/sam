@@ -62,8 +62,7 @@ object Generator {
   val genGoogleProject = Gen.alphaStr.map(x => GoogleProject(s"s$x")) //prepending `s` just so this won't be an empty string
   val genWorkbenchSubject: Gen[WorkbenchSubject] = for{
     groupId <- genWorkbenchGroupName
-    project <- genGoogleProject
-    res <- Gen.oneOf[WorkbenchSubject](List(genWorkbenchUserId(System.currentTimeMillis()), groupId, PetServiceAccountId(genWorkbenchUserId(System.currentTimeMillis()), project)))
+    res <- Gen.oneOf[WorkbenchSubject](List(genWorkbenchUserId(System.currentTimeMillis()), groupId))
   }yield res
 
   val genBasicWorkbenchGroup = for{

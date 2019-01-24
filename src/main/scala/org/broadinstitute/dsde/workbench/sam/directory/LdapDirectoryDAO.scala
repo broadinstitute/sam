@@ -27,7 +27,8 @@ class LdapDirectoryDAO(
     protected val memberOfCache: Cache[IO, WorkbenchSubject, Set[String]])(implicit executionContext: ExecutionContext, timer: Timer[IO])
     extends DirectoryDAO
     with DirectorySubjectNameSupport
-    with LdapSupport {
+    with LdapSupport
+    with LdapGroupSupport {
   implicit val cs = IO.contextShift(executionContext)
 
   override def createGroup(group: BasicWorkbenchGroup, accessInstructionsOpt: Option[String] = None): IO[BasicWorkbenchGroup] = {
@@ -48,7 +49,9 @@ class LdapDirectoryDAO(
     executeLdap(IO(ldapConnectionPool.add(groupDn(group.id), attributes.asJava))).adaptError {
       case ldape: LDAPException if ldape.getResultCode == ResultCode.ENTRY_ALREADY_EXISTS =>
         new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"group name ${group.id.value} already exists"))
-    } *> IO.pure(group)
+    } *>
+      group.members.toList.traverse(evictIsMemberOfCache) *> // need to evict cache entries for any members of new group
+      IO.pure(group)
   }
 
   override def loadGroup(groupName: WorkbenchGroupName): IO[Option[BasicWorkbenchGroup]] = {
@@ -96,7 +99,8 @@ class LdapDirectoryDAO(
           new WorkbenchExceptionWithErrorReport(
             ErrorReport(StatusCodes.Conflict, s"group ${groupName.value} cannot be deleted because it is a member of at least 1 other group")))
       } else {
-        executeLdap(IO(ldapConnectionPool.delete(groupDn(groupName))).void)
+        // need to evict before group deleted so we can still determine who is in it
+        evictIsMemberOfCache(groupName) *> executeLdap(IO(ldapConnectionPool.delete(groupDn(groupName))).void)
       }
     } yield res
 
@@ -110,7 +114,7 @@ class LdapDirectoryDAO(
         case Right(_) => IO.pure(true)
         case Left(ldape: LDAPException) if ldape.getResultCode == ResultCode.ATTRIBUTE_OR_VALUE_EXISTS => IO.pure(false)
         case Left(regrets) => IO.raiseError(regrets)
-      }
+      } <* evictIsMemberOfCache(addMember)
 
   private def groupUpdatedModification: Modification =
     new Modification(ModificationType.REPLACE, Attr.groupUpdatedTimestamp, formattedDate(new Date()))
@@ -125,7 +129,7 @@ class LdapDirectoryDAO(
         case Right(_) => IO.pure(true)
         case Left(ldape: LDAPException) if ldape.getResultCode == ResultCode.NO_SUCH_ATTRIBUTE => IO.pure(false)
         case Left(regrets) => IO.raiseError(regrets)
-      }
+      } <* evictIsMemberOfCache(removeMember)
 
   override def isGroupMember(groupId: WorkbenchGroupIdentity, member: WorkbenchSubject): IO[Boolean] =
     for {
@@ -253,14 +257,6 @@ class LdapDirectoryDAO(
       memberOf.map(dnToGroupIdentity)
     }
 
-//  override def listIntersectionGroupUsers(groupIds: Set[WorkbenchGroupIdentity]): IO[Set[WorkbenchUserId]] = IO {
-//    ldapSearchStream(
-//      directoryConfig.baseDn,
-//      SearchScope.SUB,
-//      Filter.createANDFilter(groupIds.map(groupId => Filter.createEqualityFilter(Attr.memberOf, groupDn(groupId))).asJava)
-//    )(getAttribute(_, Attr.uid)).flatten.map(WorkbenchUserId).toSet
-//  }
-
   override def listIntersectionGroupUsers(groupIds: Set[WorkbenchGroupIdentity]): IO[Set[WorkbenchUserId]] = {
     for {
       flatMembers <- groupIds.toList.traverse { groupId =>
@@ -269,24 +265,6 @@ class LdapDirectoryDAO(
     } yield {
       flatMembers.reduce(_ intersect _)
     }
-  }
-
-  def listFlattenedMembers(groupId: WorkbenchGroupIdentity, visitedGroupIds: Set[WorkbenchGroupIdentity] = Set.empty): IO[Set[WorkbenchUserId]] = {
-    for {
-      directMembers <- listDirectMembers(groupId)
-      users = directMembers.collect { case subject: WorkbenchUserId => subject }
-      subGroups = directMembers.collect { case subject: WorkbenchGroupIdentity => subject }
-      updatedVisitedGroupIds = visitedGroupIds ++ subGroups
-      nestedUsers <- (subGroups -- visitedGroupIds).toList.traverse(subGroupId => listFlattenedMembers(subGroupId, updatedVisitedGroupIds))
-    } yield {
-      users ++ nestedUsers.flatten
-    }
-  }
-
-  def listDirectMembers(groupId: WorkbenchGroupIdentity): IO[Set[WorkbenchSubject]] = {
-    executeLdap(
-      IO(getAttributes(ldapConnectionPool.getEntry(groupDn(groupId), Attr.uniqueMember), Attr.uniqueMember).map(dnToSubject))
-    )
   }
 
   override def listAncestorGroups(groupId: WorkbenchGroupIdentity): IO[Set[WorkbenchGroupIdentity]] = listMemberOfGroups(groupId)

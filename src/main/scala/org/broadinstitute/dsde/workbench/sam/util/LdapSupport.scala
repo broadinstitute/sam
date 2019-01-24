@@ -2,10 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.util
 
 import cats.effect.{ContextShift, IO}
 import com.unboundid.ldap.sdk._
-import org.broadinstitute.dsde.workbench.model.WorkbenchSubject
 import org.broadinstitute.dsde.workbench.sam.directory.DirectorySubjectNameSupport
-import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO.Attr
-import org.broadinstitute.dsde.workbench.sam.util.cache.Cache
 
 import scala.concurrent.ExecutionContext
 import scala.util.{Failure, Success, Try}
@@ -15,7 +12,6 @@ trait LdapSupport extends DirectorySubjectNameSupport {
   protected val batchSize = 1000
   protected val ecForLdapBlockingIO: ExecutionContext
   implicit protected val cs: ContextShift[IO]
-  protected val memberOfCache: Cache[IO, WorkbenchSubject, Set[String]]
 
   /**
     * Call this to perform an ldap search.
@@ -64,25 +60,6 @@ trait LdapSupport extends DirectorySubjectNameSupport {
 
   protected def getAttributes(results: Entry, key: String): Set[String] =
     Option(results.getAttribute(key)).map(_.getValues.toSet).getOrElse(Set.empty)
-
-  protected def ldapLoadMemberOf(subject: WorkbenchSubject): IO[Set[String]] = {
-    memberOfCache.get(subject).flatMap {
-      case None =>
-        for {
-          entry <- executeLdap(IO(ldapConnectionPool.getEntry(subjectDn(subject), Attr.memberOf)))
-          memberOfs = Option(entry).flatMap(e => Option(getAttributes(e, Attr.memberOf))).getOrElse(Set.empty)
-          _ <- memberOfCache.put(subject, memberOfs)
-        } yield {
-          memberOfs
-        }
-
-      case Some(memberOfs) => IO.pure(memberOfs)
-    }
-  }
-
-  def evictIsMemberOfCache(subject: WorkbenchSubject): IO[Unit] = {
-    memberOfCache.remove(subject)
-  }
 
   protected def executeLdap[A](ioa: IO[A]): IO[A] = cs.evalOn(ecForLdapBlockingIO)(ioa)
 }

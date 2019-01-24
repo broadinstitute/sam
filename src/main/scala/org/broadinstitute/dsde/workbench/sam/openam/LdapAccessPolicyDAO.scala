@@ -9,7 +9,7 @@ import cats.implicits._
 import com.unboundid.ldap.sdk._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
-import org.broadinstitute.dsde.workbench.sam.directory.DirectorySubjectNameSupport
+import org.broadinstitute.dsde.workbench.sam.directory.{DirectorySubjectNameSupport, LdapGroupSupport}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO.{Attr, ObjectClass}
 import org.broadinstitute.dsde.workbench.sam.util.LdapSupport
@@ -28,7 +28,8 @@ class LdapAccessPolicyDAO(
     protected val resourceCache: Cache[IO, FullyQualifiedResourceId, Resource])(implicit protected val cs: ContextShift[IO])
     extends AccessPolicyDAO
     with DirectorySubjectNameSupport
-    with LdapSupport {
+    with LdapSupport
+    with LdapGroupSupport {
 
   override def createResourceType(resourceTypeName: ResourceTypeName): IO[ResourceTypeName] =
     for {
@@ -111,7 +112,8 @@ class LdapAccessPolicyDAO(
         policyDn(
           FullyQualifiedPolicyId(FullyQualifiedResourceId(policy.id.resource.resourceTypeName, policy.id.resource.resourceId), policy.id.accessPolicyName)),
         attributes.asJava
-      )).map(_ => policy))
+      )).map(_ => policy)) <*
+      policy.members.toList.traverse(evictIsMemberOfCache)
   }
 
   private def maybeAttribute(attr: String, values: Set[String]): Option[Attribute] = values.toSeq match {
@@ -119,7 +121,9 @@ class LdapAccessPolicyDAO(
     case _ => Option(new Attribute(attr, values.asJava))
   }
 
-  override def deletePolicy(policy: FullyQualifiedPolicyId): IO[Unit] = executeLdap(IO(ldapConnectionPool.delete(policyDn(policy))))
+  override def deletePolicy(policy: FullyQualifiedPolicyId): IO[Unit] =
+    evictIsMemberOfCache(policy) *>
+      executeLdap(IO(ldapConnectionPool.delete(policyDn(policy))))
 
   override def loadPolicy(resourceAndPolicyName: FullyQualifiedPolicyId): IO[Option[AccessPolicy]] = executeLdap(
     IO(Option(ldapConnectionPool.getEntry(policyDn(resourceAndPolicyName))).map(unmarshalAccessPolicy))
@@ -150,7 +154,10 @@ class LdapAccessPolicyDAO(
     val memberMod = new Modification(ModificationType.REPLACE, Attr.uniqueMember, memberList.map(subjectDn).toArray: _*)
     val dateMod = new Modification(ModificationType.REPLACE, Attr.groupUpdatedTimestamp, formattedDate(new Date()))
 
-    executeLdap(IO(ldapConnectionPool.modify(policyDn(id), memberMod, dateMod)))
+    // need to evict from the cache before AND after updating ldap because we don't know who is in there to begin with
+    evictIsMemberOfCache(id) *>
+      executeLdap(IO(ldapConnectionPool.modify(policyDn(id), memberMod, dateMod))) *>
+      memberList.toList.traverse(evictIsMemberOfCache).void
   }
 
   override def overwritePolicy(newPolicy: AccessPolicy): IO[AccessPolicy] = {
@@ -162,7 +169,12 @@ class LdapAccessPolicyDAO(
 
     val ridPolicyName =
       FullyQualifiedPolicyId(FullyQualifiedResourceId(newPolicy.id.resource.resourceTypeName, newPolicy.id.resource.resourceId), newPolicy.id.accessPolicyName)
-    executeLdap(IO(ldapConnectionPool.modify(policyDn(ridPolicyName), memberMod, actionMod, roleMod, dateMod, publicMod))) *> newPolicy.pure[IO]
+
+    // need to evict from the cache before AND after updating ldap because we don't know who is in there to begin with
+    evictIsMemberOfCache(newPolicy.id) *>
+      executeLdap(IO(ldapConnectionPool.modify(policyDn(ridPolicyName), memberMod, actionMod, roleMod, dateMod, publicMod))) *>
+      newPolicy.members.toList.traverse(evictIsMemberOfCache) *>
+      newPolicy.pure[IO]
   }
 
   override def listAccessPolicies(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId): IO[Set[ResourceIdAndPolicyName]] =

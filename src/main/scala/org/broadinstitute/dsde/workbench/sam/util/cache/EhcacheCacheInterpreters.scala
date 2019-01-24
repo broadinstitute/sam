@@ -38,4 +38,7 @@ class EhcacheCacheImpl[K, V](underlyingCache: org.ehcache.Cache[Object, Object])
     }
     IO.pure(results.toMap)
   }
+  override def removeAll(keys: K*): IO[Unit] = {
+    IO.pure(underlyingCache.removeAll(keys.map(_.asInstanceOf[Object]).toSet.asJava))
+  }
 }

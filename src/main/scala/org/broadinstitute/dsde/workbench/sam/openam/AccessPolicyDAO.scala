@@ -28,6 +28,4 @@ trait AccessPolicyDAO {
   def listAccessPoliciesForUser(resource: FullyQualifiedResourceId, user: WorkbenchUserId): IO[Set[AccessPolicy]]
   def listFlattenedPolicyMembers(policyId: FullyQualifiedPolicyId): IO[Set[WorkbenchUser]]
   def setPolicyIsPublic(policyId: FullyQualifiedPolicyId, isPublic: Boolean): IO[Unit]
-
-  def evictIsMemberOfCache(subject: WorkbenchSubject): IO[Unit]
 }

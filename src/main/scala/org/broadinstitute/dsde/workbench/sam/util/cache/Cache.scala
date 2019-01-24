@@ -7,4 +7,5 @@ trait Cache[F[_], K, V] {
   def getAll(keys: K*): F[Map[K, V]]
   def put(key: K, value: V): F[Unit]
   def remove(key: K): F[Unit]
+  def removeAll(keys: K*): F[Unit]
 }
