@@ -15,7 +15,7 @@ import com.google.rpc.Code
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.dataaccess.NotificationDAO
 import org.broadinstitute.dsde.workbench.google2.util.{DistributedLock, LockPath}
-import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleIamDAO, GoogleKmsService, GoogleProjectDAO, GooglePubSubDAO, GoogleStorageDAO}
+import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleIamDAO, GoogleKmsService, GoogleProjectDAO, GooglePubSubDAO, GoogleStorageDAO, KeyId, KeyRingId, Location}
 import org.broadinstitute.dsde.workbench.google2.{CollectionName, Document}
 import org.broadinstitute.dsde.workbench.model.Notifications.Notification
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport.WorkbenchGroupNameFormat
@@ -127,23 +127,23 @@ class GoogleExtensions(
             case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode == Option(StatusCodes.Conflict) =>
           }))
 
-      _ <- googleKms.createKeyRing(googleServicesConfig.googleKms.project,
-        googleServicesConfig.googleKms.location,
-        googleServicesConfig.googleKms.keyRingId) onError { case e: ApiException if e.getStatusCode.getCode == StatusCode.Code.ALREADY_EXISTS =>
+      _ <- googleKms.createKeyRing(GoogleProject(googleServicesConfig.googleKms.project),
+        Location(googleServicesConfig.googleKms.location),
+        KeyRingId(googleServicesConfig.googleKms.keyRingId)) onError { case e: ApiException if e.getStatusCode.getCode == StatusCode.Code.ALREADY_EXISTS =>
           IO.delay(logger.warn(s"Key ring with id: ${googleServicesConfig.googleKms.keyRingId} already exists. Proceeding with this key ring"))
         }
 
-      _ <- googleKms.createKey(googleServicesConfig.googleKms.project,
-        googleServicesConfig.googleKms.location,
-        googleServicesConfig.googleKms.keyRingId,
-        googleServicesConfig.googleKms.keyId) onError { case e: ApiException if e.getStatusCode.getCode == StatusCode.Code.ALREADY_EXISTS =>
+      _ <- googleKms.createKey(GoogleProject(googleServicesConfig.googleKms.project),
+        Location(googleServicesConfig.googleKms.location),
+        KeyRingId(googleServicesConfig.googleKms.keyRingId),
+        KeyId(googleServicesConfig.googleKms.keyId)) onError { case e: ApiException if e.getStatusCode.getCode == StatusCode.Code.ALREADY_EXISTS =>
           IO.delay(logger.warn(s"Key with id: ${googleServicesConfig.googleKms.keyId} already exists. Proceeding with this key"))
         }
 
-      _ <- googleKms.addMemberToKeyPolicy(googleServicesConfig.googleKms.project,
-        googleServicesConfig.googleKms.location,
-        googleServicesConfig.googleKms.keyRingId,
-        googleServicesConfig.googleKms.keyId,
+      _ <- googleKms.addMemberToKeyPolicy(GoogleProject(googleServicesConfig.googleKms.project),
+        Location(googleServicesConfig.googleKms.location),
+        KeyRingId(googleServicesConfig.googleKms.keyRingId),
+        KeyId(googleServicesConfig.googleKms.keyId),
         s"group:$allUsersGroupEmail",
         "roles/cloudkms.cryptoKeyEncrypterDecrypter")
 

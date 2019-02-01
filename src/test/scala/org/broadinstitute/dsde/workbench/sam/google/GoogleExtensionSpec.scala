@@ -529,7 +529,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val googleKeyCache = new GoogleKeyCache(
       TestSupport.fakeDistributedLock, mockGoogleIamDAO, mockGoogleStorageDAO, FakeGoogleStorageInterpreter, mockGooglePubSubDAO, googleServicesConfig, petServiceAccountConfig)
 
-    val ge = new GoogleExtensions(TestSupport.fakeDistributedLock, mockDirectoryDAO, mockAccessPolicyDAO, mockGoogleDirectoryDAO, mockGooglePubSubDAO, mockGoogleIamDAO, mockGoogleStorageDAO, null, googleKeyCache, notificationDAO, MockGoogleKmsInterpreter, googleServicesConfig, petServiceAccountConfig, configResourceTypes)
+    val ge = new GoogleExtensions(TestSupport.fakeDistributedLock, mockDirectoryDAO, mockAccessPolicyDAO, mockGoogleDirectoryDAO, mockGooglePubSubDAO, mockGoogleIamDAO, mockGoogleStorageDAO, null, googleKeyCache, notificationDAO, FakeGoogleKmsInterpreter, googleServicesConfig, petServiceAccountConfig, configResourceTypes)
 
     val app = SamApplication(new UserService(mockDirectoryDAO, ge), new ResourceService(configResourceTypes, null, mockAccessPolicyDAO, mockDirectoryDAO, ge, "example.com"), null)
     val resourceAndPolicyName = FullyQualifiedPolicyId(FullyQualifiedResourceId(CloudExtensions.resourceTypeName, GoogleExtensions.resourceId), AccessPolicyName("owner"))
