@@ -36,7 +36,8 @@ final case class GoogleServicesConfig(
     notificationTopic: String,
     googleKeyCacheConfig: GoogleKeyCacheConfig,
     resourceNamePrefix: Option[String],
-    adminSdkServiceAccounts: Option[NonEmptyList[ServiceAccountConfig]]
+    adminSdkServiceAccounts: Option[NonEmptyList[ServiceAccountConfig]],
+    googleKms: GoogleKmsConfig
 )
 
 object GoogleServicesConfig {
@@ -51,6 +52,15 @@ object GoogleServicesConfig {
       config.getString("monitor.pubSubTopic"),
       config.getString("monitor.pubSubSubscription"),
       config.getInt("monitor.workerCount")
+    )
+  }
+
+  implicit val googleKmsConfigReader: ValueReader[GoogleKmsConfig] = ValueReader.relative { config =>
+    GoogleKmsConfig(
+      config.getString("project"),
+      config.getString("location"),
+      config.getString("keyRingId"),
+      config.getString("keyId")
     )
   }
 
@@ -87,7 +97,8 @@ object GoogleServicesConfig {
       config.getString("notifications.topicName"),
       config.as[GoogleKeyCacheConfig]("googleKeyCache"),
       config.as[Option[String]]("resourceNamePrefix"),
-      config.as[Option[NonEmptyList[ServiceAccountConfig]]]("adminSdkServiceAccounts")
+      config.as[Option[NonEmptyList[ServiceAccountConfig]]]("adminSdkServiceAccounts"),
+      config.as[GoogleKmsConfig]("kms")
     )
   }
 }

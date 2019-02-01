@@ -17,19 +17,8 @@ import javax.net.ssl.SSLContext
 import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
 import org.broadinstitute.dsde.workbench.google.GoogleCredentialModes.{Json, Pem}
 import org.broadinstitute.dsde.workbench.google2.util.DistributedLock
-import org.broadinstitute.dsde.workbench.google.{
-  GoogleDirectoryDAO,
-  HttpGoogleDirectoryDAO,
-  HttpGoogleIamDAO,
-  HttpGoogleProjectDAO,
-  HttpGooglePubSubDAO,
-  HttpGoogleStorageDAO
-}
-import org.broadinstitute.dsde.workbench.google2.{
-  GoogleStorageService,
-  GoogleFirestoreInterpreter,
-  GoogleStorageInterpreter
-}
+import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleKmsInterpreter, GoogleKmsService, HttpGoogleDirectoryDAO, HttpGoogleIamDAO, HttpGoogleProjectDAO, HttpGooglePubSubDAO, HttpGoogleStorageDAO}
+import org.broadinstitute.dsde.workbench.google2.{GoogleFirestoreInterpreter, GoogleStorageInterpreter, GoogleStorageService}
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException, WorkbenchSubject}
 import org.broadinstitute.dsde.workbench.sam.api.{SamRoutes, StandardUserInfoDirectives}
 import org.broadinstitute.dsde.workbench.sam.config.{AppConfig, GoogleConfig}
@@ -64,7 +53,7 @@ object Boot extends IOApp with LazyLogging {
 
     val appDependencies = createAppDependencies(appConfig)
 
-    appDependencies.use { dependencies =>
+    appDependencies.use { dependencies => // this is where the resource is used
       for {
         _ <- IO.fromFuture(IO(schemaDAO.init())).onError {
           case e: WorkbenchException =>
@@ -183,6 +172,8 @@ object Boot extends IOApp with LazyLogging {
               config.googleServicesConfig.serviceAccountCredentialJson.firestoreServiceAccountJsonPath.asString)
             googleStorage <- GoogleStorageInterpreter.storage[IO](
               config.googleServicesConfig.serviceAccountCredentialJson.defaultServiceAccountJsonPath.asString)
+            googleKmsClient <- GoogleKmsInterpreter.client[IO](
+              config.googleServicesConfig.serviceAccountCredentialJson.defaultServiceAccountJsonPath.asString)
           } yield {
             val ioFireStore = GoogleFirestoreInterpreter[IO](googleFire)
             // googleServicesConfig.resourceNamePrefix is an environment specific variable passed in https://github.com/broadinstitute/firecloud-develop/blob/fade9286ff0aec8449121ed201ebc44c8a4d57dd/run-context/fiab/configs/sam/docker-compose.yaml.ctmpl#L24
@@ -190,8 +181,9 @@ object Boot extends IOApp with LazyLogging {
             val lock =
               DistributedLock[IO](s"sam-${config.googleServicesConfig.resourceNamePrefix.getOrElse("local")}", appConfig.distributedLockConfig, ioFireStore)
             val newGoogleStorage = GoogleStorageInterpreter[IO](googleStorage, blockingEc)
+            val googleKmsInterpreter = GoogleKmsInterpreter[IO](googleKmsClient, blockingEc)
             val resourceTypeMap = appConfig.resourceTypes.map(rt => rt.name -> rt).toMap
-            val cloudExtension = createGoogleCloudExt(accessPolicyDao, directoryDAO, config, resourceTypeMap, lock, newGoogleStorage)
+            val cloudExtension = createGoogleCloudExt(accessPolicyDao, directoryDAO, config, resourceTypeMap, lock, newGoogleStorage, googleKmsInterpreter)
             val googleGroupSynchronizer = new GoogleGroupSynchronizer(backgroundDirectoryDAO, backgroundAccessPolicyDao, cloudExtension.googleDirectoryDAO, cloudExtension, resourceTypeMap)(backgroundLdapExecutionContext)
             val cloudExtensionsInitializer = new GoogleExtensionsInitializer(cloudExtension, googleGroupSynchronizer)
             createAppDepenciesWithSamRoutes(appConfig, cloudExtensionsInitializer, accessPolicyDao, directoryDAO)
@@ -206,7 +198,8 @@ object Boot extends IOApp with LazyLogging {
       config: GoogleConfig,
       resourceTypeMap: Map[ResourceTypeName, ResourceType],
       distributedLock: DistributedLock[IO],
-      googleStorageNew: GoogleStorageService[IO])(implicit actorSystem: ActorSystem): GoogleExtensions = {
+      googleStorageNew: GoogleStorageService[IO],
+      googleKms: GoogleKmsService[IO])(implicit actorSystem: ActorSystem): GoogleExtensions = {
     val googleDirDaos = (config.googleServicesConfig.adminSdkServiceAccounts match {
       case None =>
         NonEmptyList.one(
@@ -267,6 +260,7 @@ object Boot extends IOApp with LazyLogging {
       googleProjectDAO,
       googleKeyCache,
       notificationDAO,
+      googleKms,
       config.googleServicesConfig,
       config.petServiceAccountConfig,
       resourceTypeMap
