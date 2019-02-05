@@ -9,7 +9,7 @@ import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import cats.effect.{ContextShift, IO}
 import cats.implicits._
 import com.google.api.client.googleapis.json.GoogleJsonResponseException
-import com.google.api.gax.rpc.{ApiException, StatusCode}
+import com.google.api.gax.rpc.AlreadyExistsException
 import com.google.auth.oauth2.ServiceAccountCredentials
 import com.google.rpc.Code
 import com.typesafe.scalalogging.LazyLogging
@@ -129,16 +129,12 @@ class GoogleExtensions(
 
       _ <- googleKms.createKeyRing(GoogleProject(googleServicesConfig.googleKms.project),
         Location(googleServicesConfig.googleKms.location),
-        KeyRingId(googleServicesConfig.googleKms.keyRingId)) onError { case e: ApiException if e.getStatusCode.getCode == StatusCode.Code.ALREADY_EXISTS =>
-          IO.delay(logger.warn(s"Key ring with id: ${googleServicesConfig.googleKms.keyRingId} already exists. Proceeding with this key ring"))
-        }
+        KeyRingId(googleServicesConfig.googleKms.keyRingId)) handleErrorWith { case _: AlreadyExistsException => IO.unit }
 
       _ <- googleKms.createKey(GoogleProject(googleServicesConfig.googleKms.project),
         Location(googleServicesConfig.googleKms.location),
         KeyRingId(googleServicesConfig.googleKms.keyRingId),
-        KeyId(googleServicesConfig.googleKms.keyId)) onError { case e: ApiException if e.getStatusCode.getCode == StatusCode.Code.ALREADY_EXISTS =>
-          IO.delay(logger.warn(s"Key with id: ${googleServicesConfig.googleKms.keyId} already exists. Proceeding with this key"))
-        }
+        KeyId(googleServicesConfig.googleKms.keyId)) handleErrorWith { case _: AlreadyExistsException => IO.unit }
 
       _ <- googleKms.addMemberToKeyPolicy(GoogleProject(googleServicesConfig.googleKms.project),
         Location(googleServicesConfig.googleKms.location),
