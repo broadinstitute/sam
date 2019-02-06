@@ -21,7 +21,10 @@ order to configure OAuth in SAM, you will need to:
  Google Project.  
     1. Add an "Authorized JavaScript origin" - `https://localhost:29443`
     1. Add an "Authorized redirect URI" - `https://localhost:29443/o2c.html`
-1. In `docker/stand-alone/.env`, set the values for `GOOGLE_OAUTH_CLIENT_ID` and `GOOGLE_CLOUD_PROJECT_ID`  
+1. In `docker/stand-alone/.env`, set the values for: 
+    1. `GOOGLE_OAUTH_CLIENT_ID`: set to the Client ID obtained from the "Client ID for Web application" page in the 
+    previous step
+    1. `GOOGLE_CLOUD_PROJECT_ID`: set to the name of the Google Cloud Project from step #1
 
 ### SSL Certificate
 
