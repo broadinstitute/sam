@@ -11,6 +11,7 @@ import cats.implicits._
 import com.google.api.client.googleapis.json.GoogleJsonResponseException
 import com.google.api.gax.rpc.AlreadyExistsException
 import com.google.auth.oauth2.ServiceAccountCredentials
+import com.google.protobuf.{Timestamp, Duration}
 import com.google.rpc.Code
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.dataaccess.NotificationDAO
@@ -134,7 +135,10 @@ class GoogleExtensions(
       _ <- googleKms.createKey(GoogleProject(googleServicesConfig.googleKms.project),
         Location(googleServicesConfig.googleKms.location),
         KeyRingId(googleServicesConfig.googleKms.keyRingId),
-        KeyId(googleServicesConfig.googleKms.keyId)) handleErrorWith { case _: AlreadyExistsException => IO.unit }
+        KeyId(googleServicesConfig.googleKms.keyId),
+        Option(Timestamp.newBuilder().setSeconds(System.currentTimeMillis() / 1000 + 180.days.toSeconds).build()),
+        Option(Duration.newBuilder().setSeconds(180.days.toSeconds).build())
+      ) handleErrorWith { case _: AlreadyExistsException => IO.unit }
 
       _ <- googleKms.addMemberToKeyPolicy(GoogleProject(googleServicesConfig.googleKms.project),
         Location(googleServicesConfig.googleKms.location),
