@@ -34,7 +34,7 @@ Evaluation is the act of determining what a user may access.
 Of these 1 and 2 are the most important from a performance standpoint. Expect 1 to be called for almost every api call in a system. Expect 2 to be called from UI list pages where users generally want a snappy response.
 
 ### Resource and Policy Management
-A policy is specific to a resource and a resource may have multiple policies. Each policy consists of a set of 1 or more subjects/groups and a set of 1 or more actions/roles. All of the subjects may perform all of the actions in the policy. Each policy has a name that is unique within a resource. Access to actions through policies is additive (i.e. the actions available to a user on a resource is an accumulation of all policies the user is a member of for that resource).
+A policy is specific to a resource and a resource may have multiple policies. Each policy consists of a set of 1 or more subjects/groups and a set of 1 or more actions/roles. All of the subjects may perform all of the actions in the policy. A policy may also be marked as public effectivly meaning all users are members. Each policy has a name that is unique within a resource. Access to actions through policies is additive (i.e. the actions available to a user on a resource is an accumulation of all policies the user is a member of for that resource).
 
 There must be functions to create, delete and manage policies for resources. There must be access control around deleting resources and managing policies. There must be some built-in actions to do so (delete, read-policies, alter-policies). 
 
