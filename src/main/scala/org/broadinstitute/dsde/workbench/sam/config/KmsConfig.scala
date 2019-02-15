@@ -1,5 +1,8 @@
 package org.broadinstitute.dsde.workbench.sam.config
 
+import org.broadinstitute.dsde.workbench.google.{KeyId, KeyRingId, Location}
+import org.broadinstitute.dsde.workbench.model.google.GoogleProject
+
 /**
   * created by mtalbott 1/25/18
   *
@@ -10,8 +13,10 @@ package org.broadinstitute.dsde.workbench.sam.config
   */
 
 final case class GoogleKmsConfig(
-                                  project: String,
-                                  location: String,
-                                  keyRingId: String,
-                                  keyId: String
+                                  project: GoogleProject,
+                                  location: Location,
+                                  keyRingId: KeyRingId,
+                                  keyId: KeyId,
+                                  rotationPeriod: Int
+
                           )

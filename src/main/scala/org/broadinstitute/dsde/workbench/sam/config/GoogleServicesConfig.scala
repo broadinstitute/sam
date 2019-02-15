@@ -7,6 +7,7 @@ import org.broadinstitute.dsde.workbench.model.google.{GcsBucketName, GoogleProj
 import net.ceedubs.ficus.Ficus._
 import AppConfig.nonEmptyListReader
 import com.typesafe.config.ConfigRenderOptions
+import org.broadinstitute.dsde.workbench.google.{KeyId, KeyRingId, Location}
 
 import scala.concurrent.duration.FiniteDuration
 
@@ -57,10 +58,11 @@ object GoogleServicesConfig {
 
   implicit val googleKmsConfigReader: ValueReader[GoogleKmsConfig] = ValueReader.relative { config =>
     GoogleKmsConfig(
-      config.getString("project"),
-      config.getString("location"),
-      config.getString("keyRingId"),
-      config.getString("keyId")
+      GoogleProject(config.getString("project")),
+      Location(config.getString("location")),
+      KeyRingId(config.getString("keyRingId")),
+      KeyId(config.getString("keyId")),
+      config.getInt("rotationPeriod")
     )
   }
 

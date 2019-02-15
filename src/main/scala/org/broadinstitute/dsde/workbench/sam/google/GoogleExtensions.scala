@@ -16,7 +16,7 @@ import com.google.rpc.Code
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.dataaccess.NotificationDAO
 import org.broadinstitute.dsde.workbench.google2.util.{DistributedLock, LockPath}
-import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleIamDAO, GoogleKmsService, GoogleProjectDAO, GooglePubSubDAO, GoogleStorageDAO, KeyId, KeyRingId, Location}
+import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleIamDAO, GoogleKmsService, GoogleProjectDAO, GooglePubSubDAO, GoogleStorageDAO}
 import org.broadinstitute.dsde.workbench.google2.{CollectionName, Document}
 import org.broadinstitute.dsde.workbench.model.Notifications.Notification
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport.WorkbenchGroupNameFormat
@@ -128,22 +128,22 @@ class GoogleExtensions(
             case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode == Option(StatusCodes.Conflict) =>
           }))
 
-      _ <- googleKms.createKeyRing(GoogleProject(googleServicesConfig.googleKms.project),
-        Location(googleServicesConfig.googleKms.location),
-        KeyRingId(googleServicesConfig.googleKms.keyRingId)) handleErrorWith { case _: AlreadyExistsException => IO.unit }
+      _ <- googleKms.createKeyRing(googleServicesConfig.googleKms.project,
+        googleServicesConfig.googleKms.location,
+        googleServicesConfig.googleKms.keyRingId) handleErrorWith { case _: AlreadyExistsException => IO.unit }
 
-      _ <- googleKms.createKey(GoogleProject(googleServicesConfig.googleKms.project),
-        Location(googleServicesConfig.googleKms.location),
-        KeyRingId(googleServicesConfig.googleKms.keyRingId),
-        KeyId(googleServicesConfig.googleKms.keyId),
-        Option(Timestamp.newBuilder().setSeconds(System.currentTimeMillis() / 1000 + 180.days.toSeconds).build()),
-        Option(Duration.newBuilder().setSeconds(180.days.toSeconds).build())
+      _ <- googleKms.createKey(googleServicesConfig.googleKms.project,
+        googleServicesConfig.googleKms.location,
+        googleServicesConfig.googleKms.keyRingId,
+        googleServicesConfig.googleKms.keyId,
+        Option(Timestamp.newBuilder().setSeconds(System.currentTimeMillis() / 1000 + googleServicesConfig.googleKms.rotationPeriod.days.toSeconds).build()),
+        Option(Duration.newBuilder().setSeconds(googleServicesConfig.googleKms.rotationPeriod.days.toSeconds).build())
       ) handleErrorWith { case _: AlreadyExistsException => IO.unit }
 
-      _ <- googleKms.addMemberToKeyPolicy(GoogleProject(googleServicesConfig.googleKms.project),
-        Location(googleServicesConfig.googleKms.location),
-        KeyRingId(googleServicesConfig.googleKms.keyRingId),
-        KeyId(googleServicesConfig.googleKms.keyId),
+      _ <- googleKms.addMemberToKeyPolicy(googleServicesConfig.googleKms.project,
+        googleServicesConfig.googleKms.location,
+        googleServicesConfig.googleKms.keyRingId,
+        googleServicesConfig.googleKms.keyId,
         s"group:$allUsersGroupEmail",
         "roles/cloudkms.cryptoKeyEncrypterDecrypter")
 
