@@ -42,10 +42,15 @@ There must be functions to create and delete resources. When a resource is creat
 
 Resource types define the set of available actions for all resources of that type. It also defines a set of roles and their associated actions. Roles are useful because it can be cumbersome to deal with granular actions and as a point of extensibility (when new actions are added to resource types, they can be added to roles as well effectively adding the action to all resources with that role). It is not yet necessary to provide apis to create and maintain resource types, this can be achieved through configuration.
 
+### Public Policies
+There are some cases where it is desireable to grant actions or roles to all authenticated users. For example, granting read-only access to public workspaces. In this case a policy can be created that has the appropriate actions or roles and set to public. Public policies show up when listing policies for a user. For this reason it is not always desirable to allow everyone to make public policies. Again, the example is public workspaces. Public workspaces show up for everyone and should be curated.
+
+To change a policy's public status the caller must be able to share the policy (either via alter_policies and share_policy::{policy_name} actions) _and_ must have the set_public action on the resource resource_type_admin/{resource type name}. resource_type_admin is an internally created resource type. {resource type name} is for the resource containing the policy. Note that every resource type in sam has a resource of the same name of type resource_type_admin which is automatically created. When these resources are created they do not have owners, permissions must be granted via direct ldap changes.
+
 ### User and Group Management
 User - Create, enable, disable, get status. Disabled users should be rejected from any api calls. Enabling a user should reinstate any prior access.
 
-Group - Create, delete, read, list, add/remove users and groups. Nested groups must be supported. Groups can be implemented as a resource type with admin and member roles.
+Group - Create, delete, read, list, add/remove users and groups. Nested groups are supported. Groups are implemented as a resource type with admin and member roles and policies. There is an additional admin_notifier role and policy that is public by default which allows any authenticate user to request access to a group. Group admins can set public to false if desired.
 
 ### Built In Actions
 * read_policies - may read all policies of a resource 
