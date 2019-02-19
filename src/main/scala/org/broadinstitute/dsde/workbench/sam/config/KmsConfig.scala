@@ -3,6 +3,8 @@ package org.broadinstitute.dsde.workbench.sam.config
 import org.broadinstitute.dsde.workbench.google.{KeyId, KeyRingId, Location}
 import org.broadinstitute.dsde.workbench.model.google.GoogleProject
 
+import scala.concurrent.duration.FiniteDuration
+
 /**
   * created by mtalbott 1/25/18
   *
@@ -17,6 +19,5 @@ final case class GoogleKmsConfig(
                                   location: Location,
                                   keyRingId: KeyRingId,
                                   keyId: KeyId,
-                                  rotationPeriod: Int
-
+                                  rotationPeriod: FiniteDuration
                           )

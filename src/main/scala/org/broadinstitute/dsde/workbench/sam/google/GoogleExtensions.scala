@@ -136,8 +136,8 @@ class GoogleExtensions(
         googleServicesConfig.googleKms.location,
         googleServicesConfig.googleKms.keyRingId,
         googleServicesConfig.googleKms.keyId,
-        Option(Timestamp.newBuilder().setSeconds(System.currentTimeMillis() / 1000 + googleServicesConfig.googleKms.rotationPeriod.days.toSeconds).build()),
-        Option(Duration.newBuilder().setSeconds(googleServicesConfig.googleKms.rotationPeriod.days.toSeconds).build())
+        Option(Timestamp.newBuilder().setSeconds(System.currentTimeMillis() / 1000 + googleServicesConfig.googleKms.rotationPeriod.toSeconds).build()),
+        Option(Duration.newBuilder().setSeconds(googleServicesConfig.googleKms.rotationPeriod.toSeconds).build())
       ) handleErrorWith { case _: AlreadyExistsException => IO.unit }
 
       _ <- googleKms.addMemberToKeyPolicy(googleServicesConfig.googleKms.project,

@@ -62,7 +62,7 @@ object GoogleServicesConfig {
       Location(config.getString("location")),
       KeyRingId(config.getString("keyRingId")),
       KeyId(config.getString("keyId")),
-      config.getInt("rotationPeriod")
+      config.as[FiniteDuration]("rotationPeriod")
     )
   }
 
