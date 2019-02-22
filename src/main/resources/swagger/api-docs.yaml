@@ -730,7 +730,7 @@ paths:
       tags:
         - Resources
     post:
-      summary: Create a new resource, cannot be used when resource type allows id reuse
+      summary: Create a new resource, cannot be used when resource type allows both authorization domains and id reuse
       responses:
         204:
           description: Successfully created resource
