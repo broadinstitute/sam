@@ -1125,6 +1125,22 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/ErrorReport'
+      parameters:
+        - in: path
+          description: Type of resource
+          name: resourceTypeName
+          required: true
+          type: string
+        - in: path
+          description: Id of resource
+          name: resourceId
+          required: true
+          type: string
+        - in: path
+          description: Name of the policy
+          name: policyName
+          required: true
+          type: string
       operationId: getPolicyPublic
       tags:
       - Resources
@@ -1161,7 +1177,8 @@ paths:
         description: true to make the policy public, false to make it private
         name: public
         required: true
-        type: boolean
+        schema:
+          type: boolean
       operationId: setPolicyPublic
       tags:
       - Resources
@@ -1642,17 +1659,15 @@ definitions:
     additionalProperties:
       type: array
       items:
-        $ref: '#/definitions/ResourceAndAccessPolicy'
-
-  SyncReportItem:
-    description: results of an attempt to synchronize a member
-    properties:
-      operation:
-        type: string
-      email:
-        type: string
-      errorReport:
-        $ref: '#/definitions/ErrorReport'
+# this really should be the line below but the code gen does not include the import for SyncReportItem so it does not compile
+#        $ref: '#/definitions/SyncReportItem'
+        properties:
+          operation:
+            type: string
+          email:
+            type: string
+          errorReport:
+            $ref: '#/definitions/ErrorReport'
 
   SyncStatus:
     description: status of group synchronization
