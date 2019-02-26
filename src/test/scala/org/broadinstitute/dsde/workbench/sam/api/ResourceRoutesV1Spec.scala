@@ -132,8 +132,8 @@ class ResourceRoutesV1Spec extends FlatSpec with Matchers with ScalatestRouteTes
     }
   }
 
-  it should "400 when resource type allows id reuse" in {
-    val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceActionPattern("run", "", false)), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("run")))), ResourceRoleName("owner"), true)
+  it should "400 when resource type allows auth domains and id reuse" in {
+    val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceActionPattern("run", "", true)), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("run")))), ResourceRoleName("owner"), true)
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
 
     val createResourceRequest = CreateResourceRequest(ResourceId("foo"), Map(AccessPolicyName("goober") -> AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set(ResourceAction("run")), Set(resourceType.ownerRoleName))), Set.empty)

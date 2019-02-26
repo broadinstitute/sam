@@ -121,8 +121,8 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
   def postResource(resourceType: ResourceType, userInfo: UserInfo): server.Route =
     post {
       entity(as[CreateResourceRequest]) { createResourceRequest =>
-        if (resourceType.reuseIds) {
-          throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "this api may not be used for resource types that allow id reuse"))
+        if (resourceType.reuseIds && resourceType.isAuthDomainConstrainable) {
+          throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "this api may not be used for resource types that allow both authorization domains and id reuse"))
         }
         complete(
           resourceService
