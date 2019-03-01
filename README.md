@@ -73,6 +73,27 @@ for sbt:
 ```libraryDependencies += "org.broadinstitute.dsde.workbench" %% "sam-client" % "0.1-<git hash>"```
  
 where ```<git hash>``` is the first 7 characters of the commit hash of the HEAD of develop
+
+Example Scala Usage:
+```
+import org.broadinstitute.dsde.workbench.client.sam.api.ResourcesApi
+import org.broadinstitute.dsde.workbench.client.sam.ApiClient
+
+class SamClient(samBasePath: String) {
+  private def samResourcesApi(accessToken: String): ResourcesApi = {
+    val apiClient = new ApiClient()
+    apiClient.setAccessToken(accessToken)
+    apiClient.setBasePath(samBasePath)
+    new ResourcesApi(apiClient)
+  }
+
+  def checkResourceAction(token: String, samResourceType: String, samResource: String, action: String): Boolean = {
+    val samResourceApi = samResourcesApi(token)
+    samResourceApi.resourceAction(samResourceType, samResource, action)
+  }
+}
+
+```
  
 ## Cloud Integrations
 ### Google
