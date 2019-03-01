@@ -231,13 +231,8 @@ class GoogleExtensions(
 
   override def onUserDelete(userId: WorkbenchUserId): Future[Unit] =
     for {
+      _ <- forAllPets(userId)(removePetServiceAccount)
       _ <- withProxyEmail(userId) { googleDirectoryDAO.deleteGroup }
-      _ <- forAllPets(userId) { pet =>
-        googleIamDAO.removeServiceAccount(pet.id.project, toAccountName(pet.serviceAccount.email))
-      }
-      _ <- forAllPets(userId) { pet =>
-        directoryDAO.deletePetServiceAccount(pet.id).unsafeToFuture()
-      }
     } yield ()
 
   override def onGroupDelete(groupEmail: WorkbenchEmail): Future[Unit] =
@@ -255,12 +250,7 @@ class GoogleExtensions(
     for {
       maybePet <- directoryDAO.loadPetServiceAccount(PetServiceAccountId(userId, project))
       deletedSomething <- maybePet match {
-        case Some(pet) =>
-          for {
-            _ <- directoryDAO.deletePetServiceAccount(PetServiceAccountId(userId, project))
-            _ <- IO.fromFuture(IO(googleIamDAO.removeServiceAccount(project, toAccountName(pet.serviceAccount.email))))
-          } yield true
-
+        case Some(pet) => IO.fromFuture(IO(removePetServiceAccount(pet))).map(_ => true)
         case None => IO.pure(false) // didn't find the pet, nothing to delete
       }
     } yield deletedSomething
@@ -421,7 +411,7 @@ class GoogleExtensions(
       // remove the LDAP record for the pet service account
       _ <- directoryDAO.deletePetServiceAccount(petServiceAccount.id).unsafeToFuture()
       // remove the service account itself in Google
-      _ <- googleIamDAO.removeServiceAccount(petServiceAccountConfig.googleProject, toAccountName(petServiceAccount.serviceAccount.email))
+      _ <- googleIamDAO.removeServiceAccount(petServiceAccount.id.project, toAccountName(petServiceAccount.serviceAccount.email))
     } yield ()
 
   def getSynchronizedState(groupId: WorkbenchGroupIdentity): IO[Option[GroupSyncResponse]] = {
