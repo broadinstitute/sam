@@ -67,6 +67,13 @@ Note that in this model Group is a Subject. This allows it to be used interchang
 ### API
 [Sam APIs](http://petstore.swagger.io/?url=https://raw.githubusercontent.com/broadinstitute/sam/develop/src/main/resources/swagger/api-docs.yaml)
 
+#### Java Client Library
+for sbt:
+
+```libraryDependencies += "org.broadinstitute.dsde.workbench" %% "sam-client" % "0.1-<git hash>"```
+ 
+where ```<git hash>``` is the first 7 characters of the commit hash of the HEAD of develop
+ 
 ## Cloud Integrations
 ### Google
 * Groups can be mirrored to google groups.
@@ -130,3 +137,5 @@ sh docker/run-opendj.sh stop
 ```
 
 ### [CONTRIBUTING.md](../CONTRIBUTING.md)
+
+
