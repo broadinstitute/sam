@@ -1,8 +1,8 @@
 import sbt._
 
 object Dependencies {
-  val akkaV = "2.5.16"
-  val akkaHttpV = "10.1.3"
+  val akkaV = "2.5.19"
+  val akkaHttpV = "10.1.7"
   val jacksonV = "2.9.5"
   val scalaLoggingV = "3.5.0"
   val scalaTestV    = "3.0.5"
@@ -14,7 +14,7 @@ object Dependencies {
   val workbenchGoogle2V = "0.1-8328aae"
   val workbenchNotificationsV = "0.1-f2a0020"
   val monocleVersion = "1.5.1-cats"
-  val newRelicVersion = "4.6.0"
+  val newRelicVersion = "4.11.0"
 
   val excludeAkkaActor =        ExclusionRule(organization = "com.typesafe.akka", name = "akka-actor_2.12")
   val excludeWorkbenchUtil =    ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-util_2.12")

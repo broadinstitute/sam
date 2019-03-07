@@ -124,4 +124,15 @@ Stop your local opendj:
 sh docker/run-opendj.sh stop
 ```
 
+### Test newrelic metrics locally
+* Download a newrelic agent jar from https://docs.newrelic.com/docs/release-notes/agent-release-notes/java-release-notes
+* Put `newrelic-agent-x.x.x.jar` under `config` directory (If you haven't set up config, follow instructions [here](https://github.com/broadinstitute/firecloud-develop#quick-start---how-do-i-set-up-my-configs))
+* Rename newrelic config file, `mv newrelic-v4.yml newrelic.yml`
+* In newrelic.yml, update `agent_enabled` to `true`
+* In `docker-rsync-local-sam.sh` file, add `-javaagent:/app/config/newrelic-agent-4.11.0.jar` to server startup java options.
+* Start sam locally, `./config/docker-rsync-local-sam.sh`
+* Send some requests to local sam.
+* Go to `https://newrelic.com/`, and log in
+* Look for `sam - local - dev` and check if metrics look good.
+
 ### [CONTRIBUTING.md](../CONTRIBUTING.md)
