@@ -102,6 +102,10 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
                   pathEndOrSingleSlash {
                     getUserResourceRoles(resource, userInfo)
                   }
+                } ~ pathPrefix("actions") {
+                  pathEndOrSingleSlash {
+                    listActionsForUser(resource, userInfo)
+                  }
                 } ~ pathPrefix("allUsers") {
                   pathEndOrSingleSlash {
                     getAllResourceUsers(resource, userInfo)
@@ -147,6 +151,13 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
     get {
       complete(policyEvaluatorService.hasPermission(resource, ResourceAction(action), userInfo.userId).map { hasPermission =>
         StatusCodes.OK -> JsBoolean(hasPermission)
+      })
+    }
+
+  def listActionsForUser(resource: FullyQualifiedResourceId, userInfo: UserInfo): server.Route =
+    get {
+      complete(policyEvaluatorService.listUserResourceActions(resource, userInfo.userId).map { actions =>
+        StatusCodes.OK -> actions
       })
     }
 

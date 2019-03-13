@@ -226,6 +226,29 @@ class ResourceRoutesV1Spec extends FlatSpec with Matchers with ScalatestRouteTes
     }
   }
 
+  "GET /api/resources/v1/{resourceType}/{resourceId}/actions" should "200 on list resource actions" in {
+    val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceActionPattern("run", "", false)), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("run")))), ResourceRoleName("owner"))
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
+
+    Post(s"/api/resources/v1/${resourceType.name}/foo") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+    }
+
+    Get(s"/api/resources/v1/${resourceType.name}/foo/actions") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[Set[String]]
+    }
+  }
+
+  it should "404 on list resource actions when resource type doesnt exist" in {
+    val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceActionPattern("run", "", false)), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("run")))), ResourceRoleName("owner"))
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
+
+    Get(s"/api/resources/v1/doesntexist/foo/actions") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
+    }
+  }
+
   "GET /api/resources/v1/{resourceType}/{resourceId}/policies/{policyName}" should "200 on existing policy of a resource with read_policies" in {
     val members = AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set.empty, Set.empty)
     val resourceType = ResourceType(
