@@ -5,10 +5,10 @@ import cats.effect.IO
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.google.GoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.model._
+import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.openam.AccessPolicyDAO
-import org.broadinstitute.dsde.workbench.sam._
+import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, LoadResourceAuthDomainResult}
 import org.broadinstitute.dsde.workbench.util.FutureSupport
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -127,10 +127,14 @@ class GoogleGroupSynchronizer(directoryDAO: DirectoryDAO,
 
   private[google] def calculateIntersectionGroup(resource: FullyQualifiedResourceId, policy: AccessPolicy): IO[Set[WorkbenchUserId]] =
     for {
-      groups <- accessPolicyDAO.loadResourceAuthDomain(resource)
-      members <- directoryDAO.listIntersectionGroupUsers(groups.asInstanceOf[Set[WorkbenchGroupIdentity]] + policy.id)
-    } yield {
-      members
-    }
+      result <- accessPolicyDAO.loadResourceAuthDomain(resource)
+      members <- result match {
+        case LoadResourceAuthDomainResult.Constrained(groups) =>
+          val groupsIdentity: Set[WorkbenchGroupIdentity] = groups.toList.toSet
+          directoryDAO.listIntersectionGroupUsers(groupsIdentity + policy.id)
+        case LoadResourceAuthDomainResult.NotConstrained | LoadResourceAuthDomainResult.ResourceNotFound =>
+          IO.pure(Set.empty[WorkbenchUserId])
+      }
+    } yield members
 
 }

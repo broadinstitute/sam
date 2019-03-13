@@ -9,6 +9,7 @@ import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import akka.testkit.TestKit
 import cats.effect.IO
 import cats.implicits._
+import cats.data.NonEmptyList
 import com.google.api.services.groupssettings.model.Groups
 import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
@@ -22,7 +23,7 @@ import org.broadinstitute.dsde.workbench.sam.TestSupport.blockingEc
 import org.broadinstitute.dsde.workbench.sam.api.CreateWorkbenchUser
 import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryDAO, LdapDirectoryDAO, MockDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, LdapAccessPolicyDAO, MockAccessPolicyDAO}
+import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, LdapAccessPolicyDAO, LoadResourceAuthDomainResult, MockAccessPolicyDAO}
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.{TestSupport, model, _}
@@ -223,7 +224,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val synchronizer = new GoogleGroupSynchronizer(mockDirectoryDAO, mockAccessPolicyDAO, mockGoogleDirectoryDAO,ge, constrainableResourceTypes)
 
     when(mockAccessPolicyDAO.loadPolicy(testPolicy.id)).thenReturn(IO.pure(Option(testPolicy)))
-    when(mockAccessPolicyDAO.loadResourceAuthDomain(resource.fullyQualifiedId)).thenReturn(IO.pure(Set(managedGroupId)))
+    when(mockAccessPolicyDAO.loadResourceAuthDomain(resource.fullyQualifiedId)).thenReturn(IO.pure(LoadResourceAuthDomainResult.Constrained(NonEmptyList.one(managedGroupId)): LoadResourceAuthDomainResult))
 
     when(mockDirectoryDAO.listIntersectionGroupUsers(Set(managedGroupId, testPolicy.id))).thenReturn(IO.pure(Set(intersectionSamUserId, authorizedGoogleUserId, subIntersectionSamGroupUserId, subAuthorizedGoogleGroupUserId, addError)))
 
@@ -973,7 +974,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     intersectionGroup shouldEqual Set(inBothSubGroupUser.userId)
   }
 
-  it should "return the policy members if there is no auth domain set" in {
+  it should "return empty set if there is no auth domain set" in {
     val (dirDAO: DirectoryDAO, ge: GoogleExtensions, constrainableService: ResourceService, _, constrainableResourceType: ResourceType, constrainableRole: ResourceRole, synchronizer) = initPrivateTest
 
     val inPolicyUser = UserInfo(OAuth2BearerToken("token"), WorkbenchUserId("inPolicy"), WorkbenchEmail("inPolicy@example.com"), 0)
@@ -987,7 +988,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val accessPolicy = runAndWait(constrainableService.overwritePolicy(constrainableResourceType, AccessPolicyName("ap"), resource.fullyQualifiedId, AccessPolicyMembership(Set(inPolicyUser.userEmail, inBothUser.userEmail), Set.empty, Set.empty)))
 
     val intersectionGroup = synchronizer.calculateIntersectionGroup(resource.fullyQualifiedId, accessPolicy).unsafeRunSync()
-    intersectionGroup shouldEqual Set(inBothUser.userId, inPolicyUser.userId)
+    intersectionGroup shouldEqual Set()
   }
 
   it should "return an empty set if none of the policy members are in the auth domain" in {

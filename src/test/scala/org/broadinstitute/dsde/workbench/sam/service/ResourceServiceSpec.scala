@@ -5,6 +5,7 @@ import java.util.UUID
 
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
+import cats.data.NonEmptyList
 import cats.effect.IO
 import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import net.ceedubs.ficus.Ficus._
@@ -12,13 +13,13 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.Generator._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.TestSupport.blockingEc
+import org.broadinstitute.dsde.workbench.sam.config.AppConfig.resourceTypeReader
 import org.broadinstitute.dsde.workbench.sam.directory.LdapDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, LdapAccessPolicyDAO}
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FlatSpec, Matchers}
-import org.broadinstitute.dsde.workbench.sam.config.AppConfig.resourceTypeReader
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
@@ -344,12 +345,12 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     runAndWait(managedGroupService.createManagedGroup(ResourceId(managedGroupName), dummyUserInfo))
     runAndWait(managedGroupService.createManagedGroup(ResourceId(secondMGroupName), dummyUserInfo))
 
-    val authDomain = Set(WorkbenchGroupName(managedGroupName), WorkbenchGroupName(secondMGroupName))
+    val authDomain = NonEmptyList.of(WorkbenchGroupName(managedGroupName), WorkbenchGroupName(secondMGroupName))
     val viewPolicyName = AccessPolicyName(constrainableReaderRoleName.value)
-    val resource = runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId(UUID.randomUUID().toString), Map(viewPolicyName -> constrainablePolicyMembership), authDomain, dummyUserInfo.userId))
-    val storedAuthDomain = runAndWait(constrainableService.loadResourceAuthDomain(resource.fullyQualifiedId))
+    val resource = runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId(UUID.randomUUID().toString), Map(viewPolicyName -> constrainablePolicyMembership), authDomain.toList.toSet, dummyUserInfo.userId))
+    val storedAuthDomain = constrainableService.loadResourceAuthDomain(resource.fullyQualifiedId).unsafeRunSync()
 
-    storedAuthDomain shouldEqual authDomain
+    storedAuthDomain should contain theSameElementsAs authDomain.toList
   }
 
   it should "fail when at least 1 of the auth domain groups does not exist" in {
@@ -390,7 +391,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
 
   "Loading an auth domain" should "fail when the resource does not exist" in {
     val e = intercept[WorkbenchExceptionWithErrorReport] {
-      runAndWait(constrainableService.loadResourceAuthDomain(FullyQualifiedResourceId(constrainableResourceType.name, ResourceId(UUID.randomUUID().toString))))
+      constrainableService.loadResourceAuthDomain(FullyQualifiedResourceId(constrainableResourceType.name, ResourceId(UUID.randomUUID().toString))).unsafeRunSync()
     }
     e.getMessage should include ("not found")
   }

@@ -4,6 +4,7 @@ package openam
 import java.util.Date
 
 import akka.http.scaladsl.model.StatusCodes
+import cats.data.NonEmptyList
 import cats.effect.{ContextShift, IO}
 import cats.implicits._
 import com.unboundid.ldap.sdk._
@@ -13,7 +14,6 @@ import org.broadinstitute.dsde.workbench.sam.directory.DirectorySubjectNameSuppo
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO.{Attr, ObjectClass}
 import org.broadinstitute.dsde.workbench.sam.util.LdapSupport
-import cats.implicits._
 import org.ehcache.Cache
 
 import scala.collection.JavaConverters._
@@ -59,22 +59,19 @@ class LdapAccessPolicyDAO(
   // TODO: Method is not tested.  To test properly, we'll probably need a loadResource or getResource method
   override def deleteResource(resource: FullyQualifiedResourceId): IO[Unit] = IO(ldapConnectionPool.delete(resourceDn(resource)))
 
-  override def loadResourceAuthDomain(resourceId: FullyQualifiedResourceId): IO[Set[WorkbenchGroupName]] =
-    Option(resourceCache.get(resourceId)) match {
-      case None =>
-        executeLdap((IO(Option(ldapConnectionPool.getEntry(resourceDn(resourceId)))))).flatMap {
-          case None =>
-            IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Resource $resourceId not found")))
+  override def loadResourceAuthDomain(resourceId: FullyQualifiedResourceId): IO[LoadResourceAuthDomainResult] = {
+    listResourceWithAuthdomains(resourceId).map{
+      resource =>
+        resource match {
+          case None => LoadResourceAuthDomainResult.ResourceNotFound
           case Some(r) =>
-            unmarshalResourceAuthDomain(r, resourceId.resourceTypeName) match {
-              case Left(error) => IO.raiseError(new WorkbenchException(error))
-              case Right(resource) =>
-                IO(resourceCache.put(resourceId, resource)).as(resource.authDomain)
+            NonEmptyList.fromList(r.authDomain.toList) match {
+              case Some(groups) => LoadResourceAuthDomainResult.Constrained(groups)
+              case None => LoadResourceAuthDomainResult.NotConstrained
             }
         }
-
-      case Some(cachedResource) => IO.pure(cachedResource.authDomain)
     }
+  }
 
   private def unmarshalResource(results: Entry): Either[String, Resource] =
     for {
@@ -199,6 +196,20 @@ class LdapAccessPolicyDAO(
     }
   }
 
+  override def listResourceWithAuthdomains(resourceId: FullyQualifiedResourceId): IO[Option[Resource]] =
+    for {
+      cachedResource <- IO(Option(resourceCache.get(resourceId)))
+      resourceOpt <- cachedResource match {
+        case Some(cr) => IO.pure(Some(cr))
+        case None =>
+          for {
+            entry <- executeLdap(IO(ldapConnectionPool.getEntry(resourceDn(resourceId))))
+            resource <- Option(entry).traverse(e => IO.fromEither(unmarshalResourceAuthDomain(entry, resourceId.resourceTypeName).leftMap(error => new WorkbenchException(error))))
+          } yield resource
+      }
+      _ <- resourceOpt.traverse(resource => IO(resourceCache.put(resourceId, resource)))
+    } yield resourceOpt
+
   private def unmarshalResourceAuthDomain(entry: Entry, resourceTypeName: ResourceTypeName): Either[String, Resource] = {
     val authDomains = getAttributes(entry, Attr.authDomain).map(WorkbenchGroupName)
     for {
@@ -276,3 +287,4 @@ class LdapAccessPolicyDAO(
     }
   }
 }
+

@@ -1,5 +1,6 @@
 package org.broadinstitute.dsde.workbench.sam.openam
 import akka.http.scaladsl.model.StatusCodes
+import cats.data.NonEmptyList
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam._
@@ -35,8 +36,14 @@ class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdenti
     policies -- toRemove
   }
 
-  override def loadResourceAuthDomain(resource: FullyQualifiedResourceId): IO[Set[WorkbenchGroupName]] = IO.fromEither(resources.get(resource)
-    .toRight(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"no resource $resource found in mock policy dao $resources"))).map(_.authDomain))
+  override def loadResourceAuthDomain(resource: FullyQualifiedResourceId): IO[LoadResourceAuthDomainResult] =
+    IO(resources.get(resource)).map{
+      rs =>
+        rs match {
+          case None => LoadResourceAuthDomainResult.ResourceNotFound
+          case Some(r) => NonEmptyList.fromList(r.authDomain.toList).fold[LoadResourceAuthDomainResult](LoadResourceAuthDomainResult.NotConstrained)(x => LoadResourceAuthDomainResult.Constrained(x))
+        }
+    }
 
   override def listResourcesConstrainedByGroup(groupId: WorkbenchGroupIdentity): IO[Set[Resource]] = IO.pure(Set.empty)
 
@@ -124,6 +131,8 @@ class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdenti
       resourceTypeName: ResourceTypeName,
       resourceId: Set[ResourceId])
     : IO[Set[Resource]] = IO.pure(Set.empty)
+
+  override def listResourceWithAuthdomains(resourceId: FullyQualifiedResourceId): IO[Option[Resource]] = IO.pure(None)
 
   override def listPublicAccessPolicies(resource: FullyQualifiedResourceId): IO[Stream[AccessPolicy]] = {
     IO.pure(
