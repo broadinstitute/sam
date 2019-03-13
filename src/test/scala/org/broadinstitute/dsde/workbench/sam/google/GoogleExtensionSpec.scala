@@ -974,7 +974,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     intersectionGroup shouldEqual Set(inBothSubGroupUser.userId)
   }
 
-  it should "return empty set if there is no auth domain set" in {
+  it should "return the policy members if there is no auth domain set" in {
     val (dirDAO: DirectoryDAO, ge: GoogleExtensions, constrainableService: ResourceService, _, constrainableResourceType: ResourceType, constrainableRole: ResourceRole, synchronizer) = initPrivateTest
 
     val inPolicyUser = UserInfo(OAuth2BearerToken("token"), WorkbenchUserId("inPolicy"), WorkbenchEmail("inPolicy@example.com"), 0)
@@ -988,7 +988,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val accessPolicy = runAndWait(constrainableService.overwritePolicy(constrainableResourceType, AccessPolicyName("ap"), resource.fullyQualifiedId, AccessPolicyMembership(Set(inPolicyUser.userEmail, inBothUser.userEmail), Set.empty, Set.empty)))
 
     val intersectionGroup = synchronizer.calculateIntersectionGroup(resource.fullyQualifiedId, accessPolicy).unsafeRunSync()
-    intersectionGroup shouldEqual Set()
+    intersectionGroup shouldEqual Set(inBothUser.userId, inPolicyUser.userId)
   }
 
   it should "return an empty set if none of the policy members are in the auth domain" in {
