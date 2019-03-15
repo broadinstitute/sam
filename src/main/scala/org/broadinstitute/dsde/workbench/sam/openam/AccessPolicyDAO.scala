@@ -1,8 +1,9 @@
 package org.broadinstitute.dsde.workbench.sam.openam
 
+import cats.data.NonEmptyList
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.model.{FullyQualifiedResourceId, _}
 
 /**
   * Created by dvoet on 6/26/17.
@@ -12,7 +13,7 @@ trait AccessPolicyDAO {
 
   def createResource(resource: Resource): IO[Resource]
   def deleteResource(resource: FullyQualifiedResourceId): IO[Unit]
-  def loadResourceAuthDomain(resource: FullyQualifiedResourceId): IO[Set[WorkbenchGroupName]]
+  def loadResourceAuthDomain(resource: FullyQualifiedResourceId): IO[LoadResourceAuthDomainResult]
   def listResourcesConstrainedByGroup(groupId: WorkbenchGroupIdentity): IO[Set[Resource]]
 
   def createPolicy(policy: AccessPolicy): IO[AccessPolicy]
@@ -23,6 +24,7 @@ trait AccessPolicyDAO {
   def listPublicAccessPolicies(resourceTypeName: ResourceTypeName): IO[Stream[ResourceIdAndPolicyName]]
   def listPublicAccessPolicies(resource: FullyQualifiedResourceId): IO[Stream[AccessPolicy]]
   def listResourcesWithAuthdomains(resourceTypeName: ResourceTypeName, resourceId: Set[ResourceId]): IO[Set[Resource]]
+  def listResourceWithAuthdomains(resourceId: FullyQualifiedResourceId): IO[Option[Resource]]
   def listAccessPolicies(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId): IO[Set[ResourceIdAndPolicyName]]
   def listAccessPolicies(resource: FullyQualifiedResourceId): IO[Stream[AccessPolicy]]
   def listAccessPoliciesForUser(resource: FullyQualifiedResourceId, user: WorkbenchUserId): IO[Set[AccessPolicy]]
@@ -30,4 +32,12 @@ trait AccessPolicyDAO {
   def setPolicyIsPublic(policyId: FullyQualifiedPolicyId, isPublic: Boolean): IO[Unit]
 
   def evictIsMemberOfCache(subject: WorkbenchSubject): IO[Unit]
+}
+
+
+sealed abstract class LoadResourceAuthDomainResult
+object LoadResourceAuthDomainResult {
+  final case object ResourceNotFound extends LoadResourceAuthDomainResult
+  final case object NotConstrained extends LoadResourceAuthDomainResult
+  final case class Constrained(authDomain: NonEmptyList[WorkbenchGroupName]) extends LoadResourceAuthDomainResult
 }

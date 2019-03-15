@@ -10,7 +10,7 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.{model, _}
 import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.openam.AccessPolicyDAO
+import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, LoadResourceAuthDomainResult}
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Success
@@ -177,8 +177,12 @@ class ResourceService(
       Option(ErrorReport(s"Auth Domain is not permitted on resource of type: ${resourceType.name}"))
     } else None
 
-  def loadResourceAuthDomain(resource: FullyQualifiedResourceId): Future[Set[WorkbenchGroupName]] =
-    accessPolicyDAO.loadResourceAuthDomain(resource).unsafeToFuture()
+  def loadResourceAuthDomain(resource: FullyQualifiedResourceId): IO[Set[WorkbenchGroupName]] =
+    accessPolicyDAO.loadResourceAuthDomain(resource).flatMap(result => result match {
+      case LoadResourceAuthDomainResult.Constrained(authDomain) => IO.pure(authDomain.toList.toSet)
+      case LoadResourceAuthDomainResult.NotConstrained => IO.pure(Set.empty)
+      case LoadResourceAuthDomainResult.ResourceNotFound => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Resource ${resource} not found")))
+    })
 
   def createPolicy(
       policyIdentity: FullyQualifiedPolicyId,
@@ -435,17 +439,20 @@ class ResourceService(
   def setPublic(policyId: FullyQualifiedPolicyId, public: Boolean): IO[Unit] =
     for {
       authDomain <- accessPolicyDAO.loadResourceAuthDomain(policyId.resource)
-      _ <- if (!public || authDomain.isEmpty) {
-        accessPolicyDAO.setPolicyIsPublic(policyId, public)
-      } else {
-        // resources with auth domains logically can't have public policies but also technically allowing them poses a problem
-        // because the logic for public resources is different. However, sharing with the auth domain should have the
-        // exact same effect as making a policy public: anyone in the auth domain can access.
-        IO.raiseError(
+      _ <- authDomain match {
+        case LoadResourceAuthDomainResult.ResourceNotFound => IO.raiseError(
           new WorkbenchExceptionWithErrorReport(
-            ErrorReport(StatusCodes.BadRequest, "Cannot make auth domain protected resources public. Share directly with auth domain groups instead.")))
+            ErrorReport(StatusCodes.BadRequest, s"ResourceId ${policyId.resource} not found.")))
+        case LoadResourceAuthDomainResult.Constrained(_) if public =>
+          // resources with auth domains logically can't have public policies but also technically allowing them poses a problem
+          // because the logic for public resources is different. However, sharing with the auth domain should have the
+          // exact same effect as making a policy public: anyone in the auth domain can access.
+          IO.raiseError(
+            new WorkbenchExceptionWithErrorReport(
+              ErrorReport(StatusCodes.BadRequest, "Cannot make auth domain protected resources public. Share directly with auth domain groups instead.")))
+        case LoadResourceAuthDomainResult.NotConstrained =>
+          accessPolicyDAO.setPolicyIsPublic(policyId, public) *> IO.fromFuture(IO(fireGroupUpdateNotification(policyId)))
       }
-      _ <- IO.fromFuture(IO(fireGroupUpdateNotification(policyId)))
     } yield ()
 
   def listAllFlattenedResourceUsers(resourceId: FullyQualifiedResourceId): IO[Set[UserIdInfo]] =

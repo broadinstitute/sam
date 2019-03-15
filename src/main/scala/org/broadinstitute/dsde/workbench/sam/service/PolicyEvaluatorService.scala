@@ -6,7 +6,7 @@ import com.typesafe.scalalogging.LazyLogging
 import com.unboundid.ldap.sdk.{LDAPException, ResultCode}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.openam.AccessPolicyDAO
+import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, LoadResourceAuthDomainResult}
 
 import scala.concurrent.ExecutionContext
 
@@ -68,23 +68,29 @@ class PolicyEvaluatorService(
       _ <- if (force) accessPolicyDAO.evictIsMemberOfCache(userId) else IO.unit
       rt <- IO.fromEither[ResourceType](
         resourceTypes.get(resource.resourceTypeName).toRight(new WorkbenchException(s"missing configuration for resourceType ${resource.resourceTypeName}")))
-      isConstrained = rt.isAuthDomainConstrainable
+      isConstrainable = rt.isAuthDomainConstrainable
 
       policiesForResource <- listResourceAccessPoliciesForUser(resource, userId)
       allPolicyActions = policiesForResource.flatMap(p => allActions(p, rt))
-      res <- if (isConstrained) {
+      res <- if (isConstrainable) {
         for {
-          authDomains <- accessPolicyDAO.loadResourceAuthDomain(resource)
-          groupsUserIsMemberOf <- listUserManagedGroups(userId)
-        } yield {
-          val isUserMemberOfAllAuthDomains = authDomains.subsetOf(groupsUserIsMemberOf)
-          if (isUserMemberOfAllAuthDomains) {
-            allPolicyActions
-          } else {
-            val constrainableActions = rt.actionPatterns.filter(_.authDomainConstrainable)
-            allPolicyActions.filterNot(x => constrainableActions.exists(_.matches(x)))
+          authDomainsResult <- accessPolicyDAO.loadResourceAuthDomain(resource)
+          policyActions <- authDomainsResult match {
+            case LoadResourceAuthDomainResult.Constrained(authDomains) =>
+              listUserManagedGroups(userId).map{
+                groupsUserIsMemberOf =>
+                  val isUserMemberOfAllAuthDomains = authDomains.toList.toSet.subsetOf(groupsUserIsMemberOf)
+                  if (isUserMemberOfAllAuthDomains) {
+                    allPolicyActions
+                  } else {
+                    val constrainableActions = rt.actionPatterns.filter(_.authDomainConstrainable)
+                    allPolicyActions.filterNot(x => constrainableActions.exists(_.matches(x)))
+                  }
+              }
+            case LoadResourceAuthDomainResult.NotConstrained | LoadResourceAuthDomainResult.ResourceNotFound =>
+              allPolicyActions.pure[IO]
           }
-        }
+        } yield policyActions
       } else allPolicyActions.pure[IO]
     } yield res
   }
