@@ -539,6 +539,40 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
           .getOrElse(Set.empty) should contain theSameElementsAs Set(allUsersGroupEmail.value),
         5.minutes, 5.seconds)
     }
+
+    "should synchronize the all users group for public policies of constrainable resource type" taggedAs Tags.ExcludeInAlpha in {
+      val resourceId = UUID.randomUUID.toString
+      val user1 = UserPool.chooseAdmin
+      val user1AuthToken = user1.makeAuthToken()
+      val user1Proxy = Sam.user.proxyGroup(user1.email)(user1AuthToken)
+      val allUsersGroupEmail = Sam.user.getGroupEmail("All_Users")(user1AuthToken)
+
+      val resourceTypeName = "workspace"
+      val ownerPolicyName = "owner"
+      val readerPolicyName = "reader"
+
+      Sam.user.createResource(resourceTypeName, CreateResourceRequest(resourceId, Map(ownerPolicyName -> AccessPolicyMembership(Set(user1.email), Set.empty, Set("owner")), readerPolicyName -> AccessPolicyMembership(Set.empty, Set.empty, Set("reader"))), Set.empty))(user1AuthToken)
+      register cleanUp Sam.user.deleteResource(resourceTypeName, resourceId)(user1AuthToken)
+
+      val policies = Sam.user.listResourcePolicies(resourceTypeName, resourceId)(user1AuthToken)
+      val ownerPolicy = policies.filter(_.policyName equals ownerPolicyName).last
+      val readerPolicy = policies.filter(_.policyName equals readerPolicyName).last
+
+      Sam.user.syncResourcePolicy(resourceTypeName, resourceId, ownerPolicyName)(user1AuthToken)
+
+      awaitAssert(
+        Await.result(googleDirectoryDAO.listGroupMembers(ownerPolicy.email), 5.minutes)
+          .getOrElse(Set.empty) should contain theSameElementsAs Set(user1Proxy.value),
+        5.minutes, 5.seconds)
+
+      Sam.user.syncResourcePolicy(resourceTypeName, resourceId, readerPolicyName)(user1AuthToken)
+      Sam.user.makeResourcePolicyPublic(resourceTypeName, resourceId, readerPolicyName, true)(user1AuthToken)
+
+      awaitAssert(
+        Await.result(googleDirectoryDAO.listGroupMembers(readerPolicy.email), 5.minutes)
+          .getOrElse(Set.empty) should contain theSameElementsAs Set(allUsersGroupEmail.value),
+        5.minutes, 5.seconds)
+    }
   }
 
   private def getFieldFromJson(jsonKey: String, field: String): String = {
