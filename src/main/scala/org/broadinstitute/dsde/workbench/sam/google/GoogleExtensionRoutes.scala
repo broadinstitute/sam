@@ -141,7 +141,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                 post {
                   complete {
                     import GoogleModelJsonSupport._
-                    googleGroupSynchronizer.synchronizeGroupMembers(policyId).map { syncReport =>
+                    googleGroupSynchronizer.createGroupAndSendSyncMessage(policyId).map { syncReport =>
                       StatusCodes.OK -> syncReport
                     }
                   }

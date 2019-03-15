@@ -26,7 +26,7 @@ trait CloudExtensions {
   // this is temporary until we get the admin group rolled into a sam group
   def isWorkbenchAdmin(memberEmail: WorkbenchEmail): Future[Boolean]
 
-  def publishGroup(id: WorkbenchGroupName): Future[Unit]
+  def publishGroup(id: WorkbenchGroupIdentity): Future[Unit]
 
   def onGroupUpdate(groupIdentities: Seq[WorkbenchGroupIdentity]): Future[Unit]
 
@@ -68,7 +68,7 @@ trait CloudExtensionsInitializer {
 trait NoExtensions extends CloudExtensions {
   override def isWorkbenchAdmin(memberEmail: WorkbenchEmail): Future[Boolean] = Future.successful(true)
 
-  override def publishGroup(id: WorkbenchGroupName): Future[Unit] = Future.successful(())
+  override def publishGroup(id: WorkbenchGroupIdentity): Future[Unit] = Future.successful(())
 
   override def onGroupUpdate(groupIdentities: Seq[WorkbenchGroupIdentity]): Future[Unit] = Future.successful(())
 

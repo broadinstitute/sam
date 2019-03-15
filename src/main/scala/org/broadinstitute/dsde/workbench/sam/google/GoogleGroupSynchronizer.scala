@@ -20,6 +20,26 @@ class GoogleGroupSynchronizer(directoryDAO: DirectoryDAO,
                               googleExtensions: GoogleExtensions,
                               resourceTypes: Map[ResourceTypeName, ResourceType])(implicit executionContext: ExecutionContext)
   extends LazyLogging with FutureSupport {
+
+  def createGroupAndSendSyncMessage(groupId: WorkbenchGroupIdentity): Future[Map[WorkbenchEmail, Seq[SyncReportItem]]] = {
+    for {
+      groupOption <- groupId match {
+        case basicGroupName: WorkbenchGroupName => directoryDAO.loadGroup(basicGroupName).unsafeToFuture()
+        case rpn: FullyQualifiedPolicyId => accessPolicyDAO.loadPolicy(rpn).unsafeToFuture()
+      }
+
+      group = groupOption.getOrElse(throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"$groupId not found")))
+
+      googleGroup <- googleDirectoryDAO.getGoogleGroup(group.email)
+      _ <- googleGroup match {
+        case Some(_) => Future.successful(())
+        case None => googleDirectoryDAO.createGroup(groupId.toString, group.email, Option(googleDirectoryDAO.lockedDownGroupSettings))
+      }
+
+      _ <- googleExtensions.publishGroup(groupId)
+    } yield Map(group.email -> Seq.empty)
+  }
+
   def synchronizeGroupMembers(
                                groupId: WorkbenchGroupIdentity,
                                visitedGroups: Set[WorkbenchGroupIdentity] = Set.empty[WorkbenchGroupIdentity]): Future[Map[WorkbenchEmail, Seq[SyncReportItem]]] = {

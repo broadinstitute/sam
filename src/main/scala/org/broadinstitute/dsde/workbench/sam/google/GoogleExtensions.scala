@@ -146,8 +146,13 @@ class GoogleExtensions(
   // Uses Google Pub/Sub to offload creation of the group.
   // The handler for the subscription will ultimately call GoogleExtensions.synchronizeGroupMembers, which will
   // do all the heavy lifting of creating the Google Group and adding members.
-  override def publishGroup(id: WorkbenchGroupName): Future[Unit] =
-    googlePubSubDAO.publishMessages(googleServicesConfig.groupSyncTopic, Seq(id.toJson.compactPrint))
+  override def publishGroup(id: WorkbenchGroupIdentity): Future[Unit] = {
+    val message = id match {
+      case gn: WorkbenchGroupName => gn.toJson.compactPrint
+      case rpn: FullyQualifiedPolicyId => rpn.toJson.compactPrint
+    }
+    googlePubSubDAO.publishMessages(googleServicesConfig.groupSyncTopic, Seq(message))
+  }
 
   override def onGroupUpdate(groupIdentities: Seq[WorkbenchGroupIdentity]): Future[Unit] =
     onGroupUpdateRecursive(groupIdentities, Seq.empty).unsafeToFuture()
