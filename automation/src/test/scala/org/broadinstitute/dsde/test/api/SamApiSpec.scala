@@ -476,6 +476,38 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
         5.minutes, 5.seconds)
     }
 
+    "should only synchronize all policy members for constrainable policies without auth domains" taggedAs Tags.ExcludeInAlpha in {
+      val Seq(policyUser: Credentials, policyUser1: Credentials, policyUser2: Credentials) = UserPool.chooseStudents(3)
+      val policyUser2Token = policyUser2.makeAuthToken()
+      val Seq(policyUser1Proxy: WorkbenchEmail, policyUser2Proxy: WorkbenchEmail) = Seq(policyUser1, policyUser2).map {
+        user => Sam.user.proxyGroup(user.email)(policyUser2Token)
+      }
+
+      val resourceTypeName = "workspace"
+      val resourceId = UUID.randomUUID.toString
+      val ownerPolicyName = "owner"
+      val policies = Map(ownerPolicyName -> AccessPolicyMembership(Set(policyUser2.email), Set.empty, Set(ownerPolicyName)))
+      val resourceRequest = CreateResourceRequest(resourceId, policies, Set.empty) //create constrainable resource but not actually constrained
+
+      // Create constrainable resource
+      Sam.user.createResource(resourceTypeName, resourceRequest)(policyUser2Token)
+      register cleanUp Sam.user.deleteResource(resourceTypeName, resourceId)(policyUser2Token)
+
+      Sam.user.addUserToResourcePolicy(resourceTypeName, resourceId, ownerPolicyName, policyUser1.email)(policyUser2Token)
+      val resourcePolicies = Sam.user.listResourcePolicies(resourceTypeName, resourceId)(policyUser2Token)
+      val resourceOwnerEmail = resourcePolicies.collect {
+        case SamModel.AccessPolicyResponseEntry(_, policy, email) if policy.memberEmails.nonEmpty => email
+      }
+      assert(resourceOwnerEmail.size == 1)
+      Sam.user.syncResourcePolicy(resourceTypeName, resourceId, ownerPolicyName)(policyUser2Token)
+
+      // Google should only know about the user that is in both the auth domain group and the constrained policy
+      awaitAssert(
+        Await.result(googleDirectoryDAO.listGroupMembers(resourceOwnerEmail.head), 5.minutes)
+          .getOrElse(Set.empty) should contain theSameElementsAs Set(policyUser1Proxy.value, policyUser2Proxy.value),
+        5.minutes, 5.seconds)
+    }
+
     "should synchronize the all users group for public policies" taggedAs Tags.ExcludeInAlpha in {
       val resourceId = UUID.randomUUID.toString
       val user1 = UserPool.chooseStudent
