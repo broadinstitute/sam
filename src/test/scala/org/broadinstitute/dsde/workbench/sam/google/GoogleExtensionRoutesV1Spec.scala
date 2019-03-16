@@ -95,7 +95,7 @@ class GoogleExtensionRoutesV1Spec extends GoogleExtensionRoutesSpecHelper with S
     Post(s"/api/google/v1/resource/${resourceType.name}/foo/${resourceType.ownerRoleName.value}/sync").withHeaders(headers) ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK
       val proxyEmail = WorkbenchEmail(s"PROXY_${user.id}@${googleServicesConfig.appsDomain}")
-      assertResult(Map(createdPolicy.email -> Seq(SyncReportItem("added", proxyEmail.value.toLowerCase, None)))) {
+      assertResult(Map(createdPolicy.email -> Seq.empty)) {
         responseAs[Map[WorkbenchEmail, Seq[SyncReportItem]]]
       }
     }
@@ -119,10 +119,7 @@ class GoogleExtensionRoutesV1Spec extends GoogleExtensionRoutesSpecHelper with S
       }
     }
 
-    Post(s"/api/google/v1/resource/${resourceType.name}/foo/${resourceType.ownerRoleName.value}/sync").withHeaders(headers) ~> routes.route ~> check {
-      status shouldEqual StatusCodes.OK
-    }
-
+    samDep.directoryDAO.updateSynchronizedDate(FullyQualifiedPolicyId(FullyQualifiedResourceId(resourceType.name, ResourceId("foo")), AccessPolicyName(resourceType.ownerRoleName.value))).futureValue
     samDep.directoryDAO.createGroup(BasicWorkbenchGroup(WorkbenchGroupName(resourceType.ownerRoleName.value + ".foo." + resourceType.name), Set.empty, WorkbenchEmail("foo@bar.com"))).unsafeRunSync()
 
     Get(s"/api/google/v1/resource/${resourceType.name}/foo/${resourceType.ownerRoleName.value}/sync").withHeaders(headers) ~> routes.route ~> check {

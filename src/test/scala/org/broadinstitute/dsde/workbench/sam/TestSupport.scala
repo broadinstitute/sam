@@ -142,6 +142,7 @@ object TestSupport extends TestSupport {
       override val googleExtensions: GoogleExtensions = if(samDependencies.cloudExtensions.isInstanceOf[GoogleExtensions]) samDependencies.cloudExtensions.asInstanceOf[GoogleExtensions] else null
       override val googleGroupSynchronizer: GoogleGroupSynchronizer = {
         if(samDependencies.cloudExtensions.isInstanceOf[GoogleExtensions]) {
+          googleExtensions.googlePubSubDAO.createTopic(googleServicesConfig.groupSyncTopic)
           new GoogleGroupSynchronizer(googleExtensions.directoryDAO, googleExtensions.accessPolicyDAO, googleExtensions.googleDirectoryDAO, googleExtensions, googleExtensions.resourceTypes)(executionContext)
         } else null
       }

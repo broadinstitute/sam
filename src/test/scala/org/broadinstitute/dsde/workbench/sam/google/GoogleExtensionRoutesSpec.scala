@@ -113,7 +113,7 @@ class GoogleExtensionRoutesSpec extends GoogleExtensionRoutesSpecHelper with Sca
     import GoogleModelJsonSupport._
     Post(s"/api/google/resource/${resourceType.name}/foo/${resourceType.ownerRoleName.value}/sync").withHeaders(headers) ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK
-      assertResult(Map(createdPolicy.email -> Seq(SyncReportItem("added", TestSupport.proxyEmail(user.id).value.toLowerCase, None)))) {
+      assertResult(Map(createdPolicy.email -> Seq.empty)) {
         responseAs[Map[WorkbenchEmail, Seq[SyncReportItem]]]
       }
     }
@@ -137,10 +137,7 @@ class GoogleExtensionRoutesSpec extends GoogleExtensionRoutesSpecHelper with Sca
       }
     }
 
-    Post(s"/api/google/resource/${resourceType.name}/foo/${resourceType.ownerRoleName.value}/sync").withHeaders(headers) ~> routes.route ~> check {
-      status shouldEqual StatusCodes.OK
-    }
-
+    samDep.directoryDAO.updateSynchronizedDate(FullyQualifiedPolicyId(FullyQualifiedResourceId(resourceType.name, ResourceId("foo")), AccessPolicyName(resourceType.ownerRoleName.value))).futureValue
     samDep.directoryDAO.createGroup(BasicWorkbenchGroup(WorkbenchGroupName(resourceType.ownerRoleName.value + ".foo." + resourceType.name), Set.empty, WorkbenchEmail("foo@bar.com"))).unsafeRunSync()
 
     Get(s"/api/google/resource/${resourceType.name}/foo/${resourceType.ownerRoleName.value}/sync").withHeaders(headers) ~> routes.route ~> check {
