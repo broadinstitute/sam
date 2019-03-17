@@ -2,6 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.google
 
 import akka.http.scaladsl.model.StatusCodes
 import cats.effect.IO
+import com.google.api.client.http.HttpResponseException
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.google.GoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.model._
@@ -30,10 +31,8 @@ class GoogleGroupSynchronizer(directoryDAO: DirectoryDAO,
 
       group = groupOption.getOrElse(throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"$groupId not found")))
 
-      googleGroup <- googleDirectoryDAO.getGoogleGroup(group.email)
-      _ <- googleGroup match {
-        case Some(_) => Future.successful(())
-        case None => googleDirectoryDAO.createGroup(groupId.toString, group.email, Option(googleDirectoryDAO.lockedDownGroupSettings))
+      _ <- googleDirectoryDAO.createGroup(groupId.toString, group.email, Option(googleDirectoryDAO.lockedDownGroupSettings)).recover {
+        case t: HttpResponseException if t.getStatusCode == 409 => // already exists
       }
 
       _ <- googleExtensions.publishGroup(groupId)
