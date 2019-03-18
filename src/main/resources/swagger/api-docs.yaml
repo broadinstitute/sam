@@ -814,6 +814,37 @@ paths:
       tags:
         - Resources
 
+  /api/resources/v1/{resourceTypeName}/{resourceId}/actions:
+    get:
+      summary: List the actions the user has on the given resource
+      responses:
+        200:
+          description: List of actions the user has on the given resource. Empty if the user has no actions or the resource does not exist
+          schema:
+            type: array
+            items:
+              type: string
+        404:
+          description: Resource type does not exist
+        500:
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      parameters:
+        - in: path
+          description: Type of resource
+          name: resourceTypeName
+          required: true
+          type: string
+        - in: path
+          description: Id of resource
+          name: resourceId
+          required: true
+          type: string
+      operationId: resourceActions
+      tags:
+        - Resources
+
   /api/resources/v1/{resourceTypeName}/{resourceId}/authDomain:
     get:
       summary: List the groups in the Auth Domain for a resource
