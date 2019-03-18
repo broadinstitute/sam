@@ -287,9 +287,9 @@ class ResourceService(
       case Some(accessPolicy) =>
         accessPolicyDAO
           .overwritePolicy(AccessPolicy(policyIdentity, workbenchSubjects, accessPolicy.email, policy.roles, policy.actions, accessPolicy.public))
-          .unsafeToFuture()
-    } andThen {
-      case Success(_) => fireGroupUpdateNotification(policyIdentity)
+          .unsafeToFuture().andThen {
+            case Success(_) => fireGroupUpdateNotification(policyIdentity)
+          }
     }
   }
 
