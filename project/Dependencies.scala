@@ -7,6 +7,7 @@ object Dependencies {
   val scalaLoggingV = "3.5.0"
   val scalaTestV    = "3.0.5"
   val scalaCheckV    = "1.14.0"
+  val catsEffectV         = "1.2.0"
 
   val workbenchUtilV   = "0.5-6942040"
   val workbenchModelV  = "0.13-7e86fba"
@@ -41,6 +42,7 @@ object Dependencies {
   val akkaTestKit: ModuleID =       "com.typesafe.akka"   %%  "akka-testkit"         % akkaV     % "test"
   val akkaHttpTestKit: ModuleID =   "com.typesafe.akka"   %%  "akka-http-testkit"    % akkaHttpV % "test"
   val scalaCheck: ModuleID =        "org.scalacheck"      %%  "scalacheck"           % scalaCheckV % "test"
+  val catsEffect: ModuleID = "org.typelevel" %% "cats-effect" % catsEffectV
 
   val googleOAuth2: ModuleID = "com.google.auth" % "google-auth-library-oauth2-http" % "0.9.0"
   val googleStorage: ModuleID = "com.google.apis" % "google-api-services-storage" % "v1-rev20181013-1.27.0" //force this version
@@ -103,6 +105,7 @@ object Dependencies {
     googleStorageLocal,
 
     unboundid,
-    ehcache
+    ehcache,
+    catsEffect
   )
 }
