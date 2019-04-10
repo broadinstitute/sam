@@ -267,7 +267,15 @@ class LdapAccessPolicyDAO(
     } yield accessPolicies
 
   override def listFlattenedPolicyMembers(policyId: FullyQualifiedPolicyId): IO[Set[WorkbenchUser]] = executeLdap(
-    IO(ldapSearchStream(peopleOu, SearchScope.ONE, Filter.createEqualityFilter(Attr.memberOf, policyDn(policyId)))(unmarshalUser).toSet)
+    // we only care about entries in ou=people and only 1 level down but searching the whole directory is MUCH faster
+    // for some reason (a couple seconds vs hundreds). So search everything and ignore anything that is not workbenchPerson
+    IO(ldapSearchStream(directoryConfig.baseDn, SearchScope.SUB, Filter.createEqualityFilter(Attr.memberOf, policyDn(policyId))) { entry =>
+      if (entry.getObjectClassValues.map(_.toLowerCase).contains(ObjectClass.workbenchPerson)) {
+        Option(unmarshalUser(entry))
+      } else {
+        None
+      }
+    }.flatten.toSet)
   )
 
   private def unmarshalUser(entry: Entry): WorkbenchUser = {
