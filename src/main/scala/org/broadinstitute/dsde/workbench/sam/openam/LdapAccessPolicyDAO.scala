@@ -270,7 +270,7 @@ class LdapAccessPolicyDAO(
     // we only care about entries in ou=people and only 1 level down but searching the whole directory is MUCH faster
     // for some reason (a couple seconds vs hundreds). So search everything and ignore anything that is not workbenchPerson
     IO(ldapSearchStream(directoryConfig.baseDn, SearchScope.SUB, Filter.createEqualityFilter(Attr.memberOf, policyDn(policyId))) { entry =>
-      if (entry.getObjectClassValues.map(_.toLowerCase).contains(ObjectClass.workbenchPerson)) {
+      if (entry.getObjectClassValues.map(_.toLowerCase).contains(ObjectClass.workbenchPerson.toLowerCase)) {
         Option(unmarshalUser(entry))
       } else {
         None
