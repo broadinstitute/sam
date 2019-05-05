@@ -188,6 +188,8 @@ class GoogleGroupSyncMonitorActor(
         message.contents.parseJson.convertTo[WorkbenchGroupName]
     }).get
 
+  override def postStop(): Unit = logger.info(s"GoogleGroupSyncMonitorActor $self terminated")
+
   override val supervisorStrategy =
     OneForOneStrategy() {
       case e => {
