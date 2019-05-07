@@ -162,8 +162,10 @@ class GoogleExtensions(
   override def publishGroup(id: WorkbenchGroupName): Future[Unit] =
     googlePubSubDAO.publishMessages(googleServicesConfig.groupSyncTopic, Seq(id.toJson.compactPrint))
 
-  override def onGroupUpdate(groupIdentities: Seq[WorkbenchGroupIdentity]): Future[Unit] =
+  override def onGroupUpdate(groupIdentities: Seq[WorkbenchGroupIdentity]): Future[Unit] = {
+    logger.info("called onGroupUpdate", new Exception())
     onGroupUpdateRecursive(groupIdentities, Seq.empty).unsafeToFuture()
+  }
 
   private def onGroupUpdateRecursive(groupIdentities: Seq[WorkbenchGroupIdentity], visitedGroups: Seq[WorkbenchGroupIdentity]): IO[Unit] =
     for {
