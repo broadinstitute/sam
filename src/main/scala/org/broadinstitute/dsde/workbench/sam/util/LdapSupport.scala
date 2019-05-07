@@ -69,7 +69,7 @@ trait LdapSupport extends DirectorySubjectNameSupport with LazyLogging {
   protected def ldapLoadMemberOf(subject: WorkbenchSubject): IO[Set[String]] =
     Option(memberOfCache.get(subject)) match {
       case None =>
-        logger.info("called ldapLoadMemberOf", new Exception())
+        logger.error("called ldapLoadMemberOf", new Exception())
         for {
           entry <- executeLdap(IO(ldapConnectionPool.getEntry(subjectDn(subject), Attr.memberOf)))
         } yield {
