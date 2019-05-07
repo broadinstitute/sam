@@ -1,6 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.util
 
 import cats.effect.{ContextShift, IO}
+import com.typesafe.scalalogging.LazyLogging
 import com.unboundid.ldap.sdk._
 import org.broadinstitute.dsde.workbench.model.WorkbenchSubject
 import org.broadinstitute.dsde.workbench.sam.directory.DirectorySubjectNameSupport
@@ -10,7 +11,7 @@ import org.ehcache.Cache
 import scala.concurrent.ExecutionContext
 import scala.util.{Failure, Success, Try}
 
-trait LdapSupport extends DirectorySubjectNameSupport {
+trait LdapSupport extends DirectorySubjectNameSupport with LazyLogging {
   protected val ldapConnectionPool: LDAPConnectionPool
   protected val batchSize = 1000
   protected val ecForLdapBlockingIO: ExecutionContext
@@ -68,6 +69,7 @@ trait LdapSupport extends DirectorySubjectNameSupport {
   protected def ldapLoadMemberOf(subject: WorkbenchSubject): IO[Set[String]] =
     Option(memberOfCache.get(subject)) match {
       case None =>
+        logger.info("called ldapLoadMemberOf", new Exception())
         for {
           entry <- executeLdap(IO(ldapConnectionPool.getEntry(subjectDn(subject), Attr.memberOf)))
         } yield {

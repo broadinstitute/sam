@@ -5,6 +5,7 @@ import akka.http.scaladsl.model.StatusCodes
 import cats.data.OptionT
 import cats.effect.{IO, Timer}
 import cats.implicits._
+import com.typesafe.scalalogging.LazyLogging
 import com.unboundid.ldap.sdk._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google._
@@ -26,6 +27,7 @@ class LdapDirectoryDAO(
     protected val ecForLdapBlockingIO: ExecutionContext,
     protected val memberOfCache: Cache[WorkbenchSubject, Set[String]])(implicit executionContext: ExecutionContext, timer: Timer[IO])
     extends DirectoryDAO
+    with LazyLogging
     with DirectorySubjectNameSupport
     with LdapSupport {
   implicit val cs = IO.contextShift(executionContext)
@@ -289,7 +291,10 @@ class LdapDirectoryDAO(
     )
   }
 
-  override def listAncestorGroups(groupId: WorkbenchGroupIdentity): IO[Set[WorkbenchGroupIdentity]] = listMemberOfGroups(groupId)
+  override def listAncestorGroups(groupId: WorkbenchGroupIdentity): IO[Set[WorkbenchGroupIdentity]] = {
+    logger.info("called listAncestorGroups", new Exception())
+    listMemberOfGroups(groupId)
+  }
 
   override def enableIdentity(subject: WorkbenchSubject): IO[Unit] =
     executeLdap(
