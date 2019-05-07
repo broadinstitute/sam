@@ -287,7 +287,7 @@ class LdapDirectoryDAO(
 
   def listDirectMembers(groupId: WorkbenchGroupIdentity): IO[Set[WorkbenchSubject]] = {
     executeLdap(
-      IO(getAttributes(ldapConnectionPool.getEntry(groupDn(groupId), Attr.uniqueMember), Attr.uniqueMember).map(dnToSubject))
+      IO(getAttributes(ldapConnectionPool.getEntry(groupDn(groupId), "UniqueMember"), "UniqueMember").map(dnToSubject))
     )
   }
 
