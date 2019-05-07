@@ -191,7 +191,9 @@ class GoogleExtensions(
       policies <- resources.toList.traverse { resource =>
         accessPolicyDAO.listAccessPolicies(resource.fullyQualifiedId)
       }
-      _ <- onGroupUpdateRecursive(policies.flatten.map(_.id).toList, visitedGroups)
+      filteredList = policies.flatten.collect { case accessPolicy if accessPolicyDAO.listFlattenedPolicyMembers(accessPolicy.id).flatMap(_.isEmpty) => accessPolicy.id }
+     // parTraverseResult = policies.flatten.parTraverse( accessPolicy => accessPolicyDAO.listFlattenedPolicyMembers(accessPolicy.id))
+      _ <- onGroupUpdateRecursive(filteredList  , visitedGroups) //.map(_.id).toList, visitedGroups)
     } yield ()
 
   override def onUserCreate(user: WorkbenchUser): Future[Unit] = {
