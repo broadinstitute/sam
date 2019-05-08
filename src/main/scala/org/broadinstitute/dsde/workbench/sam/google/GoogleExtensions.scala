@@ -160,7 +160,7 @@ class GoogleExtensions(
   // The handler for the subscription will ultimately call GoogleExtensions.synchronizeGroupMembers, which will
   // do all the heavy lifting of creating the Google Group and adding members.
   override def publishGroup(id: WorkbenchGroupName): Future[Unit] =
-    googlePubSubDAO.publishMessages(googleServicesConfig.groupSyncTopic, Seq(id.toJson.compactPrint))
+    Future.unit //googlePubSubDAO.publishMessages(googleServicesConfig.groupSyncTopic, Seq(id.toJson.compactPrint))
 
   override def onGroupUpdate(groupIdentities: Seq[WorkbenchGroupIdentity]): Future[Unit] = {
     onGroupUpdateRecursive(groupIdentities, Seq.empty).unsafeToFuture()
@@ -176,7 +176,7 @@ class GoogleExtensions(
         case (gn: WorkbenchGroupName, Some(_)) => gn.toJson.compactPrint
         case (rpn: FullyQualifiedPolicyId, Some(_)) => rpn.toJson.compactPrint
       }
-      _ <- IO.fromFuture(IO(googlePubSubDAO.publishMessages(googleServicesConfig.groupSyncTopic, messagesForIdsWithSyncDates)))
+//      _ <- IO.fromFuture(IO(googlePubSubDAO.publishMessages(googleServicesConfig.groupSyncTopic, messagesForIdsWithSyncDates)))
       ancestorGroups <- groupIdentities.toList.traverse { id =>
         directoryDAO.listAncestorGroups(id)
       }
