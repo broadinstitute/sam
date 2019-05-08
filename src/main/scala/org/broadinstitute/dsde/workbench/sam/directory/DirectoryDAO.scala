@@ -50,7 +50,6 @@ trait DirectoryDAO {
   def listUserDirectMemberships(userId: WorkbenchUserId): IO[Stream[WorkbenchGroupIdentity]]
   def listIntersectionGroupUsers(groupId: Set[WorkbenchGroupIdentity]): IO[Set[WorkbenchUserId]]
   def listAncestorGroups(groupId: WorkbenchGroupIdentity): IO[Set[WorkbenchGroupIdentity]]
-  def listDirectMembers(groupId: WorkbenchGroupIdentity): IO[Set[WorkbenchSubject]]
 
   def enableIdentity(subject: WorkbenchSubject): IO[Unit]
   def disableIdentity(subject: WorkbenchSubject): Future[Unit]
