@@ -13,7 +13,6 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, LoadResourceAuthDomainResult}
 
 import scala.concurrent.{ExecutionContext, Future}
-import scala.util.Success
 
 /**
   * Created by mbemis on 5/22/17.
@@ -285,11 +284,11 @@ class ResourceService(
     accessPolicyDAO.loadPolicy(policyIdentity).unsafeToFuture().flatMap {
       case None => createPolicy(policyIdentity, workbenchSubjects, generateGroupEmail(), policy.roles, policy.actions)
       case Some(accessPolicy) =>
-        accessPolicyDAO
-          .overwritePolicy(AccessPolicy(policyIdentity, workbenchSubjects, accessPolicy.email, policy.roles, policy.actions, accessPolicy.public))
-          .unsafeToFuture().andThen {
-            case Success(_) => fireGroupUpdateNotification(policyIdentity)
-          }
+        val x = for {
+          policy <- accessPolicyDAO.overwritePolicy(AccessPolicy(policyIdentity, workbenchSubjects, accessPolicy.email, policy.roles, policy.actions, accessPolicy.public))
+          _ <- IO.fromFuture(IO(fireGroupUpdateNotification(policyIdentity)))
+        } yield policy
+        x.unsafeToFuture()
     }
   }
 
@@ -367,15 +366,21 @@ class ResourceService(
         throw t
     }
 
-  def addSubjectToPolicy(policyIdentity: FullyQualifiedPolicyId, subject: WorkbenchSubject): Future[Unit] =
-    directoryDAO.addGroupMember(policyIdentity, subject).unsafeToFuture().map(_ => ()) andThen {
-      case Success(_) => fireGroupUpdateNotification(policyIdentity)
-    }
+  def addSubjectToPolicy(policyIdentity: FullyQualifiedPolicyId, subject: WorkbenchSubject): Future[Unit] = {
+    val x = for {
+      _ <- directoryDAO.addGroupMember(policyIdentity, subject)
+      _ <- IO.fromFuture(IO(fireGroupUpdateNotification(policyIdentity)))
+    } yield ()
+    x.unsafeToFuture()
+  }
 
-  def removeSubjectFromPolicy(policyIdentity: FullyQualifiedPolicyId, subject: WorkbenchSubject): Future[Unit] =
-    directoryDAO.removeGroupMember(policyIdentity, subject).void.unsafeToFuture() andThen {
-      case Success(_) => fireGroupUpdateNotification(policyIdentity)
-    }
+  def removeSubjectFromPolicy(policyIdentity: FullyQualifiedPolicyId, subject: WorkbenchSubject): Future[Unit] = {
+    val x = for {
+      _ <- directoryDAO.removeGroupMember(policyIdentity, subject)
+      _ <- IO.fromFuture(IO(fireGroupUpdateNotification(policyIdentity)))
+    } yield ()
+    x.unsafeToFuture()
+  }
 
   private[service] def loadAccessPolicyWithEmails(policy: AccessPolicy): IO[AccessPolicyMembership] = {
     val users = policy.members.collect { case userId: WorkbenchUserId => userId }
