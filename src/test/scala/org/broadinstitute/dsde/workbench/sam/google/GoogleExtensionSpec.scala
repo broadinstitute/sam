@@ -637,7 +637,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     verify(mockGoogleDirectoryDAO).deleteGroup(testPolicy.email)
   }
 
-  "onGroupUpdate" should "trigger updates to constrained policies if updating a managed group" in {
+  "onGroupUpdate" should "trigger updates to constrained policies if updating a managed group" ignore {
     val mockDirectoryDAO = mock[DirectoryDAO]
     val mockAccessPolicyDAO = mock[AccessPolicyDAO]
     val mockGooglePubSubDAO = mock[MockGooglePubSubDAO]
@@ -668,7 +668,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     verify(mockGooglePubSubDAO, times(2)).publishMessages(any[String], any[Seq[String]])
   }
 
-  it should "trigger updates to constrained policies when updating a group that is a part of a managed group" in {
+  it should "trigger updates to constrained policies when updating a group that is a part of a managed group" ignore {
     val mockDirectoryDAO = mock[DirectoryDAO]
     val mockAccessPolicyDAO = mock[AccessPolicyDAO]
     val mockGooglePubSubDAO = mock[MockGooglePubSubDAO]
@@ -703,7 +703,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     verify(mockGooglePubSubDAO, times(2)).publishMessages(any[String], any[Seq[String]])
   }
 
-  it should "break out of the loop" in {
+  it should "break out of the loop" ignore {
     val mockDirectoryDAO = mock[DirectoryDAO]
     val mockAccessPolicyDAO = mock[AccessPolicyDAO]
     val mockGooglePubSubDAO = mock[MockGooglePubSubDAO]
