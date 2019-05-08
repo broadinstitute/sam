@@ -292,7 +292,6 @@ class LdapDirectoryDAO(
   }
 
   override def listAncestorGroups(groupId: WorkbenchGroupIdentity): IO[Set[WorkbenchGroupIdentity]] = {
-    logger.info("called listAncestorGroups", new Exception())
     listMemberOfGroups(groupId)
   }
 

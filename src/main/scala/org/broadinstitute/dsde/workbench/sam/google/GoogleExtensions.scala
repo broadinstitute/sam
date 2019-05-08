@@ -163,7 +163,6 @@ class GoogleExtensions(
     googlePubSubDAO.publishMessages(googleServicesConfig.groupSyncTopic, Seq(id.toJson.compactPrint))
 
   override def onGroupUpdate(groupIdentities: Seq[WorkbenchGroupIdentity]): Future[Unit] = {
-    logger.info("called onGroupUpdate", new Exception())
     onGroupUpdateRecursive(groupIdentities, Seq.empty).unsafeToFuture()
   }
 
