@@ -171,18 +171,18 @@ class GoogleExtensions(
         directoryDAO.getSynchronizedDate(id).map(dateOption => id -> dateOption)
       }
       // only sync groups that have already been synchronized
-      messagesForIdsWithSyncDates = idsAndSyncDates.collect {
-        case (gn: WorkbenchGroupName, Some(_)) => gn.toJson.compactPrint
-        case (rpn: FullyQualifiedPolicyId, Some(_)) => rpn.toJson.compactPrint
-      }
-      _ <- IO.fromFuture(IO(googlePubSubDAO.publishMessages(googleServicesConfig.groupSyncTopic, messagesForIdsWithSyncDates)))
-      ancestorGroups <- groupIdentities.toList.traverse { id =>
+      managedGroupNames = idsAndSyncDates.collect { case (groupName: WorkbenchGroupName, Some(_)) => groupName }
+      accessPolicyIds   = idsAndSyncDates.collect { case (accessPolicyId: FullyQualifiedPolicyId, Some(_)) => accessPolicyId }
+
+      _ <- IO.fromFuture(IO(googlePubSubDAO.publishMessages(googleServicesConfig.groupSyncTopic, managedGroupNames.map(_.toJson.compactPrint) ++ accessPolicyIds.map(_.toJson.compactPrint))))
+
+      ancestorManagedGroups <- managedGroupNames traverse { id =>
         directoryDAO.listAncestorGroups(id)
       }
-      managedGroupIds = (ancestorGroups.flatten ++ groupIdentities).filterNot(visitedGroups.contains).collect {
+      managedGroupIds = (ancestorManagedGroups.flatten ++ groupIdentities).filterNot(visitedGroups.contains).collect {
         case FullyQualifiedPolicyId(FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, id), ManagedGroupService.adminPolicyName | ManagedGroupService.memberPolicyName) => id
       }
-      _ <- managedGroupIds.traverse(id => onManagedGroupUpdate(id, visitedGroups ++ groupIdentities ++ ancestorGroups.flatten))
+      _ <- managedGroupIds.traverse(id => onManagedGroupUpdate(id, visitedGroups ++ groupIdentities ++ ancestorManagedGroups.flatten))
     } yield ()
 
   private def onManagedGroupUpdate(groupId: ResourceId, visitedGroups: Seq[WorkbenchGroupIdentity]): IO[Unit] =
