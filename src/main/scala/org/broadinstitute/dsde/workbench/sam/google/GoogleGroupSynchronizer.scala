@@ -125,16 +125,21 @@ class GoogleGroupSynchronizer(directoryDAO: DirectoryDAO,
         throw new WorkbenchException(s"Invalid resource type specified. ${resource.resourceTypeName} is not a recognized resource type.")
     }
 
-  private[google] def calculateIntersectionGroup(resource: FullyQualifiedResourceId, policy: AccessPolicy): IO[Set[WorkbenchSubject]] =
-    for {
-      result <- accessPolicyDAO.loadResourceAuthDomain(resource)
-      members <- result match {
-        case LoadResourceAuthDomainResult.Constrained(groups) =>
-          val groupsIdentity: Set[WorkbenchGroupIdentity] = groups.toList.toSet
-          directoryDAO.listIntersectionGroupUsers(groupsIdentity + policy.id).map(_.map(_.asInstanceOf[WorkbenchSubject])) //Doesn't seem like I can avoid the asInstanceOf, would be interested to know if there's a way
-        case LoadResourceAuthDomainResult.NotConstrained | LoadResourceAuthDomainResult.ResourceNotFound =>
-          IO.pure(policy.members)
-      }
-    } yield members
-
+  private[google] def calculateIntersectionGroup(resource: FullyQualifiedResourceId, policy: AccessPolicy): IO[Set[WorkbenchSubject]] = {
+    // if the policy has no members, there will be no intersections
+    if (policy.members.isEmpty)
+      IO.pure(Set())
+    else {
+      for {
+        result <- accessPolicyDAO.loadResourceAuthDomain(resource)
+        members <- result match {
+          case LoadResourceAuthDomainResult.Constrained(groups) =>
+            val groupsIdentity: Set[WorkbenchGroupIdentity] = groups.toList.toSet
+            directoryDAO.listIntersectionGroupUsers(groupsIdentity + policy.id).map(_.map(_.asInstanceOf[WorkbenchSubject])) //Doesn't seem like I can avoid the asInstanceOf, would be interested to know if there's a way
+          case LoadResourceAuthDomainResult.NotConstrained | LoadResourceAuthDomainResult.ResourceNotFound =>
+            IO.pure(policy.members)
+        }
+      } yield members
+    }
+  }
 }

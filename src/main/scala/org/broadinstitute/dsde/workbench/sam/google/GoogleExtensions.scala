@@ -116,7 +116,7 @@ class GoogleExtensions(
         case Some(_) =>
           IO.raiseError(
             new WorkbenchExceptionWithErrorReport(
-              ErrorReport(StatusCodes.Conflict, s"subjectId in configration ${googleServicesConfig.serviceAccountClientId} is not a valid user")))
+              ErrorReport(StatusCodes.Conflict, s"subjectId in configuration ${googleServicesConfig.serviceAccountClientId} is not a valid user")))
         case None => IO.pure(UserInfo(OAuth2BearerToken(""), genWorkbenchUserId(System.currentTimeMillis()), googleServicesConfig.serviceAccountClientEmail, 0))
       }
       _ <- IO.fromFuture(
@@ -191,22 +191,7 @@ class GoogleExtensions(
       policies <- resources.toList.traverse { resource =>
         accessPolicyDAO.listAccessPolicies(resource.fullyQualifiedId)
       }
-
-      // ~ Attempt 1 ~
-      // Separate out (1) figuring out if the access policy has any members and (2) collecting the ones that do and returning just the policy ids
-      flatPols: List[(Boolean, FullyQualifiedPolicyId)] <- policies.flatten.map(pol => accessPolicyDAO.listFlattenedPolicyMembers(pol.id).map(x => (x.isEmpty, pol.id))).sequence
-      filteredList1 = flatPols.collect { case (policyHasNoMembers, policyId) if policyHasNoMembers => policyId }
-
-      // ~ Attempt 2 ~
-      // Use filterA to filter out basted on whether the access policy has any members and then map over the policies to get a list of the policy ids
-      filteredList2 <- policies.flatten.filterA { accessPolicy => accessPolicyDAO.listFlattenedPolicyMembers(accessPolicy.id).map(memberSet => memberSet.isEmpty) }.map(x => x.map(_.id))
-
-      // ~ Attempt 3 ~
-      // Use a traverseFilter to filter based on whether the access policy has any members. traverseFilter filters based on Option, not boolean, so in
-      // this case we have to return None if the member set is empty and Some(id of the access policy) if it is not empty.
-      filteredList3 <- policies.flatten.traverseFilter { accessPolicy: AccessPolicy => accessPolicyDAO.listFlattenedPolicyMembers(accessPolicy.id).map(x => if (x.isEmpty) None else Some(accessPolicy.id)) }
-
-      _ <- onGroupUpdateRecursive(filteredList1, visitedGroups)
+      _ <- onGroupUpdateRecursive(policies.flatten.map(_.id).toList, visitedGroups)
     } yield ()
 
   override def onUserCreate(user: WorkbenchUser): Future[Unit] = {
