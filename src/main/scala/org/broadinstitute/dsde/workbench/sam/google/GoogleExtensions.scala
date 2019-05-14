@@ -67,7 +67,7 @@ class GoogleExtensions(
   private val maxGroupEmailLength = 64
 
   private[google] def toProxyFromUser(userId: WorkbenchUserId): WorkbenchEmail =
-    /* Re-enable this code and remove the temporary code below after fixing rawls for GAWB-2933
+  /* Re-enable this code and remove the temporary code below after fixing rawls for GAWB-2933
     val username = user.email.value.split("@").head
     val emailSuffix = s"_${user.id.value}@${googleServicesConfig.appsDomain}"
     val maxUsernameLength = maxGroupEmailLength - emailSuffix.length
@@ -162,37 +162,48 @@ class GoogleExtensions(
   override def publishGroup(id: WorkbenchGroupName): Future[Unit] =
     googlePubSubDAO.publishMessages(googleServicesConfig.groupSyncTopic, Seq(id.toJson.compactPrint))
 
-  override def onGroupUpdate(groupIdentities: Seq[WorkbenchGroupIdentity]): Future[Unit] =
-    onGroupUpdateRecursive(groupIdentities, Seq.empty).unsafeToFuture()
 
-  private def onGroupUpdateRecursive(groupIdentities: Seq[WorkbenchGroupIdentity], visitedGroups: Seq[WorkbenchGroupIdentity]): IO[Unit] =
+  private def onGroupUpdate(groupIdentities: Seq[WorkbenchGroupIdentity]): Future[Unit] = {
     for {
-      idsAndSyncDates <- groupIdentities.toList.traverse { id =>
-        directoryDAO.getSynchronizedDate(id).map(dateOption => id -> dateOption)
+      // only sync groups that have been synchronized in the past
+      previouslySyncedIds <- groupIdentities.toList.traverseFilter { id =>
+        directoryDAO.getSynchronizedDate(id).map(dateOption => dateOption.map(_ => id))
       }
-      // only sync groups that have already been synchronized
-      managedGroupNames = idsAndSyncDates.collect { case (groupName: WorkbenchGroupName, Some(_)) => groupName }
-      accessPolicyIds   = idsAndSyncDates.collect { case (accessPolicyId: FullyQualifiedPolicyId, Some(_)) => accessPolicyId }
 
-      _ <- IO.fromFuture(IO(googlePubSubDAO.publishMessages(googleServicesConfig.groupSyncTopic, managedGroupNames.map(_.toJson.compactPrint) ++ accessPolicyIds.map(_.toJson.compactPrint))))
+      // separate out the access policies and managed groups
+      managedGroupNames = previouslySyncedIds.collect { case groupName: WorkbenchGroupName => groupName }
+      accessPolicyIds = previouslySyncedIds.collect { case accessPolicyId: FullyQualifiedPolicyId => accessPolicyId }
 
-      ancestorManagedGroups <- managedGroupNames traverse { id =>
-        directoryDAO.listAncestorGroups(id)
+      // get all the ancestor groups of each managed group
+      ancestorGroupsOfManagerGroups: List[Set[WorkbenchGroupIdentity]] <- managedGroupNames traverse { id =>
+        directoryDAO.listAncestorGroups(id)  // <-- This calls isMemberOf
       }
-      managedGroupIds = (ancestorManagedGroups.flatten ++ groupIdentities).filterNot(visitedGroups.contains).collect {
+
+      // get the groups ids of all the managed groups
+      managedGroupIds = (ancestorGroupsOfManagerGroups.flatten ++ managedGroupNames).collect {
         case FullyQualifiedPolicyId(FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, id), ManagedGroupService.adminPolicyName | ManagedGroupService.memberPolicyName) => id
       }
-      _ <- managedGroupIds.traverse(id => onManagedGroupUpdate(id, visitedGroups ++ groupIdentities ++ ancestorManagedGroups.flatten))
-    } yield ()
 
-  private def onManagedGroupUpdate(groupId: ResourceId, visitedGroups: Seq[WorkbenchGroupIdentity]): IO[Unit] =
+      // get all access policies on any resource that is constrained by the managed groups
+      accessPolicies <- managedGroupIds.traverse(id => getAccessPoliciesOnResourcesConstrainedByGroup(id))
+      constrainedResourceAccessPolicyIds = accessPolicies.flatten.map(accessPolicy => accessPolicy.id)
+
+      managedGroupMessages = managedGroupNames.map(_.toJson.compactPrint)
+      accessPolicyMessages = (accessPolicyIds ++ constrainedResourceAccessPolicyIds).map(_.toJson.compactPrint)
+
+      _ <- IO.fromFuture(IO(googlePubSubDAO.publishMessages(googleServicesConfig.groupSyncTopic, managedGroupMessages ++ accessPolicyMessages)))
+
+    } yield ()
+  }.unsafeToFuture()
+
+  private def getAccessPoliciesOnResourcesConstrainedByGroup(groupId: ResourceId): IO[List[AccessPolicy]] = {
     for {
       resources <- accessPolicyDAO.listResourcesConstrainedByGroup(WorkbenchGroupName(groupId.value))
       policies <- resources.toList.traverse { resource =>
         accessPolicyDAO.listAccessPolicies(resource.fullyQualifiedId)
       }
-      _ <- onGroupUpdateRecursive(policies.flatten.map(_.id).toList, visitedGroups)
-    } yield ()
+    } yield policies.flatten
+  }
 
   override def onUserCreate(user: WorkbenchUser): Future[Unit] = {
     val proxyEmail = toProxyFromUser(user.id)
