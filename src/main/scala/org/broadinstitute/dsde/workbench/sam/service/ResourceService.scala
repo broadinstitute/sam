@@ -370,7 +370,7 @@ class ResourceService(
   def addSubjectToPolicy(policyIdentity: FullyQualifiedPolicyId, subject: WorkbenchSubject): Future[Unit] = {
     subject match {
       case subject: FullyQualifiedPolicyId if policyIdentity.resource.resourceTypeName.equals(ManagedGroupService.managedGroupTypeName) =>
-        throw new WorkbenchExceptionWithErrorReport(ErrorReport(s"Access policies cannot be added to managed groups."))
+        Future.failed(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"Access policies cannot be added to managed groups.")))
       case _ =>    {
         directoryDAO.addGroupMember(policyIdentity, subject).unsafeToFuture().map(_ => ()) andThen {
           case Success(_) => fireGroupUpdateNotification(policyIdentity)
