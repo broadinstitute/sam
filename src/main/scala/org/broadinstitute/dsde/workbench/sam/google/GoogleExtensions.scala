@@ -11,7 +11,7 @@ import cats.implicits._
 import com.google.api.client.googleapis.json.GoogleJsonResponseException
 import com.google.api.gax.rpc.AlreadyExistsException
 import com.google.auth.oauth2.ServiceAccountCredentials
-import com.google.protobuf.{Timestamp, Duration}
+import com.google.protobuf.{Duration, Timestamp}
 import com.google.rpc.Code
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.dataaccess.NotificationDAO
@@ -162,39 +162,47 @@ class GoogleExtensions(
   override def publishGroup(id: WorkbenchGroupName): Future[Unit] =
     googlePubSubDAO.publishMessages(googleServicesConfig.groupSyncTopic, Seq(id.toJson.compactPrint))
 
-
-  private def onGroupUpdate(groupIdentities: Seq[WorkbenchGroupIdentity]): Future[Unit] = {
+  override def onGroupUpdate(groupIdentities: Seq[WorkbenchGroupIdentity]): Future[Unit] = {
     for {
       // only sync groups that have been synchronized in the past
       previouslySyncedIds <- groupIdentities.toList.traverseFilter { id =>
         directoryDAO.getSynchronizedDate(id).map(dateOption => dateOption.map(_ => id))
       }
 
-      // separate out the access policies and managed groups
-      managedGroupNames = previouslySyncedIds.collect { case groupName: WorkbenchGroupName => groupName }
-      accessPolicyIds = previouslySyncedIds.collect { case accessPolicyId: FullyQualifiedPolicyId => accessPolicyId }
-
-      // get all the ancestor groups of each managed group
-      ancestorGroupsOfManagerGroups: List[Set[WorkbenchGroupIdentity]] <- managedGroupNames traverse { id =>
-        directoryDAO.listAncestorGroups(id)  // <-- This calls isMemberOf
+      // get all the messages for the previously synced groups
+      messages <- previouslySyncedIds.traverse {
+          case groupName: WorkbenchGroupName => getGroupPublishMessages(groupName)
+          case accessPolicyId: FullyQualifiedPolicyId => IO.pure(List(accessPolicyId.toJson.compactPrint))
       }
 
-      // get the groups ids of all the managed groups
-      managedGroupIds = (ancestorGroupsOfManagerGroups.flatten ++ managedGroupNames).collect {
-        case FullyQualifiedPolicyId(FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, id), ManagedGroupService.adminPolicyName | ManagedGroupService.memberPolicyName) => id
-      }
-
-      // get all access policies on any resource that is constrained by the managed groups
-      accessPolicies <- managedGroupIds.traverse(id => getAccessPoliciesOnResourcesConstrainedByGroup(id))
-      constrainedResourceAccessPolicyIds = accessPolicies.flatten.map(accessPolicy => accessPolicy.id)
-
-      managedGroupMessages = managedGroupNames.map(_.toJson.compactPrint)
-      accessPolicyMessages = (accessPolicyIds ++ constrainedResourceAccessPolicyIds).map(_.toJson.compactPrint)
-
-      _ <- IO.fromFuture(IO(googlePubSubDAO.publishMessages(googleServicesConfig.groupSyncTopic, managedGroupMessages ++ accessPolicyMessages)))
+      // publish all the messages
+      _ <- IO.fromFuture(IO(publishMessage(messages.flatten)))
 
     } yield ()
   }.unsafeToFuture()
+
+  private def getGroupPublishMessages(groupName: WorkbenchGroupName): IO[List[String]] = {
+   // start with a group
+    for {
+      // get all the ancestors of that group
+      ancestorGroupsOfManagedGroups <- directoryDAO.listAncestorGroups(groupName)
+
+      // get all the ids of the group and its ancestors
+      managedGroupIds = (ancestorGroupsOfManagedGroups + groupName).collect {
+        case FullyQualifiedPolicyId(FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, id), ManagedGroupService.adminPolicyName | ManagedGroupService.memberPolicyName) => id
+      }
+
+      // get all access policies on any resource that is constrained by the groups
+      constrainedResourceAccessPolicies <- managedGroupIds.toList.traverse(id => getAccessPoliciesOnResourcesConstrainedByGroup(id))
+
+      // return messages for all the affected access policies and the original group we started with
+    } yield constrainedResourceAccessPolicies.flatten.map(accessPolicy => accessPolicy.id.toJson.compactPrint) :+ groupName.toJson.compactPrint
+  }
+
+  private def publishMessage(messages: Seq[String]): Future[Unit] = {
+    googlePubSubDAO.publishMessages(googleServicesConfig.groupSyncTopic, messages)
+  }
+
 
   private def getAccessPoliciesOnResourcesConstrainedByGroup(groupId: ResourceId): IO[List[AccessPolicy]] = {
     for {
