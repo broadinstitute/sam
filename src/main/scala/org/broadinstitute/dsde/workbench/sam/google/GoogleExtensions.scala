@@ -116,7 +116,7 @@ class GoogleExtensions(
         case Some(_) =>
           IO.raiseError(
             new WorkbenchExceptionWithErrorReport(
-              ErrorReport(StatusCodes.Conflict, s"subjectId in configration ${googleServicesConfig.serviceAccountClientId} is not a valid user")))
+              ErrorReport(StatusCodes.Conflict, s"subjectId in configuration ${googleServicesConfig.serviceAccountClientId} is not a valid user")))
         case None => IO.pure(UserInfo(OAuth2BearerToken(""), genWorkbenchUserId(System.currentTimeMillis()), googleServicesConfig.serviceAccountClientEmail, 0))
       }
       _ <- IO.fromFuture(
