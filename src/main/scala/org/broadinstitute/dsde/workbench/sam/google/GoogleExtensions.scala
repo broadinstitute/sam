@@ -176,7 +176,7 @@ class GoogleExtensions(
       }
 
       // publish all the messages
-      _ <- IO.fromFuture(IO(publishMessage(messages.flatten)))
+      _ <- IO.fromFuture(IO(publishMessages(messages.flatten)))
 
     } yield ()
   }.unsafeToFuture()
@@ -199,7 +199,7 @@ class GoogleExtensions(
     } yield constrainedResourceAccessPolicies.flatten.map(accessPolicy => accessPolicy.id.toJson.compactPrint) :+ groupName.toJson.compactPrint
   }
 
-  private def publishMessage(messages: Seq[String]): Future[Unit] = {
+  private def publishMessages(messages: Seq[String]): Future[Unit] = {
     googlePubSubDAO.publishMessages(googleServicesConfig.groupSyncTopic, messages)
   }
 
