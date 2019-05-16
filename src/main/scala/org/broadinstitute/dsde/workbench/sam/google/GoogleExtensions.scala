@@ -162,6 +162,25 @@ class GoogleExtensions(
   override def publishGroup(id: WorkbenchGroupName): Future[Unit] =
     googlePubSubDAO.publishMessages(googleServicesConfig.groupSyncTopic, Seq(id.toJson.compactPrint))
 
+
+  /*
+    - managed groups and access policies are both "groups"
+    - You can have a bunch of workspaces inside an auth domain (a type of managed group).
+    - A user must be a member of the auth domain in order to access any of the workspaces in that auth domain.
+    - If a workspace is in multiple auth domains, the user must be a member of all of them in order to access that workspace
+    - An access policy is specific to a single workspace (or other resource) - so you must be an Owner/Writer/... whatever
+      in order to be able to do the relevant action on that workspace
+    - To access a workspace, a user must BOTH be a member in all the auth domains that workspace is in AND also be a member
+      in one of the access policy groups.
+    - When someone gets added to an managed group or access policy, we have to figure out which google buckets they suddenly have access to.
+    - To do this, when someone gets added to a group, we call onGroupUpdate, which retrieves a list of all of the groups that are affected
+      by the groupUpdate, and for each publishes a message to a pub/sub queue telling a Sam background process
+      to sync the user's access for all of those access policy groups.
+    - To figure out which groups are affected - we first separate access policies and managed groups.
+      For each access policy passed to onGroupUpdate, we publish a message to sync just that group
+      For each managed group passed to onGroupUpdate, we first find all of the ancestor groups of that group and then all of the access policies
+      for each of those groups and then publish a messsage to sync each of those access policies.
+   */
   override def onGroupUpdate(groupIdentities: Seq[WorkbenchGroupIdentity]): Future[Unit] = {
     for {
       // only sync groups that have been synchronized in the past
@@ -169,9 +188,9 @@ class GoogleExtensions(
         directoryDAO.getSynchronizedDate(id).map(dateOption => dateOption.map(_ => id))
       }
 
-      // get all the messages for the previously synced groups
+      // make all the publish messages for the previously synced groups
       messages <- previouslySyncedIds.traverse {
-          case groupName: WorkbenchGroupName => getGroupPublishMessages(groupName)
+          case groupName: WorkbenchGroupName => makeGroupPublishMessages(groupName)
           case accessPolicyId: FullyQualifiedPolicyId => IO.pure(List(accessPolicyId.toJson.compactPrint))
       }
 
@@ -181,7 +200,7 @@ class GoogleExtensions(
     } yield ()
   }.unsafeToFuture()
 
-  private def getGroupPublishMessages(groupName: WorkbenchGroupName): IO[List[String]] = {
+  private def makeGroupPublishMessages(groupName: WorkbenchGroupName): IO[List[String]] = {
    // start with a group
     for {
       // get all the ancestors of that group
