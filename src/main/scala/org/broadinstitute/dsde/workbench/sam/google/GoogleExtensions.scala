@@ -190,7 +190,13 @@ class GoogleExtensions(
 
       // make all the publish messages for the previously synced groups
       messages <- previouslySyncedIds.traverse {
+          // if it's a group that isn't an access policy
           case groupName: WorkbenchGroupName => makeGroupPublishMessages(groupName)
+          // if it's the access policy of a managed group
+          case FullyQualifiedPolicyId(FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, id: ResourceId),
+                                                 ManagedGroupService.adminPolicyName | ManagedGroupService.memberPolicyName) =>
+            makeGroupPublishMessages(WorkbenchGroupName(id.value))
+          // if it's an access policy on a resource that's not a managed group
           case accessPolicyId: FullyQualifiedPolicyId => IO.pure(List(accessPolicyId.toJson.compactPrint))
       }
 
