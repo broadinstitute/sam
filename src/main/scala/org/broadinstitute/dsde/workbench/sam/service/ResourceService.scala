@@ -367,10 +367,17 @@ class ResourceService(
         throw t
     }
 
-  def addSubjectToPolicy(policyIdentity: FullyQualifiedPolicyId, subject: WorkbenchSubject): Future[Unit] =
-    directoryDAO.addGroupMember(policyIdentity, subject).unsafeToFuture().map(_ => ()) andThen {
-      case Success(_) => fireGroupUpdateNotification(policyIdentity)
+  def addSubjectToPolicy(policyIdentity: FullyQualifiedPolicyId, subject: WorkbenchSubject): Future[Unit] = {
+    subject match {
+      case subject: FullyQualifiedPolicyId if policyIdentity.resource.resourceTypeName.equals(ManagedGroupService.managedGroupTypeName) =>
+        Future.failed(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"Access policies cannot be added to managed groups.")))
+      case _ =>    {
+        directoryDAO.addGroupMember(policyIdentity, subject).unsafeToFuture().map(_ => ()) andThen {
+          case Success(_) => fireGroupUpdateNotification(policyIdentity)
+        }
+      }
     }
+  }
 
   def removeSubjectFromPolicy(policyIdentity: FullyQualifiedPolicyId, subject: WorkbenchSubject): Future[Unit] =
     directoryDAO.removeGroupMember(policyIdentity, subject).void.unsafeToFuture() andThen {

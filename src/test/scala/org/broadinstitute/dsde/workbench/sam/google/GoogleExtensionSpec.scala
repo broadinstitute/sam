@@ -664,8 +664,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
 
     runAndWait(googleExtensions.onGroupUpdate(Seq(managedGroupRPN)))
 
-    // once when updating the managed group, and once when updating the policies it constrains
-    verify(mockGooglePubSubDAO, times(2)).publishMessages(any[String], any[Seq[String]])
+    verify(mockGooglePubSubDAO, times(1)).publishMessages(any[String], any[Seq[String]])
   }
 
   it should "trigger updates to constrained policies when updating a group that is a part of a managed group" in {
@@ -699,8 +698,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
 
     runAndWait(googleExtensions.onGroupUpdate(Seq(WorkbenchGroupName(subGroupId))))
 
-    // once when updating the subgroup, and once when updating the policies constrained by the managed group
-    verify(mockGooglePubSubDAO, times(2)).publishMessages(any[String], any[Seq[String]])
+    verify(mockGooglePubSubDAO, times(1)).publishMessages(any[String], any[Seq[String]])
   }
 
   it should "break out of the loop" in {
@@ -735,8 +733,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
 
     runAndWait(googleExtensions.onGroupUpdate(Seq(WorkbenchGroupName(subGroupId))))
 
-    // once when updating the subgroup, and once when updating the policies constrained by the managed group
-    verify(mockGooglePubSubDAO, times(2)).publishMessages(any[String], any[Seq[String]])
+    verify(mockGooglePubSubDAO, times(1)).publishMessages(any[String], any[Seq[String]])
   }
 
   private def setupGoogleKeyCacheTests: (GoogleExtensions, UserService) = {
