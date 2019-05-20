@@ -198,8 +198,8 @@ class GoogleExtensions(
             makeConstrainedResourceAccessPolicyMessages(groupName).map(_  :+ groupName.toJson.compactPrint)
 
           // it is the admin or member access policy of a managed group
-          case accessPolicyId@FullyQualifiedPolicyId(FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, id: ResourceId), ManagedGroupService.adminPolicyName | ManagedGroupService.memberPolicyName) =>
-            makeConstrainedResourceAccessPolicyMessages(WorkbenchGroupName(id.value)).map(_  :+ accessPolicyId.toJson.compactPrint)
+          case accessPolicyId@FullyQualifiedPolicyId(FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, id), ManagedGroupService.adminPolicyName | ManagedGroupService.memberPolicyName) =>
+            makeConstrainedResourceAccessPolicyMessages(accessPolicyId).map(_  :+ accessPolicyId.toJson.compactPrint)
 
           // it is an access policy on a resource that's not a managed group
           case accessPolicyId: FullyQualifiedPolicyId => IO.pure(List(accessPolicyId.toJson.compactPrint))
