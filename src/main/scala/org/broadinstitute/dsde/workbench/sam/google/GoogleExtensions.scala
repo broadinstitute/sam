@@ -165,21 +165,24 @@ class GoogleExtensions(
 
   /*
     - managed groups and access policies are both "groups"
-    - You can have a bunch of workspaces inside an auth domain (a type of managed group).
-    - A user must be a member of the auth domain in order to access any of the workspaces in that auth domain.
-    - If a workspace is in multiple auth domains, the user must be a member of all of them in order to access that workspace
-    - An access policy is specific to a single workspace (or other resource) - so you must be an Owner/Writer/... whatever
-      in order to be able to do the relevant action on that workspace
-    - To access a workspace, a user must BOTH be a member in all the auth domains that workspace is in AND also be a member
-      in one of the access policy groups.
-    - When someone gets added to an managed group or access policy, we have to figure out which google buckets they suddenly have access to.
+    - You can have a bunch of resources constrained an auth domain (a collection of managed groups).
+    - A user must be a member of the auth domain in order to access some actions on the resources in that auth domain.
+    - The user must be a member of all groups in an auth domain in order to access a resource
+    - An access policy is specific to a single resource
+    - To access an action on a resource, a user must BOTH be a member of the auth domain of the resource AND also be a member
+      of one of the access policies that has the action.
+    - When someone gets added to an managed group or access policy, we have to figure out which google groups they suddenly have access to.
     - To do this, when someone gets added to a group, we call onGroupUpdate, which retrieves a list of all of the groups that are affected
       by the groupUpdate, and for each publishes a message to a pub/sub queue telling a Sam background process
-      to sync the user's access for all of those access policy groups.
+      to sync the user's access for all of those groups.
     - To figure out which groups are affected - we first separate access policies and managed groups.
       For each access policy passed to onGroupUpdate, we publish a message to sync just that group
-      For each managed group passed to onGroupUpdate, we first find all of the ancestor groups of that group and then all of the access policies
-      for each of those groups and then publish a messsage to sync each of those access policies.
+      For each managed group passed to onGroupUpdate (these might be used in auth domains)
+        - find all ancestor groups because the updated group may be a sub group
+        - find resources that have any of these groups in their auth domain
+        - publish a message for each access policy of all those resources
+
+     see GoogleGroupSynchronizer for the background process that does the group synchronization
    */
   override def onGroupUpdate(groupIdentities: Seq[WorkbenchGroupIdentity]): Future[Unit] = {
     for {
@@ -190,7 +193,15 @@ class GoogleExtensions(
 
       // make all the publish messages for the previously synced groups
       messages <- previouslySyncedIds.traverse {
-          case groupName: WorkbenchGroupName => makeGroupPublishMessages(groupName)
+          // it is a group that isn't an access policy, could be a managed group
+          case groupName: WorkbenchGroupName =>
+            makeConstrainedResourceAccessPolicyMessages(groupName).map(_  :+ groupName.toJson.compactPrint)
+
+          // it is the admin or member access policy of a managed group
+          case accessPolicyId@FullyQualifiedPolicyId(FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, id), ManagedGroupService.adminPolicyName | ManagedGroupService.memberPolicyName) =>
+            makeConstrainedResourceAccessPolicyMessages(accessPolicyId).map(_  :+ accessPolicyId.toJson.compactPrint)
+
+          // it is an access policy on a resource that's not a managed group
           case accessPolicyId: FullyQualifiedPolicyId => IO.pure(List(accessPolicyId.toJson.compactPrint))
       }
 
@@ -200,14 +211,14 @@ class GoogleExtensions(
     } yield ()
   }.unsafeToFuture()
 
-  private def makeGroupPublishMessages(groupName: WorkbenchGroupName): IO[List[String]] = {
+  private def makeConstrainedResourceAccessPolicyMessages(groupIdentity: WorkbenchGroupIdentity): IO[List[String]] = {
    // start with a group
     for {
       // get all the ancestors of that group
-      ancestorGroupsOfManagedGroups <- directoryDAO.listAncestorGroups(groupName)
+      ancestorGroupsOfManagedGroups <- directoryDAO.listAncestorGroups(groupIdentity)
 
       // get all the ids of the group and its ancestors
-      managedGroupIds = (ancestorGroupsOfManagedGroups + groupName).collect {
+      managedGroupIds = (ancestorGroupsOfManagedGroups + groupIdentity).collect {
         case FullyQualifiedPolicyId(FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, id), ManagedGroupService.adminPolicyName | ManagedGroupService.memberPolicyName) => id
       }
 
@@ -215,7 +226,7 @@ class GoogleExtensions(
       constrainedResourceAccessPolicies <- managedGroupIds.toList.traverse(id => getAccessPoliciesOnResourcesConstrainedByGroup(id))
 
       // return messages for all the affected access policies and the original group we started with
-    } yield constrainedResourceAccessPolicies.flatten.map(accessPolicy => accessPolicy.id.toJson.compactPrint) :+ groupName.toJson.compactPrint
+    } yield constrainedResourceAccessPolicies.flatten.map(accessPolicy => accessPolicy.id.toJson.compactPrint)
   }
 
   private def publishMessages(messages: Seq[String]): Future[Unit] = {
