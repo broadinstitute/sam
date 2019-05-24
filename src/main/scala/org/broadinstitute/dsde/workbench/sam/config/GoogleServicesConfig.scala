@@ -38,7 +38,8 @@ final case class GoogleServicesConfig(
     googleKeyCacheConfig: GoogleKeyCacheConfig,
     resourceNamePrefix: Option[String],
     adminSdkServiceAccounts: Option[NonEmptyList[ServiceAccountConfig]],
-    googleKms: GoogleKmsConfig
+    googleKms: GoogleKmsConfig,
+    terraGoogleOrgNumber: String
 )
 
 object GoogleServicesConfig {
@@ -100,7 +101,8 @@ object GoogleServicesConfig {
       config.as[GoogleKeyCacheConfig]("googleKeyCache"),
       config.as[Option[String]]("resourceNamePrefix"),
       config.as[Option[NonEmptyList[ServiceAccountConfig]]]("adminSdkServiceAccounts"),
-      config.as[GoogleKmsConfig]("kms")
+      config.as[GoogleKmsConfig]("kms"),
+      config.getString("terraGoogleOrgNumber")
     )
   }
 }

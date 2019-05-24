@@ -329,6 +329,7 @@ class GoogleExtensions(
         // SA does not exist in google, create it and add it to the proxy group
         case None =>
           for {
+            _ <- assertProjectInTerraOrg(project)
             sa <- IO.fromFuture(IO(googleIamDAO.createServiceAccount(project, petSaName, petSaDisplayName)))
             r <- IO.fromFuture(IO(withProxyEmail(user.id) { proxyEmail =>
               googleDirectoryDAO.addMemberToGroup(proxyEmail, sa.email)
@@ -360,6 +361,18 @@ class GoogleExtensions(
       shouldLock = !(pet.isDefined && sa.isDefined) // if either is not defined, we need to lock and potentially create them; else we return the pet
       p <- if (shouldLock) distributedLock.withLock(lock).use(_ => createPet) else pet.get.pure[IO]
     } yield p
+  }
+
+  private def assertProjectInTerraOrg(project: GoogleProject): IO[Unit] = {
+    val validOrg = IO.fromFuture(IO(googleProjectDAO.getAncestry(project.value).map { ancestry =>
+      ancestry.exists { ancestor =>
+        ancestor.getResourceId.getType == "organization" && ancestor.getResourceId.getId == googleServicesConfig.terraGoogleOrgNumber
+      }
+    }))
+    validOrg.flatMap {
+      case true => IO.unit
+      case false => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"Project ${project.value} must be in Terra Organization")))
+    }
   }
 
   private def retrievePetAndSA(

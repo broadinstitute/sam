@@ -112,6 +112,7 @@ object TestSupport extends TestSupport {
     val policyDAO = policyAccessDAO.getOrElse(new MockAccessPolicyDAO())
     val pubSubDAO = new MockGooglePubSubDAO()
     val googleStorageDAO = new MockGoogleStorageDAO()
+    val googleProjectDAO = new MockGoogleProjectDAO()
     val notificationDAO = new PubSubNotificationDAO(pubSubDAO, "foo")
     val cloudKeyCache = new GoogleKeyCache(fakeDistributedLock, googleIamDAO, googleStorageDAO, FakeGoogleStorageInterpreter, pubSubDAO, googleServicesConfig, petServiceAccountConfig)
     val googleExt = cloudExtensions.getOrElse(new GoogleExtensions(
@@ -122,7 +123,7 @@ object TestSupport extends TestSupport {
       pubSubDAO,
       googleIamDAO,
       googleStorageDAO,
-      null,
+      googleProjectDAO,
       cloudKeyCache,
       notificationDAO,
       FakeGoogleKmsInterpreter,

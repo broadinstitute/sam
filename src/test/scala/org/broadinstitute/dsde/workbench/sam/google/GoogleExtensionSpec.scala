@@ -355,8 +355,9 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
 
     val mockGoogleIamDAO = new MockGoogleIamDAO
     val mockGoogleDirectoryDAO = new MockGoogleDirectoryDAO
+    val mockGoogleProjectDAO = new MockGoogleProjectDAO
 
-    val googleExtensions = new GoogleExtensions(TestSupport.fakeDistributedLock, dirDAO, null, mockGoogleDirectoryDAO, null, mockGoogleIamDAO, null, null, null, null, null, googleServicesConfig, petServiceAccountConfig, configResourceTypes)
+    val googleExtensions = new GoogleExtensions(TestSupport.fakeDistributedLock, dirDAO, null, mockGoogleDirectoryDAO, null, mockGoogleIamDAO, null, mockGoogleProjectDAO, null, null, null, googleServicesConfig, petServiceAccountConfig, configResourceTypes)
     val service = new UserService(dirDAO, googleExtensions)
 
     val defaultUserId = WorkbenchUserId("newuser123")
@@ -749,10 +750,11 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val mockGoogleDirectoryDAO = new MockGoogleDirectoryDAO
     val mockGooglePubSubDAO = new MockGooglePubSubDAO
     val mockGoogleStorageDAO = new MockGoogleStorageDAO
+    val mockGoogleProjectDAO = new MockGoogleProjectDAO
     val notificationDAO = new PubSubNotificationDAO(mockGooglePubSubDAO, "foo")
     val googleKeyCache = new GoogleKeyCache(TestSupport.fakeDistributedLock, mockGoogleIamDAO, mockGoogleStorageDAO, FakeGoogleStorageInterpreter, mockGooglePubSubDAO, googleServicesConfig, petServiceAccountConfig)
 
-    val googleExtensions = new GoogleExtensions(TestSupport.fakeDistributedLock, dirDAO, null, mockGoogleDirectoryDAO, null, mockGoogleIamDAO, mockGoogleStorageDAO, null, googleKeyCache, notificationDAO, null, googleServicesConfig, petServiceAccountConfig, configResourceTypes)
+    val googleExtensions = new GoogleExtensions(TestSupport.fakeDistributedLock, dirDAO, null, mockGoogleDirectoryDAO, null, mockGoogleIamDAO, mockGoogleStorageDAO, mockGoogleProjectDAO, googleKeyCache, notificationDAO, null, googleServicesConfig, petServiceAccountConfig, configResourceTypes)
     val service = new UserService(dirDAO, googleExtensions)
 
     (googleExtensions, service)
@@ -1120,5 +1122,33 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
 
     val constrained = synchronizer.isConstrainable(resource.fullyQualifiedId, accessPolicy)
     constrained shouldEqual false
+  }
+
+  it should "return a failed IO when the project is not in the Terra Google Org" in {
+    val dirURI = new URI(directoryConfig.directoryUrl)
+    val connectionPool = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
+    val dirDAO = new LdapDirectoryDAO(connectionPool, directoryConfig, TestSupport.blockingEc, TestSupport.testMemberOfCache)
+    val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
+
+    runAndWait(schemaDao.clearDatabase())
+    runAndWait(schemaDao.init())
+    runAndWait(schemaDao.createOrgUnits())
+
+    val mockGoogleIamDAO = new MockGoogleIamDAO
+    val mockGoogleDirectoryDAO = new MockGoogleDirectoryDAO
+    val mockGoogleProjectDAO = new MockGoogleProjectDAO
+    val garbageOrgGoogleServicesConfig = TestSupport.googleServicesConfig.copy(terraGoogleOrgNumber = "garbage")
+    val googleExtensions = new GoogleExtensions(TestSupport.fakeDistributedLock, dirDAO, null, mockGoogleDirectoryDAO, null, mockGoogleIamDAO, null, mockGoogleProjectDAO, null, null, null, garbageOrgGoogleServicesConfig, petServiceAccountConfig, configResourceTypes)
+
+    val defaultUserId = WorkbenchUserId("newuser123")
+    val defaultUserEmail = WorkbenchEmail("newuser@new.com")
+    val defaultUser = WorkbenchUser(defaultUserId, Some(GoogleSubjectId(defaultUserId.value)), defaultUserEmail)
+
+    val googleProject = GoogleProject("testproject")
+    val report = intercept[WorkbenchExceptionWithErrorReport] {
+      googleExtensions.createUserPetServiceAccount(defaultUser, googleProject).unsafeRunSync()
+    }
+
+    report.errorReport.statusCode shouldEqual Some(StatusCodes.BadRequest)
   }
 }
