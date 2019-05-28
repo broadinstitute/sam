@@ -10,6 +10,8 @@ import akka.testkit.TestKit
 import cats.effect.IO
 import cats.implicits._
 import cats.data.NonEmptyList
+import com.google.api.client.http.{HttpHeaders, HttpResponseException}
+import com.google.api.services.cloudresourcemanager.model.Ancestor
 import com.google.api.services.groupssettings.model.Groups
 import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
@@ -1124,7 +1126,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     constrained shouldEqual false
   }
 
-  it should "return a failed IO when the project is not in the Terra Google Org" in {
+  "createUserPetServiceAccount" should "return a failed IO when the project is not in the Terra Google Org" in {
     val dirURI = new URI(directoryConfig.directoryUrl)
     val connectionPool = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
     val dirDAO = new LdapDirectoryDAO(connectionPool, directoryConfig, TestSupport.blockingEc, TestSupport.testMemberOfCache)
@@ -1139,6 +1141,37 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val mockGoogleProjectDAO = new MockGoogleProjectDAO
     val garbageOrgGoogleServicesConfig = TestSupport.googleServicesConfig.copy(terraGoogleOrgNumber = "garbage")
     val googleExtensions = new GoogleExtensions(TestSupport.fakeDistributedLock, dirDAO, null, mockGoogleDirectoryDAO, null, mockGoogleIamDAO, null, mockGoogleProjectDAO, null, null, null, garbageOrgGoogleServicesConfig, petServiceAccountConfig, configResourceTypes)
+
+    val defaultUserId = WorkbenchUserId("newuser123")
+    val defaultUserEmail = WorkbenchEmail("newuser@new.com")
+    val defaultUser = WorkbenchUser(defaultUserId, Some(GoogleSubjectId(defaultUserId.value)), defaultUserEmail)
+
+    val googleProject = GoogleProject("testproject")
+    val report = intercept[WorkbenchExceptionWithErrorReport] {
+      googleExtensions.createUserPetServiceAccount(defaultUser, googleProject).unsafeRunSync()
+    }
+
+    report.errorReport.statusCode shouldEqual Some(StatusCodes.BadRequest)
+  }
+
+  it should "return a failed IO when google returns a 403" in {
+    val dirURI = new URI(directoryConfig.directoryUrl)
+    val connectionPool = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
+    val dirDAO = new LdapDirectoryDAO(connectionPool, directoryConfig, TestSupport.blockingEc, TestSupport.testMemberOfCache)
+    val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
+
+    runAndWait(schemaDao.clearDatabase())
+    runAndWait(schemaDao.init())
+    runAndWait(schemaDao.createOrgUnits())
+
+    val mockGoogleIamDAO = new MockGoogleIamDAO
+    val mockGoogleDirectoryDAO = new MockGoogleDirectoryDAO
+    val mockGoogleProjectDAO = new MockGoogleProjectDAO {
+      override def getAncestry(projectName: String): Future[Seq[Ancestor]] = {
+        Future.failed(new HttpResponseException.Builder(403, "Made up error message", new HttpHeaders()).build())
+      }
+    }
+    val googleExtensions = new GoogleExtensions(TestSupport.fakeDistributedLock, dirDAO, null, mockGoogleDirectoryDAO, null, mockGoogleIamDAO, null, mockGoogleProjectDAO, null, null, null, googleServicesConfig, petServiceAccountConfig, configResourceTypes)
 
     val defaultUserId = WorkbenchUserId("newuser123")
     val defaultUserEmail = WorkbenchEmail("newuser@new.com")
