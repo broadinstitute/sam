@@ -367,7 +367,7 @@ class GoogleExtensions(
   private def assertProjectInTerraOrg(project: GoogleProject): IO[Unit] = {
     val validOrg = IO.fromFuture(IO(googleProjectDAO.getAncestry(project.value).map { ancestry =>
       ancestry.exists { ancestor =>
-        ancestor.getResourceId.getType == "organization" && ancestor.getResourceId.getId == googleServicesConfig.terraGoogleOrgNumber
+        ancestor.getResourceId.getType == GoogleResourceTypes.Organization.value && ancestor.getResourceId.getId == googleServicesConfig.terraGoogleOrgNumber
       }
     })).recoverWith {
       // if the getAncestry call results in a 403 error the project can't be in the right org
@@ -421,7 +421,7 @@ class GoogleExtensions(
   private def getDefaultServiceAccountForShellProject(user: WorkbenchUser): Future[String] = {
     val projectName = s"fc-${googleServicesConfig.environment.substring(0, Math.min(googleServicesConfig.environment.length(), 5))}-${user.id.value}" //max 30 characters. subject ID is 21
     for {
-      creationOperationId <- googleProjectDAO.createProject(projectName).map(opId => Option(opId)) recover {
+      creationOperationId <- googleProjectDAO.createProject(projectName, googleServicesConfig.terraGoogleOrgNumber, GoogleResourceTypes.Organization).map(opId => Option(opId)) recover {
         case gjre: GoogleJsonResponseException if gjre.getDetails.getCode == StatusCodes.Conflict.intValue => None
       }
       _ <- creationOperationId match {
