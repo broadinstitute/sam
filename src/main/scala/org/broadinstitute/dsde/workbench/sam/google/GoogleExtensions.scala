@@ -9,6 +9,7 @@ import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import cats.effect.{ContextShift, IO}
 import cats.implicits._
 import com.google.api.client.googleapis.json.GoogleJsonResponseException
+import com.google.api.client.http.HttpResponseException
 import com.google.api.gax.rpc.AlreadyExistsException
 import com.google.auth.oauth2.ServiceAccountCredentials
 import com.google.protobuf.{Duration, Timestamp}
@@ -368,7 +369,12 @@ class GoogleExtensions(
       ancestry.exists { ancestor =>
         ancestor.getResourceId.getType == "organization" && ancestor.getResourceId.getId == googleServicesConfig.terraGoogleOrgNumber
       }
-    }))
+    })).recoverWith {
+      // if the getAncestry call results in a 403 error the project can't be in the right org
+      case e: HttpResponseException if e.getStatusCode == StatusCodes.Forbidden.intValue =>
+        IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"Access denied from google accessing project ${project.value}, is it a Terra project?", e)))
+    }
+
     validOrg.flatMap {
       case true => IO.unit
       case false => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"Project ${project.value} must be in Terra Organization")))
