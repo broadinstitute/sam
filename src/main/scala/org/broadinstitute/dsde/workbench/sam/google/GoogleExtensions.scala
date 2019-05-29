@@ -9,6 +9,7 @@ import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import cats.effect.{ContextShift, IO}
 import cats.implicits._
 import com.google.api.client.googleapis.json.GoogleJsonResponseException
+import com.google.api.client.http.HttpResponseException
 import com.google.api.gax.rpc.AlreadyExistsException
 import com.google.auth.oauth2.ServiceAccountCredentials
 import com.google.protobuf.{Duration, Timestamp}
@@ -329,6 +330,7 @@ class GoogleExtensions(
         // SA does not exist in google, create it and add it to the proxy group
         case None =>
           for {
+            _ <- assertProjectInTerraOrg(project)
             sa <- IO.fromFuture(IO(googleIamDAO.createServiceAccount(project, petSaName, petSaDisplayName)))
             r <- IO.fromFuture(IO(withProxyEmail(user.id) { proxyEmail =>
               googleDirectoryDAO.addMemberToGroup(proxyEmail, sa.email)
@@ -360,6 +362,23 @@ class GoogleExtensions(
       shouldLock = !(pet.isDefined && sa.isDefined) // if either is not defined, we need to lock and potentially create them; else we return the pet
       p <- if (shouldLock) distributedLock.withLock(lock).use(_ => createPet) else pet.get.pure[IO]
     } yield p
+  }
+
+  private def assertProjectInTerraOrg(project: GoogleProject): IO[Unit] = {
+    val validOrg = IO.fromFuture(IO(googleProjectDAO.getAncestry(project.value).map { ancestry =>
+      ancestry.exists { ancestor =>
+        ancestor.getResourceId.getType == GoogleResourceTypes.Organization.value && ancestor.getResourceId.getId == googleServicesConfig.terraGoogleOrgNumber
+      }
+    })).recoverWith {
+      // if the getAncestry call results in a 403 error the project can't be in the right org
+      case e: HttpResponseException if e.getStatusCode == StatusCodes.Forbidden.intValue =>
+        IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"Access denied from google accessing project ${project.value}, is it a Terra project?", e)))
+    }
+
+    validOrg.flatMap {
+      case true => IO.unit
+      case false => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"Project ${project.value} must be in Terra Organization")))
+    }
   }
 
   private def retrievePetAndSA(
@@ -402,7 +421,7 @@ class GoogleExtensions(
   private def getDefaultServiceAccountForShellProject(user: WorkbenchUser): Future[String] = {
     val projectName = s"fc-${googleServicesConfig.environment.substring(0, Math.min(googleServicesConfig.environment.length(), 5))}-${user.id.value}" //max 30 characters. subject ID is 21
     for {
-      creationOperationId <- googleProjectDAO.createProject(projectName).map(opId => Option(opId)) recover {
+      creationOperationId <- googleProjectDAO.createProject(projectName, googleServicesConfig.terraGoogleOrgNumber, GoogleResourceTypes.Organization).map(opId => Option(opId)) recover {
         case gjre: GoogleJsonResponseException if gjre.getDetails.getCode == StatusCodes.Conflict.intValue => None
       }
       _ <- creationOperationId match {
