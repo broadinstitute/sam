@@ -25,9 +25,6 @@ final case class GoogleServicesConfig(
     serviceAccountClientProject: GoogleProject,
     subEmail: WorkbenchEmail,
     projectServiceAccount: WorkbenchEmail,
-    pathToBillingPem: String,
-    billingPemEmail: WorkbenchEmail,
-    billingEmail: WorkbenchEmail,
     groupSyncPubSubProject: String,
     groupSyncPollInterval: FiniteDuration,
     groupSyncPollJitter: FiniteDuration,
@@ -38,7 +35,8 @@ final case class GoogleServicesConfig(
     googleKeyCacheConfig: GoogleKeyCacheConfig,
     resourceNamePrefix: Option[String],
     adminSdkServiceAccounts: Option[NonEmptyList[ServiceAccountConfig]],
-    googleKms: GoogleKmsConfig
+    googleKms: GoogleKmsConfig,
+    terraGoogleOrgNumber: String
 )
 
 object GoogleServicesConfig {
@@ -87,9 +85,6 @@ object GoogleServicesConfig {
       GoogleProject(config.getString("serviceAccountClientProject")),
       WorkbenchEmail(config.getString("subEmail")),
       WorkbenchEmail(config.getString("projectServiceAccount")),
-      config.getString("billing.pathToBillingPem"),
-      WorkbenchEmail(config.getString("billing.billingPemEmail")),
-      WorkbenchEmail(config.getString("billing.billingEmail")),
       config.getString("groupSync.pubSubProject"),
       org.broadinstitute.dsde.workbench.util.toScalaDuration(config.getDuration("groupSync.pollInterval")),
       org.broadinstitute.dsde.workbench.util.toScalaDuration(config.getDuration("groupSync.pollJitter")),
@@ -100,7 +95,8 @@ object GoogleServicesConfig {
       config.as[GoogleKeyCacheConfig]("googleKeyCache"),
       config.as[Option[String]]("resourceNamePrefix"),
       config.as[Option[NonEmptyList[ServiceAccountConfig]]]("adminSdkServiceAccounts"),
-      config.as[GoogleKmsConfig]("kms")
+      config.as[GoogleKmsConfig]("kms"),
+      config.getString("terraGoogleOrgNumber")
     )
   }
 }

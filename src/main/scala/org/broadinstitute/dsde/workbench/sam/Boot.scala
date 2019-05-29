@@ -232,10 +232,7 @@ object Boot extends IOApp with LazyLogging {
     )
     val googleProjectDAO = new HttpGoogleProjectDAO(
       config.googleServicesConfig.appName,
-      Pem(
-        config.googleServicesConfig.billingPemEmail,
-        new File(config.googleServicesConfig.pathToBillingPem),
-        Option(config.googleServicesConfig.billingEmail)),
+      Pem(WorkbenchEmail(config.googleServicesConfig.serviceAccountClientId), new File(config.googleServicesConfig.pemFile)),
       "google"
     )
     val googleKeyCache =
