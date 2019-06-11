@@ -16,7 +16,7 @@ import org.broadinstitute.dsde.workbench.sam.util.{LdapSupport, NewRelicMetrics}
 import org.ehcache.Cache
 
 import scala.collection.JavaConverters._
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.ExecutionContext
 import scala.util.Try
 
 // use ExecutionContexts.blockingThreadPool for blockingEc
@@ -135,9 +135,8 @@ class LdapDirectoryDAO(
       memberships.contains(groupDn(groupId).toLowerCase)
     }
 
-  override def updateSynchronizedDate(groupId: WorkbenchGroupIdentity): Future[Unit] = Future {
-    ldapConnectionPool.modify(groupDn(groupId), new Modification(ModificationType.REPLACE, Attr.groupSynchronizedTimestamp, formattedDate(new Date())))
-  }
+  override def updateSynchronizedDate(groupId: WorkbenchGroupIdentity): IO[Unit] =
+    executeLdap(IO(ldapConnectionPool.modify(groupDn(groupId), new Modification(ModificationType.REPLACE, Attr.groupSynchronizedTimestamp, formattedDate(new Date())))))
 
   override def getSynchronizedDate(groupId: WorkbenchGroupIdentity): IO[Option[Date]] = {
     executeLdap(IO(Option(ldapConnectionPool.getEntry(groupDn(groupId), Attr.groupSynchronizedTimestamp))
@@ -221,22 +220,21 @@ class LdapDirectoryDAO(
     executeLdap(IO(ldapSearchStream(peopleOu, SearchScope.ONE, filters: _*)(unmarshalUserThrow)))
   }
 
-  override def deleteUser(userId: WorkbenchUserId): Future[Unit] = Future {
-    ldapConnectionPool.delete(userDn(userId))
-  }
+  override def deleteUser(userId: WorkbenchUserId): IO[Unit] =
+    executeLdap(IO(ldapConnectionPool.delete(userDn(userId))))
 
-  override def addProxyGroup(userId: WorkbenchUserId, proxyEmail: WorkbenchEmail): Future[Unit] = Future {
-    ldapConnectionPool.modify(userDn(userId), new Modification(ModificationType.ADD, Attr.proxyEmail, proxyEmail.value))
-  }
+  override def addProxyGroup(userId: WorkbenchUserId, proxyEmail: WorkbenchEmail): IO[Unit] =
+    executeLdap(IO(ldapConnectionPool.modify(userDn(userId), new Modification(ModificationType.ADD, Attr.proxyEmail, proxyEmail.value))))
 
-  override def readProxyGroup(userId: WorkbenchUserId): Future[Option[WorkbenchEmail]] = Future {
-    for {
-      entry <- Option(ldapConnectionPool.getEntry(userDn(userId), Attr.proxyEmail))
-      email <- Option(entry.getAttributeValue(Attr.proxyEmail))
-    } yield {
-      WorkbenchEmail(email)
+  override def readProxyGroup(userId: WorkbenchUserId): IO[Option[WorkbenchEmail]] =
+    executeLdap(IO(ldapConnectionPool.getEntry(userDn(userId), Attr.proxyEmail))).map { result =>
+      for {
+        entry <- Option(result)
+        email <- Option(entry.getAttributeValue(Attr.proxyEmail))
+      } yield {
+        WorkbenchEmail(email)
+      }
     }
-  }
 
   override def listUsersGroups(userId: WorkbenchUserId): IO[Set[WorkbenchGroupIdentity]] = listMemberOfGroups(userId)
 
@@ -305,10 +303,10 @@ class LdapDirectoryDAO(
       case ldape: LDAPException if ldape.getResultCode == ResultCode.ATTRIBUTE_OR_VALUE_EXISTS => IO.unit
     }
 
-  override def disableIdentity(subject: WorkbenchSubject): Future[Unit] = Future {
-    try {
-      ldapConnectionPool.modify(directoryConfig.enabledUsersGroupDn, new Modification(ModificationType.DELETE, Attr.member, subjectDn(subject)))
-    } catch {
+  override def disableIdentity(subject: WorkbenchSubject): IO[Unit] = {
+    executeLdap(
+      IO(ldapConnectionPool.modify(directoryConfig.enabledUsersGroupDn, new Modification(ModificationType.DELETE, Attr.member, subjectDn(subject)))).void
+    ).recover {
       case ldape: LDAPException if ldape.getResultCode == ResultCode.NO_SUCH_ATTRIBUTE =>
     }
   }
@@ -378,9 +376,8 @@ class LdapDirectoryDAO(
   override def deletePetServiceAccount(petServiceAccountId: PetServiceAccountId): IO[Unit] =
     executeLdap(IO(ldapConnectionPool.delete(petDn(petServiceAccountId))))
 
-  override def getAllPetServiceAccountsForUser(userId: WorkbenchUserId): Future[Seq[PetServiceAccount]] = Future {
-    ldapSearchStream(userDn(userId), SearchScope.SUB, Filter.createEqualityFilter("objectclass", ObjectClass.petServiceAccount))(unmarshalPetServiceAccount)
-  }
+  override def getAllPetServiceAccountsForUser(userId: WorkbenchUserId): IO[Seq[PetServiceAccount]] =
+    executeLdap(IO(ldapSearchStream(userDn(userId), SearchScope.SUB, Filter.createEqualityFilter("objectclass", ObjectClass.petServiceAccount))(unmarshalPetServiceAccount)))
 
   override def updatePetServiceAccount(petServiceAccount: PetServiceAccount): IO[PetServiceAccount] = {
     val modifications = createPetServiceAccountAttributes(petServiceAccount).map { attribute =>

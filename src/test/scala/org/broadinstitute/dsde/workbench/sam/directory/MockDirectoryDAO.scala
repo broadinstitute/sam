@@ -13,8 +13,7 @@ import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO.Attr
 
 import scala.collection.concurrent.TrieMap
 import scala.collection.mutable
-import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.ExecutionContext
 
 /**
   * Created by mbemis on 6/23/17.
@@ -110,13 +109,13 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     users.filterKeys(userIds).values.toStream
   }
 
-  override def deleteUser(userId: WorkbenchUserId): Future[Unit] = Future {
+  override def deleteUser(userId: WorkbenchUserId): IO[Unit] = IO {
     users -= userId
   }
 
-  override def addProxyGroup(userId: WorkbenchUserId, proxyEmail: WorkbenchEmail): Future[Unit] = addUserAttribute(userId, Attr.proxyEmail, proxyEmail)
+  override def addProxyGroup(userId: WorkbenchUserId, proxyEmail: WorkbenchEmail): IO[Unit] = addUserAttribute(userId, Attr.proxyEmail, proxyEmail)
 
-  override def readProxyGroup(userId: WorkbenchUserId): Future[Option[WorkbenchEmail]] = readUserAttribute[WorkbenchEmail](userId, Attr.proxyEmail)
+  override def readProxyGroup(userId: WorkbenchUserId): IO[Option[WorkbenchEmail]] = readUserAttribute[WorkbenchEmail](userId, Attr.proxyEmail)
 
   override def listUsersGroups(userId: WorkbenchUserId): IO[Set[WorkbenchGroupIdentity]] = IO {
     listSubjectsGroups(userId, Set.empty).map(_.id)
@@ -159,7 +158,7 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
 
   override def enableIdentity(subject: WorkbenchSubject): IO[Unit] = IO.pure(enabledUsers += ((subject, ())))
 
-  override def disableIdentity(subject: WorkbenchSubject): Future[Unit] = Future {
+  override def disableIdentity(subject: WorkbenchSubject): IO[Unit] = IO {
     enabledUsers -= subject
   }
 
@@ -191,15 +190,15 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     petServiceAccountsByUser -= petServiceAccountUniqueId
   }
 
-  override def getAllPetServiceAccountsForUser(userId: WorkbenchUserId): Future[Seq[PetServiceAccount]] = Future {
+  override def getAllPetServiceAccountsForUser(userId: WorkbenchUserId): IO[Seq[PetServiceAccount]] = IO {
     petServiceAccountsByUser.collect {
       case (PetServiceAccountId(`userId`, _), petSA) => petSA
     }.toSeq
   }
 
-  override def updateSynchronizedDate(groupId: WorkbenchGroupIdentity): Future[Unit] = {
+  override def updateSynchronizedDate(groupId: WorkbenchGroupIdentity): IO[Unit] = {
     groupSynchronizedDates += groupId -> new Date()
-    Future.successful(())
+    IO.unit
   }
 
   override def loadSubjectEmail(subject: WorkbenchSubject): IO[Option[WorkbenchEmail]] = IO {
@@ -250,20 +249,20 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     IO.pure(())
   }
 
-  private def addUserAttribute(userId: WorkbenchUserId, attrId: String, value: Any): Future[Unit] = {
+  private def addUserAttribute(userId: WorkbenchUserId, attrId: String, value: Any): IO[Unit] = {
     userAttributes.get(userId) match {
       case Some(attributes: Map[String, Any]) => attributes += attrId -> value
       case _ => userAttributes += userId -> (new TrieMap() += attrId -> value)
     }
-    Future.successful(())
+    IO.unit
   }
 
-  private def readUserAttribute[T](userId: WorkbenchUserId, attrId: String): Future[Option[T]] = {
+  private def readUserAttribute[T](userId: WorkbenchUserId, attrId: String): IO[Option[T]] = {
     val value = for {
       attributes <- userAttributes.get(userId)
       value <- attributes.get(attrId)
     } yield value.asInstanceOf[T]
-    Future.successful(value)
+    IO.pure(value)
   }
 
   override def loadSubjectFromGoogleSubjectId(googleSubjectId: GoogleSubjectId): IO[Option[WorkbenchSubject]] = {

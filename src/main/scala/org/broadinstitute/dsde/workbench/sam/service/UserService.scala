@@ -174,7 +174,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
     directoryDAO.loadUser(userId).unsafeToFuture().flatMap {
       case Some(user) =>
         for {
-          _ <- directoryDAO.disableIdentity(user.id)
+          _ <- directoryDAO.disableIdentity(user.id).unsafeToFuture()
           _ <- cloudExtensions.onUserDisable(user)
           userStatus <- getUserStatus(user.id)
         } yield {
@@ -188,7 +188,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
       allUsersGroup <- cloudExtensions.getOrCreateAllUsersGroup(directoryDAO)
       _ <- directoryDAO.removeGroupMember(allUsersGroup.id, userId).unsafeToFuture()
       _ <- cloudExtensions.onUserDelete(userId)
-      deleteResult <- directoryDAO.deleteUser(userId)
+      deleteResult <- directoryDAO.deleteUser(userId).unsafeToFuture()
     } yield deleteResult
 }
 

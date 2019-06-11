@@ -85,7 +85,7 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
       dao.loadUser(user.id).unsafeRunSync()
     }
 
-    runAndWait(dao.deleteUser(user.id))
+    dao.deleteUser(user.id).unsafeRunSync()
 
     assertResult(None) {
       dao.loadUser(user.id).unsafeRunSync()
@@ -101,13 +101,13 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     }
 
     assertResult(None) {
-      runAndWait(dao.readProxyGroup(userId))
+      dao.readProxyGroup(userId).unsafeRunSync()
     }
 
-    runAndWait(dao.addProxyGroup(userId, WorkbenchEmail("foo_1234@test.firecloud.org")))
+    dao.addProxyGroup(userId, WorkbenchEmail("foo_1234@test.firecloud.org")).unsafeRunSync()
 
     assertResult(Some(WorkbenchEmail("foo_1234@test.firecloud.org"))) {
-      runAndWait(dao.readProxyGroup(userId))
+      dao.readProxyGroup(userId).unsafeRunSync()
     }
   }
 
@@ -128,7 +128,7 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     }
 
     assertResult(Seq()) {
-      runAndWait(dao.getAllPetServiceAccountsForUser(userId))
+      dao.getAllPetServiceAccountsForUser(userId).unsafeRunSync()
     }
 
     assertResult(petServiceAccount) {
@@ -140,7 +140,7 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     }
 
     assertResult(Seq(petServiceAccount)) {
-      runAndWait(dao.getAllPetServiceAccountsForUser(userId))
+      dao.getAllPetServiceAccountsForUser(userId).unsafeRunSync()
     }
 
     val updatedPetSA = petServiceAccount.copy(serviceAccount = ServiceAccount(ServiceAccountSubjectId(UUID.randomUUID().toString), WorkbenchEmail("foo@bar.com"), ServiceAccountDisplayName("qqq")))
@@ -159,7 +159,7 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     }
 
     assertResult(Seq()) {
-      runAndWait(dao.getAllPetServiceAccountsForUser(userId))
+      dao.getAllPetServiceAccountsForUser(userId).unsafeRunSync()
     }
   }
 
@@ -182,7 +182,7 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
         dao.listUsersGroups(userId).unsafeRunSync()
       }
     } finally {
-      runAndWait(dao.deleteUser(userId))
+      dao.deleteUser(userId).unsafeRunSync()
       dao.deleteGroup(groupName2).unsafeRunSync()
       dao.deleteGroup(groupName1).unsafeRunSync()
     }
@@ -242,7 +242,7 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
         dao.listAncestorGroups(groupName3).unsafeRunSync()
       }
     } finally {
-      runAndWait(dao.deleteUser(userId))
+      dao.deleteUser(userId).unsafeRunSync()
       dao.removeGroupMember(groupName1, groupName3).unsafeRunSync()
       dao.deleteGroup(groupName3).unsafeRunSync()
       dao.deleteGroup(groupName2).unsafeRunSync()
@@ -291,7 +291,7 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
       }
 
     } finally {
-      runAndWait(dao.deleteUser(userId))
+      dao.deleteUser(userId).unsafeRunSync()
       dao.deleteGroup(groupName1).unsafeRunSync()
       dao.deleteGroup(groupName2).unsafeRunSync()
     }

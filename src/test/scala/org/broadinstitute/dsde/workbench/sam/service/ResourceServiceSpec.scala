@@ -434,7 +434,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
 
     roles shouldEqual Set.empty
 
-    runAndWait(dirDAO.deleteUser(dummyUserInfo.userId))
+    dirDAO.deleteUser(dummyUserInfo.userId).unsafeRunSync()
   }
 
   "policyDao.listAccessPolicies" should "list policies for a newly created resource" in {
