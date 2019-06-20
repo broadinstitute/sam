@@ -301,6 +301,23 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     }
   }
 
+  it should "prevent invalid resource ids" in {
+    val ownerRoleName = ResourceRoleName("owner")
+    val resourceType = ResourceType(ResourceTypeName(UUID.randomUUID().toString), Set(SamResourceActionPatterns.delete, ResourceActionPattern("view", "", false)), Set(ResourceRole(ownerRoleName, Set(ResourceAction("delete"), ResourceAction("view")))), ownerRoleName)
+
+    service.createResourceType(resourceType).unsafeRunSync()
+
+    for (char <- "!@#$^&*()+= <>/?'\"][{}\\|`") {
+      withClue(s"expected character $char to be invalid") {
+        val exception = intercept[WorkbenchExceptionWithErrorReport] {
+          runAndWait(service.createResource(resourceType, ResourceId(char.toString), dummyUserInfo))
+        }
+
+        exception.errorReport.statusCode shouldEqual Option(StatusCodes.BadRequest)
+      }
+    }
+  }
+
   it should "prevent ownerless resource" in {
     val ownerRoleName = ResourceRoleName("owner")
     val resourceType = ResourceType(ResourceTypeName(UUID.randomUUID().toString), Set(SamResourceActionPatterns.delete, ResourceActionPattern("view", "", false)), Set(ResourceRole(ownerRoleName, Set(ResourceAction("delete"), ResourceAction("view")))), ownerRoleName)

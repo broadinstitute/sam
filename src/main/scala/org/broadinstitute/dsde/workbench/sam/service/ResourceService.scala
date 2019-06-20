@@ -140,10 +140,21 @@ class ResourceService(
       authDomain: Set[WorkbenchGroupName],
       userId: WorkbenchUserId) =
     for {
+      resourceIdErrors <- Future.successful(validateResourceId(resourceId))
       ownerPolicyErrors <- Future.successful(validateOwnerPolicyExists(resourceType, policies))
       policyErrors <- Future.successful(policies.flatMap(policy => validatePolicy(resourceType, policy)))
       authDomainErrors <- validateAuthDomain(resourceType, authDomain, userId)
-    } yield (ownerPolicyErrors ++ policyErrors ++ authDomainErrors).toSeq
+    } yield (resourceIdErrors ++ ownerPolicyErrors ++ policyErrors ++ authDomainErrors).toSeq
+
+  // support only url safe characters in resource ids
+  private val validResourceIdRegex = "[-a-zA-Z0-9._~%]+".r
+  private def validateResourceId(resourceId: ResourceId): Option[ErrorReport] = {
+    if(! validResourceIdRegex.pattern.matcher(resourceId.value).matches) {
+      Option(ErrorReport(s"Invalid resource id: ${resourceId.value}. Resource ids may only contain alphanumeric characters, periods, tildes, percents, underscores, and dashes. Try url encoding."))
+    } else {
+      None
+    }
+  }
 
   private def validateOwnerPolicyExists(resourceType: ResourceType, policies: Set[ValidatableAccessPolicy]): Option[ErrorReport] =
     policies.exists { policy =>
