@@ -301,6 +301,16 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     }
   }
 
+  it should "support valid resource ids" in {
+    val ownerRoleName = ResourceRoleName("owner")
+    val resourceType = ResourceType(ResourceTypeName(UUID.randomUUID().toString), Set(SamResourceActionPatterns.delete, ResourceActionPattern("view", "", false)), Set(ResourceRole(ownerRoleName, Set(ResourceAction("delete"), ResourceAction("view")))), ownerRoleName)
+
+    service.createResourceType(resourceType).unsafeRunSync()
+
+    val validChars = ('A' to 'Z') ++ ('a' to 'z') ++ ('0' to '9') ++ Seq('.', '-', '_', '~', '%')
+    runAndWait(service.createResource(resourceType, ResourceId(validChars.mkString), dummyUserInfo))
+  }
+
   it should "prevent invalid resource ids" in {
     val ownerRoleName = ResourceRoleName("owner")
     val resourceType = ResourceType(ResourceTypeName(UUID.randomUUID().toString), Set(SamResourceActionPatterns.delete, ResourceActionPattern("view", "", false)), Set(ResourceRole(ownerRoleName, Set(ResourceAction("delete"), ResourceAction("view")))), ownerRoleName)
