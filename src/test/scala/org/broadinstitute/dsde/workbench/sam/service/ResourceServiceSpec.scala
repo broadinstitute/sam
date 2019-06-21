@@ -301,6 +301,33 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     }
   }
 
+  it should "support valid resource ids" in {
+    val ownerRoleName = ResourceRoleName("owner")
+    val resourceType = ResourceType(ResourceTypeName(UUID.randomUUID().toString), Set(SamResourceActionPatterns.delete, ResourceActionPattern("view", "", false)), Set(ResourceRole(ownerRoleName, Set(ResourceAction("delete"), ResourceAction("view")))), ownerRoleName)
+
+    service.createResourceType(resourceType).unsafeRunSync()
+
+    val validChars = ('A' to 'Z') ++ ('a' to 'z') ++ ('0' to '9') ++ Seq('.', '-', '_', '~', '%')
+    runAndWait(service.createResource(resourceType, ResourceId(validChars.mkString), dummyUserInfo))
+  }
+
+  it should "prevent invalid resource ids" in {
+    val ownerRoleName = ResourceRoleName("owner")
+    val resourceType = ResourceType(ResourceTypeName(UUID.randomUUID().toString), Set(SamResourceActionPatterns.delete, ResourceActionPattern("view", "", false)), Set(ResourceRole(ownerRoleName, Set(ResourceAction("delete"), ResourceAction("view")))), ownerRoleName)
+
+    service.createResourceType(resourceType).unsafeRunSync()
+
+    for (char <- "!@#$^&*()+= <>/?'\"][{}\\|`") {
+      withClue(s"expected character $char to be invalid") {
+        val exception = intercept[WorkbenchExceptionWithErrorReport] {
+          runAndWait(service.createResource(resourceType, ResourceId(char.toString), dummyUserInfo))
+        }
+
+        exception.errorReport.statusCode shouldEqual Option(StatusCodes.BadRequest)
+      }
+    }
+  }
+
   it should "prevent ownerless resource" in {
     val ownerRoleName = ResourceRoleName("owner")
     val resourceType = ResourceType(ResourceTypeName(UUID.randomUUID().toString), Set(SamResourceActionPatterns.delete, ResourceActionPattern("view", "", false)), Set(ResourceRole(ownerRoleName, Set(ResourceAction("delete"), ResourceAction("view")))), ownerRoleName)
@@ -599,6 +626,27 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     }
 
     assert(exception.getMessage.contains("invalid member email"))
+
+    val policies = policyDAO.listAccessPolicies(resource).unsafeRunSync()
+
+    assert(!policies.contains(newPolicy))
+  }
+
+  it should "fail when given an invalid name" in {
+    val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("my-resource"))
+
+    service.createResourceType(defaultResourceType).unsafeRunSync()
+    runAndWait(service.createResource(defaultResourceType, resource.resourceId, dummyUserInfo))
+
+    val group = BasicWorkbenchGroup(WorkbenchGroupName("foo"), Set.empty, toEmail(resource.resourceTypeName.value, resource.resourceId.value, "foo"))
+    val newPolicy = AccessPolicy(
+      FullyQualifiedPolicyId(resource, AccessPolicyName("foo?bar")), group.members, group.email, Set.empty, Set(ResourceAction("non_owner_action")), public = false)
+
+    val exception = intercept[WorkbenchExceptionWithErrorReport] {
+      runAndWait(service.overwritePolicy(defaultResourceType, newPolicy.id.accessPolicyName, newPolicy.id.resource, AccessPolicyMembership(Set.empty, Set(ResourceAction("non_owner_action")), Set.empty)))
+    }
+
+    assert(exception.getMessage.contains("Invalid input"))
 
     val policies = policyDAO.listAccessPolicies(resource).unsafeRunSync()
 

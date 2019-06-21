@@ -140,10 +140,20 @@ class ResourceService(
       authDomain: Set[WorkbenchGroupName],
       userId: WorkbenchUserId) =
     for {
+      resourceIdErrors <- Future.successful(validateUrlSafe(resourceId.value))
       ownerPolicyErrors <- Future.successful(validateOwnerPolicyExists(resourceType, policies))
       policyErrors <- Future.successful(policies.flatMap(policy => validatePolicy(resourceType, policy)))
       authDomainErrors <- validateAuthDomain(resourceType, authDomain, userId)
-    } yield (ownerPolicyErrors ++ policyErrors ++ authDomainErrors).toSeq
+    } yield (resourceIdErrors ++ ownerPolicyErrors ++ policyErrors ++ authDomainErrors).toSeq
+
+  private val validUrlSafePattern = "[-a-zA-Z0-9._~%]+".r
+  private def validateUrlSafe(input: String): Option[ErrorReport] = {
+    if(! validUrlSafePattern.pattern.matcher(input).matches) {
+      Option(ErrorReport(s"Invalid input: $input. Valid characters are alphanumeric characters, periods, tildes, percents, underscores, and dashes. Try url encoding."))
+    } else {
+      None
+    }
+  }
 
   private def validateOwnerPolicyExists(resourceType: ResourceType, policies: Set[ValidatableAccessPolicy]): Option[ErrorReport] =
     policies.exists { policy =>
@@ -309,7 +319,12 @@ class ResourceService(
     * @return
     */
   private def validatePolicy(resourceType: ResourceType, policy: ValidatableAccessPolicy): Option[ErrorReport] = {
-    val validationErrors = validateMemberEmails(policy.emailsToSubjects) ++ validateActions(resourceType, policy) ++ validateRoles(resourceType, policy)
+    val validationErrors =
+      validateMemberEmails(policy.emailsToSubjects) ++
+      validateActions(resourceType, policy) ++
+      validateRoles(resourceType, policy) ++
+      validateUrlSafe(policy.policyName.value)
+
     if (validationErrors.nonEmpty) {
       Some(ErrorReport("You have specified an invalid policy", validationErrors.toSeq))
     } else None
