@@ -8,6 +8,8 @@ object Dependencies {
   val scalaTestV    = "3.0.5"
   val scalaCheckV    = "1.14.0"
   val catsEffectV         = "1.2.0"
+  val scalikejdbcVersion    = "3.3.5"
+  val postgresDriverVersion = "42.2.4"
 
   val workbenchUtilV   = "0.5-6942040"
   val workbenchModelV  = "0.13-d4e0782"
@@ -69,6 +71,11 @@ object Dependencies {
 
   val liquibaseCore: ModuleID = "org.liquibase" % "liquibase-core" % "3.6.3"
 
+  val scalikeCore =       "org.scalikejdbc"                   %% "scalikejdbc"         % scalikejdbcVersion
+  val scalikeCoreConfig = "org.scalikejdbc"                   %% "scalikejdbc-config"  % scalikejdbcVersion
+  val scalikeCoreTest =   "org.scalikejdbc"                   %% "scalikejdbc-test"    % scalikejdbcVersion   % "test"
+  val postgres = "org.postgresql"                    %  "postgresql"          % postgresDriverVersion
+  
   val rootDependencies = Seq(
     // proactively pull in latest versions of Jackson libs, instead of relying on the versions
     // specified as transitive dependencies, due to OWASP DependencyCheck warnings for earlier versions.
@@ -110,6 +117,11 @@ object Dependencies {
     ehcache,
     catsEffect,
 
-    liquibaseCore
+    liquibaseCore,
+
+    scalikeCore,
+    scalikeCoreConfig,
+    scalikeCoreTest,
+    postgres
   )
 }

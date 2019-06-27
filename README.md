@@ -142,10 +142,15 @@ Spin up a local OpenDJ:
 ```
 sh docker/run-opendj.sh start
 ```
+Spin up a local postgres:
+```
+sh docker/run-postgres.sh start
+````
+
 
 Make sure your `SBT_OPTS` are set:
 ```
-export SBT_OPTS="-Ddirectory.url=ldap://localhost:3389 -Ddirectory.password=testtesttest"
+export SBT_OPTS="-Dpostgres.host=localhost -Dpostgres.port=5432 -Ddirectory.url=ldap://localhost:3389 -Ddirectory.password=testtesttest"
 ```
 
 Run tests:
@@ -155,6 +160,10 @@ sbt test
 Stop your local opendj:
 ```
 sh docker/run-opendj.sh stop
+```
+Stop your local postgres:
+```
+sh docker/run-postgres.sh stop
 ```
 
 ### Test newrelic metrics locally
