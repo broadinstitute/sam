@@ -8,9 +8,10 @@ services:
 - docker
 before_install:
 - sh docker/run-opendj.sh start
+- sh docker/run-postgres.sh start 15432
 script:
 - export SBT_OPTS="-J-Xmx3g -Denv.type=test -Ddirectory.url=ldap://localhost:3389
-  -Ddirectory.password=testtesttest"
+  -Ddirectory.password=testtesttest -Dpostgres.host=localhost -Dpostgres.port=15432"
 - sbt clean "testOnly -- -n org.broadinstitute.tags.SchemaInit"
 - docker restart opendj
 - sleep 40
@@ -20,6 +21,7 @@ after_success:
 - export SBT_OPTS="-J-Xmx3g"
 - sbt coveralls
 - sh docker/run-opendj.sh stop
+- sh docker/run-postgres.sh stop
 - bash scripts/publish-client.sh
 env:
   global:
