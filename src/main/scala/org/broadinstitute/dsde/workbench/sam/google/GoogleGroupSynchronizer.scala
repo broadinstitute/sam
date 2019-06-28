@@ -120,7 +120,7 @@ class GoogleGroupSynchronizer(directoryDAO: DirectoryDAO,
           googleDirectoryDAO.removeMemberFromGroup(group.email, WorkbenchEmail(removeEmail)).toTry.map(toSyncReportItem("removed", removeEmail, _))
         }
 
-        _ <- directoryDAO.updateSynchronizedDate(groupId)
+        _ <- directoryDAO.updateSynchronizedDate(groupId).unsafeToFuture()
       } yield {
         Map(group.email -> Seq(addTrials, removeTrials).flatten) ++ subGroupSyncs.flatten
       }

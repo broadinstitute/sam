@@ -1,0 +1,606 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog logicalFilePath="dummy"
+                   xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog-ext http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-ext.xsd http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.4.xsd">
+
+    <changeSet logicalFilePath="dummy" author="dvoet" id="group_table">
+        <createTable tableName="SAM_GROUP">
+            <column autoIncrement="true" name="id" type="BIGINT">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="name" type="TEXT">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="email" type="TEXT">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="updated_date" type="timestamptz"/>
+            <column name="synchronized_date" type="timestamptz"/>
+        </createTable>
+    </changeSet>
+
+
+
+
+
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-1">
+        <createTable tableName="ATTRIBUTE">
+            <column autoIncrement="true" name="id" type="BIGINT">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="name" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="value_string" type="TEXT"/>
+            <column name="value_number" type="DOUBLE"/>
+            <column name="value_boolean" type="BIT"/>
+            <column name="value_entity_ref" type="BIGINT"/>
+            <column name="list_index" type="INT"/>
+        </createTable>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-2">
+        <createTable tableName="BILLING_PROJECT">
+            <column name="NAME" type="VARCHAR(254)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="CROMWELL_BUCKET_URL" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-3">
+        <createTable tableName="BUCKET_DELETION">
+            <column name="bucket" type="VARCHAR(254)">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-4">
+        <createTable tableName="ENTITY">
+            <column autoIncrement="true" name="id" type="BIGINT">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="name" type="VARCHAR(254)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="entity_type" type="VARCHAR(254)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="workspace_id" type="BINARY(16)">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-5">
+        <createTable tableName="ENTITY_ATTRIBUTE">
+            <column name="entity_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="attribute_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-6">
+        <createTable tableName="GROUP">
+            <column name="NAME" type="VARCHAR(254)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="EMAIL" type="VARCHAR(254)">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-7">
+        <createTable tableName="GROUP_SUBGROUPS">
+            <column name="PARENT_NAME" type="VARCHAR(254)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="CHILD_NAME" type="VARCHAR(254)">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-8">
+        <createTable tableName="GROUP_USERS">
+            <column name="USER_SUBJECT_ID" type="VARCHAR(254)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="GROUP_NAME" type="VARCHAR(254)">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-9">
+        <createTable tableName="METHOD_CONFIG">
+            <column autoIncrement="true" name="ID" type="BIGINT">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="NAMESPACE" type="VARCHAR(254)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="NAME" type="VARCHAR(254)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="WORKSPACE_ID" type="BINARY(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="ROOT_ENTITY_TYPE" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="METHOD_NAMESPACE" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="METHOD_NAME" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="METHOD_VERSION" type="INT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-10">
+        <createTable tableName="METHOD_CONFIG_INPUT">
+            <column name="METHOD_CONFIG_ID" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column autoIncrement="true" name="ID" type="BIGINT">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="KEY" type="VARCHAR(254)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="VALUE" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-11">
+        <createTable tableName="METHOD_CONFIG_OUTPUT">
+            <column name="METHOD_CONFIG_ID" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column autoIncrement="true" name="ID" type="BIGINT">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="KEY" type="VARCHAR(254)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="VALUE" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-12">
+        <createTable tableName="METHOD_CONFIG_PREREQ">
+            <column name="METHOD_CONFIG_ID" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column autoIncrement="true" name="ID" type="BIGINT">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="KEY" type="VARCHAR(254)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="VALUE" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-13">
+        <createTable tableName="PROJECT_USERS">
+            <column name="USER_SUBJECT_ID" type="VARCHAR(254)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="PROJECT_NAME" type="VARCHAR(254)">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-14">
+        <createTable tableName="SUBMISSION">
+            <column name="ID" type="BINARY(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="WORKSPACE_ID" type="BINARY(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column defaultValueDate="2001-01-01 01:01:01.0" name="DATE_SUBMITTED" type="TIMESTAMP(6)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="SUBMITTER" type="VARCHAR(254)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="METHOD_CONFIG_ID" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="ENTITY_ID" type="BIGINT"/>
+            <column name="STATUS" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-15">
+        <createTable tableName="SUBMISSION_VALIDATION">
+            <column name="WORKFLOW_ID" type="BINARY(16)"/>
+            <column name="WORKFLOW_FAILURE_ID" type="BIGINT"/>
+            <column name="VALUE_ID" type="BIGINT"/>
+            <column name="ERROR_TEXT" type="TEXT"/>
+            <column name="INPUT_NAME" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-16">
+        <createTable tableName="USER">
+            <column name="SUBJECT_ID" type="VARCHAR(254)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="EMAIL" type="VARCHAR(254)">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-17">
+        <createTable tableName="WORKFLOW">
+            <column name="ID" type="BINARY(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="SUBMISSION_ID" type="BINARY(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="STATUS" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column defaultValueDate="2001-01-01 01:01:01.0" name="STATUS_LAST_CHANGED" type="TIMESTAMP(6)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="ENTITY_ID" type="BIGINT"/>
+        </createTable>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-18">
+        <createTable tableName="WORKFLOW_ERROR">
+            <column name="WORKFLOW_FAILURE_ID" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="ERROR_TEXT" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-19">
+        <createTable tableName="WORKFLOW_FAILURE">
+            <column autoIncrement="true" name="ID" type="BIGINT">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="SUBMISSION_ID" type="BINARY(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="ENTITY_ID" type="BIGINT"/>
+        </createTable>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-20">
+        <createTable tableName="WORKFLOW_MESSAGE">
+            <column name="WORKFLOW_ID" type="BINARY(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="MESSAGE" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-21">
+        <createTable tableName="WORKSPACE">
+            <column name="namespace" type="VARCHAR(254)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="name" type="VARCHAR(254)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="id" type="BINARY(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="bucket_name" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column defaultValueDate="2001-01-01 01:01:01.0" name="created_date" type="TIMESTAMP(6)">
+                <constraints nullable="false"/>
+            </column>
+            <column defaultValueDate="2001-01-01 01:01:01.0" name="last_modified" type="TIMESTAMP(6)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="is_locked" type="BIT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-22">
+        <createTable tableName="WORKSPACE_ACCESS">
+            <column name="workspace_id" type="BINARY(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="group_name" type="VARCHAR(254)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="access_level" type="VARCHAR(254)">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-23">
+        <createTable tableName="WORKSPACE_ATTRIBUTE">
+            <column name="workspace_id" type="BINARY(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="attribute_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-24">
+        <addPrimaryKey columnNames="NAME" constraintName="PRIMARY" tableName="BILLING_PROJECT"/>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-25">
+        <addPrimaryKey columnNames="bucket" constraintName="PRIMARY" tableName="BUCKET_DELETION"/>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-26">
+        <addPrimaryKey columnNames="attribute_id" constraintName="PRIMARY" tableName="ENTITY_ATTRIBUTE"/>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-27">
+        <addPrimaryKey columnNames="NAME" constraintName="PRIMARY" tableName="GROUP"/>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-28">
+        <addPrimaryKey columnNames="PARENT_NAME, CHILD_NAME" constraintName="PRIMARY" tableName="GROUP_SUBGROUPS"/>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-29">
+        <addPrimaryKey columnNames="USER_SUBJECT_ID, GROUP_NAME" constraintName="PRIMARY" tableName="GROUP_USERS"/>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-30">
+        <addPrimaryKey columnNames="USER_SUBJECT_ID, PROJECT_NAME" constraintName="PRIMARY" tableName="PROJECT_USERS"/>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-31">
+        <addPrimaryKey columnNames="ID" constraintName="PRIMARY" tableName="SUBMISSION"/>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-32">
+        <addPrimaryKey columnNames="SUBJECT_ID" constraintName="PRIMARY" tableName="USER"/>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-33">
+        <addPrimaryKey columnNames="ID" constraintName="PRIMARY" tableName="WORKFLOW"/>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-34">
+        <addPrimaryKey columnNames="id" constraintName="PRIMARY" tableName="WORKSPACE"/>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-35">
+        <addPrimaryKey columnNames="workspace_id, access_level" constraintName="PRIMARY" tableName="WORKSPACE_ACCESS"/>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-36">
+        <addPrimaryKey columnNames="attribute_id" constraintName="PRIMARY" tableName="WORKSPACE_ATTRIBUTE"/>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-37">
+        <addUniqueConstraint columnNames="NAMESPACE, NAME" constraintName="IDX_CONFIG" tableName="METHOD_CONFIG"/>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-38">
+        <addUniqueConstraint columnNames="EMAIL" constraintName="IDX_GROUP_EMAIL" tableName="GROUP"/>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-39">
+        <addUniqueConstraint columnNames="METHOD_CONFIG_ID, KEY" constraintName="IDX_MC_INPUT" tableName="METHOD_CONFIG_INPUT"/>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-40">
+        <addUniqueConstraint columnNames="METHOD_CONFIG_ID, KEY" constraintName="IDX_MC_OUTPUT" tableName="METHOD_CONFIG_OUTPUT"/>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-41">
+        <addUniqueConstraint columnNames="METHOD_CONFIG_ID, KEY" constraintName="IDX_MC_PREREQ" tableName="METHOD_CONFIG_PREREQ"/>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-42">
+        <addUniqueConstraint columnNames="EMAIL" constraintName="IDX_USER_EMAIL" tableName="USER"/>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-43">
+        <addUniqueConstraint columnNames="namespace, name" constraintName="IDX_WS_UNIQUE_NAMESPACE_NAME" tableName="WORKSPACE"/>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-44">
+        <addUniqueConstraint columnNames="workspace_id, entity_type, name" constraintName="idx_entity_type_name" tableName="ENTITY"/>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-45">
+        <createIndex indexName="FK_ATTRIBUTE_ENTITY_REF" tableName="ATTRIBUTE">
+            <column name="value_entity_ref"/>
+        </createIndex>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-46">
+        <createIndex indexName="FK_ENT_ATTR_ENTITY" tableName="ENTITY_ATTRIBUTE">
+            <column name="entity_id"/>
+        </createIndex>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-47">
+        <createIndex indexName="FK_GROUP_SUBGROUPS_CHILD" tableName="GROUP_SUBGROUPS">
+            <column name="CHILD_NAME"/>
+        </createIndex>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-48">
+        <createIndex indexName="FK_GROUP_USERS_GROUP" tableName="GROUP_USERS">
+            <column name="GROUP_NAME"/>
+        </createIndex>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-49">
+        <createIndex indexName="FK_MC_WORKSPACE" tableName="METHOD_CONFIG">
+            <column name="WORKSPACE_ID"/>
+        </createIndex>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-50">
+        <createIndex indexName="FK_PROJECT_USERS_PROJECT" tableName="PROJECT_USERS">
+            <column name="PROJECT_NAME"/>
+        </createIndex>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-51">
+        <createIndex indexName="FK_SUB_ENTITY" tableName="SUBMISSION">
+            <column name="ENTITY_ID"/>
+        </createIndex>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-52">
+        <createIndex indexName="FK_SUB_METHOD_CONFIG" tableName="SUBMISSION">
+            <column name="METHOD_CONFIG_ID"/>
+        </createIndex>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-53">
+        <createIndex indexName="FK_SUB_SUBMITTER" tableName="SUBMISSION">
+            <column name="SUBMITTER"/>
+        </createIndex>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-54">
+        <createIndex indexName="FK_SUB_VALIDATION_FAIL" tableName="SUBMISSION_VALIDATION">
+            <column name="WORKFLOW_FAILURE_ID"/>
+        </createIndex>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-55">
+        <createIndex indexName="FK_SUB_VALIDATION_VAL" tableName="SUBMISSION_VALIDATION">
+            <column name="VALUE_ID"/>
+        </createIndex>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-56">
+        <createIndex indexName="FK_SUB_VALIDATION_WF" tableName="SUBMISSION_VALIDATION">
+            <column name="WORKFLOW_ID"/>
+        </createIndex>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-57">
+        <createIndex indexName="FK_SUB_WORKSPACE" tableName="SUBMISSION">
+            <column name="WORKSPACE_ID"/>
+        </createIndex>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-58">
+        <createIndex indexName="FK_WF_ENTITY" tableName="WORKFLOW">
+            <column name="ENTITY_ID"/>
+        </createIndex>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-59">
+        <createIndex indexName="FK_WF_ERR_FAILURE" tableName="WORKFLOW_ERROR">
+            <column name="WORKFLOW_FAILURE_ID"/>
+        </createIndex>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-60">
+        <createIndex indexName="FK_WF_FAILURE_ENTITY" tableName="WORKFLOW_FAILURE">
+            <column name="ENTITY_ID"/>
+        </createIndex>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-61">
+        <createIndex indexName="FK_WF_FAILURE_SUB" tableName="WORKFLOW_FAILURE">
+            <column name="SUBMISSION_ID"/>
+        </createIndex>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-62">
+        <createIndex indexName="FK_WF_MSG_WF" tableName="WORKFLOW_MESSAGE">
+            <column name="WORKFLOW_ID"/>
+        </createIndex>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-63">
+        <createIndex indexName="FK_WF_SUB" tableName="WORKFLOW">
+            <column name="SUBMISSION_ID"/>
+        </createIndex>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-64">
+        <createIndex indexName="FK_WS_ACCESS_GROUP" tableName="WORKSPACE_ACCESS">
+            <column name="group_name"/>
+        </createIndex>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-65">
+        <createIndex indexName="FK_WS_ATTR_WORKSPACE" tableName="WORKSPACE_ATTRIBUTE">
+            <column name="workspace_id"/>
+        </createIndex>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-66">
+        <addForeignKeyConstraint baseColumnNames="value_entity_ref" baseTableName="ATTRIBUTE" constraintName="FK_ATTRIBUTE_ENTITY_REF" deferrable="false" initiallyDeferred="false" onDelete="NO ACTION" onUpdate="NO ACTION" referencedColumnNames="id" referencedTableName="ENTITY"/>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-67">
+        <addForeignKeyConstraint baseColumnNames="workspace_id" baseTableName="ENTITY" constraintName="FK_ENTITY_WORKSPACE" deferrable="false" initiallyDeferred="false" onDelete="NO ACTION" onUpdate="NO ACTION" referencedColumnNames="id" referencedTableName="WORKSPACE"/>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-68">
+        <addForeignKeyConstraint baseColumnNames="attribute_id" baseTableName="ENTITY_ATTRIBUTE" constraintName="FK_ENT_ATTR_ATTRIBUTE" deferrable="false" initiallyDeferred="false" onDelete="NO ACTION" onUpdate="NO ACTION" referencedColumnNames="id" referencedTableName="ATTRIBUTE"/>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-69">
+        <addForeignKeyConstraint baseColumnNames="entity_id" baseTableName="ENTITY_ATTRIBUTE" constraintName="FK_ENT_ATTR_ENTITY" deferrable="false" initiallyDeferred="false" onDelete="NO ACTION" onUpdate="NO ACTION" referencedColumnNames="id" referencedTableName="ENTITY"/>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-70">
+        <addForeignKeyConstraint baseColumnNames="CHILD_NAME" baseTableName="GROUP_SUBGROUPS" constraintName="FK_GROUP_SUBGROUPS_CHILD" deferrable="false" initiallyDeferred="false" onDelete="NO ACTION" onUpdate="NO ACTION" referencedColumnNames="NAME" referencedTableName="GROUP"/>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-71">
+        <addForeignKeyConstraint baseColumnNames="PARENT_NAME" baseTableName="GROUP_SUBGROUPS" constraintName="FK_GROUP_SUBGROUPS_PARENT" deferrable="false" initiallyDeferred="false" onDelete="NO ACTION" onUpdate="NO ACTION" referencedColumnNames="NAME" referencedTableName="GROUP"/>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-72">
+        <addForeignKeyConstraint baseColumnNames="GROUP_NAME" baseTableName="GROUP_USERS" constraintName="FK_GROUP_USERS_GROUP" deferrable="false" initiallyDeferred="false" onDelete="NO ACTION" onUpdate="NO ACTION" referencedColumnNames="NAME" referencedTableName="GROUP"/>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-73">
+        <addForeignKeyConstraint baseColumnNames="USER_SUBJECT_ID" baseTableName="GROUP_USERS" constraintName="FK_GROUP_USERS_USER" deferrable="false" initiallyDeferred="false" onDelete="NO ACTION" onUpdate="NO ACTION" referencedColumnNames="SUBJECT_ID" referencedTableName="USER"/>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-74">
+        <addForeignKeyConstraint baseColumnNames="METHOD_CONFIG_ID" baseTableName="METHOD_CONFIG_INPUT" constraintName="FK_MC_INPUT" deferrable="false" initiallyDeferred="false" onDelete="NO ACTION" onUpdate="NO ACTION" referencedColumnNames="ID" referencedTableName="METHOD_CONFIG"/>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-75">
+        <addForeignKeyConstraint baseColumnNames="METHOD_CONFIG_ID" baseTableName="METHOD_CONFIG_OUTPUT" constraintName="FK_MC_OUTPUT" deferrable="false" initiallyDeferred="false" onDelete="NO ACTION" onUpdate="NO ACTION" referencedColumnNames="ID" referencedTableName="METHOD_CONFIG"/>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-76">
+        <addForeignKeyConstraint baseColumnNames="METHOD_CONFIG_ID" baseTableName="METHOD_CONFIG_PREREQ" constraintName="FK_MC_PREREQ" deferrable="false" initiallyDeferred="false" onDelete="NO ACTION" onUpdate="NO ACTION" referencedColumnNames="ID" referencedTableName="METHOD_CONFIG"/>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-77">
+        <addForeignKeyConstraint baseColumnNames="WORKSPACE_ID" baseTableName="METHOD_CONFIG" constraintName="FK_MC_WORKSPACE" deferrable="false" initiallyDeferred="false" onDelete="NO ACTION" onUpdate="NO ACTION" referencedColumnNames="id" referencedTableName="WORKSPACE"/>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-78">
+        <addForeignKeyConstraint baseColumnNames="PROJECT_NAME" baseTableName="PROJECT_USERS" constraintName="FK_PROJECT_USERS_PROJECT" deferrable="false" initiallyDeferred="false" onDelete="NO ACTION" onUpdate="NO ACTION" referencedColumnNames="NAME" referencedTableName="BILLING_PROJECT"/>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-79">
+        <addForeignKeyConstraint baseColumnNames="USER_SUBJECT_ID" baseTableName="PROJECT_USERS" constraintName="FK_PROJECT_USERS_USER" deferrable="false" initiallyDeferred="false" onDelete="NO ACTION" onUpdate="NO ACTION" referencedColumnNames="SUBJECT_ID" referencedTableName="USER"/>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-80">
+        <addForeignKeyConstraint baseColumnNames="ENTITY_ID" baseTableName="SUBMISSION" constraintName="FK_SUB_ENTITY" deferrable="false" initiallyDeferred="false" onDelete="NO ACTION" onUpdate="NO ACTION" referencedColumnNames="id" referencedTableName="ENTITY"/>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-81">
+        <addForeignKeyConstraint baseColumnNames="METHOD_CONFIG_ID" baseTableName="SUBMISSION" constraintName="FK_SUB_METHOD_CONFIG" deferrable="false" initiallyDeferred="false" onDelete="NO ACTION" onUpdate="NO ACTION" referencedColumnNames="ID" referencedTableName="METHOD_CONFIG"/>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-82">
+        <addForeignKeyConstraint baseColumnNames="SUBMITTER" baseTableName="SUBMISSION" constraintName="FK_SUB_SUBMITTER" deferrable="false" initiallyDeferred="false" onDelete="NO ACTION" onUpdate="NO ACTION" referencedColumnNames="SUBJECT_ID" referencedTableName="USER"/>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-83">
+        <addForeignKeyConstraint baseColumnNames="WORKFLOW_FAILURE_ID" baseTableName="SUBMISSION_VALIDATION" constraintName="FK_SUB_VALIDATION_FAIL" deferrable="false" initiallyDeferred="false" onDelete="NO ACTION" onUpdate="NO ACTION" referencedColumnNames="ID" referencedTableName="WORKFLOW_FAILURE"/>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-84">
+        <addForeignKeyConstraint baseColumnNames="VALUE_ID" baseTableName="SUBMISSION_VALIDATION" constraintName="FK_SUB_VALIDATION_VAL" deferrable="false" initiallyDeferred="false" onDelete="NO ACTION" onUpdate="NO ACTION" referencedColumnNames="id" referencedTableName="ATTRIBUTE"/>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-85">
+        <addForeignKeyConstraint baseColumnNames="WORKFLOW_ID" baseTableName="SUBMISSION_VALIDATION" constraintName="FK_SUB_VALIDATION_WF" deferrable="false" initiallyDeferred="false" onDelete="NO ACTION" onUpdate="NO ACTION" referencedColumnNames="ID" referencedTableName="WORKFLOW"/>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-86">
+        <addForeignKeyConstraint baseColumnNames="WORKSPACE_ID" baseTableName="SUBMISSION" constraintName="FK_SUB_WORKSPACE" deferrable="false" initiallyDeferred="false" onDelete="NO ACTION" onUpdate="NO ACTION" referencedColumnNames="id" referencedTableName="WORKSPACE"/>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-87">
+        <addForeignKeyConstraint baseColumnNames="ENTITY_ID" baseTableName="WORKFLOW" constraintName="FK_WF_ENTITY" deferrable="false" initiallyDeferred="false" onDelete="NO ACTION" onUpdate="NO ACTION" referencedColumnNames="id" referencedTableName="ENTITY"/>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-88">
+        <addForeignKeyConstraint baseColumnNames="WORKFLOW_FAILURE_ID" baseTableName="WORKFLOW_ERROR" constraintName="FK_WF_ERR_FAILURE" deferrable="false" initiallyDeferred="false" onDelete="NO ACTION" onUpdate="NO ACTION" referencedColumnNames="ID" referencedTableName="WORKFLOW_FAILURE"/>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-89">
+        <addForeignKeyConstraint baseColumnNames="ENTITY_ID" baseTableName="WORKFLOW_FAILURE" constraintName="FK_WF_FAILURE_ENTITY" deferrable="false" initiallyDeferred="false" onDelete="NO ACTION" onUpdate="NO ACTION" referencedColumnNames="id" referencedTableName="ENTITY"/>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-90">
+        <addForeignKeyConstraint baseColumnNames="SUBMISSION_ID" baseTableName="WORKFLOW_FAILURE" constraintName="FK_WF_FAILURE_SUB" deferrable="false" initiallyDeferred="false" onDelete="NO ACTION" onUpdate="NO ACTION" referencedColumnNames="ID" referencedTableName="SUBMISSION"/>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-91">
+        <addForeignKeyConstraint baseColumnNames="WORKFLOW_ID" baseTableName="WORKFLOW_MESSAGE" constraintName="FK_WF_MSG_WF" deferrable="false" initiallyDeferred="false" onDelete="NO ACTION" onUpdate="NO ACTION" referencedColumnNames="ID" referencedTableName="WORKFLOW"/>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-92">
+        <addForeignKeyConstraint baseColumnNames="SUBMISSION_ID" baseTableName="WORKFLOW" constraintName="FK_WF_SUB" deferrable="false" initiallyDeferred="false" onDelete="NO ACTION" onUpdate="NO ACTION" referencedColumnNames="ID" referencedTableName="SUBMISSION"/>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-93">
+        <addForeignKeyConstraint baseColumnNames="group_name" baseTableName="WORKSPACE_ACCESS" constraintName="FK_WS_ACCESS_GROUP" deferrable="false" initiallyDeferred="false" onDelete="NO ACTION" onUpdate="NO ACTION" referencedColumnNames="NAME" referencedTableName="GROUP"/>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-94">
+        <addForeignKeyConstraint baseColumnNames="workspace_id" baseTableName="WORKSPACE_ACCESS" constraintName="FK_WS_ACCESS_WORKSPACE" deferrable="false" initiallyDeferred="false" onDelete="NO ACTION" onUpdate="NO ACTION" referencedColumnNames="id" referencedTableName="WORKSPACE"/>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-95">
+        <addForeignKeyConstraint baseColumnNames="attribute_id" baseTableName="WORKSPACE_ATTRIBUTE" constraintName="FK_WS_ATTR_ATTRIBUTE" deferrable="false" initiallyDeferred="false" onDelete="NO ACTION" onUpdate="NO ACTION" referencedColumnNames="id" referencedTableName="ATTRIBUTE"/>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="thibault (generated)" id="1457644930582-96">
+        <addForeignKeyConstraint baseColumnNames="workspace_id" baseTableName="WORKSPACE_ATTRIBUTE" constraintName="FK_WS_ATTR_WORKSPACE" deferrable="false" initiallyDeferred="false" onDelete="NO ACTION" onUpdate="NO ACTION" referencedColumnNames="id" referencedTableName="WORKSPACE"/>
+    </changeSet>
+</databaseChangeLog>

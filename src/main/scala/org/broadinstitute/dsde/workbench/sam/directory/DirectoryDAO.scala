@@ -7,8 +7,6 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google._
 import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
 
-import scala.concurrent.Future
-
 /**
   * Created by dvoet on 5/26/17.
   */
@@ -30,7 +28,7 @@ trait DirectoryDAO {
     */
   def removeGroupMember(groupId: WorkbenchGroupIdentity, removeMember: WorkbenchSubject): IO[Boolean]
   def isGroupMember(groupId: WorkbenchGroupIdentity, member: WorkbenchSubject): IO[Boolean]
-  def updateSynchronizedDate(groupId: WorkbenchGroupIdentity): Future[Unit]
+  def updateSynchronizedDate(groupId: WorkbenchGroupIdentity): IO[Unit]
   def getSynchronizedDate(groupId: WorkbenchGroupIdentity): IO[Option[Date]]
   def getSynchronizedEmail(groupId: WorkbenchGroupIdentity): IO[Option[WorkbenchEmail]]
 
@@ -42,9 +40,9 @@ trait DirectoryDAO {
   def createUser(user: WorkbenchUser): IO[WorkbenchUser]
   def loadUser(userId: WorkbenchUserId): IO[Option[WorkbenchUser]]
   def loadUsers(userIds: Set[WorkbenchUserId]): IO[Stream[WorkbenchUser]]
-  def deleteUser(userId: WorkbenchUserId): Future[Unit]
-  def addProxyGroup(userId: WorkbenchUserId, proxyEmail: WorkbenchEmail): Future[Unit]
-  def readProxyGroup(userId: WorkbenchUserId): Future[Option[WorkbenchEmail]]
+  def deleteUser(userId: WorkbenchUserId): IO[Unit]
+  def addProxyGroup(userId: WorkbenchUserId, proxyEmail: WorkbenchEmail): IO[Unit]
+  def readProxyGroup(userId: WorkbenchUserId): IO[Option[WorkbenchEmail]]
 
   def listUsersGroups(userId: WorkbenchUserId): IO[Set[WorkbenchGroupIdentity]]
   def listUserDirectMemberships(userId: WorkbenchUserId): IO[Stream[WorkbenchGroupIdentity]]
@@ -52,14 +50,14 @@ trait DirectoryDAO {
   def listAncestorGroups(groupId: WorkbenchGroupIdentity): IO[Set[WorkbenchGroupIdentity]]
 
   def enableIdentity(subject: WorkbenchSubject): IO[Unit]
-  def disableIdentity(subject: WorkbenchSubject): Future[Unit]
+  def disableIdentity(subject: WorkbenchSubject): IO[Unit]
   def isEnabled(subject: WorkbenchSubject): IO[Boolean]
 
   def getUserFromPetServiceAccount(petSA: ServiceAccountSubjectId): IO[Option[WorkbenchUser]]
   def createPetServiceAccount(petServiceAccount: PetServiceAccount): IO[PetServiceAccount]
   def loadPetServiceAccount(petServiceAccountId: PetServiceAccountId): IO[Option[PetServiceAccount]]
   def deletePetServiceAccount(petServiceAccountId: PetServiceAccountId): IO[Unit]
-  def getAllPetServiceAccountsForUser(userId: WorkbenchUserId): Future[Seq[PetServiceAccount]]
+  def getAllPetServiceAccountsForUser(userId: WorkbenchUserId): IO[Seq[PetServiceAccount]]
   def updatePetServiceAccount(petServiceAccount: PetServiceAccount): IO[PetServiceAccount]
   def getManagedGroupAccessInstructions(groupName: WorkbenchGroupName): IO[Option[String]]
   def setManagedGroupAccessInstructions(groupName: WorkbenchGroupName, accessInstructions: String): IO[Unit]

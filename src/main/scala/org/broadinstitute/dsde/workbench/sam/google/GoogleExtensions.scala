@@ -270,7 +270,7 @@ class GoogleExtensions(
     */
   private def forAllPets[T](userId: WorkbenchUserId)(f: PetServiceAccount => Future[T]): Future[Seq[T]] =
     for {
-      pets <- directoryDAO.getAllPetServiceAccountsForUser(userId)
+      pets <- directoryDAO.getAllPetServiceAccountsForUser(userId).unsafeToFuture()
       a <- Future.traverse(pets) { pet =>
         f(pet)
       }
@@ -476,14 +476,11 @@ class GoogleExtensions(
 
   private def disablePetServiceAccount(petServiceAccount: PetServiceAccount): Future[Unit] =
     for {
-      _ <- directoryDAO.disableIdentity(petServiceAccount.id)
+      _ <- directoryDAO.disableIdentity(petServiceAccount.id).unsafeToFuture()
       _ <- withProxyEmail(petServiceAccount.id.userId) { proxyEmail =>
         googleDirectoryDAO.removeMemberFromGroup(proxyEmail, petServiceAccount.serviceAccount.email)
       }
     } yield ()
-
-  private def getPetServiceAccountsForUser(userId: WorkbenchUserId): Future[Seq[PetServiceAccount]] =
-    directoryDAO.getAllPetServiceAccountsForUser(userId)
 
   private def removePetServiceAccount(petServiceAccount: PetServiceAccount): Future[Unit] =
     for {
