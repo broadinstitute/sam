@@ -1,17 +1,18 @@
 package org.broadinstitute.dsde.workbench.sam.util
-import cats.effect.IO
+import cats.effect.{Clock, IO}
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.{FlatSpec, Matchers}
 
 import scala.concurrent.{ExecutionContext, Promise}
 import scala.concurrent.duration._
 
-class ShadowCasterSpec extends FlatSpec with Matchers with ScalaFutures {
+class ShadowRunnerSpec extends FlatSpec with Matchers with ScalaFutures {
 
   "ShadowCaster" should "runWithShadow" in {
 
-    class TestCaster extends ShadowCaster {
+    class TestRunner extends ShadowRunner {
       override implicit val executionContext: ExecutionContext = scala.concurrent.ExecutionContext.global
+      override implicit val clock: Clock[IO] = Clock.create[IO]
 
       val real = IO.pure(10)
       val shadow = IO.timer(executionContext).sleep(1 second).map(_ => 15)
@@ -27,7 +28,7 @@ class ShadowCasterSpec extends FlatSpec with Matchers with ScalaFutures {
       }
     }
 
-    val testCaster = new TestCaster()
+    val testCaster = new TestRunner()
     val result = testCaster.runTest()
 
     result.unsafeRunSync() should equal (10)
