@@ -17,14 +17,14 @@ class ShadowRunnerSpec extends FlatSpec with Matchers with ScalaFutures {
       val real = IO.pure(10)
       val shadow = IO.timer(executionContext).sleep(1 second).map(_ => 15)
 
-      val resultPromise: Promise[(String, Any, Long, Any, Long)] = Promise()
+      val resultPromise: Promise[(String, TimedResult[_], TimedResult[_])] = Promise()
 
       def runTest(): IO[Int] = {
         runWithShadow("runTest", real, shadow)
       }
 
-      override protected def reportResult[T](functionName: String, realResult: T, realTime: Long, shadowResult: T, shadowTime: Long): Unit = {
-        resultPromise.success((functionName, realResult, realTime, shadowResult, shadowTime))
+      override protected def reportResult[T](functionName: String, realTimedResult: TimedResult[T], shadowTimedResult: TimedResult[T]): Unit = {
+        resultPromise.success((functionName, realTimedResult, shadowTimedResult))
       }
     }
 
@@ -36,11 +36,11 @@ class ShadowRunnerSpec extends FlatSpec with Matchers with ScalaFutures {
     implicit val patienceConfig = PatienceConfig(2 seconds)
 
     testCaster.resultPromise should not be 'isCompleted
-    val (functionName, realResult, realTime, shadowResult, shadowTime) = testCaster.resultPromise.future.futureValue
+    val (functionName, realTimedResult, shadowTimedResult) = testCaster.resultPromise.future.futureValue
     functionName should equal ("runTest")
-    realResult should equal (10)
-    realTime should be < (1000L)
-    shadowResult should equal (15)
-    shadowTime should be > (1000L)
+    realTimedResult.result should equal (10)
+    realTimedResult.time should be < (1000L)
+    shadowTimedResult.result should equal (15)
+    shadowTimedResult.time should be > (1000L)
   }
 }
