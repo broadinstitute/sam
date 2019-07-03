@@ -15,6 +15,7 @@ object GroupMemberRecord extends SQLSyntaxSupport[GroupMemberRecord] {
   override def tableName: String = "SAM_GROUP_MEMBER"
 
   import GroupMemberRecordBinders._
+  import GroupRecordBinders._
   import UserRecordBinders._
   def apply(e: ResultName[GroupMemberRecord])(rs: WrappedResultSet): GroupMemberRecord = GroupMemberRecord(
     rs.get(e.id),
