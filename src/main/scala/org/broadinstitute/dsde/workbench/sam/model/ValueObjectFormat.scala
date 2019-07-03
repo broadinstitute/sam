@@ -1,5 +1,6 @@
 package org.broadinstitute.dsde.workbench.sam.model
 
+import scalikejdbc.ParameterBinderFactory
 import spray.json.{DeserializationException, JsString, JsValue, RootJsonFormat}
 
 /**
