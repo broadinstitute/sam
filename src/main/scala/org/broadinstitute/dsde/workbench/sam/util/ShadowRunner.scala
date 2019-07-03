@@ -4,11 +4,11 @@ import java.lang.reflect.{InvocationHandler, Method, Proxy}
 import cats.effect._
 import com.typesafe.scalalogging.LazyLogging
 
-import scala.concurrent.duration.MILLISECONDS
+import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 import scala.concurrent.ExecutionContext
 import scala.reflect.ClassTag
 
-case class TimedResult[T](result: Either[Throwable, T], time: Long)
+case class TimedResult[T](result: Either[Throwable, T], time: FiniteDuration)
 
 trait ShadowRunner {
   implicit val executionContext: ExecutionContext
@@ -34,7 +34,7 @@ trait ShadowRunner {
       start  <- clock.monotonic(MILLISECONDS)
       result <- fa.attempt
       finish <- clock.monotonic(MILLISECONDS)
-    } yield TimedResult(result, finish - start)
+    } yield TimedResult(result, FiniteDuration(finish - start, MILLISECONDS))
   }
 }
 
