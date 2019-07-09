@@ -12,11 +12,11 @@ final case class ResourceRoleRecord(id: ResourceRoleId,
                                     resourceTypeId: ResourceTypeId,
                                     role: ResourceRoleName)
 
-object ResourceRoleRecord extends SQLSyntaxSupport[ResourceRoleRecord] {
+object ResourceRoleTable extends SQLSyntaxSupport[ResourceRoleRecord] {
   override def tableName: String = "SAM_RESOURCE_ROLE"
 
-  import ResourceTypeRecordBinders._
-  import ResourceRoleRecordBinders._
+  import ResourceTypeTableBinders._
+  import ResourceRoleTableBinders._
   def apply(e: ResultName[ResourceRoleRecord])(rs: WrappedResultSet): ResourceRoleRecord = ResourceRoleRecord(
     rs.get(e.id),
     rs.get(e.resourceTypeId),
@@ -24,7 +24,7 @@ object ResourceRoleRecord extends SQLSyntaxSupport[ResourceRoleRecord] {
   )
 }
 
-object ResourceRoleRecordBinders {
+object ResourceRoleTableBinders {
   implicit val resourceRoleIdTypeBinder: TypeBinder[ResourceRoleId] = new TypeBinder[ResourceRoleId] {
     def apply(rs: ResultSet, label: String): ResourceRoleId = ResourceRoleId(rs.getLong(label))
     def apply(rs: ResultSet, index: Int): ResourceRoleId = ResourceRoleId(rs.getLong(index))

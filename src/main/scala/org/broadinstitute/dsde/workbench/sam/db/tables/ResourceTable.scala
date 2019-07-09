@@ -12,11 +12,11 @@ final case class ResourceRecord(id: ResourceId,
                                 name: ResourceName,
                                 resourceTypeId: ResourceTypeId)
 
-object ResourceRecord extends SQLSyntaxSupport[ResourceRecord] {
+object ResourceTable extends SQLSyntaxSupport[ResourceRecord] {
   override def tableName: String = "SAM_RESOURCE"
 
-  import ResourceTypeRecordBinders._
-  import ResourceRecordBinders._
+  import ResourceTypeTableBinders._
+  import ResourceTableBinders._
   def apply(e: ResultName[ResourceRecord])(rs: WrappedResultSet): ResourceRecord = ResourceRecord(
     rs.get(e.id),
     rs.get(e.name),
@@ -24,7 +24,7 @@ object ResourceRecord extends SQLSyntaxSupport[ResourceRecord] {
   )
 }
 
-object ResourceRecordBinders {
+object ResourceTableBinders {
   implicit val resourceIdTypeBinder: TypeBinder[ResourceId] = new TypeBinder[ResourceId] {
     def apply(rs: ResultSet, label: String): ResourceId = ResourceId(rs.getLong(label))
     def apply(rs: ResultSet, index: Int): ResourceId = ResourceId(rs.getLong(index))

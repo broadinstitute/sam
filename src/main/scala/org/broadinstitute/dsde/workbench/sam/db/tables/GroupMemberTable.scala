@@ -11,12 +11,12 @@ final case class GroupMemberRecord(id: GroupMemberId,
                                    memberUserId: Option[UserId],
                                    memberGroupId: Option[GroupId])
 
-object GroupMemberRecord extends SQLSyntaxSupport[GroupMemberRecord] {
+object GroupMemberTable extends SQLSyntaxSupport[GroupMemberRecord] {
   override def tableName: String = "SAM_GROUP_MEMBER"
 
-  import GroupMemberRecordBinders._
-  import GroupRecordBinders._
-  import UserRecordBinders._
+  import GroupMemberTableBinders._
+  import GroupTableBinders._
+  import UserTableBinders._
   def apply(e: ResultName[GroupMemberRecord])(rs: WrappedResultSet): GroupMemberRecord = GroupMemberRecord(
     rs.get(e.id),
     rs.get(e.groupId),
@@ -25,7 +25,7 @@ object GroupMemberRecord extends SQLSyntaxSupport[GroupMemberRecord] {
   )
 }
 
-object GroupMemberRecordBinders {
+object GroupMemberTableBinders {
   implicit val groupMemberIdTypeBinder: TypeBinder[GroupMemberId] = new TypeBinder[GroupMemberId] {
     def apply(rs: ResultSet, label: String): GroupMemberId = GroupMemberId(rs.getLong(label))
     def apply(rs: ResultSet, index: Int): GroupMemberId = GroupMemberId(rs.getLong(index))

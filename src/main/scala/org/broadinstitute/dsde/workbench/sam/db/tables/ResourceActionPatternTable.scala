@@ -12,11 +12,11 @@ final case class ResourceActionPatternRecord(id: ResourceActionPatternId,
                                              resourceTypeId: ResourceTypeId,
                                              actionPattern: ResourceActionPattern)
 
-object ResourceActionPatternRecord extends SQLSyntaxSupport[ResourceActionPatternRecord] {
+object ResourceActionPatternTable extends SQLSyntaxSupport[ResourceActionPatternRecord] {
   override def tableName: String = "SAM_ACTION_PATTERN"
 
-  import ResourceTypeRecordBinders._
-  import ResourceActionPatternRecordBinders._
+  import ResourceTypeTableBinders._
+  import ResourceActionPatternTableBinders._
   def apply(e: ResultName[ResourceActionPatternRecord])(rs: WrappedResultSet): ResourceActionPatternRecord = ResourceActionPatternRecord(
     rs.get(e.id),
     rs.get(e.resourceTypeId),
@@ -24,7 +24,7 @@ object ResourceActionPatternRecord extends SQLSyntaxSupport[ResourceActionPatter
   )
 }
 
-object ResourceActionPatternRecordBinders {
+object ResourceActionPatternTableBinders {
   implicit val resourceActionPatternIdTypeBinder: TypeBinder[ResourceActionPatternId] = new TypeBinder[ResourceActionPatternId] {
     def apply(rs: ResultSet, label: String): ResourceActionPatternId = ResourceActionPatternId(rs.getLong(label))
     def apply(rs: ResultSet, index: Int): ResourceActionPatternId = ResourceActionPatternId(rs.getLong(index))

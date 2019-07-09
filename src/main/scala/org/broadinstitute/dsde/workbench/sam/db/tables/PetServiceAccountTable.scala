@@ -13,11 +13,11 @@ final case class PetServiceAccountRecord(userId: UserId,
                                          googleSubjectId: PetServiceAccountGoogleSubjectId,
                                          email: PetServiceAccountEmail)
 
-object PetServiceAccountRecord extends SQLSyntaxSupport[PetServiceAccountRecord] {
+object PetServiceAccountTable extends SQLSyntaxSupport[PetServiceAccountRecord] {
   override def tableName: String = "SAM_PET_SERVICE_ACCOUNT"
 
-  import PetServiceAccountRecordBinders._
-  import UserRecordBinders._
+  import PetServiceAccountTableBinders._
+  import UserTableBinders._
   def apply(e: ResultName[PetServiceAccountRecord])(rs: WrappedResultSet): PetServiceAccountRecord = PetServiceAccountRecord(
     rs.get(e.userId),
     rs.get(e.project),
@@ -26,7 +26,7 @@ object PetServiceAccountRecord extends SQLSyntaxSupport[PetServiceAccountRecord]
   )
 }
 
-object PetServiceAccountRecordBinders {
+object PetServiceAccountTableBinders {
   implicit val petServiceAccountGoogleProjectTypeBinder: TypeBinder[PetServiceAccountGoogleProject] = new TypeBinder[PetServiceAccountGoogleProject] {
     def apply(rs: ResultSet, label: String): PetServiceAccountGoogleProject = PetServiceAccountGoogleProject(rs.getString(label))
     def apply(rs: ResultSet, index: Int): PetServiceAccountGoogleProject = PetServiceAccountGoogleProject(rs.getString(index))

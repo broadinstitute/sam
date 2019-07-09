@@ -11,17 +11,17 @@ final case class ResourceTypeName(value: String) extends ValueObject
 final case class ResourceTypeRecord(id: ResourceTypeId,
                                     resourceTypeName: ResourceTypeName)
 
-object ResourceTypeRecord extends SQLSyntaxSupport[ResourceTypeRecord] {
+object ResourceTypeTable extends SQLSyntaxSupport[ResourceTypeRecord] {
   override def tableName: String = "SAM_RESOURCE_TYPE"
 
-  import ResourceTypeRecordBinders._
+  import ResourceTypeTableBinders._
   def apply(e: ResultName[ResourceTypeRecord])(rs: WrappedResultSet): ResourceTypeRecord = ResourceTypeRecord(
     rs.get(e.id),
     rs.get(e.resourceTypeName)
   )
 }
 
-object ResourceTypeRecordBinders {
+object ResourceTypeTableBinders {
   implicit val resourceTypeIdTypeBinder: TypeBinder[ResourceTypeId] = new TypeBinder[ResourceTypeId] {
     def apply(rs: ResultSet, label: String): ResourceTypeId = ResourceTypeId(rs.getLong(label))
     def apply(rs: ResultSet, index: Int): ResourceTypeId = ResourceTypeId(rs.getLong(index))

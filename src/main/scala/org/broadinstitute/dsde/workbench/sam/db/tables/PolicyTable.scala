@@ -13,12 +13,12 @@ final case class PolicyRecord(id: PolicyId,
                               groupId: GroupId,
                               name: PolicyName)
 
-object PolicyRecord extends SQLSyntaxSupport[PolicyRecord] {
+object PolicyTable extends SQLSyntaxSupport[PolicyRecord] {
   override def tableName: String = "SAM_RESOURCE_POLICY"
 
-  import ResourceRecordBinders._
-  import GroupRecordBinders._
-  import PolicyRecordBinders._
+  import ResourceTableBinders._
+  import GroupTableBinders._
+  import PolicyTableBinders._
   def apply(e: ResultName[PolicyRecord])(rs: WrappedResultSet): PolicyRecord = PolicyRecord(
     rs.get(e.id),
     rs.get(e.resourceId),
@@ -27,7 +27,7 @@ object PolicyRecord extends SQLSyntaxSupport[PolicyRecord] {
   )
 }
 
-object PolicyRecordBinders {
+object PolicyTableBinders {
   implicit val policyIdTypeBinder: TypeBinder[PolicyId] = new TypeBinder[PolicyId] {
     def apply(rs: ResultSet, label: String): PolicyId = PolicyId(rs.getLong(label))
     def apply(rs: ResultSet, index: Int): PolicyId = PolicyId(rs.getLong(index))

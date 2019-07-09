@@ -16,10 +16,10 @@ final case class GroupRecord(id: GroupId,
                              updatedDate: Option[Instant],
                              synchronizedDate: Option[Instant])
 
-object GroupRecord extends SQLSyntaxSupport[GroupRecord] {
+object GroupTable extends SQLSyntaxSupport[GroupRecord] {
   override def tableName: String = "SAM_GROUP"
 
-  import GroupRecordBinders._
+  import GroupTableBinders._
   def apply(e: ResultName[GroupRecord])(rs: WrappedResultSet): GroupRecord = GroupRecord(
     rs.get(e.id),
     rs.get(e.name),
@@ -29,7 +29,7 @@ object GroupRecord extends SQLSyntaxSupport[GroupRecord] {
   )
 }
 
-object GroupRecordBinders {
+object GroupTableBinders {
   implicit val groupIdTypeBinder: TypeBinder[GroupId] = new TypeBinder[GroupId] {
     def apply(rs: ResultSet, label: String): GroupId = GroupId(rs.getLong(label))
     def apply(rs: ResultSet, index: Int): GroupId = GroupId(rs.getLong(index))

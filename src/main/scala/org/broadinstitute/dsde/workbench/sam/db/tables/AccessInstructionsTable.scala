@@ -10,11 +10,11 @@ final case class AccessInstructionsRecord(id: AccessInstructionsId,
                                           groupId: GroupId,
                                           instructions: String)
 
-object AccessInstructionsRecord extends SQLSyntaxSupport[AccessInstructionsRecord] {
+object AccessInstructionsTable extends SQLSyntaxSupport[AccessInstructionsRecord] {
   override def tableName: String = "SAM_ACCESS_INSTRUCTIONS"
 
-  import AccessInstructionsRecordBinders._
-  import GroupRecordBinders._
+  import AccessInstructionsTableBinders._
+  import GroupTableBinders._
   def apply(e: ResultName[AccessInstructionsRecord])(rs: WrappedResultSet): AccessInstructionsRecord = AccessInstructionsRecord(
     rs.get(e.id),
     rs.get(e.groupId),
@@ -22,7 +22,7 @@ object AccessInstructionsRecord extends SQLSyntaxSupport[AccessInstructionsRecor
   )
 }
 
-object AccessInstructionsRecordBinders {
+object AccessInstructionsTableBinders {
   implicit val accessInstructionsIdTypeBinder: TypeBinder[AccessInstructionsId] = new TypeBinder[AccessInstructionsId] {
     def apply(rs: ResultSet, label: String): AccessInstructionsId = AccessInstructionsId(rs.getLong(label))
     def apply(rs: ResultSet, index: Int): AccessInstructionsId = AccessInstructionsId(rs.getLong(index))

@@ -5,11 +5,11 @@ import scalikejdbc._
 final case class PolicyRoleRecord(policyId: PolicyId,
                                   roleId: ResourceRoleId)
 
-object PolicyRoleRecord extends SQLSyntaxSupport[PolicyRoleRecord] {
+object PolicyRoleTable extends SQLSyntaxSupport[PolicyRoleRecord] {
   override def tableName: String = "SAM_POLICY_ROLE"
 
-  import PolicyRecordBinders._
-  import ResourceRoleRecordBinders._
+  import PolicyTableBinders._
+  import ResourceRoleTableBinders._
   def apply(e: ResultName[PolicyRoleRecord])(rs: WrappedResultSet): PolicyRoleRecord = PolicyRoleRecord(
     rs.get(e.policyId),
     rs.get(e.roleId)

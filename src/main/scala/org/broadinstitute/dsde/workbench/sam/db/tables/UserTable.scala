@@ -6,17 +6,17 @@ import org.broadinstitute.dsde.workbench.sam.db.DatabaseId
 import org.broadinstitute.dsde.workbench.sam.model.ValueObject
 import scalikejdbc._
 
-final case class UserId(value: Long) extends DatabaseId
+final case class UserId(value: String) extends ValueObject
 final case class UserEmail(value: String) extends ValueObject
 final case class UserGoogleSubjectId(value: String) extends ValueObject
 final case class UserRecord(id: UserId,
                             email: UserEmail,
                             googleSubjectId: Option[UserGoogleSubjectId])
 
-object UserRecord extends SQLSyntaxSupport[UserRecord] {
+object UserTable extends SQLSyntaxSupport[UserRecord] {
   override def tableName: String = "SAM_USER"
 
-  import UserRecordBinders._
+  import UserTableBinders._
   def apply(e: ResultName[UserRecord])(rs: WrappedResultSet): UserRecord = UserRecord(
     rs.get(e.id),
     rs.get(e.email),
@@ -24,10 +24,10 @@ object UserRecord extends SQLSyntaxSupport[UserRecord] {
   )
 }
 
-object UserRecordBinders {
+object UserTableBinders {
   implicit val userIdTypeBinder: TypeBinder[UserId] = new TypeBinder[UserId] {
-    def apply(rs: ResultSet, label: String): UserId = UserId(rs.getLong(label))
-    def apply(rs: ResultSet, index: Int): UserId = UserId(rs.getLong(index))
+    def apply(rs: ResultSet, label: String): UserId = UserId(rs.getString(label))
+    def apply(rs: ResultSet, index: Int): UserId = UserId(rs.getString(index))
   }
 
   implicit val userEmailTypeBinder: TypeBinder[UserEmail] = new TypeBinder[UserEmail] {
