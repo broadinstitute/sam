@@ -23,6 +23,11 @@ object GroupMemberTable extends SQLSyntaxSupport[GroupMemberRecord] {
     rs.get(e.memberUserId),
     rs.get(e.memberGroupId)
   )
+
+  def apply(m: SyntaxProvider[GroupMemberRecord])(rs: WrappedResultSet): GroupMemberRecord = apply(m.resultName)(rs)
+
+  def opt(m: SyntaxProvider[GroupMemberRecord])(rs: WrappedResultSet): Option[GroupMemberRecord] =
+    rs.longOpt(m.resultName.id).map(_ => GroupMemberTable(m)(rs))
 }
 
 object GroupMemberTableBinders {

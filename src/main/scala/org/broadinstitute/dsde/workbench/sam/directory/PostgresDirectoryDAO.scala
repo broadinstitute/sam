@@ -13,6 +13,7 @@ import org.broadinstitute.dsde.workbench.sam.util.DatabaseSupport
 import scalikejdbc._
 import SamParameterBinderFactory._
 
+import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 
 class PostgresDirectoryDAO(protected val dbRef: DbReference,
@@ -80,18 +81,27 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
   override def loadGroup(groupName: WorkbenchGroupName): IO[Option[BasicWorkbenchGroup]] = {
     runInTransaction { implicit session =>
       val groupTable = GroupTable.syntax("group")
+      val subGroupTable = GroupTable.syntax("subGroup")
       val groupMemberTable = GroupMemberTable.syntax("groupMember")
 
-      import GroupMemberTableBinders._
-      import GroupTableBinders._
-
-      withSQL {
-        select(groupTable.name, groupTable.email, groupMemberTable.memberGroupId)
+      val foo: immutable.Seq[GroupRecord] = withSQL {
+        select(groupTable.email, groupMemberTable.memberUserId, subGroupTable.name)
           .from(GroupTable as groupTable)
-          .innerJoin(GroupMemberTable as groupMemberTable)
+          .leftJoin(GroupMemberTable as groupMemberTable)
           .on(groupTable.id, groupMemberTable.groupId)
+          .leftJoin(GroupTable as subGroupTable)
+          .on(groupMemberTable.memberGroupId, subGroupTable.id)
           .where.eq(groupTable.name, WorkbenchGroupName(groupName.value))
-      }.map(BasicWorkbenchGroup(groupTable.name, groupTable.email, )).list().apply()
+//      }.map(GroupTable(groupTable)).list().apply()
+        // TODO: Everything below this line (to end of method) is still WIP, no idea if it's right or how to fix it yet
+      }.one(GroupTable(groupTable))
+        .toManies(
+          rs => GroupMemberTable.opt(groupMemberTable)(rs),
+          rs => GroupTable.opt(subGroupTable)(rs)
+        )
+        .map { (group, memberUsers, memberGroups) =>
+          BasicWorkbenchGroup(groupName, Set(), group)
+        }
     }
   }
 

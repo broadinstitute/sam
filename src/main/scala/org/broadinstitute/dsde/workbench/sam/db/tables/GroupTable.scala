@@ -26,6 +26,11 @@ object GroupTable extends SQLSyntaxSupport[GroupRecord] {
     rs.get(e.updatedDate),
     rs.get(e.synchronizedDate)
   )
+
+  def apply(o: SyntaxProvider[GroupRecord])(rs: WrappedResultSet): GroupRecord = apply(o.resultName)(rs)
+
+  def opt(m: SyntaxProvider[GroupRecord])(rs: WrappedResultSet): Option[GroupRecord] =
+    rs.longOpt(m.resultName.id).map(_ => GroupTable(m)(rs))
 }
 
 object GroupTableBinders {
