@@ -3,16 +3,15 @@ package org.broadinstitute.dsde.workbench.sam.db.tables
 import java.sql.ResultSet
 import java.time.Instant
 
+import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchGroupName}
 import org.broadinstitute.dsde.workbench.sam.db.DatabaseId
 import org.broadinstitute.dsde.workbench.sam.model.ValueObject
 import scalikejdbc._
 
 final case class GroupId(value: Long) extends DatabaseId
-final case class GroupName(value: String) extends ValueObject
-final case class GroupEmail(value: String) extends ValueObject
 final case class GroupRecord(id: GroupId,
-                             name: GroupName,
-                             email: GroupEmail,
+                             name: WorkbenchGroupName,
+                             email: WorkbenchEmail,
                              updatedDate: Option[Instant],
                              synchronizedDate: Option[Instant])
 
@@ -35,13 +34,13 @@ object GroupTableBinders {
     def apply(rs: ResultSet, index: Int): GroupId = GroupId(rs.getLong(index))
   }
 
-  implicit val groupNameTypeBinder: TypeBinder[GroupName] = new TypeBinder[GroupName] {
-    def apply(rs: ResultSet, label: String): GroupName = GroupName(rs.getString(label))
-    def apply(rs: ResultSet, index: Int): GroupName = GroupName(rs.getString(index))
+  implicit val groupNameTypeBinder: TypeBinder[WorkbenchGroupName] = new TypeBinder[WorkbenchGroupName] {
+    def apply(rs: ResultSet, label: String): WorkbenchGroupName = WorkbenchGroupName(rs.getString(label))
+    def apply(rs: ResultSet, index: Int): WorkbenchGroupName = WorkbenchGroupName(rs.getString(index))
   }
 
-  implicit val groupEmailTypeBinder: TypeBinder[GroupEmail] = new TypeBinder[GroupEmail] {
-    def apply(rs: ResultSet, label: String): GroupEmail = GroupEmail(rs.getString(label))
-    def apply(rs: ResultSet, index: Int): GroupEmail = GroupEmail(rs.getString(index))
+  implicit val groupEmailTypeBinder: TypeBinder[WorkbenchEmail] = new TypeBinder[WorkbenchEmail] {
+    def apply(rs: ResultSet, label: String): WorkbenchEmail = WorkbenchEmail(rs.getString(label))
+    def apply(rs: ResultSet, index: Int): WorkbenchEmail = WorkbenchEmail(rs.getString(index))
   }
 }

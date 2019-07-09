@@ -37,8 +37,8 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     val groupTableColumn = GroupTable.column
     GroupId(withSQL {
       insert.into(GroupTable).namedValues(
-        groupTableColumn.name -> GroupName(group.id.value),
-        groupTableColumn.email -> GroupEmail(group.email.value),
+        groupTableColumn.name -> group.id,
+        groupTableColumn.email -> group.email,
         groupTableColumn.updatedDate -> Option(Instant.now()),
         groupTableColumn.synchronizedDate -> None
       )
@@ -77,7 +77,23 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     }.update().apply()
   }
 
-  override def loadGroup(groupName: WorkbenchGroupName): IO[Option[BasicWorkbenchGroup]] = ???
+  override def loadGroup(groupName: WorkbenchGroupName): IO[Option[BasicWorkbenchGroup]] = {
+    runInTransaction { implicit session =>
+      val groupTable = GroupTable.syntax("group")
+      val groupMemberTable = GroupMemberTable.syntax("groupMember")
+
+      import GroupMemberTableBinders._
+      import GroupTableBinders._
+
+      withSQL {
+        select(groupTable.name, groupTable.email, groupMemberTable.memberGroupId)
+          .from(GroupTable as groupTable)
+          .innerJoin(GroupMemberTable as groupMemberTable)
+          .on(groupTable.id, groupMemberTable.groupId)
+          .where.eq(groupTable.name, WorkbenchGroupName(groupName.value))
+      }.map(BasicWorkbenchGroup(groupTable.name, groupTable.email, )).list().apply()
+    }
+  }
 
   override def loadGroups(groupNames: Set[WorkbenchGroupName]): IO[Stream[BasicWorkbenchGroup]] = ???
 
