@@ -13,7 +13,6 @@ import org.broadinstitute.dsde.workbench.sam.util.DatabaseSupport
 import scalikejdbc._
 import SamParameterBinderFactory._
 
-import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 
 class PostgresDirectoryDAO(protected val dbRef: DbReference,
@@ -38,7 +37,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     val groupTableColumn = GroupTable.column
     GroupId(withSQL {
       insert.into(GroupTable).namedValues(
-        groupTableColumn.name -> group.id,
+        groupTableColumn.name -> group.id, // the id of a BasicWorkbenchGroup is the name of the group and is a different id from the database id... obviously (sorry)
         groupTableColumn.email -> group.email,
         groupTableColumn.updatedDate -> Option(Instant.now()),
         groupTableColumn.synchronizedDate -> None
@@ -51,7 +50,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     withSQL {
       insert.into(AccessInstructionsTable).namedValues(
         accessInstructionsColumn.groupId -> groupId,
-        accessInstructionsColumn.accessInstructions -> accessInstructions
+        accessInstructionsColumn.instructions -> accessInstructions
       )
     }.update().apply()
   }
@@ -79,29 +78,35 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
   }
 
   override def loadGroup(groupName: WorkbenchGroupName): IO[Option[BasicWorkbenchGroup]] = {
-    runInTransaction { implicit session =>
-      val groupTable = GroupTable.syntax("group")
-      val subGroupTable = GroupTable.syntax("subGroup")
-      val groupMemberTable = GroupMemberTable.syntax("groupMember")
+    for {
+      results <- runInTransaction { implicit session =>
+        val groupTable = GroupTable.syntax("group")
+        val subGroupTable = GroupTable.syntax("subGroup")
+        val groupMemberTable = GroupMemberTable.syntax("groupMember")
 
-      val foo: immutable.Seq[GroupRecord] = withSQL {
-        select(groupTable.email, groupMemberTable.memberUserId, subGroupTable.name)
-          .from(GroupTable as groupTable)
-          .leftJoin(GroupMemberTable as groupMemberTable)
-          .on(groupTable.id, groupMemberTable.groupId)
-          .leftJoin(GroupTable as subGroupTable)
-          .on(groupMemberTable.memberGroupId, subGroupTable.id)
-          .where.eq(groupTable.name, WorkbenchGroupName(groupName.value))
-//      }.map(GroupTable(groupTable)).list().apply()
-        // TODO: Everything below this line (to end of method) is still WIP, no idea if it's right or how to fix it yet
-      }.one(GroupTable(groupTable))
-        .toManies(
-          rs => GroupMemberTable.opt(groupMemberTable)(rs),
-          rs => GroupTable.opt(subGroupTable)(rs)
-        )
-        .map { (group, memberUsers, memberGroups) =>
-          BasicWorkbenchGroup(groupName, Set(), group)
-        }
+        withSQL {
+          select(groupTable.email, groupMemberTable.memberUserId, subGroupTable.name)
+            .from(GroupTable as groupTable)
+            .leftJoin(GroupMemberTable as groupMemberTable)
+            .on(groupTable.id, groupMemberTable.groupId)
+            .leftJoin(GroupTable as subGroupTable)
+            .on(groupMemberTable.memberGroupId, subGroupTable.id)
+            .where.eq(groupTable.name, WorkbenchGroupName(groupName.value))
+        }.map(rs => (WorkbenchEmail(rs.string(0)), Option(rs.string(1)).map(WorkbenchUserId), Option(rs.string(2)).map(WorkbenchGroupName)))
+          .list().apply()
+      }
+    } yield {
+      if (results.isEmpty) {
+        None
+      } else {
+        val email = results.head._1
+        val members: Set[WorkbenchSubject] = results.collect {
+          case (_, Some (userId), None) => userId
+          case (_, None, Some (subGroupName)) => subGroupName
+        }.toSet
+
+        Option(BasicWorkbenchGroup(groupName, members, email))
+      }
     }
   }
 

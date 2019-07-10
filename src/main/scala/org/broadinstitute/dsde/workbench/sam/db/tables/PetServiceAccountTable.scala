@@ -2,7 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.db.tables
 
 import java.sql.ResultSet
 
-import org.broadinstitute.dsde.workbench.sam.model.ValueObject
+import org.broadinstitute.dsde.workbench.model.ValueObject
 import scalikejdbc._
 
 final case class PetServiceAccountGoogleProject(value: String) extends ValueObject

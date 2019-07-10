@@ -1,6 +1,6 @@
 package org.broadinstitute.dsde.workbench.sam.db
 
-import org.broadinstitute.dsde.workbench.sam.model.ValueObject
+import org.broadinstitute.dsde.workbench.model.ValueObject
 import scalikejdbc.ParameterBinderFactory
 
 object SamParameterBinderFactory {

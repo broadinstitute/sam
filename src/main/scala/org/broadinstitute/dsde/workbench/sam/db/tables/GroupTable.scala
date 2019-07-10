@@ -5,7 +5,6 @@ import java.time.Instant
 
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchGroupName}
 import org.broadinstitute.dsde.workbench.sam.db.DatabaseId
-import org.broadinstitute.dsde.workbench.sam.model.ValueObject
 import scalikejdbc._
 
 final case class GroupId(value: Long) extends DatabaseId
