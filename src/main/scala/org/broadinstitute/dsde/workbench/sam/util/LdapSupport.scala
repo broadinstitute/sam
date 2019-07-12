@@ -60,10 +60,16 @@ trait LdapSupport extends DirectorySubjectNameSupport {
     }
 
   protected def getAttribute(results: Entry, key: String): Option[String] =
-    Option(results.getAttribute(key)).map(_.getValue)
+    Option(results)
+      .flatMap { searchResultEntries => Option(searchResultEntries.getAttribute(key)) }
+      .map(_.getValue)
+
 
   protected def getAttributes(results: Entry, key: String): Set[String] =
-    Option(results.getAttribute(key)).map(_.getValues.toSet).getOrElse(Set.empty)
+    Option(results)
+      .flatMap { searchResultEntries => Option(searchResultEntries.getAttribute(key)) }
+      .map(_.getValues.toSet)
+      .getOrElse(Set.empty)
 
   protected def ldapLoadMemberOf(subject: WorkbenchSubject): IO[Set[String]] =
     Option(memberOfCache.get(subject)) match {
