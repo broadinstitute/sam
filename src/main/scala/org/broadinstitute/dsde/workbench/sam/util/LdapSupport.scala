@@ -61,12 +61,13 @@ trait LdapSupport extends DirectorySubjectNameSupport {
 
   protected def getAttribute(results: Entry, key: String): Option[String] =
     Option(results)
-      .map(_.getAttribute(key))
+      .flatMap { searchResultEntries => Option(searchResultEntries.getAttribute(key)) }
       .map(_.getValue)
+
 
   protected def getAttributes(results: Entry, key: String): Set[String] =
     Option(results)
-      .map(_.getAttribute(key))
+      .flatMap { searchResultEntries => Option(searchResultEntries.getAttribute(key)) }
       .map(_.getValues.toSet)
       .getOrElse(Set.empty)
 
