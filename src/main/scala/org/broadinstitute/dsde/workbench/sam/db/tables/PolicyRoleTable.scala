@@ -2,8 +2,8 @@ package org.broadinstitute.dsde.workbench.sam.db.tables
 
 import scalikejdbc._
 
-final case class PolicyRoleRecord(policyId: PolicyId,
-                                  roleId: ResourceRoleId)
+final case class PolicyRoleRecord(policyId: PolicyKey,
+                                  roleId: ResourceRoleKey)
 
 object PolicyRoleTable extends SQLSyntaxSupport[PolicyRoleRecord] {
   override def tableName: String = "SAM_POLICY_ROLE"

@@ -4,7 +4,7 @@ import org.broadinstitute.dsde.workbench.model.ValueObject
 import scalikejdbc.ParameterBinderFactory
 
 object SamParameterBinderFactory {
-  implicit def databaseIdPbf[T <: DatabaseId]: ParameterBinderFactory[T] = ParameterBinderFactory[T] {
+  implicit def databaseKeyPbf[T <: DatabaseKey]: ParameterBinderFactory[T] = ParameterBinderFactory[T] {
     value => (stmt, idx) => stmt.setLong(idx, value.value)
   }
 

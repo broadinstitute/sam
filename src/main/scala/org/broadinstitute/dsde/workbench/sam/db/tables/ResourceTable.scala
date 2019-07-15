@@ -3,14 +3,14 @@ package org.broadinstitute.dsde.workbench.sam.db.tables
 import java.sql.ResultSet
 
 import org.broadinstitute.dsde.workbench.model.ValueObject
-import org.broadinstitute.dsde.workbench.sam.db.DatabaseId
+import org.broadinstitute.dsde.workbench.sam.db.DatabaseKey
 import scalikejdbc._
 
-final case class ResourceId(value: Long) extends DatabaseId
+final case class ResourceKey(value: Long) extends DatabaseKey
 final case class ResourceName(value: String) extends ValueObject
-final case class ResourceRecord(id: ResourceId,
+final case class ResourceRecord(id: ResourceKey,
                                 name: ResourceName,
-                                resourceTypeId: ResourceTypeId)
+                                resourceTypeId: ResourceTypeKey)
 
 object ResourceTable extends SQLSyntaxSupport[ResourceRecord] {
   override def tableName: String = "SAM_RESOURCE"
@@ -25,9 +25,9 @@ object ResourceTable extends SQLSyntaxSupport[ResourceRecord] {
 }
 
 object ResourceTableBinders {
-  implicit val resourceIdTypeBinder: TypeBinder[ResourceId] = new TypeBinder[ResourceId] {
-    def apply(rs: ResultSet, label: String): ResourceId = ResourceId(rs.getLong(label))
-    def apply(rs: ResultSet, index: Int): ResourceId = ResourceId(rs.getLong(index))
+  implicit val resourceIdTypeBinder: TypeBinder[ResourceKey] = new TypeBinder[ResourceKey] {
+    def apply(rs: ResultSet, label: String): ResourceKey = ResourceKey(rs.getLong(label))
+    def apply(rs: ResultSet, index: Int): ResourceKey = ResourceKey(rs.getLong(index))
   }
 
   implicit val resourceNameTypeBinder: TypeBinder[ResourceName] = new TypeBinder[ResourceName] {

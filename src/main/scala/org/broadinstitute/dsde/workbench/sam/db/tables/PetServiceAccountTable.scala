@@ -2,16 +2,14 @@ package org.broadinstitute.dsde.workbench.sam.db.tables
 
 import java.sql.ResultSet
 
-import org.broadinstitute.dsde.workbench.model.ValueObject
+import org.broadinstitute.dsde.workbench.model.google.GoogleProject
+import org.broadinstitute.dsde.workbench.model.{GoogleSubjectId, WorkbenchEmail, WorkbenchUserId}
 import scalikejdbc._
 
-final case class PetServiceAccountGoogleProject(value: String) extends ValueObject
-final case class PetServiceAccountGoogleSubjectId(value: String) extends ValueObject
-final case class PetServiceAccountEmail(value: String) extends ValueObject
-final case class PetServiceAccountRecord(userId: UserId,
-                                         project: PetServiceAccountGoogleProject,
-                                         googleSubjectId: PetServiceAccountGoogleSubjectId,
-                                         email: PetServiceAccountEmail)
+final case class PetServiceAccountRecord(userId: WorkbenchUserId,
+                                         project: GoogleProject,
+                                         googleSubjectId: GoogleSubjectId,
+                                         email: WorkbenchEmail)
 
 object PetServiceAccountTable extends SQLSyntaxSupport[PetServiceAccountRecord] {
   override def tableName: String = "SAM_PET_SERVICE_ACCOUNT"
@@ -27,18 +25,18 @@ object PetServiceAccountTable extends SQLSyntaxSupport[PetServiceAccountRecord] 
 }
 
 object PetServiceAccountTableBinders {
-  implicit val petServiceAccountGoogleProjectTypeBinder: TypeBinder[PetServiceAccountGoogleProject] = new TypeBinder[PetServiceAccountGoogleProject] {
-    def apply(rs: ResultSet, label: String): PetServiceAccountGoogleProject = PetServiceAccountGoogleProject(rs.getString(label))
-    def apply(rs: ResultSet, index: Int): PetServiceAccountGoogleProject = PetServiceAccountGoogleProject(rs.getString(index))
+  implicit val petServiceAccountGoogleProjectTypeBinder: TypeBinder[GoogleProject] = new TypeBinder[GoogleProject] {
+    def apply(rs: ResultSet, label: String): GoogleProject = GoogleProject(rs.getString(label))
+    def apply(rs: ResultSet, index: Int): GoogleProject = GoogleProject(rs.getString(index))
   }
 
-  implicit val petServiceAccountGoogleSubjectIdTypeBinder: TypeBinder[PetServiceAccountGoogleSubjectId] = new TypeBinder[PetServiceAccountGoogleSubjectId] {
-    def apply(rs: ResultSet, label: String): PetServiceAccountGoogleSubjectId = PetServiceAccountGoogleSubjectId(rs.getString(label))
-    def apply(rs: ResultSet, index: Int): PetServiceAccountGoogleSubjectId = PetServiceAccountGoogleSubjectId(rs.getString(index))
+  implicit val petServiceAccountGoogleSubjectIdTypeBinder: TypeBinder[GoogleSubjectId] = new TypeBinder[GoogleSubjectId] {
+    def apply(rs: ResultSet, label: String): GoogleSubjectId = GoogleSubjectId(rs.getString(label))
+    def apply(rs: ResultSet, index: Int): GoogleSubjectId = GoogleSubjectId(rs.getString(index))
   }
 
-  implicit val petServiceAccountEmailTypeBinder: TypeBinder[PetServiceAccountEmail] = new TypeBinder[PetServiceAccountEmail] {
-    def apply(rs: ResultSet, label: String): PetServiceAccountEmail = PetServiceAccountEmail(rs.getString(label))
-    def apply(rs: ResultSet, index: Int): PetServiceAccountEmail = PetServiceAccountEmail(rs.getString(index))
+  implicit val petServiceAccountEmailTypeBinder: TypeBinder[WorkbenchEmail] = new TypeBinder[WorkbenchEmail] {
+    def apply(rs: ResultSet, label: String): WorkbenchEmail = WorkbenchEmail(rs.getString(label))
+    def apply(rs: ResultSet, index: Int): WorkbenchEmail = WorkbenchEmail(rs.getString(index))
   }
 }

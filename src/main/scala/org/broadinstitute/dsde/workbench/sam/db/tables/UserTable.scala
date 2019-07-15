@@ -2,15 +2,12 @@ package org.broadinstitute.dsde.workbench.sam.db.tables
 
 import java.sql.ResultSet
 
-import org.broadinstitute.dsde.workbench.model.ValueObject
+import org.broadinstitute.dsde.workbench.model.{GoogleSubjectId, WorkbenchEmail, WorkbenchUserId}
 import scalikejdbc._
 
-final case class UserId(value: String) extends ValueObject
-final case class UserEmail(value: String) extends ValueObject
-final case class UserGoogleSubjectId(value: String) extends ValueObject
-final case class UserRecord(id: UserId,
-                            email: UserEmail,
-                            googleSubjectId: Option[UserGoogleSubjectId])
+final case class UserRecord(id: WorkbenchUserId,
+                            email: WorkbenchEmail,
+                            googleSubjectId: Option[GoogleSubjectId])
 
 object UserTable extends SQLSyntaxSupport[UserRecord] {
   override def tableName: String = "SAM_USER"
@@ -24,18 +21,18 @@ object UserTable extends SQLSyntaxSupport[UserRecord] {
 }
 
 object UserTableBinders {
-  implicit val userIdTypeBinder: TypeBinder[UserId] = new TypeBinder[UserId] {
-    def apply(rs: ResultSet, label: String): UserId = UserId(rs.getString(label))
-    def apply(rs: ResultSet, index: Int): UserId = UserId(rs.getString(index))
+  implicit val userIdTypeBinder: TypeBinder[WorkbenchUserId] = new TypeBinder[WorkbenchUserId] {
+    def apply(rs: ResultSet, label: String): WorkbenchUserId = WorkbenchUserId(rs.getString(label))
+    def apply(rs: ResultSet, index: Int): WorkbenchUserId = WorkbenchUserId(rs.getString(index))
   }
 
-  implicit val userEmailTypeBinder: TypeBinder[UserEmail] = new TypeBinder[UserEmail] {
-    def apply(rs: ResultSet, label: String): UserEmail = UserEmail(rs.getString(label))
-    def apply(rs: ResultSet, index: Int): UserEmail = UserEmail(rs.getString(index))
+  implicit val emailTypeBinder: TypeBinder[WorkbenchEmail] = new TypeBinder[WorkbenchEmail] {
+    def apply(rs: ResultSet, label: String): WorkbenchEmail = WorkbenchEmail(rs.getString(label))
+    def apply(rs: ResultSet, index: Int): WorkbenchEmail = WorkbenchEmail(rs.getString(index))
   }
 
-  implicit val userGoogleSubjectIdTypeBinder: TypeBinder[UserGoogleSubjectId] = new TypeBinder[UserGoogleSubjectId] {
-    def apply(rs: ResultSet, label: String): UserGoogleSubjectId = UserGoogleSubjectId(rs.getString(label))
-    def apply(rs: ResultSet, index: Int): UserGoogleSubjectId = UserGoogleSubjectId(rs.getString(index))
+  implicit val googleSubjectIdTypeBinder: TypeBinder[GoogleSubjectId] = new TypeBinder[GoogleSubjectId] {
+    def apply(rs: ResultSet, label: String): GoogleSubjectId = GoogleSubjectId(rs.getString(label))
+    def apply(rs: ResultSet, index: Int): GoogleSubjectId = GoogleSubjectId(rs.getString(index))
   }
 }

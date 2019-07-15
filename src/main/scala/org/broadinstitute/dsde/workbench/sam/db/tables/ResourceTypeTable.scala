@@ -3,12 +3,12 @@ package org.broadinstitute.dsde.workbench.sam.db.tables
 import java.sql.ResultSet
 
 import org.broadinstitute.dsde.workbench.model.ValueObject
-import org.broadinstitute.dsde.workbench.sam.db.DatabaseId
+import org.broadinstitute.dsde.workbench.sam.db.DatabaseKey
 import scalikejdbc._
 
-final case class ResourceTypeId(value: Long) extends DatabaseId
+final case class ResourceTypeKey(value: Long) extends DatabaseKey
 final case class ResourceTypeName(value: String) extends ValueObject
-final case class ResourceTypeRecord(id: ResourceTypeId,
+final case class ResourceTypeRecord(id: ResourceTypeKey,
                                     resourceTypeName: ResourceTypeName)
 
 object ResourceTypeTable extends SQLSyntaxSupport[ResourceTypeRecord] {
@@ -22,9 +22,9 @@ object ResourceTypeTable extends SQLSyntaxSupport[ResourceTypeRecord] {
 }
 
 object ResourceTypeTableBinders {
-  implicit val resourceTypeIdTypeBinder: TypeBinder[ResourceTypeId] = new TypeBinder[ResourceTypeId] {
-    def apply(rs: ResultSet, label: String): ResourceTypeId = ResourceTypeId(rs.getLong(label))
-    def apply(rs: ResultSet, index: Int): ResourceTypeId = ResourceTypeId(rs.getLong(index))
+  implicit val resourceTypeIdTypeBinder: TypeBinder[ResourceTypeKey] = new TypeBinder[ResourceTypeKey] {
+    def apply(rs: ResultSet, label: String): ResourceTypeKey = ResourceTypeKey(rs.getLong(label))
+    def apply(rs: ResultSet, index: Int): ResourceTypeKey = ResourceTypeKey(rs.getLong(index))
   }
 
   implicit val resourceTypeNameTypeBinder: TypeBinder[ResourceTypeName] = new TypeBinder[ResourceTypeName] {

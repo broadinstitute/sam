@@ -3,13 +3,13 @@ package org.broadinstitute.dsde.workbench.sam.db.tables
 import java.sql.ResultSet
 
 import org.broadinstitute.dsde.workbench.model.ValueObject
-import org.broadinstitute.dsde.workbench.sam.db.DatabaseId
+import org.broadinstitute.dsde.workbench.sam.db.DatabaseKey
 import scalikejdbc._
 
-final case class ResourceRoleId(value: Long) extends DatabaseId
+final case class ResourceRoleKey(value: Long) extends DatabaseKey
 final case class ResourceRoleName(value: String) extends ValueObject
-final case class ResourceRoleRecord(id: ResourceRoleId,
-                                    resourceTypeId: ResourceTypeId,
+final case class ResourceRoleRecord(id: ResourceRoleKey,
+                                    resourceTypeId: ResourceTypeKey,
                                     role: ResourceRoleName)
 
 object ResourceRoleTable extends SQLSyntaxSupport[ResourceRoleRecord] {
@@ -25,9 +25,9 @@ object ResourceRoleTable extends SQLSyntaxSupport[ResourceRoleRecord] {
 }
 
 object ResourceRoleTableBinders {
-  implicit val resourceRoleIdTypeBinder: TypeBinder[ResourceRoleId] = new TypeBinder[ResourceRoleId] {
-    def apply(rs: ResultSet, label: String): ResourceRoleId = ResourceRoleId(rs.getLong(label))
-    def apply(rs: ResultSet, index: Int): ResourceRoleId = ResourceRoleId(rs.getLong(index))
+  implicit val resourceRoleIdTypeBinder: TypeBinder[ResourceRoleKey] = new TypeBinder[ResourceRoleKey] {
+    def apply(rs: ResultSet, label: String): ResourceRoleKey = ResourceRoleKey(rs.getLong(label))
+    def apply(rs: ResultSet, index: Int): ResourceRoleKey = ResourceRoleKey(rs.getLong(index))
   }
 
   implicit val resourceRoleNameTypeBinder: TypeBinder[ResourceRoleName] = new TypeBinder[ResourceRoleName] {

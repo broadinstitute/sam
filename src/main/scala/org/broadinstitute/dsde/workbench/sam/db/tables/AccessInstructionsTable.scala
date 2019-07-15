@@ -2,12 +2,12 @@ package org.broadinstitute.dsde.workbench.sam.db.tables
 
 import java.sql.ResultSet
 
-import org.broadinstitute.dsde.workbench.sam.db.DatabaseId
+import org.broadinstitute.dsde.workbench.sam.db.DatabaseKey
 import scalikejdbc._
 
-final case class AccessInstructionsId(value: Long) extends DatabaseId
-final case class AccessInstructionsRecord(id: AccessInstructionsId,
-                                          groupId: GroupId,
+final case class AccessInstructionsKey(value: Long) extends DatabaseKey
+final case class AccessInstructionsRecord(id: AccessInstructionsKey,
+                                          groupId: GroupKey,
                                           instructions: String)
 
 object AccessInstructionsTable extends SQLSyntaxSupport[AccessInstructionsRecord] {
@@ -23,8 +23,8 @@ object AccessInstructionsTable extends SQLSyntaxSupport[AccessInstructionsRecord
 }
 
 object AccessInstructionsTableBinders {
-  implicit val accessInstructionsIdTypeBinder: TypeBinder[AccessInstructionsId] = new TypeBinder[AccessInstructionsId] {
-    def apply(rs: ResultSet, label: String): AccessInstructionsId = AccessInstructionsId(rs.getLong(label))
-    def apply(rs: ResultSet, index: Int): AccessInstructionsId = AccessInstructionsId(rs.getLong(index))
+  implicit val accessInstructionsIdTypeBinder: TypeBinder[AccessInstructionsKey] = new TypeBinder[AccessInstructionsKey] {
+    def apply(rs: ResultSet, label: String): AccessInstructionsKey = AccessInstructionsKey(rs.getLong(label))
+    def apply(rs: ResultSet, index: Int): AccessInstructionsKey = AccessInstructionsKey(rs.getLong(index))
   }
 }

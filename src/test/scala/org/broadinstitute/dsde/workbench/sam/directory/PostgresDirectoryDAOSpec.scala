@@ -1,47 +1,58 @@
 package org.broadinstitute.dsde.workbench.sam.directory
 
-import cats.effect.IO
-import com.typesafe.config.ConfigFactory
-import net.ceedubs.ficus.Ficus._
-import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchGroupName}
+import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchGroupName, WorkbenchSubject}
 import org.broadinstitute.dsde.workbench.sam.TestSupport
-import org.broadinstitute.dsde.workbench.sam.config.LiquibaseConfig
-import org.broadinstitute.dsde.workbench.sam.config.AppConfig._
-import org.broadinstitute.dsde.workbench.sam.db.DbReference
 import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
-import org.scalatest.{FlatSpec, Matchers}
+import org.postgresql.util.PSQLException
+import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
 
 import scala.concurrent.ExecutionContext.Implicits.global
 
-class PostgresDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport {
-  val config = ConfigFactory.load()
+class PostgresDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with BeforeAndAfterEach {
+  val dao = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.blockingEc)
 
-  private def initDao: PostgresDirectoryDAO = {
-    val dbRef = DbReference.resource[IO](config.as[LiquibaseConfig]("liquibase")).use(dbRef => IO(dbRef)).unsafeRunSync()
-    new PostgresDirectoryDAO(dbRef, TestSupport.blockingEc)
+  val defaultGroupName = WorkbenchGroupName("group")
+  val defaultGroup = BasicWorkbenchGroup(defaultGroupName, Set.empty, WorkbenchEmail("foo@bar.com"))
+
+  override protected def beforeEach(): Unit = {
+    TestSupport.truncateAll.unsafeRunSync()
   }
 
   "PostgresDirectoryDAO" should "create a group" in {
-    val dao = initDao
-    val group = BasicWorkbenchGroup(WorkbenchGroupName("group"), Set.empty, WorkbenchEmail("foo@bar.com"))
-    dao.createGroup(group)
+    dao.createGroup(defaultGroup).unsafeRunSync() shouldEqual defaultGroup
   }
 
   it should "create a group with access instructions" in {
-    val dao = initDao
-    val group = BasicWorkbenchGroup(WorkbenchGroupName("group"), Set.empty, WorkbenchEmail("foo@bar.com"))
-    dao.createGroup(group, Option("access instructions"))
+    dao.createGroup(defaultGroup, Option("access instructions")).unsafeRunSync() shouldEqual defaultGroup
+  }
+
+  it should "not allow groups with duplicate names" in {
+    val duplicateGroup = BasicWorkbenchGroup(defaultGroupName, Set.empty, WorkbenchEmail("foo@bar.com"))
+    dao.createGroup(defaultGroup).unsafeRunSync()
+    assertThrows[PSQLException] {
+      dao.createGroup(duplicateGroup).unsafeRunSync()
+    }
+  }
+
+  it should "create groups with subGroup members" in {
+    val subGroup = defaultGroup
+    val members: Set[WorkbenchSubject] = Set(subGroup.id)
+    val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName("parentGroup"), members, WorkbenchEmail("bar@baz.com"))
+
+    dao.createGroup(subGroup).unsafeRunSync()
+    dao.createGroup(parentGroup).unsafeRunSync()
+
+    val loadedGroup = dao.loadGroup(parentGroup.id).unsafeRunSync().getOrElse(fail(s"Failed to load group ${parentGroup.id}"))
+    loadedGroup.members shouldEqual members
   }
 
   it should "load a group" in {
-    val dao = initDao
-    val groupName = WorkbenchGroupName("group")
-    val group = BasicWorkbenchGroup(groupName, Set.empty, WorkbenchEmail("foo@bar.com"))
-    for {
-      _ <- dao.createGroup(group)
-      loadedGroupOpt <- dao.loadGroup(groupName)
-    } yield {
-      loadedGroupOpt.map(loadedGroup => loadedGroup shouldEqual group)
-    }
+    dao.createGroup(defaultGroup).unsafeRunSync()
+    val loadedGroup = dao.loadGroup(defaultGroupName).unsafeRunSync().getOrElse(fail(s"Failed to load group $defaultGroupName"))
+    loadedGroup shouldEqual defaultGroup
+  }
+
+  it should "return None when loading a nonexistent group" in {
+    dao.loadGroup(WorkbenchGroupName("fakeGroup")).unsafeRunSync() shouldBe None
   }
 }

@@ -3,14 +3,14 @@ package org.broadinstitute.dsde.workbench.sam.db.tables
 import java.sql.ResultSet
 
 import org.broadinstitute.dsde.workbench.model.ValueObject
-import org.broadinstitute.dsde.workbench.sam.db.DatabaseId
+import org.broadinstitute.dsde.workbench.sam.db.DatabaseKey
 import scalikejdbc._
 
-final case class ResourceActionPatternId(value: Long) extends DatabaseId
-final case class ResourceActionPattern(value: String) extends ValueObject
-final case class ResourceActionPatternRecord(id: ResourceActionPatternId,
-                                             resourceTypeId: ResourceTypeId,
-                                             actionPattern: ResourceActionPattern)
+final case class ResourceActionPatternKey(value: Long) extends DatabaseKey
+final case class ResourceActionPatternName(value: String) extends ValueObject
+final case class ResourceActionPatternRecord(id: ResourceActionPatternKey,
+                                             resourceTypeId: ResourceTypeKey,
+                                             actionPattern: ResourceActionPatternName)
 
 object ResourceActionPatternTable extends SQLSyntaxSupport[ResourceActionPatternRecord] {
   override def tableName: String = "SAM_ACTION_PATTERN"
@@ -25,13 +25,13 @@ object ResourceActionPatternTable extends SQLSyntaxSupport[ResourceActionPattern
 }
 
 object ResourceActionPatternTableBinders {
-  implicit val resourceActionPatternIdTypeBinder: TypeBinder[ResourceActionPatternId] = new TypeBinder[ResourceActionPatternId] {
-    def apply(rs: ResultSet, label: String): ResourceActionPatternId = ResourceActionPatternId(rs.getLong(label))
-    def apply(rs: ResultSet, index: Int): ResourceActionPatternId = ResourceActionPatternId(rs.getLong(index))
+  implicit val resourceActionPatternIdTypeBinder: TypeBinder[ResourceActionPatternKey] = new TypeBinder[ResourceActionPatternKey] {
+    def apply(rs: ResultSet, label: String): ResourceActionPatternKey = ResourceActionPatternKey(rs.getLong(label))
+    def apply(rs: ResultSet, index: Int): ResourceActionPatternKey = ResourceActionPatternKey(rs.getLong(index))
   }
 
-  implicit val actionPatternTypeBinder: TypeBinder[ResourceActionPattern] = new TypeBinder[ResourceActionPattern] {
-    def apply(rs: ResultSet, label: String): ResourceActionPattern = ResourceActionPattern(rs.getString(label))
-    def apply(rs: ResultSet, index: Int): ResourceActionPattern = ResourceActionPattern(rs.getString(index))
+  implicit val actionPatternTypeBinder: TypeBinder[ResourceActionPatternName] = new TypeBinder[ResourceActionPatternName] {
+    def apply(rs: ResultSet, label: String): ResourceActionPatternName = ResourceActionPatternName(rs.getString(label))
+    def apply(rs: ResultSet, index: Int): ResourceActionPatternName = ResourceActionPatternName(rs.getString(index))
   }
 }

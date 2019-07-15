@@ -4,11 +4,11 @@ import java.sql.ResultSet
 import java.time.Instant
 
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchGroupName}
-import org.broadinstitute.dsde.workbench.sam.db.DatabaseId
+import org.broadinstitute.dsde.workbench.sam.db.DatabaseKey
 import scalikejdbc._
 
-final case class GroupId(value: Long) extends DatabaseId
-final case class GroupRecord(id: GroupId,
+final case class GroupKey(value: Long) extends DatabaseKey
+final case class GroupRecord(id: GroupKey,
                              name: WorkbenchGroupName,
                              email: WorkbenchEmail,
                              updatedDate: Option[Instant],
@@ -33,9 +33,9 @@ object GroupTable extends SQLSyntaxSupport[GroupRecord] {
 }
 
 object GroupTableBinders {
-  implicit val groupIdTypeBinder: TypeBinder[GroupId] = new TypeBinder[GroupId] {
-    def apply(rs: ResultSet, label: String): GroupId = GroupId(rs.getLong(label))
-    def apply(rs: ResultSet, index: Int): GroupId = GroupId(rs.getLong(index))
+  implicit val groupIdTypeBinder: TypeBinder[GroupKey] = new TypeBinder[GroupKey] {
+    def apply(rs: ResultSet, label: String): GroupKey = GroupKey(rs.getLong(label))
+    def apply(rs: ResultSet, index: Int): GroupKey = GroupKey(rs.getLong(index))
   }
 
   implicit val groupNameTypeBinder: TypeBinder[WorkbenchGroupName] = new TypeBinder[WorkbenchGroupName] {

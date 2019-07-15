@@ -2,14 +2,15 @@ package org.broadinstitute.dsde.workbench.sam.db.tables
 
 import java.sql.ResultSet
 
-import org.broadinstitute.dsde.workbench.sam.db.DatabaseId
+import org.broadinstitute.dsde.workbench.model.WorkbenchUserId
+import org.broadinstitute.dsde.workbench.sam.db.DatabaseKey
 import scalikejdbc._
 
-final case class GroupMemberId(value: Long) extends DatabaseId
-final case class GroupMemberRecord(id: GroupMemberId,
-                                   groupId: GroupId,
-                                   memberUserId: Option[UserId],
-                                   memberGroupId: Option[GroupId])
+final case class GroupMemberKey(value: Long) extends DatabaseKey
+final case class GroupMemberRecord(id: GroupMemberKey,
+                                   groupId: GroupKey,
+                                   memberUserId: Option[WorkbenchUserId],
+                                   memberGroupId: Option[GroupKey])
 
 object GroupMemberTable extends SQLSyntaxSupport[GroupMemberRecord] {
   override def tableName: String = "SAM_GROUP_MEMBER"
@@ -31,8 +32,8 @@ object GroupMemberTable extends SQLSyntaxSupport[GroupMemberRecord] {
 }
 
 object GroupMemberTableBinders {
-  implicit val groupMemberIdTypeBinder: TypeBinder[GroupMemberId] = new TypeBinder[GroupMemberId] {
-    def apply(rs: ResultSet, label: String): GroupMemberId = GroupMemberId(rs.getLong(label))
-    def apply(rs: ResultSet, index: Int): GroupMemberId = GroupMemberId(rs.getLong(index))
+  implicit val groupMemberIdTypeBinder: TypeBinder[GroupMemberKey] = new TypeBinder[GroupMemberKey] {
+    def apply(rs: ResultSet, label: String): GroupMemberKey = GroupMemberKey(rs.getLong(label))
+    def apply(rs: ResultSet, index: Int): GroupMemberKey = GroupMemberKey(rs.getLong(index))
   }
 }

@@ -3,13 +3,13 @@ package org.broadinstitute.dsde.workbench.sam.db.tables
 import java.sql.ResultSet
 
 import org.broadinstitute.dsde.workbench.model.ValueObject
-import org.broadinstitute.dsde.workbench.sam.db.DatabaseId
+import org.broadinstitute.dsde.workbench.sam.db.DatabaseKey
 import scalikejdbc._
 
-final case class ResourceActionId(value: Long) extends DatabaseId
+final case class ResourceActionKey(value: Long) extends DatabaseKey
 final case class ResourceActionName(value: String) extends ValueObject
-final case class ResourceActionRecord(id: ResourceActionId,
-                                      resourceTypeId: ResourceTypeId,
+final case class ResourceActionRecord(id: ResourceActionKey,
+                                      resourceTypeId: ResourceTypeKey,
                                       action: ResourceActionName)
 
 object ResourceActionTable extends SQLSyntaxSupport[ResourceActionRecord] {
@@ -25,9 +25,9 @@ object ResourceActionTable extends SQLSyntaxSupport[ResourceActionRecord] {
 }
 
 object ResourceActionTableBinders {
-  implicit val resourceActionIdTypeBinder: TypeBinder[ResourceActionId] = new TypeBinder[ResourceActionId] {
-    def apply(rs: ResultSet, label: String): ResourceActionId = ResourceActionId(rs.getLong(label))
-    def apply(rs: ResultSet, index: Int): ResourceActionId = ResourceActionId(rs.getLong(index))
+  implicit val resourceActionIdTypeBinder: TypeBinder[ResourceActionKey] = new TypeBinder[ResourceActionKey] {
+    def apply(rs: ResultSet, label: String): ResourceActionKey = ResourceActionKey(rs.getLong(label))
+    def apply(rs: ResultSet, index: Int): ResourceActionKey = ResourceActionKey(rs.getLong(index))
   }
 
   implicit val resourceActionNameTypeBinder: TypeBinder[ResourceActionName] = new TypeBinder[ResourceActionName] {

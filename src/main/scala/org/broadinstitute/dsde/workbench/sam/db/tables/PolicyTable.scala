@@ -3,14 +3,14 @@ package org.broadinstitute.dsde.workbench.sam.db.tables
 import java.sql.ResultSet
 
 import org.broadinstitute.dsde.workbench.model.ValueObject
-import org.broadinstitute.dsde.workbench.sam.db.DatabaseId
+import org.broadinstitute.dsde.workbench.sam.db.DatabaseKey
 import scalikejdbc._
 
-final case class PolicyId(value: Long) extends DatabaseId
+final case class PolicyKey(value: Long) extends DatabaseKey
 final case class PolicyName(value: String) extends ValueObject
-final case class PolicyRecord(id: PolicyId,
-                              resourceId: ResourceId,
-                              groupId: GroupId,
+final case class PolicyRecord(id: PolicyKey,
+                              resourceId: ResourceKey,
+                              groupId: GroupKey,
                               name: PolicyName)
 
 object PolicyTable extends SQLSyntaxSupport[PolicyRecord] {
@@ -28,9 +28,9 @@ object PolicyTable extends SQLSyntaxSupport[PolicyRecord] {
 }
 
 object PolicyTableBinders {
-  implicit val policyIdTypeBinder: TypeBinder[PolicyId] = new TypeBinder[PolicyId] {
-    def apply(rs: ResultSet, label: String): PolicyId = PolicyId(rs.getLong(label))
-    def apply(rs: ResultSet, index: Int): PolicyId = PolicyId(rs.getLong(index))
+  implicit val policyIdTypeBinder: TypeBinder[PolicyKey] = new TypeBinder[PolicyKey] {
+    def apply(rs: ResultSet, label: String): PolicyKey = PolicyKey(rs.getLong(label))
+    def apply(rs: ResultSet, index: Int): PolicyKey = PolicyKey(rs.getLong(index))
   }
 
   implicit val policyNameTypeBinder: TypeBinder[PolicyName] = new TypeBinder[PolicyName] {

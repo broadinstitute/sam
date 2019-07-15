@@ -21,7 +21,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
 
   override def createGroup(group: BasicWorkbenchGroup, accessInstructionsOpt: Option[String]): IO[BasicWorkbenchGroup] = {
     runInTransaction { implicit session =>
-      val groupId: GroupId = insertGroup(group)
+      val groupId: GroupKey = insertGroup(group)
 
       accessInstructionsOpt.map { accessInstructions =>
         insertAccessInstructions(groupId, accessInstructions)
@@ -33,56 +33,81 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     }
   }
 
-  private def insertGroup(group: BasicWorkbenchGroup)(implicit session: DBSession): GroupId = {
+  private def insertGroup(group: BasicWorkbenchGroup)(implicit session: DBSession): GroupKey = {
     val groupTableColumn = GroupTable.column
-    GroupId(withSQL {
-      insert.into(GroupTable).namedValues(
-        groupTableColumn.name -> group.id, // the id of a BasicWorkbenchGroup is the name of the group and is a different id from the database id... obviously (sorry)
-        groupTableColumn.email -> group.email,
-        groupTableColumn.updatedDate -> Option(Instant.now()),
-        groupTableColumn.synchronizedDate -> None
-      )
+    GroupKey(withSQL {
+      insert
+        .into(GroupTable)
+        .namedValues(
+          groupTableColumn.name -> group.id, // the id of a BasicWorkbenchGroup is the name of the group and is a different id from the database id... obviously (sorry)
+          groupTableColumn.email -> group.email,
+          groupTableColumn.updatedDate -> Option(Instant.now()),
+          groupTableColumn.synchronizedDate -> None
+        )
     }.updateAndReturnGeneratedKey().apply())
   }
 
-  private def insertAccessInstructions(groupId: GroupId, accessInstructions: String)(implicit session: DBSession): Int = {
+  private def insertAccessInstructions(groupId: GroupKey, accessInstructions: String)(implicit session: DBSession): Int = {
     val accessInstructionsColumn = AccessInstructionsTable.column
     withSQL {
-      insert.into(AccessInstructionsTable).namedValues(
-        accessInstructionsColumn.groupId -> groupId,
-        accessInstructionsColumn.instructions -> accessInstructions
-      )
+      insert
+        .into(AccessInstructionsTable)
+        .namedValues(
+          accessInstructionsColumn.groupId -> groupId,
+          accessInstructionsColumn.instructions -> accessInstructions
+        )
     }.update().apply()
   }
 
-  private def insertGroupMembers(groupId: GroupId, members: Set[WorkbenchSubject])(implicit session: DBSession): Int = {
-    val memberUserRecords: Seq[(GroupId, Option[UserId], Option[GroupId])] = members.collect {
-      case WorkbenchUserId(value) => (groupId, Option(UserId(value)), None)
-    }.toSeq
+  private def insertGroupMembers(groupId: GroupKey, members: Set[WorkbenchSubject])(implicit session: DBSession): Int = {
+    if (members.isEmpty) {
+      0
+    } else {
+      // multipleValues (used below to insert all the records into the GroupMemberTable) doesn't really handle implicit parameter binder factories
+      // like namedValues does because it takes a Seq[Any] and so it doesn't know to convert our case classes to ParameterBinders using the PBFs.
+      // Declaring the PBFs and then using them explicitly to convert our case classes to ParameterBinders enables scalike to properly bind our values
+      // to the PreparedStatement. Without these PBFs, scalike throws an error because it doesn't know what SQL type one of our case classes corresponds to
+      val groupIdPBF = databaseKeyPbf[GroupKey]
+      val userIdPBF = valueObjectPbf[WorkbenchUserId]
+      val optionalUserPBF = ParameterBinderFactory.optionalParameterBinderFactory(userIdPBF)
+      val optionalGroupPBF = ParameterBinderFactory.optionalParameterBinderFactory(groupIdPBF)
 
-    val memberGroupNames = members.collect {
-      case WorkbenchGroupName(name) => name
+      val memberUserRecords: Seq[(ParameterBinder, ParameterBinder, ParameterBinder)] = members.collect {
+        case WorkbenchUserId(value) => (groupIdPBF(groupId), optionalUserPBF(Option(WorkbenchUserId(value))), optionalGroupPBF(None))
+      }.toSeq
+
+      val memberGroupNames = members.collect {
+        case WorkbenchGroupName(name) => name
+      }
+
+      import GroupTableBinders._
+
+      val groupTable = GroupTable.syntax("g")
+      val memberGroupRecords: List[(ParameterBinder, ParameterBinder, ParameterBinder)] = withSQL {
+        select(groupTable.id)
+          .from(GroupTable as groupTable)
+          .where
+          .in(groupTable.name, memberGroupNames.toSeq)
+      }.map(rs => (groupIdPBF(groupId), optionalUserPBF(None), optionalGroupPBF(Option(rs.get[GroupKey](1))))).list().apply()
+
+      val allRecords = (memberUserRecords ++ memberGroupRecords).map(_.productIterator.toSeq)
+
+      val groupMemberColumn = GroupMemberTable.column
+      withSQL {
+        insert
+          .into(GroupMemberTable)
+          .columns(groupMemberColumn.groupId, groupMemberColumn.memberUserId, groupMemberColumn.memberGroupId)
+          .multipleValues(allRecords: _*)
+      }.update().apply()
     }
-
-    val groupTable = GroupTable.syntax("group")
-    val memberGroupRecords: Seq[(GroupId, Option[UserId], Option[GroupId])] = withSQL {
-      select(groupTable.id).from(GroupTable as groupTable).where.in(groupTable.name, memberGroupNames.toSeq)
-    }.map(rs => (groupId, None, Option(GroupId(rs.long(groupTable.id))))).list().apply()
-
-    val allRecords = (memberUserRecords ++ memberGroupRecords).map(_.productIterator.toSeq)
-
-    val groupMemberTable = GroupMemberTable.syntax("groupMember")
-    withSQL {
-      insert.into(GroupMemberTable).columns(groupMemberTable.groupId, groupMemberTable.memberUserId, groupMemberTable.memberGroupId).multipleValues(allRecords: _*)
-    }.update().apply()
   }
 
   override def loadGroup(groupName: WorkbenchGroupName): IO[Option[BasicWorkbenchGroup]] = {
     for {
       results <- runInTransaction { implicit session =>
-        val groupTable = GroupTable.syntax("group")
-        val subGroupTable = GroupTable.syntax("subGroup")
-        val groupMemberTable = GroupMemberTable.syntax("groupMember")
+        val groupTable = GroupTable.syntax("g")
+        val subGroupTable = GroupTable.syntax("sG")
+        val groupMemberTable = GroupMemberTable.syntax("gM")
 
         withSQL {
           select(groupTable.email, groupMemberTable.memberUserId, subGroupTable.name)
@@ -91,8 +116,9 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
             .on(groupTable.id, groupMemberTable.groupId)
             .leftJoin(GroupTable as subGroupTable)
             .on(groupMemberTable.memberGroupId, subGroupTable.id)
-            .where.eq(groupTable.name, WorkbenchGroupName(groupName.value))
-        }.map(rs => (WorkbenchEmail(rs.string(0)), Option(rs.string(1)).map(WorkbenchUserId), Option(rs.string(2)).map(WorkbenchGroupName)))
+            .where
+            .eq(groupTable.name, WorkbenchGroupName(groupName.value))
+        }.map(rs => (WorkbenchEmail(rs.string(1)), Option(rs.string(2)).map(WorkbenchUserId), Option(rs.string(3)).map(WorkbenchGroupName)))
           .list().apply()
       }
     } yield {
