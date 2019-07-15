@@ -23,7 +23,8 @@ class NewRelicShadowResultReporterSpec extends FlatSpec with Matchers with Mocki
   "NewRelicShadowResultReporter" should "match complex case class structure" in {
     val reporter = createResultReporter
     val probe = TestCaseClass("asdfasdf", Seq(TestInnerCaseClass(MyValueObject("qqq"), 88), TestInnerCaseClass(MyValueObject("ppp"), 99)))
-    val result = reporter.resultsMatch(Right(probe), Right(probe))
+    // copy probe to make sure not just testing reference equality
+    val result = reporter.resultsMatch(Right(probe), Right(probe.copy()))
     withClue(result.mismatchReasons) {
       result.matches should be (true)
     }
