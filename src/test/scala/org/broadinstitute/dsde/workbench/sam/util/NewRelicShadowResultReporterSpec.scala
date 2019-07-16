@@ -60,7 +60,7 @@ class NewRelicShadowResultReporterSpec extends FlatSpec with Matchers with Mocki
 
   it should "match embedded collection independent of order" in {
     val reporter = createResultReporter
-    val real = TestCaseClass("asdfasdf", Seq(TestInnerCaseClass(MyValueObject("ppp"), 99), TestInnerCaseClass(MyValueObject("qqq"), 88)))
+    val real = TestCaseClass("asdfasdf", Vector(TestInnerCaseClass(MyValueObject("ppp"), 99), TestInnerCaseClass(MyValueObject("qqq"), 88)))
     val shadow = TestCaseClass("asdfasdf", Seq(TestInnerCaseClass(MyValueObject("qqq"), 88), TestInnerCaseClass(MyValueObject("ppp"), 99)))
     val result = reporter.resultsMatch(Right(real), Right(shadow))
     withClue(result.mismatchReasons) {
@@ -210,6 +210,15 @@ class NewRelicShadowResultReporterSpec extends FlatSpec with Matchers with Mocki
   it should "report mismatch" in {
     val reporter = createResultReporter
     reporter.reportResult(MethodCallInfo("fxn", Array("param"), Array("arg")), TimedResult(Right(20), 100 seconds), TimedResult(Right(27), 10 seconds)).unsafeRunSync()
+
+    verify(reporter.newRelicMetrics).incrementCounterIO(s"${reporter.daoName}_fxn_mismatch")
+  }
+
+  it should "report complex mismatch" in {
+    val reporter = createResultReporter
+    val real = TestCaseClass("asdfsdf", Vector(TestInnerCaseClass(MyValueObject("qqq"), 88), TestInnerCaseClass(MyValueObject("ppp"), 97)))
+    val shadow = TestCaseClass("asdfasdf", Seq(TestInnerCaseClass(MyValueObject("qqq"), 88), TestInnerCaseClass(MyValueObject("ppp"), 99)))
+    reporter.reportResult(MethodCallInfo("fxn", Array("param"), Array("arg")), TimedResult(Right(real), 100 seconds), TimedResult(Right(shadow), 10 seconds)).unsafeRunSync()
 
     verify(reporter.newRelicMetrics).incrementCounterIO(s"${reporter.daoName}_fxn_mismatch")
   }
