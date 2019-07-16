@@ -35,11 +35,13 @@ class PostgresDirectoryDAOSpec extends FlatSpec with Matchers with BeforeAndAfte
   }
 
   it should "create groups with subGroup members" in {
-    val subGroup = defaultGroup
-    val members: Set[WorkbenchSubject] = Set(subGroup.id)
-    val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName("parentGroup"), members, WorkbenchEmail("bar@baz.com"))
+    val subGroup1 = defaultGroup
+    val subGroup2 = BasicWorkbenchGroup(WorkbenchGroupName("subGroup2"), Set.empty, WorkbenchEmail("bar@baz.com"))
+    val members: Set[WorkbenchSubject] = Set(subGroup1.id, subGroup2.id)
+    val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName("parentGroup"), members, WorkbenchEmail("baz@qux.com"))
 
-    dao.createGroup(subGroup).unsafeRunSync()
+    dao.createGroup(subGroup1).unsafeRunSync()
+    dao.createGroup(subGroup2).unsafeRunSync()
     dao.createGroup(parentGroup).unsafeRunSync()
 
     val loadedGroup = dao.loadGroup(parentGroup.id).unsafeRunSync().getOrElse(fail(s"Failed to load group ${parentGroup.id}"))
