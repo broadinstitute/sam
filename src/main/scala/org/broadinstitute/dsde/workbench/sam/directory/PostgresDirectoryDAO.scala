@@ -21,7 +21,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
 
   override def createGroup(group: BasicWorkbenchGroup, accessInstructionsOpt: Option[String]): IO[BasicWorkbenchGroup] = {
     runInTransaction { implicit session =>
-      val groupId: GroupKey = insertGroup(group)
+      val groupId: GroupPK = insertGroup(group)
 
       accessInstructionsOpt.map { accessInstructions =>
         insertAccessInstructions(groupId, accessInstructions)
@@ -33,9 +33,9 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     }
   }
 
-  private def insertGroup(group: BasicWorkbenchGroup)(implicit session: DBSession): GroupKey = {
+  private def insertGroup(group: BasicWorkbenchGroup)(implicit session: DBSession): GroupPK = {
     val groupTableColumn = GroupTable.column
-    GroupKey(withSQL {
+    GroupPK(withSQL {
       insert
         .into(GroupTable)
         .namedValues(
@@ -47,7 +47,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     }.updateAndReturnGeneratedKey().apply())
   }
 
-  private def insertAccessInstructions(groupId: GroupKey, accessInstructions: String)(implicit session: DBSession): Int = {
+  private def insertAccessInstructions(groupId: GroupPK, accessInstructions: String)(implicit session: DBSession): Int = {
     val accessInstructionsColumn = AccessInstructionsTable.column
     withSQL {
       insert
@@ -59,7 +59,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     }.update().apply()
   }
 
-  private def insertGroupMembers(groupId: GroupKey, members: Set[WorkbenchSubject])(implicit session: DBSession): Int = {
+  private def insertGroupMembers(groupId: GroupPK, members: Set[WorkbenchSubject])(implicit session: DBSession): Int = {
     if (members.isEmpty) {
       0
     } else {
@@ -67,7 +67,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
       // like namedValues does because it takes a Seq[Any] and so it doesn't know to convert our case classes to ParameterBinders using the PBFs.
       // Declaring the PBFs and then using them explicitly to convert our case classes to ParameterBinders enables scalike to properly bind our values
       // to the PreparedStatement. Without these PBFs, scalike throws an error because it doesn't know what SQL type one of our case classes corresponds to
-      val groupIdPBF = databaseKeyPbf[GroupKey]
+      val groupIdPBF = databaseKeyPbf[GroupPK]
       val userIdPBF = valueObjectPbf[WorkbenchUserId]
       val optionalUserPBF = ParameterBinderFactory.optionalParameterBinderFactory(userIdPBF)
       val optionalGroupPBF = ParameterBinderFactory.optionalParameterBinderFactory(groupIdPBF)
@@ -80,7 +80,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
         case WorkbenchGroupName(name) => name
       }
 
-      import GroupTableBinders._
+      import SamTypeBinders._
 
       val groupTable = GroupTable.syntax("g")
       val memberGroupRecords: List[(ParameterBinder, ParameterBinder, ParameterBinder)] = withSQL {
@@ -88,7 +88,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
           .from(GroupTable as groupTable)
           .where
           .in(groupTable.name, memberGroupNames.toSeq)
-      }.map(rs => (groupIdPBF(groupId), optionalUserPBF(None), optionalGroupPBF(Option(rs.get[GroupKey](1))))).list().apply()
+      }.map(rs => (groupIdPBF(groupId), optionalUserPBF(None), optionalGroupPBF(Option(rs.get[GroupPK](1))))).list().apply()
 
       val allRecords = (memberUserRecords ++ memberGroupRecords).map(_.productIterator.toSeq)
 
