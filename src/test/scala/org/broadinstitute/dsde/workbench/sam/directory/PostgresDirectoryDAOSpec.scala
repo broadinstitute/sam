@@ -50,7 +50,7 @@ class PostgresDirectoryDAOSpec extends FlatSpec with Matchers with BeforeAndAfte
 
   it should "load a group" in {
     dao.createGroup(defaultGroup).unsafeRunSync()
-    val loadedGroup = dao.loadGroup(defaultGroupName).unsafeRunSync().getOrElse(fail(s"Failed to load group $defaultGroupName"))
+    val loadedGroup = dao.loadGroup(defaultGroup.id).unsafeRunSync().getOrElse(fail(s"Failed to load group $defaultGroupName"))
     loadedGroup shouldEqual defaultGroup
   }
 

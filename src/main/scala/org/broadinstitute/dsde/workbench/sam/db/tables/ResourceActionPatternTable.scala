@@ -20,7 +20,3 @@ object ResourceActionPatternTable extends SQLSyntaxSupport[ResourceActionPattern
     rs.get(e.actionPattern)
   )
 }
-
-object ResourceActionPatternTableBinders {
-
-}

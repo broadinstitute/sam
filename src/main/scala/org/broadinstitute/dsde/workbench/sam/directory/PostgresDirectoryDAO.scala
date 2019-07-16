@@ -117,7 +117,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
             .leftJoin(GroupTable as subGroupTable)
             .on(groupMemberTable.memberGroupId, subGroupTable.id)
             .where
-            .eq(groupTable.name, WorkbenchGroupName(groupName.value))
+            .eq(groupTable.name, groupName)
         }.map(rs => (WorkbenchEmail(rs.string(1)), Option(rs.string(2)).map(WorkbenchUserId), Option(rs.string(3)).map(WorkbenchGroupName)))
           .list().apply()
       }
