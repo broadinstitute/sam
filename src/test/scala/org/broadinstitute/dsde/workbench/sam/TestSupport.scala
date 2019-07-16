@@ -31,7 +31,6 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, MockAccessPolicyDAO}
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
 import org.broadinstitute.dsde.workbench.sam.service._
-import org.broadinstitute.dsde.workbench.sam.util.DatabaseSupport
 import org.ehcache.Cache
 import org.ehcache.config.builders.{CacheConfigurationBuilder, CacheManagerBuilder, ExpiryPolicyBuilder, ResourcePoolsBuilder}
 import org.scalatest.Matchers
@@ -60,7 +59,7 @@ trait PropertyBasedTesting extends PropertyChecks with Configuration with Matche
   implicit override val generatorDrivenConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(minSuccessful = 3)
 }
 
-object TestSupport extends TestSupport with DatabaseSupport {
+object TestSupport extends TestSupport {
   private val executor = Executors.newCachedThreadPool()
   val blockingEc = ExecutionContext.fromExecutor(executor)
   def testMemberOfCache: Cache[WorkbenchSubject, Set[String]] = {
@@ -157,11 +156,10 @@ object TestSupport extends TestSupport with DatabaseSupport {
 
   def genSamRoutesWithDefault(implicit system: ActorSystem, materializer: Materializer): SamRoutes = genSamRoutes(genSamDependencies())
 
-  override val ecForDatabaseIO = blockingEc
-  val dbRef = DbReference.init(config.as[LiquibaseConfig]("liquibase"))
+  lazy val dbRef = DbReference.init(config.as[LiquibaseConfig]("liquibase"))
 
-  def truncateAll: IO[Int] = {
-    runInTransaction { implicit session =>
+  def truncateAll: Int = {
+    dbRef.inLocalTransaction { implicit session =>
       val tables = List(PolicyActionTable,
         PolicyRoleTable,
         PolicyTable,

@@ -8,14 +8,14 @@ import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
 
 import scala.concurrent.ExecutionContext.Implicits.global
 
-class PostgresDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with BeforeAndAfterEach {
+class PostgresDirectoryDAOSpec extends FlatSpec with Matchers with BeforeAndAfterEach {
   val dao = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.blockingEc)
 
   val defaultGroupName = WorkbenchGroupName("group")
   val defaultGroup = BasicWorkbenchGroup(defaultGroupName, Set.empty, WorkbenchEmail("foo@bar.com"))
 
   override protected def beforeEach(): Unit = {
-    TestSupport.truncateAll.unsafeRunSync()
+    TestSupport.truncateAll
   }
 
   "PostgresDirectoryDAO" should "create a group" in {
