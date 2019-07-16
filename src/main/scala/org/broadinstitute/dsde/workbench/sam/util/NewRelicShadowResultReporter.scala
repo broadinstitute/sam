@@ -94,27 +94,10 @@ class NewRelicShadowResultReporter(val daoName: String, val newRelicMetrics: New
         MatchResult(true, Seq.empty)
 
       case (Right(realTraversable: Traversable[_]), Right(shadowTraversable: Traversable[_])) =>
-        // both traversables, we don't care about order, we care that each item in real matches an item in shadow, that
-        // there are the same number of occurrences, and both real and shadow have the same number of distinct items
-        val real = realTraversable.groupBy(x => x).map { case (key, values) => (key, values.size) }
-        val shadow = shadowTraversable.groupBy(x => x).map { case (key, values) => (key, values.size) }
-        val sizeMatch = createMatchResult(real.size, shadow.size, s"unequal distinct item count, [${real.mkString(",")}] vs [${shadow.mkString(",")}]")
-        val itemsMatch = real.keySet.map { realValue =>
-          shadow.keySet.find(shadowValue => resultsMatch(Right(realValue), Right(shadowValue)).matches) match {
-            case None => MatchResult(false, Seq(s"cannot find match for [$realValue] in [$shadowTraversable]"))
-            case Some(shadowMatch) => createMatchResult(real(realValue), shadow(shadowMatch), s"unequal occurrences of [$realValue]")
-          }
-        }
-        aggregateMatchResults(itemsMatch.toSeq :+ sizeMatch)
+        traversablesContainSameElements(realTraversable, shadowTraversable)
 
       case (Right(realCaseClass: Product), Right(shadowCaseClass: Product)) =>
-        // both are case classes, iterate through all case class fields and recursively call resultsMatch
-        // I don't think a class mismatch is possible, but just in case let's check
-        val classMatch = createMatchResult(realCaseClass.getClass, shadowCaseClass.getClass, "class mismatch")
-        val matchResults = realCaseClass.productIterator.zip(shadowCaseClass.productIterator).map { case (realPart, shadowPart) =>
-          resultsMatch(Right(realPart), Right(shadowPart))
-        }.toSeq
-        aggregateMatchResults(matchResults :+ classMatch)
+        caseClassesMatch(realCaseClass, shadowCaseClass)
 
       case (Right(realValue), Right(shadowValue)) => createMatchResult(realValue, shadowValue, "values unequal")
 
@@ -122,6 +105,55 @@ class NewRelicShadowResultReporter(val daoName: String, val newRelicMetrics: New
         // either real or shadow failed but not both
         MatchResult(false, Seq(s"real and shadow are not comparable: real [$realResult], shadow [$shadowResult]"))
     }
+  }
+
+  /**
+    * Case classes may contain traversable elements and since a match does not care about order, this function
+    * iterates through each field of the case class and calls resultsMatch recursively.
+    * @param realCaseClass
+    * @param shadowCaseClass
+    * @return
+    */
+  private def caseClassesMatch(realCaseClass: Product, shadowCaseClass: Product): MatchResult = {
+    // I don't think a class mismatch is possible, but just in case let's check
+    val classMatch = createMatchResult(realCaseClass.getClass, shadowCaseClass.getClass, "class mismatch")
+    val matchResults = realCaseClass.productIterator
+      .zip(shadowCaseClass.productIterator)
+      .map {
+        case (realPart, shadowPart) =>
+          resultsMatch(Right(realPart), Right(shadowPart))
+      }
+      .toSeq
+    aggregateMatchResults(matchResults :+ classMatch)
+  }
+
+  /**
+    * Check that 2 traversables have the same elements, not necessarily the same order. Each distinct element must
+    * occur the same number of times in each traversable.
+    *
+    * @param realTraversable
+    * @param shadowTraversable
+    * @return
+    */
+  private def traversablesContainSameElements(realTraversable: Traversable[Any], shadowTraversable: Traversable[Any]): MatchResult = {
+    // one implementation would be to sort both taversables and compare pairwise but we don't have a sort order
+
+    // this implementation groups by each distinct element to produce a map keyed by element with values of the occurrence count.
+    // make sure both maps have the same size then check that each real element has a match in shadow and that the
+    // number of occurrences for the shadow match is the same as real
+    val realDistinctElementCountsByElement = realTraversable.groupBy(x => x).map { case (key, values) => (key, values.size) }
+    val shadowDistinctElementCountsByElement = shadowTraversable.groupBy(x => x).map { case (key, values) => (key, values.size) }
+    val sizeMatch = createMatchResult(realDistinctElementCountsByElement.size, shadowDistinctElementCountsByElement.size, s"unequal distinct item count, [${realDistinctElementCountsByElement.mkString(",")}] vs [${shadowDistinctElementCountsByElement.mkString(",")}]")
+    val elementsMatch = realDistinctElementCountsByElement.keySet.map { realElement =>
+      shadowDistinctElementCountsByElement.keySet.find(shadowElement => resultsMatch(Right(realElement), Right(shadowElement)).matches) match {
+        case None => MatchResult(false, Seq(s"cannot find match for [$realElement] in [$shadowTraversable]"))
+        case Some(shadowMatch) =>
+          val realOccurrences = realDistinctElementCountsByElement(realElement)
+          val shadowOccurrences = shadowDistinctElementCountsByElement(shadowMatch)
+          createMatchResult(realOccurrences, shadowOccurrences, s"unequal occurrences of [$realElement]")
+      }
+    }
+    aggregateMatchResults(elementsMatch.toSeq :+ sizeMatch)
   }
 
   // checkName is passed by-name to avoid unnecessary toString and string concatenation when items match
