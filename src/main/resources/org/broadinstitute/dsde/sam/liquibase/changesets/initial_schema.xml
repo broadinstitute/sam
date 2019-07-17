@@ -95,7 +95,7 @@
     </changeSet>
 
     <changeSet logicalFilePath="dummy" author="dvoet" id="resource_action_pattern_table">
-        <createTable tableName="SAM_ACTION_PATTERN">
+        <createTable tableName="SAM_RESOURCE_TYPE_ACTION_PATTERN">
             <column name="id" type="BIGINT" autoIncrement="true">
                 <constraints primaryKey="true"/>
             </column>
@@ -138,10 +138,10 @@
 
     <changeSet logicalFilePath="dummy" author="dvoet" id="role_action_table">
         <createTable tableName="SAM_ROLE_ACTION">
-            <column name="role_id" type="BIGINT">
+            <column name="resource_role_id" type="BIGINT">
                 <constraints nullable="false" foreignKeyName="FK_SROLEA_ROLE" referencedTableName="SAM_RESOURCE_ROLE" referencedColumnNames="id" primaryKey="true"/>
             </column>
-            <column name="action_id" type="BIGINT">
+            <column name="resource_action_id" type="BIGINT">
                 <constraints nullable="false" foreignKeyName="FK_SROLEA_ACTION" referencedTableName="SAM_RESOURCE_ACTION" referencedColumnNames="id" primaryKey="true"/>
             </column>
         </createTable>
@@ -191,10 +191,10 @@
 
     <changeSet logicalFilePath="dummy" author="dvoet" id="policy_role_table">
         <createTable tableName="SAM_POLICY_ROLE">
-            <column name="policy_id" type="BIGINT">
+            <column name="resource_policy_id" type="BIGINT">
                 <constraints nullable="false" foreignKeyName="FK_SPR_POLICY" referencedTableName="SAM_RESOURCE_POLICY" referencedColumnNames="id" primaryKey="true"/>
             </column>
-            <column name="role_id" type="BIGINT">
+            <column name="resource_role_id" type="BIGINT">
                 <constraints nullable="false" foreignKeyName="FK_SPR_ROLE" referencedTableName="SAM_RESOURCE_ROLE" referencedColumnNames="id" primaryKey="true"/>
             </column>
         </createTable>
@@ -202,10 +202,10 @@
 
     <changeSet logicalFilePath="dummy" author="dvoet" id="policy_action_table">
         <createTable tableName="SAM_POLICY_ACTION">
-            <column name="policy_id" type="BIGINT">
+            <column name="resource_policy_id" type="BIGINT">
                 <constraints nullable="false" foreignKeyName="FK_SPA_POLICY" referencedTableName="SAM_RESOURCE_POLICY" referencedColumnNames="id" primaryKey="true"/>
             </column>
-            <column name="action_id" type="BIGINT">
+            <column name="resource_action_id" type="BIGINT">
                 <constraints nullable="false" foreignKeyName="FK_SPA_ACTION" referencedTableName="SAM_RESOURCE_ACTION" referencedColumnNames="id" primaryKey="true"/>
             </column>
         </createTable>

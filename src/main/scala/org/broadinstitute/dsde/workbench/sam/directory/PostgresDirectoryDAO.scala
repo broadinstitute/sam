@@ -127,8 +127,8 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
       } else {
         val email = results.head._1
         val members: Set[WorkbenchSubject] = results.collect {
-          case (_, Some (userId), None) => userId
-          case (_, None, Some (subGroupName)) => subGroupName
+          case (_, Some(userId), None) => userId
+          case (_, None, Some(subGroupName)) => subGroupName
         }.toSet
 
         Option(BasicWorkbenchGroup(groupName, members, email))

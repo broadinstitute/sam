@@ -11,7 +11,7 @@ final case class ResourceActionPatternRecord(id: ResourceActionPatternPK,
                                              actionPattern: ResourceActionPatternName)
 
 object ResourceActionPatternTable extends SQLSyntaxSupport[ResourceActionPatternRecord] {
-  override def tableName: String = "SAM_ACTION_PATTERN"
+  override def tableName: String = "SAM_RESOURCE_TYPE_ACTION_PATTERN"
 
   import SamTypeBinders._
   def apply(e: ResultName[ResourceActionPatternRecord])(rs: WrappedResultSet): ResourceActionPatternRecord = ResourceActionPatternRecord(
