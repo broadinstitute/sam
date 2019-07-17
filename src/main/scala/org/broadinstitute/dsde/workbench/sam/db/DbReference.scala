@@ -43,7 +43,7 @@ object DbReference extends LazyLogging {
     }
   }
 
-  private def init(liquibaseConfig: LiquibaseConfig): DbReference = {
+  def init(liquibaseConfig: LiquibaseConfig): DbReference = {
     DBs.setupAll()
     if (liquibaseConfig.initWithLiquibase)
       initWithLiquibase(liquibaseConfig)
@@ -57,7 +57,6 @@ object DbReference extends LazyLogging {
 }
 
 case class DbReference() {
-
   def inReadOnlyTransaction[A](f: DBSession => A): A = {
     DB.readOnly[A] { implicit session =>
       f(session)

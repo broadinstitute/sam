@@ -23,6 +23,8 @@ import org.broadinstitute.dsde.workbench.sam.api.StandardUserInfoDirectives._
 import org.broadinstitute.dsde.workbench.sam.api._
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig._
 import org.broadinstitute.dsde.workbench.sam.config._
+import org.broadinstitute.dsde.workbench.sam.db.DbReference
+import org.broadinstitute.dsde.workbench.sam.db.tables._
 import org.broadinstitute.dsde.workbench.sam.directory.MockDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.google.{GoogleExtensionRoutes, GoogleExtensions, GoogleGroupSynchronizer, GoogleKeyCache}
 import org.broadinstitute.dsde.workbench.sam.model._
@@ -35,6 +37,8 @@ import org.scalatest.Matchers
 import org.scalatest.concurrent.PatienceConfiguration.Timeout
 import org.scalatest.prop.{Configuration, PropertyChecks}
 import org.scalatest.time.{Seconds, Span}
+import scalikejdbc.withSQL
+import scalikejdbc.QueryDSL.delete
 
 import scala.concurrent.duration.Duration
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -153,6 +157,32 @@ object TestSupport extends TestSupport {
   }
 
   def genSamRoutesWithDefault(implicit system: ActorSystem, materializer: Materializer): SamRoutes = genSamRoutes(genSamDependencies())
+
+  lazy val dbRef = DbReference.init(config.as[LiquibaseConfig]("liquibase"))
+
+  def truncateAll: Int = {
+    dbRef.inLocalTransaction { implicit session =>
+      val tables = List(PolicyActionTable,
+        PolicyRoleTable,
+        PolicyTable,
+        AuthDomainTable,
+        ResourceTable,
+        RoleActionTable,
+        ResourceActionTable,
+        ResourceRoleTable,
+        ResourceActionPatternTable,
+        ResourceTypeTable,
+        GroupMemberTable,
+        PetServiceAccountTable,
+        UserTable,
+        AccessInstructionsTable,
+        GroupTable)
+
+      tables.map(table => withSQL{
+        delete.from(table)
+      }.update.apply).sum
+    }
+  }
 }
 
 final case class SamDependencies(resourceService: ResourceService, policyEvaluatorService: PolicyEvaluatorService, userService: UserService, statusService: StatusService, managedGroupService: ManagedGroupService, directoryDAO: MockDirectoryDAO, policyDao: AccessPolicyDAO, val cloudExtensions: CloudExtensions)
