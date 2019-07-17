@@ -16,6 +16,7 @@ object Dependencies {
   val workbenchGoogleV = "0.20-a9f29eb"
   val workbenchGoogle2V = "0.1-8328aae"
   val workbenchNotificationsV = "0.1-f2a0020"
+  val workbenchNewRelicV = "0.2-24dabc8"
   val monocleVersion = "1.5.1-cats"
   val newRelicVersion = "4.11.0"
 
@@ -67,6 +68,7 @@ object Dependencies {
   val workbenchNotifications: ModuleID =  "org.broadinstitute.dsde.workbench" %% "workbench-notifications" % workbenchNotificationsV excludeAll(excludeWorkbenchGoogle, excludeWorkbenchModel)
   val workbenchGoogleTests: ModuleID =    "org.broadinstitute.dsde.workbench" %% "workbench-google" % workbenchGoogleV % "test" classifier "tests" excludeAll(excludeWorkbenchUtil, excludeWorkbenchModel)
   val workbenchGoogle2Tests: ModuleID =    "org.broadinstitute.dsde.workbench" %% "workbench-google2" % workbenchGoogle2V % "test" classifier "tests" excludeAll(excludeWorkbenchUtil, excludeWorkbenchModel)
+  val workbenchNewRelic: ModuleID =    "org.broadinstitute.dsde.workbench" %% "workbench-newrelic" % workbenchNewRelicV excludeAll(excludeWorkbenchUtil, excludeWorkbenchModel)
   val googleStorageLocal: ModuleID = "com.google.cloud" % "google-cloud-nio" % "0.71.0-alpha" % "test" //needed for mocking google cloud storage
 
   val liquibaseCore: ModuleID = "org.liquibase" % "liquibase-core" % "3.6.3"
@@ -112,6 +114,7 @@ object Dependencies {
     workbenchGoogleTests,
     workbenchGoogle2Tests,
     googleStorageLocal,
+    workbenchNewRelic,
 
     unboundid,
     ehcache,
