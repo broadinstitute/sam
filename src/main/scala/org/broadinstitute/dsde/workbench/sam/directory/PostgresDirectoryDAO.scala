@@ -73,7 +73,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
       val optionalGroupPBF = ParameterBinderFactory.optionalParameterBinderFactory(groupIdPBF)
 
       val memberUserRecords: Seq[(ParameterBinder, ParameterBinder, ParameterBinder)] = members.collect {
-        case WorkbenchUserId(value) => (groupIdPBF(groupId), optionalUserPBF(Option(WorkbenchUserId(value))), optionalGroupPBF(None))
+        case userId@WorkbenchUserId(_) => (groupIdPBF(groupId), optionalUserPBF(Option(userId)), optionalGroupPBF(None))
       }.toSeq
 
       val memberGroupNames = members.collect {
@@ -118,7 +118,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
             .on(groupMemberTable.memberGroupId, subGroupTable.id)
             .where
             .eq(groupTable.name, groupName)
-        }.map(rs => (WorkbenchEmail(rs.string(1)), Option(rs.string(2)).map(WorkbenchUserId), Option(rs.string(3)).map(WorkbenchGroupName)))
+        }.map(rs => (WorkbenchEmail(rs.string(1)), rs.stringOpt(2).map(WorkbenchUserId), rs.stringOpt(3).map(WorkbenchGroupName)))
           .list().apply()
       }
     } yield {
