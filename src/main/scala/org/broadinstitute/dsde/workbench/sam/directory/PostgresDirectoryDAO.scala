@@ -241,9 +241,8 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
           sql"insert into ${GroupMemberTable.table} (${groupMemberColumn.groupId}, ${groupMemberColumn.memberUserId}) values (($groupPKQuery), ${memberUser.value})"
         case memberGroup: WorkbenchGroupIdentity =>
           val memberGroupPKQuery = workbenchGroupIdentityToGroupPK(memberGroup)
-          val groupMemberColumn = GroupMemberTable.column
           sql"insert into ${GroupMemberTable.table} (${groupMemberColumn.groupId}, ${groupMemberColumn.memberGroupId}) values ((${groupPKQuery}), (${memberGroupPKQuery}))"
-        case _ => throw new WorkbenchException(s"unexpected WorkbenchGroupIdentity $groupId")
+        case _ => throw new WorkbenchException(s"unexpected WorkbenchSubject $addMember")
       }
       addMemberQuery.update().apply() > 0
     }
@@ -276,7 +275,22 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
   /**
     * @return true if the subject was removed, false if it was already gone
     */
-  override def removeGroupMember(groupId: WorkbenchGroupIdentity, removeMember: WorkbenchSubject): IO[Boolean] = ???
+  override def removeGroupMember(groupId: WorkbenchGroupIdentity, removeMember: WorkbenchSubject): IO[Boolean] = {
+    runInTransaction { implicit session =>
+      val groupPKQuery = workbenchGroupIdentityToGroupPK(groupId)
+      val groupMemberColumn = GroupMemberTable.column
+
+      val removeMemberQuery = removeMember match {
+        case memberUser: WorkbenchUserId =>
+          sql"delete from ${GroupMemberTable.table} where ${groupMemberColumn.groupId} = (${groupPKQuery}) and ${groupMemberColumn.memberUserId} = ${memberUser.value}"
+        case memberGroup: WorkbenchGroupIdentity =>
+          val memberGroupPKQuery = workbenchGroupIdentityToGroupPK(memberGroup)
+          sql"delete from ${GroupMemberTable.table} where ${groupMemberColumn.groupId} = (${groupPKQuery}) and ${groupMemberColumn.memberGroupId} = (${memberGroupPKQuery})"
+        case _ => throw new WorkbenchException(s"unexpected WorkbenchSubject $removeMember")
+      }
+      removeMemberQuery.update().apply() > 0
+    }
+  }
 
   override def isGroupMember(groupId: WorkbenchGroupIdentity, member: WorkbenchSubject): IO[Boolean] = ???
 

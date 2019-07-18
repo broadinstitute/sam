@@ -162,4 +162,24 @@ class PostgresDirectoryDAOSpec extends FlatSpec with Matchers with BeforeAndAfte
 
     dao.batchLoadGroupEmail(Set(group1.id, group2.id)).unsafeRunSync() should contain theSameElementsAs Set(group1, group2).map(group => (group.id, group.email))
   }
+
+  it should "remove groups from other groups" in {
+    val subGroup = emptyWorkbenchGroup("subGroup")
+    dao.createGroup(defaultGroup).unsafeRunSync()
+    dao.createGroup(subGroup).unsafeRunSync()
+
+    dao.addGroupMember(defaultGroup.id, subGroup.id).unsafeRunSync() shouldBe true
+    dao.removeGroupMember(defaultGroup.id, subGroup.id).unsafeRunSync() shouldBe true
+
+    val loadedGroup = dao.loadGroup(defaultGroup.id).unsafeRunSync().getOrElse(fail(s"failed to load group ${defaultGroup.id}"))
+    loadedGroup.members shouldBe empty
+  }
+
+  ignore should "remove users from other groups" in {
+
+  }
+
+  ignore should "remove policies from other groups" in {
+
+  }
 }
