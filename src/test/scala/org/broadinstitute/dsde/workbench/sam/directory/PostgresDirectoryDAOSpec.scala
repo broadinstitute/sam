@@ -13,6 +13,8 @@ class PostgresDirectoryDAOSpec extends FlatSpec with Matchers with BeforeAndAfte
 
   val defaultGroupName = WorkbenchGroupName("group")
   val defaultGroup = BasicWorkbenchGroup(defaultGroupName, Set.empty, WorkbenchEmail("foo@bar.com"))
+  val defaultUserId = WorkbenchUserId("testUser")
+  val defaultUser = WorkbenchUser(defaultUserId, Option(GoogleSubjectId("testGoogleSubject")), WorkbenchEmail("user@foo.com"))
 
   override protected def beforeEach(): Unit = {
     TestSupport.truncateAll
@@ -181,5 +183,11 @@ class PostgresDirectoryDAOSpec extends FlatSpec with Matchers with BeforeAndAfte
 
   ignore should "remove policies from other groups" in {
 
+  }
+
+  it should "create and load a user" in {
+    dao.createUser(defaultUser).unsafeRunSync() shouldEqual defaultUser
+    val loadedUser = dao.loadUser(defaultUser.id).unsafeRunSync().getOrElse(fail(s"failed to load user ${defaultUser.id}"))
+    loadedUser shouldEqual defaultUser
   }
 }

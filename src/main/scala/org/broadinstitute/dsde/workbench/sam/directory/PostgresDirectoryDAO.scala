@@ -308,9 +308,27 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
 
   override def loadSubjectFromGoogleSubjectId(googleSubjectId: GoogleSubjectId): IO[Option[WorkbenchSubject]] = ???
 
-  override def createUser(user: WorkbenchUser): IO[WorkbenchUser] = ???
+  override def createUser(user: WorkbenchUser): IO[WorkbenchUser] = {
+    runInTransaction { implicit session =>
+      val userColumn = UserTable.column
 
-  override def loadUser(userId: WorkbenchUserId): IO[Option[WorkbenchUser]] = ???
+      val insertUserQuery = sql"insert into ${UserTable.table} (${userColumn.id}, ${userColumn.email}, ${userColumn.googleSubjectId}) values (${user.id.value}, ${user.email.value}, ${user.googleSubjectId.map(_.value)})"
+      insertUserQuery.update.apply
+      user
+    }
+  }
+
+  override def loadUser(userId: WorkbenchUserId): IO[Option[WorkbenchUser]] = {
+    runInTransaction { implicit session =>
+      val userTable = UserTable.syntax
+      val userColumn = UserTable.column
+
+      import SamTypeBinders._
+      val loadUserQuery = sql"select ${userTable.id}, ${userTable.email}, ${userTable.googleSubjectId} from ${UserTable.table} where ${userTable.id} = ${userId.value}"
+      loadUserQuery.map(rs => WorkbenchUser(rs.get[WorkbenchUserId](userColumn.id), rs.stringOpt(userColumn.googleSubjectId).map(GoogleSubjectId), rs.get[WorkbenchEmail](userColumn.email)))
+        .single().apply()
+    }
+  }
 
   override def loadUsers(userIds: Set[WorkbenchUserId]): IO[Stream[WorkbenchUser]] = ???
 

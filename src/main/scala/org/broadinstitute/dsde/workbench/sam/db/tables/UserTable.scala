@@ -17,4 +17,6 @@ object UserTable extends SQLSyntaxSupport[UserRecord] {
     rs.get(e.email),
     rs.get(e.googleSubjectId)
   )
+
+  def apply(o: SyntaxProvider[UserRecord])(rs: WrappedResultSet): UserRecord = apply(o.resultName)(rs)
 }
