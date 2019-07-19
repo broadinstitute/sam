@@ -199,6 +199,20 @@ class PostgresDirectoryDAOSpec extends FlatSpec with Matchers with BeforeAndAfte
     dao.loadUser(defaultUser.id).unsafeRunSync() shouldBe None
   }
 
+  it should "not delete a user that is still a member of a group" in {
+    val user = defaultUser
+    val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName("parentGroup"), Set(user.id), WorkbenchEmail("bar@baz.com"))
+
+    dao.createUser(user).unsafeRunSync()
+    dao.createGroup(parentGroup).unsafeRunSync()
+
+    assertThrows[PSQLException] {
+      dao.deleteUser(user.id).unsafeRunSync()
+    }
+
+    dao.loadUser(user.id).unsafeRunSync() shouldEqual Option(user)
+  }
+
   it should "load multiple users at once" in {
     val user1 = defaultUser
     val user2 = WorkbenchUser(WorkbenchUserId("testUser2"), Option(GoogleSubjectId("testGoogleSubjectId2")), WorkbenchEmail("user2@test.com"))
