@@ -1,6 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.directory
 
 import org.broadinstitute.dsde.workbench.model._
+import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountDisplayName, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
 import org.postgresql.util.PSQLException
@@ -221,5 +222,15 @@ class PostgresDirectoryDAOSpec extends FlatSpec with Matchers with BeforeAndAfte
     dao.createUser(user2).unsafeRunSync() shouldEqual user2
 
     dao.loadUsers(Set(user1.id, user2.id)).unsafeRunSync() should contain theSameElementsAs Set(user1, user2)
+  }
+
+  ignore should "not delete a user's pet SA when the user is deleted" in {
+
+  }
+
+  it should "create pet service accounts" in {
+    val petSA = PetServiceAccount(PetServiceAccountId(defaultUser.id, GoogleProject("testProject")), ServiceAccount(ServiceAccountSubjectId("testGoogleSubjectId"), WorkbenchEmail("test@pet.co"), ServiceAccountDisplayName("whoCares")))
+    dao.createUser(defaultUser).unsafeRunSync()
+    dao.createPetServiceAccount(petSA).unsafeRunSync() shouldBe petSA
   }
 }

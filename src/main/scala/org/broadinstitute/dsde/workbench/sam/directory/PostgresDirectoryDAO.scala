@@ -371,7 +371,16 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
 
   override def getUserFromPetServiceAccount(petSA: ServiceAccountSubjectId): IO[Option[WorkbenchUser]] = ???
 
-  override def createPetServiceAccount(petServiceAccount: PetServiceAccount): IO[PetServiceAccount] = ???
+  override def createPetServiceAccount(petServiceAccount: PetServiceAccount): IO[PetServiceAccount] = {
+    runInTransaction { implicit session =>
+      val petServiceAccountColumn = PetServiceAccountTable.column
+
+      sql"""insert into ${PetServiceAccountTable.table} (${petServiceAccountColumn.userId}, ${petServiceAccountColumn.project}, ${petServiceAccountColumn.googleSubjectId}, ${petServiceAccountColumn.email})
+           values (${petServiceAccount.id.userId.value}, ${petServiceAccount.id.project.value}, ${petServiceAccount.serviceAccount.subjectId.value}, ${petServiceAccount.serviceAccount.email.value})"""
+        .update().apply()
+      petServiceAccount
+    }
+  }
 
   override def loadPetServiceAccount(petServiceAccountId: PetServiceAccountId): IO[Option[PetServiceAccount]] = ???
 
