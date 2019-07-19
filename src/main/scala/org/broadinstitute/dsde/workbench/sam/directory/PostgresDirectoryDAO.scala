@@ -332,7 +332,12 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
 
   override def loadUsers(userIds: Set[WorkbenchUserId]): IO[Stream[WorkbenchUser]] = ???
 
-  override def deleteUser(userId: WorkbenchUserId): IO[Unit] = ???
+  override def deleteUser(userId: WorkbenchUserId): IO[Unit] = {
+    runInTransaction { implicit session =>
+      val userTable = UserTable.syntax
+      sql"delete from ${UserTable.table} where ${userTable.id} = ${userId.value}".update().apply()
+    }
+  }
 
   override def addProxyGroup(userId: WorkbenchUserId, proxyEmail: WorkbenchEmail): IO[Unit] = ???
 

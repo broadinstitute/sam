@@ -190,4 +190,12 @@ class PostgresDirectoryDAOSpec extends FlatSpec with Matchers with BeforeAndAfte
     val loadedUser = dao.loadUser(defaultUser.id).unsafeRunSync().getOrElse(fail(s"failed to load user ${defaultUser.id}"))
     loadedUser shouldEqual defaultUser
   }
+
+  it should "delete users" in {
+    dao.createUser(defaultUser).unsafeRunSync() shouldEqual defaultUser
+    val loadedUser = dao.loadUser(defaultUser.id).unsafeRunSync().getOrElse(fail(s"failed to load user ${defaultUser.id}"))
+    loadedUser shouldEqual defaultUser
+    dao.deleteUser(defaultUser.id).unsafeRunSync()
+    dao.loadUser(defaultUser.id).unsafeRunSync() shouldBe None
+  }
 }
