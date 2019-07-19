@@ -330,7 +330,18 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     }
   }
 
-  override def loadUsers(userIds: Set[WorkbenchUserId]): IO[Stream[WorkbenchUser]] = ???
+  override def loadUsers(userIds: Set[WorkbenchUserId]): IO[Stream[WorkbenchUser]] = {
+    runInTransaction { implicit session =>
+      val userTable = UserTable.syntax
+      val userColumn = UserTable.column
+
+      import SamTypeBinders._
+
+      val loadUsersQuery = sql"select ${userTable.id}, ${userTable.email}, ${userTable.googleSubjectId} from ${UserTable.table} where ${userTable.id} in (${userIds.map(_.value)})"
+      loadUsersQuery.map(rs => WorkbenchUser(rs.get[WorkbenchUserId](userColumn.id), rs.stringOpt(userColumn.googleSubjectId).map(GoogleSubjectId), rs.get[WorkbenchEmail](userColumn.email)))
+        .list().apply().toStream
+    }
+  }
 
   override def deleteUser(userId: WorkbenchUserId): IO[Unit] = {
     runInTransaction { implicit session =>
