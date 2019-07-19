@@ -8,7 +8,7 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.ServiceAccountSubjectId
 import org.broadinstitute.dsde.workbench.sam.db._
 import org.broadinstitute.dsde.workbench.sam.db.tables._
-import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, FullyQualifiedPolicyId}
+import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, FullyQualifiedPolicyId, FullyQualifiedResourceId}
 import org.broadinstitute.dsde.workbench.sam.util.DatabaseSupport
 import org.broadinstitute.dsde.workbench.sam.errorReportSource
 import scalikejdbc._
@@ -281,7 +281,67 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     }
   }
 
-  override def isGroupMember(groupId: WorkbenchGroupIdentity, member: WorkbenchSubject): IO[Boolean] = ???
+  override def isGroupMember(groupId: WorkbenchGroupIdentity, member: WorkbenchSubject): IO[Boolean] = {
+    val gm = GroupMemberTable.syntax("gm")
+
+    val memberClause: SQLSyntax = member match {
+      case WorkbenchGroupName(groupName) =>
+        val g = GroupTable.syntax("g")
+        sqls"sg.member_group_id = (select ${g.id} from ${GroupTable.as(g)} where ${g.name} = $groupName)"
+
+      case FullyQualifiedPolicyId(FullyQualifiedResourceId(resourceTypeName, resourceId), accessPolicyName) =>
+        val rt = ResourceTypeTable.syntax("rt")
+        val r = ResourceTable.syntax("r")
+        val p = PolicyTable.syntax("p")
+        sqls"""sg.member_group_id = (select ${p.groupId}
+              from ${ResourceTypeTable.as(rt)}
+              join ${ResourceTable.as(r)} on ${rt.id} = ${r.resourceTypeId}
+              join ${PolicyTable.as(p)} on ${r.id} = ${p.resourceId}
+              where ${rt.resourceTypeName} = $resourceTypeName)
+              and ${r.name} = $resourceId
+              and ${p.name} = $accessPolicyName)"""
+
+      case WorkbenchUserId(userId) => sqls"sg.member_user_id = $userId"
+
+      case _ => throw new WorkbenchException(s"illegal member $member")
+    }
+
+    val topGroupQuery = groupId match {
+      case WorkbenchGroupName(groupName) =>
+        val g = GroupTable.syntax("g")
+        sqls"select ${g.id}, ${gm.memberGroupId}, ${gm.memberUserId} from ${GroupTable.as(g)} join ${GroupMemberTable.as(gm)} on ${g.id} = ${gm.groupId} WHERE ${g.name} = $groupName"
+
+      case FullyQualifiedPolicyId(FullyQualifiedResourceId(resourceTypeName, resourceId), accessPolicyName) =>
+        val rt = ResourceTypeTable.syntax("rt")
+        val r = ResourceTable.syntax("r")
+        val p = PolicyTable.syntax("p")
+        sqls"""select ${p.groupId}, ${gm.memberGroupId}, ${gm.memberUserId}
+              from ${ResourceTypeTable.as(rt)}
+              join ${ResourceTable.as(r)} on ${rt.id} = ${r.resourceTypeId}
+              join ${PolicyTable.as(p)} on ${r.id} = ${p.resourceId}
+              join ${GroupMemberTable.as(gm)} on ${p.groupId} = ${gm.groupId}
+              where ${rt.resourceTypeName} = $resourceTypeName)
+              and ${r.name} = $resourceId
+              and ${p.name} = $accessPolicyName"""
+
+    }
+
+    runInTransaction { implicit session =>
+      // https://www.postgresql.org/docs/9.6/queries-with.html
+      // in the recursive query below, UNION, as opposed to UNION ALL, should break out of cycles because it removes duplicates
+      val query = sql"""WITH RECURSIVE sub_group(parent_group_id, member_group_id, member_user_id) AS (
+        $topGroupQuery
+        UNION
+        SELECT ${gm.groupId}, ${gm.memberGroupId}, ${gm.memberUserId}
+        FROM sub_group sg, ${GroupMemberTable.as(gm)}
+        WHERE ${gm.groupId} = sg.member_group_id
+      )
+      SELECT count(1)
+        FROM sub_group sg WHERE $memberClause"""
+
+      query.map(rs => rs.int(1)).single().apply().getOrElse(0) == 1
+    }
+  }
 
   override def updateSynchronizedDate(groupId: WorkbenchGroupIdentity): IO[Unit] = ???
 

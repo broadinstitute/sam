@@ -240,4 +240,40 @@ class PostgresDirectoryDAOSpec extends FlatSpec with Matchers with BeforeAndAfte
     dao.createUser(defaultUser).unsafeRunSync()
     dao.createPetServiceAccount(petSA).unsafeRunSync() shouldBe petSA
   }
+
+  "isGroupMember" should "return true when member is in sub group" in {
+    val subGroup1 = defaultGroup
+    val subGroup2 = BasicWorkbenchGroup(WorkbenchGroupName("subGroup2"), Set(subGroup1.id), WorkbenchEmail("bar@baz.com"))
+    val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName("parentGroup"), Set(subGroup2.id), WorkbenchEmail("baz@qux.com"))
+
+    dao.createGroup(subGroup1).unsafeRunSync()
+    dao.createGroup(subGroup2).unsafeRunSync()
+    dao.createGroup(parentGroup).unsafeRunSync()
+
+    dao.isGroupMember(parentGroup.id, subGroup1.id).unsafeRunSync() should be (true)
+  }
+
+  it should "return false when member is not in sub group" in {
+    val subGroup1 = defaultGroup
+    val subGroup2 = BasicWorkbenchGroup(WorkbenchGroupName("subGroup2"), Set(subGroup1.id), WorkbenchEmail("bar@baz.com"))
+    val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName("parentGroup"), Set.empty, WorkbenchEmail("baz@qux.com"))
+
+    dao.createGroup(subGroup1).unsafeRunSync()
+    dao.createGroup(subGroup2).unsafeRunSync()
+    dao.createGroup(parentGroup).unsafeRunSync()
+
+    dao.isGroupMember(parentGroup.id, subGroup1.id).unsafeRunSync() should be (false)
+  }
+
+  it should "return true when user is in sub group" in fail("not implemented")
+  it should "return false when user is not in sub group" in fail("not implemented")
+  it should "return true when user is in policy" in fail("not implemented")
+  it should "return false when user is not in policy" in fail("not implemented")
+  it should "return true when policy is in policy" in fail("not implemented")
+  it should "return false when policy is not in policy" in fail("not implemented")
+  it should "return true when policy is in group" in fail("not implemented")
+  it should "return false when policy is not in group" in fail("not implemented")
+  it should "return true when group is in policy" in fail("not implemented")
+  it should "return false when group is not in policy" in fail("not implemented")
+
 }
