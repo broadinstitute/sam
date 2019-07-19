@@ -37,28 +37,17 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
 
   private def insertGroup(group: BasicWorkbenchGroup)(implicit session: DBSession): GroupPK = {
     val groupTableColumn = GroupTable.column
-    GroupPK(withSQL {
-      insert
-        .into(GroupTable)
-        .namedValues(
-          groupTableColumn.name -> group.id, // the id of a BasicWorkbenchGroup is the name of the group and is a different id from the database id... obviously (sorry)
-          groupTableColumn.email -> group.email,
-          groupTableColumn.updatedDate -> Option(Instant.now()),
-          groupTableColumn.synchronizedDate -> None
-        )
-    }.updateAndReturnGeneratedKey().apply())
+    val insertGroupQuery = sql"""insert into ${GroupTable.table} (${groupTableColumn.name}, ${groupTableColumn.email}, ${groupTableColumn.updatedDate}, ${groupTableColumn.synchronizedDate})
+           values (${group.id.value}, ${group.email.value}, ${Option(Instant.now())}, ${None})"""
+
+    GroupPK(insertGroupQuery.updateAndReturnGeneratedKey().apply())
   }
 
   private def insertAccessInstructions(groupId: GroupPK, accessInstructions: String)(implicit session: DBSession): Int = {
     val accessInstructionsColumn = AccessInstructionsTable.column
-    withSQL {
-      insert
-        .into(AccessInstructionsTable)
-        .namedValues(
-          accessInstructionsColumn.groupId -> groupId,
-          accessInstructionsColumn.instructions -> accessInstructions
-        )
-    }.update().apply()
+    val insertAccessInstructionsQuery = sql"insert into ${AccessInstructionsTable.table} (${accessInstructionsColumn.groupId}, ${accessInstructionsColumn.instructions}) values (${groupId.value}, ${accessInstructions})"
+
+    insertAccessInstructionsQuery.update().apply()
   }
 
   private def insertGroupMembers(groupId: GroupPK, members: Set[WorkbenchSubject])(implicit session: DBSession): Int = {

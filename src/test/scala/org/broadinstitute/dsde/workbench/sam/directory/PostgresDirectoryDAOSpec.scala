@@ -21,7 +21,7 @@ class PostgresDirectoryDAOSpec extends FlatSpec with Matchers with BeforeAndAfte
     TestSupport.truncateAll
   }
 
-  "PostgresDirectoryDAO" should "create a group" in {
+"PostgresDirectoryDAO\ncreateGroup" should "create a group" in {
     dao.createGroup(defaultGroup).unsafeRunSync() shouldEqual defaultGroup
   }
 
@@ -62,7 +62,7 @@ class PostgresDirectoryDAOSpec extends FlatSpec with Matchers with BeforeAndAfte
     }
   }
 
-  it should "load a group" in {
+  "loadGroup" should "load a group" in {
     dao.createGroup(defaultGroup).unsafeRunSync()
     val loadedGroup = dao.loadGroup(defaultGroup.id).unsafeRunSync().getOrElse(fail(s"Failed to load group $defaultGroupName"))
     loadedGroup shouldEqual defaultGroup
@@ -72,7 +72,7 @@ class PostgresDirectoryDAOSpec extends FlatSpec with Matchers with BeforeAndAfte
     dao.loadGroup(WorkbenchGroupName("fakeGroup")).unsafeRunSync() shouldBe None
   }
 
-  it should "load a group's email" in {
+  "loadGroupEmail" should "load a group's email" in {
     dao.createGroup(defaultGroup).unsafeRunSync()
     val loadedEmail = dao.loadGroupEmail(defaultGroup.id).unsafeRunSync().getOrElse(fail(s"Failed to load group ${defaultGroup.id}"))
     loadedEmail shouldEqual defaultGroup.email
@@ -82,7 +82,7 @@ class PostgresDirectoryDAOSpec extends FlatSpec with Matchers with BeforeAndAfte
     dao.loadGroupEmail(WorkbenchGroupName("fakeGroup")).unsafeRunSync() shouldBe None
   }
 
-  it should "delete groups" in {
+  "deleteGroup" should "delete groups" in {
     dao.createGroup(defaultGroup).unsafeRunSync()
 
     val loadedGroup = dao.loadGroup(defaultGroup.id).unsafeRunSync().getOrElse(fail(s"Failed to load group $defaultGroupName"))
@@ -107,7 +107,7 @@ class PostgresDirectoryDAOSpec extends FlatSpec with Matchers with BeforeAndAfte
     dao.loadGroup(subGroup.id).unsafeRunSync() shouldEqual Option(subGroup)
   }
 
-  it should "load multiple groups" in {
+  "loadGroups" should "load multiple groups" in {
     val group1 = BasicWorkbenchGroup(WorkbenchGroupName("group1"), Set.empty, WorkbenchEmail("group1@foo.com"))
     val group2 = BasicWorkbenchGroup(WorkbenchGroupName("group2"), Set.empty, WorkbenchEmail("group2@foo.com"))
 
@@ -129,7 +129,7 @@ class PostgresDirectoryDAOSpec extends FlatSpec with Matchers with BeforeAndAfte
 
   private def emptyWorkbenchGroup(groupName: String): BasicWorkbenchGroup = BasicWorkbenchGroup(WorkbenchGroupName(groupName), Set.empty, WorkbenchEmail(s"$groupName@test.com"))
 
-  it should "add groups to other groups" in {
+  "addGroupMember" should "add groups to other groups" in {
     val subGroup = emptyWorkbenchGroup("subGroup")
     dao.createGroup(defaultGroup).unsafeRunSync()
     dao.createGroup(subGroup).unsafeRunSync()
@@ -140,23 +140,23 @@ class PostgresDirectoryDAOSpec extends FlatSpec with Matchers with BeforeAndAfte
     loadedGroup.members should contain theSameElementsAs Set(subGroup.id)
   }
 
-  // TODO: Pending implementation of adding users to database
-  ignore should "add users to groups" in {
-    val testUser = WorkbenchUserId("user")
+  it should "add users to groups" in {
     dao.createGroup(defaultGroup).unsafeRunSync()
+    dao.createUser(defaultUser).unsafeRunSync()
 
-    dao.addGroupMember(defaultGroup.id, testUser).unsafeRunSync() shouldBe true
+    dao.addGroupMember(defaultGroup.id, defaultUser.id).unsafeRunSync() shouldBe true
 
     val loadedGroup = dao.loadGroup(defaultGroup.id).unsafeRunSync().getOrElse(fail(s"failed to load group ${defaultGroup.id}"))
-    loadedGroup.members should contain theSameElementsAs Set(testUser)
+    loadedGroup.members should contain theSameElementsAs Set(defaultUser.id)
   }
 
-  // TODO: pending policy creation
-  ignore should "add policies to groups" in {
+  // TODO: pending policy creation implementation
+  it should "add policies to groups" is pending
+  it should "add groups to policies" is pending
+  it should "add users to policies" is pending
+  it should "add policies to other policies" is pending
 
-  }
-
-  it should "batch load multiple group emails" in {
+  "batchLoadGroupEmail" should "batch load multiple group emails" in {
     val group1 = emptyWorkbenchGroup("group1")
     val group2 = emptyWorkbenchGroup("group2")
 
@@ -166,7 +166,7 @@ class PostgresDirectoryDAOSpec extends FlatSpec with Matchers with BeforeAndAfte
     dao.batchLoadGroupEmail(Set(group1.id, group2.id)).unsafeRunSync() should contain theSameElementsAs Set(group1, group2).map(group => (group.id, group.email))
   }
 
-  it should "remove groups from other groups" in {
+  "removeGroupMember" should "remove groups from other groups" in {
     val subGroup = emptyWorkbenchGroup("subGroup")
     dao.createGroup(defaultGroup).unsafeRunSync()
     dao.createGroup(subGroup).unsafeRunSync()
@@ -178,21 +178,30 @@ class PostgresDirectoryDAOSpec extends FlatSpec with Matchers with BeforeAndAfte
     loadedGroup.members shouldBe empty
   }
 
-  ignore should "remove users from other groups" in {
+  it should "remove users from groups" in {
+    dao.createGroup(defaultGroup).unsafeRunSync()
+    dao.createUser(defaultUser).unsafeRunSync()
 
+    dao.addGroupMember(defaultGroup.id, defaultUser.id).unsafeRunSync() shouldBe true
+    dao.removeGroupMember(defaultGroup.id, defaultUser.id).unsafeRunSync() shouldBe true
+
+    val loadedGroup = dao.loadGroup(defaultGroup.id).unsafeRunSync().getOrElse(fail(s"failed to load group ${defaultGroup.id}"))
+    loadedGroup.members shouldBe empty
   }
 
-  ignore should "remove policies from other groups" in {
+  // TODO: pending policy creation implementation
+  it should "remove policies from groups" is pending
+  it should "remove groups from policies" is pending
+  it should "remove users from policies" is pending
+  it should "remove policies from other policies" is pending
 
-  }
-
-  it should "create and load a user" in {
+  "createUser and loadUser" should "create and load a user" in {
     dao.createUser(defaultUser).unsafeRunSync() shouldEqual defaultUser
     val loadedUser = dao.loadUser(defaultUser.id).unsafeRunSync().getOrElse(fail(s"failed to load user ${defaultUser.id}"))
     loadedUser shouldEqual defaultUser
   }
 
-  it should "delete users" in {
+  "deleteUser" should "delete users" in {
     dao.createUser(defaultUser).unsafeRunSync() shouldEqual defaultUser
     val loadedUser = dao.loadUser(defaultUser.id).unsafeRunSync().getOrElse(fail(s"failed to load user ${defaultUser.id}"))
     loadedUser shouldEqual defaultUser
@@ -214,7 +223,9 @@ class PostgresDirectoryDAOSpec extends FlatSpec with Matchers with BeforeAndAfte
     dao.loadUser(user.id).unsafeRunSync() shouldEqual Option(user)
   }
 
-  it should "load multiple users at once" in {
+  it should "not delete a user's pet SA when the user is deleted" is pending
+
+  "loadUsers" should "load multiple users at once" in {
     val user1 = defaultUser
     val user2 = WorkbenchUser(WorkbenchUserId("testUser2"), Option(GoogleSubjectId("testGoogleSubjectId2")), WorkbenchEmail("user2@test.com"))
 
@@ -224,11 +235,7 @@ class PostgresDirectoryDAOSpec extends FlatSpec with Matchers with BeforeAndAfte
     dao.loadUsers(Set(user1.id, user2.id)).unsafeRunSync() should contain theSameElementsAs Set(user1, user2)
   }
 
-  ignore should "not delete a user's pet SA when the user is deleted" in {
-
-  }
-
-  it should "create pet service accounts" in {
+  "createPetServiceAccount" should "create pet service accounts" in {
     val petSA = PetServiceAccount(PetServiceAccountId(defaultUser.id, GoogleProject("testProject")), ServiceAccount(ServiceAccountSubjectId("testGoogleSubjectId"), WorkbenchEmail("test@pet.co"), ServiceAccountDisplayName("whoCares")))
     dao.createUser(defaultUser).unsafeRunSync()
     dao.createPetServiceAccount(petSA).unsafeRunSync() shouldBe petSA
