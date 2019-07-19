@@ -72,7 +72,7 @@
                 <constraints primaryKey="true"/>
             </column>
             <column name="group_id" type="BIGINT">
-                <constraints foreignKeyName="FK_SGM_GROUP" referencedTableName="SAM_GROUP" referencedColumnNames="id" nullable="false"/>
+                <constraints foreignKeyName="FK_SGM_GROUP" referencedTableName="SAM_GROUP" referencedColumnNames="id" nullable="false" deleteCascade="true"/>
             </column>
             <column name="member_group_id" type="BIGINT">
                 <constraints foreignKeyName="FK_SGM_MEMBER_GROUP" referencedTableName="SAM_GROUP" referencedColumnNames="id"/>
@@ -225,6 +225,14 @@
 
     <changeSet logicalFilePath="dummy" author="dvoet" id="unique_policy_name">
         <addUniqueConstraint tableName="SAM_RESOURCE_POLICY" columnNames="resource_id, name"/>
+    </changeSet>
+
+    <changeSet logicalFilePath="dummy" author="mtalbott" id="unique_subgroup_member_">
+        <addUniqueConstraint tableName="SAM_GROUP_MEMBER" columnNames="group_id, member_group_id"/>
+    </changeSet>
+
+    <changeSet logicalFilePath="dummy" author="mtalbott" id="unique_user_member">
+        <addUniqueConstraint tableName="SAM_GROUP_MEMBER" columnNames="group_id, member_user_id"/>
     </changeSet>
 
     <changeSet logicalFilePath="dummy" author="dvoet" id="index_sgm_group_id">
