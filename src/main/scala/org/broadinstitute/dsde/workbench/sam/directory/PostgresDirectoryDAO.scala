@@ -8,7 +8,7 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.ServiceAccountSubjectId
 import org.broadinstitute.dsde.workbench.sam.db._
 import org.broadinstitute.dsde.workbench.sam.db.tables._
-import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, FullyQualifiedPolicyId, FullyQualifiedResourceId}
+import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, FullyQualifiedPolicyId}
 import org.broadinstitute.dsde.workbench.sam.util.DatabaseSupport
 import org.broadinstitute.dsde.workbench.sam.errorReportSource
 import scalikejdbc._
@@ -37,15 +37,15 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
 
   private def insertGroup(group: BasicWorkbenchGroup)(implicit session: DBSession): GroupPK = {
     val groupTableColumn = GroupTable.column
-    val insertGroupQuery = sql"""insert into ${GroupTable.table} (${groupTableColumn.name}, ${groupTableColumn.email}, ${groupTableColumn.updatedDate}, ${groupTableColumn.synchronizedDate})
-           values (${group.id.value}, ${group.email.value}, ${Option(Instant.now())}, ${None})"""
+    val insertGroupQuery = samsql"""insert into ${GroupTable.table} (${groupTableColumn.name}, ${groupTableColumn.email}, ${groupTableColumn.updatedDate}, ${groupTableColumn.synchronizedDate})
+           values (${group.id}, ${group.email}, ${Option(Instant.now())}, ${None})"""
 
     GroupPK(insertGroupQuery.updateAndReturnGeneratedKey().apply())
   }
 
   private def insertAccessInstructions(groupId: GroupPK, accessInstructions: String)(implicit session: DBSession): Int = {
     val accessInstructionsColumn = AccessInstructionsTable.column
-    val insertAccessInstructionsQuery = sql"insert into ${AccessInstructionsTable.table} (${accessInstructionsColumn.groupId}, ${accessInstructionsColumn.instructions}) values (${groupId.value}, ${accessInstructions})"
+    val insertAccessInstructionsQuery = samsql"insert into ${AccessInstructionsTable.table} (${accessInstructionsColumn.groupId}, ${accessInstructionsColumn.instructions}) values (${groupId}, ${accessInstructions})"
 
     insertAccessInstructionsQuery.update().apply()
   }
@@ -227,10 +227,10 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
 
       val addMemberQuery = addMember match {
         case memberUser: WorkbenchUserId =>
-          sql"insert into ${GroupMemberTable.table} (${groupMemberColumn.groupId}, ${groupMemberColumn.memberUserId}) values (($groupPKQuery), ${memberUser.value})"
+          samsql"insert into ${GroupMemberTable.table} (${groupMemberColumn.groupId}, ${groupMemberColumn.memberUserId}) values (($groupPKQuery), ${memberUser})"
         case memberGroup: WorkbenchGroupIdentity =>
           val memberGroupPKQuery = workbenchGroupIdentityToGroupPK(memberGroup)
-          sql"insert into ${GroupMemberTable.table} (${groupMemberColumn.groupId}, ${groupMemberColumn.memberGroupId}) values ((${groupPKQuery}), (${memberGroupPKQuery}))"
+          samsql"insert into ${GroupMemberTable.table} (${groupMemberColumn.groupId}, ${groupMemberColumn.memberGroupId}) values ((${groupPKQuery}), (${memberGroupPKQuery}))"
         case _ => throw new WorkbenchException(s"unexpected WorkbenchSubject $addMember")
       }
       addMemberQuery.update().apply() > 0
@@ -245,20 +245,25 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     }
   }
 
-  private def groupPKQueryForGroup(groupName: WorkbenchGroupName): SQLSyntax = {
-    val groupTable = GroupTable.syntax("gpk")
-
-    sqls"SELECT ${groupTable.id} from ${GroupTable.as(groupTable)} where ${groupTable.name} = ${groupName.value}"
+  private def groupPKQueryForGroup(groupName: WorkbenchGroupName, groupTableAlias: String = "gpk"): SQLSyntax = {
+    val gpk = GroupTable.syntax(groupTableAlias)
+    samsqls"select ${gpk.id} from ${GroupTable as gpk} where ${gpk.name} = $groupName"
   }
 
-  private def groupPKQueryForPolicy(policyId: FullyQualifiedPolicyId): SQLSyntax = {
-    val resourceTable = ResourceTable.syntax("r")
-    val policyTable = PolicyTable.syntax("p")
-    // TODO: untested, needs to be done after implementing access policy DAO
-    sqls"""SELECT ${policyTable.groupId} from ${PolicyTable.as(policyTable)}
-           join ${ResourceTable.as(resourceTable)} on ${policyTable.resourceId} = ${resourceTable.id}
-           where ${policyTable.name} = ${policyId.accessPolicyName.value}
-           and ${resourceTable.name} = ${policyId.resource.resourceId}"""
+  private def groupPKQueryForPolicy(policyId: FullyQualifiedPolicyId,
+                                    resourceTypeTableAlias: String = "rt",
+                                    resourceTableAlias: String = "r",
+                                    policyTableAlias: String = "p"): SQLSyntax = {
+    val rt = ResourceTypeTable.syntax(resourceTypeTableAlias)
+    val r = ResourceTable.syntax(resourceTableAlias)
+    val p = PolicyTable.syntax(policyTableAlias)
+    samsqls"""select ${p.groupId}
+              from ${ResourceTypeTable as rt}
+              join ${ResourceTable as r} on ${rt.id} = ${r.resourceTypeId}
+              join ${PolicyTable as p} on ${r.id} = ${p.resourceId}
+              where ${rt.resourceTypeName} = ${policyId.resource.resourceTypeName}
+              and ${r.name} = ${policyId.resource.resourceId}
+              and ${p.name} = ${policyId.accessPolicyName}"""
   }
 
   /**
@@ -271,10 +276,10 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
 
       val removeMemberQuery = removeMember match {
         case memberUser: WorkbenchUserId =>
-          sql"delete from ${GroupMemberTable.table} where ${groupMemberColumn.groupId} = (${groupPKQuery}) and ${groupMemberColumn.memberUserId} = ${memberUser.value}"
+          samsql"delete from ${GroupMemberTable.table} where ${groupMemberColumn.groupId} = (${groupPKQuery}) and ${groupMemberColumn.memberUserId} = ${memberUser}"
         case memberGroup: WorkbenchGroupIdentity =>
           val memberGroupPKQuery = workbenchGroupIdentityToGroupPK(memberGroup)
-          sql"delete from ${GroupMemberTable.table} where ${groupMemberColumn.groupId} = (${groupPKQuery}) and ${groupMemberColumn.memberGroupId} = (${memberGroupPKQuery})"
+          samsql"delete from ${GroupMemberTable.table} where ${groupMemberColumn.groupId} = (${groupPKQuery}) and ${groupMemberColumn.memberGroupId} = (${memberGroupPKQuery})"
         case _ => throw new WorkbenchException(s"unexpected WorkbenchSubject $removeMember")
       }
       removeMemberQuery.update().apply() > 0
@@ -285,51 +290,23 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     val gm = GroupMemberTable.syntax("gm")
 
     val memberClause: SQLSyntax = member match {
-      case WorkbenchGroupName(groupName) =>
-        val g = GroupTable.syntax("g")
-        sqls"sg.member_group_id = (select ${g.id} from ${GroupTable as g} where ${g.name} = $groupName)"
-
-      case FullyQualifiedPolicyId(FullyQualifiedResourceId(resourceTypeName, resourceId), accessPolicyName) =>
-        val rt = ResourceTypeTable.syntax("rt")
-        val r = ResourceTable.syntax("r")
-        val p = PolicyTable.syntax("p")
-        sqls"""sg.member_group_id = (select ${p.groupId}
-              from ${ResourceTypeTable as rt}
-              join ${ResourceTable as r} on ${rt.id} = ${r.resourceTypeId}
-              join ${PolicyTable as p} on ${r.id} = ${p.resourceId}
-              where ${rt.resourceTypeName} = $resourceTypeName)
-              and ${r.name} = $resourceId
-              and ${p.name} = $accessPolicyName)"""
-
-      case WorkbenchUserId(userId) => sqls"sg.member_user_id = $userId"
-
+      case groupName: WorkbenchGroupName => samsqls"sg.member_group_id = (${groupPKQueryForGroup(groupName)})"
+      case policyId: FullyQualifiedPolicyId => samsqls"sg.member_group_id = (${groupPKQueryForPolicy(policyId)})"
+      case WorkbenchUserId(userId) => samsqls"sg.member_user_id = $userId"
       case _ => throw new WorkbenchException(s"illegal member $member")
     }
 
-    val topGroupQuery = groupId match {
-      case WorkbenchGroupName(groupName) =>
-        val g = GroupTable.syntax("g")
-        sqls"select ${g.id}, ${gm.memberGroupId}, ${gm.memberUserId} from ${GroupTable as g} join ${GroupMemberTable as gm} on ${g.id} = ${gm.groupId} WHERE ${g.name} = $groupName"
-
-      case FullyQualifiedPolicyId(FullyQualifiedResourceId(resourceTypeName, resourceId), accessPolicyName) =>
-        val rt = ResourceTypeTable.syntax("rt")
-        val r = ResourceTable.syntax("r")
-        val p = PolicyTable.syntax("p")
-        sqls"""select ${p.groupId}, ${gm.memberGroupId}, ${gm.memberUserId}
-              from ${ResourceTypeTable as rt}
-              join ${ResourceTable as r} on ${rt.id} = ${r.resourceTypeId}
-              join ${PolicyTable as p} on ${r.id} = ${p.resourceId}
-              join ${GroupMemberTable as gm} on ${p.groupId} = ${gm.groupId}
-              where ${rt.resourceTypeName} = $resourceTypeName)
-              and ${r.name} = $resourceId
-              and ${p.name} = $accessPolicyName"""
-
+    val groupPKQuery = groupId match {
+      case groupName: WorkbenchGroupName => groupPKQueryForGroup(groupName)
+      case policyId: FullyQualifiedPolicyId => groupPKQueryForPolicy(policyId)
     }
+
+    val topGroupQuery = samsqls"select ${gm.groupId}, ${gm.memberGroupId}, ${gm.memberUserId} from ${GroupMemberTable as gm} where ${gm.groupId} = ($groupPKQuery)"
 
     runInTransaction { implicit session =>
       // https://www.postgresql.org/docs/9.6/queries-with.html
       // in the recursive query below, UNION, as opposed to UNION ALL, should break out of cycles because it removes duplicates
-      val query = sql"""WITH RECURSIVE sub_group(parent_group_id, member_group_id, member_user_id) AS (
+      val query = samsql"""WITH RECURSIVE sub_group(parent_group_id, member_group_id, member_user_id) AS (
         $topGroupQuery
         UNION
         SELECT ${gm.groupId}, ${gm.memberGroupId}, ${gm.memberUserId}
@@ -361,7 +338,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     runInTransaction { implicit session =>
       val userColumn = UserTable.column
 
-      val insertUserQuery = sql"insert into ${UserTable.table} (${userColumn.id}, ${userColumn.email}, ${userColumn.googleSubjectId}) values (${user.id.value}, ${user.email.value}, ${user.googleSubjectId.map(_.value)})"
+      val insertUserQuery = samsql"insert into ${UserTable.table} (${userColumn.id}, ${userColumn.email}, ${userColumn.googleSubjectId}) values (${user.id}, ${user.email}, ${user.googleSubjectId})"
       insertUserQuery.update.apply
       user
     }
@@ -373,7 +350,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
       val userColumn = UserTable.column
 
       import SamTypeBinders._
-      val loadUserQuery = sql"select ${userTable.id}, ${userTable.email}, ${userTable.googleSubjectId} from ${UserTable.table} where ${userTable.id} = ${userId.value}"
+      val loadUserQuery = samsql"select ${userTable.id}, ${userTable.email}, ${userTable.googleSubjectId} from ${UserTable.table} where ${userTable.id} = ${userId}"
       loadUserQuery.map(rs => WorkbenchUser(rs.get[WorkbenchUserId](userColumn.id), rs.stringOpt(userColumn.googleSubjectId).map(GoogleSubjectId), rs.get[WorkbenchEmail](userColumn.email)))
         .single().apply()
     }
@@ -386,7 +363,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
 
       import SamTypeBinders._
 
-      val loadUsersQuery = sql"select ${userTable.id}, ${userTable.email}, ${userTable.googleSubjectId} from ${UserTable.table} where ${userTable.id} in (${userIds.map(_.value)})"
+      val loadUsersQuery = samsql"select ${userTable.id}, ${userTable.email}, ${userTable.googleSubjectId} from ${UserTable.table} where ${userTable.id} in (${userIds})"
       loadUsersQuery.map(rs => WorkbenchUser(rs.get[WorkbenchUserId](userColumn.id), rs.stringOpt(userColumn.googleSubjectId).map(GoogleSubjectId), rs.get[WorkbenchEmail](userColumn.email)))
         .list().apply().toStream
     }
@@ -396,7 +373,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
   override def deleteUser(userId: WorkbenchUserId): IO[Unit] = {
     runInTransaction { implicit session =>
       val userTable = UserTable.syntax
-      sql"delete from ${UserTable.table} where ${userTable.id} = ${userId.value}".update().apply()
+      samsql"delete from ${UserTable.table} where ${userTable.id} = ${userId}".update().apply()
     }
   }
 
@@ -424,8 +401,8 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     runInTransaction { implicit session =>
       val petServiceAccountColumn = PetServiceAccountTable.column
 
-      sql"""insert into ${PetServiceAccountTable.table} (${petServiceAccountColumn.userId}, ${petServiceAccountColumn.project}, ${petServiceAccountColumn.googleSubjectId}, ${petServiceAccountColumn.email})
-           values (${petServiceAccount.id.userId.value}, ${petServiceAccount.id.project.value}, ${petServiceAccount.serviceAccount.subjectId.value}, ${petServiceAccount.serviceAccount.email.value})"""
+      samsql"""insert into ${PetServiceAccountTable.table} (${petServiceAccountColumn.userId}, ${petServiceAccountColumn.project}, ${petServiceAccountColumn.googleSubjectId}, ${petServiceAccountColumn.email})
+           values (${petServiceAccount.id.userId}, ${petServiceAccount.id.project}, ${petServiceAccount.serviceAccount.subjectId}, ${petServiceAccount.serviceAccount.email})"""
         .update().apply()
       petServiceAccount
     }

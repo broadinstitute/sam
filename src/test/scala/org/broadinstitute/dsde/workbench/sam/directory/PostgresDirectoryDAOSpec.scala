@@ -265,15 +265,15 @@ class PostgresDirectoryDAOSpec extends FlatSpec with Matchers with BeforeAndAfte
     dao.isGroupMember(parentGroup.id, subGroup1.id).unsafeRunSync() should be (false)
   }
 
-  it should "return true when user is in sub group" in fail("not implemented")
-  it should "return false when user is not in sub group" in fail("not implemented")
-  it should "return true when user is in policy" in fail("not implemented")
-  it should "return false when user is not in policy" in fail("not implemented")
-  it should "return true when policy is in policy" in fail("not implemented")
-  it should "return false when policy is not in policy" in fail("not implemented")
-  it should "return true when policy is in group" in fail("not implemented")
-  it should "return false when policy is not in group" in fail("not implemented")
-  it should "return true when group is in policy" in fail("not implemented")
-  it should "return false when group is not in policy" in fail("not implemented")
+  it should "return true when user is in sub group" is pending
+  it should "return false when user is not in sub group" is pending
+  it should "return true when user is in policy" is pending
+  it should "return false when user is not in policy" is pending
+  it should "return true when policy is in policy" is pending
+  it should "return false when policy is not in policy" is pending
+  it should "return true when policy is in group" is pending
+  it should "return false when policy is not in group" is pending
+  it should "return true when group is in policy" is pending
+  it should "return false when group is not in policy" is pending
 
 }
