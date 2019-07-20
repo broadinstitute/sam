@@ -241,7 +241,6 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     groupId match {
       case group: WorkbenchGroupName => groupPKQueryForGroup(group)
       case policy: FullyQualifiedPolicyId => groupPKQueryForPolicy(policy)
-      case _ => throw new WorkbenchException(s"unexpected WorkbenchGroupIdentity $groupId")
     }
   }
 
@@ -290,18 +289,15 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     val gm = GroupMemberTable.syntax("gm")
 
     val memberClause: SQLSyntax = member match {
-      case groupName: WorkbenchGroupName => samsqls"sg.member_group_id = (${groupPKQueryForGroup(groupName)})"
-      case policyId: FullyQualifiedPolicyId => samsqls"sg.member_group_id = (${groupPKQueryForPolicy(policyId)})"
+      case subGroupId: WorkbenchGroupIdentity => samsqls"sg.member_group_id = (${workbenchGroupIdentityToGroupPK(subGroupId)})"
       case WorkbenchUserId(userId) => samsqls"sg.member_user_id = $userId"
       case _ => throw new WorkbenchException(s"illegal member $member")
     }
 
-    val groupPKQuery = groupId match {
-      case groupName: WorkbenchGroupName => groupPKQueryForGroup(groupName)
-      case policyId: FullyQualifiedPolicyId => groupPKQueryForPolicy(policyId)
-    }
-
-    val topGroupQuery = samsqls"select ${gm.groupId}, ${gm.memberGroupId}, ${gm.memberUserId} from ${GroupMemberTable as gm} where ${gm.groupId} = ($groupPKQuery)"
+    val topGroupQuery =
+      samsqls"""select ${gm.groupId}, ${gm.memberGroupId}, ${gm.memberUserId}
+               from ${GroupMemberTable as gm}
+               where ${gm.groupId} = (${workbenchGroupIdentityToGroupPK(groupId)})"""
 
     runInTransaction { implicit session =>
       // https://www.postgresql.org/docs/9.6/queries-with.html
