@@ -59,17 +59,24 @@ trait LdapSupport extends DirectorySubjectNameSupport {
       case Failure(regrets) => throw regrets
     }
 
-  protected def getAttribute(results: Entry, key: String): Option[String] =
-    Option(results)
-      .flatMap { searchResultEntries => Option(searchResultEntries.getAttribute(key)) }
-      .map(_.getValue)
+  protected def getAttribute(results: Entry, key: String): Option[String] = {
+    for {
+      searchResultEntries <- Option(results)
+      attributes <- Option(searchResultEntries.getAttribute(key))
+    } yield {
+     attributes.getValue
+    }
+  }
 
 
-  protected def getAttributes(results: Entry, key: String): Set[String] =
-    Option(results)
-      .flatMap { searchResultEntries => Option(searchResultEntries.getAttribute(key)) }
-      .map(_.getValues.toSet)
-      .getOrElse(Set.empty)
+  protected def getAttributes(results: Entry, key: String): Set[String] = {
+    for {
+      searchResultEntries <- Option(results)
+      attributes <- Option(searchResultEntries.getAttribute(key))
+    } yield {
+      attributes.getValues.toSet
+    }
+  }.getOrElse(Set.empty)
 
   protected def ldapLoadMemberOf(subject: WorkbenchSubject): IO[Set[String]] =
     Option(memberOfCache.get(subject)) match {
