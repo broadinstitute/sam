@@ -1,6 +1,6 @@
 package org.broadinstitute.dsde.workbench.sam.config
 
-import org.broadinstitute.dsde.workbench.google.{KeyId, KeyRingId, Location}
+import org.broadinstitute.dsde.workbench.google2.{KeyId, KeyRingId, Location}
 import org.broadinstitute.dsde.workbench.model.google.GoogleProject
 
 import scala.concurrent.duration.FiniteDuration

@@ -7,7 +7,7 @@ import org.broadinstitute.dsde.workbench.model.google.{GcsBucketName, GoogleProj
 import net.ceedubs.ficus.Ficus._
 import AppConfig.nonEmptyListReader
 import com.typesafe.config.ConfigRenderOptions
-import org.broadinstitute.dsde.workbench.google.{KeyId, KeyRingId, Location}
+import org.broadinstitute.dsde.workbench.google2.{KeyId, KeyRingId, Location}
 
 import scala.concurrent.duration.FiniteDuration
 

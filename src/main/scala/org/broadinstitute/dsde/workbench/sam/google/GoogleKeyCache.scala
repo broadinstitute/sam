@@ -10,6 +10,7 @@ import com.google.api.client.googleapis.json.GoogleJsonResponseException
 import com.google.cloud.storage.{BucketInfo, StorageException}
 import com.google.cloud.storage.BucketInfo.LifecycleRule
 import com.typesafe.scalalogging.LazyLogging
+import fs2.Stream
 import org.broadinstitute.dsde.workbench.google2.util.{DistributedLock, LockPath}
 import org.broadinstitute.dsde.workbench.google.{GoogleIamDAO, GooglePubSubDAO, GoogleStorageDAO}
 import org.broadinstitute.dsde.workbench.google2.{CollectionName, Document, GcsBlobName, GoogleStorageService}
@@ -52,10 +53,10 @@ class GoogleKeyCache(
       ))
 
     googleStorageAlg
-      .createBucket(googleServicesConfig.serviceAccountClientProject, googleServicesConfig.googleKeyCacheConfig.bucketName, List.empty)
+      .createBucket(googleServicesConfig.serviceAccountClientProject, googleServicesConfig.googleKeyCacheConfig.bucketName, None)
       .recoverWith {
         case t: StorageException if t.getCode == 409 && t.getMessage.contains("You already own this bucket") =>
-          IO(logger.info(t.getMessage))
+          Stream.eval(IO(logger.info(t.getMessage)))
       } flatMap { _ =>
       val lifecycleCondition = BucketInfo.LifecycleRule.LifecycleCondition
         .newBuilder()
