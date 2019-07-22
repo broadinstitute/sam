@@ -52,19 +52,19 @@ class GoogleKeyCache(
         this
       ))
 
-    googleStorageAlg
+    (googleStorageAlg
       .createBucket(googleServicesConfig.serviceAccountClientProject, googleServicesConfig.googleKeyCacheConfig.bucketName, None)
       .recoverWith {
         case t: StorageException if t.getCode == 409 && t.getMessage.contains("You already own this bucket") =>
           Stream.eval(IO(logger.info(t.getMessage)))
-      } flatMap { _ =>
+      } flatMap { _: Unit =>
       val lifecycleCondition = BucketInfo.LifecycleRule.LifecycleCondition
         .newBuilder()
         .setAge(googleServicesConfig.googleKeyCacheConfig.retiredKeyMaxAge)
         .build()
       val lifecycleRule = new LifecycleRule(LifecycleRule.LifecycleAction.newDeleteAction(), lifecycleCondition)
       googleStorageAlg.setBucketLifecycle(googleServicesConfig.googleKeyCacheConfig.bucketName, List(lifecycleRule))
-    }
+    }).compile.drain
   }
 
   override def getKey(pet: PetServiceAccount): IO[String] = {
