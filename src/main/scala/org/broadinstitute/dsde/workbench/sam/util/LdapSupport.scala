@@ -59,12 +59,12 @@ trait LdapSupport extends DirectorySubjectNameSupport {
       case Failure(regrets) => throw regrets
     }
 
-  protected def getAttribute(results: Entry, key: String): Option[String] = {
+  protected def getAttribute(result: Entry, key: String): Option[String] = {
     for {
-      searchResultEntries <- Option(results)
-      attributes <- Option(searchResultEntries.getAttribute(key))
+      searchResultEntry <- Option(result)
+      attribute <- Option(searchResultEntry.getAttribute(key))
     } yield {
-     attributes.getValue
+     attribute.getValue
     }
   }
 
