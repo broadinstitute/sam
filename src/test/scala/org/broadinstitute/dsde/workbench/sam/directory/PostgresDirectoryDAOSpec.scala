@@ -300,5 +300,31 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
       "return true when group is in policy" is pending
       "return false when group is not in policy" is pending
     }
+
+    "listIntersectionGroupUsers" - {
+      // DV: I have tried this up to 100 groups to intersect locally with no functional issue, performance seems linear
+      for (groupCount <- 1 to 3) {
+        s"intersect $groupCount groups" in {
+          val inAllGroups = WorkbenchUser(WorkbenchUserId("allgroups"), None, WorkbenchEmail("allgroups"))
+          dao.createUser(inAllGroups).unsafeRunSync()
+
+          val allGroups = for (i <- 1 to groupCount) yield {
+            // create a group with 1 user and 1 subgroup, subgroup with "allgroups" users and another user
+            val userInGroup = WorkbenchUser(WorkbenchUserId(s"ingroup$i"), None, WorkbenchEmail(s"ingroup$i"))
+            val userInSubGroup = WorkbenchUser(WorkbenchUserId(s"insubgroup$i"), None, WorkbenchEmail(s"insubgroup$i"))
+            val subGroup = BasicWorkbenchGroup(WorkbenchGroupName(s"subgroup$i"), Set(inAllGroups.id, userInSubGroup.id), WorkbenchEmail(s"subgroup$i"))
+            val group = BasicWorkbenchGroup(WorkbenchGroupName(s"group$i"), Set(userInGroup.id, subGroup.id), WorkbenchEmail(s"group$i"))
+            dao.createUser(userInSubGroup).unsafeRunSync()
+            dao.createUser(userInGroup).unsafeRunSync()
+            dao.createGroup(subGroup).unsafeRunSync()
+            dao.createGroup(group).unsafeRunSync()
+          }
+
+          val expected = if (groupCount == 1) Set(WorkbenchUserId("allgroups"), WorkbenchUserId("ingroup1"), WorkbenchUserId("insubgroup1")) else Set(inAllGroups.id)
+
+          dao.listIntersectionGroupUsers(allGroups.map(_.id).toSet).unsafeRunSync() should contain theSameElementsAs expected
+        }
+      }
+    }
   }
 }
