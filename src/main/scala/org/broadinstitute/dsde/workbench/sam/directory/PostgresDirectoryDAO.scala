@@ -174,17 +174,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
   }
 
   override def loadGroupEmail(groupName: WorkbenchGroupName): IO[Option[WorkbenchEmail]] = {
-    runInTransaction { implicit session =>
-      val groupTable = GroupTable.syntax("g")
-
-      import SamTypeBinders._
-      withSQL {
-        select(groupTable.email)
-          .from(GroupTable as groupTable)
-          .where
-          .eq(groupTable.name, groupName)
-      }.map(rs => rs.get[WorkbenchEmail]("email")).single().apply()
-    }
+    batchLoadGroupEmail(Set(groupName)).map(_.toMap.get(groupName))
   }
 
   override def batchLoadGroupEmail(groupNames: Set[WorkbenchGroupName]): IO[Stream[(WorkbenchGroupName, WorkbenchEmail)]] = {
@@ -231,10 +221,21 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
         case memberGroup: WorkbenchGroupIdentity =>
           val memberGroupPKQuery = workbenchGroupIdentityToGroupPK(memberGroup)
           samsql"insert into ${GroupMemberTable.table} (${groupMemberColumn.groupId}, ${groupMemberColumn.memberGroupId}) values ((${groupPKQuery}), (${memberGroupPKQuery}))"
-        case _ => throw new WorkbenchException(s"unexpected WorkbenchSubject $addMember")
+        case pet: PetServiceAccountId => throw new WorkbenchException(s"pet service accounts cannot be added to groups $pet")
       }
-      addMemberQuery.update().apply() > 0
+      val added = addMemberQuery.update().apply() > 0
+
+      if (added) {
+        updateGroupUpdatedDate(groupId)
+      }
+
+      added
     }
+  }
+
+  private def updateGroupUpdatedDate(groupId: WorkbenchGroupIdentity)(implicit session: DBSession): Int = {
+    val g = GroupTable.column
+    samsql"update ${GroupTable.table} set ${g.updatedDate} = ${Instant.now()} where ${g.id} = (${workbenchGroupIdentityToGroupPK(groupId)})".update().apply()
   }
 
   private def workbenchGroupIdentityToGroupPK(groupId: WorkbenchGroupIdentity): SQLSyntax = {
@@ -281,7 +282,13 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
           samsql"delete from ${GroupMemberTable.table} where ${groupMemberColumn.groupId} = (${groupPKQuery}) and ${groupMemberColumn.memberGroupId} = (${memberGroupPKQuery})"
         case _ => throw new WorkbenchException(s"unexpected WorkbenchSubject $removeMember")
       }
-      removeMemberQuery.update().apply() > 0
+      val removed = removeMemberQuery.update().apply() > 0
+
+      if (removed) {
+        updateGroupUpdatedDate(groupId)
+      }
+
+      removed
     }
   }
 
@@ -316,7 +323,12 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     }
   }
 
-  override def updateSynchronizedDate(groupId: WorkbenchGroupIdentity): IO[Unit] = ???
+  override def updateSynchronizedDate(groupId: WorkbenchGroupIdentity): IO[Unit] = {
+    runInTransaction { implicit session =>
+      val g = GroupTable.column
+      samsql"update ${GroupTable.table} set ${g.synchronizedDate} = ${Instant.now()} where ${g.id} = (${workbenchGroupIdentityToGroupPK(groupId)})".update().apply()
+    }
+  }
 
   override def getSynchronizedDate(groupId: WorkbenchGroupIdentity): IO[Option[Date]] = ???
 
