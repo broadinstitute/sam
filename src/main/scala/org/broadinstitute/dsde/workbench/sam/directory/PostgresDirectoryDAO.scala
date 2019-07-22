@@ -390,11 +390,17 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
   override def listUserDirectMemberships(userId: WorkbenchUserId): IO[Stream[WorkbenchGroupIdentity]] = ???
 
   override def listIntersectionGroupUsers(groupIds: Set[WorkbenchGroupIdentity]): IO[Set[WorkbenchUserId]] = {
-    case class QueryAndTableName(query: SQLSyntax, table: SubGroupMemberTable)
+    // the implementation of this is a little fancy and is able to do the entire intersection in a single request
+    // the general structure of the query is:
+    // WITH RECURSIVE [subGroupsQuery for each group] SELECT user_id FROM [all the subgroup queries joined on user_id]
+    case class QueryAndTable(subGroupQuery: SQLSyntax, table: SubGroupMemberTable)
     val gm = GroupMemberTable.syntax("gm")
 
+    // the toSeq below is important to fix a predictable order
     val subGroupQueries = groupIds.toSeq.zipWithIndex.map { case (groupId, index) =>
-      val subGroupTable = SubGroupMemberTable("subGroup_" + index)
+      // need each subgroup table to be named uniquely
+      // this is careful not to use a user defined string (e.g. the group's name) to avoid sql injection attacks
+      val subGroupTable = SubGroupMemberTable("sub_group_" + index)
       val topGroupQuery =
         samsqls"""select ${gm.groupId}, ${gm.memberGroupId}, ${gm.memberUserId}
                  from ${GroupMemberTable as gm}
@@ -402,11 +408,12 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
 
       val subGroupQuery = subGroupsQuery(subGroupTable, topGroupQuery)
 
-      QueryAndTableName(subGroupQuery, subGroupTable)
+      QueryAndTable(subGroupQuery, subGroupTable)
     }
 
-    val allSubGroupQueries = SQLSyntax.join(subGroupQueries.map(_.query).toSeq, sqls",", false)
+    val allSubGroupQueries = SQLSyntax.join(subGroupQueries.map(_.subGroupQuery), sqls",", false)
 
+    // need to handle the first table special, all others will join back to this
     val firstTable = subGroupQueries.head.table
     val ft = firstTable.syntax
     val allSubGroupJoins = subGroupQueries.tail.map(_.table).foldLeft(samsqls"") { (joins, nextTable) =>
