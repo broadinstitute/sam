@@ -5,7 +5,7 @@ import java.util.Date
 
 import cats.effect.{ContextShift, IO}
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.model.google.ServiceAccountSubjectId
+import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountDisplayName, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.sam.db._
 import org.broadinstitute.dsde.workbench.sam.db.tables._
 import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, FullyQualifiedPolicyId}
@@ -481,14 +481,27 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     runInTransaction { implicit session =>
       val petServiceAccountColumn = PetServiceAccountTable.column
 
-      samsql"""insert into ${PetServiceAccountTable.table} (${petServiceAccountColumn.userId}, ${petServiceAccountColumn.project}, ${petServiceAccountColumn.googleSubjectId}, ${petServiceAccountColumn.email})
-           values (${petServiceAccount.id.userId}, ${petServiceAccount.id.project}, ${petServiceAccount.serviceAccount.subjectId}, ${petServiceAccount.serviceAccount.email})"""
+      samsql"""insert into ${PetServiceAccountTable.table} (${petServiceAccountColumn.userId}, ${petServiceAccountColumn.project}, ${petServiceAccountColumn.googleSubjectId}, ${petServiceAccountColumn.email}, ${petServiceAccountColumn.displayName})
+           values (${petServiceAccount.id.userId}, ${petServiceAccount.id.project}, ${petServiceAccount.serviceAccount.subjectId}, ${petServiceAccount.serviceAccount.email}, ${petServiceAccount.serviceAccount.displayName})"""
         .update().apply()
       petServiceAccount
     }
   }
 
-  override def loadPetServiceAccount(petServiceAccountId: PetServiceAccountId): IO[Option[PetServiceAccount]] = ???
+  override def loadPetServiceAccount(petServiceAccountId: PetServiceAccountId): IO[Option[PetServiceAccount]] = {
+    import SamTypeBinders._
+    runInTransaction { implicit session =>
+      val petServiceAccountTable = PetServiceAccountTable.syntax
+      val petServiceAccountColumn = PetServiceAccountTable.column
+
+      val loadPetQuery = samsql"""select ${petServiceAccountTable.userId}, ${petServiceAccountTable.project}, ${petServiceAccountTable.googleSubjectId}, ${petServiceAccountTable.email}, ${petServiceAccountTable.displayName} from ${PetServiceAccountTable.table} where ${petServiceAccountTable.userId} = ${petServiceAccountId.userId} and ${petServiceAccountTable.project} = ${petServiceAccountId.project}"""
+
+      loadPetQuery.map(rs => PetServiceAccount(
+        PetServiceAccountId(rs.get[WorkbenchUserId](petServiceAccountColumn.userId), rs.get[GoogleProject](petServiceAccountColumn.project)),
+        ServiceAccount(rs.get[ServiceAccountSubjectId](petServiceAccountColumn.googleSubjectId), rs.get[WorkbenchEmail](petServiceAccountColumn.email), rs.get[ServiceAccountDisplayName](petServiceAccountColumn.displayName))
+      )).single().apply()
+    }
+  }
 
   override def deletePetServiceAccount(petServiceAccountId: PetServiceAccountId): IO[Unit] = ???
 
