@@ -510,7 +510,20 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     }
   }
 
-  override def getAllPetServiceAccountsForUser(userId: WorkbenchUserId): IO[Seq[PetServiceAccount]] = ???
+  override def getAllPetServiceAccountsForUser(userId: WorkbenchUserId): IO[Seq[PetServiceAccount]] = {
+    import SamTypeBinders._
+    runInTransaction { implicit session =>
+      val petServiceAccountTable = PetServiceAccountTable.syntax
+      val petServiceAccountColumn = PetServiceAccountTable.column
+
+      val loadPetsQuery = samsql"select ${petServiceAccountTable.userId}, ${petServiceAccountTable.project}, ${petServiceAccountTable.googleSubjectId}, ${petServiceAccountTable.email}, ${petServiceAccountTable.displayName} from ${PetServiceAccountTable.table} where ${petServiceAccountTable.userId} = ${userId}"
+
+      loadPetsQuery.map(rs => PetServiceAccount(
+        PetServiceAccountId(rs.get[WorkbenchUserId](petServiceAccountColumn.userId), rs.get[GoogleProject](petServiceAccountColumn.project)),
+        ServiceAccount(rs.get[ServiceAccountSubjectId](petServiceAccountColumn.googleSubjectId), rs.get[WorkbenchEmail](petServiceAccountColumn.email), rs.get[ServiceAccountDisplayName](petServiceAccountColumn.displayName))
+      )).list().apply()
+    }
+  }
 
   override def updatePetServiceAccount(petServiceAccount: PetServiceAccount): IO[PetServiceAccount] = ???
 
