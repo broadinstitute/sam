@@ -503,7 +503,12 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     }
   }
 
-  override def deletePetServiceAccount(petServiceAccountId: PetServiceAccountId): IO[Unit] = ???
+  override def deletePetServiceAccount(petServiceAccountId: PetServiceAccountId): IO[Unit] = {
+    runInTransaction { implicit session =>
+      val petServiceAccountTable = PetServiceAccountTable.syntax
+      samsql"delete from ${PetServiceAccountTable.table} where ${petServiceAccountTable.userId} = ${petServiceAccountId.userId} and ${petServiceAccountTable.project} = ${petServiceAccountId.project}".update().apply()
+    }
+  }
 
   override def getAllPetServiceAccountsForUser(userId: WorkbenchUserId): IO[Seq[PetServiceAccount]] = ???
 
