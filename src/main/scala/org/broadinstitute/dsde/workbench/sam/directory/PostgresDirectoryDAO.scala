@@ -389,6 +389,27 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
 
   override def listUserDirectMemberships(userId: WorkbenchUserId): IO[Stream[WorkbenchGroupIdentity]] = ???
 
+  /**
+    * This query attempts to list the User records that are members of ALL the groups given in the groupIds parameter.
+    *
+    * The overall approach is to take each group and flatten its membership to determine the full set of all the users
+    * that are a member of that group, its children, its children's children, etc. Once we have the flattened group
+    * membership for each group, we do a big join statement to select only those users that showed up in the flattened
+    * list for each group.
+    *
+    * The crux of this implementation is the use of PostgreSQL's `WITH` statement, https://www.postgresql.org/docs/9.6/queries-with.html
+    * These statements allow us to create Common Table Expressions (CTE), which are basically temporary tables that
+    * exist only for the duration of the query.  You can create multiple CTEs using a single `WITH` by comma separating
+    * each `SELECT` that creates each individual CTE.  In this implementation, we use `WITH RECURSIVE` to create N CTEs
+    * where N is the cardinality of the groupIds parameter.  Each of these CTEs is the flattened group membership for
+    * one of the WorkbenchGroupIdentities.
+    *
+    * The query maintains a table alias for each of the CTEs.  The final part of the query uses this list of aliases to
+    * join each of them based on the memberUserId column to give us the final result of only those memberUserIds that
+    * showed up as an entry in every CTE.
+    * @param groupIds
+    * @return Set of WorkbenchUserIds that are members of each group specified by groupIds
+    */
   override def listIntersectionGroupUsers(groupIds: Set[WorkbenchGroupIdentity]): IO[Set[WorkbenchUserId]] = {
     // the implementation of this is a little fancy and is able to do the entire intersection in a single request
     // the general structure of the query is:
