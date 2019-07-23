@@ -303,6 +303,17 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
       }
     }
 
+    "getUserFromPetServiceAccount" - {
+      "get user from pet service account subject ID" in {
+        dao.createUser(defaultUser).unsafeRunSync()
+
+        val petSA = PetServiceAccount(PetServiceAccountId(defaultUser.id, GoogleProject("testProject")), ServiceAccount(ServiceAccountSubjectId("testGoogleSubjectId"), WorkbenchEmail("test@pet.co"), ServiceAccountDisplayName("whoCares")))
+        dao.createPetServiceAccount(petSA).unsafeRunSync()
+
+        dao.getUserFromPetServiceAccount(petSA.serviceAccount.subjectId).unsafeRunSync() shouldBe Some(defaultUser)
+      }
+    }
+
     "isGroupMember" - {
       "return true when member is in sub group" in {
         val subGroup1 = defaultGroup

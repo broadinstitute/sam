@@ -475,7 +475,21 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
 
   override def isEnabled(subject: WorkbenchSubject): IO[Boolean] = ???
 
-  override def getUserFromPetServiceAccount(petSA: ServiceAccountSubjectId): IO[Option[WorkbenchUser]] = ???
+  override def getUserFromPetServiceAccount(petSA: ServiceAccountSubjectId): IO[Option[WorkbenchUser]] = {
+    import SamTypeBinders._
+
+    runInTransaction { implicit session =>
+      val petServiceAccountTable = PetServiceAccountTable.syntax
+
+      val userTable = UserTable.syntax
+      val userColumn = UserTable.column
+
+      val loadUserQuery = samsql"""select ${userTable.id}, ${userTable.email}, ${userTable.googleSubjectId} from ${UserTable.table} left join ${PetServiceAccountTable.table} on ${petServiceAccountTable.userId} = ${userTable.id} where ${petServiceAccountTable.googleSubjectId} = ${GoogleSubjectId(petSA.value)}""" //TODO harmonize the subjectId types
+
+      loadUserQuery.map(rs => WorkbenchUser(rs.get[WorkbenchUserId](userColumn.id), rs.stringOpt(userColumn.googleSubjectId).map(GoogleSubjectId), rs.get[WorkbenchEmail](userColumn.email)))
+        .single().apply()
+    }
+  }
 
   override def createPetServiceAccount(petServiceAccount: PetServiceAccount): IO[PetServiceAccount] = {
     runInTransaction { implicit session =>
