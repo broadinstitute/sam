@@ -395,8 +395,8 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
                     from ${GroupMemberTable as pg}
                     join ${ancestorGroupsTable as ag} ON ${agColumn.parentGroupId} = ${pg.memberGroupId}
           ) select distinct(${g.name})
-            from ${GroupTable as g}, ${ancestorGroupsTable as ag}
-            where ${ag.parentGroupId} = ${g.id}"""
+            from ${GroupTable as g}
+            join ${ancestorGroupsTable as ag} on ${ag.parentGroupId} = ${g.id}"""
       listGroupsQuery.map(rs => WorkbenchGroupName(rs.string(1))).list.apply().toSet
     }
   }
