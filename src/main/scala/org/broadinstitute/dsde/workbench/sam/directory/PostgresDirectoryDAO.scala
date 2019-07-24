@@ -174,17 +174,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
   }
 
   override def loadGroupEmail(groupName: WorkbenchGroupName): IO[Option[WorkbenchEmail]] = {
-    runInTransaction { implicit session =>
-      val groupTable = GroupTable.syntax("g")
-
-      import SamTypeBinders._
-      withSQL {
-        select(groupTable.email)
-          .from(GroupTable as groupTable)
-          .where
-          .eq(groupTable.name, groupName)
-      }.map(rs => rs.get[WorkbenchEmail]("email")).single().apply()
-    }
+    batchLoadGroupEmail(Set(groupName)).map(_.toMap.get(groupName))
   }
 
   override def batchLoadGroupEmail(groupNames: Set[WorkbenchGroupName]): IO[Stream[(WorkbenchGroupName, WorkbenchEmail)]] = {
@@ -231,10 +221,21 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
         case memberGroup: WorkbenchGroupIdentity =>
           val memberGroupPKQuery = workbenchGroupIdentityToGroupPK(memberGroup)
           samsql"insert into ${GroupMemberTable.table} (${groupMemberColumn.groupId}, ${groupMemberColumn.memberGroupId}) values ((${groupPKQuery}), (${memberGroupPKQuery}))"
-        case _ => throw new WorkbenchException(s"unexpected WorkbenchSubject $addMember")
+        case pet: PetServiceAccountId => throw new WorkbenchException(s"pet service accounts cannot be added to groups $pet")
       }
-      addMemberQuery.update().apply() > 0
+      val added = addMemberQuery.update().apply() > 0
+
+      if (added) {
+        updateGroupUpdatedDate(groupId)
+      }
+
+      added
     }
+  }
+
+  private def updateGroupUpdatedDate(groupId: WorkbenchGroupIdentity)(implicit session: DBSession): Int = {
+    val g = GroupTable.column
+    samsql"update ${GroupTable.table} set ${g.updatedDate} = ${Instant.now()} where ${g.id} = (${workbenchGroupIdentityToGroupPK(groupId)})".update().apply()
   }
 
   private def workbenchGroupIdentityToGroupPK(groupId: WorkbenchGroupIdentity): SQLSyntax = {
@@ -281,42 +282,44 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
           samsql"delete from ${GroupMemberTable.table} where ${groupMemberColumn.groupId} = (${groupPKQuery}) and ${groupMemberColumn.memberGroupId} = (${memberGroupPKQuery})"
         case _ => throw new WorkbenchException(s"unexpected WorkbenchSubject $removeMember")
       }
-      removeMemberQuery.update().apply() > 0
+      val removed = removeMemberQuery.update().apply() > 0
+
+      if (removed) {
+        updateGroupUpdatedDate(groupId)
+      }
+
+      removed
     }
   }
 
   override def isGroupMember(groupId: WorkbenchGroupIdentity, member: WorkbenchSubject): IO[Boolean] = {
     val gm = GroupMemberTable.syntax("gm")
+    val subGroupMemberTable = SubGroupMemberTable("sub_group")
+    val sg = subGroupMemberTable.syntax("sg")
 
     val memberClause: SQLSyntax = member match {
-      case subGroupId: WorkbenchGroupIdentity => samsqls"sg.member_group_id = (${workbenchGroupIdentityToGroupPK(subGroupId)})"
-      case WorkbenchUserId(userId) => samsqls"sg.member_user_id = $userId"
+      case subGroupId: WorkbenchGroupIdentity => samsqls"${sg.memberGroupId} = (${workbenchGroupIdentityToGroupPK(subGroupId)})"
+      case WorkbenchUserId(userId) => samsqls"${sg.memberUserId} = $userId"
       case _ => throw new WorkbenchException(s"illegal member $member")
     }
-
-    val topGroupQuery =
-      samsqls"""select ${gm.groupId}, ${gm.memberGroupId}, ${gm.memberUserId}
-               from ${GroupMemberTable as gm}
-               where ${gm.groupId} = (${workbenchGroupIdentityToGroupPK(groupId)})"""
 
     runInTransaction { implicit session =>
       // https://www.postgresql.org/docs/9.6/queries-with.html
       // in the recursive query below, UNION, as opposed to UNION ALL, should break out of cycles because it removes duplicates
-      val query = samsql"""WITH RECURSIVE sub_group(parent_group_id, member_group_id, member_user_id) AS (
-        $topGroupQuery
-        UNION
-        SELECT ${gm.groupId}, ${gm.memberGroupId}, ${gm.memberUserId}
-        FROM sub_group sg, ${GroupMemberTable as gm}
-        WHERE ${gm.groupId} = sg.member_group_id
-      )
-      SELECT count(1)
-        FROM sub_group sg WHERE $memberClause"""
+      val query = samsql"""WITH RECURSIVE ${recursiveMembersQuery(groupId, subGroupMemberTable)}
+        SELECT count(*)
+        FROM ${subGroupMemberTable as sg} WHERE $memberClause"""
 
       query.map(rs => rs.int(1)).single().apply().getOrElse(0) == 1
     }
   }
 
-  override def updateSynchronizedDate(groupId: WorkbenchGroupIdentity): IO[Unit] = ???
+  override def updateSynchronizedDate(groupId: WorkbenchGroupIdentity): IO[Unit] = {
+    runInTransaction { implicit session =>
+      val g = GroupTable.column
+      samsql"update ${GroupTable.table} set ${g.synchronizedDate} = ${Instant.now()} where ${g.id} = (${workbenchGroupIdentityToGroupPK(groupId)})".update().apply()
+    }
+  }
 
   override def getSynchronizedDate(groupId: WorkbenchGroupIdentity): IO[Option[Date]] = ???
 
@@ -381,7 +384,88 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
 
   override def listUserDirectMemberships(userId: WorkbenchUserId): IO[Stream[WorkbenchGroupIdentity]] = ???
 
-  override def listIntersectionGroupUsers(groupId: Set[WorkbenchGroupIdentity]): IO[Set[WorkbenchUserId]] = ???
+  /**
+    * This query attempts to list the User records that are members of ALL the groups given in the groupIds parameter.
+    *
+    * The overall approach is to take each group and flatten its membership to determine the full set of all the users
+    * that are a member of that group, its children, its children's children, etc. Once we have the flattened group
+    * membership for each group, we do a big join statement to select only those users that showed up in the flattened
+    * list for each group.
+    *
+    * The crux of this implementation is the use of PostgreSQL's `WITH` statement, https://www.postgresql.org/docs/9.6/queries-with.html
+    * These statements allow us to create Common Table Expressions (CTE), which are basically temporary tables that
+    * exist only for the duration of the query.  You can create multiple CTEs using a single `WITH` by comma separating
+    * each `SELECT` that creates each individual CTE.  In this implementation, we use `WITH RECURSIVE` to create N CTEs
+    * where N is the cardinality of the groupIds parameter.  Each of these CTEs is the flattened group membership for
+    * one of the WorkbenchGroupIdentities.
+    *
+    * The query maintains a table alias for each of the CTEs.  The final part of the query uses this list of aliases to
+    * join each of them based on the memberUserId column to give us the final result of only those memberUserIds that
+    * showed up as an entry in every CTE.
+    * @param groupIds
+    * @return Set of WorkbenchUserIds that are members of each group specified by groupIds
+    */
+  override def listIntersectionGroupUsers(groupIds: Set[WorkbenchGroupIdentity]): IO[Set[WorkbenchUserId]] = {
+    // the implementation of this is a little fancy and is able to do the entire intersection in a single request
+    // the general structure of the query is:
+    // WITH RECURSIVE [subGroupsQuery for each group] SELECT user_id FROM [all the subgroup queries joined on user_id]
+    case class QueryAndTable(recursiveMembersQuery: SQLSyntax, table: SubGroupMemberTable)
+    val gm = GroupMemberTable.syntax("gm")
+
+    // the toSeq below is important to fix a predictable order
+    val recursiveMembersQueries = groupIds.toSeq.zipWithIndex.map { case (groupId, index) =>
+      // need each subgroup table to be named uniquely
+      // this is careful not to use a user defined string (e.g. the group's name) to avoid sql injection attacks
+      val subGroupTable = SubGroupMemberTable("sub_group_" + index)
+
+      QueryAndTable(recursiveMembersQuery(groupId, subGroupTable), subGroupTable)
+    }
+
+    val allRecursiveMembersQueries = SQLSyntax.join(recursiveMembersQueries.map(_.recursiveMembersQuery), sqls",", false)
+
+    // need to handle the first table special, all others will join back to this
+    val firstTable = recursiveMembersQueries.head.table
+    val ft = firstTable.syntax
+    val allSubGroupTableJoins = recursiveMembersQueries.tail.map(_.table).foldLeft(samsqls"") { (joins, nextTable) =>
+      val nt = nextTable.syntax
+      samsqls"$joins join ${nextTable as nt} on ${ft.memberUserId} = ${nt.memberUserId} "
+    }
+
+    runInTransaction { implicit session =>
+      samsql"""with recursive $allRecursiveMembersQueries
+              select ${ft.memberUserId}
+              from ${firstTable as ft} $allSubGroupTableJoins where ${ft.memberUserId} is not null""".map(rs => WorkbenchUserId(rs.string(1))).list().apply().toSet
+    }
+  }
+
+  /**
+    * Produces a SQLSyntax to traverse a nested group structure and find all members.
+    * Can only be used within a WITH RECURSIVE clause. This is recursive in the SQL sense, it does not call itself.
+    *
+    * @param groupId the group id to traverse from
+    * @param subGroupMemberTable table that will be defined in the WITH clause, must have a unique name within the WITH clause
+    * @param groupMemberTableAlias
+    * @return
+    */
+  private def recursiveMembersQuery(groupId: WorkbenchGroupIdentity, subGroupMemberTable: SubGroupMemberTable, groupMemberTableAlias: String = "gm"): scalikejdbc.SQLSyntax = {
+    val sg = subGroupMemberTable.syntax("sg")
+    val gm = GroupMemberTable.syntax(groupMemberTableAlias)
+    val sgColumns = subGroupMemberTable.column
+    samsqls"""${subGroupMemberTable.table}(${sgColumns.parentGroupId}, ${sgColumns.memberGroupId}, ${sgColumns.memberUserId}) AS (
+          ${directMembersQuery(groupId, groupMemberTableAlias)}
+          UNION
+          SELECT ${gm.groupId}, ${gm.memberGroupId}, ${gm.memberUserId}
+          FROM ${subGroupMemberTable as sg}, ${GroupMemberTable as gm}
+          WHERE ${gm.groupId} = ${sg.memberGroupId}
+        )"""
+    }
+
+  private def directMembersQuery(groupId: WorkbenchGroupIdentity, groupMemberTableAlias: String = "gm") = {
+    val gm = GroupMemberTable.syntax(groupMemberTableAlias)
+    samsqls"""select ${gm.groupId}, ${gm.memberGroupId}, ${gm.memberUserId}
+               from ${GroupMemberTable as gm}
+               where ${gm.groupId} = (${workbenchGroupIdentityToGroupPK(groupId)})"""
+  }
 
   override def listAncestorGroups(groupId: WorkbenchGroupIdentity): IO[Set[WorkbenchGroupIdentity]] = ???
 
@@ -418,3 +502,12 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
 
   override def setGoogleSubjectId(userId: WorkbenchUserId, googleSubjectId: GoogleSubjectId): IO[Unit] = ???
 }
+
+// these 2 case classes represent the logical table used in nested group queries
+// this table does not actually exist but looks like a table in a WITH RECURSIVE query
+private final case class SubGroupMemberRecord(parentGroupId: GroupPK, memberUserId: Option[WorkbenchUserId], memberGroupId: Option[GroupPK])
+private final case class SubGroupMemberTable(override val tableName: String) extends SQLSyntaxSupport[SubGroupMemberRecord] {
+  // need to specify column names explicitly because this table does not actually exist in the database
+  override val columnNames: Seq[String] = Seq("parent_group_id", "member_user_id", "member_group_id")
+}
+
