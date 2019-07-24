@@ -314,6 +314,31 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
       }
     }
 
+    "updatePetServiceAccount" - {
+      "update a pet service account" in {
+        dao.createUser(defaultUser).unsafeRunSync()
+
+        val petSA = PetServiceAccount(PetServiceAccountId(defaultUser.id, GoogleProject("testProject")), ServiceAccount(ServiceAccountSubjectId("testGoogleSubjectId"), WorkbenchEmail("test@pet.co"), ServiceAccountDisplayName("whoCares")))
+        dao.createPetServiceAccount(petSA).unsafeRunSync()
+
+        val updatedPetSA = petSA.copy(serviceAccount = ServiceAccount(ServiceAccountSubjectId("updatedTestGoogleSubjectId"), WorkbenchEmail("new@pet.co"), ServiceAccountDisplayName("whoCares")))
+        dao.updatePetServiceAccount(updatedPetSA).unsafeRunSync() shouldBe updatedPetSA
+
+        dao.loadPetServiceAccount(updatedPetSA.id).unsafeRunSync() shouldBe Some(updatedPetSA)
+      }
+
+      "throw an exception when updating a nonexistent pet SA" in {
+        dao.createUser(defaultUser).unsafeRunSync()
+
+        val petSA = PetServiceAccount(PetServiceAccountId(defaultUser.id, GoogleProject("testProject")), ServiceAccount(ServiceAccountSubjectId("testGoogleSubjectId"), WorkbenchEmail("test@pet.co"), ServiceAccountDisplayName("whoCares")))
+
+        val updatedPetSA = petSA.copy(serviceAccount = ServiceAccount(ServiceAccountSubjectId("updatedTestGoogleSubjectId"), WorkbenchEmail("new@pet.co"), ServiceAccountDisplayName("whoCares")))
+        assertThrows[WorkbenchException] {
+          dao.updatePetServiceAccount(updatedPetSA).unsafeRunSync() shouldBe updatedPetSA
+        }
+      }
+    }
+
     "isGroupMember" - {
       "return true when member is in sub group" in {
         val subGroup1 = defaultGroup

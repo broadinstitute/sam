@@ -539,7 +539,24 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     }
   }
 
-  override def updatePetServiceAccount(petServiceAccount: PetServiceAccount): IO[PetServiceAccount] = ???
+  override def updatePetServiceAccount(petServiceAccount: PetServiceAccount): IO[PetServiceAccount] = {
+    runInTransaction { implicit session =>
+      val petServiceAccountColumn = PetServiceAccountTable.column
+      val updatePetQuery = samsql"""update ${PetServiceAccountTable.table} set
+        ${petServiceAccountColumn.userId} = ${petServiceAccount.id.userId},
+        ${petServiceAccountColumn.project} = ${petServiceAccount.id.project},
+        ${petServiceAccountColumn.googleSubjectId} = ${petServiceAccount.serviceAccount.subjectId},
+        ${petServiceAccountColumn.email} = ${petServiceAccount.serviceAccount.email},
+        ${petServiceAccountColumn.displayName} = ${petServiceAccount.serviceAccount.displayName}
+        where ${petServiceAccountColumn.userId} = ${petServiceAccount.id.userId} and ${petServiceAccountColumn.project} = ${petServiceAccount.id.project}"""
+
+      if (updatePetQuery.update().apply() != 1) {
+        throw new WorkbenchException(s"Update cannot be applied because ${petServiceAccount.id} does not exist")
+      }
+
+      petServiceAccount
+    }
+  }
 
   override def getManagedGroupAccessInstructions(groupName: WorkbenchGroupName): IO[Option[String]] = ???
 
