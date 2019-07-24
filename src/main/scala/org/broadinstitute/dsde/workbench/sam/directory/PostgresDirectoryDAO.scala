@@ -484,7 +484,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
       val userTable = UserTable.syntax
       val userColumn = UserTable.column
 
-      val loadUserQuery = samsql"""select ${userTable.id}, ${userTable.email}, ${userTable.googleSubjectId} from ${UserTable.table} left join ${PetServiceAccountTable.table} on ${petServiceAccountTable.userId} = ${userTable.id} where ${petServiceAccountTable.googleSubjectId} = ${GoogleSubjectId(petSA.value)}""" //TODO harmonize the subjectId types
+      val loadUserQuery = samsql"""select ${userTable.id}, ${userTable.email}, ${userTable.googleSubjectId} from ${UserTable.table} left join ${PetServiceAccountTable.table} on ${petServiceAccountTable.userId} = ${userTable.id} where ${petServiceAccountTable.googleSubjectId} = ${petSA}""" //TODO harmonize the subjectId types
 
       loadUserQuery.map(rs => WorkbenchUser(rs.get[WorkbenchUserId](userColumn.id), rs.stringOpt(userColumn.googleSubjectId).map(GoogleSubjectId), rs.get[WorkbenchEmail](userColumn.email)))
         .single().apply()

@@ -241,8 +241,6 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
 
         dao.loadUser(user.id).unsafeRunSync() shouldEqual Option(user)
       }
-
-      "not delete a user's pet SA when the user is deleted" is pending
     }
 
     "loadUsers" - {
