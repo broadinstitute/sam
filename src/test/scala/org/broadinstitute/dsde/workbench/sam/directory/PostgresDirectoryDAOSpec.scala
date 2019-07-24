@@ -180,7 +180,7 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
         dao.batchLoadGroupEmail(Set(group1.id, group2.id)).unsafeRunSync() should contain theSameElementsAs Set(group1, group2).map(group => (group.id, group.email))
       }
     }
-  
+
     "removeGroupMember" - {
       "remove groups from other groups" in {
         val subGroup = emptyWorkbenchGroup("subGroup")
@@ -210,7 +210,7 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
       "remove users from policies" is pending
       "remove policies from other policies" is pending
     }
-  
+
     "createUser and loadUser" - {
       "create and load a user" in {
         dao.createUser(defaultUser).unsafeRunSync() shouldEqual defaultUser
@@ -218,7 +218,7 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
         loadedUser shouldEqual defaultUser
       }
     }
-  
+
     "deleteUser" - {
       "delete users" in {
         dao.createUser(defaultUser).unsafeRunSync() shouldEqual defaultUser
@@ -243,6 +243,22 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
       }
     }
 
+    "listUsersGroups" - {
+      "list all of the groups a user is in" in {
+        val subGroupId = WorkbenchGroupName("subGroup")
+        val subGroup = BasicWorkbenchGroup(subGroupId, Set(defaultUserId), WorkbenchEmail("subGroup@foo.com"))
+        val parentGroupId = WorkbenchGroupName("parentGroup")
+        val parentGroup = BasicWorkbenchGroup(parentGroupId, Set(subGroupId), WorkbenchEmail("parentGroup@foo.com"))
+
+        dao.createUser(defaultUser).unsafeRunSync()
+        dao.createGroup(subGroup).unsafeRunSync()
+        dao.createGroup(parentGroup).unsafeRunSync()
+
+        val usersGroups = dao.listUsersGroups(defaultUserId).unsafeRunSync()
+        usersGroups should contain theSameElementsAs Set(subGroupId, parentGroupId)
+      }
+    }
+
     "loadUsers" - {
       "load multiple users at once" in {
         val user1 = defaultUser
@@ -254,7 +270,7 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
         dao.loadUsers(Set(user1.id, user2.id)).unsafeRunSync() should contain theSameElementsAs Set(user1, user2)
       }
     }
-  
+
     "createPetServiceAccount" - {
       "create pet service accounts" in {
         dao.createUser(defaultUser).unsafeRunSync()

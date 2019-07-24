@@ -375,7 +375,31 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
 
   override def readProxyGroup(userId: WorkbenchUserId): IO[Option[WorkbenchEmail]] = ???
 
-  override def listUsersGroups(userId: WorkbenchUserId): IO[Set[WorkbenchGroupIdentity]] = ???
+  override def listUsersGroups(userId: WorkbenchUserId): IO[Set[WorkbenchGroupIdentity]] = {
+    runInTransaction { implicit session =>
+      val ancestorGroupsTable = SubGroupMemberTable("ancestor_groups")
+      val ag = ancestorGroupsTable.syntax("ag")
+      val agColumn = ancestorGroupsTable.column
+
+      val gm = GroupMemberTable.syntax("gm")
+      val pg = GroupMemberTable.syntax("parent_groups")
+      val g = GroupTable.syntax("g")
+
+      val listGroupsQuery =
+        samsql"""WITH RECURSIVE ${ancestorGroupsTable.table}(${agColumn.parentGroupId}, ${agColumn.memberGroupId}) AS (
+                    select ${gm.groupId}, ${gm.memberGroupId}
+                    from ${GroupMemberTable as gm}
+                    where ${gm.memberUserId} = ${userId}
+                    union
+                    select ${pg.groupId}, ${pg.memberGroupId}
+                    from ${GroupMemberTable as pg}
+                    join ${ancestorGroupsTable as ag} ON ${agColumn.parentGroupId} = ${pg.memberGroupId}
+          ) select distinct(${g.name})
+            from ${GroupTable as g}, ${ancestorGroupsTable as ag}
+            where ${ag.parentGroupId} = ${g.id}"""
+      listGroupsQuery.map(rs => WorkbenchGroupName(rs.string(1))).list.apply().toSet
+    }
+  }
 
   override def listUserDirectMemberships(userId: WorkbenchUserId): IO[Stream[WorkbenchGroupIdentity]] = ???
 
