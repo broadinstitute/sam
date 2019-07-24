@@ -520,7 +520,10 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
   override def deletePetServiceAccount(petServiceAccountId: PetServiceAccountId): IO[Unit] = {
     runInTransaction { implicit session =>
       val petServiceAccountTable = PetServiceAccountTable.syntax
-      samsql"delete from ${PetServiceAccountTable.table} where ${petServiceAccountTable.userId} = ${petServiceAccountId.userId} and ${petServiceAccountTable.project} = ${petServiceAccountId.project}".update().apply()
+      val deletePetQuery = samsql"delete from ${PetServiceAccountTable.table} where ${petServiceAccountTable.userId} = ${petServiceAccountId.userId} and ${petServiceAccountTable.project} = ${petServiceAccountId.project}"
+      if (deletePetQuery.update().apply() != 1) {
+        throw new WorkbenchException(s"${petServiceAccountId} cannot be deleted because it already does not exist")
+      }
     }
   }
 

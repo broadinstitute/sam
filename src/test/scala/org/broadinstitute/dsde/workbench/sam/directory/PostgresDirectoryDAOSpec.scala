@@ -16,6 +16,7 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
   val defaultGroup = BasicWorkbenchGroup(defaultGroupName, Set.empty, WorkbenchEmail("foo@bar.com"))
   val defaultUserId = WorkbenchUserId("testUser")
   val defaultUser = WorkbenchUser(defaultUserId, Option(GoogleSubjectId("testGoogleSubject")), WorkbenchEmail("user@foo.com"))
+  val defaultPetSA = PetServiceAccount(PetServiceAccountId(defaultUser.id, GoogleProject("testProject")), ServiceAccount(ServiceAccountSubjectId("testGoogleSubjectId"), WorkbenchEmail("test@pet.co"), ServiceAccountDisplayName("whoCares")))
 
   override protected def beforeEach(): Unit = {
     TestSupport.truncateAll
@@ -258,34 +259,40 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
   
     "createPetServiceAccount" - {
       "create pet service accounts" in {
-        val petSA = PetServiceAccount(PetServiceAccountId(defaultUser.id, GoogleProject("testProject")), ServiceAccount(ServiceAccountSubjectId("testGoogleSubjectId"), WorkbenchEmail("test@pet.co"), ServiceAccountDisplayName("whoCares")))
         dao.createUser(defaultUser).unsafeRunSync()
-        dao.createPetServiceAccount(petSA).unsafeRunSync() shouldBe petSA
+        dao.createPetServiceAccount(defaultPetSA).unsafeRunSync() shouldBe defaultPetSA
       }
     }
 
     "loadPetServiceAccount" - {
       "load pet service accounts" in {
-        val petSA = PetServiceAccount(PetServiceAccountId(defaultUser.id, GoogleProject("testProject")), ServiceAccount(ServiceAccountSubjectId("testGoogleSubjectId"), WorkbenchEmail("test@pet.co"), ServiceAccountDisplayName("whoCares")))
         dao.createUser(defaultUser).unsafeRunSync()
-        dao.createPetServiceAccount(petSA).unsafeRunSync()
+        dao.createPetServiceAccount(defaultPetSA).unsafeRunSync()
 
-        dao.loadPetServiceAccount(petSA.id).unsafeRunSync() shouldBe Some(petSA)
+        dao.loadPetServiceAccount(defaultPetSA.id).unsafeRunSync() shouldBe Some(defaultPetSA)
+      }
+
+      "return None for nonexistent pet service accounts" in {
+        dao.loadPetServiceAccount(defaultPetSA.id).unsafeRunSync() shouldBe None
       }
     }
 
     "deletePetServiceAccount" - {
       "delete pet service accounts" in {
-        val petSA = PetServiceAccount(PetServiceAccountId(defaultUser.id, GoogleProject("testProject")), ServiceAccount(ServiceAccountSubjectId("testGoogleSubjectId"), WorkbenchEmail("test@pet.co"), ServiceAccountDisplayName("whoCares")))
         dao.createUser(defaultUser).unsafeRunSync()
-        dao.createPetServiceAccount(petSA).unsafeRunSync()
+        dao.createPetServiceAccount(defaultPetSA).unsafeRunSync()
 
-        dao.loadPetServiceAccount(petSA.id).unsafeRunSync() shouldBe Some(petSA)
+        dao.loadPetServiceAccount(defaultPetSA.id).unsafeRunSync() shouldBe Some(defaultPetSA)
 
-        dao.deletePetServiceAccount(petSA.id).unsafeRunSync()
+        dao.deletePetServiceAccount(defaultPetSA.id).unsafeRunSync()
 
-        dao.loadPetServiceAccount(petSA.id).unsafeRunSync() shouldBe None
+        dao.loadPetServiceAccount(defaultPetSA.id).unsafeRunSync() shouldBe None
+      }
 
+      "throw an exception when trying to delete a nonexistent pet service account" in {
+        assertThrows[WorkbenchException] {
+          dao.deletePetServiceAccount(defaultPetSA.id).unsafeRunSync()
+        }
       }
     }
 
@@ -307,10 +314,9 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
       "get user from pet service account subject ID" in {
         dao.createUser(defaultUser).unsafeRunSync()
 
-        val petSA = PetServiceAccount(PetServiceAccountId(defaultUser.id, GoogleProject("testProject")), ServiceAccount(ServiceAccountSubjectId("testGoogleSubjectId"), WorkbenchEmail("test@pet.co"), ServiceAccountDisplayName("whoCares")))
-        dao.createPetServiceAccount(petSA).unsafeRunSync()
+        dao.createPetServiceAccount(defaultPetSA).unsafeRunSync()
 
-        dao.getUserFromPetServiceAccount(petSA.serviceAccount.subjectId).unsafeRunSync() shouldBe Some(defaultUser)
+        dao.getUserFromPetServiceAccount(defaultPetSA.serviceAccount.subjectId).unsafeRunSync() shouldBe Some(defaultUser)
       }
     }
 
@@ -318,10 +324,9 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
       "update a pet service account" in {
         dao.createUser(defaultUser).unsafeRunSync()
 
-        val petSA = PetServiceAccount(PetServiceAccountId(defaultUser.id, GoogleProject("testProject")), ServiceAccount(ServiceAccountSubjectId("testGoogleSubjectId"), WorkbenchEmail("test@pet.co"), ServiceAccountDisplayName("whoCares")))
-        dao.createPetServiceAccount(petSA).unsafeRunSync()
+        dao.createPetServiceAccount(defaultPetSA).unsafeRunSync()
 
-        val updatedPetSA = petSA.copy(serviceAccount = ServiceAccount(ServiceAccountSubjectId("updatedTestGoogleSubjectId"), WorkbenchEmail("new@pet.co"), ServiceAccountDisplayName("whoCares")))
+        val updatedPetSA = defaultPetSA.copy(serviceAccount = ServiceAccount(ServiceAccountSubjectId("updatedTestGoogleSubjectId"), WorkbenchEmail("new@pet.co"), ServiceAccountDisplayName("whoCares")))
         dao.updatePetServiceAccount(updatedPetSA).unsafeRunSync() shouldBe updatedPetSA
 
         dao.loadPetServiceAccount(updatedPetSA.id).unsafeRunSync() shouldBe Some(updatedPetSA)
@@ -330,9 +335,7 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
       "throw an exception when updating a nonexistent pet SA" in {
         dao.createUser(defaultUser).unsafeRunSync()
 
-        val petSA = PetServiceAccount(PetServiceAccountId(defaultUser.id, GoogleProject("testProject")), ServiceAccount(ServiceAccountSubjectId("testGoogleSubjectId"), WorkbenchEmail("test@pet.co"), ServiceAccountDisplayName("whoCares")))
-
-        val updatedPetSA = petSA.copy(serviceAccount = ServiceAccount(ServiceAccountSubjectId("updatedTestGoogleSubjectId"), WorkbenchEmail("new@pet.co"), ServiceAccountDisplayName("whoCares")))
+        val updatedPetSA = defaultPetSA.copy(serviceAccount = ServiceAccount(ServiceAccountSubjectId("updatedTestGoogleSubjectId"), WorkbenchEmail("new@pet.co"), ServiceAccountDisplayName("whoCares")))
         assertThrows[WorkbenchException] {
           dao.updatePetServiceAccount(updatedPetSA).unsafeRunSync() shouldBe updatedPetSA
         }
