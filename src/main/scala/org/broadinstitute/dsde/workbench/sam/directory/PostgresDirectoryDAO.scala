@@ -461,7 +461,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     }
 
   private def directMembersQuery(groupId: WorkbenchGroupIdentity, groupMemberTableAlias: String = "gm") = {
-    val gm = GroupMemberTable.syntax("gm")
+    val gm = GroupMemberTable.syntax(groupMemberTableAlias)
     samsqls"""select ${gm.groupId}, ${gm.memberGroupId}, ${gm.memberUserId}
                from ${GroupMemberTable as gm}
                where ${gm.groupId} = (${workbenchGroupIdentityToGroupPK(groupId)})"""
