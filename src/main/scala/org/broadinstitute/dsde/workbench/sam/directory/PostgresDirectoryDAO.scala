@@ -409,33 +409,32 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     // the implementation of this is a little fancy and is able to do the entire intersection in a single request
     // the general structure of the query is:
     // WITH RECURSIVE [subGroupsQuery for each group] SELECT user_id FROM [all the subgroup queries joined on user_id]
-    case class QueryAndTable(subGroupQuery: SQLSyntax, table: SubGroupMemberTable)
+    case class QueryAndTable(recursiveMembersQuery: SQLSyntax, table: SubGroupMemberTable)
     val gm = GroupMemberTable.syntax("gm")
 
     // the toSeq below is important to fix a predictable order
-    val subGroupQueries = groupIds.toSeq.zipWithIndex.map { case (groupId, index) =>
+    val recursiveMembersQueries = groupIds.toSeq.zipWithIndex.map { case (groupId, index) =>
       // need each subgroup table to be named uniquely
       // this is careful not to use a user defined string (e.g. the group's name) to avoid sql injection attacks
       val subGroupTable = SubGroupMemberTable("sub_group_" + index)
-      val subGroupQuery = recursiveMembersQuery(groupId, subGroupTable)
 
-      QueryAndTable(subGroupQuery, subGroupTable)
+      QueryAndTable(recursiveMembersQuery(groupId, subGroupTable), subGroupTable)
     }
 
-    val allSubGroupQueries = SQLSyntax.join(subGroupQueries.map(_.subGroupQuery), sqls",", false)
+    val allRecursiveMembersQueries = SQLSyntax.join(recursiveMembersQueries.map(_.recursiveMembersQuery), sqls",", false)
 
     // need to handle the first table special, all others will join back to this
-    val firstTable = subGroupQueries.head.table
+    val firstTable = recursiveMembersQueries.head.table
     val ft = firstTable.syntax
-    val allSubGroupJoins = subGroupQueries.tail.map(_.table).foldLeft(samsqls"") { (joins, nextTable) =>
+    val allSubGroupTableJoins = recursiveMembersQueries.tail.map(_.table).foldLeft(samsqls"") { (joins, nextTable) =>
       val nt = nextTable.syntax
       samsqls"$joins join ${nextTable as nt} on ${ft.memberUserId} = ${nt.memberUserId} "
     }
 
     runInTransaction { implicit session =>
-      samsql"""with recursive $allSubGroupQueries
+      samsql"""with recursive $allRecursiveMembersQueries
               select ${ft.memberUserId}
-              from ${firstTable as ft} $allSubGroupJoins where ${ft.memberUserId} is not null""".map(rs => WorkbenchUserId(rs.string(1))).list().apply().toSet
+              from ${firstTable as ft} $allSubGroupTableJoins where ${ft.memberUserId} is not null""".map(rs => WorkbenchUserId(rs.string(1))).list().apply().toSet
     }
   }
 
