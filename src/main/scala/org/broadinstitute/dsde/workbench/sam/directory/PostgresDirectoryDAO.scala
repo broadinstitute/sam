@@ -478,7 +478,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
       val loadUserQuery = samsql"""select ${userTable.resultAll}
                 from ${UserTable as userTable}
                 join ${PetServiceAccountTable as petServiceAccountTable} on ${petServiceAccountTable.userId} = ${userTable.id}
-                where ${petServiceAccountTable.googleSubjectId} = ${petSA}""" //TODO harmonize the subjectId types
+                where ${petServiceAccountTable.googleSubjectId} = ${petSA}"""
 
       val userRecordOpt: Option[UserRecord] = loadUserQuery.map(UserTable(userTable)).single().apply()
       userRecordOpt.map(unmarshalUserRecord)
@@ -549,7 +549,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
   }
 
   private def unmarshalPetServiceAccountRecord(petRecord: PetServiceAccountRecord): PetServiceAccount = {
-    PetServiceAccount(PetServiceAccountId(petRecord.userId, petRecord.project), ServiceAccount(ServiceAccountSubjectId(petRecord.googleSubjectId.value), petRecord.email, petRecord.displayName))
+    PetServiceAccount(PetServiceAccountId(petRecord.userId, petRecord.project), ServiceAccount(petRecord.googleSubjectId, petRecord.email, petRecord.displayName))
   }
 
   private def unmarshalUserRecord(userRecord: UserRecord): WorkbenchUser = {
