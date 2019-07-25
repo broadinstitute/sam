@@ -1,18 +1,23 @@
 package org.broadinstitute.dsde.workbench.sam.openam
 
+import akka.http.scaladsl.model.StatusCodes
 import cats.effect.{ContextShift, IO}
-import org.broadinstitute.dsde.workbench.model.{WorkbenchGroupIdentity, WorkbenchSubject, WorkbenchUser, WorkbenchUserId}
-import org.broadinstitute.dsde.workbench.sam.db.DbReference
+import cats.implicits._
+import com.typesafe.scalalogging.LazyLogging
+import org.broadinstitute.dsde.workbench.sam.errorReportSource
+import org.broadinstitute.dsde.workbench.model._
+import org.broadinstitute.dsde.workbench.sam.db.{DbReference, PSQLStateExtensions}
 import org.broadinstitute.dsde.workbench.sam.db.SamParameterBinderFactory._
-import org.broadinstitute.dsde.workbench.sam.db.tables.{ResourceTypePK, ResourceTypeTable}
+import org.broadinstitute.dsde.workbench.sam.db.tables._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.util.DatabaseSupport
+import org.postgresql.util.PSQLException
 import scalikejdbc._
 
 import scala.concurrent.ExecutionContext
 
 class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
-                              protected val ecForDatabaseIO: ExecutionContext)(implicit executionContext: ExecutionContext) extends AccessPolicyDAO with DatabaseSupport {
+                              protected val ecForDatabaseIO: ExecutionContext)(implicit executionContext: ExecutionContext) extends AccessPolicyDAO with DatabaseSupport with LazyLogging {
 
   implicit val cs: ContextShift[IO] = IO.contextShift(executionContext)
 
@@ -30,8 +35,47 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     ResourceTypePK(insertResourceTypeQuery.updateAndReturnGeneratedKey().apply())
   }
 
+  // 1. Maybe check if groups given in authdomains parameter exist, not sure if we need to do that
+  // 2. Create Resource
+  // 3. Create the entries in the join table for the auth domains
+  // Do we need to care or do something special if the ResourceType doesn't exist?
+  def createResource(resource: Resource): IO[Resource] = {
 
-  def createResource(resource: Resource): IO[Resource] = ???
+    runInTransaction { implicit session =>
+      insertResource(resource)
+
+      if (resource.authDomain.nonEmpty) {
+        insertAuthDomains(resource.resourceId, resource.authDomain)
+      }
+
+      resource
+    }.recoverWith {
+      case sqlException: PSQLException if sqlException.getSQLState == PSQLStateExtensions.UNIQUE_VIOLATION => {
+        logger.debug(s"Uniqueness violation", sqlException)
+        IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, "A resource of this type and name already exists")))
+      }
+    }
+  }
+
+  private def insertResource(resource: Resource)(implicit session: DBSession): ResourcePK = {
+    val resourceTableColumn = ResourceTable.column
+    val insertResourceQuery =
+      samsql"""insert into ${ResourceTable.table} (${resourceTableColumn.name}, ${resourceTableColumn.resourceTypeId})
+               values (${resource.resourceId}, (${loadResourceTypePK(resource.resourceTypeName)}))"""
+    ResourcePK(insertResourceQuery.updateAndReturnGeneratedKey().apply())
+  }
+
+  private def insertAuthDomains(resourceId: ResourceId, authDomains: Set[WorkbenchGroupName])(implicit session: DBSession): Int = {
+    val authDomainEntries = authDomains.map(authDomain => samsqls"(${resourceId}, ${GroupTable.groupPKQueryForGroup(authDomain)})")
+    val insertAuthDomainQuery = samsql"insert into ${AuthDomainTable.table} values ${authDomainEntries.mkString(",")}"
+    insertAuthDomainQuery.update().apply()
+  }
+
+  private def loadResourceTypePK(resourceTypeName: ResourceTypeName, resourceTypeTableAlias: String = "rt"): SQLSyntax = {
+    val rt = ResourceTypeTable.syntax(resourceTypeTableAlias)
+    samsqls"""select ${rt.id} from ${ResourceTypeTable as rt} where ${rt.name} = ${resourceTypeName}"""
+  }
+
   def deleteResource(resource: FullyQualifiedResourceId): IO[Unit] = ???
   def loadResourceAuthDomain(resource: FullyQualifiedResourceId): IO[LoadResourceAuthDomainResult] = ???
   def listResourcesConstrainedByGroup(groupId: WorkbenchGroupIdentity): IO[Set[Resource]] = ???
