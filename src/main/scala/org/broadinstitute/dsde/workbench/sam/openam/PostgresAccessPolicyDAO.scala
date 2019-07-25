@@ -23,9 +23,9 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     }
   }
 
-  def insertResourceType(resourceTypeName: ResourceTypeName)(implicit session: DBSession): ResourceTypePK = {
+  private def insertResourceType(resourceTypeName: ResourceTypeName)(implicit session: DBSession): ResourceTypePK = {
     val resourceTypeTableColumn = ResourceTypeTable.column
-    val insertResourceTypeQuery = samsql"""insert into ${ResourceTypeTable.table} (${resourceTypeTableColumn.resourceTypeName}) values (${resourceTypeName.value})"""
+    val insertResourceTypeQuery = samsql"""insert into ${ResourceTypeTable.table} (${resourceTypeTableColumn.name}) values (${resourceTypeName.value})"""
 
     ResourceTypePK(insertResourceTypeQuery.updateAndReturnGeneratedKey().apply())
   }
