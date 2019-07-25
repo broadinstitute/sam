@@ -22,4 +22,6 @@ object PetServiceAccountTable extends SQLSyntaxSupport[PetServiceAccountRecord] 
     rs.get(e.email),
     rs.get(e.displayName)
   )
+
+  def apply(p: SyntaxProvider[PetServiceAccountRecord])(rs: WrappedResultSet): PetServiceAccountRecord = apply(p.resultName)(rs)
 }
