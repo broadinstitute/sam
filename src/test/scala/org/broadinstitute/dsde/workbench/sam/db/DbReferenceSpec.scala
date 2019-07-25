@@ -10,7 +10,7 @@ class DbReferenceSpec extends FlatSpecLike with Matchers {
   "DbReference" should "init" in {
     val config = ConfigFactory.load()
     val test = for {
-      ref <- DbReference.resource[IO](config.as[LiquibaseConfig]("liquibase")).use(_ => IO.unit)
+      ref <- DbReference.resource(config.as[LiquibaseConfig]("liquibase")).use(_ => IO.unit)
     } yield {
       ref
     }
