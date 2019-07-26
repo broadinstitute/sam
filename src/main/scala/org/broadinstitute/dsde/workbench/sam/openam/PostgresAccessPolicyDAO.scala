@@ -6,7 +6,7 @@ import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.sam.errorReportSource
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.db.{DbReference, PSQLStateExtensions, SamTypeBinders}
+import org.broadinstitute.dsde.workbench.sam.db.{DbReference, PSQLStateExtensions}
 import org.broadinstitute.dsde.workbench.sam.db.SamParameterBinderFactory._
 import org.broadinstitute.dsde.workbench.sam.db.tables._
 import org.broadinstitute.dsde.workbench.sam.model._
@@ -41,10 +41,10 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
   // Do we need to care or do something special if the ResourceType doesn't exist?
   def createResource(resource: Resource): IO[Resource] = {
     runInTransaction { implicit session =>
-      insertResource(resource)
+      val resourcePK = insertResource(resource)
 
       if (resource.authDomain.nonEmpty) {
-        insertAuthDomainsForResource(resource)
+        insertAuthDomainsForResource(resourcePK, resource.authDomain)
       }
 
       resource
@@ -60,16 +60,17 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     val resourceTableColumn = ResourceTable.column
     val insertResourceQuery =
       samsql"""insert into ${ResourceTable.table} (${resourceTableColumn.name}, ${resourceTableColumn.resourceTypeId})
-               values ((${resource.resourceId}), (${loadResourceTypePK(resource.resourceTypeName)}))"""
+               values (${resource.resourceId}, (${loadResourceTypePK(resource.resourceTypeName)}))"""
     ResourcePK(insertResourceQuery.updateAndReturnGeneratedKey().apply())
   }
 
-  private def insertAuthDomainsForResource(resource: Resource)(implicit session: DBSession): Int = {
-    val authDomainValues = resource.authDomain.map { authDomain =>
-      samsqls"((${ResourceTable.pkQuery(resource.resourceId, resource.resourceTypeName)}), (${GroupTable.groupPKQueryForGroup(authDomain)}))"
+  private def insertAuthDomainsForResource(resourcePK: ResourcePK, authDomains: Set[WorkbenchGroupName])(implicit session: DBSession): Int = {
+    val authDomainValues = authDomains.map { authDomain =>
+      samsqls"(${resourcePK}, (${GroupTable.groupPKQueryForGroup(authDomain)}))"
     }
 
-    val insertAuthDomainQuery = samsql"insert into ${AuthDomainTable.table} values (${authDomainValues})"
+    val authDomainColumn = AuthDomainTable.column
+    val insertAuthDomainQuery = samsql"insert into ${AuthDomainTable.table} (${authDomainColumn.resourceId}, ${authDomainColumn.groupId}) values ${authDomainValues}"
     insertAuthDomainQuery.update().apply()
   }
 
