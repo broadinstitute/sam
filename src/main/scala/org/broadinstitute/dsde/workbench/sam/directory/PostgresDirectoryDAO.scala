@@ -5,7 +5,7 @@ import java.util.Date
 
 import cats.effect.{ContextShift, IO}
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.model.google.ServiceAccountSubjectId
+import org.broadinstitute.dsde.workbench.model.google.{ServiceAccount, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.sam.db._
 import org.broadinstitute.dsde.workbench.sam.db.tables._
 import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, FullyQualifiedPolicyId}
@@ -346,25 +346,20 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
   override def loadUser(userId: WorkbenchUserId): IO[Option[WorkbenchUser]] = {
     runInTransaction { implicit session =>
       val userTable = UserTable.syntax
-      val userColumn = UserTable.column
 
-      import SamTypeBinders._
-      val loadUserQuery = samsql"select ${userTable.id}, ${userTable.email}, ${userTable.googleSubjectId} from ${UserTable.table} where ${userTable.id} = ${userId}"
-      loadUserQuery.map(rs => WorkbenchUser(rs.get[WorkbenchUserId](userColumn.id), rs.stringOpt(userColumn.googleSubjectId).map(GoogleSubjectId), rs.get[WorkbenchEmail](userColumn.email)))
-        .single().apply()
+      val loadUserQuery = samsql"select ${userTable.resultAll} from ${UserTable as userTable} where ${userTable.id} = ${userId}"
+      loadUserQuery.map(UserTable(userTable))
+        .single().apply().map(unmarshalUserRecord)
     }
   }
 
   override def loadUsers(userIds: Set[WorkbenchUserId]): IO[Stream[WorkbenchUser]] = {
     runInTransaction { implicit session =>
       val userTable = UserTable.syntax
-      val userColumn = UserTable.column
 
-      import SamTypeBinders._
-
-      val loadUsersQuery = samsql"select ${userTable.id}, ${userTable.email}, ${userTable.googleSubjectId} from ${UserTable.table} where ${userTable.id} in (${userIds})"
-      loadUsersQuery.map(rs => WorkbenchUser(rs.get[WorkbenchUserId](userColumn.id), rs.stringOpt(userColumn.googleSubjectId).map(GoogleSubjectId), rs.get[WorkbenchEmail](userColumn.email)))
-        .list().apply().toStream
+      val loadUsersQuery = samsql"select ${userTable.resultAll} from ${UserTable as userTable} where ${userTable.id} in (${userIds})"
+      loadUsersQuery.map(UserTable(userTable))
+        .list().apply().map(unmarshalUserRecord).toStream
     }
   }
 
@@ -475,26 +470,91 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
 
   override def isEnabled(subject: WorkbenchSubject): IO[Boolean] = ???
 
-  override def getUserFromPetServiceAccount(petSA: ServiceAccountSubjectId): IO[Option[WorkbenchUser]] = ???
+  override def getUserFromPetServiceAccount(petSA: ServiceAccountSubjectId): IO[Option[WorkbenchUser]] = {
+    runInTransaction { implicit session =>
+      val petServiceAccountTable = PetServiceAccountTable.syntax
+      val userTable = UserTable.syntax
+
+      val loadUserQuery = samsql"""select ${userTable.resultAll}
+                from ${UserTable as userTable}
+                join ${PetServiceAccountTable as petServiceAccountTable} on ${petServiceAccountTable.userId} = ${userTable.id}
+                where ${petServiceAccountTable.googleSubjectId} = ${petSA}"""
+
+      val userRecordOpt: Option[UserRecord] = loadUserQuery.map(UserTable(userTable)).single().apply()
+      userRecordOpt.map(unmarshalUserRecord)
+    }
+  }
 
   override def createPetServiceAccount(petServiceAccount: PetServiceAccount): IO[PetServiceAccount] = {
     runInTransaction { implicit session =>
       val petServiceAccountColumn = PetServiceAccountTable.column
 
-      samsql"""insert into ${PetServiceAccountTable.table} (${petServiceAccountColumn.userId}, ${petServiceAccountColumn.project}, ${petServiceAccountColumn.googleSubjectId}, ${petServiceAccountColumn.email})
-           values (${petServiceAccount.id.userId}, ${petServiceAccount.id.project}, ${petServiceAccount.serviceAccount.subjectId}, ${petServiceAccount.serviceAccount.email})"""
+      samsql"""insert into ${PetServiceAccountTable.table} (${petServiceAccountColumn.userId}, ${petServiceAccountColumn.project}, ${petServiceAccountColumn.googleSubjectId}, ${petServiceAccountColumn.email}, ${petServiceAccountColumn.displayName})
+           values (${petServiceAccount.id.userId}, ${petServiceAccount.id.project}, ${petServiceAccount.serviceAccount.subjectId}, ${petServiceAccount.serviceAccount.email}, ${petServiceAccount.serviceAccount.displayName})"""
         .update().apply()
       petServiceAccount
     }
   }
 
-  override def loadPetServiceAccount(petServiceAccountId: PetServiceAccountId): IO[Option[PetServiceAccount]] = ???
+  override def loadPetServiceAccount(petServiceAccountId: PetServiceAccountId): IO[Option[PetServiceAccount]] = {
+    runInTransaction { implicit session =>
+      val petServiceAccountTable = PetServiceAccountTable.syntax
 
-  override def deletePetServiceAccount(petServiceAccountId: PetServiceAccountId): IO[Unit] = ???
+      val loadPetQuery = samsql"""select ${petServiceAccountTable.resultAll}
+       from ${PetServiceAccountTable as petServiceAccountTable}
+       where ${petServiceAccountTable.userId} = ${petServiceAccountId.userId} and ${petServiceAccountTable.project} = ${petServiceAccountId.project}"""
 
-  override def getAllPetServiceAccountsForUser(userId: WorkbenchUserId): IO[Seq[PetServiceAccount]] = ???
+      val petRecordOpt = loadPetQuery.map(PetServiceAccountTable(petServiceAccountTable)).single().apply()
+      petRecordOpt.map(unmarshalPetServiceAccountRecord)
+    }
+  }
 
-  override def updatePetServiceAccount(petServiceAccount: PetServiceAccount): IO[PetServiceAccount] = ???
+  override def deletePetServiceAccount(petServiceAccountId: PetServiceAccountId): IO[Unit] = {
+    runInTransaction { implicit session =>
+      val petServiceAccountTable = PetServiceAccountTable.syntax
+      val deletePetQuery = samsql"delete from ${PetServiceAccountTable.table} where ${petServiceAccountTable.userId} = ${petServiceAccountId.userId} and ${petServiceAccountTable.project} = ${petServiceAccountId.project}"
+      if (deletePetQuery.update().apply() != 1) {
+        throw new WorkbenchException(s"${petServiceAccountId} cannot be deleted because it already does not exist")
+      }
+    }
+  }
+
+  override def getAllPetServiceAccountsForUser(userId: WorkbenchUserId): IO[Seq[PetServiceAccount]] = {
+    runInTransaction { implicit session =>
+      val petServiceAccountTable = PetServiceAccountTable.syntax
+
+      val loadPetsQuery = samsql"""select ${petServiceAccountTable.resultAll}
+                from ${PetServiceAccountTable as petServiceAccountTable} where ${petServiceAccountTable.userId} = ${userId}"""
+
+      val petRecords = loadPetsQuery.map(PetServiceAccountTable(petServiceAccountTable)).list().apply()
+      petRecords.map(unmarshalPetServiceAccountRecord)
+    }
+  }
+
+  override def updatePetServiceAccount(petServiceAccount: PetServiceAccount): IO[PetServiceAccount] = {
+    runInTransaction { implicit session =>
+      val petServiceAccountColumn = PetServiceAccountTable.column
+      val updatePetQuery = samsql"""update ${PetServiceAccountTable.table} set
+        ${petServiceAccountColumn.googleSubjectId} = ${petServiceAccount.serviceAccount.subjectId},
+        ${petServiceAccountColumn.email} = ${petServiceAccount.serviceAccount.email},
+        ${petServiceAccountColumn.displayName} = ${petServiceAccount.serviceAccount.displayName}
+        where ${petServiceAccountColumn.userId} = ${petServiceAccount.id.userId} and ${petServiceAccountColumn.project} = ${petServiceAccount.id.project}"""
+
+      if (updatePetQuery.update().apply() != 1) {
+        throw new WorkbenchException(s"Update cannot be applied because ${petServiceAccount.id} does not exist")
+      }
+
+      petServiceAccount
+    }
+  }
+
+  private def unmarshalPetServiceAccountRecord(petRecord: PetServiceAccountRecord): PetServiceAccount = {
+    PetServiceAccount(PetServiceAccountId(petRecord.userId, petRecord.project), ServiceAccount(petRecord.googleSubjectId, petRecord.email, petRecord.displayName))
+  }
+
+  private def unmarshalUserRecord(userRecord: UserRecord): WorkbenchUser = {
+    WorkbenchUser(userRecord.id, userRecord.googleSubjectId, userRecord.email)
+  }
 
   override def getManagedGroupAccessInstructions(groupName: WorkbenchGroupName): IO[Option[String]] = ???
 

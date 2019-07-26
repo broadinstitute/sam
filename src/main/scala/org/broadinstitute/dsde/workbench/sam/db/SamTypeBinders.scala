@@ -2,7 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.db
 
 import java.sql.ResultSet
 
-import org.broadinstitute.dsde.workbench.model.google.GoogleProject
+import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccountDisplayName, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.model.{GoogleSubjectId, WorkbenchEmail, WorkbenchGroupName, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.db.tables._
 import org.broadinstitute.dsde.workbench.sam.model._
@@ -107,5 +107,15 @@ object SamTypeBinders {
   implicit val workbenchUserIdTypeBinder: TypeBinder[WorkbenchUserId] = new TypeBinder[WorkbenchUserId] {
     def apply(rs: ResultSet, label: String): WorkbenchUserId = WorkbenchUserId(rs.getString(label))
     def apply(rs: ResultSet, index: Int): WorkbenchUserId = WorkbenchUserId(rs.getString(index))
+  }
+
+  implicit val serviceAccountDisplayNameTypeBinder: TypeBinder[ServiceAccountDisplayName] = new TypeBinder[ServiceAccountDisplayName] {
+    def apply(rs: ResultSet, label: String): ServiceAccountDisplayName = ServiceAccountDisplayName(rs.getString(label))
+    def apply(rs: ResultSet, index: Int): ServiceAccountDisplayName = ServiceAccountDisplayName(rs.getString(index))
+  }
+
+  implicit val serviceAccountSubjectIdTypeBinder: TypeBinder[ServiceAccountSubjectId] = new TypeBinder[ServiceAccountSubjectId] {
+    def apply(rs: ResultSet, label: String): ServiceAccountSubjectId = ServiceAccountSubjectId(rs.getString(label))
+    def apply(rs: ResultSet, index: Int): ServiceAccountSubjectId = ServiceAccountSubjectId(rs.getString(index))
   }
 }
