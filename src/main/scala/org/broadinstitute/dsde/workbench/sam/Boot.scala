@@ -22,6 +22,7 @@ import org.broadinstitute.dsde.workbench.google2.{GoogleFirestoreInterpreter, Go
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException, WorkbenchSubject}
 import org.broadinstitute.dsde.workbench.sam.api.{SamRoutes, StandardUserInfoDirectives}
 import org.broadinstitute.dsde.workbench.sam.config.{AppConfig, GoogleConfig}
+import org.broadinstitute.dsde.workbench.sam.db.DbReference
 import org.broadinstitute.dsde.workbench.sam.directory._
 import org.broadinstitute.dsde.workbench.sam.google._
 import org.broadinstitute.dsde.workbench.sam.model._
@@ -155,6 +156,7 @@ object Boot extends IOApp with LazyLogging {
   private[sam] def createAppDependencies(
       appConfig: AppConfig)(implicit actorSystem: ActorSystem, actorMaterializer: ActorMaterializer): cats.effect.Resource[IO, AppDependencies] =
     for {
+      dbReference <- DbReference.resource(appConfig.liquibaseConfig)
       ldapConnectionPool <- createLdapConnectionPool(appConfig.directoryConfig.directoryUrl, appConfig.directoryConfig.user, appConfig.directoryConfig.password, appConfig.directoryConfig.connectionPoolSize, "foreground")
       memberOfCache <- createMemberOfCache("memberof", appConfig.directoryConfig.memberOfCache.maxEntries, appConfig.directoryConfig.memberOfCache.timeToLive)
       resourceCache <- createResourceCache("resource", appConfig.directoryConfig.resourceCache.maxEntries, appConfig.directoryConfig.resourceCache.timeToLive)
