@@ -2,7 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.db
 
 import java.sql.SQLTimeoutException
 
-import cats.effect.{Resource, Sync}
+import cats.effect.{IO, Resource}
 import com.google.common.base.Throwables
 import com.typesafe.scalalogging.LazyLogging
 import liquibase.database.jvm.JdbcConnection
@@ -12,7 +12,6 @@ import org.broadinstitute.dsde.workbench.sam.config.LiquibaseConfig
 import scalikejdbc.{DB, DBSession}
 import scalikejdbc.config.DBs
 import sun.security.provider.certpath.SunCertPathBuilderException
-import scala.language.higherKinds
 
 object DbReference extends LazyLogging {
 
@@ -51,9 +50,9 @@ object DbReference extends LazyLogging {
     DbReference()
   }
 
-  def resource[F[_]: Sync](liquibaseConfig: LiquibaseConfig): Resource[F, DbReference] = Resource.make(
-    Sync[F].delay(init(liquibaseConfig))
-  )(_ => Sync[F].delay(DBs.closeAll()))
+  def resource(liquibaseConfig: LiquibaseConfig): Resource[IO, DbReference] = Resource.make(
+    IO(init(liquibaseConfig))
+  )(_ => IO(DBs.closeAll()))
 }
 
 case class DbReference() {
