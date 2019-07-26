@@ -63,6 +63,9 @@
             <column name="google_subject_id" type="VARCHAR(30)">
                 <constraints unique="true" nullable="false"/>
             </column>
+            <column name="display_name" type="VARCHAR(100)">
+                <constraints unique="false" nullable="false"/>
+            </column>
         </createTable>
     </changeSet>
 
