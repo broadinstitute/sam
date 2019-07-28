@@ -6,7 +6,7 @@ import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.sam.errorReportSource
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.db.{DbReference, PSQLStateExtensions}
+import org.broadinstitute.dsde.workbench.sam.db.DbReference
 import org.broadinstitute.dsde.workbench.sam.db.SamParameterBinderFactory._
 import org.broadinstitute.dsde.workbench.sam.db.tables._
 import org.broadinstitute.dsde.workbench.sam.model._
@@ -35,10 +35,8 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     ResourceTypePK(insertResourceTypeQuery.updateAndReturnGeneratedKey().apply())
   }
 
-  // 1. Maybe check if groups given in authdomains parameter exist, not sure if we need to do that
-  // 2. Create Resource
-  // 3. Create the entries in the join table for the auth domains
-  // Do we need to care or do something special if the ResourceType doesn't exist?
+  // 1. Create Resource
+  // 2. Create the entries in the join table for the auth domains
   def createResource(resource: Resource): IO[Resource] = {
     runInTransaction { implicit session =>
       val resourcePK = insertResource(resource)
@@ -49,9 +47,9 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
 
       resource
     }.recoverWith {
-      case sqlException: PSQLException if sqlException.getSQLState == PSQLStateExtensions.UNIQUE_VIOLATION => {
-        logger.debug(s"Uniqueness violation", sqlException)
-        IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, "A resource of this type and name already exists")))
+      case sqlException: PSQLException => {
+        logger.debug(s"createResource psql exception on resource $resource", sqlException)
+        IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"Create resource failed with the following database exception: ${sqlException.getMessage}")))
       }
     }
   }
