@@ -402,16 +402,20 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
                     select ${pg.groupId}, ${pg.memberGroupId}
                     from ${GroupMemberTable as pg}
                     join ${ancestorGroupsTable as ag} ON ${agColumn.parentGroupId} = ${pg.memberGroupId}
-          ) select distinct(${g.name}), ${p.name}, ${r.name}, ${rt.name}
+          ) select distinct(${g.name}) as ${g.resultName.name}, ${p.result.name}, ${r.result.name}, ${rt.result.name}
             from ${GroupTable as g}
             join ${ancestorGroupsTable as ag} on ${ag.parentGroupId} = ${g.id}
             left join ${PolicyTable as p} on ${p.groupId} = ${g.id}
             left join ${ResourceTable as r} on ${p.resourceId} = ${r.id}
             left join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}"""
 
-      listGroupsQuery.map(rs => rs.stringOpt(2) match {
-        case Some(policyName) => FullyQualifiedPolicyId(FullyQualifiedResourceId(ResourceTypeName(rs.string(4)), ResourceId(rs.string(3))), AccessPolicyName(policyName))
-        case None => WorkbenchGroupName(rs.string(1))
+      listGroupsQuery.map(rs => (rs.stringOpt(p.resultName.name), rs.stringOpt(r.resultName.name), rs.stringOpt(rt.resultName.name)) match {
+        case (Some(policyName), Some(resourceId), Some(resourceTypeName)) =>
+          FullyQualifiedPolicyId(FullyQualifiedResourceId(ResourceTypeName(resourceTypeName), ResourceId(resourceId)), AccessPolicyName(policyName))
+        case (None, None, None) =>
+          WorkbenchGroupName(rs.string(g.resultName.name))
+        case (policyOpt, resourceOpt, resourceTypeOpt) =>
+          throw new WorkbenchException(s"Inconsistent result. Expected either nothing or names for the policy, resource, and resource type, but instead got (policy = ${policyOpt}, resource = ${resourceOpt}, resourceType = ${resourceTypeOpt})")
       }).list().apply().toSet
     }
   }
