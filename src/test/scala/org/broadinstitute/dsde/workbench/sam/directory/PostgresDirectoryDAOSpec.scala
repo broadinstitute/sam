@@ -340,6 +340,30 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
       }
     }
 
+    "getManagedGroupAccessInstructions" - {
+      "get managed group access instructions" in {
+        dao.createGroup(defaultGroup).unsafeRunSync()
+
+        dao.getManagedGroupAccessInstructions(defaultGroupName).unsafeRunSync() shouldBe None
+      }
+    }
+
+    "setManagedGroupAccessInstructions" - {
+      "set managed group access instructions" in {
+        dao.createGroup(defaultGroup).unsafeRunSync()
+
+        dao.setManagedGroupAccessInstructions(defaultGroupName, "testinstructions").unsafeRunSync()
+
+        dao.getManagedGroupAccessInstructions(defaultGroupName).unsafeRunSync() shouldBe Some("testinstructions")
+      }
+
+      "throw an exception when setting managed group access instructions for a nonexistent group" in {
+        assertThrows[WorkbenchException] {
+          dao.setManagedGroupAccessInstructions(defaultGroupName, "testinstructions").unsafeRunSync()
+        }
+      }
+    }
+
     "isGroupMember" - {
       "return true when member is in sub group" in {
         val subGroup1 = defaultGroup

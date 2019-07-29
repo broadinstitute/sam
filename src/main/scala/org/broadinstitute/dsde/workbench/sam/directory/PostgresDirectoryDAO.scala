@@ -556,9 +556,36 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     WorkbenchUser(userRecord.id, userRecord.googleSubjectId, userRecord.email)
   }
 
-  override def getManagedGroupAccessInstructions(groupName: WorkbenchGroupName): IO[Option[String]] = ???
+  override def getManagedGroupAccessInstructions(groupName: WorkbenchGroupName): IO[Option[String]] = {
+    runInTransaction { implicit session =>
+      val accessInstructionsTable = AccessInstructionsTable.syntax
+      val groupTable = GroupTable.syntax
 
-  override def setManagedGroupAccessInstructions(groupName: WorkbenchGroupName, accessInstructions: String): IO[Unit] = ???
+      val loadAccessInstructionsQuery = samsql"""select ${accessInstructionsTable.instructions}
+                from ${AccessInstructionsTable as accessInstructionsTable}
+                join ${GroupTable as groupTable} on ${groupTable.id} = ${accessInstructionsTable.groupId}
+                where ${groupTable.name} = ${groupName}"""
+
+      val accessInstructionsOpt = loadAccessInstructionsQuery.map(AccessInstructionsTable(accessInstructionsTable)).single().apply()
+      accessInstructionsOpt.map(_.instructions)
+    }
+  }
+
+  override def setManagedGroupAccessInstructions(groupName: WorkbenchGroupName, accessInstructions: String): IO[Unit] = {
+    runInTransaction { implicit session =>
+      val accessInstructionsColumn = AccessInstructionsTable.column
+      val groupColumn = GroupTable.column
+
+      val updateAccessInstructionsQuery =
+        samsql"""update ${AccessInstructionsTable.table} set
+                 ${accessInstructionsColumn.instructions} = ${accessInstructions}
+                 from ${GroupTable.table} where ${accessInstructionsColumn.groupId} = ${groupColumn.id}"""
+
+      if (updateAccessInstructionsQuery.update().apply() != 1) {
+        throw new WorkbenchException(s"Update cannot be applied because ${groupName.value} does not exist")
+      }
+    }
+  }
 
   override def setGoogleSubjectId(userId: WorkbenchUserId, googleSubjectId: GoogleSubjectId): IO[Unit] = ???
 }
