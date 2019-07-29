@@ -248,7 +248,7 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
         val subGroupId = WorkbenchGroupName("subGroup")
         val subGroup = BasicWorkbenchGroup(subGroupId, Set(defaultUserId), WorkbenchEmail("subGroup@foo.com"))
         val parentGroupId = WorkbenchGroupName("parentGroup")
-        val parentGroup = BasicWorkbenchGroup(parentGroupId, Set(subGroupId), WorkbenchEmail("parentGroup@foo.com"))
+        val parentGroup = BasicWorkbenchGroup(parentGroupId, Set(defaultUserId, subGroupId), WorkbenchEmail("parentGroup@foo.com"))
 
         dao.createUser(defaultUser).unsafeRunSync()
         dao.createGroup(subGroup).unsafeRunSync()
