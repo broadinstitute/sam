@@ -74,8 +74,8 @@ class ResourceService(
         } yield result :+ resourceTypeAdmin
     }
 
-  def createResourceType(resourceType: ResourceType): IO[ResourceTypeName] =
-    accessPolicyDAO.createResourceType(resourceType.name)
+  def createResourceType(resourceType: ResourceType): IO[ResourceType] =
+    accessPolicyDAO.createResourceType(resourceType)
 
   /**
     * Create a resource with default policies. The default policies contain 1 policy with the same name as the
