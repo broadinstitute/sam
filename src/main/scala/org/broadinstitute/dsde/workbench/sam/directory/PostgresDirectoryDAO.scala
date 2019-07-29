@@ -8,7 +8,7 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{ServiceAccount, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.sam.db._
 import org.broadinstitute.dsde.workbench.sam.db.tables._
-import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, FullyQualifiedPolicyId}
+import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.util.DatabaseSupport
 import org.broadinstitute.dsde.workbench.sam.errorReportSource
 import scalikejdbc._
@@ -261,7 +261,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
               from ${ResourceTypeTable as rt}
               join ${ResourceTable as r} on ${rt.id} = ${r.resourceTypeId}
               join ${PolicyTable as p} on ${r.id} = ${p.resourceId}
-              where ${rt.resourceTypeName} = ${policyId.resource.resourceTypeName}
+              where ${rt.name} = ${policyId.resource.resourceTypeName}
               and ${r.name} = ${policyId.resource.resourceId}
               and ${p.name} = ${policyId.accessPolicyName}"""
   }
@@ -375,7 +375,45 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
 
   override def readProxyGroup(userId: WorkbenchUserId): IO[Option[WorkbenchEmail]] = ???
 
-  override def listUsersGroups(userId: WorkbenchUserId): IO[Set[WorkbenchGroupIdentity]] = ???
+  override def listUsersGroups(userId: WorkbenchUserId): IO[Set[WorkbenchGroupIdentity]] = {
+    runInTransaction { implicit session =>
+      val ancestorGroupsTable = SubGroupMemberTable("ancestor_groups")
+      val ag = ancestorGroupsTable.syntax("ag")
+      val agColumn = ancestorGroupsTable.column
+
+      val gm = GroupMemberTable.syntax("gm")
+      val pg = GroupMemberTable.syntax("parent_groups")
+      val g = GroupTable.syntax("g")
+      val p = PolicyTable.syntax("p")
+      val r = ResourceTable.syntax("r")
+      val rt = ResourceTypeTable.syntax("rt")
+
+      val listGroupsQuery =
+        samsql"""WITH RECURSIVE ${ancestorGroupsTable.table}(${agColumn.parentGroupId}, ${agColumn.memberGroupId}) AS (
+                    select ${gm.groupId}, ${gm.memberGroupId}
+                    from ${GroupMemberTable as gm}
+                    where ${gm.memberUserId} = ${userId}
+                    union
+                    select ${pg.groupId}, ${pg.memberGroupId}
+                    from ${GroupMemberTable as pg}
+                    join ${ancestorGroupsTable as ag} ON ${agColumn.parentGroupId} = ${pg.memberGroupId}
+          ) select distinct(${g.name}) as ${g.resultName.name}, ${p.result.name}, ${r.result.name}, ${rt.result.name}
+            from ${GroupTable as g}
+            join ${ancestorGroupsTable as ag} on ${ag.parentGroupId} = ${g.id}
+            left join ${PolicyTable as p} on ${p.groupId} = ${g.id}
+            left join ${ResourceTable as r} on ${p.resourceId} = ${r.id}
+            left join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}"""
+
+      listGroupsQuery.map(rs => (rs.stringOpt(p.resultName.name), rs.stringOpt(r.resultName.name), rs.stringOpt(rt.resultName.name)) match {
+        case (Some(policyName), Some(resourceId), Some(resourceTypeName)) =>
+          FullyQualifiedPolicyId(FullyQualifiedResourceId(ResourceTypeName(resourceTypeName), ResourceId(resourceId)), AccessPolicyName(policyName))
+        case (None, None, None) =>
+          WorkbenchGroupName(rs.string(g.resultName.name))
+        case (policyOpt, resourceOpt, resourceTypeOpt) =>
+          throw new WorkbenchException(s"Inconsistent result. Expected either nothing or names for the policy, resource, and resource type, but instead got (policy = ${policyOpt}, resource = ${resourceOpt}, resourceType = ${resourceTypeOpt})")
+      }).list().apply().toSet
+    }
+  }
 
   override def listUserDirectMemberships(userId: WorkbenchUserId): IO[Stream[WorkbenchGroupIdentity]] = ???
 

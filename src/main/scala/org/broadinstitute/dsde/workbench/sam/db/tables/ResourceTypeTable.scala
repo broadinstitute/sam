@@ -6,7 +6,7 @@ import scalikejdbc._
 
 final case class ResourceTypePK(value: Long) extends DatabaseKey
 final case class ResourceTypeRecord(id: ResourceTypePK,
-                                    resourceTypeName: ResourceTypeName)
+                                    name: ResourceTypeName)
 
 object ResourceTypeTable extends SQLSyntaxSupport[ResourceTypeRecord] {
   override def tableName: String = "SAM_RESOURCE_TYPE"
@@ -14,6 +14,6 @@ object ResourceTypeTable extends SQLSyntaxSupport[ResourceTypeRecord] {
   import SamTypeBinders._
   def apply(e: ResultName[ResourceTypeRecord])(rs: WrappedResultSet): ResourceTypeRecord = ResourceTypeRecord(
     rs.get(e.id),
-    rs.get(e.resourceTypeName)
+    rs.get(e.name)
   )
 }
