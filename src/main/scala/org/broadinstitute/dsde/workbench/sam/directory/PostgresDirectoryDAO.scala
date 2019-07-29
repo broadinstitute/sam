@@ -8,7 +8,7 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.ServiceAccountSubjectId
 import org.broadinstitute.dsde.workbench.sam.db._
 import org.broadinstitute.dsde.workbench.sam.db.tables._
-import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, FullyQualifiedPolicyId}
+import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.util.DatabaseSupport
 import org.broadinstitute.dsde.workbench.sam.errorReportSource
 import scalikejdbc._
@@ -261,7 +261,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
               from ${ResourceTypeTable as rt}
               join ${ResourceTable as r} on ${rt.id} = ${r.resourceTypeId}
               join ${PolicyTable as p} on ${r.id} = ${p.resourceId}
-              where ${rt.resourceTypeName} = ${policyId.resource.resourceTypeName}
+              where ${rt.name} = ${policyId.resource.resourceTypeName}
               and ${r.name} = ${policyId.resource.resourceId}
               and ${p.name} = ${policyId.accessPolicyName}"""
   }
@@ -389,6 +389,9 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
       val gm = GroupMemberTable.syntax("gm")
       val pg = GroupMemberTable.syntax("parent_groups")
       val g = GroupTable.syntax("g")
+      val p = PolicyTable.syntax("p")
+      val r = ResourceTable.syntax("r")
+      val rt = ResourceTypeTable.syntax("rt")
 
       val listGroupsQuery =
         samsql"""WITH RECURSIVE ${ancestorGroupsTable.table}(${agColumn.parentGroupId}, ${agColumn.memberGroupId}) AS (
@@ -399,10 +402,17 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
                     select ${pg.groupId}, ${pg.memberGroupId}
                     from ${GroupMemberTable as pg}
                     join ${ancestorGroupsTable as ag} ON ${agColumn.parentGroupId} = ${pg.memberGroupId}
-          ) select distinct(${g.name})
+          ) select distinct(${g.name}), ${p.name}, ${r.name}, ${rt.name}
             from ${GroupTable as g}
-            join ${ancestorGroupsTable as ag} on ${ag.parentGroupId} = ${g.id}"""
-      listGroupsQuery.map(rs => WorkbenchGroupName(rs.string(1))).list.apply().toSet
+            join ${ancestorGroupsTable as ag} on ${ag.parentGroupId} = ${g.id}
+            left join ${PolicyTable as p} on ${p.groupId} = ${g.id}
+            left join ${ResourceTable as r} on ${p.resourceId} = ${r.id}
+            left join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}"""
+
+      listGroupsQuery.map(rs => rs.stringOpt(2) match {
+        case Some(policyName) => FullyQualifiedPolicyId(FullyQualifiedResourceId(ResourceTypeName(rs.string(4)), ResourceId(rs.string(3))), AccessPolicyName(policyName))
+        case None => WorkbenchGroupName(rs.string(1))
+      }).list().apply().toSet
     }
   }
 
