@@ -257,6 +257,8 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
         val usersGroups = dao.listUsersGroups(defaultUserId).unsafeRunSync()
         usersGroups should contain theSameElementsAs Set(subGroupId, parentGroupId)
       }
+
+      "list all of the policies a user is in" is pending
     }
 
     "loadUsers" - {
