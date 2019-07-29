@@ -48,8 +48,8 @@ class LdapAccessPolicyDAOSpec extends FlatSpec with ScalaFutures with Matchers w
 
     val res = for{
       _ <- setup()
-      _ <- dao.createResourceType(typeName1)
-      _ <- dao.createResourceType(typeName2)
+      _ <- dao.createResourceType(dummyResourceType(typeName1))
+      _ <- dao.createResourceType(dummyResourceType(typeName2))
       _ <- dao.createResource(resource1)
       //policy2's resource already exists
       _ <- dao.createResource(resource3)
@@ -95,7 +95,7 @@ class LdapAccessPolicyDAOSpec extends FlatSpec with ScalaFutures with Matchers w
     val resource2 = Resource(resourceTypeName, ResourceId("rid2"), Set(authDomain))
 
     val res = for {
-      _ <- dao.createResourceType(resourceTypeName)
+      _ <- dao.createResourceType(dummyResourceType(resourceTypeName))
       _ <- dao.createResource(resource1)
       _ <- dao.createResource(resource2)
       resources <- dao.listResourcesConstrainedByGroup(authDomain)
@@ -114,7 +114,7 @@ class LdapAccessPolicyDAOSpec extends FlatSpec with ScalaFutures with Matchers w
     val policy = SamLenses.resourceIdentityAccessPolicy.set(resource.fullyQualifiedId)(genPolicy.sample.get)
     val res = for{
       _ <- setup()
-      _ <- testDao.createResourceType(resource.resourceTypeName)
+      _ <- testDao.createResourceType(dummyResourceType(resource.resourceTypeName))
       _ <- testDao.createResource(resource)
       // put cachedResource in ldap with different auth domains so we are sure we don't actually look it up
       _ <- testDao.createResource(Resource.authDomain.set(genAuthDomains.sample.get)(cachedResource))
@@ -136,7 +136,7 @@ class LdapAccessPolicyDAOSpec extends FlatSpec with ScalaFutures with Matchers w
     val res = for{
       _ <- setup()
       _ <- dirDao.createUser(user)
-      _ <- dao.createResourceType(policy.id.resource.resourceTypeName)
+      _ <- dao.createResourceType(dummyResourceType(policy.id.resource.resourceTypeName))
       _ <- dao.createResource(resource)
       _ <- dao.createPolicy(policy)
       resources <- dao.listAccessPolicies(policy.id.resource.resourceTypeName, user.id)

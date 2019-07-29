@@ -9,7 +9,7 @@ import org.broadinstitute.dsde.workbench.sam.model.{FullyQualifiedResourceId, _}
   * Created by dvoet on 6/26/17.
   */
 trait AccessPolicyDAO {
-  def createResourceType(resourceTypeName: ResourceTypeName): IO[ResourceTypeName]
+  def createResourceType(resourceType: ResourceType): IO[ResourceType]
 
   def createResource(resource: Resource): IO[Resource]
   def deleteResource(resource: FullyQualifiedResourceId): IO[Unit]

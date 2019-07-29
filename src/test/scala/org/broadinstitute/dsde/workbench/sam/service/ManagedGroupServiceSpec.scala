@@ -58,7 +58,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     runAndWait(schemaDao.init())
   }
 
-  def makeResourceType(resourceType: ResourceType): ResourceTypeName = resourceService.createResourceType(resourceType).unsafeRunSync()
+  def makeResourceType(resourceType: ResourceType): ResourceType = resourceService.createResourceType(resourceType).unsafeRunSync()
 
   def assertPoliciesOnResource(resource: FullyQualifiedResourceId, policyDAO: AccessPolicyDAO = policyDAO, expectedPolicies: Stream[AccessPolicyName] = Stream(ManagedGroupService.adminPolicyName, ManagedGroupService.memberPolicyName)) = {
     val policies = policyDAO.listAccessPolicies(resource).unsafeRunSync()

@@ -30,17 +30,17 @@ class LdapAccessPolicyDAO(
     with DirectorySubjectNameSupport
     with LdapSupport {
 
-  override def createResourceType(resourceTypeName: ResourceTypeName): IO[ResourceTypeName] =
+  override def createResourceType(resourceType: ResourceType): IO[ResourceType] =
     for {
       _ <- executeLdap(
         IO(
           ldapConnectionPool.add(
-            resourceTypeDn(resourceTypeName),
+            resourceTypeDn(resourceType.name),
             new Attribute("objectclass", List("top", ObjectClass.resourceType).asJava),
             new Attribute(Attr.ou, "resources")))).void.recover {
         case ldape: LDAPException if ldape.getResultCode == ResultCode.ENTRY_ALREADY_EXISTS => ()
       }
-    } yield resourceTypeName
+    } yield resourceType
 
   override def createResource(resource: Resource): IO[Resource] = {
     val attributes = List(

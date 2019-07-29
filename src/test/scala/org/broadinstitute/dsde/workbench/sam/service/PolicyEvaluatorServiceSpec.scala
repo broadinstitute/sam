@@ -146,7 +146,7 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
 
     val res = for{
       _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
-      _ <- policyDAO.createResourceType(policy.id.resource.resourceTypeName)
+      _ <- policyDAO.createResourceType(defaultResourceType)
       _ <- policyDAO.createResource(resource)
       _ <- policyDAO.createPolicy(policy)
       r <- service.policyEvaluatorService.hasPermission(policy.id.resource, action, user.userId)
@@ -168,7 +168,7 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
 
     val res = for{
       _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
-      _ <- policyDAO.createResourceType(policy.id.resource.resourceTypeName)
+      _ <- policyDAO.createResourceType(defaultResourceType)
       _ <- policyDAO.createResource(resource)
       _ <- policyDAO.createPolicy(policy)
       r <- service.policyEvaluatorService.hasPermission(policy.id.resource, action, user.userId)
@@ -191,7 +191,7 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
     val res = for{
       _ <- setup()
       _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
-      _ <- policyDAO.createResourceType(policy.id.resource.resourceTypeName)
+      _ <- policyDAO.createResourceType(defaultResourceType)
       _ <- policyDAO.createResource(resource)
       _ <- policyDAO.createPolicy(policy)
       r <- service.policyEvaluatorService.hasPermission(policy.id.resource, action, user.userId)
@@ -238,8 +238,8 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
 
     val res = for{
       _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
-      _ <- policyDAO.createResourceType(policy.id.resource.resourceTypeName)
-      _ <- policyDAO.createResourceType(managedGroupResourceType.name)
+      _ <- policyDAO.createResourceType(defaultResourceType)
+      _ <- policyDAO.createResourceType(managedGroupResourceType)
       _ <- policyDAO.createResource(resource)
       _ <- policyDAO.createPolicy(policy)
       _ <- resource.authDomain.toList.parTraverse{
@@ -264,8 +264,8 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
 
     val res = for{
       _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
-      _ <- policyDAO.createResourceType(policy.id.resource.resourceTypeName)
-      _ <- policyDAO.createResourceType(managedGroupResourceType.name)
+      _ <- policyDAO.createResourceType(defaultResourceType)
+      _ <- policyDAO.createResourceType(managedGroupResourceType)
       _ <- policyDAO.createResource(resource)
       _ <- policyDAO.createPolicy(policy)
       r <- constrainableService.policyEvaluatorService.hasPermission(policy.id.resource, action, user.userId)
@@ -289,8 +289,8 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
     val res = for{
       _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
       _ <- dirDAO.createUser(WorkbenchUser(probeUser.userId, Some(GoogleSubjectId(probeUser.userId.value)), probeUser.userEmail))
-      _ <- policyDAO.createResourceType(policy.id.resource.resourceTypeName)
-      _ <- policyDAO.createResourceType(managedGroupResourceType.name)
+      _ <- policyDAO.createResourceType(defaultResourceType)
+      _ <- policyDAO.createResourceType(managedGroupResourceType)
       _ <- policyDAO.createResource(resource)
       _ <- policyDAO.createPolicy(policy)
       _ <- resource.authDomain.toList.parTraverse{
@@ -317,8 +317,8 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
     val res = for{
       _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
       _ <- dirDAO.createUser(WorkbenchUser(probeUser.userId, Some(GoogleSubjectId(probeUser.userId.value)), probeUser.userEmail))
-      _ <- policyDAO.createResourceType(policy.id.resource.resourceTypeName)
-      _ <- policyDAO.createResourceType(managedGroupResourceType.name)
+      _ <- policyDAO.createResourceType(defaultResourceType)
+      _ <- policyDAO.createResourceType(managedGroupResourceType)
       _ <- policyDAO.createResource(resource)
       _ <- policyDAO.createPolicy(policy)
       _ <- resource.authDomain.toList.parTraverse{

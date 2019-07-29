@@ -15,7 +15,7 @@ import scala.collection.mutable
 class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdentity, WorkbenchGroup] = new TrieMap()) extends AccessPolicyDAO {
   val resources = new TrieMap[FullyQualifiedResourceId, Resource]()
 
-  override def createResourceType(resourceTypeName: ResourceTypeName): IO[ResourceTypeName] = IO.pure(resourceTypeName)
+  override def createResourceType(resourceType: ResourceType): IO[ResourceType] = IO.pure(resourceType)
 
   override def createResource(resource: Resource): IO[Resource] = IO {
     resources += resource.fullyQualifiedId -> resource
