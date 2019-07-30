@@ -400,18 +400,52 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
             left join ${ResourceTable as r} on ${p.resourceId} = ${r.id}
             left join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}"""
 
-      listGroupsQuery.map(rs => (rs.stringOpt(p.resultName.name), rs.stringOpt(r.resultName.name), rs.stringOpt(rt.resultName.name)) match {
-        case (Some(policyName), Some(resourceId), Some(resourceTypeName)) =>
-          FullyQualifiedPolicyId(FullyQualifiedResourceId(ResourceTypeName(resourceTypeName), ResourceId(resourceId)), AccessPolicyName(policyName))
-        case (None, None, None) =>
-          WorkbenchGroupName(rs.string(g.resultName.name))
-        case (policyOpt, resourceOpt, resourceTypeOpt) =>
-          throw new WorkbenchException(s"Inconsistent result. Expected either nothing or names for the policy, resource, and resource type, but instead got (policy = ${policyOpt}, resource = ${resourceOpt}, resourceType = ${resourceTypeOpt})")
-      }).list().apply().toSet
+      listGroupsQuery.map(resultSetToGroupIdentity(_, g, p, r, rt)).list().apply().toSet
     }
   }
 
-  override def listUserDirectMemberships(userId: WorkbenchUserId): IO[Stream[WorkbenchGroupIdentity]] = ???
+  /** Extracts a WorkbenchGroupIdentity from a SQL query
+    *
+    * @param rs of form (groupName, Option[policyName], Option[resourceName], Option[resourceTypeName]
+    * @param g SQLSyntaxProvider for GroupTable
+    * @param p SQLSyntaxProvider for PolicyTable
+    * @param r SQLSyntaxProvider for ResourceTable
+    * @param rt SQLSyntaxProvider for ResourceTypeTable
+    * @return Either a WorkbenchGroupName or a FullyQualifiedPolicyId if policy information is available
+    */
+  private def resultSetToGroupIdentity(rs: WrappedResultSet,
+                                       g: QuerySQLSyntaxProvider[SQLSyntaxSupport[GroupRecord], GroupRecord],
+                                       p: QuerySQLSyntaxProvider[SQLSyntaxSupport[PolicyRecord], PolicyRecord],
+                                       r: QuerySQLSyntaxProvider[SQLSyntaxSupport[ResourceRecord], ResourceRecord],
+                                       rt: QuerySQLSyntaxProvider[SQLSyntaxSupport[ResourceTypeRecord], ResourceTypeRecord]): WorkbenchGroupIdentity = {
+    (rs.stringOpt(p.resultName.name), rs.stringOpt(r.resultName.name), rs.stringOpt(rt.resultName.name)) match {
+      case (Some(policyName), Some(resourceId), Some(resourceTypeName)) =>
+        FullyQualifiedPolicyId(FullyQualifiedResourceId(ResourceTypeName(resourceTypeName), ResourceId(resourceId)), AccessPolicyName(policyName))
+      case (None, None, None) =>
+        WorkbenchGroupName(rs.string(g.resultName.name))
+      case (policyOpt, resourceOpt, resourceTypeOpt) =>
+        throw new WorkbenchException(s"Inconsistent result. Expected either nothing or names for the policy, resource, and resource type, but instead got (policy = ${policyOpt}, resource = ${resourceOpt}, resourceType = ${resourceTypeOpt})")
+    }
+  }
+
+  override def listUserDirectMemberships(userId: WorkbenchUserId): IO[Stream[WorkbenchGroupIdentity]] = {
+    runInTransaction { implicit session =>
+      val gm = GroupMemberTable.syntax("gm")
+      val g = GroupTable.syntax("g")
+      val p = PolicyTable.syntax("p")
+      val r = ResourceTable.syntax("r")
+      val rt = ResourceTypeTable.syntax("rt")
+
+      samsql"""select ${g.result.name}, ${p.result.name}, ${r.result.name}, ${rt.result.name}
+              from ${GroupTable as g}
+              join ${GroupMemberTable as gm} on ${gm.groupId} = ${g.id}
+              left join ${PolicyTable as p} on ${p.groupId} = ${g.id}
+              left join ${ResourceTable as r} on ${p.resourceId} = ${r.id}
+              left join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
+              where ${gm.memberUserId} = ${userId}"""
+        .map(resultSetToGroupIdentity(_, g, p, r, rt)).list().apply().toStream
+    }
+  }
 
   /**
     * This query attempts to list the User records that are members of ALL the groups given in the groupIds parameter.

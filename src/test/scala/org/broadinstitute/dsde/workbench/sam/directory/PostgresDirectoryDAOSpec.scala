@@ -491,5 +491,22 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
 
       "returns false for policies" is pending
     }
+
+    "listUserDirectMemberships" - {
+      "lists all groups that a user is in directly" in {
+        val subSubGroup = BasicWorkbenchGroup(WorkbenchGroupName("ssg"), Set(defaultUser.id), WorkbenchEmail("ssg@groups.r.us"))
+        val subGroup = BasicWorkbenchGroup(WorkbenchGroupName("sg"), Set(defaultUser.id, subSubGroup.id), WorkbenchEmail("sg@groups.r.us"))
+        val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName("pg"), Set(subGroup.id), WorkbenchEmail("pg@groups.r.us"))
+
+        dao.createUser(defaultUser).unsafeRunSync()
+        dao.createGroup(subSubGroup).unsafeRunSync()
+        dao.createGroup(subGroup).unsafeRunSync()
+        dao.createGroup(parentGroup).unsafeRunSync()
+
+        dao.listUserDirectMemberships(defaultUser.id).unsafeRunSync() should contain theSameElementsAs Set(subGroup.id, subSubGroup.id)
+      }
+
+      "lists all policies that a user is in directly" is pending
+    }
   }
 }
