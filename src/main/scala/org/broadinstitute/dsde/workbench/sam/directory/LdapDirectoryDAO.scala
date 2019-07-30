@@ -223,19 +223,6 @@ class LdapDirectoryDAO(
   override def deleteUser(userId: WorkbenchUserId): IO[Unit] =
     executeLdap(IO(ldapConnectionPool.delete(userDn(userId))))
 
-  override def addProxyGroup(userId: WorkbenchUserId, proxyEmail: WorkbenchEmail): IO[Unit] =
-    executeLdap(IO(ldapConnectionPool.modify(userDn(userId), new Modification(ModificationType.ADD, Attr.proxyEmail, proxyEmail.value))))
-
-  override def readProxyGroup(userId: WorkbenchUserId): IO[Option[WorkbenchEmail]] =
-    executeLdap(IO(ldapConnectionPool.getEntry(userDn(userId), Attr.proxyEmail))).map { result =>
-      for {
-        entry <- Option(result)
-        email <- Option(entry.getAttributeValue(Attr.proxyEmail))
-      } yield {
-        WorkbenchEmail(email)
-      }
-    }
-
   override def listUsersGroups(userId: WorkbenchUserId): IO[Set[WorkbenchGroupIdentity]] = listMemberOfGroups(userId)
 
   override def listUserDirectMemberships(userId: WorkbenchUserId): IO[Stream[WorkbenchGroupIdentity]] =

@@ -124,10 +124,6 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
       when(mockDirectoryDAO.loadGroup(ge.allUsersGroupName)).thenReturn(IO.pure(Option(BasicWorkbenchGroup(ge.allUsersGroupName, Set.empty, ge.allUsersGroupEmail))))
       when(mockDirectoryDAO.updateSynchronizedDate(any[WorkbenchGroupIdentity])).thenReturn(IO.unit)
       when(mockDirectoryDAO.getSynchronizedDate(any[WorkbenchGroupIdentity])).thenReturn(IO.pure(Some((new GregorianCalendar(2017, 11, 22).getTime()))))
-      when(mockDirectoryDAO.readProxyGroup(WorkbenchUserId("addError"))).thenReturn(IO.pure(Some(WorkbenchEmail(addErrorProxyEmail))))
-      when(mockDirectoryDAO.readProxyGroup(WorkbenchUserId("inSamUser"))).thenReturn(IO.pure(Some(WorkbenchEmail(inSamUserProxyEmail))))
-      when(mockDirectoryDAO.readProxyGroup(WorkbenchUserId("inGoogleUser"))).thenReturn(IO.pure(Some(WorkbenchEmail(inGoogleUserProxyEmail))))
-      when(mockDirectoryDAO.readProxyGroup(WorkbenchUserId("inBothUser"))).thenReturn(IO.pure(Some(WorkbenchEmail(inBothUserProxyEmail))))
 
       val subGroups = Seq(inSamSubGroup, inGoogleSubGroup, inBothSubGroup)
       subGroups.foreach { g => when(mockDirectoryDAO.loadSubjectEmail(g.id)).thenReturn(IO.pure(Option(g.email))) }
@@ -611,7 +607,6 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     }
     when(mockDirectoryDAO.createGroup(argThat(allUsersGroupMatcher), isNull())).thenReturn(IO.pure(allUsersGroup))
 
-    when(mockDirectoryDAO.addProxyGroup(userId, proxyEmail)).thenReturn(IO.unit)
     when(mockGoogleDirectoryDAO.getGoogleGroup(any[WorkbenchEmail])).thenReturn(Future.successful(None))
     when(mockGoogleDirectoryDAO.createGroup(any[String], any[WorkbenchEmail], any[Option[Groups]])).thenReturn(Future.successful(()))
     when(mockGoogleDirectoryDAO.addMemberToGroup(any[WorkbenchEmail], any[WorkbenchEmail])).thenReturn(Future.successful(()))

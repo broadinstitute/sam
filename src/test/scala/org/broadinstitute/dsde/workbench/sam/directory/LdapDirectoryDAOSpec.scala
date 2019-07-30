@@ -92,25 +92,6 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     }
   }
 
-  it should "add and read proxy group email" in {
-    val userId = WorkbenchUserId(UUID.randomUUID().toString)
-    val user = WorkbenchUser(userId, None, WorkbenchEmail("foo@bar.com"))
-
-    assertResult(user) {
-      dao.createUser(user).unsafeRunSync()
-    }
-
-    assertResult(None) {
-      dao.readProxyGroup(userId).unsafeRunSync()
-    }
-
-    dao.addProxyGroup(userId, WorkbenchEmail("foo_1234@test.firecloud.org")).unsafeRunSync()
-
-    assertResult(Some(WorkbenchEmail("foo_1234@test.firecloud.org"))) {
-      dao.readProxyGroup(userId).unsafeRunSync()
-    }
-  }
-
   it should "create, read, delete pet service accounts" in {
     val userId = WorkbenchUserId(UUID.randomUUID().toString)
     val user = WorkbenchUser(userId, None, WorkbenchEmail("foo@bar.com"))

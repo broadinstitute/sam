@@ -41,8 +41,6 @@ trait DirectoryDAO {
   def loadUser(userId: WorkbenchUserId): IO[Option[WorkbenchUser]]
   def loadUsers(userIds: Set[WorkbenchUserId]): IO[Stream[WorkbenchUser]]
   def deleteUser(userId: WorkbenchUserId): IO[Unit]
-  def addProxyGroup(userId: WorkbenchUserId, proxyEmail: WorkbenchEmail): IO[Unit]
-  def readProxyGroup(userId: WorkbenchUserId): IO[Option[WorkbenchEmail]]
 
   def listUsersGroups(userId: WorkbenchUserId): IO[Set[WorkbenchGroupIdentity]]
   def listUserDirectMemberships(userId: WorkbenchUserId): IO[Stream[WorkbenchGroupIdentity]]
