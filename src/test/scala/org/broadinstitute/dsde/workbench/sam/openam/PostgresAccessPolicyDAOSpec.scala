@@ -19,14 +19,21 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
   }
 
   "PostgresAccessPolicyDAO" - {
-    val resourceType = ResourceTypeName("awesomeType")
+    val resourceTypeName = ResourceTypeName("awesomeType")
+    val resourceType = ResourceType(resourceTypeName,
+                                    Set(ResourceActionPattern("pattern1", "description of pattern1", false),
+                                        ResourceActionPattern("pattern2", "description of pattern2", false)),
+                                    Set(ResourceRole(ResourceRoleName("role1"), Set(ResourceAction("write"), ResourceAction("read"))),
+                                      ResourceRole(ResourceRoleName("role2"), Set(ResourceAction("read")))),
+                                    ResourceRoleName("role1"),
+                                    false)
 
     "createResourceType" in {
       dao.createResourceType(resourceType).unsafeRunSync() shouldEqual resourceType
     }
 
     "createResource" - {
-      val resource = Resource(resourceType, ResourceId("verySpecialResource"), Set.empty)
+      val resource = Resource(resourceTypeName, ResourceId("verySpecialResource"), Set.empty)
 
       "succeeds when resource type exists" in {
         dao.createResourceType(resourceType).unsafeRunSync()
@@ -55,7 +62,7 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
         dirDao.createGroup(authDomainGroup2).unsafeRunSync()
         dao.createResourceType(resourceType).unsafeRunSync()
 
-        val resourceWithAuthDomain = Resource(resourceType, ResourceId("authDomainResource"), Set(authDomainGroupName1, authDomainGroupName2))
+        val resourceWithAuthDomain = Resource(resourceTypeName, ResourceId("authDomainResource"), Set(authDomainGroupName1, authDomainGroupName2))
         dao.createResource(resourceWithAuthDomain).unsafeRunSync() shouldEqual resourceWithAuthDomain
       }
     }

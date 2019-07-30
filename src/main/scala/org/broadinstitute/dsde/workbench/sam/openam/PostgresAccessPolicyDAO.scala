@@ -21,11 +21,71 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
 
   implicit val cs: ContextShift[IO] = IO.contextShift(executionContext)
 
-  def createResourceType(resourceTypeName: ResourceTypeName): IO[ResourceTypeName] = {
+  // Create resourceType should do the following:
+  // 1. Create the resource type
+  // 2. Add the roles
+  // 3. Add the actions
+  // 4. Add patterns
+  def createResourceType(resourceType: ResourceType): IO[ResourceType] = {
     runInTransaction { implicit session =>
-      insertResourceType(resourceTypeName)
-      resourceTypeName
+      val resourceTypePK = insertResourceType(resourceType.name)
+      insertRolesAndActions(resourceType.roles, resourceTypePK)
+      insertActionPatterns(resourceType.actionPatterns, resourceTypePK)
+      resourceType
     }
+  }
+
+  private def insertRolesAndActions(roles: Set[ResourceRole], resourceTypePK: ResourceTypePK)(implicit session: DBSession) = {
+    val resourceRoleTableColumn = ResourceRoleTable.column
+    val resourceActionTableColumn = ResourceActionTable.column
+    val roleActionTableColumn = RoleActionTable.column
+    val r  = ResourceRoleTable.syntax("r")
+    val a  = ResourceActionTable.syntax("a")
+    val ra = RoleActionTable.syntax("ra")
+
+    val uniqueActions = roles.map(_.actions).flatten
+    val actionPKs = uniqueActions map { action =>
+        val insertActionQuery =
+          samsql"""insert into ${ResourceActionTable.table}
+                  (${resourceActionTableColumn.resourceTypeId}, ${resourceActionTableColumn.action})
+                  values (${resourceTypePK}, ${action})"""
+
+        ResourceActionPK(insertActionQuery.updateAndReturnGeneratedKey().apply())
+    }
+
+    // 1. Add role to ResourceRole table
+    // 2. Add every action for each role to the ResourceAction table
+    // 3. Add each Resource Role and Resource Action to the RoleAction table <-- Is this what actually happens?
+    roles map { role =>
+      val insertRoleQuery =
+        samsql"""insert into ${ResourceRoleTable.table}
+              (${resourceRoleTableColumn.resourceTypeId}, ${resourceRoleTableColumn.role})
+              values (${resourceTypePK}, ${role.roleName})"""
+      val resourceRolePK = ResourceRolePK(insertRoleQuery.updateAndReturnGeneratedKey().apply())
+
+        val insertRoleActionQuery =
+          samsql"""insert into ${RoleActionTable.table}
+                   select ${r.id}, ${a.id}
+                   from ${ResourceRoleTable as r}, ${ResourceActionTable as a}
+                   where ${r.resourceTypeId} = ${resourceTypePK}
+                   and   ${a.resourceTypeId} = ${resourceTypePK}
+                   and   ${r.role}   = ${role.roleName}
+                   and   ${a.action} IN (${role.actions.mkString(",")})
+            """
+        insertRoleActionQuery.update().apply()
+      }
+  }
+
+  private def insertActionPatterns(actionPatterns: Set[ResourceActionPattern], resourceTypePK: ResourceTypePK)(implicit session: DBSession) = {
+    val resourceActionPatternTableColumn = ResourceActionPatternTable.column
+    val actionPatternValues = actionPatterns map { actionPattern =>
+      samsqls"(${resourceTypePK}, ${actionPattern.value})"
+    }
+    val actionPatternQuery =
+      samsql"""insert into ${ResourceActionPatternTable.table}
+              (${resourceActionPatternTableColumn.resourceTypeId}, ${resourceActionPatternTableColumn.actionPattern})
+              values ${actionPatternValues}"""
+    actionPatternQuery.update().apply()
   }
 
   private def insertResourceType(resourceTypeName: ResourceTypeName)(implicit session: DBSession): ResourceTypePK = {
@@ -49,7 +109,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     }.recoverWith {
       case sqlException: PSQLException => {
         logger.debug(s"createResource psql exception on resource $resource", sqlException)
-        IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"Create resource failed with the following database exception: ${sqlException.getMessage}")))
+        IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"Resource ${resource.resourceTypeName} failed.", sqlException)))
       }
     }
   }
