@@ -337,7 +337,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     runInTransaction { implicit session =>
       val userColumn = UserTable.column
 
-      val insertUserQuery = samsql"insert into ${UserTable.table} (${userColumn.id}, ${userColumn.email}, ${userColumn.googleSubjectId}) values (${user.id}, ${user.email}, ${user.googleSubjectId})"
+      val insertUserQuery = samsql"insert into ${UserTable.table} (${userColumn.id}, ${userColumn.email}, ${userColumn.googleSubjectId}, ${userColumn.enabled}) values (${user.id}, ${user.email}, ${user.googleSubjectId}, true)"
       insertUserQuery.update.apply
       user
     }
@@ -502,11 +502,44 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
 
   override def listAncestorGroups(groupId: WorkbenchGroupIdentity): IO[Set[WorkbenchGroupIdentity]] = ???
 
-  override def enableIdentity(subject: WorkbenchSubject): IO[Unit] = ???
+  override def enableIdentity(subject: WorkbenchSubject): IO[Unit] = {
+    runInTransaction { implicit session =>
+      subject match {
+        case userId: WorkbenchUserId =>
+          val u = UserTable.column
+          samsql"update ${UserTable.table} set ${u.enabled} = true where ${u.id} = ${userId}".update().apply()
+        case _ => // other types of WorkbenchSubjects cannot be enabled
+      }
+    }
+  }
 
-  override def disableIdentity(subject: WorkbenchSubject): IO[Unit] = ???
+  override def disableIdentity(subject: WorkbenchSubject): IO[Unit] = {
+    runInTransaction { implicit session =>
+      subject match {
+        case userId: WorkbenchUserId =>
+          val u = UserTable.column
+          samsql"update ${UserTable.table} set ${u.enabled} = false where ${u.id} = ${userId}".update().apply()
+        case _ => // other types of WorkbenchSubjects cannot be disabled
+      }
+    }
+  }
 
-  override def isEnabled(subject: WorkbenchSubject): IO[Boolean] = ???
+  override def isEnabled(subject: WorkbenchSubject): IO[Boolean] = {
+    runInTransaction { implicit session =>
+      val userIdOpt = subject match {
+        case user: WorkbenchUserId => Option(user)
+        case PetServiceAccountId(user, _) => Option(user)
+        case _ => None
+      }
+
+      val u = UserTable.column
+
+      userIdOpt.flatMap { userId =>
+        samsql"select ${u.enabled} from ${UserTable.table} where ${u.id} = ${userId}"
+          .map(rs => rs.boolean(u.enabled)).single().apply()
+      }.getOrElse(false)
+    }
+  }
 
   override def getUserFromPetServiceAccount(petSA: ServiceAccountSubjectId): IO[Option[WorkbenchUser]] = {
     runInTransaction { implicit session =>
