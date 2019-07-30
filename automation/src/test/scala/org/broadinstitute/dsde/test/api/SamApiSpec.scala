@@ -165,17 +165,11 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
       val proxyGroup2_1 = Sam.user.proxyGroup(email2.value)(authToken1)
       val proxyGroup2_2 = Sam.user.proxyGroup(email2.value)(authToken2)
 
-/* Re-enable this code and remove the temporary code below after fixing rawls for GAWB-2933
-      val expectedProxyEmail1 = s"${username1}_$userId1@${gcsConfig.appsDomain}"
-*/
       val expectedProxyEmail1 = s"$userId1@${gcsConfig.appsDomain}"
 
       proxyGroup1_1.value should endWith (expectedProxyEmail1)
       proxyGroup1_2.value should endWith (expectedProxyEmail1)
 
-/* Re-enable this code and remove the temporary code below after fixing rawls for GAWB-2933
-      val expectedProxyEmail2 = s"${username2}_$userId2@${gcsConfig.appsDomain}"
-*/
       val expectedProxyEmail2 = s"$userId2@${gcsConfig.appsDomain}"
 
       proxyGroup2_1.value should endWith (expectedProxyEmail2)
@@ -197,9 +191,6 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
         val proxyGroup_1 = Sam.user.proxyGroup(petSAEmail.value)(authToken1)
         val proxyGroup_2 = Sam.user.proxyGroup(petSAEmail.value)(authToken2)
 
-        /* Re-enable this code and remove the temporary code below after fixing rawls for GAWB-2933
-      val expectedProxyEmail = s"${username}_$userId@${gcsConfig.appsDomain}"
-*/
         val expectedProxyEmail = s"$userId@${gcsConfig.appsDomain}"
 
         proxyGroup_1.value should endWith(expectedProxyEmail)

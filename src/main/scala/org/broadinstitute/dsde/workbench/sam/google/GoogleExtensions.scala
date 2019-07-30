@@ -68,15 +68,8 @@ class GoogleExtensions(
   private val maxGroupEmailLength = 64
 
   private[google] def toProxyFromUser(userId: WorkbenchUserId): WorkbenchEmail =
-  /* Re-enable this code and remove the temporary code below after fixing rawls for GAWB-2933
-    val username = user.email.value.split("@").head
-    val emailSuffix = s"_${user.id.value}@${googleServicesConfig.appsDomain}"
-    val maxUsernameLength = maxGroupEmailLength - emailSuffix.length
-    WorkbenchEmail(username.take(maxUsernameLength) + emailSuffix)
-     */
     WorkbenchEmail(s"${googleServicesConfig.resourceNamePrefix.getOrElse("")}PROXY_${userId.value}@${googleServicesConfig.appsDomain}")
 
-  /**/
   override val emailDomain = googleServicesConfig.appsDomain
   private[google] val allUsersGroupEmail = WorkbenchEmail(
     s"${googleServicesConfig.resourceNamePrefix.getOrElse("")}GROUP_${allUsersGroupName.value}@$emailDomain")
@@ -253,9 +246,6 @@ class GoogleExtensions(
       allUsersGroup <- getOrCreateAllUsersGroup(directoryDAO)
       _ <- googleDirectoryDAO.addMemberToGroup(allUsersGroup.email, proxyEmail)
 
-      /* Re-enable this code after fixing rawls for GAWB-2933
-      _ <- directoryDAO.addProxyGroup(user.id, proxyEmail)
-     */
     } yield ()
   }
 
@@ -540,9 +530,6 @@ class GoogleExtensions(
     }
 
   private[google] def getUserProxy(userId: WorkbenchUserId): Future[Option[WorkbenchEmail]] =
-    /* Re-enable this code and remove the temporary code below after fixing rawls for GAWB-2933
-    directoryDAO.readProxyGroup(userId)
-     */
     Future.successful(Some(toProxyFromUser(userId)))
 
   private def withProxyEmail[T](userId: WorkbenchUserId)(f: WorkbenchEmail => Future[T]): Future[T] =
