@@ -92,11 +92,6 @@ class GoogleExtensionRoutesSpec extends GoogleExtensionRoutesSpecHelper with Sca
   private val resourceType = ResourceType(ResourceTypeName("rt"), Set(SamResourceActionPatterns.alterPolicies, ResourceActionPattern("can_compute", "", false), SamResourceActionPatterns.readPolicies), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("alter_policies"), ResourceAction("read_policies")))), ResourceRoleName("owner"))
 
   "POST /api/google/policy/{resourceTypeName}/{resourceId}/{accessPolicyName}/sync" should "204 Create Google group for policy" in {
-///* Re-enable this code and remove the temporary code below after fixing rawls for GAWB-2933
-//    val defaultUserProxyEmail = WorkbenchEmail(s"user1_user123@${googleServicesConfig.appsDomain}")
-//*/
-//    val defaultUserProxyEmail = WorkbenchEmail(s"PROXY_user123@${googleServicesConfig.appsDomain}")
-///**/
     val resourceTypes = Map(resourceType.name -> resourceType)
     val (user, headers, _, routes) = createTestUser(resourceTypes)
 
@@ -239,11 +234,7 @@ class GoogleExtensionRoutesSpec extends GoogleExtensionRoutesSpecHelper with Sca
 trait GoogleExtensionRoutesSpecHelper extends FlatSpec with Matchers with ScalatestRouteTest with TestSupport with MockitoSugar{
   val defaultUserId = genWorkbenchUserId(System.currentTimeMillis())
   val defaultUserEmail = genNonPetEmail.sample.get
-  /* Re-enable this code and remove the temporary code below after fixing rawls for GAWB-2933
-    val defaultUserProxyEmail = WorkbenchEmail(s"newuser_$defaultUserId@${googleServicesConfig.appsDomain}")
-  */
   val defaultUserProxyEmail = WorkbenchEmail(s"PROXY_$defaultUserId@${googleServicesConfig.appsDomain}")
-  /**/
 
   val configResourceTypes = TestSupport.configResourceTypes
 

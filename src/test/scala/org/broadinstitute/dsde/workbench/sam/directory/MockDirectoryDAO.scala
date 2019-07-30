@@ -9,7 +9,6 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.ServiceAccountSubjectId
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicy, BasicWorkbenchGroup}
-import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO.Attr
 
 import scala.collection.concurrent.TrieMap
 import scala.collection.mutable
@@ -112,10 +111,6 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
   override def deleteUser(userId: WorkbenchUserId): IO[Unit] = IO {
     users -= userId
   }
-
-  override def addProxyGroup(userId: WorkbenchUserId, proxyEmail: WorkbenchEmail): IO[Unit] = addUserAttribute(userId, Attr.proxyEmail, proxyEmail)
-
-  override def readProxyGroup(userId: WorkbenchUserId): IO[Option[WorkbenchEmail]] = readUserAttribute[WorkbenchEmail](userId, Attr.proxyEmail)
 
   override def listUsersGroups(userId: WorkbenchUserId): IO[Set[WorkbenchGroupIdentity]] = IO {
     listSubjectsGroups(userId, Set.empty).map(_.id)
