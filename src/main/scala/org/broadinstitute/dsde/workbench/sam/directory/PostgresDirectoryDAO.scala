@@ -504,18 +504,22 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
 
   override def enableIdentity(subject: WorkbenchSubject): IO[Unit] = {
     runInTransaction { implicit session =>
-      if (subject.isInstanceOf[WorkbenchUserId]) {
-        val u = UserTable.column
-        samsql"update ${UserTable.table} set ${u.enabled} = true where ${u.id} = ${subject.asInstanceOf[WorkbenchUserId]}".update().apply()
+      subject match {
+        case userId: WorkbenchUserId =>
+          val u = UserTable.column
+          samsql"update ${UserTable.table} set ${u.enabled} = true where ${u.id} = ${userId}".update().apply()
+        case _ => // other types of WorkbenchSubjects cannot be enabled
       }
     }
   }
 
   override def disableIdentity(subject: WorkbenchSubject): IO[Unit] = {
     runInTransaction { implicit session =>
-      if (subject.isInstanceOf[WorkbenchUserId]) {
-        val u = UserTable.column
-        samsql"update ${UserTable.table} set ${u.enabled} = false where ${u.id} = ${subject.asInstanceOf[WorkbenchUserId]}".update().apply()
+      subject match {
+        case userId: WorkbenchUserId =>
+          val u = UserTable.column
+          samsql"update ${UserTable.table} set ${u.enabled} = false where ${u.id} = ${userId}".update().apply()
+        case _ => // other types of WorkbenchSubjects cannot be disabled
       }
     }
   }
