@@ -508,5 +508,26 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
 
       "lists all policies that a user is in directly" is pending
     }
+
+    "listAncestorGroups" - {
+      "list all of the groups a group is in" in {
+        val subSubGroup = BasicWorkbenchGroup(WorkbenchGroupName("ssg"), Set.empty, WorkbenchEmail("ssg@groups.r.us"))
+        val subGroup = BasicWorkbenchGroup(WorkbenchGroupName("sg"), Set(subSubGroup.id), WorkbenchEmail("sg@groups.r.us"))
+        val directParentGroup = BasicWorkbenchGroup(WorkbenchGroupName("dpg"), Set(subGroup.id, subSubGroup.id), WorkbenchEmail("dpg@groups.r.us"))
+        val indirectParentGroup = BasicWorkbenchGroup(WorkbenchGroupName("ipg"), Set(subGroup.id), WorkbenchEmail("ipg@groups.r.us"))
+
+        dao.createGroup(subSubGroup).unsafeRunSync()
+        dao.createGroup(subGroup).unsafeRunSync()
+        dao.createGroup(directParentGroup).unsafeRunSync()
+        dao.createGroup(indirectParentGroup).unsafeRunSync()
+
+        val ancestorGroups = dao.listAncestorGroups(subSubGroup.id).unsafeRunSync()
+        ancestorGroups should contain theSameElementsAs Set(subGroup.id, directParentGroup.id, indirectParentGroup.id)
+      }
+
+      "list all of the policies a group is in" is pending
+      "list all of the groups a policy is in" is pending
+      "list all of the policies a policy is in" is pending
+    }
   }
 }

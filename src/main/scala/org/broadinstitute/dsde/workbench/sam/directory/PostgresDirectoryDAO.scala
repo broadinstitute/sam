@@ -372,36 +372,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
   }
 
   override def listUsersGroups(userId: WorkbenchUserId): IO[Set[WorkbenchGroupIdentity]] = {
-    runInTransaction { implicit session =>
-      val ancestorGroupsTable = SubGroupMemberTable("ancestor_groups")
-      val ag = ancestorGroupsTable.syntax("ag")
-      val agColumn = ancestorGroupsTable.column
-
-      val gm = GroupMemberTable.syntax("gm")
-      val pg = GroupMemberTable.syntax("parent_groups")
-      val g = GroupTable.syntax("g")
-      val p = PolicyTable.syntax("p")
-      val r = ResourceTable.syntax("r")
-      val rt = ResourceTypeTable.syntax("rt")
-
-      val listGroupsQuery =
-        samsql"""WITH RECURSIVE ${ancestorGroupsTable.table}(${agColumn.parentGroupId}, ${agColumn.memberGroupId}) AS (
-                    select ${gm.groupId}, ${gm.memberGroupId}
-                    from ${GroupMemberTable as gm}
-                    where ${gm.memberUserId} = ${userId}
-                    union
-                    select ${pg.groupId}, ${pg.memberGroupId}
-                    from ${GroupMemberTable as pg}
-                    join ${ancestorGroupsTable as ag} ON ${agColumn.parentGroupId} = ${pg.memberGroupId}
-          ) select distinct(${g.name}) as ${g.resultName.name}, ${p.result.name}, ${r.result.name}, ${rt.result.name}
-            from ${GroupTable as g}
-            join ${ancestorGroupsTable as ag} on ${ag.parentGroupId} = ${g.id}
-            left join ${PolicyTable as p} on ${p.groupId} = ${g.id}
-            left join ${ResourceTable as r} on ${p.resourceId} = ${r.id}
-            left join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}"""
-
-      listGroupsQuery.map(resultSetToGroupIdentity(_, g, p, r, rt)).list().apply().toSet
-    }
+    listMemberOfGroups(userId)
   }
 
   /** Extracts a WorkbenchGroupIdentity from a SQL query
@@ -530,7 +501,49 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
                where ${gm.groupId} = (${workbenchGroupIdentityToGroupPK(groupId)})"""
   }
 
-  override def listAncestorGroups(groupId: WorkbenchGroupIdentity): IO[Set[WorkbenchGroupIdentity]] = ???
+  private def listMemberOfGroups(subject: WorkbenchSubject): IO[Set[WorkbenchGroupIdentity]] = {
+    val gm = GroupMemberTable.syntax("gm")
+    val g = GroupTable.syntax("g")
+    val p = PolicyTable.syntax("p")
+
+    val topQueryWhere = subject match {
+      case userId: WorkbenchUserId => samsqls"where ${gm.memberUserId} = ${userId}"
+      case workbenchGroupIdentity: WorkbenchGroupIdentity => samsqls"where ${gm.memberGroupId} = (${workbenchGroupIdentityToGroupPK(workbenchGroupIdentity)})"
+      case _ => throw new WorkbenchException(s"Unexpected WorkbenchSubject. Expected WorkbenchUserId or WorkbenchGroupIdentity but got ${subject}")
+    }
+
+    runInTransaction { implicit session =>
+      val ancestorGroupsTable = SubGroupMemberTable("ancestor_groups")
+      val ag = ancestorGroupsTable.syntax("ag")
+      val agColumn = ancestorGroupsTable.column
+
+      val pg = GroupMemberTable.syntax("parent_groups")
+      val r = ResourceTable.syntax("r")
+      val rt = ResourceTypeTable.syntax("rt")
+
+      val listGroupsQuery =
+        samsql"""WITH RECURSIVE ${ancestorGroupsTable.table}(${agColumn.parentGroupId}, ${agColumn.memberGroupId}) AS (
+                    select ${gm.groupId}, ${gm.memberGroupId}
+                    from ${GroupMemberTable as gm}
+                    ${topQueryWhere}
+                    union
+                    select ${pg.groupId}, ${pg.memberGroupId}
+                    from ${GroupMemberTable as pg}
+                    join ${ancestorGroupsTable as ag} ON ${agColumn.parentGroupId} = ${pg.memberGroupId}
+          ) select distinct(${g.name}) as ${g.resultName.name}, ${p.result.name}, ${r.result.name}, ${rt.result.name}
+            from ${GroupTable as g}
+            join ${ancestorGroupsTable as ag} on ${ag.parentGroupId} = ${g.id}
+            left join ${PolicyTable as p} on ${p.groupId} = ${g.id}
+            left join ${ResourceTable as r} on ${p.resourceId} = ${r.id}
+            left join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}"""
+
+      listGroupsQuery.map(resultSetToGroupIdentity(_, g, p, r, rt)).list().apply().toSet
+    }
+  }
+
+  override def listAncestorGroups(groupId: WorkbenchGroupIdentity): IO[Set[WorkbenchGroupIdentity]] = {
+    listMemberOfGroups(groupId)
+  }
 
   override def enableIdentity(subject: WorkbenchSubject): IO[Unit] = {
     runInTransaction { implicit session =>
