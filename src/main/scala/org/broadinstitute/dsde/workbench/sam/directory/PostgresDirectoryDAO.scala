@@ -371,10 +371,6 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     }
   }
 
-  override def addProxyGroup(userId: WorkbenchUserId, proxyEmail: WorkbenchEmail): IO[Unit] = ???
-
-  override def readProxyGroup(userId: WorkbenchUserId): IO[Option[WorkbenchEmail]] = ???
-
   override def listUsersGroups(userId: WorkbenchUserId): IO[Set[WorkbenchGroupIdentity]] = {
     runInTransaction { implicit session =>
       val ancestorGroupsTable = SubGroupMemberTable("ancestor_groups")
