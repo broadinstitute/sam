@@ -657,9 +657,36 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     WorkbenchUser(userRecord.id, userRecord.googleSubjectId, userRecord.email)
   }
 
-  override def getManagedGroupAccessInstructions(groupName: WorkbenchGroupName): IO[Option[String]] = ???
+  override def getManagedGroupAccessInstructions(groupName: WorkbenchGroupName): IO[Option[String]] = {
+    runInTransaction { implicit session =>
+      val groupTable = GroupTable.syntax
+      val accessInstructionsTable = AccessInstructionsTable.syntax
 
-  override def setManagedGroupAccessInstructions(groupName: WorkbenchGroupName, accessInstructions: String): IO[Unit] = ???
+      val loadAccessInstructionsQuery = samsql"""select ${accessInstructionsTable.resultAll}
+                from ${AccessInstructionsTable as accessInstructionsTable}
+                join ${GroupTable as groupTable} on ${groupTable.id} = ${accessInstructionsTable.groupId}
+                where ${groupTable.name} = ${groupName}"""
+
+      val accessInstructionsOpt = loadAccessInstructionsQuery.map(AccessInstructionsTable(accessInstructionsTable)).single().apply()
+      accessInstructionsOpt.map(_.instructions)
+    }
+  }
+
+  override def setManagedGroupAccessInstructions(groupName: WorkbenchGroupName, accessInstructions: String): IO[Unit] = {
+    runInTransaction { implicit session =>
+      val groupPKQuery = workbenchGroupIdentityToGroupPK(groupName)
+      val accessInstructionsColumn = AccessInstructionsTable.column
+
+      val upsertAccessInstructionsQuery = samsql"""insert into ${AccessInstructionsTable.table}
+                            (${accessInstructionsColumn.groupId}, ${accessInstructionsColumn.instructions})
+                            values((${groupPKQuery}), ${accessInstructions})
+                            on conflict (${accessInstructionsColumn.groupId})
+                            do update set ${accessInstructionsColumn.instructions} = ${accessInstructions}
+                            where  ${AccessInstructionsTable.syntax.groupId} = (${groupPKQuery})"""
+
+      upsertAccessInstructionsQuery.update().apply()
+    }
+  }
 
   override def setGoogleSubjectId(userId: WorkbenchUserId, googleSubjectId: GoogleSubjectId): IO[Unit] = ???
 }

@@ -17,4 +17,6 @@ object AccessInstructionsTable extends SQLSyntaxSupport[AccessInstructionsRecord
     rs.get(e.groupId),
     rs.get(e.instructions)
   )
+
+  def apply(o: SyntaxProvider[AccessInstructionsRecord])(rs: WrappedResultSet): AccessInstructionsRecord = apply(o.resultName)(rs)
 }
