@@ -362,8 +362,10 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
       val userTable = UserTable.syntax
 
       val loadUserQuery = samsql"select ${userTable.resultAll} from ${UserTable as userTable} where ${userTable.id} = ${userId}"
-      loadUserQuery.map(UserTable(userTable))
-        .single().apply().map(unmarshalUserRecord)
+      val pls = loadUserQuery.map(UserTable(userTable))
+        .single().apply()
+        println(pls)
+        pls.map(unmarshalUserRecord)
     }
   }
 
@@ -688,7 +690,12 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
 
   override def setManagedGroupAccessInstructions(groupName: WorkbenchGroupName, accessInstructions: String): IO[Unit] = ???
 
-  override def setGoogleSubjectId(userId: WorkbenchUserId, googleSubjectId: GoogleSubjectId): IO[Unit] = ???
+  override def setGoogleSubjectId(userId: WorkbenchUserId, googleSubjectId: GoogleSubjectId): IO[Unit] = {
+    runInTransaction { implicit session =>
+      val u = UserTable.column
+      samsql"update ${UserTable.table} set ${u.googleSubjectId} = ${googleSubjectId} where ${u.id} = ${userId}".update().apply()
+    }
+  }
 }
 
 // these 2 case classes represent the logical table used in nested group queries

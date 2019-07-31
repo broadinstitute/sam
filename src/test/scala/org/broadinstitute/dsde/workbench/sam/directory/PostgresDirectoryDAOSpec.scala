@@ -214,11 +214,18 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
       "remove policies from other policies" is pending
     }
 
-    "createUser and loadUser" - {
-      "create and load a user" in {
+    "createUser" - {
+      "create a user" in {
         dao.createUser(defaultUser).unsafeRunSync() shouldEqual defaultUser
         val loadedUser = dao.loadUser(defaultUser.id).unsafeRunSync().getOrElse(fail(s"failed to load user ${defaultUser.id}"))
         loadedUser shouldEqual defaultUser
+      }
+    }
+
+    "loadUser" - {
+      "load a user without a google subject id" in {
+        dao.createUser(defaultUser.copy(googleSubjectId = None)).unsafeRunSync()
+        dao.loadUser(defaultUser.id).unsafeRunSync().map(user => user.googleSubjectId shouldBe None)
       }
     }
 
@@ -554,6 +561,18 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
       }
 
       "load the synchronized date for a policy" is pending
+    }
+
+    "setGoogleSubjectId" - {
+      "update the googleSubjectId for a user" in {
+        val newGoogleSubjectId = GoogleSubjectId("newGoogleSubjectId")
+        dao.createUser(defaultUser.copy(googleSubjectId = None)).unsafeRunSync()
+
+        dao.loadUser(defaultUser.id).unsafeRunSync().flatMap(_.googleSubjectId) shouldBe None
+        dao.setGoogleSubjectId(defaultUser.id, newGoogleSubjectId).unsafeRunSync()
+
+        dao.loadUser(defaultUser.id).unsafeRunSync().flatMap(_.googleSubjectId) shouldBe Option(newGoogleSubjectId)
+      }
     }
   }
 }
