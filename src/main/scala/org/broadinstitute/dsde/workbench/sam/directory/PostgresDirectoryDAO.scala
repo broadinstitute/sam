@@ -323,7 +323,15 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
 
   override def getSynchronizedDate(groupId: WorkbenchGroupIdentity): IO[Option[Date]] = ???
 
-  override def getSynchronizedEmail(groupId: WorkbenchGroupIdentity): IO[Option[WorkbenchEmail]] = ???
+  override def getSynchronizedEmail(groupId: WorkbenchGroupIdentity): IO[Option[WorkbenchEmail]] = {
+    import SamTypeBinders._
+    runInTransaction { implicit session =>
+      val g = GroupTable.column
+
+      samsql"select ${g.email} from ${GroupTable.table} where ${g.id} = (${workbenchGroupIdentityToGroupPK(groupId)})"
+        .map(rs => rs.get[WorkbenchEmail](g.email)).single().apply()
+    }
+  }
 
   override def loadSubjectFromEmail(email: WorkbenchEmail): IO[Option[WorkbenchSubject]] = ???
 

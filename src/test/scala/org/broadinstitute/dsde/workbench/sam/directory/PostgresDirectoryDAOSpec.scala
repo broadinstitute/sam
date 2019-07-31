@@ -529,5 +529,15 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
       "list all of the groups a policy is in" is pending
       "list all of the policies a policy is in" is pending
     }
+
+    "getSynchronizedEmail" - {
+      "load the email for a group" in {
+        dao.createGroup(defaultGroup).unsafeRunSync()
+
+        dao.getSynchronizedEmail(defaultGroup.id).unsafeRunSync() shouldEqual Option(defaultGroup.email)
+      }
+
+      "load the email for a policy" is pending
+    }
   }
 }
