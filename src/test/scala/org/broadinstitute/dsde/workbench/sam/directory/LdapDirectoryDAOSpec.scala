@@ -297,6 +297,10 @@ class LdapDirectoryDAOSpec extends FlatSpec with Matchers with TestSupport with 
     }
   }
 
+  it should "do shit" in {
+    dao.setManagedGroupAccessInstructions(WorkbenchGroupName("foo"), "blah").unsafeRunSync()
+  }
+
   it should "handle different kinds of groups" in {
     val userId = WorkbenchUserId(UUID.randomUUID().toString)
     val user = WorkbenchUser(userId, None, WorkbenchEmail("foo@bar.com"))
