@@ -47,8 +47,8 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     val actionPKs = uniqueActions map { action =>
         val insertActionQuery =
           samsql"""insert into ${ResourceActionTable.table}
-                  (${resourceActionTableColumn.resourceTypeId}, ${resourceActionTableColumn.action})
-                  values (${resourceTypePK}, ${action})"""
+                   (${resourceActionTableColumn.resourceTypeId}, ${resourceActionTableColumn.action})
+                   values (${resourceTypePK}, ${action})"""
 
         ResourceActionPK(insertActionQuery.updateAndReturnGeneratedKey().apply())
     }
@@ -59,8 +59,8 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     roles map { role =>
       val insertRoleQuery =
         samsql"""insert into ${ResourceRoleTable.table}
-              (${resourceRoleTableColumn.resourceTypeId}, ${resourceRoleTableColumn.role})
-              values (${resourceTypePK}, ${role.roleName})"""
+                 (${resourceRoleTableColumn.resourceTypeId}, ${resourceRoleTableColumn.role})
+                 values (${resourceTypePK}, ${role.roleName})"""
       val resourceRolePK = ResourceRolePK(insertRoleQuery.updateAndReturnGeneratedKey().apply())
 
         val insertRoleActionQuery =
@@ -70,7 +70,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
                    where ${r.resourceTypeId} = ${resourceTypePK}
                    and   ${a.resourceTypeId} = ${resourceTypePK}
                    and   ${r.role}   = ${role.roleName}
-                   and   ${a.action} IN (${role.actions.mkString(",")})
+                   and   ${a.action} IN (${role.actions})
             """
         insertRoleActionQuery.update().apply()
       }
