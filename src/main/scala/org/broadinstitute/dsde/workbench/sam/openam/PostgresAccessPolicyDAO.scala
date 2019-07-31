@@ -148,6 +148,8 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
       val rt = ResourceTypeTable.syntax("rt")
       val g = GroupTable.syntax("g")
 
+      // left joins below so we can detect the difference between a resource does not exist vs.
+      // a resource exists but does not have any auth domains
       val query = samsql"""select ${g.result.name}
               from ${ResourceTable as r}
               join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
