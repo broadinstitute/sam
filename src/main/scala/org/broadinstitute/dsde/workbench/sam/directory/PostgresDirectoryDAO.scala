@@ -682,7 +682,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
                             values((${groupPKQuery}), ${accessInstructions})
                             on conflict (${accessInstructionsColumn.groupId})
                             do update set ${accessInstructionsColumn.instructions} = ${accessInstructions}
-                            where  ${AccessInstructionsTable.syntax.groupId} = (${groupPKQuery})"""
+                            where ${AccessInstructionsTable.syntax.groupId} = (${groupPKQuery})"""
 
       upsertAccessInstructionsQuery.update().apply()
     }
