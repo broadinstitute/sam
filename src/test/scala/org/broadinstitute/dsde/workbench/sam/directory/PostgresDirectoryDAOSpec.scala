@@ -1,5 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.directory
 
+import java.util.Date
+
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountDisplayName, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.sam.TestSupport
@@ -8,6 +10,7 @@ import org.postgresql.util.PSQLException
 import org.scalatest.{BeforeAndAfterEach, FreeSpec, Matchers}
 
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.duration._
 
 class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfterEach {
   val dao = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.blockingEc)
@@ -538,6 +541,19 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
       }
 
       "load the email for a policy" is pending
+    }
+
+    "getSynchronizedDate" - {
+      "load the synchronized date for a group" in {
+        dao.createGroup(defaultGroup).unsafeRunSync()
+
+        dao.updateSynchronizedDate(defaultGroup.id).unsafeRunSync()
+
+        val loadedDate = dao.getSynchronizedDate(defaultGroup.id).unsafeRunSync().getOrElse(fail("failed to load date"))
+        loadedDate.getTime() should equal (new Date().getTime +- 2.seconds.toMillis)
+      }
+
+      "load the synchronized date for a policy" is pending
     }
   }
 }
