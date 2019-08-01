@@ -22,8 +22,8 @@ object GroupTable extends SQLSyntaxSupport[GroupRecord] {
     rs.get(e.id),
     rs.get(e.name),
     rs.get(e.email),
-    rs.get(e.updatedDate),
-    rs.get(e.synchronizedDate)
+    rs.timestampOpt(e.updatedDate).map(_.toInstant),
+    rs.timestampOpt(e.synchronizedDate).map(_.toInstant)
   )
 
   def apply(o: SyntaxProvider[GroupRecord])(rs: WrappedResultSet): GroupRecord = apply(o.resultName)(rs)
