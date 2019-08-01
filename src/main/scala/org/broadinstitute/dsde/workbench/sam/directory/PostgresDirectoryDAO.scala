@@ -10,10 +10,8 @@ import org.broadinstitute.dsde.workbench.sam.db._
 import org.broadinstitute.dsde.workbench.sam.db.tables._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.util.DatabaseSupport
-import org.broadinstitute.dsde.workbench.sam.errorReportSource
 import scalikejdbc._
 import SamParameterBinderFactory._
-import akka.http.scaladsl.model.StatusCodes
 
 import scala.concurrent.ExecutionContext
 
@@ -54,51 +52,33 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     if (members.isEmpty) {
       0
     } else {
-      // multipleValues (used below to insert all the records into the GroupMemberTable) doesn't really handle implicit parameter binder factories
-      // like namedValues does because it takes a Seq[Any] and so it doesn't know to convert our case classes to ParameterBinders using the PBFs.
-      // Declaring the PBFs and then using them explicitly to convert our case classes to ParameterBinders enables scalike to properly bind our values
-      // to the PreparedStatement. Without these PBFs, scalike throws an error because it doesn't know what SQL type one of our case classes corresponds to
-      val groupIdPBF = databaseKeyPbf[GroupPK]
-      val userIdPBF = valueObjectPbf[WorkbenchUserId]
-      val optionalUserPBF = ParameterBinderFactory.optionalParameterBinderFactory(userIdPBF)
-      val optionalGroupPBF = ParameterBinderFactory.optionalParameterBinderFactory(groupIdPBF)
+      val memberUsers: List[SQLSyntax] = members.collect {
+        case userId: WorkbenchUserId => samsqls"(${groupId}, ${Option(userId)}, ${None})"
+      }.toList
 
-      val parentGroupParameterBinder = groupIdPBF(groupId)
-
-      val memberUserParameterBinders: Seq[(ParameterBinder, ParameterBinder, ParameterBinder)] = members.collect {
-        case userId@WorkbenchUserId(_) => (parentGroupParameterBinder, optionalUserPBF(Option(userId)), optionalGroupPBF(None))
-      }.toSeq
-
-      val memberGroupNames = members.collect {
-        case WorkbenchGroupName(name) => name
+      val memberGroupPKQueries = members.collect {
+        case id: WorkbenchGroupIdentity => samsqls"(${workbenchGroupIdentityToGroupPK(id)})"
       }
 
-      val groupTable = GroupTable.syntax("g")
-      val memberGroupRecords: List[GroupRecord]  = withSQL {
-        select
-          .from(GroupTable as groupTable)
-          .where
-          .in(groupTable.name, memberGroupNames.toSeq)
-      }.map(GroupTable(groupTable)).list().apply()
-
-      val loadedGroupNames = memberGroupRecords.map(_.name.value).toSet
-      val missingNames = memberGroupNames -- loadedGroupNames
-
-      if (missingNames.nonEmpty) {
-        throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"Some group members not found: [${missingNames.mkString(", ")}]"))
+      import SamTypeBinders._
+      val memberGroupPKs: List[GroupPK] = if (memberGroupPKQueries.nonEmpty) {
+        val g = GroupTable.syntax("g")
+        samsql"select ${g.result.id} from ${GroupTable as g} where ${g.id} in (${memberGroupPKQueries})"
+          .map(rs => rs.get[GroupPK](g.resultName.id)).list().apply()
       } else {
-        val memberGroupParameterBinders: List[(ParameterBinder, ParameterBinder, ParameterBinder)] = memberGroupRecords.map { groupRecord =>
-          (parentGroupParameterBinder, optionalUserPBF(None), optionalGroupPBF(Option(groupRecord.id)))
-        }
-        val allMemberParameterBinders = (memberUserParameterBinders ++ memberGroupParameterBinders).map(_.productIterator.toSeq)
+        List.empty
+      }
 
-        val groupMemberColumn = GroupMemberTable.column
-        withSQL {
-          insert
-            .into(GroupMemberTable)
-            .columns(groupMemberColumn.groupId, groupMemberColumn.memberUserId, groupMemberColumn.memberGroupId)
-            .multipleValues(allMemberParameterBinders: _*)
-        }.update().apply()
+      val memberGroups: List[SQLSyntax] = memberGroupPKs.map { groupPK =>
+        samsqls"(${groupId}, ${None}, ${Option(groupPK)})"
+      }
+
+      if (memberGroups.size != memberGroupPKQueries.size) {
+        throw new WorkbenchException("Some member groups not found")
+      } else {
+        val gm = GroupMemberTable.column
+        samsql"insert into ${GroupMemberTable.table} (${gm.groupId}, ${gm.memberUserId}, ${gm.memberGroupId}) values ${memberUsers ++ memberGroups}"
+          .update().apply()
       }
     }
   }
@@ -106,21 +86,22 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
   override def loadGroup(groupName: WorkbenchGroupName): IO[Option[BasicWorkbenchGroup]] = {
     for {
       results <- runInTransaction { implicit session =>
-        val groupTable = GroupTable.syntax("g")
-        val subGroupTable = GroupTable.syntax("sG")
-        val groupMemberTable = GroupMemberTable.syntax("gM")
+        val g = GroupTable.syntax("g")
+        val sg = GroupTable.syntax("sg")
+        val gm = GroupMemberTable.syntax("gm")
 
-        withSQL {
-          select(groupTable.email, groupMemberTable.memberUserId, subGroupTable.name)
-            .from(GroupTable as groupTable)
-            .leftJoin(GroupMemberTable as groupMemberTable)
-            .on(groupTable.id, groupMemberTable.groupId)
-            .leftJoin(GroupTable as subGroupTable)
-            .on(groupMemberTable.memberGroupId, subGroupTable.id)
-            .where
-            .eq(groupTable.name, groupName)
-        }.map(rs => (WorkbenchEmail(rs.string(1)), rs.stringOpt(2).map(WorkbenchUserId), rs.stringOpt(3).map(WorkbenchGroupName)))
-          .list().apply()
+        import SamTypeBinders._
+
+        samsql"""select ${g.result.email}, ${gm.result.memberUserId}, ${sg.result.name}
+                  from ${GroupTable as g}
+                  left join ${GroupMemberTable as gm} on ${g.id} = ${gm.groupId}
+                  left join ${GroupTable as sg} on ${gm.memberGroupId} = ${sg.id}
+                  where ${g.name} = ${groupName}"""
+          .map { rs =>
+            (rs.get[WorkbenchEmail](g.resultName.email),
+              rs.stringOpt(gm.resultName.memberUserId).map(WorkbenchUserId),
+              rs.stringOpt(sg.resultName.name).map(WorkbenchGroupName))
+          }.list().apply()
       }
     } yield {
       if (results.isEmpty) {
@@ -140,26 +121,22 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
   override def loadGroups(groupNames: Set[WorkbenchGroupName]): IO[Stream[BasicWorkbenchGroup]] = {
     for {
       results <- runInTransaction { implicit session =>
-        val groupTable = GroupTable.syntax("g")
-        val subGroupTable = GroupTable.syntax("sG")
-        val groupMemberTable = GroupMemberTable.syntax("gM")
+        val g = GroupTable.syntax("g")
+        val sg = GroupTable.syntax("sg")
+        val gm = GroupMemberTable.syntax("gm")
 
-        val groupNamesValuesSeq = groupNames.map(_.value).toSeq
-        withSQL {
-          select(groupTable.name, groupTable.email, groupMemberTable.memberUserId, subGroupTable.name)
-            .from(GroupTable as groupTable)
-            .leftJoin(GroupMemberTable as groupMemberTable)
-            .on(groupTable.id, groupMemberTable.groupId)
-            .leftJoin(GroupTable as subGroupTable)
-            .on(groupMemberTable.memberGroupId, subGroupTable.id)
-            .where
-            .in(groupTable.name, groupNamesValuesSeq)
-        }.map { rs =>
-          (WorkbenchGroupName(rs.string(1)),
-            WorkbenchEmail(rs.string(2)),
-            rs.stringOpt(3).map(WorkbenchUserId),
-            rs.stringOpt(4).map(WorkbenchGroupName))
-        }.list().apply()
+        import SamTypeBinders._
+        samsql"""select ${g.result.name}, ${g.result.email}, ${gm.result.memberUserId}, ${sg.result.name}
+                  from ${GroupTable as g}
+                  left join ${GroupMemberTable as gm} on ${g.id} = ${gm.groupId}
+                  left join ${GroupTable as sg} on ${gm.memberGroupId} = ${sg.id}
+                  where ${g.name} in (${groupNames})"""
+          .map { rs =>
+            (rs.get[WorkbenchGroupName](g.resultName.name),
+              rs.get[WorkbenchEmail](g.resultName.email),
+              rs.stringOpt(gm.resultName.memberUserId).map(WorkbenchUserId),
+              rs.stringOpt(sg.resultName.name).map(WorkbenchGroupName))
+          }.list().apply()
       }
     } yield {
       results.groupBy(result => (result._1, result._2)).map { case ((groupName, email), results) =>
@@ -179,31 +156,23 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
 
   override def batchLoadGroupEmail(groupNames: Set[WorkbenchGroupName]): IO[Stream[(WorkbenchGroupName, WorkbenchEmail)]] = {
     runInTransaction { implicit session =>
-      val groupTable = GroupTable.syntax("g")
+      val g = GroupTable.column
 
       import SamTypeBinders._
-      withSQL {
-        select(groupTable.name, groupTable.email)
-          .from(GroupTable as groupTable)
-          .where
-          .in(groupTable.name, groupNames.map(_.value).toSeq)
-      }.map(rs => (rs.get[WorkbenchGroupName]("name"), rs.get[WorkbenchEmail]("email"))).list().apply().toStream
+      samsql"select ${g.name}, ${g.email} from ${GroupTable.table} where ${g.name} in (${groupNames})"
+          .map(rs => (rs.get[WorkbenchGroupName](g.name), rs.get[WorkbenchEmail](g.email)))
+          .list().apply().toStream
     }
   }
 
   override def deleteGroup(groupName: WorkbenchGroupName): IO[Unit] = {
     runInTransaction { implicit session =>
-      val groupTable = GroupTable.syntax("g")
+      val g = GroupTable.syntax("g")
 
       // foreign keys in accessInstructions and groupMember tables are set to cascade delete
       // note: this will not remove this group from any parent groups and will throw a
       // foreign key constraint violation error if group is still a member of any parent groups
-      withSQL {
-        delete
-          .from(GroupTable as groupTable)
-          .where
-          .eq(groupTable.name, groupName)
-      }.update().apply()
+      samsql"delete from ${GroupTable as g} where ${g.name} = ${groupName}".update().apply()
     }
   }
 
@@ -288,7 +257,6 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
   }
 
   override def isGroupMember(groupId: WorkbenchGroupIdentity, member: WorkbenchSubject): IO[Boolean] = {
-    val gm = GroupMemberTable.syntax("gm")
     val subGroupMemberTable = SubGroupMemberTable("sub_group")
     val sg = subGroupMemberTable.syntax("sg")
 
@@ -453,7 +421,6 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     // the general structure of the query is:
     // WITH RECURSIVE [subGroupsQuery for each group] SELECT user_id FROM [all the subgroup queries joined on user_id]
     case class QueryAndTable(recursiveMembersQuery: SQLSyntax, table: SubGroupMemberTable)
-    val gm = GroupMemberTable.syntax("gm")
 
     // the toSeq below is important to fix a predictable order
     val recursiveMembersQueries = groupIds.toSeq.zipWithIndex.map { case (groupId, index) =>
