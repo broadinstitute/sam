@@ -240,14 +240,9 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
 
   private def workbenchGroupIdentityToGroupPK(groupId: WorkbenchGroupIdentity): SQLSyntax = {
     groupId match {
-      case group: WorkbenchGroupName => groupPKQueryForGroup(group)
+      case group: WorkbenchGroupName => GroupTable.groupPKQueryForGroup(group)
       case policy: FullyQualifiedPolicyId => groupPKQueryForPolicy(policy)
     }
-  }
-
-  private def groupPKQueryForGroup(groupName: WorkbenchGroupName, groupTableAlias: String = "gpk"): SQLSyntax = {
-    val gpk = GroupTable.syntax(groupTableAlias)
-    samsqls"select ${gpk.id} from ${GroupTable as gpk} where ${gpk.name} = $groupName"
   }
 
   private def groupPKQueryForPolicy(policyId: FullyQualifiedPolicyId,
