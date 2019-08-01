@@ -362,10 +362,8 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
       val userTable = UserTable.syntax
 
       val loadUserQuery = samsql"select ${userTable.resultAll} from ${UserTable as userTable} where ${userTable.id} = ${userId}"
-      val pls = loadUserQuery.map(UserTable(userTable))
-        .single().apply()
-        println(pls)
-        pls.map(unmarshalUserRecord)
+      loadUserQuery.map(UserTable(userTable))
+        .single().apply().map(unmarshalUserRecord)
     }
   }
 
