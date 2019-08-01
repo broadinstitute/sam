@@ -23,18 +23,27 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
 
   implicit val cs: ContextShift[IO] = IO.contextShift(executionContext)
 
-  // Create resourceType should do the following:
-  // 1. Create the resource type
-  // 2. Add the roles
-  // 3. Add the actions
-  // 4. Add patterns
+
   def createResourceType(resourceType: ResourceType): IO[ResourceType] = {
-    runInTransaction { implicit session =>
-      val resourceTypePK = insertResourceType(resourceType.name)
-      insertRolesAndActions(resourceType.roles, resourceTypePK)
-      insertActionPatterns(resourceType.actionPatterns, resourceTypePK)
-      resourceType
+    // Check that actions match action patterns
+    validateRoleActions(resourceType)
+      runInTransaction { implicit session =>
+        // Create resource type
+        val resourceTypePK = insertResourceType(resourceType.name)
+        // Create action patterns
+        insertActionPatterns(resourceType.actionPatterns, resourceTypePK)
+        // Create actions
+        // Create roles
+        // Create role actions
+        insertRolesAndActions(resourceType.roles, resourceTypePK)
+
+        resourceType
     }
+  }
+
+  private def validateRoleActions(resourceType: ResourceType) = {
+    val invalidActions = resourceType.roles.flatMap(_.actions).filter(a => !resourceType.actionPatterns.exists(_.matches(a)))
+    if (invalidActions.nonEmpty) throw new WorkbenchException(s"ResourceType ${resourceType.name} had invalid actions ${invalidActions}")
   }
 
   private def insertRolesAndActions(roles: Set[ResourceRole], resourceTypePK: ResourceTypePK)(implicit session: DBSession) = {
@@ -46,14 +55,16 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     val ra = RoleActionTable.syntax("ra")
 
     val uniqueActions = roles.map(_.actions).flatten
-    val actionPKs = uniqueActions map { action =>
-        val insertActionQuery =
-          samsql"""insert into ${ResourceActionTable.table}
-                   (${resourceActionTableColumn.resourceTypeId}, ${resourceActionTableColumn.action})
-                   values (${resourceTypePK}, ${action})"""
-
-        ResourceActionPK(insertActionQuery.updateAndReturnGeneratedKey().apply())
+    val uniqueActionValues = uniqueActions map { action =>
+      samsqls"(${resourceTypePK}, ${action})"
     }
+
+     val insertActionQuery = samsql"""insert into ${ResourceActionTable.table}
+                                      (${resourceActionTableColumn.resourceTypeId}, ${resourceActionTableColumn.action})
+                                      values ${uniqueActionValues}"""
+
+      ResourceActionPK(insertActionQuery.updateAndReturnGeneratedKey().apply())
+
 
     // 1. Add role to ResourceRole table
     // 2. Add every action for each role to the ResourceAction table
@@ -81,11 +92,14 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
   private def insertActionPatterns(actionPatterns: Set[ResourceActionPattern], resourceTypePK: ResourceTypePK)(implicit session: DBSession) = {
     val resourceActionPatternTableColumn = ResourceActionPatternTable.column
     val actionPatternValues = actionPatterns map { actionPattern =>
-      samsqls"(${resourceTypePK}, ${actionPattern.value})"
+      samsqls"(${resourceTypePK}, ${actionPattern.value}, ${actionPattern.description}, ${actionPattern.authDomainConstrainable})"
     }
     val actionPatternQuery =
       samsql"""insert into ${ResourceActionPatternTable.table}
-              (${resourceActionPatternTableColumn.resourceTypeId}, ${resourceActionPatternTableColumn.actionPattern})
+              (${resourceActionPatternTableColumn.resourceTypeId},
+               ${resourceActionPatternTableColumn.actionPattern},
+               ${resourceActionPatternTableColumn.description},
+               ${resourceActionPatternTableColumn.isAuthDomainConstrainable})
               values ${actionPatternValues}"""
     actionPatternQuery.update().apply()
   }

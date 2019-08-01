@@ -112,6 +112,12 @@
             <column name="action_pattern" type="VARCHAR">
                 <constraints nullable="false"/>
             </column>
+            <column name="description" type="VARCHAR">
+                <constraints nullable="false"/>
+            </column>
+            <column name="is_auth_domain_constrainable" type="VARCHAR" defaultValue="false">
+                <constraints nullable="false"/>
+            </column>
         </createTable>
     </changeSet>
 

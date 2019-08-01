@@ -8,7 +8,9 @@ final case class ResourceActionPatternPK(value: Long) extends DatabaseKey
 final case class ResourceActionPatternName(value: String) extends ValueObject
 final case class ResourceActionPatternRecord(id: ResourceActionPatternPK,
                                              resourceTypeId: ResourceTypePK,
-                                             actionPattern: ResourceActionPatternName)
+                                             actionPattern: ResourceActionPatternName,
+                                             description: String,
+                                             isAuthDomainConstrainable: Boolean)
 
 object ResourceActionPatternTable extends SQLSyntaxSupport[ResourceActionPatternRecord] {
   override def tableName: String = "SAM_RESOURCE_TYPE_ACTION_PATTERN"
@@ -17,6 +19,8 @@ object ResourceActionPatternTable extends SQLSyntaxSupport[ResourceActionPattern
   def apply(e: ResultName[ResourceActionPatternRecord])(rs: WrappedResultSet): ResourceActionPatternRecord = ResourceActionPatternRecord(
     rs.get(e.id),
     rs.get(e.resourceTypeId),
-    rs.get(e.actionPattern)
+    rs.get(e.actionPattern),
+    rs.get(e.description),
+    rs.get(e.isAuthDomainConstrainable)
   )
 }

@@ -1,7 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.openam
 
 import akka.http.scaladsl.model.StatusCodes
-import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchExceptionWithErrorReport, WorkbenchGroupName}
+import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException, WorkbenchExceptionWithErrorReport, WorkbenchGroupName}
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.directory._
@@ -22,15 +22,27 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
   "PostgresAccessPolicyDAO" - {
     val resourceTypeName = ResourceTypeName("awesomeType")
     val resourceType = ResourceType(resourceTypeName,
-                                    Set(ResourceActionPattern("pattern1", "description of pattern1", false),
-                                        ResourceActionPattern("pattern2", "description of pattern2", false)),
-                                    Set(ResourceRole(ResourceRoleName("role1"), Set(ResourceAction("write"), ResourceAction("read"))),
-                                      ResourceRole(ResourceRoleName("role2"), Set(ResourceAction("read")))),
-                                    ResourceRoleName("role1"),
-                                    false)
+      Set(ResourceActionPattern("write", "description of pattern1", false),
+        ResourceActionPattern("read", "description of pattern2", false)),
+      Set(ResourceRole(ResourceRoleName("role1"), Set(ResourceAction("write"), ResourceAction("read"))),
+        ResourceRole(ResourceRoleName("role2"), Set(ResourceAction("read")))),
+      ResourceRoleName("role1"),
+      false)
 
-    "createResourceType" in {
-      dao.createResourceType(resourceType).unsafeRunSync() shouldEqual resourceType
+    "createResourceType" - {
+      "succeeds" in {
+        dao.createResourceType(resourceType).unsafeRunSync() shouldEqual resourceType
+      }
+
+      "fails if actions don't match action patterns" in {
+        val resourceTypeName = ResourceTypeName("awesomeType")
+        val badAction = "edit"
+        val badResourceType = resourceType.copy(roles = Set(ResourceRole(ResourceRoleName("role3"), Set(ResourceAction(badAction)))))
+
+        val exception = intercept[WorkbenchException](dao.createResourceType(badResourceType).unsafeRunSync())
+        exception.getMessage should be (s"ResourceType ${badResourceType.name} had invalid actions Set(${badAction})")
+
+      }
     }
 
     "createResource" - {
