@@ -5,6 +5,7 @@ import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchExcepti
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.directory._
+import org.broadinstitute.dsde.workbench.sam.openam.LoadResourceAuthDomainResult.{Constrained, NotConstrained, ResourceNotFound}
 import org.scalatest.{BeforeAndAfterEach, FreeSpec, Matchers}
 
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -33,7 +34,7 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
     }
 
     "createResource" - {
-      val resource = Resource(resourceTypeName, ResourceId("verySpecialResource"), Set.empty)
+      val resource = Resource(resourceType.name, ResourceId("verySpecialResource"), Set.empty)
 
       "succeeds when resource type exists" in {
         dao.createResourceType(resourceType).unsafeRunSync()
@@ -62,8 +63,41 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
         dirDao.createGroup(authDomainGroup2).unsafeRunSync()
         dao.createResourceType(resourceType).unsafeRunSync()
 
-        val resourceWithAuthDomain = Resource(resourceTypeName, ResourceId("authDomainResource"), Set(authDomainGroupName1, authDomainGroupName2))
+        val resourceWithAuthDomain = Resource(resourceType.name, ResourceId("authDomainResource"), Set(authDomainGroupName1, authDomainGroupName2))
         dao.createResource(resourceWithAuthDomain).unsafeRunSync() shouldEqual resourceWithAuthDomain
+      }
+    }
+
+    "loadResourceAuthDomain" - {
+      "ResourceNotFound" in {
+        dao.createResourceType(resourceType).unsafeRunSync()
+        dao.loadResourceAuthDomain(FullyQualifiedResourceId(resourceType.name, ResourceId("missing"))).unsafeRunSync() should be (ResourceNotFound)
+      }
+
+      "NotConstrained" in {
+        dao.createResourceType(resourceType).unsafeRunSync()
+        val resource = Resource(resourceType.name, ResourceId("verySpecialResource"), Set.empty)
+        dao.createResource(resource).unsafeRunSync()
+        dao.loadResourceAuthDomain(resource.fullyQualifiedId).unsafeRunSync() should be (NotConstrained)
+      }
+
+      "Constrained" in {
+        val authDomainGroupName1 = WorkbenchGroupName("authDomain1")
+        val authDomainGroup1 = BasicWorkbenchGroup(authDomainGroupName1, Set(), WorkbenchEmail("authDomain1@foo.com"))
+        val authDomainGroupName2 = WorkbenchGroupName("authDomain2")
+        val authDomainGroup2 = BasicWorkbenchGroup(authDomainGroupName2, Set(), WorkbenchEmail("authDomain2@foo.com"))
+
+        dirDao.createGroup(authDomainGroup1).unsafeRunSync()
+        dirDao.createGroup(authDomainGroup2).unsafeRunSync()
+        dao.createResourceType(resourceType).unsafeRunSync()
+
+        val resourceWithAuthDomain = Resource(resourceType.name, ResourceId("authDomainResource"), Set(authDomainGroupName1, authDomainGroupName2))
+        dao.createResource(resourceWithAuthDomain).unsafeRunSync() shouldEqual resourceWithAuthDomain
+
+        dao.loadResourceAuthDomain(resourceWithAuthDomain.fullyQualifiedId).unsafeRunSync() match {
+          case Constrained(authDomain) => authDomain.toList should contain theSameElementsAs Set(authDomainGroupName1, authDomainGroupName2)
+          case wrong => fail(s"result was $wrong, not Constrained")
+        }
       }
     }
   }

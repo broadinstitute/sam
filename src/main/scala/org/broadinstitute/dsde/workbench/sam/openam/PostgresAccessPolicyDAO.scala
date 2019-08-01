@@ -1,6 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.openam
 
 import akka.http.scaladsl.model.StatusCodes
+import cats.data.NonEmptyList
 import cats.effect.{ContextShift, IO}
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
@@ -10,6 +11,7 @@ import org.broadinstitute.dsde.workbench.sam.db.DbReference
 import org.broadinstitute.dsde.workbench.sam.db.SamParameterBinderFactory._
 import org.broadinstitute.dsde.workbench.sam.db.tables._
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.openam.LoadResourceAuthDomainResult.{Constrained, NotConstrained, ResourceNotFound}
 import org.broadinstitute.dsde.workbench.sam.util.DatabaseSupport
 import org.postgresql.util.PSQLException
 import scalikejdbc._
@@ -47,8 +49,8 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     val actionPKs = uniqueActions map { action =>
         val insertActionQuery =
           samsql"""insert into ${ResourceActionTable.table}
-                  (${resourceActionTableColumn.resourceTypeId}, ${resourceActionTableColumn.action})
-                  values (${resourceTypePK}, ${action})"""
+                   (${resourceActionTableColumn.resourceTypeId}, ${resourceActionTableColumn.action})
+                   values (${resourceTypePK}, ${action})"""
 
         ResourceActionPK(insertActionQuery.updateAndReturnGeneratedKey().apply())
     }
@@ -59,8 +61,8 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     roles map { role =>
       val insertRoleQuery =
         samsql"""insert into ${ResourceRoleTable.table}
-              (${resourceRoleTableColumn.resourceTypeId}, ${resourceRoleTableColumn.role})
-              values (${resourceTypePK}, ${role.roleName})"""
+                 (${resourceRoleTableColumn.resourceTypeId}, ${resourceRoleTableColumn.role})
+                 values (${resourceTypePK}, ${role.roleName})"""
       val resourceRolePK = ResourceRolePK(insertRoleQuery.updateAndReturnGeneratedKey().apply())
 
         val insertRoleActionQuery =
@@ -70,7 +72,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
                    where ${r.resourceTypeId} = ${resourceTypePK}
                    and   ${a.resourceTypeId} = ${resourceTypePK}
                    and   ${r.role}   = ${role.roleName}
-                   and   ${a.action} IN (${role.actions.mkString(",")})
+                   and   ${a.action} IN (${role.actions})
             """
         insertRoleActionQuery.update().apply()
       }
@@ -138,7 +140,46 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
   }
 
   def deleteResource(resource: FullyQualifiedResourceId): IO[Unit] = ???
-  def loadResourceAuthDomain(resource: FullyQualifiedResourceId): IO[LoadResourceAuthDomainResult] = ???
+
+  def loadResourceAuthDomain(resource: FullyQualifiedResourceId): IO[LoadResourceAuthDomainResult] = {
+    runInTransaction { implicit session =>
+      val ad = AuthDomainTable.syntax("ad")
+      val r = ResourceTable.syntax("r")
+      val rt = ResourceTypeTable.syntax("rt")
+      val g = GroupTable.syntax("g")
+
+      // left joins below so we can detect the difference between a resource does not exist vs.
+      // a resource exists but does not have any auth domains
+      val query = samsql"""select ${g.result.name}
+              from ${ResourceTable as r}
+              join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
+              left outer join ${AuthDomainTable as ad} on ${r.id} = ${ad.resourceId}
+              left outer join ${GroupTable as g} on  ${ad.groupId} = ${g.id}
+              where ${r.name} = ${resource.resourceId} and ${rt.name} = ${resource.resourceTypeName}"""
+
+      val results = query.map(_.stringOpt(g.resultName.name)).list().apply()
+
+      // there are 3 expected forms for the results:
+      //   1) empty list - nothing matched inner joins
+      //   2) 1 row with a None - nothing matched left joins
+      //   3) non-empty list of non-None group names
+      // there are 2 unexpected forms
+      //   a) more than one row, all Nones
+      //   b) more than one row, some Nones
+      // a is treated like 2 and b is treated like 3 with Nones removed
+      val authDomains = NonEmptyList.fromList(results.flatten) // flatten removes Nones
+      authDomains match {
+        case None =>
+          if (results.isEmpty) {
+            ResourceNotFound // case 1
+          } else {
+            NotConstrained  // case 2
+          }
+        case Some(nel) => Constrained(nel.map(WorkbenchGroupName)) // case 3
+      }
+    }
+  }
+
   def listResourcesConstrainedByGroup(groupId: WorkbenchGroupIdentity): IO[Set[Resource]] = ???
   def createPolicy(policy: AccessPolicy): IO[AccessPolicy] = ???
   def deletePolicy(policy: FullyQualifiedPolicyId): IO[Unit] = ???
