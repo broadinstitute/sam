@@ -1,5 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.directory
 
+import java.util.Date
+
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountDisplayName, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.sam.TestSupport
@@ -8,6 +10,7 @@ import org.postgresql.util.PSQLException
 import org.scalatest.{BeforeAndAfterEach, FreeSpec, Matchers}
 
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.duration._
 
 class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfterEach {
   val dao = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.blockingEc)
@@ -211,11 +214,18 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
       "remove policies from other policies" is pending
     }
 
-    "createUser and loadUser" - {
-      "create and load a user" in {
+    "createUser" - {
+      "create a user" in {
         dao.createUser(defaultUser).unsafeRunSync() shouldEqual defaultUser
         val loadedUser = dao.loadUser(defaultUser.id).unsafeRunSync().getOrElse(fail(s"failed to load user ${defaultUser.id}"))
         loadedUser shouldEqual defaultUser
+      }
+    }
+
+    "loadUser" - {
+      "load a user without a google subject id" in {
+        dao.createUser(defaultUser.copy(googleSubjectId = None)).unsafeRunSync()
+        dao.loadUser(defaultUser.id).unsafeRunSync().map(user => user.googleSubjectId shouldBe None)
       }
     }
 
@@ -546,6 +556,41 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
       "list all of the policies a group is in" is pending
       "list all of the groups a policy is in" is pending
       "list all of the policies a policy is in" is pending
+    }
+
+    "getSynchronizedEmail" - {
+      "load the email for a group" in {
+        dao.createGroup(defaultGroup).unsafeRunSync()
+
+        dao.getSynchronizedEmail(defaultGroup.id).unsafeRunSync() shouldEqual Option(defaultGroup.email)
+      }
+
+      "load the email for a policy" is pending
+    }
+
+    "getSynchronizedDate" - {
+      "load the synchronized date for a group" in {
+        dao.createGroup(defaultGroup).unsafeRunSync()
+
+        dao.updateSynchronizedDate(defaultGroup.id).unsafeRunSync()
+
+        val loadedDate = dao.getSynchronizedDate(defaultGroup.id).unsafeRunSync().getOrElse(fail("failed to load date"))
+        loadedDate.getTime() should equal (new Date().getTime +- 2.seconds.toMillis)
+      }
+
+      "load the synchronized date for a policy" is pending
+    }
+
+    "setGoogleSubjectId" - {
+      "update the googleSubjectId for a user" in {
+        val newGoogleSubjectId = GoogleSubjectId("newGoogleSubjectId")
+        dao.createUser(defaultUser.copy(googleSubjectId = None)).unsafeRunSync()
+
+        dao.loadUser(defaultUser.id).unsafeRunSync().flatMap(_.googleSubjectId) shouldBe None
+        dao.setGoogleSubjectId(defaultUser.id, newGoogleSubjectId).unsafeRunSync()
+
+        dao.loadUser(defaultUser.id).unsafeRunSync().flatMap(_.googleSubjectId) shouldBe Option(newGoogleSubjectId)
+      }
     }
   }
 }

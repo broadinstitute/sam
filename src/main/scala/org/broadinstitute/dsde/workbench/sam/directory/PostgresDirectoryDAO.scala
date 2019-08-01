@@ -316,9 +316,23 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     }
   }
 
-  override def getSynchronizedDate(groupId: WorkbenchGroupIdentity): IO[Option[Date]] = ???
+  override def getSynchronizedDate(groupId: WorkbenchGroupIdentity): IO[Option[Date]] = {
+    runInTransaction { implicit session =>
+      val g = GroupTable.column
+      samsql"select ${g.synchronizedDate} from ${GroupTable.table} where ${g.id} = (${workbenchGroupIdentityToGroupPK(groupId)})"
+        .map(rs => rs.timestamp(g.synchronizedDate).toJavaUtilDate).single().apply()
+    }
+  }
 
-  override def getSynchronizedEmail(groupId: WorkbenchGroupIdentity): IO[Option[WorkbenchEmail]] = ???
+  override def getSynchronizedEmail(groupId: WorkbenchGroupIdentity): IO[Option[WorkbenchEmail]] = {
+    import SamTypeBinders._
+    runInTransaction { implicit session =>
+      val g = GroupTable.column
+
+      samsql"select ${g.email} from ${GroupTable.table} where ${g.id} = (${workbenchGroupIdentityToGroupPK(groupId)})"
+        .map(rs => rs.get[WorkbenchEmail](g.email)).single().apply()
+    }
+  }
 
   override def loadSubjectFromEmail(email: WorkbenchEmail): IO[Option[WorkbenchSubject]] = ???
 
@@ -696,7 +710,12 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     }
   }
 
-  override def setGoogleSubjectId(userId: WorkbenchUserId, googleSubjectId: GoogleSubjectId): IO[Unit] = ???
+  override def setGoogleSubjectId(userId: WorkbenchUserId, googleSubjectId: GoogleSubjectId): IO[Unit] = {
+    runInTransaction { implicit session =>
+      val u = UserTable.column
+      samsql"update ${UserTable.table} set ${u.googleSubjectId} = ${googleSubjectId} where ${u.id} = ${userId}".update().apply()
+    }
+  }
 }
 
 // these 2 case classes represent the logical table used in nested group queries

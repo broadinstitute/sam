@@ -17,8 +17,8 @@ object GroupMemberTable extends SQLSyntaxSupport[GroupMemberRecord] {
   def apply(e: ResultName[GroupMemberRecord])(rs: WrappedResultSet): GroupMemberRecord = GroupMemberRecord(
     rs.get(e.id),
     rs.get(e.groupId),
-    rs.get(e.memberUserId),
-    rs.get(e.memberGroupId)
+    rs.stringOpt(e.memberUserId).map(WorkbenchUserId),
+    rs.longOpt(e.memberGroupId).map(GroupPK)
   )
 
   def apply(m: SyntaxProvider[GroupMemberRecord])(rs: WrappedResultSet): GroupMemberRecord = apply(m.resultName)(rs)
