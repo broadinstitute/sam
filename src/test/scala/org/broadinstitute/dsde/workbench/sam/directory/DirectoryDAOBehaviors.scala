@@ -589,7 +589,7 @@ trait DirectoryDAOBehaviors extends FreeSpec with Matchers { this: FreeSpec =>
         }
       }
 
-      "LdapTests" - {
+      "Pre-existing Ldap tests" - {
         "create, read, delete groups" in {
           val groupName = WorkbenchGroupName(UUID.randomUUID().toString)
           val group = BasicWorkbenchGroup(groupName, Set.empty, WorkbenchEmail("john@doe.org"))
