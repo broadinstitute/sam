@@ -7,7 +7,7 @@ import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.sam.errorReportSource
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.db.DbReference
+import org.broadinstitute.dsde.workbench.sam.db.{DbReference, SamTypeBinders}
 import org.broadinstitute.dsde.workbench.sam.db.SamParameterBinderFactory._
 import org.broadinstitute.dsde.workbench.sam.db.tables._
 import org.broadinstitute.dsde.workbench.sam.model._
@@ -23,70 +23,92 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
 
   implicit val cs: ContextShift[IO] = IO.contextShift(executionContext)
 
-
   def createResourceType(resourceType: ResourceType): IO[ResourceType] = {
     // Check that actions match action patterns
     validateRoleActions(resourceType)
-      runInTransaction { implicit session =>
-        // Create resource type
-        val resourceTypePK = insertResourceType(resourceType.name)
-        // Create action patterns
-        insertActionPatterns(resourceType.actionPatterns, resourceTypePK)
-        // Create actions
-        // Create roles
-        // Create role actions
-        insertRolesAndActions(resourceType.roles, resourceTypePK)
+    val uniqueActions = resourceType.roles.flatMap(_.actions)
+    runInTransaction { implicit session =>
+      val resourceTypePK = insertResourceType(resourceType.name)
 
-        resourceType
+      insertActionPatterns(resourceType.actionPatterns, resourceTypePK)
+      insertActions(uniqueActions, resourceTypePK)
+      insertRoles(resourceType.roles, resourceTypePK)
+      insertRoleActions(resourceType.roles, resourceTypePK)
+
+      resourceType
     }
   }
 
-  private def validateRoleActions(resourceType: ResourceType) = {
+  // The Actions that get created for a ResourceType must regex.match at least one ActionPattern for that ResourceType
+  // This method collects the actions that do not match at least 1 ActionPattern for this resourceType and lists them
+  // out in an exception
+  // Method is side-effecty.  All actions are valid if there was no exception thrown
+  private def validateRoleActions(resourceType: ResourceType): Unit = {
     val invalidActions = resourceType.roles.flatMap(_.actions).filter(a => !resourceType.actionPatterns.exists(_.matches(a)))
     if (invalidActions.nonEmpty) throw new WorkbenchException(s"ResourceType ${resourceType.name} had invalid actions ${invalidActions}")
   }
 
-  private def insertRolesAndActions(roles: Set[ResourceRole], resourceTypePK: ResourceTypePK)(implicit session: DBSession) = {
-    val resourceRoleTableColumn = ResourceRoleTable.column
-    val resourceActionTableColumn = ResourceActionTable.column
-    val roleActionTableColumn = RoleActionTable.column
-    val r  = ResourceRoleTable.syntax("r")
-    val a  = ResourceActionTable.syntax("a")
-    val ra = RoleActionTable.syntax("ra")
+  private def insertRoleActions(roles: Set[ResourceRole], resourceTypePK: ResourceTypePK)(implicit session: DBSession): Int = {
+    val resourceTypeActions = selectActionsForResourceType(resourceTypePK)
+    val resourceTypeRoles = selectRolesForResourceType(resourceTypePK)
 
-    val uniqueActions = roles.map(_.actions).flatten
-    val uniqueActionValues = uniqueActions map { action =>
+    val roleActionValues = roles.flatMap { role =>
+      val maybeRolePK = resourceTypeRoles.find(r => r.role == role.roleName).map(_.id)
+      val actionPKs = resourceTypeActions.filter(rta => role.actions.contains(rta.action)).map(_.id)
+
+      val rolePK = maybeRolePK.getOrElse(throw new WorkbenchException(s"Cannot add Role Actions because Role '${role.roleName}' does not exist for ResourceType: ${resourceTypePK}"))
+
+      actionPKs.map(actionPK => samsqls"(${rolePK}, ${actionPK})")
+    }
+
+    val insertQuery = samsql"insert into ${RoleActionTable.table}(${RoleActionTable.column.resourceRoleId}, ${RoleActionTable.column.resourceActionId}) values ${roleActionValues}"
+    insertQuery.update().apply()
+  }
+
+  private def selectActionsForResourceType(resourceTypePK: ResourceTypePK)(implicit session: DBSession): List[ResourceActionRecord] = {
+    val actionsQuery =
+      samsql"""select *
+               from ${ResourceActionTable.table}
+               where ${ResourceActionTable.column.resourceTypeId} = ${resourceTypePK}"""
+
+    import SamTypeBinders._
+    actionsQuery.map{ rs =>
+      ResourceActionRecord(rs.get[ResourceActionPK](1), rs.get[ResourceTypePK](2), rs.get[ResourceAction](3))
+    }.list().apply()
+  }
+
+  private def selectRolesForResourceType(resourceTypePK: ResourceTypePK)(implicit session: DBSession): List[ResourceRoleRecord] = {
+    val actionsQuery =
+      samsql"""select *
+               from ${ResourceRoleTable.table}
+               where ${ResourceRoleTable.column.resourceTypeId} = ${resourceTypePK}"""
+
+    import SamTypeBinders._
+    actionsQuery.map{ rs =>
+      ResourceRoleRecord(rs.get[ResourceRolePK](1), rs.get[ResourceTypePK](2), rs.get[ResourceRoleName](3))
+    }.list().apply()
+  }
+
+  private def insertRoles(roles: Set[ResourceRole], resourceTypePK: ResourceTypePK)(implicit session: DBSession): Int = {
+    val roleValues = roles.map(role => samsqls"(${resourceTypePK}, ${role.roleName})")
+    val insertRolesQuery =
+      samsql"""insert into ${ResourceRoleTable.table}(${ResourceRoleTable.column.resourceTypeId}, ${ResourceRoleTable.column.role})
+                 values ${roleValues}"""
+
+    insertRolesQuery.update().apply()
+  }
+
+  // Note: Each ResourceAction that you are saving here should match the regex pattern of at least 1
+  // ResourceActionPattern defined for the specified ResourceType.  This method DOES NOT perform that validation for
+  // you.  It is up to the caller to make sure the actions being saved are valid.
+  private def insertActions(actions: Set[ResourceAction], resourceTypePK: ResourceTypePK)(implicit session: DBSession): Int = {
+    val uniqueActionValues = actions.map { action =>
       samsqls"(${resourceTypePK}, ${action})"
     }
 
-     val insertActionQuery = samsql"""insert into ${ResourceActionTable.table}
-                                      (${resourceActionTableColumn.resourceTypeId}, ${resourceActionTableColumn.action})
-                                      values ${uniqueActionValues}"""
+    val insertActionQuery = samsql"""insert into ${ResourceActionTable.table}(${ResourceActionTable.column.resourceTypeId}, ${ResourceActionTable.column.action}) values ${uniqueActionValues}"""
 
-      ResourceActionPK(insertActionQuery.updateAndReturnGeneratedKey().apply())
-
-
-    // 1. Add role to ResourceRole table
-    // 2. Add every action for each role to the ResourceAction table
-    // 3. Add each Resource Role and Resource Action to the RoleAction table <-- Is this what actually happens?
-    roles map { role =>
-      val insertRoleQuery =
-        samsql"""insert into ${ResourceRoleTable.table}
-                 (${resourceRoleTableColumn.resourceTypeId}, ${resourceRoleTableColumn.role})
-                 values (${resourceTypePK}, ${role.roleName})"""
-      val resourceRolePK = ResourceRolePK(insertRoleQuery.updateAndReturnGeneratedKey().apply())
-
-        val insertRoleActionQuery =
-          samsql"""insert into ${RoleActionTable.table}
-                   select ${r.id}, ${a.id}
-                   from ${ResourceRoleTable as r}, ${ResourceActionTable as a}
-                   where ${r.resourceTypeId} = ${resourceTypePK}
-                   and   ${a.resourceTypeId} = ${resourceTypePK}
-                   and   ${r.role}   = ${role.roleName}
-                   and   ${a.action} IN (${role.actions})
-            """
-        insertRoleActionQuery.update().apply()
-      }
+    insertActionQuery.update().apply()
   }
 
   private def insertActionPatterns(actionPatterns: Set[ResourceActionPattern], resourceTypePK: ResourceTypePK)(implicit session: DBSession) = {
