@@ -31,9 +31,13 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
       val resourceTypePK = insertResourceType(resourceType.name)
 
       insertActionPatterns(resourceType.actionPatterns, resourceTypePK)
-      insertActions(uniqueActions, resourceTypePK)
       insertRoles(resourceType.roles, resourceTypePK)
-      insertRoleActions(resourceType.roles, resourceTypePK)
+
+      // Only save Actions and RoleActions if at least 1 Role has at least 1 Action
+      if (uniqueActions.nonEmpty) {
+        insertActions(uniqueActions, resourceTypePK)
+        insertRoleActions(resourceType.roles, resourceTypePK)
+      }
 
       resourceType
     }
@@ -49,10 +53,13 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
   }
 
   private def insertRoleActions(roles: Set[ResourceRole], resourceTypePK: ResourceTypePK)(implicit session: DBSession): Int = {
+    // Load Actions and Roles from DB because we need their DB IDs
     val resourceTypeActions = selectActionsForResourceType(resourceTypePK)
     val resourceTypeRoles = selectRolesForResourceType(resourceTypePK)
 
-    val roleActionValues = roles.flatMap { role =>
+    // For Roles that do not have any Actions, we can ignore them
+    val rolesWithActions = roles.filter(_.actions.nonEmpty)
+    val roleActionValues = rolesWithActions.flatMap { role =>
       val maybeRolePK = resourceTypeRoles.find(r => r.role == role.roleName).map(_.id)
       val actionPKs = resourceTypeActions.filter(rta => role.actions.contains(rta.action)).map(_.id)
 
@@ -61,8 +68,12 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
       actionPKs.map(actionPK => samsqls"(${rolePK}, ${actionPK})")
     }
 
-    val insertQuery = samsql"insert into ${RoleActionTable.table}(${RoleActionTable.column.resourceRoleId}, ${RoleActionTable.column.resourceActionId}) values ${roleActionValues}"
-    insertQuery.update().apply()
+    if (roleActionValues.nonEmpty) {
+      val insertQuery = samsql"insert into ${RoleActionTable.table}(${RoleActionTable.column.resourceRoleId}, ${RoleActionTable.column.resourceActionId}) values ${roleActionValues}"
+      insertQuery.update().apply()
+    } else {
+      0
+    }
   }
 
   private def selectActionsForResourceType(resourceTypePK: ResourceTypePK)(implicit session: DBSession): List[ResourceActionRecord] = {

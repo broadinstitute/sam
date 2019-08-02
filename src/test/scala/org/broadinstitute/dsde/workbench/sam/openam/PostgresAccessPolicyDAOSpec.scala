@@ -21,27 +21,38 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
 
   "PostgresAccessPolicyDAO" - {
     val resourceTypeName = ResourceTypeName("awesomeType")
-    val resourceType = ResourceType(resourceTypeName,
-      Set(ResourceActionPattern("write", "description of pattern1", false),
-        ResourceActionPattern("read", "description of pattern2", false)),
-      Set(ResourceRole(ResourceRoleName("role1"), Set(ResourceAction("write"), ResourceAction("read"))),
-        ResourceRole(ResourceRoleName("role2"), Set(ResourceAction("read")))),
-      ResourceRoleName("role1"),
-      false)
+
+    val actionPatterns = Set(ResourceActionPattern("write", "description of pattern1", false),
+                             ResourceActionPattern("read", "description of pattern2", false))
+
+    val writeAction = ResourceAction("write")
+    val readAction = ResourceAction("read")
+
+    val ownerRoleName = ResourceRoleName("role1")
+
+    val ownerRole = ResourceRole(ownerRoleName, Set(writeAction, readAction))
+    val readerRole = ResourceRole(ResourceRoleName("role2"), Set(readAction))
+    val actionlessRole = ResourceRole(ResourceRoleName("cantDoNuthin"), Set()) // yeah, it's a double negative, sue me!
+
+    val roles = Set(ownerRole, readerRole, actionlessRole)
+    val resourceType = ResourceType(resourceTypeName, actionPatterns, roles, ownerRoleName, false)
 
     "createResourceType" - {
       "succeeds" in {
         dao.createResourceType(resourceType).unsafeRunSync() shouldEqual resourceType
       }
 
+      "succeeds when there is exactly one Role that has no actions" in {
+        val myResourceType = resourceType.copy(roles = Set(actionlessRole))
+        dao.createResourceType(myResourceType).unsafeRunSync() shouldEqual myResourceType
+      }
+
       "fails if actions don't match action patterns" in {
-        val resourceTypeName = ResourceTypeName("awesomeType")
         val badAction = "edit"
         val badResourceType = resourceType.copy(roles = Set(ResourceRole(ResourceRoleName("role3"), Set(ResourceAction(badAction)))))
 
         val exception = intercept[WorkbenchException](dao.createResourceType(badResourceType).unsafeRunSync())
         exception.getMessage should be (s"ResourceType ${badResourceType.name} had invalid actions Set(${badAction})")
-
       }
     }
 
