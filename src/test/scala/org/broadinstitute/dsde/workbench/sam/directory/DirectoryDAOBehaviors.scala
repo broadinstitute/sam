@@ -13,7 +13,7 @@ import org.scalatest.{FreeSpec, Matchers}
 
 import scala.concurrent.duration._
 
-trait DirectoryDAOBehaviors extends FreeSpec with Matchers { this: FreeSpec =>
+trait DirectoryDAOBehaviors extends Matchers { this: FreeSpec =>
   val defaultGroupName = WorkbenchGroupName("group")
   val defaultGroup = BasicWorkbenchGroup(defaultGroupName, Set.empty, WorkbenchEmail("foo@bar.com"))
   val defaultUserId = WorkbenchUserId("testUser")
@@ -448,13 +448,13 @@ trait DirectoryDAOBehaviors extends FreeSpec with Matchers { this: FreeSpec =>
       "enableIdentity and disableIdentity" - {
         "can enable and disable users" in {
           dao.createUser(defaultUser).unsafeRunSync()
-          dao.isEnabled(defaultUser.id).unsafeRunSync() shouldBe true
-
-          dao.disableIdentity(defaultUser.id).unsafeRunSync()
           dao.isEnabled(defaultUser.id).unsafeRunSync() shouldBe false
 
           dao.enableIdentity(defaultUser.id).unsafeRunSync()
           dao.isEnabled(defaultUser.id).unsafeRunSync() shouldBe true
+
+          dao.disableIdentity(defaultUser.id).unsafeRunSync()
+          dao.isEnabled(defaultUser.id).unsafeRunSync() shouldBe false
         }
 
         "cannot enable and disable pet service accounts" in {

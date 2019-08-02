@@ -346,7 +346,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     runInTransaction { implicit session =>
       val userColumn = UserTable.column
 
-      val insertUserQuery = samsql"insert into ${UserTable.table} (${userColumn.id}, ${userColumn.email}, ${userColumn.googleSubjectId}, ${userColumn.enabled}) values (${user.id}, ${user.email}, ${user.googleSubjectId}, true)"
+      val insertUserQuery = samsql"insert into ${UserTable.table} (${userColumn.id}, ${userColumn.email}, ${userColumn.googleSubjectId}, ${userColumn.enabled}) values (${user.id}, ${user.email}, ${user.googleSubjectId}, false)"
       insertUserQuery.update.apply
       user
     }

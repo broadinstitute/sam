@@ -21,7 +21,7 @@ import cats.implicits._
 /**
   * Created by dvoet on 5/30/17.
   */
-class LdapDirectoryDAOSpec extends FreeSpec with Matchers with TestSupport with BeforeAndAfter with BeforeAndAfterAll with DirectorySubjectNameSupport with DirectoryDAOBehaviors {
+class LdapDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfter with BeforeAndAfterAll with DirectorySubjectNameSupport with DirectoryDAOBehaviors {
   override lazy val directoryConfig: DirectoryConfig = TestSupport.directoryConfig
   val dirURI = new URI(directoryConfig.directoryUrl)
   val connectionPool = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
