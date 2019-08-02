@@ -6,7 +6,7 @@ import org.broadinstitute.dsde.workbench.sam.db.SamTypeBinders
 final case class RoleActionRecord(resourceRoleId: ResourceRolePK,
                                   resourceActionId: ResourceActionPK)
 
-object RoleActionTable extends SQLSyntaxSupport[RoleActionRecord] {
+object RoleActionTable extends SQLSyntaxSupportWithDefaultSamDB[RoleActionRecord] {
   override def tableName: String = "SAM_ROLE_ACTION"
 
   import SamTypeBinders._

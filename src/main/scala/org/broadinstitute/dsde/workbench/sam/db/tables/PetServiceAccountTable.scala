@@ -11,7 +11,7 @@ final case class PetServiceAccountRecord(userId: WorkbenchUserId,
                                          email: WorkbenchEmail,
                                          displayName: ServiceAccountDisplayName)
 
-object PetServiceAccountTable extends SQLSyntaxSupport[PetServiceAccountRecord] {
+object PetServiceAccountTable extends SQLSyntaxSupportWithDefaultSamDB[PetServiceAccountRecord] {
   override def tableName: String = "SAM_PET_SERVICE_ACCOUNT"
 
   import SamTypeBinders._

@@ -8,7 +8,7 @@ final case class AccessInstructionsRecord(id: AccessInstructionsPK,
                                           groupId: GroupPK,
                                           instructions: String)
 
-object AccessInstructionsTable extends SQLSyntaxSupport[AccessInstructionsRecord] {
+object AccessInstructionsTable extends SQLSyntaxSupportWithDefaultSamDB[AccessInstructionsRecord] {
   override def tableName: String = "SAM_ACCESS_INSTRUCTIONS"
 
   import SamTypeBinders._

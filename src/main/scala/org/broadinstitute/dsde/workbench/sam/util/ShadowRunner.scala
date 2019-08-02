@@ -7,6 +7,7 @@ import com.typesafe.scalalogging.LazyLogging
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 import scala.concurrent.ExecutionContext
 import scala.reflect.ClassTag
+import scala.util.Try
 
 case class TimedResult[T](result: Either[Throwable, T], time: FiniteDuration)
 
@@ -79,12 +80,23 @@ object DaoWithShadow {
 
 private class ShadowRunnerDynamicProxy[DAO](realDAO: DAO, shadowDAO: DAO, val resultReporter: ShadowResultReporter, val clock: Clock[IO])(implicit val executionContext: ExecutionContext) extends InvocationHandler with ShadowRunner {
   override def invoke(proxy: Any, method: Method, args: Array[AnyRef]): AnyRef = {
-    // this will throw a class cast exception at runtime if the method does not return an IO
-    // since these are IOs any side effects should be deferred so invoking them here does not do the actual work... just creates the IO
-    val realIO = method.invoke(realDAO, args:_*).asInstanceOf[IO[_]]
-    val shadowIO = method.invoke(shadowDAO, args:_*).asInstanceOf[IO[_]]
-    runWithShadow(MethodCallInfo(method, args), realIO, shadowIO)
+    // there should not be any functions in our DAOs that return non-IO type but scala does funny stuff at the java class level wrt default parameters
+    // so check if the return type is IO, if it is just call it and run with shadow
+    // if not then wrap the call in IO run with shadow then unwrap before returning
+    if (classOf[IO[_]].isAssignableFrom(method.getReturnType)) {
+      // since these are IOs any side effects should be deferred so invoking them here does not do the actual work... just creates the IO
+      val realIO = attempt(method.invoke(realDAO, args: _*).asInstanceOf[IO[_]])
+      val shadowIO = attempt(method.invoke(shadowDAO, args: _*).asInstanceOf[IO[_]])
+      runWithShadow(MethodCallInfo(method, args), realIO, shadowIO)
+    } else {
+      // return type is not IO so wrap them in IO to run with shadow then unwrap
+      val realIO = IO(method.invoke(realDAO, args:_*))
+      val shadowIO = IO(method.invoke(shadowDAO, args:_*))
+      runWithShadow(MethodCallInfo(method, args), realIO, shadowIO).unsafeRunSync()
+    }
   }
+
+  private def attempt(io: => IO[_]): IO[_] = Try(io).recover { case e => IO.raiseError(e) }.get
 }
 
 case class MethodCallInfo(functionName: String, parameterNames: Array[String], parameterValues: Array[AnyRef])
