@@ -69,6 +69,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     }
 
     if (roleActionValues.nonEmpty) {
+      // on conflict do nothing
       val insertQuery = samsql"insert into ${RoleActionTable.table}(${RoleActionTable.column.resourceRoleId}, ${RoleActionTable.column.resourceActionId}) values ${roleActionValues}"
       insertQuery.update().apply()
     } else {
@@ -102,6 +103,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
 
   private def insertRoles(roles: Set[ResourceRole], resourceTypePK: ResourceTypePK)(implicit session: DBSession): Int = {
     val roleValues = roles.map(role => samsqls"(${resourceTypePK}, ${role.roleName})")
+    // on conflict do nothing
     val insertRolesQuery =
       samsql"""insert into ${ResourceRoleTable.table}(${ResourceRoleTable.column.resourceTypeId}, ${ResourceRoleTable.column.role})
                  values ${roleValues}"""
@@ -117,6 +119,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
       samsqls"(${resourceTypePK}, ${action})"
     }
 
+    // on conflict do nothing
     val insertActionQuery = samsql"""insert into ${ResourceActionTable.table}(${ResourceActionTable.column.resourceTypeId}, ${ResourceActionTable.column.action}) values ${uniqueActionValues}"""
 
     insertActionQuery.update().apply()
@@ -127,6 +130,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     val actionPatternValues = actionPatterns map { actionPattern =>
       samsqls"(${resourceTypePK}, ${actionPattern.value}, ${actionPattern.description}, ${actionPattern.authDomainConstrainable})"
     }
+    // Upsert.  possibly throw an error if trying to change isAuthDomainConstrainable from TRUE to FALSE
     val actionPatternQuery =
       samsql"""insert into ${ResourceActionPatternTable.table}
               (${resourceActionPatternTableColumn.resourceTypeId},
@@ -139,7 +143,11 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
 
   private def insertResourceType(resourceTypeName: ResourceTypeName)(implicit session: DBSession): ResourceTypePK = {
     val resourceTypeTableColumn = ResourceTypeTable.column
-    val insertResourceTypeQuery = samsql"""insert into ${ResourceTypeTable.table} (${resourceTypeTableColumn.name}) values (${resourceTypeName.value})"""
+    // on conflict do nothing, but we still need to return the PK and that's the hard part here.  Might need to do a second query
+    val insertResourceTypeQuery =
+      samsql"""insert into ${ResourceTypeTable.table} (${resourceTypeTableColumn.name})
+               values (${resourceTypeName.value})
+               on conflict do nothing"""
 
     ResourceTypePK(insertResourceTypeQuery.updateAndReturnGeneratedKey().apply())
   }

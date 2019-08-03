@@ -54,6 +54,41 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
         val exception = intercept[WorkbenchException](dao.createResourceType(badResourceType).unsafeRunSync())
         exception.getMessage should be (s"ResourceType ${badResourceType.name} had invalid actions Set(${badAction})")
       }
+
+
+      "overwriting a ResourceType with the same name" - {
+        "succeeds" - {
+          "when the new ResourceType" - {
+            "is identical" in {
+              pending
+              dao.createResourceType(resourceType).unsafeRunSync()
+              dao.createResourceType(resourceType).unsafeRunSync() shouldEqual resourceType
+            }
+
+            "adds new" - {
+              "ActionPatterns" in pending
+              "Roles" in pending
+              "Role Actions" in pending
+            }
+
+            "has the same ActionPatterns with modified descriptions" in pending
+          }
+        }
+
+        "fails" - {
+          "when the new ResourceType" - {
+            "is removing at least one" - {
+              "ActionPattern" in pending
+              "Role" in pending
+              "Role Action" in pending
+            }
+
+            // Not sure if we need this next test or not.  I don't want AuthDomain functionality in general to break if
+            // we change the isConstrainable value on one of our patterns
+            "removes an Auth Domain Constraint from an ActionPattern" in pending
+          }
+        }
+      }
     }
 
     "createResource" - {
