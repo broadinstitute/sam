@@ -129,19 +129,28 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     insertActionQuery.update().apply()
   }
 
+  // Performs an UPSERT when a record already exists for this exact ActionPattern for this ResourceType.  Query will
+  // overwrite the `description` and `isAuthDomainConstrainable` columns if the ResourceTypeActionPattern already
+  // exists.
+  // Question:  Should we permit the ability to change `isAuthDomainConstrainable` from TRUE to FALSE?  This may have
+  // consequences to how we enforce auth domains.
   private def insertActionPatterns(actionPatterns: Set[ResourceActionPattern], resourceTypePK: ResourceTypePK)(implicit session: DBSession) = {
     val resourceActionPatternTableColumn = ResourceActionPatternTable.column
     val actionPatternValues = actionPatterns map { actionPattern =>
       samsqls"(${resourceTypePK}, ${actionPattern.value}, ${actionPattern.description}, ${actionPattern.authDomainConstrainable})"
     }
-    // Upsert.  possibly throw an error if trying to change isAuthDomainConstrainable from TRUE to FALSE
+
     val actionPatternQuery =
       samsql"""insert into ${ResourceActionPatternTable.table}
-              (${resourceActionPatternTableColumn.resourceTypeId},
-               ${resourceActionPatternTableColumn.actionPattern},
-               ${resourceActionPatternTableColumn.description},
-               ${resourceActionPatternTableColumn.isAuthDomainConstrainable})
-              values ${actionPatternValues}"""
+                  (${resourceActionPatternTableColumn.resourceTypeId},
+                   ${resourceActionPatternTableColumn.actionPattern},
+                   ${resourceActionPatternTableColumn.description},
+                   ${resourceActionPatternTableColumn.isAuthDomainConstrainable})
+                  values ${actionPatternValues}
+               on conflict (${resourceActionPatternTableColumn.resourceTypeId}, ${resourceActionPatternTableColumn.actionPattern})
+                  do update
+                      set ${resourceActionPatternTableColumn.description} = EXCLUDED.${resourceActionPatternTableColumn.description},
+                          ${resourceActionPatternTableColumn.isAuthDomainConstrainable} = EXCLUDED.${resourceActionPatternTableColumn.isAuthDomainConstrainable}"""
     actionPatternQuery.update().apply()
   }
 

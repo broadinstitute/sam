@@ -247,6 +247,10 @@
     <changeSet logicalFilePath="dummy" author="mtalbott" id="unique_user_member">
         <addUniqueConstraint tableName="SAM_GROUP_MEMBER" columnNames="group_id, member_user_id"/>
     </changeSet>
+    
+    <changeSet logicalFilePath="dummy" id="unique_action_pattern" author="gpolumbo">
+        <addUniqueConstraint tableName="SAM_RESOURCE_TYPE_ACTION_PATTERN" columnNames="resource_type_id, action_pattern"/>
+    </changeSet>
 
     <changeSet logicalFilePath="dummy" author="dvoet" id="index_sgm_group_id">
         <createIndex tableName="SAM_GROUP_MEMBER" indexName="IDX_SGM_GROUP_ID">

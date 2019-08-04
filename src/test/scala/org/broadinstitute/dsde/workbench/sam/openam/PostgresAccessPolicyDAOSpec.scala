@@ -65,9 +65,30 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
             }
 
             "adds new" - {
-              "ActionPatterns" in pending
-              "Roles" in pending
-              "Role Actions" in pending
+              "ActionPatterns" in {
+                val myActionPatterns = actionPatterns + ResourceActionPattern("coolNewPattern", "I am the coolest pattern EVER!  Mwahaha", true)
+                val myResourceType = resourceType.copy(actionPatterns = myActionPatterns)
+
+                dao.createResourceType(resourceType).unsafeRunSync()
+                dao.createResourceType(myResourceType).unsafeRunSync() shouldEqual myResourceType
+              }
+
+              "Roles" in {
+                val myRoles = roles + ResourceRole(ResourceRoleName("blindWriter"), Set(writeAction))
+                val myResourceType = resourceType.copy(roles = myRoles)
+
+                dao.createResourceType(resourceType).unsafeRunSync()
+                dao.createResourceType(myResourceType).unsafeRunSync() shouldEqual myResourceType
+              }
+
+              "Role Actions" in {
+                val myReaderRole = readerRole.copy(actions = Set(readAction, writeAction))
+                val myRoles = Set(myReaderRole, ownerRole, actionlessRole)
+                val myResourceType = resourceType.copy(roles = myRoles)
+
+                dao.createResourceType(resourceType).unsafeRunSync()
+                dao.createResourceType(myResourceType).unsafeRunSync() shouldEqual myResourceType
+              }
             }
 
             "has the same ActionPatterns with modified descriptions" in pending
