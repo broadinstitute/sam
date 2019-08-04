@@ -60,7 +60,6 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
         "succeeds" - {
           "when the new ResourceType" - {
             "is identical" in {
-              pending
               dao.createResourceType(resourceType).unsafeRunSync()
               dao.createResourceType(resourceType).unsafeRunSync() shouldEqual resourceType
             }
