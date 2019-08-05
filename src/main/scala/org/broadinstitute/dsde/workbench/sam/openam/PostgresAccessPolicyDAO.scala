@@ -23,11 +23,15 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
 
   implicit val cs: ContextShift[IO] = IO.contextShift(executionContext)
 
+  // This method obtains an EXCLUSIVE lock on the ResourceType table because if we boot multiple Sam instances at once,
+  // they will all try to (re)create ResourceTypes at the same time and could collide. The lock is automatically
+  // released at the end of the transaction.
   def createResourceType(resourceType: ResourceType): IO[ResourceType] = {
     // Check that actions match action patterns
     validateRoleActions(resourceType)
     val uniqueActions = resourceType.roles.flatMap(_.actions)
     runInTransaction { implicit session =>
+      samsql"lock table ${ResourceTypeTable.table} IN EXCLUSIVE MODE".execute().apply()
       val resourceTypePK = insertResourceType(resourceType.name)
 
       insertActionPatterns(resourceType.actionPatterns, resourceTypePK)

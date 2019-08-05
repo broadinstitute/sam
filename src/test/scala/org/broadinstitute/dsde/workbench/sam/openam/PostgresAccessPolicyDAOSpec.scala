@@ -7,6 +7,8 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.directory._
 import org.broadinstitute.dsde.workbench.sam.openam.LoadResourceAuthDomainResult.{Constrained, NotConstrained, ResourceNotFound}
 import org.scalatest.{BeforeAndAfterEach, FreeSpec, Matchers}
+import scala.concurrent.{Future, Await}
+import scala.concurrent.duration._
 
 import scala.concurrent.ExecutionContext.Implicits.global
 
@@ -55,6 +57,23 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
         exception.getMessage should be (s"ResourceType ${badResourceType.name} had invalid actions Set(${badAction})")
       }
 
+      // This test is hard to write at the moment.  We don't have an easy way to guarantee the race condition at exactly the right time.  Nor do
+      // we have a good way to check if the data that was saved is what we intended.   This spec class could implement DatabaseSupport.  Or the
+      // createResourceType could minimally return the ResourceTypePK in its results.  Or we need some way to get all
+      // of the ResourceTypes from the DB and compare them to what we were trying to save.
+      "succeeds and only creates 1 ResourceType when trying to create multiple identical ResourceTypes at the same time" in {
+
+        pending
+
+        // Since we can't directly force a collision at exactly the right time, kick off a bunch of inserts in parallel
+        // and hope for the best.  <- That's how automated testing is supposed to work right?  Just cross your fingers?
+        val allMyFutures = 0.to(20).map { _ =>
+          dao.createResourceType(resourceType).unsafeToFuture()
+        }
+
+        Await.result(Future.sequence(allMyFutures), 5 seconds)
+        // This is the part where I would want to assert that the database contains only one ResourceType
+      }
 
       "overwriting a ResourceType with the same name" - {
         "succeeds" - {
