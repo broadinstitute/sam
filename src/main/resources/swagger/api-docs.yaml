@@ -18,18 +18,14 @@ produces:
 security:
   - googleoauth:
       - openid
-      - email
-      - profile
 
 securityDefinitions:
   googleoauth:
     type: oauth2
-    authorizationUrl: 'https://accounts.google.com/o/oauth2/auth'
+    authorizationUrl: 'https://dev-277992.okta.com/oauth2/default/v1/authorize'
     flow: implicit
     scopes:
       openid: open id authorization
-      email: email authorization
-      profile: profile authorization
 
 ##########################################################################################
 ## PATHS

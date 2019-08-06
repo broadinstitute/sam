@@ -51,9 +51,9 @@ trait StandardUserInfoDirectives extends UserInfoDirectives {
 object StandardUserInfoDirectives {
   val SAdomain = "\\S+@\\S+\\.iam\\.gserviceaccount\\.com".r
   val accessTokenHeader = "OIDC_access_token"
-  val expiresInHeader = "OIDC_CLAIM_expires_in"
-  val emailHeader = "OIDC_CLAIM_email"
-  val googleSubjectIdHeader = "OIDC_CLAIM_user_id"
+  val expiresInHeader = "OIDC_CLAIM_exp"
+  val emailHeader = "OIDC_CLAIM_sub"
+  val googleSubjectIdHeader = "OIDC_CLAIM_uid"
 
   def isServiceAccount(email: WorkbenchEmail) =
     SAdomain.pattern.matcher(email.value).matches
