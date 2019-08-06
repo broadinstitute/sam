@@ -63,7 +63,7 @@ trait SwaggerRoutes {
             .replace("scopeSeparator: \",\"", "scopeSeparator: \" \"")
             .replace("jsonEditor: false,", "jsonEditor: false," + swaggerOptions)
             .replace("url = \"http://petstore.swagger.io/v2/swagger.json\";", "url = '/api-docs.yaml';")
-            .replace("additionalQueryStringParams: {}", """additionalQueryStringParams: { "nonce": "1234", "idp": "0oa1273hxmZy8f1Yz357" }""")
+            .replace("additionalQueryStringParams: {}", """additionalQueryStringParams: { "nonce": "1234" }""")
         )
       })
     } {
