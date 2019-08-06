@@ -3,9 +3,11 @@ package api
 
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
-import akka.http.scaladsl.server.Directives.{headerValueByName, onSuccess}
+import akka.http.scaladsl.server.Directives.{headerValueByName, onSuccess, optionalHeaderValueByName}
 import akka.http.scaladsl.server._
+import akka.http.scaladsl.server.directives.BasicDirectives.provide
 import akka.http.scaladsl.server.directives.OnSuccessMagnet._
+import akka.http.scaladsl.server.directives.RouteDirectives.reject
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model.google.ServiceAccountSubjectId
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, _}
@@ -22,7 +24,7 @@ trait StandardUserInfoDirectives extends UserInfoDirectives {
   def requireUserInfo: Directive1[UserInfo] =
     (
       headerValueByName(accessTokenHeader) &
-        headerValueByName(googleSubjectIdHeader) &
+        callerId &
         headerValueByName(expiresInHeader) &
         headerValueByName(emailHeader)
     ) tflatMap {
@@ -38,14 +40,27 @@ trait StandardUserInfoDirectives extends UserInfoDirectives {
 
   def requireCreateUser: Directive1[CreateWorkbenchUser] =
     (
-      headerValueByName(googleSubjectIdHeader) &
+      callerId &
         headerValueByName(emailHeader)
     ) tflatMap {
       case (googleSubjectId, email) => {
+        val realEmail = if (!email.contains("@")) {
+          email + "@example.com"
+        } else {
+          email
+        }
         onSuccess(
-          Future.successful(CreateWorkbenchUser(genWorkbenchUserId(System.currentTimeMillis()), GoogleSubjectId(googleSubjectId), WorkbenchEmail(email))))
+          Future.successful(CreateWorkbenchUser(genWorkbenchUserId(System.currentTimeMillis()), GoogleSubjectId(googleSubjectId), WorkbenchEmail(realEmail))))
       }
     }
+
+  def callerId: Directive1[String] = {
+    (optionalHeaderValueByName(googleSubjectIdHeader) & optionalHeaderValueByName(clientIdHeader)).tflatMap {
+      case (Some(uid), _) => provide(uid)
+      case (None, Some(cid)) => provide(cid)
+      case (None, None) => reject(MissingHeaderRejection(googleSubjectIdHeader))
+    }
+  }
 }
 
 object StandardUserInfoDirectives {
@@ -54,6 +69,7 @@ object StandardUserInfoDirectives {
   val expiresInHeader = "OIDC_CLAIM_exp"
   val emailHeader = "OIDC_CLAIM_sub"
   val googleSubjectIdHeader = "OIDC_CLAIM_uid"
+  val clientIdHeader = "OIDC_CLAIM_cid"
 
   def isServiceAccount(email: WorkbenchEmail) =
     SAdomain.pattern.matcher(email.value).matches
