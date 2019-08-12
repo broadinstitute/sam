@@ -74,7 +74,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
       }
 
       if (memberGroups.size != memberGroupPKQueries.size) {
-        throw new WorkbenchException("Some member groups not found")
+        throw new WorkbenchException(s"Some member groups not found. Primary keys for the loaded groups: ${memberGroupPKs}")
       } else {
         val gm = GroupMemberTable.column
         samsql"insert into ${GroupMemberTable.table} (${gm.groupId}, ${gm.memberUserId}, ${gm.memberGroupId}) values ${memberUsers ++ memberGroups}"
