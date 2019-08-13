@@ -9,16 +9,16 @@ import liquibase.database.jvm.JdbcConnection
 import liquibase.resource.{ClassLoaderResourceAccessor, ResourceAccessor}
 import liquibase.{Contexts, Liquibase}
 import org.broadinstitute.dsde.workbench.sam.config.LiquibaseConfig
-import scalikejdbc.{DB, DBSession}
+import scalikejdbc.{ConnectionPool, DBSession, NamedDB}
 import scalikejdbc.config.DBs
 import sun.security.provider.certpath.SunCertPathBuilderException
 
 object DbReference extends LazyLogging {
 
   private def initWithLiquibase(liquibaseConfig: LiquibaseConfig, changelogParameters: Map[String, AnyRef] = Map.empty): Unit = {
-    val dbConnection = DB.connect()
+    val dbConnection = ConnectionPool.borrow('sam_foreground)
     try {
-      val liquibaseConnection = new JdbcConnection(dbConnection.conn)
+      val liquibaseConnection = new JdbcConnection(dbConnection)
       val resourceAccessor: ResourceAccessor = new ClassLoaderResourceAccessor()
       val liquibase = new Liquibase(liquibaseConfig.changelog, resourceAccessor, liquibaseConnection)
 
@@ -42,28 +42,23 @@ object DbReference extends LazyLogging {
     }
   }
 
-  def init(liquibaseConfig: LiquibaseConfig): DbReference = {
-    DBs.setupAll()
-    if (liquibaseConfig.initWithLiquibase)
+  def init(liquibaseConfig: LiquibaseConfig, dbName: Symbol): DbReference = {
+    DBs.setup(dbName)
+    if (liquibaseConfig.initWithLiquibase) {
       initWithLiquibase(liquibaseConfig)
+    }
 
-    DbReference()
+    DbReference(dbName)
   }
 
-  def resource(liquibaseConfig: LiquibaseConfig): Resource[IO, DbReference] = Resource.make(
-    IO(init(liquibaseConfig))
-  )(_ => IO(DBs.closeAll()))
+  def resource(liquibaseConfig: LiquibaseConfig, dbName: Symbol): Resource[IO, DbReference] = Resource.make(
+    IO(init(liquibaseConfig, dbName))
+  )(_ => IO(DBs.close(dbName)))
 }
 
-case class DbReference() {
-  def inReadOnlyTransaction[A](f: DBSession => A): A = {
-    DB.readOnly[A] { implicit session =>
-      f(session)
-    }
-  }
-
+case class DbReference(dbName: Symbol) extends LazyLogging {
   def inLocalTransaction[A](f: DBSession => A): A = {
-    DB.localTx[A] { implicit session =>
+    NamedDB(dbName).localTx[A] { implicit session =>
       f(session)
     }
   }

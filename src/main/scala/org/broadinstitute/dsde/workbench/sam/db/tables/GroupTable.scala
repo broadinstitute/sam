@@ -14,7 +14,7 @@ final case class GroupRecord(id: GroupPK,
                              updatedDate: Option[Instant],
                              synchronizedDate: Option[Instant])
 
-object GroupTable extends SQLSyntaxSupport[GroupRecord] {
+object GroupTable extends SQLSyntaxSupportWithDefaultSamDB[GroupRecord] {
   override def tableName: String = "SAM_GROUP"
 
   import SamTypeBinders._

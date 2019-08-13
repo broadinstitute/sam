@@ -10,7 +10,7 @@ final case class PolicyRecord(id: PolicyPK,
                               groupId: GroupPK,
                               name: AccessPolicyName)
 
-object PolicyTable extends SQLSyntaxSupport[PolicyRecord] {
+object PolicyTable extends SQLSyntaxSupportWithDefaultSamDB[PolicyRecord] {
   override def tableName: String = "SAM_RESOURCE_POLICY"
 
   import SamTypeBinders._

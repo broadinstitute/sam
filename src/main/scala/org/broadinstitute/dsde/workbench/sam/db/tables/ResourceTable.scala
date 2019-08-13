@@ -10,7 +10,7 @@ final case class ResourceRecord(id: ResourcePK,
                                 name: ResourceId,
                                 resourceTypeId: ResourceTypePK)
 
-object ResourceTable extends SQLSyntaxSupport[ResourceRecord] {
+object ResourceTable extends SQLSyntaxSupportWithDefaultSamDB[ResourceRecord] {
   override def tableName: String = "SAM_RESOURCE"
 
   import SamTypeBinders._

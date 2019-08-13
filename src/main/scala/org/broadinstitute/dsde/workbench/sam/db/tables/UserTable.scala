@@ -9,7 +9,7 @@ final case class UserRecord(id: WorkbenchUserId,
                             googleSubjectId: Option[GoogleSubjectId],
                             enabled: Boolean)
 
-object UserTable extends SQLSyntaxSupport[UserRecord] {
+object UserTable extends SQLSyntaxSupportWithDefaultSamDB[UserRecord] {
   override def tableName: String = "SAM_USER"
 
   import SamTypeBinders._

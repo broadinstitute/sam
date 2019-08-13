@@ -6,7 +6,7 @@ import org.broadinstitute.dsde.workbench.sam.db.SamTypeBinders
 final case class PolicyActionRecord(resourcePolicyId: PolicyPK,
                                     resourceActionId: ResourceActionPK)
 
-object PolicyActionTable extends SQLSyntaxSupport[PolicyActionRecord] {
+object PolicyActionTable extends SQLSyntaxSupportWithDefaultSamDB[PolicyActionRecord] {
   override def tableName: String = "SAM_POLICY_ACTION"
 
   import SamTypeBinders._

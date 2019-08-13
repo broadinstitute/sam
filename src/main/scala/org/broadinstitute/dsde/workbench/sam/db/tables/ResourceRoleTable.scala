@@ -9,7 +9,7 @@ final case class ResourceRoleRecord(id: ResourceRolePK,
                                     resourceTypeId: ResourceTypePK,
                                     role: ResourceRoleName)
 
-object ResourceRoleTable extends SQLSyntaxSupport[ResourceRoleRecord] {
+object ResourceRoleTable extends SQLSyntaxSupportWithDefaultSamDB[ResourceRoleRecord] {
   override def tableName: String = "SAM_RESOURCE_ROLE"
 
   import SamTypeBinders._

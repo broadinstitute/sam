@@ -10,7 +10,7 @@ final case class GroupMemberRecord(id: GroupMemberPK,
                                    memberUserId: Option[WorkbenchUserId],
                                    memberGroupId: Option[GroupPK])
 
-object GroupMemberTable extends SQLSyntaxSupport[GroupMemberRecord] {
+object GroupMemberTable extends SQLSyntaxSupportWithDefaultSamDB[GroupMemberRecord] {
   override def tableName: String = "SAM_GROUP_MEMBER"
 
   import SamTypeBinders._
