@@ -34,12 +34,8 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
 
       insertActionPatterns(resourceType.actionPatterns, resourceTypePK)
       insertRoles(resourceType.roles, resourceTypePK)
-
-      // Only save Actions and RoleActions if at least 1 Role has at least 1 Action
-      if (uniqueActions.nonEmpty) {
-        insertActions(uniqueActions, resourceTypePK)
-        insertRoleActions(resourceType.roles, resourceTypePK)
-      }
+      insertActions(uniqueActions, resourceTypePK)
+      insertRoleActions(resourceType.roles, resourceTypePK)
 
       resourceType
     }
@@ -50,9 +46,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     val resourceTypeActions = selectActionsForResourceType(resourceTypePK)
     val resourceTypeRoles = selectRolesForResourceType(resourceTypePK)
 
-    // For Roles that do not have any Actions, we can ignore them
-    val rolesWithActions = roles.filter(_.actions.nonEmpty)
-    val roleActionValues = rolesWithActions.flatMap { role =>
+    val roleActionValues = roles.flatMap { role =>
       val maybeRolePK = resourceTypeRoles.find(r => r.role == role.roleName).map(_.id)
       val actionPKs = resourceTypeActions.filter(rta => role.actions.contains(rta.action)).map(_.id)
 
@@ -103,16 +97,20 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
   }
 
   private def insertActions(actions: Set[ResourceAction], resourceTypePK: ResourceTypePK)(implicit session: DBSession): Int = {
-    val uniqueActionValues = actions.map { action =>
-      samsqls"(${resourceTypePK}, ${action})"
+    if (actions.isEmpty) {
+      return 0
+    } else {
+      val uniqueActionValues = actions.map { action =>
+        samsqls"(${resourceTypePK}, ${action})"
+      }
+
+      val insertActionQuery =
+        samsql"""insert into ${ResourceActionTable.table}(${ResourceActionTable.column.resourceTypeId}, ${ResourceActionTable.column.action})
+                    values ${uniqueActionValues}
+                 on conflict do nothing"""
+
+      insertActionQuery.update().apply()
     }
-
-    val insertActionQuery =
-      samsql"""insert into ${ResourceActionTable.table}(${ResourceActionTable.column.resourceTypeId}, ${ResourceActionTable.column.action})
-                  values ${uniqueActionValues}
-               on conflict do nothing"""
-
-    insertActionQuery.update().apply()
   }
 
   /**
