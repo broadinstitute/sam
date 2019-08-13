@@ -59,13 +59,15 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
         loadedGroup.members shouldEqual members
       }
 
+      "create groups with policy members" is pending
+
       "not allow nonexistent group members" in {
         val subGroup1 = defaultGroup
         val subGroup2 = BasicWorkbenchGroup(WorkbenchGroupName("subGroup2"), Set.empty, WorkbenchEmail("bar@baz.com"))
         val members: Set[WorkbenchSubject] = Set(subGroup1.id, subGroup2.id)
         val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName("parentGroup"), members, WorkbenchEmail("baz@qux.com"))
 
-        assertThrows[WorkbenchExceptionWithErrorReport] {
+        assertThrows[WorkbenchException] {
           dao.createGroup(parentGroup).unsafeRunSync()
         }
       }
