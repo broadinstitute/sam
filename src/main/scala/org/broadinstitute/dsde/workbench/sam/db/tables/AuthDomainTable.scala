@@ -6,7 +6,7 @@ import org.broadinstitute.dsde.workbench.sam.db.SamTypeBinders
 final case class AuthDomainRecord(resourceId: ResourcePK,
                                   groupId: GroupPK)
 
-object AuthDomainTable extends SQLSyntaxSupport[AuthDomainRecord] {
+object AuthDomainTable extends SQLSyntaxSupportWithDefaultSamDB[AuthDomainRecord] {
   override def tableName: String = "SAM_RESOURCE_AUTH_DOMAIN"
 
   import SamTypeBinders._

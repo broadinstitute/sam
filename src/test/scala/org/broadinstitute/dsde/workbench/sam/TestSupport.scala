@@ -158,7 +158,7 @@ object TestSupport extends TestSupport {
 
   def genSamRoutesWithDefault(implicit system: ActorSystem, materializer: Materializer): SamRoutes = genSamRoutes(genSamDependencies())
 
-  lazy val dbRef = DbReference.init(config.as[LiquibaseConfig]("liquibase"))
+  lazy val dbRef = DbReference.init(config.as[LiquibaseConfig]("liquibase"), 'sam_foreground)
 
   def truncateAll: Int = {
     dbRef.inLocalTransaction { implicit session =>

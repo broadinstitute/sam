@@ -10,7 +10,7 @@ final case class ResourceActionPatternRecord(id: ResourceActionPatternPK,
                                              resourceTypeId: ResourceTypePK,
                                              actionPattern: ResourceActionPatternName)
 
-object ResourceActionPatternTable extends SQLSyntaxSupport[ResourceActionPatternRecord] {
+object ResourceActionPatternTable extends SQLSyntaxSupportWithDefaultSamDB[ResourceActionPatternRecord] {
   override def tableName: String = "SAM_RESOURCE_TYPE_ACTION_PATTERN"
 
   import SamTypeBinders._
