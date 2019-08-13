@@ -7,7 +7,7 @@ import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.sam.errorReportSource
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.db.{DbReference, SamTypeBinders}
+import org.broadinstitute.dsde.workbench.sam.db.DbReference
 import org.broadinstitute.dsde.workbench.sam.db.SamParameterBinderFactory._
 import org.broadinstitute.dsde.workbench.sam.db.tables._
 import org.broadinstitute.dsde.workbench.sam.model._
@@ -83,15 +83,13 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
   }
 
   private def selectRolesForResourceType(resourceTypePK: ResourceTypePK)(implicit session: DBSession): List[ResourceRoleRecord] = {
+    val rrt = ResourceRoleTable.syntax("rrt")
     val actionsQuery =
-      samsql"""select *
-               from ${ResourceRoleTable.table}
-               where ${ResourceRoleTable.column.resourceTypeId} = ${resourceTypePK}"""
+      samsql"""select ${rrt.result.*}
+               from ${ResourceRoleTable as rrt}
+               where ${rrt.resourceTypeId} = ${resourceTypePK}"""
 
-    import SamTypeBinders._
-    actionsQuery.map{ rs =>
-      ResourceRoleRecord(rs.get[ResourceRolePK](1), rs.get[ResourceTypePK](2), rs.get[ResourceRoleName](3))
-    }.list().apply()
+    actionsQuery.map(ResourceRoleTable(rrt.resultName)).list().apply()
   }
 
   private def insertRoles(roles: Set[ResourceRole], resourceTypePK: ResourceTypePK)(implicit session: DBSession): Int = {
