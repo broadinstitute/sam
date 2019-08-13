@@ -27,8 +27,6 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
   // they will all try to (re)create ResourceTypes at the same time and could collide. The lock is automatically
   // released at the end of the transaction.
   def createResourceType(resourceType: ResourceType): IO[ResourceType] = {
-    // Check that actions match action patterns
-    validateRoleActions(resourceType)
     val uniqueActions = resourceType.roles.flatMap(_.actions)
     runInTransaction { implicit session =>
       samsql"lock table ${ResourceTypeTable.table} IN EXCLUSIVE MODE".execute().apply()
@@ -45,15 +43,6 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
 
       resourceType
     }
-  }
-
-  // The Actions that get created for a ResourceType must regex.match at least one ActionPattern for that ResourceType
-  // This method collects the actions that do not match at least 1 ActionPattern for this resourceType and lists them
-  // out in an exception
-  // Method is side-effecty.  All actions are valid if there was no exception thrown
-  private def validateRoleActions(resourceType: ResourceType): Unit = {
-    val invalidActions = resourceType.roles.flatMap(_.actions).filter(a => !resourceType.actionPatterns.exists(_.matches(a)))
-    if (invalidActions.nonEmpty) throw new WorkbenchException(s"ResourceType ${resourceType.name} had invalid actions ${invalidActions}")
   }
 
   private def insertRoleActions(roles: Set[ResourceRole], resourceTypePK: ResourceTypePK)(implicit session: DBSession): Int = {
@@ -84,15 +73,13 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
   }
 
   private def selectActionsForResourceType(resourceTypePK: ResourceTypePK)(implicit session: DBSession): List[ResourceActionRecord] = {
+    val rat = ResourceActionTable.syntax("rat")
     val actionsQuery =
-      samsql"""select *
-               from ${ResourceActionTable.table}
-               where ${ResourceActionTable.column.resourceTypeId} = ${resourceTypePK}"""
+      samsql"""select ${rat.result.*}
+               from ${ResourceActionTable as rat}
+               where ${rat.resourceTypeId} = ${resourceTypePK}"""
 
-    import SamTypeBinders._
-    actionsQuery.map{ rs =>
-      ResourceActionRecord(rs.get[ResourceActionPK](1), rs.get[ResourceTypePK](2), rs.get[ResourceAction](3))
-    }.list().apply()
+    actionsQuery.map(ResourceActionTable(rat.resultName)).list().apply()
   }
 
   private def selectRolesForResourceType(resourceTypePK: ResourceTypePK)(implicit session: DBSession): List[ResourceRoleRecord] = {
@@ -117,9 +104,6 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     insertRolesQuery.update().apply()
   }
 
-  // Note: Each ResourceAction that you are saving here should match the regex pattern of at least 1
-  // ResourceActionPattern defined for the specified ResourceType.  This method DOES NOT perform that validation for
-  // you.  It is up to the caller to make sure the actions being saved are valid.
   private def insertActions(actions: Set[ResourceAction], resourceTypePK: ResourceTypePK)(implicit session: DBSession): Int = {
     val uniqueActionValues = actions.map { action =>
       samsqls"(${resourceTypePK}, ${action})"
@@ -133,11 +117,11 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     insertActionQuery.update().apply()
   }
 
-  // Performs an UPSERT when a record already exists for this exact ActionPattern for this ResourceType.  Query will
-  // overwrite the `description` and `isAuthDomainConstrainable` columns if the ResourceTypeActionPattern already
-  // exists.
-  // Question:  Should we permit the ability to change `isAuthDomainConstrainable` from TRUE to FALSE?  This may have
-  // consequences to how we enforce auth domains.
+  /**
+    * Performs an UPSERT when a record already exists for this exact ActionPattern for this ResourceType.  Query will
+    * rerwrite the `description` and `isAuthDomainConstrainable` columns if the ResourceTypeActionPattern already
+    * exists.
+    */
   private def insertActionPatterns(actionPatterns: Set[ResourceActionPattern], resourceTypePK: ResourceTypePK)(implicit session: DBSession) = {
     val resourceActionPatternTableColumn = ResourceActionPatternTable.column
     val actionPatternValues = actionPatterns map { actionPattern =>

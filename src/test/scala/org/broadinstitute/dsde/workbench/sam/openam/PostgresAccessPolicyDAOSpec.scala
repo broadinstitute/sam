@@ -1,7 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.openam
 
 import akka.http.scaladsl.model.StatusCodes
-import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException, WorkbenchExceptionWithErrorReport, WorkbenchGroupName}
+import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchExceptionWithErrorReport, WorkbenchGroupName}
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.directory._
@@ -47,14 +47,6 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
       "succeeds when there is exactly one Role that has no actions" in {
         val myResourceType = resourceType.copy(roles = Set(actionlessRole))
         dao.createResourceType(myResourceType).unsafeRunSync() shouldEqual myResourceType
-      }
-
-      "fails if actions don't match action patterns" in {
-        val badAction = "edit"
-        val badResourceType = resourceType.copy(roles = Set(ResourceRole(ResourceRoleName("role3"), Set(ResourceAction(badAction)))))
-
-        val exception = intercept[WorkbenchException](dao.createResourceType(badResourceType).unsafeRunSync())
-        exception.getMessage should be (s"ResourceType ${badResourceType.name} had invalid actions Set(${badAction})")
       }
 
       // This test is hard to write at the moment.  We don't have an easy way to guarantee the race condition at exactly the right time.  Nor do
