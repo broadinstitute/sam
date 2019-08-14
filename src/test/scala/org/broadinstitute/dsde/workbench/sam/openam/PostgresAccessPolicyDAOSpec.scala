@@ -7,6 +7,8 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.directory._
 import org.broadinstitute.dsde.workbench.sam.openam.LoadResourceAuthDomainResult.{Constrained, NotConstrained, ResourceNotFound}
 import org.scalatest.{BeforeAndAfterEach, FreeSpec, Matchers}
+import scala.concurrent.{Future, Await}
+import scala.concurrent.duration._
 
 import scala.concurrent.ExecutionContext.Implicits.global
 
@@ -21,16 +23,103 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
 
   "PostgresAccessPolicyDAO" - {
     val resourceTypeName = ResourceTypeName("awesomeType")
-    val resourceType = ResourceType(resourceTypeName,
-                                    Set(ResourceActionPattern("pattern1", "description of pattern1", false),
-                                        ResourceActionPattern("pattern2", "description of pattern2", false)),
-                                    Set(ResourceRole(ResourceRoleName("role1"), Set(ResourceAction("write"), ResourceAction("read"))),
-                                      ResourceRole(ResourceRoleName("role2"), Set(ResourceAction("read")))),
-                                    ResourceRoleName("role1"),
-                                    false)
 
-    "createResourceType" in {
-      dao.createResourceType(resourceType).unsafeRunSync() shouldEqual resourceType
+    val actionPatterns = Set(ResourceActionPattern("write", "description of pattern1", false),
+                             ResourceActionPattern("read", "description of pattern2", false))
+
+    val writeAction = ResourceAction("write")
+    val readAction = ResourceAction("read")
+
+    val ownerRoleName = ResourceRoleName("role1")
+
+    val ownerRole = ResourceRole(ownerRoleName, Set(writeAction, readAction))
+    val readerRole = ResourceRole(ResourceRoleName("role2"), Set(readAction))
+    val actionlessRole = ResourceRole(ResourceRoleName("cantDoNuthin"), Set()) // yeah, it's a double negative, sue me!
+
+    val roles = Set(ownerRole, readerRole, actionlessRole)
+    val resourceType = ResourceType(resourceTypeName, actionPatterns, roles, ownerRoleName, false)
+
+    "createResourceType" - {
+      "succeeds" in {
+        dao.createResourceType(resourceType).unsafeRunSync() shouldEqual resourceType
+      }
+
+      "succeeds when there is exactly one Role that has no actions" in {
+        val myResourceType = resourceType.copy(roles = Set(actionlessRole))
+        dao.createResourceType(myResourceType).unsafeRunSync() shouldEqual myResourceType
+      }
+
+      // This test is hard to write at the moment.  We don't have an easy way to guarantee the race condition at exactly the right time.  Nor do
+      // we have a good way to check if the data that was saved is what we intended.   This spec class could implement DatabaseSupport.  Or the
+      // createResourceType could minimally return the ResourceTypePK in its results.  Or we need some way to get all
+      // of the ResourceTypes from the DB and compare them to what we were trying to save.
+      "succeeds and only creates 1 ResourceType when trying to create multiple identical ResourceTypes at the same time" in {
+
+        pending
+
+        // Since we can't directly force a collision at exactly the right time, kick off a bunch of inserts in parallel
+        // and hope for the best.  <- That's how automated testing is supposed to work right?  Just cross your fingers?
+        val allMyFutures = 0.to(20).map { _ =>
+          dao.createResourceType(resourceType).unsafeToFuture()
+        }
+
+        Await.result(Future.sequence(allMyFutures), 5 seconds)
+        // This is the part where I would want to assert that the database contains only one ResourceType
+      }
+
+      "overwriting a ResourceType with the same name" - {
+        "succeeds" - {
+          "when the new ResourceType" - {
+            "is identical" in {
+              dao.createResourceType(resourceType).unsafeRunSync()
+              dao.createResourceType(resourceType).unsafeRunSync() shouldEqual resourceType
+            }
+
+            "adds new" - {
+              "ActionPatterns" in {
+                val myActionPatterns = actionPatterns + ResourceActionPattern("coolNewPattern", "I am the coolest pattern EVER!  Mwahaha", true)
+                val myResourceType = resourceType.copy(actionPatterns = myActionPatterns)
+
+                dao.createResourceType(resourceType).unsafeRunSync()
+                dao.createResourceType(myResourceType).unsafeRunSync() shouldEqual myResourceType
+              }
+
+              "Roles" in {
+                val myRoles = roles + ResourceRole(ResourceRoleName("blindWriter"), Set(writeAction))
+                val myResourceType = resourceType.copy(roles = myRoles)
+
+                dao.createResourceType(resourceType).unsafeRunSync()
+                dao.createResourceType(myResourceType).unsafeRunSync() shouldEqual myResourceType
+              }
+
+              "Role Actions" in {
+                val myReaderRole = readerRole.copy(actions = Set(readAction, writeAction))
+                val myRoles = Set(myReaderRole, ownerRole, actionlessRole)
+                val myResourceType = resourceType.copy(roles = myRoles)
+
+                dao.createResourceType(resourceType).unsafeRunSync()
+                dao.createResourceType(myResourceType).unsafeRunSync() shouldEqual myResourceType
+              }
+            }
+
+            "has the same ActionPatterns with modified descriptions" in pending
+          }
+        }
+
+        "fails" - {
+          "when the new ResourceType" - {
+            "is removing at least one" - {
+              "ActionPattern" in pending
+              "Role" in pending
+              "Role Action" in pending
+            }
+
+            // Not sure if we need this next test or not.  I don't want AuthDomain functionality in general to break if
+            // we change the isConstrainable value on one of our patterns
+            "removes an Auth Domain Constraint from an ActionPattern" in pending
+          }
+        }
+      }
     }
 
     "createResource" - {
