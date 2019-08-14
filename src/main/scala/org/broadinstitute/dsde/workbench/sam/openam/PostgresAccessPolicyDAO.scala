@@ -23,76 +23,133 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
 
   implicit val cs: ContextShift[IO] = IO.contextShift(executionContext)
 
-  // Create resourceType should do the following:
-  // 1. Create the resource type
-  // 2. Add the roles
-  // 3. Add the actions
-  // 4. Add patterns
+  // This method obtains an EXCLUSIVE lock on the ResourceType table because if we boot multiple Sam instances at once,
+  // they will all try to (re)create ResourceTypes at the same time and could collide. The lock is automatically
+  // released at the end of the transaction.
   def createResourceType(resourceType: ResourceType): IO[ResourceType] = {
+    val uniqueActions = resourceType.roles.flatMap(_.actions)
     runInTransaction { implicit session =>
+      samsql"lock table ${ResourceTypeTable.table} IN EXCLUSIVE MODE".execute().apply()
       val resourceTypePK = insertResourceType(resourceType.name)
-      insertRolesAndActions(resourceType.roles, resourceTypePK)
+
       insertActionPatterns(resourceType.actionPatterns, resourceTypePK)
+      insertRoles(resourceType.roles, resourceTypePK)
+      insertActions(uniqueActions, resourceTypePK)
+      insertRoleActions(resourceType.roles, resourceTypePK)
+
       resourceType
     }
   }
 
-  private def insertRolesAndActions(roles: Set[ResourceRole], resourceTypePK: ResourceTypePK)(implicit session: DBSession) = {
-    val resourceRoleTableColumn = ResourceRoleTable.column
-    val resourceActionTableColumn = ResourceActionTable.column
-    val roleActionTableColumn = RoleActionTable.column
-    val r  = ResourceRoleTable.syntax("r")
-    val a  = ResourceActionTable.syntax("a")
-    val ra = RoleActionTable.syntax("ra")
+  private def insertRoleActions(roles: Set[ResourceRole], resourceTypePK: ResourceTypePK)(implicit session: DBSession): Int = {
+    // Load Actions and Roles from DB because we need their DB IDs
+    val resourceTypeActions = selectActionsForResourceType(resourceTypePK)
+    val resourceTypeRoles = selectRolesForResourceType(resourceTypePK)
 
-    val uniqueActions = roles.map(_.actions).flatten
-    val actionPKs = uniqueActions map { action =>
-        val insertActionQuery =
-          samsql"""insert into ${ResourceActionTable.table}
-                   (${resourceActionTableColumn.resourceTypeId}, ${resourceActionTableColumn.action})
-                   values (${resourceTypePK}, ${action})"""
+    val roleActionValues = roles.flatMap { role =>
+      val maybeRolePK = resourceTypeRoles.find(r => r.role == role.roleName).map(_.id)
+      val actionPKs = resourceTypeActions.filter(rta => role.actions.contains(rta.action)).map(_.id)
 
-        ResourceActionPK(insertActionQuery.updateAndReturnGeneratedKey().apply())
+      val rolePK = maybeRolePK.getOrElse(throw new WorkbenchException(s"Cannot add Role Actions because Role '${role.roleName}' does not exist for ResourceType: ${resourceTypePK}"))
+
+      actionPKs.map(actionPK => samsqls"(${rolePK}, ${actionPK})")
     }
 
-    // 1. Add role to ResourceRole table
-    // 2. Add every action for each role to the ResourceAction table
-    // 3. Add each Resource Role and Resource Action to the RoleAction table <-- Is this what actually happens?
-    roles map { role =>
-      val insertRoleQuery =
-        samsql"""insert into ${ResourceRoleTable.table}
-                 (${resourceRoleTableColumn.resourceTypeId}, ${resourceRoleTableColumn.role})
-                 values (${resourceTypePK}, ${role.roleName})"""
-      val resourceRolePK = ResourceRolePK(insertRoleQuery.updateAndReturnGeneratedKey().apply())
-
-        val insertRoleActionQuery =
-          samsql"""insert into ${RoleActionTable.table}
-                   select ${r.id}, ${a.id}
-                   from ${ResourceRoleTable as r}, ${ResourceActionTable as a}
-                   where ${r.resourceTypeId} = ${resourceTypePK}
-                   and   ${a.resourceTypeId} = ${resourceTypePK}
-                   and   ${r.role}   = ${role.roleName}
-                   and   ${a.action} IN (${role.actions})
-            """
-        insertRoleActionQuery.update().apply()
-      }
+    if (roleActionValues.nonEmpty) {
+      val insertQuery =
+        samsql"""insert into ${RoleActionTable.table}(${RoleActionTable.column.resourceRoleId}, ${RoleActionTable.column.resourceActionId})
+                    values ${roleActionValues}
+                 on conflict do nothing"""
+      insertQuery.update().apply()
+    } else {
+      0
+    }
   }
 
+  private def selectActionsForResourceType(resourceTypePK: ResourceTypePK)(implicit session: DBSession): List[ResourceActionRecord] = {
+    val rat = ResourceActionTable.syntax("rat")
+    val actionsQuery =
+      samsql"""select ${rat.result.*}
+               from ${ResourceActionTable as rat}
+               where ${rat.resourceTypeId} = ${resourceTypePK}"""
+
+    actionsQuery.map(ResourceActionTable(rat.resultName)).list().apply()
+  }
+
+  private def selectRolesForResourceType(resourceTypePK: ResourceTypePK)(implicit session: DBSession): List[ResourceRoleRecord] = {
+    val rrt = ResourceRoleTable.syntax("rrt")
+    val actionsQuery =
+      samsql"""select ${rrt.result.*}
+               from ${ResourceRoleTable as rrt}
+               where ${rrt.resourceTypeId} = ${resourceTypePK}"""
+
+    actionsQuery.map(ResourceRoleTable(rrt.resultName)).list().apply()
+  }
+
+  private def insertRoles(roles: Set[ResourceRole], resourceTypePK: ResourceTypePK)(implicit session: DBSession): Int = {
+    val roleValues = roles.map(role => samsqls"(${resourceTypePK}, ${role.roleName})")
+    val insertRolesQuery =
+      samsql"""insert into ${ResourceRoleTable.table}(${ResourceRoleTable.column.resourceTypeId}, ${ResourceRoleTable.column.role})
+                  values ${roleValues}
+               on conflict do nothing"""
+
+    insertRolesQuery.update().apply()
+  }
+
+  private def insertActions(actions: Set[ResourceAction], resourceTypePK: ResourceTypePK)(implicit session: DBSession): Int = {
+    if (actions.isEmpty) {
+      return 0
+    } else {
+      val uniqueActionValues = actions.map { action =>
+        samsqls"(${resourceTypePK}, ${action})"
+      }
+
+      val insertActionQuery =
+        samsql"""insert into ${ResourceActionTable.table}(${ResourceActionTable.column.resourceTypeId}, ${ResourceActionTable.column.action})
+                    values ${uniqueActionValues}
+                 on conflict do nothing"""
+
+      insertActionQuery.update().apply()
+    }
+  }
+
+  /**
+    * Performs an UPSERT when a record already exists for this exact ActionPattern for this ResourceType.  Query will
+    * rerwrite the `description` and `isAuthDomainConstrainable` columns if the ResourceTypeActionPattern already
+    * exists.
+    */
   private def insertActionPatterns(actionPatterns: Set[ResourceActionPattern], resourceTypePK: ResourceTypePK)(implicit session: DBSession) = {
     val resourceActionPatternTableColumn = ResourceActionPatternTable.column
     val actionPatternValues = actionPatterns map { actionPattern =>
-      samsqls"(${resourceTypePK}, ${actionPattern.value})"
+      samsqls"(${resourceTypePK}, ${actionPattern.value}, ${actionPattern.description}, ${actionPattern.authDomainConstrainable})"
     }
+
     val actionPatternQuery =
       samsql"""insert into ${ResourceActionPatternTable.table}
-              (${resourceActionPatternTableColumn.resourceTypeId}, ${resourceActionPatternTableColumn.actionPattern})
-              values ${actionPatternValues}"""
+                  (${resourceActionPatternTableColumn.resourceTypeId},
+                   ${resourceActionPatternTableColumn.actionPattern},
+                   ${resourceActionPatternTableColumn.description},
+                   ${resourceActionPatternTableColumn.isAuthDomainConstrainable})
+                  values ${actionPatternValues}
+               on conflict (${resourceActionPatternTableColumn.resourceTypeId}, ${resourceActionPatternTableColumn.actionPattern})
+                  do update
+                      set ${resourceActionPatternTableColumn.description} = EXCLUDED.${resourceActionPatternTableColumn.description},
+                          ${resourceActionPatternTableColumn.isAuthDomainConstrainable} = EXCLUDED.${resourceActionPatternTableColumn.isAuthDomainConstrainable}"""
     actionPatternQuery.update().apply()
   }
 
+  // This method needs to always return the ResourceTypePK, regardless of whether we just inserted the ResourceType or
+  // it already existed.  We do this by using a `RETURNING` statement.  This statement will only return values for rows
+  // that were created or updated.  Therefore, `ON CONFLICT` will update the row with the same name value that was there
+  // before and the previously existing ResourceType id will be returned.
   private def insertResourceType(resourceTypeName: ResourceTypeName)(implicit session: DBSession): ResourceTypePK = {
     val resourceTypeTableColumn = ResourceTypeTable.column
-    val insertResourceTypeQuery = samsql"""insert into ${ResourceTypeTable.table} (${resourceTypeTableColumn.name}) values (${resourceTypeName.value})"""
+    val insertResourceTypeQuery =
+      samsql"""insert into ${ResourceTypeTable.table} (${resourceTypeTableColumn.name})
+                  values (${resourceTypeName.value})
+               on conflict (${ResourceTypeTable.column.name})
+                  do update set ${ResourceTypeTable.column.name}=EXCLUDED.${ResourceTypeTable.column.name}
+               returning ${ResourceTypeTable.column.id}"""
 
     ResourceTypePK(insertResourceTypeQuery.updateAndReturnGeneratedKey().apply())
   }
