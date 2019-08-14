@@ -7,7 +7,7 @@ import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.sam.errorReportSource
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.db.DbReference
+import org.broadinstitute.dsde.workbench.sam.db.{DbReference, SamTypeBinders}
 import org.broadinstitute.dsde.workbench.sam.db.SamParameterBinderFactory._
 import org.broadinstitute.dsde.workbench.sam.db.tables._
 import org.broadinstitute.dsde.workbench.sam.model._
@@ -26,7 +26,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
   // This method obtains an EXCLUSIVE lock on the ResourceType table because if we boot multiple Sam instances at once,
   // they will all try to (re)create ResourceTypes at the same time and could collide. The lock is automatically
   // released at the end of the transaction.
-  def createResourceType(resourceType: ResourceType): IO[ResourceType] = {
+  override def createResourceType(resourceType: ResourceType): IO[ResourceType] = {
     val uniqueActions = resourceType.roles.flatMap(_.actions)
     runInTransaction { implicit session =>
       samsql"lock table ${ResourceTypeTable.table} IN EXCLUSIVE MODE".execute().apply()
@@ -156,7 +156,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
 
   // 1. Create Resource
   // 2. Create the entries in the join table for the auth domains
-  def createResource(resource: Resource): IO[Resource] = {
+  override def createResource(resource: Resource): IO[Resource] = {
     runInTransaction { implicit session =>
       val resourcePK = insertResource(resource)
 
@@ -196,9 +196,14 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     samsqls"""select ${rt.id} from ${ResourceTypeTable as rt} where ${rt.name} = ${resourceTypeName}"""
   }
 
-  def deleteResource(resource: FullyQualifiedResourceId): IO[Unit] = ???
+  override def deleteResource(resource: FullyQualifiedResourceId): IO[Unit] = {
+    runInTransaction { implicit session =>
+      val r = ResourceTable.syntax("r")
+      samsql"delete from ${ResourceTable as r} where ${r.name} = ${resource.resourceId} and ${r.resourceTypeId} = (${loadResourceTypePK(resource.resourceTypeName)})".update().apply()
+    }
+  }
 
-  def loadResourceAuthDomain(resource: FullyQualifiedResourceId): IO[LoadResourceAuthDomainResult] = {
+  override def loadResourceAuthDomain(resource: FullyQualifiedResourceId): IO[LoadResourceAuthDomainResult] = {
     runInTransaction { implicit session =>
       val ad = AuthDomainTable.syntax("ad")
       val r = ResourceTable.syntax("r")
@@ -237,20 +242,47 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     }
   }
 
-  def listResourcesConstrainedByGroup(groupId: WorkbenchGroupIdentity): IO[Set[Resource]] = ???
-  def createPolicy(policy: AccessPolicy): IO[AccessPolicy] = ???
-  def deletePolicy(policy: FullyQualifiedPolicyId): IO[Unit] = ???
-  def loadPolicy(resourceAndPolicyName: FullyQualifiedPolicyId): IO[Option[AccessPolicy]] = ???
-  def overwritePolicyMembers(id: FullyQualifiedPolicyId, memberList: Set[WorkbenchSubject]): IO[Unit] = ???
-  def overwritePolicy(newPolicy: AccessPolicy): IO[AccessPolicy] = ???
-  def listPublicAccessPolicies(resourceTypeName: ResourceTypeName): IO[Stream[ResourceIdAndPolicyName]] = ???
-  def listPublicAccessPolicies(resource: FullyQualifiedResourceId): IO[Stream[AccessPolicy]] = ???
-  def listResourcesWithAuthdomains(resourceTypeName: ResourceTypeName, resourceId: Set[ResourceId]): IO[Set[Resource]] = ???
-  def listResourceWithAuthdomains(resourceId: FullyQualifiedResourceId): IO[Option[Resource]] = ???
-  def listAccessPolicies(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId): IO[Set[ResourceIdAndPolicyName]] = ???
-  def listAccessPolicies(resource: FullyQualifiedResourceId): IO[Stream[AccessPolicy]] = ???
-  def listAccessPoliciesForUser(resource: FullyQualifiedResourceId, user: WorkbenchUserId): IO[Set[AccessPolicy]] = ???
-  def listFlattenedPolicyMembers(policyId: FullyQualifiedPolicyId): IO[Set[WorkbenchUser]] = ???
-  def setPolicyIsPublic(policyId: FullyQualifiedPolicyId, isPublic: Boolean): IO[Unit] = ???
-  def evictIsMemberOfCache(subject: WorkbenchSubject): IO[Unit] = ???
+  override def listResourcesConstrainedByGroup(groupId: WorkbenchGroupIdentity): IO[Set[Resource]] = ???
+  override def createPolicy(policy: AccessPolicy): IO[AccessPolicy] = ???
+  override def deletePolicy(policy: FullyQualifiedPolicyId): IO[Unit] = ???
+  override def loadPolicy(resourceAndPolicyName: FullyQualifiedPolicyId): IO[Option[AccessPolicy]] = ???
+  override def overwritePolicyMembers(id: FullyQualifiedPolicyId, memberList: Set[WorkbenchSubject]): IO[Unit] = ???
+  override def overwritePolicy(newPolicy: AccessPolicy): IO[AccessPolicy] = ???
+  override def listPublicAccessPolicies(resourceTypeName: ResourceTypeName): IO[Stream[ResourceIdAndPolicyName]] = ???
+  override def listPublicAccessPolicies(resource: FullyQualifiedResourceId): IO[Stream[AccessPolicy]] = ???
+  override def listResourcesWithAuthdomains(resourceTypeName: ResourceTypeName, resourceId: Set[ResourceId]): IO[Set[Resource]] = ???
+
+  override def listResourceWithAuthdomains(resourceId: FullyQualifiedResourceId): IO[Option[Resource]] = {
+    import SamTypeBinders._
+
+    runInTransaction { implicit session =>
+      val r = ResourceTable.syntax("r")
+      val ad = AuthDomainTable.syntax("ad")
+      val g = GroupTable.syntax("g")
+      val rt = ResourceTypeTable.syntax("rt")
+
+      val results = samsql"""select ${rt.result.name}, ${r.result.name}, ${g.result.name} from ${ResourceTable as r}
+              join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
+              left join ${AuthDomainTable as ad} on ${r.id} = ${ad.resourceId}
+              left join ${GroupTable as g} on ${ad.groupId} = ${g.id}
+              where ${r.name} = ${resourceId.resourceId}"""
+        .map(rs => (rs.get[ResourceTypeName](rt.resultName.name), rs.get[ResourceId](r.resultName.name), rs.stringOpt(g.resultName.name).map(WorkbenchGroupName))).list().apply()
+
+      val authDomain = results.collect {
+        case (_, _, Some(authDomainGroup)) => authDomainGroup
+      }.toSet
+
+      // resource type name and resource id will be the same across results so just using the first if it exists
+      results.headOption.map { head =>
+        Resource(head._1, head._2, authDomain)
+      }
+    }
+  }
+
+  override def listAccessPolicies(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId): IO[Set[ResourceIdAndPolicyName]] = ???
+  override def listAccessPolicies(resource: FullyQualifiedResourceId): IO[Stream[AccessPolicy]] = ???
+  override def listAccessPoliciesForUser(resource: FullyQualifiedResourceId, user: WorkbenchUserId): IO[Set[AccessPolicy]] = ???
+  override def listFlattenedPolicyMembers(policyId: FullyQualifiedPolicyId): IO[Set[WorkbenchUser]] = ???
+  override def setPolicyIsPublic(policyId: FullyQualifiedPolicyId, isPublic: Boolean): IO[Unit] = ???
+  override def evictIsMemberOfCache(subject: WorkbenchSubject): IO[Unit] = ???
 }

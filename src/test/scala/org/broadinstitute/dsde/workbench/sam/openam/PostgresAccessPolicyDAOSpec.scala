@@ -189,5 +189,45 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
         }
       }
     }
+
+    "listResourceWithAuthdomains" - {
+      "loads a resource with its auth domain" in {
+        val authDomain = BasicWorkbenchGroup(WorkbenchGroupName("aufthDomain"), Set.empty, WorkbenchEmail("authDomain@groups.com"))
+        dirDao.createGroup(authDomain).unsafeRunSync()
+        dao.createResourceType(resourceType).unsafeRunSync()
+
+        val resource = Resource(resourceType.name, ResourceId("resource"), Set(authDomain.id))
+        dao.createResource(resource).unsafeRunSync()
+
+        dao.listResourceWithAuthdomains(resource.fullyQualifiedId).unsafeRunSync() shouldEqual Option(resource)
+      }
+
+      "loads a resource even if its unconstrained" in {
+        dao.createResourceType(resourceType).unsafeRunSync()
+
+        val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
+        dao.createResource(resource).unsafeRunSync()
+
+        dao.listResourceWithAuthdomains(resource.fullyQualifiedId).unsafeRunSync() shouldEqual Option(resource)
+      }
+
+      "returns None when resource isn't found" in {
+        dao.listResourceWithAuthdomains(FullyQualifiedResourceId(resourceTypeName, ResourceId("terribleResource"))).unsafeRunSync() shouldBe None
+      }
+    }
+
+    "deleteResource" - {
+      "deletes a resource" in {
+        dao.createResourceType(resourceType).unsafeRunSync()
+        val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
+        dao.createResource(resource).unsafeRunSync()
+
+        dao.listResourceWithAuthdomains(resource.fullyQualifiedId).unsafeRunSync() shouldEqual Option(resource)
+
+        dao.deleteResource(resource.fullyQualifiedId).unsafeRunSync()
+
+        dao.listResourceWithAuthdomains(resource.fullyQualifiedId).unsafeRunSync() shouldEqual None
+      }
+    }
   }
 }

@@ -44,6 +44,7 @@ object DbReference extends LazyLogging {
 
   def init(liquibaseConfig: LiquibaseConfig, dbName: Symbol): DbReference = {
     DBs.setup(dbName)
+    DBs.loadGlobalSettings()
     if (liquibaseConfig.initWithLiquibase) {
       initWithLiquibase(liquibaseConfig)
     }
