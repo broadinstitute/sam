@@ -5,7 +5,7 @@ import java.util.Date
 
 import cats.effect.{ContextShift, IO}
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.model.google.{ServiceAccount, ServiceAccountSubjectId}
+import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.sam.db._
 import org.broadinstitute.dsde.workbench.sam.db.tables._
 import org.broadinstitute.dsde.workbench.sam.model._
@@ -325,11 +325,89 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
 
   override def getSynchronizedEmail(groupId: WorkbenchGroupIdentity): IO[Option[WorkbenchEmail]] = ???
 
-  override def loadSubjectFromEmail(email: WorkbenchEmail): IO[Option[WorkbenchSubject]] = ???
+  case class SubjectConglomerate(
+      userId: Option[String],
+      groupName: Option[String],
+      petUserId: Option[String],
+      petProject: Option[String],
+      policyResourceType: Option[String],
+      policyResourceId: Option[String],
+      policyName: Option[String])
 
-  override def loadSubjectEmail(subject: WorkbenchSubject): IO[Option[WorkbenchEmail]] = ???
+  private def unmarshalSubjectConglomerate(subjectConglomerate: SubjectConglomerate): WorkbenchSubject = {
+    subjectConglomerate match {
+      case SubjectConglomerate(Some(userId), None, None, None, None, None, None) => WorkbenchUserId(userId)
+      case SubjectConglomerate(None, Some(groupName), None, None, None, None, None) => WorkbenchGroupName(groupName)
+      case SubjectConglomerate(None, None, Some(petUserId), Some(petProject), None, None, None) => PetServiceAccountId(WorkbenchUserId(petUserId), GoogleProject(petProject))
+      case SubjectConglomerate(None, None, None, None, Some(policyResourceType), Some(policyResourceId), Some(policyName)) => FullyQualifiedPolicyId(FullyQualifiedResourceId(ResourceTypeName(policyResourceType), ResourceId(policyResourceId)), AccessPolicyName(policyName))
+      case _ => throw new WorkbenchException("Not found")
+    }
+  }
 
-  override def loadSubjectEmails(subjects: Set[WorkbenchSubject]): IO[Stream[WorkbenchEmail]] = ???
+  /*
+
+  TODO: update this comment
+    This query is better than it looks. The problem that this gets around is that we are given an email address,
+    which can be for a user, a group, a policy, or a pet service account. We have no definitive way of knowing
+    what type it belongs to until we query all four of the tables. You can't do a clean union here because the
+    data in the four tables is shaped differently. Hence the nulls. The nulls coerce the data being selected from
+    the tables to have the correct shape, and thus make it unionable. The advantage that this give us is that we
+    only need to do one trip to the database to figure out what type it is, and in the case of users, that single
+    trip can actually give us all of the information that we need without requiring a second trip to the database.
+
+    The alternative would be to have a "cleaner" looking function which actually just fires off a specialized query
+    each of the four tables.
+
+   */
+
+  //todo: handle case where it returns more than one, somehow
+  override def loadSubjectFromEmail(email: WorkbenchEmail): IO[Option[WorkbenchSubject]] = {
+    runInTransaction { implicit session =>
+      val u = UserTable.syntax
+      val g = GroupTable.syntax
+      val pet = PetServiceAccountTable.syntax
+      val pol = PolicyTable.syntax
+      val srt = ResourceTypeTable.syntax
+      val res = ResourceTable.syntax
+
+      val query = samsql"""
+              select ${u.id}, ${None}, ${None}, ${None}, ${None}, ${None}, ${None} from ${UserTable as u} where ${u.email} = ${email}
+              union
+              select ${None}, ${g.name}, ${None}, ${None}, ${None}, ${None}, ${None} from ${GroupTable as g} where ${g.email} = ${email}
+              union
+              select ${None}, ${None}, ${pet.userId}, ${pet.project}, ${None}, ${None}, ${None} from ${PetServiceAccountTable as pet} where ${pet.email} = ${email}
+              union
+              select ${None}, ${None}, ${None}, ${None}, ${pol.name}, ${res.name}, ${srt.name} from ${PolicyTable as pol} join ${GroupTable as g} on ${pol.groupId} = ${g.id} join ${ResourceTable as res} on ${res.id} = ${pol.resourceId} join ${ResourceTypeTable as srt} on ${res.resourceTypeId} = ${srt.id} where ${g.email} = ${email}
+        """
+
+      val result = query.map(rs => SubjectConglomerate(rs.stringOpt(1), rs.stringOpt(2), rs.stringOpt(3), rs.stringOpt(4), rs.stringOpt(5), rs.stringOpt(6), rs.stringOpt(7))).single().apply()
+
+      result.map(unmarshalSubjectConglomerate)
+    }
+  }
+
+  override def loadSubjectEmail(subject: WorkbenchSubject): IO[Option[WorkbenchEmail]] = {
+    subject match {
+      case subject: WorkbenchGroupName => loadGroupEmail(subject)
+      case subject: PetServiceAccountId => for {
+        petSA <- loadPetServiceAccount(subject)
+      } yield petSA.map(_.serviceAccount.email)
+      case subject: WorkbenchUserId => for {
+        user <- loadUser(subject)
+      } yield user.map(_.email)
+        // case FullyQualifiedPolicyId => ...
+      case _ => throw new WorkbenchException(s"unexpected subject [$subject]")
+    }
+  }
+
+  override def loadSubjectEmails(subjects: Set[WorkbenchSubject]): IO[Stream[WorkbenchEmail]] = {
+    val users = loadUsers(subjects collect { case userId: WorkbenchUserId => userId })
+    val groups = loadGroups(subjects collect { case groupName: WorkbenchGroupName => groupName })
+    for {
+      userEmails <- users.map(_.map(_.email))
+      groupEmails <- groups.map(_.map(_.email))
+    } yield userEmails ++ groupEmails
+  }
 
   override def loadSubjectFromGoogleSubjectId(googleSubjectId: GoogleSubjectId): IO[Option[WorkbenchSubject]] = ???
 
