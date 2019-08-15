@@ -277,5 +277,36 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
         dao.listResourceWithAuthdomains(resource.fullyQualifiedId).unsafeRunSync() shouldEqual None
       }
     }
+
+    "listResourcesConstrainedByGroup" - {
+      "can find all resources with a group in its auth domain" in {
+        dao.createResourceType(resourceType).unsafeRunSync()
+        val secondResourceType = resourceType.copy(name = ResourceTypeName("superAwesomeResourceType"))
+        dao.createResourceType(secondResourceType).unsafeRunSync()
+
+        val sharedAuthDomain = BasicWorkbenchGroup(WorkbenchGroupName("authDomain"), Set.empty, WorkbenchEmail("authDomain@very-secure.biz"))
+        val otherGroup = BasicWorkbenchGroup(WorkbenchGroupName("notShared"), Set.empty, WorkbenchEmail("selfish@very-secure.biz"))
+        dirDao.createGroup(sharedAuthDomain).unsafeRunSync()
+        dirDao.createGroup(otherGroup).unsafeRunSync()
+
+        val resource1 = Resource(resourceType.name, ResourceId("resource1"), Set(sharedAuthDomain.id))
+        val resource2 = Resource(secondResourceType.name, ResourceId("resource2"), Set(sharedAuthDomain.id, otherGroup.id))
+        dao.createResource(resource1).unsafeRunSync()
+        dao.createResource(resource2).unsafeRunSync()
+
+        dao.listResourcesConstrainedByGroup(sharedAuthDomain.id).unsafeRunSync() should contain theSameElementsAs Set(resource1, resource2)
+      }
+
+      "returns an empty list if group is not used in an auth domain" in {
+        val group = BasicWorkbenchGroup(WorkbenchGroupName("boringGroup"), Set.empty, WorkbenchEmail("notAnAuthDomain@insecure.biz"))
+        dirDao.createGroup(group).unsafeRunSync()
+
+        dao.listResourcesConstrainedByGroup(group.id).unsafeRunSync() shouldEqual Set.empty
+      }
+
+      "returns an empty list if group doesn't exist" in {
+        dao.listResourcesConstrainedByGroup(WorkbenchGroupName("notEvenReal")).unsafeRunSync() shouldEqual Set.empty
+      }
+    }
   }
 }

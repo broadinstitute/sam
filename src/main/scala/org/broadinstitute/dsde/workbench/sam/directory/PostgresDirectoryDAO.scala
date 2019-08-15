@@ -207,29 +207,6 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     samsql"update ${GroupTable.table} set ${g.updatedDate} = ${Instant.now()} where ${g.id} = (${workbenchGroupIdentityToGroupPK(groupId)})".update().apply()
   }
 
-  private def workbenchGroupIdentityToGroupPK(groupId: WorkbenchGroupIdentity): SQLSyntax = {
-    groupId match {
-      case group: WorkbenchGroupName => GroupTable.groupPKQueryForGroup(group)
-      case policy: FullyQualifiedPolicyId => groupPKQueryForPolicy(policy)
-    }
-  }
-
-  private def groupPKQueryForPolicy(policyId: FullyQualifiedPolicyId,
-                                    resourceTypeTableAlias: String = "rt",
-                                    resourceTableAlias: String = "r",
-                                    policyTableAlias: String = "p"): SQLSyntax = {
-    val rt = ResourceTypeTable.syntax(resourceTypeTableAlias)
-    val r = ResourceTable.syntax(resourceTableAlias)
-    val p = PolicyTable.syntax(policyTableAlias)
-    samsqls"""select ${p.groupId}
-              from ${ResourceTypeTable as rt}
-              join ${ResourceTable as r} on ${rt.id} = ${r.resourceTypeId}
-              join ${PolicyTable as p} on ${r.id} = ${p.resourceId}
-              where ${rt.name} = ${policyId.resource.resourceTypeName}
-              and ${r.name} = ${policyId.resource.resourceId}
-              and ${p.name} = ${policyId.accessPolicyName}"""
-  }
-
   /**
     * @return true if the subject was removed, false if it was already gone
     */

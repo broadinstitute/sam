@@ -242,7 +242,36 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     }
   }
 
-  override def listResourcesConstrainedByGroup(groupId: WorkbenchGroupIdentity): IO[Set[Resource]] = ???
+  override def listResourcesConstrainedByGroup(groupId: WorkbenchGroupIdentity): IO[Set[Resource]] = {
+    import SamTypeBinders._
+
+    runInTransaction { implicit session =>
+      val r = ResourceTable.syntax("r")
+      val ad = AuthDomainTable.syntax("ad")
+      val g = GroupTable.syntax("g")
+      val rt = ResourceTypeTable.syntax("rt")
+
+      val constrainedResourcesPKs = samsqls"""select ${ad.result.resourceId}
+              from ${AuthDomainTable as ad}
+              where ${ad.groupId} = (${workbenchGroupIdentityToGroupPK(groupId)})"""
+
+      val results = samsql"""select ${rt.result.name}, ${r.result.name}, ${g.result.name}
+                      from ${ResourceTable as r}
+                      join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
+                      left join ${AuthDomainTable as ad} on ${r.id} = ${ad.resourceId}
+                      left join ${GroupTable as g} on ${ad.groupId} = ${g.id}
+                      where ${r.id} in (${constrainedResourcesPKs})"""
+        .map(rs => (rs.get[ResourceTypeName](rt.resultName.name), rs.get[ResourceId](r.resultName.name), rs.stringOpt(g.resultName.name).map(WorkbenchGroupName))).list().apply()
+
+      val resultsByResource = results.groupBy(result => (result._1, result._2))
+      resultsByResource.map {
+        case ((resourceTypeName, resourceId), groupedResults) => Resource(resourceTypeName, resourceId, groupedResults.collect {
+          case (_, _, Some(authDomainGroupName)) => authDomainGroupName
+        }.toSet)
+      }.toSet
+    }
+  }
+
   override def createPolicy(policy: AccessPolicy): IO[AccessPolicy] = ???
   override def deletePolicy(policy: FullyQualifiedPolicyId): IO[Unit] = ???
   override def loadPolicy(resourceAndPolicyName: FullyQualifiedPolicyId): IO[Option[AccessPolicy]] = ???
@@ -268,7 +297,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
 
       val resultsByResource = results.groupBy(_._1)
       resultsByResource.map {
-        case (resource, results) => Resource(resourceTypeName, resource, results.collect {
+        case (resource, groupedResults) => Resource(resourceTypeName, resource, groupedResults.collect {
           case (_, Some(authDomainGroupName)) => authDomainGroupName
         }.toSet)
       }.toSet
