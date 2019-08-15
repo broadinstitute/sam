@@ -250,6 +250,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
   override def overwritePolicy(newPolicy: AccessPolicy): IO[AccessPolicy] = ???
   override def listPublicAccessPolicies(resourceTypeName: ResourceTypeName): IO[Stream[ResourceIdAndPolicyName]] = ???
   override def listPublicAccessPolicies(resource: FullyQualifiedResourceId): IO[Stream[AccessPolicy]] = ???
+
   override def listResourcesWithAuthdomains(resourceTypeName: ResourceTypeName, resourceId: Set[ResourceId]): IO[Set[Resource]] = {
     import SamTypeBinders._
 
@@ -275,27 +276,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
   }
 
   override def listResourceWithAuthdomains(resourceId: FullyQualifiedResourceId): IO[Option[Resource]] = {
-    import SamTypeBinders._
-
-    runInTransaction { implicit session =>
-      val r = ResourceTable.syntax("r")
-      val ad = AuthDomainTable.syntax("ad")
-      val g = GroupTable.syntax("g")
-      val results = samsql"""select ${r.result.name}, ${g.result.name} from ${ResourceTable as r}
-              left join ${AuthDomainTable as ad} on ${r.id} = ${ad.resourceId}
-              left join ${GroupTable as g} on ${ad.groupId} = ${g.id}
-              where ${r.name} = ${resourceId.resourceId} and ${r.resourceTypeId} = (${loadResourceTypePK(resourceId.resourceTypeName)})"""
-        .map(rs => (rs.get[ResourceId](r.resultName.name), rs.stringOpt(g.resultName.name).map(WorkbenchGroupName))).list().apply()
-
-      val authDomain = results.collect {
-        case (_, Some(authDomainGroup)) => authDomainGroup
-      }.toSet
-
-      // resource type name and resource id will be the same across results so just using the first if it exists
-      results.headOption.map { head =>
-        Resource(resourceId.resourceTypeName, head._1, authDomain)
-      }
-    }
+    listResourcesWithAuthdomains(resourceId.resourceTypeName, Set(resourceId.resourceId)).map(_.headOption)
   }
 
   override def listAccessPolicies(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId): IO[Set[ResourceIdAndPolicyName]] = ???
