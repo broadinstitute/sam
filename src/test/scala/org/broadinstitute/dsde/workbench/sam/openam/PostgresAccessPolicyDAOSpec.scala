@@ -211,8 +211,56 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
         dao.listResourceWithAuthdomains(resource.fullyQualifiedId).unsafeRunSync() shouldEqual Option(resource)
       }
 
+      "loads the correct resource if different resource types have a resource with a common name" in {
+        val authDomain1 = BasicWorkbenchGroup(WorkbenchGroupName("authDomain1"), Set.empty, WorkbenchEmail("authDomain1@groups.com"))
+        dirDao.createGroup(authDomain1).unsafeRunSync()
+        val authDomain2 = BasicWorkbenchGroup(WorkbenchGroupName("authDomain2"), Set.empty, WorkbenchEmail("authDomain2@groups.com"))
+        dirDao.createGroup(authDomain2).unsafeRunSync()
+
+        dao.createResourceType(resourceType).unsafeRunSync()
+        val secondResourceTypeName = ResourceTypeName("superAwesomeType")
+        dao.createResourceType(resourceType.copy(name = secondResourceTypeName)).unsafeRunSync()
+
+        val resource = Resource(resourceType.name, ResourceId("resource"), Set(authDomain1.id))
+        val otherResource = Resource(secondResourceTypeName, ResourceId("resource"), Set(authDomain2.id))
+
+        dao.createResource(resource).unsafeRunSync()
+        dao.createResource(otherResource).unsafeRunSync()
+
+        dao.listResourceWithAuthdomains(resource.fullyQualifiedId).unsafeRunSync() shouldEqual Option(resource)
+      }
+
       "returns None when resource isn't found" in {
         dao.listResourceWithAuthdomains(FullyQualifiedResourceId(resourceTypeName, ResourceId("terribleResource"))).unsafeRunSync() shouldBe None
+      }
+    }
+
+    "listResourcesWithAuthdomains" - {
+      "finds the auth domains for the provided resources" in {
+        val authDomain1 = BasicWorkbenchGroup(WorkbenchGroupName("authDomain1"), Set.empty, WorkbenchEmail("authDomain1@groups.com"))
+        dirDao.createGroup(authDomain1).unsafeRunSync()
+        val authDomain2 = BasicWorkbenchGroup(WorkbenchGroupName("authDomain2"), Set.empty, WorkbenchEmail("authDomain2@groups.com"))
+        dirDao.createGroup(authDomain2).unsafeRunSync()
+
+        dao.createResourceType(resourceType).unsafeRunSync()
+
+        val resource1 = Resource(resourceType.name, ResourceId("resource1"), Set(authDomain1.id))
+        val resource2 = Resource(resourceType.name, ResourceId("resource2"), Set(authDomain2.id))
+
+        dao.createResource(resource1).unsafeRunSync()
+        dao.createResource(resource2).unsafeRunSync()
+
+        dao.listResourcesWithAuthdomains(resourceType.name, Set(resource1.resourceId, resource2.resourceId)).unsafeRunSync() shouldEqual Set(resource1, resource2)
+      }
+
+      "only returns actual resources" in {
+        dao.createResourceType(resourceType).unsafeRunSync()
+        dao.listResourcesWithAuthdomains(resourceType.name, Set(ResourceId("reallyAwfulResource"))).unsafeRunSync() shouldEqual Set.empty
+
+        val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
+        dao.createResource(resource).unsafeRunSync()
+
+        dao.listResourcesWithAuthdomains(resourceType.name, Set(resource.resourceId, ResourceId("possiblyWorseResource"))).unsafeRunSync() shouldEqual Set(resource)
       }
     }
 
