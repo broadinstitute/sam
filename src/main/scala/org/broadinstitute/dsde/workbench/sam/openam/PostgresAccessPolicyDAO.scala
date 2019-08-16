@@ -261,12 +261,12 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
                       left join ${AuthDomainTable as ad} on ${r.id} = ${ad.resourceId}
                       left join ${GroupTable as g} on ${ad.groupId} = ${g.id}
                       where ${r.id} in (${constrainedResourcesPKs})"""
-        .map(rs => (rs.get[ResourceTypeName](rt.resultName.name), rs.get[ResourceId](r.resultName.name), rs.stringOpt(g.resultName.name).map(WorkbenchGroupName))).list().apply()
+        .map(rs => (rs.get[ResourceTypeName](rt.resultName.name), rs.get[ResourceId](r.resultName.name), rs.get[WorkbenchGroupName](g.resultName.name))).list().apply()
 
       val resultsByResource = results.groupBy(result => (result._1, result._2))
       resultsByResource.map {
         case ((resourceTypeName, resourceId), groupedResults) => Resource(resourceTypeName, resourceId, groupedResults.collect {
-          case (_, _, Some(authDomainGroupName)) => authDomainGroupName
+          case (_, _, authDomainGroupName) => authDomainGroupName
         }.toSet)
       }.toSet
     }
@@ -287,12 +287,14 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
       val r = ResourceTable.syntax("r")
       val ad = AuthDomainTable.syntax("ad")
       val g = GroupTable.syntax("g")
+      val rt = ResourceTypeTable.syntax("rt")
 
       val results = samsql"""select ${r.result.name}, ${g.result.name}
                       from ${ResourceTable as r}
+                      join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
                       left join ${AuthDomainTable as ad} on ${r.id} = ${ad.resourceId}
                       left join ${GroupTable as g} on ${ad.groupId} = ${g.id}
-                      where ${r.name} in (${resourceId}) and ${r.resourceTypeId} = (${loadResourceTypePK(resourceTypeName)})"""
+                      where ${r.name} in (${resourceId}) and ${rt.name} = ${resourceTypeName}"""
         .map(rs => (rs.get[ResourceId](r.resultName.name), rs.stringOpt(g.resultName.name).map(WorkbenchGroupName))).list().apply()
 
       val resultsByResource = results.groupBy(_._1)
