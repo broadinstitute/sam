@@ -250,10 +250,24 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
       val ad = AuthDomainTable.syntax("ad")
       val g = GroupTable.syntax("g")
       val rt = ResourceTypeTable.syntax("rt")
+      val p = PolicyTable.syntax("p")
 
-      val constrainedResourcesPKs = samsqls"""select ${ad.result.resourceId}
-              from ${AuthDomainTable as ad}
-              where ${ad.groupId} = (${workbenchGroupIdentityToGroupPK(groupId)})"""
+      val constrainedResourcesPKs = groupId match {
+        case group: WorkbenchGroupName =>
+          samsqls"""select ${ad.result.resourceId}
+           from ${AuthDomainTable as ad}
+           join ${GroupTable as g} on ${g.id} = ${ad.groupId}
+           where ${g.name} = ${group}"""
+        case policy: FullyQualifiedPolicyId =>
+          samsqls"""select ${ad.result.resourceId}
+           from ${AuthDomainTable as ad}
+           join ${PolicyTable as p} on ${ad.groupId} = ${p.groupId}
+           join ${ResourceTable as r} on ${p.resourceId} = ${r.id}
+           join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
+           where ${policy.accessPolicyName} = ${p.name}
+           and ${policy.resource.resourceId} = ${r.name}
+           and ${policy.resource.resourceTypeName} = ${rt.name}"""
+      }
 
       val results = samsql"""select ${rt.result.name}, ${r.result.name}, ${g.result.name}
                       from ${ResourceTable as r}
