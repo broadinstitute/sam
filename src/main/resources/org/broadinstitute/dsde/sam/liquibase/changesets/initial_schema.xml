@@ -194,9 +194,9 @@
                 <constraints nullable="false" foreignKeyName="FK_SRP_RESOURCE" referencedTableName="SAM_RESOURCE" referencedColumnNames="id"/>
             </column>
             <column name="group_id" type="BIGINT">
-                <constraints nullable="false" foreignKeyName="FK_SRP_GROUP" referencedTableName="SAM_GROUP" referencedColumnNames="id"/>
+                <constraints nullable="false" foreignKeyName="FK_SRP_GROUP" referencedTableName="SAM_GROUP" referencedColumnNames="id" deleteCascade="true"/>
             </column>
-            <column name="name" type="VARCHAR">
+            <column name="public" type="BOOLEAN">
                 <constraints nullable="false"/>
             </column>
         </createTable>
@@ -205,7 +205,7 @@
     <changeSet logicalFilePath="dummy" author="dvoet" id="policy_role_table">
         <createTable tableName="SAM_POLICY_ROLE">
             <column name="resource_policy_id" type="BIGINT">
-                <constraints nullable="false" foreignKeyName="FK_SPR_POLICY" referencedTableName="SAM_RESOURCE_POLICY" referencedColumnNames="id" primaryKey="true"/>
+                <constraints nullable="false" foreignKeyName="FK_SPR_POLICY" referencedTableName="SAM_RESOURCE_POLICY" referencedColumnNames="id" primaryKey="true" deleteCascade="true"/>
             </column>
             <column name="resource_role_id" type="BIGINT">
                 <constraints nullable="false" foreignKeyName="FK_SPR_ROLE" referencedTableName="SAM_RESOURCE_ROLE" referencedColumnNames="id" primaryKey="true"/>
@@ -216,7 +216,7 @@
     <changeSet logicalFilePath="dummy" author="dvoet" id="policy_action_table">
         <createTable tableName="SAM_POLICY_ACTION">
             <column name="resource_policy_id" type="BIGINT">
-                <constraints nullable="false" foreignKeyName="FK_SPA_POLICY" referencedTableName="SAM_RESOURCE_POLICY" referencedColumnNames="id" primaryKey="true"/>
+                <constraints nullable="false" foreignKeyName="FK_SPA_POLICY" referencedTableName="SAM_RESOURCE_POLICY" referencedColumnNames="id" primaryKey="true" deleteCascade="true"/>
             </column>
             <column name="resource_action_id" type="BIGINT">
                 <constraints nullable="false" foreignKeyName="FK_SPA_ACTION" referencedTableName="SAM_RESOURCE_ACTION" referencedColumnNames="id" primaryKey="true"/>
@@ -236,9 +236,9 @@
         <addUniqueConstraint tableName="SAM_RESOURCE" columnNames="resource_type_id, name"/>
     </changeSet>
 
-    <changeSet logicalFilePath="dummy" author="dvoet" id="unique_policy_name">
-        <addUniqueConstraint tableName="SAM_RESOURCE_POLICY" columnNames="resource_id, name"/>
-    </changeSet>
+    <!--<changeSet logicalFilePath="dummy" author="dvoet" id="unique_policy_name">-->
+        <!--<addUniqueConstraint tableName="SAM_RESOURCE_POLICY" columnNames="resource_id, name"/>-->
+    <!--</changeSet>-->
 
     <changeSet logicalFilePath="dummy" author="mtalbott" id="unique_subgroup_member_">
         <addUniqueConstraint tableName="SAM_GROUP_MEMBER" columnNames="group_id, member_group_id"/>

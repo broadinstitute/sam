@@ -343,11 +343,11 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
                                        p: QuerySQLSyntaxProvider[SQLSyntaxSupport[PolicyRecord], PolicyRecord],
                                        r: QuerySQLSyntaxProvider[SQLSyntaxSupport[ResourceRecord], ResourceRecord],
                                        rt: QuerySQLSyntaxProvider[SQLSyntaxSupport[ResourceTypeRecord], ResourceTypeRecord]): WorkbenchGroupIdentity = {
-    (rs.stringOpt(p.resultName.name), rs.stringOpt(r.resultName.name), rs.stringOpt(rt.resultName.name)) match {
+    (rs.stringOpt(g.resultName.name), rs.stringOpt(r.resultName.name), rs.stringOpt(rt.resultName.name)) match {
       case (Some(policyName), Some(resourceId), Some(resourceTypeName)) =>
         FullyQualifiedPolicyId(FullyQualifiedResourceId(ResourceTypeName(resourceTypeName), ResourceId(resourceId)), AccessPolicyName(policyName))
-      case (None, None, None) =>
-        WorkbenchGroupName(rs.string(g.resultName.name))
+      case (Some(groupName), None, None) =>
+        WorkbenchGroupName(groupName)
       case (policyOpt, resourceOpt, resourceTypeOpt) =>
         throw new WorkbenchException(s"Inconsistent result. Expected either nothing or names for the policy, resource, and resource type, but instead got (policy = ${policyOpt}, resource = ${resourceOpt}, resourceType = ${resourceTypeOpt})")
     }
@@ -361,7 +361,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
       val r = ResourceTable.syntax("r")
       val rt = ResourceTypeTable.syntax("rt")
 
-      samsql"""select ${g.result.name}, ${p.result.name}, ${r.result.name}, ${rt.result.name}
+      samsql"""select ${g.result.name}, ${r.result.name}, ${rt.result.name}
               from ${GroupTable as g}
               join ${GroupMemberTable as gm} on ${gm.groupId} = ${g.id}
               left join ${PolicyTable as p} on ${p.groupId} = ${g.id}
@@ -483,7 +483,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
                     select ${pg.groupId}, ${pg.memberGroupId}
                     from ${GroupMemberTable as pg}
                     join ${ancestorGroupsTable as ag} ON ${agColumn.parentGroupId} = ${pg.memberGroupId}
-          ) select distinct(${g.name}) as ${g.resultName.name}, ${p.result.name}, ${r.result.name}, ${rt.result.name}
+          ) select distinct(${g.name}) as ${g.resultName.name}, ${r.result.name}, ${rt.result.name}
             from ${GroupTable as g}
             join ${ancestorGroupsTable as ag} on ${ag.parentGroupId} = ${g.id}
             left join ${PolicyTable as p} on ${p.groupId} = ${g.id}

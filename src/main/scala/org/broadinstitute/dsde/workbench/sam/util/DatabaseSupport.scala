@@ -29,18 +29,21 @@ trait DatabaseSupport {
   }
 
   protected def groupPKQueryForPolicy(policyId: FullyQualifiedPolicyId,
-                                    resourceTypeTableAlias: String = "rt",
-                                    resourceTableAlias: String = "r",
-                                    policyTableAlias: String = "p"): SQLSyntax = {
+                                      resourceTypeTableAlias: String = "rt",
+                                      resourceTableAlias: String = "r",
+                                      policyTableAlias: String = "p",
+                                      groupTableAlias: String = "g"): SQLSyntax = {
     val rt = ResourceTypeTable.syntax(resourceTypeTableAlias)
     val r = ResourceTable.syntax(resourceTableAlias)
     val p = PolicyTable.syntax(policyTableAlias)
+    val g = GroupTable.syntax(groupTableAlias)
     samsqls"""select ${p.groupId}
               from ${ResourceTypeTable as rt}
               join ${ResourceTable as r} on ${rt.id} = ${r.resourceTypeId}
               join ${PolicyTable as p} on ${r.id} = ${p.resourceId}
+              join ${GroupTable as g} on ${g.id} = ${p.groupId}
               where ${rt.name} = ${policyId.resource.resourceTypeName}
               and ${r.name} = ${policyId.resource.resourceId}
-              and ${p.name} = ${policyId.accessPolicyName}"""
+              and ${g.name} = ${policyId.accessPolicyName}"""
   }
 }

@@ -1,5 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.openam
 
+import java.time.Instant
+
 import akka.http.scaladsl.model.StatusCodes
 import cats.data.NonEmptyList
 import cats.effect.{ContextShift, IO}
@@ -286,9 +288,149 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     }
   }
 
-  override def createPolicy(policy: AccessPolicy): IO[AccessPolicy] = ???
-  override def deletePolicy(policy: FullyQualifiedPolicyId): IO[Unit] = ???
-  override def loadPolicy(resourceAndPolicyName: FullyQualifiedPolicyId): IO[Option[AccessPolicy]] = ???
+  override def createPolicy(policy: AccessPolicy): IO[AccessPolicy] = {
+    runInTransaction { implicit session =>
+      val groupId = insertPolicyGroup(policy)
+      val policyId = insertPolicy(policy, groupId)
+
+      insertGroupMembers(groupId, policy.members)
+
+      insertPolicyRoles(policy.roles, policyId)
+      insertPolicyActions(policy.actions, policyId)
+
+      policy
+    }
+  }
+
+  private def insertGroupMembers(groupId: GroupPK, members: Set[WorkbenchSubject])(implicit session: DBSession): Int = {
+    if (members.isEmpty) {
+      0
+    } else {
+      val memberUsers: List[SQLSyntax] = members.collect {
+        case userId: WorkbenchUserId => samsqls"(${groupId}, ${Option(userId)}, ${None})"
+      }.toList
+
+      val memberGroupPKQueries = members.collect {
+        case id: WorkbenchGroupIdentity => samsqls"(${workbenchGroupIdentityToGroupPK(id)})"
+      }
+
+      import SamTypeBinders._
+      val memberGroupPKs: List[GroupPK] = if (memberGroupPKQueries.nonEmpty) {
+        val g = GroupTable.syntax("g")
+        samsql"select ${g.result.id} from ${GroupTable as g} where ${g.id} in (${memberGroupPKQueries})"
+          .map(rs => rs.get[GroupPK](g.resultName.id)).list().apply()
+      } else {
+        List.empty
+      }
+
+      val memberGroups: List[SQLSyntax] = memberGroupPKs.map { groupPK =>
+        samsqls"(${groupId}, ${None}, ${Option(groupPK)})"
+      }
+
+      if (memberGroups.size != memberGroupPKQueries.size) {
+        throw new WorkbenchException(s"Some member groups not found.")
+      } else {
+        val gm = GroupMemberTable.column
+        samsql"insert into ${GroupMemberTable.table} (${gm.groupId}, ${gm.memberUserId}, ${gm.memberGroupId}) values ${memberUsers ++ memberGroups}"
+          .update().apply()
+      }
+    }
+  }
+
+  private def insertPolicyActions(actions: Set[ResourceAction], policyId: PolicyPK)(implicit session: DBSession): Int = {
+    val ra = ResourceActionTable.syntax("ra")
+    val paCol = PolicyActionTable.column
+    samsql"""insert into ${PolicyActionTable.table} (${paCol.resourcePolicyId}, ${paCol.resourceActionId})
+            select ${policyId}, ${ra.result.id} from ${ResourceActionTable as ra} where ${ra.action} in (${actions})"""
+      .update().apply()
+  }
+
+  private def insertPolicyRoles(roles: Set[ResourceRoleName], policyId: PolicyPK)(implicit session: DBSession): Int = {
+    val rr = ResourceRoleTable.syntax("rr")
+    val prCol = PolicyRoleTable.column
+    samsql"""insert into ${PolicyRoleTable.table} (${prCol.resourcePolicyId}, ${prCol.resourceRoleId})
+            select ${policyId}, ${rr.result.id} from ${ResourceRoleTable as rr} where ${rr.role} in (${roles})"""
+      .update().apply()
+  }
+
+  private def insertPolicy(policy: AccessPolicy, groupId: GroupPK)(implicit session: DBSession): PolicyPK = {
+    val pCol = PolicyTable.column
+    PolicyPK(samsql"""insert into ${PolicyTable.table} (${pCol.resourceId}, ${pCol.groupId}, ${pCol.public})
+              values ((${loadResourcePK(policy.id.resource)}), ${groupId}, ${policy.public})""".updateAndReturnGeneratedKey().apply())
+  }
+
+  private def insertPolicyGroup(policy: AccessPolicy)(implicit session: DBSession): GroupPK = {
+    val gCol = GroupTable.column
+    GroupPK(samsql"""insert into ${GroupTable.table} (${gCol.name}, ${gCol.email}, ${gCol.updatedDate})
+               values (${policy.id.accessPolicyName}, ${policy.email}, ${Instant.now()})""".updateAndReturnGeneratedKey().apply())
+  }
+
+  private def loadResourcePK(resource: FullyQualifiedResourceId): SQLSyntax = {
+    val r = ResourceTable.syntax("r")
+    val rt = ResourceTypeTable.syntax("rt")
+    samsqls"select ${r.id} from ${ResourceTable as r} join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id} where ${r.name} = ${resource.resourceId} and ${rt.name} = ${resource.resourceTypeName}"
+  }
+
+  override def deletePolicy(policy: FullyQualifiedPolicyId): IO[Unit] = {
+    val p = PolicyTable.syntax("p")
+    val g = GroupTable.syntax("g")
+
+    runInTransaction { implicit session =>
+      samsql"""delete from ${GroupTable as g}
+        using ${PolicyTable as p}
+        where ${g.name} = ${policy.accessPolicyName}
+        and ${g.id} = ${p.groupId}
+        and ${p.resourceId} = (${loadResourcePK(policy.resource)})""".update().apply()
+    }
+  }
+
+  override def loadPolicy(resourceAndPolicyName: FullyQualifiedPolicyId): IO[Option[AccessPolicy]] = {
+    import SamTypeBinders._
+    case class PolicyInfo(name: AccessPolicyName, resourceId: ResourceId, resourceTypeName: ResourceTypeName, email: WorkbenchEmail, public: Boolean)
+
+    runInTransaction { implicit session =>
+      val g = GroupTable.syntax("g")
+      val r = ResourceTable.syntax("r")
+      val rt = ResourceTypeTable.syntax("rt")
+      val gm = GroupMemberTable.syntax("gm")
+      val sg = GroupTable.syntax("sg")
+      val p = PolicyTable.syntax("p")
+      val pr = PolicyRoleTable.syntax("pr")
+      val rr = ResourceRoleTable.syntax("rr")
+      val pa = PolicyActionTable.syntax("pa")
+      val ra = ResourceActionTable.syntax("ra")
+
+      val (policyInfo: List[PolicyInfo], memberResults: List[(Option[WorkbenchUserId], Option[WorkbenchGroupName])], roleActionResults: List[(Option[ResourceRoleName], Option[ResourceAction])]) =
+        samsql"""select ${g.result.name}, ${r.result.name}, ${rt.result.name}, ${g.result.email}, ${p.result.public}, ${gm.result.memberUserId}, ${sg.result.name}, ${rr.result.role}, ${ra.result.action}
+          from ${GroupTable as g}
+          join ${PolicyTable as p} on ${g.id} = ${p.groupId}
+          join ${ResourceTable as r} on ${p.resourceId} = ${r.id}
+          join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
+          left join ${GroupMemberTable as gm} on ${g.id} = ${gm.groupId}
+          left join ${GroupTable as sg} on ${gm.memberGroupId} = ${sg.id}
+          left join ${PolicyRoleTable as pr} on ${p.id} = ${pr.resourcePolicyId}
+          left join ${ResourceRoleTable as rr} on ${pr.resourceRoleId} = ${rr.id}
+          left join ${PolicyActionTable as pa} on ${p.id} = ${pa.resourcePolicyId}
+          left join ${ResourceActionTable as ra} on ${pa.resourceActionId} = ${ra.id}
+          where ${g.name} = ${resourceAndPolicyName.accessPolicyName}
+          and ${r.name} = ${resourceAndPolicyName.resource.resourceId}
+          and ${rt.name} = ${resourceAndPolicyName.resource.resourceTypeName}"""
+        .map(rs => (PolicyInfo(rs.get[AccessPolicyName](g.resultName.name), rs.get[ResourceId](r.resultName.name), rs.get[ResourceTypeName](rt.resultName.name), rs.get[WorkbenchEmail](g.resultName.email), rs.boolean(p.resultName.public)),
+          (rs.stringOpt(gm.resultName.memberUserId).map(WorkbenchUserId), rs.stringOpt(sg.resultName.name).map(WorkbenchGroupName)),
+          (rs.stringOpt(rr.resultName.role).map(ResourceRoleName(_)), rs.stringOpt(ra.resultName.action).map(ResourceAction(_))))).list().apply().unzip3
+
+      policyInfo.headOption.map { info =>
+        val members: Set[WorkbenchSubject] = memberResults.collect {
+          case (Some(user), None) => user
+          case (None, Some(group)) => group
+        }.toSet
+
+        val (roles, actions) = roleActionResults.unzip
+
+        AccessPolicy(FullyQualifiedPolicyId(FullyQualifiedResourceId(info.resourceTypeName, info.resourceId), info.name), members, info.email, roles.flatten.toSet, actions.flatten.toSet, info.public)
+      }
+    }
+  }
   override def overwritePolicyMembers(id: FullyQualifiedPolicyId, memberList: Set[WorkbenchSubject]): IO[Unit] = ???
   override def overwritePolicy(newPolicy: AccessPolicy): IO[AccessPolicy] = ???
   override def listPublicAccessPolicies(resourceTypeName: ResourceTypeName): IO[Stream[ResourceIdAndPolicyName]] = ???

@@ -1,15 +1,15 @@
 package org.broadinstitute.dsde.workbench.sam.openam
 
 import akka.http.scaladsl.model.StatusCodes
-import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchExceptionWithErrorReport, WorkbenchGroupName}
+import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.directory._
 import org.broadinstitute.dsde.workbench.sam.openam.LoadResourceAuthDomainResult.{Constrained, NotConstrained, ResourceNotFound}
 import org.scalatest.{BeforeAndAfterEach, FreeSpec, Matchers}
-import scala.concurrent.{Future, Await}
-import scala.concurrent.duration._
 
+import scala.concurrent.{Await, Future}
+import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext.Implicits.global
 
 class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndAfterEach {
@@ -306,6 +306,60 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
 
       "returns an empty list if group doesn't exist" in {
         dao.listResourcesConstrainedByGroup(WorkbenchGroupName("notEvenReal")).unsafeRunSync() shouldEqual Set.empty
+      }
+    }
+    val defaultGroupName = WorkbenchGroupName("group")
+    val defaultGroup = BasicWorkbenchGroup(defaultGroupName, Set.empty, WorkbenchEmail("foo@bar.com"))
+    val defaultUserId = WorkbenchUserId("testUser")
+    val defaultUser = WorkbenchUser(defaultUserId, Option(GoogleSubjectId("testGoogleSubject")), WorkbenchEmail("user@foo.com"))
+    "createPolicy" - {
+      "creates a policy" in {
+        dao.createResourceType(resourceType).unsafeRunSync()
+        val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
+        dao.createResource(resource).unsafeRunSync()
+
+        val policy = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("policyName")), Set.empty, WorkbenchEmail("policy@email.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), false)
+        dao.createPolicy(policy).unsafeRunSync()
+        dao.loadPolicy(policy.id).unsafeRunSync() shouldEqual Option(policy)
+      }
+
+      "creates a policy with users and groups as members" in {
+        dao.createResourceType(resourceType).unsafeRunSync()
+        val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
+        dao.createResource(resource).unsafeRunSync()
+
+        dirDao.createGroup(defaultGroup).unsafeRunSync()
+        dirDao.createUser(defaultUser).unsafeRunSync()
+
+        val policy = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("policyName")), Set(defaultGroup.id, defaultUser.id), WorkbenchEmail("policy@email.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), false)
+        dao.createPolicy(policy).unsafeRunSync()
+        dao.loadPolicy(policy.id).unsafeRunSync() shouldEqual Option(policy)
+      }
+    }
+
+    "loadPolicy" - {
+      "returns None for a nonexistent policy" in {
+        val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
+        dao.loadPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("fakePolicy"))).unsafeRunSync() shouldBe None
+      }
+    }
+
+    "deletePolicy" - {
+      "deletes a policy and the associated group" in {
+        dao.createResourceType(resourceType).unsafeRunSync()
+        val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
+        dao.createResource(resource).unsafeRunSync()
+
+        dirDao.createGroup(defaultGroup).unsafeRunSync()
+        dirDao.createUser(defaultUser).unsafeRunSync()
+
+        val policy = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("policyName")), Set(defaultGroup.id, defaultUser.id), WorkbenchEmail("policy@email.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), false)
+        dao.createPolicy(policy).unsafeRunSync()
+        dao.loadPolicy(policy.id).unsafeRunSync() shouldBe Option(policy)
+        dirDao.loadGroup(WorkbenchGroupName(policy.id.accessPolicyName.value)).unsafeRunSync() shouldBe defined // we just want this to exist, we don't actually care about what the group is
+        dao.deletePolicy(policy.id).unsafeRunSync()
+        dao.loadPolicy(policy.id).unsafeRunSync() shouldBe None
+        dirDao.loadGroup(WorkbenchGroupName(policy.id.accessPolicyName.value)).unsafeRunSync() shouldBe None
       }
     }
   }
