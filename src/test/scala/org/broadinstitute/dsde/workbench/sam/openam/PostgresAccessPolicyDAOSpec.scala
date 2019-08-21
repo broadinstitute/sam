@@ -323,7 +323,7 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
         dao.loadPolicy(policy.id).unsafeRunSync() shouldEqual Option(policy)
       }
 
-      "creates a policy with users and groups as members" in {
+      "creates a policy with users and groups as members and loads those members" in {
         dao.createResourceType(resourceType).unsafeRunSync()
         val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
         dao.createResource(resource).unsafeRunSync()
@@ -345,7 +345,11 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
     }
 
     "deletePolicy" - {
-      "deletes a policy and the associated group" in {
+      "deletes a policy" in {
+        // ideally we'd check that the associated group was deleted,
+        // but there's no way to load the associated group without its name,
+        // and we can't get its name without the resource's primary key which is not exposed anywhere,
+        // so we aren't checking that the associated group was deleted
         dao.createResourceType(resourceType).unsafeRunSync()
         val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
         dao.createResource(resource).unsafeRunSync()
@@ -356,10 +360,8 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
         val policy = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("policyName")), Set(defaultGroup.id, defaultUser.id), WorkbenchEmail("policy@email.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), false)
         dao.createPolicy(policy).unsafeRunSync()
         dao.loadPolicy(policy.id).unsafeRunSync() shouldBe Option(policy)
-        dirDao.loadGroup(WorkbenchGroupName(policy.id.accessPolicyName.value)).unsafeRunSync() shouldBe defined // we just want this to exist, we don't actually care about what the group is
         dao.deletePolicy(policy.id).unsafeRunSync()
         dao.loadPolicy(policy.id).unsafeRunSync() shouldBe None
-        dirDao.loadGroup(WorkbenchGroupName(policy.id.accessPolicyName.value)).unsafeRunSync() shouldBe None
       }
     }
   }

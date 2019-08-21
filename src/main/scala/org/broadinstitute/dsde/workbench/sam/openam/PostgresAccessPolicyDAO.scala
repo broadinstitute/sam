@@ -355,14 +355,23 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
 
   private def insertPolicy(policy: AccessPolicy, groupId: GroupPK)(implicit session: DBSession): PolicyPK = {
     val pCol = PolicyTable.column
-    PolicyPK(samsql"""insert into ${PolicyTable.table} (${pCol.resourceId}, ${pCol.groupId}, ${pCol.public})
-              values ((${loadResourcePK(policy.id.resource)}), ${groupId}, ${policy.public})""".updateAndReturnGeneratedKey().apply())
+    PolicyPK(samsql"""insert into ${PolicyTable.table} (${pCol.resourceId}, ${pCol.groupId}, ${pCol.public}, ${pCol.name})
+              values ((${loadResourcePK(policy.id.resource)}), ${groupId}, ${policy.public}, ${policy.id.accessPolicyName})""".updateAndReturnGeneratedKey().apply())
   }
 
   private def insertPolicyGroup(policy: AccessPolicy)(implicit session: DBSession): GroupPK = {
     val gCol = GroupTable.column
+
+    val r = ResourceTable.syntax("r")
+    val rt = ResourceTypeTable.syntax("rt")
+    val policyGroupName =
+      samsqls"""select concat(${r.id}, '_', ${policy.id.accessPolicyName}) from ${ResourceTable as r}
+               join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
+               where ${r.name} = ${policy.id.resource.resourceId}
+               and ${rt.name} = ${policy.id.resource.resourceTypeName}"""
+
     GroupPK(samsql"""insert into ${GroupTable.table} (${gCol.name}, ${gCol.email}, ${gCol.updatedDate})
-               values (${policy.id.accessPolicyName}, ${policy.email}, ${Instant.now()})""".updateAndReturnGeneratedKey().apply())
+               values ((${policyGroupName}), ${policy.email}, ${Instant.now()})""".updateAndReturnGeneratedKey().apply())
   }
 
   private def loadResourcePK(resource: FullyQualifiedResourceId): SQLSyntax = {
@@ -378,8 +387,8 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     runInTransaction { implicit session =>
       samsql"""delete from ${GroupTable as g}
         using ${PolicyTable as p}
-        where ${g.name} = ${policy.accessPolicyName}
-        and ${g.id} = ${p.groupId}
+        where ${g.id} = ${p.groupId}
+        and ${p.name} = ${policy.accessPolicyName}
         and ${p.resourceId} = (${loadResourcePK(policy.resource)})""".update().apply()
     }
   }
@@ -401,7 +410,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
       val ra = ResourceActionTable.syntax("ra")
 
       val (policyInfo: List[PolicyInfo], memberResults: List[(Option[WorkbenchUserId], Option[WorkbenchGroupName])], roleActionResults: List[(Option[ResourceRoleName], Option[ResourceAction])]) =
-        samsql"""select ${g.result.name}, ${r.result.name}, ${rt.result.name}, ${g.result.email}, ${p.result.public}, ${gm.result.memberUserId}, ${sg.result.name}, ${rr.result.role}, ${ra.result.action}
+        samsql"""select ${p.result.name}, ${r.result.name}, ${rt.result.name}, ${g.result.email}, ${p.result.public}, ${gm.result.memberUserId}, ${sg.result.name}, ${rr.result.role}, ${ra.result.action}
           from ${GroupTable as g}
           join ${PolicyTable as p} on ${g.id} = ${p.groupId}
           join ${ResourceTable as r} on ${p.resourceId} = ${r.id}
@@ -412,10 +421,10 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
           left join ${ResourceRoleTable as rr} on ${pr.resourceRoleId} = ${rr.id}
           left join ${PolicyActionTable as pa} on ${p.id} = ${pa.resourcePolicyId}
           left join ${ResourceActionTable as ra} on ${pa.resourceActionId} = ${ra.id}
-          where ${g.name} = ${resourceAndPolicyName.accessPolicyName}
+          where ${p.name} = ${resourceAndPolicyName.accessPolicyName}
           and ${r.name} = ${resourceAndPolicyName.resource.resourceId}
           and ${rt.name} = ${resourceAndPolicyName.resource.resourceTypeName}"""
-        .map(rs => (PolicyInfo(rs.get[AccessPolicyName](g.resultName.name), rs.get[ResourceId](r.resultName.name), rs.get[ResourceTypeName](rt.resultName.name), rs.get[WorkbenchEmail](g.resultName.email), rs.boolean(p.resultName.public)),
+        .map(rs => (PolicyInfo(rs.get[AccessPolicyName](p.resultName.name), rs.get[ResourceId](r.resultName.name), rs.get[ResourceTypeName](rt.resultName.name), rs.get[WorkbenchEmail](g.resultName.email), rs.boolean(p.resultName.public)),
           (rs.stringOpt(gm.resultName.memberUserId).map(WorkbenchUserId), rs.stringOpt(sg.resultName.name).map(WorkbenchGroupName)),
           (rs.stringOpt(rr.resultName.role).map(ResourceRoleName(_)), rs.stringOpt(ra.resultName.action).map(ResourceAction(_))))).list().apply().unzip3
 

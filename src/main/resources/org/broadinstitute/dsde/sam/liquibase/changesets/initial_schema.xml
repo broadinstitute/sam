@@ -196,6 +196,9 @@
             <column name="group_id" type="BIGINT">
                 <constraints nullable="false" foreignKeyName="FK_SRP_GROUP" referencedTableName="SAM_GROUP" referencedColumnNames="id" deleteCascade="true"/>
             </column>
+            <column name="name" type="VARCHAR">
+                <constraints nullable="false"/>
+            </column>
             <column name="public" type="BOOLEAN">
                 <constraints nullable="false"/>
             </column>
@@ -236,9 +239,9 @@
         <addUniqueConstraint tableName="SAM_RESOURCE" columnNames="resource_type_id, name"/>
     </changeSet>
 
-    <!--<changeSet logicalFilePath="dummy" author="dvoet" id="unique_policy_name">-->
-        <!--<addUniqueConstraint tableName="SAM_RESOURCE_POLICY" columnNames="resource_id, name"/>-->
-    <!--</changeSet>-->
+    <changeSet logicalFilePath="dummy" author="dvoet" id="unique_policy_name">
+        <addUniqueConstraint tableName="SAM_RESOURCE_POLICY" columnNames="resource_id, name"/>
+    </changeSet>
 
     <changeSet logicalFilePath="dummy" author="mtalbott" id="unique_subgroup_member_">
         <addUniqueConstraint tableName="SAM_GROUP_MEMBER" columnNames="group_id, member_group_id"/>
