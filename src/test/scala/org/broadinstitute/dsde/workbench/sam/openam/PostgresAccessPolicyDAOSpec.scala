@@ -3,6 +3,7 @@ package org.broadinstitute.dsde.workbench.sam.openam
 import akka.http.scaladsl.model.StatusCodes
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
+import org.broadinstitute.dsde.workbench.sam.db.dao.PostgresGroupDAO
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.directory._
 import org.broadinstitute.dsde.workbench.sam.openam.LoadResourceAuthDomainResult.{Constrained, NotConstrained, ResourceNotFound}
@@ -13,8 +14,9 @@ import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext.Implicits.global
 
 class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndAfterEach {
-  val dao = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.blockingEc)
-  val dirDao = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.blockingEc)
+  val groupDAO = new PostgresGroupDAO(TestSupport.dbRef, TestSupport.blockingEc)
+  val dao = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.blockingEc, groupDAO)
+  val dirDao = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.blockingEc, groupDAO)
 
   override protected def beforeEach(): Unit = {
     TestSupport.truncateAll

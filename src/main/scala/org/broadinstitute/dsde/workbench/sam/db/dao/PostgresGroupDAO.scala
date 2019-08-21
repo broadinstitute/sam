@@ -1,16 +1,17 @@
 package org.broadinstitute.dsde.workbench.sam.db.dao
 import cats.effect.{ContextShift, IO}
-import org.broadinstitute.dsde.workbench.model.{WorkbenchException, WorkbenchGroupIdentity, WorkbenchSubject, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.db.{DbReference, SamTypeBinders}
-import org.broadinstitute.dsde.workbench.sam.db.tables.{GroupMemberTable, GroupPK, GroupTable}
+import org.broadinstitute.dsde.workbench.sam.db.tables._
 import org.broadinstitute.dsde.workbench.sam.util.DatabaseSupport
 import scalikejdbc.{DBSession, SQLSyntax}
 import org.broadinstitute.dsde.workbench.sam.db.SamParameterBinderFactory.SqlInterpolationWithSamBinders
+import org.broadinstitute.dsde.workbench.sam.model.FullyQualifiedPolicyId
 
 import scala.concurrent.ExecutionContext
 
 class PostgresGroupDAO(protected val dbRef: DbReference,
-               protected val ecForDatabaseIO: ExecutionContext)(implicit executionContext: ExecutionContext) extends DatabaseSupport {
+                       protected val ecForDatabaseIO: ExecutionContext)(implicit executionContext: ExecutionContext) extends DatabaseSupport {
   implicit val cs: ContextShift[IO] = IO.contextShift(executionContext)
 
   def insertGroupMembers(groupId: GroupPK, members: Set[WorkbenchSubject])(implicit session: DBSession): Int = {
@@ -46,5 +47,31 @@ class PostgresGroupDAO(protected val dbRef: DbReference,
           .update().apply()
       }
     }
+  }
+
+  def workbenchGroupIdentityToGroupPK(groupId: WorkbenchGroupIdentity): SQLSyntax = {
+    groupId match {
+      case group: WorkbenchGroupName => GroupTable.groupPKQueryForGroup(group)
+      case policy: FullyQualifiedPolicyId => groupPKQueryForPolicy(policy)
+    }
+  }
+
+  private def groupPKQueryForPolicy(policyId: FullyQualifiedPolicyId,
+                                    resourceTypeTableAlias: String = "rt",
+                                    resourceTableAlias: String = "r",
+                                    policyTableAlias: String = "p",
+                                    groupTableAlias: String = "g"): SQLSyntax = {
+    val rt = ResourceTypeTable.syntax(resourceTypeTableAlias)
+    val r = ResourceTable.syntax(resourceTableAlias)
+    val p = PolicyTable.syntax(policyTableAlias)
+    val g = GroupTable.syntax(groupTableAlias)
+    samsqls"""select ${p.groupId}
+              from ${ResourceTypeTable as rt}
+              join ${ResourceTable as r} on ${rt.id} = ${r.resourceTypeId}
+              join ${PolicyTable as p} on ${r.id} = ${p.resourceId}
+              join ${GroupTable as g} on ${g.id} = ${p.groupId}
+              where ${rt.name} = ${policyId.resource.resourceTypeName}
+              and ${r.name} = ${policyId.resource.resourceId}
+              and ${g.name} = ${policyId.accessPolicyName}"""
   }
 }

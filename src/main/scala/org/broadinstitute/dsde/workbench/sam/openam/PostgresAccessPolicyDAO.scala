@@ -11,6 +11,7 @@ import org.broadinstitute.dsde.workbench.sam.errorReportSource
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.db.{DbReference, SamTypeBinders}
 import org.broadinstitute.dsde.workbench.sam.db.SamParameterBinderFactory._
+import org.broadinstitute.dsde.workbench.sam.db.dao.PostgresGroupDAO
 import org.broadinstitute.dsde.workbench.sam.db.tables._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.LoadResourceAuthDomainResult.{Constrained, NotConstrained, ResourceNotFound}
@@ -21,7 +22,8 @@ import scalikejdbc._
 import scala.concurrent.ExecutionContext
 
 class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
-                              protected val ecForDatabaseIO: ExecutionContext)(implicit executionContext: ExecutionContext) extends AccessPolicyDAO with DatabaseSupport with LazyLogging {
+                              protected val ecForDatabaseIO: ExecutionContext,
+                              protected val groupDAO: PostgresGroupDAO)(implicit executionContext: ExecutionContext) extends AccessPolicyDAO with DatabaseSupport with LazyLogging {
 
   implicit val cs: ContextShift[IO] = IO.contextShift(executionContext)
 
@@ -293,47 +295,12 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
       val groupId = insertPolicyGroup(policy)
       val policyId = insertPolicy(policy, groupId)
 
-      insertGroupMembers(groupId, policy.members)
+      groupDAO.insertGroupMembers(groupId, policy.members)
 
       insertPolicyRoles(policy.roles, policyId)
       insertPolicyActions(policy.actions, policyId)
 
       policy
-    }
-  }
-
-  private def insertGroupMembers(groupId: GroupPK, members: Set[WorkbenchSubject])(implicit session: DBSession): Int = {
-    if (members.isEmpty) {
-      0
-    } else {
-      val memberUsers: List[SQLSyntax] = members.collect {
-        case userId: WorkbenchUserId => samsqls"(${groupId}, ${Option(userId)}, ${None})"
-      }.toList
-
-      val memberGroupPKQueries = members.collect {
-        case id: WorkbenchGroupIdentity => samsqls"(${workbenchGroupIdentityToGroupPK(id)})"
-      }
-
-      import SamTypeBinders._
-      val memberGroupPKs: List[GroupPK] = if (memberGroupPKQueries.nonEmpty) {
-        val g = GroupTable.syntax("g")
-        samsql"select ${g.result.id} from ${GroupTable as g} where ${g.id} in (${memberGroupPKQueries})"
-          .map(rs => rs.get[GroupPK](g.resultName.id)).list().apply()
-      } else {
-        List.empty
-      }
-
-      val memberGroups: List[SQLSyntax] = memberGroupPKs.map { groupPK =>
-        samsqls"(${groupId}, ${None}, ${Option(groupPK)})"
-      }
-
-      if (memberGroups.size != memberGroupPKQueries.size) {
-        throw new WorkbenchException(s"Some member groups not found.")
-      } else {
-        val gm = GroupMemberTable.column
-        samsql"insert into ${GroupMemberTable.table} (${gm.groupId}, ${gm.memberUserId}, ${gm.memberGroupId}) values ${memberUsers ++ memberGroups}"
-          .update().apply()
-      }
     }
   }
 
