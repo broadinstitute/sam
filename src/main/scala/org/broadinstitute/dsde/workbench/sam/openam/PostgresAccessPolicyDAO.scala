@@ -407,7 +407,26 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
   }
   override def overwritePolicyMembers(id: FullyQualifiedPolicyId, memberList: Set[WorkbenchSubject]): IO[Unit] = ???
   override def overwritePolicy(newPolicy: AccessPolicy): IO[AccessPolicy] = ???
-  override def listPublicAccessPolicies(resourceTypeName: ResourceTypeName): IO[Stream[ResourceIdAndPolicyName]] = ???
+
+  override def listPublicAccessPolicies(resourceTypeName: ResourceTypeName): IO[Stream[ResourceIdAndPolicyName]] = {
+    val rt = ResourceTypeTable.syntax("rt")
+    val r = ResourceTable.syntax("r")
+    val p = PolicyTable.syntax("p")
+
+    val query =
+      samsql"""select ${r.result.name}, ${p.result.name}
+               from ${ResourceTypeTable as rt}
+               join ${ResourceTable as r} on ${r.resourceTypeId} = ${rt.id}
+               join ${PolicyTable as p} on ${p.resourceId} = ${r.id}
+               where ${rt.name} = ${resourceTypeName}
+               and ${p.public} = true"""
+
+    import SamTypeBinders._
+    runInTransaction { implicit session =>
+      query.map(rs => ResourceIdAndPolicyName(rs.get[ResourceId](r.resultName.name), rs.get[AccessPolicyName](p.resultName.name))).list().apply().toStream
+    }
+  }
+
   override def listPublicAccessPolicies(resource: FullyQualifiedResourceId): IO[Stream[AccessPolicy]] = ???
 
   override def listResourcesWithAuthdomains(resourceTypeName: ResourceTypeName, resourceId: Set[ResourceId]): IO[Set[Resource]] = {
