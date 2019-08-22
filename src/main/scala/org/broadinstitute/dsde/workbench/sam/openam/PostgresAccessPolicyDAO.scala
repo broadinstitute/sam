@@ -373,15 +373,21 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
       val rr = ResourceRoleTable.syntax("rr")
       val pa = PolicyActionTable.syntax("pa")
       val ra = ResourceActionTable.syntax("ra")
+      val sp = PolicyTable.syntax("sp")
+      val sr = ResourceTable.syntax("sr")
+      val srt = ResourceTypeTable.syntax("srt")
 
-      val (policyInfo: List[PolicyInfo], memberResults: List[(Option[WorkbenchUserId], Option[WorkbenchGroupName])], roleActionResults: List[(Option[ResourceRoleName], Option[ResourceAction])]) =
-        samsql"""select ${p.result.name}, ${r.result.name}, ${rt.result.name}, ${g.result.email}, ${p.result.public}, ${gm.result.memberUserId}, ${sg.result.name}, ${rr.result.role}, ${ra.result.action}
+      val (policyInfo: List[PolicyInfo], memberResults: List[(Option[WorkbenchUserId], Option[WorkbenchGroupName], Option[AccessPolicyName], Option[ResourceId], Option[ResourceTypeName])], roleActionResults: List[(Option[ResourceRoleName], Option[ResourceAction])]) =
+        samsql"""select ${p.result.name}, ${r.result.name}, ${rt.result.name}, ${g.result.email}, ${p.result.public}, ${gm.result.memberUserId}, ${sg.result.name}, ${sp.result.name}, ${sr.result.name}, ${srt.result.name}, ${rr.result.role}, ${ra.result.action}
           from ${GroupTable as g}
           join ${PolicyTable as p} on ${g.id} = ${p.groupId}
           join ${ResourceTable as r} on ${p.resourceId} = ${r.id}
           join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
           left join ${GroupMemberTable as gm} on ${g.id} = ${gm.groupId}
           left join ${GroupTable as sg} on ${gm.memberGroupId} = ${sg.id}
+          left join ${PolicyTable as sp} on ${sg.id} = ${sp.groupId}
+          left join ${ResourceTable as sr} on ${sp.resourceId} = ${sr.id}
+          left join ${ResourceTypeTable as srt} on ${sr.resourceTypeId} = ${srt.id}
           left join ${PolicyRoleTable as pr} on ${p.id} = ${pr.resourcePolicyId}
           left join ${ResourceRoleTable as rr} on ${pr.resourceRoleId} = ${rr.id}
           left join ${PolicyActionTable as pa} on ${p.id} = ${pa.resourcePolicyId}
@@ -390,13 +396,14 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
           and ${r.name} = ${resourceAndPolicyName.resource.resourceId}
           and ${rt.name} = ${resourceAndPolicyName.resource.resourceTypeName}"""
         .map(rs => (PolicyInfo(rs.get[AccessPolicyName](p.resultName.name), rs.get[ResourceId](r.resultName.name), rs.get[ResourceTypeName](rt.resultName.name), rs.get[WorkbenchEmail](g.resultName.email), rs.boolean(p.resultName.public)),
-          (rs.stringOpt(gm.resultName.memberUserId).map(WorkbenchUserId), rs.stringOpt(sg.resultName.name).map(WorkbenchGroupName)),
+          (rs.stringOpt(gm.resultName.memberUserId).map(WorkbenchUserId), rs.stringOpt(sg.resultName.name).map(WorkbenchGroupName), rs.stringOpt(sp.resultName.name).map(AccessPolicyName(_)), rs.stringOpt(sr.resultName.name).map(ResourceId(_)), rs.stringOpt(srt.resultName.name).map(ResourceTypeName(_))),
           (rs.stringOpt(rr.resultName.role).map(ResourceRoleName(_)), rs.stringOpt(ra.resultName.action).map(ResourceAction(_))))).list().apply().unzip3
 
       policyInfo.headOption.map { info =>
         val members: Set[WorkbenchSubject] = memberResults.collect {
-          case (Some(user), None) => user
-          case (None, Some(group)) => group
+          case (Some(user), None, None, None, None) => user
+          case (None, Some(group), None, None, None) => group
+          case (None, Some(_), Some(policyName), Some(resourceName), Some(resourceTypeName)) => FullyQualifiedPolicyId(FullyQualifiedResourceId(resourceTypeName, resourceName), policyName)
         }.toSet
 
         val (roles, actions) = roleActionResults.unzip

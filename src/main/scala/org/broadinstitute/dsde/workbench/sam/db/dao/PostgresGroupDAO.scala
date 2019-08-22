@@ -73,6 +73,6 @@ class PostgresGroupDAO(protected val dbRef: DbReference,
               join ${GroupTable as g} on ${g.id} = ${p.groupId}
               where ${rt.name} = ${policyId.resource.resourceTypeName}
               and ${r.name} = ${policyId.resource.resourceId}
-              and ${g.name} = ${policyId.accessPolicyName}"""
+              and ${p.name} = ${policyId.accessPolicyName}"""
   }
 }

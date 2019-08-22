@@ -56,18 +56,27 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
         val g = GroupTable.syntax("g")
         val sg = GroupTable.syntax("sg")
         val gm = GroupMemberTable.syntax("gm")
+        val p = PolicyTable.syntax("p")
+        val r = ResourceTable.syntax("r")
+        val rt = ResourceTypeTable.syntax("rt")
 
         import SamTypeBinders._
 
-        samsql"""select ${g.result.email}, ${gm.result.memberUserId}, ${sg.result.name}
+        samsql"""select ${g.result.email}, ${gm.result.memberUserId}, ${sg.result.name}, ${p.result.name}, ${r.result.name}, ${rt.result.name}
                   from ${GroupTable as g}
                   left join ${GroupMemberTable as gm} on ${g.id} = ${gm.groupId}
                   left join ${GroupTable as sg} on ${gm.memberGroupId} = ${sg.id}
+                  left join ${PolicyTable as p} on ${p.groupId} = ${sg.id}
+                  left join ${ResourceTable as r} on ${p.resourceId} = ${r.id}
+                  left join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
                   where ${g.name} = ${groupName}"""
           .map { rs =>
             (rs.get[WorkbenchEmail](g.resultName.email),
               rs.stringOpt(gm.resultName.memberUserId).map(WorkbenchUserId),
-              rs.stringOpt(sg.resultName.name).map(WorkbenchGroupName))
+              rs.stringOpt(sg.resultName.name).map(WorkbenchGroupName),
+              rs.stringOpt(p.resultName.name).map(AccessPolicyName(_)),
+              rs.stringOpt(r.resultName.name).map(ResourceId(_)),
+              rs.stringOpt(rt.resultName.name).map(ResourceTypeName(_)))
           }.list().apply()
       }
     } yield {
@@ -76,8 +85,9 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
       } else {
         val email = results.head._1
         val members: Set[WorkbenchSubject] = results.collect {
-          case (_, Some(userId), None) => userId
-          case (_, None, Some(subGroupName)) => subGroupName
+          case (_, Some(userId), None, None, None, None) => userId
+          case (_, None, Some(subGroupName), None, None, None) => subGroupName
+          case (_, None, Some(_), Some(policyName), Some(resourceName), Some(resourceTypeName)) => FullyQualifiedPolicyId(FullyQualifiedResourceId(resourceTypeName, resourceName), policyName)
         }.toSet
 
         Option(BasicWorkbenchGroup(groupName, members, email))
@@ -310,11 +320,12 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
                                        p: QuerySQLSyntaxProvider[SQLSyntaxSupport[PolicyRecord], PolicyRecord],
                                        r: QuerySQLSyntaxProvider[SQLSyntaxSupport[ResourceRecord], ResourceRecord],
                                        rt: QuerySQLSyntaxProvider[SQLSyntaxSupport[ResourceTypeRecord], ResourceTypeRecord]): WorkbenchGroupIdentity = {
-    (rs.stringOpt(g.resultName.name), rs.stringOpt(r.resultName.name), rs.stringOpt(rt.resultName.name)) match {
+    import SamTypeBinders._
+    (rs.stringOpt(p.resultName.name), rs.stringOpt(r.resultName.name), rs.stringOpt(rt.resultName.name)) match {
       case (Some(policyName), Some(resourceId), Some(resourceTypeName)) =>
         FullyQualifiedPolicyId(FullyQualifiedResourceId(ResourceTypeName(resourceTypeName), ResourceId(resourceId)), AccessPolicyName(policyName))
-      case (Some(groupName), None, None) =>
-        WorkbenchGroupName(groupName)
+      case (None, None, None) =>
+        rs.get[WorkbenchGroupName](g.resultName.name)
       case (policyOpt, resourceOpt, resourceTypeOpt) =>
         throw new WorkbenchException(s"Inconsistent result. Expected either nothing or names for the policy, resource, and resource type, but instead got (policy = ${policyOpt}, resource = ${resourceOpt}, resourceType = ${resourceTypeOpt})")
     }
@@ -328,7 +339,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
       val r = ResourceTable.syntax("r")
       val rt = ResourceTypeTable.syntax("rt")
 
-      samsql"""select ${g.result.name}, ${r.result.name}, ${rt.result.name}
+      samsql"""select ${g.result.name}, ${p.result.name}, ${r.result.name}, ${rt.result.name}
               from ${GroupTable as g}
               join ${GroupMemberTable as gm} on ${gm.groupId} = ${g.id}
               left join ${PolicyTable as p} on ${p.groupId} = ${g.id}
@@ -450,7 +461,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
                     select ${pg.groupId}, ${pg.memberGroupId}
                     from ${GroupMemberTable as pg}
                     join ${ancestorGroupsTable as ag} ON ${agColumn.parentGroupId} = ${pg.memberGroupId}
-          ) select distinct(${g.name}) as ${g.resultName.name}, ${r.result.name}, ${rt.result.name}
+          ) select distinct(${g.name}) as ${g.resultName.name}, ${p.result.name}, ${r.result.name}, ${rt.result.name}
             from ${GroupTable as g}
             join ${ancestorGroupsTable as ag} on ${ag.parentGroupId} = ${g.id}
             left join ${PolicyTable as p} on ${p.groupId} = ${g.id}
