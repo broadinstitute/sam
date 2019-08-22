@@ -331,6 +331,9 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
 
     val r = ResourceTable.syntax("r")
     val rt = ResourceTypeTable.syntax("rt")
+    // Group.name in DB cannot be null and must be unique.  Policy names are stored in the SAM_POLICY table, and
+    // policies don't care about the group.name, but it must be set.  So we are building something unique here, in order
+    // to satisfy the db constraint, but it's otherwise irrelevant for polices.
     val policyGroupName =
       samsqls"""select concat(${r.id}, '_', ${policy.id.accessPolicyName}) from ${ResourceTable as r}
                join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
