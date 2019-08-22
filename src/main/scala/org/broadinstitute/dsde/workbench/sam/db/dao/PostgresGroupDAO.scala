@@ -19,7 +19,7 @@ class PostgresGroupDAO(protected val dbRef: DbReference,
       0
     } else {
       val memberUsers: List[SQLSyntax] = members.collect {
-        case userId: WorkbenchUserId => samsqls"(${groupId}, ${Option(userId)}, ${None})"
+        case userId: WorkbenchUserId => samsqls"(${groupId}, ${userId}, ${None})"
       }.toList
 
       val memberGroupPKQueries = members.collect {
@@ -27,6 +27,7 @@ class PostgresGroupDAO(protected val dbRef: DbReference,
       }
 
       import SamTypeBinders._
+      // TODO: is there a way to do this without needing N subqueries?
       val memberGroupPKs: List[GroupPK] = if (memberGroupPKQueries.nonEmpty) {
         val g = GroupTable.syntax("g")
         samsql"select ${g.result.id} from ${GroupTable as g} where ${g.id} in (${memberGroupPKQueries})"
@@ -36,7 +37,7 @@ class PostgresGroupDAO(protected val dbRef: DbReference,
       }
 
       val memberGroups: List[SQLSyntax] = memberGroupPKs.map { groupPK =>
-        samsqls"(${groupId}, ${None}, ${Option(groupPK)})"
+        samsqls"(${groupId}, ${None}, ${groupPK})"
       }
 
       if (memberGroups.size != memberGroupPKQueries.size) {

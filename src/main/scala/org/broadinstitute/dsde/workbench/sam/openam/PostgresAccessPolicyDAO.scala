@@ -323,7 +323,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
   private def insertPolicy(policy: AccessPolicy, groupId: GroupPK)(implicit session: DBSession): PolicyPK = {
     val pCol = PolicyTable.column
     PolicyPK(samsql"""insert into ${PolicyTable.table} (${pCol.resourceId}, ${pCol.groupId}, ${pCol.public}, ${pCol.name})
-              values ((${loadResourcePK(policy.id.resource)}), ${groupId}, ${policy.public}, ${policy.id.accessPolicyName})""".updateAndReturnGeneratedKey().apply())
+              values ((${ResourceTable.loadResourcePK(policy.id.resource)}), ${groupId}, ${policy.public}, ${policy.id.accessPolicyName})""".updateAndReturnGeneratedKey().apply())
   }
 
   private def insertPolicyGroup(policy: AccessPolicy)(implicit session: DBSession): GroupPK = {
@@ -341,12 +341,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
                values ((${policyGroupName}), ${policy.email}, ${Instant.now()})""".updateAndReturnGeneratedKey().apply())
   }
 
-  private def loadResourcePK(resource: FullyQualifiedResourceId): SQLSyntax = {
-    val r = ResourceTable.syntax("r")
-    val rt = ResourceTypeTable.syntax("rt")
-    samsqls"select ${r.id} from ${ResourceTable as r} join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id} where ${r.name} = ${resource.resourceId} and ${rt.name} = ${resource.resourceTypeName}"
-  }
-
+  // Policies and their roles and actions are set to cascade delete when the associated group is deleted
   override def deletePolicy(policy: FullyQualifiedPolicyId): IO[Unit] = {
     val p = PolicyTable.syntax("p")
     val g = GroupTable.syntax("g")
@@ -356,7 +351,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
         using ${PolicyTable as p}
         where ${g.id} = ${p.groupId}
         and ${p.name} = ${policy.accessPolicyName}
-        and ${p.resourceId} = (${loadResourcePK(policy.resource)})""".update().apply()
+        and ${p.resourceId} = (${ResourceTable.loadResourcePK(policy.resource)})""".update().apply()
     }
   }
 

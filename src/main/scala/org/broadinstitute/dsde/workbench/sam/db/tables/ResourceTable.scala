@@ -1,7 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.db.tables
 
 import org.broadinstitute.dsde.workbench.sam.db.{DatabaseKey, SamTypeBinders}
-import org.broadinstitute.dsde.workbench.sam.model.{ResourceId, ResourceTypeName}
+import org.broadinstitute.dsde.workbench.sam.model.{FullyQualifiedResourceId, ResourceId, ResourceTypeName}
 import org.broadinstitute.dsde.workbench.sam.db.SamParameterBinderFactory.SqlInterpolationWithSamBinders
 import scalikejdbc._
 
@@ -20,10 +20,9 @@ object ResourceTable extends SQLSyntaxSupportWithDefaultSamDB[ResourceRecord] {
     rs.get(e.resourceTypeId)
   )
 
-  def pkQuery(resourceId: ResourceId, resourceTypeName: ResourceTypeName, resourceTableAlias: String = "r"): SQLSyntax = {
-    val r = ResourceTable.syntax(resourceTableAlias)
-    samsqls"""select ${r.id}
-              from ${ResourceTable as r}
-              where ${r.name} = ${resourceId} and ${r.resourceTypeId} = (${ResourceTypeTable.pkQuery(resourceTypeName)})"""
+  def loadResourcePK(resource: FullyQualifiedResourceId): SQLSyntax = {
+    val r = ResourceTable.syntax("r")
+    val rt = ResourceTypeTable.syntax("rt")
+    samsqls"select ${r.id} from ${ResourceTable as r} join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id} where ${r.name} = ${resource.resourceId} and ${rt.name} = ${resource.resourceTypeName}"
   }
 }
