@@ -1,7 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.db.tables
 
 import org.broadinstitute.dsde.workbench.sam.db.{DatabaseKey, SamTypeBinders}
-import org.broadinstitute.dsde.workbench.sam.model.{FullyQualifiedResourceId, ResourceId, ResourceTypeName}
+import org.broadinstitute.dsde.workbench.sam.model.{FullyQualifiedResourceId, ResourceId}
 import org.broadinstitute.dsde.workbench.sam.db.SamParameterBinderFactory.SqlInterpolationWithSamBinders
 import scalikejdbc._
 
