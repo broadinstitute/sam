@@ -8,7 +8,8 @@ final case class PolicyPK(value: Long) extends DatabaseKey
 final case class PolicyRecord(id: PolicyPK,
                               resourceId: ResourcePK,
                               groupId: GroupPK,
-                              name: AccessPolicyName)
+                              name: AccessPolicyName,
+                              public: Boolean)
 
 object PolicyTable extends SQLSyntaxSupportWithDefaultSamDB[PolicyRecord] {
   override def tableName: String = "SAM_RESOURCE_POLICY"
@@ -18,6 +19,7 @@ object PolicyTable extends SQLSyntaxSupportWithDefaultSamDB[PolicyRecord] {
     rs.get(e.id),
     rs.get(e.resourceId),
     rs.get(e.groupId),
-    rs.get(e.name)
+    rs.get(e.name),
+    rs.get(e.public)
   )
 }
