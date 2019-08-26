@@ -366,5 +366,29 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
         dao.loadPolicy(policy.id).unsafeRunSync() shouldBe None
       }
     }
+
+    "listPublicAccessPolicies" in {
+      dao.createResourceType(resourceType).unsafeRunSync()
+      val resourceId = ResourceId("resource")
+      val resource = Resource(resourceType.name, resourceId, Set.empty)
+      dao.createResource(resource).unsafeRunSync()
+
+      val privatePolicyId = FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("privatePolicyName"))
+      val publicPolicy1Id = FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("publicPolicy1Name"))
+      val publicPolicy2Id = FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("publicPolicy2Name"))
+
+      val privatePolicy = AccessPolicy(privatePolicyId, Set.empty, WorkbenchEmail("privatePolicy@email.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), false)
+      val publicPolicy1 = AccessPolicy(publicPolicy1Id, Set.empty, WorkbenchEmail("publicPolicy1@email.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), true)
+      val publicPolicy2 = AccessPolicy(publicPolicy2Id, Set.empty, WorkbenchEmail("publicPolicy2@email.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), true)
+
+      dao.createPolicy(privatePolicy).unsafeRunSync()
+      dao.createPolicy(publicPolicy1).unsafeRunSync()
+      dao.createPolicy(publicPolicy2).unsafeRunSync()
+
+      val expectedResults = Set(ResourceIdAndPolicyName(resourceId, publicPolicy1.id.accessPolicyName),
+                                ResourceIdAndPolicyName(resourceId, publicPolicy2.id.accessPolicyName))
+
+      dao.listPublicAccessPolicies(resourceTypeName).unsafeRunSync() should contain theSameElementsAs expectedResults
+    }
   }
 }
