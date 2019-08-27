@@ -459,5 +459,23 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
         dao.listAccessPoliciesForUser(resource.fullyQualifiedId, user.id).unsafeRunSync() should contain theSameElementsAs Set(policy)
       }
     }
+
+    "setPolicyIsPublic" - {
+      "can change whether a policy is public or private" in {
+        val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
+        val policy = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("private")), Set.empty, WorkbenchEmail("private@policy.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), false)
+
+        dao.createResourceType(resourceType).unsafeRunSync()
+        dao.createResource(resource).unsafeRunSync()
+        dao.createPolicy(policy).unsafeRunSync()
+        dao.loadPolicy(policy.id).unsafeRunSync().getOrElse(fail(s"failed to load policy ${policy.id}")).public shouldBe false
+
+        dao.setPolicyIsPublic(policy.id, true).unsafeRunSync()
+        dao.loadPolicy(policy.id).unsafeRunSync().getOrElse(fail(s"failed to load policy ${policy.id}")).public shouldBe true
+
+        dao.setPolicyIsPublic(policy.id, false).unsafeRunSync()
+        dao.loadPolicy(policy.id).unsafeRunSync().getOrElse(fail(s"failed to load policy ${policy.id}")).public shouldBe false
+      }
+    }
   }
 }

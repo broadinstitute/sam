@@ -556,7 +556,24 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     }
   }
 
-  override def setPolicyIsPublic(policyId: FullyQualifiedPolicyId, isPublic: Boolean): IO[Unit] = ???
+  override def setPolicyIsPublic(policyId: FullyQualifiedPolicyId, isPublic: Boolean): IO[Unit] = {
+    runInTransaction { implicit session =>
+      val p = PolicyTable.syntax("p")
+      val policyTableColumn = PolicyTable.column
+      val r = ResourceTable.syntax("r")
+      val rt = ResourceTypeTable.syntax("rt")
+
+      samsql"""update ${PolicyTable as p}
+              set ${policyTableColumn.public} = ${isPublic}
+              from ${ResourceTable as r}
+              join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
+              where ${p.resourceId} = ${r.id}
+              and ${p.name} = ${policyId.accessPolicyName}
+              and ${r.name} = ${policyId.resource.resourceId}
+              and ${rt.name} = ${policyId.resource.resourceTypeName}""".update().apply()
+    }
+  }
+
   override def evictIsMemberOfCache(subject: WorkbenchSubject): IO[Unit] = ???
 
 }
