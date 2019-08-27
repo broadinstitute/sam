@@ -928,5 +928,115 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
         dao.loadUser(defaultUser.id).unsafeRunSync().flatMap(_.googleSubjectId) shouldBe Option(newGoogleSubjectId)
       }
     }
+
+    "loadSubjectFromEmail" - {
+      "load a user subject from their email" in {
+        dao.createUser(defaultUser).unsafeRunSync()
+
+        dao.loadSubjectFromEmail(defaultUser.email).unsafeRunSync() shouldBe Some(defaultUser.id)
+      }
+
+      "load a group subject from its email" in {
+        dao.createGroup(defaultGroup).unsafeRunSync()
+
+        dao.loadSubjectFromEmail(defaultGroup.email).unsafeRunSync() shouldBe Some(defaultGroupName)
+      }
+
+      "load a pet service account subject from its email" in {
+        dao.createUser(defaultUser).unsafeRunSync()
+        dao.createPetServiceAccount(defaultPetSA).unsafeRunSync()
+
+        dao.loadSubjectFromEmail(defaultPetSA.serviceAccount.email).unsafeRunSync() shouldBe Some(defaultPetSA.id)
+      }
+
+      "load a policy subject from its email" in {
+        val memberPolicy = defaultPolicy
+
+        policyDAO.createResourceType(resourceType).unsafeRunSync()
+        policyDAO.createResource(defaultResource).unsafeRunSync()
+        policyDAO.createPolicy(memberPolicy).unsafeRunSync()
+
+        dao.loadSubjectFromEmail(defaultPolicy.email).unsafeRunSync() shouldBe Some(defaultPolicy.id)
+      }
+
+      "throw an exception when an email refers to more than one subject" in {
+        dao.createUser(defaultUser).unsafeRunSync()
+        dao.createPetServiceAccount(defaultPetSA.copy(serviceAccount = defaultPetSA.serviceAccount.copy(email = defaultUser.email))).unsafeRunSync()
+
+        assertThrows[WorkbenchException] {
+          dao.loadSubjectFromEmail(defaultUser.email).unsafeRunSync() shouldBe Some(defaultPetSA.id)
+        }
+      }
+    }
+
+    "loadSubjectFromGoogleSubjectId" - {
+      "load a user subject from their google subject id" in {
+        dao.createUser(defaultUser).unsafeRunSync()
+
+        dao.loadSubjectFromGoogleSubjectId(defaultUser.googleSubjectId.get).unsafeRunSync() shouldBe Some(defaultUser.id)
+      }
+
+      "load a pet service account subject from its google subject id" in {
+        dao.createUser(defaultUser).unsafeRunSync()
+        dao.createPetServiceAccount(defaultPetSA).unsafeRunSync()
+
+        dao.loadSubjectFromGoogleSubjectId(GoogleSubjectId(defaultPetSA.serviceAccount.subjectId.value)).unsafeRunSync() shouldBe Some(defaultPetSA.id)
+      }
+    }
+
+    "loadSubjectEmails" - {
+      "two emails that don't exist" in {
+        dao.loadSubjectEmails(Set(defaultUser.id, defaultGroupName)).unsafeRunSync() should contain theSameElementsAs Set.empty
+      }
+
+      "two emails that do exist" in {
+        val secondUser = WorkbenchUser(WorkbenchUserId("secondUser"), Option(GoogleSubjectId("testGoogleSubject2")), WorkbenchEmail("secondUser@foo.com"))
+
+        dao.createUser(defaultUser).unsafeRunSync()
+        dao.createUser(secondUser).unsafeRunSync()
+
+        dao.loadSubjectEmails(Set(defaultUser.id, secondUser.id)).unsafeRunSync() should contain theSameElementsAs Set(defaultUser.email, secondUser.email)
+      }
+
+      "two emails of different types that do exist" in {
+        dao.createUser(defaultUser).unsafeRunSync()
+        dao.createGroup(defaultGroup).unsafeRunSync()
+
+        dao.loadSubjectEmails(Set(defaultUser.id, defaultGroupName)).unsafeRunSync() should contain theSameElementsAs Set(defaultUser.email, defaultGroup.email)
+      }
+
+    }
+
+    "loadSubjectEmail" - {
+      "load the email for a user" in {
+        dao.createUser(defaultUser).unsafeRunSync()
+
+        dao.loadSubjectEmail(defaultUser.id).unsafeRunSync() shouldBe Some(defaultUser.email)
+      }
+
+      "load the email for a group" in {
+        dao.createGroup(defaultGroup).unsafeRunSync()
+
+        dao.loadSubjectEmail(defaultGroup.id).unsafeRunSync() shouldBe Some(defaultGroup.email)
+      }
+
+      "load the email for a pet service account" in {
+        dao.createUser(defaultUser).unsafeRunSync()
+        dao.createPetServiceAccount(defaultPetSA).unsafeRunSync()
+
+        dao.loadSubjectEmail(defaultPetSA.id).unsafeRunSync() shouldBe Some(defaultPetSA.serviceAccount.email)
+      }
+
+      "load the email for a policy" in {
+        val memberPolicy = defaultPolicy
+
+        policyDAO.createResourceType(resourceType).unsafeRunSync()
+        policyDAO.createResource(defaultResource).unsafeRunSync()
+        policyDAO.createPolicy(memberPolicy).unsafeRunSync()
+
+        dao.loadSubjectEmail(defaultPolicy.id).unsafeRunSync() shouldBe Some(defaultPolicy.email)
+      }
+    }
+
   }
 }
