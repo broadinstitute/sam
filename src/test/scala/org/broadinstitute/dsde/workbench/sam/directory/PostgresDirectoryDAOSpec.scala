@@ -6,7 +6,8 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountDisplayName, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.db.dao.PostgresGroupDAO
-import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
+import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.openam.PostgresAccessPolicyDAO
 import org.postgresql.util.PSQLException
 import org.scalatest.{BeforeAndAfterEach, FreeSpec, Matchers}
 
@@ -16,12 +17,29 @@ import scala.concurrent.duration._
 class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfterEach {
   val groupDAO = new PostgresGroupDAO(TestSupport.dbRef, TestSupport.blockingEc)
   val dao = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.blockingEc, groupDAO)
+  val policyDAO = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.blockingEc, groupDAO)
 
   val defaultGroupName = WorkbenchGroupName("group")
   val defaultGroup = BasicWorkbenchGroup(defaultGroupName, Set.empty, WorkbenchEmail("foo@bar.com"))
   val defaultUserId = WorkbenchUserId("testUser")
   val defaultUser = WorkbenchUser(defaultUserId, Option(GoogleSubjectId("testGoogleSubject")), WorkbenchEmail("user@foo.com"))
   val defaultPetSA = PetServiceAccount(PetServiceAccountId(defaultUser.id, GoogleProject("testProject")), ServiceAccount(ServiceAccountSubjectId("testGoogleSubjectId"), WorkbenchEmail("test@pet.co"), ServiceAccountDisplayName("whoCares")))
+
+  val actionPatterns = Set(ResourceActionPattern("write", "description of pattern1", false),
+    ResourceActionPattern("read", "description of pattern2", false))
+  val writeAction = ResourceAction("write")
+  val readAction = ResourceAction("read")
+
+  val ownerRoleName = ResourceRoleName("role1")
+  val ownerRole = ResourceRole(ownerRoleName, Set(writeAction, readAction))
+  val readerRole = ResourceRole(ResourceRoleName("role2"), Set(readAction))
+  val actionlessRole = ResourceRole(ResourceRoleName("cantDoNuthin"), Set()) // yeah, it's a double negative, sue me!
+  val roles = Set(ownerRole, readerRole, actionlessRole)
+
+  val resourceTypeName = ResourceTypeName("awesomeType")
+  val resourceType = ResourceType(resourceTypeName, actionPatterns, roles, ownerRoleName, false)
+  val defaultResource = Resource(resourceType.name, ResourceId("defaultResource"), Set.empty)
+  val defaultPolicy = AccessPolicy(FullyQualifiedPolicyId(defaultResource.fullyQualifiedId, AccessPolicyName("defaultPolicy")), Set.empty, WorkbenchEmail("default@policy.com"), roles.map(_.roleName), Set(writeAction, readAction), false)
 
   override protected def beforeEach(): Unit = {
     TestSupport.truncateAll
@@ -61,7 +79,19 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
         loadedGroup.members shouldEqual members
       }
 
-      "create groups with policy members" is pending
+      "create groups with policy members" in {
+        val memberPolicy = defaultPolicy
+        val members: Set[WorkbenchSubject] = Set(memberPolicy.id)
+        val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName("parentGroup"), members, WorkbenchEmail("baz@qux.com"))
+
+        policyDAO.createResourceType(resourceType).unsafeRunSync()
+        policyDAO.createResource(defaultResource).unsafeRunSync()
+        policyDAO.createPolicy(defaultPolicy).unsafeRunSync()
+        dao.createGroup(parentGroup).unsafeRunSync()
+
+        val loadedGroup = dao.loadGroup(parentGroup.id).unsafeRunSync().getOrElse(fail(s"Failed to load group ${parentGroup.id}"))
+        loadedGroup.members shouldEqual members
+      }
 
       "not allow nonexistent group members" in {
         val subGroup1 = defaultGroup
@@ -170,10 +200,54 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
         loadedGroup.members should contain theSameElementsAs Set(defaultUser.id)
       }
 
-      "add policies to groups" is pending
-      "add groups to policies" is pending
-      "add users to policies" is pending
-      "add policies to other policies" is pending
+      "add policies to groups" in {
+        dao.createGroup(defaultGroup).unsafeRunSync()
+        policyDAO.createResourceType(resourceType).unsafeRunSync()
+        policyDAO.createResource(defaultResource).unsafeRunSync()
+        policyDAO.createPolicy(defaultPolicy).unsafeRunSync()
+
+        dao.addGroupMember(defaultGroup.id, defaultPolicy.id).unsafeRunSync() shouldBe true
+
+        val loadedGroup = dao.loadGroup(defaultGroup.id).unsafeRunSync().getOrElse(fail(s"failed to load group ${defaultGroup.id}"))
+        loadedGroup.members should contain theSameElementsAs Set(defaultPolicy.id)
+      }
+
+      "add groups to policies" in {
+        dao.createGroup(defaultGroup).unsafeRunSync()
+        policyDAO.createResourceType(resourceType).unsafeRunSync()
+        policyDAO.createResource(defaultResource).unsafeRunSync()
+        policyDAO.createPolicy(defaultPolicy).unsafeRunSync()
+
+        dao.addGroupMember(defaultPolicy.id, defaultGroup.id).unsafeRunSync()
+
+        val loadedPolicy = policyDAO.loadPolicy(defaultPolicy.id).unsafeRunSync().getOrElse(fail(s"s'failed to load policy ${defaultPolicy.id}"))
+        loadedPolicy.members should contain theSameElementsAs Set(defaultGroup.id)
+      }
+
+      "add users to policies" in {
+        dao.createUser(defaultUser).unsafeRunSync()
+        policyDAO.createResourceType(resourceType).unsafeRunSync()
+        policyDAO.createResource(defaultResource).unsafeRunSync()
+        policyDAO.createPolicy(defaultPolicy).unsafeRunSync()
+
+        dao.addGroupMember(defaultPolicy.id, defaultUser.id).unsafeRunSync()
+
+        val loadedPolicy = policyDAO.loadPolicy(defaultPolicy.id).unsafeRunSync().getOrElse(fail(s"s'failed to load policy ${defaultPolicy.id}"))
+        loadedPolicy.members should contain theSameElementsAs Set(defaultUser.id)
+      }
+
+      "add policies to other policies" in {
+        policyDAO.createResourceType(resourceType).unsafeRunSync()
+        policyDAO.createResource(defaultResource).unsafeRunSync()
+        policyDAO.createPolicy(defaultPolicy).unsafeRunSync()
+        val memberPolicy = defaultPolicy.copy(id = defaultPolicy.id.copy(accessPolicyName = AccessPolicyName("memberPolicy")), email = WorkbenchEmail("copied@policy.com"))
+        policyDAO.createPolicy(memberPolicy).unsafeRunSync()
+
+        dao.addGroupMember(defaultPolicy.id, memberPolicy.id).unsafeRunSync()
+
+        val loadedPolicy = policyDAO.loadPolicy(defaultPolicy.id).unsafeRunSync().getOrElse(fail(s"s'failed to load policy ${defaultPolicy.id}"))
+        loadedPolicy.members should contain theSameElementsAs Set(memberPolicy.id)
+      }
     }
 
     "batchLoadGroupEmail" - {
@@ -212,10 +286,58 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
         loadedGroup.members shouldBe empty
       }
 
-      "remove policies from groups" is pending
-      "remove groups from policies" is pending
-      "remove users from policies" is pending
-      "remove policies from other policies" is pending
+      "remove policies from groups" in {
+        dao.createGroup(defaultGroup).unsafeRunSync()
+        policyDAO.createResourceType(resourceType).unsafeRunSync()
+        policyDAO.createResource(defaultResource).unsafeRunSync()
+        policyDAO.createPolicy(defaultPolicy).unsafeRunSync()
+
+        dao.addGroupMember(defaultGroup.id, defaultPolicy.id).unsafeRunSync() shouldBe true
+        dao.removeGroupMember(defaultGroup.id, defaultPolicy.id).unsafeRunSync() shouldBe true
+
+        val loadedGroup = dao.loadGroup(defaultGroup.id).unsafeRunSync().getOrElse(fail(s"failed to load group ${defaultGroup.id}"))
+        loadedGroup.members shouldBe empty
+      }
+
+      "remove groups from policies" in {
+        dao.createGroup(defaultGroup).unsafeRunSync()
+        policyDAO.createResourceType(resourceType).unsafeRunSync()
+        policyDAO.createResource(defaultResource).unsafeRunSync()
+        policyDAO.createPolicy(defaultPolicy).unsafeRunSync()
+
+        dao.addGroupMember(defaultPolicy.id, defaultGroup.id).unsafeRunSync()
+        dao.removeGroupMember(defaultPolicy.id, defaultGroup.id).unsafeRunSync()
+
+        val loadedPolicy = policyDAO.loadPolicy(defaultPolicy.id).unsafeRunSync().getOrElse(fail(s"s'failed to load policy ${defaultPolicy.id}"))
+        loadedPolicy.members shouldBe empty
+      }
+
+      "remove users from policies" in {
+        dao.createUser(defaultUser).unsafeRunSync()
+        policyDAO.createResourceType(resourceType).unsafeRunSync()
+        policyDAO.createResource(defaultResource).unsafeRunSync()
+        policyDAO.createPolicy(defaultPolicy).unsafeRunSync()
+
+        dao.addGroupMember(defaultPolicy.id, defaultUser.id).unsafeRunSync()
+        dao.removeGroupMember(defaultPolicy.id, defaultUser.id).unsafeRunSync()
+
+        val loadedPolicy = policyDAO.loadPolicy(defaultPolicy.id).unsafeRunSync().getOrElse(fail(s"s'failed to load policy ${defaultPolicy.id}"))
+        loadedPolicy.members shouldBe empty
+      }
+
+      "remove policies from other policies" in {
+        policyDAO.createResourceType(resourceType).unsafeRunSync()
+        policyDAO.createResource(defaultResource).unsafeRunSync()
+        policyDAO.createPolicy(defaultPolicy).unsafeRunSync()
+        val memberPolicy = defaultPolicy.copy(id = defaultPolicy.id.copy(accessPolicyName = AccessPolicyName("memberPolicy")), email = WorkbenchEmail("copied@policy.com"))
+        policyDAO.createPolicy(memberPolicy).unsafeRunSync()
+
+        dao.addGroupMember(defaultPolicy.id, memberPolicy.id).unsafeRunSync()
+        dao.removeGroupMember(defaultPolicy.id, memberPolicy.id).unsafeRunSync()
+
+        val loadedPolicy = policyDAO.loadPolicy(defaultPolicy.id).unsafeRunSync().getOrElse(fail(s"s'failed to load policy ${defaultPolicy.id}"))
+        loadedPolicy.members shouldBe empty
+      }
     }
 
     "createUser" - {
@@ -272,7 +394,18 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
         usersGroups should contain theSameElementsAs Set(subGroupId, parentGroupId)
       }
 
-      "list all of the policies a user is in" is pending
+      "list all of the policies a user is in" in {
+        val subPolicy = defaultPolicy.copy(id = defaultPolicy.id.copy(accessPolicyName = AccessPolicyName("sp")), email = WorkbenchEmail("sp@policy.com"), members = Set(defaultUser.id))
+        val parentPolicy = defaultPolicy.copy(id = defaultPolicy.id.copy(accessPolicyName = AccessPolicyName("pp")), email = WorkbenchEmail("pp@policy.com"), members = Set(subPolicy.id))
+
+        dao.createUser(defaultUser).unsafeRunSync()
+        policyDAO.createResourceType(resourceType).unsafeRunSync()
+        policyDAO.createResource(defaultResource).unsafeRunSync()
+        policyDAO.createPolicy(subPolicy).unsafeRunSync()
+        policyDAO.createPolicy(parentPolicy).unsafeRunSync()
+
+        dao.listUsersGroups(defaultUser.id).unsafeRunSync() should contain theSameElementsAs Set(subPolicy.id, parentPolicy.id)
+      }
     }
 
     "loadUsers" - {
@@ -415,16 +548,125 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
         dao.isGroupMember(parentGroup.id, subGroup1.id).unsafeRunSync() should be (false)
       }
 
-      "return true when user is in sub group" is pending
-      "return false when user is not in sub group" is pending
-      "return true when user is in policy" is pending
-      "return false when user is not in policy" is pending
-      "return true when policy is in policy" is pending
-      "return false when policy is not in policy" is pending
-      "return true when policy is in group" is pending
-      "return false when policy is not in group" is pending
-      "return true when group is in policy" is pending
-      "return false when group is not in policy" is pending
+      "return true when user is in sub group" in {
+        val user = defaultUser
+        val subGroup = defaultGroup.copy(members = Set(user.id))
+        val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName("parentGroup"), Set(subGroup.id), WorkbenchEmail("parent@group.com"))
+
+        dao.createUser(user).unsafeRunSync()
+        dao.createGroup(subGroup).unsafeRunSync()
+        dao.createGroup(parentGroup).unsafeRunSync()
+
+        dao.isGroupMember(parentGroup.id, user.id).unsafeRunSync() shouldBe true
+      }
+
+      "return false when user is not in sub group" in {
+        val user = defaultUser
+        val subGroup = defaultGroup.copy(members = Set(user.id))
+        val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName("parentGroup"), Set.empty, WorkbenchEmail("parent@group.com"))
+
+        dao.createUser(user).unsafeRunSync()
+        dao.createGroup(subGroup).unsafeRunSync()
+        dao.createGroup(parentGroup).unsafeRunSync()
+
+        dao.isGroupMember(parentGroup.id, user.id).unsafeRunSync() shouldBe false
+      }
+
+      "return true when user is in policy" in {
+        val user = defaultUser
+        val policy = defaultPolicy.copy(members = Set(user.id))
+
+        dao.createUser(user).unsafeRunSync()
+        policyDAO.createResourceType(resourceType).unsafeRunSync()
+        policyDAO.createResource(defaultResource).unsafeRunSync()
+        policyDAO.createPolicy(policy).unsafeRunSync()
+
+        dao.isGroupMember(policy.id, user.id).unsafeRunSync() shouldBe true
+      }
+
+      "return false when user is not in policy" in {
+        val user = defaultUser
+        val policy = defaultPolicy
+
+        dao.createUser(user).unsafeRunSync()
+        policyDAO.createResourceType(resourceType).unsafeRunSync()
+        policyDAO.createResource(defaultResource).unsafeRunSync()
+        policyDAO.createPolicy(policy).unsafeRunSync()
+
+        dao.isGroupMember(policy.id, user.id).unsafeRunSync() shouldBe false
+      }
+
+      "return true when policy is in policy" in {
+        val memberPolicy = defaultPolicy.copy(id = defaultPolicy.id.copy(accessPolicyName = AccessPolicyName("memberPolicy")), email = WorkbenchEmail("copied@policy.com"))
+        val policy = defaultPolicy.copy(members = Set(memberPolicy.id))
+
+        policyDAO.createResourceType(resourceType).unsafeRunSync()
+        policyDAO.createResource(defaultResource).unsafeRunSync()
+        policyDAO.createPolicy(memberPolicy).unsafeRunSync()
+        policyDAO.createPolicy(policy).unsafeRunSync()
+
+        dao.isGroupMember(policy.id, memberPolicy.id).unsafeRunSync() shouldBe true
+      }
+
+      "return false when policy is not in policy" in {
+        val memberPolicy = defaultPolicy.copy(id = defaultPolicy.id.copy(accessPolicyName = AccessPolicyName("memberPolicy")), email = WorkbenchEmail("copied@policy.com"))
+        val policy = defaultPolicy
+
+        policyDAO.createResourceType(resourceType).unsafeRunSync()
+        policyDAO.createResource(defaultResource).unsafeRunSync()
+        policyDAO.createPolicy(memberPolicy).unsafeRunSync()
+        policyDAO.createPolicy(policy).unsafeRunSync()
+
+        dao.isGroupMember(policy.id, memberPolicy.id).unsafeRunSync() shouldBe false
+      }
+
+      "return true when policy is in group" in {
+        val memberPolicy = defaultPolicy
+        val group = defaultGroup.copy(members = Set(memberPolicy.id))
+
+        policyDAO.createResourceType(resourceType).unsafeRunSync()
+        policyDAO.createResource(defaultResource).unsafeRunSync()
+        policyDAO.createPolicy(memberPolicy).unsafeRunSync()
+        dao.createGroup(group).unsafeRunSync()
+
+        dao.isGroupMember(group.id, memberPolicy.id).unsafeRunSync() shouldBe true
+      }
+
+      "return false when policy is not in group" in {
+        val memberPolicy = defaultPolicy
+        val group = defaultGroup
+
+        policyDAO.createResourceType(resourceType).unsafeRunSync()
+        policyDAO.createResource(defaultResource).unsafeRunSync()
+        policyDAO.createPolicy(memberPolicy).unsafeRunSync()
+        dao.createGroup(group).unsafeRunSync()
+
+        dao.isGroupMember(group.id, memberPolicy.id).unsafeRunSync() shouldBe false
+      }
+
+      "return true when group is in policy" in {
+        val memberGroup = defaultGroup
+        val policy = defaultPolicy.copy(members = Set(memberGroup.id))
+
+        dao.createGroup(memberGroup).unsafeRunSync()
+        policyDAO.createResourceType(resourceType).unsafeRunSync()
+        policyDAO.createResource(defaultResource).unsafeRunSync()
+        policyDAO.createPolicy(policy).unsafeRunSync()
+
+        dao.isGroupMember(policy.id, memberGroup.id).unsafeRunSync() shouldBe true
+      }
+
+      "return false when group is not in policy" in {
+        val memberGroup = defaultGroup
+        val policy = defaultPolicy
+
+        dao.createGroup(memberGroup).unsafeRunSync()
+        policyDAO.createResourceType(resourceType).unsafeRunSync()
+        policyDAO.createResource(defaultResource).unsafeRunSync()
+        policyDAO.createPolicy(policy).unsafeRunSync()
+
+        dao.isGroupMember(policy.id, memberGroup.id).unsafeRunSync() shouldBe false
+      }
     }
 
     "listIntersectionGroupUsers" - {
@@ -488,7 +730,18 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
         dao.isEnabled(defaultGroup.id).unsafeRunSync() shouldBe initialEnabledStatus
       }
 
-      "cannot enable and disable policies" is pending
+      "cannot enable and disable policies" in {
+        policyDAO.createResourceType(resourceType).unsafeRunSync()
+        policyDAO.createResource(defaultResource).unsafeRunSync()
+        policyDAO.createPolicy(defaultPolicy).unsafeRunSync()
+        val initialEnabledStatus = dao.isEnabled(defaultPolicy.id).unsafeRunSync()
+
+        dao.disableIdentity(defaultPolicy.id).unsafeRunSync()
+        dao.isEnabled(defaultPolicy.id).unsafeRunSync() shouldBe initialEnabledStatus
+
+        dao.enableIdentity(defaultPolicy.id).unsafeRunSync()
+        dao.isEnabled(defaultPolicy.id).unsafeRunSync() shouldBe initialEnabledStatus
+      }
     }
 
     "isEnabled" - {
@@ -521,7 +774,15 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
         dao.isEnabled(defaultGroup.id).unsafeRunSync() shouldBe false
       }
 
-      "returns false for policies" is pending
+      "returns false for policies" in {
+        policyDAO.createResourceType(resourceType).unsafeRunSync()
+        policyDAO.createResource(defaultResource).unsafeRunSync()
+        policyDAO.createPolicy(defaultPolicy).unsafeRunSync()
+
+        dao.isEnabled(defaultPolicy.id).unsafeRunSync() shouldBe false
+        dao.enableIdentity(defaultPolicy.id).unsafeRunSync()
+        dao.isEnabled(defaultPolicy.id).unsafeRunSync() shouldBe false
+      }
     }
 
     "listUserDirectMemberships" - {
@@ -538,7 +799,21 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
         dao.listUserDirectMemberships(defaultUser.id).unsafeRunSync() should contain theSameElementsAs Set(subGroup.id, subSubGroup.id)
       }
 
-      "lists all policies that a user is in directly" is pending
+      "lists all policies that a user is in directly" in {
+        // disclaimer: not sure this ever happens in actual sam usage, but it should still work
+        val subSubPolicy = defaultPolicy.copy(id = defaultPolicy.id.copy(accessPolicyName = AccessPolicyName("ssp")), email = WorkbenchEmail("ssp@policy.com"), members = Set(defaultUser.id))
+        val subPolicy = defaultPolicy.copy(id = defaultPolicy.id.copy(accessPolicyName = AccessPolicyName("sp")), email = WorkbenchEmail("sp@policy.com"), members = Set(subSubPolicy.id, defaultUser.id))
+        val parentPolicy = defaultPolicy.copy(id = defaultPolicy.id.copy(accessPolicyName = AccessPolicyName("pp")), email = WorkbenchEmail("pp@policy.com"), members = Set(subPolicy.id))
+
+        dao.createUser(defaultUser).unsafeRunSync()
+        policyDAO.createResourceType(resourceType).unsafeRunSync()
+        policyDAO.createResource(defaultResource).unsafeRunSync()
+        policyDAO.createPolicy(subSubPolicy).unsafeRunSync()
+        policyDAO.createPolicy(subPolicy).unsafeRunSync()
+        policyDAO.createPolicy(parentPolicy).unsafeRunSync()
+
+        dao.listUserDirectMemberships(defaultUser.id).unsafeRunSync() should contain theSameElementsAs Set(subSubPolicy.id, subPolicy.id)
+      }
     }
 
     "listAncestorGroups" - {
@@ -557,9 +832,51 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
         ancestorGroups should contain theSameElementsAs Set(subGroup.id, directParentGroup.id, indirectParentGroup.id)
       }
 
-      "list all of the policies a group is in" is pending
-      "list all of the groups a policy is in" is pending
-      "list all of the policies a policy is in" is pending
+      "list all of the policies a group is in" in {
+        val subPolicy = defaultPolicy.copy(id = defaultPolicy.id.copy(accessPolicyName = AccessPolicyName("sp")), email = WorkbenchEmail("sp@policy.com"), members = Set(defaultGroup.id))
+        val parentPolicy = defaultPolicy.copy(id = defaultPolicy.id.copy(accessPolicyName = AccessPolicyName("pp")), email = WorkbenchEmail("pp@policy.com"), members = Set(subPolicy.id))
+
+        dao.createGroup(defaultGroup).unsafeRunSync()
+        policyDAO.createResourceType(resourceType).unsafeRunSync()
+        policyDAO.createResource(defaultResource).unsafeRunSync()
+        policyDAO.createPolicy(subPolicy).unsafeRunSync()
+        policyDAO.createPolicy(parentPolicy).unsafeRunSync()
+
+        dao.listAncestorGroups(defaultGroup.id).unsafeRunSync() should contain theSameElementsAs Set(subPolicy.id, parentPolicy.id)
+      }
+
+      "list all of the groups a policy is in" in {
+        val subGroup = BasicWorkbenchGroup(WorkbenchGroupName("sg"), Set(defaultPolicy.id), WorkbenchEmail("sg@groups.r.us"))
+        val directParentGroup = BasicWorkbenchGroup(WorkbenchGroupName("dpg"), Set(subGroup.id, defaultPolicy.id), WorkbenchEmail("dpg@groups.r.us"))
+        val indirectParentGroup = BasicWorkbenchGroup(WorkbenchGroupName("ipg"), Set(subGroup.id), WorkbenchEmail("ipg@groups.r.us"))
+
+        policyDAO.createResourceType(resourceType).unsafeRunSync()
+        policyDAO.createResource(defaultResource).unsafeRunSync()
+        policyDAO.createPolicy(defaultPolicy).unsafeRunSync()
+        dao.createGroup(subGroup).unsafeRunSync()
+        dao.createGroup(directParentGroup).unsafeRunSync()
+        dao.createGroup(indirectParentGroup).unsafeRunSync()
+
+        val ancestorGroups = dao.listAncestorGroups(defaultPolicy.id).unsafeRunSync()
+        ancestorGroups should contain theSameElementsAs Set(subGroup.id, directParentGroup.id, indirectParentGroup.id)
+      }
+
+      "list all of the policies a policy is in" in {
+        val subPolicy = defaultPolicy.copy(id = defaultPolicy.id.copy(accessPolicyName = AccessPolicyName("sp")), email = WorkbenchEmail("sp@policy.com"), members = Set(defaultPolicy.id))
+        val directParentPolicy = defaultPolicy.copy(id = defaultPolicy.id.copy(accessPolicyName = AccessPolicyName("pp")), email = WorkbenchEmail("pp@policy.com"), members = Set(subPolicy.id, defaultPolicy.id))
+        val indirectParentPolicy = defaultPolicy.copy(id = defaultPolicy.id.copy(accessPolicyName = AccessPolicyName("ssp")), email = WorkbenchEmail("ssp@policy.com"), members = Set(subPolicy.id))
+
+
+        policyDAO.createResourceType(resourceType).unsafeRunSync()
+        policyDAO.createResource(defaultResource).unsafeRunSync()
+        policyDAO.createPolicy(defaultPolicy).unsafeRunSync()
+        policyDAO.createPolicy(subPolicy).unsafeRunSync()
+        policyDAO.createPolicy(directParentPolicy).unsafeRunSync()
+        policyDAO.createPolicy(indirectParentPolicy).unsafeRunSync()
+
+        val ancestorGroups = dao.listAncestorGroups(defaultPolicy.id).unsafeRunSync()
+        ancestorGroups should contain theSameElementsAs Set(subPolicy.id, directParentPolicy.id, indirectParentPolicy.id)
+      }
     }
 
     "getSynchronizedEmail" - {
@@ -569,7 +886,13 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
         dao.getSynchronizedEmail(defaultGroup.id).unsafeRunSync() shouldEqual Option(defaultGroup.email)
       }
 
-      "load the email for a policy" is pending
+      "load the email for a policy" in {
+        policyDAO.createResourceType(resourceType).unsafeRunSync()
+        policyDAO.createResource(defaultResource).unsafeRunSync()
+        policyDAO.createPolicy(defaultPolicy).unsafeRunSync()
+
+        dao.getSynchronizedEmail(defaultPolicy.id).unsafeRunSync() shouldEqual Option(defaultPolicy.email)
+      }
     }
 
     "getSynchronizedDate" - {
@@ -582,7 +905,16 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
         loadedDate.getTime() should equal (new Date().getTime +- 2.seconds.toMillis)
       }
 
-      "load the synchronized date for a policy" is pending
+      "load the synchronized date for a policy" in {
+        policyDAO.createResourceType(resourceType).unsafeRunSync()
+        policyDAO.createResource(defaultResource).unsafeRunSync()
+        policyDAO.createPolicy(defaultPolicy).unsafeRunSync()
+
+        dao.updateSynchronizedDate(defaultPolicy.id).unsafeRunSync()
+
+        val loadedDate = dao.getSynchronizedDate(defaultPolicy.id).unsafeRunSync().getOrElse(fail("failed to load date"))
+        loadedDate.getTime() should equal (new Date().getTime +- 2.seconds.toMillis)
+      }
     }
 
     "setGoogleSubjectId" - {
