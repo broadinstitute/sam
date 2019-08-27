@@ -11,7 +11,7 @@ import org.broadinstitute.dsde.workbench.sam.errorReportSource
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.db.{DbReference, SamTypeBinders}
 import org.broadinstitute.dsde.workbench.sam.db.SamParameterBinderFactory._
-import org.broadinstitute.dsde.workbench.sam.db.dao.PostgresGroupDAO
+import org.broadinstitute.dsde.workbench.sam.db.dao.{PostgresGroupDAO, SubGroupMemberTable}
 import org.broadinstitute.dsde.workbench.sam.db.tables._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.LoadResourceAuthDomainResult.{Constrained, NotConstrained, ResourceNotFound}
@@ -469,7 +469,25 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
   override def listAccessPolicies(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId): IO[Set[ResourceIdAndPolicyName]] = ???
   override def listAccessPolicies(resource: FullyQualifiedResourceId): IO[Stream[AccessPolicy]] = ???
   override def listAccessPoliciesForUser(resource: FullyQualifiedResourceId, user: WorkbenchUserId): IO[Set[AccessPolicy]] = ???
-  override def listFlattenedPolicyMembers(policyId: FullyQualifiedPolicyId): IO[Set[WorkbenchUser]] = ???
+
+  override def listFlattenedPolicyMembers(policyId: FullyQualifiedPolicyId): IO[Set[WorkbenchUser]] = {
+    val subGroupMemberTable = SubGroupMemberTable("sub_group")
+    val sg = subGroupMemberTable.syntax("sg")
+    val u = UserTable.syntax("u")
+
+    runInTransaction { implicit session =>
+      val query = samsql"""with recursive ${groupDAO.recursiveMembersQuery(policyId, subGroupMemberTable)}
+        select ${sg.result.memberUserId}, ${u.result.googleSubjectId}, ${u.result.email}
+        from ${subGroupMemberTable as sg}
+        join ${UserTable as u} on ${u.id} = ${sg.memberUserId}"""
+
+      import SamTypeBinders._
+      query.map { rs =>
+        WorkbenchUser(rs.get[WorkbenchUserId](sg.resultName.memberUserId), rs.stringOpt(u.resultName.googleSubjectId).map(GoogleSubjectId), rs.get[WorkbenchEmail](u.resultName.email))
+      }.list().apply().toSet
+    }
+  }
+
   override def setPolicyIsPublic(policyId: FullyQualifiedPolicyId, isPublic: Boolean): IO[Unit] = ???
   override def evictIsMemberOfCache(subject: WorkbenchSubject): IO[Unit] = ???
 }

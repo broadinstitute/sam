@@ -390,5 +390,31 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
 
       dao.listPublicAccessPolicies(resourceTypeName).unsafeRunSync() should contain theSameElementsAs expectedResults
     }
+
+    "listFlattenedPolicyMembers" - {
+      "lists all members of a policy" in {
+        val directMember = WorkbenchUser(WorkbenchUserId("direct"), None, WorkbenchEmail("direct@member.biz"))
+        val subGroupMember = WorkbenchUser(WorkbenchUserId("indirect"), Option(GoogleSubjectId("googley")), WorkbenchEmail("subGroup@member.edu.biz"))
+        val subSubGroupMember = WorkbenchUser(WorkbenchUserId("veryIndirect"), None, WorkbenchEmail("very@indirect.net"))
+        val inTwoGroupsMember = WorkbenchUser(WorkbenchUserId("multipleGroups"), None, WorkbenchEmail("member@members.com"))
+        val allMembers = Set(directMember, subGroupMember, subSubGroupMember, inTwoGroupsMember)
+
+        val subSubGroup = BasicWorkbenchGroup(WorkbenchGroupName("subSubGroup"), Set(subSubGroupMember.id), WorkbenchEmail("subSub@groups.com"))
+        val subGroup = BasicWorkbenchGroup(WorkbenchGroupName("subGroup"), Set(subSubGroup.id, subGroupMember.id, inTwoGroupsMember.id), WorkbenchEmail("sub@groups.com"))
+        val secondGroup = BasicWorkbenchGroup(WorkbenchGroupName("secondGroup"), Set(inTwoGroupsMember.id), WorkbenchEmail("second@groups.com"))
+
+        val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
+        val policy = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("policy")), Set(subGroup.id, secondGroup.id, directMember.id), WorkbenchEmail("policy@policy.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), false)
+
+        allMembers.map(dirDao.createUser(_).unsafeRunSync())
+        Set(subSubGroup, subGroup, secondGroup).map(dirDao.createGroup(_).unsafeRunSync())
+
+        dao.createResourceType(resourceType).unsafeRunSync()
+        dao.createResource(resource).unsafeRunSync()
+        dao.createPolicy(policy).unsafeRunSync()
+
+        dao.listFlattenedPolicyMembers(policy.id).unsafeRunSync() should contain theSameElementsAs allMembers
+      }
+    }
   }
 }
