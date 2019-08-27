@@ -949,7 +949,15 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
         dao.loadSubjectFromEmail(defaultPetSA.serviceAccount.email).unsafeRunSync() shouldBe Some(defaultPetSA.id)
       }
 
-      "load a policy subject from its email" is pending
+      "load a policy subject from its email" in {
+        val memberPolicy = defaultPolicy
+
+        policyDAO.createResourceType(resourceType).unsafeRunSync()
+        policyDAO.createResource(defaultResource).unsafeRunSync()
+        policyDAO.createPolicy(memberPolicy).unsafeRunSync()
+
+        dao.loadSubjectFromEmail(defaultPolicy.email).unsafeRunSync() shouldBe Some(defaultPolicy.id)
+      }
 
       "throw an exception when an email refers to more than one subject" in {
         dao.createUser(defaultUser).unsafeRunSync()
@@ -981,7 +989,7 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
         dao.loadSubjectEmails(Set(defaultUser.id, defaultGroupName)).unsafeRunSync() should contain theSameElementsAs Set.empty
       }
 
-      "two emails that do exist" ignore {
+      "two emails that do exist" in {
         val secondUser = WorkbenchUser(WorkbenchUserId("secondUser"), Option(GoogleSubjectId("testGoogleSubject2")), WorkbenchEmail("secondUser@foo.com"))
 
         dao.createUser(defaultUser).unsafeRunSync()
@@ -1019,7 +1027,15 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
         dao.loadSubjectEmail(defaultPetSA.id).unsafeRunSync() shouldBe Some(defaultPetSA.serviceAccount.email)
       }
 
-      "load the email for a policy" is pending
+      "load the email for a policy" in {
+        val memberPolicy = defaultPolicy
+
+        policyDAO.createResourceType(resourceType).unsafeRunSync()
+        policyDAO.createResource(defaultResource).unsafeRunSync()
+        policyDAO.createPolicy(memberPolicy).unsafeRunSync()
+
+        dao.loadSubjectEmail(defaultPolicy.id).unsafeRunSync() shouldBe Some(defaultPolicy.email)
+      }
     }
 
   }

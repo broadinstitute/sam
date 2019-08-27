@@ -290,7 +290,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
                 from ${PetServiceAccountTable as pet}
                 where ${pet.email} = ${email}
               union
-              select ${None}, ${None}, ${None}, ${None}, ${pol.name}, ${res.name}, ${srt.name}
+              select ${None}, ${None}, ${None}, ${None}, ${srt.name}, ${res.name}, ${pol.name}
                 from ${PolicyTable as pol}
                 join ${GroupTable as g}
                 on ${pol.groupId} = ${g.id}
@@ -328,6 +328,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
   def loadPolicyEmail(policyId: FullyQualifiedPolicyId): IO[Option[WorkbenchEmail]] = {
     runInTransaction { implicit session =>
       val g = GroupTable.syntax
+      val g2 = GroupTable.column
       val pol = PolicyTable.syntax
       val srt = ResourceTypeTable.syntax
       val res = ResourceTable.syntax
@@ -347,7 +348,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
                       ${res.name} = ${policyId.resource.resourceId} and
                       ${pol.name} = ${policyId.accessPolicyName}"""
 
-      query.map(rs => rs.get[WorkbenchEmail](g.email)).single().apply()
+      query.map(rs => rs.get[WorkbenchEmail](g2.email)).single().apply()
     }
   }
 
@@ -369,8 +370,12 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
   // whether this should also handle Pets and Policies.  At this time, we don't know if it should, but for backwards
   // compatibility with LdapDirectoryDAO, we're going to use the same implementation for now.
   override def loadSubjectEmails(subjects: Set[WorkbenchSubject]): IO[Stream[WorkbenchEmail]] = {
-    val users = loadUsers(subjects collect { case userId: WorkbenchUserId => userId })
-    val groups = loadGroups(subjects collect { case groupName: WorkbenchGroupName => groupName })
+    val userSubjects = subjects collect { case userId: WorkbenchUserId => userId }
+    val groupSubjects = subjects collect { case groupName: WorkbenchGroupName => groupName }
+
+    val users = if(userSubjects.nonEmpty) loadUsers(userSubjects) else IO.pure(Stream.empty)
+    val groups = if(groupSubjects.nonEmpty) loadGroups(groupSubjects) else IO.pure(Stream.empty)
+
     for {
       userEmails <- users.map(_.map(_.email))
       groupEmails <- groups.map(_.map(_.email))
