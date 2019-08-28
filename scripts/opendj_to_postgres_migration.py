@@ -1,5 +1,3 @@
-#!/bin/bash
-
 import ldap
 import subprocess
 import psycopg2
@@ -84,28 +82,6 @@ def database_call(sql_query, ldap_entity, cursor, return_result=False):
             TypeError) as err:
         log(str(ldap_entity) + " " + str(err))
         return False
-
-    # except psycopg2.errors.UniqueViolation as e:
-    #     # log(str(ldap_entity) + " " + str(e))
-    #     return False
-    # except psycopg2.errors.InFailedSqlTransaction as ft:
-    #     # log(str(ldap_entity) + " with message " + str(ft))
-    #     return False
-    # except psycopg2.errors.ForeignKeyViolation as fk:
-    #     # log(str(ldap_entity) + " with message " + str(fk))
-    #     return False
-    # except psycopg2.errors.SyntaxError as se:
-    #     # log(str(ldap_entity) + " with message " + str(se))
-    #     return False
-    # except psycopg2.errors.NotNullViolation as nnv:
-    #     # log(str(nnv) + " on " + str(ldap_entity))
-    #     return False
-    # except psycopg2.errors.InvalidTextRepresentation as itr:
-    #     # log(str(itr) + "on " + str(ldap_entity))
-    #     return False
-    # except TypeError as te:
-    #     # log(str(te))
-    #     return False
 
 
 def close_postgres_connection(connection):
@@ -668,9 +644,9 @@ def migrate():
     populate_entities()
     migrate_sam_users()
     migrate_pet_service_accounts()
-    # migrate_groups()
-    # migrate_resources()
-    # migrate_policies()
+    migrate_groups()
+    migrate_resources()
+    migrate_policies()
     end = datetime.now()
     log("START: " + str(start))
     log("END: " + str(end))
