@@ -377,7 +377,20 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
       val srt = ResourceTypeTable.syntax("srt")
 
       val (policyInfo: List[PolicyInfo], memberResults: List[(Option[WorkbenchUserId], Option[WorkbenchGroupName], Option[AccessPolicyName], Option[ResourceId], Option[ResourceTypeName])], roleActionResults: List[(Option[ResourceRoleName], Option[ResourceAction])]) =
-        samsql"""${selectPolicy(g, p, r, rt, gm, sg, sp, sr, srt, pr, rr, pa, ra)}
+        samsql"""select ${p.result.name}, ${r.result.name}, ${rt.result.name}, ${g.result.email}, ${p.result.public}, ${gm.result.memberUserId}, ${sg.result.name}, ${sp.result.name}, ${sr.result.name}, ${srt.result.name}, ${rr.result.role}, ${ra.result.action}
+          from ${GroupTable as g}
+          join ${PolicyTable as p} on ${g.id} = ${p.groupId}
+          join ${ResourceTable as r} on ${p.resourceId} = ${r.id}
+          join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
+          left join ${GroupMemberTable as gm} on ${g.id} = ${gm.groupId}
+          left join ${GroupTable as sg} on ${gm.memberGroupId} = ${sg.id}
+          left join ${PolicyTable as sp} on ${sg.id} = ${sp.groupId}
+          left join ${ResourceTable as sr} on ${sp.resourceId} = ${sr.id}
+          left join ${ResourceTypeTable as srt} on ${sr.resourceTypeId} = ${srt.id}
+          left join ${PolicyRoleTable as pr} on ${p.id} = ${pr.resourcePolicyId}
+          left join ${ResourceRoleTable as rr} on ${pr.resourceRoleId} = ${rr.id}
+          left join ${PolicyActionTable as pa} on ${p.id} = ${pa.resourcePolicyId}
+          left join ${ResourceActionTable as ra} on ${pa.resourceActionId} = ${ra.id}
           where ${p.name} = ${resourceAndPolicyName.accessPolicyName}
           and ${r.name} = ${resourceAndPolicyName.resource.resourceId}
           and ${rt.name} = ${resourceAndPolicyName.resource.resourceTypeName}"""
@@ -466,7 +479,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
       val rt = ResourceTypeTable.syntax("rt")
       val gm = GroupMemberTable.syntax("gm")
       val g = GroupTable.syntax("g")
-      val p = PolicyTable.syntax("p")
+      val p: scalikejdbc.QuerySQLSyntaxProvider[scalikejdbc.SQLSyntaxSupport[PolicyRecord], PolicyRecord] = PolicyTable.syntax("p")
 
       val sg = GroupTable.syntax("sg")
       val pr = PolicyRoleTable.syntax("pr")
@@ -477,8 +490,6 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
       val sr = ResourceTable.syntax("sr")
       val srt = ResourceTypeTable.syntax("srt")
 
-      val ancestorGroupsTableJoin = samsqls"join ${ancestorGroupsTable as ag} on ${ag.parentGroupId} = ${g.id}"
-
       val listPoliciesQuery =
         samsql"""with recursive ${ancestorGroupsTable.table}(${agColumn.parentGroupId}, ${agColumn.memberGroupId}) as (
                   select ${gm.groupId}, ${gm.memberGroupId}
@@ -488,7 +499,21 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
                   select ${pg.groupId}, ${pg.memberGroupId}
                   from ${GroupMemberTable as pg}
                   join ${ancestorGroupsTable as ag} on ${agColumn.parentGroupId} = ${pg.memberGroupId}
-        ) ${selectPolicy(g, p, r, rt, gm, sg, sp, sr, srt, pr, rr, pa, ra, ancestorGroupsTableJoin)}
+        ) select ${p.result.name}, ${r.result.name}, ${rt.result.name}, ${g.result.email}, ${p.result.public}, ${gm.result.memberUserId}, ${sg.result.name}, ${sp.result.name}, ${sr.result.name}, ${srt.result.name}, ${rr.result.role}, ${ra.result.action}
+          from ${GroupTable as g}
+          join ${ancestorGroupsTable as ag} on ${ag.parentGroupId} = ${g.id}
+          join ${PolicyTable as p} on ${g.id} = ${p.groupId}
+          join ${ResourceTable as r} on ${p.resourceId} = ${r.id}
+          join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
+          left join ${GroupMemberTable as gm} on ${g.id} = ${gm.groupId}
+          left join ${GroupTable as sg} on ${gm.memberGroupId} = ${sg.id}
+          left join ${PolicyTable as sp} on ${sg.id} = ${sp.groupId}
+          left join ${ResourceTable as sr} on ${sp.resourceId} = ${sr.id}
+          left join ${ResourceTypeTable as srt} on ${sr.resourceTypeId} = ${srt.id}
+          left join ${PolicyRoleTable as pr} on ${p.id} = ${pr.resourcePolicyId}
+          left join ${ResourceRoleTable as rr} on ${pr.resourceRoleId} = ${rr.id}
+          left join ${PolicyActionTable as pa} on ${p.id} = ${pa.resourcePolicyId}
+          left join ${ResourceActionTable as ra} on ${pa.resourceActionId} = ${ra.id}
           where ${r.name} = ${resource.resourceId}
           and ${rt.name} = ${resource.resourceTypeName}"""
 
@@ -511,37 +536,6 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
         AccessPolicy(FullyQualifiedPolicyId(FullyQualifiedResourceId(policyInfo.resourceTypeName, policyInfo.resourceId), policyInfo.name), members, policyInfo.email, roles.flatten.toSet, actions.flatten.toSet, policyInfo.public)
       }.toSet
     }
-  }
-
-  private def selectPolicy(g: QuerySQLSyntaxProvider[SQLSyntaxSupport[GroupRecord], GroupRecord],
-                           p: QuerySQLSyntaxProvider[SQLSyntaxSupport[PolicyRecord], PolicyRecord],
-                           r: QuerySQLSyntaxProvider[SQLSyntaxSupport[ResourceRecord], ResourceRecord],
-                           rt: QuerySQLSyntaxProvider[SQLSyntaxSupport[ResourceTypeRecord], ResourceTypeRecord],
-                           gm: QuerySQLSyntaxProvider[SQLSyntaxSupport[GroupMemberRecord], GroupMemberRecord],
-                           sg: QuerySQLSyntaxProvider[SQLSyntaxSupport[GroupRecord], GroupRecord],
-                           sp: QuerySQLSyntaxProvider[SQLSyntaxSupport[PolicyRecord], PolicyRecord],
-                           sr: QuerySQLSyntaxProvider[SQLSyntaxSupport[ResourceRecord], ResourceRecord],
-                           srt: QuerySQLSyntaxProvider[SQLSyntaxSupport[ResourceTypeRecord], ResourceTypeRecord],
-                           pr: QuerySQLSyntaxProvider[SQLSyntaxSupport[PolicyRoleRecord], PolicyRoleRecord],
-                           rr: QuerySQLSyntaxProvider[SQLSyntaxSupport[ResourceRoleRecord], ResourceRoleRecord],
-                           pa: QuerySQLSyntaxProvider[SQLSyntaxSupport[PolicyActionRecord], PolicyActionRecord],
-                           ra: QuerySQLSyntaxProvider[SQLSyntaxSupport[ResourceActionRecord], ResourceActionRecord],
-                           ancestorGroupsTableJoin: SQLSyntax = samsqls""): SQLSyntax = {
-    samsqls"""select ${p.result.name}, ${r.result.name}, ${rt.result.name}, ${g.result.email}, ${p.result.public}, ${gm.result.memberUserId}, ${sg.result.name}, ${sp.result.name}, ${sr.result.name}, ${srt.result.name}, ${rr.result.role}, ${ra.result.action}
-      from ${GroupTable as g}
-      ${ancestorGroupsTableJoin}
-      join ${PolicyTable as p} on ${g.id} = ${p.groupId}
-      join ${ResourceTable as r} on ${p.resourceId} = ${r.id}
-      join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
-      left join ${GroupMemberTable as gm} on ${g.id} = ${gm.groupId}
-      left join ${GroupTable as sg} on ${gm.memberGroupId} = ${sg.id}
-      left join ${PolicyTable as sp} on ${sg.id} = ${sp.groupId}
-      left join ${ResourceTable as sr} on ${sp.resourceId} = ${sr.id}
-      left join ${ResourceTypeTable as srt} on ${sr.resourceTypeId} = ${srt.id}
-      left join ${PolicyRoleTable as pr} on ${p.id} = ${pr.resourcePolicyId}
-      left join ${ResourceRoleTable as rr} on ${pr.resourceRoleId} = ${rr.id}
-      left join ${PolicyActionTable as pa} on ${p.id} = ${pa.resourcePolicyId}
-      left join ${ResourceActionTable as ra} on ${pa.resourceActionId} = ${ra.id}"""
   }
 
   override def listFlattenedPolicyMembers(policyId: FullyQualifiedPolicyId): IO[Set[WorkbenchUser]] = {
