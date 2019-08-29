@@ -390,5 +390,92 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
 
       dao.listPublicAccessPolicies(resourceTypeName).unsafeRunSync() should contain theSameElementsAs expectedResults
     }
+
+    "listFlattenedPolicyMembers" - {
+      "lists all members of a policy" in {
+        val directMember = WorkbenchUser(WorkbenchUserId("direct"), None, WorkbenchEmail("direct@member.biz"))
+        val subGroupMember = WorkbenchUser(WorkbenchUserId("indirect"), Option(GoogleSubjectId("googley")), WorkbenchEmail("subGroup@member.edu.biz"))
+        val subSubGroupMember = WorkbenchUser(WorkbenchUserId("veryIndirect"), None, WorkbenchEmail("very@indirect.net"))
+        val inTwoGroupsMember = WorkbenchUser(WorkbenchUserId("multipleGroups"), None, WorkbenchEmail("member@members.com"))
+        val allMembers = Set(directMember, subGroupMember, subSubGroupMember, inTwoGroupsMember)
+
+        val subSubGroup = BasicWorkbenchGroup(WorkbenchGroupName("subSubGroup"), Set(subSubGroupMember.id), WorkbenchEmail("subSub@groups.com"))
+        val subGroup = BasicWorkbenchGroup(WorkbenchGroupName("subGroup"), Set(subSubGroup.id, subGroupMember.id, inTwoGroupsMember.id), WorkbenchEmail("sub@groups.com"))
+        val secondGroup = BasicWorkbenchGroup(WorkbenchGroupName("secondGroup"), Set(inTwoGroupsMember.id), WorkbenchEmail("second@groups.com"))
+
+        val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
+        val policy = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("policy")), Set(subGroup.id, secondGroup.id, directMember.id), WorkbenchEmail("policy@policy.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), false)
+
+        allMembers.map(dirDao.createUser(_).unsafeRunSync())
+        Set(subSubGroup, subGroup, secondGroup).map(dirDao.createGroup(_).unsafeRunSync())
+
+        dao.createResourceType(resourceType).unsafeRunSync()
+        dao.createResource(resource).unsafeRunSync()
+        dao.createPolicy(policy).unsafeRunSync()
+
+        dao.listFlattenedPolicyMembers(policy.id).unsafeRunSync() should contain theSameElementsAs allMembers
+      }
+    }
+
+    "listAccessPoliciesForUser" - {
+      "lists the access policies on a resource that a user is a member of" in {
+        val user = WorkbenchUser(WorkbenchUserId("user"), None, WorkbenchEmail("user@user.edu"))
+
+        val subGroup = BasicWorkbenchGroup(WorkbenchGroupName("subGroup"), Set(user.id), WorkbenchEmail("sub@groups.com"))
+        val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName("parent"), Set(subGroup.id), WorkbenchEmail("parent@groups.com"))
+
+        val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
+        val indirectPolicy = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("indirect")), Set(parentGroup.id), WorkbenchEmail("indirect@policy.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), false)
+        val directPolicy = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("direct")), Set(user.id), WorkbenchEmail("direct@policy.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), false)
+        val allPolicies = Set(indirectPolicy, directPolicy)
+
+        dirDao.createUser(user).unsafeRunSync()
+        dirDao.createGroup(subGroup).unsafeRunSync()
+        dirDao.createGroup(parentGroup).unsafeRunSync()
+
+        dao.createResourceType(resourceType).unsafeRunSync()
+        dao.createResource(resource).unsafeRunSync()
+        allPolicies.map(dao.createPolicy(_).unsafeRunSync())
+
+        dao.listAccessPoliciesForUser(resource.fullyQualifiedId, user.id).unsafeRunSync() should contain theSameElementsAs allPolicies
+      }
+
+      "does not list policies on other resources the user is a member of" in {
+        val user = WorkbenchUser(WorkbenchUserId("user"), None, WorkbenchEmail("user@user.edu"))
+
+        val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
+        val policy = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("thisOne")), Set(user.id), WorkbenchEmail("correct@policy.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), false)
+        val otherResource = Resource(resourceType.name, ResourceId("notThisResource"), Set.empty)
+        val otherPolicy = AccessPolicy(FullyQualifiedPolicyId(otherResource.fullyQualifiedId, AccessPolicyName("notThisOne")), Set(user.id), WorkbenchEmail("wrong@policy.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), false)
+        val allPolicies = Set(otherPolicy, policy)
+
+        dirDao.createUser(user).unsafeRunSync()
+
+        dao.createResourceType(resourceType).unsafeRunSync()
+        dao.createResource(resource).unsafeRunSync()
+        dao.createResource(otherResource).unsafeRunSync()
+        allPolicies.map(dao.createPolicy(_).unsafeRunSync())
+
+        dao.listAccessPoliciesForUser(resource.fullyQualifiedId, user.id).unsafeRunSync() should contain theSameElementsAs Set(policy)
+      }
+    }
+
+    "setPolicyIsPublic" - {
+      "can change whether a policy is public or private" in {
+        val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
+        val policy = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("private")), Set.empty, WorkbenchEmail("private@policy.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), false)
+
+        dao.createResourceType(resourceType).unsafeRunSync()
+        dao.createResource(resource).unsafeRunSync()
+        dao.createPolicy(policy).unsafeRunSync()
+        dao.loadPolicy(policy.id).unsafeRunSync().getOrElse(fail(s"failed to load policy ${policy.id}")).public shouldBe false
+
+        dao.setPolicyIsPublic(policy.id, true).unsafeRunSync()
+        dao.loadPolicy(policy.id).unsafeRunSync().getOrElse(fail(s"failed to load policy ${policy.id}")).public shouldBe true
+
+        dao.setPolicyIsPublic(policy.id, false).unsafeRunSync()
+        dao.loadPolicy(policy.id).unsafeRunSync().getOrElse(fail(s"failed to load policy ${policy.id}")).public shouldBe false
+      }
+    }
   }
 }

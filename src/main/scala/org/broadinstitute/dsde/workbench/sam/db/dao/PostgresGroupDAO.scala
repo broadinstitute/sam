@@ -4,7 +4,7 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.db.{DbReference, SamTypeBinders}
 import org.broadinstitute.dsde.workbench.sam.db.tables._
 import org.broadinstitute.dsde.workbench.sam.util.DatabaseSupport
-import scalikejdbc.{DBSession, SQLSyntax}
+import scalikejdbc.{DBSession, SQLSyntax, SQLSyntaxSupport}
 import org.broadinstitute.dsde.workbench.sam.db.SamParameterBinderFactory.SqlInterpolationWithSamBinders
 import org.broadinstitute.dsde.workbench.sam.model.FullyQualifiedPolicyId
 
@@ -75,4 +75,41 @@ class PostgresGroupDAO(protected val dbRef: DbReference,
               and ${r.name} = ${policyId.resource.resourceId}
               and ${p.name} = ${policyId.accessPolicyName}"""
   }
+
+  /**
+    * Produces a SQLSyntax to traverse a nested group structure and find all members.
+    * Can only be used within a WITH RECURSIVE clause. This is recursive in the SQL sense, it does not call itself.
+    *
+    * @param groupId the group id to traverse from
+    * @param subGroupMemberTable table that will be defined in the WITH clause, must have a unique name within the WITH clause
+    * @param groupMemberTableAlias
+    * @return
+    */
+  def recursiveMembersQuery(groupId: WorkbenchGroupIdentity, subGroupMemberTable: SubGroupMemberTable, groupMemberTableAlias: String = "gm"): SQLSyntax = {
+    val sg = subGroupMemberTable.syntax("sg")
+    val gm = GroupMemberTable.syntax(groupMemberTableAlias)
+    val sgColumns = subGroupMemberTable.column
+    samsqls"""${subGroupMemberTable.table}(${sgColumns.parentGroupId}, ${sgColumns.memberGroupId}, ${sgColumns.memberUserId}) AS (
+          ${directMembersQuery(groupId, groupMemberTableAlias)}
+          UNION
+          SELECT ${gm.groupId}, ${gm.memberGroupId}, ${gm.memberUserId}
+          FROM ${subGroupMemberTable as sg}, ${GroupMemberTable as gm}
+          WHERE ${gm.groupId} = ${sg.memberGroupId}
+        )"""
+  }
+
+  private def directMembersQuery(groupId: WorkbenchGroupIdentity, groupMemberTableAlias: String = "gm"): SQLSyntax = {
+    val gm = GroupMemberTable.syntax(groupMemberTableAlias)
+    samsqls"""select ${gm.groupId}, ${gm.memberGroupId}, ${gm.memberUserId}
+               from ${GroupMemberTable as gm}
+               where ${gm.groupId} = (${workbenchGroupIdentityToGroupPK(groupId)})"""
+  }
+}
+
+// these 2 case classes represent the logical table used in nested group queries
+// this table does not actually exist but looks like a table in a WITH RECURSIVE query
+final case class SubGroupMemberRecord(parentGroupId: GroupPK, memberUserId: Option[WorkbenchUserId], memberGroupId: Option[GroupPK])
+final case class SubGroupMemberTable(override val tableName: String) extends SQLSyntaxSupport[SubGroupMemberRecord] {
+  // need to specify column names explicitly because this table does not actually exist in the database
+  override val columnNames: Seq[String] = Seq("parent_group_id", "member_user_id", "member_group_id")
 }
