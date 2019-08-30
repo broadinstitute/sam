@@ -5,7 +5,6 @@ import java.util.Date
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountDisplayName, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.sam.TestSupport
-import org.broadinstitute.dsde.workbench.sam.db.dao.PostgresGroupDAO
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.PostgresAccessPolicyDAO
 import org.postgresql.util.PSQLException
@@ -15,9 +14,8 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
 
 class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfterEach {
-  val groupDAO = new PostgresGroupDAO(TestSupport.dbRef, TestSupport.blockingEc)
-  val dao = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.blockingEc, groupDAO)
-  val policyDAO = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.blockingEc, groupDAO)
+  val dao = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.blockingEc)
+  val policyDAO = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.blockingEc)
 
   val defaultGroupName = WorkbenchGroupName("group")
   val defaultGroup = BasicWorkbenchGroup(defaultGroupName, Set.empty, WorkbenchEmail("foo@bar.com"))

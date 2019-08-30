@@ -1,19 +1,12 @@
 package org.broadinstitute.dsde.workbench.sam.db.dao
-import cats.effect.{ContextShift, IO}
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.db.{DbReference, SamTypeBinders}
+import org.broadinstitute.dsde.workbench.sam.db.SamTypeBinders
 import org.broadinstitute.dsde.workbench.sam.db.tables._
-import org.broadinstitute.dsde.workbench.sam.util.DatabaseSupport
 import scalikejdbc.{DBSession, SQLSyntax, SQLSyntaxSupport}
 import org.broadinstitute.dsde.workbench.sam.db.SamParameterBinderFactory.SqlInterpolationWithSamBinders
 import org.broadinstitute.dsde.workbench.sam.model.FullyQualifiedPolicyId
 
-import scala.concurrent.ExecutionContext
-
-class PostgresGroupDAO(protected val dbRef: DbReference,
-                       protected val ecForDatabaseIO: ExecutionContext)(implicit executionContext: ExecutionContext) extends DatabaseSupport {
-  implicit val cs: ContextShift[IO] = IO.contextShift(executionContext)
-
+trait PostgresGroupDAO {
   def insertGroupMembers(groupId: GroupPK, members: Set[WorkbenchSubject])(implicit session: DBSession): Int = {
     if (members.isEmpty) {
       0
