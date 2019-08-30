@@ -328,7 +328,6 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
   def loadPolicyEmail(policyId: FullyQualifiedPolicyId): IO[Option[WorkbenchEmail]] = {
     runInTransaction { implicit session =>
       val g = GroupTable.syntax
-      val g2 = GroupTable.column
       val pol = PolicyTable.syntax
       val srt = ResourceTypeTable.syntax
       val res = ResourceTable.syntax
@@ -336,7 +335,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
       import SamTypeBinders._
 
       val query = samsql"""
-                     select ${g.email}
+                     select ${g.result.email}
                      from ${PolicyTable as pol}
                      join ${GroupTable as g}
                       on ${pol.groupId} = ${g.id}
@@ -348,7 +347,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
                       ${res.name} = ${policyId.resource.resourceId} and
                       ${pol.name} = ${policyId.accessPolicyName}"""
 
-      query.map(rs => rs.get[WorkbenchEmail](g2.email)).single().apply()
+      query.map(rs => rs.get[WorkbenchEmail](g.resultName.email)).single().apply()
     }
   }
 

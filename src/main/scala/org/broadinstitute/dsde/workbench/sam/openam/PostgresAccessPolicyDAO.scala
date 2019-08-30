@@ -361,7 +361,24 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
   override def loadPolicy(resourceAndPolicyName: FullyQualifiedPolicyId): IO[Option[AccessPolicy]] = {
     listPolicies(resourceAndPolicyName.resource, limitOnePolicy = Option(resourceAndPolicyName.accessPolicyName)).map(_.headOption)
   }
-  override def overwritePolicyMembers(id: FullyQualifiedPolicyId, memberList: Set[WorkbenchSubject]): IO[Unit] = ???
+
+  //Steps: Delete every member from the underlying group and then add all of the new members. Do this in a *single*
+  //transaction so if any bit fails, all of it fails and we don't end up in some incorrect intermediate state.
+  override def overwritePolicyMembers(id: FullyQualifiedPolicyId, memberList: Set[WorkbenchSubject]): IO[Unit] = {
+    val p = PolicyTable.syntax("p")
+    val gm = GroupMemberTable.syntax("gm")
+
+    runInTransaction { implicit session =>
+      val groupId = samsql"""delete from ${GroupMemberTable as gm}
+        using ${PolicyTable as p}
+        where ${gm.groupId} = ${p.groupId}
+        and ${p.name} = ${id.accessPolicyName}
+        and ${p.resourceId} = (${ResourceTable.loadResourcePK(id.resource)}) returning ${p.groupId}""".updateAndReturnGeneratedKey().apply()
+
+      groupDAO.insertGroupMembers(GroupPK(groupId.toLong), memberList)
+    }
+  }
+
   override def overwritePolicy(newPolicy: AccessPolicy): IO[AccessPolicy] = ???
 
   override def listPublicAccessPolicies(resourceTypeName: ResourceTypeName): IO[Stream[ResourceIdAndPolicyName]] = {
