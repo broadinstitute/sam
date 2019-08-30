@@ -387,7 +387,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
         and ${p.name} = ${id.accessPolicyName}
         and ${p.resourceId} = (${ResourceTable.loadResourcePK(id.resource)}) returning ${p.groupId}""".updateAndReturnGeneratedKey().apply()
 
-    groupDAO.insertGroupMembers(GroupPK(groupId.toLong), memberList)
+    insertGroupMembers(GroupPK(groupId.toLong), memberList)
   }
 
   override def overwritePolicy(newPolicy: AccessPolicy): IO[AccessPolicy] = {
