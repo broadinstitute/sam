@@ -7,6 +7,7 @@ import org.broadinstitute.dsde.workbench.sam.db.dao.PostgresGroupDAO
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.directory._
 import org.broadinstitute.dsde.workbench.sam.openam.LoadResourceAuthDomainResult.{Constrained, NotConstrained, ResourceNotFound}
+import org.postgresql.util.PSQLException
 import org.scalatest.{BeforeAndAfterEach, FreeSpec, Matchers}
 
 import scala.concurrent.{Await, Future}
@@ -560,6 +561,49 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
         dao.overwritePolicyMembers(policy.id, Set(secondUser.id)).unsafeRunSync()
 
         dao.listFlattenedPolicyMembers(policy.id).unsafeRunSync() shouldBe Set(secondUser)
+      }
+    }
+
+    "overwritePolicy" - {
+      "overwrites a policy" in {
+        dao.createResourceType(resourceType).unsafeRunSync()
+        val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
+        dao.createResource(resource).unsafeRunSync()
+
+        val secondUser = defaultUser.copy(id = WorkbenchUserId("foo"), googleSubjectId = Some(GoogleSubjectId("blablabla")), email = WorkbenchEmail("bar@baz.com"))
+
+        dirDao.createUser(defaultUser).unsafeRunSync()
+        dirDao.createUser(secondUser).unsafeRunSync()
+
+        val policy = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("policyName")), Set(defaultUserId), WorkbenchEmail("policy@email.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), false)
+        dao.createPolicy(policy).unsafeRunSync()
+        dao.loadPolicy(policy.id).unsafeRunSync() shouldEqual Option(policy)
+
+        val newPolicy = policy.copy(members = Set(defaultUserId, secondUser.id), actions = Set(readAction), roles = Set.empty, public = true)
+        dao.overwritePolicy(newPolicy).unsafeRunSync()
+
+        dao.loadPolicy(policy.id).unsafeRunSync() shouldEqual Option(newPolicy)
+      }
+
+      "will not overwrite a policy if any of the new members don't exist" in {
+        dao.createResourceType(resourceType).unsafeRunSync()
+        val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
+        dao.createResource(resource).unsafeRunSync()
+
+        val secondUser = defaultUser.copy(id = WorkbenchUserId("foo"), googleSubjectId = Some(GoogleSubjectId("blablabla")), email = WorkbenchEmail("bar@baz.com"))
+
+        dirDao.createUser(defaultUser).unsafeRunSync()
+
+        val policy = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("policyName")), Set(defaultUserId), WorkbenchEmail("policy@email.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), false)
+        dao.createPolicy(policy).unsafeRunSync()
+        dao.loadPolicy(policy.id).unsafeRunSync() shouldEqual Option(policy)
+
+        val newPolicy = policy.copy(members = Set(defaultUserId, secondUser.id), actions = Set(ResourceAction("fakeAction")), roles = Set.empty, public = true)
+
+        assertThrows[PSQLException] {
+          dao.overwritePolicy(newPolicy).unsafeRunSync()
+        }
+        dao.loadPolicy(policy.id).unsafeRunSync() shouldEqual Option(policy)
       }
     }
   }
