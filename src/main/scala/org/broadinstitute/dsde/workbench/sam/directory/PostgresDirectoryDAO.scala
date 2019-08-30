@@ -17,8 +17,7 @@ import org.broadinstitute.dsde.workbench.sam.db.dao.{PostgresGroupDAO, SubGroupM
 import scala.concurrent.ExecutionContext
 
 class PostgresDirectoryDAO(protected val dbRef: DbReference,
-                           protected val ecForDatabaseIO: ExecutionContext,
-                           protected val groupDAO: PostgresGroupDAO)(implicit executionContext: ExecutionContext) extends DirectoryDAO with DatabaseSupport {
+                           protected val ecForDatabaseIO: ExecutionContext)(implicit executionContext: ExecutionContext) extends DirectoryDAO with DatabaseSupport with PostgresGroupDAO {
   implicit val cs: ContextShift[IO] = IO.contextShift(executionContext)
 
   override def createGroup(group: BasicWorkbenchGroup, accessInstructionsOpt: Option[String]): IO[BasicWorkbenchGroup] = {
@@ -29,7 +28,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
         insertAccessInstructions(groupId, accessInstructions)
       }
 
-      groupDAO.insertGroupMembers(groupId, group.members)
+      insertGroupMembers(groupId, group.members)
 
       group
     }
@@ -158,14 +157,14 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     */
   override def addGroupMember(groupId: WorkbenchGroupIdentity, addMember: WorkbenchSubject): IO[Boolean] = {
     runInTransaction { implicit session =>
-      val groupPKQuery = groupDAO.workbenchGroupIdentityToGroupPK(groupId)
+      val groupPKQuery = workbenchGroupIdentityToGroupPK(groupId)
       val groupMemberColumn = GroupMemberTable.column
 
       val addMemberQuery = addMember match {
         case memberUser: WorkbenchUserId =>
           samsql"insert into ${GroupMemberTable.table} (${groupMemberColumn.groupId}, ${groupMemberColumn.memberUserId}) values (($groupPKQuery), ${memberUser})"
         case memberGroup: WorkbenchGroupIdentity =>
-          val memberGroupPKQuery = groupDAO.workbenchGroupIdentityToGroupPK(memberGroup)
+          val memberGroupPKQuery = workbenchGroupIdentityToGroupPK(memberGroup)
           samsql"insert into ${GroupMemberTable.table} (${groupMemberColumn.groupId}, ${groupMemberColumn.memberGroupId}) values ((${groupPKQuery}), (${memberGroupPKQuery}))"
         case pet: PetServiceAccountId => throw new WorkbenchException(s"pet service accounts cannot be added to groups $pet")
       }
@@ -181,7 +180,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
 
   private def updateGroupUpdatedDate(groupId: WorkbenchGroupIdentity)(implicit session: DBSession): Int = {
     val g = GroupTable.column
-    samsql"update ${GroupTable.table} set ${g.updatedDate} = ${Instant.now()} where ${g.id} = (${groupDAO.workbenchGroupIdentityToGroupPK(groupId)})".update().apply()
+    samsql"update ${GroupTable.table} set ${g.updatedDate} = ${Instant.now()} where ${g.id} = (${workbenchGroupIdentityToGroupPK(groupId)})".update().apply()
   }
 
   /**
@@ -189,14 +188,14 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     */
   override def removeGroupMember(groupId: WorkbenchGroupIdentity, removeMember: WorkbenchSubject): IO[Boolean] = {
     runInTransaction { implicit session =>
-      val groupPKQuery = groupDAO.workbenchGroupIdentityToGroupPK(groupId)
+      val groupPKQuery = workbenchGroupIdentityToGroupPK(groupId)
       val groupMemberColumn = GroupMemberTable.column
 
       val removeMemberQuery = removeMember match {
         case memberUser: WorkbenchUserId =>
           samsql"delete from ${GroupMemberTable.table} where ${groupMemberColumn.groupId} = (${groupPKQuery}) and ${groupMemberColumn.memberUserId} = ${memberUser}"
         case memberGroup: WorkbenchGroupIdentity =>
-          val memberGroupPKQuery = groupDAO.workbenchGroupIdentityToGroupPK(memberGroup)
+          val memberGroupPKQuery = workbenchGroupIdentityToGroupPK(memberGroup)
           samsql"delete from ${GroupMemberTable.table} where ${groupMemberColumn.groupId} = (${groupPKQuery}) and ${groupMemberColumn.memberGroupId} = (${memberGroupPKQuery})"
         case _ => throw new WorkbenchException(s"unexpected WorkbenchSubject $removeMember")
       }
@@ -215,7 +214,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     val sg = subGroupMemberTable.syntax("sg")
 
     val memberClause: SQLSyntax = member match {
-      case subGroupId: WorkbenchGroupIdentity => samsqls"${sg.memberGroupId} = (${groupDAO.workbenchGroupIdentityToGroupPK(subGroupId)})"
+      case subGroupId: WorkbenchGroupIdentity => samsqls"${sg.memberGroupId} = (${workbenchGroupIdentityToGroupPK(subGroupId)})"
       case WorkbenchUserId(userId) => samsqls"${sg.memberUserId} = $userId"
       case _ => throw new WorkbenchException(s"illegal member $member")
     }
@@ -223,7 +222,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     runInTransaction { implicit session =>
       // https://www.postgresql.org/docs/9.6/queries-with.html
       // in the recursive query below, UNION, as opposed to UNION ALL, should break out of cycles because it removes duplicates
-      val query = samsql"""WITH RECURSIVE ${groupDAO.recursiveMembersQuery(groupId, subGroupMemberTable)}
+      val query = samsql"""WITH RECURSIVE ${recursiveMembersQuery(groupId, subGroupMemberTable)}
         SELECT count(*)
         FROM ${subGroupMemberTable as sg} WHERE $memberClause"""
 
@@ -234,14 +233,14 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
   override def updateSynchronizedDate(groupId: WorkbenchGroupIdentity): IO[Unit] = {
     runInTransaction { implicit session =>
       val g = GroupTable.column
-      samsql"update ${GroupTable.table} set ${g.synchronizedDate} = ${Instant.now()} where ${g.id} = (${groupDAO.workbenchGroupIdentityToGroupPK(groupId)})".update().apply()
+      samsql"update ${GroupTable.table} set ${g.synchronizedDate} = ${Instant.now()} where ${g.id} = (${workbenchGroupIdentityToGroupPK(groupId)})".update().apply()
     }
   }
 
   override def getSynchronizedDate(groupId: WorkbenchGroupIdentity): IO[Option[Date]] = {
     runInTransaction { implicit session =>
       val g = GroupTable.column
-      samsql"select ${g.synchronizedDate} from ${GroupTable.table} where ${g.id} = (${groupDAO.workbenchGroupIdentityToGroupPK(groupId)})"
+      samsql"select ${g.synchronizedDate} from ${GroupTable.table} where ${g.id} = (${workbenchGroupIdentityToGroupPK(groupId)})"
         .map(rs => rs.timestamp(g.synchronizedDate).toJavaUtilDate).single().apply()
     }
   }
@@ -251,7 +250,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     runInTransaction { implicit session =>
       val g = GroupTable.column
 
-      samsql"select ${g.email} from ${GroupTable.table} where ${g.id} = (${groupDAO.workbenchGroupIdentityToGroupPK(groupId)})"
+      samsql"select ${g.email} from ${GroupTable.table} where ${g.id} = (${workbenchGroupIdentityToGroupPK(groupId)})"
         .map(rs => rs.get[WorkbenchEmail](g.email)).single().apply()
     }
   }
@@ -528,7 +527,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
       // this is careful not to use a user defined string (e.g. the group's name) to avoid sql injection attacks
       val subGroupTable = SubGroupMemberTable("sub_group_" + index)
 
-      QueryAndTable(groupDAO.recursiveMembersQuery(groupId, subGroupTable), subGroupTable)
+      QueryAndTable(recursiveMembersQuery(groupId, subGroupTable), subGroupTable)
     }
 
     val allRecursiveMembersQueries = SQLSyntax.join(recursiveMembersQueries.map(_.recursiveMembersQuery), sqls",", false)
@@ -555,7 +554,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
 
     val topQueryWhere = subject match {
       case userId: WorkbenchUserId => samsqls"where ${gm.memberUserId} = ${userId}"
-      case workbenchGroupIdentity: WorkbenchGroupIdentity => samsqls"where ${gm.memberGroupId} = (${groupDAO.workbenchGroupIdentityToGroupPK(workbenchGroupIdentity)})"
+      case workbenchGroupIdentity: WorkbenchGroupIdentity => samsqls"where ${gm.memberGroupId} = (${workbenchGroupIdentityToGroupPK(workbenchGroupIdentity)})"
       case _ => throw new WorkbenchException(s"Unexpected WorkbenchSubject. Expected WorkbenchUserId or WorkbenchGroupIdentity but got ${subject}")
     }
 
@@ -753,7 +752,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
 
   override def setManagedGroupAccessInstructions(groupName: WorkbenchGroupName, accessInstructions: String): IO[Unit] = {
     runInTransaction { implicit session =>
-      val groupPKQuery = groupDAO.workbenchGroupIdentityToGroupPK(groupName)
+      val groupPKQuery = workbenchGroupIdentityToGroupPK(groupName)
       val accessInstructionsColumn = AccessInstructionsTable.column
 
       val upsertAccessInstructionsQuery = samsql"""insert into ${AccessInstructionsTable.table}

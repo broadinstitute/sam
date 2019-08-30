@@ -22,8 +22,7 @@ import scalikejdbc._
 import scala.concurrent.ExecutionContext
 
 class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
-                              protected val ecForDatabaseIO: ExecutionContext,
-                              protected val groupDAO: PostgresGroupDAO)(implicit executionContext: ExecutionContext) extends AccessPolicyDAO with DatabaseSupport with LazyLogging {
+                              protected val ecForDatabaseIO: ExecutionContext)(implicit executionContext: ExecutionContext) extends AccessPolicyDAO with DatabaseSupport with PostgresGroupDAO with LazyLogging {
 
   implicit val cs: ContextShift[IO] = IO.contextShift(executionContext)
 
@@ -295,7 +294,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
       val groupId = insertPolicyGroup(policy)
       val policyId = insertPolicy(policy, groupId)
 
-      groupDAO.insertGroupMembers(groupId, policy.members)
+      insertGroupMembers(groupId, policy.members)
 
       insertPolicyRoles(policy.roles, policyId)
       insertPolicyActions(policy.actions, policyId)
@@ -388,7 +387,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
         and ${p.name} = ${id.accessPolicyName}
         and ${p.resourceId} = (${ResourceTable.loadResourcePK(id.resource)}) returning ${p.groupId}""".updateAndReturnGeneratedKey().apply()
 
-    groupDAO.insertGroupMembers(GroupPK(groupId.toLong), memberList)
+    insertGroupMembers(GroupPK(groupId.toLong), memberList)
   }
 
   override def overwritePolicy(newPolicy: AccessPolicy): IO[AccessPolicy] = {
@@ -661,7 +660,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     val u = UserTable.syntax("u")
 
     runInTransaction { implicit session =>
-      val query = samsql"""with recursive ${groupDAO.recursiveMembersQuery(policyId, subGroupMemberTable)}
+      val query = samsql"""with recursive ${recursiveMembersQuery(policyId, subGroupMemberTable)}
         select ${sg.result.memberUserId}, ${u.result.googleSubjectId}, ${u.result.email}
         from ${subGroupMemberTable as sg}
         join ${UserTable as u} on ${u.id} = ${sg.memberUserId}"""

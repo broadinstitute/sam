@@ -24,7 +24,6 @@ import org.broadinstitute.dsde.workbench.newrelic.NewRelicMetrics
 import org.broadinstitute.dsde.workbench.sam.api.{SamRoutes, StandardUserInfoDirectives}
 import org.broadinstitute.dsde.workbench.sam.config.{AppConfig, GoogleConfig}
 import org.broadinstitute.dsde.workbench.sam.db.DbReference
-import org.broadinstitute.dsde.workbench.sam.db.dao.PostgresGroupDAO
 import org.broadinstitute.dsde.workbench.sam.directory._
 import org.broadinstitute.dsde.workbench.sam.google._
 import org.broadinstitute.dsde.workbench.sam.model._
@@ -212,9 +211,8 @@ object Boot extends IOApp with LazyLogging {
       ldapExecutionContext <- ExecutionContexts.fixedThreadPool[IO](appConfig.directoryConfig.connectionPoolSize)
       postgresExecutionContext <- ExecutionContexts.fixedThreadPool[IO](DBs.config.getInt(s"db.${dbName.name}.poolMaxSize"))
 
-      postgresGroupDAO = new PostgresGroupDAO(dbReference, postgresExecutionContext)
-      directoryDAO = createDirectoryDAO(appConfig, ldapExecutionContext, ldapConnectionPool, dbReference, postgresExecutionContext, memberOfCache, newRelicMetrics, postgresGroupDAO)
-      accessPolicyDAO = createAccessPolicyDAO(appConfig, ldapExecutionContext, ldapConnectionPool, dbReference, postgresExecutionContext, memberOfCache, resourceCache, newRelicMetrics, postgresGroupDAO)
+      directoryDAO = createDirectoryDAO(appConfig, ldapExecutionContext, ldapConnectionPool, dbReference, postgresExecutionContext, memberOfCache, newRelicMetrics)
+      accessPolicyDAO = createAccessPolicyDAO(appConfig, ldapExecutionContext, ldapConnectionPool, dbReference, postgresExecutionContext, memberOfCache, resourceCache, newRelicMetrics)
     } yield (directoryDAO, accessPolicyDAO, ldapExecutionContext)
   }
 
@@ -224,10 +222,9 @@ object Boot extends IOApp with LazyLogging {
                                  dbReference: DbReference,
                                  postgresExecutionContext: ExecutionContext,
                                  memberOfCache: Cache[WorkbenchSubject, Set[String]],
-                                 newRelicMetrics: NewRelicMetrics,
-                                 postgresGroupDAO: PostgresGroupDAO): DirectoryDAO = {
+                                 newRelicMetrics: NewRelicMetrics): DirectoryDAO = {
     val ldapDirectoryDAO = new LdapDirectoryDAO(ldapConnectionPool, appConfig.directoryConfig, ldapExecutionContext, memberOfCache)
-    val postgresDirectoryDAO = new PostgresDirectoryDAO(dbReference, postgresExecutionContext, postgresGroupDAO)
+    val postgresDirectoryDAO = new PostgresDirectoryDAO(dbReference, postgresExecutionContext)
     DaoWithShadow(ldapDirectoryDAO, postgresDirectoryDAO, new NewRelicShadowResultReporter("directoryDAO", newRelicMetrics), timer.clock)
   }
 
@@ -238,10 +235,9 @@ object Boot extends IOApp with LazyLogging {
                                     postgresExecutionContext: ExecutionContext,
                                     memberOfCache: Cache[WorkbenchSubject, Set[String]],
                                     resourceCache: Cache[FullyQualifiedResourceId, Resource],
-                                    newRelicMetrics: NewRelicMetrics,
-                                    postgresGroupDAO: PostgresGroupDAO): AccessPolicyDAO = {
+                                    newRelicMetrics: NewRelicMetrics): AccessPolicyDAO = {
     val ldapAccessPolicyDao = new LdapAccessPolicyDAO(ldapConnectionPool, appConfig.directoryConfig, ldapExecutionContext, memberOfCache, resourceCache)
-    val foregroundPostgresAccessPolicyDAO = new PostgresAccessPolicyDAO(dbReference, postgresExecutionContext, postgresGroupDAO)
+    val foregroundPostgresAccessPolicyDAO = new PostgresAccessPolicyDAO(dbReference, postgresExecutionContext)
     DaoWithShadow(ldapAccessPolicyDao, foregroundPostgresAccessPolicyDAO, new NewRelicShadowResultReporter("directoryDAO", newRelicMetrics), timer.clock)
   }
 
