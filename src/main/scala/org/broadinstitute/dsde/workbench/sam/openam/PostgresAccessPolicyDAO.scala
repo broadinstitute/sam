@@ -307,17 +307,25 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
   private def insertPolicyActions(actions: Set[ResourceAction], policyId: PolicyPK)(implicit session: DBSession): Int = {
     val ra = ResourceActionTable.syntax("ra")
     val paCol = PolicyActionTable.column
-    samsql"""insert into ${PolicyActionTable.table} (${paCol.resourcePolicyId}, ${paCol.resourceActionId})
+    if (actions.nonEmpty) {
+      samsql"""insert into ${PolicyActionTable.table} (${paCol.resourcePolicyId}, ${paCol.resourceActionId})
             select ${policyId}, ${ra.result.id} from ${ResourceActionTable as ra} where ${ra.action} in (${actions})"""
-      .update().apply()
+        .update().apply()
+    } else {
+      0
+    }
   }
 
   private def insertPolicyRoles(roles: Set[ResourceRoleName], policyId: PolicyPK)(implicit session: DBSession): Int = {
     val rr = ResourceRoleTable.syntax("rr")
     val prCol = PolicyRoleTable.column
-    samsql"""insert into ${PolicyRoleTable.table} (${prCol.resourcePolicyId}, ${prCol.resourceRoleId})
+    if (roles.nonEmpty) {
+      samsql"""insert into ${PolicyRoleTable.table} (${prCol.resourcePolicyId}, ${prCol.resourceRoleId})
             select ${policyId}, ${rr.result.id} from ${ResourceRoleTable as rr} where ${rr.role} in (${roles})"""
-      .update().apply()
+        .update().apply()
+    } else {
+      0
+    }
   }
 
   private def insertPolicy(policy: AccessPolicy, groupId: GroupPK)(implicit session: DBSession): PolicyPK = {
@@ -362,24 +370,63 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     listPolicies(resourceAndPolicyName.resource, limitOnePolicy = Option(resourceAndPolicyName.accessPolicyName)).map(_.headOption)
   }
 
+  override def overwritePolicyMembers(id: FullyQualifiedPolicyId, memberList: Set[WorkbenchSubject]): IO[Unit] = {
+    runInTransaction { implicit session =>
+      overwritePolicyMembersInternal(id, memberList)
+    }
+  }
+
   //Steps: Delete every member from the underlying group and then add all of the new members. Do this in a *single*
   //transaction so if any bit fails, all of it fails and we don't end up in some incorrect intermediate state.
-  override def overwritePolicyMembers(id: FullyQualifiedPolicyId, memberList: Set[WorkbenchSubject]): IO[Unit] = {
+  private def overwritePolicyMembersInternal(id: FullyQualifiedPolicyId, memberList: Set[WorkbenchSubject])(implicit session: DBSession): Int = {
     val p = PolicyTable.syntax("p")
     val gm = GroupMemberTable.syntax("gm")
 
-    runInTransaction { implicit session =>
-      val groupId = samsql"""delete from ${GroupMemberTable as gm}
+    val groupId = samsql"""delete from ${GroupMemberTable as gm}
         using ${PolicyTable as p}
         where ${gm.groupId} = ${p.groupId}
         and ${p.name} = ${id.accessPolicyName}
         and ${p.resourceId} = (${ResourceTable.loadResourcePK(id.resource)}) returning ${p.groupId}""".updateAndReturnGeneratedKey().apply()
 
-      groupDAO.insertGroupMembers(GroupPK(groupId.toLong), memberList)
+    groupDAO.insertGroupMembers(GroupPK(groupId.toLong), memberList)
+  }
+
+  override def overwritePolicy(newPolicy: AccessPolicy): IO[AccessPolicy] = {
+    runInTransaction { implicit session =>
+      overwritePolicyMembersInternal(newPolicy.id, newPolicy.members)
+      overwritePolicyRolesInternal(newPolicy.id, newPolicy.roles)
+      overwritePolicyActionsInternal(newPolicy.id, newPolicy.actions)
+      setPolicyIsPublicInternal(newPolicy.id, newPolicy.public)
+
+      newPolicy
     }
   }
 
-  override def overwritePolicy(newPolicy: AccessPolicy): IO[AccessPolicy] = ???
+  private def overwritePolicyRolesInternal(id: FullyQualifiedPolicyId, roles: Set[ResourceRoleName])(implicit session: DBSession): Int = {
+    val pr = PolicyRoleTable.syntax("pr")
+    val p = PolicyTable.syntax("p")
+
+    val policyPK = PolicyPK(
+      samsql"""delete from ${PolicyRoleTable as pr}
+              using ${PolicyTable as p}
+              where ${p.name} = ${id.accessPolicyName}
+              and ${p.resourceId} = (${ResourceTable.loadResourcePK(id.resource)}) returning ${p.id}""".updateAndReturnGeneratedKey().apply().toLong)
+
+    insertPolicyRoles(roles, policyPK)
+  }
+
+  private def overwritePolicyActionsInternal(id: FullyQualifiedPolicyId, actions: Set[ResourceAction])(implicit session: DBSession): Int = {
+    val pa = PolicyActionTable.syntax("pa")
+    val p = PolicyTable.syntax("p")
+
+    val policyPK = PolicyPK(
+      samsql"""delete from ${PolicyActionTable as pa}
+              using ${PolicyTable as p}
+              where ${p.name} = ${id.accessPolicyName}
+              and ${p.resourceId} = (${ResourceTable.loadResourcePK(id.resource)}) returning ${p.id}""".updateAndReturnGeneratedKey().apply().toLong)
+
+    insertPolicyActions(actions, policyPK)
+  }
 
   override def listPublicAccessPolicies(resourceTypeName: ResourceTypeName): IO[Stream[ResourceIdAndPolicyName]] = {
     val rt = ResourceTypeTable.syntax("rt")
@@ -628,12 +675,17 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
 
   override def setPolicyIsPublic(policyId: FullyQualifiedPolicyId, isPublic: Boolean): IO[Unit] = {
     runInTransaction { implicit session =>
-      val p = PolicyTable.syntax("p")
-      val policyTableColumn = PolicyTable.column
-      val r = ResourceTable.syntax("r")
-      val rt = ResourceTypeTable.syntax("rt")
+      setPolicyIsPublicInternal(policyId, isPublic)
+    }
+  }
 
-      samsql"""update ${PolicyTable as p}
+  private def setPolicyIsPublicInternal(policyId: FullyQualifiedPolicyId, isPublic: Boolean)(implicit session: DBSession): Int = {
+    val p = PolicyTable.syntax("p")
+    val policyTableColumn = PolicyTable.column
+    val r = ResourceTable.syntax("r")
+    val rt = ResourceTypeTable.syntax("rt")
+
+    samsql"""update ${PolicyTable as p}
               set ${policyTableColumn.public} = ${isPublic}
               from ${ResourceTable as r}
               join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
@@ -641,7 +693,6 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
               and ${p.name} = ${policyId.accessPolicyName}
               and ${r.name} = ${policyId.resource.resourceId}
               and ${rt.name} = ${policyId.resource.resourceTypeName}""".update().apply()
-    }
   }
 
   override def evictIsMemberOfCache(subject: WorkbenchSubject): IO[Unit] = IO.unit
