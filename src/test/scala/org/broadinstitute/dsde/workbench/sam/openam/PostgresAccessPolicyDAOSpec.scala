@@ -539,5 +539,28 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
         dao.listAccessPolicies(resource.fullyQualifiedId).unsafeRunSync() should contain theSameElementsAs Set(owner, reader)
       }
     }
+
+    "overwritePolicyMembers" - {
+      "overwrites a policy's members" in {
+        dao.createResourceType(resourceType).unsafeRunSync()
+        val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
+        dao.createResource(resource).unsafeRunSync()
+
+        val secondUser = defaultUser.copy(id = WorkbenchUserId("foo"), googleSubjectId = Some(GoogleSubjectId("blablabla")), email = WorkbenchEmail("bar@baz.com"))
+
+        dirDao.createUser(defaultUser).unsafeRunSync()
+        dirDao.createUser(secondUser).unsafeRunSync()
+
+        val policy = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("policyName")), Set(defaultUserId), WorkbenchEmail("policy@email.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), false)
+        dao.createPolicy(policy).unsafeRunSync()
+        dao.loadPolicy(policy.id).unsafeRunSync() shouldEqual Option(policy)
+
+        dao.listFlattenedPolicyMembers(policy.id).unsafeRunSync() shouldBe Set(defaultUser)
+
+        dao.overwritePolicyMembers(policy.id, Set(secondUser.id)).unsafeRunSync()
+
+        dao.listFlattenedPolicyMembers(policy.id).unsafeRunSync() shouldBe Set(secondUser)
+      }
+    }
   }
 }
