@@ -5,7 +5,6 @@ import java.util.Date
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountDisplayName, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.sam.TestSupport
-import org.broadinstitute.dsde.workbench.sam.db.dao.PostgresGroupDAO
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.PostgresAccessPolicyDAO
 import org.postgresql.util.PSQLException
@@ -15,9 +14,8 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
 
 class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfterEach {
-  val groupDAO = new PostgresGroupDAO(TestSupport.dbRef, TestSupport.blockingEc)
-  val dao = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.blockingEc, groupDAO)
-  val policyDAO = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.blockingEc, groupDAO)
+  val dao = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.blockingEc)
+  val policyDAO = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.blockingEc)
 
   val defaultGroupName = WorkbenchGroupName("group")
   val defaultGroup = BasicWorkbenchGroup(defaultGroupName, Set.empty, WorkbenchEmail("foo@bar.com"))
@@ -82,6 +80,23 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
       "create groups with policy members" in {
         val memberPolicy = defaultPolicy
         val members: Set[WorkbenchSubject] = Set(memberPolicy.id)
+        val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName("parentGroup"), members, WorkbenchEmail("baz@qux.com"))
+
+        policyDAO.createResourceType(resourceType).unsafeRunSync()
+        policyDAO.createResource(defaultResource).unsafeRunSync()
+        policyDAO.createPolicy(defaultPolicy).unsafeRunSync()
+        dao.createGroup(parentGroup).unsafeRunSync()
+
+        val loadedGroup = dao.loadGroup(parentGroup.id).unsafeRunSync().getOrElse(fail(s"Failed to load group ${parentGroup.id}"))
+        loadedGroup.members shouldEqual members
+      }
+
+      "create groups with both subGroup and policy members" in {
+        val subGroup = defaultGroup
+        dao.createGroup(subGroup).unsafeRunSync()
+
+        val memberPolicy = defaultPolicy
+        val members: Set[WorkbenchSubject] = Set(memberPolicy.id, subGroup.id)
         val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName("parentGroup"), members, WorkbenchEmail("baz@qux.com"))
 
         policyDAO.createResourceType(resourceType).unsafeRunSync()
