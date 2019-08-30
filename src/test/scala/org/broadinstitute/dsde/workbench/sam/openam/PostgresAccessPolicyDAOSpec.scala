@@ -367,28 +367,59 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
       }
     }
 
-    "listPublicAccessPolicies" in {
-      dao.createResourceType(resourceType).unsafeRunSync()
-      val resourceId = ResourceId("resource")
-      val resource = Resource(resourceType.name, resourceId, Set.empty)
-      dao.createResource(resource).unsafeRunSync()
+    "listPublicAccessPolicies" - {
+      "lists the public access policies for a given resource type" in {
+        dao.createResourceType(resourceType).unsafeRunSync()
+        val resourceId = ResourceId("resource")
+        val resource = Resource(resourceType.name, resourceId, Set.empty)
+        dao.createResource(resource).unsafeRunSync()
 
-      val privatePolicyId = FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("privatePolicyName"))
-      val publicPolicy1Id = FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("publicPolicy1Name"))
-      val publicPolicy2Id = FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("publicPolicy2Name"))
+        val privatePolicyId = FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("privatePolicyName"))
+        val publicPolicy1Id = FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("publicPolicy1Name"))
+        val publicPolicy2Id = FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("publicPolicy2Name"))
 
-      val privatePolicy = AccessPolicy(privatePolicyId, Set.empty, WorkbenchEmail("privatePolicy@email.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), false)
-      val publicPolicy1 = AccessPolicy(publicPolicy1Id, Set.empty, WorkbenchEmail("publicPolicy1@email.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), true)
-      val publicPolicy2 = AccessPolicy(publicPolicy2Id, Set.empty, WorkbenchEmail("publicPolicy2@email.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), true)
+        val privatePolicy = AccessPolicy(privatePolicyId, Set.empty, WorkbenchEmail("privatePolicy@email.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), false)
+        val publicPolicy1 = AccessPolicy(publicPolicy1Id, Set.empty, WorkbenchEmail("publicPolicy1@email.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), true)
+        val publicPolicy2 = AccessPolicy(publicPolicy2Id, Set.empty, WorkbenchEmail("publicPolicy2@email.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), true)
 
-      dao.createPolicy(privatePolicy).unsafeRunSync()
-      dao.createPolicy(publicPolicy1).unsafeRunSync()
-      dao.createPolicy(publicPolicy2).unsafeRunSync()
+        dao.createPolicy(privatePolicy).unsafeRunSync()
+        dao.createPolicy(publicPolicy1).unsafeRunSync()
+        dao.createPolicy(publicPolicy2).unsafeRunSync()
 
-      val expectedResults = Set(ResourceIdAndPolicyName(resourceId, publicPolicy1.id.accessPolicyName),
-                                ResourceIdAndPolicyName(resourceId, publicPolicy2.id.accessPolicyName))
+        val expectedResults = Set(ResourceIdAndPolicyName(resourceId, publicPolicy1.id.accessPolicyName),
+          ResourceIdAndPolicyName(resourceId, publicPolicy2.id.accessPolicyName))
 
-      dao.listPublicAccessPolicies(resourceTypeName).unsafeRunSync() should contain theSameElementsAs expectedResults
+        dao.listPublicAccessPolicies(resourceTypeName).unsafeRunSync() should contain theSameElementsAs expectedResults
+      }
+
+      "lists the public access policies on a resource" in {
+        dao.createResourceType(resourceType).unsafeRunSync()
+        val resourceId = ResourceId("resource")
+        val resource = Resource(resourceType.name, resourceId, Set.empty)
+        dao.createResource(resource).unsafeRunSync()
+
+        val wrongResource = Resource(resourceType.name, ResourceId("wrongResource"), Set.empty)
+        dao.createResource(wrongResource).unsafeRunSync()
+
+        val privatePolicyId = FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("privatePolicyName"))
+        val publicPolicy1Id = FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("publicPolicy1Name"))
+        val publicPolicy2Id = FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("publicPolicy2Name"))
+        val wrongPublicPolicyId = FullyQualifiedPolicyId(wrongResource.fullyQualifiedId, AccessPolicyName("wrongPolicyName"))
+
+        val privatePolicy = AccessPolicy(privatePolicyId, Set.empty, WorkbenchEmail("privatePolicy@email.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), false)
+        val publicPolicy1 = AccessPolicy(publicPolicy1Id, Set.empty, WorkbenchEmail("publicPolicy1@email.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), true)
+        val publicPolicy2 = AccessPolicy(publicPolicy2Id, Set.empty, WorkbenchEmail("publicPolicy2@email.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), true)
+        val wrongPublicPolicy = AccessPolicy(wrongPublicPolicyId, Set.empty, WorkbenchEmail("wrong@email.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), true)
+
+        dao.createPolicy(privatePolicy).unsafeRunSync()
+        dao.createPolicy(publicPolicy1).unsafeRunSync()
+        dao.createPolicy(publicPolicy2).unsafeRunSync()
+        dao.createPolicy(wrongPublicPolicy).unsafeRunSync()
+
+        val expectedResults = Set(publicPolicy1, publicPolicy2)
+
+        dao.listPublicAccessPolicies(resource.fullyQualifiedId).unsafeRunSync() should contain theSameElementsAs expectedResults
+      }
     }
 
     "listFlattenedPolicyMembers" - {
@@ -475,6 +506,37 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
 
         dao.setPolicyIsPublic(policy.id, false).unsafeRunSync()
         dao.loadPolicy(policy.id).unsafeRunSync().getOrElse(fail(s"failed to load policy ${policy.id}")).public shouldBe false
+      }
+    }
+
+    "listAccessPolicies" - {
+      "lists all the access policy names with their resource names that a user is in for a given resource type" in {
+        val resource1 = Resource(resourceType.name, ResourceId("resource1"), Set.empty)
+        val policy1 = AccessPolicy(FullyQualifiedPolicyId(resource1.fullyQualifiedId, AccessPolicyName("one")), Set(defaultUser.id), WorkbenchEmail("one@policy.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), false)
+        val resource2 = Resource(resourceType.name, ResourceId("resource2"), Set.empty)
+        val policy2 = AccessPolicy(FullyQualifiedPolicyId(resource2.fullyQualifiedId, AccessPolicyName("two")), Set(defaultUser.id), WorkbenchEmail("two@policy.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), false)
+
+        dirDao.createUser(defaultUser).unsafeRunSync()
+        dao.createResourceType(resourceType).unsafeRunSync()
+        dao.createResource(resource1).unsafeRunSync()
+        dao.createResource(resource2).unsafeRunSync()
+        dao.createPolicy(policy1).unsafeRunSync()
+        dao.createPolicy(policy2).unsafeRunSync()
+
+        dao.listAccessPolicies(resourceType.name, defaultUser.id).unsafeRunSync() should contain theSameElementsAs Set(ResourceIdAndPolicyName(resource1.resourceId, policy1.id.accessPolicyName), ResourceIdAndPolicyName(resource2.resourceId, policy2.id.accessPolicyName))
+      }
+
+      "lists the access policies for a resource" in {
+        val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
+        val owner = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("owner")), Set.empty, WorkbenchEmail("owner@policy.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), false)
+        val reader = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("reader")), Set.empty, WorkbenchEmail("reader@policy.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), false)
+
+        dao.createResourceType(resourceType).unsafeRunSync()
+        dao.createResource(resource).unsafeRunSync()
+        dao.createPolicy(owner).unsafeRunSync()
+        dao.createPolicy(reader).unsafeRunSync()
+
+        dao.listAccessPolicies(resource.fullyQualifiedId).unsafeRunSync() should contain theSameElementsAs Set(owner, reader)
       }
     }
   }
