@@ -103,7 +103,18 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
               }
             }
 
-            "has the same ActionPatterns with modified descriptions" in pending
+            "has the same ActionPatterns with modified descriptions" in {
+              val myActionPatterns = actionPatterns + ResourceActionPattern("coolNewPattern", "I am the coolest pattern EVER!  Mwahaha", true)
+              val myResourceType = resourceType.copy(actionPatterns = myActionPatterns)
+
+              val myActionPatternsNew = actionPatterns + ResourceActionPattern("coolNewPattern", "I am the NEWEST pattern EVER!  Mwahaha", true)
+
+              val myUpdatedResourceType = myResourceType.copy(actionPatterns = myActionPatternsNew)
+
+              dao.createResourceType(myResourceType).unsafeRunSync() shouldEqual myResourceType
+
+              dao.createResourceType(myUpdatedResourceType).unsafeRunSync() shouldEqual myUpdatedResourceType
+            }
           }
         }
 
@@ -114,10 +125,6 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
               "Role" in pending
               "Role Action" in pending
             }
-
-            // Not sure if we need this next test or not.  I don't want AuthDomain functionality in general to break if
-            // we change the isConstrainable value on one of our patterns
-            "removes an Auth Domain Constraint from an ActionPattern" in pending
           }
         }
       }
@@ -141,7 +148,13 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
         exception.errorReport.statusCode should equal (Some(StatusCodes.Conflict))
       }
 
-      "raises an error when the ResourceType does not exist" is pending
+      "raises an error when the ResourceType does not exist" in {
+        val exception = intercept[WorkbenchExceptionWithErrorReport] {
+          dao.createResource(resource).unsafeRunSync()
+        }
+
+        exception.errorReport.statusCode should equal (Some(StatusCodes.Conflict))
+      }
 
       "can add a resource that has at least 1 Auth Domain" in {
         val authDomainGroupName1 = WorkbenchGroupName("authDomain1")
