@@ -127,21 +127,6 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
               "Role" in pending
               "Role Action" in pending
             }
-
-            // Not sure if we need this next test or not.  I don't want AuthDomain functionality in general to break if
-            // we change the isConstrainable value on one of our patterns
-            "removes an Auth Domain Constraint from an ActionPattern" ignore {
-              val myActionPatterns = actionPatterns + ResourceActionPattern("coolNewPattern", "I am the coolest pattern EVER!  Mwahaha", true)
-              val myResourceType = resourceType.copy(actionPatterns = myActionPatterns)
-
-              val myActionPatternsNew = actionPatterns + ResourceActionPattern("coolNewPattern", "I am the coolest pattern EVER!  Mwahaha", false)
-
-              val myUpdatedResourceType = myResourceType.copy(actionPatterns = myActionPatternsNew)
-
-              dao.createResourceType(myResourceType).unsafeRunSync() shouldEqual myResourceType
-
-              dao.createResourceType(myUpdatedResourceType).unsafeRunSync() shouldEqual myUpdatedResourceType //TODO: we don't have a listResourceTypes so how shall we verify this?
-            }
           }
         }
       }
