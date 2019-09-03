@@ -140,7 +140,7 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
 
               dao.createResourceType(myResourceType).unsafeRunSync() shouldEqual myResourceType
 
-              dao.createResourceType(myUpdatedResourceType).unsafeRunSync() shouldEqual myUpdatedResourceType
+              dao.createResourceType(myUpdatedResourceType).unsafeRunSync() shouldEqual myUpdatedResourceType //TODO: we don't have a listResourceTypes so how shall we verify this?
             }
           }
         }
