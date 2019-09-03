@@ -307,9 +307,28 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     val ra = ResourceActionTable.syntax("ra")
     val paCol = PolicyActionTable.column
     if (actions.nonEmpty) {
-      samsql"""insert into ${PolicyActionTable.table} (${paCol.resourcePolicyId}, ${paCol.resourceActionId})
+      val insertQuery = samsqls"""insert into ${PolicyActionTable.table} (${paCol.resourcePolicyId}, ${paCol.resourceActionId})
             select ${policyId}, ${ra.result.id} from ${ResourceActionTable as ra} where ${ra.action} in (${actions})"""
-        .update().apply()
+
+      val inserted = samsql"$insertQuery".update().apply()
+
+      if (inserted != actions.size) {
+        // in this case some actions that we want to insert did not exist in ResourceActionTable
+        // add them now and rerun the insert ignoring conflicts
+        // this case should happen rarely
+        import SamTypeBinders._
+        val r = ResourceTable.syntax("r")
+        val p = PolicyTable.syntax("p")
+        val resourceTypePK = samsql"select ${r.result.resourceTypeId} from ${PolicyTable as p} join ${ResourceTable as r} on ${p.resourceId} = ${r.id} where ${p.id} = ${policyId}"
+          .map(rs => rs.get[ResourceTypePK](r.resultName.resourceTypeId)).single().apply().getOrElse(throw new WorkbenchException(s"could not find resource type id for policy id $policyId"))
+        insertActions(actions, resourceTypePK)
+
+        val moreInserted = samsql"$insertQuery on conflict do nothing".update().apply()
+
+        inserted + moreInserted
+      } else {
+        inserted
+      }
     } else {
       0
     }
@@ -409,7 +428,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
       samsql"""delete from ${PolicyRoleTable as pr}
               using ${PolicyTable as p}
               where ${p.name} = ${id.accessPolicyName}
-              and ${p.resourceId} = (${ResourceTable.loadResourcePK(id.resource)}) returning ${p.id}""".updateAndReturnGeneratedKey().apply().toLong)
+              and ${p.resourceId} = (${ResourceTable.loadResourcePK(id.resource)}) returning ${p.id}""".updateAndReturnGeneratedKey().apply())
 
     insertPolicyRoles(roles, policyPK)
   }
@@ -422,7 +441,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
       samsql"""delete from ${PolicyActionTable as pa}
               using ${PolicyTable as p}
               where ${p.name} = ${id.accessPolicyName}
-              and ${p.resourceId} = (${ResourceTable.loadResourcePK(id.resource)}) returning ${p.id}""".updateAndReturnGeneratedKey().apply().toLong)
+              and ${p.resourceId} = (${ResourceTable.loadResourcePK(id.resource)}) returning ${p.id}""".updateAndReturnGeneratedKey().apply())
 
     insertPolicyActions(actions, policyPK)
   }

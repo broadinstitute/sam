@@ -324,6 +324,17 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
         dao.loadPolicy(policy.id).unsafeRunSync() shouldEqual Option(policy)
       }
 
+      "creates a policy with actions that don't already exist" in {
+        dao.createResourceType(resourceType).unsafeRunSync()
+        val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
+        dao.createResource(resource).unsafeRunSync()
+
+        val newAction = ResourceAction("new")
+        val policy = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("policyName")), Set.empty, WorkbenchEmail("policy@email.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction, newAction), false)
+        dao.createPolicy(policy).unsafeRunSync()
+        dao.loadPolicy(policy.id).unsafeRunSync() shouldEqual Option(policy)
+      }
+
       "creates a policy with users and groups as members and loads those members" in {
         dao.createResourceType(resourceType).unsafeRunSync()
         val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
