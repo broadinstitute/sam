@@ -22,7 +22,8 @@ import org.broadinstitute.dsde.workbench.google2.{GoogleFirestoreInterpreter, Go
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException, WorkbenchSubject}
 import org.broadinstitute.dsde.workbench.newrelic.NewRelicMetrics
 import org.broadinstitute.dsde.workbench.sam.api.{SamRoutes, StandardUserInfoDirectives}
-import org.broadinstitute.dsde.workbench.sam.config.{AppConfig, GoogleConfig}
+import org.broadinstitute.dsde.workbench.sam.config.DataStores.{OpenDJ, Postgres}
+import org.broadinstitute.dsde.workbench.sam.config.{AppConfig, DataStoreConfig, GoogleConfig}
 import org.broadinstitute.dsde.workbench.sam.db.DbReference
 import org.broadinstitute.dsde.workbench.sam.directory._
 import org.broadinstitute.dsde.workbench.sam.google._
@@ -40,6 +41,7 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
 import scala.util.control.NonFatal
+import scala.reflect.ClassTag
 
 object Boot extends IOApp with LazyLogging {
 
@@ -225,7 +227,7 @@ object Boot extends IOApp with LazyLogging {
                                  newRelicMetrics: NewRelicMetrics): DirectoryDAO = {
     val ldapDirectoryDAO = new LdapDirectoryDAO(ldapConnectionPool, appConfig.directoryConfig, ldapExecutionContext, memberOfCache)
     val postgresDirectoryDAO = new PostgresDirectoryDAO(dbReference, postgresExecutionContext)
-    DaoWithShadow(ldapDirectoryDAO, postgresDirectoryDAO, new NewRelicShadowResultReporter("directoryDAO", newRelicMetrics), timer.clock)
+    chooseRightDAO(appConfig.dataStoreConfig, ldapDirectoryDAO, postgresDirectoryDAO, "directoryDAO", newRelicMetrics)
   }
 
   private def createAccessPolicyDAO(appConfig: AppConfig,
@@ -236,9 +238,19 @@ object Boot extends IOApp with LazyLogging {
                                     memberOfCache: Cache[WorkbenchSubject, Set[String]],
                                     resourceCache: Cache[FullyQualifiedResourceId, Resource],
                                     newRelicMetrics: NewRelicMetrics): AccessPolicyDAO = {
-    val ldapAccessPolicyDao = new LdapAccessPolicyDAO(ldapConnectionPool, appConfig.directoryConfig, ldapExecutionContext, memberOfCache, resourceCache)
-    val foregroundPostgresAccessPolicyDAO = new PostgresAccessPolicyDAO(dbReference, postgresExecutionContext)
-    DaoWithShadow(ldapAccessPolicyDao, foregroundPostgresAccessPolicyDAO, new NewRelicShadowResultReporter("directoryDAO", newRelicMetrics), timer.clock)
+    val ldapAccessPolicyDAO = new LdapAccessPolicyDAO(ldapConnectionPool, appConfig.directoryConfig, ldapExecutionContext, memberOfCache, resourceCache)
+    val postgresAccessPolicyDAO = new PostgresAccessPolicyDAO(dbReference, postgresExecutionContext)
+    chooseRightDAO(appConfig.dataStoreConfig, ldapAccessPolicyDAO, postgresAccessPolicyDAO, "accessPolicyDAO", newRelicMetrics)
+  }
+
+  def chooseRightDAO[T : ClassTag](dataStoreConfig: DataStoreConfig, ldapDAO: T, postgresDAO: T, daoName: String, newRelicMetrics: NewRelicMetrics): T = {
+    dataStoreConfig match {
+      case DataStoreConfig(OpenDJ, None) => ldapDAO
+      case DataStoreConfig(Postgres, None) => postgresDAO
+      case DataStoreConfig(OpenDJ, Some(Postgres)) => DaoWithShadow(ldapDAO, postgresDAO, new NewRelicShadowResultReporter(daoName, newRelicMetrics), timer.clock)
+      case DataStoreConfig(Postgres, Some(OpenDJ)) => DaoWithShadow(postgresDAO, ldapDAO, new NewRelicShadowResultReporter(daoName, newRelicMetrics), timer.clock)
+      case _ => throw new WorkbenchException(s"unsupported DataStoreConfig $DataStoreConfig")
+    }
   }
 
   private[sam] def createGoogleCloudExt(

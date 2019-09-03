@@ -25,9 +25,16 @@ final case class AppConfig(
     swaggerConfig: SwaggerConfig,
     googleConfig: Option[GoogleConfig],
     resourceTypes: Set[ResourceType],
-    liquibaseConfig: LiquibaseConfig)
+    liquibaseConfig: LiquibaseConfig,
+    dataStoreConfig: DataStoreConfig)
 
 object AppConfig {
+  implicit val dataStoreConfigReader: ValueReader[DataStoreConfig] = ValueReader.relative { config =>
+    val live = DataStores(config.getString("live"))
+    val shadow = config.as[Option[String]]("shadow").map(DataStores.apply)
+    DataStoreConfig(live, shadow)
+  }
+
   implicit val swaggerReader: ValueReader[SwaggerConfig] = ValueReader.relative { config =>
     SwaggerConfig(
       config.getString("googleClientId"),
@@ -169,7 +176,8 @@ object AppConfig {
     val emailDomain = config.as[Option[String]]("emailDomain").getOrElse(config.getString("googleServices.appsDomain"))
     val resourceTypes = config.as[Map[String, ResourceType]]("resourceTypes").values.toSet
     val liquibaseConfig = config.as[LiquibaseConfig]("liquibase")
+    val dataStoreConfig = config.as[DataStoreConfig]("dataStore")
 
-    AppConfig(emailDomain, directoryConfig, schemaLockConfig, distributedLockConfig, swaggerConfig, googleConfigOption, resourceTypes, liquibaseConfig)
+    AppConfig(emailDomain, directoryConfig, schemaLockConfig, distributedLockConfig, swaggerConfig, googleConfigOption, resourceTypes, liquibaseConfig, dataStoreConfig)
   }
 }
