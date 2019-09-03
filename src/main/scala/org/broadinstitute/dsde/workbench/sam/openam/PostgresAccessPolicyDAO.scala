@@ -319,7 +319,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
         import SamTypeBinders._
         val r = ResourceTable.syntax("r")
         val p = PolicyTable.syntax("p")
-        val resourceTypePK = samsql"select ${r.result.resourceTypeId} from ${PolicyTable as p} join ${ResourceTable as r} on ${p.resourceId} = ${r.id}"
+        val resourceTypePK = samsql"select ${r.result.resourceTypeId} from ${PolicyTable as p} join ${ResourceTable as r} on ${p.resourceId} = ${r.id} where ${p.id} = ${policyId}"
           .map(rs => rs.get[ResourceTypePK](r.resultName.resourceTypeId)).single().apply().getOrElse(throw new WorkbenchException(s"could not find resource type id for policy id $policyId"))
         insertActions(actions, resourceTypePK)
 
