@@ -12,9 +12,13 @@ import org.broadinstitute.dsde.workbench.sam.model.{FullyQualifiedPolicyId, _}
 import org.broadinstitute.dsde.workbench.sam.util.DatabaseSupport
 import scalikejdbc._
 import SamParameterBinderFactory._
+import akka.http.scaladsl.model.StatusCodes
 import org.broadinstitute.dsde.workbench.sam.db.dao.{PostgresGroupDAO, SubGroupMemberTable}
+import org.postgresql.util.PSQLException
+import org.broadinstitute.dsde.workbench.sam._
 
 import scala.concurrent.ExecutionContext
+import scala.util.{Failure, Try}
 
 class PostgresDirectoryDAO(protected val dbRef: DbReference,
                            protected val ecForDatabaseIO: ExecutionContext)(implicit executionContext: ExecutionContext) extends DirectoryDAO with DatabaseSupport with PostgresGroupDAO {
@@ -39,7 +43,12 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     val insertGroupQuery = samsql"""insert into ${GroupTable.table} (${groupTableColumn.name}, ${groupTableColumn.email}, ${groupTableColumn.updatedDate}, ${groupTableColumn.synchronizedDate})
            values (${group.id}, ${group.email}, ${Option(Instant.now())}, ${None})"""
 
-    GroupPK(insertGroupQuery.updateAndReturnGeneratedKey().apply())
+    Try {
+      GroupPK(insertGroupQuery.updateAndReturnGeneratedKey().apply())
+    }.recoverWith {
+      case duplicateException: PSQLException if duplicateException.getSQLState == PSQLStateExtensions.UNIQUE_VIOLATION =>
+        Failure(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"group name ${group.id.value} already exists")))
+    }.get
   }
 
   private def insertAccessInstructions(groupId: GroupPK, accessInstructions: String)(implicit session: DBSession): Int = {
