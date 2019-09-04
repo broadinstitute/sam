@@ -23,9 +23,9 @@ import org.broadinstitute.dsde.workbench.model.google.GoogleProject
 import org.broadinstitute.dsde.workbench.model.{WorkbenchExceptionWithErrorReport, _}
 import org.broadinstitute.dsde.workbench.sam.TestSupport.blockingEc
 import org.broadinstitute.dsde.workbench.sam.api.CreateWorkbenchUser
-import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryDAO, LdapDirectoryDAO, MockDirectoryDAO}
+import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryDAO, LdapDirectoryDAO, MockDirectoryDAO, PostgresDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, LdapAccessPolicyDAO, LoadResourceAuthDomainResult, MockAccessPolicyDAO}
+import org.broadinstitute.dsde.workbench.sam.openam._
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.{TestSupport, model, _}
@@ -329,14 +329,9 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
   }
 
   private def initPetTest: (DirectoryDAO, MockGoogleIamDAO, MockGoogleDirectoryDAO, GoogleExtensions, UserService, WorkbenchUserId, WorkbenchEmail, WorkbenchEmail, CreateWorkbenchUser) = {
-    val dirURI = new URI(directoryConfig.directoryUrl)
-    val connectionPool = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
-    val dirDAO = new LdapDirectoryDAO(connectionPool, directoryConfig, TestSupport.blockingEc, TestSupport.testMemberOfCache)
-    val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
+    val dirDAO = newDirectoryDAO()
 
-    runAndWait(schemaDao.clearDatabase())
-    runAndWait(schemaDao.init())
-    runAndWait(schemaDao.createOrgUnits())
+    clearDatabase()
 
     val mockGoogleIamDAO = new MockGoogleIamDAO
     val mockGoogleDirectoryDAO = new MockGoogleDirectoryDAO
@@ -352,6 +347,9 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val defaultUser = CreateWorkbenchUser(defaultUserId, GoogleSubjectId(defaultUserId.value), defaultUserEmail)
     (dirDAO, mockGoogleIamDAO, mockGoogleDirectoryDAO, googleExtensions, service, defaultUserId, defaultUserEmail, defaultUserProxyEmail, defaultUser)
   }
+
+  protected def newDirectoryDAO(): DirectoryDAO = new LdapDirectoryDAO(connectionPool, directoryConfig, TestSupport.blockingEc, TestSupport.testMemberOfCache)
+  protected def newAccessPolicyDAO(): AccessPolicyDAO = new LdapAccessPolicyDAO(connectionPool, directoryConfig, blockingEc, TestSupport.testMemberOfCache, TestSupport.testResourceCache)
 
   it should "attach existing service account to pet" in {
     val (dirDAO: DirectoryDAO, mockGoogleIamDAO: MockGoogleIamDAO, mockGoogleDirectoryDAO: MockGoogleDirectoryDAO, googleExtensions: GoogleExtensions, service: UserService, defaultUserId: WorkbenchUserId, defaultUserEmail: WorkbenchEmail, defaultUserProxyEmail: WorkbenchEmail, createDefaultUser: CreateWorkbenchUser) = initPetTest
@@ -408,7 +406,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
   }
 
   it should "throw an exception with a NotFound error report when getting sync date for group that does not exist" in {
-    val dirDAO = new LdapDirectoryDAO(connectionPool, directoryConfig, TestSupport.blockingEc, TestSupport.testMemberOfCache)
+    val dirDAO = newDirectoryDAO()
     val ge = new GoogleExtensions(TestSupport.fakeDistributedLock, dirDAO, null, null, null, null, null, null, null, null, null, googleServicesConfig, null, configResourceTypes)
     val groupName = WorkbenchGroupName("missing-group")
     val caught: WorkbenchExceptionWithErrorReport = intercept[WorkbenchExceptionWithErrorReport] {
@@ -419,7 +417,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
   }
 
   it should "return None when getting sync date for a group that has not been synced" in {
-    val dirDAO = new LdapDirectoryDAO(connectionPool, directoryConfig, TestSupport.blockingEc, TestSupport.testMemberOfCache)
+    val dirDAO = newDirectoryDAO()
     val ge = new GoogleExtensions(TestSupport.fakeDistributedLock, dirDAO, null, null, null, null, null, null, null, null, null, googleServicesConfig, null, configResourceTypes)
     val groupName = WorkbenchGroupName("group-sync")
     dirDAO.createGroup(BasicWorkbenchGroup(groupName, Set(), WorkbenchEmail(""))).unsafeRunSync()
@@ -431,7 +429,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
   }
 
   it should "return sync date for a group that has been synced" in {
-    val dirDAO = new LdapDirectoryDAO(connectionPool, directoryConfig, TestSupport.blockingEc, TestSupport.testMemberOfCache)
+    val dirDAO = newDirectoryDAO()
     val mockGoogleDirectoryDAO = new MockGoogleDirectoryDAO()
     val ge = new GoogleExtensions(TestSupport.fakeDistributedLock, dirDAO, null, new MockGoogleDirectoryDAO(), null, null, null, null, null, null, null, googleServicesConfig, null, configResourceTypes)
     val synchronizer = new GoogleGroupSynchronizer(dirDAO, null, mockGoogleDirectoryDAO, ge, configResourceTypes)
@@ -447,7 +445,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
   }
 
   it should "throw an exception with a NotFound error report when getting email for group that does not exist" in {
-    val dirDAO = new LdapDirectoryDAO(connectionPool, directoryConfig, TestSupport.blockingEc, TestSupport.testMemberOfCache)
+    val dirDAO = newDirectoryDAO()
     val ge = new GoogleExtensions(TestSupport.fakeDistributedLock, dirDAO, null, null, null, null, null, null, null, null, null, googleServicesConfig, null, configResourceTypes)
     val groupName = WorkbenchGroupName("missing-group")
     val caught: WorkbenchExceptionWithErrorReport = intercept[WorkbenchExceptionWithErrorReport] {
@@ -458,7 +456,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
   }
 
   it should "return email for a group" in {
-    val dirDAO = new LdapDirectoryDAO(connectionPool, directoryConfig, TestSupport.blockingEc, TestSupport.testMemberOfCache)
+    val dirDAO = newDirectoryDAO()
     val ge = new GoogleExtensions(TestSupport.fakeDistributedLock, dirDAO, null, null, null, null, null, null, null, null, null, googleServicesConfig, null, configResourceTypes)
     val groupName = WorkbenchGroupName("group-sync")
     val email = WorkbenchEmail("foo@bar.com")
@@ -471,7 +469,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
   }
 
   it should "return None if an email is found, but the group has not been synced" in {
-    val dirDAO = new LdapDirectoryDAO(connectionPool, directoryConfig, TestSupport.blockingEc, TestSupport.testMemberOfCache)
+    val dirDAO = newDirectoryDAO()
     val ge = new GoogleExtensions(TestSupport.fakeDistributedLock, dirDAO, null, null, null, null, null, null, null, null, null, googleServicesConfig, null, configResourceTypes)
     val groupName = WorkbenchGroupName("group-sync")
     val email = WorkbenchEmail("foo@bar.com")
@@ -484,7 +482,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
   }
 
   it should "return SyncState with email and last sync date if there is an email and the group has been synced" in {
-    val dirDAO = new LdapDirectoryDAO(connectionPool, directoryConfig, TestSupport.blockingEc, TestSupport.testMemberOfCache)
+    val dirDAO = newDirectoryDAO()
     val mockGoogleDirectoryDAO = new MockGoogleDirectoryDAO()
     val ge = new GoogleExtensions(TestSupport.fakeDistributedLock, dirDAO, null, mockGoogleDirectoryDAO, null, null, null, null, null, null, null, googleServicesConfig, null, configResourceTypes)
     val synchronizer = new GoogleGroupSynchronizer(dirDAO, null, mockGoogleDirectoryDAO, ge, configResourceTypes)
@@ -701,12 +699,9 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
 
   private def setupGoogleKeyCacheTests: (GoogleExtensions, UserService) = {
     implicit val patienceConfig = PatienceConfig(1 second)
-    val dirDAO = new LdapDirectoryDAO(connectionPool, directoryConfig, TestSupport.blockingEc, TestSupport.testMemberOfCache)
-    val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
+    val dirDAO = newDirectoryDAO()
 
-    runAndWait(schemaDao.clearDatabase())
-    runAndWait(schemaDao.init())
-    runAndWait(schemaDao.createOrgUnits())
+    clearDatabase()
 
     val mockGoogleIamDAO = new MockGoogleIamDAO
     val mockGoogleDirectoryDAO = new MockGoogleDirectoryDAO
@@ -836,13 +831,10 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val managedGroupResourceType = realResourceTypeMap.getOrElse(ResourceTypeName("managed-group"), throw new Error("Failed to load managed-group resource type from reference.conf"))
 
     val connectionPool = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
-    val dirDAO = new LdapDirectoryDAO(connectionPool, directoryConfig, TestSupport.blockingEc, TestSupport.testMemberOfCache)
-    val policyDAO = new LdapAccessPolicyDAO(connectionPool, directoryConfig, blockingEc, TestSupport.testMemberOfCache, TestSupport.testResourceCache)
-    val schemaDAO = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
+    val dirDAO = newDirectoryDAO()
+    val policyDAO = newAccessPolicyDAO()
 
-    runAndWait(schemaDAO.clearDatabase())
-    runAndWait(schemaDAO.init())
-    runAndWait(schemaDAO.createOrgUnits())
+    clearDatabase()
 
     val constrainableActionPatterns = Set(ResourceActionPattern("constrainable_view", "Can be constrained by an auth domain", true))
 
@@ -1087,14 +1079,9 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
   }
 
   "createUserPetServiceAccount" should "return a failed IO when the project is not in the Terra Google Org" in {
-    val dirURI = new URI(directoryConfig.directoryUrl)
-    val connectionPool = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
-    val dirDAO = new LdapDirectoryDAO(connectionPool, directoryConfig, TestSupport.blockingEc, TestSupport.testMemberOfCache)
-    val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
+    val dirDAO = newDirectoryDAO()
 
-    runAndWait(schemaDao.clearDatabase())
-    runAndWait(schemaDao.init())
-    runAndWait(schemaDao.createOrgUnits())
+    clearDatabase()
 
     val mockGoogleIamDAO = new MockGoogleIamDAO
     val mockGoogleDirectoryDAO = new MockGoogleDirectoryDAO
@@ -1115,14 +1102,9 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
   }
 
   it should "return a failed IO when google returns a 403" in {
-    val dirURI = new URI(directoryConfig.directoryUrl)
-    val connectionPool = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
-    val dirDAO = new LdapDirectoryDAO(connectionPool, directoryConfig, TestSupport.blockingEc, TestSupport.testMemberOfCache)
-    val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
+    val dirDAO = newDirectoryDAO()
 
-    runAndWait(schemaDao.clearDatabase())
-    runAndWait(schemaDao.init())
-    runAndWait(schemaDao.createOrgUnits())
+    clearDatabase()
 
     val mockGoogleIamDAO = new MockGoogleIamDAO
     val mockGoogleDirectoryDAO = new MockGoogleDirectoryDAO
@@ -1144,4 +1126,18 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
 
     report.errorReport.statusCode shouldEqual Some(StatusCodes.BadRequest)
   }
+
+  protected def clearDatabase(): Unit = {
+    val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
+    runAndWait(schemaDao.clearDatabase())
+    runAndWait(schemaDao.init())
+    runAndWait(schemaDao.createOrgUnits())
+  }
+}
+
+class GoogleExtensionWithPostgresSpec(_system: ActorSystem) extends GoogleExtensionSpec(_system) {
+  def this() = this(ActorSystem("GoogleExtensionWithPostgresSpec"))
+  override protected def newDirectoryDAO(): DirectoryDAO = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.blockingEc)
+  override protected def newAccessPolicyDAO(): AccessPolicyDAO = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.blockingEc)
+  override protected def clearDatabase(): Unit = TestSupport.truncateAll
 }
