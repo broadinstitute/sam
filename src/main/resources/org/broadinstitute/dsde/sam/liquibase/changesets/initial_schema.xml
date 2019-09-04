@@ -158,7 +158,7 @@
                 <constraints nullable="false" foreignKeyName="FK_SROLEA_ROLE" referencedTableName="SAM_RESOURCE_ROLE" referencedColumnNames="id" primaryKey="true"/>
             </column>
             <column name="resource_action_id" type="BIGINT">
-                <constraints nullable="false" foreignKeyName="FK_SROLEA_ACTION" referencedTableName="SAM_RESOURCE_ACTION" referencedColumnNames="id" primaryKey="true"/>
+                <constraints nullable="false" foreignKeyName="FK_SROLEA_ACTION" referencedTableName="SAM_RESOURCE_ACTION" referencedColumnNames="id" primaryKey="true" deleteCascade="true"/>
             </column>
         </createTable>
     </changeSet>
@@ -225,7 +225,7 @@
                 <constraints nullable="false" foreignKeyName="FK_SPA_POLICY" referencedTableName="SAM_RESOURCE_POLICY" referencedColumnNames="id" primaryKey="true" deleteCascade="true"/>
             </column>
             <column name="resource_action_id" type="BIGINT">
-                <constraints nullable="false" foreignKeyName="FK_SPA_ACTION" referencedTableName="SAM_RESOURCE_ACTION" referencedColumnNames="id" primaryKey="true"/>
+                <constraints nullable="false" foreignKeyName="FK_SPA_ACTION" referencedTableName="SAM_RESOURCE_ACTION" referencedColumnNames="id" primaryKey="true" deleteCascade="true"/>
             </column>
         </createTable>
     </changeSet>
