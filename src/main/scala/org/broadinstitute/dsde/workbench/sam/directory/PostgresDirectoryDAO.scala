@@ -250,7 +250,8 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     runInTransaction { implicit session =>
       val g = GroupTable.column
       samsql"select ${g.synchronizedDate} from ${GroupTable.table} where ${g.id} = (${workbenchGroupIdentityToGroupPK(groupId)})"
-        .map(rs => rs.timestamp(g.synchronizedDate).toJavaUtilDate).single().apply()
+        .map(rs => rs.timestampOpt(g.synchronizedDate).map(_.toJavaUtilDate)).single().apply()
+        .getOrElse(throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"$groupId not found")))
     }
   }
 
@@ -260,7 +261,8 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
       val g = GroupTable.column
 
       samsql"select ${g.email} from ${GroupTable.table} where ${g.id} = (${workbenchGroupIdentityToGroupPK(groupId)})"
-        .map(rs => rs.get[WorkbenchEmail](g.email)).single().apply()
+        .map(rs => rs.get[Option[WorkbenchEmail]](g.email)).single().apply()
+        .getOrElse(throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"$groupId not found")))
     }
   }
 
