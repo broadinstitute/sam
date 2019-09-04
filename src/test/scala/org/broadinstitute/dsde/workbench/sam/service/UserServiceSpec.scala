@@ -12,7 +12,7 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.Generator.{arbNonPetEmail => _, _}
 import org.broadinstitute.dsde.workbench.sam.TestSupport.eqWorkbenchExceptionErrorReport
 import org.broadinstitute.dsde.workbench.sam.api.{CreateWorkbenchUser, InviteUser}
-import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryDAO, LdapDirectoryDAO}
+import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryDAO, LdapDirectoryDAO, PostgresDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
@@ -48,7 +48,7 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
   lazy val petServiceAccountConfig = TestSupport.appConfig.googleConfig.get.petServiceAccountConfig
   lazy val dirURI = new URI(directoryConfig.directoryUrl)
   lazy val connectionPool = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
-  lazy val dirDAO = new LdapDirectoryDAO(connectionPool, directoryConfig, TestSupport.blockingEc, TestSupport.testMemberOfCache)
+  lazy val dirDAO: DirectoryDAO = new LdapDirectoryDAO(connectionPool, directoryConfig, TestSupport.blockingEc, TestSupport.testMemberOfCache)
   lazy val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
   var service: UserService = _
@@ -60,8 +60,7 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
   }
 
   before {
-    runAndWait(schemaDao.clearDatabase())
-    runAndWait(schemaDao.createOrgUnits())
+    clearDatabase()
 
     googleExtensions = mock[GoogleExtensions]
     when(googleExtensions.allUsersGroupName).thenReturn(NoExtensions.allUsersGroupName)
@@ -74,6 +73,11 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
     when(googleExtensions.onGroupUpdate(any[Seq[WorkbenchGroupIdentity]])).thenReturn(Future.successful(()))
 
     service = new UserService(dirDAO, googleExtensions)
+  }
+
+  protected def clearDatabase(): Unit = {
+    runAndWait(schemaDao.clearDatabase())
+    runAndWait(schemaDao.createOrgUnits())
   }
 
   "UserService" should "create a user" in {
@@ -348,4 +352,9 @@ object GenEmail {
   val genEmailServerChar = Gen.frequency((9, Gen.alphaNumChar), (1, Gen.const('-')))
   val genEmailServerPart = Gen.nonEmptyListOf(genEmailServerChar).map(_.mkString)
   val genEmailLastPart = Gen.listOfN(2, Gen.alphaChar).map(_.mkString)
+}
+
+class UserServiceWithPostgresSpec extends UserServiceSpec {
+  override lazy val dirDAO: DirectoryDAO = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.blockingEc)
+  override protected def clearDatabase(): Unit = TestSupport.truncateAll
 }

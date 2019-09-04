@@ -11,9 +11,9 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.Generator.{genPolicy, genResourceTypeNameExcludeManagedGroup, genUserInfo, _}
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.TestSupport.{blockingEc, _}
-import org.broadinstitute.dsde.workbench.sam.directory.LdapDirectoryDAO
+import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryDAO, LdapDirectoryDAO, PostgresDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.openam.LdapAccessPolicyDAO
+import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, LdapAccessPolicyDAO, PostgresAccessPolicyDAO}
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.scalatest._
 
@@ -22,8 +22,8 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
   val connectionPool = new LDAPConnectionPool(
     new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password),
     directoryConfig.connectionPoolSize)
-  val dirDAO = new LdapDirectoryDAO(connectionPool, directoryConfig, blockingEc, TestSupport.testMemberOfCache)
-  val policyDAO = new LdapAccessPolicyDAO(connectionPool, directoryConfig, blockingEc, TestSupport.testMemberOfCache, TestSupport.testResourceCache)
+  lazy val dirDAO: DirectoryDAO = new LdapDirectoryDAO(connectionPool, directoryConfig, blockingEc, TestSupport.testMemberOfCache)
+  lazy val policyDAO: AccessPolicyDAO = new LdapAccessPolicyDAO(connectionPool, directoryConfig, blockingEc, TestSupport.testMemberOfCache, TestSupport.testResourceCache)
   val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
   private val dummyUserInfo =
@@ -127,13 +127,19 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
 
   def setup(): IO[Unit] = {
     for{
-      _ <- IO.fromFuture(IO(schemaDao.init()))
-      _ <- IO.fromFuture(IO(schemaDao.clearDatabase()))
-      _ <- IO.fromFuture(IO(schemaDao.createOrgUnits()))
+      _ <- clearDatabase()
       _ <- dirDAO.createUser(WorkbenchUser(dummyUserInfo.userId, Some(TestSupport.genGoogleSubjectId()), dummyUserInfo.userEmail))
     } yield ()
   }
 
+
+  protected def clearDatabase(): IO[Unit] = {
+    for {
+      _ <- IO.fromFuture(IO(schemaDao.init()))
+      _ <- IO.fromFuture(IO(schemaDao.clearDatabase()))
+      _ <- IO.fromFuture(IO(schemaDao.createOrgUnits()))
+    } yield ()
+  }
 
   "hasPermission" should "return false if given action is not allowed for a user" in {
     val user = genUserInfo.sample.get
@@ -427,4 +433,10 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
 
     res.unsafeToFuture()
   }
+}
+
+class PolicyEvaluatorServiceWithPostgresSpec extends PolicyEvaluatorServiceSpec {
+  override lazy val dirDAO: DirectoryDAO = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.blockingEc)
+  override lazy val policyDAO: AccessPolicyDAO = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.blockingEc)
+  override protected def clearDatabase(): IO[Unit] = IO(TestSupport.truncateAll).void
 }
