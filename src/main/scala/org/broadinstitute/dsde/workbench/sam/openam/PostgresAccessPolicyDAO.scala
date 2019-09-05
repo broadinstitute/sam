@@ -35,16 +35,16 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
       samsql"lock table ${ResourceTypeTable.table} IN EXCLUSIVE MODE".execute().apply()
       val resourceTypePK = insertResourceType(resourceType.name)
 
-      insertActionPatterns(resourceType.actionPatterns, resourceTypePK)
-      insertRoles(resourceType.roles, resourceTypePK)
-      overwriteActions(uniqueActions, resourceTypePK)
-      insertRoleActions(resourceType.roles, resourceTypePK)
+      overwriteActionPatterns(resourceType.actionPatterns, resourceTypePK)
+      overwriteRoles(resourceType.roles, resourceTypePK)
+      insertActions(uniqueActions, resourceTypePK)
+      overwriteRoleActions(resourceType.roles, resourceTypePK)
 
       resourceType
     }
   }
 
-  private def insertRoleActions(roles: Set[ResourceRole], resourceTypePK: ResourceTypePK)(implicit session: DBSession): Int = {
+  private def overwriteRoleActions(roles: Set[ResourceRole], resourceTypePK: ResourceTypePK)(implicit session: DBSession): Int = {
     // Load Actions and Roles from DB because we need their DB IDs
     val resourceTypeActions = selectActionsForResourceType(resourceTypePK)
     val resourceTypeRoles = selectRolesForResourceType(resourceTypePK)
@@ -95,7 +95,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     actionsQuery.map(ResourceRoleTable(rrt.resultName)).list().apply()
   }
 
-  private def insertRoles(roles: Set[ResourceRole], resourceTypePK: ResourceTypePK)(implicit session: DBSession): Int = {
+  private def overwriteRoles(roles: Set[ResourceRole], resourceTypePK: ResourceTypePK)(implicit session: DBSession): Int = {
     val roleValues = roles.map(role => samsqls"(${resourceTypePK}, ${role.roleName})")
 
     val resourceRoleColumn = ResourceRoleTable.column
@@ -113,33 +113,21 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     insertRolesQuery.update().apply()
   }
 
-  private def overwriteActions(actions: Set[ResourceAction], resourceTypePK: ResourceTypePK)(implicit session: DBSession): Int = {
-    val ra = ResourceActionTable.syntax("ra")
-    if (actions.isEmpty) {
-      samsql"""delete from ${ResourceActionTable as ra}
-              where ${ra.resourceTypeId} = ${resourceTypePK}"""
-        .update().apply()
-    } else {
-      samsql"""delete from ${ResourceActionTable as ra}
-              where ${ra.resourceTypeId} = ${resourceTypePK}
-              and ${ra.action} not in (${actions})"""
-        .update().apply()
-
-      insertActions(actions, resourceTypePK)
-    }
-  }
-
   private def insertActions(actions: Set[ResourceAction], resourceTypePK: ResourceTypePK)(implicit session: DBSession): Int = {
-    val uniqueActionValues = actions.map { action =>
-      samsqls"(${resourceTypePK}, ${action})"
-    }
+    if (actions.isEmpty) {
+      return 0
+    } else {
+      val uniqueActionValues = actions.map { action =>
+        samsqls"(${resourceTypePK}, ${action})"
+      }
 
-    val insertActionQuery =
-      samsql"""insert into ${ResourceActionTable.table}(${ResourceActionTable.column.resourceTypeId}, ${ResourceActionTable.column.action})
+      val insertActionQuery =
+        samsql"""insert into ${ResourceActionTable.table}(${ResourceActionTable.column.resourceTypeId}, ${ResourceActionTable.column.action})
                     values ${uniqueActionValues}
                  on conflict do nothing"""
 
-    insertActionQuery.update().apply()
+      insertActionQuery.update().apply()
+    }
   }
 
   /**
@@ -147,7 +135,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     * rerwrite the `description` and `isAuthDomainConstrainable` columns if the ResourceTypeActionPattern already
     * exists.
     */
-  private def insertActionPatterns(actionPatterns: Set[ResourceActionPattern], resourceTypePK: ResourceTypePK)(implicit session: DBSession) = {
+  private def overwriteActionPatterns(actionPatterns: Set[ResourceActionPattern], resourceTypePK: ResourceTypePK)(implicit session: DBSession) = {
     val resourceActionPatternTableColumn = ResourceActionPatternTable.column
     val actionPatternValues = actionPatterns map { actionPattern =>
       samsqls"(${resourceTypePK}, ${actionPattern.value}, ${actionPattern.description}, ${actionPattern.authDomainConstrainable})"
@@ -376,15 +364,20 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     val p = PolicyTable.syntax("p")
     val prCol = PolicyRoleTable.column
     if (roles.nonEmpty) {
-      samsql"""insert into ${PolicyRoleTable.table} (${prCol.resourcePolicyId}, ${prCol.resourceRoleId})
+      val insertedRolesCount = samsql"""insert into ${PolicyRoleTable.table} (${prCol.resourcePolicyId}, ${prCol.resourceRoleId})
             select ${policyId}, ${rr.result.id}
             from ${ResourceRoleTable as rr}
             join ${ResourceTypeTable as rt} on ${rr.resourceTypeId} = ${rt.id}
             join ${ResourceTable as r} on ${r.resourceTypeId} = ${rt.id}
             join ${PolicyTable as p} on ${p.resourceId} = ${r.id}
             where ${rr.role} in (${roles})
+            and ${rr.deprecated} = false
             and ${p.id} = ${policyId}"""
         .update().apply()
+      if (insertedRolesCount != roles.size) {
+        throw new WorkbenchException("Some roles have been deprecated or were not found.")
+      }
+      insertedRolesCount
     } else {
       0
     }

@@ -31,10 +31,10 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
     val writeAction = ResourceAction("write")
     val readAction = ResourceAction("read")
 
-    val ownerRoleName = ResourceRoleName("role1")
+    val ownerRoleName = ResourceRoleName("owner")
 
     val ownerRole = ResourceRole(ownerRoleName, Set(writeAction, readAction))
-    val readerRole = ResourceRole(ResourceRoleName("role2"), Set(readAction))
+    val readerRole = ResourceRole(ResourceRoleName("reader"), Set(readAction))
     val actionlessRole = ResourceRole(ResourceRoleName("cantDoNuthin"), Set()) // yeah, it's a double negative, sue me!
 
     val roles = Set(ownerRole, readerRole, actionlessRole)
@@ -115,16 +115,102 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
 
               dao.createResourceType(myUpdatedResourceType).unsafeRunSync() shouldEqual myUpdatedResourceType
             }
+
+            "is removing at least one" - {
+              "ActionPattern" in {
+                val removeActionPattern = resourceType.copy(actionPatterns = actionPatterns.tail)
+                dao.createResourceType(resourceType).unsafeRunSync()
+                dao.createResourceType(removeActionPattern).unsafeRunSync() shouldEqual removeActionPattern
+              }
+
+              "Role" in {
+                val removeRole = resourceType.copy(roles = roles.tail)
+                dao.createResourceType(resourceType).unsafeRunSync()
+                dao.createResourceType(removeRole).unsafeRunSync() shouldEqual removeRole
+              }
+
+              "of its role's Actions" in {
+                val readerlessReader = readerRole.copy(actions = Set.empty)
+                val newRoles = Set(ownerRole, readerlessReader, actionlessRole)
+                val removeAction = resourceType.copy(roles = newRoles)
+                dao.createResourceType(resourceType).unsafeRunSync()
+                dao.createResourceType(removeAction).unsafeRunSync() shouldEqual removeAction
+              }
+            }
           }
         }
 
-        "fails" - {
-          "when the new ResourceType" - {
-            "is removing at least one" - {
-              "ActionPattern" in pending
-              "Role" in pending
-              "Role Action" in pending
+        "and removing a role" - {
+          "doesn't affect existing policies with the role, but prevents using the role in new policies" in {
+            val initialRoles = Set(ownerRole, readerRole, actionlessRole)
+            val initialResourceType = resourceType.copy(roles = initialRoles)
+
+            val newRoles = Set(ownerRole, actionlessRole)
+            val overwriteResourceType = initialResourceType.copy(roles = newRoles)
+
+            val resource = Resource(initialResourceType.name, ResourceId("resource"), Set.empty)
+            val beforeOverwritePolicy = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("willHaveDeprecatedRole")), Set.empty, WorkbenchEmail("allowed@policy.com"), Set(readerRole.roleName, actionlessRole.roleName), Set.empty, false)
+            val afterOverwritePolicy = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("cannotHaveDeprecatedRole")), Set.empty, WorkbenchEmail("not_allowed@policy.com"), Set(readerRole.roleName, actionlessRole.roleName), Set.empty, false)
+
+            dao.createResourceType(initialResourceType).unsafeRunSync()
+            dao.createResource(resource).unsafeRunSync()
+            dao.createPolicy(beforeOverwritePolicy).unsafeRunSync()
+
+            dao.createResourceType(overwriteResourceType).unsafeRunSync()
+            assertThrows[WorkbenchException] {
+              dao.createPolicy(afterOverwritePolicy).unsafeRunSync()
             }
+
+            dao.loadPolicy(beforeOverwritePolicy.id).unsafeRunSync() shouldBe Option(beforeOverwritePolicy)
+            dao.loadPolicy(afterOverwritePolicy.id).unsafeRunSync() shouldBe None
+          }
+        }
+
+        "and removing an action" - {
+          "from all roles will not affect policies that use the action" in {
+            val initialRoles = Set(ownerRole, readerRole, actionlessRole)
+            val initialResourceType = resourceType.copy(roles = initialRoles)
+
+            val readingOwner = ownerRole.copy(actions = Set(readAction))
+            val newRoles = Set(readingOwner, readerRole, actionlessRole)
+            val overwriteResourceType = initialResourceType.copy(roles = newRoles)
+
+            val resource = Resource(initialResourceType.name, ResourceId("resource"), Set.empty)
+            val beforeOverwritePolicy = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("willHaveDeprecatedRole")), Set.empty, WorkbenchEmail("allowed@policy.com"), Set(ownerRole.roleName, actionlessRole.roleName), Set.empty, false)
+            val afterOverwritePolicy = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("cannotHaveDeprecatedRole")), Set.empty, WorkbenchEmail("not_allowed@policy.com"), Set(readingOwner.roleName, actionlessRole.roleName), Set(writeAction), false)
+
+            dao.createResourceType(initialResourceType).unsafeRunSync()
+            dao.createResource(resource).unsafeRunSync()
+            dao.createPolicy(beforeOverwritePolicy).unsafeRunSync()
+
+            dao.createResourceType(overwriteResourceType).unsafeRunSync()
+            dao.createPolicy(afterOverwritePolicy).unsafeRunSync()
+
+            dao.loadPolicy(beforeOverwritePolicy.id).unsafeRunSync() shouldBe Option(beforeOverwritePolicy)
+            dao.loadPolicy(afterOverwritePolicy.id).unsafeRunSync() shouldBe Option(afterOverwritePolicy)
+          }
+
+          "from a resource type's role will remove that action from all policies with that role" in {
+            val initialRoles = Set(ownerRole, readerRole, actionlessRole)
+            val initialResourceType = resourceType.copy(roles = initialRoles)
+
+            val readerlessReader = readerRole.copy(actions = Set.empty)
+            val newRoles = Set(ownerRole, readerlessReader, actionlessRole)
+            val overwriteResourceType = initialResourceType.copy(roles = newRoles)
+
+            val resource = Resource(initialResourceType.name, ResourceId("resource"), Set.empty)
+            val beforeOverwritePolicy = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("willHaveDeprecatedRole")), Set.empty, WorkbenchEmail("allowed@policy.com"), Set(readerRole.roleName, actionlessRole.roleName), Set.empty, false)
+            val afterOverwritePolicy = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("cannotHaveDeprecatedRole")), Set.empty, WorkbenchEmail("not_allowed@policy.com"), Set(readerlessReader.roleName, actionlessRole.roleName), Set.empty, false)
+
+            dao.createResourceType(initialResourceType).unsafeRunSync()
+            dao.createResource(resource).unsafeRunSync()
+            dao.createPolicy(beforeOverwritePolicy).unsafeRunSync()
+
+            dao.createResourceType(overwriteResourceType).unsafeRunSync()
+            dao.createPolicy(afterOverwritePolicy).unsafeRunSync()
+
+            dao.loadPolicy(beforeOverwritePolicy.id).unsafeRunSync() shouldBe Option(beforeOverwritePolicy)
+            dao.loadPolicy(afterOverwritePolicy.id).unsafeRunSync() shouldBe Option(afterOverwritePolicy)
           }
         }
       }
