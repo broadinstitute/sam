@@ -104,35 +104,39 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
   }
 
   override def loadGroups(groupNames: Set[WorkbenchGroupName]): IO[Stream[BasicWorkbenchGroup]] = {
-    for {
-      results <- runInTransaction { implicit session =>
-        val g = GroupTable.syntax("g")
-        val sg = GroupTable.syntax("sg")
-        val gm = GroupMemberTable.syntax("gm")
+    if (groupNames.isEmpty) {
+      IO.pure(Stream.empty)
+    } else {
+      for {
+        results <- runInTransaction { implicit session =>
+          val g = GroupTable.syntax("g")
+          val sg = GroupTable.syntax("sg")
+          val gm = GroupMemberTable.syntax("gm")
 
-        import SamTypeBinders._
-        samsql"""select ${g.result.name}, ${g.result.email}, ${gm.result.memberUserId}, ${sg.result.name}
-                  from ${GroupTable as g}
-                  left join ${GroupMemberTable as gm} on ${g.id} = ${gm.groupId}
-                  left join ${GroupTable as sg} on ${gm.memberGroupId} = ${sg.id}
-                  where ${g.name} in (${groupNames})"""
-          .map { rs =>
-            (rs.get[WorkbenchGroupName](g.resultName.name),
-              rs.get[WorkbenchEmail](g.resultName.email),
-              rs.stringOpt(gm.resultName.memberUserId).map(WorkbenchUserId),
-              rs.stringOpt(sg.resultName.name).map(WorkbenchGroupName))
-          }.list().apply()
-      }
-    } yield {
-      results.groupBy(result => (result._1, result._2)).map { case ((groupName, email), results) =>
-        val members: Set[WorkbenchSubject] = results.collect {
-            case (_, _, Some(userId), None) => userId
-            case (_, _, None, Some(subGroupName)) => subGroupName
-        }.toSet
+          import SamTypeBinders._
+          samsql"""select ${g.result.name}, ${g.result.email}, ${gm.result.memberUserId}, ${sg.result.name}
+                    from ${GroupTable as g}
+                    left join ${GroupMemberTable as gm} on ${g.id} = ${gm.groupId}
+                    left join ${GroupTable as sg} on ${gm.memberGroupId} = ${sg.id}
+                    where ${g.name} in (${groupNames})"""
+            .map { rs =>
+              (rs.get[WorkbenchGroupName](g.resultName.name),
+                rs.get[WorkbenchEmail](g.resultName.email),
+                rs.stringOpt(gm.resultName.memberUserId).map(WorkbenchUserId),
+                rs.stringOpt(sg.resultName.name).map(WorkbenchGroupName))
+            }.list().apply()
+        }
+      } yield {
+        results.groupBy(result => (result._1, result._2)).map { case ((groupName, email), results) =>
+          val members: Set[WorkbenchSubject] = results.collect {
+              case (_, _, Some(userId), None) => userId
+              case (_, _, None, Some(subGroupName)) => subGroupName
+          }.toSet
 
-        BasicWorkbenchGroup(groupName, members, email)
-      }
-    }.toStream
+          BasicWorkbenchGroup(groupName, members, email)
+        }
+      }.toStream
+    }
   }
 
   override def loadGroupEmail(groupName: WorkbenchGroupName): IO[Option[WorkbenchEmail]] = {
@@ -177,13 +181,19 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
           samsql"insert into ${GroupMemberTable.table} (${groupMemberColumn.groupId}, ${groupMemberColumn.memberGroupId}) values ((${groupPKQuery}), (${memberGroupPKQuery}))"
         case pet: PetServiceAccountId => throw new WorkbenchException(s"pet service accounts cannot be added to groups $pet")
       }
-      val added = addMemberQuery.update().apply() > 0
 
-      if (added) {
-        updateGroupUpdatedDate(groupId)
+      val numberAdded = Try {
+        addMemberQuery.update().apply()
+      }.recover {
+        case duplicateException: PSQLException if duplicateException.getSQLState == PSQLStateExtensions.UNIQUE_VIOLATION => 0
       }
 
-      added
+      if (numberAdded.get > 0) {
+        updateGroupUpdatedDate(groupId)
+        true
+      } else {
+        false
+      }
     }
   }
 

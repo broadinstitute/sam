@@ -9,7 +9,7 @@ import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.sam.errorReportSource
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.db.{DbReference, SamTypeBinders}
+import org.broadinstitute.dsde.workbench.sam.db.{DbReference, PSQLStateExtensions, SamTypeBinders}
 import org.broadinstitute.dsde.workbench.sam.db.SamParameterBinderFactory._
 import org.broadinstitute.dsde.workbench.sam.db.dao.{PostgresGroupDAO, SubGroupMemberTable}
 import org.broadinstitute.dsde.workbench.sam.db.tables._
@@ -20,6 +20,7 @@ import org.postgresql.util.PSQLException
 import scalikejdbc._
 
 import scala.concurrent.ExecutionContext
+import scala.util.{Failure, Try}
 
 class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
                               protected val ecForDatabaseIO: ExecutionContext)(implicit executionContext: ExecutionContext) extends AccessPolicyDAO with DatabaseSupport with PostgresGroupDAO with LazyLogging {
@@ -181,7 +182,13 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     val insertResourceQuery =
       samsql"""insert into ${ResourceTable.table} (${resourceTableColumn.name}, ${resourceTableColumn.resourceTypeId})
                values (${resource.resourceId}, (${loadResourceTypePK(resource.resourceTypeName)}))"""
-    ResourcePK(insertResourceQuery.updateAndReturnGeneratedKey().apply())
+
+    Try {
+      ResourcePK(insertResourceQuery.updateAndReturnGeneratedKey().apply())
+    }.recoverWith {
+      case duplicateException: PSQLException if duplicateException.getSQLState == PSQLStateExtensions.UNIQUE_VIOLATION =>
+        Failure(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, "A resource of this type and name already exists")))
+    }.get
   }
 
   private def insertAuthDomainsForResource(resourcePK: ResourcePK, authDomains: Set[WorkbenchGroupName])(implicit session: DBSession): Int = {
@@ -397,14 +404,13 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
   //Steps: Delete every member from the underlying group and then add all of the new members. Do this in a *single*
   //transaction so if any bit fails, all of it fails and we don't end up in some incorrect intermediate state.
   private def overwritePolicyMembersInternal(id: FullyQualifiedPolicyId, memberList: Set[WorkbenchSubject])(implicit session: DBSession): Int = {
-    val p = PolicyTable.syntax("p")
     val gm = GroupMemberTable.syntax("gm")
 
-    val groupId = samsql"""delete from ${GroupMemberTable as gm}
-        using ${PolicyTable as p}
-        where ${gm.groupId} = ${p.groupId}
-        and ${p.name} = ${id.accessPolicyName}
-        and ${p.resourceId} = (${ResourceTable.loadResourcePK(id.resource)}) returning ${p.groupId}""".updateAndReturnGeneratedKey().apply()
+    val groupId = samsql"${workbenchGroupIdentityToGroupPK(id)}".map(rs => rs.long(1)).single().apply().getOrElse {
+      throw new WorkbenchException(s"Group for policy [$id] not found")
+    }
+
+    samsql"delete from ${GroupMemberTable as gm} where ${gm.groupId} = ${groupId}".update().apply()
 
     insertGroupMembers(GroupPK(groupId.toLong), memberList)
   }
@@ -437,11 +443,11 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     val pa = PolicyActionTable.syntax("pa")
     val p = PolicyTable.syntax("p")
 
-    val policyPK = PolicyPK(
-      samsql"""delete from ${PolicyActionTable as pa}
-              using ${PolicyTable as p}
-              where ${p.name} = ${id.accessPolicyName}
-              and ${p.resourceId} = (${ResourceTable.loadResourcePK(id.resource)}) returning ${p.id}""".updateAndReturnGeneratedKey().apply())
+    val policyPK = samsql"select ${p.id} from ${PolicyTable as p} where ${p.name} = ${id.accessPolicyName} and ${p.resourceId} = (${ResourceTable.loadResourcePK(id.resource)})".map(rs => PolicyPK(rs.long(1))).single().apply().getOrElse {
+      throw new WorkbenchException(s"policy record not found for $id")
+    }
+
+    samsql"delete from ${PolicyActionTable as pa} where ${pa.resourcePolicyId} = $policyPK".update().apply()
 
     insertPolicyActions(actions, policyPK)
   }
