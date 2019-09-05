@@ -434,7 +434,13 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
       val userColumn = UserTable.column
 
       val insertUserQuery = samsql"insert into ${UserTable.table} (${userColumn.id}, ${userColumn.email}, ${userColumn.googleSubjectId}, ${userColumn.enabled}) values (${user.id}, ${user.email}, ${user.googleSubjectId}, true)"
-      insertUserQuery.update.apply
+
+      Try {
+        insertUserQuery.update.apply
+      }.recoverWith {
+        case duplicateException: PSQLException if duplicateException.getSQLState == PSQLStateExtensions.UNIQUE_VIOLATION =>
+          Failure(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"identity with id ${user.id} already exists")))
+      }.get
       user
     }
   }
