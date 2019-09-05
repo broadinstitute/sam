@@ -4,7 +4,9 @@ import java.time.Instant
 import java.util.Date
 
 import cats.effect.{ContextShift, IO}
-import org.broadinstitute.dsde.workbench.model._
+import cats.implicits._
+import org.broadinstitute.dsde.workbench.sam.errorReportSource
+import org.broadinstitute.dsde.workbench.model.{WorkbenchExceptionWithErrorReport, _}
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.sam.db._
 import org.broadinstitute.dsde.workbench.sam.db.tables._
@@ -12,7 +14,9 @@ import org.broadinstitute.dsde.workbench.sam.model.{FullyQualifiedPolicyId, _}
 import org.broadinstitute.dsde.workbench.sam.util.DatabaseSupport
 import scalikejdbc._
 import SamParameterBinderFactory._
+import akka.http.scaladsl.model.StatusCodes
 import org.broadinstitute.dsde.workbench.sam.db.dao.{PostgresGroupDAO, SubGroupMemberTable}
+import org.postgresql.util.PSQLException
 
 import scala.concurrent.ExecutionContext
 
@@ -415,6 +419,10 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
       val insertUserQuery = samsql"insert into ${UserTable.table} (${userColumn.id}, ${userColumn.email}, ${userColumn.googleSubjectId}, ${userColumn.enabled}) values (${user.id}, ${user.email}, ${user.googleSubjectId}, true)"
       insertUserQuery.update.apply
       user
+    }.recoverWith {
+      case sqlException: PSQLException => {
+        IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"identity with id ${user.id} already exists")))
+      }
     }
   }
 

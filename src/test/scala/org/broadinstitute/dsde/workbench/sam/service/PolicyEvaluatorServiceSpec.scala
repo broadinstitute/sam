@@ -152,6 +152,12 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
 
     val res = for{
       _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
+      _ <- resource.authDomain.toList.parTraverse { g => dirDAO.createGroup(BasicWorkbenchGroup(g, Set.empty, WorkbenchEmail(g.value + "@foo.bar"))) }
+      _ <- samplePolicy.members.toList.parTraverse {
+        case u: WorkbenchUserId => dirDAO.createUser(WorkbenchUser(u, None, WorkbenchEmail(u.value + "@foo.bar")))
+        case g: WorkbenchGroupName => dirDAO.createGroup(BasicWorkbenchGroup(g, Set.empty, WorkbenchEmail(g.value + "@foo.bar")))
+        case _ => IO.unit
+      }
       _ <- policyDAO.createResourceType(defaultResourceType)
       _ <- policyDAO.createResource(resource)
       _ <- policyDAO.createPolicy(policy)

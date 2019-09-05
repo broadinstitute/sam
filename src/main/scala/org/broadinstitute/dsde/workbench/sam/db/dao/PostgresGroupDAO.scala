@@ -63,7 +63,7 @@ trait PostgresGroupDAO {
     val memberGroupPKs = subgroupPKQuery.map(x => samsql"$x".map(rs => rs.get[GroupPK]("group_id")).list().apply()).getOrElse(List.empty)
 
     if (memberGroupPKs.size != memberGroupNames.size + memberPolicyIdTuples.size) {
-      throw new WorkbenchException(s"Some member groups not found.")
+      throw new WorkbenchException(s"Some member groups not found: ${memberGroupPKs}, ${memberGroupNames}.")
     }
     memberGroupPKs
   }

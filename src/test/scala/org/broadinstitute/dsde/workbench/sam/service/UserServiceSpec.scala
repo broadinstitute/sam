@@ -206,6 +206,7 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
     * GoogleSubjectId    Email
     *      no             yes      ---> Someone invited this user previous and we have a record for this user already. We just need to update GoogleSubjetId field for this user.
     */
+  //TODO: is this scenario even valid?
   it should "return BadRequest when there's no existing subject for a given googleSubjectId and but there is one for email, and the returned subject is not a regular user" in{
     val user = genCreateWorkbenchUser.sample.get.copy(email = genNonPetEmail.sample.get)
     val group = genBasicWorkbenchGroup.sample.get.copy(email = user.email)
