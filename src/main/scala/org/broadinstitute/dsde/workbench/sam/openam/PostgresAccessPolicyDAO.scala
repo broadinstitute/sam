@@ -427,29 +427,28 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
   }
 
   private def overwritePolicyRolesInternal(id: FullyQualifiedPolicyId, roles: Set[ResourceRoleName])(implicit session: DBSession): Int = {
-    val pr = PolicyRoleTable.syntax("pr")
-    val p = PolicyTable.syntax("p")
+    val policyPK = getPolicyPK(id)
 
-    val policyPK = PolicyPK(
-      samsql"""delete from ${PolicyRoleTable as pr}
-              using ${PolicyTable as p}
-              where ${p.name} = ${id.accessPolicyName}
-              and ${p.resourceId} = (${ResourceTable.loadResourcePK(id.resource)}) returning ${p.id}""".updateAndReturnGeneratedKey().apply())
+    val pr = PolicyRoleTable.syntax("pr")
+    samsql"delete from ${PolicyRoleTable as pr} where ${pr.resourcePolicyId} = $policyPK".update().apply()
 
     insertPolicyRoles(roles, policyPK)
   }
 
   private def overwritePolicyActionsInternal(id: FullyQualifiedPolicyId, actions: Set[ResourceAction])(implicit session: DBSession): Int = {
+    val policyPK = getPolicyPK(id)
+
     val pa = PolicyActionTable.syntax("pa")
-    val p = PolicyTable.syntax("p")
-
-    val policyPK = samsql"select ${p.id} from ${PolicyTable as p} where ${p.name} = ${id.accessPolicyName} and ${p.resourceId} = (${ResourceTable.loadResourcePK(id.resource)})".map(rs => PolicyPK(rs.long(1))).single().apply().getOrElse {
-      throw new WorkbenchException(s"policy record not found for $id")
-    }
-
     samsql"delete from ${PolicyActionTable as pa} where ${pa.resourcePolicyId} = $policyPK".update().apply()
 
     insertPolicyActions(actions, policyPK)
+  }
+
+  private def getPolicyPK(id: FullyQualifiedPolicyId)(implicit session: DBSession): PolicyPK = {
+    val p = PolicyTable.syntax("p")
+    samsql"select ${p.id} from ${PolicyTable as p} where ${p.name} = ${id.accessPolicyName} and ${p.resourceId} = (${ResourceTable.loadResourcePK(id.resource)})".map(rs => PolicyPK(rs.long(1))).single().apply().getOrElse {
+      throw new WorkbenchException(s"policy record not found for $id")
+    }
   }
 
   override def listPublicAccessPolicies(resourceTypeName: ResourceTypeName): IO[Stream[ResourceIdAndPolicyName]] = {
