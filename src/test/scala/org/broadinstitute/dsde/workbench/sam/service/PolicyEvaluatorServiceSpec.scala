@@ -180,6 +180,12 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
 
     val res = for{
       _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
+      _ <- resource.authDomain.toList.parTraverse(a => IO.fromFuture(IO(managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))))
+      _ <- samplePolicy.members.toList.parTraverse {
+        case u: WorkbenchUserId => dirDAO.createUser(WorkbenchUser(u, None, WorkbenchEmail(u.value + "@foo.bar")))
+        case g: WorkbenchGroupName => IO.fromFuture(IO(managedGroupService.createManagedGroup(ResourceId(g.value), dummyUserInfo)))
+        case _ => IO.unit
+      }
       _ <- policyDAO.createResourceType(defaultResourceType)
       _ <- policyDAO.createResource(resource)
       _ <- policyDAO.createPolicy(policy)
@@ -427,6 +433,11 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
       _ <- constrainableService.createResourceType(constrainableResourceType)
       _ <- constrainableService.createResourceType(managedGroupResourceType)
       _ <- resource.authDomain.toList.parTraverse(a => IO.fromFuture(IO(managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))))
+      _ <- policy.members.toList.parTraverse {
+        case u: WorkbenchUserId => dirDAO.createUser(WorkbenchUser(u, None, WorkbenchEmail(u.value + "@foo.bar")))
+        case g: WorkbenchGroupName => IO.fromFuture(IO(managedGroupService.createManagedGroup(ResourceId(g.value), dummyUserInfo)))
+        case _ => IO.unit
+      }
       // create resource that dummyUserInfo is a member of for constrainableResourceType
       _ <- IO.fromFuture(IO(constrainableService.createResource(constrainableResourceType, resource.resourceId, Map(viewPolicyName -> constrainablePolicyMembership), resource.authDomain, dummyUserInfo.userId)))
       _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
