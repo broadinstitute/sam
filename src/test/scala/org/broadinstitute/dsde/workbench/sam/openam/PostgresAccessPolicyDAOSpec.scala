@@ -45,27 +45,39 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
         dao.createResourceType(resourceType).unsafeRunSync() shouldEqual resourceType
       }
 
-      "succeeds when there is exactly one Role that has no actions" in {
-        val myResourceType = resourceType.copy(roles = Set(actionlessRole))
-        dao.createResourceType(myResourceType).unsafeRunSync() shouldEqual myResourceType
-      }
-
-      // This test is hard to write at the moment.  We don't have an easy way to guarantee the race condition at exactly the right time.  Nor do
-      // we have a good way to check if the data that was saved is what we intended.   This spec class could implement DatabaseSupport.  Or the
-      // createResourceType could minimally return the ResourceTypePK in its results.  Or we need some way to get all
-      // of the ResourceTypes from the DB and compare them to what we were trying to save.
-      "succeeds and only creates 1 ResourceType when trying to create multiple identical ResourceTypes at the same time" in {
-
-        pending
-
-        // Since we can't directly force a collision at exactly the right time, kick off a bunch of inserts in parallel
-        // and hope for the best.  <- That's how automated testing is supposed to work right?  Just cross your fingers?
-        val allMyFutures = 0.to(20).map { _ =>
-          dao.createResourceType(resourceType).unsafeToFuture()
+      "succeeds" - {
+        "when there are no action patterns" in {
+          val myResourceType = resourceType.copy(actionPatterns = Set.empty)
+          dao.createResourceType(myResourceType).unsafeRunSync() shouldEqual myResourceType
         }
 
-        Await.result(Future.sequence(allMyFutures), 5 seconds)
-        // This is the part where I would want to assert that the database contains only one ResourceType
+        "when there are no roles" in {
+          val myResourceType = resourceType.copy(roles = Set.empty)
+          dao.createResourceType(myResourceType).unsafeRunSync() shouldEqual myResourceType
+        }
+
+        "when there is exactly one Role that has no actions" in {
+          val myResourceType = resourceType.copy(roles = Set(actionlessRole))
+          dao.createResourceType(myResourceType).unsafeRunSync() shouldEqual myResourceType
+        }
+
+        // This test is hard to write at the moment.  We don't have an easy way to guarantee the race condition at exactly the right time.  Nor do
+        // we have a good way to check if the data that was saved is what we intended.   This spec class could implement DatabaseSupport.  Or the
+        // createResourceType could minimally return the ResourceTypePK in its results.  Or we need some way to get all
+        // of the ResourceTypes from the DB and compare them to what we were trying to save.
+        "and only creates 1 ResourceType when trying to create multiple identical ResourceTypes at the same time" in {
+
+          pending
+
+          // Since we can't directly force a collision at exactly the right time, kick off a bunch of inserts in parallel
+          // and hope for the best.  <- That's how automated testing is supposed to work right?  Just cross your fingers?
+          val allMyFutures = 0.to(20).map { _ =>
+            dao.createResourceType(resourceType).unsafeToFuture()
+          }
+
+          Await.result(Future.sequence(allMyFutures), 5 seconds)
+          // This is the part where I would want to assert that the database contains only one ResourceType
+        }
       }
 
       "overwriting a ResourceType with the same name" - {

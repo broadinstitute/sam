@@ -58,19 +58,27 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
       actionPKs.map(actionPK => samsqls"(${rolePK}, ${actionPK})")
     }
 
-    if (roleActionValues.nonEmpty) {
-      val ra = RoleActionTable.syntax("ra")
-
+    val ra = RoleActionTable.syntax("ra")
+    val rr = ResourceRoleTable.syntax("rr")
+    if (roleActionValues.isEmpty) {
       samsql"""delete from ${RoleActionTable as ra}
-              where ${ra.resourceRoleId} in (${resourceTypeRoles.map(_.id)})"""
+                 using ${ResourceRoleTable as rr}
+                 where ${ra.resourceRoleId} = ${rr.id}
+                 and ${rr.resourceTypeId} = ${resourceTypePK}"""
+        .update().apply()
+    } else {
+      samsql"""delete from ${RoleActionTable as ra}
+                 using ${ResourceRoleTable as rr}
+                 where ${ra.resourceRoleId} = ${rr.id}
+                 and ${ra.resourceRoleId} in (${resourceTypeRoles.map(_.id)})
+                 and ${rr.role} not in (${roles.map(_.roleName)})"""
         .update().apply()
 
       val insertQuery =
         samsql"""insert into ${RoleActionTable.table}(${RoleActionTable.column.resourceRoleId}, ${RoleActionTable.column.resourceActionId})
-                    values ${roleActionValues}"""
+                    values ${roleActionValues}
+                    on conflict do nothing"""
       insertQuery.update().apply()
-    } else {
-      0
     }
   }
 
@@ -99,18 +107,25 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     val roleValues = roles.map(role => samsqls"(${resourceTypePK}, ${role.roleName})")
 
     val resourceRoleColumn = ResourceRoleTable.column
-    samsql"""update ${ResourceRoleTable.table}
+    if (roles.isEmpty) {
+      samsql"""update ${ResourceRoleTable.table}
             set ${resourceRoleColumn.deprecated} = true
             where ${resourceRoleColumn.resourceTypeId} = ${resourceTypePK}"""
-      .update().apply()
+        .update().apply()
+    } else {
+      samsql"""update ${ResourceRoleTable.table}
+              set ${resourceRoleColumn.deprecated} = true
+              where ${resourceRoleColumn.resourceTypeId} = ${resourceTypePK}
+              and ${resourceRoleColumn.role} not in (${roles.map(_.roleName)})"""
+        .update().apply()
 
-    val insertRolesQuery =
-      samsql"""insert into ${ResourceRoleTable.table}(${resourceRoleColumn.resourceTypeId}, ${resourceRoleColumn.role})
-                  values ${roleValues}
-               on conflict (${resourceRoleColumn.resourceTypeId}, ${resourceRoleColumn.role})
-               do update set ${resourceRoleColumn.deprecated} = false"""
+      val insertRolesQuery =
+        samsql"""insert into ${ResourceRoleTable.table}(${resourceRoleColumn.resourceTypeId}, ${resourceRoleColumn.role})
+               values ${roleValues}
+               on conflict do nothing"""
 
-    insertRolesQuery.update().apply()
+      insertRolesQuery.update().apply()
+    }
   }
 
   private def insertActions(actions: Set[ResourceAction], resourceTypePK: ResourceTypePK)(implicit session: DBSession): Int = {
@@ -135,26 +150,37 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     * rerwrite the `description` and `isAuthDomainConstrainable` columns if the ResourceTypeActionPattern already
     * exists.
     */
-  private def overwriteActionPatterns(actionPatterns: Set[ResourceActionPattern], resourceTypePK: ResourceTypePK)(implicit session: DBSession) = {
-    val resourceActionPatternTableColumn = ResourceActionPatternTable.column
-    val actionPatternValues = actionPatterns map { actionPattern =>
-      samsqls"(${resourceTypePK}, ${actionPattern.value}, ${actionPattern.description}, ${actionPattern.authDomainConstrainable})"
-    }
-
+  private def overwriteActionPatterns(actionPatterns: Set[ResourceActionPattern], resourceTypePK: ResourceTypePK)(implicit session: DBSession): Int = {
     val rap = ResourceActionPatternTable.syntax("rap")
 
-    samsql"""delete from ${ResourceActionPatternTable as rap}
+    if (actionPatterns.isEmpty) {
+      samsql"""delete from ${ResourceActionPatternTable as rap}
             where ${rap.resourceTypeId} = ${resourceTypePK}"""
-      .update().apply()
+        .update().apply()
+    } else {
+      samsql"""delete from ${ResourceActionPatternTable as rap}
+            where ${rap.resourceTypeId} = ${resourceTypePK}
+            and ${rap.actionPattern} not in (${actionPatterns.map(_.value)})"""
+        .update().apply()
 
-    val actionPatternQuery =
-      samsql"""insert into ${ResourceActionPatternTable.table}
+      val resourceActionPatternTableColumn = ResourceActionPatternTable.column
+      val actionPatternValues = actionPatterns map { actionPattern =>
+        samsqls"(${resourceTypePK}, ${actionPattern.value}, ${actionPattern.description}, ${actionPattern.authDomainConstrainable})"
+      }
+
+      val actionPatternQuery =
+        samsql"""insert into ${ResourceActionPatternTable.table}
                   (${resourceActionPatternTableColumn.resourceTypeId},
-                   ${resourceActionPatternTableColumn.actionPattern},
-                   ${resourceActionPatternTableColumn.description},
-                   ${resourceActionPatternTableColumn.isAuthDomainConstrainable})
-                  values ${actionPatternValues}"""
-    actionPatternQuery.update().apply()
+          ${resourceActionPatternTableColumn.actionPattern},
+          ${resourceActionPatternTableColumn.description},
+          ${resourceActionPatternTableColumn.isAuthDomainConstrainable})
+                  values ${actionPatternValues}
+               on conflict (${resourceActionPatternTableColumn.resourceTypeId}, ${resourceActionPatternTableColumn.actionPattern})
+                  do update
+                      set ${resourceActionPatternTableColumn.description} = EXCLUDED.${resourceActionPatternTableColumn.description},
+          ${resourceActionPatternTableColumn.isAuthDomainConstrainable} = EXCLUDED.${resourceActionPatternTableColumn.isAuthDomainConstrainable}"""
+      actionPatternQuery.update().apply()
+    }
   }
 
   // This method needs to always return the ResourceTypePK, regardless of whether we just inserted the ResourceType or
