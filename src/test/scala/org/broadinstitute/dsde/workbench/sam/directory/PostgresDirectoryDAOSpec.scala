@@ -166,9 +166,11 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
         dao.createGroup(subGroup).unsafeRunSync()
         dao.createGroup(parentGroup).unsafeRunSync()
 
-        assertThrows[PSQLException] {
+        val inUseException = intercept[WorkbenchExceptionWithErrorReport] {
           dao.deleteGroup(subGroup.id).unsafeRunSync()
         }
+
+        inUseException.errorReport.statusCode shouldEqual Some(StatusCodes.Conflict)
 
         dao.loadGroup(subGroup.id).unsafeRunSync() shouldEqual Option(subGroup)
       }

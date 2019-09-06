@@ -158,10 +158,16 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     runInTransaction { implicit session =>
       val g = GroupTable.syntax("g")
 
-      // foreign keys in accessInstructions and groupMember tables are set to cascade delete
-      // note: this will not remove this group from any parent groups and will throw a
-      // foreign key constraint violation error if group is still a member of any parent groups
-      samsql"delete from ${GroupTable as g} where ${g.name} = ${groupName}".update().apply()
+      Try {
+        // foreign keys in accessInstructions and groupMember tables are set to cascade delete
+        // note: this will not remove this group from any parent groups and will throw a
+        // foreign key constraint violation error if group is still a member of any parent groups
+        samsql"delete from ${GroupTable as g} where ${g.name} = ${groupName}".update().apply()
+      }.recoverWith {
+        case fkViolation: PSQLException if fkViolation.getSQLState == PSQLStateExtensions.FOREIGN_KEY_VIOLATION =>
+          Failure(new WorkbenchExceptionWithErrorReport(
+            ErrorReport(StatusCodes.Conflict, s"group ${groupName.value} cannot be deleted because it is a member of at least 1 other group")))
+      }.get
     }
   }
 
@@ -767,13 +773,23 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
       val groupTable = GroupTable.syntax
       val accessInstructionsTable = AccessInstructionsTable.syntax
 
+      // note the left join - this allows us to distinguish between the group does not exist and the group exists but
+      // does not have access instructions
       val loadAccessInstructionsQuery = samsql"""select ${accessInstructionsTable.resultAll}
-                from ${AccessInstructionsTable as accessInstructionsTable}
-                join ${GroupTable as groupTable} on ${groupTable.id} = ${accessInstructionsTable.groupId}
+                from ${GroupTable as groupTable}
+                left join ${AccessInstructionsTable as accessInstructionsTable} on ${groupTable.id} = ${accessInstructionsTable.groupId}
                 where ${groupTable.name} = ${groupName}"""
 
       val accessInstructionsOpt = loadAccessInstructionsQuery.map(AccessInstructionsTable(accessInstructionsTable)).single().apply()
-      accessInstructionsOpt.map(_.instructions)
+
+      accessInstructionsOpt match {
+        case None =>
+          // the group does not exist
+          throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"$groupName not found"))
+        case Some(accessInstructionsRecord) =>
+          // the group exists but the access instructions will be null in the query result if there are no instructions
+          Option(accessInstructionsRecord.instructions)
+      }
     }
   }
 

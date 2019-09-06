@@ -282,19 +282,6 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName).unsafeRunSync() should contain theSameElementsAs Set(adminUser.email)
   }
 
-  // TODO: Is this right?  ResourceService.overwriteResource fails with invalid emails, should addSubjectToPolicy fail too?
-  // The correct behavior is enforced in the routing, but is that the right place?  Should it be enforced in the Service class?
-  it should "succeed even if the subject is doesn't exist" in {
-    val adminUser = WorkbenchUser(dummyUserInfo.userId, None, dummyUserInfo.userEmail)
-
-    val managedGroup = assertMakeGroup()
-
-    managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName).unsafeRunSync() should contain theSameElementsAs Set(adminUser.email)
-
-    val someUser = WorkbenchUser(WorkbenchUserId("someUser"), None, WorkbenchEmail("someUser@foo.test"))
-    runAndWait(managedGroupService.addSubjectToPolicy(managedGroup.resourceId, ManagedGroupService.adminPolicyName, someUser.id))
-  }
-
   "ManagedGroupService removeSubjectFromPolicy" should "successfully remove the subject from the policy for the group" in {
     val adminUser = WorkbenchUser(dummyUserInfo.userId, None, dummyUserInfo.userEmail)
 
@@ -422,7 +409,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
 
     assertMakeGroup(groupId = resourceId.value, managedGroupService = testManagedGroupService)
 
-    val requester = dirDAO.createUser(WorkbenchUser(WorkbenchUserId("userId1"), Some(GoogleSubjectId("this subject id is different that the user id")), WorkbenchEmail("user1@company.com"))).unsafeRunSync()
+    val requester = dirDAO.createUser(WorkbenchUser(WorkbenchUserId("userId1"), Some(GoogleSubjectId("not the user id")), WorkbenchEmail("user1@company.com"))).unsafeRunSync()
     val adminGoogleSubjectId = WorkbenchUserId(dirDAO.loadUser(dummyUserInfo.userId).unsafeRunSync().flatMap(_.googleSubjectId).getOrElse(fail("could not find admin google subject id")).value)
 
     val expectedNotificationMessages = Set(

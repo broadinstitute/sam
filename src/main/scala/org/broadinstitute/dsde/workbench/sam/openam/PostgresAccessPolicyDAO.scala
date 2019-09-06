@@ -383,10 +383,8 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     val g = GroupTable.syntax("g")
 
     runInTransaction { implicit session =>
-      samsql"""delete from ${GroupTable as g}
-        using ${PolicyTable as p}
-        where ${g.id} = ${p.groupId}
-        and ${p.name} = ${policy.accessPolicyName}
+      samsql"""delete from ${PolicyTable as p}
+        where ${p.name} = ${policy.accessPolicyName}
         and ${p.resourceId} = (${ResourceTable.loadResourcePK(policy.resource)})""".update().apply()
     }
   }
