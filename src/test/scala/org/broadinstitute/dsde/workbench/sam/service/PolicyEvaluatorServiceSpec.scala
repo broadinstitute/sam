@@ -319,7 +319,7 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
     val res = for{
       _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
       _ <- dirDAO.createUser(WorkbenchUser(probeUser.userId, Some(GoogleSubjectId(probeUser.userId.value)), probeUser.userEmail))
-      _ <- resource.authDomain.toList.parTraverse(a => IO.fromFuture(IO(managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))))
+      _ <- resource.authDomain.toList.parTraverse(a => IO.fromFuture(IO(managedGroupService.createManagedGroup(ResourceId(a.value), user))))
       _ <- savePolicyMembers(policy)
       _ <- policyDAO.createResourceType(defaultResourceType)
       _ <- policyDAO.createResourceType(managedGroupResourceType)
@@ -346,7 +346,7 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
     val res = for{
       _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
       _ <- dirDAO.createUser(WorkbenchUser(probeUser.userId, Some(GoogleSubjectId(probeUser.userId.value)), probeUser.userEmail))
-      _ <- resource.authDomain.toList.parTraverse(a => IO.fromFuture(IO(managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))))
+      _ <- resource.authDomain.toList.parTraverse(a => IO.fromFuture(IO(managedGroupService.createManagedGroup(ResourceId(a.value), user))))
       _ <- savePolicyMembers(policy)
       _ <- policyDAO.createResourceType(defaultResourceType)
       _ <- policyDAO.createResourceType(managedGroupResourceType)
