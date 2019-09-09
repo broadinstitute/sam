@@ -32,12 +32,14 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
     }
 
   def resourceRoutes: server.Route =
-    requireUserInfo { userInfo =>
-      asWorkbenchAdmin(userInfo) {
-        path("initializeResourceTypes") {
-          put {
-            complete {
-              resourceService.initResourceTypes()
+    pathPrefix("initializeResourceTypes") {
+      requireUserInfo { userInfo =>
+        asWorkbenchAdmin(userInfo) {
+          pathEndOrSingleSlash {
+            put {
+              complete {
+                resourceService.initResourceTypes()
+              }
             }
           }
         }
