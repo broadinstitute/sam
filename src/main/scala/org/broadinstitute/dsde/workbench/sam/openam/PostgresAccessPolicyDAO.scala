@@ -68,10 +68,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
         .update().apply()
     } else {
       samsql"""delete from ${RoleActionTable as ra}
-                 using ${ResourceRoleTable as rr}
-                 where ${ra.resourceRoleId} = ${rr.id}
-                 and ${ra.resourceRoleId} in (${resourceTypeRoles.map(_.id)})
-                 and ${rr.role} not in (${roles.map(_.roleName)})"""
+                 where (${ra.resourceRoleId}, ${ra.resourceActionId}) not in (${roleActionValues})"""
         .update().apply()
 
       val insertQuery =
