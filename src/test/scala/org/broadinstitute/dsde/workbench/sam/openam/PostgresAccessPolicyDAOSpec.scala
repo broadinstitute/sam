@@ -31,10 +31,10 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
     val writeAction = ResourceAction("write")
     val readAction = ResourceAction("read")
 
-    val ownerRoleName = ResourceRoleName("role1")
+    val ownerRoleName = ResourceRoleName("owner")
 
     val ownerRole = ResourceRole(ownerRoleName, Set(writeAction, readAction))
-    val readerRole = ResourceRole(ResourceRoleName("role2"), Set(readAction))
+    val readerRole = ResourceRole(ResourceRoleName("reader"), Set(readAction))
     val actionlessRole = ResourceRole(ResourceRoleName("cantDoNuthin"), Set()) // yeah, it's a double negative, sue me!
 
     val roles = Set(ownerRole, readerRole, actionlessRole)
@@ -45,27 +45,39 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
         dao.createResourceType(resourceType).unsafeRunSync() shouldEqual resourceType
       }
 
-      "succeeds when there is exactly one Role that has no actions" in {
-        val myResourceType = resourceType.copy(roles = Set(actionlessRole))
-        dao.createResourceType(myResourceType).unsafeRunSync() shouldEqual myResourceType
-      }
-
-      // This test is hard to write at the moment.  We don't have an easy way to guarantee the race condition at exactly the right time.  Nor do
-      // we have a good way to check if the data that was saved is what we intended.   This spec class could implement DatabaseSupport.  Or the
-      // createResourceType could minimally return the ResourceTypePK in its results.  Or we need some way to get all
-      // of the ResourceTypes from the DB and compare them to what we were trying to save.
-      "succeeds and only creates 1 ResourceType when trying to create multiple identical ResourceTypes at the same time" in {
-
-        pending
-
-        // Since we can't directly force a collision at exactly the right time, kick off a bunch of inserts in parallel
-        // and hope for the best.  <- That's how automated testing is supposed to work right?  Just cross your fingers?
-        val allMyFutures = 0.to(20).map { _ =>
-          dao.createResourceType(resourceType).unsafeToFuture()
+      "succeeds" - {
+        "when there are no action patterns" in {
+          val myResourceType = resourceType.copy(actionPatterns = Set.empty)
+          dao.createResourceType(myResourceType).unsafeRunSync() shouldEqual myResourceType
         }
 
-        Await.result(Future.sequence(allMyFutures), 5 seconds)
-        // This is the part where I would want to assert that the database contains only one ResourceType
+        "when there are no roles" in {
+          val myResourceType = resourceType.copy(roles = Set.empty)
+          dao.createResourceType(myResourceType).unsafeRunSync() shouldEqual myResourceType
+        }
+
+        "when there is exactly one Role that has no actions" in {
+          val myResourceType = resourceType.copy(roles = Set(actionlessRole))
+          dao.createResourceType(myResourceType).unsafeRunSync() shouldEqual myResourceType
+        }
+
+        // This test is hard to write at the moment.  We don't have an easy way to guarantee the race condition at exactly the right time.  Nor do
+        // we have a good way to check if the data that was saved is what we intended.   This spec class could implement DatabaseSupport.  Or the
+        // createResourceType could minimally return the ResourceTypePK in its results.  Or we need some way to get all
+        // of the ResourceTypes from the DB and compare them to what we were trying to save.
+        "and only creates 1 ResourceType when trying to create multiple identical ResourceTypes at the same time" in {
+
+          pending
+
+          // Since we can't directly force a collision at exactly the right time, kick off a bunch of inserts in parallel
+          // and hope for the best.  <- That's how automated testing is supposed to work right?  Just cross your fingers?
+          val allMyFutures = 0.to(20).map { _ =>
+            dao.createResourceType(resourceType).unsafeToFuture()
+          }
+
+          Await.result(Future.sequence(allMyFutures), 5 seconds)
+          // This is the part where I would want to assert that the database contains only one ResourceType
+        }
       }
 
       "overwriting a ResourceType with the same name" - {
@@ -115,16 +127,102 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
 
               dao.createResourceType(myUpdatedResourceType).unsafeRunSync() shouldEqual myUpdatedResourceType
             }
+
+            "is removing at least one" - {
+              "ActionPattern" in {
+                val removeActionPattern = resourceType.copy(actionPatterns = actionPatterns.tail)
+                dao.createResourceType(resourceType).unsafeRunSync()
+                dao.createResourceType(removeActionPattern).unsafeRunSync() shouldEqual removeActionPattern
+              }
+
+              "Role" in {
+                val removeRole = resourceType.copy(roles = roles.tail)
+                dao.createResourceType(resourceType).unsafeRunSync()
+                dao.createResourceType(removeRole).unsafeRunSync() shouldEqual removeRole
+              }
+
+              "of its role's Actions" in {
+                val readerlessReader = readerRole.copy(actions = Set.empty)
+                val newRoles = Set(ownerRole, readerlessReader, actionlessRole)
+                val removeAction = resourceType.copy(roles = newRoles)
+                dao.createResourceType(resourceType).unsafeRunSync()
+                dao.createResourceType(removeAction).unsafeRunSync() shouldEqual removeAction
+              }
+            }
           }
         }
 
-        "fails" - {
-          "when the new ResourceType" - {
-            "is removing at least one" - {
-              "ActionPattern" in pending
-              "Role" in pending
-              "Role Action" in pending
+        "and removing a role" - {
+          "doesn't affect existing policies with the role, but prevents using the role in new policies" in {
+            val initialRoles = Set(ownerRole, readerRole, actionlessRole)
+            val initialResourceType = resourceType.copy(roles = initialRoles)
+
+            val newRoles = Set(ownerRole, actionlessRole)
+            val overwriteResourceType = initialResourceType.copy(roles = newRoles)
+
+            val resource = Resource(initialResourceType.name, ResourceId("resource"), Set.empty)
+            val beforeOverwritePolicy = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("willHaveDeprecatedRole")), Set.empty, WorkbenchEmail("allowed@policy.com"), Set(readerRole.roleName, actionlessRole.roleName), Set.empty, false)
+            val afterOverwritePolicy = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("cannotHaveDeprecatedRole")), Set.empty, WorkbenchEmail("not_allowed@policy.com"), Set(readerRole.roleName, actionlessRole.roleName), Set.empty, false)
+
+            dao.createResourceType(initialResourceType).unsafeRunSync()
+            dao.createResource(resource).unsafeRunSync()
+            dao.createPolicy(beforeOverwritePolicy).unsafeRunSync()
+
+            dao.createResourceType(overwriteResourceType).unsafeRunSync()
+            assertThrows[WorkbenchException] {
+              dao.createPolicy(afterOverwritePolicy).unsafeRunSync()
             }
+
+            dao.loadPolicy(beforeOverwritePolicy.id).unsafeRunSync() shouldBe Option(beforeOverwritePolicy)
+            dao.loadPolicy(afterOverwritePolicy.id).unsafeRunSync() shouldBe None
+          }
+        }
+
+        "and removing an action" - {
+          "from all roles will not affect policies that use the action" in {
+            val initialRoles = Set(ownerRole, readerRole, actionlessRole)
+            val initialResourceType = resourceType.copy(roles = initialRoles)
+
+            val readingOwner = ownerRole.copy(actions = Set(readAction))
+            val newRoles = Set(readingOwner, readerRole, actionlessRole)
+            val overwriteResourceType = initialResourceType.copy(roles = newRoles)
+
+            val resource = Resource(initialResourceType.name, ResourceId("resource"), Set.empty)
+            val beforeOverwritePolicy = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("willHaveDeprecatedRole")), Set.empty, WorkbenchEmail("allowed@policy.com"), Set(ownerRole.roleName, actionlessRole.roleName), Set.empty, false)
+            val afterOverwritePolicy = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("cannotHaveDeprecatedRole")), Set.empty, WorkbenchEmail("not_allowed@policy.com"), Set(readingOwner.roleName, actionlessRole.roleName), Set(writeAction), false)
+
+            dao.createResourceType(initialResourceType).unsafeRunSync()
+            dao.createResource(resource).unsafeRunSync()
+            dao.createPolicy(beforeOverwritePolicy).unsafeRunSync()
+
+            dao.createResourceType(overwriteResourceType).unsafeRunSync()
+            dao.createPolicy(afterOverwritePolicy).unsafeRunSync()
+
+            dao.loadPolicy(beforeOverwritePolicy.id).unsafeRunSync() shouldBe Option(beforeOverwritePolicy)
+            dao.loadPolicy(afterOverwritePolicy.id).unsafeRunSync() shouldBe Option(afterOverwritePolicy)
+          }
+
+          "from a resource type's role will remove that action from all policies with that role" in {
+            val initialRoles = Set(ownerRole, readerRole, actionlessRole)
+            val initialResourceType = resourceType.copy(roles = initialRoles)
+
+            val readerlessReader = readerRole.copy(actions = Set.empty)
+            val newRoles = Set(ownerRole, readerlessReader, actionlessRole)
+            val overwriteResourceType = initialResourceType.copy(roles = newRoles)
+
+            val resource = Resource(initialResourceType.name, ResourceId("resource"), Set.empty)
+            val beforeOverwritePolicy = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("willHaveDeprecatedRole")), Set.empty, WorkbenchEmail("allowed@policy.com"), Set(readerRole.roleName, actionlessRole.roleName), Set.empty, false)
+            val afterOverwritePolicy = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("cannotHaveDeprecatedRole")), Set.empty, WorkbenchEmail("not_allowed@policy.com"), Set(readerlessReader.roleName, actionlessRole.roleName), Set.empty, false)
+
+            dao.createResourceType(initialResourceType).unsafeRunSync()
+            dao.createResource(resource).unsafeRunSync()
+            dao.createPolicy(beforeOverwritePolicy).unsafeRunSync()
+
+            dao.createResourceType(overwriteResourceType).unsafeRunSync()
+            dao.createPolicy(afterOverwritePolicy).unsafeRunSync()
+
+            dao.loadPolicy(beforeOverwritePolicy.id).unsafeRunSync() shouldBe Option(beforeOverwritePolicy)
+            dao.loadPolicy(afterOverwritePolicy.id).unsafeRunSync() shouldBe Option(afterOverwritePolicy)
           }
         }
       }
