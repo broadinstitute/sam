@@ -398,8 +398,8 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     val userSubjects = subjects collect { case userId: WorkbenchUserId => userId }
     val groupSubjects = subjects collect { case groupName: WorkbenchGroupName => groupName }
 
-    val users = if(userSubjects.nonEmpty) loadUsers(userSubjects) else IO.pure(Stream.empty)
-    val groups = if(groupSubjects.nonEmpty) loadGroups(groupSubjects) else IO.pure(Stream.empty)
+    val users = loadUsers(userSubjects)
+    val groups = loadGroups(groupSubjects)
 
     for {
       userEmails <- users.map(_.map(_.email))
@@ -462,13 +462,15 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
   }
 
   override def loadUsers(userIds: Set[WorkbenchUserId]): IO[Stream[WorkbenchUser]] = {
-    runInTransaction { implicit session =>
-      val userTable = UserTable.syntax
+    if(userIds.nonEmpty) {
+      runInTransaction { implicit session =>
+        val userTable = UserTable.syntax
 
-      val loadUsersQuery = samsql"select ${userTable.resultAll} from ${UserTable as userTable} where ${userTable.id} in (${userIds})"
-      loadUsersQuery.map(UserTable(userTable))
-        .list().apply().map(unmarshalUserRecord).toStream
-    }
+        val loadUsersQuery = samsql"select ${userTable.resultAll} from ${UserTable as userTable} where ${userTable.id} in (${userIds})"
+        loadUsersQuery.map(UserTable(userTable))
+          .list().apply().map(unmarshalUserRecord).toStream
+      }
+    } else IO.pure(Stream.empty)
   }
 
   // Not worrying about cascading deletion of user's pet SAs because LDAP doesn't delete user's pet SAs automatically

@@ -543,27 +543,30 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
   override def listResourcesWithAuthdomains(resourceTypeName: ResourceTypeName, resourceId: Set[ResourceId]): IO[Set[Resource]] = {
     import SamTypeBinders._
 
-    runInTransaction { implicit session =>
-      val r = ResourceTable.syntax("r")
-      val ad = AuthDomainTable.syntax("ad")
-      val g = GroupTable.syntax("g")
-      val rt = ResourceTypeTable.syntax("rt")
+    if(resourceId.nonEmpty) {
+      runInTransaction { implicit session =>
+        val r = ResourceTable.syntax("r")
+        val ad = AuthDomainTable.syntax("ad")
+        val g = GroupTable.syntax("g")
+        val rt = ResourceTypeTable.syntax("rt")
 
-      val results = samsql"""select ${r.result.name}, ${g.result.name}
-                      from ${ResourceTable as r}
-                      join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
-                      left join ${AuthDomainTable as ad} on ${r.id} = ${ad.resourceId}
-                      left join ${GroupTable as g} on ${ad.groupId} = ${g.id}
-                      where ${r.name} in (${resourceId}) and ${rt.name} = ${resourceTypeName}"""
-        .map(rs => (rs.get[ResourceId](r.resultName.name), rs.stringOpt(g.resultName.name).map(WorkbenchGroupName))).list().apply()
+        val results =
+          samsql"""select ${r.result.name}, ${g.result.name}
+                        from ${ResourceTable as r}
+                        join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
+                        left join ${AuthDomainTable as ad} on ${r.id} = ${ad.resourceId}
+                        left join ${GroupTable as g} on ${ad.groupId} = ${g.id}
+                        where ${r.name} in (${resourceId}) and ${rt.name} = ${resourceTypeName}"""
+            .map(rs => (rs.get[ResourceId](r.resultName.name), rs.stringOpt(g.resultName.name).map(WorkbenchGroupName))).list().apply()
 
-      val resultsByResource = results.groupBy(_._1)
-      resultsByResource.map {
-        case (resource, groupedResults) => Resource(resourceTypeName, resource, groupedResults.collect {
-          case (_, Some(authDomainGroupName)) => authDomainGroupName
-        }.toSet)
-      }.toSet
-    }
+        val resultsByResource = results.groupBy(_._1)
+        resultsByResource.map {
+          case (resource, groupedResults) => Resource(resourceTypeName, resource, groupedResults.collect {
+            case (_, Some(authDomainGroupName)) => authDomainGroupName
+          }.toSet)
+        }.toSet
+      }
+    } else IO.pure(Set.empty)
   }
 
   override def listResourceWithAuthdomains(resourceId: FullyQualifiedResourceId): IO[Option[Resource]] = {
