@@ -32,90 +32,103 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
     }
 
   def resourceRoutes: server.Route =
-    (pathPrefix("config" / "v1" / "resourceTypes") | pathPrefix("resourceTypes")) {
+    pathPrefix("initializeResourceTypes") {
       requireUserInfo { userInfo =>
-        pathEndOrSingleSlash {
-          get {
-            complete {
-              resourceService.getResourceTypes().map(typeMap => StatusCodes.OK -> typeMap.values.toSet)
+        asWorkbenchAdmin(userInfo) {
+          pathEndOrSingleSlash {
+            put {
+              complete {
+                resourceService.initResourceTypes()
+              }
             }
           }
         }
       }
     } ~
-      (pathPrefix("resources" / "v1") | pathPrefix("resource")) {
+    (pathPrefix("config" / "v1" / "resourceTypes") | pathPrefix("resourceTypes")) {
         requireUserInfo { userInfo =>
-          pathPrefix(Segment) { resourceTypeName =>
-            withResourceType(ResourceTypeName(resourceTypeName)) { resourceType =>
+          pathEndOrSingleSlash {
+            get {
+              complete {
+                resourceService.getResourceTypes().map(typeMap => StatusCodes.OK -> typeMap.values.toSet)
+              }
+            }
+          }
+        }
+    } ~
+    (pathPrefix("resources" / "v1") | pathPrefix("resource")) {
+      requireUserInfo { userInfo =>
+        pathPrefix(Segment) { resourceTypeName =>
+          withResourceType(ResourceTypeName(resourceTypeName)) { resourceType =>
+            pathEndOrSingleSlash {
+              getUserPoliciesForResourceType(resourceType, userInfo) ~
+                postResource(resourceType, userInfo)
+            } ~ pathPrefix(Segment) { resourceId =>
+              val resource = FullyQualifiedResourceId(resourceType.name, ResourceId(resourceId))
+
               pathEndOrSingleSlash {
-                getUserPoliciesForResourceType(resourceType, userInfo) ~
-                  postResource(resourceType, userInfo)
-              } ~ pathPrefix(Segment) { resourceId =>
-                val resource = FullyQualifiedResourceId(resourceType.name, ResourceId(resourceId))
-
+                deleteResource(resource, userInfo) ~
+                  postDefaultResource(resourceType, resource, userInfo)
+              } ~ pathPrefix("action") {
+                pathPrefix(Segment) { action =>
+                  pathEndOrSingleSlash {
+                    getActionPermissionForUser(resource, userInfo, action)
+                  }
+                }
+              } ~ pathPrefix("authDomain") {
                 pathEndOrSingleSlash {
-                  deleteResource(resource, userInfo) ~
-                    postDefaultResource(resourceType, resource, userInfo)
-                } ~ pathPrefix("action") {
-                  pathPrefix(Segment) { action =>
-                    pathEndOrSingleSlash {
-                      getActionPermissionForUser(resource, userInfo, action)
-                    }
-                  }
-                } ~ pathPrefix("authDomain") {
-                  pathEndOrSingleSlash {
-                    getResourceAuthDomain(resource, userInfo)
-                  }
-                } ~ pathPrefix("policies") {
-                  pathEndOrSingleSlash {
-                    getResourcePolicies(resource, userInfo)
-                  } ~ pathPrefix(Segment) { policyName =>
-                    val policyId = FullyQualifiedPolicyId(resource, AccessPolicyName(policyName))
+                  getResourceAuthDomain(resource, userInfo)
+                }
+              } ~ pathPrefix("policies") {
+                pathEndOrSingleSlash {
+                  getResourcePolicies(resource, userInfo)
+                } ~ pathPrefix(Segment) { policyName =>
+                  val policyId = FullyQualifiedPolicyId(resource, AccessPolicyName(policyName))
 
+                  pathEndOrSingleSlash {
+                    getPolicy(policyId, userInfo) ~
+                      putPolicyOverwrite(resourceType, policyId, userInfo)
+                  } ~ pathPrefix("memberEmails") {
                     pathEndOrSingleSlash {
-                      getPolicy(policyId, userInfo) ~
-                        putPolicyOverwrite(resourceType, policyId, userInfo)
-                    } ~ pathPrefix("memberEmails") {
-                      pathEndOrSingleSlash {
-                        putPolicyMembershipOverwrite(resourceType, policyId, userInfo)
-                      } ~ pathPrefix(Segment) { email =>
-                        withSubject(WorkbenchEmail(email)) { subject =>
-                          pathEndOrSingleSlash {
-                            requireOneOfAction(
-                              resource,
-                              Set(SamResourceActions.alterPolicies, SamResourceActions.sharePolicy(policyId.accessPolicyName)),
-                              userInfo.userId) {
-                              putUserInPolicy(policyId, subject) ~
-                                deleteUserFromPolicy(policyId, subject)
-                            }
+                      putPolicyMembershipOverwrite(resourceType, policyId, userInfo)
+                    } ~ pathPrefix(Segment) { email =>
+                      withSubject(WorkbenchEmail(email)) { subject =>
+                        pathEndOrSingleSlash {
+                          requireOneOfAction(
+                            resource,
+                            Set(SamResourceActions.alterPolicies, SamResourceActions.sharePolicy(policyId.accessPolicyName)),
+                            userInfo.userId) {
+                            putUserInPolicy(policyId, subject) ~
+                              deleteUserFromPolicy(policyId, subject)
                           }
                         }
                       }
-                    } ~ pathPrefix("public") {
-                      pathEndOrSingleSlash {
-                        getPublicFlag(policyId, userInfo) ~
-                          putPublicFlag(policyId, userInfo)
-                      }
+                    }
+                  } ~ pathPrefix("public") {
+                    pathEndOrSingleSlash {
+                      getPublicFlag(policyId, userInfo) ~
+                        putPublicFlag(policyId, userInfo)
                     }
                   }
-                } ~ pathPrefix("roles") {
-                  pathEndOrSingleSlash {
-                    getUserResourceRoles(resource, userInfo)
-                  }
-                } ~ pathPrefix("actions") {
-                  pathEndOrSingleSlash {
-                    listActionsForUser(resource, userInfo)
-                  }
-                } ~ pathPrefix("allUsers") {
-                  pathEndOrSingleSlash {
-                    getAllResourceUsers(resource, userInfo)
-                  }
+                }
+              } ~ pathPrefix("roles") {
+                pathEndOrSingleSlash {
+                  getUserResourceRoles(resource, userInfo)
+                }
+              } ~ pathPrefix("actions") {
+                pathEndOrSingleSlash {
+                  listActionsForUser(resource, userInfo)
+                }
+              } ~ pathPrefix("allUsers") {
+                pathEndOrSingleSlash {
+                  getAllResourceUsers(resource, userInfo)
                 }
               }
             }
           }
         }
       }
+    }
 
   def getUserPoliciesForResourceType(resourceType: ResourceType, userInfo: UserInfo): server.Route =
     get {
