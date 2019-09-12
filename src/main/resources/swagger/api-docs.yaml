@@ -157,6 +157,22 @@ paths:
       tags:
         - Admin
 
+  /api/initializeResourceTypes:
+    put:
+      summary: TEMPORARY FOR MIGRATION - Initializes resource types and attendent roles and actions
+      responses:
+        204:
+          description: Successfully initialized resource types
+        403:
+          description: You do not have admin privileges
+        500:
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      operationId: initializeResourceTypes
+      tags:
+        - Admin
+
   /api/config/v1/resourceTypes:
     get:
       responses:
