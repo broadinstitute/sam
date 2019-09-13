@@ -11,9 +11,9 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.Generator.{genPolicy, genResourceTypeNameExcludeManagedGroup, genUserInfo, _}
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.TestSupport.{blockingEc, _}
-import org.broadinstitute.dsde.workbench.sam.directory.LdapDirectoryDAO
+import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryDAO, LdapDirectoryDAO, PostgresDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.openam.LdapAccessPolicyDAO
+import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, LdapAccessPolicyDAO, PostgresAccessPolicyDAO}
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.scalatest._
 
@@ -22,8 +22,8 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
   val connectionPool = new LDAPConnectionPool(
     new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password),
     directoryConfig.connectionPoolSize)
-  val dirDAO = new LdapDirectoryDAO(connectionPool, directoryConfig, blockingEc, TestSupport.testMemberOfCache)
-  val policyDAO = new LdapAccessPolicyDAO(connectionPool, directoryConfig, blockingEc, TestSupport.testMemberOfCache, TestSupport.testResourceCache)
+  lazy val dirDAO: DirectoryDAO = new LdapDirectoryDAO(connectionPool, directoryConfig, blockingEc, TestSupport.testMemberOfCache)
+  lazy val policyDAO: AccessPolicyDAO = new LdapAccessPolicyDAO(connectionPool, directoryConfig, blockingEc, TestSupport.testMemberOfCache, TestSupport.testResourceCache)
   val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
   private val dummyUserInfo =
@@ -127,13 +127,31 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
 
   def setup(): IO[Unit] = {
     for{
-      _ <- IO.fromFuture(IO(schemaDao.init()))
-      _ <- IO.fromFuture(IO(schemaDao.clearDatabase()))
-      _ <- IO.fromFuture(IO(schemaDao.createOrgUnits()))
+      _ <- clearDatabase()
       _ <- dirDAO.createUser(WorkbenchUser(dummyUserInfo.userId, Some(TestSupport.genGoogleSubjectId()), dummyUserInfo.userEmail))
     } yield ()
   }
 
+
+  protected def clearDatabase(): IO[Unit] = {
+    for {
+      _ <- IO.fromFuture(IO(schemaDao.init()))
+      _ <- IO.fromFuture(IO(schemaDao.clearDatabase()))
+      _ <- IO.fromFuture(IO(schemaDao.createOrgUnits()))
+    } yield ()
+  }
+
+  private def savePolicyMembers(policy: AccessPolicy) = {
+    policy.members.toList.parTraverse {
+      case u: WorkbenchUserId => dirDAO.createUser(WorkbenchUser(u, None, WorkbenchEmail(u.value + "@foo.bar"))).recoverWith {
+        case _: WorkbenchException => IO.pure(WorkbenchUser(u, None, WorkbenchEmail(u.value + "@foo.bar")))
+      }
+      case g: WorkbenchGroupName => IO.fromFuture(IO(managedGroupService.createManagedGroup(ResourceId(g.value), dummyUserInfo))).recoverWith {
+        case _: WorkbenchException => IO.pure(Resource(defaultResourceType.name, ResourceId(g.value), Set.empty))
+      }
+      case _ => IO.unit
+    }
+  }
 
   "hasPermission" should "return false if given action is not allowed for a user" in {
     val user = genUserInfo.sample.get
@@ -145,7 +163,11 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
     val policy = SamLenses.resourceIdentityAccessPolicy.set(resource.fullyQualifiedId)(policyExcludeAction)
 
     val res = for{
+      _ <- setup()
+      _ <- policyDAO.createResourceType(managedGroupResourceType)
       _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
+      _ <- resource.authDomain.toList.parTraverse(a => IO.fromFuture(IO(managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))))
+      _ <- savePolicyMembers(policy)
       _ <- policyDAO.createResourceType(defaultResourceType)
       _ <- policyDAO.createResource(resource)
       _ <- policyDAO.createPolicy(policy)
@@ -167,7 +189,11 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
     val policy = SamLenses.resourceIdentityAccessPolicy.set(resource.fullyQualifiedId)(policyExcludeAction)
 
     val res = for{
+      _ <- setup()
+      _ <- policyDAO.createResourceType(managedGroupResourceType)
       _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
+      _ <- resource.authDomain.toList.parTraverse(a => IO.fromFuture(IO(managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))))
+      _ <- savePolicyMembers(policy)
       _ <- policyDAO.createResourceType(defaultResourceType)
       _ <- policyDAO.createResource(resource)
       _ <- policyDAO.createPolicy(policy)
@@ -192,6 +218,8 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
       _ <- setup()
       _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
       _ <- policyDAO.createResourceType(defaultResourceType)
+      _ <- policyDAO.createResourceType(managedGroupResourceType)
+      _ <- savePolicyMembers(policy)
       _ <- policyDAO.createResource(resource)
       _ <- policyDAO.createPolicy(policy)
       r <- service.policyEvaluatorService.hasPermission(policy.id.resource, action, user.userId)
@@ -213,6 +241,7 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
       _ <- setup()
       _ <- constrainableService.createResourceType(constrainableResourceType)
       _ <- constrainableService.createResourceType(managedGroupResourceType)
+      _ <- savePolicyMembers(policy)
       _ <- resource.authDomain.toList.parTraverse(a => IO.fromFuture(IO(managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))))
       // create resource that dummyUserInfo is a member of for constrainableResourceType
       _ <- IO.fromFuture(IO(constrainableService.createResource(constrainableResourceType, resource.resourceId, Map(viewPolicyName -> constrainablePolicyMembership), resource.authDomain, dummyUserInfo.userId)))
@@ -238,13 +267,12 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
 
     val res = for{
       _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
-      _ <- policyDAO.createResourceType(defaultResourceType)
       _ <- policyDAO.createResourceType(managedGroupResourceType)
+      _ <- resource.authDomain.toList.parTraverse(a => IO.fromFuture(IO(managedGroupService.createManagedGroup(ResourceId(a.value), user))))
+      _ <- savePolicyMembers(policy)
+      _ <- policyDAO.createResourceType(defaultResourceType)
       _ <- policyDAO.createResource(resource)
       _ <- policyDAO.createPolicy(policy)
-      _ <- resource.authDomain.toList.parTraverse{
-        authDomain => IO.fromFuture(IO(managedGroupService.createManagedGroup(ResourceId(authDomain.value), user)))
-      }
       r <- constrainableService.policyEvaluatorService.hasPermission(policy.id.resource, action, user.userId)
     } yield {
       r shouldBe(true)
@@ -264,6 +292,8 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
 
     val res = for{
       _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
+      _ <- resource.authDomain.toList.parTraverse(a => IO.fromFuture(IO(managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))))
+      _ <- savePolicyMembers(policy)
       _ <- policyDAO.createResourceType(defaultResourceType)
       _ <- policyDAO.createResourceType(managedGroupResourceType)
       _ <- policyDAO.createResource(resource)
@@ -289,13 +319,12 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
     val res = for{
       _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
       _ <- dirDAO.createUser(WorkbenchUser(probeUser.userId, Some(GoogleSubjectId(probeUser.userId.value)), probeUser.userEmail))
+      _ <- resource.authDomain.toList.parTraverse(a => IO.fromFuture(IO(managedGroupService.createManagedGroup(ResourceId(a.value), user))))
+      _ <- savePolicyMembers(policy)
       _ <- policyDAO.createResourceType(defaultResourceType)
       _ <- policyDAO.createResourceType(managedGroupResourceType)
       _ <- policyDAO.createResource(resource)
       _ <- policyDAO.createPolicy(policy)
-      _ <- resource.authDomain.toList.parTraverse{
-        authDomain => IO.fromFuture(IO(managedGroupService.createManagedGroup(ResourceId(authDomain.value), user)))
-      }
       r <- constrainableService.policyEvaluatorService.hasPermission(policy.id.resource, action, probeUser.userId)
     } yield {
       r shouldBe(false)
@@ -317,13 +346,12 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
     val res = for{
       _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
       _ <- dirDAO.createUser(WorkbenchUser(probeUser.userId, Some(GoogleSubjectId(probeUser.userId.value)), probeUser.userEmail))
+      _ <- resource.authDomain.toList.parTraverse(a => IO.fromFuture(IO(managedGroupService.createManagedGroup(ResourceId(a.value), user))))
+      _ <- savePolicyMembers(policy)
       _ <- policyDAO.createResourceType(defaultResourceType)
       _ <- policyDAO.createResourceType(managedGroupResourceType)
       _ <- policyDAO.createResource(resource)
       _ <- policyDAO.createPolicy(policy)
-      _ <- resource.authDomain.toList.parTraverse{
-        authDomain => IO.fromFuture(IO(managedGroupService.createManagedGroup(ResourceId(authDomain.value), user)))
-      }
       r <- constrainableService.policyEvaluatorService.hasPermission(policy.id.resource, action, probeUser.userId)
     } yield {
       r shouldBe(true)
@@ -415,6 +443,7 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
       _ <- constrainableService.createResourceType(constrainableResourceType)
       _ <- constrainableService.createResourceType(managedGroupResourceType)
       _ <- resource.authDomain.toList.parTraverse(a => IO.fromFuture(IO(managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))))
+      _ <- savePolicyMembers(policy)
       // create resource that dummyUserInfo is a member of for constrainableResourceType
       _ <- IO.fromFuture(IO(constrainableService.createResource(constrainableResourceType, resource.resourceId, Map(viewPolicyName -> constrainablePolicyMembership), resource.authDomain, dummyUserInfo.userId)))
       _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
@@ -427,4 +456,10 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
 
     res.unsafeToFuture()
   }
+}
+
+class PolicyEvaluatorServiceWithPostgresSpec extends PolicyEvaluatorServiceSpec {
+  override lazy val dirDAO: DirectoryDAO = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.blockingEc)
+  override lazy val policyDAO: AccessPolicyDAO = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.blockingEc)
+  override protected def clearDatabase(): IO[Unit] = IO(TestSupport.truncateAll).void
 }
