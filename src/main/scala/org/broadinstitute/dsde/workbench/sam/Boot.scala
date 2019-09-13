@@ -249,7 +249,7 @@ object Boot extends IOApp with LazyLogging {
       case DataStoreConfig(Postgres, None) => postgresDAO
       case DataStoreConfig(OpenDJ, Some(Postgres)) => DaoWithShadow(ldapDAO, postgresDAO, new NewRelicShadowResultReporter(daoName, newRelicMetrics), timer.clock)
       case DataStoreConfig(Postgres, Some(OpenDJ)) => DaoWithShadow(postgresDAO, ldapDAO, new NewRelicShadowResultReporter(daoName, newRelicMetrics), timer.clock)
-      case _ => throw new WorkbenchException(s"unsupported DataStoreConfig $DataStoreConfig")
+      case _ => throw new WorkbenchException(s"unsupported DataStoreConfig $dataStoreConfig")
     }
   }
 
