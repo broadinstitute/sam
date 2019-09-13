@@ -233,7 +233,7 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
   it should "list required authDomains and authDomains user is not a member of if constrainable" in {
     val user = genUserInfo.sample.get
     val resource = genResource.sample.get.copy(authDomain = Set.empty, resourceTypeName = constrainableResourceType.name)
-    val policy = SamLenses.resourceIdentityAccessPolicy.set(resource.fullyQualifiedId)(genPolicy.sample.get)
+    val policy = SamLenses.resourceIdentityAccessPolicy.set(resource.fullyQualifiedId)(genPolicy.sample.get).copy(roles = Set.empty)
 
     val viewPolicyName = AccessPolicyName(constrainableReaderRoleName.value)
 
@@ -263,7 +263,7 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
     val resource = genResource.sample.get.copy(resourceTypeName = constrainableResourceType.name)
     val policyWithUser = AccessPolicy.members.modify(_ + user.userId)(samplePolicy)
     val policyWithResource = SamLenses.resourceIdentityAccessPolicy.set(resource.fullyQualifiedId)(policyWithUser)
-    val policy = AccessPolicy.actions.modify(_ + action)(policyWithResource)
+    val policy = AccessPolicy.actions.modify(_ + action)(policyWithResource).copy(roles = Set.empty)
 
     val res = for{
       _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
@@ -288,7 +288,7 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
     val resource = genResource.sample.get.copy(resourceTypeName = constrainableResourceType.name, authDomain = Set.empty)
     val policyWithUser = AccessPolicy.members.modify(_ + user.userId)(samplePolicy)
     val policyWithResource = SamLenses.resourceIdentityAccessPolicy.set(resource.fullyQualifiedId)(policyWithUser)
-    val policy = AccessPolicy.actions.modify(_ + action)(policyWithResource)
+    val policy = AccessPolicy.actions.modify(_ + action)(policyWithResource).copy(roles = Set.empty)
 
     val res = for{
       _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
@@ -314,7 +314,7 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
     val resource = genResource.sample.get.copy(resourceTypeName = constrainableResourceType.name)
     val policyWithUser = AccessPolicy.members.modify(_ + probeUser.userId)(samplePolicy)
     val policyWithResource = SamLenses.resourceIdentityAccessPolicy.set(resource.fullyQualifiedId)(policyWithUser)
-    val policy = AccessPolicy.actions.modify(_ + action)(policyWithResource)
+    val policy = AccessPolicy.actions.modify(_ + action)(policyWithResource).copy(roles = Set.empty)
 
     val res = for{
       _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
@@ -341,7 +341,7 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
     val resource = genResource.sample.get.copy(resourceTypeName = constrainableResourceType.name)
     val policyWithUser = AccessPolicy.members.modify(_ + probeUser.userId)(samplePolicy)
     val policyWithResource = SamLenses.resourceIdentityAccessPolicy.set(resource.fullyQualifiedId)(policyWithUser)
-    val policy = AccessPolicy.actions.modify(_ + action)(policyWithResource)
+    val policy = AccessPolicy.actions.modify(_ + action)(policyWithResource).copy(roles = Set.empty)
 
     val res = for{
       _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
@@ -435,7 +435,7 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
   it should "list required authDomains and authDomains user is not a member of if constrainable" in {
     val user = genUserInfo.sample.get
     val resource = genResource.sample.get.copy(resourceTypeName = constrainableResourceType.name)
-    val policy = SamLenses.resourceIdentityAccessPolicy.set(resource.fullyQualifiedId)(genPolicy.sample.get)
+    val policy = SamLenses.resourceIdentityAccessPolicy.set(resource.fullyQualifiedId)(genPolicy.sample.get).copy(roles = Set.empty)
     val viewPolicyName = AccessPolicyName(constrainableReaderRoleName.value)
 
     val res = for{
