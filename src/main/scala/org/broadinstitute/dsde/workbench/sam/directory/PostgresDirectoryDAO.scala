@@ -12,9 +12,13 @@ import org.broadinstitute.dsde.workbench.sam.model.{FullyQualifiedPolicyId, _}
 import org.broadinstitute.dsde.workbench.sam.util.DatabaseSupport
 import scalikejdbc._
 import SamParameterBinderFactory._
+import akka.http.scaladsl.model.StatusCodes
 import org.broadinstitute.dsde.workbench.sam.db.dao.{PostgresGroupDAO, SubGroupMemberTable}
+import org.postgresql.util.PSQLException
+import org.broadinstitute.dsde.workbench.sam._
 
 import scala.concurrent.ExecutionContext
+import scala.util.{Failure, Try}
 
 class PostgresDirectoryDAO(protected val dbRef: DbReference,
                            protected val ecForDatabaseIO: ExecutionContext)(implicit executionContext: ExecutionContext) extends DirectoryDAO with DatabaseSupport with PostgresGroupDAO {
@@ -39,7 +43,12 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     val insertGroupQuery = samsql"""insert into ${GroupTable.table} (${groupTableColumn.name}, ${groupTableColumn.email}, ${groupTableColumn.updatedDate}, ${groupTableColumn.synchronizedDate})
            values (${group.id}, ${group.email}, ${Option(Instant.now())}, ${None})"""
 
-    GroupPK(insertGroupQuery.updateAndReturnGeneratedKey().apply())
+    Try {
+      GroupPK(insertGroupQuery.updateAndReturnGeneratedKey().apply())
+    }.recoverWith {
+      case duplicateException: PSQLException if duplicateException.getSQLState == PSQLStateExtensions.UNIQUE_VIOLATION =>
+        Failure(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"group name ${group.id.value} already exists")))
+    }.get
   }
 
   private def insertAccessInstructions(groupId: GroupPK, accessInstructions: String)(implicit session: DBSession): Int = {
@@ -95,35 +104,39 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
   }
 
   override def loadGroups(groupNames: Set[WorkbenchGroupName]): IO[Stream[BasicWorkbenchGroup]] = {
-    for {
-      results <- runInTransaction { implicit session =>
-        val g = GroupTable.syntax("g")
-        val sg = GroupTable.syntax("sg")
-        val gm = GroupMemberTable.syntax("gm")
+    if (groupNames.isEmpty) {
+      IO.pure(Stream.empty)
+    } else {
+      for {
+        results <- runInTransaction { implicit session =>
+          val g = GroupTable.syntax("g")
+          val sg = GroupTable.syntax("sg")
+          val gm = GroupMemberTable.syntax("gm")
 
-        import SamTypeBinders._
-        samsql"""select ${g.result.name}, ${g.result.email}, ${gm.result.memberUserId}, ${sg.result.name}
-                  from ${GroupTable as g}
-                  left join ${GroupMemberTable as gm} on ${g.id} = ${gm.groupId}
-                  left join ${GroupTable as sg} on ${gm.memberGroupId} = ${sg.id}
-                  where ${g.name} in (${groupNames})"""
-          .map { rs =>
-            (rs.get[WorkbenchGroupName](g.resultName.name),
-              rs.get[WorkbenchEmail](g.resultName.email),
-              rs.stringOpt(gm.resultName.memberUserId).map(WorkbenchUserId),
-              rs.stringOpt(sg.resultName.name).map(WorkbenchGroupName))
-          }.list().apply()
-      }
-    } yield {
-      results.groupBy(result => (result._1, result._2)).map { case ((groupName, email), results) =>
-        val members: Set[WorkbenchSubject] = results.collect {
-            case (_, _, Some(userId), None) => userId
-            case (_, _, None, Some(subGroupName)) => subGroupName
-        }.toSet
+          import SamTypeBinders._
+          samsql"""select ${g.result.name}, ${g.result.email}, ${gm.result.memberUserId}, ${sg.result.name}
+                    from ${GroupTable as g}
+                    left join ${GroupMemberTable as gm} on ${g.id} = ${gm.groupId}
+                    left join ${GroupTable as sg} on ${gm.memberGroupId} = ${sg.id}
+                    where ${g.name} in (${groupNames})"""
+            .map { rs =>
+              (rs.get[WorkbenchGroupName](g.resultName.name),
+                rs.get[WorkbenchEmail](g.resultName.email),
+                rs.stringOpt(gm.resultName.memberUserId).map(WorkbenchUserId),
+                rs.stringOpt(sg.resultName.name).map(WorkbenchGroupName))
+            }.list().apply()
+        }
+      } yield {
+        results.groupBy(result => (result._1, result._2)).map { case ((groupName, email), results) =>
+          val members: Set[WorkbenchSubject] = results.collect {
+              case (_, _, Some(userId), None) => userId
+              case (_, _, None, Some(subGroupName)) => subGroupName
+          }.toSet
 
-        BasicWorkbenchGroup(groupName, members, email)
-      }
-    }.toStream
+          BasicWorkbenchGroup(groupName, members, email)
+        }
+      }.toStream
+    }
   }
 
   override def loadGroupEmail(groupName: WorkbenchGroupName): IO[Option[WorkbenchEmail]] = {
@@ -145,10 +158,16 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     runInTransaction { implicit session =>
       val g = GroupTable.syntax("g")
 
-      // foreign keys in accessInstructions and groupMember tables are set to cascade delete
-      // note: this will not remove this group from any parent groups and will throw a
-      // foreign key constraint violation error if group is still a member of any parent groups
-      samsql"delete from ${GroupTable as g} where ${g.name} = ${groupName}".update().apply()
+      Try {
+        // foreign keys in accessInstructions and groupMember tables are set to cascade delete
+        // note: this will not remove this group from any parent groups and will throw a
+        // foreign key constraint violation error if group is still a member of any parent groups
+        samsql"delete from ${GroupTable as g} where ${g.name} = ${groupName}".update().apply()
+      }.recoverWith {
+        case fkViolation: PSQLException if fkViolation.getSQLState == PSQLStateExtensions.FOREIGN_KEY_VIOLATION =>
+          Failure(new WorkbenchExceptionWithErrorReport(
+            ErrorReport(StatusCodes.Conflict, s"group ${groupName.value} cannot be deleted because it is a member of at least 1 other group")))
+      }.get
     }
   }
 
@@ -168,13 +187,19 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
           samsql"insert into ${GroupMemberTable.table} (${groupMemberColumn.groupId}, ${groupMemberColumn.memberGroupId}) values ((${groupPKQuery}), (${memberGroupPKQuery}))"
         case pet: PetServiceAccountId => throw new WorkbenchException(s"pet service accounts cannot be added to groups $pet")
       }
-      val added = addMemberQuery.update().apply() > 0
 
-      if (added) {
-        updateGroupUpdatedDate(groupId)
+      val numberAdded = Try {
+        addMemberQuery.update().apply()
+      }.recover {
+        case duplicateException: PSQLException if duplicateException.getSQLState == PSQLStateExtensions.UNIQUE_VIOLATION => 0
       }
 
-      added
+      if (numberAdded.get > 0) {
+        updateGroupUpdatedDate(groupId)
+        true
+      } else {
+        false
+      }
     }
   }
 
@@ -241,7 +266,8 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     runInTransaction { implicit session =>
       val g = GroupTable.column
       samsql"select ${g.synchronizedDate} from ${GroupTable.table} where ${g.id} = (${workbenchGroupIdentityToGroupPK(groupId)})"
-        .map(rs => rs.timestamp(g.synchronizedDate).toJavaUtilDate).single().apply()
+        .map(rs => rs.timestampOpt(g.synchronizedDate).map(_.toJavaUtilDate)).single().apply()
+        .getOrElse(throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"$groupId not found")))
     }
   }
 
@@ -251,7 +277,8 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
       val g = GroupTable.column
 
       samsql"select ${g.email} from ${GroupTable.table} where ${g.id} = (${workbenchGroupIdentityToGroupPK(groupId)})"
-        .map(rs => rs.get[WorkbenchEmail](g.email)).single().apply()
+        .map(rs => rs.get[Option[WorkbenchEmail]](g.email)).single().apply()
+        .getOrElse(throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"$groupId not found")))
     }
   }
 
@@ -371,8 +398,8 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     val userSubjects = subjects collect { case userId: WorkbenchUserId => userId }
     val groupSubjects = subjects collect { case groupName: WorkbenchGroupName => groupName }
 
-    val users = if(userSubjects.nonEmpty) loadUsers(userSubjects) else IO.pure(Stream.empty)
-    val groups = if(groupSubjects.nonEmpty) loadGroups(groupSubjects) else IO.pure(Stream.empty)
+    val users = loadUsers(userSubjects)
+    val groups = loadGroups(groupSubjects)
 
     for {
       userEmails <- users.map(_.map(_.email))
@@ -413,7 +440,13 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
       val userColumn = UserTable.column
 
       val insertUserQuery = samsql"insert into ${UserTable.table} (${userColumn.id}, ${userColumn.email}, ${userColumn.googleSubjectId}, ${userColumn.enabled}) values (${user.id}, ${user.email}, ${user.googleSubjectId}, true)"
-      insertUserQuery.update.apply
+
+      Try {
+        insertUserQuery.update.apply
+      }.recoverWith {
+        case duplicateException: PSQLException if duplicateException.getSQLState == PSQLStateExtensions.UNIQUE_VIOLATION =>
+          Failure(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"identity with id ${user.id} already exists")))
+      }.get
       user
     }
   }
@@ -429,13 +462,15 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
   }
 
   override def loadUsers(userIds: Set[WorkbenchUserId]): IO[Stream[WorkbenchUser]] = {
-    runInTransaction { implicit session =>
-      val userTable = UserTable.syntax
+    if(userIds.nonEmpty) {
+      runInTransaction { implicit session =>
+        val userTable = UserTable.syntax
 
-      val loadUsersQuery = samsql"select ${userTable.resultAll} from ${UserTable as userTable} where ${userTable.id} in (${userIds})"
-      loadUsersQuery.map(UserTable(userTable))
-        .list().apply().map(unmarshalUserRecord).toStream
-    }
+        val loadUsersQuery = samsql"select ${userTable.resultAll} from ${UserTable as userTable} where ${userTable.id} in (${userIds})"
+        loadUsersQuery.map(UserTable(userTable))
+          .list().apply().map(unmarshalUserRecord).toStream
+      }
+    } else IO.pure(Stream.empty)
   }
 
   // Not worrying about cascading deletion of user's pet SAs because LDAP doesn't delete user's pet SAs automatically
@@ -740,13 +775,23 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
       val groupTable = GroupTable.syntax
       val accessInstructionsTable = AccessInstructionsTable.syntax
 
+      // note the left join - this allows us to distinguish between the group does not exist and the group exists but
+      // does not have access instructions
       val loadAccessInstructionsQuery = samsql"""select ${accessInstructionsTable.resultAll}
-                from ${AccessInstructionsTable as accessInstructionsTable}
-                join ${GroupTable as groupTable} on ${groupTable.id} = ${accessInstructionsTable.groupId}
+                from ${GroupTable as groupTable}
+                left join ${AccessInstructionsTable as accessInstructionsTable} on ${groupTable.id} = ${accessInstructionsTable.groupId}
                 where ${groupTable.name} = ${groupName}"""
 
       val accessInstructionsOpt = loadAccessInstructionsQuery.map(AccessInstructionsTable(accessInstructionsTable)).single().apply()
-      accessInstructionsOpt.map(_.instructions)
+
+      accessInstructionsOpt match {
+        case None =>
+          // the group does not exist
+          throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"$groupName not found"))
+        case Some(accessInstructionsRecord) =>
+          // the group exists but the access instructions will be null in the query result if there are no instructions
+          Option(accessInstructionsRecord.instructions)
+      }
     }
   }
 

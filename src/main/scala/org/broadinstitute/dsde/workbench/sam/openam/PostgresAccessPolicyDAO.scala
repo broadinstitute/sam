@@ -9,7 +9,7 @@ import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.sam.errorReportSource
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.db.{DbReference, SamTypeBinders}
+import org.broadinstitute.dsde.workbench.sam.db.{DbReference, PSQLStateExtensions, SamTypeBinders}
 import org.broadinstitute.dsde.workbench.sam.db.SamParameterBinderFactory._
 import org.broadinstitute.dsde.workbench.sam.db.dao.{PostgresGroupDAO, SubGroupMemberTable}
 import org.broadinstitute.dsde.workbench.sam.db.tables._
@@ -20,6 +20,7 @@ import org.postgresql.util.PSQLException
 import scalikejdbc._
 
 import scala.concurrent.ExecutionContext
+import scala.util.{Failure, Try}
 
 class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
                               protected val ecForDatabaseIO: ExecutionContext)(implicit executionContext: ExecutionContext) extends AccessPolicyDAO with DatabaseSupport with PostgresGroupDAO with LazyLogging {
@@ -220,7 +221,13 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     val insertResourceQuery =
       samsql"""insert into ${ResourceTable.table} (${resourceTableColumn.name}, ${resourceTableColumn.resourceTypeId})
                values (${resource.resourceId}, (${loadResourceTypePK(resource.resourceTypeName)}))"""
-    ResourcePK(insertResourceQuery.updateAndReturnGeneratedKey().apply())
+
+    Try {
+      ResourcePK(insertResourceQuery.updateAndReturnGeneratedKey().apply())
+    }.recoverWith {
+      case duplicateException: PSQLException if duplicateException.getSQLState == PSQLStateExtensions.UNIQUE_VIOLATION =>
+        Failure(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, "A resource of this type and name already exists")))
+    }.get
   }
 
   private def insertAuthDomainsForResource(resourcePK: ResourcePK, authDomains: Set[WorkbenchGroupName])(implicit session: DBSession): Int = {
@@ -436,10 +443,8 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     val g = GroupTable.syntax("g")
 
     runInTransaction { implicit session =>
-      samsql"""delete from ${GroupTable as g}
-        using ${PolicyTable as p}
-        where ${g.id} = ${p.groupId}
-        and ${p.name} = ${policy.accessPolicyName}
+      samsql"""delete from ${PolicyTable as p}
+        where ${p.name} = ${policy.accessPolicyName}
         and ${p.resourceId} = (${ResourceTable.loadResourcePK(policy.resource)})""".update().apply()
     }
   }
@@ -457,14 +462,13 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
   //Steps: Delete every member from the underlying group and then add all of the new members. Do this in a *single*
   //transaction so if any bit fails, all of it fails and we don't end up in some incorrect intermediate state.
   private def overwritePolicyMembersInternal(id: FullyQualifiedPolicyId, memberList: Set[WorkbenchSubject])(implicit session: DBSession): Int = {
-    val p = PolicyTable.syntax("p")
     val gm = GroupMemberTable.syntax("gm")
 
-    val groupId = samsql"""delete from ${GroupMemberTable as gm}
-        using ${PolicyTable as p}
-        where ${gm.groupId} = ${p.groupId}
-        and ${p.name} = ${id.accessPolicyName}
-        and ${p.resourceId} = (${ResourceTable.loadResourcePK(id.resource)}) returning ${p.groupId}""".updateAndReturnGeneratedKey().apply()
+    val groupId = samsql"${workbenchGroupIdentityToGroupPK(id)}".map(rs => rs.long(1)).single().apply().getOrElse {
+      throw new WorkbenchException(s"Group for policy [$id] not found")
+    }
+
+    samsql"delete from ${GroupMemberTable as gm} where ${gm.groupId} = ${groupId}".update().apply()
 
     insertGroupMembers(GroupPK(groupId.toLong), memberList)
   }
@@ -481,29 +485,28 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
   }
 
   private def overwritePolicyRolesInternal(id: FullyQualifiedPolicyId, roles: Set[ResourceRoleName])(implicit session: DBSession): Int = {
-    val pr = PolicyRoleTable.syntax("pr")
-    val p = PolicyTable.syntax("p")
+    val policyPK = getPolicyPK(id)
 
-    val policyPK = PolicyPK(
-      samsql"""delete from ${PolicyRoleTable as pr}
-              using ${PolicyTable as p}
-              where ${p.name} = ${id.accessPolicyName}
-              and ${p.resourceId} = (${ResourceTable.loadResourcePK(id.resource)}) returning ${p.id}""".updateAndReturnGeneratedKey().apply())
+    val pr = PolicyRoleTable.syntax("pr")
+    samsql"delete from ${PolicyRoleTable as pr} where ${pr.resourcePolicyId} = $policyPK".update().apply()
 
     insertPolicyRoles(roles, policyPK)
   }
 
   private def overwritePolicyActionsInternal(id: FullyQualifiedPolicyId, actions: Set[ResourceAction])(implicit session: DBSession): Int = {
-    val pa = PolicyActionTable.syntax("pa")
-    val p = PolicyTable.syntax("p")
+    val policyPK = getPolicyPK(id)
 
-    val policyPK = PolicyPK(
-      samsql"""delete from ${PolicyActionTable as pa}
-              using ${PolicyTable as p}
-              where ${p.name} = ${id.accessPolicyName}
-              and ${p.resourceId} = (${ResourceTable.loadResourcePK(id.resource)}) returning ${p.id}""".updateAndReturnGeneratedKey().apply())
+    val pa = PolicyActionTable.syntax("pa")
+    samsql"delete from ${PolicyActionTable as pa} where ${pa.resourcePolicyId} = $policyPK".update().apply()
 
     insertPolicyActions(actions, policyPK)
+  }
+
+  private def getPolicyPK(id: FullyQualifiedPolicyId)(implicit session: DBSession): PolicyPK = {
+    val p = PolicyTable.syntax("p")
+    samsql"select ${p.id} from ${PolicyTable as p} where ${p.name} = ${id.accessPolicyName} and ${p.resourceId} = (${ResourceTable.loadResourcePK(id.resource)})".map(rs => PolicyPK(rs.long(1))).single().apply().getOrElse {
+      throw new WorkbenchException(s"policy record not found for $id")
+    }
   }
 
   override def listPublicAccessPolicies(resourceTypeName: ResourceTypeName): IO[Stream[ResourceIdAndPolicyName]] = {
@@ -600,27 +603,30 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
   override def listResourcesWithAuthdomains(resourceTypeName: ResourceTypeName, resourceId: Set[ResourceId]): IO[Set[Resource]] = {
     import SamTypeBinders._
 
-    runInTransaction { implicit session =>
-      val r = ResourceTable.syntax("r")
-      val ad = AuthDomainTable.syntax("ad")
-      val g = GroupTable.syntax("g")
-      val rt = ResourceTypeTable.syntax("rt")
+    if(resourceId.nonEmpty) {
+      runInTransaction { implicit session =>
+        val r = ResourceTable.syntax("r")
+        val ad = AuthDomainTable.syntax("ad")
+        val g = GroupTable.syntax("g")
+        val rt = ResourceTypeTable.syntax("rt")
 
-      val results = samsql"""select ${r.result.name}, ${g.result.name}
-                      from ${ResourceTable as r}
-                      join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
-                      left join ${AuthDomainTable as ad} on ${r.id} = ${ad.resourceId}
-                      left join ${GroupTable as g} on ${ad.groupId} = ${g.id}
-                      where ${r.name} in (${resourceId}) and ${rt.name} = ${resourceTypeName}"""
-        .map(rs => (rs.get[ResourceId](r.resultName.name), rs.stringOpt(g.resultName.name).map(WorkbenchGroupName))).list().apply()
+        val results =
+          samsql"""select ${r.result.name}, ${g.result.name}
+                        from ${ResourceTable as r}
+                        join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
+                        left join ${AuthDomainTable as ad} on ${r.id} = ${ad.resourceId}
+                        left join ${GroupTable as g} on ${ad.groupId} = ${g.id}
+                        where ${r.name} in (${resourceId}) and ${rt.name} = ${resourceTypeName}"""
+            .map(rs => (rs.get[ResourceId](r.resultName.name), rs.stringOpt(g.resultName.name).map(WorkbenchGroupName))).list().apply()
 
-      val resultsByResource = results.groupBy(_._1)
-      resultsByResource.map {
-        case (resource, groupedResults) => Resource(resourceTypeName, resource, groupedResults.collect {
-          case (_, Some(authDomainGroupName)) => authDomainGroupName
-        }.toSet)
-      }.toSet
-    }
+        val resultsByResource = results.groupBy(_._1)
+        resultsByResource.map {
+          case (resource, groupedResults) => Resource(resourceTypeName, resource, groupedResults.collect {
+            case (_, Some(authDomainGroupName)) => authDomainGroupName
+          }.toSet)
+        }.toSet
+      }
+    } else IO.pure(Set.empty)
   }
 
   override def listResourceWithAuthdomains(resourceId: FullyQualifiedResourceId): IO[Option[Resource]] = {

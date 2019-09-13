@@ -2,6 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.directory
 
 import java.util.Date
 
+import akka.http.scaladsl.model.StatusCodes
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountDisplayName, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.sam.TestSupport
@@ -58,9 +59,11 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
       "not allow groups with duplicate names" in {
         val duplicateGroup = BasicWorkbenchGroup(defaultGroupName, Set.empty, WorkbenchEmail("foo@bar.com"))
         dao.createGroup(defaultGroup).unsafeRunSync()
-        assertThrows[PSQLException] {
+        val exception = intercept[WorkbenchExceptionWithErrorReport] {
           dao.createGroup(duplicateGroup).unsafeRunSync()
         }
+
+        exception.errorReport.statusCode shouldEqual Some(StatusCodes.Conflict)
       }
 
       "create groups with subGroup members" in {
@@ -163,9 +166,11 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
         dao.createGroup(subGroup).unsafeRunSync()
         dao.createGroup(parentGroup).unsafeRunSync()
 
-        assertThrows[PSQLException] {
+        val inUseException = intercept[WorkbenchExceptionWithErrorReport] {
           dao.deleteGroup(subGroup.id).unsafeRunSync()
         }
+
+        inUseException.errorReport.statusCode shouldEqual Some(StatusCodes.Conflict)
 
         dao.loadGroup(subGroup.id).unsafeRunSync() shouldEqual Option(subGroup)
       }

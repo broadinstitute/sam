@@ -58,12 +58,12 @@ object Generator {
     userId = genWorkbenchUserId(System.currentTimeMillis())
   }yield InviteUser(userId, email)
 
-  val genWorkbenchGroupName = Gen.alphaStr.map(x => WorkbenchGroupName(s"s$x")) //prepending `s` just so this won't be an empty string
+  val genWorkbenchGroupName = Gen.alphaStr.map(x => WorkbenchGroupName(s"s${x.take(50)}")) //prepending `s` just so this won't be an empty string
   val genGoogleProject = Gen.alphaStr.map(x => GoogleProject(s"s$x")) //prepending `s` just so this won't be an empty string
   val genWorkbenchSubject: Gen[WorkbenchSubject] = for{
     groupId <- genWorkbenchGroupName
     project <- genGoogleProject
-    res <- Gen.oneOf[WorkbenchSubject](List(genWorkbenchUserId(System.currentTimeMillis()), groupId, PetServiceAccountId(genWorkbenchUserId(System.currentTimeMillis()), project)))
+    res <- Gen.oneOf[WorkbenchSubject](List(genWorkbenchUserId(System.currentTimeMillis()), groupId))
   }yield res
 
   val genBasicWorkbenchGroup = for{
