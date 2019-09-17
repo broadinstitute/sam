@@ -144,13 +144,17 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
   }
 
   override def batchLoadGroupEmail(groupNames: Set[WorkbenchGroupName]): IO[Stream[(WorkbenchGroupName, WorkbenchEmail)]] = {
-    runInTransaction { implicit session =>
-      val g = GroupTable.column
+    if (groupNames.isEmpty) {
+      IO.pure(Stream.empty)
+    } else {
+      runInTransaction { implicit session =>
+        val g = GroupTable.column
 
-      import SamTypeBinders._
-      samsql"select ${g.name}, ${g.email} from ${GroupTable.table} where ${g.name} in (${groupNames})"
-          .map(rs => (rs.get[WorkbenchGroupName](g.name), rs.get[WorkbenchEmail](g.email)))
-          .list().apply().toStream
+        import SamTypeBinders._
+        samsql"select ${g.name}, ${g.email} from ${GroupTable.table} where ${g.name} in (${groupNames})"
+            .map(rs => (rs.get[WorkbenchGroupName](g.name), rs.get[WorkbenchEmail](g.email)))
+            .list().apply().toStream
+      }
     }
   }
 
