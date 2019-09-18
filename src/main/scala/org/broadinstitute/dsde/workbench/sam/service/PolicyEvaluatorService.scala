@@ -1,9 +1,9 @@
 package org.broadinstitute.dsde.workbench.sam.service
 
+import akka.http.scaladsl.model.StatusCodes
 import cats.effect.IO
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
-import com.unboundid.ldap.sdk.{LDAPException, ResultCode}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, LoadResourceAuthDomainResult}
@@ -29,7 +29,7 @@ class PolicyEvaluatorService(
         ))
       .void
       .recoverWith {
-        case ldape: LDAPException if ldape.getResultCode == ResultCode.ENTRY_ALREADY_EXISTS =>
+        case duplicateException: WorkbenchExceptionWithErrorReport if duplicateException.errorReport.statusCode.contains(StatusCodes.Conflict) =>
           IO(logger.debug(s"$policyName has already been created"))
       }
   }

@@ -346,6 +346,9 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
       insertPolicyActions(policy.actions, policyId)
 
       policy
+    }.recoverWith {
+      case duplicateException: PSQLException if duplicateException.getSQLState == PSQLStateExtensions.UNIQUE_VIOLATION =>
+        IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"policy $policy already exists")))
     }
   }
 
