@@ -107,7 +107,11 @@ class LdapAccessPolicyDAO(
         policyDn(
           FullyQualifiedPolicyId(FullyQualifiedResourceId(policy.id.resource.resourceTypeName, policy.id.resource.resourceId), policy.id.accessPolicyName)),
         attributes.asJava
-      )).map(_ => policy))
+      )).map(_ => policy)).recoverWith {
+
+      case ldape: LDAPException if ldape.getResultCode == ResultCode.ENTRY_ALREADY_EXISTS =>
+        IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"policy $policy already exists")))
+    }
   }
 
   private def maybeAttribute(attr: String, values: Set[String]): Option[Attribute] = values.toSeq match {
