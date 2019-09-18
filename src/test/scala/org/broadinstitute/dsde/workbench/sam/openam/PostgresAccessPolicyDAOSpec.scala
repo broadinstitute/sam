@@ -435,6 +435,21 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
         dao.loadPolicy(policy.id).unsafeRunSync() shouldEqual Option(policy)
       }
 
+      "detects duplicate policy" in {
+        dao.createResourceType(resourceType).unsafeRunSync()
+        val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
+        dao.createResource(resource).unsafeRunSync()
+
+        val policy = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("policyName")), Set.empty, WorkbenchEmail("policy@email.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), false)
+        dao.createPolicy(policy).unsafeRunSync()
+
+        val dupException = intercept[WorkbenchExceptionWithErrorReport] {
+          dao.createPolicy(policy).unsafeRunSync()
+        }
+
+        dupException.errorReport.statusCode shouldEqual Some(StatusCodes.Conflict)
+      }
+
       "creates a policy with actions that don't already exist" in {
         dao.createResourceType(resourceType).unsafeRunSync()
         val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
