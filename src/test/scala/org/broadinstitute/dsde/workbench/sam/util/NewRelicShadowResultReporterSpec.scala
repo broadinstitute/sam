@@ -203,15 +203,15 @@ class NewRelicShadowResultReporterSpec extends FlatSpec with Matchers with Mocki
     val reporter = createResultReporter
     reporter.reportResult(MethodCallInfo("fxn", Array("param"), Array("arg")), TimedResult(Right(27), 100 seconds), TimedResult(Right(27), 10 seconds)).unsafeRunSync()
 
-    verify(reporter.newRelicMetrics).gauge(s"${reporter.daoName}_fxn_perf", 90000f)
-    verify(reporter.newRelicMetrics).incrementCounterIO(s"${reporter.daoName}_fxn_match")
+    verify(reporter.newRelicMetrics).gauge(s"${reporter.daoName}/fxn/perf", 90000f)
+    verify(reporter.newRelicMetrics).incrementCounterIO(s"${reporter.daoName}/fxn/match")
   }
 
   it should "report mismatch" in {
     val reporter = createResultReporter
     reporter.reportResult(MethodCallInfo("fxn", Array("param"), Array("arg")), TimedResult(Right(20), 100 seconds), TimedResult(Right(27), 10 seconds)).unsafeRunSync()
 
-    verify(reporter.newRelicMetrics).incrementCounterIO(s"${reporter.daoName}_fxn_mismatch")
+    verify(reporter.newRelicMetrics).incrementCounterIO(s"${reporter.daoName}/fxn/mismatch")
   }
 
   it should "report complex mismatch" in {
@@ -220,7 +220,7 @@ class NewRelicShadowResultReporterSpec extends FlatSpec with Matchers with Mocki
     val shadow = TestCaseClass("asdfasdf", Seq(TestInnerCaseClass(MyValueObject("qqq"), 88), TestInnerCaseClass(MyValueObject("ppp"), 99)))
     reporter.reportResult(MethodCallInfo("fxn", Array("param"), Array("arg")), TimedResult(Right(real), 100 seconds), TimedResult(Right(shadow), 10 seconds)).unsafeRunSync()
 
-    verify(reporter.newRelicMetrics).incrementCounterIO(s"${reporter.daoName}_fxn_mismatch")
+    verify(reporter.newRelicMetrics).incrementCounterIO(s"${reporter.daoName}/fxn/mismatch")
   }
 
   it should "truncate too long message" in {
