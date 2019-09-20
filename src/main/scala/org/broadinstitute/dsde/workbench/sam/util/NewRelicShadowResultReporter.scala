@@ -26,9 +26,9 @@ class NewRelicShadowResultReporter(val daoName: String, val newRelicMetrics: New
     for {
       matchResult <- IO(resultsMatch(realTimedResult.result, shadowTimedResult.result))
       matchString = if(matchResult.matches) "match" else "mismatch"
-      _ <- newRelicMetrics.incrementCounterIO(s"${daoName}_${methodCallInfo.functionName}_$matchString")
+      _ <- newRelicMetrics.incrementCounterIO(s"${daoName}/${methodCallInfo.functionName}/$matchString")
       perfImprovement = (realTimedResult.time - shadowTimedResult.time).toMillis
-      _ <- if (matchResult.matches) newRelicMetrics.gauge(s"${daoName}_${methodCallInfo.functionName}_perf", perfImprovement.toFloat)
+      _ <- if (matchResult.matches) newRelicMetrics.gauge(s"${daoName}/${methodCallInfo.functionName}/perf", perfImprovement.toFloat)
            else logMismatch(methodCallInfo: MethodCallInfo, realTimedResult: TimedResult[T], shadowTimedResult: TimedResult[T], matchResult)
     } yield ()
   }
