@@ -34,11 +34,16 @@ import org.ehcache.config.builders.{CacheConfigurationBuilder, CacheManagerBuild
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
+import scala.util.control.NonFatal
 
 object Boot extends IOApp with LazyLogging {
 
   def run(args: List[String]): IO[ExitCode] =
-    startup() *> ExitCode.Success.pure[IO]
+    (startup() *> ExitCode.Success.pure[IO]).recoverWith {
+      case NonFatal(t) =>
+        logger.error("sam failed to start, trying again in 5s", t)
+        IO.sleep(5 seconds) *> run(args)
+    }
 
   private def startup(): IO[Unit] = {
 
