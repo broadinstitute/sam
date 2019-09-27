@@ -425,19 +425,10 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
   private def insertPolicyGroup(policy: AccessPolicy)(implicit session: DBSession): GroupPK = {
     val gCol = GroupTable.column
 
-    val r = ResourceTable.syntax("r")
-    val rt = ResourceTypeTable.syntax("rt")
-    // Group.name in DB cannot be null and must be unique.  Policy names are stored in the SAM_POLICY table, and
-    // policies don't care about the group.name, but it must be set.  So we are building something unique here, in order
-    // to satisfy the db constraint, but it's otherwise irrelevant for polices.
-    val policyGroupName =
-      samsqls"""select concat(${r.id}, '_', ${policy.id.accessPolicyName}) from ${ResourceTable as r}
-               join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
-               where ${r.name} = ${policy.id.resource.resourceId}
-               and ${rt.name} = ${policy.id.resource.resourceTypeName}"""
+    val policyGroupName = s"${policy.id.resource.resourceTypeName}_${policy.id.resource.resourceId}_${policy.id.accessPolicyName}"
 
     GroupPK(samsql"""insert into ${GroupTable.table} (${gCol.name}, ${gCol.email}, ${gCol.updatedDate})
-               values ((${policyGroupName}), ${policy.email}, ${Instant.now()})""".updateAndReturnGeneratedKey().apply())
+               values (${policyGroupName}, ${policy.email}, ${Instant.now()})""".updateAndReturnGeneratedKey().apply())
   }
 
   // Policies and their roles and actions are set to cascade delete when the associated group is deleted
@@ -446,9 +437,13 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     val g = GroupTable.syntax("g")
 
     runInTransaction { implicit session =>
-      samsql"""delete from ${PolicyTable as p}
+      val policyGroupPK = samsql"""delete from ${PolicyTable as p}
         where ${p.name} = ${policy.accessPolicyName}
-        and ${p.resourceId} = (${ResourceTable.loadResourcePK(policy.resource)})""".update().apply()
+        and ${p.resourceId} = (${ResourceTable.loadResourcePK(policy.resource)})
+        returning ${p.groupId}""".updateAndReturnGeneratedKey().apply()
+
+      samsql"""delete from ${GroupTable as g}
+         where ${g.id} = ${policyGroupPK}""".update().apply()
     }
   }
 
