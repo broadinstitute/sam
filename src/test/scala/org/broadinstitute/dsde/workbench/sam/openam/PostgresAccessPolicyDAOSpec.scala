@@ -495,10 +495,6 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
 
     "deletePolicy" - {
       "deletes a policy" in {
-        // ideally we'd check that the associated group was deleted,
-        // but there's no way to load the associated group without its name,
-        // and we can't get its name without the resource's primary key which is not exposed anywhere,
-        // so we aren't checking that the associated group was deleted
         dao.createResourceType(resourceType).unsafeRunSync()
         val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
         dao.createResource(resource).unsafeRunSync()
@@ -511,6 +507,23 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
         dao.loadPolicy(policy.id).unsafeRunSync() shouldBe Option(policy)
         dao.deletePolicy(policy.id).unsafeRunSync()
         dao.loadPolicy(policy.id).unsafeRunSync() shouldBe None
+        dirDao.loadGroup(WorkbenchGroupName(s"${resourceType.name}_${resource.resourceId}_${policy.id.accessPolicyName}")).unsafeRunSync() shouldBe None
+      }
+
+      "can handle deleting a policy that has already been deleted" in {
+        dao.createResourceType(resourceType).unsafeRunSync()
+        val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
+        dao.createResource(resource).unsafeRunSync()
+
+        dirDao.createGroup(defaultGroup).unsafeRunSync()
+        dirDao.createUser(defaultUser).unsafeRunSync()
+
+        val policy = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("policyName")), Set(defaultGroup.id, defaultUser.id), WorkbenchEmail("policy@email.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), false)
+        dao.createPolicy(policy).unsafeRunSync()
+        dao.loadPolicy(policy.id).unsafeRunSync() shouldBe Option(policy)
+        dao.deletePolicy(policy.id).unsafeRunSync()
+        dao.loadPolicy(policy.id).unsafeRunSync() shouldBe None
+        dao.deletePolicy(policy.id).unsafeRunSync()
       }
     }
 
