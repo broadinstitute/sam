@@ -215,14 +215,21 @@ class ResourceService(
   //      preventing a new Resource with the same ID from being created
   def deleteResource(resource: FullyQualifiedResourceId): Future[Unit] =
     for {
-      policiesToDelete <- accessPolicyDAO.listAccessPolicies(resource).unsafeToFuture()
       // remove from cloud extensions first so a failure there does not leave ldap in a bad state
-      _ <- Future.traverse(policiesToDelete) { policy =>
-        cloudExtensions.onGroupDelete(policy.email)
-      }
+      policiesToDelete <- cloudDeletePolicies(resource)
+
       _ <- policiesToDelete.toList.parTraverse(p => accessPolicyDAO.deletePolicy(p.id)).unsafeToFuture()
       _ <- maybeDeleteResource(resource)
     } yield ()
+
+  def cloudDeletePolicies(resource: FullyQualifiedResourceId): Future[Stream[AccessPolicy]] = {
+    for {
+      policiesToDelete <- accessPolicyDAO.listAccessPolicies(resource).unsafeToFuture()
+      _ <- Future.traverse(policiesToDelete) { policy =>
+        cloudExtensions.onGroupDelete(policy.email)
+      }
+    } yield policiesToDelete
+  }
 
   private def maybeDeleteResource(resource: FullyQualifiedResourceId): Future[Unit] =
     resourceTypes.get(resource.resourceTypeName) match {

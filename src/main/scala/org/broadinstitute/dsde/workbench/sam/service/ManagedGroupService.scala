@@ -100,8 +100,10 @@ class ManagedGroupService(
       // so failures there do not leave ldap in a bad state
       // resourceService.deleteResource also does cloudExtensions.onGroupDelete first thing
       _ <- cloudExtensions.onGroupDelete(WorkbenchEmail(constructEmail(groupId.value)))
-      _ <- resourceService.deleteResource(FullyQualifiedResourceId(managedGroupType.name, groupId))
+      managedGroupResourceId = FullyQualifiedResourceId(managedGroupType.name, groupId)
+      _ <- resourceService.cloudDeletePolicies(managedGroupResourceId)
       _ <- directoryDAO.deleteGroup(WorkbenchGroupName(groupId.value)).unsafeToFuture()
+      _ <- resourceService.deleteResource(managedGroupResourceId)
     } yield ()
 
   def listGroups(userId: WorkbenchUserId): IO[Set[ManagedGroupMembershipEntry]] =

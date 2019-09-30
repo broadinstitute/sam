@@ -197,7 +197,7 @@
                 <constraints nullable="false" foreignKeyName="FK_SRP_RESOURCE" referencedTableName="SAM_RESOURCE" referencedColumnNames="id"/>
             </column>
             <column name="group_id" type="BIGINT">
-                <constraints nullable="false" foreignKeyName="FK_SRP_GROUP" referencedTableName="SAM_GROUP" referencedColumnNames="id" deleteCascade="true"/>
+                <constraints nullable="false" foreignKeyName="FK_SRP_GROUP" referencedTableName="SAM_GROUP" referencedColumnNames="id"/>
             </column>
             <column name="name" type="VARCHAR">
                 <constraints nullable="false"/>
