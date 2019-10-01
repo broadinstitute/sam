@@ -41,7 +41,8 @@ class GoogleGroupSynchronizer(directoryDAO: DirectoryDAO,
   extends LazyLogging with FutureSupport {
   def synchronizeGroupMembers(
                                groupId: WorkbenchGroupIdentity,
-                               visitedGroups: Set[WorkbenchGroupIdentity] = Set.empty[WorkbenchGroupIdentity]): Future[Map[WorkbenchEmail, Seq[SyncReportItem]]] = {
+                               visitedGroups: Set[WorkbenchGroupIdentity] = Set.empty[WorkbenchGroupIdentity],
+                               updateMembersAsynchronously: Boolean = false): Future[Map[WorkbenchEmail, Seq[SyncReportItem]]] = {
     def toSyncReportItem(operation: String, email: String, result: Try[Unit]) =
       SyncReportItem(
         operation,
@@ -98,6 +99,9 @@ class GoogleGroupSynchronizer(directoryDAO: DirectoryDAO,
             googleDirectoryDAO.createGroup(groupId.toString, group.email, Option(googleDirectoryDAO.lockedDownGroupSettings)) map (_ => Set.empty[String])
           case Some(members) => Future.successful(members.map(_.toLowerCase).toSet)
         }
+
+        /*
+        //TODO: move this... somewhere?
         samMemberEmails <- Future
           .traverse(members) {
             case group: WorkbenchGroupIdentity => directoryDAO.loadSubjectEmail(group).unsafeToFuture()
@@ -121,8 +125,10 @@ class GoogleGroupSynchronizer(directoryDAO: DirectoryDAO,
         }
 
         _ <- directoryDAO.updateSynchronizedDate(groupId).unsafeToFuture()
+        */
       } yield {
-        Map(group.email -> Seq(addTrials, removeTrials).flatten) ++ subGroupSyncs.flatten
+        Map.empty[WorkbenchEmail, Seq[SyncReportItem]]
+        //Map(group.email -> Seq(addTrials, removeTrials).flatten) ++ subGroupSyncs.flatten
       }
     }
   }
