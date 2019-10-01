@@ -18,6 +18,8 @@ import spray.json.JsString
 
 import scala.concurrent.ExecutionContext
 
+import io.opencensus.scala.Tracing._
+
 trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with SecurityDirectives {
   implicit val executionContext: ExecutionContext
   val googleExtensions: GoogleExtensions
@@ -141,9 +143,11 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                 post {
                   complete {
                     import GoogleModelJsonSupport._
-                    googleGroupSynchronizer.synchronizeGroupMembers(policyId).map { syncReport =>
+                    trace("/sync")( span =>
+                      googleGroupSynchronizer.synchronizeGroupMembers(policyId).map { syncReport =>
                       StatusCodes.OK -> syncReport
                     }
+                    )
                   }
                 } ~
                   get {

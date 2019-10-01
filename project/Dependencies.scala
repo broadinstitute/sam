@@ -55,6 +55,9 @@ object Dependencies {
 
   val unboundid: ModuleID = "com.unboundid" % "unboundid-ldapsdk" % "4.0.6"
   val ehcache: ModuleID = "org.ehcache" % "ehcache" % "3.6.2"
+  
+  // was included transitively before, now explicit
+  val commonsCodec: ModuleID = "commons-codec" % "commons-codec" % "1.13"
 
   // All of workbench-libs pull in Akka; exclude it since we provide our own Akka dependency.
   // workbench-google pulls in workbench-{util, model, metrics}; exclude them so we can control the library versions individually.
@@ -66,6 +69,19 @@ object Dependencies {
   val workbenchGoogleTests: ModuleID =    "org.broadinstitute.dsde.workbench" %% "workbench-google" % workbenchGoogleV % "test" classifier "tests" excludeAll(excludeWorkbenchUtil, excludeWorkbenchModel)
   val workbenchGoogle2Tests: ModuleID =    "org.broadinstitute.dsde.workbench" %% "workbench-google2" % workbenchGoogle2V % "test" classifier "tests" excludeAll(excludeWorkbenchUtil, excludeWorkbenchModel)
   val googleStorageLocal: ModuleID = "com.google.cloud" % "google-cloud-nio" % "0.71.0-alpha" % "test" //needed for mocking google cloud storage
+
+  val opencensusScalaCode: ModuleID = "com.github.sebruck" %% "opencensus-scala-core" % "0.7.0-M2"
+  val opencensusAkkaHttp: ModuleID = "com.github.sebruck" %% "opencensus-scala-akka-http" % "0.7.0-M2"
+
+  val opencensusStackDriverExporter: ModuleID = "io.opencensus" % "opencensus-exporter-trace-stackdriver" % "0.23.0"
+  val opencensusLoggingExporter: ModuleID = "io.opencensus" % "opencensus-exporter-trace-logging"     % "0.23.0"
+
+  val openCensusDependencies = Seq(
+    opencensusScalaCode,
+    opencensusAkkaHttp,
+    opencensusStackDriverExporter,
+    opencensusLoggingExporter
+  )
 
   val rootDependencies = Seq(
     // proactively pull in latest versions of Jackson libs, instead of relying on the versions
@@ -106,6 +122,7 @@ object Dependencies {
 
     unboundid,
     ehcache,
-    catsEffect
-  )
+    catsEffect,
+    commonsCodec
+  ) ++ openCensusDependencies
 }

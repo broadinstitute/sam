@@ -13,6 +13,7 @@ import org.broadinstitute.dsde.workbench.util.FutureSupport
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success, Try}
+import io.opencensus.scala.Tracing._
 
 /**
   * This class makes sure that our google groups have the right members.
@@ -52,14 +53,14 @@ class GoogleGroupSynchronizer(directoryDAO: DirectoryDAO,
         }
       )
 
-    if (visitedGroups.contains(groupId)) {
+    trace("synchronizeGroupMembers")( span => if (visitedGroups.contains(groupId)) {
       Future.successful(Map.empty)
     } else {
       for {
         groupOption <- groupId match {
-          case basicGroupName: WorkbenchGroupName => directoryDAO.loadGroup(basicGroupName).unsafeToFuture()
+          case basicGroupName: WorkbenchGroupName => traceWithParent("loadGroup",span)( _ => directoryDAO.loadGroup(basicGroupName).unsafeToFuture())
           case rpn: FullyQualifiedPolicyId =>
-            accessPolicyDAO
+            traceWithParent("loadPolicy",span)( _ => accessPolicyDAO
               .loadPolicy(rpn)
               .unsafeToFuture()
               .map(_.map { loadedPolicy =>
@@ -69,12 +70,12 @@ class GoogleGroupSynchronizer(directoryDAO: DirectoryDAO,
                 } else {
                   loadedPolicy
                 }
-              })
+              }))
         }
 
         group = groupOption.getOrElse(throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"$groupId not found")))
 
-        members <- (group match {
+        members <- traceWithParent("calculateMembers",span)( _ => (group match {
           case accessPolicy: AccessPolicy =>
             if (isConstrainable(accessPolicy.id.resource, accessPolicy)) {
               calculateIntersectionGroup(accessPolicy.id.resource, accessPolicy)
@@ -82,23 +83,24 @@ class GoogleGroupSynchronizer(directoryDAO: DirectoryDAO,
               IO.pure(accessPolicy.members)
             }
           case group: BasicWorkbenchGroup => IO.pure(group.members)
-        }).unsafeToFuture()
+        }).unsafeToFuture())
 
-        subGroupSyncs <- Future.traverse(group.members) {
+        subGroupSyncs <- traceWithParent("syncSubgroups",span)( _ => Future.traverse(group.members) {
           case subGroup: WorkbenchGroupIdentity =>
             directoryDAO.getSynchronizedDate(subGroup).unsafeToFuture().flatMap {
               case None => synchronizeGroupMembers(subGroup, visitedGroups + groupId)
               case _ => Future.successful(Map.empty[WorkbenchEmail, Seq[SyncReportItem]])
             }
           case _ => Future.successful(Map.empty[WorkbenchEmail, Seq[SyncReportItem]])
-        }
+        })
 
-        googleMemberEmails <- googleDirectoryDAO.listGroupMembers(group.email) flatMap {
+        googleMemberEmails <- traceWithParent("listGroupMembers", span)(s2 => googleDirectoryDAO.listGroupMembers(group.email) flatMap {
           case None =>
-            googleDirectoryDAO.createGroup(groupId.toString, group.email, Option(googleDirectoryDAO.lockedDownGroupSettings)) map (_ => Set.empty[String])
+            traceWithParent("createGroup",s2)( _ => googleDirectoryDAO.createGroup(groupId.toString, group.email, Option(googleDirectoryDAO.lockedDownGroupSettings)) map (_ => Set.empty[String]))
           case Some(members) => Future.successful(members.map(_.toLowerCase).toSet)
-        }
-        samMemberEmails <- Future
+        })
+
+        samMemberEmails <- traceWithParent("gatherEmails",span)( _ => Future
           .traverse(members) {
             case group: WorkbenchGroupIdentity => directoryDAO.loadSubjectEmail(group).unsafeToFuture()
 
@@ -108,23 +110,24 @@ class GoogleGroupSynchronizer(directoryDAO: DirectoryDAO,
             // not sure why this next case would happen but if a petSA is in a group just use its email
             case petSA: PetServiceAccountId => directoryDAO.loadSubjectEmail(petSA).unsafeToFuture()
           }
-          .map(_.collect { case Some(email) => email.value.toLowerCase })
+          .map(_.collect { case Some(email) => email.value.toLowerCase }))
 
         toAdd = samMemberEmails -- googleMemberEmails
         toRemove = googleMemberEmails -- samMemberEmails
 
-        addTrials <- Future.traverse(toAdd) { addEmail =>
+        addTrials <- traceWithParent("addTrials",span)( _ => Future.traverse(toAdd) { addEmail =>
           googleDirectoryDAO.addMemberToGroup(group.email, WorkbenchEmail(addEmail)).toTry.map(toSyncReportItem("added", addEmail, _))
-        }
-        removeTrials <- Future.traverse(toRemove) { removeEmail =>
+        })
+        removeTrials <- traceWithParent("removeTrials",span)( _ => Future.traverse(toRemove) { removeEmail =>
           googleDirectoryDAO.removeMemberFromGroup(group.email, WorkbenchEmail(removeEmail)).toTry.map(toSyncReportItem("removed", removeEmail, _))
-        }
+        })
 
-        _ <- directoryDAO.updateSynchronizedDate(groupId).unsafeToFuture()
+        _ <- traceWithParent("updateSyncDate",span)( _ => directoryDAO.updateSynchronizedDate(groupId).unsafeToFuture())
       } yield {
         Map(group.email -> Seq(addTrials, removeTrials).flatten) ++ subGroupSyncs.flatten
       }
-    }
+    })
+
   }
 
   /**
