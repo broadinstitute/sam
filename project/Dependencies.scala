@@ -9,9 +9,9 @@ object Dependencies {
   val scalaCheckV    = "1.14.0"
   val catsEffectV         = "1.2.0"
 
-  val workbenchUtilV   = "0.5-6942040"
+  val workbenchUtilV   = "0.5-65ead2a-SNAP"
   val workbenchModelV  = "0.13-d4e0782"
-  val workbenchGoogleV = "0.20-a9f29eb"
+  val workbenchGoogleV = "0.21-65ead2a-SNAP"
   val workbenchGoogle2V = "0.1-8328aae"
   val workbenchNotificationsV = "0.1-f2a0020"
   val monocleVersion = "1.5.1-cats"
@@ -22,6 +22,9 @@ object Dependencies {
   val excludeWorkbenchModel =   ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-model_2.12")
   val excludeWorkbenchMetrics = ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-metrics_2.12")
   val excludeWorkbenchGoogle =  ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-google_2.12")
+
+  val excludIoGrpc =  ExclusionRule(organization = "io.grpc", name = "grpc-core")
+  val ioGrpc: ModuleID = "io.grpc" % "grpc-core" % "1.19.0"
 
   val newRelic: ModuleID = "com.newrelic.agent.java" % "newrelic-api" % newRelicVersion
   val jacksonAnnotations: ModuleID = "com.fasterxml.jackson.core" % "jackson-annotations" % jacksonV
@@ -42,10 +45,12 @@ object Dependencies {
   val akkaTestKit: ModuleID =       "com.typesafe.akka"   %%  "akka-testkit"         % akkaV     % "test"
   val akkaHttpTestKit: ModuleID =   "com.typesafe.akka"   %%  "akka-http-testkit"    % akkaHttpV % "test"
   val scalaCheck: ModuleID =        "org.scalacheck"      %%  "scalacheck"           % scalaCheckV % "test"
+
+  val excludeCatsEffect =  ExclusionRule(organization = "org.typelevel", name = "cats-effect")
   val catsEffect: ModuleID = "org.typelevel" %% "cats-effect" % catsEffectV
 
-  val googleOAuth2: ModuleID = "com.google.auth" % "google-auth-library-oauth2-http" % "0.9.0"
-  val googleStorage: ModuleID = "com.google.apis" % "google-api-services-storage" % "v1-rev20181013-1.27.0" //force this version
+  val googleOAuth2: ModuleID = "com.google.auth" % "google-auth-library-oauth2-http" % "0.9.0" excludeAll(excludIoGrpc)
+  val googleStorage: ModuleID = "com.google.apis" % "google-api-services-storage" % "v1-rev20181013-1.27.0"  excludeAll(excludIoGrpc) //force this version
 
   val monocle: ModuleID = "com.github.julien-truffaut" %%  "monocle-core"  % monocleVersion
   val monocleMacro: ModuleID = "com.github.julien-truffaut" %%  "monocle-macro" % monocleVersion
@@ -61,7 +66,7 @@ object Dependencies {
 
   // All of workbench-libs pull in Akka; exclude it since we provide our own Akka dependency.
   // workbench-google pulls in workbench-{util, model, metrics}; exclude them so we can control the library versions individually.
-  val workbenchUtil: ModuleID =      "org.broadinstitute.dsde.workbench" %% "workbench-util"   % workbenchUtilV excludeAll(excludeWorkbenchModel)
+  val workbenchUtil: ModuleID =      "org.broadinstitute.dsde.workbench" %% "workbench-util"   % workbenchUtilV excludeAll(excludeWorkbenchModel, excludeCatsEffect)
   val workbenchModel: ModuleID =     "org.broadinstitute.dsde.workbench" %% "workbench-model"  % workbenchModelV
   val workbenchGoogle: ModuleID =    "org.broadinstitute.dsde.workbench" %% "workbench-google" % workbenchGoogleV excludeAll(excludeWorkbenchModel, excludeWorkbenchUtil)
   val workbenchGoogle2: ModuleID =    "org.broadinstitute.dsde.workbench" %% "workbench-google2" % workbenchGoogle2V excludeAll(excludeWorkbenchModel, excludeWorkbenchUtil)
@@ -70,11 +75,11 @@ object Dependencies {
   val workbenchGoogle2Tests: ModuleID =    "org.broadinstitute.dsde.workbench" %% "workbench-google2" % workbenchGoogle2V % "test" classifier "tests" excludeAll(excludeWorkbenchUtil, excludeWorkbenchModel)
   val googleStorageLocal: ModuleID = "com.google.cloud" % "google-cloud-nio" % "0.71.0-alpha" % "test" //needed for mocking google cloud storage
 
-  val opencensusScalaCode: ModuleID = "com.github.sebruck" %% "opencensus-scala-core" % "0.7.0-M2"
-  val opencensusAkkaHttp: ModuleID = "com.github.sebruck" %% "opencensus-scala-akka-http" % "0.7.0-M2"
+  val opencensusScalaCode: ModuleID = "com.github.sebruck" %% "opencensus-scala-core" % "0.7.0-M2" excludeAll(excludIoGrpc)
+  val opencensusAkkaHttp: ModuleID = "com.github.sebruck" %% "opencensus-scala-akka-http" % "0.7.0-M2" excludeAll(excludIoGrpc)
 
-  val opencensusStackDriverExporter: ModuleID = "io.opencensus" % "opencensus-exporter-trace-stackdriver" % "0.23.0"
-  val opencensusLoggingExporter: ModuleID = "io.opencensus" % "opencensus-exporter-trace-logging"     % "0.23.0"
+  val opencensusStackDriverExporter: ModuleID = "io.opencensus" % "opencensus-exporter-trace-stackdriver" % "0.23.0" excludeAll(excludIoGrpc)
+  val opencensusLoggingExporter: ModuleID = "io.opencensus" % "opencensus-exporter-trace-logging"     % "0.23.0" excludeAll(excludIoGrpc)
 
   val openCensusDependencies = Seq(
     opencensusScalaCode,
@@ -86,6 +91,7 @@ object Dependencies {
   val rootDependencies = Seq(
     // proactively pull in latest versions of Jackson libs, instead of relying on the versions
     // specified as transitive dependencies, due to OWASP DependencyCheck warnings for earlier versions.
+    ioGrpc,
     logbackClassic,
     ravenLogback,
     scalaLogging,

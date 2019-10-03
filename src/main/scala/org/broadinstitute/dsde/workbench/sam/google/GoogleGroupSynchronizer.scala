@@ -2,6 +2,9 @@ package org.broadinstitute.dsde.workbench.sam.google
 
 import akka.http.scaladsl.model.StatusCodes
 import cats.effect.IO
+//import com.google.api.services.admin.directory.Directory
+//import com.google.api.services.admin.directory.model.Group
+//import com.google.api.services.groupssettings.{Groupssettings, GroupssettingsScopes}
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.google.GoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.model._
@@ -14,6 +17,10 @@ import org.broadinstitute.dsde.workbench.util.FutureSupport
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success, Try}
 import io.opencensus.scala.Tracing._
+//import io.opencensus.trace.Span
+//import org.broadinstitute.dsde.workbench.google.GoogleCredentialModes.{httpTransport, jsonFactory}
+//import org.broadinstitute.dsde.workbench.google.GoogleUtilities.RetryPredicates.{when404, when5xx, whenInvalidValueOnBucketCreation, whenNonHttpIOException, whenUsageLimited}
+//import org.broadinstitute.dsde.workbench.metrics.GoogleInstrumentedService
 
 /**
   * This class makes sure that our google groups have the right members.
@@ -94,11 +101,11 @@ class GoogleGroupSynchronizer(directoryDAO: DirectoryDAO,
           case _ => Future.successful(Map.empty[WorkbenchEmail, Seq[SyncReportItem]])
         })
 
-        googleMemberEmails <- traceWithParent("listGroupMembers", span)(s2 => googleDirectoryDAO.listGroupMembers(group.email) flatMap {
+        googleMemberEmails <- traceWithParent("listGroupMembers", span)(_ => googleDirectoryDAO.listGroupMembers(group.email)) flatMap {
           case None =>
-            traceWithParent("createGroup",s2)( _ => googleDirectoryDAO.createGroup(groupId.toString, group.email, Option(googleDirectoryDAO.lockedDownGroupSettings)) map (_ => Set.empty[String]))
+            traceWithParent("createGroup",span)( s2 => googleDirectoryDAO.createGroup(groupId.toString, group.email, Option(googleDirectoryDAO.lockedDownGroupSettings))(s2)) map (_ => Set.empty[String])
           case Some(members) => Future.successful(members.map(_.toLowerCase).toSet)
-        })
+        }
 
         samMemberEmails <- traceWithParent("gatherEmails",span)( _ => Future
           .traverse(members) {
@@ -115,10 +122,10 @@ class GoogleGroupSynchronizer(directoryDAO: DirectoryDAO,
         toAdd = samMemberEmails -- googleMemberEmails
         toRemove = googleMemberEmails -- samMemberEmails
 
-        addTrials <- traceWithParent("addTrials",span)( _ => Future.traverse(toAdd) { addEmail =>
+        addTrials <- traceWithParent("addMembers",span)( _ => Future.traverse(toAdd) { addEmail =>
           googleDirectoryDAO.addMemberToGroup(group.email, WorkbenchEmail(addEmail)).toTry.map(toSyncReportItem("added", addEmail, _))
         })
-        removeTrials <- traceWithParent("removeTrials",span)( _ => Future.traverse(toRemove) { removeEmail =>
+        removeTrials <- traceWithParent("removeMembers",span)( _ => Future.traverse(toRemove) { removeEmail =>
           googleDirectoryDAO.removeMemberFromGroup(group.email, WorkbenchEmail(removeEmail)).toTry.map(toSyncReportItem("removed", removeEmail, _))
         })
 
@@ -130,6 +137,42 @@ class GoogleGroupSynchronizer(directoryDAO: DirectoryDAO,
 
   }
 
+//
+//  val googleCredential = null  // FIXME!!
+//
+//  private lazy val directory = {
+//    new Directory.Builder(httpTransport, jsonFactory, googleCredential).setApplicationName("local-sam").build()
+//  }
+//
+//  import com.google.api.services.groupssettings.model.{Groups => GroupSettings}
+//  val appName = "sam"
+//
+//  private class GroupSettingsDAO() extends AbstractHttpGoogleDAO(appName, googleCredentialMode, workbenchMetricBaseName) {
+//    override implicit val service = GoogleInstrumentedService.Groups
+//    override val scopes = Seq(GroupssettingsScopes.APPS_GROUPS_SETTINGS)
+//    private lazy val settingsClient = new Groupssettings.Builder(httpTransport, jsonFactory, googleCredential).setApplicationName(appName).build()
+//
+//
+//    def updateGroupSettings(groupEmail: WorkbenchEmail, settings: GroupSettings) = {
+//      val updater = settingsClient.groups().update(groupEmail.value, settings)
+//      retry(when5xx, whenUsageLimited, when404, whenInvalidValueOnBucketCreation, whenNonHttpIOException) (() => { executeGoogleRequest(updater) })
+//    }
+//  }
+//
+//  def localCreateGroup(displayName: String, groupEmail: WorkbenchEmail, groupSettings: Option[GroupSettings] = None)(implicit span: Span = null): Future[Unit] = {
+//
+//    val groups = directory.groups
+//    val group = new Group().setEmail(groupEmail.value).setName(displayName.take(60)) //max google group name length is 60 characters
+//    val inserter = groups.insert(group)
+//
+//    for {
+//      _ <- retry(when5xx, whenUsageLimited, when404, whenInvalidValueOnBucketCreation, whenNonHttpIOException)(() => { executeGoogleRequest(inserter) })
+//      _ <- groupSettings match {
+//        case None => Future.successful(())
+//        case Some(settings) => traceWithParent("update", span)(_ => new GroupSettingsDAO().updateGroupSettings(groupEmail, settings))
+//      }
+//    } yield ()
+//  }
   /**
     * An access policy is constrainable if it contains an action or a role that contains an action that is
     * configured as constrainable in the resource type definition.

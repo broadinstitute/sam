@@ -20,6 +20,8 @@ import scala.util.matching.Regex
   * Created by dvoet on 7/14/17.
   */
 class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExtensions)(implicit val executionContext: ExecutionContext) extends LazyLogging {
+  // KC: why did I need to do this after upgrading workbench utils?
+  private implicit val cs = IO.contextShift(executionContext)
 
   def createUser(user: CreateWorkbenchUser): Future[UserStatus] =
     for {
