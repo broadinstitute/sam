@@ -14,6 +14,8 @@ import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, LoadResour
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Success
+import io.opencensus.scala.Tracing._
+import io.opencensus.trace.Span
 
 /**
   * Created by mbemis on 5/22/17.
@@ -109,13 +111,13 @@ class ResourceService(
       policiesMap: Map[AccessPolicyName, AccessPolicyMembership],
       authDomain: Set[WorkbenchGroupName],
       userId: WorkbenchUserId): Future[Resource] =
-    makeValidatablePolicies(policiesMap).flatMap { policies =>
-      validateCreateResource(resourceType, resourceId, policies, authDomain, userId).flatMap {
-        case Seq() => persistResource(resourceType, resourceId, policies, authDomain)
+    trace("createResource")( span => makeValidatablePolicies(policiesMap).flatMap { policies =>
+      traceWithParent("validateCreateResource", span)( s2 => validateCreateResource(resourceType, resourceId, policies, authDomain, userId, s2)).flatMap {
+        case Seq() => traceWithParent("persistResource", span)( s2 => persistResource(resourceType, resourceId, policies, authDomain,s2))
         case errorReports: Seq[ErrorReport] =>
           throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "Cannot create resource", errorReports))
       }
-    }
+    })
 
   /**
     * This method only persists the resource and then overwrites/creates the policies for that resource.
@@ -127,10 +129,10 @@ class ResourceService(
     * @param authDomain
     * @return Future[Resource]
     */
-  private def persistResource(resourceType: ResourceType, resourceId: ResourceId, policies: Set[ValidatableAccessPolicy], authDomain: Set[WorkbenchGroupName]) =
+  private def persistResource(resourceType: ResourceType, resourceId: ResourceId, policies: Set[ValidatableAccessPolicy], authDomain: Set[WorkbenchGroupName], span: Span = null) =
     for {
-      resource <- accessPolicyDAO.createResource(Resource(resourceType.name, resourceId, authDomain)).unsafeToFuture()
-      _ <- Future.traverse(policies)(p => createOrUpdatePolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, p.policyName), p))
+      resource <- traceWithParent("createResource", span)( _ => accessPolicyDAO.createResource(Resource(resourceType.name, resourceId, authDomain)).unsafeToFuture())
+      _ <- Future.traverse(policies)(p => traceWithParent("createOrUpdatePolicy", span)( _ => createOrUpdatePolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, p.policyName), p)))
     } yield resource
 
   private def validateCreateResource(
@@ -138,12 +140,13 @@ class ResourceService(
       resourceId: ResourceId,
       policies: Set[ValidatableAccessPolicy],
       authDomain: Set[WorkbenchGroupName],
-      userId: WorkbenchUserId) =
+      userId: WorkbenchUserId,
+      span: Span = null) =
     for {
-      resourceIdErrors <- Future.successful(validateUrlSafe(resourceId.value))
-      ownerPolicyErrors <- Future.successful(validateOwnerPolicyExists(resourceType, policies))
-      policyErrors <- Future.successful(policies.flatMap(policy => validatePolicy(resourceType, policy)))
-      authDomainErrors <- validateAuthDomain(resourceType, authDomain, userId)
+      resourceIdErrors <- traceWithParent("validate", span)(_ => Future.successful(validateUrlSafe(resourceId.value)))
+      ownerPolicyErrors <- traceWithParent("validate", span)(_ => Future.successful(validateOwnerPolicyExists(resourceType, policies)))
+      policyErrors <- traceWithParent("validate", span)(_ => (Future.successful(policies.flatMap(policy => validatePolicy(resourceType, policy)))))
+      authDomainErrors <- traceWithParent("validate", span)(_ => validateAuthDomain(resourceType, authDomain, userId))
     } yield (resourceIdErrors ++ ownerPolicyErrors ++ policyErrors ++ authDomainErrors).toSeq
 
   private val validUrlSafePattern = "[-a-zA-Z0-9._~%]+".r
