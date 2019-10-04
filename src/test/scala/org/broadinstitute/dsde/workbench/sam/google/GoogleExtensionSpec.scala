@@ -14,6 +14,7 @@ import com.google.api.client.http.{HttpHeaders, HttpResponseException}
 import com.google.api.services.cloudresourcemanager.model.Ancestor
 import com.google.api.services.groupssettings.model.Groups
 import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
+import io.opencensus.trace.Span
 import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
 import org.broadinstitute.dsde.workbench.google.GoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.google2.GcsBlobName
@@ -576,7 +577,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     when(mockDirectoryDAO.createGroup(argThat(allUsersGroupMatcher), isNull())).thenReturn(IO.pure(allUsersGroup))
 
     when(mockGoogleDirectoryDAO.getGoogleGroup(any[WorkbenchEmail])).thenReturn(Future.successful(None))
-    when(mockGoogleDirectoryDAO.createGroup(any[String], any[WorkbenchEmail], any[Option[Groups]])).thenReturn(Future.successful(()))
+    when(mockGoogleDirectoryDAO.createGroup(any[String], any[WorkbenchEmail], any[Option[Groups]])(any[Span])).thenReturn(Future.successful(()))
     when(mockGoogleDirectoryDAO.addMemberToGroup(any[WorkbenchEmail], any[WorkbenchEmail])).thenReturn(Future.successful(()))
 
     googleExtensions.onUserCreate(user).futureValue
