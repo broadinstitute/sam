@@ -172,10 +172,21 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
 
   def getResourcePolicies(resource: FullyQualifiedResourceId, userInfo: UserInfo): server.Route =
     get {
-      requireAction(resource, SamResourceActions.readPolicies, userInfo.userId) {
-        complete(resourceService.listResourcePolicies(resource).map { response =>
-          StatusCodes.OK -> response.toSet
-        })
+      parameters('noMembers.?) { (noMembers) =>
+        val loadMembers = noMembers match {
+          case Some(_) =>
+            System.out.println("KCIBUL not loading members!")
+            false
+          case None =>
+            System.out.println("KCIBUL WE ARE loading members!")
+            true
+        }
+
+        requireAction(resource, SamResourceActions.readPolicies, userInfo.userId) {
+          complete(resourceService.listResourcePolicies(resource, loadMembers).map { response =>
+            StatusCodes.OK -> response.toSet
+          })
+        }
       }
     }
 
