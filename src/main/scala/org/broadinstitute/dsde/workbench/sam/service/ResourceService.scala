@@ -16,6 +16,7 @@ import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Success
 import io.opencensus.scala.Tracing._
 import io.opencensus.trace.Span
+import org.broadinstitute.dsde.workbench.sam.util.OpenCensusUtils
 
 /**
   * Created by mbemis on 5/22/17.
@@ -419,13 +420,13 @@ class ResourceService(
   }
 
   def listResourcePolicies(resource: FullyQualifiedResourceId): IO[Stream[AccessPolicyResponseEntry]] =
-    accessPolicyDAO.listAccessPolicies(resource).flatMap { policies =>
+    OpenCensusUtils.traceIO("listAccessPolicies" )(span => accessPolicyDAO.listAccessPolicies(resource).flatMap { policies =>
       policies.parTraverse { policy =>
-        loadAccessPolicyWithEmails(policy).map { membership =>
+        OpenCensusUtils.traceIOWithParent(s"loadAccessPolicyWithEmails-${policy.email}" , span)(_ => loadAccessPolicyWithEmails(policy).map { membership =>
           AccessPolicyResponseEntry(policy.id.accessPolicyName, membership, policy.email)
-        }
+        })
       }
-    }
+    })
 
   def loadResourcePolicy(policyIdentity: FullyQualifiedPolicyId): IO[Option[AccessPolicyMembership]] =
     for {
