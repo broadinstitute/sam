@@ -10,6 +10,7 @@ import akka.stream.ActorMaterializer
 import cats.data.NonEmptyList
 import cats.effect.{ExitCode, IO, IOApp, Timer}
 import cats.implicits._
+import com.google.common.util.concurrent.ThreadFactoryBuilder
 import com.typesafe.config.ConfigFactory
 import com.typesafe.scalalogging.LazyLogging
 import com.unboundid.ldap.sdk._
@@ -38,7 +39,7 @@ import scala.concurrent.duration._
 import scala.util.control.NonFatal
 
 object Boot extends IOApp with LazyLogging {
-  implicit val ec : ExecutionContext = ExecutionContext.fromExecutor(Executors.newFixedThreadPool(64))
+  implicit val ec : ExecutionContext = ExecutionContext.fromExecutor(Executors.newFixedThreadPool(64, new ThreadFactoryBuilder().setNameFormat("sam-default-ec-%d").build()))
 
 
   def run(args: List[String]): IO[ExitCode] =
