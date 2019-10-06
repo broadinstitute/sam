@@ -17,6 +17,8 @@ import spray.json.JsBoolean
 
 import scala.concurrent.ExecutionContext
 import ImplicitConversions.ioOnSuccessMagnet
+import io.opencensus.scala.akka.http.TracingDirective._
+import io.opencensus.trace.AttributeValue
 
 /**
   * Created by mbemis on 5/22/17.
@@ -172,20 +174,22 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
 
   def getResourcePolicies(resource: FullyQualifiedResourceId, userInfo: UserInfo): server.Route =
     get {
-      parameters('noMembers.?) { (noMembers) =>
-        val loadMembers = noMembers match {
-          case Some(_) =>
-            System.out.println("KCIBUL not loading members!")
-            false
-          case None =>
-            System.out.println("KCIBUL WE ARE loading members!")
-            true
-        }
+      traceRequest { span =>
+        parameters('noMembers.?) { (noMembers) =>
+          val loadMembers = noMembers match {
+            case Some(_) =>
+              false
+            case None =>
+              true
+          }
 
-        requireAction(resource, SamResourceActions.readPolicies, userInfo.userId) {
-          complete(resourceService.listResourcePolicies(resource, loadMembers).map { response =>
-            StatusCodes.OK -> response.toSet
-          })
+          span.putAttribute("resourceId", AttributeValue.stringAttributeValue(resource.resourceId.toString))
+
+          requireAction(resource, SamResourceActions.readPolicies, userInfo.userId) {
+            complete(resourceService.listResourcePolicies(resource, loadMembers, span).map { response =>
+              StatusCodes.OK -> response.toSet
+            })
+          }
         }
       }
     }

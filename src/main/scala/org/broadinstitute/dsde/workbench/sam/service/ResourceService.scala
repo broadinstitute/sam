@@ -421,8 +421,8 @@ class ResourceService(
 
   val emptyMembership = AccessPolicyMembership(Set(), Set(), Set())
 
-  def listResourcePolicies(resource: FullyQualifiedResourceId, loadMembers: Boolean = true): IO[Stream[AccessPolicyResponseEntry]] =
-    OpenCensusUtils.traceIO("listAccessPolicies" )(span => accessPolicyDAO.listAccessPolicies(resource).flatMap { policies =>
+  def listResourcePolicies(resource: FullyQualifiedResourceId, loadMembers: Boolean = true, parentSpan: Span = null): IO[Stream[AccessPolicyResponseEntry]] =
+    OpenCensusUtils.traceIOWithParent("listAccessPolicies" , parentSpan)(span => accessPolicyDAO.listAccessPolicies(resource).flatMap { policies =>
         policies.parTraverse { policy =>
           OpenCensusUtils.traceIOWithParent(s"loadAccessPolicyWithEmails-${policy.email}", span)(_ =>
             if (loadMembers) {
