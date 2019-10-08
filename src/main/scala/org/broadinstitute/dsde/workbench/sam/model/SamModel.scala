@@ -1,7 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.model
 
 import monocle.macros.Lenses
-import org.broadinstitute.dsde.workbench.model._
+import org.broadinstitute.dsde.workbench.model.{WorkbenchSubject, _}
 import org.broadinstitute.dsde.workbench.sam.service.ManagedGroupService.MangedGroupRoleName
 import spray.json.{DefaultJsonProtocol, JsValue, RootJsonFormat}
 
@@ -56,6 +56,9 @@ object SamJsonSupport {
 
   implicit val CreateResourceRequestFormat = jsonFormat3(CreateResourceRequest.apply)
 
+  implicit val CreateResourcePolicyResponseFormat = jsonFormat2(CreateResourcePolicyResponse.apply)
+
+  implicit val CreateResourceResponseFormat = jsonFormat4(CreateResourceResponse.apply)
 }
 
 object RootPrimitiveJsonSupport {
@@ -100,9 +103,13 @@ object SamResourceTypes {
 @Lenses final case class ResourceTypeName(value: String) extends ValueObject
 
 @Lenses final case class FullyQualifiedResourceId(resourceTypeName: ResourceTypeName, resourceId: ResourceId)
-@Lenses final case class Resource(resourceTypeName: ResourceTypeName, resourceId: ResourceId, authDomain: Set[WorkbenchGroupName]) {
+@Lenses final case class Resource(resourceTypeName: ResourceTypeName, resourceId: ResourceId, authDomain: Set[WorkbenchGroupName], accessPolicies: Set[AccessPolicy] = Set()) {
   val fullyQualifiedId = FullyQualifiedResourceId(resourceTypeName, resourceId)
 }
+
+@Lenses final case class CreateResourceResponse(resourceTypeName: ResourceTypeName, resourceId: ResourceId, authDomain: Set[WorkbenchGroupName], accessPolicies: Set[CreateResourcePolicyResponse] = Set())
+@Lenses final case class CreateResourcePolicyResponse(id: FullyQualifiedPolicyId, email: WorkbenchEmail)
+
 @Lenses final case class ResourceType(
     name: ResourceTypeName,
     actionPatterns: Set[ResourceActionPattern],

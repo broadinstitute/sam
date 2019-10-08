@@ -102,7 +102,7 @@ class ResourceRoutesV1Spec extends FlatSpec with Matchers with ScalatestRouteTes
 
     val createResourceRequest = CreateResourceRequest(ResourceId("foo"), Map(AccessPolicyName("goober") -> AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set(ResourceAction("run")), Set(resourceType.ownerRoleName))), Set.empty)
     Post(s"/api/resources/v1/${resourceType.name}", createResourceRequest) ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.NoContent
+      status shouldEqual StatusCodes.OK
     }
 
     Get(s"/api/resources/v1/${resourceType.name}/foo/action/run") ~> samRoutes.route ~> check {
@@ -123,7 +123,7 @@ class ResourceRoutesV1Spec extends FlatSpec with Matchers with ScalatestRouteTes
 
     val createResourceRequest = CreateResourceRequest(ResourceId("foo"), Map(AccessPolicyName("goober") -> AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set(ResourceAction("run")), Set(resourceType.ownerRoleName))), authDomain)
     Post(s"/api/resources/v1/${resourceType.name}", createResourceRequest) ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.NoContent
+      status shouldEqual StatusCodes.OK
     }
 
     Get(s"/api/resources/v1/${resourceType.name}/foo/action/run") ~> samRoutes.route ~> check {
@@ -193,7 +193,7 @@ class ResourceRoutesV1Spec extends FlatSpec with Matchers with ScalatestRouteTes
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
 
     Post(s"/api/resources/v1/${resourceType.name}/foo") ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.NoContent
+      status shouldEqual StatusCodes.OK
     }
 
     Get(s"/api/resources/v1/${resourceType.name}/foo/action/run") ~> samRoutes.route ~> check {
@@ -208,7 +208,7 @@ class ResourceRoutesV1Spec extends FlatSpec with Matchers with ScalatestRouteTes
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
 
     Post(s"/api/resources/v1/${resourceType.name}/foo") ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.NoContent
+      status shouldEqual StatusCodes.OK
     }
 
     Get(s"/api/resources/v1/${resourceType.name}/foo/roles") ~> samRoutes.route ~> check {
@@ -231,7 +231,7 @@ class ResourceRoutesV1Spec extends FlatSpec with Matchers with ScalatestRouteTes
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
 
     Post(s"/api/resources/v1/${resourceType.name}/foo") ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.NoContent
+      status shouldEqual StatusCodes.OK
     }
 
     Get(s"/api/resources/v1/${resourceType.name}/foo/actions") ~> samRoutes.route ~> check {
@@ -275,7 +275,7 @@ class ResourceRoutesV1Spec extends FlatSpec with Matchers with ScalatestRouteTes
     findOrCreateUser(user, samRoutes.userService)
 
     Post(s"/api/resources/v1/${resourceType.name}/${resourceId.value}") ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.NoContent withClue responsePayloadClue(responseAs[String])
+      status shouldEqual StatusCodes.OK withClue responsePayloadClue(responseAs[String])
     }
 
 
@@ -351,7 +351,7 @@ class ResourceRoutesV1Spec extends FlatSpec with Matchers with ScalatestRouteTes
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
 
     Post(s"/api/resources/v1/${resourceType.name}/foo") ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.NoContent
+      status shouldEqual StatusCodes.OK
     }
 
     val testUser = CreateWorkbenchUser(WorkbenchUserId("testuser"), genGoogleSubjectId(), WorkbenchEmail("testuser@foo.com"))
@@ -370,7 +370,7 @@ class ResourceRoutesV1Spec extends FlatSpec with Matchers with ScalatestRouteTes
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
 
     Post(s"/api/resources/v1/${resourceType.name}/foo") ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.NoContent
+      status shouldEqual StatusCodes.OK
     }
 
     val testUser = CreateWorkbenchUser(WorkbenchUserId("testuser"), genGoogleSubjectId(), WorkbenchEmail("testuser@foo.com"))
@@ -395,7 +395,7 @@ class ResourceRoutesV1Spec extends FlatSpec with Matchers with ScalatestRouteTes
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
 
     Post(s"/api/resources/v1/${resourceType.name}/foo") ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.NoContent
+      status shouldEqual StatusCodes.OK
     }
 
     val testUser = CreateWorkbenchUser(WorkbenchUserId("testuser"), genGoogleSubjectId(), WorkbenchEmail("testuser@foo.com"))
@@ -420,7 +420,7 @@ class ResourceRoutesV1Spec extends FlatSpec with Matchers with ScalatestRouteTes
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
 
     Post(s"/api/resources/v1/${resourceType.name}/foo") ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.NoContent
+      status shouldEqual StatusCodes.OK
     }
 
     val testUser = CreateWorkbenchUser(WorkbenchUserId("testuser"), genGoogleSubjectId(), WorkbenchEmail("testuser@foo.com"))
@@ -442,7 +442,7 @@ class ResourceRoutesV1Spec extends FlatSpec with Matchers with ScalatestRouteTes
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
 
     Post(s"/api/resources/v1/${resourceType.name}/foo") ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.NoContent
+      status shouldEqual StatusCodes.OK
     }
 
     val testUser = CreateWorkbenchUser(WorkbenchUserId("testuser"), genGoogleSubjectId(), WorkbenchEmail("testuser@foo.com"))
@@ -464,7 +464,7 @@ class ResourceRoutesV1Spec extends FlatSpec with Matchers with ScalatestRouteTes
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
 
     Post(s"/api/resources/v1/${resourceType.name}/foo") ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.NoContent
+      status shouldEqual StatusCodes.OK
     }
 
     val testUser = CreateWorkbenchUser(WorkbenchUserId("testuser"), genGoogleSubjectId(), WorkbenchEmail("testuser@foo.com"))
@@ -487,7 +487,7 @@ class ResourceRoutesV1Spec extends FlatSpec with Matchers with ScalatestRouteTes
     val members = AccessPolicyMembership(Set(WorkbenchEmail("me@me.me")), Set(ResourceAction("can_compute")), Set.empty)
 
     Post(s"/api/resources/v1/${resourceType.name}/foo") ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.NoContent
+      status shouldEqual StatusCodes.OK
     }
 
     Put(s"/api/resources/v1/${resourceType.name}/foo/policies/canCompute", members) ~> samRoutes.route ~> check {
@@ -518,7 +518,7 @@ class ResourceRoutesV1Spec extends FlatSpec with Matchers with ScalatestRouteTes
 
     //Create a resource
     Post(s"/api/resources/v1/${resourceType.name}/foo") ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.NoContent
+      status shouldEqual StatusCodes.OK
     }
 
     //As a different user who isn't on any policy, try to overwrite a policy
@@ -533,7 +533,7 @@ class ResourceRoutesV1Spec extends FlatSpec with Matchers with ScalatestRouteTes
 
     //Create a resource
     Post(s"/api/resources/v1/${resourceType.name}/foo") ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.NoContent
+      status shouldEqual StatusCodes.OK
     }
 
     //Read the policies
@@ -548,7 +548,7 @@ class ResourceRoutesV1Spec extends FlatSpec with Matchers with ScalatestRouteTes
 
     //Create a resource that doesn't have the read_policies action on any roles
     Post(s"/api/resources/v1/${resourceType.name}/foo") ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.NoContent
+      status shouldEqual StatusCodes.OK
     }
 
     //Try to read the policies
@@ -578,7 +578,7 @@ class ResourceRoutesV1Spec extends FlatSpec with Matchers with ScalatestRouteTes
 
     //Create the resource
     Post(s"/api/resources/v1/${resourceType.name}/foo") ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.NoContent
+      status shouldEqual StatusCodes.OK
     }
 
     //As a different user, try to read the policies
@@ -593,7 +593,7 @@ class ResourceRoutesV1Spec extends FlatSpec with Matchers with ScalatestRouteTes
 
     //Create the resource
     Post(s"/api/resources/v1/${resourceType.name}/foo") ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.NoContent
+      status shouldEqual StatusCodes.OK
     }
 
     //Read the policies to make sure the resource exists)
@@ -613,7 +613,7 @@ class ResourceRoutesV1Spec extends FlatSpec with Matchers with ScalatestRouteTes
 
     //Create the resource
     Post(s"/api/resources/v1/${resourceType.name}/foo") ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.NoContent
+      status shouldEqual StatusCodes.OK
     }
 
     //Read the policies to make sure the resource exists)
@@ -662,7 +662,7 @@ class ResourceRoutesV1Spec extends FlatSpec with Matchers with ScalatestRouteTes
 
     //Create a resource
     Post(s"/api/resources/v1/${resourceType.name}/foo") ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.NoContent
+      status shouldEqual StatusCodes.OK
     }
 
     //Read the policies

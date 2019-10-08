@@ -96,7 +96,7 @@ class GoogleExtensionRoutesSpec extends GoogleExtensionRoutesSpecHelper with Sca
     val (user, headers, _, routes) = createTestUser(resourceTypes)
 
     Post(s"/api/resource/${resourceType.name}/foo").withHeaders(headers) ~> routes.route ~> check {
-      status shouldEqual StatusCodes.NoContent
+      status shouldEqual StatusCodes.OK
     }
 
     import spray.json.DefaultJsonProtocol._
@@ -119,10 +119,7 @@ class GoogleExtensionRoutesSpec extends GoogleExtensionRoutesSpecHelper with Sca
     val (user, headers, samDep, routes) = createTestUser(resourceTypes)
 
     Post(s"/api/resource/${resourceType.name}/foo").withHeaders(headers) ~> routes.route ~> check {
-      status shouldEqual StatusCodes.NoContent
-      assertResult("") {
-        responseAs[String]
-      }
+      status shouldEqual StatusCodes.OK
     }
 
     Get(s"/api/google/resource/${resourceType.name}/foo/${resourceType.ownerRoleName.value}/sync").withHeaders(headers) ~> routes.route ~> check {

@@ -9,16 +9,18 @@ import org.broadinstitute.dsde.workbench.sam.model.{FullyQualifiedResourceId, Re
 import org.broadinstitute.dsde.workbench.sam.service.PolicyEvaluatorService
 import ImplicitConversions.ioOnSuccessMagnet
 import cats.effect.IO
+import io.opencensus.trace.Span
+import org.broadinstitute.dsde.workbench.sam.util.OpenCensusUtils
 
 trait SecurityDirectives {
   def policyEvaluatorService: PolicyEvaluatorService
 
-  def requireAction(resource: FullyQualifiedResourceId, action: ResourceAction, userId: WorkbenchUserId): Directive0 =
-    requireOneOfAction(resource, Set(action), userId)
+  def requireAction(resource: FullyQualifiedResourceId, action: ResourceAction, userId: WorkbenchUserId, parentSpan: Span = null): Directive0 =
+    requireOneOfAction(resource, Set(action), userId, parentSpan)
 
-  def requireOneOfAction(resource: FullyQualifiedResourceId, requestedActions: Set[ResourceAction], userId: WorkbenchUserId): Directive0 =
+  def requireOneOfAction(resource: FullyQualifiedResourceId, requestedActions: Set[ResourceAction], userId: WorkbenchUserId, parentSpan: Span = null): Directive0 =
     Directives.mapInnerRoute { innerRoute =>
-      onSuccess(listActions(resource, userId, requestedActions)) { actions =>
+      onSuccess(OpenCensusUtils.traceIOWithParent("listActions", parentSpan)( s2 => listActions(resource, userId, requestedActions))) { actions =>
         if (hasAccess(requestedActions, actions)) innerRoute
         else if (actions.isEmpty)
           Directives.failWith(

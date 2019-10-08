@@ -133,8 +133,8 @@ class ResourceService(
   private def persistResource(resourceType: ResourceType, resourceId: ResourceId, policies: Set[ValidatableAccessPolicy], authDomain: Set[WorkbenchGroupName], span: Span = null) =
     for {
       resource <- traceWithParent("createResource", span)( _ => accessPolicyDAO.createResource(Resource(resourceType.name, resourceId, authDomain)).unsafeToFuture())
-      _ <- Future.traverse(policies)(p => traceWithParent("createOrUpdatePolicy", span)( _ => createOrUpdatePolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, p.policyName), p)))
-    } yield resource
+      policies <- Future.traverse(policies)(p => traceWithParent("createOrUpdatePolicy", span)( _ => createOrUpdatePolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, p.policyName), p)))
+    } yield resource.copy(accessPolicies=policies)
 
   private def validateCreateResource(
       resourceType: ResourceType,

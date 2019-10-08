@@ -133,7 +133,9 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
         complete(
           resourceService
             .createResource(resourceType, createResourceRequest.resourceId, createResourceRequest.policies, createResourceRequest.authDomain, userInfo.userId)
-            .map(_ => StatusCodes.NoContent))
+            .map { r =>
+              CreateResourceResponse(r.resourceTypeName, r.resourceId, r.authDomain, r.accessPolicies.map( ap => CreateResourcePolicyResponse(ap.id, ap.email)))
+            })
       }
     }
 
@@ -146,7 +148,10 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
 
   def postDefaultResource(resourceType: ResourceType, resource: FullyQualifiedResourceId, userInfo: UserInfo): server.Route =
     post {
-      complete(resourceService.createResource(resourceType, resource.resourceId, userInfo).map(_ => StatusCodes.NoContent))
+      complete(resourceService.createResource(resourceType, resource.resourceId, userInfo)
+        .map { r =>
+          CreateResourceResponse(r.resourceTypeName, r.resourceId, r.authDomain, r.accessPolicies.map( ap => CreateResourcePolicyResponse(ap.id, ap.email)))
+        })
     }
 
   def getActionPermissionForUser(resource: FullyQualifiedResourceId, userInfo: UserInfo, action: String): server.Route =
@@ -185,7 +190,7 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
 
           span.putAttribute("resourceId", AttributeValue.stringAttributeValue(resource.resourceId.toString))
 
-          requireAction(resource, SamResourceActions.readPolicies, userInfo.userId) {
+          requireAction(resource, SamResourceActions.readPolicies, userInfo.userId, span) {
             complete(resourceService.listResourcePolicies(resource, loadMembers, span).map { response =>
               StatusCodes.OK -> response.toSet
             })
