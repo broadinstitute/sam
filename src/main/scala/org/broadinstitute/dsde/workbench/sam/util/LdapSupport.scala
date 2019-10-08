@@ -37,11 +37,14 @@ trait LdapSupport extends DirectorySubjectNameSupport {
     filters.flatMap { filter =>
       val search = new SearchRequest(baseDn, searchScope, filter)
       val connection = ldapConnectionPool.getConnection
-      val entrySource = new LDAPEntrySource(connection, search, false)
+      val closeConnection = false
+
+      val entrySource = new LDAPEntrySource(connection, search, closeConnection)
       ldapEntrySourceStream(entrySource, connection)(unmarshaller)
     }.toStream
 
   // this is the magic recursive stream generator
+  // releases connection back to the pool once the end of entrySource is reached
   private def ldapEntrySourceStream[T](entrySource: LDAPEntrySource, connection: LDAPConnection)(unmarshaller: Entry => T): Stream[T] =
     Try(Option(entrySource.nextEntry)) match {
       case Success(None) =>
