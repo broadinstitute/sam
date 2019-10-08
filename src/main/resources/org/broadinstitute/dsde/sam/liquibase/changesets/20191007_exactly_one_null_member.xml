@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog logicalFilePath="dummy"
+                   xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog-ext http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-ext.xsd http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.4.xsd">
+
+<changeSet logicalFilePath="dummy" author="mtalbott" id="exactly_one_null_member">
+        <sql stripComments="true">
+            alter table sam_group_member add constraint exactly_one_null_member check( ( member_user_id is null and member_group_id is not null ) or ( member_user_id is not null and member_group_id is null ) );
+            <comment>SAM_GROUP_MEMBER: ensure exactly one null member column </comment>
+        </sql>
+    </changeSet>
+</databaseChangeLog>
