@@ -10,7 +10,7 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.RootPrimitiveJsonSupport._
-import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.model.{CreateResourcePolicyResponse, CreateResourceResponse, _}
 import org.broadinstitute.dsde.workbench.sam.service.ResourceService
 import spray.json.DefaultJsonProtocol._
 import spray.json.JsBoolean
@@ -124,14 +124,23 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
 
   def postResource(resourceType: ResourceType, userInfo: UserInfo): server.Route =
     post {
-      entity(as[CreateResourceRequest]) { createResourceRequest =>
-        if (resourceType.reuseIds && resourceType.isAuthDomainConstrainable) {
-          throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "this api may not be used for resource types that allow both authorization domains and id reuse"))
-        }
-        complete(
-          resourceService
-            .createResource(resourceType, createResourceRequest.resourceId, createResourceRequest.policies, createResourceRequest.authDomain, userInfo.userId)
-            .map(_ => StatusCodes.NoContent))
+        entity(as[CreateResourceRequest]) { createResourceRequest =>
+          if (resourceType.reuseIds && resourceType.isAuthDomainConstrainable) {
+            throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "this api may not be used for resource types that allow both authorization domains and id reuse"))
+          }
+          complete(
+            createResourceRequest.returnResource match {
+              case true =>
+                StatusCodes.Created -> resourceService
+                  .createResource(resourceType, createResourceRequest.resourceId, createResourceRequest.policies, createResourceRequest.authDomain, userInfo.userId)
+                  .map { r => CreateResourceResponse(r.resourceTypeName, r.resourceId, r.authDomain, r.accessPolicies.map(ap => CreateResourcePolicyResponse(ap.id, ap.email))) }
+              case _ =>
+                resourceService
+                  .createResource (resourceType, createResourceRequest.resourceId, createResourceRequest.policies, createResourceRequest.authDomain, userInfo.userId)
+                  .map { _ => StatusCodes.NoContent }
+            }
+          )
+
       }
     }
 
