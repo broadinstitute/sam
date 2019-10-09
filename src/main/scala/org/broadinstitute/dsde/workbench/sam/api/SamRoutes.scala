@@ -47,8 +47,10 @@ abstract class SamRoutes(
   def route: server.Route = (logRequestResult & handleExceptions(myExceptionHandler)) {
     swaggerRoutes ~
       statusRoutes ~
-      pathPrefix("register") { userRoutes } ~
-      pathPrefix("api") { resourceRoutes ~ adminUserRoutes ~ extensionRoutes ~ groupRoutes ~ apiUserRoutes }
+      withExecutionContext(ExecutionContext.global) {
+        pathPrefix("register") { userRoutes } ~
+        pathPrefix("api") { resourceRoutes ~ adminUserRoutes ~ extensionRoutes ~ groupRoutes ~ apiUserRoutes }
+      }
   }
 
   // basis for logRequestResult lifted from http://stackoverflow.com/questions/32475471/how-does-one-log-akka-http-client-requests
