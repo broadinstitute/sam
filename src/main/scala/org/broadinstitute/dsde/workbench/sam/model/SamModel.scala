@@ -54,8 +54,11 @@ object SamJsonSupport {
 
   implicit val GroupSyncResponseFormat = jsonFormat2(GroupSyncResponse.apply)
 
-  implicit val CreateResourceRequestFormat = jsonFormat3(CreateResourceRequest.apply)
+  implicit val CreateResourceRequestFormat = jsonFormat4(CreateResourceRequest.apply)
 
+  implicit val CreateResourcePolicyResponseFormat = jsonFormat2(CreateResourcePolicyResponse.apply)
+
+  implicit val CreateResourceResponseFormat = jsonFormat4(CreateResourceResponse.apply)
 }
 
 object RootPrimitiveJsonSupport {
@@ -100,9 +103,11 @@ object SamResourceTypes {
 @Lenses final case class ResourceTypeName(value: String) extends ValueObject
 
 @Lenses final case class FullyQualifiedResourceId(resourceTypeName: ResourceTypeName, resourceId: ResourceId)
-@Lenses final case class Resource(resourceTypeName: ResourceTypeName, resourceId: ResourceId, authDomain: Set[WorkbenchGroupName]) {
+@Lenses final case class Resource(resourceTypeName: ResourceTypeName, resourceId: ResourceId, authDomain: Set[WorkbenchGroupName], accessPolicies: Set[AccessPolicy] = Set.empty) {
   val fullyQualifiedId = FullyQualifiedResourceId(resourceTypeName, resourceId)
 }
+@Lenses final case class CreateResourceResponse(resourceTypeName: ResourceTypeName, resourceId: ResourceId, authDomain: Set[WorkbenchGroupName], accessPolicies: Set[CreateResourcePolicyResponse])
+@Lenses final case class CreateResourcePolicyResponse(id: FullyQualifiedPolicyId, email: WorkbenchEmail)
 @Lenses final case class ResourceType(
     name: ResourceTypeName,
     actionPatterns: Set[ResourceActionPattern],
@@ -129,7 +134,8 @@ object SamResourceTypes {
 @Lenses final case class CreateResourceRequest(
     resourceId: ResourceId,
     policies: Map[AccessPolicyName, AccessPolicyMembership],
-    authDomain: Set[WorkbenchGroupName])
+    authDomain: Set[WorkbenchGroupName],
+    returnResource: Option[Boolean] = Some(false))
 
 /*
 Note that AccessPolicy IS A group, does not have a group. This makes the ldap query to list all a user's policies

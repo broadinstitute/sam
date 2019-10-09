@@ -72,7 +72,11 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
   def assertMakeGroup(groupId: String = resourceId.value, managedGroupService: ManagedGroupService = managedGroupService, policyDAO: AccessPolicyDAO = policyDAO): Resource = {
     val resource: Resource = makeGroup(groupId, managedGroupService)
     val intendedResource = Resource(ManagedGroupService.managedGroupTypeName, ResourceId(groupId), Set.empty)
-    resource shouldEqual intendedResource
+
+    // just compare top level fields because createResource returns the policies, including the default one
+    resource.resourceTypeName shouldEqual intendedResource.resourceTypeName
+    resource.resourceId shouldEqual intendedResource.resourceId
+
     assertPoliciesOnResource(resource.fullyQualifiedId, expectedPolicies = Stream(ManagedGroupService.adminPolicyName, ManagedGroupService.memberPolicyName, ManagedGroupService.adminNotifierPolicyName))
     resource
   }
