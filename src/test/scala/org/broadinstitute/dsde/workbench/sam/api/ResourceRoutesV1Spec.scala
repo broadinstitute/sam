@@ -118,6 +118,16 @@ class ResourceRoutesV1Spec extends FlatSpec with Matchers with ScalatestRouteTes
     val createResourceRequest = CreateResourceRequest(ResourceId("foo"), Map(AccessPolicyName("goober") -> AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set(ResourceAction("run")), Set(resourceType.ownerRoleName))), Set.empty, Some(true))
     Post(s"/api/resources/v1/${resourceType.name}", createResourceRequest) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
+      val r = responseAs[CreateResourceResponse]
+
+      r.resourceId shouldEqual createResourceRequest.resourceId
+      r.authDomain shouldEqual createResourceRequest.authDomain
+      r.resourceTypeName shouldEqual resourceType.name
+
+      val returnedNames = r.accessPolicies.map( x => x.id.accessPolicyName )
+      createResourceRequest.policies.keys.foreach { k =>
+        returnedNames.contains(k) shouldEqual true
+      }
     }
   }
 
