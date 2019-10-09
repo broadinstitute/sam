@@ -106,7 +106,7 @@ object SamResourceTypes {
 @Lenses final case class Resource(resourceTypeName: ResourceTypeName, resourceId: ResourceId, authDomain: Set[WorkbenchGroupName], accessPolicies: Set[AccessPolicy] = Set.empty) {
   val fullyQualifiedId = FullyQualifiedResourceId(resourceTypeName, resourceId)
 }
-@Lenses final case class CreateResourceResponse(resourceTypeName: ResourceTypeName, resourceId: ResourceId, authDomain: Set[WorkbenchGroupName], accessPolicies: Set[CreateResourcePolicyResponse] = Set())
+@Lenses final case class CreateResourceResponse(resourceTypeName: ResourceTypeName, resourceId: ResourceId, authDomain: Set[WorkbenchGroupName], accessPolicies: Set[CreateResourcePolicyResponse])
 @Lenses final case class CreateResourcePolicyResponse(id: FullyQualifiedPolicyId, email: WorkbenchEmail)
 @Lenses final case class ResourceType(
     name: ResourceTypeName,
@@ -135,7 +135,7 @@ object SamResourceTypes {
     resourceId: ResourceId,
     policies: Map[AccessPolicyName, AccessPolicyMembership],
     authDomain: Set[WorkbenchGroupName],
-    returnResource: Boolean = false)
+    returnResource: Option[Boolean] = Some(false))
 
 /*
 Note that AccessPolicy IS A group, does not have a group. This makes the ldap query to list all a user's policies

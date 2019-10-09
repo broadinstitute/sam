@@ -130,10 +130,10 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
           }
           complete(
             createResourceRequest.returnResource match {
-              case true =>
+              case Some(x) if x =>
                 StatusCodes.Created -> resourceService
                   .createResource(resourceType, createResourceRequest.resourceId, createResourceRequest.policies, createResourceRequest.authDomain, userInfo.userId)
-                  .map { r => CreateResourceResponse(r.resourceTypeName, r.resourceId, r.authDomain, r.accessPolicies.map(ap => CreateResourcePolicyResponse(ap.id, ap.email))) }
+                  .map { r =>   CreateResourceResponse(r.resourceTypeName, r.resourceId, r.authDomain, r.accessPolicies.map(ap => CreateResourcePolicyResponse(ap.id, ap.email))) }
               case _ =>
                 resourceService
                   .createResource (resourceType, createResourceRequest.resourceId, createResourceRequest.policies, createResourceRequest.authDomain, userInfo.userId)
