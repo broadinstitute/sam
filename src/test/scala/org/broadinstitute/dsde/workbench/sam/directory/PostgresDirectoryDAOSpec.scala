@@ -268,6 +268,15 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
         val loadedPolicy = policyDAO.loadPolicy(defaultPolicy.id).unsafeRunSync().getOrElse(fail(s"s'failed to load policy ${defaultPolicy.id}"))
         loadedPolicy.members should contain theSameElementsAs Set(memberPolicy.id)
       }
+
+      "trying to add a group that does not exist will fail" in {
+        val subGroup = emptyWorkbenchGroup("subGroup")
+        dao.createGroup(defaultGroup).unsafeRunSync()
+
+        assertThrows[PSQLException] {
+          dao.addGroupMember(defaultGroup.id, subGroup.id).unsafeRunSync() shouldBe true
+        }
+      }
     }
 
     "batchLoadGroupEmail" - {
