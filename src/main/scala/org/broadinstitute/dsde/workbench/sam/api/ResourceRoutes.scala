@@ -18,6 +18,13 @@ import spray.json.JsBoolean
 import scala.concurrent.{ExecutionContext, Future}
 import ImplicitConversions.ioOnSuccessMagnet
 import akka.http.scaladsl.marshalling.ToResponseMarshallable
+import cats.effect.IO
+import org.broadinstitute.dsde.workbench.sam.config.LiquibaseConfig
+import org.broadinstitute.dsde.workbench.sam.db.DbReference
+import org.broadinstitute.dsde.workbench.sam.directory.PostgresDirectoryDAO
+import org.broadinstitute.dsde.workbench.sam.openam.PostgresAccessPolicyDAO
+import org.broadinstitute.dsde.workbench.util.ExecutionContexts
+import scalikejdbc.config.DBs
 
 /**
   * Created by mbemis on 5/22/17.
@@ -25,6 +32,7 @@ import akka.http.scaladsl.marshalling.ToResponseMarshallable
 trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with SamModelDirectives {
   implicit val executionContext: ExecutionContext
   val resourceService: ResourceService
+  val liquibaseConfig: LiquibaseConfig
 
   def withResourceType(name: ResourceTypeName): Directive1[ResourceType] =
     onSuccess(resourceService.getResourceType(name)).map {
@@ -39,7 +47,7 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
           pathEndOrSingleSlash {
             put {
               complete {
-                resourceService.initResourceTypes()
+                initializePostgresResourceTypes
               }
             }
           }
@@ -130,6 +138,21 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
         }
       }
     }
+
+  private def initializePostgresResourceTypes = {
+    val dbName: Symbol = 'sam_foreground
+    val postgresResourceService: cats.effect.Resource[IO, ResourceService] = for {
+      postgresExecutionContext <- ExecutionContexts.fixedThreadPool[IO](DBs.config.getInt(s"db.${dbName.name}.poolMaxSize"))
+      dbReference <- DbReference.resource(liquibaseConfig, dbName)
+
+      postgresAccessPolicyDAO = new PostgresAccessPolicyDAO(dbReference, postgresExecutionContext)
+      postgresDirectoryDAO = new PostgresDirectoryDAO(dbReference, postgresExecutionContext)
+    } yield new ResourceService(resourceService.getResourceTypes().unsafeRunSync(), policyEvaluatorService, postgresAccessPolicyDAO, postgresDirectoryDAO, cloudExtensions, resourceService.emailDomain)
+
+    postgresResourceService.use { resourceService =>
+      resourceService.initResourceTypes()
+    }
+  }
 
   def getUserPoliciesForResourceType(resourceType: ResourceType, userInfo: UserInfo): server.Route =
     get {
