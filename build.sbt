@@ -20,8 +20,6 @@ sys.env.getOrElse("JAVA_OPTS", "").split(" ").toSeq.map { opt =>
   javaOptions in reStart += opt
 }
 
-javaOptions in reStart += "-agentpath:/app/jprofiler10.1.5/bin/linux-x64/libjprofilerti.so=port=8849,nowait"
-
 addCompilerPlugin("com.olegpy" %% "better-monadic-for" % "0.2.4")
 addCompilerPlugin("org.scalamacros" %% "paradise" % "2.1.0" cross CrossVersion.full)
 
