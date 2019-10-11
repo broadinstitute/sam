@@ -3,7 +3,7 @@ import java.util.Date
 
 import akka.http.scaladsl.model.StatusCodes
 import cats.data.OptionT
-import cats.effect.{IO, Timer}
+import cats.effect.{ContextShift, IO, Timer}
 import cats.implicits._
 import com.unboundid.ldap.sdk._
 import org.broadinstitute.dsde.workbench.model._
@@ -25,11 +25,10 @@ class LdapDirectoryDAO(
     protected val ldapConnectionPool: LDAPConnectionPool,
     protected val directoryConfig: DirectoryConfig,
     protected val ecForLdapBlockingIO: ExecutionContext,
-    protected val memberOfCache: Cache[WorkbenchSubject, Set[String]])(implicit executionContext: ExecutionContext, timer: Timer[IO])
+    protected val memberOfCache: Cache[WorkbenchSubject, Set[String]])(implicit val cs: ContextShift[IO], timer: Timer[IO])
     extends DirectoryDAO
     with DirectorySubjectNameSupport
     with LdapSupport {
-  implicit val cs = IO.contextShift(executionContext)
 
   override def createGroup(group: BasicWorkbenchGroup, accessInstructionsOpt: Option[String] = None): IO[BasicWorkbenchGroup] = {
     val membersAttribute =

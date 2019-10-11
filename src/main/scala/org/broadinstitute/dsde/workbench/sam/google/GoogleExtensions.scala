@@ -143,7 +143,7 @@ class GoogleExtensions(
 
       _ <- samApplication.resourceService.createResourceType(extensionResourceType)
 
-      _ <- IO.fromFuture(IO(samApplication.resourceService.createResource(extensionResourceType, GoogleExtensions.resourceId, serviceAccountUserInfo))) handleErrorWith {
+      _ <- samApplication.resourceService.createResource(extensionResourceType, GoogleExtensions.resourceId, serviceAccountUserInfo) handleErrorWith {
         case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode == Option(StatusCodes.Conflict) => IO.unit
       }
       _ <- googleKeyCache.onBoot()

@@ -1,30 +1,35 @@
 package org.broadinstitute.dsde.workbench.sam.util
 import java.lang.reflect.{InvocationHandler, Method, Proxy}
+import java.util.concurrent.Executors
 
 import cats.effect._
 import com.typesafe.scalalogging.LazyLogging
 
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
-import scala.concurrent.ExecutionContext
+import scala.concurrent.{ExecutionContext, ExecutionContextExecutor}
 import scala.reflect.ClassTag
 import scala.util.Try
 
 case class TimedResult[T](result: Either[Throwable, T], time: FiniteDuration)
 
+object ShadowRunner {
+  val shadowExecutionContext: ExecutionContextExecutor = ExecutionContext.fromExecutor(Executors.newFixedThreadPool(30))
+}
+
 trait ShadowRunner {
-  implicit val executionContext: ExecutionContext
   val clock: Clock[IO]
   val resultReporter: ShadowResultReporter
+  implicit val contextShift: ContextShift[IO]
 
   protected def runWithShadow[T](methodCallInfo: MethodCallInfo, real: IO[T], shadow: IO[T]): IO[T] = {
     for {
       realTimedResult <- measure(real)
-      _ <- measure(shadow).runAsync {
+      _ <- contextShift.evalOn(ShadowRunner.shadowExecutionContext)(measure(shadow).runAsync {
         case Left(regrets) =>
           resultReporter.reportShadowExecutionFailure(methodCallInfo, regrets)
         case Right(shadowTimedResult) =>
           resultReporter.reportResult(methodCallInfo, realTimedResult, shadowTimedResult)
-      }.toIO
+      }.toIO)
     } yield {
       realTimedResult.result.toTry.get
     }
@@ -71,14 +76,14 @@ trait ShadowResultReporter extends LazyLogging {
   * All methods in your DAO must return IO.
   */
 object DaoWithShadow {
-  def apply[T : ClassTag](realDAO: T, shadowDAO: T, resultReporter: ShadowResultReporter, clock: Clock[IO])(implicit executionContext: ExecutionContext): T = {
+  def apply[T : ClassTag](realDAO: T, shadowDAO: T, resultReporter: ShadowResultReporter, clock: Clock[IO])(implicit contextShift: ContextShift[IO]): T = {
     Proxy.newProxyInstance(getClass.getClassLoader,
       Array(implicitly[ClassTag[T]].runtimeClass),
       new ShadowRunnerDynamicProxy[T](realDAO, shadowDAO, resultReporter, clock)).asInstanceOf[T]
   }
 }
 
-private class ShadowRunnerDynamicProxy[DAO](realDAO: DAO, shadowDAO: DAO, val resultReporter: ShadowResultReporter, val clock: Clock[IO])(implicit val executionContext: ExecutionContext) extends InvocationHandler with ShadowRunner {
+private class ShadowRunnerDynamicProxy[DAO](realDAO: DAO, shadowDAO: DAO, val resultReporter: ShadowResultReporter, val clock: Clock[IO])(implicit val contextShift: ContextShift[IO]) extends InvocationHandler with ShadowRunner {
   override def invoke(proxy: Any, method: Method, args: Array[AnyRef]): AnyRef = {
     // there should not be any functions in our DAOs that return non-IO type but scala does funny stuff at the java class level wrt default parameters
     // so check if the return type is IO, if it is just call it and run with shadow

@@ -23,9 +23,7 @@ import scala.concurrent.ExecutionContext
 import scala.util.{Failure, Try}
 
 class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
-                              protected val ecForDatabaseIO: ExecutionContext)(implicit executionContext: ExecutionContext) extends AccessPolicyDAO with DatabaseSupport with PostgresGroupDAO with LazyLogging {
-
-  implicit val cs: ContextShift[IO] = IO.contextShift(executionContext)
+                              protected val ecForDatabaseIO: ExecutionContext)(implicit val cs: ContextShift[IO]) extends AccessPolicyDAO with DatabaseSupport with PostgresGroupDAO with LazyLogging {
 
   // This method obtains an EXCLUSIVE lock on the ResourceType table because if we boot multiple Sam instances at once,
   // they will all try to (re)create ResourceTypes at the same time and could collide. The lock is automatically

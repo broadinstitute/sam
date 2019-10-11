@@ -1,7 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.util
 
 import cats.effect.concurrent.Semaphore
-import cats.effect.{Clock, IO}
+import cats.effect.{Clock, ContextShift, IO}
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.{FlatSpec, Matchers}
 
@@ -20,10 +20,10 @@ class ShadowRunnerSpec extends FlatSpec with Matchers with ScalaFutures {
       * to acquire it again and will have to wait until it is release externally.
       */
     class TestShadowRunner extends ShadowRunner {
-      implicit val ctx = IO.contextShift(ExecutionContext.global)
+      implicit val executionContext: ExecutionContext = scala.concurrent.ExecutionContext.global
+      override implicit val contextShift: ContextShift[IO] = IO.contextShift(scala.concurrent.ExecutionContext.global)
       val semaphore = Semaphore[IO](1).unsafeRunSync()
 
-      override implicit val executionContext: ExecutionContext = scala.concurrent.ExecutionContext.global
       override val clock: Clock[IO] = Clock.create[IO]
       override val resultReporter: ShadowResultReporter = testShadowResultReporter
 
@@ -59,7 +59,7 @@ class ShadowRunnerSpec extends FlatSpec with Matchers with ScalaFutures {
     val testShadowResultReporter = new TestShadowResultReporter
 
     class TestShadowRunner extends ShadowRunner {
-      override implicit val executionContext: ExecutionContext = scala.concurrent.ExecutionContext.global
+      override implicit val contextShift: ContextShift[IO] = IO.contextShift(scala.concurrent.ExecutionContext.global)
       override val clock: Clock[IO] = Clock.create[IO]
       override val resultReporter: ShadowResultReporter = testShadowResultReporter
 
@@ -92,8 +92,8 @@ class ShadowRunnerSpec extends FlatSpec with Matchers with ScalaFutures {
       def test(x: Int) = IO.pure(x-1)
     }
 
+    implicit val contextShift: ContextShift[IO] = IO.contextShift(scala.concurrent.ExecutionContext.global)
     val clock: Clock[IO] = Clock.create[IO]
-    import scala.concurrent.ExecutionContext.Implicits.global
     val proxy = DaoWithShadow(new RealDAO, new ShadowDAO, testShadowResultReporter, clock)
 
     val realResult = proxy.test(20).unsafeRunSync()

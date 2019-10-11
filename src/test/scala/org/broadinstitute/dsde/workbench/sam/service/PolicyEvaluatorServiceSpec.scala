@@ -16,8 +16,9 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, LdapAccessPolicyDAO, PostgresAccessPolicyDAO}
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.scalatest._
+import scala.concurrent.ExecutionContext.Implicits.global
 
-class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSupport {
+class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport {
   val dirURI = new URI(directoryConfig.directoryUrl)
   val connectionPool = new LDAPConnectionPool(
     new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password),
@@ -146,7 +147,7 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
       case u: WorkbenchUserId => dirDAO.createUser(WorkbenchUser(u, None, WorkbenchEmail(u.value + "@foo.bar"))).recoverWith {
         case _: WorkbenchException => IO.pure(WorkbenchUser(u, None, WorkbenchEmail(u.value + "@foo.bar")))
       }
-      case g: WorkbenchGroupName => IO.fromFuture(IO(managedGroupService.createManagedGroup(ResourceId(g.value), dummyUserInfo))).recoverWith {
+      case g: WorkbenchGroupName => managedGroupService.createManagedGroup(ResourceId(g.value), dummyUserInfo).recoverWith {
         case _: WorkbenchException => IO.pure(Resource(defaultResourceType.name, ResourceId(g.value), Set.empty))
       }
       case _ => IO.unit
@@ -166,7 +167,7 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
       _ <- setup()
       _ <- policyDAO.createResourceType(managedGroupResourceType)
       _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
-      _ <- resource.authDomain.toList.parTraverse(a => IO.fromFuture(IO(managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))))
+      _ <- resource.authDomain.toList.parTraverse(a => managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))
       _ <- savePolicyMembers(policy)
       _ <- policyDAO.createResourceType(defaultResourceType)
       _ <- policyDAO.createResource(resource)
@@ -176,7 +177,7 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
       r shouldBe false
     }
 
-    res.unsafeToFuture()
+    res.unsafeRunSync()
   }
 
   it should "return false if user is not a member of the resource" in {
@@ -192,7 +193,7 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
       _ <- setup()
       _ <- policyDAO.createResourceType(managedGroupResourceType)
       _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
-      _ <- resource.authDomain.toList.parTraverse(a => IO.fromFuture(IO(managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))))
+      _ <- resource.authDomain.toList.parTraverse(a => managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))
       _ <- savePolicyMembers(policy)
       _ <- policyDAO.createResourceType(defaultResourceType)
       _ <- policyDAO.createResource(resource)
@@ -202,7 +203,7 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
       r shouldBe(false)
     }
 
-    res.unsafeToFuture()
+    res.unsafeRunSync()
   }
 
   it should "return true if given action is allowed for a user and resource is not constrained by auth domains" in {
@@ -227,7 +228,7 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
       r shouldBe(true)
     }
 
-    res.unsafeToFuture()
+    res.unsafeRunSync()
   }
 
   it should "list required authDomains and authDomains user is not a member of if constrainable" in {
@@ -242,18 +243,18 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
       _ <- constrainableService.createResourceType(constrainableResourceType)
       _ <- constrainableService.createResourceType(managedGroupResourceType)
       _ <- savePolicyMembers(policy)
-      _ <- resource.authDomain.toList.parTraverse(a => IO.fromFuture(IO(managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))))
+      _ <- resource.authDomain.toList.parTraverse(a => managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))
       // create resource that dummyUserInfo is a member of for constrainableResourceType
-      _ <- IO.fromFuture(IO(constrainableService.createResource(constrainableResourceType, resource.resourceId, Map(viewPolicyName -> constrainablePolicyMembership), resource.authDomain, dummyUserInfo.userId)))
+      _ <- constrainableService.createResource(constrainableResourceType, resource.resourceId, Map(viewPolicyName -> constrainablePolicyMembership), resource.authDomain, dummyUserInfo.userId)
       _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
-      _ <- IO.fromFuture(IO(constrainableService.createPolicy(policy.id, policy.members + user.userId, policy.roles, policy.actions)))
+      _ <- constrainableService.createPolicy(policy.id, policy.members + user.userId, policy.roles, policy.actions)
       r <- constrainableService.policyEvaluatorService.listUserAccessPolicies(constrainableResourceType.name, user.userId)
     } yield {
       val expected = Set(UserPolicyResponse(resource.resourceId, policy.id.accessPolicyName, resource.authDomain, resource.authDomain, false))
       r shouldBe(expected)
     }
 
-    res.unsafeToFuture()
+    res.unsafeRunSync()
   }
 
   it should "return true if given action is allowed for a user, action is constrained by auth domains, user is a member of all required auth domains" in {
@@ -268,7 +269,7 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
     val res = for{
       _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
       _ <- policyDAO.createResourceType(managedGroupResourceType)
-      _ <- resource.authDomain.toList.parTraverse(a => IO.fromFuture(IO(managedGroupService.createManagedGroup(ResourceId(a.value), user))))
+      _ <- resource.authDomain.toList.parTraverse(a => managedGroupService.createManagedGroup(ResourceId(a.value), user))
       _ <- savePolicyMembers(policy)
       _ <- policyDAO.createResourceType(defaultResourceType)
       _ <- policyDAO.createResource(resource)
@@ -278,7 +279,7 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
       r shouldBe(true)
     }
 
-    res.unsafeToFuture()
+    res.unsafeRunSync()
   }
 
   it should "return true if given action is allowed for a user, action is constrained by auth domains, resource has no auth domain" in {
@@ -292,7 +293,7 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
 
     val res = for{
       _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
-      _ <- resource.authDomain.toList.parTraverse(a => IO.fromFuture(IO(managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))))
+      _ <- resource.authDomain.toList.parTraverse(a => managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))
       _ <- savePolicyMembers(policy)
       _ <- policyDAO.createResourceType(defaultResourceType)
       _ <- policyDAO.createResourceType(managedGroupResourceType)
@@ -303,7 +304,7 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
       r shouldBe(true)
     }
 
-    res.unsafeToFuture()
+    res.unsafeRunSync()
   }
 
   it should "return false if given action is allowed for a user, action is constrained by auth domains, user is NOT a member of auth domain" in {
@@ -319,7 +320,7 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
     val res = for{
       _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
       _ <- dirDAO.createUser(WorkbenchUser(probeUser.userId, Some(GoogleSubjectId(probeUser.userId.value)), probeUser.userEmail))
-      _ <- resource.authDomain.toList.parTraverse(a => IO.fromFuture(IO(managedGroupService.createManagedGroup(ResourceId(a.value), user))))
+      _ <- resource.authDomain.toList.parTraverse(a => managedGroupService.createManagedGroup(ResourceId(a.value), user))
       _ <- savePolicyMembers(policy)
       _ <- policyDAO.createResourceType(defaultResourceType)
       _ <- policyDAO.createResourceType(managedGroupResourceType)
@@ -330,7 +331,7 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
       r shouldBe(false)
     }
 
-    res.unsafeToFuture()
+    res.unsafeRunSync()
   }
 
   it should "return true if given action is allowed for a user, action is NOT constrained by auth domains, user is not a member of auth domain" in {
@@ -346,7 +347,7 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
     val res = for{
       _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
       _ <- dirDAO.createUser(WorkbenchUser(probeUser.userId, Some(GoogleSubjectId(probeUser.userId.value)), probeUser.userEmail))
-      _ <- resource.authDomain.toList.parTraverse(a => IO.fromFuture(IO(managedGroupService.createManagedGroup(ResourceId(a.value), user))))
+      _ <- resource.authDomain.toList.parTraverse(a => managedGroupService.createManagedGroup(ResourceId(a.value), user))
       _ <- savePolicyMembers(policy)
       _ <- policyDAO.createResourceType(defaultResourceType)
       _ <- policyDAO.createResourceType(managedGroupResourceType)
@@ -357,7 +358,7 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
       r shouldBe(true)
     }
 
-    res.unsafeToFuture()
+    res.unsafeRunSync()
   }
 
   "listUserAccessPolicies" should "list user's access policies but not others" in {
@@ -366,10 +367,10 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
     val resource3 = FullyQualifiedResourceId(otherResourceType.name, ResourceId("my-resource1"))
     val resource4 = FullyQualifiedResourceId(otherResourceType.name, ResourceId("my-resource2"))
 
-    for{
-      _ <- setup().unsafeToFuture()
-      _ <- service.createResourceType(defaultResourceType).unsafeToFuture()
-      _ <- service.createResourceType(otherResourceType).unsafeToFuture()
+    val test = for {
+      _ <- setup()
+      _ <- service.createResourceType(defaultResourceType)
+      _ <- service.createResourceType(otherResourceType)
 
       _ <- service.createResource(defaultResourceType, resource1.resourceId, dummyUserInfo)
       _ <- service.createResource(defaultResourceType, resource2.resourceId, dummyUserInfo)
@@ -380,13 +381,15 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
       _ <- service.overwritePolicy(defaultResourceType, AccessPolicyName("not-in-it"), resource1, AccessPolicyMembership(Set.empty, Set(ResourceAction("alter_policies")), Set.empty))
       _ <- service.overwritePolicy(otherResourceType, AccessPolicyName("in-it"), resource3, AccessPolicyMembership(Set(dummyUserInfo.userEmail), Set(ResourceAction("alter_policies")), Set.empty))
       _ <- service.overwritePolicy(otherResourceType, AccessPolicyName("not-in-it"), resource3, AccessPolicyMembership(Set.empty, Set(ResourceAction("alter_policies")), Set.empty))
-      r <- service.policyEvaluatorService.listUserAccessPolicies(defaultResourceType.name, dummyUserInfo.userId).unsafeToFuture()
+      r <- service.policyEvaluatorService.listUserAccessPolicies(defaultResourceType.name, dummyUserInfo.userId)
     } yield {
-      assertResult(Set(
+      r should contain theSameElementsAs Set(
         UserPolicyResponse(resource1.resourceId, AccessPolicyName(defaultResourceType.ownerRoleName.value), Set.empty, Set.empty, false),
         UserPolicyResponse(resource2.resourceId, AccessPolicyName(defaultResourceType.ownerRoleName.value), Set.empty, Set.empty, false),
-        UserPolicyResponse(resource1.resourceId, AccessPolicyName("in-it"), Set.empty, Set.empty, false)))(r)
+        UserPolicyResponse(resource1.resourceId, AccessPolicyName("in-it"), Set.empty, Set.empty, false))
     }
+
+    test.unsafeRunSync()
   }
 
   it should "return no auth domains where there is a resource in a constrainable type but does not have any auth domains" in {
@@ -399,16 +402,16 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
       _ <- setup()
       _ <- constrainableService.createResourceType(constrainableResourceType)
       _ <- constrainableService.createResourceType(managedGroupResourceType)  // make sure managed groups in auth domain set are created. dummyUserInfo will be member of the created resourceId
-      _ <- resource.authDomain.toList.parTraverse(a => IO.fromFuture(IO(managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))))
+      _ <- resource.authDomain.toList.parTraverse(a => managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))
       // create resource that dummyUserInfo is a member of for constrainableResourceType
-      _ <- IO.fromFuture(IO(constrainableService.createResource(constrainableResourceType, resource.resourceId, Map(viewPolicyName -> constrainablePolicyMembership), resource.authDomain, dummyUserInfo.userId)))
+      _ <- constrainableService.createResource(constrainableResourceType, resource.resourceId, Map(viewPolicyName -> constrainablePolicyMembership), resource.authDomain, dummyUserInfo.userId)
       r <- constrainableService.policyEvaluatorService.listUserAccessPolicies(constrainableResourceType.name, dummyUserInfo.userId)
     } yield {
       val expected = Set(UserPolicyResponse(resource.resourceId, viewPolicyName, Set.empty, Set.empty, false))
       r shouldBe(expected)
     }
 
-    res.unsafeToFuture()
+    res.unsafeRunSync()
   }
 
   it should "list required authDomains if constrainable" in {
@@ -420,16 +423,16 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
       _ <- setup()
       _ <- constrainableService.createResourceType(constrainableResourceType)
       _ <- constrainableService.createResourceType(managedGroupResourceType)  // make sure managed groups in auth domain set are created. dummyUserInfo will be member of the created resourceId
-      _ <- resource.authDomain.toList.parTraverse(a => IO.fromFuture(IO(managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))))
+      _ <- resource.authDomain.toList.parTraverse(a => managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))
       // create resource that dummyUserInfo is a member of for constrainableResourceType
-      _ <- IO.fromFuture(IO(constrainableService.createResource(constrainableResourceType, resource.resourceId, Map(viewPolicyName -> constrainablePolicyMembership), resource.authDomain, dummyUserInfo.userId)))
+      _ <- constrainableService.createResource(constrainableResourceType, resource.resourceId, Map(viewPolicyName -> constrainablePolicyMembership), resource.authDomain, dummyUserInfo.userId)
       r <- constrainableService.policyEvaluatorService.listUserAccessPolicies(constrainableResourceType.name, dummyUserInfo.userId)
     } yield {
       val expected = Set(UserPolicyResponse(resource.resourceId, viewPolicyName, resource.authDomain, Set.empty, false))
       r shouldBe(expected)
     }
 
-    res.unsafeToFuture()
+    res.unsafeRunSync()
   }
 
   it should "list required authDomains and authDomains user is not a member of if constrainable" in {
@@ -442,19 +445,19 @@ class PolicyEvaluatorServiceSpec extends AsyncFlatSpec with Matchers with TestSu
       _ <- setup()
       _ <- constrainableService.createResourceType(constrainableResourceType)
       _ <- constrainableService.createResourceType(managedGroupResourceType)
-      _ <- resource.authDomain.toList.parTraverse(a => IO.fromFuture(IO(managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))))
+      _ <- resource.authDomain.toList.parTraverse(a => managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))
       _ <- savePolicyMembers(policy)
       // create resource that dummyUserInfo is a member of for constrainableResourceType
-      _ <- IO.fromFuture(IO(constrainableService.createResource(constrainableResourceType, resource.resourceId, Map(viewPolicyName -> constrainablePolicyMembership), resource.authDomain, dummyUserInfo.userId)))
+      _ <- constrainableService.createResource(constrainableResourceType, resource.resourceId, Map(viewPolicyName -> constrainablePolicyMembership), resource.authDomain, dummyUserInfo.userId)
       _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
-      _ <- IO.fromFuture(IO(constrainableService.createPolicy(policy.id, policy.members + user.userId, policy.roles, policy.actions)))
+      _ <- constrainableService.createPolicy(policy.id, policy.members + user.userId, policy.roles, policy.actions)
       r <- constrainableService.policyEvaluatorService.listUserAccessPolicies(constrainableResourceType.name, user.userId)
     } yield {
       val expected = Set(UserPolicyResponse(resource.resourceId, policy.id.accessPolicyName, resource.authDomain, resource.authDomain, false))
       r shouldBe(expected)
     }
 
-    res.unsafeToFuture()
+    res.unsafeRunSync()
   }
 }
 
