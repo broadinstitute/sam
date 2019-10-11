@@ -15,7 +15,7 @@ import org.broadinstitute.dsde.workbench.sam.service.ResourceService
 import spray.json.DefaultJsonProtocol._
 import spray.json.JsBoolean
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.ExecutionContext
 import ImplicitConversions.ioOnSuccessMagnet
 import akka.http.scaladsl.marshalling.ToResponseMarshallable
 import cats.effect.IO
@@ -141,6 +141,7 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
 
   private def initializePostgresResourceTypes = {
     val dbName: Symbol = 'sam_foreground
+    implicit val contextShift = IO.contextShift(ExecutionContext.Implicits.global)
     val postgresResourceService: cats.effect.Resource[IO, ResourceService] = for {
       postgresExecutionContext <- ExecutionContexts.fixedThreadPool[IO](DBs.config.getInt(s"db.${dbName.name}.poolMaxSize"))
       dbReference <- DbReference.resource(liquibaseConfig, dbName)
@@ -166,7 +167,7 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
             throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "this api may not be used for resource types that allow both authorization domains and id reuse"))
           }
 
-          val resourceMaker: Future[ToResponseMarshallable] = resourceService
+          val resourceMaker: IO[ToResponseMarshallable] = resourceService
             .createResource(resourceType, createResourceRequest.resourceId, createResourceRequest.policies, createResourceRequest.authDomain, userInfo.userId)
             .map { r =>
               if (createResourceRequest.returnResource.contains(true)) {
