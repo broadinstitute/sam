@@ -143,7 +143,7 @@ object TestSupport extends TestSupport {
     SamDependencies(mockResourceService, policyEvaluatorService, new UserService(directoryDAO, googleExt), new StatusService(directoryDAO, googleExt), mockManagedGroupService, directoryDAO, policyDAO, googleExt)
   }
 
-  def genSamRoutes(samDependencies: SamDependencies)(implicit system: ActorSystem, materializer: Materializer): SamRoutes = new SamRoutes(samDependencies.resourceService, samDependencies.userService, samDependencies.statusService, samDependencies.managedGroupService, null, samDependencies.directoryDAO, samDependencies.policyEvaluatorService)
+  def genSamRoutes(samDependencies: SamDependencies)(implicit system: ActorSystem, materializer: Materializer): SamRoutes = new SamRoutes(samDependencies.resourceService, samDependencies.userService, samDependencies.statusService, samDependencies.managedGroupService, null, samDependencies.directoryDAO, samDependencies.policyEvaluatorService, LiquibaseConfig("", false))
     with StandardUserInfoDirectives
     with GoogleExtensionRoutes {
       override val cloudExtensions: CloudExtensions = samDependencies.cloudExtensions

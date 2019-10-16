@@ -8,7 +8,7 @@ import akka.stream.Materializer
 import org.broadinstitute.dsde.workbench.google.mock.MockGoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
-import org.broadinstitute.dsde.workbench.sam.config.SwaggerConfig
+import org.broadinstitute.dsde.workbench.sam.config.{LiquibaseConfig, SwaggerConfig}
 import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryDAO, MockDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model.{ResourceType, ResourceTypeName}
 import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, MockAccessPolicyDAO}
@@ -23,7 +23,7 @@ import scala.concurrent.ExecutionContext
   * Created by dvoet on 7/14/17.
   */
 class TestSamRoutes(resourceService: ResourceService, policyEvaluatorService: PolicyEvaluatorService, userService: UserService, statusService: StatusService, managedGroupService: ManagedGroupService, val userInfo: UserInfo, directoryDAO: DirectoryDAO, val cloudExtensions: CloudExtensions = NoExtensions)(implicit override val system: ActorSystem, override val materializer: Materializer, override val executionContext: ExecutionContext)
-  extends SamRoutes(resourceService, userService, statusService, managedGroupService, SwaggerConfig("", ""), directoryDAO, policyEvaluatorService) with MockUserInfoDirectives with ExtensionRoutes with ScalaFutures {
+  extends SamRoutes(resourceService, userService, statusService, managedGroupService, SwaggerConfig("", ""), directoryDAO, policyEvaluatorService, LiquibaseConfig("", false)) with MockUserInfoDirectives with ExtensionRoutes with ScalaFutures {
   def extensionRoutes: server.Route = reject
   def mockDirectoryDao: DirectoryDAO = directoryDAO
 }
