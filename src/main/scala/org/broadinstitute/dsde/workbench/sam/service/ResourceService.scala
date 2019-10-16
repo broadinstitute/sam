@@ -56,6 +56,7 @@ class ResourceService(
           createdAdminType <- createResourceType(resourceTypeAdmin)
 
           // sleep added so shadow dao can catch up, remove when removing opendj
+          // https://broadworkbench.atlassian.net/browse/CA-526
           _ <- IO.sleep(1 second)(IO.timer(executionContext))
 
           result <- resourceTypes.values.filterNot(_.name == SamResourceTypes.resourceTypeAdminName).toList.traverse { rt =>
@@ -63,6 +64,7 @@ class ResourceService(
               _ <- createResourceType(rt)
 
               // sleep added so shadow dao can catch up, remove when removing opendj
+              // https://broadworkbench.atlassian.net/browse/CA-526
               _ <- IO.sleep(1 second)(IO.timer(executionContext))
 
               policy = ValidatableAccessPolicy(
