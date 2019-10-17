@@ -7,7 +7,7 @@ import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import akka.stream.ActorMaterializer
 import cats.data.NonEmptyList
-import cats.effect.{ExitCode, IO, IOApp}
+import cats.effect.{ContextShift, ExitCode, IO, IOApp}
 import cats.implicits._
 import com.typesafe.config.ConfigFactory
 import com.typesafe.scalalogging.LazyLogging
@@ -22,7 +22,7 @@ import org.broadinstitute.dsde.workbench.google2.{GoogleFirestoreInterpreter, Go
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException, WorkbenchSubject}
 import org.broadinstitute.dsde.workbench.newrelic.NewRelicMetrics
 import org.broadinstitute.dsde.workbench.sam.api.{SamRoutes, StandardUserInfoDirectives}
-import org.broadinstitute.dsde.workbench.sam.config.DataStores.{OpenDJ, Postgres}
+import org.broadinstitute.dsde.workbench.sam.config.DataStores.{DataStore, OpenDJ, Postgres}
 import org.broadinstitute.dsde.workbench.sam.config.{AppConfig, DataStoreConfig, GoogleConfig}
 import org.broadinstitute.dsde.workbench.sam.db.DbReference
 import org.broadinstitute.dsde.workbench.sam.directory._
@@ -31,7 +31,7 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam._
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.broadinstitute.dsde.workbench.sam.service._
-import org.broadinstitute.dsde.workbench.sam.util.{DaoWithShadow, NewRelicShadowResultReporter}
+import org.broadinstitute.dsde.workbench.sam.util.{DaoWithShadow, NewRelicShadowResultReporter, ShadowRunner}
 import org.broadinstitute.dsde.workbench.util.{DelegatePool, ExecutionContexts}
 import org.ehcache.Cache
 import org.ehcache.config.builders.{CacheConfigurationBuilder, CacheManagerBuilder, ExpiryPolicyBuilder, ResourcePoolsBuilder}
@@ -225,8 +225,8 @@ object Boot extends IOApp with LazyLogging {
                                  postgresExecutionContext: ExecutionContext,
                                  memberOfCache: Cache[WorkbenchSubject, Set[String]],
                                  newRelicMetrics: NewRelicMetrics): DirectoryDAO = {
-    val ldapDirectoryDAO = new LdapDirectoryDAO(ldapConnectionPool, appConfig.directoryConfig, ldapExecutionContext, memberOfCache)
-    val postgresDirectoryDAO = new PostgresDirectoryDAO(dbReference, postgresExecutionContext)
+    val ldapDirectoryDAO = new LdapDirectoryDAO(ldapConnectionPool, appConfig.directoryConfig, ldapExecutionContext, memberOfCache)(chooseRightContextShift(appConfig.dataStoreConfig, OpenDJ), implicitly)
+    val postgresDirectoryDAO = new PostgresDirectoryDAO(dbReference, postgresExecutionContext)(chooseRightContextShift(appConfig.dataStoreConfig, Postgres))
     chooseRightDAO(appConfig.dataStoreConfig, ldapDirectoryDAO, postgresDirectoryDAO, "directoryDAO", newRelicMetrics)
   }
 
@@ -238,8 +238,8 @@ object Boot extends IOApp with LazyLogging {
                                     memberOfCache: Cache[WorkbenchSubject, Set[String]],
                                     resourceCache: Cache[FullyQualifiedResourceId, Resource],
                                     newRelicMetrics: NewRelicMetrics): AccessPolicyDAO = {
-    val ldapAccessPolicyDAO = new LdapAccessPolicyDAO(ldapConnectionPool, appConfig.directoryConfig, ldapExecutionContext, memberOfCache, resourceCache)
-    val postgresAccessPolicyDAO = new PostgresAccessPolicyDAO(dbReference, postgresExecutionContext)
+    val ldapAccessPolicyDAO = new LdapAccessPolicyDAO(ldapConnectionPool, appConfig.directoryConfig, ldapExecutionContext, memberOfCache, resourceCache)(chooseRightContextShift(appConfig.dataStoreConfig, OpenDJ))
+    val postgresAccessPolicyDAO = new PostgresAccessPolicyDAO(dbReference, postgresExecutionContext)(chooseRightContextShift(appConfig.dataStoreConfig, Postgres))
     chooseRightDAO(appConfig.dataStoreConfig, ldapAccessPolicyDAO, postgresAccessPolicyDAO, "accessPolicyDAO", newRelicMetrics)
   }
 
@@ -250,6 +250,14 @@ object Boot extends IOApp with LazyLogging {
       case DataStoreConfig(OpenDJ, Some(Postgres)) => DaoWithShadow(ldapDAO, postgresDAO, new NewRelicShadowResultReporter(daoName, newRelicMetrics), timer.clock)
       case DataStoreConfig(Postgres, Some(OpenDJ)) => DaoWithShadow(postgresDAO, ldapDAO, new NewRelicShadowResultReporter(daoName, newRelicMetrics), timer.clock)
       case _ => throw new WorkbenchException(s"unsupported DataStoreConfig $dataStoreConfig")
+    }
+  }
+
+  def chooseRightContextShift(dataStoreConfig: DataStoreConfig, dataStore: DataStore): ContextShift[IO] = {
+    if (dataStoreConfig.shadow.contains(dataStore)) {
+      IO.contextShift(ShadowRunner.shadowExecutionContext)
+    } else {
+      implicitly[ContextShift[IO]]
     }
   }
 

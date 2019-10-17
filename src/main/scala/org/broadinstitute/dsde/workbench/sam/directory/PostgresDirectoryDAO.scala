@@ -21,8 +21,7 @@ import scala.concurrent.ExecutionContext
 import scala.util.{Failure, Try}
 
 class PostgresDirectoryDAO(protected val dbRef: DbReference,
-                           protected val ecForDatabaseIO: ExecutionContext)(implicit executionContext: ExecutionContext) extends DirectoryDAO with DatabaseSupport with PostgresGroupDAO {
-  implicit val cs: ContextShift[IO] = IO.contextShift(executionContext)
+                           protected val ecForDatabaseIO: ExecutionContext)(implicit val cs: ContextShift[IO]) extends DirectoryDAO with DatabaseSupport with PostgresGroupDAO {
 
   override def createGroup(group: BasicWorkbenchGroup, accessInstructionsOpt: Option[String]): IO[BasicWorkbenchGroup] = {
     runInTransaction { implicit session =>

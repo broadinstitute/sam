@@ -3,6 +3,7 @@ package org.broadinstitute.dsde.workbench.sam.directory
 import java.util.Date
 
 import akka.http.scaladsl.model.StatusCodes
+import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountDisplayName, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.sam.TestSupport
@@ -11,10 +12,10 @@ import org.broadinstitute.dsde.workbench.sam.openam.PostgresAccessPolicyDAO
 import org.postgresql.util.PSQLException
 import org.scalatest.{BeforeAndAfterEach, FreeSpec, Matchers}
 
-import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
 
 class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfterEach {
+  implicit val cs = IO.contextShift(scala.concurrent.ExecutionContext.global)
   val dao = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.blockingEc)
   val policyDAO = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.blockingEc)
 

@@ -1,6 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.openam
 
 import akka.http.scaladsl.model.StatusCodes
+import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.model._
@@ -14,6 +15,7 @@ import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext.Implicits.global
 
 class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndAfterEach {
+  implicit val cs = IO.contextShift(scala.concurrent.ExecutionContext.global)
   val dao = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.blockingEc)
   val dirDao = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.blockingEc)
 
