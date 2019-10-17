@@ -2,6 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.openam
 
 import cats.data.NonEmptyList
 import cats.effect.IO
+import io.opencensus.trace.Span
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.model.{FullyQualifiedResourceId, _}
 
@@ -27,7 +28,7 @@ trait AccessPolicyDAO {
   def listResourceWithAuthdomains(resourceId: FullyQualifiedResourceId): IO[Option[Resource]]
   def listAccessPolicies(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId): IO[Set[ResourceIdAndPolicyName]]
   def listAccessPolicies(resource: FullyQualifiedResourceId): IO[Stream[AccessPolicy]]
-  def listAccessPoliciesForUser(resource: FullyQualifiedResourceId, user: WorkbenchUserId): IO[Set[AccessPolicy]]
+  def listAccessPoliciesForUser(resource: FullyQualifiedResourceId, user: WorkbenchUserId, parentSpan: Span): IO[Set[AccessPolicy]]
   def listFlattenedPolicyMembers(policyId: FullyQualifiedPolicyId): IO[Set[WorkbenchUser]]
   def setPolicyIsPublic(policyId: FullyQualifiedPolicyId, isPublic: Boolean): IO[Unit]
 

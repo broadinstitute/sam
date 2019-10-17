@@ -4,6 +4,7 @@ import cats.effect.IO
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
 import com.unboundid.ldap.sdk.{LDAPException, ResultCode}
+import io.opencensus.trace.Span
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, LoadResourceAuthDomainResult}
@@ -72,7 +73,7 @@ class PolicyEvaluatorService(
         resourceTypes.get(resource.resourceTypeName).toRight(new WorkbenchException(s"missing configuration for resourceType ${resource.resourceTypeName}")))
       isConstrainable = rt.isAuthDomainConstrainable
 
-      policiesForResource <- traceIOWithParent("listResourceAccessPoliciesForUser", span)(_ => listResourceAccessPoliciesForUser(resource, userId))
+      policiesForResource <- traceIOWithParent("listResourceAccessPoliciesForUser", span)(s2 => listResourceAccessPoliciesForUser(resource, userId, s2))
       allPolicyActions = policiesForResource.flatMap(p => allActions(p, rt))
       res <- if (isConstrainable) {
         for {
@@ -144,10 +145,10 @@ class PolicyEvaluatorService(
       policies.map(_.groupName)
     }
 
-  def listResourceAccessPoliciesForUser(resource: FullyQualifiedResourceId, userId: WorkbenchUserId): IO[Set[AccessPolicy]] =
+  def listResourceAccessPoliciesForUser(resource: FullyQualifiedResourceId, userId: WorkbenchUserId, parentSpan: Span  = null): IO[Set[AccessPolicy]] =
     for {
-      policies <- accessPolicyDAO.listAccessPoliciesForUser(resource, userId)
-      publicPolicies <- accessPolicyDAO.listPublicAccessPolicies(resource)
+      policies <- traceIOWithParent("listAccessPoliciesForUser", parentSpan)(s2 => accessPolicyDAO.listAccessPoliciesForUser(resource, userId, s2))
+      publicPolicies <- traceIOWithParent("listPublicAccessPolicies", parentSpan)(_ => accessPolicyDAO.listPublicAccessPolicies(resource))
     } yield policies ++ publicPolicies
 }
 

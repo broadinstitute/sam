@@ -8,6 +8,7 @@ import cats.data.NonEmptyList
 import cats.effect.{ContextShift, IO}
 import cats.implicits._
 import com.unboundid.ldap.sdk._
+import io.opencensus.trace.Span
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
 import org.broadinstitute.dsde.workbench.sam.directory.DirectorySubjectNameSupport
@@ -18,6 +19,8 @@ import org.ehcache.Cache
 
 import scala.collection.JavaConverters._
 import scala.concurrent.ExecutionContext
+import org.broadinstitute.dsde.workbench.sam.util.OpenCensusIOUtils._
+
 
 // use ExecutionContexts.blockingThreadPool for blockingEc
 class LdapAccessPolicyDAO(
@@ -243,9 +246,9 @@ class LdapAccessPolicyDAO(
         ldapSearchStream(resourceDn(resource), SearchScope.SUB, Filter.createEqualityFilter("objectclass", ObjectClass.policy))(unmarshalAccessPolicy)
       ))
 
-  override def listAccessPoliciesForUser(resource: FullyQualifiedResourceId, user: WorkbenchUserId): IO[Set[AccessPolicy]] =
+  override def listAccessPoliciesForUser(resource: FullyQualifiedResourceId, user: WorkbenchUserId, parentSpan: Span = null): IO[Set[AccessPolicy]] =
     for {
-      memberOfs <- ldapLoadMemberOf(user)
+      memberOfs <- traceIOWithParent("ldapLoadMemberOf", parentSpan)( _ => ldapLoadMemberOf(user))
       accessPolicies <- {
         val fullyQualifiedPolicyIds = memberOfs.toList.mapFilter { str =>
           for {
@@ -262,7 +265,7 @@ class LdapAccessPolicyDAO(
           .grouped(batchSize)
           .map(batch => Filter.createORFilter(batch.map(r => Filter.createEqualityFilter(Attr.policy, r.accessPolicyName.value)).asJava))
           .toSeq
-        executeLdap(IO(ldapSearchStream(resourceDn(resource), SearchScope.SUB, filters: _*)(unmarshalAccessPolicy).toSet))
+        traceIOWithParent("ldapLoadMemberOf", parentSpan)( _ => executeLdap(IO(ldapSearchStream(resourceDn(resource), SearchScope.SUB, filters: _*)(unmarshalAccessPolicy).toSet)))
       }
     } yield accessPolicies
 

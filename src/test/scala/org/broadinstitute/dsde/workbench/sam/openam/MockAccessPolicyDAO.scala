@@ -2,6 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.openam
 import akka.http.scaladsl.model.StatusCodes
 import cats.data.NonEmptyList
 import cats.effect.IO
+import io.opencensus.trace.Span
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.model._
@@ -87,7 +88,7 @@ class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdenti
     }.toStream
   }
 
-  override def listAccessPoliciesForUser(resource: FullyQualifiedResourceId, user: WorkbenchUserId): IO[Set[AccessPolicy]] = IO {
+  override def listAccessPoliciesForUser(resource: FullyQualifiedResourceId, user: WorkbenchUserId, parentSpan: Span = null): IO[Set[AccessPolicy]] = IO {
     policies.collect {
       case (FullyQualifiedPolicyId(`resource`, _), policy: AccessPolicy) if policy.members.contains(user) => policy
     }.toSet
