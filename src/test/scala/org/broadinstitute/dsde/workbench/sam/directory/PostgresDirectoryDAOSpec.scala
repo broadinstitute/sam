@@ -197,6 +197,16 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
 
         dao.loadGroups(Set(group1.id, group2.id, WorkbenchGroupName("fakeGroup"))).unsafeRunSync() should contain theSameElementsAs Set(group1, group2)
       }
+
+      "should return member policies" in {
+        val group = BasicWorkbenchGroup(WorkbenchGroupName("group"), Set(defaultPolicy.id), WorkbenchEmail("group@example.com"))
+        policyDAO.createResourceType(resourceType).unsafeRunSync()
+        policyDAO.createResource(defaultResource).unsafeRunSync()
+        policyDAO.createPolicy(defaultPolicy).unsafeRunSync()
+        dao.createGroup(group).unsafeRunSync()
+
+        dao.loadGroups(Set(group.id)).unsafeRunSync() should contain theSameElementsAs Set(group)
+      }
     }
 
     "addGroupMember" - {
@@ -728,13 +738,13 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
     "enableIdentity and disableIdentity" - {
       "can enable and disable users" in {
         dao.createUser(defaultUser).unsafeRunSync()
-        dao.isEnabled(defaultUser.id).unsafeRunSync() shouldBe true
-
-        dao.disableIdentity(defaultUser.id).unsafeRunSync()
         dao.isEnabled(defaultUser.id).unsafeRunSync() shouldBe false
 
         dao.enableIdentity(defaultUser.id).unsafeRunSync()
         dao.isEnabled(defaultUser.id).unsafeRunSync() shouldBe true
+
+        dao.disableIdentity(defaultUser.id).unsafeRunSync()
+        dao.isEnabled(defaultUser.id).unsafeRunSync() shouldBe false
       }
 
       "cannot enable and disable pet service accounts" in {

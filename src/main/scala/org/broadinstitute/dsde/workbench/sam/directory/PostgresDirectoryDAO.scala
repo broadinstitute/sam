@@ -111,25 +111,35 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
           val g = GroupTable.syntax("g")
           val sg = GroupTable.syntax("sg")
           val gm = GroupMemberTable.syntax("gm")
+          val p = PolicyTable.syntax("p")
+          val r = ResourceTable.syntax("r")
+          val rt = ResourceTypeTable.syntax("rt")
 
           import SamTypeBinders._
-          samsql"""select ${g.result.name}, ${g.result.email}, ${gm.result.memberUserId}, ${sg.result.name}
+          samsql"""select ${g.result.name}, ${g.result.email}, ${gm.result.memberUserId}, ${sg.result.name}, ${p.result.name}, ${r.result.name}, ${rt.result.name}
                     from ${GroupTable as g}
                     left join ${GroupMemberTable as gm} on ${g.id} = ${gm.groupId}
                     left join ${GroupTable as sg} on ${gm.memberGroupId} = ${sg.id}
+                    left join ${PolicyTable as p} on ${p.groupId} = ${sg.id}
+                    left join ${ResourceTable as r} on ${p.resourceId} = ${r.id}
+                    left join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
                     where ${g.name} in (${groupNames})"""
             .map { rs =>
               (rs.get[WorkbenchGroupName](g.resultName.name),
                 rs.get[WorkbenchEmail](g.resultName.email),
                 rs.stringOpt(gm.resultName.memberUserId).map(WorkbenchUserId),
-                rs.stringOpt(sg.resultName.name).map(WorkbenchGroupName))
+                rs.stringOpt(sg.resultName.name).map(WorkbenchGroupName),
+                rs.stringOpt(p.resultName.name).map(AccessPolicyName(_)),
+                rs.stringOpt(r.resultName.name).map(ResourceId(_)),
+                rs.stringOpt(rt.resultName.name).map(ResourceTypeName(_)))
             }.list().apply()
         }
       } yield {
         results.groupBy(result => (result._1, result._2)).map { case ((groupName, email), results) =>
           val members: Set[WorkbenchSubject] = results.collect {
-              case (_, _, Some(userId), None) => userId
-              case (_, _, None, Some(subGroupName)) => subGroupName
+              case (_, _, Some(userId), None, None, None, None) => userId
+              case (_, _, None, Some(subGroupName), None, None, None) => subGroupName
+              case (_, _, None, Some(_), Some(policyName), Some(resourceName), Some(resourceTypeName)) => FullyQualifiedPolicyId(FullyQualifiedResourceId(resourceTypeName, resourceName), policyName)
           }.toSet
 
           BasicWorkbenchGroup(groupName, members, email)
@@ -442,7 +452,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     runInTransaction { implicit session =>
       val userColumn = UserTable.column
 
-      val insertUserQuery = samsql"insert into ${UserTable.table} (${userColumn.id}, ${userColumn.email}, ${userColumn.googleSubjectId}, ${userColumn.enabled}) values (${user.id}, ${user.email}, ${user.googleSubjectId}, true)"
+      val insertUserQuery = samsql"insert into ${UserTable.table} (${userColumn.id}, ${userColumn.email}, ${userColumn.googleSubjectId}, ${userColumn.enabled}) values (${user.id}, ${user.email}, ${user.googleSubjectId}, false)"
 
       Try {
         insertUserQuery.update.apply
