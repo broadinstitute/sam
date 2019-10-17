@@ -9,6 +9,7 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, LoadResourceAuthDomainResult}
 
 import scala.concurrent.ExecutionContext
+import org.broadinstitute.dsde.workbench.sam.util.OpenCensusIOUtils._
 
 class PolicyEvaluatorService(
     private val emailDomain: String,
@@ -64,20 +65,21 @@ class PolicyEvaluatorService(
       policy.actions ++ roleActions
     }
 
-    for {
+    traceIO("listUserResourceActions") ( span =>
+      for {
       _ <- if (force) accessPolicyDAO.evictIsMemberOfCache(userId) else IO.unit
       rt <- IO.fromEither[ResourceType](
         resourceTypes.get(resource.resourceTypeName).toRight(new WorkbenchException(s"missing configuration for resourceType ${resource.resourceTypeName}")))
       isConstrainable = rt.isAuthDomainConstrainable
 
-      policiesForResource <- listResourceAccessPoliciesForUser(resource, userId)
+      policiesForResource <- traceIOWithParent("listResourceAccessPoliciesForUser", span)(_ => listResourceAccessPoliciesForUser(resource, userId))
       allPolicyActions = policiesForResource.flatMap(p => allActions(p, rt))
       res <- if (isConstrainable) {
         for {
-          authDomainsResult <- accessPolicyDAO.loadResourceAuthDomain(resource)
+          authDomainsResult <- traceIOWithParent("loadResourceAuthDomain", span)(_ => accessPolicyDAO.loadResourceAuthDomain(resource))
           policyActions <- authDomainsResult match {
             case LoadResourceAuthDomainResult.Constrained(authDomains) =>
-              listUserManagedGroups(userId).map{
+              traceIOWithParent("listUserManagedGroups", span)(_ => listUserManagedGroups(userId)).map{
                 groupsUserIsMemberOf =>
                   val isUserMemberOfAllAuthDomains = authDomains.toList.toSet.subsetOf(groupsUserIsMemberOf)
                   if (isUserMemberOfAllAuthDomains) {
@@ -92,7 +94,7 @@ class PolicyEvaluatorService(
           }
         } yield policyActions
       } else allPolicyActions.pure[IO]
-    } yield res
+    } yield res)
   }
 
   def listUserAccessPolicies(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId): IO[Set[UserPolicyResponse]] =

@@ -14,6 +14,8 @@ import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, LoadResour
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Success
+import io.opencensus.scala.Tracing._
+import io.opencensus.trace.Span
 
 /**
   * Created by mbemis on 5/22/17.
@@ -109,13 +111,15 @@ class ResourceService(
       policiesMap: Map[AccessPolicyName, AccessPolicyMembership],
       authDomain: Set[WorkbenchGroupName],
       userId: WorkbenchUserId): Future[Resource] =
-    makeValidatablePolicies(policiesMap).flatMap { policies =>
-      validateCreateResource(resourceType, resourceId, policies, authDomain, userId).flatMap {
-        case Seq() => persistResource(resourceType, resourceId, policies, authDomain)
+    trace("createResource")( span =>
+      traceWithParent("makeValidatablePolicies", span)( _=> makeValidatablePolicies(policiesMap)).flatMap { policies =>
+        traceWithParent("validateCreateResource", span)( _=> validateCreateResource(resourceType, resourceId, policies, authDomain, userId)).flatMap {
+        case Seq() => traceWithParent("persistResource", span)( _=> persistResource(resourceType, resourceId, policies, authDomain, span))
         case errorReports: Seq[ErrorReport] =>
           throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "Cannot create resource", errorReports))
       }
-    }
+      }
+    )
 
   /**
     * This method only persists the resource and then overwrites/creates the policies for that resource.
@@ -127,10 +131,10 @@ class ResourceService(
     * @param authDomain
     * @return Future[Resource]
     */
-  private def persistResource(resourceType: ResourceType, resourceId: ResourceId, policies: Set[ValidatableAccessPolicy], authDomain: Set[WorkbenchGroupName]) =
+  private def persistResource(resourceType: ResourceType, resourceId: ResourceId, policies: Set[ValidatableAccessPolicy], authDomain: Set[WorkbenchGroupName], parentSpan: Span = null) =
     for {
-      resource <- accessPolicyDAO.createResource(Resource(resourceType.name, resourceId, authDomain)).unsafeToFuture()
-      policies <- Future.traverse(policies)(p => createOrUpdatePolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, p.policyName), p))
+      resource <- traceWithParent("createResource", parentSpan)( span => accessPolicyDAO.createResource(Resource(resourceType.name, resourceId, authDomain)).unsafeToFuture())
+      policies <- traceWithParent("createOrUpdatePolicies", parentSpan)( span => Future.traverse(policies)(p => createOrUpdatePolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, p.policyName), p)))
     } yield resource.copy(accessPolicies=policies)
 
   private def validateCreateResource(
