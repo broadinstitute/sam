@@ -134,7 +134,7 @@ class ResourceService(
   private def persistResource(resourceType: ResourceType, resourceId: ResourceId, policies: Set[ValidatableAccessPolicy], authDomain: Set[WorkbenchGroupName], parentSpan: Span = null) =
     for {
       resource <- traceWithParent("createResource", parentSpan)( span => accessPolicyDAO.createResource(Resource(resourceType.name, resourceId, authDomain)).unsafeToFuture())
-      policies <- traceWithParent("createOrUpdatePolicies", parentSpan)( span => Future.traverse(policies)(p => createOrUpdatePolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, p.policyName), p)))
+      policies <- Future.traverse(policies)(p => traceWithParent("createOrUpdatePolicy", parentSpan)(span => createOrUpdatePolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, p.policyName), p, span)))
     } yield resource.copy(accessPolicies=policies)
 
   private def validateCreateResource(
@@ -294,16 +294,16 @@ class ResourceService(
     * @param policy
     * @return
     */
-  private def createOrUpdatePolicy(policyIdentity: FullyQualifiedPolicyId, policy: ValidatableAccessPolicy): Future[AccessPolicy] = {
+  private def createOrUpdatePolicy(policyIdentity: FullyQualifiedPolicyId, policy: ValidatableAccessPolicy, parentSpan: Span = null): Future[AccessPolicy] = {
     val workbenchSubjects = policy.emailsToSubjects.values.flatten.toSet
-    accessPolicyDAO.loadPolicy(policyIdentity).unsafeToFuture().flatMap {
-      case None => createPolicy(policyIdentity, workbenchSubjects, generateGroupEmail(), policy.roles, policy.actions)
+    traceWithParent("loadPolicy", parentSpan)(span => accessPolicyDAO.loadPolicy(policyIdentity).unsafeToFuture()).flatMap {
+      case None => traceWithParent("createPolicy", parentSpan)(span => createPolicy(policyIdentity, workbenchSubjects, generateGroupEmail(), policy.roles, policy.actions))
       case Some(accessPolicy) =>
-        accessPolicyDAO
+        traceWithParent("overwritePolicy", parentSpan)(span => accessPolicyDAO
           .overwritePolicy(AccessPolicy(policyIdentity, workbenchSubjects, accessPolicy.email, policy.roles, policy.actions, accessPolicy.public))
           .unsafeToFuture().andThen {
             case Success(_) => fireGroupUpdateNotification(policyIdentity)
-          }
+          })
     }
   }
 
