@@ -2,6 +2,7 @@ package org.broadinstitute.dsde.workbench.sam
 
 import java.io.File
 import java.net.URI
+import java.util.concurrent.Executors
 
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
@@ -32,11 +33,13 @@ import org.broadinstitute.dsde.workbench.util.{DelegatePool, ExecutionContexts}
 import org.ehcache.Cache
 import org.ehcache.config.builders.{CacheConfigurationBuilder, CacheManagerBuilder, ExpiryPolicyBuilder, ResourcePoolsBuilder}
 
-import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 import scala.util.control.NonFatal
 
 object Boot extends IOApp with LazyLogging {
+
+  implicit val executionContext = ExecutionContext.fromExecutor(Executors.newFixedThreadPool(30))
 
   def run(args: List[String]): IO[ExitCode] =
     (startup() *> ExitCode.Success.pure[IO]).recoverWith {
