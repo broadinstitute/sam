@@ -15,6 +15,7 @@ import com.google.auth.oauth2.ServiceAccountCredentials
 import com.google.protobuf.{Duration, Timestamp}
 import com.google.rpc.Code
 import com.typesafe.scalalogging.LazyLogging
+import io.opencensus.trace.Span
 import org.broadinstitute.dsde.workbench.dataaccess.NotificationDAO
 import org.broadinstitute.dsde.workbench.google2.util.{DistributedLock, LockPath}
 import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleIamDAO, GoogleKmsService, GoogleProjectDAO, GooglePubSubDAO, GoogleStorageDAO}
@@ -39,6 +40,8 @@ import spray.json._
 import scala.collection.JavaConverters._
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
+import io.opencensus.scala.Tracing._
+
 
 object GoogleExtensions {
   val resourceId = ResourceId("google")
@@ -237,14 +240,14 @@ class GoogleExtensions(
     } yield policies.flatten
   }
 
-  override def onUserCreate(user: WorkbenchUser): Future[Unit] = {
+  override def onUserCreate(user: WorkbenchUser, parentSpan: Span =  null): Future[Unit] = {
     val proxyEmail = toProxyFromUser(user.id)
     for {
-      _ <- googleDirectoryDAO.createGroup(user.email.value, proxyEmail, Option(googleDirectoryDAO.lockedDownGroupSettings)) recover {
+      _ <- traceWithParent("createGroup", parentSpan)( _ => googleDirectoryDAO.createGroup(user.email.value, proxyEmail, Option(googleDirectoryDAO.lockedDownGroupSettings)) recover {
         case e: GoogleJsonResponseException if e.getDetails.getCode == StatusCodes.Conflict.intValue => ()
-      }
-      allUsersGroup <- getOrCreateAllUsersGroup(directoryDAO)
-      _ <- googleDirectoryDAO.addMemberToGroup(allUsersGroup.email, proxyEmail)
+      })
+      allUsersGroup <- traceWithParent("getOrCreateAllUsersGroup", parentSpan)( _ => getOrCreateAllUsersGroup(directoryDAO))
+      _ <- traceWithParent("addMemberToGroup", parentSpan)( _ => googleDirectoryDAO.addMemberToGroup(allUsersGroup.email, proxyEmail))
 
     } yield ()
   }

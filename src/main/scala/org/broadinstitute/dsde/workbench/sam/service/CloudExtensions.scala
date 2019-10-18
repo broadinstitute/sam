@@ -5,6 +5,7 @@ import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directives._
 import cats.effect.IO
+import io.opencensus.trace.Span
 import org.broadinstitute.dsde.workbench.model.Notifications.Notification
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.GoogleProject
@@ -32,7 +33,7 @@ trait CloudExtensions {
 
   def onGroupDelete(groupEmail: WorkbenchEmail): Future[Unit]
 
-  def onUserCreate(user: WorkbenchUser): Future[Unit]
+  def onUserCreate(user: WorkbenchUser, parentSpan: Span): Future[Unit]
 
   def getUserStatus(user: WorkbenchUser): Future[Boolean]
 
@@ -74,7 +75,7 @@ trait NoExtensions extends CloudExtensions {
 
   override def onGroupDelete(groupEmail: WorkbenchEmail): Future[Unit] = Future.successful(())
 
-  override def onUserCreate(user: WorkbenchUser): Future[Unit] = Future.successful(())
+  override def onUserCreate(user: WorkbenchUser, parentSpan: Span = null): Future[Unit] = Future.successful(())
 
   override def getUserStatus(user: WorkbenchUser): Future[Boolean] = Future.successful(true)
 

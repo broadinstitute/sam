@@ -15,6 +15,9 @@ import org.broadinstitute.dsde.workbench.sam.model._
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.matching.Regex
+import io.opencensus.scala.Tracing._
+import io.opencensus.trace.Span
+import org.broadinstitute.dsde.workbench.sam.util.OpenCensusIOUtils._
 
 /**
   * Created by dvoet on 7/14/17.
@@ -22,14 +25,14 @@ import scala.util.matching.Regex
 class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExtensions)(implicit val executionContext: ExecutionContext) extends LazyLogging {
 
   def createUser(user: CreateWorkbenchUser): Future[UserStatus] =
-    for {
-      allUsersGroup <- cloudExtensions.getOrCreateAllUsersGroup(directoryDAO)
-      createdUser <- registerUser(user).unsafeToFuture()
-      _ <- enableUserInternal(createdUser)
-      _ <- directoryDAO.addGroupMember(allUsersGroup.id, createdUser.id).unsafeToFuture()
-      userStatus <- getUserStatus(createdUser.id)
+    trace("createUser")(span => for {
+      allUsersGroup <- traceWithParent("getOrCreateAllUsersGroup", span)(_ => cloudExtensions.getOrCreateAllUsersGroup(directoryDAO))
+      createdUser <- traceWithParent("registerUser", span)(s2 => registerUser(user, s2).unsafeToFuture())
+      _ <- traceWithParent("enableUserInternal", span)(_ => enableUserInternal(createdUser))
+      _ <- traceWithParent("addGroupMember", span)(_ => directoryDAO.addGroupMember(allUsersGroup.id, createdUser.id).unsafeToFuture())
+      userStatus <- traceWithParent("getUserStatus", span)(_ => getUserStatus(createdUser.id))
       res <- userStatus.toRight(new WorkbenchException("getUserStatus returned None after user was created")).fold(Future.failed, Future.successful)
-    } yield res
+    } yield res)
 
   def inviteUser(invitee: InviteUser): IO[UserStatusDetails] =
     for {
@@ -52,20 +55,20 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
     *      yes            skip    ---> User exists. Do nothing.
     *      yes            skip    ---> User exists. Do nothing.
     */
-  protected[service] def registerUser(user: CreateWorkbenchUser): IO[WorkbenchUser] =
+  protected[service] def registerUser(user: CreateWorkbenchUser, parentSpan: Span = null): IO[WorkbenchUser] =
     for {
-      existingSubFromGoogleSubjectId <- directoryDAO.loadSubjectFromGoogleSubjectId(user.googleSubjectId)
+      existingSubFromGoogleSubjectId <- traceIOWithParent("loadSubjectFromGoogleSubjectId", parentSpan)(_ => directoryDAO.loadSubjectFromGoogleSubjectId(user.googleSubjectId))
       user <- existingSubFromGoogleSubjectId match {
         case Some(_) => IO.raiseError[WorkbenchUser](new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"user ${user} already exists")))
         case None =>
           for {
-            subjectFromEmail <- directoryDAO.loadSubjectFromEmail(user.email)
+            subjectFromEmail <- traceIOWithParent("loadSubjectFromEmail", parentSpan)(_ => directoryDAO.loadSubjectFromEmail(user.email))
             updated <- subjectFromEmail match {
               case Some(uid: WorkbenchUserId) =>
                 for {
-                  groups <- directoryDAO.listUserDirectMemberships(uid)
-                  _ <- directoryDAO.setGoogleSubjectId(uid, user.googleSubjectId)
-                  _ <- IO.fromFuture(IO(cloudExtensions.onGroupUpdate(groups)))
+                  groups <- traceIOWithParent("listUserDirectMemberships", parentSpan)(_ => directoryDAO.listUserDirectMemberships(uid))
+                  _ <- traceIOWithParent("setGoogleSubjectId", parentSpan)(_ => directoryDAO.setGoogleSubjectId(uid, user.googleSubjectId))
+                  _ <- traceIOWithParent("onGroupUpdate", parentSpan)(_ => IO.fromFuture(IO(cloudExtensions.onGroupUpdate(groups))))
                 } yield WorkbenchUser(uid, Some(user.googleSubjectId), user.email)
 
               case Some(_) =>
@@ -73,17 +76,17 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
                 IO.raiseError[WorkbenchUser](
                   new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"$user is not a regular user. Please use a different endpoint")))
               case None =>
-                createUserInternal(WorkbenchUser(WorkbenchUserId(user.googleSubjectId.value), Some(user.googleSubjectId), user.email)) //For completely new users, we still use googleSubjectId as their userId
+                traceIOWithParent("createUserInternal", parentSpan)(_ => createUserInternal(WorkbenchUser(WorkbenchUserId(user.googleSubjectId.value), Some(user.googleSubjectId), user.email))) //For completely new users, we still use googleSubjectId as their userId
 
             }
           } yield updated
       }
     } yield user
 
-  private def createUserInternal(user: WorkbenchUser) = {
+  private def createUserInternal(user: WorkbenchUser, parentSpan: Span = null) = {
     for {
-      createdUser <- directoryDAO.createUser(user)
-      _ <- IO.fromFuture(IO(cloudExtensions.onUserCreate(createdUser)))
+      createdUser <- traceIOWithParent("createUser", parentSpan)(_ => directoryDAO.createUser(user))
+      _ <- traceIOWithParent("onUserCreate", parentSpan)(s2 => IO.fromFuture(IO(cloudExtensions.onUserCreate(createdUser, s2))))
     } yield createdUser
   }
   def getSubjectFromEmail(email: WorkbenchEmail): Future[Option[WorkbenchSubject]] = directoryDAO.loadSubjectFromEmail(email).unsafeToFuture()
