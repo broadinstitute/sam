@@ -31,7 +31,7 @@ class ManagedGroupService(
       ManagedGroupService.managedGroupTypeName,
       throw new WorkbenchException(s"resource type ${ManagedGroupService.managedGroupTypeName.value} not found"))
 
-  def createManagedGroup(groupId: ResourceId, userInfo: UserInfo, accessInstructionsOpt: Option[String] = None): Future[Resource] = {
+  def createManagedGroup(groupId: ResourceId, userInfo: UserInfo, accessInstructionsOpt: Option[String] = None): IO[Resource] = {
     def adminRole = managedGroupType.ownerRoleName
 
     val memberPolicy = ManagedGroupService.memberPolicyName -> AccessPolicyMembership(Set.empty, Set.empty, Set(ManagedGroupService.memberRoleName))
@@ -49,9 +49,9 @@ class ManagedGroupService(
         Map(adminPolicy, memberPolicy, adminNotificationPolicy),
         Set.empty,
         userInfo.userId)
-      policies <- accessPolicyDAO.listAccessPolicies(managedGroup.fullyQualifiedId).unsafeToFuture()
-      workbenchGroup <- createAggregateGroup(managedGroup, policies.toSet, accessInstructionsOpt).unsafeToFuture()
-      _ <- cloudExtensions.publishGroup(workbenchGroup.id)
+      policies <- accessPolicyDAO.listAccessPolicies(managedGroup.fullyQualifiedId)
+      workbenchGroup <- createAggregateGroup(managedGroup, policies.toSet, accessInstructionsOpt)
+      _ <- IO.fromFuture(IO(cloudExtensions.publishGroup(workbenchGroup.id)))
     } yield managedGroup
   }
 
@@ -100,8 +100,10 @@ class ManagedGroupService(
       // so failures there do not leave ldap in a bad state
       // resourceService.deleteResource also does cloudExtensions.onGroupDelete first thing
       _ <- cloudExtensions.onGroupDelete(WorkbenchEmail(constructEmail(groupId.value)))
-      _ <- resourceService.deleteResource(FullyQualifiedResourceId(managedGroupType.name, groupId))
+      managedGroupResourceId = FullyQualifiedResourceId(managedGroupType.name, groupId)
+      _ <- resourceService.cloudDeletePolicies(managedGroupResourceId)
       _ <- directoryDAO.deleteGroup(WorkbenchGroupName(groupId.value)).unsafeToFuture()
+      _ <- resourceService.deleteResource(managedGroupResourceId)
     } yield ()
 
   def listGroups(userId: WorkbenchUserId): IO[Set[ManagedGroupMembershipEntry]] =
@@ -130,10 +132,10 @@ class ManagedGroupService(
     }
   }
 
-  def overwritePolicyMemberEmails(resourceId: ResourceId, policyName: ManagedGroupPolicyName, emails: Set[WorkbenchEmail]): Future[AccessPolicy] = {
+  def overwritePolicyMemberEmails(resourceId: ResourceId, policyName: ManagedGroupPolicyName, emails: Set[WorkbenchEmail]): IO[AccessPolicy] = {
     val resourceAndPolicyName =
       FullyQualifiedPolicyId(FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, resourceId), policyName)
-    accessPolicyDAO.loadPolicy(resourceAndPolicyName).unsafeToFuture().flatMap {
+    accessPolicyDAO.loadPolicy(resourceAndPolicyName).flatMap {
       case Some(policy) => {
         val updatedPolicy = AccessPolicyMembership(emails, policy.actions, policy.roles)
         resourceService.overwritePolicy(managedGroupType, resourceAndPolicyName.accessPolicyName, resourceAndPolicyName.resource, updatedPolicy)

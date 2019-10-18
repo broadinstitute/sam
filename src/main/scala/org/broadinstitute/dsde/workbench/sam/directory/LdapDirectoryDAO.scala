@@ -3,16 +3,17 @@ import java.util.Date
 
 import akka.http.scaladsl.model.StatusCodes
 import cats.data.OptionT
-import cats.effect.{IO, Timer}
+import cats.effect.{ContextShift, IO, Timer}
 import cats.implicits._
 import com.unboundid.ldap.sdk._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google._
+import org.broadinstitute.dsde.workbench.newrelic.NewRelicMetrics
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
 import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO.{Attr, ObjectClass}
-import org.broadinstitute.dsde.workbench.sam.util.{LdapSupport, NewRelicMetrics}
+import org.broadinstitute.dsde.workbench.sam.util.LdapSupport
 import org.ehcache.Cache
 
 import scala.collection.JavaConverters._
@@ -24,11 +25,10 @@ class LdapDirectoryDAO(
     protected val ldapConnectionPool: LDAPConnectionPool,
     protected val directoryConfig: DirectoryConfig,
     protected val ecForLdapBlockingIO: ExecutionContext,
-    protected val memberOfCache: Cache[WorkbenchSubject, Set[String]])(implicit executionContext: ExecutionContext, timer: Timer[IO])
+    protected val memberOfCache: Cache[WorkbenchSubject, Set[String]])(implicit val cs: ContextShift[IO], timer: Timer[IO])
     extends DirectoryDAO
     with DirectorySubjectNameSupport
     with LdapSupport {
-  implicit val cs = IO.contextShift(executionContext)
 
   override def createGroup(group: BasicWorkbenchGroup, accessInstructionsOpt: Option[String] = None): IO[BasicWorkbenchGroup] = {
     val membersAttribute =
@@ -168,7 +168,7 @@ class LdapDirectoryDAO(
             IO.raiseError[WorkbenchSubject](new WorkbenchException(s"Database error: email $email refers to too many subjects: ${subjects.map(_.getDN)}")))
       }
     } yield res
-    NewRelicMetrics.time("loadSubjectFromEmail", ret.value)
+    NewRelicMetrics.fromNewRelic("sam").timeIO("loadSubjectFromEmail")(ret.value)
   }
 
   override def loadSubjectEmail(subject: WorkbenchSubject): IO[Option[WorkbenchEmail]] =
@@ -402,7 +402,7 @@ class LdapDirectoryDAO(
           IO.raiseError(new WorkbenchException(s"Database error: googleSubjectId $googleSubjectId refers to too many subjects: ${subjects.map(_.getDN)}"))
       }
     } yield r
-    NewRelicMetrics.time("loadSubjectFromGoogleSubjectId", res)
+    NewRelicMetrics.fromNewRelic("sam").timeIO("loadSubjectFromGoogleSubjectId")(res)
   }
 
   override def setGoogleSubjectId(userId: WorkbenchUserId, googleSubjectId: GoogleSubjectId): IO[Unit] =

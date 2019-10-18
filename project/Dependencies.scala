@@ -8,12 +8,15 @@ object Dependencies {
   val scalaTestV    = "3.0.5"
   val scalaCheckV    = "1.14.0"
   val catsEffectV         = "1.2.0"
+  val scalikejdbcVersion    = "3.3.5"
+  val postgresDriverVersion = "42.2.4"
 
   val workbenchUtilV   = "0.5-6942040"
   val workbenchModelV  = "0.13-d4e0782"
   val workbenchGoogleV = "0.20-a9f29eb"
   val workbenchGoogle2V = "0.1-8328aae"
   val workbenchNotificationsV = "0.1-f2a0020"
+  val workbenchNewRelicV = "0.2-24dabc8"
   val monocleVersion = "1.5.1-cats"
   val newRelicVersion = "4.11.0"
 
@@ -65,7 +68,15 @@ object Dependencies {
   val workbenchNotifications: ModuleID =  "org.broadinstitute.dsde.workbench" %% "workbench-notifications" % workbenchNotificationsV excludeAll(excludeWorkbenchGoogle, excludeWorkbenchModel)
   val workbenchGoogleTests: ModuleID =    "org.broadinstitute.dsde.workbench" %% "workbench-google" % workbenchGoogleV % "test" classifier "tests" excludeAll(excludeWorkbenchUtil, excludeWorkbenchModel)
   val workbenchGoogle2Tests: ModuleID =    "org.broadinstitute.dsde.workbench" %% "workbench-google2" % workbenchGoogle2V % "test" classifier "tests" excludeAll(excludeWorkbenchUtil, excludeWorkbenchModel)
+  val workbenchNewRelic: ModuleID =    "org.broadinstitute.dsde.workbench" %% "workbench-newrelic" % workbenchNewRelicV excludeAll(excludeWorkbenchUtil, excludeWorkbenchModel)
   val googleStorageLocal: ModuleID = "com.google.cloud" % "google-cloud-nio" % "0.71.0-alpha" % "test" //needed for mocking google cloud storage
+
+  val liquibaseCore: ModuleID = "org.liquibase" % "liquibase-core" % "3.6.3"
+
+  val scalikeCore =       "org.scalikejdbc"                   %% "scalikejdbc"         % scalikejdbcVersion
+  val scalikeCoreConfig = "org.scalikejdbc"                   %% "scalikejdbc-config"  % scalikejdbcVersion
+  val scalikeCoreTest =   "org.scalikejdbc"                   %% "scalikejdbc-test"    % scalikejdbcVersion   % "test"
+  val postgres = "org.postgresql"                    %  "postgresql"          % postgresDriverVersion
 
   val rootDependencies = Seq(
     // proactively pull in latest versions of Jackson libs, instead of relying on the versions
@@ -103,9 +114,17 @@ object Dependencies {
     workbenchGoogleTests,
     workbenchGoogle2Tests,
     googleStorageLocal,
+    workbenchNewRelic,
 
     unboundid,
     ehcache,
-    catsEffect
+    catsEffect,
+
+    liquibaseCore,
+
+    scalikeCore,
+    scalikeCoreConfig,
+    scalikeCoreTest,
+    postgres
   )
 }

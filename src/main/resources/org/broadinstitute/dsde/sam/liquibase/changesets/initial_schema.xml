@@ -1,0 +1,279 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog logicalFilePath="dummy"
+                   xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog-ext http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-ext.xsd http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.4.xsd">
+
+    <changeSet logicalFilePath="dummy" author="dvoet" id="group_table">
+        <createTable tableName="SAM_GROUP">
+            <column autoIncrement="true" name="id" type="BIGINT">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="name" type="VARCHAR">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="email" type="VARCHAR">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="updated_date" type="timestamptz"/>
+            <column name="synchronized_date" type="timestamptz"/>
+        </createTable>
+    </changeSet>
+
+    <changeSet logicalFilePath="dummy" author="dvoet" id="access_instructions_table">
+        <createTable tableName="SAM_ACCESS_INSTRUCTIONS">
+            <column autoIncrement="true" name="id" type="BIGINT">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="group_id" type="BIGINT">
+                <constraints foreignKeyName="FK_SAI_GROUP" referencedTableName="SAM_GROUP" referencedColumnNames="id" unique="true" deleteCascade="true"/>
+            </column>
+            <column name="instructions" type="VARCHAR">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <changeSet logicalFilePath="dummy" author="dvoet" id="user_table">
+        <createTable tableName="SAM_USER">
+            <column name="id" type="VARCHAR">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="email" type="VARCHAR">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="google_subject_id" type="VARCHAR(30)">
+                <constraints unique="true"/>
+            </column>
+            <column name="enabled" type="BOOLEAN">
+                <constraints nullable="false"/>
+            </column>
+
+        </createTable>
+    </changeSet>
+
+    <changeSet logicalFilePath="dummy" author="dvoet" id="pet_service_account_table">
+        <createTable tableName="SAM_PET_SERVICE_ACCOUNT">
+            <column name="user_id" type="VARCHAR">
+                <constraints primaryKey="true" foreignKeyName="FK_SPSA_USER" referencedTableName="SAM_USER" referencedColumnNames="id"/>
+            </column>
+            <column name="project" type="VARCHAR">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="email" type="VARCHAR">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="google_subject_id" type="VARCHAR(30)">
+                <constraints unique="true" nullable="false"/>
+            </column>
+            <column name="display_name" type="VARCHAR(100)">
+                <constraints unique="false" nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <changeSet logicalFilePath="dummy" author="dvoet" id="group_member_table">
+        <createTable tableName="SAM_GROUP_MEMBER">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="group_id" type="BIGINT">
+                <constraints foreignKeyName="FK_SGM_GROUP" referencedTableName="SAM_GROUP" referencedColumnNames="id" nullable="false" deleteCascade="true"/>
+            </column>
+            <column name="member_group_id" type="BIGINT">
+                <constraints foreignKeyName="FK_SGM_MEMBER_GROUP" referencedTableName="SAM_GROUP" referencedColumnNames="id"/>
+            </column>
+            <column name="member_user_id" type="VARCHAR">
+                <constraints foreignKeyName="FK_SGM_MEMBER_USER" referencedTableName="SAM_USER" referencedColumnNames="id"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <changeSet logicalFilePath="dummy" author="dvoet" id="resource_type_table">
+        <createTable tableName="SAM_RESOURCE_TYPE">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="name" type="VARCHAR">
+                <constraints nullable="false" unique="true"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <changeSet logicalFilePath="dummy" author="dvoet" id="resource_action_pattern_table">
+        <createTable tableName="SAM_RESOURCE_TYPE_ACTION_PATTERN">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="resource_type_id" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="FK_SAP_RESOURCE_TYPE" referencedTableName="SAM_RESOURCE_TYPE" referencedColumnNames="id"/>
+            </column>
+            <column name="action_pattern" type="VARCHAR">
+                <constraints nullable="false"/>
+            </column>
+            <column name="description" type="VARCHAR">
+                <constraints nullable="false"/>
+            </column>
+            <column name="is_auth_domain_constrainable" type="BOOLEAN" defaultValue="false">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <changeSet logicalFilePath="dummy" author="dvoet" id="resource_role_table">
+        <createTable tableName="SAM_RESOURCE_ROLE">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="resource_type_id" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="FK_SRR_RESOURCE_TYPE" referencedTableName="SAM_RESOURCE_TYPE" referencedColumnNames="id"/>
+            </column>
+            <column name="role" type="VARCHAR">
+                <constraints nullable="false"/>
+            </column>
+            <column name="deprecated" type="BOOLEAN" defaultValue="false">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <changeSet logicalFilePath="dummy" author="dvoet" id="resource_action_table">
+        <createTable tableName="SAM_RESOURCE_ACTION">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="resource_type_id" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="FK_SRESA_RESOURCE_TYPE" referencedTableName="SAM_RESOURCE_TYPE" referencedColumnNames="id"/>
+            </column>
+            <column name="action" type="VARCHAR">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <changeSet logicalFilePath="dummy" author="dvoet" id="role_action_table">
+        <createTable tableName="SAM_ROLE_ACTION">
+            <column name="resource_role_id" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="FK_SROLEA_ROLE" referencedTableName="SAM_RESOURCE_ROLE" referencedColumnNames="id" primaryKey="true"/>
+            </column>
+            <column name="resource_action_id" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="FK_SROLEA_ACTION" referencedTableName="SAM_RESOURCE_ACTION" referencedColumnNames="id" primaryKey="true"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <changeSet logicalFilePath="dummy" author="dvoet" id="resource_table">
+        <createTable tableName="SAM_RESOURCE">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="resource_type_id" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="FK_SR_RESOURCE_TYPE" referencedTableName="SAM_RESOURCE_TYPE" referencedColumnNames="id"/>
+            </column>
+            <column name="name" type="VARCHAR">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <changeSet logicalFilePath="dummy" author="dvoet" id="auth_domain_table">
+        <createTable tableName="SAM_RESOURCE_AUTH_DOMAIN">
+            <column name="resource_id" type="BIGINT">
+                <constraints primaryKey="true" nullable="false" foreignKeyName="FK_SRAD_RESOURCE" referencedTableName="SAM_RESOURCE" referencedColumnNames="id"/>
+            </column>
+            <column name="group_id" type="BIGINT">
+                <constraints primaryKey="true" nullable="false" foreignKeyName="FK_SRAD_GROUP" referencedTableName="SAM_GROUP" referencedColumnNames="id"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <changeSet logicalFilePath="dummy" author="dvoet" id="policy_table">
+        <createTable tableName="SAM_RESOURCE_POLICY">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="resource_id" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="FK_SRP_RESOURCE" referencedTableName="SAM_RESOURCE" referencedColumnNames="id"/>
+            </column>
+            <column name="group_id" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="FK_SRP_GROUP" referencedTableName="SAM_GROUP" referencedColumnNames="id"/>
+            </column>
+            <column name="name" type="VARCHAR">
+                <constraints nullable="false"/>
+            </column>
+            <column name="public" type="BOOLEAN">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <changeSet logicalFilePath="dummy" author="dvoet" id="policy_role_table">
+        <createTable tableName="SAM_POLICY_ROLE">
+            <column name="resource_policy_id" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="FK_SPR_POLICY" referencedTableName="SAM_RESOURCE_POLICY" referencedColumnNames="id" primaryKey="true" deleteCascade="true"/>
+            </column>
+            <column name="resource_role_id" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="FK_SPR_ROLE" referencedTableName="SAM_RESOURCE_ROLE" referencedColumnNames="id" primaryKey="true"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <changeSet logicalFilePath="dummy" author="dvoet" id="policy_action_table">
+        <createTable tableName="SAM_POLICY_ACTION">
+            <column name="resource_policy_id" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="FK_SPA_POLICY" referencedTableName="SAM_RESOURCE_POLICY" referencedColumnNames="id" primaryKey="true" deleteCascade="true"/>
+            </column>
+            <column name="resource_action_id" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="FK_SPA_ACTION" referencedTableName="SAM_RESOURCE_ACTION" referencedColumnNames="id" primaryKey="true"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <changeSet logicalFilePath="dummy" author="dvoet" id="unique_role_type">
+        <addUniqueConstraint tableName="SAM_RESOURCE_ROLE" columnNames="resource_type_id, role"/>
+    </changeSet>
+
+    <changeSet logicalFilePath="dummy" author="dvoet" id="unique_action_type">
+        <addUniqueConstraint tableName="SAM_RESOURCE_ACTION" columnNames="resource_type_id, action"/>
+    </changeSet>
+
+    <changeSet logicalFilePath="dummy" author="dvoet" id="unique_resource_name">
+        <addUniqueConstraint tableName="SAM_RESOURCE" columnNames="resource_type_id, name"/>
+    </changeSet>
+
+    <changeSet logicalFilePath="dummy" author="dvoet" id="unique_policy_name">
+        <addUniqueConstraint tableName="SAM_RESOURCE_POLICY" columnNames="resource_id, name"/>
+    </changeSet>
+
+    <changeSet logicalFilePath="dummy" author="mtalbott" id="unique_subgroup_member_">
+        <addUniqueConstraint tableName="SAM_GROUP_MEMBER" columnNames="group_id, member_group_id"/>
+    </changeSet>
+
+    <changeSet logicalFilePath="dummy" author="mtalbott" id="unique_user_member">
+        <addUniqueConstraint tableName="SAM_GROUP_MEMBER" columnNames="group_id, member_user_id"/>
+    </changeSet>
+    
+    <changeSet logicalFilePath="dummy" id="unique_action_pattern" author="gpolumbo">
+        <addUniqueConstraint tableName="SAM_RESOURCE_TYPE_ACTION_PATTERN" columnNames="resource_type_id, action_pattern"/>
+    </changeSet>
+
+    <changeSet logicalFilePath="dummy" author="dvoet" id="index_sgm_group_id">
+        <createIndex tableName="SAM_GROUP_MEMBER" indexName="IDX_SGM_GROUP_ID">
+            <column name="group_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet logicalFilePath="dummy" author="dvoet" id="index_sgm_member_user_id">
+        <createIndex tableName="SAM_GROUP_MEMBER" indexName="IDX_SGM_MEMBER_USER_ID">
+            <column name="member_user_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet logicalFilePath="dummy" author="dvoet" id="index_sgm_member_group_id">
+        <createIndex tableName="SAM_GROUP_MEMBER" indexName="IDX_SGM_MEMBER_GROUP_ID">
+            <column name="member_group_id"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

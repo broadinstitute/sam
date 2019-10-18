@@ -6,7 +6,6 @@ import java.util.UUID
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import cats.data.NonEmptyList
-import cats.effect.IO
 import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.model._
@@ -14,9 +13,9 @@ import org.broadinstitute.dsde.workbench.sam.Generator._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.TestSupport.blockingEc
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig.resourceTypeReader
-import org.broadinstitute.dsde.workbench.sam.directory.LdapDirectoryDAO
+import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryDAO, LdapDirectoryDAO, PostgresDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, LdapAccessPolicyDAO}
+import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, LdapAccessPolicyDAO, PostgresAccessPolicyDAO}
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FlatSpec, Matchers}
@@ -36,8 +35,8 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
 
   val dirURI = new URI(directoryConfig.directoryUrl)
   val connectionPool = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
-  val dirDAO = new LdapDirectoryDAO(connectionPool, directoryConfig, blockingEc, TestSupport.testMemberOfCache)
-  val policyDAO = new LdapAccessPolicyDAO(connectionPool, directoryConfig, blockingEc, TestSupport.testMemberOfCache, TestSupport.testResourceCache)
+  lazy val dirDAO: DirectoryDAO = new LdapDirectoryDAO(connectionPool, directoryConfig, blockingEc, TestSupport.testMemberOfCache)
+  lazy val policyDAO: AccessPolicyDAO = new LdapAccessPolicyDAO(connectionPool, directoryConfig, blockingEc, TestSupport.testMemberOfCache, TestSupport.testResourceCache)
   val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
   private val dummyUserInfo = UserInfo(OAuth2BearerToken("token"), WorkbenchUserId("userid"), WorkbenchEmail("user@company.com"), 0)
@@ -85,9 +84,13 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
   }
 
   before {
+    clearDatabase()
+    dirDAO.createUser(WorkbenchUser(dummyUserInfo.userId, Some(TestSupport.genGoogleSubjectId()), dummyUserInfo.userEmail)).unsafeRunSync()
+  }
+
+  protected def clearDatabase(): Unit = {
     runAndWait(schemaDao.clearDatabase())
     runAndWait(schemaDao.createOrgUnits())
-    dirDAO.createUser(WorkbenchUser(dummyUserInfo.userId, Some(TestSupport.genGoogleSubjectId()), dummyUserInfo.userEmail)).unsafeRunSync()
   }
 
   def toEmail(resourceType: String, resourceName: String, policyName: String) = {
@@ -182,7 +185,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     val resource = FullyQualifiedResourceId(constrainableResourceType.name, resourceName)
 
     constrainableService.createResourceType(constrainableResourceType).unsafeRunSync()
-    val managedGroupResource = managedGroupService.createManagedGroup(ResourceId("ad"), dummyUserInfo).futureValue
+    val managedGroupResource = managedGroupService.createManagedGroup(ResourceId("ad"), dummyUserInfo).unsafeRunSync()
 
     val ownerRoleName = constrainableReaderRoleName
     val policyMembership = AccessPolicyMembership(Set(dummyUserInfo.userEmail), Set(constrainableViewAction), Set(ownerRoleName))
@@ -206,9 +209,9 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     val resourceName2 = ResourceId("resource2")
 
     service.createResourceType(defaultResourceType).unsafeRunSync()
-    service.createResource(defaultResourceType, resourceName1, dummyUserInfo).futureValue
+    service.createResource(defaultResourceType, resourceName1, dummyUserInfo).unsafeRunSync()
 
-    val policies2 = service.createResource(defaultResourceType, resourceName2, dummyUserInfo).futureValue
+    val policies2 = service.createResource(defaultResourceType, resourceName2, dummyUserInfo).unsafeRunSync()
 
     policyDAO.createPolicy(AccessPolicy(
       FullyQualifiedPolicyId(policies2.fullyQualifiedId, AccessPolicyName(otherRoleName.value)), Set(dummyUserInfo.userId), WorkbenchEmail("a@b.c"), Set(otherRoleName), Set.empty, public = false)).unsafeRunSync()
@@ -818,10 +821,10 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
 
       testGroup <- dirDAO.createGroup(BasicWorkbenchGroup(WorkbenchGroupName("mygroup"), Set.empty, WorkbenchEmail("group@a.com")))
 
-      res1 <- IO.fromFuture(IO(service.createResource(defaultResourceType, ResourceId("resource1"), dummyUserInfo)))
+      res1 <- service.createResource(defaultResourceType, ResourceId("resource1"), dummyUserInfo)
       testPolicy <- service.listResourcePolicies(res1.fullyQualifiedId).map(_.head)
 
-      res2 <- IO.fromFuture(IO(service.createResource(defaultResourceType, ResourceId("resource2"), dummyUserInfo)))
+      res2 <- service.createResource(defaultResourceType, ResourceId("resource2"), dummyUserInfo)
 
       newPolicy <- policyDAO.createPolicy(AccessPolicy(
         FullyQualifiedPolicyId(res2.fullyQualifiedId, AccessPolicyName("foo")), Set(testGroup.id, dummyUserInfo.userId, FullyQualifiedPolicyId(res1.fullyQualifiedId, testPolicy.policyName)), WorkbenchEmail("a@b.c"), Set.empty, Set.empty, public = false))
@@ -838,4 +841,10 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     implicit val patienceConfig = PatienceConfig(5.seconds)
     testResult.unsafeRunSync()
   }
+}
+
+class ResourceServiceWithPostgresSpec extends ResourceServiceSpec {
+  override lazy val dirDAO: DirectoryDAO = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.blockingEc)
+  override lazy val policyDAO: AccessPolicyDAO = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.blockingEc)
+  override protected def clearDatabase(): Unit = TestSupport.truncateAll
 }

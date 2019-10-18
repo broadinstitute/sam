@@ -15,9 +15,16 @@ import org.broadinstitute.dsde.workbench.sam.service.ResourceService
 import spray.json.DefaultJsonProtocol._
 import spray.json.JsBoolean
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.ExecutionContext
 import ImplicitConversions.ioOnSuccessMagnet
 import akka.http.scaladsl.marshalling.ToResponseMarshallable
+import cats.effect.IO
+import org.broadinstitute.dsde.workbench.sam.config.LiquibaseConfig
+import org.broadinstitute.dsde.workbench.sam.db.DbReference
+import org.broadinstitute.dsde.workbench.sam.directory.PostgresDirectoryDAO
+import org.broadinstitute.dsde.workbench.sam.openam.PostgresAccessPolicyDAO
+import org.broadinstitute.dsde.workbench.util.ExecutionContexts
+import scalikejdbc.config.DBs
 
 /**
   * Created by mbemis on 5/22/17.
@@ -25,6 +32,7 @@ import akka.http.scaladsl.marshalling.ToResponseMarshallable
 trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with SamModelDirectives {
   implicit val executionContext: ExecutionContext
   val resourceService: ResourceService
+  val liquibaseConfig: LiquibaseConfig
 
   def withResourceType(name: ResourceTypeName): Directive1[ResourceType] =
     onSuccess(resourceService.getResourceType(name)).map {
@@ -33,90 +41,119 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
     }
 
   def resourceRoutes: server.Route =
-    (pathPrefix("config" / "v1" / "resourceTypes") | pathPrefix("resourceTypes")) {
+    pathPrefix("initializeResourceTypes") {
       requireUserInfo { userInfo =>
-        pathEndOrSingleSlash {
-          get {
-            complete {
-              resourceService.getResourceTypes().map(typeMap => StatusCodes.OK -> typeMap.values.toSet)
+        asWorkbenchAdmin(userInfo) {
+          pathEndOrSingleSlash {
+            put {
+              complete {
+                initializePostgresResourceTypes
+              }
             }
           }
         }
       }
     } ~
-      (pathPrefix("resources" / "v1") | pathPrefix("resource")) {
+    (pathPrefix("config" / "v1" / "resourceTypes") | pathPrefix("resourceTypes")) {
         requireUserInfo { userInfo =>
-          pathPrefix(Segment) { resourceTypeName =>
-            withResourceType(ResourceTypeName(resourceTypeName)) { resourceType =>
+          pathEndOrSingleSlash {
+            get {
+              complete {
+                resourceService.getResourceTypes().map(typeMap => StatusCodes.OK -> typeMap.values.toSet)
+              }
+            }
+          }
+        }
+    } ~
+    (pathPrefix("resources" / "v1") | pathPrefix("resource")) {
+      requireUserInfo { userInfo =>
+        pathPrefix(Segment) { resourceTypeName =>
+          withResourceType(ResourceTypeName(resourceTypeName)) { resourceType =>
+            pathEndOrSingleSlash {
+              getUserPoliciesForResourceType(resourceType, userInfo) ~
+                postResource(resourceType, userInfo)
+            } ~ pathPrefix(Segment) { resourceId =>
+              val resource = FullyQualifiedResourceId(resourceType.name, ResourceId(resourceId))
+
               pathEndOrSingleSlash {
-                getUserPoliciesForResourceType(resourceType, userInfo) ~
-                  postResource(resourceType, userInfo)
-              } ~ pathPrefix(Segment) { resourceId =>
-                val resource = FullyQualifiedResourceId(resourceType.name, ResourceId(resourceId))
-
+                deleteResource(resource, userInfo) ~
+                  postDefaultResource(resourceType, resource, userInfo)
+              } ~ pathPrefix("action") {
+                pathPrefix(Segment) { action =>
+                  pathEndOrSingleSlash {
+                    getActionPermissionForUser(resource, userInfo, action)
+                  }
+                }
+              } ~ pathPrefix("authDomain") {
                 pathEndOrSingleSlash {
-                  deleteResource(resource, userInfo) ~
-                    postDefaultResource(resourceType, resource, userInfo)
-                } ~ pathPrefix("action") {
-                  pathPrefix(Segment) { action =>
-                    pathEndOrSingleSlash {
-                      getActionPermissionForUser(resource, userInfo, action)
-                    }
-                  }
-                } ~ pathPrefix("authDomain") {
-                  pathEndOrSingleSlash {
-                    getResourceAuthDomain(resource, userInfo)
-                  }
-                } ~ pathPrefix("policies") {
-                  pathEndOrSingleSlash {
-                    getResourcePolicies(resource, userInfo)
-                  } ~ pathPrefix(Segment) { policyName =>
-                    val policyId = FullyQualifiedPolicyId(resource, AccessPolicyName(policyName))
+                  getResourceAuthDomain(resource, userInfo)
+                }
+              } ~ pathPrefix("policies") {
+                pathEndOrSingleSlash {
+                  getResourcePolicies(resource, userInfo)
+                } ~ pathPrefix(Segment) { policyName =>
+                  val policyId = FullyQualifiedPolicyId(resource, AccessPolicyName(policyName))
 
+                  pathEndOrSingleSlash {
+                    getPolicy(policyId, userInfo) ~
+                      putPolicyOverwrite(resourceType, policyId, userInfo)
+                  } ~ pathPrefix("memberEmails") {
                     pathEndOrSingleSlash {
-                      getPolicy(policyId, userInfo) ~
-                        putPolicyOverwrite(resourceType, policyId, userInfo)
-                    } ~ pathPrefix("memberEmails") {
-                      pathEndOrSingleSlash {
-                        putPolicyMembershipOverwrite(resourceType, policyId, userInfo)
-                      } ~ pathPrefix(Segment) { email =>
-                        withSubject(WorkbenchEmail(email)) { subject =>
-                          pathEndOrSingleSlash {
-                            requireOneOfAction(
-                              resource,
-                              Set(SamResourceActions.alterPolicies, SamResourceActions.sharePolicy(policyId.accessPolicyName)),
-                              userInfo.userId) {
-                              putUserInPolicy(policyId, subject) ~
-                                deleteUserFromPolicy(policyId, subject)
-                            }
+                      putPolicyMembershipOverwrite(resourceType, policyId, userInfo)
+                    } ~ pathPrefix(Segment) { email =>
+                      withSubject(WorkbenchEmail(email)) { subject =>
+                        pathEndOrSingleSlash {
+                          requireOneOfAction(
+                            resource,
+                            Set(SamResourceActions.alterPolicies, SamResourceActions.sharePolicy(policyId.accessPolicyName)),
+                            userInfo.userId) {
+                            putUserInPolicy(policyId, subject) ~
+                              deleteUserFromPolicy(policyId, subject)
                           }
                         }
                       }
-                    } ~ pathPrefix("public") {
-                      pathEndOrSingleSlash {
-                        getPublicFlag(policyId, userInfo) ~
-                          putPublicFlag(policyId, userInfo)
-                      }
+                    }
+                  } ~ pathPrefix("public") {
+                    pathEndOrSingleSlash {
+                      getPublicFlag(policyId, userInfo) ~
+                        putPublicFlag(policyId, userInfo)
                     }
                   }
-                } ~ pathPrefix("roles") {
-                  pathEndOrSingleSlash {
-                    getUserResourceRoles(resource, userInfo)
-                  }
-                } ~ pathPrefix("actions") {
-                  pathEndOrSingleSlash {
-                    listActionsForUser(resource, userInfo)
-                  }
-                } ~ pathPrefix("allUsers") {
-                  pathEndOrSingleSlash {
-                    getAllResourceUsers(resource, userInfo)
-                  }
+                }
+              } ~ pathPrefix("roles") {
+                pathEndOrSingleSlash {
+                  getUserResourceRoles(resource, userInfo)
+                }
+              } ~ pathPrefix("actions") {
+                pathEndOrSingleSlash {
+                  listActionsForUser(resource, userInfo)
+                }
+              } ~ pathPrefix("allUsers") {
+                pathEndOrSingleSlash {
+                  getAllResourceUsers(resource, userInfo)
                 }
               }
             }
           }
         }
       }
+    }
+
+  private def initializePostgresResourceTypes = {
+    val dbName: Symbol = 'sam_foreground
+    implicit val contextShift = IO.contextShift(ExecutionContext.Implicits.global)
+    val postgresResourceService: cats.effect.Resource[IO, ResourceService] = for {
+      postgresExecutionContext <- ExecutionContexts.fixedThreadPool[IO](DBs.config.getInt(s"db.${dbName.name}.poolMaxSize"))
+      dbReference <- DbReference.resource(liquibaseConfig, dbName)
+
+      postgresAccessPolicyDAO = new PostgresAccessPolicyDAO(dbReference, postgresExecutionContext)
+      postgresDirectoryDAO = new PostgresDirectoryDAO(dbReference, postgresExecutionContext)
+    } yield new ResourceService(resourceService.getResourceTypes().unsafeRunSync(), policyEvaluatorService, postgresAccessPolicyDAO, postgresDirectoryDAO, cloudExtensions, resourceService.emailDomain)
+
+    postgresResourceService.use { resourceService =>
+      resourceService.initResourceTypes()
+    }
+  }
 
   def getUserPoliciesForResourceType(resourceType: ResourceType, userInfo: UserInfo): server.Route =
     get {
@@ -130,7 +167,7 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
             throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "this api may not be used for resource types that allow both authorization domains and id reuse"))
           }
 
-          val resourceMaker: Future[ToResponseMarshallable] = resourceService
+          val resourceMaker: IO[ToResponseMarshallable] = resourceService
             .createResource(resourceType, createResourceRequest.resourceId, createResourceRequest.policies, createResourceRequest.authDomain, userInfo.userId)
             .map { r =>
               if (createResourceRequest.returnResource.contains(true)) {

@@ -29,7 +29,7 @@ object JndiSchemaDAO {
     val resourceId = "resourceId"
     val objectClass = "objectclass"
     val resourceType = "resourceType"
-    val subject = "subject"
+//    val subject = "subject"
     val action = "action"
     val role = "role"
     val email = "mail"

@@ -58,12 +58,12 @@ object Generator {
     userId = genWorkbenchUserId(System.currentTimeMillis())
   }yield InviteUser(userId, email)
 
-  val genWorkbenchGroupName = Gen.alphaStr.map(x => WorkbenchGroupName(s"s$x")) //prepending `s` just so this won't be an empty string
+  val genWorkbenchGroupName = Gen.alphaStr.map(x => WorkbenchGroupName(s"s${x.take(50)}")) //prepending `s` just so this won't be an empty string
   val genGoogleProject = Gen.alphaStr.map(x => GoogleProject(s"s$x")) //prepending `s` just so this won't be an empty string
   val genWorkbenchSubject: Gen[WorkbenchSubject] = for{
     groupId <- genWorkbenchGroupName
     project <- genGoogleProject
-    res <- Gen.oneOf[WorkbenchSubject](List(genWorkbenchUserId(System.currentTimeMillis()), groupId, PetServiceAccountId(genWorkbenchUserId(System.currentTimeMillis()), project)))
+    res <- Gen.oneOf[WorkbenchSubject](List(genWorkbenchUserId(System.currentTimeMillis()), groupId))
   }yield res
 
   val genBasicWorkbenchGroup = for{
@@ -78,7 +78,7 @@ object Generator {
   val genAccessPolicyName : Gen[AccessPolicyName] = Gen.oneOf("member", "admin", "admin-notifier").map(AccessPolicyName.apply) //there might be possible values
   def genAuthDomains: Gen[Set[WorkbenchGroupName]] = Gen.listOfN[ResourceId](3, genResourceId).map(x => x.map(v => WorkbenchGroupName(v.value)).toSet) //make it a list of 3 items so that unit test won't time out
   val genNonEmptyAuthDomains: Gen[Set[WorkbenchGroupName]] = Gen.nonEmptyListOf[ResourceId](genResourceId).map(x => x.map(v => WorkbenchGroupName(v.value)).toSet)
-  val genRoleName: Gen[ResourceRoleName] = Gen.oneOf("owner", "admin").map(ResourceRoleName.apply) //there might be possible values
+  val genRoleName: Gen[ResourceRoleName] = Gen.oneOf("owner", "other").map(ResourceRoleName.apply) //there might be possible values
   val genResourceAction: Gen[ResourceAction] = Gen.oneOf(readPolicies, alterPolicies, delete, notifyAdmins, setAccessInstructions)
 
   val genResource: Gen[Resource] = for{

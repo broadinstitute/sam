@@ -24,9 +24,17 @@ final case class AppConfig(
     distributedLockConfig: DistributedLockConfig,
     swaggerConfig: SwaggerConfig,
     googleConfig: Option[GoogleConfig],
-    resourceTypes: Set[ResourceType])
+    resourceTypes: Set[ResourceType],
+    liquibaseConfig: LiquibaseConfig,
+    dataStoreConfig: DataStoreConfig)
 
 object AppConfig {
+  implicit val dataStoreConfigReader: ValueReader[DataStoreConfig] = ValueReader.relative { config =>
+    val live = DataStores(config.getString("live"))
+    val shadow = config.as[Option[String]]("shadow").map(DataStores.apply)
+    DataStoreConfig(live, shadow)
+  }
+
   implicit val swaggerReader: ValueReader[SwaggerConfig] = ValueReader.relative { config =>
     SwaggerConfig(
       config.getString("googleClientId"),
@@ -149,6 +157,10 @@ object AppConfig {
     )
   }
 
+  implicit val liquibaseConfigReader: ValueReader[LiquibaseConfig] = ValueReader.relative { config =>
+    LiquibaseConfig(config.getString("changelog"), config.getBoolean("initWithLiquibase"))
+  }
+
   def readConfig(config: Config): AppConfig = {
     val directoryConfig = config.as[DirectoryConfig]("directory")
     val googleConfigOption = for {
@@ -163,7 +175,9 @@ object AppConfig {
     // fall back to getting the "googleServices.appsDomain"
     val emailDomain = config.as[Option[String]]("emailDomain").getOrElse(config.getString("googleServices.appsDomain"))
     val resourceTypes = config.as[Map[String, ResourceType]]("resourceTypes").values.toSet
+    val liquibaseConfig = config.as[LiquibaseConfig]("liquibase")
+    val dataStoreConfig = config.as[DataStoreConfig]("dataStore")
 
-    AppConfig(emailDomain, directoryConfig, schemaLockConfig, distributedLockConfig, swaggerConfig, googleConfigOption, resourceTypes)
+    AppConfig(emailDomain, directoryConfig, schemaLockConfig, distributedLockConfig, swaggerConfig, googleConfigOption, resourceTypes, liquibaseConfig, dataStoreConfig)
   }
 }
