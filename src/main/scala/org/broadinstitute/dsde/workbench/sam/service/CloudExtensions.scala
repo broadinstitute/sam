@@ -75,7 +75,7 @@ trait NoExtensions extends CloudExtensions {
 
   override def onGroupDelete(groupEmail: WorkbenchEmail): Future[Unit] = Future.successful(())
 
-  override def onUserCreate(user: WorkbenchUser, parentSpan: Span = null): Future[Unit] = Future.successful(())
+  override def onUserCreate(user: WorkbenchUser, parentSpan: Span): Future[Unit] = Future.successful(())
 
   override def getUserStatus(user: WorkbenchUser): Future[Boolean] = Future.successful(true)
 

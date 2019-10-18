@@ -240,7 +240,7 @@ class GoogleExtensions(
     } yield policies.flatten
   }
 
-  override def onUserCreate(user: WorkbenchUser, parentSpan: Span =  null): Future[Unit] = {
+  override def onUserCreate(user: WorkbenchUser, parentSpan: Span): Future[Unit] = {
     val proxyEmail = toProxyFromUser(user.id)
     for {
       _ <- traceWithParent("createGroup", parentSpan)( _ => googleDirectoryDAO.createGroup(user.email.value, proxyEmail, Option(googleDirectoryDAO.lockedDownGroupSettings)) recover {

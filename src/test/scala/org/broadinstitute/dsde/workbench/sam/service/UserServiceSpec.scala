@@ -8,6 +8,7 @@ import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import cats.kernel.Eq
 import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
+import io.opencensus.trace.Span
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.Generator.{arbNonPetEmail => _, _}
 import org.broadinstitute.dsde.workbench.sam.TestSupport.eqWorkbenchExceptionErrorReport
@@ -66,7 +67,7 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
     googleExtensions = mock[GoogleExtensions]
     when(googleExtensions.allUsersGroupName).thenReturn(NoExtensions.allUsersGroupName)
     when(googleExtensions.getOrCreateAllUsersGroup(any[DirectoryDAO])(any[ExecutionContext])).thenReturn(NoExtensions.getOrCreateAllUsersGroup(dirDAO))
-    when(googleExtensions.onUserCreate(any[WorkbenchUser])).thenReturn(Future.successful(()))
+    when(googleExtensions.onUserCreate(any[WorkbenchUser], any[Span])).thenReturn(Future.successful(()))
     when(googleExtensions.onUserDelete(any[WorkbenchUserId])).thenReturn(Future.successful(()))
     when(googleExtensions.getUserStatus(any[WorkbenchUser])).thenReturn(Future.successful(true))
     when(googleExtensions.onUserDisable(any[WorkbenchUser])).thenReturn(Future.successful(()))
@@ -80,7 +81,7 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
     // create a user
     val newUser = service.createUser(defaultUser).futureValue
     newUser shouldBe UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
-    verify(googleExtensions).onUserCreate(WorkbenchUser(defaultUser.id, Some(defaultUser.googleSubjectId), defaultUser.email))
+    verify(googleExtensions).onUserCreate(org.mockito.ArgumentMatchers.eq(WorkbenchUser(defaultUser.id, Some(defaultUser.googleSubjectId), defaultUser.email)), any())
 
     // check ldap
     dirDAO.loadUser(defaultUserId).unsafeRunSync() shouldBe Some(WorkbenchUser(defaultUser.id, Some(defaultUser.googleSubjectId), defaultUser.email))

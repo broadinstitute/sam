@@ -579,7 +579,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     when(mockGoogleDirectoryDAO.createGroup(any[String], any[WorkbenchEmail], any[Option[Groups]])).thenReturn(Future.successful(()))
     when(mockGoogleDirectoryDAO.addMemberToGroup(any[WorkbenchEmail], any[WorkbenchEmail])).thenReturn(Future.successful(()))
 
-    googleExtensions.onUserCreate(user).futureValue
+    googleExtensions.onUserCreate(user, null).futureValue
 
     val lockedDownGroupSettings = Option(mockGoogleDirectoryDAO.lockedDownGroupSettings)
     verify(mockGoogleDirectoryDAO).createGroup(userEmail.value, proxyEmail, lockedDownGroupSettings)
