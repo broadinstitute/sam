@@ -10,8 +10,7 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.AccessPolicyDAO
 import org.broadinstitute.dsde.workbench.sam.service.ManagedGroupService.ManagedGroupPolicyName
 
-import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.Future
+import scala.concurrent.ExecutionContext
 
 /**
   * Created by gpolumbo on 2/21/2018.
@@ -23,7 +22,7 @@ class ManagedGroupService(
     private val accessPolicyDAO: AccessPolicyDAO,
     private val directoryDAO: DirectoryDAO,
     private val cloudExtensions: CloudExtensions,
-    private val emailDomain: String)
+    private val emailDomain: String)(implicit val executionContext: ExecutionContext)
     extends LazyLogging {
 
   def managedGroupType: ResourceType =
@@ -94,15 +93,15 @@ class ManagedGroupService(
   def loadManagedGroup(groupId: ResourceId): IO[Option[WorkbenchEmail]] =
     directoryDAO.loadGroup(WorkbenchGroupName(groupId.value)).map(_.map(_.email))
 
-  def deleteManagedGroup(groupId: ResourceId): Future[Unit] =
+  def deleteManagedGroup(groupId: ResourceId): IO[Unit] =
     for {
       // order is important here, we want to make sure we do all the cloudExtensions calls before we touch ldap
       // so failures there do not leave ldap in a bad state
       // resourceService.deleteResource also does cloudExtensions.onGroupDelete first thing
-      _ <- cloudExtensions.onGroupDelete(WorkbenchEmail(constructEmail(groupId.value)))
+      _ <- IO.fromFuture(IO(cloudExtensions.onGroupDelete(WorkbenchEmail(constructEmail(groupId.value)))))
       managedGroupResourceId = FullyQualifiedResourceId(managedGroupType.name, groupId)
       _ <- resourceService.cloudDeletePolicies(managedGroupResourceId)
-      _ <- directoryDAO.deleteGroup(WorkbenchGroupName(groupId.value)).unsafeToFuture()
+      _ <- directoryDAO.deleteGroup(WorkbenchGroupName(groupId.value))
       _ <- resourceService.deleteResource(managedGroupResourceId)
     } yield ()
 
@@ -144,13 +143,13 @@ class ManagedGroupService(
     }
   }
 
-  def addSubjectToPolicy(resourceId: ResourceId, policyName: ManagedGroupPolicyName, subject: WorkbenchSubject): Future[Unit] = {
+  def addSubjectToPolicy(resourceId: ResourceId, policyName: ManagedGroupPolicyName, subject: WorkbenchSubject): IO[Unit] = {
     val resourceAndPolicyName =
       FullyQualifiedPolicyId(FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, resourceId), policyName)
     resourceService.addSubjectToPolicy(resourceAndPolicyName, subject)
   }
 
-  def removeSubjectFromPolicy(resourceId: ResourceId, policyName: ManagedGroupPolicyName, subject: WorkbenchSubject): Future[Unit] = {
+  def removeSubjectFromPolicy(resourceId: ResourceId, policyName: ManagedGroupPolicyName, subject: WorkbenchSubject): IO[Unit] = {
     val resourceAndPolicyName =
       FullyQualifiedPolicyId(FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, resourceId), policyName)
     resourceService.removeSubjectFromPolicy(resourceAndPolicyName, subject)

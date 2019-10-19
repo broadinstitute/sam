@@ -18,6 +18,7 @@ import org.scalatest.{AppendedClues, FlatSpec, Matchers}
 import spray.json.DefaultJsonProtocol._
 import spray.json.{JsBoolean, JsValue}
 import org.broadinstitute.dsde.workbench.sam.model.RootPrimitiveJsonSupport._
+import org.broadinstitute.dsde.workbench.sam.service.UserService.genRandom
 
 import scala.collection.concurrent.TrieMap
 
@@ -673,6 +674,8 @@ class ResourceRoutesV1Spec extends FlatSpec with Matchers with ScalatestRouteTes
     samRoutes.resourceService.createResourceType(resourceType).unsafeRunSync()
     runAndWait(samRoutes.userService.createUser(
       CreateWorkbenchUser(WorkbenchUserId("user2"), genGoogleSubjectId(), WorkbenchEmail("user2@example.com"))))
+    runAndWait(samRoutes.userService.createUser(
+      CreateWorkbenchUser(WorkbenchUserId("user1"), GoogleSubjectId(genRandom(System.currentTimeMillis())), WorkbenchEmail("user1@example.com"))))
     runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), UserInfo(OAuth2BearerToken("accessToken"), WorkbenchUserId("user2"), WorkbenchEmail("user2@example.com"), 0)))
 
     //Verify resource exists by checking for conflict on recreate

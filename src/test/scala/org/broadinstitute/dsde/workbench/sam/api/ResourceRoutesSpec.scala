@@ -595,6 +595,8 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     samRoutes.resourceService.createResourceType(resourceType).unsafeRunSync()
     runAndWait(samRoutes.userService.createUser(
       CreateWorkbenchUser(WorkbenchUserId(""), defaultGoogleSubjectId, WorkbenchEmail("user2@example.com"))))
+    runAndWait(samRoutes.userService.createUser(
+      CreateWorkbenchUser(WorkbenchUserId(""), GoogleSubjectId(genRandom(System.currentTimeMillis())), WorkbenchEmail("user1@example.com"))))
     runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), UserInfo(OAuth2BearerToken("accessToken"), WorkbenchUserId("user2"), WorkbenchEmail("user2@example.com"), 0)))
 
     //Verify resource exists by checking for conflict on recreate

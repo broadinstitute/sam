@@ -82,7 +82,7 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
 
   "UserService" should "create a user" in {
     // create a user
-    val newUser = service.createUser(defaultUser).futureValue
+    val newUser = service.createUser(defaultUser).unsafeRunSync()
     newUser shouldBe UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
     verify(googleExtensions).onUserCreate(WorkbenchUser(defaultUser.id, Some(defaultUser.googleSubjectId), defaultUser.email))
 
@@ -95,17 +95,17 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
 
   it should "get user status" in {
     // user doesn't exist yet
-    service.getUserStatus(defaultUserId).futureValue shouldBe None
+    service.getUserStatus(defaultUserId).unsafeRunSync() shouldBe None
 
     // create a user
-    val newUser = service.createUser(defaultUser).futureValue
+    val newUser = service.createUser(defaultUser).unsafeRunSync()
     newUser shouldBe UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
 
     // user should exist now
-    val status = service.getUserStatus(defaultUserId).futureValue
+    val status = service.getUserStatus(defaultUserId).unsafeRunSync()
     status shouldBe Some(UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true)))
 
-    val statusNoEnabled = service.getUserStatus(defaultUserId, true).futureValue
+    val statusNoEnabled = service.getUserStatus(defaultUserId, true).unsafeRunSync()
     statusNoEnabled shouldBe Some(UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map.empty))
   }
 
@@ -114,7 +114,7 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
     service.getUserStatusInfo(defaultUserId).unsafeRunSync() shouldBe None
 
     // create a user
-    val newUser = service.createUser(defaultUser).futureValue
+    val newUser = service.createUser(defaultUser).unsafeRunSync()
     newUser shouldBe UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
 
     // get user status info (id, email, ldap)
@@ -124,31 +124,31 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
 
   it should "get user status diagnostics" in {
     // user doesn't exist yet
-    service.getUserStatusDiagnostics(defaultUserId).futureValue shouldBe None
+    service.getUserStatusDiagnostics(defaultUserId).unsafeRunSync() shouldBe None
 
     // create a user
-    val newUser = service.createUser(defaultUser).futureValue
+    val newUser = service.createUser(defaultUser).unsafeRunSync()
     newUser shouldBe UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
 
     // get user status diagnostics (ldap, usersGroups, googleGroups
-    val diagnostics = service.getUserStatusDiagnostics(defaultUserId).futureValue
+    val diagnostics = service.getUserStatusDiagnostics(defaultUserId).unsafeRunSync()
     diagnostics shouldBe Some(UserStatusDiagnostics(true, true, true))
   }
 
   it should "enable/disable user" in {
     // user doesn't exist yet
-    service.enableUser(defaultUserId, userInfo).futureValue shouldBe None
-    service.disableUser(defaultUserId, userInfo).futureValue shouldBe None
+    service.enableUser(defaultUserId, userInfo).unsafeRunSync() shouldBe None
+    service.disableUser(defaultUserId, userInfo).unsafeRunSync() shouldBe None
 
     // create a user
-    val newUser = service.createUser(defaultUser).futureValue
+    val newUser = service.createUser(defaultUser).unsafeRunSync()
     newUser shouldBe UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
 
     // it should be enabled
     dirDAO.isEnabled(defaultUserId).unsafeRunSync() shouldBe true
 
     // disable the user
-    val response = service.disableUser(defaultUserId, userInfo).futureValue
+    val response = service.disableUser(defaultUserId, userInfo).unsafeRunSync()
     response shouldBe Some(UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> false, "allUsersGroup" -> true, "google" -> true)))
 
     // check ldap
@@ -157,11 +157,11 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
 
   it should "delete a user" in {
     // create a user
-    val newUser = service.createUser(defaultUser).futureValue
+    val newUser = service.createUser(defaultUser).unsafeRunSync()
     newUser shouldBe UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
 
     // delete the user
-    service.deleteUser(defaultUserId, userInfo).futureValue
+    service.deleteUser(defaultUserId, userInfo).unsafeRunSync()
 
     // check ldap
     dirDAO.loadUser(defaultUserId).unsafeRunSync() shouldBe None
@@ -254,21 +254,21 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
     val res = dirDAO.loadUser(user.id).unsafeRunSync()
     res shouldBe Some(WorkbenchUser(user.id, None, user.email))
 
-    service.createUser(user).futureValue
+    service.createUser(user).unsafeRunSync()
     val updated = dirDAO.loadUser(user.id).unsafeRunSync()
     updated shouldBe Some(WorkbenchUser(user.id, Some(user.googleSubjectId), user.email))
   }
 
   "UserService getUserIdInfoFromEmail" should "return the email along with the userSubjectId and googleSubjectId" in {
     // user doesn't exist yet
-    service.getUserStatusDiagnostics(defaultUserId).futureValue shouldBe None
+    service.getUserStatusDiagnostics(defaultUserId).unsafeRunSync() shouldBe None
 
     // create a user
-    val newUser = service.createUser(defaultUser).futureValue
+    val newUser = service.createUser(defaultUser).unsafeRunSync()
     newUser shouldBe UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
 
     // get user status id info (both subject ids and email)
-    val info = service.getUserIdInfoFromEmail(defaultUserEmail).futureValue
+    val info = service.getUserIdInfoFromEmail(defaultUserEmail).unsafeRunSync()
     info shouldBe Right(Some(UserIdInfo(defaultUserId, defaultUserEmail, Some(defaultGoogleSubjectId))))
   }
 

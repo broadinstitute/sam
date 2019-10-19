@@ -15,7 +15,7 @@ trait SamModelDirectives {
   val userService: UserService
 
   def withSubject(email: WorkbenchEmail): Directive1[WorkbenchSubject] =
-    onSuccess(userService.getSubjectFromEmail(email)).map {
+    onSuccess(userService.getSubjectFromEmail(email).unsafeToFuture()).map {
       case Some(subject) => subject
       case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"${email} not found"))
     }

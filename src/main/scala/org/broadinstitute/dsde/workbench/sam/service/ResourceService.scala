@@ -13,8 +13,7 @@ import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, LoadResourceAuthDomainResult}
 
-import scala.concurrent.{ExecutionContext, Future}
-import scala.util.Success
+import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 
 /**
@@ -224,37 +223,36 @@ class ResourceService(
   // ELSE Resource ID reuse is not allowed, and we enforce this by deleting all policies associated with the Resource,
   //      but not the Resource itself, thereby orphaning the Resource so that it cannot be used or accessed anymore and
   //      preventing a new Resource with the same ID from being created
-  def deleteResource(resource: FullyQualifiedResourceId): Future[Unit] =
+  def deleteResource(resource: FullyQualifiedResourceId): IO[Unit] =
     for {
       // remove from cloud extensions first so a failure there does not leave ldap in a bad state
       policiesToDelete <- cloudDeletePolicies(resource)
 
-      _ <- policiesToDelete.toList.parTraverse(p => accessPolicyDAO.deletePolicy(p.id)).unsafeToFuture()
+      _ <- policiesToDelete.toList.traverse(p => accessPolicyDAO.deletePolicy(p.id))
       _ <- maybeDeleteResource(resource)
     } yield ()
 
-  def cloudDeletePolicies(resource: FullyQualifiedResourceId): Future[Stream[AccessPolicy]] = {
+  def cloudDeletePolicies(resource: FullyQualifiedResourceId): IO[Stream[AccessPolicy]] = {
     for {
-      policiesToDelete <- accessPolicyDAO.listAccessPolicies(resource).unsafeToFuture()
-      _ <- Future.traverse(policiesToDelete) { policy =>
-        cloudExtensions.onGroupDelete(policy.email)
+      policiesToDelete <- accessPolicyDAO.listAccessPolicies(resource)
+      _ <- policiesToDelete.traverse { policy =>
+        IO.fromFuture(IO(cloudExtensions.onGroupDelete(policy.email)))
       }
     } yield policiesToDelete
   }
 
-  private def maybeDeleteResource(resource: FullyQualifiedResourceId): Future[Unit] =
+  private def maybeDeleteResource(resource: FullyQualifiedResourceId): IO[Unit] =
     resourceTypes.get(resource.resourceTypeName) match {
-      case Some(resourceType) if resourceType.reuseIds => accessPolicyDAO.deleteResource(resource).unsafeToFuture()
-      case _ => accessPolicyDAO.removeAuthDomainFromResource(resource).unsafeToFuture()
+      case Some(resourceType) if resourceType.reuseIds => accessPolicyDAO.deleteResource(resource)
+      case _ => accessPolicyDAO.removeAuthDomainFromResource(resource)
     }
 
-  def listUserResourceRoles(resource: FullyQualifiedResourceId, userInfo: UserInfo, parentSpan: Span = null): Future[Set[ResourceRoleName]] =
+  def listUserResourceRoles(resource: FullyQualifiedResourceId, userInfo: UserInfo, parentSpan: Span = null): IO[Set[ResourceRoleName]] =
     policyEvaluatorService
       .listResourceAccessPoliciesForUser(resource, userInfo.userId)
       .map { matchingPolicies =>
         matchingPolicies.flatMap(_.roles)
       }
-      .unsafeToFuture()
 
   /**
     * Overwrites an existing policy (keyed by resourceType/resourceId/policyName), saves a new one if it doesn't exist yet
@@ -315,10 +313,7 @@ class ResourceService(
       case Some(accessPolicy) =>
         for {
           result <- accessPolicyDAO.overwritePolicy(AccessPolicy(policyIdentity, workbenchSubjects, accessPolicy.email, policy.roles, policy.actions, accessPolicy.public))
-          _ <- IO.fromFuture(IO(fireGroupUpdateNotification(policyIdentity))).runAsync {
-            case Left(regrets) => IO(logger.error(s"failure calling fireGroupUpdateNotification on $policyIdentity", regrets))
-            case Right(_) => IO.unit
-          }.toIO
+          _ <- fireGroupUpdateNotification(policyIdentity)
         } yield {
           result
         }
@@ -397,29 +392,33 @@ class ResourceService(
     } else None
   }
 
-  private def fireGroupUpdateNotification(groupId: WorkbenchGroupIdentity): Future[Unit] =
-    cloudExtensions.onGroupUpdate(Seq(groupId)) recover {
+  private def fireGroupUpdateNotification(groupId: WorkbenchGroupIdentity): IO[Unit] =
+    IO.fromFuture(IO(cloudExtensions.onGroupUpdate(Seq(groupId)) recover {
       case t: Throwable =>
         logger.error(s"error calling cloudExtensions.onGroupUpdate for $groupId", t)
         throw t
-    }
+    })).runAsync {
+      case Left(regrets) => IO(logger.error(s"failure calling fireGroupUpdateNotification on $groupId", regrets))
+      case Right(_) => IO.unit
+    }.toIO
 
-  def addSubjectToPolicy(policyIdentity: FullyQualifiedPolicyId, subject: WorkbenchSubject): Future[Unit] = {
+  def addSubjectToPolicy(policyIdentity: FullyQualifiedPolicyId, subject: WorkbenchSubject): IO[Unit] = {
     subject match {
       case subject: FullyQualifiedPolicyId if policyIdentity.resource.resourceTypeName.equals(ManagedGroupService.managedGroupTypeName) =>
-        Future.failed(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"Access policies cannot be added to managed groups.")))
-      case _ =>    {
-        directoryDAO.addGroupMember(policyIdentity, subject).unsafeToFuture().map(_ => ()) andThen {
-          case Success(_) => fireGroupUpdateNotification(policyIdentity)
-        }
-      }
+        IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"Access policies cannot be added to managed groups.")))
+      case _ =>
+        for {
+          _ <- directoryDAO.addGroupMember(policyIdentity, subject)
+          _ <- fireGroupUpdateNotification(policyIdentity)
+        } yield ()
     }
   }
 
-  def removeSubjectFromPolicy(policyIdentity: FullyQualifiedPolicyId, subject: WorkbenchSubject): Future[Unit] =
-    directoryDAO.removeGroupMember(policyIdentity, subject).void.unsafeToFuture() andThen {
-      case Success(_) => fireGroupUpdateNotification(policyIdentity)
-    }
+  def removeSubjectFromPolicy(policyIdentity: FullyQualifiedPolicyId, subject: WorkbenchSubject): IO[Unit] =
+    for {
+      _ <- directoryDAO.removeGroupMember(policyIdentity, subject).void
+      _ <- fireGroupUpdateNotification(policyIdentity)
+    } yield ()
 
   private[service] def loadAccessPolicyWithEmails(policy: AccessPolicy): IO[AccessPolicyMembership] = {
     val users = policy.members.collect { case userId: WorkbenchUserId => userId }
@@ -493,7 +492,7 @@ class ResourceService(
             new WorkbenchExceptionWithErrorReport(
               ErrorReport(StatusCodes.BadRequest, "Cannot make auth domain protected resources public. Share directly with auth domain groups instead.")))
         case LoadResourceAuthDomainResult.NotConstrained =>
-          accessPolicyDAO.setPolicyIsPublic(policyId, public) *> IO.fromFuture(IO(fireGroupUpdateNotification(policyId)))
+          accessPolicyDAO.setPolicyIsPublic(policyId, public) *> fireGroupUpdateNotification(policyId)
       }
     } yield ()
 
