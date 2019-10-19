@@ -113,14 +113,12 @@ class GoogleExtensions(
               ErrorReport(StatusCodes.Conflict, s"subjectId in configuration ${googleServicesConfig.serviceAccountClientId} is not a valid user")))
         case None => IO.pure(UserInfo(OAuth2BearerToken(""), genWorkbenchUserId(System.currentTimeMillis()), googleServicesConfig.serviceAccountClientEmail, 0))
       }
-      _ <- IO.fromFuture(
-        IO(
-          samApplication.userService.createUser(CreateWorkbenchUser(
+      _ <- samApplication.userService.createUser(CreateWorkbenchUser(
             serviceAccountUserInfo.userId,
             GoogleSubjectId(googleServicesConfig.serviceAccountClientId),
-            serviceAccountUserInfo.userEmail)) recover {
+            serviceAccountUserInfo.userEmail)).void recover {
             case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode == Option(StatusCodes.Conflict) =>
-          }))
+          }
 
       _ <- googleKms.createKeyRing(googleServicesConfig.googleKms.project,
         googleServicesConfig.googleKms.location,

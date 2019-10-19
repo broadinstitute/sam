@@ -101,7 +101,7 @@ class ManagedGroupRoutesV1Spec extends FlatSpec with ScalaFutures with Matchers 
     assertGetGroup(samRoutes = samRoutes)
 
     samRoutes.userService.createUser(
-        CreateWorkbenchUser(newGuy.userId, GoogleSubjectId(newGuy.userId.value), newGuy.userEmail)).futureValue
+        CreateWorkbenchUser(newGuy.userId, GoogleSubjectId(newGuy.userId.value), newGuy.userEmail)).unsafeRunSync()
 
     setGroupMembers(samRoutes, Set(newGuyEmail), expectedStatus = StatusCodes.Created)
 
