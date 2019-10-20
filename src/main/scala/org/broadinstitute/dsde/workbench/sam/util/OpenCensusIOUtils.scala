@@ -3,7 +3,7 @@ package org.broadinstitute.dsde.workbench.sam.util
 import io.opencensus.trace.{Span, Status}
 import io.opencensus.scala.Tracing._
 
-import cats.effect.{IO, Resource}
+import cats.effect.IO
 
 
 object OpenCensusIOUtils {
@@ -25,11 +25,11 @@ object OpenCensusIOUtils {
 
 
   private def traceIOSpan[T](spanIO: IO[Span], failureStatus: Throwable => Status) (f: Span => IO[T]): IO[T] = {
-    def release(s: Span) = IO(endSpan(s, Status.OK))
-
-    val resource = Resource.make(spanIO)(release)
-
-    resource.use(f)
+    for {
+      span <- spanIO
+      result <- f(span).attempt
+      _ <- IO(endSpan(span, Status.OK))
+    } yield result.toTry.get
   }
 
 }
