@@ -2,7 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.util
 
 import cats.effect.{ContextShift, IO}
 import com.unboundid.ldap.sdk._
-import io.opencensus.trace.Span
+import io.opencensus.trace.{AttributeValue, Span}
 import org.broadinstitute.dsde.workbench.model.WorkbenchSubject
 import org.broadinstitute.dsde.workbench.sam.directory.DirectorySubjectNameSupport
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO.Attr
@@ -10,7 +10,6 @@ import org.ehcache.Cache
 
 import scala.concurrent.ExecutionContext
 import scala.util.{Failure, Success, Try}
-
 import OpenCensusIOUtils._
 
 trait LdapSupport extends DirectorySubjectNameSupport {
@@ -92,6 +91,7 @@ trait LdapSupport extends DirectorySubjectNameSupport {
   protected def ldapLoadMemberOf(subject: WorkbenchSubject, parentSpan: Span = null): IO[Set[String]] = traceIOWithParent("sam_ldapLoadMemberOf", parentSpan) { childspan =>
     Option(memberOfCache.get(subject)) match {
       case None =>
+        childspan.putAttribute("cache-hit", AttributeValue.booleanAttributeValue(false))
         for {
           entry <- executeLdap(IO(ldapConnectionPool.getEntry(subjectDn(subject), Attr.memberOf)), childspan)
         } yield {
@@ -100,7 +100,9 @@ trait LdapSupport extends DirectorySubjectNameSupport {
           memberOfs
         }
 
-      case Some(memberOfs) => IO.pure(memberOfs)
+      case Some(memberOfs) =>
+        childspan.putAttribute("cache-hit", AttributeValue.booleanAttributeValue(true))
+        IO.pure(memberOfs)
     }
   }
 

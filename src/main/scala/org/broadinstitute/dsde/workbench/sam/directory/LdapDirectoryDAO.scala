@@ -21,6 +21,8 @@ import scala.collection.JavaConverters._
 import scala.concurrent.ExecutionContext
 import scala.util.Try
 
+import org.broadinstitute.dsde.workbench.sam.util.OpenCensusIOUtils._
+
 // use ExecutionContexts.blockingThreadPool for blockingEc
 class LdapDirectoryDAO(
     protected val ldapConnectionPool: LDAPConnectionPool,
@@ -155,10 +157,10 @@ class LdapDirectoryDAO(
       .getOrElse(throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"$groupId not found")))))
   }
 
-  override def loadSubjectFromEmail(email: WorkbenchEmail, parentSpan: Span = null): IO[Option[WorkbenchSubject]] = {
+  override def loadSubjectFromEmail(email: WorkbenchEmail, parentSpan: Span = null): IO[Option[WorkbenchSubject]] = traceIOWithParent("sam_LdapDirectoryDAO_loadSubjectFromEmail", parentSpan) { childSpan =>
     val ret = for {
       entry <- OptionT(
-        executeLdap(IO(ldapConnectionPool.search(directoryConfig.baseDn, SearchScope.SUB, Filter.createEqualityFilter(Attr.email, email.value))), parentSpan)
+        executeLdap(IO(ldapConnectionPool.search(directoryConfig.baseDn, SearchScope.SUB, Filter.createEqualityFilter(Attr.email, email.value))), childSpan)
           .map(Option.apply))
       entries <- OptionT.fromOption[IO](Option(entry.getSearchEntries))
       res <- entries.asScala match {

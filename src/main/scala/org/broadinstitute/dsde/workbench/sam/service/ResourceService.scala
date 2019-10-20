@@ -314,13 +314,13 @@ class ResourceService(
     * @param policy
     * @return
     */
-  private def createOrUpdatePolicy(policyIdentity: FullyQualifiedPolicyId, policy: ValidatableAccessPolicy, parentSpan: Span = null): IO[AccessPolicy] = {
+  private def createOrUpdatePolicy(policyIdentity: FullyQualifiedPolicyId, policy: ValidatableAccessPolicy, parentSpan: Span = null): IO[AccessPolicy] = traceIOWithParent("sam_createOrUpdatePolicy", parentSpan) { childSpan =>
     val workbenchSubjects = policy.emailsToSubjects.values.flatten.toSet
-    accessPolicyDAO.loadPolicy(policyIdentity, parentSpan).flatMap {
-      case None => createPolicy(policyIdentity, workbenchSubjects, generateGroupEmail(), policy.roles, policy.actions, parentSpan)
+    accessPolicyDAO.loadPolicy(policyIdentity, childSpan).flatMap {
+      case None => createPolicy(policyIdentity, workbenchSubjects, generateGroupEmail(), policy.roles, policy.actions, childSpan)
       case Some(accessPolicy) =>
         for {
-          result <- accessPolicyDAO.overwritePolicy(AccessPolicy(policyIdentity, workbenchSubjects, accessPolicy.email, policy.roles, policy.actions, accessPolicy.public), parentSpan)
+          result <- accessPolicyDAO.overwritePolicy(AccessPolicy(policyIdentity, workbenchSubjects, accessPolicy.email, policy.roles, policy.actions, accessPolicy.public), childSpan)
           _ <- fireGroupUpdateNotification(policyIdentity)
         } yield {
           result
