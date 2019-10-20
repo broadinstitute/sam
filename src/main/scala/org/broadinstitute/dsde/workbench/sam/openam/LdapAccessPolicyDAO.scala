@@ -62,8 +62,8 @@ class LdapAccessPolicyDAO(
   // TODO: Method is not tested.  To test properly, we'll probably need a loadResource or getResource method
   override def deleteResource(resource: FullyQualifiedResourceId): IO[Unit] = IO(ldapConnectionPool.delete(resourceDn(resource)))
 
-  override def loadResourceAuthDomain(resourceId: FullyQualifiedResourceId, parentSpan: Span = null): IO[LoadResourceAuthDomainResult] = {
-    listResourceWithAuthdomains(resourceId, parentSpan).map{
+  override def loadResourceAuthDomain(resourceId: FullyQualifiedResourceId, parentSpan: Span = null): IO[LoadResourceAuthDomainResult] = traceIOWithParent("sam_LdapAccessPolicyDAO_loadResourceAuthDomain", parentSpan) { childSpan =>
+    listResourceWithAuthdomains(resourceId, childSpan).map{
       resource =>
         resource match {
           case None => LoadResourceAuthDomainResult.ResourceNotFound
@@ -124,9 +124,11 @@ class LdapAccessPolicyDAO(
 
   override def deletePolicy(policy: FullyQualifiedPolicyId): IO[Unit] = executeLdap(IO(ldapConnectionPool.delete(policyDn(policy))))
 
-  override def loadPolicy(resourceAndPolicyName: FullyQualifiedPolicyId, parentSpan: Span = null): IO[Option[AccessPolicy]] = executeLdap(
-    IO(Option(ldapConnectionPool.getEntry(policyDn(resourceAndPolicyName))).map(unmarshalAccessPolicy)), parentSpan
-  )
+  override def loadPolicy(resourceAndPolicyName: FullyQualifiedPolicyId, parentSpan: Span = null): IO[Option[AccessPolicy]] = traceIOWithParent("sam_LdapAccessPolicyDAO_loadPolicy", parentSpan) { childSpan =>
+    executeLdap(
+      IO(Option(ldapConnectionPool.getEntry(policyDn(resourceAndPolicyName))).map(unmarshalAccessPolicy)), childSpan
+    )
+  }
 
   private def unmarshalAccessPolicy(entry: Entry): AccessPolicy = {
     val policyName = getAttribute(entry, Attr.policy).get
@@ -156,7 +158,7 @@ class LdapAccessPolicyDAO(
     executeLdap(IO(ldapConnectionPool.modify(policyDn(id), memberMod, dateMod)))
   }
 
-  override def overwritePolicy(newPolicy: AccessPolicy, parentSpan: Span = null): IO[AccessPolicy] = {
+  override def overwritePolicy(newPolicy: AccessPolicy, parentSpan: Span = null): IO[AccessPolicy] = traceIOWithParent("sam_LdapAccessPolicyDAO_overwritePolicy", parentSpan) { childSpan =>
     val memberMod = new Modification(ModificationType.REPLACE, Attr.uniqueMember, newPolicy.members.map(subjectDn).toArray: _*)
     val actionMod = new Modification(ModificationType.REPLACE, Attr.action, newPolicy.actions.map(_.value).toArray: _*)
     val roleMod = new Modification(ModificationType.REPLACE, Attr.role, newPolicy.roles.map(_.value).toArray: _*)
@@ -165,18 +167,19 @@ class LdapAccessPolicyDAO(
 
     val ridPolicyName =
       FullyQualifiedPolicyId(FullyQualifiedResourceId(newPolicy.id.resource.resourceTypeName, newPolicy.id.resource.resourceId), newPolicy.id.accessPolicyName)
-    executeLdap(IO(ldapConnectionPool.modify(policyDn(ridPolicyName), memberMod, actionMod, roleMod, dateMod, publicMod)), parentSpan) *> newPolicy.pure[IO]
+    executeLdap(IO(ldapConnectionPool.modify(policyDn(ridPolicyName), memberMod, actionMod, roleMod, dateMod, publicMod)), childSpan) *> newPolicy.pure[IO]
   }
 
-  override def listAccessPolicies(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId, parentSpan: Span = null): IO[Set[ResourceIdAndPolicyName]] =
+  override def listAccessPolicies(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId, parentSpan: Span = null): IO[Set[ResourceIdAndPolicyName]] = traceIOWithParent("sam_LdapAccessPolicyDAO_listAccessPolicies", parentSpan) { childSpan =>
     for {
       policyDnPattern <- IO(dnMatcher(Seq(Attr.policy, Attr.resourceId), resourceTypeDn(resourceTypeName)))
-      groupDns <- ldapLoadMemberOf(userId, parentSpan)
+      groupDns <- ldapLoadMemberOf(userId, childSpan)
     } yield {
       groupDns.collect { case policyDnPattern(policyName, resourceId) => ResourceIdAndPolicyName(ResourceId(resourceId), AccessPolicyName(policyName)) }
     }
+  }
 
-  override def listResourcesWithAuthdomains(resourceTypeName: ResourceTypeName, resourceIds: Set[ResourceId], parentSpan: Span = null): IO[Set[Resource]] = {
+  override def listResourcesWithAuthdomains(resourceTypeName: ResourceTypeName, resourceIds: Set[ResourceId], parentSpan: Span = null): IO[Set[Resource]] = traceIOWithParent("sam_LdapAccessPolicyDAO_listResourcesWithAuthdomains", parentSpan) { childSpan =>
     val cachedResources = for {
       resourceId <- resourceIds
       cachedResource <- Option(resourceCache.get(FullyQualifiedResourceId(resourceTypeName, resourceId)))
@@ -195,7 +198,7 @@ class LdapAccessPolicyDAO(
 
     for {
       stream <- executeLdap(
-        IO(ldapSearchStream(resourceTypeDn(resourceTypeName), SearchScope.ONE, filters: _*)(et => unmarshalResourceAuthDomain(et, resourceTypeName))), parentSpan)
+        IO(ldapSearchStream(resourceTypeDn(resourceTypeName), SearchScope.ONE, filters: _*)(et => unmarshalResourceAuthDomain(et, resourceTypeName))), childSpan)
       loadedResources <- IO.fromEither(stream.parSequence.leftMap(s => new WorkbenchException(s)))
     } yield {
       resourceCache.putAll(loadedResources.map(resource => resource.fullyQualifiedId -> resource).toMap.asJava)
@@ -236,14 +239,15 @@ class LdapAccessPolicyDAO(
     }
   )
 
-  override def listPublicAccessPolicies(resource: FullyQualifiedResourceId, parentSpan: Span = null): IO[Stream[AccessPolicy]] =
+  override def listPublicAccessPolicies(resource: FullyQualifiedResourceId, parentSpan: Span = null): IO[Stream[AccessPolicy]] = traceIOWithParent("sam_LdapAccessPolicyDAO_listPublicAccessPolicies", parentSpan) { childSpan =>
     executeLdap(
       IO(
         ldapSearchStream(
           resourceDn(resource),
           SearchScope.SUB,
           Filter.createANDFilter(Filter.createEqualityFilter("objectclass", ObjectClass.policy), Filter.createEqualityFilter(Attr.public, "true"))
-        )(unmarshalAccessPolicy)), parentSpan)
+        )(unmarshalAccessPolicy)), childSpan)
+  }
 
   override def listAccessPolicies(resource: FullyQualifiedResourceId): IO[Stream[AccessPolicy]] =
     executeLdap(
