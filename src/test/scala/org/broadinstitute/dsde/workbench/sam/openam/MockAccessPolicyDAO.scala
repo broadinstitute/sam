@@ -2,6 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.openam
 import akka.http.scaladsl.model.StatusCodes
 import cats.data.NonEmptyList
 import cats.effect.IO
+import io.opencensus.trace.Span
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.model._
@@ -17,7 +18,7 @@ class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdenti
 
   override def createResourceType(resourceType: ResourceType): IO[ResourceType] = IO.pure(resourceType)
 
-  override def createResource(resource: Resource): IO[Resource] = IO {
+  override def createResource(resource: Resource, span: Span = null): IO[Resource] = IO {
     resources += resource.fullyQualifiedId -> resource
     if (policies.exists {
       case (FullyQualifiedPolicyId(FullyQualifiedResourceId(`resource`.resourceTypeName, `resource`.resourceId), _), _) =>
@@ -36,7 +37,7 @@ class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdenti
     policies -- toRemove
   }
 
-  override def loadResourceAuthDomain(resource: FullyQualifiedResourceId): IO[LoadResourceAuthDomainResult] =
+  override def loadResourceAuthDomain(resource: FullyQualifiedResourceId, span: Span = null): IO[LoadResourceAuthDomainResult] =
     IO(resources.get(resource)).map{
       rs =>
         rs match {
@@ -47,7 +48,7 @@ class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdenti
 
   override def listResourcesConstrainedByGroup(groupId: WorkbenchGroupIdentity): IO[Set[Resource]] = IO.pure(Set.empty)
 
-  override def createPolicy(policy: AccessPolicy): IO[AccessPolicy] = IO {
+  override def createPolicy(policy: AccessPolicy, span: Span = null): IO[AccessPolicy] = IO {
     policies += policy.id -> policy
     policy
   }
@@ -56,13 +57,13 @@ class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdenti
     policies -= policy
   }
 
-  override def listAccessPolicies(resourceTypeName: ResourceTypeName, user: WorkbenchUserId): IO[Set[ResourceIdAndPolicyName]] = IO {
+  override def listAccessPolicies(resourceTypeName: ResourceTypeName, user: WorkbenchUserId, span: Span = null): IO[Set[ResourceIdAndPolicyName]] = IO {
     policies.collect {
       case (riapn @ FullyQualifiedPolicyId(FullyQualifiedResourceId(`resourceTypeName`, _), _), accessPolicy) if accessPolicy.members.contains(user) => ResourceIdAndPolicyName(riapn.resource.resourceId, riapn.accessPolicyName)
     }.toSet
   }
 
-  override def loadPolicy(policyIdentity: FullyQualifiedPolicyId): IO[Option[AccessPolicy]] = {
+  override def loadPolicy(policyIdentity: FullyQualifiedPolicyId, span: Span = null): IO[Option[AccessPolicy]] = {
     listAccessPolicies(policyIdentity.resource).map { policies =>
       policies.filter(_.id.accessPolicyName == policyIdentity.accessPolicyName).toSeq match {
         case Seq() => None
@@ -72,7 +73,7 @@ class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdenti
     }
   }
 
-  override def overwritePolicy(newPolicy: AccessPolicy): IO[AccessPolicy] = createPolicy(newPolicy)
+  override def overwritePolicy(newPolicy: AccessPolicy, span: Span = null): IO[AccessPolicy] = createPolicy(newPolicy)
 
   override def overwritePolicyMembers(id: FullyQualifiedPolicyId, memberList: Set[WorkbenchSubject]): IO[Unit] = {
     loadPolicy(id) flatMap {
@@ -87,7 +88,7 @@ class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdenti
     }.toStream
   }
 
-  override def listAccessPoliciesForUser(resource: FullyQualifiedResourceId, user: WorkbenchUserId): IO[Set[AccessPolicy]] = IO {
+  override def listAccessPoliciesForUser(resource: FullyQualifiedResourceId, user: WorkbenchUserId, span: Span = null): IO[Set[AccessPolicy]] = IO {
     policies.collect {
       case (FullyQualifiedPolicyId(`resource`, _), policy: AccessPolicy) if policy.members.contains(user) => policy
     }.toSet
@@ -129,12 +130,12 @@ class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdenti
 
   override def listResourcesWithAuthdomains(
       resourceTypeName: ResourceTypeName,
-      resourceId: Set[ResourceId])
+      resourceId: Set[ResourceId], span: Span = null)
     : IO[Set[Resource]] = IO.pure(Set.empty)
 
-  override def listResourceWithAuthdomains(resourceId: FullyQualifiedResourceId): IO[Option[Resource]] = IO.pure(None)
+  override def listResourceWithAuthdomains(resourceId: FullyQualifiedResourceId, span: Span = null): IO[Option[Resource]] = IO.pure(None)
 
-  override def listPublicAccessPolicies(resource: FullyQualifiedResourceId): IO[Stream[AccessPolicy]] = {
+  override def listPublicAccessPolicies(resource: FullyQualifiedResourceId, span: Span = null): IO[Stream[AccessPolicy]] = {
     IO.pure(
       policies.collect {
         case (_, policy: AccessPolicy) if policy.public => policy

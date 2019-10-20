@@ -13,6 +13,7 @@ import org.broadinstitute.dsde.workbench.sam.util.DatabaseSupport
 import scalikejdbc._
 import SamParameterBinderFactory._
 import akka.http.scaladsl.model.StatusCodes
+import io.opencensus.trace.Span
 import org.broadinstitute.dsde.workbench.sam.db.dao.{PostgresGroupDAO, SubGroupMemberTable}
 import org.postgresql.util.PSQLException
 import org.broadinstitute.dsde.workbench.sam._
@@ -307,8 +308,8 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     each of the four tables.
    */
 
-  override def loadSubjectFromEmail(email: WorkbenchEmail): IO[Option[WorkbenchSubject]] = {
-    runInTransaction { implicit session =>
+  override def loadSubjectFromEmail(email: WorkbenchEmail, parentSpan: Span = null): IO[Option[WorkbenchSubject]] = {
+    runInTransaction ({ implicit session =>
       val u = UserTable.syntax
       val g = GroupTable.syntax
       val pet = PetServiceAccountTable.syntax
@@ -361,7 +362,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
         case _ => throw new WorkbenchException(s"Database error: email $email refers to too many subjects.")
 
       }
-    }
+    }, parentSpan)
   }
 
   def loadPolicyEmail(policyId: FullyQualifiedPolicyId): IO[Option[WorkbenchEmail]] = {

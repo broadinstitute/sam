@@ -2,6 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.util
 
 import cats.effect.{ContextShift, IO}
 import com.unboundid.ldap.sdk._
+import io.opencensus.trace.Span
 import org.broadinstitute.dsde.workbench.model.WorkbenchSubject
 import org.broadinstitute.dsde.workbench.sam.directory.DirectorySubjectNameSupport
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO.Attr
@@ -9,6 +10,8 @@ import org.ehcache.Cache
 
 import scala.concurrent.ExecutionContext
 import scala.util.{Failure, Success, Try}
+
+import OpenCensusIOUtils._
 
 trait LdapSupport extends DirectorySubjectNameSupport {
   protected val ldapConnectionPool: LDAPConnectionPool
@@ -86,11 +89,11 @@ trait LdapSupport extends DirectorySubjectNameSupport {
     }
   }.getOrElse(Set.empty)
 
-  protected def ldapLoadMemberOf(subject: WorkbenchSubject): IO[Set[String]] =
+  protected def ldapLoadMemberOf(subject: WorkbenchSubject, parentSpan: Span = null): IO[Set[String]] = traceIOWithParent("sam_ldapLoadMemberOf", parentSpan) { childspan =>
     Option(memberOfCache.get(subject)) match {
       case None =>
         for {
-          entry <- executeLdap(IO(ldapConnectionPool.getEntry(subjectDn(subject), Attr.memberOf)))
+          entry <- executeLdap(IO(ldapConnectionPool.getEntry(subjectDn(subject), Attr.memberOf)), childspan)
         } yield {
           val memberOfs = Option(entry).flatMap(e => Option(getAttributes(e, Attr.memberOf))).getOrElse(Set.empty)
           memberOfCache.put(subject, memberOfs)
@@ -99,9 +102,14 @@ trait LdapSupport extends DirectorySubjectNameSupport {
 
       case Some(memberOfs) => IO.pure(memberOfs)
     }
+  }
 
   def evictIsMemberOfCache(subject: WorkbenchSubject): IO[Unit] =
     IO.pure(memberOfCache.remove(subject))
 
-  protected def executeLdap[A](ioa: IO[A]): IO[A] = cs.evalOn(ecForLdapBlockingIO)(ioa)
+  protected def executeLdap[A](ioa: IO[A], parentSpan: Span = null): IO[A] = {
+    traceIOWithParent("sam_ldap_contextSwitch", parentSpan) { contextSpan =>
+      cs.evalOn(ecForLdapBlockingIO)(traceIOWithParent("sam_ldap_call", contextSpan)(_ => ioa))
+    }
+  }
 }

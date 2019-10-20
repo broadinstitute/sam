@@ -6,6 +6,7 @@ import cats.data.OptionT
 import cats.effect.{ContextShift, IO, Timer}
 import cats.implicits._
 import com.unboundid.ldap.sdk._
+import io.opencensus.trace.Span
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google._
 import org.broadinstitute.dsde.workbench.newrelic.NewRelicMetrics
@@ -154,10 +155,10 @@ class LdapDirectoryDAO(
       .getOrElse(throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"$groupId not found")))))
   }
 
-  override def loadSubjectFromEmail(email: WorkbenchEmail): IO[Option[WorkbenchSubject]] = {
+  override def loadSubjectFromEmail(email: WorkbenchEmail, parentSpan: Span = null): IO[Option[WorkbenchSubject]] = {
     val ret = for {
       entry <- OptionT(
-        executeLdap(IO(ldapConnectionPool.search(directoryConfig.baseDn, SearchScope.SUB, Filter.createEqualityFilter(Attr.email, email.value))))
+        executeLdap(IO(ldapConnectionPool.search(directoryConfig.baseDn, SearchScope.SUB, Filter.createEqualityFilter(Attr.email, email.value))), parentSpan)
           .map(Option.apply))
       entries <- OptionT.fromOption[IO](Option(entry.getSearchEntries))
       res <- entries.asScala match {

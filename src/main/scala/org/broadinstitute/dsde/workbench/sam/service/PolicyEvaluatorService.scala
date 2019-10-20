@@ -4,11 +4,13 @@ import akka.http.scaladsl.model.StatusCodes
 import cats.effect.IO
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
+import io.opencensus.trace.Span
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, LoadResourceAuthDomainResult}
 
 import scala.concurrent.ExecutionContext
+import org.broadinstitute.dsde.workbench.sam.util.OpenCensusIOUtils._
 
 class PolicyEvaluatorService(
     private val emailDomain: String,
@@ -34,9 +36,9 @@ class PolicyEvaluatorService(
       }
   }
 
-  def hasPermission(resource: FullyQualifiedResourceId, action: ResourceAction, userId: WorkbenchUserId): IO[Boolean] = {
+  def hasPermission(resource: FullyQualifiedResourceId, action: ResourceAction, userId: WorkbenchUserId, parentSpan: Span = null): IO[Boolean] = {
     def checkPermission(force: Boolean) =
-      listUserResourceActions(resource, userId, force).map { _.contains(action) }
+      listUserResourceActions(resource, userId, force, parentSpan).map { _.contains(action) }
 
     // this is optimized for the case where the user has permission since that is the usual case
     // if the first attempt shows the user does not have permission, force a second attempt
@@ -56,53 +58,54 @@ class PolicyEvaluatorService(
     * @param force true to ignore any caching
     * @return
     */
-  def listUserResourceActions(resource: FullyQualifiedResourceId, userId: WorkbenchUserId, force: Boolean = false): IO[Set[ResourceAction]] = {
-    def allActions(policy: AccessPolicy, resourceType: ResourceType): Set[ResourceAction] = {
-      val roleActions = policy.roles.flatMap { role =>
-        resourceType.roles.filter(_.roleName == role).flatMap(_.actions)
+  def listUserResourceActions(resource: FullyQualifiedResourceId, userId: WorkbenchUserId, force: Boolean = false, parentSpan: Span = null): IO[Set[ResourceAction]] =
+    traceIOWithParent("sam_listUserResourceActions", parentSpan) { childSpan =>
+      def allActions(policy: AccessPolicy, resourceType: ResourceType): Set[ResourceAction] = {
+        val roleActions = policy.roles.flatMap { role =>
+          resourceType.roles.filter(_.roleName == role).flatMap(_.actions)
+        }
+        policy.actions ++ roleActions
       }
-      policy.actions ++ roleActions
+
+      for {
+        _ <- if (force) accessPolicyDAO.evictIsMemberOfCache(userId) else IO.unit
+        rt <- IO.fromEither[ResourceType](
+          resourceTypes.get(resource.resourceTypeName).toRight(new WorkbenchException(s"missing configuration for resourceType ${resource.resourceTypeName}")))
+        isConstrainable = rt.isAuthDomainConstrainable
+
+        policiesForResource <- listResourceAccessPoliciesForUser(resource, userId, childSpan)
+        allPolicyActions = policiesForResource.flatMap(p => allActions(p, rt))
+        res <- if (isConstrainable) {
+          for {
+            authDomainsResult <- accessPolicyDAO.loadResourceAuthDomain(resource, childSpan)
+            policyActions <- authDomainsResult match {
+              case LoadResourceAuthDomainResult.Constrained(authDomains) =>
+                listUserManagedGroups(userId, childSpan).map{
+                  groupsUserIsMemberOf =>
+                    val isUserMemberOfAllAuthDomains = authDomains.toList.toSet.subsetOf(groupsUserIsMemberOf)
+                    if (isUserMemberOfAllAuthDomains) {
+                      allPolicyActions
+                    } else {
+                      val constrainableActions = rt.actionPatterns.filter(_.authDomainConstrainable)
+                      allPolicyActions.filterNot(x => constrainableActions.exists(_.matches(x)))
+                    }
+                }
+              case LoadResourceAuthDomainResult.NotConstrained | LoadResourceAuthDomainResult.ResourceNotFound =>
+                allPolicyActions.pure[IO]
+            }
+          } yield policyActions
+        } else allPolicyActions.pure[IO]
+      } yield res
     }
 
-    for {
-      _ <- if (force) accessPolicyDAO.evictIsMemberOfCache(userId) else IO.unit
-      rt <- IO.fromEither[ResourceType](
-        resourceTypes.get(resource.resourceTypeName).toRight(new WorkbenchException(s"missing configuration for resourceType ${resource.resourceTypeName}")))
-      isConstrainable = rt.isAuthDomainConstrainable
-
-      policiesForResource <- listResourceAccessPoliciesForUser(resource, userId)
-      allPolicyActions = policiesForResource.flatMap(p => allActions(p, rt))
-      res <- if (isConstrainable) {
-        for {
-          authDomainsResult <- accessPolicyDAO.loadResourceAuthDomain(resource)
-          policyActions <- authDomainsResult match {
-            case LoadResourceAuthDomainResult.Constrained(authDomains) =>
-              listUserManagedGroups(userId).map{
-                groupsUserIsMemberOf =>
-                  val isUserMemberOfAllAuthDomains = authDomains.toList.toSet.subsetOf(groupsUserIsMemberOf)
-                  if (isUserMemberOfAllAuthDomains) {
-                    allPolicyActions
-                  } else {
-                    val constrainableActions = rt.actionPatterns.filter(_.authDomainConstrainable)
-                    allPolicyActions.filterNot(x => constrainableActions.exists(_.matches(x)))
-                  }
-              }
-            case LoadResourceAuthDomainResult.NotConstrained | LoadResourceAuthDomainResult.ResourceNotFound =>
-              allPolicyActions.pure[IO]
-          }
-        } yield policyActions
-      } else allPolicyActions.pure[IO]
-    } yield res
-  }
-
-  def listUserAccessPolicies(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId): IO[Set[UserPolicyResponse]] =
+  def listUserAccessPolicies(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId, parentSpan: Span = null): IO[Set[UserPolicyResponse]] =
     for {
       rt <- IO.fromEither(
         resourceTypes
           .get(resourceTypeName)
           .toRight(new WorkbenchException(s"missing configration for resourceType ${resourceTypeName}")))
       isConstrained = rt.isAuthDomainConstrainable
-      ridAndPolicyName <- accessPolicyDAO.listAccessPolicies(resourceTypeName, userId) // List all policies of a given resourceType the user is a member of
+      ridAndPolicyName <- accessPolicyDAO.listAccessPolicies(resourceTypeName, userId, parentSpan) // List all policies of a given resourceType the user is a member of
       rids = ridAndPolicyName.map(_.resourceId)
 
       resources <- if (isConstrained) accessPolicyDAO.listResourcesWithAuthdomains(resourceTypeName, rids)
@@ -126,26 +129,26 @@ class PolicyEvaluatorService(
       publicPolicies <- accessPolicyDAO.listPublicAccessPolicies(resourceTypeName)
     } yield results.flatten ++ publicPolicies.map(p => UserPolicyResponse(p.resourceId, p.accessPolicyName, Set.empty, Set.empty, public = true))
 
-  def listUserManagedGroupsWithRole(userId: WorkbenchUserId): IO[Set[ManagedGroupAndRole]] =
+  def listUserManagedGroupsWithRole(userId: WorkbenchUserId, parentSpan: Span = null): IO[Set[ManagedGroupAndRole]] =
     for {
-      ripns <- accessPolicyDAO.listAccessPolicies(ManagedGroupService.managedGroupTypeName, userId)
+      ripns <- accessPolicyDAO.listAccessPolicies(ManagedGroupService.managedGroupTypeName, userId, parentSpan)
     } yield {
       ripns
         .filter(ripn => ManagedGroupService.userMembershipPolicyNames.contains(ripn.accessPolicyName))
         .map(p => ManagedGroupAndRole(WorkbenchGroupName(p.resourceId.value), ManagedGroupService.getRoleName(p.accessPolicyName.value)))
     }
 
-  def listUserManagedGroups(userId: WorkbenchUserId): IO[Set[WorkbenchGroupName]] =
+  def listUserManagedGroups(userId: WorkbenchUserId, parentSpan: Span = null): IO[Set[WorkbenchGroupName]] =
     for {
-      policies <- listUserManagedGroupsWithRole(userId)
+      policies <- listUserManagedGroupsWithRole(userId, parentSpan)
     } yield {
       policies.map(_.groupName)
     }
 
-  def listResourceAccessPoliciesForUser(resource: FullyQualifiedResourceId, userId: WorkbenchUserId): IO[Set[AccessPolicy]] =
+  def listResourceAccessPoliciesForUser(resource: FullyQualifiedResourceId, userId: WorkbenchUserId, parentSpan: Span = null): IO[Set[AccessPolicy]] =
     for {
-      policies <- accessPolicyDAO.listAccessPoliciesForUser(resource, userId)
-      publicPolicies <- accessPolicyDAO.listPublicAccessPolicies(resource)
+      policies <- accessPolicyDAO.listAccessPoliciesForUser(resource, userId, parentSpan)
+      publicPolicies <- accessPolicyDAO.listPublicAccessPolicies(resource, parentSpan)
     } yield policies ++ publicPolicies
 }
 

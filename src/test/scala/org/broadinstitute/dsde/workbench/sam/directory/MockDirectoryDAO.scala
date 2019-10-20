@@ -5,6 +5,7 @@ import java.util.Date
 import akka.http.scaladsl.model.StatusCodes
 import cats.effect.IO
 import cats.implicits._
+import io.opencensus.trace.Span
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.ServiceAccountSubjectId
 import org.broadinstitute.dsde.workbench.sam._
@@ -85,7 +86,7 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     groups.getOrElse(groupId, BasicWorkbenchGroup(null, Set.empty, WorkbenchEmail("g1@example.com"))).members.contains(member)
   }
 
-  override def loadSubjectFromEmail(email: WorkbenchEmail): IO[Option[WorkbenchSubject]] = IO {
+  override def loadSubjectFromEmail(email: WorkbenchEmail, span: Span = null): IO[Option[WorkbenchSubject]] = IO {
     Option(usersWithEmails.getOrElse(email, groupsWithEmails.getOrElse(email, petsWithEmails.getOrElse(email, null))))
   }
 

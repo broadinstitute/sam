@@ -3,6 +3,7 @@ package org.broadinstitute.dsde.workbench.sam.directory
 import java.util.Date
 
 import cats.effect.IO
+import io.opencensus.trace.Span
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google._
 import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
@@ -32,7 +33,7 @@ trait DirectoryDAO {
   def getSynchronizedDate(groupId: WorkbenchGroupIdentity): IO[Option[Date]]
   def getSynchronizedEmail(groupId: WorkbenchGroupIdentity): IO[Option[WorkbenchEmail]]
 
-  def loadSubjectFromEmail(email: WorkbenchEmail): IO[Option[WorkbenchSubject]]
+  def loadSubjectFromEmail(email: WorkbenchEmail, parentSpan: Span = null): IO[Option[WorkbenchSubject]]
   def loadSubjectEmail(subject: WorkbenchSubject): IO[Option[WorkbenchEmail]]
   def loadSubjectEmails(subjects: Set[WorkbenchSubject]): IO[Stream[WorkbenchEmail]]
   def loadSubjectFromGoogleSubjectId(googleSubjectId: GoogleSubjectId): IO[Option[WorkbenchSubject]]
