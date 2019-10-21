@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog logicalFilePath="dummy"
+                   xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog-ext http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-ext.xsd http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.4.xsd">
+
+    <changeSet logicalFilePath="dummy" id="create_citext_extension" author="gpolumbo">
+        <sql dbms="postgresql">
+            CREATE EXTENSION IF NOT EXISTS citext;
+        </sql>
+    </changeSet>
+
+    <changeSet id="alter_SAM_GROUP_name_to_citext" author="gpolumbo">
+        <modifyDataType tableName="SAM_GROUP" columnName="name" newDataType="citext" />
+    </changeSet>
+
+    <changeSet id="alter_SAM_GROUP_email_to_citext" author="gpolumbo">
+        <modifyDataType tableName="SAM_GROUP" columnName="email" newDataType="citext" />
+    </changeSet>
+
+    <changeSet id="alter_SAM_USER_id_to_citext" author="gpolumbo">
+        <dropForeignKeyConstraint baseTableName="SAM_PET_SERVICE_ACCOUNT" constraintName="FK_SPSA_USER" />
+        <dropForeignKeyConstraint baseTableName="SAM_GROUP_MEMBER" constraintName="FK_SGM_MEMBER_USER" />
+        <modifyDataType tableName="SAM_USER" columnName="id" newDataType="citext" />
+        <modifyDataType tableName="SAM_PET_SERVICE_ACCOUNT" columnName="user_id" newDataType="citext" />
+        <modifyDataType tableName="SAM_GROUP_MEMBER" columnName="member_user_id" newDataType="citext" />
+        <addForeignKeyConstraint baseTableName="SAM_GROUP_MEMBER" baseColumnNames="member_user_id"
+                                 constraintName="FK_SGM_MEMBER_USER"
+                                 referencedTableName="SAM_USER"
+                                 referencedColumnNames="id" />
+        <addForeignKeyConstraint baseTableName="SAM_PET_SERVICE_ACCOUNT" baseColumnNames="user_id"
+                                 constraintName="FK_SPSA_USER"
+                                 referencedTableName="SAM_USER"
+                                 referencedColumnNames="id" />
+    </changeSet>
+
+    <changeSet id="alter_SAM_USER_email_to_citext" author="gpolumbo">
+        <modifyDataType tableName="SAM_USER" columnName="email" newDataType="citext" />
+    </changeSet>
+
+    <changeSet id="alter_SAM_PET_SERVICE_ACCOUNT_project_to_citext" author="gpolumbo">
+        <modifyDataType tableName="SAM_PET_SERVICE_ACCOUNT" columnName="project" newDataType="citext" />
+    </changeSet>
+
+    <changeSet id="alter_SAM_PET_SERVICE_ACCOUNT_name_to_citext" author="gpolumbo">
+        <modifyDataType tableName="SAM_PET_SERVICE_ACCOUNT" columnName="email" newDataType="citext" />
+    </changeSet>
+
+    <changeSet id="alter_SAM_RESOURCE_TYPE_name_to_citext" author="gpolumbo">
+        <modifyDataType tableName="SAM_RESOURCE_TYPE" columnName="name" newDataType="citext" />
+    </changeSet>
+
+    <changeSet id="alter_SAM_RESOURCE_ROLE_role_to_citext" author="gpolumbo">
+        <modifyDataType tableName="SAM_RESOURCE_ROLE" columnName="role" newDataType="citext" />
+    </changeSet>
+
+    <changeSet id="alter_SAM_RESOURCE_ACTION_action_to_citext" author="gpolumbo">
+        <modifyDataType tableName="SAM_RESOURCE_ACTION" columnName="action" newDataType="citext" />
+    </changeSet>
+
+    <changeSet id="alter_SAM_RESOURCE_name_to_citext" author="gpolumbo">
+        <modifyDataType tableName="SAM_RESOURCE" columnName="name" newDataType="citext" />
+    </changeSet>
+
+    <changeSet id="alter_SAM_RESOURCE_POLICY_name_to_citext" author="gpolumbo">
+        <modifyDataType tableName="SAM_RESOURCE_POLICY" columnName="name" newDataType="citext" />
+    </changeSet>
+</databaseChangeLog>

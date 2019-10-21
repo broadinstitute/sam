@@ -3,5 +3,6 @@
 
     <include file="changesets/initial_schema.xml" relativeToChangelogFile="true"/>
     <include file="changesets/20191007_exactly_one_null_member.xml" relativeToChangelogFile="true"/>
+    <include file="changesets/20191021_citext_support.xml" relativeToChangelogFile="true"/>
 
 </databaseChangeLog>

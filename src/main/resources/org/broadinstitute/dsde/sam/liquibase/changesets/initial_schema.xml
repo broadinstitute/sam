@@ -5,21 +5,15 @@
                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
                    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog-ext http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-ext.xsd http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.4.xsd">
 
-    <changeSet logicalFilePath="dummy" id="create_citext_extension" author="gpolumbo">
-        <sql dbms="postgresql">
-            CREATE EXTENSION IF NOT EXISTS citext;
-        </sql>
-    </changeSet>
-
     <changeSet logicalFilePath="dummy" author="dvoet" id="group_table">
         <createTable tableName="SAM_GROUP">
             <column autoIncrement="true" name="id" type="BIGINT">
                 <constraints primaryKey="true"/>
             </column>
-            <column name="name" type="citext">
+            <column name="name" type="VARCHAR">
                 <constraints nullable="false" unique="true"/>
             </column>
-            <column name="email" type="citext">
+            <column name="email" type="VARCHAR">
                 <constraints nullable="false" unique="true"/>
             </column>
             <column name="updated_date" type="timestamptz"/>
@@ -43,10 +37,10 @@
 
     <changeSet logicalFilePath="dummy" author="dvoet" id="user_table">
         <createTable tableName="SAM_USER">
-            <column name="id" type="citext">
+            <column name="id" type="VARCHAR">
                 <constraints primaryKey="true"/>
             </column>
-            <column name="email" type="citext">
+            <column name="email" type="VARCHAR">
                 <constraints nullable="false" unique="true"/>
             </column>
             <column name="google_subject_id" type="VARCHAR(30)">
@@ -61,13 +55,13 @@
 
     <changeSet logicalFilePath="dummy" author="dvoet" id="pet_service_account_table">
         <createTable tableName="SAM_PET_SERVICE_ACCOUNT">
-            <column name="user_id" type="citext">
+            <column name="user_id" type="VARCHAR">
                 <constraints primaryKey="true" foreignKeyName="FK_SPSA_USER" referencedTableName="SAM_USER" referencedColumnNames="id"/>
             </column>
-            <column name="project" type="citext">
+            <column name="project" type="VARCHAR">
                 <constraints primaryKey="true"/>
             </column>
-            <column name="email" type="citext">
+            <column name="email" type="VARCHAR">
                 <constraints nullable="false" unique="true"/>
             </column>
             <column name="google_subject_id" type="VARCHAR(30)">
@@ -90,7 +84,7 @@
             <column name="member_group_id" type="BIGINT">
                 <constraints foreignKeyName="FK_SGM_MEMBER_GROUP" referencedTableName="SAM_GROUP" referencedColumnNames="id"/>
             </column>
-            <column name="member_user_id" type="citext">
+            <column name="member_user_id" type="VARCHAR">
                 <constraints foreignKeyName="FK_SGM_MEMBER_USER" referencedTableName="SAM_USER" referencedColumnNames="id"/>
             </column>
         </createTable>
@@ -101,7 +95,7 @@
             <column name="id" type="BIGINT" autoIncrement="true">
                 <constraints primaryKey="true"/>
             </column>
-            <column name="name" type="citext">
+            <column name="name" type="VARCHAR">
                 <constraints nullable="false" unique="true"/>
             </column>
         </createTable>
@@ -135,7 +129,7 @@
             <column name="resource_type_id" type="BIGINT">
                 <constraints nullable="false" foreignKeyName="FK_SRR_RESOURCE_TYPE" referencedTableName="SAM_RESOURCE_TYPE" referencedColumnNames="id"/>
             </column>
-            <column name="role" type="citext">
+            <column name="role" type="VARCHAR">
                 <constraints nullable="false"/>
             </column>
             <column name="deprecated" type="BOOLEAN" defaultValue="false">
@@ -152,7 +146,7 @@
             <column name="resource_type_id" type="BIGINT">
                 <constraints nullable="false" foreignKeyName="FK_SRESA_RESOURCE_TYPE" referencedTableName="SAM_RESOURCE_TYPE" referencedColumnNames="id"/>
             </column>
-            <column name="action" type="citext">
+            <column name="action" type="VARCHAR">
                 <constraints nullable="false"/>
             </column>
         </createTable>
@@ -177,7 +171,7 @@
             <column name="resource_type_id" type="BIGINT">
                 <constraints nullable="false" foreignKeyName="FK_SR_RESOURCE_TYPE" referencedTableName="SAM_RESOURCE_TYPE" referencedColumnNames="id"/>
             </column>
-            <column name="name" type="citext">
+            <column name="name" type="VARCHAR">
                 <constraints nullable="false"/>
             </column>
         </createTable>
@@ -205,7 +199,7 @@
             <column name="group_id" type="BIGINT">
                 <constraints nullable="false" foreignKeyName="FK_SRP_GROUP" referencedTableName="SAM_GROUP" referencedColumnNames="id"/>
             </column>
-            <column name="name" type="citext">
+            <column name="name" type="VARCHAR">
                 <constraints nullable="false"/>
             </column>
             <column name="public" type="BOOLEAN">
