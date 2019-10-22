@@ -57,7 +57,7 @@ class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdenti
     policies -= policy
   }
 
-  override def listAccessPolicies(resourceTypeName: ResourceTypeName, user: WorkbenchUserId, span: Span = null): IO[Set[ResourceIdAndPolicyName]] = IO {
+  override def listResrouceTypeAccessPolicies(resourceTypeName: ResourceTypeName, user: WorkbenchUserId, span: Span = null): IO[Set[ResourceIdAndPolicyName]] = IO {
     policies.collect {
       case (riapn @ FullyQualifiedPolicyId(FullyQualifiedResourceId(`resourceTypeName`, _), _), accessPolicy) if accessPolicy.members.contains(user) => ResourceIdAndPolicyName(riapn.resource.resourceId, riapn.accessPolicyName)
     }.toSet
@@ -82,7 +82,7 @@ class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdenti
     }
   }
 
-  override def listAccessPolicies(resource: FullyQualifiedResourceId): IO[Stream[AccessPolicy]] = IO {
+  override def listAccessPolicies(resource: FullyQualifiedResourceId, span: Span = null): IO[Stream[AccessPolicy]] = IO {
     policies.collect {
       case (FullyQualifiedPolicyId(`resource`, _), policy: AccessPolicy) => policy
     }.toStream
@@ -144,4 +144,10 @@ class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdenti
   }
 
   override def evictIsMemberOfCache(subject: WorkbenchSubject): IO[Unit] = IO.unit
+
+  override def userMemberOfAnyPolicy(userId: WorkbenchUserId, queryPolicies: Set[AccessPolicy], parentSpan: Span): IO[Boolean] = {
+    IO.pure(policies.exists {
+      case (id, policy) => queryPolicies.exists(_.id == id) && policy.members.contains(userId)
+    })
+  }
 }

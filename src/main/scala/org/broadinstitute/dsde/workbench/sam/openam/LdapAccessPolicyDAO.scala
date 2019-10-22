@@ -170,7 +170,7 @@ class LdapAccessPolicyDAO(
     executeLdap(IO(ldapConnectionPool.modify(policyDn(ridPolicyName), memberMod, actionMod, roleMod, dateMod, publicMod)), childSpan) *> newPolicy.pure[IO]
   }
 
-  override def listAccessPolicies(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId, parentSpan: Span = null): IO[Set[ResourceIdAndPolicyName]] = traceIOWithParent("sam_LdapAccessPolicyDAO_listAccessPolicies", parentSpan) { childSpan =>
+  override def listResrouceTypeAccessPolicies(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId, parentSpan: Span = null): IO[Set[ResourceIdAndPolicyName]] = traceIOWithParent("sam_LdapAccessPolicyDAO_listAccessPolicies", parentSpan) { childSpan =>
     for {
       policyDnPattern <- IO(dnMatcher(Seq(Attr.policy, Attr.resourceId), resourceTypeDn(resourceTypeName)))
       groupDns <- ldapLoadMemberOf(userId, childSpan)
@@ -249,11 +249,12 @@ class LdapAccessPolicyDAO(
         )(unmarshalAccessPolicy)), childSpan)
   }
 
-  override def listAccessPolicies(resource: FullyQualifiedResourceId): IO[Stream[AccessPolicy]] =
+  override def listAccessPolicies(resource: FullyQualifiedResourceId, parentSpan: Span = null): IO[Stream[AccessPolicy]] = traceIOWithParent("sam_LdapAccessPolicyDAO_listAccessPolicies", parentSpan) { childSpan =>
     executeLdap(
       IO(
         ldapSearchStream(resourceDn(resource), SearchScope.SUB, Filter.createEqualityFilter("objectclass", ObjectClass.policy))(unmarshalAccessPolicy)
-      ))
+      ), childSpan)
+  }
 
   override def listAccessPoliciesForUser(resource: FullyQualifiedResourceId, user: WorkbenchUserId, parentSpan: Span = null): IO[Set[AccessPolicy]] = traceIOWithParent("sam_LdapAccessPolicyDAO_listAccessPoliciesForUser", parentSpan) { childSpan =>
     for {
@@ -290,6 +291,15 @@ class LdapAccessPolicyDAO(
       }
     }.flatten.toSet)
   )
+
+  override def userMemberOfAnyPolicy(userId: WorkbenchUserId, policies: Set[AccessPolicy], parentSpan: Span = null): IO[Boolean] = traceIOWithParent("sam_LdapAccessPolicyDAO_userMemberOfAnyPolicy", parentSpan) { childSpan =>
+    if (policies.isEmpty) {
+      IO.pure(false)
+    } else {
+      val filters = policies.map { policy => Filter.createEqualityFilter(Attr.memberOf, policyDn(policy.id))}
+      executeLdap(IO(ldapSearchStream(userDn(userId), SearchScope.BASE, Filter.createORFilter(filters.toSeq:_*))(identity)), childSpan).map(_.nonEmpty)
+    }
+  }
 
   private def unmarshalUser(entry: Entry): WorkbenchUser = {
     val uid = getAttribute(entry, Attr.uid).getOrElse(throw new WorkbenchException(s"${Attr.uid} attribute missing"))

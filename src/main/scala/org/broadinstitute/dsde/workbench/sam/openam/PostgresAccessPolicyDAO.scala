@@ -632,7 +632,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     listResourcesWithAuthdomains(resourceId.resourceTypeName, Set(resourceId.resourceId)).map(_.headOption)
   }
 
-  override def listAccessPolicies(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId, parentSpan: Span = null): IO[Set[ResourceIdAndPolicyName]] = {
+  override def listResrouceTypeAccessPolicies(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId, parentSpan: Span = null): IO[Set[ResourceIdAndPolicyName]] = {
     val ancestorGroupsTable = SubGroupMemberTable("ancestor_groups")
     val ag = ancestorGroupsTable.syntax("ag")
     val agColumn = ancestorGroupsTable.column
@@ -664,8 +664,8 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     }, parentSpan)
   }
 
-  override def listAccessPolicies(resource: FullyQualifiedResourceId): IO[Stream[AccessPolicy]] = {
-    listPolicies(resource)
+  override def listAccessPolicies(resource: FullyQualifiedResourceId, parentSpan: Span = null): IO[Stream[AccessPolicy]] = {
+    listPolicies(resource, parentSpan=parentSpan)
   }
 
   override def listAccessPoliciesForUser(resource: FullyQualifiedResourceId, user: WorkbenchUserId, parentSpan: Span = null): IO[Set[AccessPolicy]] = {
@@ -736,6 +736,15 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
         AccessPolicy(FullyQualifiedPolicyId(FullyQualifiedResourceId(policyInfo.resourceTypeName, policyInfo.resourceId), policyInfo.name), members, policyInfo.email, roles.flatten.toSet, actions.flatten.toSet, policyInfo.public)
       }.toSet
     }, parentSpan)
+  }
+
+  override def userMemberOfAnyPolicy(userId: WorkbenchUserId, policies: Set[AccessPolicy], parentSpan: Span): IO[Boolean] = {
+    if (policies.isEmpty) {
+      IO.pure(false)
+    } else {
+      // TODO a little hack, assumes all policies are in the same resource
+      listAccessPoliciesForUser(policies.head.id.resource, userId, parentSpan).map(_.map(_.id).intersect(policies.map(_.id)).nonEmpty)
+    }
   }
 
   override def listFlattenedPolicyMembers(policyId: FullyQualifiedPolicyId): IO[Set[WorkbenchUser]] = {

@@ -139,7 +139,7 @@ class LdapAccessPolicyDAOSpec extends FlatSpec with ScalaFutures with Matchers w
       _ <- dao.createResourceType(dummyResourceType(policy.id.resource.resourceTypeName))
       _ <- dao.createResource(resource)
       _ <- dao.createPolicy(policy)
-      resources <- dao.listAccessPolicies(policy.id.resource.resourceTypeName, user.id)
+      resources <- dao.listResrouceTypeAccessPolicies(policy.id.resource.resourceTypeName, user.id)
     } yield resources
 
     res.unsafeRunSync() shouldBe Set(ResourceIdAndPolicyName(policy.id.resource.resourceId, policy.id.accessPolicyName))

@@ -685,7 +685,7 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
         dao.createPolicy(policy1).unsafeRunSync()
         dao.createPolicy(policy2).unsafeRunSync()
 
-        dao.listAccessPolicies(resourceType.name, defaultUser.id).unsafeRunSync() should contain theSameElementsAs Set(ResourceIdAndPolicyName(resource1.resourceId, policy1.id.accessPolicyName), ResourceIdAndPolicyName(resource2.resourceId, policy2.id.accessPolicyName))
+        dao.listResrouceTypeAccessPolicies(resourceType.name, defaultUser.id).unsafeRunSync() should contain theSameElementsAs Set(ResourceIdAndPolicyName(resource1.resourceId, policy1.id.accessPolicyName), ResourceIdAndPolicyName(resource2.resourceId, policy2.id.accessPolicyName))
       }
 
       "lists the access policies for a resource" in {

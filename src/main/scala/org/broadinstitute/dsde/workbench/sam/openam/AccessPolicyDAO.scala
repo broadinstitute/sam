@@ -26,11 +26,12 @@ trait AccessPolicyDAO {
   def listPublicAccessPolicies(resource: FullyQualifiedResourceId, span: Span = null): IO[Stream[AccessPolicy]]
   def listResourcesWithAuthdomains(resourceTypeName: ResourceTypeName, resourceId: Set[ResourceId], span: Span = null): IO[Set[Resource]]
   def listResourceWithAuthdomains(resourceId: FullyQualifiedResourceId, span: Span = null): IO[Option[Resource]]
-  def listAccessPolicies(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId, span: Span = null): IO[Set[ResourceIdAndPolicyName]]
-  def listAccessPolicies(resource: FullyQualifiedResourceId): IO[Stream[AccessPolicy]]
+  def listResrouceTypeAccessPolicies(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId, span: Span = null): IO[Set[ResourceIdAndPolicyName]]
+  def listAccessPolicies(resource: FullyQualifiedResourceId, span: Span = null): IO[Stream[AccessPolicy]]
   def listAccessPoliciesForUser(resource: FullyQualifiedResourceId, user: WorkbenchUserId, span: Span = null): IO[Set[AccessPolicy]]
   def listFlattenedPolicyMembers(policyId: FullyQualifiedPolicyId): IO[Set[WorkbenchUser]]
   def setPolicyIsPublic(policyId: FullyQualifiedPolicyId, isPublic: Boolean): IO[Unit]
+  def userMemberOfAnyPolicy(userId: WorkbenchUserId, policies: Set[AccessPolicy], parentSpan: Span = null): IO[Boolean]
 
   def evictIsMemberOfCache(subject: WorkbenchSubject): IO[Unit]
 }
