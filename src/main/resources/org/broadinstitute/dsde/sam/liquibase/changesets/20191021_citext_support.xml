@@ -19,28 +19,8 @@
         <modifyDataType tableName="SAM_GROUP" columnName="email" newDataType="citext" />
     </changeSet>
 
-    <changeSet id="alter_SAM_USER_id_to_citext" author="gpolumbo">
-        <dropForeignKeyConstraint baseTableName="SAM_PET_SERVICE_ACCOUNT" constraintName="FK_SPSA_USER" />
-        <dropForeignKeyConstraint baseTableName="SAM_GROUP_MEMBER" constraintName="FK_SGM_MEMBER_USER" />
-        <modifyDataType tableName="SAM_USER" columnName="id" newDataType="citext" />
-        <modifyDataType tableName="SAM_PET_SERVICE_ACCOUNT" columnName="user_id" newDataType="citext" />
-        <modifyDataType tableName="SAM_GROUP_MEMBER" columnName="member_user_id" newDataType="citext" />
-        <addForeignKeyConstraint baseTableName="SAM_GROUP_MEMBER" baseColumnNames="member_user_id"
-                                 constraintName="FK_SGM_MEMBER_USER"
-                                 referencedTableName="SAM_USER"
-                                 referencedColumnNames="id" />
-        <addForeignKeyConstraint baseTableName="SAM_PET_SERVICE_ACCOUNT" baseColumnNames="user_id"
-                                 constraintName="FK_SPSA_USER"
-                                 referencedTableName="SAM_USER"
-                                 referencedColumnNames="id" />
-    </changeSet>
-
     <changeSet id="alter_SAM_USER_email_to_citext" author="gpolumbo">
         <modifyDataType tableName="SAM_USER" columnName="email" newDataType="citext" />
-    </changeSet>
-
-    <changeSet id="alter_SAM_PET_SERVICE_ACCOUNT_project_to_citext" author="gpolumbo">
-        <modifyDataType tableName="SAM_PET_SERVICE_ACCOUNT" columnName="project" newDataType="citext" />
     </changeSet>
 
     <changeSet id="alter_SAM_PET_SERVICE_ACCOUNT_name_to_citext" author="gpolumbo">
