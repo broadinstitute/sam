@@ -35,6 +35,16 @@ class PolicyEvaluatorService(
   }
 
   def hasPermission(resource: FullyQualifiedResourceId, action: ResourceAction, userId: WorkbenchUserId): IO[Boolean] = {
+    // first attempt the cheap, short circuit and fallback to the full check if it returns false
+    for {
+      attempt1 <- hasPermissionShortCircuit(resource, action, userId)
+      attempt2 <- if (attempt1) IO.pure(attempt1) else hasPermissionFullCheck(resource, action, userId)
+    } yield {
+      attempt2
+    }
+  }
+
+  def hasPermissionFullCheck(resource: FullyQualifiedResourceId, action: ResourceAction, userId: WorkbenchUserId): IO[Boolean] = {
     def checkPermission(force: Boolean) =
       listUserResourceActions(resource, userId, force).map { _.contains(action) }
 
@@ -47,6 +57,38 @@ class PolicyEvaluatorService(
       attempt2
     }
   }
+
+  /**
+    * Check if the user has the action on the resource.  A true result means they do, and can be trusted.  A false result only means that the short
+    * circuit approach did not find that to be true, but a more exhaustive check might.
+    *
+    * In many cases users are direct members of policies, and it is very fast to query direct members of a policy (as opposed to
+    * calling isMemberOf for a user), this method leverages that to do a fast check for presence
+    */
+  def hasPermissionShortCircuit(resource: FullyQualifiedResourceId, action: ResourceAction, userId: WorkbenchUserId): IO[Boolean] = {
+
+    // if this is auth domain constrainable (or is unknown), we can not use this approach
+    resourceTypes.get(resource.resourceTypeName) match {
+      case Some(x) if !x.isAuthDomainConstrainable =>
+      // nothing
+      case _ =>
+        return IO { false }
+    }
+
+    // compute the list of roles that contain the action requested
+    val roleNamesWithAction = resourceTypes.get(resource.resourceTypeName).get.roles.filter(_.actions.contains(action)).map(_.roleName)
+
+    // get the policies for this resource and filter to ones that contain the roles with the action, or the action directly
+    val policies =
+      accessPolicyDAO.listAccessPolicies(resource).map(_.toList.filter( p => p.roles.intersect(roleNamesWithAction).nonEmpty || p.actions.contains( action ) ))
+
+    // get all the members of all the policies
+    val members = policies.map(l => l.flatMap(_.members))
+
+    // and check for membership
+    members.map( _.contains(userId) )
+  }
+
 
   /**
     * Lists all the actions a user has on the specified resource
