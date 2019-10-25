@@ -36,18 +36,58 @@ class PolicyEvaluatorService(
       }
   }
 
-  def hasPermission(resource: FullyQualifiedResourceId, action: ResourceAction, userId: WorkbenchUserId): IO[Boolean] = {
+  // TODO: the way this is build... it `should` be ok to enable as the default.... but MUST REVIEW!!!
+  def hasPermission(resource: FullyQualifiedResourceId, action: ResourceAction, userId: WorkbenchUserId, attemptShortCircuit: Boolean = true): IO[Boolean] = {
     def checkPermission(force: Boolean) =
       listUserResourceActions(resource, userId, force).map { _.contains(action) }
 
-    // this is optimized for the case where the user has permission since that is the usual case
-    // if the first attempt shows the user does not have permission, force a second attempt
-    for {
-      attempt1 <- checkPermission(force = false)
-      attempt2 <- if (attempt1) IO.pure(attempt1) else checkPermission(force = true)
-    } yield {
-      attempt2
+    if (attemptShortCircuit) {
+      for {
+        attempt1 <- hasPermissionShortCircuit(resource, action, userId)
+        attempt2 <- if (attempt1) IO.pure(attempt1) else hasPermission(resource, action, userId, false)
+      } yield {
+        attempt2
+      }
+    } else {
+      // this is optimized for the case where the user has permission since that is the usual case
+      // if the first attempt shows the user does not have permission, force a second attempt
+      for {
+        attempt1 <- checkPermission(force = false)
+        attempt2 <- if (attempt1) IO.pure(attempt1) else checkPermission(force = true)
+      } yield {
+        attempt2
+      }
     }
+  }
+
+  // attempt to succeed quickly for the case where the user is a direct member of a group that with the supplied action either
+  // via a role or directly on the policy
+  private def hasPermissionShortCircuit(resource: FullyQualifiedResourceId, action: ResourceAction, userId: WorkbenchUserId): IO[Boolean] = {
+
+    // TODO: is this a valid thing?
+    // if this is auth domain constrainable (or is unknown), fallback
+    resourceTypes.get(resource.resourceTypeName) match {
+      case Some(x) if !x.isAuthDomainConstrainable =>
+        // nothing
+      case _ =>
+        return IO { false }
+    }
+
+    // compute the list of roles that contain the action requested
+    val roleNamesWithAction = resourceTypes.get(resource.resourceTypeName).get.roles.filter(_.actions.contains(action)).map(_.roleName)
+
+    // get the policies for this resource
+
+    // NOTE: validate direction action logic
+    // TODO: question... is there such a thing as an 'excluded' action on a policy?
+    val policies: IO[List[AccessPolicy]] =
+      accessPolicyDAO.listAccessPolicies(resource).map(_.toList.filter( p => p.roles.intersect(roleNamesWithAction).nonEmpty || p.actions.contains( action ) ))
+
+    // get all the members of all the policies
+    val members = policies.map(l => l.flatMap(_.members))
+
+    // NOTE: if we wanted to do our own group recursion, we could do it here...
+    members.map( _.contains(userId) )
   }
 
   /**
