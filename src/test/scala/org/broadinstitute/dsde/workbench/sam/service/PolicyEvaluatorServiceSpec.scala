@@ -226,7 +226,7 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
       r shouldBe false
     }
 
-    res.unsafeToFuture()
+    res.unsafeRunSync()
   }
 
 
@@ -251,7 +251,7 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
       r shouldBe(true)
     }
 
-    res.unsafeToFuture()
+    res.unsafeRunSync()
   }
 
   it should "return true if given action is allowed via a role for a direct member of the policy using the short circuit" in {
@@ -276,7 +276,7 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
       r shouldBe(true)
     }
 
-    res.unsafeToFuture()
+    res.unsafeRunSync()
   }
 
   it should "return false if given action is not present for a user via a role using the short circuit" in {
@@ -301,7 +301,7 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
       r shouldBe(false)
     }
 
-    res.unsafeToFuture()
+    res.unsafeRunSync()
   }
 
   it should "return true if given action is allowed for a user and resource is not constrained by auth domains" in {
