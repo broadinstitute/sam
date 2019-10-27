@@ -207,7 +207,7 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
   }
 
 
-  "hasPermission" should "return false if given action is not allowed for a user using the short circuit" in {
+  "hasPermission" should "return false if given action is not allowed for a user using the shallow check" in {
     val user = genUserInfo.sample.get
     val samplePolicy = genPolicy.sample.get
     val action = ResourceAction("weirdAction")
@@ -217,11 +217,16 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
     val policy = SamLenses.resourceIdentityAccessPolicy.set(resource.fullyQualifiedId)(policyExcludeAction)
 
     val res = for{
+      _ <- setup()
+      _ <- policyDAO.createResourceType(managedGroupResourceType)
       _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
+      _ <- resource.authDomain.toList.parTraverse(a => managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))
+      _ <- savePolicyMembers(policy)
+
       _ <- policyDAO.createResourceType(defaultResourceType)
       _ <- policyDAO.createResource(resource)
       _ <- policyDAO.createPolicy(policy)
-      r <- service.policyEvaluatorService.hasPermissionShortCircuit(policy.id.resource, action, user.userId)
+      r <- service.policyEvaluatorService.hasPermissionShallowCheck(policy.id.resource, action, user.userId)
     } yield {
       r shouldBe false
     }
@@ -229,8 +234,7 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
     res.unsafeRunSync()
   }
 
-
-  it should "return true if given action is on a policy directly for a direct member of the policy using the short circuit" in {
+  it should "return true if given action is on a policy directly for a direct member of the policy using the shallow check" in {
     val user = genUserInfo.sample.get
     val samplePolicy = genPolicy.sample.get
     val action = defaultResourceType.roles.head.actions.head
@@ -242,11 +246,15 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
 
     val res = for{
       _ <- setup()
+      _ <- policyDAO.createResourceType(managedGroupResourceType)
       _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
+      _ <- resource.authDomain.toList.parTraverse(a => managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))
+      _ <- savePolicyMembers(policy)
+
       _ <- policyDAO.createResourceType(defaultResourceType)
       _ <- policyDAO.createResource(resource)
       _ <- policyDAO.createPolicy(policy)
-      r <- service.policyEvaluatorService.hasPermissionShortCircuit(policy.id.resource, action, user.userId)
+      r <- service.policyEvaluatorService.hasPermissionShallowCheck(policy.id.resource, action, user.userId)
     } yield {
       r shouldBe(true)
     }
@@ -254,7 +262,7 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
     res.unsafeRunSync()
   }
 
-  it should "return true if given action is allowed via a role for a direct member of the policy using the short circuit" in {
+  it should "return true if given action is allowed via a role for a direct member of the policy using the shallow check" in {
     val user = genUserInfo.sample.get
     val samplePolicy = genPolicy.sample.get
     val sampleRole = defaultResourceType.roles.head.roleName
@@ -267,11 +275,15 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
 
     val res = for{
       _ <- setup()
+      _ <- policyDAO.createResourceType(managedGroupResourceType)
       _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
+      _ <- resource.authDomain.toList.parTraverse(a => managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))
+      _ <- savePolicyMembers(policy)
+
       _ <- policyDAO.createResourceType(defaultResourceType)
       _ <- policyDAO.createResource(resource)
       _ <- policyDAO.createPolicy(policy)
-      r <- service.policyEvaluatorService.hasPermissionShortCircuit(policy.id.resource, action, user.userId)
+      r <- service.policyEvaluatorService.hasPermissionShallowCheck(policy.id.resource, action, user.userId)
     } yield {
       r shouldBe(true)
     }
@@ -279,24 +291,29 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
     res.unsafeRunSync()
   }
 
-  it should "return false if given action is not present for a user via a role using the short circuit" in {
+  it should "return false if given action is not present for a user via a role or directly using the shallow check" in {
     val user = genUserInfo.sample.get
     val samplePolicy = genPolicy.sample.get
     val sampleRole = ResourceRoleName("owner")
-    val action = ResourceAction("non_owner_action") // an action not given to owner
 
-    val resource = genResource.sample.get.copy(authDomain = Set.empty, resourceTypeName = defaultResourceType.name)
+    val action = ResourceAction("just_a_made_up_action") // an action not given to owner
+
+    val resource = genResource.sample.get.copy(resourceTypeName = defaultResourceType.name)
     val policyWithUser = AccessPolicy.members.modify(_ + user.userId)(samplePolicy)
     val policyWithRole = AccessPolicy.roles.modify(_ + sampleRole)(policyWithUser)
     val policy = SamLenses.resourceIdentityAccessPolicy.set(resource.fullyQualifiedId)(policyWithRole)
 
     val res = for{
       _ <- setup()
+      _ <- policyDAO.createResourceType(managedGroupResourceType)
       _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
+      _ <- resource.authDomain.toList.parTraverse(a => managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))
+      _ <- savePolicyMembers(policy)
+
       _ <- policyDAO.createResourceType(defaultResourceType)
       _ <- policyDAO.createResource(resource)
       _ <- policyDAO.createPolicy(policy)
-      r <- service.policyEvaluatorService.hasPermissionShortCircuit(policy.id.resource, action, user.userId)
+      r <- service.policyEvaluatorService.hasPermissionShallowCheck(policy.id.resource, action, user.userId)
     } yield {
       r shouldBe(false)
     }
