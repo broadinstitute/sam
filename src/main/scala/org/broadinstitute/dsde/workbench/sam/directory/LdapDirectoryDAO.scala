@@ -111,7 +111,9 @@ class LdapDirectoryDAO(
         case ldape: LDAPException if maxRetries > 0 && ldape.getResultCode == ResultCode.BUSY =>
           logger.info(s"Retrying LDAP Operation due to BUSY (Error code ${ldape.getResultCode})")
           IO.sleep(initialDelay) *> retryLdapBusyWithBackoff(initialDelay * 2, maxRetries - 1)(ioa)
-        case _ => IO.raiseError(error)
+        case e =>
+          logger.info(s"NOT Retrying LDAP Operation ${e.getMessage}) with ${maxRetries}")
+          IO.raiseError(error)
       }
     }
   }
