@@ -35,7 +35,7 @@ class PolicyEvaluatorService(
   }
 
   def hasPermission(resource: FullyQualifiedResourceId, action: ResourceAction, userId: WorkbenchUserId): IO[Boolean] = {
-    // first attempt the cheap, short circuit and fallback to the full check if it returns false
+    // first attempt the shallow check and fallback to the full check if it returns false
     for {
       attempt1 <- hasPermissionShallowCheck(resource, action, userId)
       attempt2 <- if (attempt1) IO.pure(attempt1) else hasPermissionFullCheck(resource, action, userId)
@@ -59,8 +59,8 @@ class PolicyEvaluatorService(
   }
 
   /**
-    * Check if the user has the action on the resource.  A true result means they do, and can be trusted.  A false result only means that the short
-    * circuit approach did not find that to be true, but a more exhaustive check might.
+    * Check if the user has the action on the resource.  A true result means they do, and can be trusted.  A false result only means that
+    * the shallow check did not find that to be true, but a more exhaustive check might.
     *
     * In many cases users are direct members of policies, and it is very fast to query direct members of a policy (as opposed to
     * calling isMemberOf for a user), this method leverages that to do a fast check for presence
