@@ -5,6 +5,7 @@ import akka.http.scaladsl.model.StatusCodes
 import cats.data.OptionT
 import cats.effect.{ContextShift, IO, Timer}
 import cats.implicits._
+import com.typesafe.scalalogging.LazyLogging
 import com.unboundid.ldap.sdk._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google._
@@ -18,6 +19,7 @@ import org.ehcache.Cache
 
 import scala.collection.JavaConverters._
 import scala.concurrent.ExecutionContext
+import scala.concurrent.duration._
 import scala.util.Try
 
 // use ExecutionContexts.blockingThreadPool for blockingEc
@@ -28,7 +30,8 @@ class LdapDirectoryDAO(
     protected val memberOfCache: Cache[WorkbenchSubject, Set[String]])(implicit val cs: ContextShift[IO], timer: Timer[IO])
     extends DirectoryDAO
     with DirectorySubjectNameSupport
-    with LdapSupport {
+    with LdapSupport
+    with LazyLogging {
 
   override def createGroup(group: BasicWorkbenchGroup, accessInstructionsOpt: Option[String] = None): IO[BasicWorkbenchGroup] = {
     val membersAttribute =
@@ -100,17 +103,33 @@ class LdapDirectoryDAO(
       }
     } yield res
 
-  override def addGroupMember(groupId: WorkbenchGroupIdentity, addMember: WorkbenchSubject): IO[Boolean] =
-    executeLdap(
-      IO(
-        ldapConnectionPool
-          .modify(groupDn(groupId), new Modification(ModificationType.ADD, Attr.uniqueMember, subjectDn(addMember)), groupUpdatedModification)
-      )).attempt
-      .flatMap {
-        case Right(_) => IO.pure(true)
-        case Left(ldape: LDAPException) if ldape.getResultCode == ResultCode.ATTRIBUTE_OR_VALUE_EXISTS => IO.pure(false)
-        case Left(regrets) => IO.raiseError(regrets)
+
+  def retryLdapBusyWithBackoff[A](initialDelay: FiniteDuration, maxRetries: Int)(ioa: IO[A])
+                         (implicit timer: Timer[IO]): IO[A] = {
+    ioa.handleErrorWith { error =>
+      error match {
+        case ldape: LDAPException if maxRetries > 0 && ldape.getResultCode == ResultCode.BUSY =>
+          logger.info(s"Retrying LDAP Operation due to BUSY (Error code ${ldape.getResultCode})")
+          IO.sleep(initialDelay) *> retryLdapBusyWithBackoff(initialDelay * 2, maxRetries - 1)(ioa)
+        case _ => IO.raiseError(error)
       }
+    }
+  }
+
+  override def addGroupMember(groupId: WorkbenchGroupIdentity, addMember: WorkbenchSubject): IO[Boolean] = {
+    retryLdapBusyWithBackoff(100.millisecond, 4) {
+      executeLdap(
+        IO(
+          ldapConnectionPool
+            .modify(groupDn(groupId), new Modification(ModificationType.ADD, Attr.uniqueMember, subjectDn(addMember)), groupUpdatedModification)
+        )).attempt
+        .flatMap {
+          case Right(_) => IO.pure(true)
+          case Left(ldape: LDAPException) if ldape.getResultCode == ResultCode.ATTRIBUTE_OR_VALUE_EXISTS => IO.pure(false)
+          case Left(regrets) => IO.raiseError(regrets)
+        }
+    }
+  }
 
   private def groupUpdatedModification: Modification =
     new Modification(ModificationType.REPLACE, Attr.groupUpdatedTimestamp, formattedDate(new Date()))
