@@ -111,7 +111,9 @@ class LdapDirectoryDAO(
         case ldape: LDAPException if maxRetries > 0 && ldape.getResultCode == ResultCode.BUSY =>
           logger.info(s"Retrying LDAP Operation due to BUSY (Error code ${ldape.getResultCode})")
           IO.sleep(initialDelay) *> retryLdapBusyWithBackoff(initialDelay * 2, maxRetries - 1)(ioa)
-        case _ => IO.raiseError(error)
+        case e =>
+          logger.info(s"NOT Retrying LDAP Operation ${e.getMessage}) with ${maxRetries}")
+          IO.raiseError(error)
       }
     }
   }
@@ -296,17 +298,19 @@ class LdapDirectoryDAO(
   override def listAncestorGroups(groupId: WorkbenchGroupIdentity): IO[Set[WorkbenchGroupIdentity]] = listMemberOfGroups(groupId)
 
   override def enableIdentity(subject: WorkbenchSubject): IO[Unit] =
-    executeLdap(
-      IO(ldapConnectionPool.modify(directoryConfig.enabledUsersGroupDn, new Modification(ModificationType.ADD, Attr.member, subjectDn(subject)))).void
-    ).recoverWith {
-      case ldape: LDAPException if ldape.getResultCode == ResultCode.NO_SUCH_OBJECT =>
-        executeLdap(
-          IO(
-            ldapConnectionPool.add(
-              directoryConfig.enabledUsersGroupDn,
-              new Attribute("objectclass", Seq("top", "groupofnames").asJava),
-              new Attribute(Attr.member, subjectDn(subject))))).void
-      case ldape: LDAPException if ldape.getResultCode == ResultCode.ATTRIBUTE_OR_VALUE_EXISTS => IO.unit
+    retryLdapBusyWithBackoff(100.millisecond, 4) {
+      executeLdap(
+        IO(ldapConnectionPool.modify(directoryConfig.enabledUsersGroupDn, new Modification(ModificationType.ADD, Attr.member, subjectDn(subject)))).void
+      ).recoverWith {
+        case ldape: LDAPException if ldape.getResultCode == ResultCode.NO_SUCH_OBJECT =>
+          executeLdap(
+            IO(
+              ldapConnectionPool.add(
+                directoryConfig.enabledUsersGroupDn,
+                new Attribute("objectclass", Seq("top", "groupofnames").asJava),
+                new Attribute(Attr.member, subjectDn(subject))))).void
+        case ldape: LDAPException if ldape.getResultCode == ResultCode.ATTRIBUTE_OR_VALUE_EXISTS => IO.unit
+      }
     }
 
   override def disableIdentity(subject: WorkbenchSubject): IO[Unit] = {
