@@ -73,21 +73,53 @@ class PolicyEvaluatorService(
       res <- resourceTypes.get(resource.resourceTypeName).traverse {
         rt =>
 
+          val roleNamesWithAction = rt.roles.filter(_.actions.contains(action)).map(_.roleName)
+          val hasAction = directMemberHasActionOnResource(resource, roleNamesWithAction, action, userId)
+
           // we can only use this approach if the resource type isn't auth-domain constrainable
-          if (!rt.isAuthDomainConstrainable) {
-
-            // compute the list of roles that contain the action requested
-            val roleNamesWithAction = rt.roles.filter(_.actions.contains(action)).map(_.roleName)
-
+          if (!rt.isAuthDomainConstrainable) { // KCIBUL add || << !action.isConstrainable
+            hasAction
+          } else {
             for {
-              // get the policies for this resource and filter to ones that contain the roles with the action, or the action directly
-              policies <- accessPolicyDAO.listAccessPolicies(resource).map(_.toList.filter(p => p.roles.intersect(roleNamesWithAction).nonEmpty || p.actions.contains(action)))
-              members = policies.flatMap(_.members)
-            } yield members.contains(userId)
-          } else IO.pure(false)
+              // first, check if the resource in question HAS an auth domain (likely not) and if so continue [TERRA]
+              authDomainsResult <- accessPolicyDAO.loadResourceAuthDomain(resource)
+              res2 <- authDomainsResult match {
+                case LoadResourceAuthDomainResult.NotConstrained | LoadResourceAuthDomainResult.ResourceNotFound =>
+                  hasAction
+                case LoadResourceAuthDomainResult.Constrained(authDomains) =>
+
+                  // if there is more than one group, return false to fallback
+                  if (authDomains.size > 1) {
+                    IO.pure(false)
+                  } else {
+//                    // KCIBUL: if there is ONE group return hasAction && isUserMemberOfGroup
+//                    for {
+//                      mog <- isUserMemberOfGroup(authDomains.head, userId)
+//                      a <- hasAction
+//                    } yield (mog && a)
+                    IO.pure(false)
+                  }
+              }
+
+            } yield res2
+          }
       }
     } yield res.getOrElse(false)
 
+  }
+
+
+  // move to LDAP/Postgrest DAOs.  need two implementations,  postgres defaults
+  private def isUserMemberOfGroup(group: WorkbenchGroupName, userId: WorkbenchUserId): IO[Boolean] = {
+    IO.pure(false)
+  }
+
+  private def directMemberHasActionOnResource(resource: FullyQualifiedResourceId, roleNamesWithAction: Set[ResourceRoleName], action: ResourceAction, userId: WorkbenchUserId ): IO[Boolean] = {
+    for {
+      // get the policies for this resource and filter to ones that contain the roles with the action, or the action directly
+      policies <- accessPolicyDAO.listAccessPolicies(resource).map(_.toList.filter(p => p.roles.intersect(roleNamesWithAction).nonEmpty || p.actions.contains(action)))
+      members = policies.flatMap(_.members)
+    } yield members.contains(userId)
   }
 
   /**
