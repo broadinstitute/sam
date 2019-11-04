@@ -23,15 +23,17 @@ import scala.util.matching.Regex
   */
 class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExtensions)(implicit val executionContext: ExecutionContext) extends LazyLogging {
 
-  def createUser(user: CreateWorkbenchUser, parentSpan: Span = null): Future[UserStatus] =
+  def createUser(user: CreateWorkbenchUser): Future[UserStatus] = {
+    val parentSpan: Span = null
     for {
-      allUsersGroup <- traceWithParent("getOrCreateAllUsersGroup",parentSpan)(_  => cloudExtensions.getOrCreateAllUsersGroup(directoryDAO))
-      createdUser <- traceWithParent("registerUser",parentSpan)(_  => registerUser(user).unsafeToFuture())
-      _ <- traceWithParent("enableUserInternal",parentSpan)(_  =>  enableUserInternal(createdUser))
-      _ <- traceWithParent("addGroupMemberToAllUsers",parentSpan)(_  => directoryDAO.addGroupMember(allUsersGroup.id, createdUser.id).unsafeToFuture())
-      userStatus <- traceWithParent("getUserStatus",parentSpan)(_  => getUserStatus(createdUser.id))
+      allUsersGroup <- traceWithParent("getOrCreateAllUsersGroup", parentSpan)(_ => cloudExtensions.getOrCreateAllUsersGroup(directoryDAO))
+      createdUser <- traceWithParent("registerUser", parentSpan)(_ => registerUser(user).unsafeToFuture())
+      _ <- traceWithParent("enableUserInternal", parentSpan)(_ => enableUserInternal(createdUser))
+      _ <- traceWithParent("addGroupMemberToAllUsers", parentSpan)(_ => directoryDAO.addGroupMember(allUsersGroup.id, createdUser.id).unsafeToFuture())
+      userStatus <- traceWithParent("getUserStatus", parentSpan)(_ => getUserStatus(createdUser.id))
       res <- userStatus.toRight(new WorkbenchException("getUserStatus returned None after user was created")).fold(Future.failed, Future.successful)
     } yield res
+  }
 
   def inviteUser(invitee: InviteUser): IO[UserStatusDetails] =
     for {
