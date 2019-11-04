@@ -199,7 +199,7 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
   def getActionPermissionForUser(resource: FullyQualifiedResourceId, userInfo: UserInfo, action: String): server.Route =
     get {
       traceRequest { span =>
-        complete(policyEvaluatorService.hasPermission(resource, ResourceAction(action), userInfo.userId).map { hasPermission =>
+        complete(policyEvaluatorService.hasPermission(resource, ResourceAction(action), userInfo.userId, span).map { hasPermission =>
           StatusCodes.OK -> JsBoolean(hasPermission)
         })
       }
