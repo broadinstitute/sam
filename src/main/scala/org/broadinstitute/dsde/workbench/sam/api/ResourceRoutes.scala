@@ -25,6 +25,7 @@ import org.broadinstitute.dsde.workbench.sam.directory.PostgresDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.openam.PostgresAccessPolicyDAO
 import org.broadinstitute.dsde.workbench.util.ExecutionContexts
 import scalikejdbc.config.DBs
+import io.opencensus.scala.akka.http.TracingDirective._
 
 /**
   * Created by mbemis on 5/22/17.
@@ -195,9 +196,11 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
 
   def getActionPermissionForUser(resource: FullyQualifiedResourceId, userInfo: UserInfo, action: String): server.Route =
     get {
-      complete(policyEvaluatorService.hasPermission(resource, ResourceAction(action), userInfo.userId).map { hasPermission =>
-        StatusCodes.OK -> JsBoolean(hasPermission)
-      })
+      traceRequest { span =>
+        complete(policyEvaluatorService.hasPermission(resource, ResourceAction(action), userInfo.userId, span).map { hasPermission =>
+          StatusCodes.OK -> JsBoolean(hasPermission)
+        })
+      }
     }
 
   def listActionsForUser(resource: FullyQualifiedResourceId, userInfo: UserInfo): server.Route =
