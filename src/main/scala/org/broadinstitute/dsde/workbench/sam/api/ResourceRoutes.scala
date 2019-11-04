@@ -157,8 +157,10 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
   }
 
   def getUserPoliciesForResourceType(resourceType: ResourceType, userInfo: UserInfo): server.Route =
-    get {
-      complete(policyEvaluatorService.listUserAccessPolicies(resourceType.name, userInfo.userId))
+    traceRequest { span =>
+      get {
+        complete(policyEvaluatorService.listUserAccessPolicies(resourceType.name, userInfo.userId))
+      }
     }
 
   def postResource(resourceType: ResourceType, userInfo: UserInfo): server.Route =
