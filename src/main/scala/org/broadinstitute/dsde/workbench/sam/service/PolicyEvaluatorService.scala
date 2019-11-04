@@ -8,6 +8,7 @@ import io.opencensus.trace.Span
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, LoadResourceAuthDomainResult}
+import org.broadinstitute.dsde.workbench.sam.util.OpenCensusIOUtils._
 
 import scala.concurrent.ExecutionContext
 
@@ -39,21 +40,21 @@ class PolicyEvaluatorService(
     // first attempt the shallow check and fallback to the full check if it returns false
     for {
       attempt1 <- hasPermissionShallowCheck(resource, action, userId)
-      attempt2 <- if (attempt1) IO.pure(attempt1) else hasPermissionFullCheck(resource, action, userId)
+      attempt2 <- if (attempt1) IO.pure(attempt1) else traceIOWithParent("fullCheck", parentSpan)(_ => hasPermissionFullCheck(resource, action, userId))
     } yield {
       attempt2
     }
   }
 
-  def hasPermissionFullCheck(resource: FullyQualifiedResourceId, action: ResourceAction, userId: WorkbenchUserId): IO[Boolean] = {
+  def hasPermissionFullCheck(resource: FullyQualifiedResourceId, action: ResourceAction, userId: WorkbenchUserId, parentSpan: Span = null): IO[Boolean] = {
     def checkPermission(force: Boolean) =
       listUserResourceActions(resource, userId, force).map { _.contains(action) }
 
     // this is optimized for the case where the user has permission since that is the usual case
     // if the first attempt shows the user does not have permission, force a second attempt
     for {
-      attempt1 <- checkPermission(force = false)
-      attempt2 <- if (attempt1) IO.pure(attempt1) else checkPermission(force = true)
+      attempt1 <- traceIOWithParent("checkWithCache", parentSpan)(_ => checkPermission(force = false))
+      attempt2 <- if (attempt1) IO.pure(attempt1) else traceIOWithParent("checkWithoutCache", parentSpan)(_ =>checkPermission(force = true))
     } yield {
       attempt2
     }
