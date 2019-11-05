@@ -233,12 +233,14 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
     }
 
   def getPolicy(policyId: FullyQualifiedPolicyId, userInfo: UserInfo): server.Route =
-    get {
-      requireOneOfAction(policyId.resource, Set(SamResourceActions.readPolicies, SamResourceActions.readPolicy(policyId.accessPolicyName)), userInfo.userId) {
-        complete(resourceService.loadResourcePolicy(policyId).map {
-          case Some(response) => StatusCodes.OK -> response
-          case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "policy not found"))
-        })
+    traceRequest { span =>
+      get {
+        requireOneOfAction(policyId.resource, Set(SamResourceActions.readPolicies, SamResourceActions.readPolicy(policyId.accessPolicyName)), userInfo.userId) {
+          complete(resourceService.loadResourcePolicy(policyId).map {
+            case Some(response) => StatusCodes.OK -> response
+            case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "policy not found"))
+          })
+        }
       }
     }
 
