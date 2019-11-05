@@ -8,7 +8,7 @@ object Dependencies {
   val scalaTestV    = "3.0.5"
   val scalaCheckV    = "1.14.0"
   val catsEffectV         = "1.2.0"
-  val scalikejdbcVersion    = "3.4.0-RC1"
+  val scalikejdbcVersion    = "3.3.5"
   val postgresDriverVersion = "42.2.4"
 
   val workbenchUtilV   = "0.5-6942040"
@@ -81,10 +81,11 @@ object Dependencies {
   val scalikeCoreTest =   "org.scalikejdbc"                   %% "scalikejdbc-test"    % scalikejdbcVersion   % "test"
   val postgres = "org.postgresql"                    %  "postgresql"          % postgresDriverVersion
 
-  val opencensusScalaCode: ModuleID = "com.github.sebruck" %% "opencensus-scala-core" % "0.7.0-M2"
-  val opencensusAkkaHttp: ModuleID = "com.github.sebruck" %% "opencensus-scala-akka-http" % "0.7.0-M2"
-  val opencensusStackDriverExporter: ModuleID = "io.opencensus" % "opencensus-exporter-trace-stackdriver" % "0.23.0"
-  val opencensusLoggingExporter: ModuleID = "io.opencensus" % "opencensus-exporter-trace-logging"     % "0.23.0"
+  val excludeScalaCllectionCompat =  ExclusionRule(organization = "org.scala-lang.modules", name = "scala-collection-compat_2.12")
+  val opencensusScalaCode: ModuleID = "com.github.sebruck" %% "opencensus-scala-core" % "0.7.0-M2" excludeAll(excludeScalaCllectionCompat) // excludeAll(excludIoGrpc, excludeCatsEffect )
+  val opencensusAkkaHttp: ModuleID = "com.github.sebruck" %% "opencensus-scala-akka-http" % "0.7.0-M2" excludeAll(excludeScalaCllectionCompat)// excludeAll(excludIoGrpc, excludeCatsEffect)
+  val opencensusStackDriverExporter: ModuleID = "io.opencensus" % "opencensus-exporter-trace-stackdriver" % "0.23.0" // excludeAll(excludIoGrpc, excludeCatsEffect)
+  val opencensusLoggingExporter: ModuleID = "io.opencensus" % "opencensus-exporter-trace-logging"     % "0.23.0" // excludeAll(excludIoGrpc, excludeCatsEffect)
   
   val openCensusDependencies = Seq(
     opencensusScalaCode,

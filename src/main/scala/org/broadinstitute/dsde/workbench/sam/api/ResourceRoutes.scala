@@ -222,11 +222,13 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
     }
 
   def getResourcePolicies(resource: FullyQualifiedResourceId, userInfo: UserInfo): server.Route =
-    get {
-      requireAction(resource, SamResourceActions.readPolicies, userInfo.userId) {
-        complete(resourceService.listResourcePolicies(resource).map { response =>
-          StatusCodes.OK -> response.toSet
-        })
+    traceRequest { span =>
+      get {
+        requireAction(resource, SamResourceActions.readPolicies, userInfo.userId) {
+          complete(resourceService.listResourcePolicies(resource).map { response =>
+            StatusCodes.OK -> response.toSet
+          })
+        }
       }
     }
 
@@ -293,9 +295,11 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
 
   def getUserResourceRoles(resource: FullyQualifiedResourceId, userInfo: UserInfo): server.Route =
     get {
-      complete(resourceService.listUserResourceRoles(resource, userInfo).map { roles =>
-        StatusCodes.OK -> roles
-      })
+      traceRequest { span =>
+        complete(resourceService.listUserResourceRoles(resource, userInfo).map { roles =>
+          StatusCodes.OK -> roles
+        })
+      }
     }
 
   def getAllResourceUsers(resource: FullyQualifiedResourceId, userInfo: UserInfo): server.Route =
