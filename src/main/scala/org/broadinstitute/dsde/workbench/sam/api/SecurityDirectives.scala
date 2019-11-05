@@ -6,15 +6,46 @@ import akka.http.scaladsl.server.{Directive0, Directives}
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchExceptionWithErrorReport, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.model.{FullyQualifiedResourceId, ResourceAction}
-import org.broadinstitute.dsde.workbench.sam.service.PolicyEvaluatorService
+import org.broadinstitute.dsde.workbench.sam.service.{PolicyEvaluatorService, ResourceService}
 import ImplicitConversions.ioOnSuccessMagnet
 import cats.effect.IO
 
 trait SecurityDirectives {
   def policyEvaluatorService: PolicyEvaluatorService
+  def resourceService: ResourceService
 
-  def requireAction(resource: FullyQualifiedResourceId, action: ResourceAction, userId: WorkbenchUserId): Directive0 =
-    requireOneOfAction(resource, Set(action), userId)
+  def requireAction(resource: FullyQualifiedResourceId, action: ResourceAction, userId: WorkbenchUserId): Directive0 = {
+    val requestedActions = Set(action)
+
+    Directives.mapInnerRoute { innerRoute =>
+      onSuccess(policyEvaluatorService.hasPermission(resource, action, userId)) { hasPermission =>
+        if (hasPermission) {
+          innerRoute
+        } else {
+
+          // in the case where we don't have the required action, we need to figure out if we should return
+          // a Not Found (you have no access) vs a Forbidden (you have access, just not the right kind)
+          onSuccess(policyEvaluatorService.listResourceAccessPoliciesForUser(resource, userId)) { policies =>
+
+            if (policies.isEmpty) {
+              Directives.failWith(
+                new WorkbenchExceptionWithErrorReport(
+                  ErrorReport(StatusCodes.NotFound, s"Resource ${resource.resourceTypeName.value}/${resource.resourceId.value} not found")))
+            } else {
+              Directives.failWith(
+                new WorkbenchExceptionWithErrorReport(ErrorReport(
+                  StatusCodes.Forbidden,
+                  s"You may not perform any of ${requestedActions.mkString("[", ", ", "]").toString.toUpperCase} on ${resource.resourceTypeName.value}/${resource.resourceId.value}"
+                )))
+
+
+            }
+          }
+        }
+      }
+    }
+  }
+
 
   def requireOneOfAction(resource: FullyQualifiedResourceId, requestedActions: Set[ResourceAction], userId: WorkbenchUserId): Directive0 =
     Directives.mapInnerRoute { innerRoute =>
