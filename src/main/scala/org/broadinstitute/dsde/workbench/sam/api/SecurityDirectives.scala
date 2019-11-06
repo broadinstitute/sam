@@ -48,7 +48,7 @@ trait SecurityDirectives {
     //  first quickly check if we have permission using the shallow check across all actions, then try the full check
     for {
       attempt1 <- actions.toList.existsM(policyEvaluatorService.hasPermissionShallowCheck(resource, _, userId))
-      attempt2 <- if (attempt1) IO.pure(attempt1) else actions.toList.existsM(policyEvaluatorService.hasPermissionFullCheck(resource, _, userId))
+      attempt2 <- if (attempt1) IO.pure(attempt1) else policyEvaluatorService.hasPermissionFullCheck(resource, actions, userId)
     } yield {
       attempt2
     }

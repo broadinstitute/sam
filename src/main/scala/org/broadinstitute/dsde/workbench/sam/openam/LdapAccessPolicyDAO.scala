@@ -251,10 +251,10 @@ class LdapAccessPolicyDAO(
 
   override def listAccessPoliciesForUser(resource: FullyQualifiedResourceId, userId: WorkbenchUserId): IO[Set[AccessPolicy]] = {
     for {
-      allPolicies <- listAccessPolicies(resource).map(_.toSet)
+      allPolicies <- listAccessPolicies(resource)
+      userPolicies <- allPolicies.filterA(p => isUserMemberOfPolicy(p, userId))
     } yield {
-      // KCIBUL: help me!!!
-      allPolicies.filter( x => isUserMemberOfPolicy(x, userId).unsafeRunSync() )
+      userPolicies.toSet
     }
   }
 
