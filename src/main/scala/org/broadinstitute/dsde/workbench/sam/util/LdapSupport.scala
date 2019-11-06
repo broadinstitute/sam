@@ -122,10 +122,10 @@ trait LdapSupport extends DirectorySubjectNameSupport {
     executeLdap(IO(ldapSearchStream(groupsOu, SearchScope.SUB, filters: _*)(unmarshalGroupThrow)))
   }
 
-  def isUserMemberOfGroup(groupName: WorkbenchGroupName, userId: WorkbenchUserId): IO[Boolean] = {
+  def ldapIsUserMemberOfGroup(groupName: WorkbenchGroupName, userId: WorkbenchUserId): IO[Boolean] = {
     val members = ldapLoadGroup(groupName).map(_.get.members)
     val isDirectMember = members.map( _.contains(userId))
-    val isGroupMember = members.flatMap( _.collect{case x:WorkbenchGroupName => x}.toList.existsM(isUserMemberOfGroup(_, userId)))
+    val isGroupMember = members.flatMap( _.collect{case x:WorkbenchGroupName => x}.toList.existsM(ldapIsUserMemberOfGroup(_, userId)))
 
     List(isDirectMember, isGroupMember).sequence.map( _.contains(true) )
   }

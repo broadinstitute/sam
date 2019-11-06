@@ -262,8 +262,7 @@ class LdapAccessPolicyDAO(
     if (policy.members.contains(userId)) {
       IO.pure(true)
     } else {
-      // KCIBUL -- what??
-      policy.members.collect{case x:WorkbenchGroupName => x}.toList.existsM(isUserMemberOfGroup(_, userId))
+      policy.members.collect{case x:WorkbenchGroupName => x}.toList.existsM(ldapIsUserMemberOfGroup(_, userId))
     }
   }
 
