@@ -6,14 +6,13 @@ import akka.http.scaladsl.server.{Directive0, Directives}
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchExceptionWithErrorReport, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.model.{FullyQualifiedResourceId, ResourceAction}
-import org.broadinstitute.dsde.workbench.sam.service.{PolicyEvaluatorService, ResourceService}
+import org.broadinstitute.dsde.workbench.sam.service.PolicyEvaluatorService
 import ImplicitConversions.ioOnSuccessMagnet
 import cats.implicits._
 import cats.effect.IO
 
 trait SecurityDirectives {
   def policyEvaluatorService: PolicyEvaluatorService
-  def resourceService: ResourceService
 
   def requireAction(resource: FullyQualifiedResourceId, action: ResourceAction, userId: WorkbenchUserId): Directive0 =
     requireOneOfAction(resource, Set(action), userId)
