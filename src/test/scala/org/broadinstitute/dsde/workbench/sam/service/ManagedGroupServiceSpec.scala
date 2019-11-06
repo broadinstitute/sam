@@ -47,7 +47,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
   private val managedGroupResourceType = resourceTypeMap.getOrElse(ResourceTypeName("managed-group"), throw new Error("Failed to load managed-group resource type from reference.conf"))
   private val testDomain = "example.com"
 
-  private val policyEvaluatorService = PolicyEvaluatorService(testDomain, resourceTypeMap, policyDAO)
+  private val policyEvaluatorService = PolicyEvaluatorService(testDomain, resourceTypeMap, policyDAO, dirDAO)
   private val resourceService = new ResourceService(resourceTypeMap, policyEvaluatorService, policyDAO, dirDAO, NoExtensions, testDomain)
   private val managedGroupService = new ManagedGroupService(resourceService, policyEvaluatorService, resourceTypeMap, policyDAO, dirDAO, NoExtensions, testDomain)
 

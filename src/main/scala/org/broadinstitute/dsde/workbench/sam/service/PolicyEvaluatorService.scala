@@ -6,6 +6,7 @@ import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
 import io.opencensus.trace.Span
 import org.broadinstitute.dsde.workbench.model._
+import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, LoadResourceAuthDomainResult}
 import org.broadinstitute.dsde.workbench.sam.util.OpenCensusIOUtils._
@@ -15,7 +16,8 @@ import scala.concurrent.ExecutionContext
 class PolicyEvaluatorService(
     private val emailDomain: String,
     private val resourceTypes: Map[ResourceTypeName, ResourceType],
-    private val accessPolicyDAO: AccessPolicyDAO)(implicit val executionContext: ExecutionContext)
+    private val accessPolicyDAO: AccessPolicyDAO,
+    private val directoryDAO: DirectoryDAO )(implicit val executionContext: ExecutionContext)
     extends LazyLogging {
   def initPolicy(): IO[Unit] = {
     val policyName = AccessPolicyName("admin-notifier-set-public")
@@ -76,8 +78,8 @@ class PolicyEvaluatorService(
           val roleNamesWithAction = rt.roles.filter(_.actions.contains(action)).map(_.roleName)
           val hasAction = directMemberHasActionOnResource(resource, roleNamesWithAction, action, userId)
 
-          // we can only use this approach if the resource type isn't auth-domain constrainable
-          if (!rt.isAuthDomainConstrainable) { // KCIBUL add || << !action.isConstrainable
+          // if the resource type OR action are NOT auth domain constrainable... just return
+          if (!rt.isAuthDomainConstrainable || !rt.actionPatterns.exists( ap => ap.authDomainConstrainable & ap.matches(action)) ) {
             hasAction
           } else {
             for {
@@ -87,31 +89,26 @@ class PolicyEvaluatorService(
                 case LoadResourceAuthDomainResult.NotConstrained | LoadResourceAuthDomainResult.ResourceNotFound =>
                   hasAction
                 case LoadResourceAuthDomainResult.Constrained(authDomains) =>
-
-                  // if there is more than one group, return false to fallback
+                  // if there is more than one group, just fallback
                   if (authDomains.size > 1) {
                     IO.pure(false)
                   } else {
-//                    // KCIBUL: if there is ONE group return hasAction && isUserMemberOfGroup
-//                    for {
-//                      mog <- isUserMemberOfGroup(authDomains.head, userId)
-//                      a <- hasAction
-//                    } yield (mog && a)
-                    IO.pure(false)
+                    isUserMemberOfGroup(authDomains.head, userId)
                   }
               }
-
             } yield res2
           }
       }
     } yield res.getOrElse(false)
 
   }
-
-
-  // move to LDAP/Postgrest DAOs.  need two implementations,  postgres defaults
-  private def isUserMemberOfGroup(group: WorkbenchGroupName, userId: WorkbenchUserId): IO[Boolean] = {
-    IO.pure(false)
+//
+// KCIBUL: make pretty  !
+  def isUserMemberOfGroup(groupName: WorkbenchGroupName, userId: WorkbenchUserId): IO[Boolean] = {
+    val members = directoryDAO.loadGroup(groupName).map(_.get.members)
+    val isDirectMember = members.map( _.contains(userId))
+    val isGroupMember = members.flatMap( _.collect{case x:WorkbenchGroupName => x}.toList.existsM(isUserMemberOfGroup(_, userId)))
+    List(isDirectMember, isGroupMember).sequence.map( _.contains(true) )
   }
 
   private def directMemberHasActionOnResource(resource: FullyQualifiedResourceId, roleNamesWithAction: Set[ResourceRoleName], action: ResourceAction, userId: WorkbenchUserId ): IO[Boolean] = {
@@ -224,7 +221,7 @@ class PolicyEvaluatorService(
 }
 
 object PolicyEvaluatorService {
-  def apply(emailDomain: String, resourceTypes: Map[ResourceTypeName, ResourceType], accessPolicyDAO: AccessPolicyDAO)(
+  def apply(emailDomain: String, resourceTypes: Map[ResourceTypeName, ResourceType], accessPolicyDAO: AccessPolicyDAO, directoryDAO: DirectoryDAO)(
       implicit executionContext: ExecutionContext): PolicyEvaluatorService =
-    new PolicyEvaluatorService(emailDomain, resourceTypes, accessPolicyDAO)
+    new PolicyEvaluatorService(emailDomain, resourceTypes, accessPolicyDAO, directoryDAO)
 }
