@@ -157,7 +157,7 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
   }
 
   def getUserPoliciesForResourceType(resourceType: ResourceType, userInfo: UserInfo): server.Route =
-    traceRequest { span =>
+    traceRequest { _ =>
       get {
         complete(policyEvaluatorService.listUserAccessPolicies(resourceType.name, userInfo.userId))
       }
@@ -222,7 +222,7 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
     }
 
   def getResourcePolicies(resource: FullyQualifiedResourceId, userInfo: UserInfo): server.Route =
-    traceRequest { span =>
+    traceRequest { _ =>
       get {
         requireAction(resource, SamResourceActions.readPolicies, userInfo.userId) {
           complete(resourceService.listResourcePolicies(resource).map { response =>
@@ -233,7 +233,7 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
     }
 
   def getPolicy(policyId: FullyQualifiedPolicyId, userInfo: UserInfo): server.Route =
-    traceRequest { span =>
+    traceRequest { _ =>
       get {
         requireOneOfAction(policyId.resource, Set(SamResourceActions.readPolicies, SamResourceActions.readPolicy(policyId.accessPolicyName)), userInfo.userId) {
           complete(resourceService.loadResourcePolicy(policyId).map {
