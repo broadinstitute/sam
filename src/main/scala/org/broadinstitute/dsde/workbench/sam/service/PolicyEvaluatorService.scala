@@ -102,8 +102,7 @@ class PolicyEvaluatorService(
     } yield res.getOrElse(false)
 
   }
-//
-// KCIBUL: make pretty  !
+
   def isUserMemberOfGroup(groupName: WorkbenchGroupName, userId: WorkbenchUserId): IO[Boolean] = {
     val members = directoryDAO.loadGroup(groupName).map(_.get.members)
     val isDirectMember = members.map( _.contains(userId))
