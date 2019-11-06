@@ -40,7 +40,7 @@ object TestSamRoutes {
     val policyDAO = policyAccessDAO.getOrElse(new MockAccessPolicyDAO(groups))
 
     val emailDomain = "example.com"
-    val policyEvaluatorService = PolicyEvaluatorService(emailDomain, resourceTypes, policyDAO)
+    val policyEvaluatorService = PolicyEvaluatorService(emailDomain, resourceTypes, policyDAO, directoryDAO)
     val mockResourceService = new ResourceService(resourceTypes, policyEvaluatorService, policyDAO, directoryDAO, NoExtensions, emailDomain)
     val mockUserService = new UserService(directoryDAO, NoExtensions)
     val mockManagedGroupService = new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, policyDAO, directoryDAO, NoExtensions, emailDomain)

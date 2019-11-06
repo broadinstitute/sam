@@ -61,10 +61,10 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
   private val managedGroupResourceType = realResourceTypeMap.getOrElse(ResourceTypeName("managed-group"), throw new Error("Failed to load managed-group resource type from reference.conf"))
 
   private val emailDomain = "example.com"
-  private val policyEvaluatorService = PolicyEvaluatorService(emailDomain, Map(defaultResourceType.name -> defaultResourceType, otherResourceType.name -> otherResourceType, managedGroupResourceType.name -> managedGroupResourceType), policyDAO)
+  private val policyEvaluatorService = PolicyEvaluatorService(emailDomain, Map(defaultResourceType.name -> defaultResourceType, otherResourceType.name -> otherResourceType, managedGroupResourceType.name -> managedGroupResourceType), policyDAO, dirDAO)
   private val service = new ResourceService(Map(defaultResourceType.name -> defaultResourceType, otherResourceType.name -> otherResourceType, managedGroupResourceType.name -> managedGroupResourceType), policyEvaluatorService, policyDAO, dirDAO, NoExtensions, emailDomain)
   private val constrainableResourceTypes = Map(constrainableResourceType.name -> constrainableResourceType, managedGroupResourceType.name -> managedGroupResourceType)
-  private val constrainablePolicyEvaluatorService = PolicyEvaluatorService(emailDomain, constrainableResourceTypes, policyDAO)
+  private val constrainablePolicyEvaluatorService = PolicyEvaluatorService(emailDomain, constrainableResourceTypes, policyDAO, dirDAO)
   private val constrainableService = new ResourceService(constrainableResourceTypes, constrainablePolicyEvaluatorService, policyDAO, dirDAO, NoExtensions, emailDomain)
 
   val managedGroupService = new ManagedGroupService(constrainableService, constrainablePolicyEvaluatorService, constrainableResourceTypes, policyDAO, dirDAO, NoExtensions, emailDomain)

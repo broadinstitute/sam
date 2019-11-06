@@ -54,29 +54,11 @@ class LdapDirectoryDAO(
     } *> IO.pure(group)
   }
 
-  override def loadGroup(groupName: WorkbenchGroupName): IO[Option[BasicWorkbenchGroup]] = {
-    val res = for {
-      entry <- OptionT(executeLdap(IO(ldapConnectionPool.getEntry(groupDn(groupName)))).map(Option.apply))
-      r <- OptionT.liftF(IO(unmarshalGroupThrow(entry)))
-    } yield r
+  override def loadGroup(groupName: WorkbenchGroupName): IO[Option[BasicWorkbenchGroup]] =
+    ldapLoadGroup(groupName)
 
-    res.value
-  }
-
-  private def unmarshalGroup(results: Entry): Either[String, BasicWorkbenchGroup] =
-    for {
-      cn <- getAttribute(results, Attr.cn).toRight(s"${Attr.cn} attribute missing: ${results.getDN}")
-      email <- getAttribute(results, Attr.email).toRight(s"${Attr.email} attribute missing: ${results.getDN}")
-      memberDns = getAttributes(results, Attr.uniqueMember)
-    } yield BasicWorkbenchGroup(WorkbenchGroupName(cn), memberDns.map(dnToSubject), WorkbenchEmail(email))
-
-  private def unmarshalGroupThrow(results: Entry): BasicWorkbenchGroup = unmarshalGroup(results).fold(s => throw new WorkbenchException(s), identity)
-
-  override def loadGroups(groupNames: Set[WorkbenchGroupName]): IO[Stream[BasicWorkbenchGroup]] = {
-    val filters = groupNames.grouped(batchSize).map(batch => Filter.createORFilter(batch.map(g => Filter.createEqualityFilter(Attr.cn, g.value)).asJava)).toSeq
-
-    executeLdap(IO(ldapSearchStream(groupsOu, SearchScope.SUB, filters: _*)(unmarshalGroupThrow)))
-  }
+  override def loadGroups(groupNames: Set[WorkbenchGroupName]): IO[Stream[BasicWorkbenchGroup]] =
+    ldapLoadGroups(groupNames)
 
   override def loadGroupEmail(groupName: WorkbenchGroupName): IO[Option[WorkbenchEmail]] = {
     val res = for {

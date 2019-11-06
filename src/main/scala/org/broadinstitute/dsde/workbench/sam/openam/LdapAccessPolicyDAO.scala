@@ -4,7 +4,7 @@ package openam
 import java.util.Date
 
 import akka.http.scaladsl.model.StatusCodes
-import cats.data.{NonEmptyList, OptionT}
+import cats.data.NonEmptyList
 import cats.effect.{ContextShift, IO}
 import cats.implicits._
 import com.unboundid.ldap.sdk._
@@ -248,49 +248,8 @@ class LdapAccessPolicyDAO(
       ))
 
 
-  private def isUserMemberOfPolicy(policy: AccessPolicy, userId: WorkbenchUserId): IO[Boolean] = {
-    if (policy.members.contains(userId)) {
-      IO.pure(true)
-    } else {
-      // KCIBUL -- what
-      policy.members.collect{case x:WorkbenchGroupName => x}.toList.existsM(isUserMemberOfGroup(_, userId))
-    }
-  }
-
-  // KCIBUL -- I want to call this on LdapDirectoryDAO... how do I get there from here?
-  private def loadGroup(groupName: WorkbenchGroupName): IO[Option[BasicWorkbenchGroup]] = {
-    val res = for {
-      entry <- OptionT(executeLdap(IO(ldapConnectionPool.getEntry(groupDn(groupName)))).map(Option.apply))
-      r <- OptionT.liftF(IO(unmarshalGroupThrow(entry)))
-    } yield r
-
-    res.value
-  }
-  private def unmarshalGroup(results: Entry): Either[String, BasicWorkbenchGroup] =
-    for {
-      cn <- getAttribute(results, Attr.cn).toRight(s"${Attr.cn} attribute missing: ${results.getDN}")
-      email <- getAttribute(results, Attr.email).toRight(s"${Attr.email} attribute missing: ${results.getDN}")
-      memberDns = getAttributes(results, Attr.uniqueMember)
-    } yield BasicWorkbenchGroup(WorkbenchGroupName(cn), memberDns.map(dnToSubject), WorkbenchEmail(email))
-
-  private def unmarshalGroupThrow(results: Entry): BasicWorkbenchGroup = unmarshalGroup(results).fold(s => throw new WorkbenchException(s), identity)
-  // KCIBUL -- end of copied block
-
-  private def isUserMemberOfGroup(groupName: WorkbenchGroupName, userId: WorkbenchUserId): IO[Boolean] = {
-    val members = loadGroup(groupName).map(_.get.members)
-    val isDirectMember = members.map( _.contains(userId))
-    val isGroupMember = members.flatMap( _.collect{case x:WorkbenchGroupName => x}.toList.existsM(isUserMemberOfGroup(_, userId)))
-
-    List(isDirectMember, isGroupMember).sequence.map( _.contains(true) )
-  }
 
   override def listAccessPoliciesForUser(resource: FullyQualifiedResourceId, userId: WorkbenchUserId): IO[Set[AccessPolicy]] = {
-  // ok what else could we do here?
-  // for this resource, get all the policies
-  // for each policy, see if we are a member
-  //    -> check if we are directly a member, if so... yes
-  //    -> if there are groups... check if we are a member of that group
-  //        --> etc...
     for {
       allPolicies <- listAccessPolicies(resource).map(_.toSet)
     } yield {
@@ -299,29 +258,14 @@ class LdapAccessPolicyDAO(
     }
   }
 
-
-   def classicListAccessPoliciesForUser(resource: FullyQualifiedResourceId, user: WorkbenchUserId): IO[Set[AccessPolicy]] =
-    for {
-      memberOfs <- ldapLoadMemberOf(user)
-      accessPolicies <- {
-        val fullyQualifiedPolicyIds = memberOfs.toList.mapFilter { str =>
-          for {
-            subject <- Either.catchNonFatal(dnToSubject(str)).toOption
-            fullyQualifiedPolicyId <- subject match {
-              case sub: FullyQualifiedPolicyId
-                  if sub.resource.resourceId == resource.resourceId && sub.resource.resourceTypeName == resource.resourceTypeName =>
-                Some(sub)
-              case _ => None
-            }
-          } yield fullyQualifiedPolicyId
-        }
-        val filters = fullyQualifiedPolicyIds
-          .grouped(batchSize)
-          .map(batch => Filter.createORFilter(batch.map(r => Filter.createEqualityFilter(Attr.policy, r.accessPolicyName.value)).asJava))
-          .toSeq
-        executeLdap(IO(ldapSearchStream(resourceDn(resource), SearchScope.SUB, filters: _*)(unmarshalAccessPolicy).toSet))
-      }
-    } yield accessPolicies
+  private def isUserMemberOfPolicy(policy: AccessPolicy, userId: WorkbenchUserId): IO[Boolean] = {
+    if (policy.members.contains(userId)) {
+      IO.pure(true)
+    } else {
+      // KCIBUL -- what??
+      policy.members.collect{case x:WorkbenchGroupName => x}.toList.existsM(isUserMemberOfGroup(_, userId))
+    }
+  }
 
   override def listFlattenedPolicyMembers(policyId: FullyQualifiedPolicyId): IO[Set[WorkbenchUser]] = executeLdap(
     // we only care about entries in ou=people and only 1 level down but searching the whole directory is MUCH faster
