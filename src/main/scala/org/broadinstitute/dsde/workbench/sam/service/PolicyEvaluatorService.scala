@@ -216,10 +216,10 @@ class PolicyEvaluatorService(
       policies.map(_.groupName)
     }
 
-  def listResourceAccessPoliciesForUser(resource: FullyQualifiedResourceId, userId: WorkbenchUserId): IO[Set[AccessPolicy]] =
+  def listResourceAccessPoliciesForUser(resource: FullyQualifiedResourceId, userId: WorkbenchUserId, parentSpan: Span = null): IO[Set[AccessPolicy]] =
     for {
-      policies <- accessPolicyDAO.listAccessPoliciesForUser(resource, userId)
-      publicPolicies <- accessPolicyDAO.listPublicAccessPolicies(resource)
+      policies <- traceIOWithParent("listAccessPoliciesForUser", parentSpan)(_ => accessPolicyDAO.listAccessPoliciesForUser(resource, userId))
+      publicPolicies <- traceIOWithParent("listPublicAccessPolicies", parentSpan)(_ => accessPolicyDAO.listPublicAccessPolicies(resource))
     } yield policies ++ publicPolicies
 }
 

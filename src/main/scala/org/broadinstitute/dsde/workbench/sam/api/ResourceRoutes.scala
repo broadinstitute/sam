@@ -298,7 +298,7 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
   def getUserResourceRoles(resource: FullyQualifiedResourceId, userInfo: UserInfo): server.Route =
     get {
       traceRequest { span =>
-        complete(resourceService.listUserResourceRoles(resource, userInfo).map { roles =>
+        complete(resourceService.listUserResourceRoles(resource, userInfo, span).map { roles =>
           StatusCodes.OK -> roles
         })
       }
