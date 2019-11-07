@@ -79,7 +79,7 @@ class PolicyEvaluatorService(
           val hasAction = directMemberHasActionOnResource(resource, roleNamesWithAction, action, userId)
 
           // if the resource type OR action are NOT auth domain constrainable... just return
-          if (!rt.isAuthDomainConstrainable || !rt.actionPatterns.exists( ap => ap.authDomainConstrainable & ap.matches(action)) ) {
+          if (!rt.isAuthDomainConstrainable || !rt.actionPatterns.exists( ap => ap.authDomainConstrainable && ap.matches(action)) ) {
             hasAction
           } else {
             for {
