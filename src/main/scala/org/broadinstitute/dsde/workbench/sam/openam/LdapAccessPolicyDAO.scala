@@ -88,6 +88,11 @@ class LdapAccessPolicyDAO(
       r <- res.parSequence.fold(err => IO.raiseError(new WorkbenchException(err)), r => IO.pure(r.toSet))
     } yield r
 
+  override def removeAuthDomainFromResource(resource: FullyQualifiedResourceId): IO[Unit] = {
+    val removeAuthDomainMod = new Modification(ModificationType.DELETE, Attr.authDomain)
+    executeLdap(IO(ldapConnectionPool.modify(resourceDn(resource), removeAuthDomainMod)))
+  }
+
   override def createPolicy(policy: AccessPolicy): IO[AccessPolicy] = {
     val attributes = List(
       new Attribute("objectclass", "top", ObjectClass.policy),

@@ -244,7 +244,7 @@ class ResourceService(
   private def maybeDeleteResource(resource: FullyQualifiedResourceId): Future[Unit] =
     resourceTypes.get(resource.resourceTypeName) match {
       case Some(resourceType) if resourceType.reuseIds => accessPolicyDAO.deleteResource(resource).unsafeToFuture()
-      case _ => Future.successful(())
+      case _ => accessPolicyDAO.removeAuthDomainFromResource(resource).unsafeToFuture()
     }
 
   def listUserResourceRoles(resource: FullyQualifiedResourceId, userInfo: UserInfo): Future[Set[ResourceRoleName]] =

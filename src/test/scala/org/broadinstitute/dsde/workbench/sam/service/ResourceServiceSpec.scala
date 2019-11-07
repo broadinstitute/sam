@@ -703,6 +703,47 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     policyDAO.listAccessPolicies(resource).unsafeRunSync() should not be empty
   }
 
+  it should "remove the auth domains from the deleted resource if 'reuseIds' is false for the ResourceType" in {
+    val resourceType = constrainableResourceType.copy(reuseIds = false)
+    val managedGroupName = "fooGroup"
+    val authDomain = NonEmptyList.of(WorkbenchGroupName(managedGroupName))
+    val viewPolicyName = AccessPolicyName(constrainableReaderRoleName.value)
+//
+//    val testResult = for {
+//      _ <- constrainableService.createResourceType(resourceType)
+//      _ <- constrainableService.createResourceType(managedGroupResourceType)
+//      _ <- managedGroupService.createManagedGroup(ResourceId(managedGroupName), dummyUserInfo)
+//
+//      resource <- constrainableService.createResource(constrainableResourceType, ResourceId(UUID.randomUUID().toString), Map(viewPolicyName -> constrainablePolicyMembership), authDomain.toList.toSet, dummyUserInfo.userId)
+//      authDomainBeforeDelete <- constrainableService.loadResourceAuthDomain(resource.fullyQualifiedId)
+//
+//      _ <- IO.fromFuture(IO {
+//        constrainableService.deleteResource(resource.fullyQualifiedId)
+//      })
+//      authDomainAfterDelete <- constrainableService.loadResourceAuthDomain(resource.fullyQualifiedId)
+//    } yield {
+//      authDomainBeforeDelete should contain theSameElementsAs authDomain.toList
+//      authDomainAfterDelete shouldBe empty
+//    }
+//
+//    testResult.unsafeRunSync()
+
+    constrainableService.createResourceType(resourceType).unsafeRunSync()
+    constrainableService.createResourceType(managedGroupResourceType).unsafeRunSync()
+
+    managedGroupService.createManagedGroup(ResourceId(managedGroupName), dummyUserInfo).unsafeRunSync()
+
+    val resource = constrainableService.createResource(constrainableResourceType, ResourceId(UUID.randomUUID().toString), Map(viewPolicyName -> constrainablePolicyMembership), authDomain.toList.toSet, dummyUserInfo.userId).unsafeRunSync()
+    val authDomainBeforeDelete = constrainableService.loadResourceAuthDomain(resource.fullyQualifiedId).unsafeRunSync()
+
+    authDomainBeforeDelete should contain theSameElementsAs authDomain.toList
+
+    runAndWait(constrainableService.deleteResource(resource.fullyQualifiedId))
+
+    constrainableService.loadResourceAuthDomain(resource.fullyQualifiedId).unsafeRunSync() shouldBe empty
+
+  }
+
   "add/remove SubjectToPolicy" should "add/remove subject and tolerate prior (non)existence" in {
     val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("my-resource"))
     val policyName = AccessPolicyName(defaultResourceType.ownerRoleName.value)

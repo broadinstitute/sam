@@ -15,6 +15,7 @@ trait AccessPolicyDAO {
   def deleteResource(resource: FullyQualifiedResourceId): IO[Unit]
   def loadResourceAuthDomain(resource: FullyQualifiedResourceId): IO[LoadResourceAuthDomainResult]
   def listResourcesConstrainedByGroup(groupId: WorkbenchGroupIdentity): IO[Set[Resource]]
+  def removeAuthDomainFromResource(resource: FullyQualifiedResourceId): IO[Unit]
 
   def createPolicy(policy: AccessPolicy): IO[AccessPolicy]
   def deletePolicy(policy: FullyQualifiedPolicyId): IO[Unit]

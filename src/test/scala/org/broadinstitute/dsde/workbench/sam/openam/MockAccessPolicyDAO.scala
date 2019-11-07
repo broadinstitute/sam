@@ -45,6 +45,11 @@ class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdenti
         }
     }
 
+  override def removeAuthDomainFromResource(resource: FullyQualifiedResourceId): IO[Unit] = IO {
+    val resourceToRemoveOpt = resources.get(resource)
+    resourceToRemoveOpt.map( resourceToRemove => resources += resource -> resourceToRemove.copy(authDomain = Set.empty))
+  }
+
   override def listResourcesConstrainedByGroup(groupId: WorkbenchGroupIdentity): IO[Set[Resource]] = IO.pure(Set.empty)
 
   override def createPolicy(policy: AccessPolicy): IO[AccessPolicy] = IO {
