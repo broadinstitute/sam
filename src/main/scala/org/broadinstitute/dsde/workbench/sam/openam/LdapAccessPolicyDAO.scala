@@ -90,7 +90,10 @@ class LdapAccessPolicyDAO(
 
   override def removeAuthDomainFromResource(resource: FullyQualifiedResourceId): IO[Unit] = {
     val removeAuthDomainMod = new Modification(ModificationType.DELETE, Attr.authDomain)
-    executeLdap(IO(ldapConnectionPool.modify(resourceDn(resource), removeAuthDomainMod)))
+    executeLdap(IO(ldapConnectionPool.modify(resourceDn(resource), removeAuthDomainMod)).void)
+      .recoverWith {
+        case ldape: LDAPException if ldape.getResultCode == ResultCode.NO_SUCH_ATTRIBUTE => IO.unit
+      }
   }
 
   override def createPolicy(policy: AccessPolicy): IO[AccessPolicy] = {

@@ -17,7 +17,7 @@ import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryDAO, LdapDirect
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, LdapAccessPolicyDAO, PostgresAccessPolicyDAO}
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
-import org.scalatest.concurrent.ScalaFutures
+import org.scalatest.concurrent.{ScalaFutures, Eventually}
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FlatSpec, Matchers}
 
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -26,7 +26,7 @@ import scala.concurrent.duration._
 /**
   * Created by dvoet on 6/27/17.
   */
-class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with TestSupport with BeforeAndAfter with BeforeAndAfterAll {
+class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with TestSupport with BeforeAndAfter with BeforeAndAfterAll with Eventually {
   val directoryConfig = TestSupport.directoryConfig
   val schemaLockConfig = TestSupport.schemaLockConfig
   //Note: we intentionally use the Managed Group resource type loaded from reference.conf for the tests here.
@@ -703,45 +703,17 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     policyDAO.listAccessPolicies(resource).unsafeRunSync() should not be empty
   }
 
-  it should "remove the auth domains from the deleted resource if 'reuseIds' is false for the ResourceType" in {
+  it should "allow for auth domain groups on a deleted resource to be deleted" in {
     val resourceType = constrainableResourceType.copy(reuseIds = false)
     val managedGroupName = "fooGroup"
-    val authDomain = NonEmptyList.of(WorkbenchGroupName(managedGroupName))
-    val viewPolicyName = AccessPolicyName(constrainableReaderRoleName.value)
-//
-//    val testResult = for {
-//      _ <- constrainableService.createResourceType(resourceType)
-//      _ <- constrainableService.createResourceType(managedGroupResourceType)
-//      _ <- managedGroupService.createManagedGroup(ResourceId(managedGroupName), dummyUserInfo)
-//
-//      resource <- constrainableService.createResource(constrainableResourceType, ResourceId(UUID.randomUUID().toString), Map(viewPolicyName -> constrainablePolicyMembership), authDomain.toList.toSet, dummyUserInfo.userId)
-//      authDomainBeforeDelete <- constrainableService.loadResourceAuthDomain(resource.fullyQualifiedId)
-//
-//      _ <- IO.fromFuture(IO {
-//        constrainableService.deleteResource(resource.fullyQualifiedId)
-//      })
-//      authDomainAfterDelete <- constrainableService.loadResourceAuthDomain(resource.fullyQualifiedId)
-//    } yield {
-//      authDomainBeforeDelete should contain theSameElementsAs authDomain.toList
-//      authDomainAfterDelete shouldBe empty
-//    }
-//
-//    testResult.unsafeRunSync()
-
     constrainableService.createResourceType(resourceType).unsafeRunSync()
     constrainableService.createResourceType(managedGroupResourceType).unsafeRunSync()
-
     managedGroupService.createManagedGroup(ResourceId(managedGroupName), dummyUserInfo).unsafeRunSync()
-
-    val resource = constrainableService.createResource(constrainableResourceType, ResourceId(UUID.randomUUID().toString), Map(viewPolicyName -> constrainablePolicyMembership), authDomain.toList.toSet, dummyUserInfo.userId).unsafeRunSync()
-    val authDomainBeforeDelete = constrainableService.loadResourceAuthDomain(resource.fullyQualifiedId).unsafeRunSync()
-
-    authDomainBeforeDelete should contain theSameElementsAs authDomain.toList
+    val resource = constrainableService.createResource(resourceType, ResourceId(UUID.randomUUID().toString), Map(AccessPolicyName(constrainableReaderRoleName.value) -> constrainablePolicyMembership), Set(WorkbenchGroupName(managedGroupName)), dummyUserInfo.userId).unsafeRunSync()
 
     runAndWait(constrainableService.deleteResource(resource.fullyQualifiedId))
-
-    constrainableService.loadResourceAuthDomain(resource.fullyQualifiedId).unsafeRunSync() shouldBe empty
-
+    runAndWait(managedGroupService.deleteManagedGroup(ResourceId(managedGroupName)))
+    managedGroupService.loadManagedGroup(ResourceId(managedGroupName)).unsafeRunSync() shouldBe None
   }
 
   "add/remove SubjectToPolicy" should "add/remove subject and tolerate prior (non)existence" in {
