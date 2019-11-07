@@ -8,6 +8,7 @@ import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.model.{FullyQualifiedResourceId, ResourceAction}
 import org.broadinstitute.dsde.workbench.sam.service.PolicyEvaluatorService
 import ImplicitConversions.ioOnSuccessMagnet
+import cats.implicits._
 import cats.effect.IO
 
 trait SecurityDirectives {
@@ -18,30 +19,37 @@ trait SecurityDirectives {
 
   def requireOneOfAction(resource: FullyQualifiedResourceId, requestedActions: Set[ResourceAction], userId: WorkbenchUserId): Directive0 =
     Directives.mapInnerRoute { innerRoute =>
-      onSuccess(listActions(resource, userId, requestedActions)) { actions =>
-        if (hasAccess(requestedActions, actions)) innerRoute
-        else if (actions.isEmpty)
-          Directives.failWith(
-            new WorkbenchExceptionWithErrorReport(
-              ErrorReport(StatusCodes.NotFound, s"Resource ${resource.resourceTypeName.value}/${resource.resourceId.value} not found")))
-        else
-          Directives.failWith(
-            new WorkbenchExceptionWithErrorReport(ErrorReport(
-              StatusCodes.Forbidden,
-              s"You may not perform any of ${requestedActions.mkString("[", ", ", "]").toString.toUpperCase} on ${resource.resourceTypeName.value}/${resource.resourceId.value}"
-            )))
+      onSuccess(hasPermissionOneOf(resource, requestedActions, userId)) { hasPermission =>
+        if (hasPermission) {
+          innerRoute
+        } else {
+
+          // in the case where we don't have the required action, we need to figure out if we should return
+          // a Not Found (you have no access) vs a Forbidden (you have access, just not the right kind)
+          onSuccess(policyEvaluatorService.listResourceAccessPoliciesForUser(resource, userId)) { policies =>
+
+            if (policies.isEmpty) {
+              Directives.failWith(
+                new WorkbenchExceptionWithErrorReport(
+                  ErrorReport(StatusCodes.NotFound, s"Resource ${resource.resourceTypeName.value}/${resource.resourceId.value} not found")))
+            } else {
+              Directives.failWith(
+                new WorkbenchExceptionWithErrorReport(ErrorReport(
+                  StatusCodes.Forbidden,
+                  s"You may not perform any of ${requestedActions.mkString("[", ", ", "]").toString.toUpperCase} on ${resource.resourceTypeName.value}/${resource.resourceId.value}"
+                )))
+            }
+          }
+        }
       }
     }
 
-  private def listActions(resource: FullyQualifiedResourceId, userId: WorkbenchUserId, requestedActions: Set[ResourceAction]): IO[Set[ResourceAction]] =
-    // this is optimized for the case where the user has permission since that is the usual case
-    // if the first attempt shows the user does not have permission, force a second attempt
+  private def hasPermissionOneOf(resource: FullyQualifiedResourceId, actions: Iterable[ResourceAction], userId: WorkbenchUserId): IO[Boolean] =
+  //  first quickly check if we have permission using the shallow check across all actions, then try the full check
     for {
-      actionsAttempt1 <- policyEvaluatorService.listUserResourceActions(resource, userId, force = false)
-      actionsAttempt2 <- if (hasAccess(requestedActions, actionsAttempt1)) IO.pure(actionsAttempt1)
-      else policyEvaluatorService.listUserResourceActions(resource, userId, force = true)
-    } yield actionsAttempt2
-
-  private def hasAccess(requestedActions: Set[ResourceAction], actions: Set[ResourceAction]): Boolean =
-    actions.intersect(requestedActions).nonEmpty
+      attempt1 <- actions.toList.existsM(policyEvaluatorService.hasPermissionShallowCheck(resource, _, userId))
+      attempt2 <- if (attempt1) IO.pure(attempt1) else actions.toList.existsM(policyEvaluatorService.hasPermissionFullCheck(resource, _, userId))
+    } yield {
+      attempt2
+    }
 }
