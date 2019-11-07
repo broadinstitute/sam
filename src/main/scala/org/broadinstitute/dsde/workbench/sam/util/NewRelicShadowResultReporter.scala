@@ -60,7 +60,7 @@ class NewRelicShadowResultReporter(val daoName: String, val newRelicMetrics: New
 
   def makeString(value: Any): String = {
     value match {
-      case col: Traversable[_] => col.mkString(",")
+      case col: Traversable[_] => s"[${col.size} items]"
       case _ => value.toString
     }
   }
@@ -136,24 +136,33 @@ class NewRelicShadowResultReporter(val daoName: String, val newRelicMetrics: New
     * @return
     */
   private def traversablesContainSameElements(realTraversable: Traversable[Any], shadowTraversable: Traversable[Any]): MatchResult = {
-    // one implementation would be to sort both taversables and compare pairwise but we don't have a sort order
+    if (realTraversable.size > 100) {
+    // this is too big to do a full comparison, just match on size
+    createMatchResult(realTraversable.size, shadowTraversable.size, "unequal size")
+  } else {
+      // one implementation would be to sort both taversables and compare pairwise but we don't have a sort order
 
-    // this implementation groups by each distinct element to produce a map keyed by element with values of the occurrence count.
-    // make sure both maps have the same size then check that each real element has a match in shadow and that the
-    // number of occurrences for the shadow match is the same as real
-    val realDistinctElementCountsByElement = realTraversable.groupBy(x => x).map { case (key, values) => (key, values.size) }
-    val shadowDistinctElementCountsByElement = shadowTraversable.groupBy(x => x).map { case (key, values) => (key, values.size) }
-    val sizeMatch = createMatchResult(realDistinctElementCountsByElement.size, shadowDistinctElementCountsByElement.size, s"unequal distinct item count, [${realDistinctElementCountsByElement.mkString(",")}] vs [${shadowDistinctElementCountsByElement.mkString(",")}]")
-    val elementsMatch = realDistinctElementCountsByElement.keySet.map { realElement =>
-      shadowDistinctElementCountsByElement.keySet.find(shadowElement => resultsMatch(Right(realElement), Right(shadowElement)).matches) match {
-        case None => MatchResult(false, Seq(s"cannot find match for [$realElement] in [$shadowTraversable]"))
-        case Some(shadowMatch) =>
-          val realOccurrences = realDistinctElementCountsByElement(realElement)
-          val shadowOccurrences = shadowDistinctElementCountsByElement(shadowMatch)
-          createMatchResult(realOccurrences, shadowOccurrences, s"unequal occurrences of [$realElement]")
+      // this implementation groups by each distinct element to produce a map keyed by element with values of the occurrence count.
+      // make sure both maps have the same size then check that each real element has a match in shadow and that the
+      // number of occurrences for the shadow match is the same as real
+      val realDistinctElementCountsByElement = realTraversable.groupBy(x => x).map { case (key, values) => (key, values.size) }
+      val shadowDistinctElementCountsByElement = shadowTraversable.groupBy(x => x).map { case (key, values) => (key, values.size) }
+      val sizeMatch = createMatchResult(
+        realDistinctElementCountsByElement.size,
+        shadowDistinctElementCountsByElement.size,
+        s"unequal distinct item count, [${realDistinctElementCountsByElement.mkString(",")}] vs [${shadowDistinctElementCountsByElement.mkString(",")}]"
+      )
+      val elementsMatch = realDistinctElementCountsByElement.keySet.map { realElement =>
+        shadowDistinctElementCountsByElement.keySet.find(shadowElement => resultsMatch(Right(realElement), Right(shadowElement)).matches) match {
+          case None => MatchResult(false, Seq(s"cannot find match for [$realElement] in [$shadowTraversable]"))
+          case Some(shadowMatch) =>
+            val realOccurrences = realDistinctElementCountsByElement(realElement)
+            val shadowOccurrences = shadowDistinctElementCountsByElement(shadowMatch)
+            createMatchResult(realOccurrences, shadowOccurrences, s"unequal occurrences of [$realElement]")
+        }
       }
+      aggregateMatchResults(elementsMatch.toSeq :+ sizeMatch)
     }
-    aggregateMatchResults(elementsMatch.toSeq :+ sizeMatch)
   }
 
   // checkName is passed by-name to avoid unnecessary toString and string concatenation when items match
