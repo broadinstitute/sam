@@ -2,9 +2,10 @@ package org.broadinstitute.dsde.workbench.sam.util
 
 import cats.data.OptionT
 import cats.effect.{ContextShift, IO}
+import cats.implicits._
 import com.unboundid.ldap.sdk._
 import org.broadinstitute.dsde.workbench.model.WorkbenchSubject
-import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException, WorkbenchGroupName, WorkbenchSubject}
+import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException, WorkbenchGroupName, WorkbenchSubject, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.directory.DirectorySubjectNameSupport
 import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO.Attr
@@ -120,6 +121,17 @@ trait LdapSupport extends DirectorySubjectNameSupport {
     val filters = groupNames.grouped(batchSize).map(batch => Filter.createORFilter(batch.map(g => Filter.createEqualityFilter(Attr.cn, g.value)).asJava)).toSeq
 
     executeLdap(IO(ldapSearchStream(groupsOu, SearchScope.SUB, filters: _*)(unmarshalGroupThrow)))
+  }
+
+  def ldapIsUserMemberOfGroup(groupName: WorkbenchGroupName, userId: WorkbenchUserId): IO[Boolean] = {
+    for {
+      group <- ldapLoadGroup(groupName)
+      members = group.map(_.members).getOrElse(Set.empty[WorkbenchSubject])
+      isDirectMember = members.contains(userId)
+      isMember <- if (isDirectMember) IO.pure(isDirectMember) else members.collect{case x:WorkbenchGroupName => x}.toList.existsM(ldapIsUserMemberOfGroup(_, userId))
+    } yield {
+      isMember
+    }
   }
 
   private def unmarshalGroup(results: Entry): Either[String, BasicWorkbenchGroup] =

@@ -247,28 +247,20 @@ class LdapAccessPolicyDAO(
         ldapSearchStream(resourceDn(resource), SearchScope.SUB, Filter.createEqualityFilter("objectclass", ObjectClass.policy))(unmarshalAccessPolicy)
       ))
 
-  override def listAccessPoliciesForUser(resource: FullyQualifiedResourceId, user: WorkbenchUserId): IO[Set[AccessPolicy]] =
+  override def listAccessPoliciesForUser(resource: FullyQualifiedResourceId, userId: WorkbenchUserId): IO[Set[AccessPolicy]] =
     for {
-      memberOfs <- ldapLoadMemberOf(user)
-      accessPolicies <- {
-        val fullyQualifiedPolicyIds = memberOfs.toList.mapFilter { str =>
-          for {
-            subject <- Either.catchNonFatal(dnToSubject(str)).toOption
-            fullyQualifiedPolicyId <- subject match {
-              case sub: FullyQualifiedPolicyId
-                  if sub.resource.resourceId == resource.resourceId && sub.resource.resourceTypeName == resource.resourceTypeName =>
-                Some(sub)
-              case _ => None
-            }
-          } yield fullyQualifiedPolicyId
-        }
-        val filters = fullyQualifiedPolicyIds
-          .grouped(batchSize)
-          .map(batch => Filter.createORFilter(batch.map(r => Filter.createEqualityFilter(Attr.policy, r.accessPolicyName.value)).asJava))
-          .toSeq
-        executeLdap(IO(ldapSearchStream(resourceDn(resource), SearchScope.SUB, filters: _*)(unmarshalAccessPolicy).toSet))
-      }
-    } yield accessPolicies
+      allPolicies <- listAccessPolicies(resource)
+      userPolicies <- allPolicies.filterA(p => isUserMemberOfPolicy(p, userId))
+    } yield userPolicies.toSet
+
+
+  private def isUserMemberOfPolicy(policy: AccessPolicy, userId: WorkbenchUserId): IO[Boolean] = {
+    if (policy.members.contains(userId)) {
+      IO.pure(true)
+    } else {
+      policy.members.collect { case x: WorkbenchGroupName => x }.toList.existsM(ldapIsUserMemberOfGroup(_, userId))
+    }
+  }
 
   override def listFlattenedPolicyMembers(policyId: FullyQualifiedPolicyId): IO[Set[WorkbenchUser]] = executeLdap(
     // we only care about entries in ou=people and only 1 level down but searching the whole directory is MUCH faster
