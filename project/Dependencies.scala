@@ -47,8 +47,11 @@ object Dependencies {
   val scalaCheck: ModuleID =        "org.scalacheck"      %%  "scalacheck"           % scalaCheckV % "test"
   val catsEffect: ModuleID = "org.typelevel" %% "cats-effect" % catsEffectV
 
-  val googleOAuth2: ModuleID = "com.google.auth" % "google-auth-library-oauth2-http" % "0.9.0"
-  val googleStorage: ModuleID = "com.google.apis" % "google-api-services-storage" % "v1-rev20181013-1.27.0" //force this version
+  val excludIoGrpc =  ExclusionRule(organization = "io.grpc", name = "grpc-core")
+  val ioGrpc: ModuleID = "io.grpc" % "grpc-core" % "1.19.0"
+
+  val googleOAuth2: ModuleID = "com.google.auth" % "google-auth-library-oauth2-http" % "0.9.0" excludeAll(excludIoGrpc)
+  val googleStorage: ModuleID = "com.google.apis" % "google-api-services-storage" % "v1-rev20181013-1.27.0" excludeAll(excludIoGrpc) //force this version
 
   val monocle: ModuleID = "com.github.julien-truffaut" %%  "monocle-core"  % monocleVersion
   val monocleMacro: ModuleID = "com.github.julien-truffaut" %%  "monocle-macro" % monocleVersion
@@ -56,7 +59,7 @@ object Dependencies {
   val scalaTest: ModuleID =       "org.scalatest" %% "scalatest"    % scalaTestV % "test"
   val mockito: ModuleID =         "org.mockito"    % "mockito-core" % "2.7.22"   % "test"
 
-  val unboundid: ModuleID = "com.unboundid" % "unboundid-ldapsdk" % "4.0.6"
+  val unboundid: ModuleID = "com.unboundid" % "unboundid-ldapsdk" % "4.0.12"
   val ehcache: ModuleID = "org.ehcache" % "ehcache" % "3.6.2"
 
   // All of workbench-libs pull in Akka; exclude it since we provide our own Akka dependency.
@@ -78,9 +81,26 @@ object Dependencies {
   val scalikeCoreTest =   "org.scalikejdbc"                   %% "scalikejdbc-test"    % scalikejdbcVersion   % "test"
   val postgres = "org.postgresql"                    %  "postgresql"          % postgresDriverVersion
 
+  val excludeScalaCllectionCompat =  ExclusionRule(organization = "org.scala-lang.modules", name = "scala-collection-compat_2.12")
+  val opencensusScalaCode: ModuleID = "com.github.sebruck" %% "opencensus-scala-core" % "0.7.0-M2" excludeAll(excludeScalaCllectionCompat) // excludeAll(excludIoGrpc, excludeCatsEffect )
+  val opencensusAkkaHttp: ModuleID = "com.github.sebruck" %% "opencensus-scala-akka-http" % "0.7.0-M2" excludeAll(excludeScalaCllectionCompat)// excludeAll(excludIoGrpc, excludeCatsEffect)
+  val opencensusStackDriverExporter: ModuleID = "io.opencensus" % "opencensus-exporter-trace-stackdriver" % "0.23.0" // excludeAll(excludIoGrpc, excludeCatsEffect)
+  val opencensusLoggingExporter: ModuleID = "io.opencensus" % "opencensus-exporter-trace-logging"     % "0.23.0" // excludeAll(excludIoGrpc, excludeCatsEffect)
+  
+  val openCensusDependencies = Seq(
+    opencensusScalaCode,
+    opencensusAkkaHttp,
+    opencensusStackDriverExporter,
+    opencensusLoggingExporter
+  )
+
+  // was included transitively before, now explicit
+  val commonsCodec: ModuleID = "commons-codec" % "commons-codec" % "1.13"
+
   val rootDependencies = Seq(
     // proactively pull in latest versions of Jackson libs, instead of relying on the versions
     // specified as transitive dependencies, due to OWASP DependencyCheck warnings for earlier versions.
+    ioGrpc,
     logbackClassic,
     ravenLogback,
     scalaLogging,
@@ -119,6 +139,7 @@ object Dependencies {
     unboundid,
     ehcache,
     catsEffect,
+    commonsCodec,
 
     liquibaseCore,
 
@@ -126,5 +147,5 @@ object Dependencies {
     scalikeCoreConfig,
     scalikeCoreTest,
     postgres
-  )
+  ) ++ openCensusDependencies
 }
