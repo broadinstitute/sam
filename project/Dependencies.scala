@@ -86,7 +86,7 @@ object Dependencies {
   val opencensusAkkaHttp: ModuleID = "com.github.sebruck" %% "opencensus-scala-akka-http" % "0.7.0-M2" excludeAll(excludeScalaCllectionCompat)// excludeAll(excludIoGrpc, excludeCatsEffect)
   val opencensusStackDriverExporter: ModuleID = "io.opencensus" % "opencensus-exporter-trace-stackdriver" % "0.23.0" // excludeAll(excludIoGrpc, excludeCatsEffect)
   val opencensusLoggingExporter: ModuleID = "io.opencensus" % "opencensus-exporter-trace-logging"     % "0.23.0" // excludeAll(excludIoGrpc, excludeCatsEffect)
-  
+
   val openCensusDependencies = Seq(
     opencensusScalaCode,
     opencensusAkkaHttp,

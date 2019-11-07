@@ -4,16 +4,20 @@ import akka.http.scaladsl.model.StatusCodes
 import cats.effect.IO
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
+import io.opencensus.trace.Span
 import org.broadinstitute.dsde.workbench.model._
+import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, LoadResourceAuthDomainResult}
+import org.broadinstitute.dsde.workbench.sam.util.OpenCensusIOUtils._
 
 import scala.concurrent.ExecutionContext
 
 class PolicyEvaluatorService(
     private val emailDomain: String,
     private val resourceTypes: Map[ResourceTypeName, ResourceType],
-    private val accessPolicyDAO: AccessPolicyDAO)(implicit val executionContext: ExecutionContext)
+    private val accessPolicyDAO: AccessPolicyDAO,
+    private val directoryDAO: DirectoryDAO )(implicit val executionContext: ExecutionContext)
     extends LazyLogging {
   def initPolicy(): IO[Unit] = {
     val policyName = AccessPolicyName("admin-notifier-set-public")
@@ -34,25 +38,25 @@ class PolicyEvaluatorService(
       }
   }
 
-  def hasPermission(resource: FullyQualifiedResourceId, action: ResourceAction, userId: WorkbenchUserId): IO[Boolean] = {
+  def hasPermission(resource: FullyQualifiedResourceId, action: ResourceAction, userId: WorkbenchUserId, parentSpan: Span = null): IO[Boolean] = {
     // first attempt the shallow check and fallback to the full check if it returns false
     for {
       attempt1 <- hasPermissionShallowCheck(resource, action, userId)
-      attempt2 <- if (attempt1) IO.pure(attempt1) else hasPermissionFullCheck(resource, action, userId)
+      attempt2 <- if (attempt1) IO.pure(attempt1) else traceIOWithParent("fullCheck", parentSpan)(_ => hasPermissionFullCheck(resource, action, userId))
     } yield {
       attempt2
     }
   }
 
-  def hasPermissionFullCheck(resource: FullyQualifiedResourceId, action: ResourceAction, userId: WorkbenchUserId): IO[Boolean] = {
+  def hasPermissionFullCheck(resource: FullyQualifiedResourceId, action: ResourceAction, userId: WorkbenchUserId, parentSpan: Span = null): IO[Boolean] = {
     def checkPermission(force: Boolean) =
       listUserResourceActions(resource, userId, force).map { _.contains(action) }
 
     // this is optimized for the case where the user has permission since that is the usual case
     // if the first attempt shows the user does not have permission, force a second attempt
     for {
-      attempt1 <- checkPermission(force = false)
-      attempt2 <- if (attempt1) IO.pure(attempt1) else checkPermission(force = true)
+      attempt1 <- traceIOWithParent("checkWithCache", parentSpan)(_ => checkPermission(force = false))
+      attempt2 <- if (attempt1) IO.pure(attempt1) else traceIOWithParent("checkWithoutCache", parentSpan)(_ =>checkPermission(force = true))
     } yield {
       attempt2
     }
@@ -182,15 +186,15 @@ class PolicyEvaluatorService(
       policies.map(_.groupName)
     }
 
-  def listResourceAccessPoliciesForUser(resource: FullyQualifiedResourceId, userId: WorkbenchUserId): IO[Set[AccessPolicy]] =
+  def listResourceAccessPoliciesForUser(resource: FullyQualifiedResourceId, userId: WorkbenchUserId, parentSpan: Span = null): IO[Set[AccessPolicy]] =
     for {
-      policies <- accessPolicyDAO.listAccessPoliciesForUser(resource, userId)
-      publicPolicies <- accessPolicyDAO.listPublicAccessPolicies(resource)
+      policies <- traceIOWithParent("listAccessPoliciesForUser", parentSpan)(_ => accessPolicyDAO.listAccessPoliciesForUser(resource, userId))
+      publicPolicies <- traceIOWithParent("listPublicAccessPolicies", parentSpan)(_ => accessPolicyDAO.listPublicAccessPolicies(resource))
     } yield policies ++ publicPolicies
 }
 
 object PolicyEvaluatorService {
-  def apply(emailDomain: String, resourceTypes: Map[ResourceTypeName, ResourceType], accessPolicyDAO: AccessPolicyDAO)(
+  def apply(emailDomain: String, resourceTypes: Map[ResourceTypeName, ResourceType], accessPolicyDAO: AccessPolicyDAO, directoryDAO: DirectoryDAO)(
       implicit executionContext: ExecutionContext): PolicyEvaluatorService =
-    new PolicyEvaluatorService(emailDomain, resourceTypes, accessPolicyDAO)
+    new PolicyEvaluatorService(emailDomain, resourceTypes, accessPolicyDAO, directoryDAO)
 }

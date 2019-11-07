@@ -339,7 +339,7 @@ object Boot extends IOApp with LazyLogging {
       accessPolicyDAO: AccessPolicyDAO,
       directoryDAO: DirectoryDAO)(implicit actorSystem: ActorSystem, actorMaterializer: ActorMaterializer): AppDependencies = {
     val resourceTypeMap = config.resourceTypes.map(rt => rt.name -> rt).toMap
-    val policyEvaluatorService = PolicyEvaluatorService(config.emailDomain, resourceTypeMap, accessPolicyDAO)
+    val policyEvaluatorService = PolicyEvaluatorService(config.emailDomain, resourceTypeMap, accessPolicyDAO, directoryDAO)
     val resourceService = new ResourceService(resourceTypeMap, policyEvaluatorService, accessPolicyDAO, directoryDAO, cloudExtensionsInitializer.cloudExtensions, config.emailDomain)
     val userService = new UserService(directoryDAO, cloudExtensionsInitializer.cloudExtensions)
     val statusService = new StatusService(directoryDAO, cloudExtensionsInitializer.cloudExtensions, 10 seconds)

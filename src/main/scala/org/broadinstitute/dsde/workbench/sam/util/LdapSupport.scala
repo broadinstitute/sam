@@ -1,14 +1,18 @@
 package org.broadinstitute.dsde.workbench.sam.util
 
+import cats.data.OptionT
 import cats.effect.{ContextShift, IO}
 import com.unboundid.ldap.sdk._
 import org.broadinstitute.dsde.workbench.model.WorkbenchSubject
+import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException, WorkbenchGroupName, WorkbenchSubject}
 import org.broadinstitute.dsde.workbench.sam.directory.DirectorySubjectNameSupport
+import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO.Attr
 import org.ehcache.Cache
 
 import scala.concurrent.ExecutionContext
 import scala.util.{Failure, Success, Try}
+import scala.collection.JavaConverters._
 
 trait LdapSupport extends DirectorySubjectNameSupport {
   protected val ldapConnectionPool: LDAPConnectionPool
@@ -102,6 +106,30 @@ trait LdapSupport extends DirectorySubjectNameSupport {
 
   def evictIsMemberOfCache(subject: WorkbenchSubject): IO[Unit] =
     IO.pure(memberOfCache.remove(subject))
+
+  def ldapLoadGroup(groupName: WorkbenchGroupName): IO[Option[BasicWorkbenchGroup]] = {
+    val res = for {
+      entry <- OptionT(executeLdap(IO(ldapConnectionPool.getEntry(groupDn(groupName)))).map(Option.apply))
+      r <- OptionT.liftF(IO(unmarshalGroupThrow(entry)))
+    } yield r
+
+    res.value
+  }
+
+  def ldapLoadGroups(groupNames: Set[WorkbenchGroupName]): IO[Stream[BasicWorkbenchGroup]] = {
+    val filters = groupNames.grouped(batchSize).map(batch => Filter.createORFilter(batch.map(g => Filter.createEqualityFilter(Attr.cn, g.value)).asJava)).toSeq
+
+    executeLdap(IO(ldapSearchStream(groupsOu, SearchScope.SUB, filters: _*)(unmarshalGroupThrow)))
+  }
+
+  private def unmarshalGroup(results: Entry): Either[String, BasicWorkbenchGroup] =
+    for {
+      cn <- getAttribute(results, Attr.cn).toRight(s"${Attr.cn} attribute missing: ${results.getDN}")
+      email <- getAttribute(results, Attr.email).toRight(s"${Attr.email} attribute missing: ${results.getDN}")
+      memberDns = getAttributes(results, Attr.uniqueMember)
+    } yield BasicWorkbenchGroup(WorkbenchGroupName(cn), memberDns.map(dnToSubject), WorkbenchEmail(email))
+
+  private def unmarshalGroupThrow(results: Entry): BasicWorkbenchGroup = unmarshalGroup(results).fold(s => throw new WorkbenchException(s), identity)
 
   protected def executeLdap[A](ioa: IO[A]): IO[A] = cs.evalOn(ecForLdapBlockingIO)(ioa)
 }
