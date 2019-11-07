@@ -59,12 +59,12 @@ trait DirectorySubjectNameSupport {
     partStrings.mkString("(?i)", ",", s",$baseDn").r
   }
 
-  protected def dnToSubject(dn: String): WorkbenchSubject = {
-    val groupMatcher = dnMatcher(Seq(Attr.cn), groupsOu)
-    val personMatcher = dnMatcher(Seq(Attr.uid), peopleOu)
-    val petMatcher = dnMatcher(Seq(Attr.project, Attr.uid), peopleOu)
-    val policyMatcher = dnMatcher(Seq(Attr.policy, Attr.resourceId, Attr.resourceType), resourcesOu)
+  private val groupMatcher = dnMatcher(Seq(Attr.cn), groupsOu)
+  private val personMatcher = dnMatcher(Seq(Attr.uid), peopleOu)
+  private val petMatcher = dnMatcher(Seq(Attr.project, Attr.uid), peopleOu)
+  private val policyMatcher = dnMatcher(Seq(Attr.policy, Attr.resourceId, Attr.resourceType), resourcesOu)
 
+  protected def dnToSubject(dn: String): WorkbenchSubject = {
     dn match {
       case groupMatcher(cn) => WorkbenchGroupName(cn)
       case personMatcher(uid) => WorkbenchUserId(uid)
