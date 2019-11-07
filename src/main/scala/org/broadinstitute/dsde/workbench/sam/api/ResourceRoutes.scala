@@ -25,6 +25,7 @@ import org.broadinstitute.dsde.workbench.sam.directory.PostgresDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.openam.PostgresAccessPolicyDAO
 import org.broadinstitute.dsde.workbench.util.ExecutionContexts
 import scalikejdbc.config.DBs
+import io.opencensus.scala.akka.http.TracingDirective._
 
 /**
   * Created by mbemis on 5/22/17.
@@ -156,8 +157,10 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
   }
 
   def getUserPoliciesForResourceType(resourceType: ResourceType, userInfo: UserInfo): server.Route =
-    get {
-      complete(policyEvaluatorService.listUserAccessPolicies(resourceType.name, userInfo.userId))
+    traceRequest { _ =>
+      get {
+        complete(policyEvaluatorService.listUserAccessPolicies(resourceType.name, userInfo.userId))
+      }
     }
 
   def postResource(resourceType: ResourceType, userInfo: UserInfo): server.Route =
@@ -195,9 +198,11 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
 
   def getActionPermissionForUser(resource: FullyQualifiedResourceId, userInfo: UserInfo, action: String): server.Route =
     get {
-      complete(policyEvaluatorService.hasPermission(resource, ResourceAction(action), userInfo.userId).map { hasPermission =>
-        StatusCodes.OK -> JsBoolean(hasPermission)
-      })
+      traceRequest { span =>
+        complete(policyEvaluatorService.hasPermission(resource, ResourceAction(action), userInfo.userId).map { hasPermission =>
+          StatusCodes.OK -> JsBoolean(hasPermission)
+        })
+      }
     }
 
   def listActionsForUser(resource: FullyQualifiedResourceId, userInfo: UserInfo): server.Route =
@@ -217,21 +222,25 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
     }
 
   def getResourcePolicies(resource: FullyQualifiedResourceId, userInfo: UserInfo): server.Route =
-    get {
-      requireAction(resource, SamResourceActions.readPolicies, userInfo.userId) {
-        complete(resourceService.listResourcePolicies(resource).map { response =>
-          StatusCodes.OK -> response.toSet
-        })
+    traceRequest { _ =>
+      get {
+        requireAction(resource, SamResourceActions.readPolicies, userInfo.userId) {
+          complete(resourceService.listResourcePolicies(resource).map { response =>
+            StatusCodes.OK -> response.toSet
+          })
+        }
       }
     }
 
   def getPolicy(policyId: FullyQualifiedPolicyId, userInfo: UserInfo): server.Route =
-    get {
-      requireOneOfAction(policyId.resource, Set(SamResourceActions.readPolicies, SamResourceActions.readPolicy(policyId.accessPolicyName)), userInfo.userId) {
-        complete(resourceService.loadResourcePolicy(policyId).map {
-          case Some(response) => StatusCodes.OK -> response
-          case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "policy not found"))
-        })
+    traceRequest { _ =>
+      get {
+        requireOneOfAction(policyId.resource, Set(SamResourceActions.readPolicies, SamResourceActions.readPolicy(policyId.accessPolicyName)), userInfo.userId) {
+          complete(resourceService.loadResourcePolicy(policyId).map {
+            case Some(response) => StatusCodes.OK -> response
+            case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "policy not found"))
+          })
+        }
       }
     }
 
@@ -288,9 +297,11 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
 
   def getUserResourceRoles(resource: FullyQualifiedResourceId, userInfo: UserInfo): server.Route =
     get {
-      complete(resourceService.listUserResourceRoles(resource, userInfo).map { roles =>
-        StatusCodes.OK -> roles
-      })
+      traceRequest { span =>
+        complete(resourceService.listUserResourceRoles(resource, userInfo).map { roles =>
+          StatusCodes.OK -> roles
+        })
+      }
     }
 
   def getAllResourceUsers(resource: FullyQualifiedResourceId, userInfo: UserInfo): server.Route =
