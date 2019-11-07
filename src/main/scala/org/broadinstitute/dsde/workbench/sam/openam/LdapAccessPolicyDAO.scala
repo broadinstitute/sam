@@ -249,14 +249,12 @@ class LdapAccessPolicyDAO(
 
 
 
-  override def listAccessPoliciesForUser(resource: FullyQualifiedResourceId, userId: WorkbenchUserId): IO[Set[AccessPolicy]] = {
+  override def listAccessPoliciesForUser(resource: FullyQualifiedResourceId, userId: WorkbenchUserId): IO[Set[AccessPolicy]] =
     for {
-      allPolicies <- listAccessPolicies(resource).map(_.toSet)
-    } yield {
-      // KCIBUL: help me!!!
-      allPolicies.filter( x => isUserMemberOfPolicy(x, userId).unsafeRunSync() )
-    }
-  }
+      allPolicies <- listAccessPolicies(resource)
+      userPolicies <- allPolicies.filterA(p => isUserMemberOfPolicy(p, userId))
+    } yield userPolicies.toSet
+
 
   private def isUserMemberOfPolicy(policy: AccessPolicy, userId: WorkbenchUserId): IO[Boolean] = {
     if (policy.members.contains(userId)) {

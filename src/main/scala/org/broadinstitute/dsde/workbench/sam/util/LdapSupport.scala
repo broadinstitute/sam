@@ -123,11 +123,14 @@ trait LdapSupport extends DirectorySubjectNameSupport {
   }
 
   def ldapIsUserMemberOfGroup(groupName: WorkbenchGroupName, userId: WorkbenchUserId): IO[Boolean] = {
-    val members = ldapLoadGroup(groupName).map(_.get.members)
-    val isDirectMember = members.map( _.contains(userId))
-    val isGroupMember = members.flatMap( _.collect{case x:WorkbenchGroupName => x}.toList.existsM(ldapIsUserMemberOfGroup(_, userId)))
-
-    List(isDirectMember, isGroupMember).sequence.map( _.contains(true) )
+    for {
+      group <- ldapLoadGroup(groupName)
+      members = group.map(_.members).getOrElse(Set.empty[WorkbenchSubject])
+      isDirectMember = members.contains(userId)
+      isMember <- if (isDirectMember) IO.pure(isDirectMember) else members.collect{case x:WorkbenchGroupName => x}.toList.existsM(ldapIsUserMemberOfGroup(_, userId))
+    } yield {
+      isMember
+    }
   }
 
   private def unmarshalGroup(results: Entry): Either[String, BasicWorkbenchGroup] =
