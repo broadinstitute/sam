@@ -83,11 +83,11 @@ class PolicyEvaluatorService(
             hasAction
           } else {
             for {
-              // first, check if the resource in question HAS an auth domain (likely not) and if so continue [TERRA]
+              // check if our result should be modulated by the auth domain constraint (ie we are not a member)
               authDomainsResult <- accessPolicyDAO.loadResourceAuthDomain(resource)
-              res2 <- authDomainsResult match {
+              authConstraintOk <- authDomainsResult match {
                 case LoadResourceAuthDomainResult.NotConstrained | LoadResourceAuthDomainResult.ResourceNotFound =>
-                  hasAction
+                  IO.pure(true)
                 case LoadResourceAuthDomainResult.Constrained(authDomains) =>
                   // if there is more than one group, just fallback
                   if (authDomains.size > 1) {
@@ -96,6 +96,7 @@ class PolicyEvaluatorService(
                     directoryDAO.isGroupMember(authDomains.head, userId)
                   }
               }
+            res2 <- if (authConstraintOk) hasAction else IO.pure(false)
             } yield res2
           }
       }

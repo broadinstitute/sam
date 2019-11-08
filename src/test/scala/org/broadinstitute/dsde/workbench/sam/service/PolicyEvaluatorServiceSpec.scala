@@ -169,16 +169,16 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
 
     val samplePolicy2 = genPolicy.sample.get
     val policy2ExtraAction = AccessPolicy.actions.set(samplePolicy.actions + action)(samplePolicy2)
-    val policy2WithUser = AccessPolicy.members.set(Set(policy.id))(policy2ExtraAction)
+    val policy2WithNestedPolicy = AccessPolicy.members.set(Set(policy.id))(policy2ExtraAction)
 
-    val policy2 = SamLenses.resourceIdentityAccessPolicy.set(resource2.fullyQualifiedId)(policy2WithUser)
+    val policy2 = SamLenses.resourceIdentityAccessPolicy.set(resource2.fullyQualifiedId)(policy2WithNestedPolicy)
 
     val res = for{
       _ <- setup()
       _ <- policyDAO.createResourceType(managedGroupResourceType)
       _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
-      _ <- resource.authDomain.toList.parTraverse(a => managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))
-      _ <- resource2.authDomain.toList.parTraverse(a => managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))
+      _ <- resource.authDomain.toList.traverse(a => managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))
+      _ <- resource2.authDomain.toList.traverse(a => managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))
       _ <- savePolicyMembers(policy)
       _ <- savePolicyMembers(policy2)
 
@@ -461,6 +461,31 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
       r <- constrainableService.policyEvaluatorService.hasPermission(policy.id.resource, action, user.userId)
     } yield {
       r shouldBe(true)
+    }
+
+    res.unsafeRunSync()
+  }
+
+  it should "return false if given action is NOT allowed for a user, action is constrained by auth domains, user is a member of required auth domains" in {
+    val user = genUserInfo.sample.get
+    val samplePolicy = SamLenses.resourceTypeNameInAccessPolicy.modify(_ => constrainableResourceType.name)(genPolicy.sample.get)
+    val action = constrainableViewAction
+    val resource = genResource.sample.get.copy(resourceTypeName = constrainableResourceType.name, authDomain = Set(genWorkbenchGroupName.sample.get))
+
+    val policyWithResource = SamLenses.resourceIdentityAccessPolicy.set(resource.fullyQualifiedId)(samplePolicy)
+    val policy = AccessPolicy.actions.modify(_ + action)(policyWithResource).copy(roles = Set.empty)
+
+    val res = for{
+      _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
+      _ <- policyDAO.createResourceType(managedGroupResourceType)
+      _ <- resource.authDomain.toList.parTraverse(a => managedGroupService.createManagedGroup(ResourceId(a.value), user))
+      _ <- savePolicyMembers(policy)
+      _ <- policyDAO.createResourceType(constrainableResourceType)
+      _ <- policyDAO.createResource(resource)
+      _ <- policyDAO.createPolicy(policy)
+      r <- constrainableService.policyEvaluatorService.hasPermission(policy.id.resource, action, user.userId)
+    } yield {
+      r shouldBe(false)
     }
 
     res.unsafeRunSync()
