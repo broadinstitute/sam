@@ -96,7 +96,7 @@ class PolicyEvaluatorService(
                     directoryDAO.isGroupMember(authDomains.head, userId)
                   }
               }
-            res2 <- if (authConstraintOk) hasAction else IO.pure(false)
+              res2 <- if (authConstraintOk) hasAction else IO.pure(false)
             } yield res2
           }
       }
