@@ -705,15 +705,22 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
 
   it should "allow for auth domain groups on a deleted resource to be deleted" in {
     val resourceType = constrainableResourceType.copy(reuseIds = false)
-    val managedGroupName = "fooGroup"
+    val authDomainGroupToDelete = "fooGroup"
+    val otherAuthDomainGroup = "barGroup"
     constrainableService.createResourceType(resourceType).unsafeRunSync()
     constrainableService.createResourceType(managedGroupResourceType).unsafeRunSync()
-    managedGroupService.createManagedGroup(ResourceId(managedGroupName), dummyUserInfo).unsafeRunSync()
-    val resource = constrainableService.createResource(resourceType, ResourceId(UUID.randomUUID().toString), Map(AccessPolicyName(constrainableReaderRoleName.value) -> constrainablePolicyMembership), Set(WorkbenchGroupName(managedGroupName)), dummyUserInfo.userId).unsafeRunSync()
+    managedGroupService.createManagedGroup(ResourceId(authDomainGroupToDelete), dummyUserInfo).unsafeRunSync()
+    managedGroupService.createManagedGroup(ResourceId(otherAuthDomainGroup), dummyUserInfo).unsafeRunSync()
+    val resourceToDelete = constrainableService.createResource(resourceType, ResourceId(UUID.randomUUID().toString), Map(AccessPolicyName(constrainableReaderRoleName.value) -> constrainablePolicyMembership), Set(WorkbenchGroupName(authDomainGroupToDelete)), dummyUserInfo.userId).unsafeRunSync()
+    val otherResource = constrainableService.createResource(resourceType, ResourceId(UUID.randomUUID().toString), Map(AccessPolicyName(constrainableReaderRoleName.value) -> constrainablePolicyMembership), Set(WorkbenchGroupName(otherAuthDomainGroup)), dummyUserInfo.userId).unsafeRunSync()
 
-    runAndWait(constrainableService.deleteResource(resource.fullyQualifiedId))
-    runAndWait(managedGroupService.deleteManagedGroup(ResourceId(managedGroupName)))
-    managedGroupService.loadManagedGroup(ResourceId(managedGroupName)).unsafeRunSync() shouldBe None
+    runAndWait(constrainableService.deleteResource(resourceToDelete.fullyQualifiedId))
+    runAndWait(managedGroupService.deleteManagedGroup(ResourceId(authDomainGroupToDelete)))
+    managedGroupService.loadManagedGroup(ResourceId(authDomainGroupToDelete)).unsafeRunSync() shouldBe None
+
+    // Other constrained resources and managed groups should be unaffected
+    constrainableService.loadResourceAuthDomain(otherResource.fullyQualifiedId).unsafeRunSync() should contain theSameElementsAs Set(WorkbenchGroupName(otherAuthDomainGroup))
+    managedGroupService.loadManagedGroup(ResourceId(otherAuthDomainGroup)).unsafeRunSync() shouldBe Some(WorkbenchEmail(s"$otherAuthDomainGroup@$emailDomain"))
   }
 
   "add/remove SubjectToPolicy" should "add/remove subject and tolerate prior (non)existence" in {
