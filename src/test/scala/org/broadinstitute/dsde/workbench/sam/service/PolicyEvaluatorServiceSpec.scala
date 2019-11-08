@@ -18,7 +18,7 @@ import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.scalatest._
 import scala.concurrent.ExecutionContext.Implicits.global
 
-class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport {
+class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport with BeforeAndAfter {
   val dirURI = new URI(directoryConfig.directoryUrl)
   val connectionPool = new LDAPConnectionPool(
     new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password),
@@ -127,6 +127,10 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
     val readPolicy = ResourceActionPattern("read_policy::.+", "", false)
   }
 
+  before {
+    setup().unsafeRunSync()
+  }
+
   def setup(): IO[Unit] = {
     for{
       _ <- clearDatabase()
@@ -174,7 +178,6 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
     val policy2 = SamLenses.resourceIdentityAccessPolicy.set(resource2.fullyQualifiedId)(policy2WithNestedPolicy)
 
     val res = for{
-      _ <- setup()
       _ <- policyDAO.createResourceType(managedGroupResourceType)
       _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
       _ <- resource.authDomain.toList.traverse(a => managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))
@@ -208,7 +211,6 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
     val policy = SamLenses.resourceIdentityAccessPolicy.set(resource.fullyQualifiedId)(policyExcludeAction)
 
     val res = for{
-      _ <- setup()
       _ <- policyDAO.createResourceType(managedGroupResourceType)
       _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
       _ <- resource.authDomain.toList.parTraverse(a => managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))
@@ -234,7 +236,6 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
     val policy = SamLenses.resourceIdentityAccessPolicy.set(resource.fullyQualifiedId)(policyExcludeAction)
 
     val res = for{
-      _ <- setup()
       _ <- policyDAO.createResourceType(managedGroupResourceType)
       _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
       _ <- resource.authDomain.toList.parTraverse(a => managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))
@@ -261,7 +262,6 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
     val policy = SamLenses.resourceIdentityAccessPolicy.set(resource.fullyQualifiedId)(policyExcludeAction)
 
     val res = for{
-      _ <- setup()
       _ <- policyDAO.createResourceType(managedGroupResourceType)
       _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
       _ <- resource.authDomain.toList.parTraverse(a => managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))
@@ -289,7 +289,6 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
     val policy = SamLenses.resourceIdentityAccessPolicy.set(resource.fullyQualifiedId)(policyWithAction)
 
     val res = for{
-      _ <- setup()
       _ <- policyDAO.createResourceType(managedGroupResourceType)
       _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
       _ <- resource.authDomain.toList.parTraverse(a => managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))
@@ -318,7 +317,6 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
     val policy = SamLenses.resourceIdentityAccessPolicy.set(resource.fullyQualifiedId)(policyWithRole)
 
     val res = for{
-      _ <- setup()
       _ <- policyDAO.createResourceType(managedGroupResourceType)
       _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
       _ <- resource.authDomain.toList.parTraverse(a => managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))
@@ -348,7 +346,6 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
     val policy = SamLenses.resourceIdentityAccessPolicy.set(resource.fullyQualifiedId)(policyWithRole)
 
     val res = for{
-      _ <- setup()
       _ <- policyDAO.createResourceType(managedGroupResourceType)
       _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
       _ <- resource.authDomain.toList.parTraverse(a => managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))
@@ -375,7 +372,6 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
     val policy = SamLenses.resourceIdentityAccessPolicy.set(resource.fullyQualifiedId)(policyWithAction)
 
     val res = for{
-      _ <- setup()
       _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
       _ <- policyDAO.createResourceType(defaultResourceType)
       _ <- policyDAO.createResourceType(managedGroupResourceType)
@@ -398,7 +394,6 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
     val viewPolicyName = AccessPolicyName(constrainableReaderRoleName.value)
 
     val res = for{
-      _ <- setup()
       _ <- constrainableService.createResourceType(constrainableResourceType)
       _ <- constrainableService.createResourceType(managedGroupResourceType)
       _ <- savePolicyMembers(policy)
@@ -430,7 +425,7 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
       _ <- policyDAO.createResourceType(managedGroupResourceType)
       _ <- resource.authDomain.toList.parTraverse(a => managedGroupService.createManagedGroup(ResourceId(a.value), user))
       _ <- savePolicyMembers(policy)
-      _ <- policyDAO.createResourceType(defaultResourceType)
+      _ <- policyDAO.createResourceType(constrainableResourceType)
       _ <- policyDAO.createResource(resource)
       _ <- policyDAO.createPolicy(policy)
       r <- constrainableService.policyEvaluatorService.hasPermission(policy.id.resource, action, user.userId)
@@ -452,10 +447,10 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
 
     val res = for{
       _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
+      _ <- policyDAO.createResourceType(managedGroupResourceType)
       _ <- resource.authDomain.toList.parTraverse(a => managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))
       _ <- savePolicyMembers(policy)
-      _ <- policyDAO.createResourceType(defaultResourceType)
-      _ <- policyDAO.createResourceType(managedGroupResourceType)
+      _ <- policyDAO.createResourceType(constrainableResourceType)
       _ <- policyDAO.createResource(resource)
       _ <- policyDAO.createPolicy(policy)
       r <- constrainableService.policyEvaluatorService.hasPermission(policy.id.resource, action, user.userId)
@@ -504,10 +499,10 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
     val res = for{
       _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
       _ <- dirDAO.createUser(WorkbenchUser(probeUser.userId, Some(GoogleSubjectId(probeUser.userId.value)), probeUser.userEmail))
+      _ <- policyDAO.createResourceType(managedGroupResourceType)
       _ <- resource.authDomain.toList.parTraverse(a => managedGroupService.createManagedGroup(ResourceId(a.value), user))
       _ <- savePolicyMembers(policy)
-      _ <- policyDAO.createResourceType(defaultResourceType)
-      _ <- policyDAO.createResourceType(managedGroupResourceType)
+      _ <- policyDAO.createResourceType(constrainableResourceType)
       _ <- policyDAO.createResource(resource)
       _ <- policyDAO.createPolicy(policy)
       r <- constrainableService.policyEvaluatorService.hasPermission(policy.id.resource, action, probeUser.userId)
@@ -531,10 +526,10 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
     val res = for{
       _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
       _ <- dirDAO.createUser(WorkbenchUser(probeUser.userId, Some(GoogleSubjectId(probeUser.userId.value)), probeUser.userEmail))
+      _ <- policyDAO.createResourceType(managedGroupResourceType)
       _ <- resource.authDomain.toList.parTraverse(a => managedGroupService.createManagedGroup(ResourceId(a.value), user))
       _ <- savePolicyMembers(policy)
-      _ <- policyDAO.createResourceType(defaultResourceType)
-      _ <- policyDAO.createResourceType(managedGroupResourceType)
+      _ <- policyDAO.createResourceType(constrainableResourceType)
       _ <- policyDAO.createResource(resource)
       _ <- policyDAO.createPolicy(policy)
       r <- constrainableService.policyEvaluatorService.hasPermission(policy.id.resource, action, probeUser.userId)
@@ -552,7 +547,6 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
     val resource4 = FullyQualifiedResourceId(otherResourceType.name, ResourceId("my-resource2"))
 
     val test = for {
-      _ <- setup()
       _ <- service.createResourceType(defaultResourceType)
       _ <- service.createResourceType(otherResourceType)
 
@@ -583,7 +577,6 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
     val viewPolicyName = AccessPolicyName(constrainableReaderRoleName.value)
 
     val res = for{
-      _ <- setup()
       _ <- constrainableService.createResourceType(constrainableResourceType)
       _ <- constrainableService.createResourceType(managedGroupResourceType)  // make sure managed groups in auth domain set are created. dummyUserInfo will be member of the created resourceId
       _ <- resource.authDomain.toList.parTraverse(a => managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))
@@ -604,7 +597,6 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
     val viewPolicyName = AccessPolicyName(constrainableReaderRoleName.value)
 
     val res = for{
-      _ <- setup()
       _ <- constrainableService.createResourceType(constrainableResourceType)
       _ <- constrainableService.createResourceType(managedGroupResourceType)  // make sure managed groups in auth domain set are created. dummyUserInfo will be member of the created resourceId
       _ <- resource.authDomain.toList.parTraverse(a => managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))
@@ -626,7 +618,6 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
     val viewPolicyName = AccessPolicyName(constrainableReaderRoleName.value)
 
     val res = for{
-      _ <- setup()
       _ <- constrainableService.createResourceType(constrainableResourceType)
       _ <- constrainableService.createResourceType(managedGroupResourceType)
       _ <- resource.authDomain.toList.parTraverse(a => managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))
