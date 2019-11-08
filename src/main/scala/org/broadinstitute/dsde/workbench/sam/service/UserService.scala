@@ -23,8 +23,7 @@ import scala.util.matching.Regex
   */
 class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExtensions)(implicit val executionContext: ExecutionContext) extends LazyLogging {
 
-  def createUser(user: CreateWorkbenchUser): Future[UserStatus] = {
-    val parentSpan: Span = null
+  def createUser(user: CreateWorkbenchUser, parentSpan: Span = null): Future[UserStatus] = {
     for {
       allUsersGroup <- traceWithParent("getOrCreateAllUsersGroup", parentSpan)(_ => cloudExtensions.getOrCreateAllUsersGroup(directoryDAO))
       createdUser <- traceWithParent("registerUser", parentSpan)(_ => registerUser(user).unsafeToFuture())
