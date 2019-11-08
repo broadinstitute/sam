@@ -122,21 +122,15 @@ trait LdapSupport extends DirectorySubjectNameSupport {
     executeLdap(IO(ldapSearchStream(groupsOu, SearchScope.SUB, filters: _*)(unmarshalGroupThrow)))
   }
 
-//  override def isGroupMember(groupId: WorkbenchGroupIdentity, member: WorkbenchSubject): IO[Boolean] =
-//    for {
-//      memberOf <- ldapLoadMemberOf(member)
-//    } yield {
-//      val memberships = memberOf.map(_.toLowerCase) //toLowerCase because the dn can have varying capitalization
-//      memberships.contains(groupDn(groupId).toLowerCase)
-//    }
+  def isSubGroupMember(member: WorkbenchSubject, members: Set[WorkbenchSubject]): IO[Boolean] =
+    members.collect{case x:WorkbenchGroupIdentity => x}.toList.existsM(isGroupMember(_, member))
 
-// KCIBUL: follow up on lowercase with Doug, I don't think we need it b/c we're not looking at DNs anymore
   def isGroupMember(groupId: WorkbenchGroupIdentity, member: WorkbenchSubject): IO[Boolean] = {
     for {
       group <- ldapLoadGroup(groupId)
       members = group.map(_.members).getOrElse(Set.empty[WorkbenchSubject])
       isDirectMember = members.contains(member)
-      isMember <- if (isDirectMember) IO.pure(isDirectMember) else members.collect{case x:WorkbenchGroupIdentity => x}.toList.existsM(isGroupMember(_, member))
+      isMember <- if (isDirectMember) IO.pure(isDirectMember) else isSubGroupMember(member, members)
     } yield {
       isMember
     }
