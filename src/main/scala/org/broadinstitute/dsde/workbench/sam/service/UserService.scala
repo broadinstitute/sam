@@ -7,6 +7,8 @@ import akka.http.scaladsl.model.StatusCodes
 import cats.effect.IO
 import javax.naming.NameNotFoundException
 import com.typesafe.scalalogging.LazyLogging
+import io.opencensus.trace.Span
+import io.opencensus.scala.Tracing._
 import org.apache.commons.codec.binary.Hex
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.api.{CreateWorkbenchUser, InviteUser}
@@ -21,15 +23,17 @@ import scala.util.matching.Regex
   */
 class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExtensions)(implicit val executionContext: ExecutionContext) extends LazyLogging {
 
-  def createUser(user: CreateWorkbenchUser): Future[UserStatus] =
+  def createUser(user: CreateWorkbenchUser): Future[UserStatus] = {
+    val parentSpan: Span = null
     for {
-      allUsersGroup <- cloudExtensions.getOrCreateAllUsersGroup(directoryDAO)
-      createdUser <- registerUser(user).unsafeToFuture()
-      _ <- enableUserInternal(createdUser)
-      _ <- directoryDAO.addGroupMember(allUsersGroup.id, createdUser.id).unsafeToFuture()
-      userStatus <- getUserStatus(createdUser.id)
+      allUsersGroup <- traceWithParent("getOrCreateAllUsersGroup", parentSpan)(_ => cloudExtensions.getOrCreateAllUsersGroup(directoryDAO))
+      createdUser <- traceWithParent("registerUser", parentSpan)(_ => registerUser(user).unsafeToFuture())
+      _ <- traceWithParent("enableUserInternal", parentSpan)(_ => enableUserInternal(createdUser))
+      _ <- traceWithParent("addGroupMemberToAllUsers", parentSpan)(_ => directoryDAO.addGroupMember(allUsersGroup.id, createdUser.id).unsafeToFuture())
+      userStatus <- traceWithParent("getUserStatus", parentSpan)(_ => getUserStatus(createdUser.id))
       res <- userStatus.toRight(new WorkbenchException("getUserStatus returned None after user was created")).fold(Future.failed, Future.successful)
     } yield res
+  }
 
   def inviteUser(invitee: InviteUser): IO[UserStatusDetails] =
     for {

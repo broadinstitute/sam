@@ -6,6 +6,7 @@ import akka.http.scaladsl.model.StatusCodes
 import cats.effect.IO
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
+import io.opencensus.trace.Span
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.{model, _}
 import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
@@ -247,7 +248,7 @@ class ResourceService(
       case _ => Future.successful(())
     }
 
-  def listUserResourceRoles(resource: FullyQualifiedResourceId, userInfo: UserInfo): Future[Set[ResourceRoleName]] =
+  def listUserResourceRoles(resource: FullyQualifiedResourceId, userInfo: UserInfo, parentSpan: Span = null): Future[Set[ResourceRoleName]] =
     policyEvaluatorService
       .listResourceAccessPoliciesForUser(resource, userInfo.userId)
       .map { matchingPolicies =>

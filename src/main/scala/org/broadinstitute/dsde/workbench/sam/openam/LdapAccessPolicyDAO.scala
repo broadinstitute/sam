@@ -60,7 +60,7 @@ class LdapAccessPolicyDAO(
   override def deleteResource(resource: FullyQualifiedResourceId): IO[Unit] = IO(ldapConnectionPool.delete(resourceDn(resource)))
 
   override def loadResourceAuthDomain(resourceId: FullyQualifiedResourceId): IO[LoadResourceAuthDomainResult] = {
-    listResourceWithAuthdomains(resourceId).map{
+    listResourceWithAuthdomains(resourceId).map {
       resource =>
         resource match {
           case None => LoadResourceAuthDomainResult.ResourceNotFound
@@ -247,28 +247,12 @@ class LdapAccessPolicyDAO(
         ldapSearchStream(resourceDn(resource), SearchScope.SUB, Filter.createEqualityFilter("objectclass", ObjectClass.policy))(unmarshalAccessPolicy)
       ))
 
-  override def listAccessPoliciesForUser(resource: FullyQualifiedResourceId, user: WorkbenchUserId): IO[Set[AccessPolicy]] =
+
+  override def listAccessPoliciesForUser(resource: FullyQualifiedResourceId, userId: WorkbenchUserId): IO[Set[AccessPolicy]] =
     for {
-      memberOfs <- ldapLoadMemberOf(user)
-      accessPolicies <- {
-        val fullyQualifiedPolicyIds = memberOfs.toList.mapFilter { str =>
-          for {
-            subject <- Either.catchNonFatal(dnToSubject(str)).toOption
-            fullyQualifiedPolicyId <- subject match {
-              case sub: FullyQualifiedPolicyId
-                  if sub.resource.resourceId == resource.resourceId && sub.resource.resourceTypeName == resource.resourceTypeName =>
-                Some(sub)
-              case _ => None
-            }
-          } yield fullyQualifiedPolicyId
-        }
-        val filters = fullyQualifiedPolicyIds
-          .grouped(batchSize)
-          .map(batch => Filter.createORFilter(batch.map(r => Filter.createEqualityFilter(Attr.policy, r.accessPolicyName.value)).asJava))
-          .toSeq
-        executeLdap(IO(ldapSearchStream(resourceDn(resource), SearchScope.SUB, filters: _*)(unmarshalAccessPolicy).toSet))
-      }
-    } yield accessPolicies
+      allPolicies <- listAccessPolicies(resource)
+      userPolicies <- allPolicies.filterA(policy => isGroupMember(policy.id, userId))
+    } yield userPolicies.toSet
 
   override def listFlattenedPolicyMembers(policyId: FullyQualifiedPolicyId): IO[Set[WorkbenchUser]] = executeLdap(
     // we only care about entries in ou=people and only 1 level down but searching the whole directory is MUCH faster
