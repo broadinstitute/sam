@@ -77,10 +77,10 @@ class PolicyEvaluatorService(
           val roleNamesWithAction = resourceType.roles.filter(_.actions.contains(action)).map(_.roleName)
           for {
             hasAction <- directMemberHasActionOnResource(resource, roleNamesWithAction, action, userId)
-            authDomainMember <- isSingleAuthDomainMember(resource, userId)
+            authDomainCheckNotRequired = !resourceType.isAuthDomainConstrainable || !resourceType.actionPatterns.exists( ap => ap.authDomainConstrainable && ap.matches(action))
+            authDomainOK <- if (authDomainCheckNotRequired) IO.pure(true) else isSingleAuthDomainMember(resource, userId)
           } yield {
-            val authDomainCheckNotRequired = !resourceType.isAuthDomainConstrainable || !resourceType.actionPatterns.exists( ap => ap.authDomainConstrainable && ap.matches(action))
-            hasAction && (authDomainCheckNotRequired || authDomainMember)
+            hasAction && authDomainOK
           }
       }
     } yield result.getOrElse(false)
