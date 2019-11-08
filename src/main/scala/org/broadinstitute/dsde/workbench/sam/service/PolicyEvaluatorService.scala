@@ -72,35 +72,36 @@ class PolicyEvaluatorService(
   def hasPermissionShallowCheck(resource: FullyQualifiedResourceId, action: ResourceAction, userId: WorkbenchUserId): IO[Boolean] = {
 
     for {
-      res <- resourceTypes.get(resource.resourceTypeName).traverse {
-        rt =>
-
-          val roleNamesWithAction = rt.roles.filter(_.actions.contains(action)).map(_.roleName)
-          val hasAction = directMemberHasActionOnResource(resource, roleNamesWithAction, action, userId)
-
-          // if the resource type OR action are NOT auth domain constrainable... just return
-          if (!rt.isAuthDomainConstrainable || !rt.actionPatterns.exists( ap => ap.authDomainConstrainable && ap.matches(action)) ) {
-            hasAction
-          } else {
-            for {
-              // check if our result should be modulated by the auth domain constraint (ie we are not a member)
-              authDomainsResult <- accessPolicyDAO.loadResourceAuthDomain(resource)
-              authConstraintOk <- authDomainsResult match {
-                case LoadResourceAuthDomainResult.NotConstrained | LoadResourceAuthDomainResult.ResourceNotFound =>
-                  IO.pure(true)
-                case LoadResourceAuthDomainResult.Constrained(authDomains) =>
-                  // if there is more than one group, just fallback
-                  if (authDomains.size > 1) {
-                    IO.pure(false)
-                  } else {
-                    directoryDAO.isGroupMember(authDomains.head, userId)
-                  }
-              }
-            res2 <- if (authConstraintOk) hasAction else IO.pure(false)
-            } yield res2
+      result <- resourceTypes.get(resource.resourceTypeName).traverse {
+        resourceType =>
+          val roleNamesWithAction = resourceType.roles.filter(_.actions.contains(action)).map(_.roleName)
+          for {
+            hasAction <- directMemberHasActionOnResource(resource, roleNamesWithAction, action, userId)
+            authDomainMember <- isSingleAuthDomainMember(resource, userId)
+          } yield {
+            val authDomainCheckNotRequired = !resourceType.isAuthDomainConstrainable || !resourceType.actionPatterns.exists( ap => ap.authDomainConstrainable && ap.matches(action))
+            hasAction && (authDomainCheckNotRequired || authDomainMember)
           }
       }
-    } yield res.getOrElse(false)
+    } yield result.getOrElse(false)
+  }
+
+  private def isSingleAuthDomainMember(resource: FullyQualifiedResourceId, userId: WorkbenchUserId): IO[Boolean] = {
+    for {
+      // check if our result should be modulated by the auth domain constraint (ie we are not a member)
+      authDomainsResult <- accessPolicyDAO.loadResourceAuthDomain(resource)
+      authConstraintOk <- authDomainsResult match {
+        case LoadResourceAuthDomainResult.NotConstrained | LoadResourceAuthDomainResult.ResourceNotFound =>
+          IO.pure(true)
+        case LoadResourceAuthDomainResult.Constrained(authDomains) =>
+          // if there is more than one group, just fallback
+          if (authDomains.size > 1) {
+            IO.pure(false)
+          } else {
+            directoryDAO.isGroupMember(authDomains.head, userId)
+          }
+      }
+    } yield authConstraintOk
   }
 
   private def directMemberHasActionOnResource(resource: FullyQualifiedResourceId, roleNamesWithAction: Set[ResourceRoleName], action: ResourceAction, userId: WorkbenchUserId ): IO[Boolean] = {
