@@ -333,6 +333,22 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     }
   }
 
+  override def removeAuthDomainFromResource(resource: FullyQualifiedResourceId): IO[Unit] = {
+    val r = ResourceTable.syntax("r")
+    val ad = AuthDomainTable.syntax("ad")
+    val rt = ResourceTypeTable.syntax("rt")
+
+    runInTransaction { implicit session =>
+      samsql"""delete from ${AuthDomainTable as ad}
+              where ${ad.resourceId} =
+              (select ${r.id} from ${ResourceTable as r}
+              join ${ResourceTypeTable as rt}
+              on ${r.resourceTypeId} = ${rt.id}
+              where ${r.name} = ${resource.resourceId}
+              and ${rt.name} = ${resource.resourceTypeName})""".update().apply()
+    }
+  }
+
   override def createPolicy(policy: AccessPolicy): IO[AccessPolicy] = {
     runInTransaction { implicit session =>
       val groupId = insertPolicyGroup(policy)
