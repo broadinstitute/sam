@@ -79,7 +79,7 @@ class PolicyEvaluatorService(
           val hasAction = directMemberHasActionOnResource(resource, roleNamesWithAction, action, userId)
 
           // if the resource type OR action are NOT auth domain constrainable... just return
-          if (!rt.isAuthDomainConstrainable || !rt.actionPatterns.exists( ap => ap.authDomainConstrainable & ap.matches(action)) ) {
+          if (!rt.isAuthDomainConstrainable || !rt.actionPatterns.exists( ap => ap.authDomainConstrainable && ap.matches(action)) ) {
             hasAction
           } else {
             for {
@@ -93,21 +93,13 @@ class PolicyEvaluatorService(
                   if (authDomains.size > 1) {
                     IO.pure(false)
                   } else {
-                    isUserMemberOfGroup(authDomains.head, userId)
+                    directoryDAO.isGroupMember(authDomains.head, userId)
                   }
               }
             } yield res2
           }
       }
     } yield res.getOrElse(false)
-
-  }
-
-  def isUserMemberOfGroup(groupName: WorkbenchGroupName, userId: WorkbenchUserId): IO[Boolean] = {
-    val members = directoryDAO.loadGroup(groupName).map(_.get.members)
-    val isDirectMember = members.map( _.contains(userId))
-    val isGroupMember = members.flatMap( _.collect{case x:WorkbenchGroupName => x}.toList.existsM(isUserMemberOfGroup(_, userId)))
-    List(isDirectMember, isGroupMember).sequence.map( _.contains(true) )
   }
 
   private def directMemberHasActionOnResource(resource: FullyQualifiedResourceId, roleNamesWithAction: Set[ResourceRoleName], action: ResourceAction, userId: WorkbenchUserId ): IO[Boolean] = {

@@ -155,6 +155,49 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
     }
   }
 
+  "hasPermission" should "return true if given action is granted through membership in another policy" in {
+    val user = genUserInfo.sample.get
+    val action = ResourceAction("weirdAction")
+
+    val resource = genResource.sample.get.copy(resourceTypeName = defaultResourceType.name)
+
+    val samplePolicy = genPolicy.sample.get
+    val policyWithUser = AccessPolicy.members.set(samplePolicy.members + user.userId)(samplePolicy)
+    val policy = SamLenses.resourceIdentityAccessPolicy.set(resource.fullyQualifiedId)(policyWithUser)
+
+    val resource2 = genResource.sample.get.copy(resourceTypeName = defaultResourceType.name)
+
+    val samplePolicy2 = genPolicy.sample.get
+    val policy2ExtraAction = AccessPolicy.actions.set(samplePolicy.actions + action)(samplePolicy2)
+    val policy2WithUser = AccessPolicy.members.set(Set(policy.id))(policy2ExtraAction)
+
+    val policy2 = SamLenses.resourceIdentityAccessPolicy.set(resource2.fullyQualifiedId)(policy2WithUser)
+
+    val res = for{
+      _ <- setup()
+      _ <- policyDAO.createResourceType(managedGroupResourceType)
+      _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(GoogleSubjectId(user.userId.value)), user.userEmail))
+      _ <- resource.authDomain.toList.parTraverse(a => managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))
+      _ <- resource2.authDomain.toList.parTraverse(a => managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))
+      _ <- savePolicyMembers(policy)
+      _ <- savePolicyMembers(policy2)
+
+      _ <- policyDAO.createResourceType(defaultResourceType)
+
+      _ <- policyDAO.createResource(resource)
+      _ <- policyDAO.createResource(resource2)
+
+      _ <- policyDAO.createPolicy(policy)
+      _ <- policyDAO.createPolicy(policy2)
+
+      r <- service.policyEvaluatorService.hasPermission(policy2.id.resource, action, user.userId)
+    } yield {
+      r shouldBe true
+    }
+
+    res.unsafeRunSync()
+  }
+
   "hasPermission" should "return false if given action is not allowed for a user" in {
     val user = genUserInfo.sample.get
     val samplePolicy = genPolicy.sample.get

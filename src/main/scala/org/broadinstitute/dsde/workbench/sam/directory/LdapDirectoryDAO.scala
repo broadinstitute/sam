@@ -130,14 +130,6 @@ class LdapDirectoryDAO(
         case Left(regrets) => IO.raiseError(regrets)
       }
 
-  override def isGroupMember(groupId: WorkbenchGroupIdentity, member: WorkbenchSubject): IO[Boolean] =
-    for {
-      memberOf <- ldapLoadMemberOf(member)
-    } yield {
-      val memberships = memberOf.map(_.toLowerCase) //toLowerCase because the dn can have varying capitalization
-      memberships.contains(groupDn(groupId).toLowerCase)
-    }
-
   override def updateSynchronizedDate(groupId: WorkbenchGroupIdentity): IO[Unit] =
     executeLdap(IO(ldapConnectionPool.modify(groupDn(groupId), new Modification(ModificationType.REPLACE, Attr.groupSynchronizedTimestamp, formattedDate(new Date())))))
 

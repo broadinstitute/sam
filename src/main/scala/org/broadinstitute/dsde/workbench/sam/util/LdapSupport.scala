@@ -4,7 +4,7 @@ import cats.data.OptionT
 import cats.effect.{ContextShift, IO}
 import cats.implicits._
 import com.unboundid.ldap.sdk._
-import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException, WorkbenchGroupName, WorkbenchSubject, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException, WorkbenchGroupIdentity, WorkbenchGroupName, WorkbenchSubject}
 import org.broadinstitute.dsde.workbench.sam.directory.DirectorySubjectNameSupport
 import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO.Attr
@@ -107,9 +107,9 @@ trait LdapSupport extends DirectorySubjectNameSupport {
   def evictIsMemberOfCache(subject: WorkbenchSubject): IO[Unit] =
     IO.pure(memberOfCache.remove(subject))
 
-  def ldapLoadGroup(groupName: WorkbenchGroupName): IO[Option[BasicWorkbenchGroup]] = {
+  def ldapLoadGroup(groupId: WorkbenchGroupIdentity): IO[Option[BasicWorkbenchGroup]] = {
     val res = for {
-      entry <- OptionT(executeLdap(IO(ldapConnectionPool.getEntry(groupDn(groupName)))).map(Option.apply))
+      entry <- OptionT(executeLdap(IO(ldapConnectionPool.getEntry(groupDn(groupId)))).map(Option.apply))
       r <- OptionT.liftF(IO(unmarshalGroupThrow(entry)))
     } yield r
 
@@ -122,12 +122,21 @@ trait LdapSupport extends DirectorySubjectNameSupport {
     executeLdap(IO(ldapSearchStream(groupsOu, SearchScope.SUB, filters: _*)(unmarshalGroupThrow)))
   }
 
-  def ldapIsUserMemberOfGroup(groupName: WorkbenchGroupName, userId: WorkbenchUserId): IO[Boolean] = {
+//  override def isGroupMember(groupId: WorkbenchGroupIdentity, member: WorkbenchSubject): IO[Boolean] =
+//    for {
+//      memberOf <- ldapLoadMemberOf(member)
+//    } yield {
+//      val memberships = memberOf.map(_.toLowerCase) //toLowerCase because the dn can have varying capitalization
+//      memberships.contains(groupDn(groupId).toLowerCase)
+//    }
+
+// KCIBUL: follow up on lowercase with Doug, I don't think we need it b/c we're not looking at DNs anymore
+  def isGroupMember(groupId: WorkbenchGroupIdentity, member: WorkbenchSubject): IO[Boolean] = {
     for {
-      group <- ldapLoadGroup(groupName)
+      group <- ldapLoadGroup(groupId)
       members = group.map(_.members).getOrElse(Set.empty[WorkbenchSubject])
-      isDirectMember = members.contains(userId)
-      isMember <- if (isDirectMember) IO.pure(isDirectMember) else members.collect{case x:WorkbenchGroupName => x}.toList.existsM(ldapIsUserMemberOfGroup(_, userId))
+      isDirectMember = members.contains(member)
+      isMember <- if (isDirectMember) IO.pure(isDirectMember) else members.collect{case x:WorkbenchGroupIdentity => x}.toList.existsM(isGroupMember(_, member))
     } yield {
       isMember
     }
