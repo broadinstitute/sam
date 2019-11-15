@@ -9,6 +9,6 @@
         <dropForeignKeyConstraint baseTableName="SAM_GROUP_MEMBER" constraintName="FK_SGM_MEMBER_USER"/>
     </changeSet>
     <changeSet logicalFilePath="dummy" author="dvoet" id="cascade_delete_user_membership_2">
-        <addForeignKeyConstraint baseTableName="SAM_GROUP_MEMBER" baseColumnNames="member_user_id" constraintName="FK_SGM_MEMBER_USER" referencedTableName="SAM_USER" referencedColumnNames="id" deleteCascade="true"/>
+        <addForeignKeyConstraint baseTableName="SAM_GROUP_MEMBER" baseColumnNames="member_user_id" constraintName="FK_SGM_MEMBER_USER" referencedTableName="SAM_USER" referencedColumnNames="id" onDelete="CASCADE"/>
     </changeSet>
 </databaseChangeLog>
