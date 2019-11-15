@@ -107,7 +107,7 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
       val userStatus = Sam.user.status()(userAuthToken).get
 
       // user a brand new billing project to ensure known state for pet (not present)
-      withBrandNewBillingProject("new_pet_test") { projectName =>
+      withBrandNewBillingProject("new-pet-test") { projectName =>
         val petAccountEmail = Sam.user.petServiceAccountEmail(projectName)(userAuthToken)
         petAccountEmail.value should not be userStatus.userInfo.userEmail
         googleIamDAO.findServiceAccount(GoogleProject(projectName), petAccountEmail).futureValue.map(_.email) shouldBe Some(petAccountEmail)
