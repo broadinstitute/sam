@@ -5,7 +5,7 @@ import java.util.UUID
 
 import akka.actor.ActorSystem
 import akka.testkit.TestKitBase
-import org.broadinstitute.dsde.workbench.auth.{AuthToken, ServiceAccountAuthTokenFromJson, ServiceAccountAuthTokenFromPem}
+import org.broadinstitute.dsde.workbench.auth.{AuthToken, AuthTokenScopes, ServiceAccountAuthTokenFromJson, ServiceAccountAuthTokenFromPem}
 import org.broadinstitute.dsde.workbench.config.{Credentials, UserPool}
 import org.broadinstitute.dsde.workbench.dao.Google.{googleDirectoryDAO, googleIamDAO}
 import org.broadinstitute.dsde.workbench.fixture.BillingFixtures
@@ -106,17 +106,9 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
 
       val userStatus = Sam.user.status()(userAuthToken).get
 
-      withCleanBillingProject(owner) { projectName =>
-        // ensure known state for pet (not present)
-        // since projects get reused in tests it is possible that the pet SA is in google but not in ldap
-        // and if it is not in ldap sam won't try to remove it from google
-        // in order to remove it we need to create it in sam first (and thus ldap) then remove it
+      // user a brand new billing project to ensure known state for pet (not present)
+      withBrandNewBillingProject("new-pet-test") { projectName =>
         val petAccountEmail = Sam.user.petServiceAccountEmail(projectName)(userAuthToken)
-        assert(petAccountEmail.value.contains(userStatus.userInfo.userSubjectId))
-        Sam.removePet(projectName, userStatus.userInfo)
-        eventually(googleIamDAO.findServiceAccount(GoogleProject(projectName), petAccountEmail).futureValue shouldBe None)
-
-        Sam.user.petServiceAccountEmail(projectName)(userAuthToken)
         petAccountEmail.value should not be userStatus.userInfo.userEmail
         googleIamDAO.findServiceAccount(GoogleProject(projectName), petAccountEmail).futureValue.map(_.email) shouldBe Some(petAccountEmail)
 
@@ -129,12 +121,7 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
 
         // who is my pet -> who is my user's pet -> it's me
         Sam.user.petServiceAccountEmail(projectName)(petAuthToken) shouldBe petAccountEmail
-
-        // clean up
-
-        Sam.removePet(projectName, userStatus.userInfo)
-        eventually(googleIamDAO.findServiceAccount(GoogleProject(projectName), petAccountEmail).futureValue shouldBe None)
-      }
+      }(owner.makeAuthToken(AuthTokenScopes.billingScopes))
     }
 
     "should not treat non-pet service accounts as pets" in {
