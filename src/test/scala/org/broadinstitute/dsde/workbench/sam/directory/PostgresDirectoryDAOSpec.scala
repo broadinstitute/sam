@@ -744,16 +744,17 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
         dao.isEnabled(defaultUser.id).unsafeRunSync() shouldBe false
       }
 
-      "cannot enable and disable pet service accounts" in {
+      "can enable and disable pet service accounts" in {
         dao.createUser(defaultUser).unsafeRunSync()
         dao.createPetServiceAccount(defaultPetSA).unsafeRunSync()
-        val initialEnabledStatus = dao.isEnabled(defaultPetSA.id).unsafeRunSync()
 
-        dao.disableIdentity(defaultPetSA.id).unsafeRunSync()
-        dao.isEnabled(defaultPetSA.id).unsafeRunSync() shouldBe initialEnabledStatus
+        dao.isEnabled(defaultPetSA.id).unsafeRunSync() shouldBe false
 
         dao.enableIdentity(defaultPetSA.id).unsafeRunSync()
-        dao.isEnabled(defaultPetSA.id).unsafeRunSync() shouldBe initialEnabledStatus
+        dao.isEnabled(defaultPetSA.id).unsafeRunSync() shouldBe true
+
+        dao.disableIdentity(defaultPetSA.id).unsafeRunSync()
+        dao.isEnabled(defaultPetSA.id).unsafeRunSync() shouldBe false
       }
 
       "cannot enable and disable groups" in {
@@ -796,10 +797,10 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
         dao.createUser(defaultUser).unsafeRunSync()
         dao.createPetServiceAccount(defaultPetSA).unsafeRunSync()
 
-        dao.disableIdentity(defaultUser.id).unsafeRunSync()
+        dao.disableIdentity(defaultPetSA.id).unsafeRunSync()
         dao.isEnabled(defaultPetSA.id).unsafeRunSync() shouldBe false
 
-        dao.enableIdentity(defaultUser.id).unsafeRunSync()
+        dao.enableIdentity(defaultPetSA.id).unsafeRunSync()
         dao.isEnabled(defaultPetSA.id).unsafeRunSync() shouldBe true
       }
 

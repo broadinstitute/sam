@@ -639,12 +639,25 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     listMemberOfGroups(groupId)
   }
 
+  private def userSubSelect(userId: WorkbenchUserId) = {
+    val u = UserTable.syntax("u")
+    samsqls"(select ${u.result.googleSubjectId} from ${UserTable as u} where ${u.id} = ${userId})"
+  }
+
+  private def petSubSelect(petId: PetServiceAccountId) = {
+    val p = PetServiceAccountTable.syntax("p")
+    samsqls"(select ${p.result.googleSubjectId} from ${PetServiceAccountTable as p} where ${p.userId} = ${petId.userId} and ${p.project} = ${petId.project})"
+  }
+
   override def enableIdentity(subject: WorkbenchSubject): IO[Unit] = {
     runInTransaction { implicit session =>
       subject match {
         case userId: WorkbenchUserId =>
           val u = UserTable.column
           samsql"update ${UserTable.table} set ${u.enabled} = true where ${u.id} = ${userId}".update().apply()
+          samsql"insert into ${EnabledUserTable.table}(${EnabledUserTable.column.id}) ${userSubSelect(userId)} on conflict do nothing".update().apply()
+        case petId: PetServiceAccountId =>
+          samsql"insert into ${EnabledUserTable.table}(${EnabledUserTable.column.id}) ${petSubSelect(petId)} on conflict do nothing".update().apply()
         case _ => // other types of WorkbenchSubjects cannot be enabled
       }
     }
@@ -654,8 +667,11 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     runInTransaction { implicit session =>
       subject match {
         case userId: WorkbenchUserId =>
-          val u = UserTable.column
-          samsql"update ${UserTable.table} set ${u.enabled} = false where ${u.id} = ${userId}".update().apply()
+          val uc = UserTable.column
+          samsql"update ${UserTable.table} set ${uc.enabled} = false where ${uc.id} = ${userId}".update().apply()
+          samsql"delete from ${EnabledUserTable.table} where ${EnabledUserTable.column.id} = ${userSubSelect(userId)}".update().apply()
+        case petId: PetServiceAccountId =>
+          samsql"delete from ${EnabledUserTable.table} where ${EnabledUserTable.column.id} = ${petSubSelect(petId)}".update().apply()
         case _ => // other types of WorkbenchSubjects cannot be disabled
       }
     }
@@ -663,18 +679,16 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
 
   override def isEnabled(subject: WorkbenchSubject): IO[Boolean] = {
     runInTransaction { implicit session =>
-      val userIdOpt = subject match {
-        case user: WorkbenchUserId => Option(user)
-        case PetServiceAccountId(user, _) => Option(user)
+      val subSelectOpt = subject match {
+        case user: WorkbenchUserId => Option(userSubSelect(user))
+        case pet: PetServiceAccountId => Option(petSubSelect(pet))
         case _ => None
       }
 
-      val u = UserTable.column
-
-      userIdOpt.flatMap { userId =>
-        samsql"select ${u.enabled} from ${UserTable.table} where ${u.id} = ${userId}"
-          .map(rs => rs.boolean(u.enabled)).single().apply()
-      }.getOrElse(false)
+      subSelectOpt.exists { subSelect =>
+        val eu = EnabledUserTable.syntax("eu")
+        samsql"select count(*) from ${EnabledUserTable as eu} where ${eu.id} = $subSelect".map(_.int(1)).single().apply().exists(_ > 0)
+      }
     }
   }
 

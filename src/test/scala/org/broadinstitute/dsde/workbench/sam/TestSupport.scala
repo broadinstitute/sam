@@ -178,7 +178,9 @@ object TestSupport extends TestSupport {
         PetServiceAccountTable,
         UserTable,
         AccessInstructionsTable,
-        GroupTable)
+        GroupTable,
+        EnabledUserTable
+      )
 
       tables.map(table => withSQL{
         delete.from(table)
