@@ -1,6 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.util
 
 import akka.http.scaladsl.model.StatusCodes
+import cats.data.NonEmptyList
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, ErrorReportSource, ValueObject, WorkbenchExceptionWithErrorReport}
 import org.broadinstitute.dsde.workbench.newrelic.NewRelicMetrics
@@ -8,6 +9,7 @@ import org.scalatest.{FlatSpec, Matchers}
 import org.mockito.Mockito._
 import org.mockito.ArgumentMatchers._
 import org.scalatest.mockito.MockitoSugar
+
 import scala.concurrent.duration._
 
 class NewRelicShadowResultReporterSpec extends FlatSpec with Matchers with MockitoSugar {
@@ -52,6 +54,25 @@ class NewRelicShadowResultReporterSpec extends FlatSpec with Matchers with Mocki
     val reporter = createResultReporter
     val real = Seq(3,2,6,2,5,2)
     val shadow = Seq(3,2,5,6,2,2)
+    val result = reporter.resultsMatch(Right(real), Right(shadow))
+    withClue(result.mismatchReasons) {
+      result.matches should be (true)
+    }
+  }
+
+  it should "match NonEmptyList" in {
+    val reporter = createResultReporter
+    val probe = NonEmptyList(3,List(2,5,6,2))
+    val result = reporter.resultsMatch(Right(probe), Right(probe))
+    withClue(result.mismatchReasons) {
+      result.matches should be (true)
+    }
+  }
+
+  it should "match NonEmptyList independent of order" in {
+    val reporter = createResultReporter
+    val real = NonEmptyList(3,List(2,6,2,5,2))
+    val shadow = NonEmptyList(2,List(3,5,6,2,2))
     val result = reporter.resultsMatch(Right(real), Right(shadow))
     withClue(result.mismatchReasons) {
       result.matches should be (true)
