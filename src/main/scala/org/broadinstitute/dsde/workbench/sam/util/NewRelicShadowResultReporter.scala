@@ -1,5 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.util
 
+import java.util.Date
+
 import cats.effect.IO
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model.WorkbenchExceptionWithErrorReport
@@ -99,6 +101,9 @@ class NewRelicShadowResultReporter(val daoName: String, val newRelicMetrics: New
       case (Right(realCaseClass: Product), Right(shadowCaseClass: Product)) =>
         caseClassesMatch(realCaseClass, shadowCaseClass)
 
+      case (Right(realDate: Date), Right(shadowDate: Date)) =>
+        datesAreClose(realDate, shadowDate)
+
       case (Right(realValue), Right(shadowValue)) => createMatchResult(realValue, shadowValue, "values unequal")
 
       case (_, _) =>
@@ -125,6 +130,24 @@ class NewRelicShadowResultReporter(val daoName: String, val newRelicMetrics: New
       }
       .toSeq
     aggregateMatchResults(matchResults :+ classMatch)
+  }
+
+  /**
+    * Returns a mismatch if dates are more than 10 minutes apart.
+    *
+    * @param realDate
+    * @param shadowDate
+    * @return
+    */
+  private def datesAreClose(realDate: Date, shadowDate: Date): MatchResult = {
+    val dateDiffMillis = Math.abs(realDate.getTime - shadowDate.getTime)
+    val matches = dateDiffMillis < 600000 // 10 minutes
+    val reason = if (matches) {
+      Seq.empty
+    } else {
+      Seq(s"dates more than 10 minutes apart: real [$realDate], shadow [$shadowDate]")
+    }
+    MatchResult(matches, reason)
   }
 
   /**
