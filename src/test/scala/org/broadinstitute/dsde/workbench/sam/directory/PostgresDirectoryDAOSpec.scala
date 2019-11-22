@@ -597,6 +597,21 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
         dao.isGroupMember(parentGroup.id, user.id).unsafeRunSync() shouldBe true
       }
 
+      // https://broadworkbench.atlassian.net/browse/CA-600
+      "return true when user is in multiple sub groups" in {
+        val user = defaultUser
+        val subGroup1 = defaultGroup.copy(members = Set(user.id))
+        val subGroup2 = BasicWorkbenchGroup(WorkbenchGroupName("subGroup2"), Set(user.id), WorkbenchEmail("group2@foo.com"))
+        val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName("parentGroup"), Set(subGroup1.id, subGroup2.id), WorkbenchEmail("baz@qux.com"))
+
+        dao.createUser(user).unsafeRunSync()
+        dao.createGroup(subGroup1).unsafeRunSync()
+        dao.createGroup(subGroup2).unsafeRunSync()
+        dao.createGroup(parentGroup).unsafeRunSync()
+
+        dao.isGroupMember(parentGroup.id, user.id).unsafeRunSync() should be (true)
+      }
+
       "return false when user is not in sub group" in {
         val user = defaultUser
         val subGroup = defaultGroup.copy(members = Set(user.id))

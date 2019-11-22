@@ -1,5 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.util
 
+import java.util.Date
+
 import akka.http.scaladsl.model.StatusCodes
 import cats.data.NonEmptyList
 import cats.effect.IO
@@ -108,6 +110,26 @@ class NewRelicShadowResultReporterSpec extends FlatSpec with Matchers with Mocki
     }
   }
 
+  it should "match dates that are close - shadow after" in {
+    val reporter = createResultReporter
+    val real = new Date()
+    val shadow = new Date(real.getTime + 200000)
+    val result = reporter.resultsMatch(Right(real), Right(shadow))
+    withClue(result.mismatchReasons) {
+      result.matches should be (true)
+    }
+  }
+
+  it should "match dates that are close - shadow before" in {
+    val reporter = createResultReporter
+    val real = new Date()
+    val shadow = new Date(real.getTime - 200000)
+    val result = reporter.resultsMatch(Right(real), Right(shadow))
+    withClue(result.mismatchReasons) {
+      result.matches should be (true)
+    }
+  }
+
   //mismatch cases
 
   it should "detect mismatch in value object in collection in complex case class structure" in {
@@ -173,6 +195,18 @@ class NewRelicShadowResultReporterSpec extends FlatSpec with Matchers with Mocki
     withClue(result.mismatchReasons) {
       result.matches should be (false)
       result.mismatchReasons should contain theSameElementsAs Seq(s"unequal error report status codes: real [Some(418 I'm a teapot)], shadow [Some(200 OK)]")
+    }
+  }
+
+  it should "detect mismatch in dates" in {
+    val reporter = createResultReporter
+    val real = new Date()
+    val shadow = new Date(real.getTime - 2000000)
+    val result = reporter.resultsMatch(Right(real), Right(shadow))
+
+    withClue(result.mismatchReasons) {
+      result.matches should be (false)
+      result.mismatchReasons.exists(_.startsWith("dates more than 10 minutes apart")) should be (true)
     }
   }
 
