@@ -8,4 +8,5 @@ package org.broadinstitute.dsde.workbench.sam.db
 object PSQLStateExtensions {
   val UNIQUE_VIOLATION = "23505"
   val FOREIGN_KEY_VIOLATION = "23503"
+  val NULL_CONSTRAINT_VIOLATION = "23502"
 }

@@ -1,7 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.util
 
 import cats.effect.concurrent.Semaphore
-import cats.effect.{Clock, ContextShift, IO}
+import cats.effect.{Clock, ContextShift, IO, Timer}
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.{FlatSpec, Matchers}
 
@@ -93,6 +93,7 @@ class ShadowRunnerSpec extends FlatSpec with Matchers with ScalaFutures {
     }
 
     implicit val contextShift: ContextShift[IO] = IO.contextShift(scala.concurrent.ExecutionContext.global)
+    implicit val timer: Timer[IO] = IO.timer(scala.concurrent.ExecutionContext.global)
     val clock: Clock[IO] = Clock.create[IO]
     val proxy = DaoWithShadow(new RealDAO, new ShadowDAO, testShadowResultReporter, clock)
 

@@ -1,14 +1,19 @@
 package org.broadinstitute.dsde.workbench.sam.util
+
 import java.lang.reflect.{InvocationHandler, Method, Proxy}
 import java.util.concurrent.Executors
 
 import cats.effect._
+import cats.syntax.all._
 import com.typesafe.scalalogging.LazyLogging
+import org.broadinstitute.dsde.workbench.sam.db.PSQLStateExtensions
+import org.postgresql.util.PSQLException
 
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 import scala.concurrent.{ExecutionContext, ExecutionContextExecutor}
 import scala.reflect.ClassTag
 import scala.util.Try
+import scala.concurrent.duration._
 
 case class TimedResult[T](result: Either[Throwable, T], time: FiniteDuration)
 
@@ -76,14 +81,14 @@ trait ShadowResultReporter extends LazyLogging {
   * All methods in your DAO must return IO.
   */
 object DaoWithShadow {
-  def apply[T : ClassTag](realDAO: T, shadowDAO: T, resultReporter: ShadowResultReporter, clock: Clock[IO])(implicit contextShift: ContextShift[IO]): T = {
+  def apply[T : ClassTag](realDAO: T, shadowDAO: T, resultReporter: ShadowResultReporter, clock: Clock[IO])(implicit contextShift: ContextShift[IO], timer: Timer[IO]): T = {
     Proxy.newProxyInstance(getClass.getClassLoader,
       Array(implicitly[ClassTag[T]].runtimeClass),
       new ShadowRunnerDynamicProxy[T](realDAO, shadowDAO, resultReporter, clock)).asInstanceOf[T]
   }
 }
 
-private class ShadowRunnerDynamicProxy[DAO](realDAO: DAO, shadowDAO: DAO, val resultReporter: ShadowResultReporter, val clock: Clock[IO])(implicit val contextShift: ContextShift[IO]) extends InvocationHandler with ShadowRunner {
+private class ShadowRunnerDynamicProxy[DAO](realDAO: DAO, shadowDAO: DAO, val resultReporter: ShadowResultReporter, val clock: Clock[IO])(implicit val contextShift: ContextShift[IO], timer: Timer[IO]) extends InvocationHandler with ShadowRunner {
   override def invoke(proxy: Any, method: Method, args: Array[AnyRef]): AnyRef = {
     // there should not be any functions in our DAOs that return non-IO type but scala does funny stuff at the java class level wrt default parameters
     // so check if the return type is IO, if it is just call it and run with shadow
@@ -91,7 +96,7 @@ private class ShadowRunnerDynamicProxy[DAO](realDAO: DAO, shadowDAO: DAO, val re
     if (classOf[IO[_]].isAssignableFrom(method.getReturnType)) {
       // since these are IOs any side effects should be deferred so invoking them here does not do the actual work... just creates the IO
       val realIO = attempt(method.invoke(realDAO, args: _*).asInstanceOf[IO[_]])
-      val shadowIO = attempt(method.invoke(shadowDAO, args: _*).asInstanceOf[IO[_]])
+      val shadowIO = retryNullConstraintViolation(attempt(method.invoke(shadowDAO, args: _*).asInstanceOf[IO[_]]), 10 milliseconds, 3)
       runWithShadow(MethodCallInfo(method, args), realIO, shadowIO)
     } else {
       // return type is not IO so wrap them in IO to run with shadow then unwrap
@@ -99,9 +104,23 @@ private class ShadowRunnerDynamicProxy[DAO](realDAO: DAO, shadowDAO: DAO, val re
       val shadowIO = IO(method.invoke(shadowDAO, args:_*))
       runWithShadow(MethodCallInfo(method, args), realIO, shadowIO).unsafeRunSync()
     }
+
   }
 
   private def attempt(io: => IO[_]): IO[_] = Try(io).recover { case e => IO.raiseError(e) }.get
+
+  def retryNullConstraintViolation[A](ioa: IO[A], initialDelay: FiniteDuration, maxRetries: Int)
+                         (implicit timer: Timer[IO]): IO[A] = {
+    ioa.handleErrorWith {
+      case error: PSQLException if error.getSQLState == PSQLStateExtensions.NULL_CONSTRAINT_VIOLATION =>
+        if (maxRetries > 0) {
+          IO.sleep(initialDelay) *> retryNullConstraintViolation(ioa, initialDelay * 2, maxRetries - 1)
+        } else {
+          IO.raiseError(error)
+        }
+      case regrets => IO.raiseError(regrets)
+    }
+  }
 }
 
 case class MethodCallInfo(functionName: String, parameterNames: Array[String], parameterValues: Array[AnyRef])
