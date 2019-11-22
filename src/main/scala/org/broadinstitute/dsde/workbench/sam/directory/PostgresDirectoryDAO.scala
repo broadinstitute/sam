@@ -264,7 +264,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
         SELECT count(*)
         FROM ${subGroupMemberTable as sg} WHERE $memberClause"""
 
-      query.map(rs => rs.int(1)).single().apply().getOrElse(0) == 1
+      query.map(rs => rs.int(1)).single().apply().getOrElse(0) > 0
     }
   }
 
