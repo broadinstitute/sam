@@ -1,7 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.util
 
+import cats.data.NonEmptyList
 import java.util.Date
-
 import cats.effect.IO
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model.WorkbenchExceptionWithErrorReport
@@ -97,6 +97,9 @@ class NewRelicShadowResultReporter(val daoName: String, val newRelicMetrics: New
 
       case (Right(realTraversable: Traversable[_]), Right(shadowTraversable: Traversable[_])) =>
         traversablesContainSameElements(realTraversable, shadowTraversable)
+
+      case (Right(realNEL: NonEmptyList[_]), Right(shadowNEL: NonEmptyList[_])) =>
+        traversablesContainSameElements(realNEL.toList, shadowNEL.toList)
 
       case (Right(realCaseClass: Product), Right(shadowCaseClass: Product)) =>
         caseClassesMatch(realCaseClass, shadowCaseClass)

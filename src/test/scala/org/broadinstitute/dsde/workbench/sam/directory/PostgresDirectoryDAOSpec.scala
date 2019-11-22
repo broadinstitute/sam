@@ -988,6 +988,13 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
         dao.loadSubjectFromEmail(defaultUser.email).unsafeRunSync() shouldBe Some(defaultUser.id)
       }
 
+      "load a user subject from their email case insensitive" in {
+        val email = WorkbenchEmail("Mixed.Case.Email@foo.com")
+        dao.createUser(defaultUser.copy(email = email)).unsafeRunSync()
+
+        dao.loadSubjectFromEmail(new WorkbenchEmail(email.value.toLowerCase())).unsafeRunSync() shouldBe Some(defaultUser.id)
+      }
+
       "load a group subject from its email" in {
         dao.createGroup(defaultGroup).unsafeRunSync()
 
