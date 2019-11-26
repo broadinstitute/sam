@@ -835,6 +835,38 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     service.listAllFlattenedResourceUsers(resource).unsafeRunSync() should contain theSameElementsAs Set(dummyUserIdInfo, user1, user2, user3, user4, user5, user6)
   }
 
+  it should "return a flattened list of all of the users in any of a resource's policies even if the users are in a managed group" in {
+    val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId(UUID.randomUUID().toString))
+    val managedGroupName = "foo"
+    val resourceOwnerUserInfo = UserInfo(OAuth2BearerToken("token"), WorkbenchUserId("user1"), WorkbenchEmail("user1@company.com"), 0)
+    val managedGroupOwnerUserInfo = UserInfo(OAuth2BearerToken("token"), WorkbenchUserId("user2"), WorkbenchEmail("user2@company.com"), 0)
+
+    dirDAO.createUser(WorkbenchUser(resourceOwnerUserInfo.userId, Some(TestSupport.genGoogleSubjectId()), resourceOwnerUserInfo.userEmail)).unsafeRunSync()
+    dirDAO.createUser(WorkbenchUser(managedGroupOwnerUserInfo.userId, Some(TestSupport.genGoogleSubjectId()), managedGroupOwnerUserInfo.userEmail)).unsafeRunSync()
+
+    val resourceOwner = dirDAO.loadUser(resourceOwnerUserInfo.userId).unsafeRunSync().map { user => UserIdInfo(user.id, user.email, user.googleSubjectId) }.get
+    val managedGroupOwner = dirDAO.loadUser(managedGroupOwnerUserInfo.userId).unsafeRunSync().map { user => UserIdInfo(user.id, user.email, user.googleSubjectId) }.get
+
+    val directPolicyMember = UserIdInfo(WorkbenchUserId("directMember"), WorkbenchEmail("directMember@fake.com"), None)
+    val user3 = UserIdInfo(WorkbenchUserId("user3"), WorkbenchEmail("user3@fake.com"), None)
+    val user4 = UserIdInfo(WorkbenchUserId("user4"), WorkbenchEmail("user4@fake.com"), None)
+
+    dirDAO.createUser(WorkbenchUser(directPolicyMember.userSubjectId, None, directPolicyMember.userEmail)).unsafeRunSync()
+    dirDAO.createUser(WorkbenchUser(user3.userSubjectId, None, user3.userEmail)).unsafeRunSync()
+    dirDAO.createUser(WorkbenchUser(user4.userSubjectId, None, user4.userEmail)).unsafeRunSync()
+
+    service.createResourceType(defaultResourceType).unsafeRunSync()
+    service.createResourceType(managedGroupResourceType).unsafeRunSync()
+    runAndWait(service.createResource(defaultResourceType, resource.resourceId, resourceOwnerUserInfo))
+    runAndWait(managedGroupService.createManagedGroup(ResourceId(managedGroupName), managedGroupOwnerUserInfo))
+    runAndWait(service.createPolicy(FullyQualifiedPolicyId(resource, AccessPolicyName("can-catalog")), Set(directPolicyMember.userSubjectId, WorkbenchGroupName(managedGroupName)), Set(ResourceRoleName("other")), Set.empty))
+
+    runAndWait(managedGroupService.addSubjectToPolicy(ResourceId(managedGroupName), ManagedGroupService.memberPolicyName, user3.userSubjectId))
+    runAndWait(managedGroupService.addSubjectToPolicy(ResourceId(managedGroupName), ManagedGroupService.memberPolicyName, user4.userSubjectId))
+
+    service.listAllFlattenedResourceUsers(resource).unsafeRunSync() should contain theSameElementsAs Set(resourceOwner, managedGroupOwner, directPolicyMember, user3, user4)
+  }
+
   "loadAccessPolicyWithEmails" should "get emails for users, groups and policies" in {
     val testResult = for {
       _ <- service.createResourceType(defaultResourceType)

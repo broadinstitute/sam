@@ -202,17 +202,8 @@ class LdapDirectoryDAO(
       unmarshalUser(results).toOption
     }
 
-  private def unmarshalUser(results: Entry): Either[String, WorkbenchUser] =
-    for {
-      uid <- getAttribute(results, Attr.uid).toRight(s"${Attr.uid} attribute missing")
-      email <- getAttribute(results, Attr.email).toRight(s"${Attr.email} attribute missing")
-    } yield WorkbenchUser(WorkbenchUserId(uid), getAttribute(results, Attr.googleSubjectId).map(GoogleSubjectId), WorkbenchEmail(email))
-
-  private def unmarshalUserThrow(results: Entry): WorkbenchUser = unmarshalUser(results).fold(s => throw new WorkbenchException(s), identity)
-
   override def loadUsers(userIds: Set[WorkbenchUserId]): IO[Stream[WorkbenchUser]] = {
-    val filters = userIds.grouped(batchSize).map(batch => Filter.createORFilter(batch.map(g => Filter.createEqualityFilter(Attr.uid, g.value)).asJava)).toSeq
-    executeLdap(IO(ldapSearchStream(peopleOu, SearchScope.ONE, filters: _*)(unmarshalUserThrow)))
+    loadUsersInternal(userIds)
   }
 
   override def deleteUser(userId: WorkbenchUserId): IO[Unit] =
@@ -249,24 +240,6 @@ class LdapDirectoryDAO(
     } yield {
       flatMembers.reduce(_ intersect _)
     }
-  }
-
-  def listFlattenedMembers(groupId: WorkbenchGroupIdentity, visitedGroupIds: Set[WorkbenchGroupIdentity] = Set.empty): IO[Set[WorkbenchUserId]] = {
-    for {
-      directMembers <- listDirectMembers(groupId)
-      users = directMembers.collect { case subject: WorkbenchUserId => subject }
-      subGroups = directMembers.collect { case subject: WorkbenchGroupIdentity => subject }
-      updatedVisitedGroupIds = visitedGroupIds ++ subGroups
-      nestedUsers <- (subGroups -- visitedGroupIds).toList.traverse(subGroupId => listFlattenedMembers(subGroupId, updatedVisitedGroupIds))
-    } yield {
-      users ++ nestedUsers.flatten
-    }
-  }
-
-  def listDirectMembers(groupId: WorkbenchGroupIdentity): IO[Set[WorkbenchSubject]] = {
-    executeLdap(
-      IO(getAttributes(ldapConnectionPool.getEntry(groupDn(groupId), Attr.uniqueMember), Attr.uniqueMember).map(dnToSubject))
-    )
   }
 
   override def listAncestorGroups(groupId: WorkbenchGroupIdentity): IO[Set[WorkbenchGroupIdentity]] = listMemberOfGroups(groupId)

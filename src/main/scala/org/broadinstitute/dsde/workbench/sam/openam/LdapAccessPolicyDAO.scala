@@ -262,23 +262,11 @@ class LdapAccessPolicyDAO(
       userPolicies <- allPolicies.filterA(policy => isGroupMember(policy.id, userId))
     } yield userPolicies.toSet
 
-  override def listFlattenedPolicyMembers(policyId: FullyQualifiedPolicyId): IO[Set[WorkbenchUser]] = executeLdap(
-    // we only care about entries in ou=people and only 1 level down but searching the whole directory is MUCH faster
-    // for some reason (a couple seconds vs hundreds). So search everything and ignore anything that is not workbenchPerson
-    IO(ldapSearchStream(directoryConfig.baseDn, SearchScope.SUB, Filter.createEqualityFilter(Attr.memberOf, policyDn(policyId))) { entry =>
-      if (entry.getObjectClassValues.map(_.toLowerCase).contains(ObjectClass.workbenchPerson.toLowerCase)) {
-        Option(unmarshalUser(entry))
-      } else {
-        None
-      }
-    }.flatten.toSet)
-  )
-
-  private def unmarshalUser(entry: Entry): WorkbenchUser = {
-    val uid = getAttribute(entry, Attr.uid).getOrElse(throw new WorkbenchException(s"${Attr.uid} attribute missing"))
-    val email = getAttribute(entry, Attr.email).getOrElse(throw new WorkbenchException(s"${Attr.email} attribute missing"))
-
-    WorkbenchUser(WorkbenchUserId(uid), getAttribute(entry, Attr.googleSubjectId).map(GoogleSubjectId), WorkbenchEmail(email))
+  override def listFlattenedPolicyMembers(policyId: FullyQualifiedPolicyId): IO[Set[WorkbenchUser]] = {
+    for {
+      memberUserIds <- listFlattenedMembers(policyId)
+      users <- loadUsersInternal(memberUserIds)
+    } yield users.toSet
   }
 
   override def setPolicyIsPublic(policyId: FullyQualifiedPolicyId, public: Boolean): IO[Unit] = {
