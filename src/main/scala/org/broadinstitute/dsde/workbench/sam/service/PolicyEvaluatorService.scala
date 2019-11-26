@@ -13,12 +13,13 @@ import org.broadinstitute.dsde.workbench.sam.util.OpenCensusIOUtils._
 
 import scala.concurrent.ExecutionContext
 
-class PolicyEvaluatorService(
-    private val emailDomain: String,
-    private val resourceTypes: Map[ResourceTypeName, ResourceType],
-    private val accessPolicyDAO: AccessPolicyDAO,
-    private val directoryDAO: DirectoryDAO )(implicit val executionContext: ExecutionContext)
-    extends LazyLogging {
+trait PolicyEvaluatorService extends LazyLogging {
+  protected val emailDomain: String
+  protected val resourceTypes: Map[ResourceTypeName, ResourceType]
+  protected val accessPolicyDAO: AccessPolicyDAO
+  protected val directoryDAO: DirectoryDAO
+  implicit val executionContext: ExecutionContext
+
   def initPolicy(): IO[Unit] = {
     val policyName = AccessPolicyName("admin-notifier-set-public")
     accessPolicyDAO
@@ -215,5 +216,11 @@ class PolicyEvaluatorService(
 object PolicyEvaluatorService {
   def apply(emailDomain: String, resourceTypes: Map[ResourceTypeName, ResourceType], accessPolicyDAO: AccessPolicyDAO, directoryDAO: DirectoryDAO)(
       implicit executionContext: ExecutionContext): PolicyEvaluatorService =
-    new PolicyEvaluatorService(emailDomain, resourceTypes, accessPolicyDAO, directoryDAO)
+    new PolicyEvaluatorServiceImpl(emailDomain, resourceTypes, accessPolicyDAO, directoryDAO)
 }
+
+class PolicyEvaluatorServiceImpl(protected val emailDomain: String,
+                                 protected val resourceTypes: Map[ResourceTypeName, ResourceType],
+                                 protected val accessPolicyDAO: AccessPolicyDAO,
+                                 protected val directoryDAO: DirectoryDAO )(implicit val executionContext: ExecutionContext)
+  extends PolicyEvaluatorService

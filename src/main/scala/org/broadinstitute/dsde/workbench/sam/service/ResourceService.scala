@@ -14,12 +14,11 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, LoadResourceAuthDomainResult}
 
 import scala.concurrent.ExecutionContext
-import scala.concurrent.duration._
 
 /**
   * Created by mbemis on 5/22/17.
   */
-trait ResourceServiceTrait extends LazyLogging {
+trait ResourceService extends LazyLogging {
   protected val resourceTypes: Map[ResourceTypeName, ResourceType]
   protected[service] val policyEvaluatorService: PolicyEvaluatorService
   protected val accessPolicyDAO: AccessPolicyDAO
@@ -56,17 +55,9 @@ trait ResourceServiceTrait extends LazyLogging {
           // make sure resource type admin is added first because the rest depends on it
           createdAdminType <- createResourceType(resourceTypeAdmin)
 
-          // sleep added so shadow dao can catch up, remove when removing opendj
-          // https://broadworkbench.atlassian.net/browse/CA-526
-          _ <- IO.sleep(1 second)(IO.timer(executionContext))
-
           result <- resourceTypes.values.filterNot(_.name == SamResourceTypes.resourceTypeAdminName).toList.traverse { rt =>
             for {
               _ <- createResourceType(rt)
-
-              // sleep added so shadow dao can catch up, remove when removing opendj
-              // https://broadworkbench.atlassian.net/browse/CA-526
-              _ <- IO.sleep(1 second)(IO.timer(executionContext))
 
               policy = ValidatableAccessPolicy(
                 AccessPolicyName(resourceTypeAdmin.ownerRoleName.value),
@@ -507,10 +498,21 @@ trait ResourceServiceTrait extends LazyLogging {
     }
 }
 
-class ResourceService(protected val resourceTypes: Map[ResourceTypeName, ResourceType],
+object ResourceService {
+  def apply(resourceTypes: Map[ResourceTypeName, ResourceType],
+            policyEvaluatorService: PolicyEvaluatorService,
+            accessPolicyDAO: AccessPolicyDAO,
+            directoryDAO: DirectoryDAO,
+            cloudExtensions: CloudExtensions,
+            emailDomain: String)(implicit executionContext: ExecutionContext): ResourceService = {
+    new ResourceServiceImpl(resourceTypes, policyEvaluatorService, accessPolicyDAO, directoryDAO, cloudExtensions, emailDomain)
+  }
+}
+
+class ResourceServiceImpl(protected val resourceTypes: Map[ResourceTypeName, ResourceType],
                       protected[service] val policyEvaluatorService: PolicyEvaluatorService,
                       protected val accessPolicyDAO: AccessPolicyDAO,
                       protected val directoryDAO: DirectoryDAO,
                       protected val cloudExtensions: CloudExtensions,
                       val emailDomain: String)(implicit val executionContext: ExecutionContext)
-  extends LazyLogging with ResourceServiceTrait
+  extends LazyLogging with ResourceService

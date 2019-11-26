@@ -48,8 +48,8 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
   private val testDomain = "example.com"
 
   private val policyEvaluatorService = PolicyEvaluatorService(testDomain, resourceTypeMap, policyDAO, dirDAO)
-  private val resourceService = new ResourceService(resourceTypeMap, policyEvaluatorService, policyDAO, dirDAO, NoExtensions, testDomain)
-  private val managedGroupService = new ManagedGroupService(resourceService, policyEvaluatorService, resourceTypeMap, policyDAO, dirDAO, NoExtensions, testDomain)
+  private val resourceService = ResourceService(resourceTypeMap, policyEvaluatorService, policyDAO, dirDAO, NoExtensions, testDomain)
+  private val managedGroupService = ManagedGroupService(resourceService, policyEvaluatorService, resourceTypeMap, policyDAO, dirDAO, NoExtensions, testDomain)
 
   val dummyUserInfo = UserInfo(OAuth2BearerToken("token"), WorkbenchUserId("userid"), WorkbenchEmail("user@company.com"), 0)
 
@@ -116,7 +116,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
 
   it should "sync the new group with Google" in {
     val mockGoogleExtensions = mock[GoogleExtensions]
-    val managedGroupService = new ManagedGroupService(resourceService, null, resourceTypeMap, policyDAO, dirDAO, mockGoogleExtensions, testDomain)
+    val managedGroupService = ManagedGroupService(resourceService, null, resourceTypeMap, policyDAO, dirDAO, mockGoogleExtensions, testDomain)
     val groupName = WorkbenchGroupName(resourceId.value)
 
     when(mockGoogleExtensions.publishGroup(groupName)).thenReturn(Future.successful(()))
@@ -175,7 +175,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     val mockGoogleExtensions = mock[GoogleExtensions]
     when(mockGoogleExtensions.onGroupDelete(groupEmail)).thenReturn(Future.successful(()))
     when(mockGoogleExtensions.publishGroup(WorkbenchGroupName(resourceId.value))).thenReturn(Future.successful(()))
-    val managedGroupService = new ManagedGroupService(resourceService, null, resourceTypeMap, policyDAO, dirDAO, mockGoogleExtensions, testDomain)
+    val managedGroupService = ManagedGroupService(resourceService, null, resourceTypeMap, policyDAO, dirDAO, mockGoogleExtensions, testDomain)
 
     assertMakeGroup(managedGroupService = managedGroupService)
     runAndWait(managedGroupService.deleteManagedGroup(resourceId))
@@ -321,8 +321,8 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     makeResourceType(newResourceType)
     val resTypes = resourceTypeMap + (newResourceType.name -> newResourceType)
 
-    val resService = new ResourceService(resTypes, policyEvaluatorService, policyDAO, dirDAO, NoExtensions, testDomain)
-    val mgService = new ManagedGroupService(resService, policyEvaluatorService, resTypes, policyDAO, dirDAO, NoExtensions, testDomain)
+    val resService = ResourceService(resTypes, policyEvaluatorService, policyDAO, dirDAO, NoExtensions, testDomain)
+    val mgService = ManagedGroupService(resService, policyEvaluatorService, resTypes, policyDAO, dirDAO, NoExtensions, testDomain)
 
     val user1 = UserInfo(OAuth2BearerToken("token1"), WorkbenchUserId("userId1"), WorkbenchEmail("user1@company.com"), 0)
     val user2 = UserInfo(OAuth2BearerToken("token2"), WorkbenchUserId("userId2"), WorkbenchEmail("user2@company.com"), 0)
@@ -409,7 +409,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
   "ManagedGroupService requestAccess" should "send notifications" in {
     val mockCloudExtension = mock[CloudExtensions]
     when(mockCloudExtension.publishGroup(ArgumentMatchers.any[WorkbenchGroupName])).thenReturn(Future.successful(()))
-    val testManagedGroupService = new ManagedGroupService(resourceService, policyEvaluatorService, resourceTypeMap, policyDAO, dirDAO, mockCloudExtension, testDomain)
+    val testManagedGroupService = ManagedGroupService(resourceService, policyEvaluatorService, resourceTypeMap, policyDAO, dirDAO, mockCloudExtension, testDomain)
 
     assertMakeGroup(groupId = resourceId.value, managedGroupService = testManagedGroupService)
 

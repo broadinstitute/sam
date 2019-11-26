@@ -88,7 +88,7 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
     Map(defaultResourceType.name -> defaultResourceType, otherResourceType.name -> otherResourceType),
     policyDAO,
     dirDAO)
-  private val service = new ResourceService(
+  private val service = ResourceService(
     Map(defaultResourceType.name -> defaultResourceType, otherResourceType.name -> otherResourceType),
     policyEvaluatorService,
     policyDAO,
@@ -101,7 +101,7 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
     constrainableResourceType.name -> constrainableResourceType,
     managedGroupResourceType.name -> managedGroupResourceType)
   private val constrainablePolicyEvaluatorService = PolicyEvaluatorService(emailDomain, constrainableResourceTypes, policyDAO, dirDAO)
-  private val constrainableService = new ResourceService(
+  private val constrainableService = ResourceService(
     constrainableResourceTypes,
     constrainablePolicyEvaluatorService,
     policyDAO,
@@ -109,7 +109,7 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
     NoExtensions,
     emailDomain)
 
-  val managedGroupService = new ManagedGroupService(
+  val managedGroupService = ManagedGroupService(
     constrainableService,
     constrainablePolicyEvaluatorService,
     constrainableResourceTypes,

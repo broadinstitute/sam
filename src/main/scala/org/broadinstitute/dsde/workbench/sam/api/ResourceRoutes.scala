@@ -11,7 +11,7 @@ import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.RootPrimitiveJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.{CreateResourcePolicyResponse, CreateResourceResponse, _}
-import org.broadinstitute.dsde.workbench.sam.service.ResourceService
+import org.broadinstitute.dsde.workbench.sam.service.{ResourceService, ResourceServiceImpl}
 import spray.json.DefaultJsonProtocol._
 import spray.json.JsBoolean
 
@@ -149,7 +149,7 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
 
       postgresAccessPolicyDAO = new PostgresAccessPolicyDAO(dbReference, postgresExecutionContext)
       postgresDirectoryDAO = new PostgresDirectoryDAO(dbReference, postgresExecutionContext)
-    } yield new ResourceService(resourceService.getResourceTypes().unsafeRunSync(), policyEvaluatorService, postgresAccessPolicyDAO, postgresDirectoryDAO, cloudExtensions, resourceService.emailDomain)
+    } yield new ResourceServiceImpl(resourceService.getResourceTypes().unsafeRunSync(), policyEvaluatorService, postgresAccessPolicyDAO, postgresDirectoryDAO, cloudExtensions, resourceService.emailDomain)
 
     postgresResourceService.use { resourceService =>
       resourceService.initResourceTypes()

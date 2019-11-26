@@ -348,32 +348,32 @@ object Boot extends IOApp with LazyLogging {
 
         val realPolicyEvalSvc = PolicyEvaluatorService(config.emailDomain, resourceTypeMap, accessPolicyHandler.realDAO, directoryHandler.realDAO)
         val shadowPolicyEvalSvc = PolicyEvaluatorService(config.emailDomain, resourceTypeMap, accessPolicyHandler.shadowDAO, directoryHandler.shadowDAO)
-        val realResourceService = new ResourceService(resourceTypeMap, realPolicyEvalSvc, accessPolicyHandler.realDAO, directoryHandler.realDAO, cloudExtensionsInitializer.cloudExtensions, config.emailDomain)
-        val shadowResourceService = new ResourceService(resourceTypeMap, shadowPolicyEvalSvc, accessPolicyHandler.shadowDAO, directoryHandler.shadowDAO, NoExtensions, config.emailDomain)
+        val realResourceService = ResourceService(resourceTypeMap, realPolicyEvalSvc, accessPolicyHandler.realDAO, directoryHandler.realDAO, cloudExtensionsInitializer.cloudExtensions, config.emailDomain)
+        val shadowResourceService = ResourceService(resourceTypeMap, shadowPolicyEvalSvc, accessPolicyHandler.shadowDAO, directoryHandler.shadowDAO, NoExtensions, config.emailDomain)
 
-        val policyEvaluatorService = DaoWithShadow(
+        val policyEvaluatorService = DaoWithShadow[PolicyEvaluatorService](
           realPolicyEvalSvc,
           shadowPolicyEvalSvc,
           accessPolicyHandler.resultReporter, accessPolicyHandler.clock
         )
 
-        val resourceService = DaoWithShadow(
+        val resourceService = DaoWithShadow[ResourceService](
           realResourceService,
           shadowResourceService,
           accessPolicyHandler.resultReporter, accessPolicyHandler.clock
         )
 
-        val userService = DaoWithShadow(
-          new UserService(directoryHandler.realDAO, cloudExtensionsInitializer.cloudExtensions),
-          new UserService(directoryHandler.shadowDAO, NoExtensions),
+        val userService = DaoWithShadow[UserService](
+          UserService(directoryHandler.realDAO, cloudExtensionsInitializer.cloudExtensions),
+          UserService(directoryHandler.shadowDAO, NoExtensions),
           accessPolicyHandler.resultReporter, accessPolicyHandler.clock
         )
 
-        val statusService = new StatusService(directoryDAO, cloudExtensionsInitializer.cloudExtensions, 10 seconds)
+        val statusService = StatusService(directoryDAO, cloudExtensionsInitializer.cloudExtensions, 10 seconds)
 
-        val managedGroupService = DaoWithShadow(
-          new ManagedGroupService(realResourceService, realPolicyEvalSvc, resourceTypeMap, accessPolicyHandler.realDAO, directoryHandler.realDAO, cloudExtensionsInitializer.cloudExtensions, config.emailDomain),
-          new ManagedGroupService(shadowResourceService, shadowPolicyEvalSvc, resourceTypeMap, accessPolicyHandler.shadowDAO, directoryHandler.shadowDAO, NoExtensions, config.emailDomain),
+        val managedGroupService = DaoWithShadow[ManagedGroupService](
+          ManagedGroupService(realResourceService, realPolicyEvalSvc, resourceTypeMap, accessPolicyHandler.realDAO, directoryHandler.realDAO, cloudExtensionsInitializer.cloudExtensions, config.emailDomain),
+          ManagedGroupService(shadowResourceService, shadowPolicyEvalSvc, resourceTypeMap, accessPolicyHandler.shadowDAO, directoryHandler.shadowDAO, NoExtensions, config.emailDomain),
           accessPolicyHandler.resultReporter, accessPolicyHandler.clock
         )
 
@@ -381,11 +381,11 @@ object Boot extends IOApp with LazyLogging {
 
       } else {
         val policyEvaluatorService = PolicyEvaluatorService(config.emailDomain, resourceTypeMap, accessPolicyDAO, directoryDAO)
-        val resourceService = new ResourceService(resourceTypeMap, policyEvaluatorService, accessPolicyDAO, directoryDAO, cloudExtensionsInitializer.cloudExtensions, config.emailDomain)
-        val userService = new UserService(directoryDAO, cloudExtensionsInitializer.cloudExtensions)
-        val statusService = new StatusService(directoryDAO, cloudExtensionsInitializer.cloudExtensions, 10 seconds)
+        val resourceService = ResourceService(resourceTypeMap, policyEvaluatorService, accessPolicyDAO, directoryDAO, cloudExtensionsInitializer.cloudExtensions, config.emailDomain)
+        val userService = UserService(directoryDAO, cloudExtensionsInitializer.cloudExtensions)
+        val statusService = StatusService(directoryDAO, cloudExtensionsInitializer.cloudExtensions, 10 seconds)
         val managedGroupService =
-          new ManagedGroupService(resourceService, policyEvaluatorService, resourceTypeMap, accessPolicyDAO, directoryDAO, cloudExtensionsInitializer.cloudExtensions, config.emailDomain)
+          ManagedGroupService(resourceService, policyEvaluatorService, resourceTypeMap, accessPolicyDAO, directoryDAO, cloudExtensionsInitializer.cloudExtensions, config.emailDomain)
 
         (policyEvaluatorService, resourceService, userService, statusService, managedGroupService)
       }

@@ -22,7 +22,10 @@ import scala.util.matching.Regex
 /**
   * Created by dvoet on 7/14/17.
   */
-class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExtensions)(implicit val executionContext: ExecutionContext) extends LazyLogging {
+trait UserService extends LazyLogging {
+  val directoryDAO: DirectoryDAO
+  val cloudExtensions: CloudExtensions
+  implicit val executionContext: ExecutionContext
 
   def createUser(user: CreateWorkbenchUser, parentSpan: Span = null): IO[UserStatus] =
     for {
@@ -202,6 +205,10 @@ object UserService {
   // from https://www.regular-expressions.info/email.html
   val emailRegex: Regex = "(?i)^[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}$".r
 
+  def apply(directoryDAO: DirectoryDAO, cloudExtensions: CloudExtensions)(implicit executionContext: ExecutionContext): UserService = {
+    new UserServiceImpl(directoryDAO, cloudExtensions)
+  }
+
   // Generate a 21 digits unique identifier. First char is fixed 2
   // CurrentMillis.append(randomString)
   private[workbench] def genRandom(currentMilli: Long): String = {
@@ -226,3 +233,5 @@ object UserService {
     }
   }
 }
+
+class UserServiceImpl(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExtensions)(implicit val executionContext: ExecutionContext) extends UserService

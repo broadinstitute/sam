@@ -25,7 +25,7 @@ class StatusServiceSpec extends FreeSpec with Matchers with BeforeAndAfterAll wi
   }
 
   private def newStatusService(directoryDAO: DirectoryDAO) = {
-    new StatusService(directoryDAO, new NoExtensions {
+    StatusService(directoryDAO, new NoExtensions {
       override def checkStatus: Map[Subsystems.Subsystem, Future[SubsystemStatus]] = Map(Subsystems.GoogleGroups -> Future.successful(SubsystemStatus(true, None)))
     }, pollInterval = 10 milliseconds)
   }
@@ -41,14 +41,14 @@ class StatusServiceSpec extends FreeSpec with Matchers with BeforeAndAfterAll wi
   private def ok = newStatusService(directoryDAOWithAllUsersGroup)
 
   private def failingExtension = {
-    val service = new StatusService(directoryDAOWithAllUsersGroup, new NoExtensions {
+    val service = StatusService(directoryDAOWithAllUsersGroup, new NoExtensions {
       override def checkStatus: Map[Subsystems.Subsystem, Future[SubsystemStatus]] = Map(Subsystems.GoogleGroups -> Future.failed(new WorkbenchException("bad google")))
     })
     service
   }
 
   private def failingOpenDJ = {
-    val service = new StatusService(new MockDirectoryDAO {
+    val service = StatusService(new MockDirectoryDAO {
       override def loadGroupEmail(groupName: WorkbenchGroupName): IO[Option[WorkbenchEmail]] = IO.raiseError(new WorkbenchException("bad opendj"))
     }, NoExtensions)
     service

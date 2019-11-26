@@ -15,12 +15,14 @@ import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.language.postfixOps
 
-class StatusService(
-    val directoryDAO: DirectoryDAO,
-    val cloudExtensions: CloudExtensions,
-    initialDelay: FiniteDuration = Duration.Zero,
-    pollInterval: FiniteDuration = 1 minute)(implicit system: ActorSystem, executionContext: ExecutionContext)
-    extends LazyLogging {
+trait StatusService extends LazyLogging {
+  val directoryDAO: DirectoryDAO
+  val cloudExtensions: CloudExtensions
+  val initialDelay: FiniteDuration
+  val pollInterval: FiniteDuration
+  implicit val system: ActorSystem
+  implicit val executionContext: ExecutionContext
+
   implicit val askTimeout = Timeout(5 seconds)
 
   private val healthMonitor = system.actorOf(HealthMonitor.props(cloudExtensions.allSubSystems + OpenDJ)(checkStatus _))
@@ -39,3 +41,19 @@ class StatusService(
     }
   }
 }
+
+object StatusService {
+  def apply(directoryDAO: DirectoryDAO,
+            cloudExtensions: CloudExtensions,
+            initialDelay: FiniteDuration = Duration.Zero,
+            pollInterval: FiniteDuration = 1 minute)
+           (implicit system: ActorSystem, executionContext: ExecutionContext): StatusService = {
+    new StatusServiceImpl(directoryDAO, cloudExtensions, initialDelay, pollInterval)
+  }
+}
+
+class StatusServiceImpl(val directoryDAO: DirectoryDAO,
+                        val cloudExtensions: CloudExtensions,
+                        val initialDelay: FiniteDuration = Duration.Zero,
+                        val pollInterval: FiniteDuration = 1 minute)
+                       (implicit val system: ActorSystem, val executionContext: ExecutionContext) extends StatusService

@@ -72,7 +72,7 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
     when(googleExtensions.onUserEnable(any[WorkbenchUser])).thenReturn(Future.successful(()))
     when(googleExtensions.onGroupUpdate(any[Seq[WorkbenchGroupIdentity]])).thenReturn(Future.successful(()))
 
-    service = new UserService(dirDAO, googleExtensions)
+    service = UserService(dirDAO, googleExtensions)
   }
 
   protected def clearDatabase(): Unit = {

@@ -46,7 +46,7 @@ class NewRelicShadowResultReporter(val daoName: String, val newRelicMetrics: New
       daoName,
       methodCallInfo.functionName,
       methodCallInfo.parameterNames,
-      methodCallInfo.parameterValues.map(_.toString),
+      methodCallInfo.parameterValues.map(String.valueOf),
       makeString(realTimedResult.result),
       makeString(shadowTimedResult.result),
       matchResult

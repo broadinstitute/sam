@@ -15,15 +15,15 @@ import scala.concurrent.ExecutionContext
 /**
   * Created by gpolumbo on 2/21/2018.
   */
-class ManagedGroupService(
-    private val resourceService: ResourceService,
-    private val policyEvaluatorService: PolicyEvaluatorService,
-    private val resourceTypes: Map[ResourceTypeName, ResourceType],
-    private val accessPolicyDAO: AccessPolicyDAO,
-    private val directoryDAO: DirectoryDAO,
-    private val cloudExtensions: CloudExtensions,
-    private val emailDomain: String)(implicit val executionContext: ExecutionContext)
-    extends LazyLogging {
+trait ManagedGroupService extends LazyLogging {
+  protected val resourceService: ResourceService
+  protected val policyEvaluatorService: PolicyEvaluatorService
+  protected val resourceTypes: Map[ResourceTypeName, ResourceType]
+  protected val accessPolicyDAO: AccessPolicyDAO
+  protected val directoryDAO: DirectoryDAO
+  protected val cloudExtensions: CloudExtensions
+  protected val emailDomain: String
+  implicit val executionContext: ExecutionContext
 
   def managedGroupType: ResourceType =
     resourceTypes.getOrElse(
@@ -240,4 +240,24 @@ object ManagedGroupService {
         throw new WorkbenchExceptionWithErrorReport(
           ErrorReport(StatusCodes.NotFound, s"Role name for managed groups must be one of: ['$adminValue', '$memberValue']"))
     }
+
+  def apply(resourceService: ResourceService,
+            policyEvaluatorService: PolicyEvaluatorService,
+            resourceTypes: Map[ResourceTypeName, ResourceType],
+            accessPolicyDAO: AccessPolicyDAO,
+            directoryDAO: DirectoryDAO,
+            cloudExtensions: CloudExtensions,
+            emailDomain: String)
+           (implicit executionContext: ExecutionContext): ManagedGroupService = {
+    new ManagedGroupServiceImpl(resourceService, policyEvaluatorService, resourceTypes, accessPolicyDAO, directoryDAO, cloudExtensions, emailDomain)
+  }
 }
+
+class ManagedGroupServiceImpl(protected val resourceService: ResourceService,
+                              protected val policyEvaluatorService: PolicyEvaluatorService,
+                              protected val resourceTypes: Map[ResourceTypeName, ResourceType],
+                              protected val accessPolicyDAO: AccessPolicyDAO,
+                              protected val directoryDAO: DirectoryDAO,
+                              protected val cloudExtensions: CloudExtensions,
+                              protected val emailDomain: String)
+                             (implicit val executionContext: ExecutionContext) extends ManagedGroupService
