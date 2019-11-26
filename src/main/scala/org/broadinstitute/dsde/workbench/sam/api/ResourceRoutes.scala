@@ -149,7 +149,7 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
 
       postgresAccessPolicyDAO = new PostgresAccessPolicyDAO(dbReference, postgresExecutionContext)
       postgresDirectoryDAO = new PostgresDirectoryDAO(dbReference, postgresExecutionContext)
-    } yield new ResourceServiceImpl(resourceService.getResourceTypes().unsafeRunSync(), policyEvaluatorService, postgresAccessPolicyDAO, postgresDirectoryDAO, cloudExtensions, resourceService.emailDomain)
+    } yield ResourceService(resourceService.getResourceTypes().unsafeRunSync(), policyEvaluatorService, postgresAccessPolicyDAO, postgresDirectoryDAO, cloudExtensions, resourceService.emailDomain)
 
     postgresResourceService.use { resourceService =>
       resourceService.initResourceTypes()
