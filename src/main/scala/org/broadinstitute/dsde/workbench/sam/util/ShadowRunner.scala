@@ -88,7 +88,7 @@ object DaoWithShadow {
   }
 }
 
-private class ShadowRunnerDynamicProxy[DAO](realDAO: DAO, shadowDAO: DAO, val resultReporter: ShadowResultReporter, val clock: Clock[IO])(implicit val contextShift: ContextShift[IO], timer: Timer[IO]) extends InvocationHandler with ShadowRunner {
+class ShadowRunnerDynamicProxy[DAO](val realDAO: DAO, val shadowDAO: DAO, val resultReporter: ShadowResultReporter, val clock: Clock[IO])(implicit val contextShift: ContextShift[IO], timer: Timer[IO]) extends InvocationHandler with ShadowRunner {
   override def invoke(proxy: Any, method: Method, args: Array[AnyRef]): AnyRef = {
     // there should not be any functions in our DAOs that return non-IO type but scala does funny stuff at the java class level wrt default parameters
     // so check if the return type is IO, if it is just call it and run with shadow

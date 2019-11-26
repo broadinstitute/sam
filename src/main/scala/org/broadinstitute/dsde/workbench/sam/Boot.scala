@@ -1,6 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam
 
 import java.io.File
+import java.lang.reflect.Proxy
 import java.net.URI
 
 import akka.actor.ActorSystem
@@ -31,7 +32,7 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam._
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.broadinstitute.dsde.workbench.sam.service._
-import org.broadinstitute.dsde.workbench.sam.util.{DaoWithShadow, NewRelicShadowResultReporter, ShadowRunner}
+import org.broadinstitute.dsde.workbench.sam.util.{DaoWithShadow, NewRelicShadowResultReporter, ShadowRunner, ShadowRunnerDynamicProxy}
 import org.broadinstitute.dsde.workbench.util.{DelegatePool, ExecutionContexts}
 import org.ehcache.Cache
 import org.ehcache.config.builders.{CacheConfigurationBuilder, CacheManagerBuilder, ExpiryPolicyBuilder, ResourcePoolsBuilder}
@@ -339,12 +340,56 @@ object Boot extends IOApp with LazyLogging {
       accessPolicyDAO: AccessPolicyDAO,
       directoryDAO: DirectoryDAO)(implicit actorSystem: ActorSystem, actorMaterializer: ActorMaterializer): AppDependencies = {
     val resourceTypeMap = config.resourceTypes.map(rt => rt.name -> rt).toMap
-    val policyEvaluatorService = PolicyEvaluatorService(config.emailDomain, resourceTypeMap, accessPolicyDAO, directoryDAO)
-    val resourceService = new ResourceService(resourceTypeMap, policyEvaluatorService, accessPolicyDAO, directoryDAO, cloudExtensionsInitializer.cloudExtensions, config.emailDomain)
-    val userService = new UserService(directoryDAO, cloudExtensionsInitializer.cloudExtensions)
-    val statusService = new StatusService(directoryDAO, cloudExtensionsInitializer.cloudExtensions, 10 seconds)
-    val managedGroupService =
-      new ManagedGroupService(resourceService, policyEvaluatorService, resourceTypeMap, accessPolicyDAO, directoryDAO, cloudExtensionsInitializer.cloudExtensions, config.emailDomain)
+
+    val (policyEvaluatorService, resourceService, userService, statusService, managedGroupService) =
+      if (Proxy.isProxyClass(accessPolicyDAO.getClass)) {
+        val accessPolicyHandler = Proxy.getInvocationHandler(accessPolicyDAO).asInstanceOf[ShadowRunnerDynamicProxy[AccessPolicyDAO]]
+        val directoryHandler = Proxy.getInvocationHandler(directoryDAO).asInstanceOf[ShadowRunnerDynamicProxy[DirectoryDAO]]
+
+        val realPolicyEvalSvc = PolicyEvaluatorService(config.emailDomain, resourceTypeMap, accessPolicyHandler.realDAO, directoryHandler.realDAO)
+        val shadowPolicyEvalSvc = PolicyEvaluatorService(config.emailDomain, resourceTypeMap, accessPolicyHandler.shadowDAO, directoryHandler.shadowDAO)
+        val realResourceService = new ResourceService(resourceTypeMap, realPolicyEvalSvc, accessPolicyHandler.realDAO, directoryHandler.realDAO, cloudExtensionsInitializer.cloudExtensions, config.emailDomain)
+        val shadowResourceService = new ResourceService(resourceTypeMap, shadowPolicyEvalSvc, accessPolicyHandler.shadowDAO, directoryHandler.shadowDAO, NoExtensions, config.emailDomain)
+
+        val policyEvaluatorService = DaoWithShadow(
+          realPolicyEvalSvc,
+          shadowPolicyEvalSvc,
+          accessPolicyHandler.resultReporter, accessPolicyHandler.clock
+        )
+
+        val resourceService = DaoWithShadow(
+          realResourceService,
+          shadowResourceService,
+          accessPolicyHandler.resultReporter, accessPolicyHandler.clock
+        )
+
+        val userService = DaoWithShadow(
+          new UserService(directoryHandler.realDAO, cloudExtensionsInitializer.cloudExtensions),
+          new UserService(directoryHandler.shadowDAO, NoExtensions),
+          accessPolicyHandler.resultReporter, accessPolicyHandler.clock
+        )
+
+        val statusService = new StatusService(directoryDAO, cloudExtensionsInitializer.cloudExtensions, 10 seconds)
+
+        val managedGroupService = DaoWithShadow(
+          new ManagedGroupService(realResourceService, realPolicyEvalSvc, resourceTypeMap, accessPolicyHandler.realDAO, directoryHandler.realDAO, cloudExtensionsInitializer.cloudExtensions, config.emailDomain),
+          new ManagedGroupService(shadowResourceService, shadowPolicyEvalSvc, resourceTypeMap, accessPolicyHandler.shadowDAO, directoryHandler.shadowDAO, NoExtensions, config.emailDomain),
+          accessPolicyHandler.resultReporter, accessPolicyHandler.clock
+        )
+
+        (policyEvaluatorService, resourceService, userService, statusService, managedGroupService)
+
+      } else {
+        val policyEvaluatorService = PolicyEvaluatorService(config.emailDomain, resourceTypeMap, accessPolicyDAO, directoryDAO)
+        val resourceService = new ResourceService(resourceTypeMap, policyEvaluatorService, accessPolicyDAO, directoryDAO, cloudExtensionsInitializer.cloudExtensions, config.emailDomain)
+        val userService = new UserService(directoryDAO, cloudExtensionsInitializer.cloudExtensions)
+        val statusService = new StatusService(directoryDAO, cloudExtensionsInitializer.cloudExtensions, 10 seconds)
+        val managedGroupService =
+          new ManagedGroupService(resourceService, policyEvaluatorService, resourceTypeMap, accessPolicyDAO, directoryDAO, cloudExtensionsInitializer.cloudExtensions, config.emailDomain)
+
+        (policyEvaluatorService, resourceService, userService, statusService, managedGroupService)
+      }
+
     val samApplication = SamApplication(userService, resourceService, statusService)
 
     cloudExtensionsInitializer match {

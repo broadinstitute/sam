@@ -19,14 +19,15 @@ import scala.concurrent.duration._
 /**
   * Created by mbemis on 5/22/17.
   */
-class ResourceService(
-    private val resourceTypes: Map[ResourceTypeName, ResourceType],
-    private[service] val policyEvaluatorService: PolicyEvaluatorService,
-    private val accessPolicyDAO: AccessPolicyDAO,
-    private val directoryDAO: DirectoryDAO,
-    private val cloudExtensions: CloudExtensions,
-    val emailDomain: String)(implicit val executionContext: ExecutionContext)
-    extends LazyLogging {
+trait ResourceServiceTrait extends LazyLogging {
+  protected val resourceTypes: Map[ResourceTypeName, ResourceType]
+  protected[service] val policyEvaluatorService: PolicyEvaluatorService
+  protected val accessPolicyDAO: AccessPolicyDAO
+  protected val directoryDAO: DirectoryDAO
+  protected val cloudExtensions: CloudExtensions
+  val emailDomain: String
+  implicit val executionContext: ExecutionContext
+
   implicit val cs = IO.contextShift(executionContext) //for running IOs in paralell
 
   private case class ValidatableAccessPolicy(
@@ -505,3 +506,11 @@ class ResourceService(
       workbenchUsers.map(user => UserIdInfo(user.id, user.email, user.googleSubjectId))
     }
 }
+
+class ResourceService(protected val resourceTypes: Map[ResourceTypeName, ResourceType],
+                      protected[service] val policyEvaluatorService: PolicyEvaluatorService,
+                      protected val accessPolicyDAO: AccessPolicyDAO,
+                      protected val directoryDAO: DirectoryDAO,
+                      protected val cloudExtensions: CloudExtensions,
+                      val emailDomain: String)(implicit val executionContext: ExecutionContext)
+  extends LazyLogging with ResourceServiceTrait
