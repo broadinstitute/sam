@@ -11,7 +11,7 @@ import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.RootPrimitiveJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.{CreateResourcePolicyResponse, CreateResourceResponse, _}
-import org.broadinstitute.dsde.workbench.sam.service.{ResourceService, ResourceServiceImpl}
+import org.broadinstitute.dsde.workbench.sam.service.ResourceService
 import spray.json.DefaultJsonProtocol._
 import spray.json.JsBoolean
 
