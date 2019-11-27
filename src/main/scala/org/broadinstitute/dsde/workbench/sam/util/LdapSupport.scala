@@ -4,7 +4,7 @@ import cats.data.OptionT
 import cats.effect.{ContextShift, IO}
 import cats.implicits._
 import com.unboundid.ldap.sdk._
-import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException, WorkbenchGroupIdentity, WorkbenchGroupName, WorkbenchSubject}
+import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.directory.DirectorySubjectNameSupport
 import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO.Attr
@@ -135,6 +135,37 @@ trait LdapSupport extends DirectorySubjectNameSupport {
       isMember
     }
   }
+
+  def listFlattenedMembers(groupId: WorkbenchGroupIdentity, visitedGroupIds: Set[WorkbenchGroupIdentity] = Set.empty): IO[Set[WorkbenchUserId]] = {
+    for {
+      directMembers <- listDirectMembers(groupId)
+      users = directMembers.collect { case subject: WorkbenchUserId => subject }
+      subGroups = directMembers.collect { case subject: WorkbenchGroupIdentity => subject }
+      updatedVisitedGroupIds = visitedGroupIds ++ subGroups
+      nestedUsers <- (subGroups -- visitedGroupIds).toList.traverse(subGroupId => listFlattenedMembers(subGroupId, updatedVisitedGroupIds))
+    } yield {
+      users ++ nestedUsers.flatten
+    }
+  }
+
+  private def listDirectMembers(groupId: WorkbenchGroupIdentity): IO[Set[WorkbenchSubject]] = {
+    executeLdap(
+      IO(getAttributes(ldapConnectionPool.getEntry(groupDn(groupId), Attr.uniqueMember), Attr.uniqueMember).map(dnToSubject))
+    )
+  }
+
+  protected def loadUsersInternal(userIds: Set[WorkbenchUserId]): IO[Stream[WorkbenchUser]] = {
+    val filters = userIds.grouped(batchSize).map(batch => Filter.createORFilter(batch.map(g => Filter.createEqualityFilter(Attr.uid, g.value)).asJava)).toSeq
+    executeLdap(IO(ldapSearchStream(peopleOu, SearchScope.ONE, filters: _*)(unmarshalUserThrow)))
+  }
+
+  protected def unmarshalUser(results: Entry): Either[String, WorkbenchUser] =
+    for {
+      uid <- getAttribute(results, Attr.uid).toRight(s"${Attr.uid} attribute missing")
+      email <- getAttribute(results, Attr.email).toRight(s"${Attr.email} attribute missing")
+    } yield WorkbenchUser(WorkbenchUserId(uid), getAttribute(results, Attr.googleSubjectId).map(GoogleSubjectId), WorkbenchEmail(email))
+
+  private def unmarshalUserThrow(results: Entry): WorkbenchUser = unmarshalUser(results).fold(s => throw new WorkbenchException(s), identity)
 
   private def unmarshalGroup(results: Entry): Either[String, BasicWorkbenchGroup] =
     for {
