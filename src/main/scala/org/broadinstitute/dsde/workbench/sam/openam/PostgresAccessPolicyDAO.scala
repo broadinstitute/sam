@@ -207,9 +207,8 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
 
       resource
     }.recoverWith {
-      case sqlException: PSQLException => {
-        logger.debug(s"createResource psql exception on resource $resource", sqlException)
-        IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"Resource ${resource.resourceTypeName} failed.", sqlException)))
+      case conflictException: PSQLException if conflictException.getSQLState == PSQLStateExtensions.UNIQUE_VIOLATION => {
+        IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"Resource ${resource.resourceTypeName.value}/${resource.resourceId.value} already exists.", conflictException)))
       }
     }
   }
