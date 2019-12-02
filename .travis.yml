@@ -12,8 +12,7 @@ before_install:
 - sh docker/run-postgres.sh start 15432
 - docker run -u zap -p 4444:4444 -d owasp/zap2docker-stable zap.sh -daemon -host 0.0.0.0 -port 4444 -config api.disablekey=true -config api.addrs.addr.name=.* -config api.addrs.addr.regex=true
 script:
-- export SBT_OPTS="-J-Xmx3g -Denv.type=test -Ddirectory.url=ldap://localhost:3389
-  -Ddirectory.password=testtesttest -Dpostgres.host=localhost -Dpostgres.port=15432 -Dhttp.proxyHost=localhost -Dhttp.proxyPort=4444"
+- export SBT_OPTS="-J-Xmx3g -Denv.type=test -Ddirectory.url=ldap://localhost:3389 -Ddirectory.password=testtesttest -Dpostgres.host=localhost -Dpostgres.port=15432 -Dhttp.proxyHost=localhost -Dhttp.proxyPort=4444"
 - sbt clean "testOnly -- -n org.broadinstitute.tags.SchemaInit"
 - docker restart opendj
 - sleep 40
@@ -22,6 +21,7 @@ script:
 after_success:
 - export SBT_OPTS="-J-Xmx3g"
 - sbt coveralls
+- docker run -t owasp/zap2docker-stable zap-baseline.py -t http://$(ip -f inet -o addr show docker0 | awk '{print $4}' | cut -d '/' -f 1):8080
 - sh docker/run-opendj.sh stop
 - sh docker/run-postgres.sh stop
 - bash scripts/publish-client.sh
