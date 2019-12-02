@@ -6,7 +6,6 @@ import java.util.concurrent.Executors
 import cats.effect._
 import cats.syntax.all._
 import com.typesafe.scalalogging.LazyLogging
-import org.broadinstitute.dsde.workbench.sam.db.PSQLStateExtensions
 import org.postgresql.util.PSQLException
 
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}

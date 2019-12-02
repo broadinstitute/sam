@@ -206,10 +206,6 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
       }
 
       resource
-    }.recoverWith {
-      case conflictException: PSQLException if conflictException.getSQLState == PSQLStateExtensions.UNIQUE_VIOLATION => {
-        IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"Resource ${resource.resourceTypeName.value}/${resource.resourceId.value} already exists.", conflictException)))
-      }
     }
   }
 
@@ -234,6 +230,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
 
     val authDomainColumn = AuthDomainTable.column
     val insertAuthDomainQuery = samsql"insert into ${AuthDomainTable.table} (${authDomainColumn.resourceId}, ${authDomainColumn.groupId}) values ${authDomainValues}"
+
     insertAuthDomainQuery.update().apply()
   }
 
