@@ -640,13 +640,13 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
   }
 
   override def enableIdentity(subject: WorkbenchSubject): IO[Unit] = {
-    runInTransaction { implicit session =>
-      subject match {
-        case userId: WorkbenchUserId =>
-          val u = UserTable.column
-          samsql"update ${UserTable.table} set ${u.enabled} = true where ${u.id} = ${userId}".update().apply()
-        case _ => // other types of WorkbenchSubjects cannot be enabled
+    subject match {
+      case userId: WorkbenchUserId =>
+        runInTransaction { implicit session =>
+        val u = UserTable.column
+        samsql"update ${UserTable.table} set ${u.enabled} = true where ${u.id} = ${userId}".update().apply()
       }
+      case _ => IO.unit // other types of WorkbenchSubjects cannot be enabled
     }
   }
 
