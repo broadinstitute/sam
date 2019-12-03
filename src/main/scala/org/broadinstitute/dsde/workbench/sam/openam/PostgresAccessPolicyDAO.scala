@@ -206,11 +206,6 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
       }
 
       resource
-    }.recoverWith {
-      case sqlException: PSQLException => {
-        logger.debug(s"createResource psql exception on resource $resource", sqlException)
-        IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"Resource ${resource.resourceTypeName} failed.", sqlException)))
-      }
     }
   }
 
@@ -235,6 +230,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
 
     val authDomainColumn = AuthDomainTable.column
     val insertAuthDomainQuery = samsql"insert into ${AuthDomainTable.table} (${authDomainColumn.resourceId}, ${authDomainColumn.groupId}) values ${authDomainValues}"
+
     insertAuthDomainQuery.update().apply()
   }
 

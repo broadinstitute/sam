@@ -6,7 +6,6 @@ import java.util.concurrent.Executors
 import cats.effect._
 import cats.syntax.all._
 import com.typesafe.scalalogging.LazyLogging
-import org.broadinstitute.dsde.workbench.sam.db.PSQLStateExtensions
 import org.postgresql.util.PSQLException
 
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
@@ -96,7 +95,7 @@ private class ShadowRunnerDynamicProxy[DAO](realDAO: DAO, shadowDAO: DAO, val re
     if (classOf[IO[_]].isAssignableFrom(method.getReturnType)) {
       // since these are IOs any side effects should be deferred so invoking them here does not do the actual work... just creates the IO
       val realIO = attempt(method.invoke(realDAO, args: _*).asInstanceOf[IO[_]])
-      val shadowIO = retryNullConstraintViolation(attempt(method.invoke(shadowDAO, args: _*).asInstanceOf[IO[_]]), 10 milliseconds, 3)
+      val shadowIO = retryPSQLException(attempt(method.invoke(shadowDAO, args: _*).asInstanceOf[IO[_]]), 10 milliseconds, 5)
       runWithShadow(MethodCallInfo(method, args), realIO, shadowIO)
     } else {
       // return type is not IO so wrap them in IO to run with shadow then unwrap
@@ -109,12 +108,12 @@ private class ShadowRunnerDynamicProxy[DAO](realDAO: DAO, shadowDAO: DAO, val re
 
   private def attempt(io: => IO[_]): IO[_] = Try(io).recover { case e => IO.raiseError(e) }.get
 
-  def retryNullConstraintViolation[A](ioa: IO[A], initialDelay: FiniteDuration, maxRetries: Int)
+  def retryPSQLException[A](ioa: IO[A], initialDelay: FiniteDuration, maxRetries: Int)
                          (implicit timer: Timer[IO]): IO[A] = {
     ioa.handleErrorWith {
-      case error: PSQLException if error.getSQLState == PSQLStateExtensions.NULL_CONSTRAINT_VIOLATION =>
+      case error: PSQLException =>
         if (maxRetries > 0) {
-          IO.sleep(initialDelay) *> retryNullConstraintViolation(ioa, initialDelay * 2, maxRetries - 1)
+          IO.sleep(initialDelay) *> retryPSQLException(ioa, initialDelay * 2, maxRetries - 1)
         } else {
           IO.raiseError(error)
         }

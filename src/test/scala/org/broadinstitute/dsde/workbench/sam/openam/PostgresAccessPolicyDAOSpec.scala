@@ -4,6 +4,7 @@ import akka.http.scaladsl.model.StatusCodes
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
+import org.broadinstitute.dsde.workbench.sam.db.PSQLStateExtensions
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.directory._
 import org.broadinstitute.dsde.workbench.sam.openam.LoadResourceAuthDomainResult.{Constrained, NotConstrained, ResourceNotFound}
@@ -249,11 +250,11 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
       }
 
       "raises an error when the ResourceType does not exist" in {
-        val exception = intercept[WorkbenchExceptionWithErrorReport] {
+        val exception = intercept[PSQLException] {
           dao.createResource(resource).unsafeRunSync()
         }
 
-        exception.errorReport.statusCode should equal (Some(StatusCodes.Conflict))
+        exception.getSQLState shouldEqual PSQLStateExtensions.NULL_CONSTRAINT_VIOLATION
       }
 
       "can add a resource that has at least 1 Auth Domain" in {
@@ -268,6 +269,21 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
 
         val resourceWithAuthDomain = Resource(resourceType.name, ResourceId("authDomainResource"), Set(authDomainGroupName1, authDomainGroupName2))
         dao.createResource(resourceWithAuthDomain).unsafeRunSync() shouldEqual resourceWithAuthDomain
+      }
+
+      "raises an error when AuthDomain does not exist" in {
+        val authDomainGroupName1 = WorkbenchGroupName("authDomain1")
+        val authDomainGroup1 = BasicWorkbenchGroup(authDomainGroupName1, Set(), WorkbenchEmail("authDomain1@foo.com"))
+        val authDomainGroupName2 = WorkbenchGroupName("authDomain2")
+
+        dirDao.createGroup(authDomainGroup1).unsafeRunSync()
+        dao.createResourceType(resourceType).unsafeRunSync()
+        val exception = intercept[PSQLException] {
+          val resourceWithAuthDomain = Resource(resourceType.name, ResourceId("authDomainResource"), Set(authDomainGroupName1, authDomainGroupName2))
+          dao.createResource(resourceWithAuthDomain).unsafeRunSync() shouldEqual resourceWithAuthDomain
+        }
+
+        exception.getSQLState shouldEqual PSQLStateExtensions.NULL_CONSTRAINT_VIOLATION
       }
     }
 
