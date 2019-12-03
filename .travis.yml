@@ -10,21 +10,22 @@ services:
 before_install:
 - sh docker/run-opendj.sh start
 - sh docker/run-postgres.sh start 15432
-- docker run -u zap -p 4444:4444 -d owasp/zap2docker-stable zap.sh -daemon -host 0.0.0.0 -port 4444 -config api.disablekey=true -config api.addrs.addr.name=.* -config api.addrs.addr.regex=true
+- sh securitypentest/start-fuzzer.sh
 script:
-- export SBT_OPTS="-J-Xmx3g -Denv.type=test -Ddirectory.url=ldap://localhost:3389 -Ddirectory.password=testtesttest -Dpostgres.host=localhost -Dpostgres.port=15432 -Dhttp.proxyHost=localhost -Dhttp.proxyPort=4444"
+- export SBT_OPTS="-J-Xmx3g -Denv.type=test -Ddirectory.url=ldap://localhost:3389 -Ddirectory.password=testtesttest -Dpostgres.host=localhost -Dpostgres.port=15432 -Dhttp.proxyHost=localhost -Dhttp.proxyPort=8090"
 - sbt clean "testOnly -- -n org.broadinstitute.tags.SchemaInit"
 - docker restart opendj
 - sleep 40
 - sbt coverage "testOnly -- -l org.broadinstitute.tags.SchemaInit" coverageReport
 - bash scripts/gen_java_client.sh
+- sh securitypentest/run-pentest.sh
 after_success:
 - export SBT_OPTS="-J-Xmx3g"
 - sbt coveralls
-- docker run -t owasp/zap2docker-stable zap-baseline.py -t http://$(ip -f inet -o addr show docker0 | awk '{print $4}' | cut -d '/' -f 1):8080
 - sh docker/run-opendj.sh stop
 - sh docker/run-postgres.sh stop
 - bash scripts/publish-client.sh
+- sh securitypentest/stop-fuzzer.sh
 env:
   global:
   - secure: QZecB02i0822GE6p6VaFqUKSkpHiAO9lBIjCLFhUUMPf2GlGSaGFf5M6AXRdrBiCri3ZT3A2DDUP9XWQNYjLEipCZUbpIkDRnLs3MoFd6hJxqvrhd2ZENAPWjLAaOvw0fFYkLfBjGtl5COI6S/+P/UgGNOujZIXLHXk/WG+gpp+GmFMvM9uj08YafOvgrl/DtXo0tg1rYPBGo9Q2efUpmb9QiR3+vfCIyaJIvg/S7/j4rvjWk65Yjq+vx0E4n6L68GwX0OOc40B7p0Rf44FGod/3r0TdDf85aUo2hvackfG+KzRhU27sMKDaKDCM4tHecxW4M+HFPhWeKPfV188pEJuSr67bSq5mjSr/EI/ZGWmxt5FxAQHp3eMhJDJp+kfjLPtWa02YLuSf5Gk187BIoIdUnh8n9KmYFRk0dMBIqbD6DXsChVr0PodfM3QCe0HL0sksA1G0onNwP9JqAwaMiQ88FzbkaMFqm9TOrgeRtb/eGb5vYEXJdayPkm+gS5tNMkdJ62gRi3GWQR7fRAQIsfukGDtlsQRCl2V0RRGM7YhI75ZHDaK/Wc/BOYItN/It15i4ZbBn+UbiWtQUt1Uvz6WwIhy7xdyQH8C7f3RrGOqyarwnMfAjBcWNLSVyWO/0sPUi56cO4M/uJGao3P8mubYDub3nfAHemI980bin3mg=
