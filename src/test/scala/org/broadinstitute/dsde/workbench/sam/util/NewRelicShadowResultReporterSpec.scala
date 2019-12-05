@@ -43,6 +43,16 @@ class NewRelicShadowResultReporterSpec extends FlatSpec with Matchers with Mocki
     }
   }
 
+  it should "match string case insensitive" in {
+    val reporter = createResultReporter
+    val real = "string"
+    val shadow = "strIng"
+    val result = reporter.resultsMatch(Right(real), Right(shadow))
+    withClue(result.mismatchReasons) {
+      result.matches should be (true)
+    }
+  }
+
   it should "match collection" in {
     val reporter = createResultReporter
     val probe = Seq(3,2,5,6,2)
@@ -81,10 +91,10 @@ class NewRelicShadowResultReporterSpec extends FlatSpec with Matchers with Mocki
     }
   }
 
-  it should "match embedded collection independent of order" in {
+  it should "match embedded collection independent of order and case" in {
     val reporter = createResultReporter
     val real = TestCaseClass("asdfasdf", Vector(TestInnerCaseClass(MyValueObject("ppp"), 99), TestInnerCaseClass(MyValueObject("qqq"), 88)))
-    val shadow = TestCaseClass("asdfasdf", Seq(TestInnerCaseClass(MyValueObject("qqq"), 88), TestInnerCaseClass(MyValueObject("ppp"), 99)))
+    val shadow = TestCaseClass("asdFasdf", Seq(TestInnerCaseClass(MyValueObject("qqq"), 88), TestInnerCaseClass(MyValueObject("pPp"), 99)))
     val result = reporter.resultsMatch(Right(real), Right(shadow))
     withClue(result.mismatchReasons) {
       result.matches should be (true)

@@ -193,7 +193,12 @@ class NewRelicShadowResultReporter(val daoName: String, val newRelicMetrics: New
 
   // checkName is passed by-name to avoid unnecessary toString and string concatenation when items match
   private def createMatchResult[T](real: T, shadow: T, checkName: => String): MatchResult = {
-    val matches = real == shadow
+    val matches = (real, shadow) match {
+      // in most cases sam is case insensitive, it is accepted that in the few cases where sam is case sensitive
+      // a mismatch in only case will not be detected
+      case (realString: String, shadowString: String) => realString.equalsIgnoreCase(shadowString)
+      case _ => real == shadow
+    }
     val reason = if (matches) {
       Seq.empty
     } else {
