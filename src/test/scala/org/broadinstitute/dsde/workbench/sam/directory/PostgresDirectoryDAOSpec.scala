@@ -6,7 +6,7 @@ import akka.http.scaladsl.model.StatusCodes
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountDisplayName, ServiceAccountSubjectId}
-import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport}
+import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.PostgresAccessPolicyDAO
 import org.postgresql.util.PSQLException
@@ -747,22 +747,23 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
       }
 
       "intersect lots of groups with lots of dups and overlaps" in {
-        val groupCount = 20
-        val userCount = 70
+        val groupCount = 80
+        val userCount = 100
 
-        val allUsers = for (_ <- 1 to userCount) yield {
-          dao.createUser(Generator.genWorkbenchUser.sample.get).unsafeRunSync()
+        val allUsers = for (i <- 1 to userCount) yield {
+          dao.createUser(WorkbenchUser(WorkbenchUserId(s"user$i"), None, WorkbenchEmail(s"user$i"))).unsafeRunSync()
         }
 
         val allUserIds: Set[WorkbenchSubject] = allUsers.map(_.id).toSet
-        val allUsersGroup = Generator.genBasicWorkbenchGroup.sample.get.copy(members = allUserIds)
-        dao.createGroup(allUsersGroup).unsafeRunSync()
-        val allUsersGroup2 = Generator.genBasicWorkbenchGroup.sample.get.copy(members = allUserIds)
-        dao.createGroup(allUsersGroup2).unsafeRunSync()
+
+        val allSubGroups = for (i <- 1 to groupCount) yield {
+          val group = BasicWorkbenchGroup(WorkbenchGroupName(s"subgroup$i"), allUserIds, WorkbenchEmail(s"subgroup$i"))
+          dao.createGroup(group).unsafeRunSync()
+        }
 
         val allGroups = for (i <- 1 to groupCount) yield {
           // create a group with 1 user and 1 subgroup, subgroup with "allgroups" users and another user
-          val group = BasicWorkbenchGroup(WorkbenchGroupName(s"group$i"), Set(allUsersGroup.id, allUsersGroup2.id), WorkbenchEmail(s"group$i"))
+          val group = BasicWorkbenchGroup(WorkbenchGroupName(s"group$i"), allSubGroups.map(_.id).toSet, WorkbenchEmail(s"group$i"))
           dao.createGroup(group).unsafeRunSync()
         }
 
