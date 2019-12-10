@@ -565,7 +565,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
   override def listIntersectionGroupUsers(groupIds: Set[WorkbenchGroupIdentity]): IO[Set[WorkbenchUserId]] = {
     // the implementation of this is a little fancy and is able to do the entire intersection in a single request
     // the general structure of the query is:
-    // WITH RECURSIVE [subGroupsQuery for each group] SELECT user_id FROM [all the subgroup queries joined on user_id]
+    // WITH RECURSIVE [subGroupsQuery for each group] [SELECT user_id FROM subGroupsQuery_1 INTERSECT SELECT user_id FROM subGroupsQuery_2 INTERSECT ...]
     case class QueryAndTable(recursiveMembersQuery: SQLSyntax, table: SubGroupMemberTable)
 
     // the toSeq below is important to fix a predictable order
