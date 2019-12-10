@@ -557,16 +557,15 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     * where N is the cardinality of the groupIds parameter.  Each of these CTEs is the flattened group membership for
     * one of the WorkbenchGroupIdentities.
     *
-    * The query maintains a table alias for each of the CTEs.  The final part of the query uses this list of aliases to
-    * join each of them based on the memberUserId column to give us the final result of only those memberUserIds that
-    * showed up as an entry in every CTE.
+    * The final part of the query intersects all the tables defined in the CTE to give us the final result of only
+    * those memberUserIds that showed up as an entry in every CTE.
     * @param groupIds
     * @return Set of WorkbenchUserIds that are members of each group specified by groupIds
     */
   override def listIntersectionGroupUsers(groupIds: Set[WorkbenchGroupIdentity]): IO[Set[WorkbenchUserId]] = {
     // the implementation of this is a little fancy and is able to do the entire intersection in a single request
     // the general structure of the query is:
-    // WITH RECURSIVE [subGroupsQuery for each group] SELECT user_id FROM [all the subgroup queries joined on user_id]
+    // WITH RECURSIVE [subGroupsQuery for each group] [SELECT user_id FROM subGroupsQuery_1 INTERSECT SELECT user_id FROM subGroupsQuery_2 INTERSECT ...]
     case class QueryAndTable(recursiveMembersQuery: SQLSyntax, table: SubGroupMemberTable)
 
     // the toSeq below is important to fix a predictable order
@@ -580,18 +579,13 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
 
     val allRecursiveMembersQueries = SQLSyntax.join(recursiveMembersQueries.map(_.recursiveMembersQuery), sqls",", false)
 
-    // need to handle the first table special, all others will join back to this
-    val firstTable = recursiveMembersQueries.head.table
-    val ft = firstTable.syntax
-    val allSubGroupTableJoins = recursiveMembersQueries.tail.map(_.table).foldLeft(samsqls"") { (joins, nextTable) =>
-      val nt = nextTable.syntax
-      samsqls"$joins join ${nextTable as nt} on ${ft.memberUserId} = ${nt.memberUserId} "
-    }
+    val intersectionQuery = recursiveMembersQueries.map { queryAndTable =>
+      val sg = queryAndTable.table.syntax
+      samsqls"select ${sg.memberUserId} from ${queryAndTable.table as sg} where ${sg.memberUserId} is not null"
+    }.reduce((left, right) => samsqls"$left INTERSECT $right")
 
     runInTransaction { implicit session =>
-      samsql"""with recursive $allRecursiveMembersQueries
-              select ${ft.memberUserId}
-              from ${firstTable as ft} $allSubGroupTableJoins where ${ft.memberUserId} is not null""".map(rs => WorkbenchUserId(rs.string(1))).list().apply().toSet
+      samsql"""with recursive $allRecursiveMembersQueries $intersectionQuery""".map(rs => WorkbenchUserId(rs.string(1))).list().apply().toSet
     }
   }
 

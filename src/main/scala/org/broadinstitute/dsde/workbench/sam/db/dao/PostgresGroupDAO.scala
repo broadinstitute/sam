@@ -104,10 +104,10 @@ trait PostgresGroupDAO {
     val sg = subGroupMemberTable.syntax("sg")
     val gm = GroupMemberTable.syntax(groupMemberTableAlias)
     val sgColumns = subGroupMemberTable.column
-    samsqls"""${subGroupMemberTable.table}(${sgColumns.parentGroupId}, ${sgColumns.memberGroupId}, ${sgColumns.memberUserId}) AS (
+    samsqls"""${subGroupMemberTable.table}(${sgColumns.memberGroupId}, ${sgColumns.memberUserId}) AS (
           ${directMembersQuery(groupId, groupMemberTableAlias)}
           UNION
-          SELECT ${gm.groupId}, ${gm.memberGroupId}, ${gm.memberUserId}
+          SELECT ${gm.memberGroupId}, ${gm.memberUserId}
           FROM ${subGroupMemberTable as sg}, ${GroupMemberTable as gm}
           WHERE ${gm.groupId} = ${sg.memberGroupId}
         )"""
@@ -115,7 +115,7 @@ trait PostgresGroupDAO {
 
   private def directMembersQuery(groupId: WorkbenchGroupIdentity, groupMemberTableAlias: String = "gm"): SQLSyntax = {
     val gm = GroupMemberTable.syntax(groupMemberTableAlias)
-    samsqls"""select ${gm.groupId}, ${gm.memberGroupId}, ${gm.memberUserId}
+    samsqls"""select ${gm.memberGroupId}, ${gm.memberUserId}
                from ${GroupMemberTable as gm}
                where ${gm.groupId} = (${workbenchGroupIdentityToGroupPK(groupId)})"""
   }
