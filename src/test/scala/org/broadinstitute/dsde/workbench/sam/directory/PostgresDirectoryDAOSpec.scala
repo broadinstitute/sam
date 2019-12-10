@@ -723,8 +723,9 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
 
     "listIntersectionGroupUsers" - {
       // DV: I have tried this up to 100 groups to intersect locally with no functional issue, performance seems linear
-      for (groupCount <- 1 to 3) {
-        s"intersect $groupCount groups" in {
+      "intersect groups" in {
+        for (groupCount <- 1 to 3) {
+          beforeEach
           val inAllGroups = WorkbenchUser(WorkbenchUserId("allgroups"), None, WorkbenchEmail("allgroups"))
           dao.createUser(inAllGroups).unsafeRunSync()
 
@@ -750,24 +751,31 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
         val groupCount = 80
         val userCount = 100
 
-        val allUsers = for (i <- 1 to userCount) yield {
-          dao.createUser(WorkbenchUser(WorkbenchUserId(s"user$i"), None, WorkbenchEmail(s"user$i"))).unsafeRunSync()
-        }
-
-        val allUserIds: Set[WorkbenchSubject] = allUsers.map(_.id).toSet
-
-        val allSubGroups = for (i <- 1 to groupCount) yield {
-          val group = BasicWorkbenchGroup(WorkbenchGroupName(s"subgroup$i"), allUserIds, WorkbenchEmail(s"subgroup$i"))
+        // create a user and a group containing that single user
+        val allUserGroups = for (i <- 1 to userCount) yield {
+          val user = dao.createUser(WorkbenchUser(WorkbenchUserId(s"user$i"), None, WorkbenchEmail(s"user$i"))).unsafeRunSync()
+          val group = BasicWorkbenchGroup(WorkbenchGroupName(s"usergroup$i"), Set(user.id), WorkbenchEmail(s"usergroup$i"))
           dao.createGroup(group).unsafeRunSync()
         }
 
-        val allGroups = for (i <- 1 to groupCount) yield {
+        val allUserGroupNames: Set[WorkbenchSubject] = allUserGroups.map(_.id).toSet
+        val allUserIds = allUserGroups.map(_.members.head)
+
+        // create groupCount groups each containing all single user groups
+        val allSubGroups = for (i <- 1 to groupCount) yield {
+          val group = BasicWorkbenchGroup(WorkbenchGroupName(s"subgroup$i"), allUserGroupNames, WorkbenchEmail(s"subgroup$i"))
+          dao.createGroup(group).unsafeRunSync()
+        }
+
+        // create groupCount groups each containing all subGroups
+        val topGroups = for (i <- 1 to groupCount) yield {
           // create a group with 1 user and 1 subgroup, subgroup with "allgroups" users and another user
           val group = BasicWorkbenchGroup(WorkbenchGroupName(s"group$i"), allSubGroups.map(_.id).toSet, WorkbenchEmail(s"group$i"))
           dao.createGroup(group).unsafeRunSync()
         }
 
-        dao.listIntersectionGroupUsers(allGroups.map(_.id).toSet).unsafeRunSync() should contain theSameElementsAs allUserIds
+        // intersect all top groups
+        dao.listIntersectionGroupUsers(topGroups.map(_.id).toSet).unsafeRunSync() should contain theSameElementsAs allUserIds
       }
     }
 
