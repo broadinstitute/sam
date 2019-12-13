@@ -38,10 +38,10 @@ trait ShadowRunner {
 
       // wait for real
       realTimedResult <- realTimedResultAsync.join
-      // wait for shadow for up to shadowTimeout beyond real
-      shadowTimedResult <- IO.race(shadowTimedResultAsync.join, timer.sleep(shadowTimeout))(shadowContextShift).map {
-        case Left(result) => result
-        case Right(_) => TimedResult[T](Left(new WorkbenchException(s"shadow timed out after $shadowTimeout")), shadowTimeout)
+      // wait for shadow for up to shadowTimeout beyond real but let shadow keep running even if it takes too long
+      shadowTimedResult <- IO.racePair(shadowTimedResultAsync.join, timer.sleep(shadowTimeout))(shadowContextShift).flatMap {
+        case Left((result, timeoutFiber)) => timeoutFiber.cancel.map(_ => result)
+        case Right(_) => IO.pure(TimedResult[T](Left(new WorkbenchException(s"shadow timed out after $shadowTimeout")), shadowTimeout))
       }
 
       // asynchronously report result
