@@ -1,5 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.util
 
+import java.util.concurrent.Executor
+
 import cats.effect.{Clock, ContextShift, IO, Timer}
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.{FlatSpec, Matchers}
@@ -70,6 +72,38 @@ class ShadowRunnerSpec extends FlatSpec with Matchers with ScalaFutures {
     actualMethodCallInfo should equal (methodCallInfo)
     realTimedResult.result should equal (Right(10))
     shadowTimedResult.result should be ('isLeft)
+  }
+
+  it should "run real and shadow on correct thread pools" in {
+    val methodCallInfo = MethodCallInfo("runTest", Array.empty, Array.empty)
+    val testShadowResultReporter = new TestShadowResultReporter
+
+    val realThreadName = "real-thread"
+    val shadowThreadName = "shadow-thread"
+
+    class TestShadowRunner extends ShadowRunner {
+      override val realContextShift: ContextShift[IO] = IO.contextShift(ExecutionContext.fromExecutor(new Executor {
+        override def execute(command: Runnable): Unit = new Thread(command, realThreadName).start() }))
+      override val shadowContextShift: ContextShift[IO] = IO.contextShift(ExecutionContext.fromExecutor(new Executor {
+        override def execute(command: Runnable): Unit = new Thread(command, shadowThreadName).start() }))
+      override val timer: Timer[IO] = IO.timer(executionContext)
+      override val resultReporter: ShadowResultReporter = testShadowResultReporter
+
+      val probe = IO(Thread.currentThread().getName)
+
+      def runTest(): IO[String] = runWithShadow(methodCallInfo, probe, probe)
+    }
+
+    val testShadowRunner = new TestShadowRunner()
+    val result = testShadowRunner.runTest()
+
+    result.unsafeRunSync() should equal (realThreadName)
+
+    val (actualMethodCallInfo, realTimedResult, shadowTimedResult) = testShadowResultReporter.resultFuture.futureValue
+    actualMethodCallInfo should equal (methodCallInfo)
+    realTimedResult.result should equal (Right(realThreadName))
+    shadowTimedResult.result should equal (Right(shadowThreadName))
+
   }
 
   "ShadowRunnerDynamicProxy" should "proxy calls to both real and shadow dao" in {

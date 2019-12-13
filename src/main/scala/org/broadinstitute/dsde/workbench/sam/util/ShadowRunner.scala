@@ -45,7 +45,7 @@ trait ShadowRunner {
       }
 
       // asynchronously report result
-      _ <- shadowContextShift.evalOn(ShadowRunner.shadowExecutionContext)(resultReporter.reportResult(methodCallInfo, realTimedResult, shadowTimedResult).runAsync {
+      _ <- realContextShift.evalOn(ShadowRunner.shadowExecutionContext)(resultReporter.reportResult(methodCallInfo, realTimedResult, shadowTimedResult).runAsync {
         case Left(regrets) =>
           resultReporter.reportShadowRunnerFailure(methodCallInfo, regrets)
         case Right(_) => IO.unit
