@@ -1,6 +1,5 @@
 package org.broadinstitute.dsde.workbench.sam.util
 
-import cats.effect.concurrent.Semaphore
 import cats.effect.{Clock, ContextShift, IO, Timer}
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.{FlatSpec, Matchers}
@@ -9,8 +8,9 @@ import scala.concurrent.{ExecutionContext, Future, Promise}
 import scala.concurrent.duration._
 
 class ShadowRunnerSpec extends FlatSpec with Matchers with ScalaFutures {
+  lazy val executionContext: ExecutionContext = scala.concurrent.ExecutionContext.global
 
-  "ShadowRunner" should "run real dao and not wait for shadow to complete" in {
+  "ShadowRunner" should "timeout if the shadow takes too long" in {
     val methodCallInfo = MethodCallInfo("runTest", Array.empty, Array.empty)
     val testShadowResultReporter = new TestShadowResultReporter
 
@@ -20,23 +20,17 @@ class ShadowRunnerSpec extends FlatSpec with Matchers with ScalaFutures {
       * to acquire it again and will have to wait until it is release externally.
       */
     class TestShadowRunner extends ShadowRunner {
-      implicit val executionContext: ExecutionContext = scala.concurrent.ExecutionContext.global
-      override implicit val contextShift: ContextShift[IO] = IO.contextShift(scala.concurrent.ExecutionContext.global)
-      val semaphore = Semaphore[IO](1).unsafeRunSync()
+      override implicit val realContextShift: ContextShift[IO] = IO.contextShift(executionContext)
+      override val shadowContextShift: ContextShift[IO] = IO.contextShift(executionContext)
+      override val timer: Timer[IO] = IO.timer(executionContext)
 
-      override val clock: Clock[IO] = Clock.create[IO]
       override val resultReporter: ShadowResultReporter = testShadowResultReporter
+      override val shadowTimeout = 1 seconds
 
       val real = IO.pure(10)
-      val shadow = semaphore.acquire.map(_ => 15)
+      val shadow = timer.sleep((1 seconds) + shadowTimeout).map(_ => 15)
 
-      def runTest(): IO[Int] = {
-        for {
-          _ <- semaphore.acquire
-          result <- runWithShadow(methodCallInfo, real, shadow)
-        } yield result
-
-      }
+      def runTest(): IO[Int] = runWithShadow(methodCallInfo, real, shadow)
     }
 
     val testShadowRunner = new TestShadowRunner()
@@ -44,14 +38,11 @@ class ShadowRunnerSpec extends FlatSpec with Matchers with ScalaFutures {
 
     result.unsafeRunSync() should equal (10)
 
-    implicit val patienceConfig = PatienceConfig(2 seconds)
-
-    testShadowResultReporter.resultFuture should not be 'isCompleted
-    testShadowRunner.semaphore.release.unsafeRunSync()
     val (actualMethodCallInfo, realTimedResult, shadowTimedResult) = testShadowResultReporter.resultFuture.futureValue
     actualMethodCallInfo should equal (methodCallInfo)
     realTimedResult.result should equal (Right(10))
-    shadowTimedResult.result should equal (Right(15))
+    assert(shadowTimedResult.result.isLeft)
+    shadowTimedResult.result.left.get.getMessage should equal ("shadow timed out after 1 second")
   }
 
   it should "run real dao and not be bothered by shadow failure" in {
@@ -59,8 +50,9 @@ class ShadowRunnerSpec extends FlatSpec with Matchers with ScalaFutures {
     val testShadowResultReporter = new TestShadowResultReporter
 
     class TestShadowRunner extends ShadowRunner {
-      override implicit val contextShift: ContextShift[IO] = IO.contextShift(scala.concurrent.ExecutionContext.global)
-      override val clock: Clock[IO] = Clock.create[IO]
+      override val realContextShift: ContextShift[IO] = IO.contextShift(executionContext)
+      override val shadowContextShift: ContextShift[IO] = IO.contextShift(executionContext)
+      override val timer: Timer[IO] = IO.timer(executionContext)
       override val resultReporter: ShadowResultReporter = testShadowResultReporter
 
       val real = IO.pure(10)
@@ -92,10 +84,12 @@ class ShadowRunnerSpec extends FlatSpec with Matchers with ScalaFutures {
       def test(x: Int) = IO.pure(x-1)
     }
 
-    implicit val contextShift: ContextShift[IO] = IO.contextShift(scala.concurrent.ExecutionContext.global)
-    implicit val timer: Timer[IO] = IO.timer(scala.concurrent.ExecutionContext.global)
+    val realContextShift: ContextShift[IO] = IO.contextShift(executionContext)
+    val shadowContextShift: ContextShift[IO] = IO.contextShift(executionContext)
+    implicit val timer: Timer[IO] = IO.timer(executionContext)
+
     val clock: Clock[IO] = Clock.create[IO]
-    val proxy = DaoWithShadow(new RealDAO, new ShadowDAO, testShadowResultReporter, clock)
+    val proxy = DaoWithShadow(new RealDAO, new ShadowDAO, testShadowResultReporter, realContextShift, shadowContextShift)
 
     val realResult = proxy.test(20).unsafeRunSync()
     realResult should be (21)
@@ -125,7 +119,7 @@ class TestShadowResultReporter extends ShadowResultReporter {
     IO.unit
   }
 
-  override def reportShadowExecutionFailure(methodCallInfo: MethodCallInfo, regrets: Throwable): IO[Unit] = {
+  override def reportShadowRunnerFailure(methodCallInfo: MethodCallInfo, regrets: Throwable): IO[Unit] = {
     resultPromise.failure(regrets)
     IO.unit
   }
