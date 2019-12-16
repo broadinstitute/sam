@@ -44,6 +44,7 @@ import scala.util.control.NonFatal
 import scala.reflect.ClassTag
 
 object Boot extends IOApp with LazyLogging {
+  private val shadowContextShift = IO.contextShift(ShadowRunner.shadowExecutionContext)
 
   def run(args: List[String]): IO[ExitCode] =
     (startup() *> ExitCode.Success.pure[IO]).recoverWith {
@@ -247,15 +248,15 @@ object Boot extends IOApp with LazyLogging {
     dataStoreConfig match {
       case DataStoreConfig(OpenDJ, None) => ldapDAO
       case DataStoreConfig(Postgres, None) => postgresDAO
-      case DataStoreConfig(OpenDJ, Some(Postgres)) => DaoWithShadow(ldapDAO, postgresDAO, new NewRelicShadowResultReporter(daoName, newRelicMetrics), timer.clock)
-      case DataStoreConfig(Postgres, Some(OpenDJ)) => DaoWithShadow(postgresDAO, ldapDAO, new NewRelicShadowResultReporter(daoName, newRelicMetrics), timer.clock)
+      case DataStoreConfig(OpenDJ, Some(Postgres)) => DaoWithShadow(ldapDAO, postgresDAO, new NewRelicShadowResultReporter(daoName, newRelicMetrics), implicitly, shadowContextShift)
+      case DataStoreConfig(Postgres, Some(OpenDJ)) => DaoWithShadow(postgresDAO, ldapDAO, new NewRelicShadowResultReporter(daoName, newRelicMetrics), implicitly, shadowContextShift)
       case _ => throw new WorkbenchException(s"unsupported DataStoreConfig $dataStoreConfig")
     }
   }
 
   def chooseRightContextShift(dataStoreConfig: DataStoreConfig, dataStore: DataStore): ContextShift[IO] = {
     if (dataStoreConfig.shadow.contains(dataStore)) {
-      IO.contextShift(ShadowRunner.shadowExecutionContext)
+      shadowContextShift
     } else {
       implicitly[ContextShift[IO]]
     }

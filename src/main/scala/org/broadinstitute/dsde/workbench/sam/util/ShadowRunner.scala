@@ -6,6 +6,7 @@ import java.util.concurrent.Executors
 import cats.effect._
 import cats.syntax.all._
 import com.typesafe.scalalogging.LazyLogging
+import org.broadinstitute.dsde.workbench.model.WorkbenchException
 import org.postgresql.util.PSQLException
 
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
@@ -21,18 +22,33 @@ object ShadowRunner {
 }
 
 trait ShadowRunner {
-  val clock: Clock[IO]
+  val timer: Timer[IO]
+  lazy val clock: Clock[IO] = timer.clock
   val resultReporter: ShadowResultReporter
-  implicit val contextShift: ContextShift[IO]
+  val realContextShift: ContextShift[IO]
+  val shadowContextShift: ContextShift[IO]
+
+  val shadowTimeout = 5 seconds
 
   protected def runWithShadow[T](methodCallInfo: MethodCallInfo, real: IO[T], shadow: IO[T]): IO[T] = {
     for {
-      realTimedResult <- measure(real)
-      _ <- contextShift.evalOn(ShadowRunner.shadowExecutionContext)(measure(shadow).runAsync {
+      // start both real and shadow concurrently
+      realTimedResultAsync <- measure(real).start(realContextShift)
+      shadowTimedResultAsync <- measure(shadow).start(shadowContextShift)
+
+      // wait for real
+      realTimedResult <- realTimedResultAsync.join
+      // wait for shadow for up to shadowTimeout beyond real but let shadow keep running even if it takes too long
+      shadowTimedResult <- IO.racePair(shadowTimedResultAsync.join, timer.sleep(shadowTimeout))(shadowContextShift).flatMap {
+        case Left((result, timeoutFiber)) => timeoutFiber.cancel.map(_ => result)
+        case Right(_) => IO.pure(TimedResult[T](Left(new WorkbenchException(s"shadow timed out after $shadowTimeout")), shadowTimeout))
+      }
+
+      // asynchronously report result
+      _ <- realContextShift.evalOn(ShadowRunner.shadowExecutionContext)(resultReporter.reportResult(methodCallInfo, realTimedResult, shadowTimedResult).runAsync {
         case Left(regrets) =>
-          resultReporter.reportShadowExecutionFailure(methodCallInfo, regrets)
-        case Right(shadowTimedResult) =>
-          resultReporter.reportResult(methodCallInfo, realTimedResult, shadowTimedResult)
+          resultReporter.reportShadowRunnerFailure(methodCallInfo, regrets)
+        case Right(_) => IO.unit
       }.toIO)
     } yield {
       realTimedResult.result.toTry.get
@@ -59,8 +75,8 @@ trait ShadowResultReporter extends LazyLogging {
     * @param regrets
     * @return
     */
-  def reportShadowExecutionFailure(methodCallInfo: MethodCallInfo, regrets: Throwable): IO[Unit] = {
-    IO(logger.error(s"failure attempting to call shadow implementation of $daoName::$methodCallInfo", regrets))
+  def reportShadowRunnerFailure(methodCallInfo: MethodCallInfo, regrets: Throwable): IO[Unit] = {
+    IO(logger.error(s"general failure in shadow running calling $daoName::$methodCallInfo", regrets))
   }
 
   /**
@@ -80,14 +96,14 @@ trait ShadowResultReporter extends LazyLogging {
   * All methods in your DAO must return IO.
   */
 object DaoWithShadow {
-  def apply[T : ClassTag](realDAO: T, shadowDAO: T, resultReporter: ShadowResultReporter, clock: Clock[IO])(implicit contextShift: ContextShift[IO], timer: Timer[IO]): T = {
+  def apply[T : ClassTag](realDAO: T, shadowDAO: T, resultReporter: ShadowResultReporter, realContextShift: ContextShift[IO], shadowContextShift: ContextShift[IO])(implicit timer: Timer[IO]): T = {
     Proxy.newProxyInstance(getClass.getClassLoader,
       Array(implicitly[ClassTag[T]].runtimeClass),
-      new ShadowRunnerDynamicProxy[T](realDAO, shadowDAO, resultReporter, clock)).asInstanceOf[T]
+      new ShadowRunnerDynamicProxy[T](realDAO, shadowDAO, resultReporter, realContextShift, shadowContextShift)).asInstanceOf[T]
   }
 }
 
-private class ShadowRunnerDynamicProxy[DAO](realDAO: DAO, shadowDAO: DAO, val resultReporter: ShadowResultReporter, val clock: Clock[IO])(implicit val contextShift: ContextShift[IO], timer: Timer[IO]) extends InvocationHandler with ShadowRunner {
+private class ShadowRunnerDynamicProxy[DAO](realDAO: DAO, shadowDAO: DAO, val resultReporter: ShadowResultReporter, val realContextShift: ContextShift[IO], val shadowContextShift: ContextShift[IO])(implicit val timer: Timer[IO]) extends InvocationHandler with ShadowRunner {
   override def invoke(proxy: Any, method: Method, args: Array[AnyRef]): AnyRef = {
     // there should not be any functions in our DAOs that return non-IO type but scala does funny stuff at the java class level wrt default parameters
     // so check if the return type is IO, if it is just call it and run with shadow
