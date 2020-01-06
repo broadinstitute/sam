@@ -9,14 +9,14 @@ import liquibase.database.jvm.JdbcConnection
 import liquibase.resource.{ClassLoaderResourceAccessor, ResourceAccessor}
 import liquibase.{Contexts, Liquibase}
 import org.broadinstitute.dsde.workbench.sam.config.LiquibaseConfig
+import org.broadinstitute.dsde.workbench.sam.db.DatabaseNames.DatabaseName
 import scalikejdbc.{ConnectionPool, DBSession, NamedDB}
 import scalikejdbc.config.DBs
 import sun.security.provider.certpath.SunCertPathBuilderException
 
 object DbReference extends LazyLogging {
-
   private def initWithLiquibase(liquibaseConfig: LiquibaseConfig, changelogParameters: Map[String, AnyRef] = Map.empty): Unit = {
-    val dbConnection = ConnectionPool.borrow('sam_foreground)
+    val dbConnection = ConnectionPool.borrow(DatabaseNames.Foreground.name)
     try {
       val liquibaseConnection = new JdbcConnection(dbConnection)
       val resourceAccessor: ResourceAccessor = new ClassLoaderResourceAccessor()
@@ -42,8 +42,8 @@ object DbReference extends LazyLogging {
     }
   }
 
-  def init(liquibaseConfig: LiquibaseConfig, dbName: Symbol): DbReference = {
-    DBs.setup(dbName)
+  def init(liquibaseConfig: LiquibaseConfig, dbName: DatabaseName): DbReference = {
+    DBs.setup(dbName.name)
     DBs.loadGlobalSettings()
     if (liquibaseConfig.initWithLiquibase) {
       initWithLiquibase(liquibaseConfig)
@@ -52,14 +52,26 @@ object DbReference extends LazyLogging {
     DbReference(dbName)
   }
 
-  def resource(liquibaseConfig: LiquibaseConfig, dbName: Symbol): Resource[IO, DbReference] = Resource.make(
+  def resource(liquibaseConfig: LiquibaseConfig, dbName: DatabaseName): Resource[IO, DbReference] = Resource.make(
     IO(init(liquibaseConfig, dbName))
-  )(_ => IO(DBs.close(dbName)))
+  )(_ => IO(DBs.close(dbName.name)))
 }
 
-case class DbReference(dbName: Symbol) extends LazyLogging {
+object DatabaseNames {
+  sealed trait DatabaseName {
+    val name: Symbol
+  }
+  case object Foreground extends DatabaseName {
+    val name: Symbol = 'sam_foreground
+  }
+  case object Background extends DatabaseName {
+    val name: Symbol = 'sam_background
+  }
+}
+
+case class DbReference(dbName: DatabaseName) extends LazyLogging {
   def inLocalTransaction[A](f: DBSession => A): A = {
-    NamedDB(dbName).localTx[A] { implicit session =>
+    NamedDB(dbName.name).localTx[A] { implicit session =>
       f(session)
     }
   }

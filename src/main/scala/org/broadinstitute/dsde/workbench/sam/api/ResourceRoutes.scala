@@ -20,7 +20,7 @@ import ImplicitConversions.ioOnSuccessMagnet
 import akka.http.scaladsl.marshalling.ToResponseMarshallable
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.sam.config.LiquibaseConfig
-import org.broadinstitute.dsde.workbench.sam.db.DbReference
+import org.broadinstitute.dsde.workbench.sam.db.{DatabaseNames, DbReference}
 import org.broadinstitute.dsde.workbench.sam.directory.PostgresDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.openam.PostgresAccessPolicyDAO
 import org.broadinstitute.dsde.workbench.util.ExecutionContexts
@@ -141,10 +141,10 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
     }
 
   private def initializePostgresResourceTypes = {
-    val dbName: Symbol = 'sam_foreground
+    val dbName = DatabaseNames.Foreground
     implicit val contextShift = IO.contextShift(ExecutionContext.Implicits.global)
     val postgresResourceService: cats.effect.Resource[IO, ResourceService] = for {
-      postgresExecutionContext <- ExecutionContexts.fixedThreadPool[IO](DBs.config.getInt(s"db.${dbName.name}.poolMaxSize"))
+      postgresExecutionContext <- ExecutionContexts.fixedThreadPool[IO](DBs.config.getInt(s"db.${dbName.name.name}.poolMaxSize"))
       dbReference <- DbReference.resource(liquibaseConfig, dbName)
 
       postgresAccessPolicyDAO = new PostgresAccessPolicyDAO(dbReference, postgresExecutionContext)

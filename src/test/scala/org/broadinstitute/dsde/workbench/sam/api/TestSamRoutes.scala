@@ -49,7 +49,7 @@ object TestSamRoutes {
     val allUsersGroup = TestSupport.runAndWait(NoExtensions.getOrCreateAllUsersGroup(directoryDAO))
     TestSupport.runAndWait(googleDirectoryDAO.createGroup(allUsersGroup.id.toString, allUsersGroup.email))
 
-    val mockStatusService = new StatusService(directoryDAO, NoExtensions)
+    val mockStatusService = new StatusService(directoryDAO, NoExtensions, TestSupport.dbRef)
 
     new TestSamRoutes(mockResourceService, policyEvaluatorService, mockUserService, mockStatusService, mockManagedGroupService, userInfo, directoryDAO)
   }
