@@ -10,7 +10,7 @@ import org.broadinstitute.dsde.workbench.sam.directory.MockDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.openam.MockAccessPolicyDAO
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.util.health.StatusJsonSupport._
-import org.broadinstitute.dsde.workbench.util.health.Subsystems.OpenDJ
+import org.broadinstitute.dsde.workbench.util.health.Subsystems.{Database, OpenDJ}
 import org.broadinstitute.dsde.workbench.util.health.{HealthMonitor, StatusCheckResponse}
 import org.scalatest.concurrent.Eventually._
 import org.scalatest.{FlatSpec, Matchers}
@@ -36,7 +36,7 @@ class StatusRouteSpec extends FlatSpec with Matchers with ScalatestRouteTest wit
     implicit val patienceConfig = PatienceConfig(timeout = 1 second)
     eventually {
       Get("/status") ~> samRoutes.route ~> check {
-        responseAs[StatusCheckResponse] shouldEqual StatusCheckResponse(true, Map(OpenDJ -> HealthMonitor.OkStatus))
+        responseAs[StatusCheckResponse] shouldEqual StatusCheckResponse(true, Map(OpenDJ -> HealthMonitor.OkStatus, Database -> HealthMonitor.OkStatus))
         status shouldEqual StatusCodes.OK
       }
     }
@@ -49,7 +49,7 @@ class StatusRouteSpec extends FlatSpec with Matchers with ScalatestRouteTest wit
     val emailDomain = "example.com"
     val mockResourceService = new ResourceService(Map.empty, null, policyDAO, directoryDAO, NoExtensions, emailDomain)
     val mockUserService = new UserService(directoryDAO, NoExtensions)
-    val mockStatusService = new StatusService(directoryDAO, NoExtensions)
+    val mockStatusService = new StatusService(directoryDAO, NoExtensions, TestSupport.dbRef)
     val mockManagedGroupService = new ManagedGroupService(mockResourceService, null, Map.empty, policyDAO, directoryDAO, NoExtensions, emailDomain)
     val policyEvaluatorService = PolicyEvaluatorService(emailDomain, Map.empty, policyDAO, directoryDAO)
 

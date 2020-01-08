@@ -24,7 +24,8 @@ import org.broadinstitute.dsde.workbench.newrelic.NewRelicMetrics
 import org.broadinstitute.dsde.workbench.sam.api.{SamRoutes, StandardUserInfoDirectives}
 import org.broadinstitute.dsde.workbench.sam.config.DataStores.{DataStore, OpenDJ, Postgres}
 import org.broadinstitute.dsde.workbench.sam.config.{AppConfig, DataStoreConfig, GoogleConfig}
-import org.broadinstitute.dsde.workbench.sam.db.DbReference
+import org.broadinstitute.dsde.workbench.sam.db.DatabaseNames.DatabaseName
+import org.broadinstitute.dsde.workbench.sam.db.{DatabaseNames, DbReference}
 import org.broadinstitute.dsde.workbench.sam.directory._
 import org.broadinstitute.dsde.workbench.sam.google._
 import org.broadinstitute.dsde.workbench.sam.model._
@@ -167,11 +168,11 @@ object Boot extends IOApp with LazyLogging {
       resourceCache <- createResourceCache("resource", appConfig.directoryConfig.resourceCache.maxEntries, appConfig.directoryConfig.resourceCache.timeToLive)
       newRelicMetrics = NewRelicMetrics.fromNewRelic("sam")
 
-      (foregroundDirectoryDAO, foregroundAccessPolicyDAO, _) <- createDAOs(appConfig, 'sam_foreground, appConfig.directoryConfig.connectionPoolSize, "foreground", memberOfCache, resourceCache, newRelicMetrics)
+      (foregroundDirectoryDAO, foregroundAccessPolicyDAO, _) <- createDAOs(appConfig, DatabaseNames.Foreground, appConfig.directoryConfig.connectionPoolSize, "foreground", memberOfCache, resourceCache, newRelicMetrics)
 
       // This special set of objects are for operations that happen in the background, i.e. not in the immediate service
       // of an api call (foreground). They are meant to partition resources so that background processes can't crowd our api calls.
-      (backgroundDirectoryDAO, backgroundAccessPolicyDAO, backgroundLdapExecutionContext) <- createDAOs(appConfig, 'sam_background, appConfig.directoryConfig.backgroundConnectionPoolSize, "background", memberOfCache, resourceCache, newRelicMetrics)
+      (backgroundDirectoryDAO, backgroundAccessPolicyDAO, backgroundLdapExecutionContext) <- createDAOs(appConfig, DatabaseNames.Background, appConfig.directoryConfig.backgroundConnectionPoolSize, "background", memberOfCache, resourceCache, newRelicMetrics)
 
       blockingEc <- ExecutionContexts.fixedThreadPool[IO](24)
       appDependencies <- appConfig.googleConfig match {
@@ -202,7 +203,7 @@ object Boot extends IOApp with LazyLogging {
     } yield appDependencies
 
   private def createDAOs(appConfig: AppConfig,
-                         dbName: Symbol,
+                         dbName: DatabaseName,
                          ldapConnectionPoolSize: Int,
                          ldapConnectionPoolName: String,
                          memberOfCache: Cache[WorkbenchSubject, Set[String]],
@@ -212,7 +213,7 @@ object Boot extends IOApp with LazyLogging {
       dbReference <- DbReference.resource(appConfig.liquibaseConfig, dbName)
       ldapConnectionPool <- createLdapConnectionPool(appConfig.directoryConfig.directoryUrl, appConfig.directoryConfig.user, appConfig.directoryConfig.password, ldapConnectionPoolSize, ldapConnectionPoolName)
       ldapExecutionContext <- ExecutionContexts.fixedThreadPool[IO](appConfig.directoryConfig.connectionPoolSize)
-      postgresExecutionContext <- ExecutionContexts.fixedThreadPool[IO](DBs.config.getInt(s"db.${dbName.name}.poolMaxSize"))
+      postgresExecutionContext <- ExecutionContexts.fixedThreadPool[IO](DBs.config.getInt(s"db.${dbName.name.name}.poolMaxSize"))
 
       directoryDAO = createDirectoryDAO(appConfig, ldapExecutionContext, ldapConnectionPool, dbReference, postgresExecutionContext, memberOfCache, newRelicMetrics)
       accessPolicyDAO = createAccessPolicyDAO(appConfig, ldapExecutionContext, ldapConnectionPool, dbReference, postgresExecutionContext, memberOfCache, resourceCache, newRelicMetrics)
@@ -343,7 +344,7 @@ object Boot extends IOApp with LazyLogging {
     val policyEvaluatorService = PolicyEvaluatorService(config.emailDomain, resourceTypeMap, accessPolicyDAO, directoryDAO)
     val resourceService = new ResourceService(resourceTypeMap, policyEvaluatorService, accessPolicyDAO, directoryDAO, cloudExtensionsInitializer.cloudExtensions, config.emailDomain)
     val userService = new UserService(directoryDAO, cloudExtensionsInitializer.cloudExtensions)
-    val statusService = new StatusService(directoryDAO, cloudExtensionsInitializer.cloudExtensions, 10 seconds)
+    val statusService = new StatusService(directoryDAO, cloudExtensionsInitializer.cloudExtensions, DbReference(DatabaseNames.Foreground), 10 seconds)
     val managedGroupService =
       new ManagedGroupService(resourceService, policyEvaluatorService, resourceTypeMap, accessPolicyDAO, directoryDAO, cloudExtensionsInitializer.cloudExtensions, config.emailDomain)
     val samApplication = SamApplication(userService, resourceService, statusService)
