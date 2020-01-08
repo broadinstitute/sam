@@ -44,10 +44,10 @@ class StatusService(
   private def checkDatabase(): IO[SubsystemStatus] = IO {
     logger.info("checking database connection")
     dbReference.inLocalTransaction { session =>
-      if (session.connection.isValid(pollInterval.toSeconds.intValue())) {
+      if (session.connection.isValid((2 seconds).toSeconds.intValue())) {
         HealthMonitor.OkStatus
       } else {
-        HealthMonitor.failedStatus("database connection invalid")
+        HealthMonitor.failedStatus("database connection invalid or timed out checking")
       }
     }
   }
