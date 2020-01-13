@@ -93,7 +93,9 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
 
     // check ldap
     dirDAO.loadUser(defaultUserId).unsafeRunSync() shouldBe Some(WorkbenchUser(defaultUser.id, Some(defaultUser.googleSubjectId), defaultUser.email))
+    registrationDAO.loadUser(defaultUserId).unsafeRunSync() shouldBe Some(WorkbenchUser(defaultUser.id, Some(defaultUser.googleSubjectId), defaultUser.email))
     dirDAO.isEnabled(defaultUserId).unsafeRunSync() shouldBe true
+    registrationDAO.isEnabled(defaultUserId).unsafeRunSync() shouldBe true
     dirDAO.loadGroup(service.cloudExtensions.allUsersGroupName).unsafeRunSync() shouldBe
       Some(BasicWorkbenchGroup(service.cloudExtensions.allUsersGroupName, Set(defaultUserId), service.cloudExtensions.getOrCreateAllUsersGroup(dirDAO).futureValue.email))
   }
@@ -151,6 +153,7 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
 
     // it should be enabled
     dirDAO.isEnabled(defaultUserId).unsafeRunSync() shouldBe true
+    registrationDAO.isEnabled(defaultUserId).unsafeRunSync() shouldBe true
 
     // disable the user
     val response = service.disableUser(defaultUserId, userInfo).futureValue
@@ -158,6 +161,7 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
 
     // check ldap
     dirDAO.isEnabled(defaultUserId).unsafeRunSync() shouldBe false
+    registrationDAO.isEnabled(defaultUserId).unsafeRunSync() shouldBe false
   }
 
   it should "delete a user" in {
@@ -168,8 +172,9 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
     // delete the user
     service.deleteUser(defaultUserId, userInfo).futureValue
 
-    // check ldap
+    // check
     dirDAO.loadUser(defaultUserId).unsafeRunSync() shouldBe None
+    registrationDAO.loadUser(defaultUserId).unsafeRunSync() shouldBe None
   }
 
   it should "generate unique identifier properly" in {
