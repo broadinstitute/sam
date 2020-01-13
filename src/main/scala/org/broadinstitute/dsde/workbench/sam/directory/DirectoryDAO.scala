@@ -10,7 +10,7 @@ import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
 /**
   * Created by dvoet on 5/26/17.
   */
-trait DirectoryDAO {
+trait DirectoryDAO extends RegistrationDAO {
   def createGroup(group: BasicWorkbenchGroup, accessInstructionsOpt: Option[String] = None): IO[BasicWorkbenchGroup]
   def loadGroup(groupName: WorkbenchGroupName): IO[Option[BasicWorkbenchGroup]]
   def loadGroups(groupNames: Set[WorkbenchGroupName]): IO[Stream[BasicWorkbenchGroup]]

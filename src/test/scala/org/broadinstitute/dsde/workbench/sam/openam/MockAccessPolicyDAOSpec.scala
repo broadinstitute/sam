@@ -53,17 +53,18 @@ class MockAccessPolicyDAOSpec extends FlatSpec with Matchers with TestSupport wi
     val emailDomain = "example.com"
   }
 
-  def jndiServicesFixture = new {
+  def realServicesFixture = new {
     val shared = sharedFixtures
     val dirURI = new URI(directoryConfig.directoryUrl)
     val connectionPool = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
-    val ldapPolicyDao = new LdapAccessPolicyDAO(connectionPool, directoryConfig, TestSupport.blockingEc, TestSupport.testMemberOfCache, TestSupport.testResourceCache)
-    val ldapDirDao = new LdapDirectoryDAO(connectionPool, directoryConfig, TestSupport.blockingEc, TestSupport.testMemberOfCache)
+    val ldapPolicyDao = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.blockingEc)
+    val ldapDirDao = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.blockingEc)
+    val registrationDAO = new LdapRegistrationDAO(connectionPool, directoryConfig, TestSupport.blockingEc)
     val allUsersGroup: WorkbenchGroup = TestSupport.runAndWait(NoExtensions.getOrCreateAllUsersGroup(ldapDirDao))
 
     val policyEvaluatorService = PolicyEvaluatorService(shared.emailDomain, shared.resourceTypes, ldapPolicyDao, ldapDirDao)
     val resourceService = new ResourceService(shared.resourceTypes, policyEvaluatorService, ldapPolicyDao, ldapDirDao, NoExtensions, shared.emailDomain)
-    val userService = new UserService(ldapDirDao, NoExtensions)
+    val userService = new UserService(ldapDirDao, NoExtensions, registrationDAO)
     val managedGroupService = new ManagedGroupService(resourceService, policyEvaluatorService, shared.resourceTypes, ldapPolicyDao, ldapDirDao, NoExtensions, shared.emailDomain)
     shared.resourceTypes foreach {case (_, resourceType) => resourceService.createResourceType(resourceType).unsafeRunSync() }
   }
@@ -71,21 +72,22 @@ class MockAccessPolicyDAOSpec extends FlatSpec with Matchers with TestSupport wi
   def mockServicesFixture = new {
     val shared = sharedFixtures
     val mockDirDao = new MockDirectoryDAO(shared.groups)
+    val mockRegDao = new MockDirectoryDAO()
     val mockPolicyDAO = new MockAccessPolicyDAO(shared.groups)
     val allUsersGroup: WorkbenchGroup = TestSupport.runAndWait(NoExtensions.getOrCreateAllUsersGroup(mockDirDao))
 
     val policyEvaluatorService = PolicyEvaluatorService(shared.emailDomain, shared.resourceTypes, mockPolicyDAO, mockDirDao)
     val resourceService = new ResourceService(shared.resourceTypes, policyEvaluatorService, mockPolicyDAO, mockDirDao, NoExtensions, shared.emailDomain)
-    val userService = new UserService(mockDirDao, NoExtensions)
+    val userService = new UserService(mockDirDao, NoExtensions, mockRegDao)
     val managedGroupService = new ManagedGroupService(resourceService, policyEvaluatorService, shared.resourceTypes, mockPolicyDAO, mockDirDao, NoExtensions, shared.emailDomain)
   }
 
-  "JndiAccessPolicyDao and MockAccessPolicyDao" should "return the same results for the same methods" in {
-    val jndi = jndiServicesFixture
+  "RealAccessPolicyDao and MockAccessPolicyDao" should "return the same results for the same methods" in {
+    val real = realServicesFixture
     val mock = mockServicesFixture
 
     val dummyUser = CreateWorkbenchUser(dummyUserInfo.userId, GoogleSubjectId(dummyUserInfo.userId.value), dummyUserInfo.userEmail)
-    runAndWait(jndi.userService.createUser(dummyUser))
+    runAndWait(real.userService.createUser(dummyUser))
     runAndWait(mock.userService.createUser(dummyUser))
 
     val groupName = "fooGroup"
@@ -93,12 +95,12 @@ class MockAccessPolicyDAOSpec extends FlatSpec with Matchers with TestSupport wi
     val intendedResource = Resource(ManagedGroupService.managedGroupTypeName, ResourceId(groupName), Set.empty)
 
     // just compare top level fields because createResource returns the policies, including the default one
-    runAndWait(jndi.managedGroupService.createManagedGroup(ResourceId(groupName), dummyUserInfo)).copy(accessPolicies = Set.empty) shouldEqual intendedResource
+    runAndWait(real.managedGroupService.createManagedGroup(ResourceId(groupName), dummyUserInfo)).copy(accessPolicies = Set.empty) shouldEqual intendedResource
     runAndWait(mock.managedGroupService.createManagedGroup(ResourceId(groupName), dummyUserInfo)).copy(accessPolicies = Set.empty) shouldEqual intendedResource
 
 
     val expectedGroups = Set(ResourceIdAndPolicyName(ResourceId(groupName), ManagedGroupService.adminPolicyName))
-    jndi.managedGroupService.listGroups(dummyUserInfo.userId).unsafeRunSync().map(ripn => ResourceIdAndPolicyName(ripn.groupName, ripn.role)) shouldEqual expectedGroups
+    real.managedGroupService.listGroups(dummyUserInfo.userId).unsafeRunSync().map(ripn => ResourceIdAndPolicyName(ripn.groupName, ripn.role)) shouldEqual expectedGroups
     mock.managedGroupService.listGroups(dummyUserInfo.userId).unsafeRunSync().map(ripn => ResourceIdAndPolicyName(ripn.groupName, ripn.role)) shouldEqual expectedGroups
   }
 }

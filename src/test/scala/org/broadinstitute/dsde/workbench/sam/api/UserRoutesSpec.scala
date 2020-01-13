@@ -234,6 +234,7 @@ trait UserRoutesSpecHelper extends FlatSpec with Matchers with ScalatestRouteTes
   def withAdminRoutes[T](testCode: (TestSamRoutes, TestSamRoutes) => T): T = {
     val googleDirectoryDAO = new MockGoogleDirectoryDAO()
     val directoryDAO = new MockDirectoryDAO()
+    val registrationDAO = new MockDirectoryDAO()
 
     val adminGroupEmail = runAndWait(setupAdminsGroup(googleDirectoryDAO))
 
@@ -241,15 +242,16 @@ trait UserRoutesSpecHelper extends FlatSpec with Matchers with ScalatestRouteTes
       override def isWorkbenchAdmin(memberEmail: WorkbenchEmail): Future[Boolean] = googleDirectoryDAO.isGroupMember(adminGroupEmail, memberEmail)
     }
 
-    val samRoutes = new TestSamRoutes(null, null, new UserService(directoryDAO, cloudExtensions), new StatusService(directoryDAO, NoExtensions, TestSupport.dbRef), null, UserInfo(OAuth2BearerToken(""), defaultUserId, defaultUserEmail, 0), directoryDAO, cloudExtensions)
-    val adminRoutes = new TestSamRoutes(null, null, new UserService(directoryDAO, cloudExtensions), new StatusService(directoryDAO, NoExtensions, TestSupport.dbRef), null, UserInfo(OAuth2BearerToken(""), adminUserId, adminUserEmail, 0), directoryDAO, cloudExtensions)
+    val samRoutes = new TestSamRoutes(null, null, new UserService(directoryDAO, cloudExtensions, registrationDAO), new StatusService(directoryDAO, NoExtensions, TestSupport.dbRef), null, UserInfo(OAuth2BearerToken(""), defaultUserId, defaultUserEmail, 0), directoryDAO, cloudExtensions)
+    val adminRoutes = new TestSamRoutes(null, null, new UserService(directoryDAO, cloudExtensions, registrationDAO), new StatusService(directoryDAO, NoExtensions, TestSupport.dbRef), null, UserInfo(OAuth2BearerToken(""), adminUserId, adminUserEmail, 0), directoryDAO, cloudExtensions)
     testCode(samRoutes, adminRoutes)
   }
 
   def withDefaultRoutes[T](testCode: TestSamRoutes => T): T = {
     val directoryDAO = new MockDirectoryDAO()
+    val registrationDAO = new MockDirectoryDAO()
 
-    val samRoutes = new TestSamRoutes(null, null, new UserService(directoryDAO, NoExtensions), new StatusService(directoryDAO, NoExtensions, TestSupport.dbRef), null, UserInfo(OAuth2BearerToken(""), defaultUserId, defaultUserEmail, 0), directoryDAO)
+    val samRoutes = new TestSamRoutes(null, null, new UserService(directoryDAO, NoExtensions, registrationDAO), new StatusService(directoryDAO, NoExtensions, TestSupport.dbRef), null, UserInfo(OAuth2BearerToken(""), defaultUserId, defaultUserEmail, 0), directoryDAO)
     testCode(samRoutes)
   }
 }
