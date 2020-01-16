@@ -6,6 +6,7 @@ import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
 import com.unboundid.ldap.sdk._
 import org.broadinstitute.dsde.workbench.model._
+import org.broadinstitute.dsde.workbench.model.google.{ServiceAccount, ServiceAccountDisplayName, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO.{Attr, ObjectClass}
@@ -127,6 +128,21 @@ class LdapRegistrationDAO(
     }
 
     attributes ++ displayNameAttribute
+  }
+
+  override def loadPetServiceAccount(petServiceAccountId: PetServiceAccountId): IO[Option[PetServiceAccount]] = executeLdap {
+    IO(Option(ldapConnectionPool.getEntry(petDn(petServiceAccountId))).map(unmarshalPetServiceAccount))
+  }
+
+  private def unmarshalPetServiceAccount(entry: Entry): PetServiceAccount = {
+    val uid = getAttribute(entry, Attr.uid).getOrElse(throw new WorkbenchException(s"${Attr.uid} attribute missing"))
+    val email = getAttribute(entry, Attr.email).getOrElse(throw new WorkbenchException(s"${Attr.email} attribute missing"))
+    val displayName = getAttribute(entry, Attr.givenName).getOrElse("")
+
+    PetServiceAccount(
+      dnToSubject(entry.getDN).asInstanceOf[PetServiceAccountId],
+      ServiceAccount(ServiceAccountSubjectId(uid), WorkbenchEmail(email), ServiceAccountDisplayName(displayName))
+    )
   }
 
   override def deletePetServiceAccount(petServiceAccountId: PetServiceAccountId): IO[Unit] =

@@ -58,7 +58,7 @@ class LdapRegistrationDAOSpec extends FlatSpec with Matchers with TestSupport wi
     }
   }
 
-  it should "create, delete pet service accounts" in {
+  it should "create, load, delete pet service accounts" in {
     val userId = WorkbenchUserId(UUID.randomUUID().toString)
     val user = WorkbenchUser(userId, None, WorkbenchEmail("foo@bar.com"))
     val serviceAccountUniqueId = ServiceAccountSubjectId(UUID.randomUUID().toString)
@@ -70,11 +70,23 @@ class LdapRegistrationDAOSpec extends FlatSpec with Matchers with TestSupport wi
       dao.createUser(user).unsafeRunSync()
     }
 
+    assertResult(None) {
+      dao.loadPetServiceAccount(petServiceAccount.id).unsafeRunSync()
+    }
+
     assertResult(petServiceAccount) {
       dao.createPetServiceAccount(petServiceAccount).unsafeRunSync()
     }
 
+    assertResult(Some(petServiceAccount)) {
+      dao.loadPetServiceAccount(petServiceAccount.id).unsafeRunSync()
+    }
+
     dao.deletePetServiceAccount(petServiceAccount.id).unsafeRunSync()
+
+    assertResult(None) {
+      dao.loadPetServiceAccount(petServiceAccount.id).unsafeRunSync()
+    }
   }
 
   it should "succeed if the user has been created" in {
