@@ -7,7 +7,7 @@ import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import akka.stream.ActorMaterializer
 import cats.data.NonEmptyList
-import cats.effect.{ContextShift, ExitCode, IO, IOApp}
+import cats.effect.{ExitCode, IO, IOApp}
 import cats.implicits._
 import com.typesafe.config.ConfigFactory
 import com.typesafe.scalalogging.LazyLogging
@@ -19,11 +19,9 @@ import org.broadinstitute.dsde.workbench.google.GoogleCredentialModes.{Json, Pem
 import org.broadinstitute.dsde.workbench.google2.util.DistributedLock
 import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleKmsInterpreter, GoogleKmsService, HttpGoogleDirectoryDAO, HttpGoogleIamDAO, HttpGoogleProjectDAO, HttpGooglePubSubDAO, HttpGoogleStorageDAO}
 import org.broadinstitute.dsde.workbench.google2.{GoogleFirestoreInterpreter, GoogleStorageInterpreter, GoogleStorageService}
-import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException, WorkbenchSubject}
-import org.broadinstitute.dsde.workbench.newrelic.NewRelicMetrics
+import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException}
 import org.broadinstitute.dsde.workbench.sam.api.{SamRoutes, StandardUserInfoDirectives}
-import org.broadinstitute.dsde.workbench.sam.config.DataStores.{DataStore, OpenDJ, Postgres}
-import org.broadinstitute.dsde.workbench.sam.config.{AppConfig, DataStoreConfig, GoogleConfig}
+import org.broadinstitute.dsde.workbench.sam.config.{AppConfig, GoogleConfig}
 import org.broadinstitute.dsde.workbench.sam.db.DatabaseNames.DatabaseName
 import org.broadinstitute.dsde.workbench.sam.db.{DatabaseNames, DbReference}
 import org.broadinstitute.dsde.workbench.sam.directory._
@@ -32,21 +30,15 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam._
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.broadinstitute.dsde.workbench.sam.service._
-import org.broadinstitute.dsde.workbench.sam.util.{DaoWithShadow, NewRelicShadowResultReporter, ShadowRunner}
 import org.broadinstitute.dsde.workbench.util.{DelegatePool, ExecutionContexts}
-import org.ehcache.Cache
-import org.ehcache.config.builders.{CacheConfigurationBuilder, CacheManagerBuilder, ExpiryPolicyBuilder, ResourcePoolsBuilder}
 import scalikejdbc.config.DBs
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
 import scala.util.control.NonFatal
-import scala.reflect.ClassTag
 
 object Boot extends IOApp with LazyLogging {
-  private val shadowContextShift = IO.contextShift(ShadowRunner.shadowExecutionContext)
-
   def run(args: List[String]): IO[ExitCode] =
     (startup() *> ExitCode.Success.pure[IO]).recoverWith {
       case NonFatal(t) =>
@@ -115,64 +107,14 @@ object Boot extends IOApp with LazyLogging {
       })(ldapConnection => IO(ldapConnection.close()))
   }
 
-  private[sam] def createMemberOfCache(
-      cacheName: String,
-      maxEntries: Long,
-      timeToLive: java.time.Duration): cats.effect.Resource[IO, Cache[WorkbenchSubject, Set[String]]] = {
-    val cacheManager = CacheManagerBuilder.newCacheManagerBuilder
-      .withCache(
-        cacheName,
-        CacheConfigurationBuilder
-          .newCacheConfigurationBuilder(classOf[WorkbenchSubject], classOf[Set[String]], ResourcePoolsBuilder.heap(maxEntries))
-          .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(timeToLive))
-      )
-      .build
-
-    cats.effect.Resource.make {
-      IO {
-        cacheManager.init()
-        cacheManager.getCache(cacheName, classOf[WorkbenchSubject], classOf[Set[String]])
-      }
-    } { _ =>
-      IO(cacheManager.close())
-    }
-  }
-
-  private[sam] def createResourceCache(
-      cacheName: String,
-      maxEntries: Long,
-      timeToLive: java.time.Duration): cats.effect.Resource[IO, Cache[FullyQualifiedResourceId, Resource]] = {
-    val cacheManager = CacheManagerBuilder.newCacheManagerBuilder
-      .withCache(
-        cacheName,
-        CacheConfigurationBuilder
-          .newCacheConfigurationBuilder(classOf[FullyQualifiedResourceId], classOf[Resource], ResourcePoolsBuilder.heap(maxEntries))
-          .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(timeToLive))
-      )
-      .build
-
-    cats.effect.Resource.make {
-      IO {
-        cacheManager.init()
-        cacheManager.getCache(cacheName, classOf[FullyQualifiedResourceId], classOf[Resource])
-      }
-    } { _ =>
-      IO(cacheManager.close())
-    }
-  }
-
   private[sam] def createAppDependencies(
       appConfig: AppConfig)(implicit actorSystem: ActorSystem, actorMaterializer: ActorMaterializer): cats.effect.Resource[IO, AppDependencies] =
     for {
-      memberOfCache <- createMemberOfCache("memberof", appConfig.directoryConfig.memberOfCache.maxEntries, appConfig.directoryConfig.memberOfCache.timeToLive)
-      resourceCache <- createResourceCache("resource", appConfig.directoryConfig.resourceCache.maxEntries, appConfig.directoryConfig.resourceCache.timeToLive)
-      newRelicMetrics = NewRelicMetrics.fromNewRelic("sam")
-
-      (foregroundDirectoryDAO, foregroundAccessPolicyDAO, _) <- createDAOs(appConfig, DatabaseNames.Foreground, appConfig.directoryConfig.connectionPoolSize, "foreground", memberOfCache, resourceCache, newRelicMetrics)
+      (foregroundDirectoryDAO, foregroundAccessPolicyDAO, _, registrationDAO) <- createDAOs(appConfig, DatabaseNames.Foreground, appConfig.directoryConfig.connectionPoolSize, "foreground")
 
       // This special set of objects are for operations that happen in the background, i.e. not in the immediate service
       // of an api call (foreground). They are meant to partition resources so that background processes can't crowd our api calls.
-      (backgroundDirectoryDAO, backgroundAccessPolicyDAO, backgroundLdapExecutionContext) <- createDAOs(appConfig, DatabaseNames.Background, appConfig.directoryConfig.backgroundConnectionPoolSize, "background", memberOfCache, resourceCache, newRelicMetrics)
+      (backgroundDirectoryDAO, backgroundAccessPolicyDAO, backgroundLdapExecutionContext, _) <- createDAOs(appConfig, DatabaseNames.Background, appConfig.directoryConfig.backgroundConnectionPoolSize, "background")
 
       blockingEc <- ExecutionContexts.fixedThreadPool[IO](24)
       appDependencies <- appConfig.googleConfig match {
@@ -193,79 +135,49 @@ object Boot extends IOApp with LazyLogging {
             val newGoogleStorage = GoogleStorageInterpreter[IO](googleStorage, blockingEc)
             val googleKmsInterpreter = GoogleKmsInterpreter[IO](googleKmsClient, blockingEc)
             val resourceTypeMap = appConfig.resourceTypes.map(rt => rt.name -> rt).toMap
-            val cloudExtension = createGoogleCloudExt(foregroundAccessPolicyDAO, foregroundDirectoryDAO, config, resourceTypeMap, lock, newGoogleStorage, googleKmsInterpreter)
+            val cloudExtension = createGoogleCloudExt(foregroundAccessPolicyDAO, foregroundDirectoryDAO, registrationDAO, config, resourceTypeMap, lock, newGoogleStorage, googleKmsInterpreter)
             val googleGroupSynchronizer = new GoogleGroupSynchronizer(backgroundDirectoryDAO, backgroundAccessPolicyDAO, cloudExtension.googleDirectoryDAO, cloudExtension, resourceTypeMap)(backgroundLdapExecutionContext)
             val cloudExtensionsInitializer = new GoogleExtensionsInitializer(cloudExtension, googleGroupSynchronizer)
-            createAppDepenciesWithSamRoutes(appConfig, cloudExtensionsInitializer, foregroundAccessPolicyDAO, foregroundDirectoryDAO)
+            createAppDepenciesWithSamRoutes(appConfig, cloudExtensionsInitializer, foregroundAccessPolicyDAO, foregroundDirectoryDAO, registrationDAO)
           }
-        case None => cats.effect.Resource.pure[IO, AppDependencies](createAppDepenciesWithSamRoutes(appConfig, NoExtensionsInitializer, foregroundAccessPolicyDAO, foregroundDirectoryDAO))
+        case None => cats.effect.Resource.pure[IO, AppDependencies](createAppDepenciesWithSamRoutes(appConfig, NoExtensionsInitializer, foregroundAccessPolicyDAO, foregroundDirectoryDAO, registrationDAO))
       }
     } yield appDependencies
 
   private def createDAOs(appConfig: AppConfig,
                          dbName: DatabaseName,
                          ldapConnectionPoolSize: Int,
-                         ldapConnectionPoolName: String,
-                         memberOfCache: Cache[WorkbenchSubject, Set[String]],
-                         resourceCache: Cache[FullyQualifiedResourceId, Resource],
-                         newRelicMetrics: NewRelicMetrics): cats.effect.Resource[IO, (DirectoryDAO, AccessPolicyDAO, ExecutionContext)] = {
+                         ldapConnectionPoolName: String): cats.effect.Resource[IO, (DirectoryDAO, AccessPolicyDAO, ExecutionContext, RegistrationDAO)] = {
     for {
       dbReference <- DbReference.resource(appConfig.liquibaseConfig, dbName)
       ldapConnectionPool <- createLdapConnectionPool(appConfig.directoryConfig.directoryUrl, appConfig.directoryConfig.user, appConfig.directoryConfig.password, ldapConnectionPoolSize, ldapConnectionPoolName)
       ldapExecutionContext <- ExecutionContexts.fixedThreadPool[IO](appConfig.directoryConfig.connectionPoolSize)
       postgresExecutionContext <- ExecutionContexts.fixedThreadPool[IO](DBs.config.getInt(s"db.${dbName.name.name}.poolMaxSize"))
 
-      directoryDAO = createDirectoryDAO(appConfig, ldapExecutionContext, ldapConnectionPool, dbReference, postgresExecutionContext, memberOfCache, newRelicMetrics)
-      accessPolicyDAO = createAccessPolicyDAO(appConfig, ldapExecutionContext, ldapConnectionPool, dbReference, postgresExecutionContext, memberOfCache, resourceCache, newRelicMetrics)
-    } yield (directoryDAO, accessPolicyDAO, ldapExecutionContext)
+      directoryDAO = createDirectoryDAO(dbReference, postgresExecutionContext)
+      accessPolicyDAO = createAccessPolicyDAO(dbReference, postgresExecutionContext)
+      registrationDAO = createRegistrationDAO(appConfig, ldapExecutionContext, ldapConnectionPool)
+    } yield (directoryDAO, accessPolicyDAO, ldapExecutionContext, registrationDAO)
   }
 
-  private def createDirectoryDAO(appConfig: AppConfig,
-                                 ldapExecutionContext: ExecutionContext,
-                                 ldapConnectionPool: LDAPConnectionPool,
-                                 dbReference: DbReference,
-                                 postgresExecutionContext: ExecutionContext,
-                                 memberOfCache: Cache[WorkbenchSubject, Set[String]],
-                                 newRelicMetrics: NewRelicMetrics): DirectoryDAO = {
-    val ldapDirectoryDAO = new LdapDirectoryDAO(ldapConnectionPool, appConfig.directoryConfig, ldapExecutionContext, memberOfCache)(chooseRightContextShift(appConfig.dataStoreConfig, OpenDJ), implicitly)
-    val postgresDirectoryDAO = new PostgresDirectoryDAO(dbReference, postgresExecutionContext)(chooseRightContextShift(appConfig.dataStoreConfig, Postgres))
-    chooseRightDAO(appConfig.dataStoreConfig, ldapDirectoryDAO, postgresDirectoryDAO, "directoryDAO", newRelicMetrics)
+  private def createDirectoryDAO(dbReference: DbReference, postgresExecutionContext: ExecutionContext) = {
+    new PostgresDirectoryDAO(dbReference, postgresExecutionContext)
   }
 
-  private def createAccessPolicyDAO(appConfig: AppConfig,
+  private def createRegistrationDAO(appConfig: AppConfig,
                                     ldapExecutionContext: ExecutionContext,
-                                    ldapConnectionPool: LDAPConnectionPool,
-                                    dbReference: DbReference,
-                                    postgresExecutionContext: ExecutionContext,
-                                    memberOfCache: Cache[WorkbenchSubject, Set[String]],
-                                    resourceCache: Cache[FullyQualifiedResourceId, Resource],
-                                    newRelicMetrics: NewRelicMetrics): AccessPolicyDAO = {
-    val ldapAccessPolicyDAO = new LdapAccessPolicyDAO(ldapConnectionPool, appConfig.directoryConfig, ldapExecutionContext, memberOfCache, resourceCache)(chooseRightContextShift(appConfig.dataStoreConfig, OpenDJ))
-    val postgresAccessPolicyDAO = new PostgresAccessPolicyDAO(dbReference, postgresExecutionContext)(chooseRightContextShift(appConfig.dataStoreConfig, Postgres))
-    chooseRightDAO(appConfig.dataStoreConfig, ldapAccessPolicyDAO, postgresAccessPolicyDAO, "accessPolicyDAO", newRelicMetrics)
+                                    ldapConnectionPool: LDAPConnectionPool): RegistrationDAO = {
+    new LdapRegistrationDAO(ldapConnectionPool, appConfig.directoryConfig, ldapExecutionContext)
   }
 
-  def chooseRightDAO[T : ClassTag](dataStoreConfig: DataStoreConfig, ldapDAO: T, postgresDAO: T, daoName: String, newRelicMetrics: NewRelicMetrics): T = {
-    dataStoreConfig match {
-      case DataStoreConfig(OpenDJ, None) => ldapDAO
-      case DataStoreConfig(Postgres, None) => postgresDAO
-      case DataStoreConfig(OpenDJ, Some(Postgres)) => DaoWithShadow(ldapDAO, postgresDAO, new NewRelicShadowResultReporter(daoName, newRelicMetrics), implicitly, shadowContextShift)
-      case DataStoreConfig(Postgres, Some(OpenDJ)) => DaoWithShadow(postgresDAO, ldapDAO, new NewRelicShadowResultReporter(daoName, newRelicMetrics), implicitly, shadowContextShift)
-      case _ => throw new WorkbenchException(s"unsupported DataStoreConfig $dataStoreConfig")
-    }
-  }
-
-  def chooseRightContextShift(dataStoreConfig: DataStoreConfig, dataStore: DataStore): ContextShift[IO] = {
-    if (dataStoreConfig.shadow.contains(dataStore)) {
-      shadowContextShift
-    } else {
-      implicitly[ContextShift[IO]]
-    }
+  private def createAccessPolicyDAO(dbReference: DbReference, postgresExecutionContext: ExecutionContext) = {
+    new PostgresAccessPolicyDAO(dbReference, postgresExecutionContext)
   }
 
   private[sam] def createGoogleCloudExt(
       accessPolicyDAO: AccessPolicyDAO,
       directoryDAO: DirectoryDAO,
+      registrationDAO: RegistrationDAO,
       config: GoogleConfig,
       resourceTypeMap: Map[ResourceTypeName, ResourceType],
       distributedLock: DistributedLock[IO],
@@ -320,6 +232,7 @@ object Boot extends IOApp with LazyLogging {
     new GoogleExtensions(
       distributedLock,
       directoryDAO,
+      registrationDAO,
       accessPolicyDAO,
       googleDirectoryDAO,
       googlePubSubDAO,
@@ -339,11 +252,12 @@ object Boot extends IOApp with LazyLogging {
       config: AppConfig,
       cloudExtensionsInitializer: CloudExtensionsInitializer,
       accessPolicyDAO: AccessPolicyDAO,
-      directoryDAO: DirectoryDAO)(implicit actorSystem: ActorSystem, actorMaterializer: ActorMaterializer): AppDependencies = {
+      directoryDAO: DirectoryDAO,
+      registrationDAO: RegistrationDAO)(implicit actorSystem: ActorSystem, actorMaterializer: ActorMaterializer): AppDependencies = {
     val resourceTypeMap = config.resourceTypes.map(rt => rt.name -> rt).toMap
     val policyEvaluatorService = PolicyEvaluatorService(config.emailDomain, resourceTypeMap, accessPolicyDAO, directoryDAO)
     val resourceService = new ResourceService(resourceTypeMap, policyEvaluatorService, accessPolicyDAO, directoryDAO, cloudExtensionsInitializer.cloudExtensions, config.emailDomain)
-    val userService = new UserService(directoryDAO, cloudExtensionsInitializer.cloudExtensions)
+    val userService = new UserService(directoryDAO, cloudExtensionsInitializer.cloudExtensions, registrationDAO)
     val statusService = new StatusService(directoryDAO, cloudExtensionsInitializer.cloudExtensions, DbReference(DatabaseNames.Foreground), 10 seconds)
     val managedGroupService =
       new ManagedGroupService(resourceService, policyEvaluatorService, resourceTypeMap, accessPolicyDAO, directoryDAO, cloudExtensionsInitializer.cloudExtensions, config.emailDomain)

@@ -60,7 +60,6 @@ object Dependencies {
   val mockito: ModuleID =         "org.mockito"    % "mockito-core" % "2.7.22"   % "test"
 
   val unboundid: ModuleID = "com.unboundid" % "unboundid-ldapsdk" % "4.0.12"
-  val ehcache: ModuleID = "org.ehcache" % "ehcache" % "3.6.2"
 
   // All of workbench-libs pull in Akka; exclude it since we provide our own Akka dependency.
   // workbench-google pulls in workbench-{util, model, metrics}; exclude them so we can control the library versions individually.
@@ -137,7 +136,6 @@ object Dependencies {
     workbenchNewRelic,
 
     unboundid,
-    ehcache,
     catsEffect,
     commonsCodec,
 

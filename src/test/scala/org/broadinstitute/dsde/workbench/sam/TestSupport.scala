@@ -31,8 +31,6 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, MockAccessPolicyDAO}
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
 import org.broadinstitute.dsde.workbench.sam.service._
-import org.ehcache.Cache
-import org.ehcache.config.builders.{CacheConfigurationBuilder, CacheManagerBuilder, ExpiryPolicyBuilder, ResourcePoolsBuilder}
 import org.scalatest.Matchers
 import org.scalatest.concurrent.PatienceConfiguration.Timeout
 import org.scalatest.prop.{Configuration, PropertyChecks}
@@ -66,30 +64,6 @@ trait PropertyBasedTesting extends PropertyChecks with Configuration with Matche
 object TestSupport extends TestSupport {
   private val executor = Executors.newCachedThreadPool()
   val blockingEc = ExecutionContext.fromExecutor(executor)
-  def testMemberOfCache: Cache[WorkbenchSubject, Set[String]] = {
-    val cacheManager = CacheManagerBuilder.newCacheManagerBuilder
-      .withCache(
-        "test-memberof",
-        CacheConfigurationBuilder
-          .newCacheConfigurationBuilder(classOf[WorkbenchSubject], classOf[Set[String]], ResourcePoolsBuilder.heap(10))
-          .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(java.time.Duration.ofMillis(0)))
-      )
-      .build
-    cacheManager.init()
-    cacheManager.getCache("test-memberof", classOf[WorkbenchSubject], classOf[Set[String]])
-  }
-  def testResourceCache: Cache[FullyQualifiedResourceId, Resource] = {
-    val cacheManager = CacheManagerBuilder.newCacheManagerBuilder
-      .withCache(
-        "test-resource",
-        CacheConfigurationBuilder
-          .newCacheConfigurationBuilder(classOf[FullyQualifiedResourceId], classOf[Resource], ResourcePoolsBuilder.heap(100))
-          .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(java.time.Duration.ofMillis(1000)))
-      )
-      .build
-    cacheManager.init()
-    cacheManager.getCache("test-resource", classOf[FullyQualifiedResourceId], classOf[Resource])
-  }
 
   implicit val eqWorkbenchExceptionErrorReport: Eq[WorkbenchExceptionWithErrorReport] =
     (x: WorkbenchExceptionWithErrorReport, y: WorkbenchExceptionWithErrorReport) =>
@@ -116,6 +90,7 @@ object TestSupport extends TestSupport {
   def genSamDependencies(resourceTypes: Map[ResourceTypeName, ResourceType] = Map.empty, googIamDAO: Option[GoogleIamDAO] = None, googleServicesConfig: GoogleServicesConfig = googleServicesConfig, cloudExtensions: Option[CloudExtensions] = None, googleDirectoryDAO: Option[GoogleDirectoryDAO] = None, policyAccessDAO: Option[AccessPolicyDAO] = None)(implicit system: ActorSystem) = {
     val googleDirectoryDAO = new MockGoogleDirectoryDAO()
     val directoryDAO = new MockDirectoryDAO()
+    val registrationDAO = new MockDirectoryDAO()
     val googleIamDAO = googIamDAO.getOrElse(new MockGoogleIamDAO())
     val policyDAO = policyAccessDAO.getOrElse(new MockAccessPolicyDAO())
     val pubSubDAO = new MockGooglePubSubDAO()
@@ -126,6 +101,7 @@ object TestSupport extends TestSupport {
     val googleExt = cloudExtensions.getOrElse(new GoogleExtensions(
       fakeDistributedLock,
       directoryDAO,
+      registrationDAO,
       policyDAO,
       googleDirectoryDAO,
       pubSubDAO,
@@ -142,7 +118,7 @@ object TestSupport extends TestSupport {
     val mockResourceService = new ResourceService(resourceTypes, policyEvaluatorService, policyDAO, directoryDAO, googleExt, "example.com")
     val mockManagedGroupService = new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, policyDAO, directoryDAO, googleExt, "example.com")
 
-    SamDependencies(mockResourceService, policyEvaluatorService, new UserService(directoryDAO, googleExt), new StatusService(directoryDAO, googleExt, dbRef), mockManagedGroupService, directoryDAO, policyDAO, googleExt)
+    SamDependencies(mockResourceService, policyEvaluatorService, new UserService(directoryDAO, googleExt, registrationDAO), new StatusService(directoryDAO, googleExt, dbRef), mockManagedGroupService, directoryDAO, policyDAO, googleExt)
   }
 
   def genSamRoutes(samDependencies: SamDependencies)(implicit system: ActorSystem, materializer: Materializer): SamRoutes = new SamRoutes(samDependencies.resourceService, samDependencies.userService, samDependencies.statusService, samDependencies.managedGroupService, null, samDependencies.directoryDAO, samDependencies.policyEvaluatorService, LiquibaseConfig("", false))

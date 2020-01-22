@@ -10,10 +10,10 @@ import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.Generator.{genPolicy, genResourceTypeNameExcludeManagedGroup, genUserInfo, _}
 import org.broadinstitute.dsde.workbench.sam.TestSupport
-import org.broadinstitute.dsde.workbench.sam.TestSupport.{blockingEc, _}
-import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryDAO, LdapDirectoryDAO, PostgresDirectoryDAO}
+import org.broadinstitute.dsde.workbench.sam.TestSupport._
+import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryDAO, PostgresDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, LdapAccessPolicyDAO, PostgresAccessPolicyDAO}
+import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, PostgresAccessPolicyDAO}
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.scalatest._
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -23,8 +23,8 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
   val connectionPool = new LDAPConnectionPool(
     new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password),
     directoryConfig.connectionPoolSize)
-  lazy val dirDAO: DirectoryDAO = new LdapDirectoryDAO(connectionPool, directoryConfig, blockingEc, TestSupport.testMemberOfCache)
-  lazy val policyDAO: AccessPolicyDAO = new LdapAccessPolicyDAO(connectionPool, directoryConfig, blockingEc, TestSupport.testMemberOfCache, TestSupport.testResourceCache)
+  lazy val dirDAO: DirectoryDAO = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.blockingEc)
+  lazy val policyDAO: AccessPolicyDAO = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.blockingEc)
   val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
   private val dummyUserInfo =
@@ -134,14 +134,7 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
     } yield ()
   }
 
-
-  protected def clearDatabase(): IO[Unit] = {
-    for {
-      _ <- IO.fromFuture(IO(schemaDao.init()))
-      _ <- IO.fromFuture(IO(schemaDao.clearDatabase()))
-      _ <- IO.fromFuture(IO(schemaDao.createOrgUnits()))
-    } yield ()
-  }
+  protected def clearDatabase(): IO[Unit] = IO(TestSupport.truncateAll).void
 
   private def savePolicyMembers(policy: AccessPolicy) = {
     policy.members.toList.parTraverse {
@@ -643,10 +636,4 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
 
     res.unsafeRunSync()
   }
-}
-
-class PolicyEvaluatorServiceWithPostgresSpec extends PolicyEvaluatorServiceSpec {
-  override lazy val dirDAO: DirectoryDAO = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.blockingEc)
-  override lazy val policyDAO: AccessPolicyDAO = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.blockingEc)
-  override protected def clearDatabase(): IO[Unit] = IO(TestSupport.truncateAll).void
 }

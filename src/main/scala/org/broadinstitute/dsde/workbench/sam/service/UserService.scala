@@ -12,7 +12,7 @@ import io.opencensus.scala.Tracing._
 import org.apache.commons.codec.binary.Hex
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.api.{CreateWorkbenchUser, InviteUser}
-import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
+import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryDAO, RegistrationDAO}
 import org.broadinstitute.dsde.workbench.sam.model._
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -21,7 +21,7 @@ import scala.util.matching.Regex
 /**
   * Created by dvoet on 7/14/17.
   */
-class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExtensions)(implicit val executionContext: ExecutionContext) extends LazyLogging {
+class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExtensions, val registrationDAO: RegistrationDAO)(implicit val executionContext: ExecutionContext) extends LazyLogging {
 
   def createUser(user: CreateWorkbenchUser, parentSpan: Span = null): Future[UserStatus] = {
     for {
@@ -86,6 +86,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
   private def createUserInternal(user: WorkbenchUser) = {
     for {
       createdUser <- directoryDAO.createUser(user)
+      _ <- registrationDAO.createUser(user)
       _ <- IO.fromFuture(IO(cloudExtensions.onUserCreate(createdUser)))
     } yield createdUser
   }
@@ -98,7 +99,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
           googleStatus <- cloudExtensions.getUserStatus(user)
           allUsersGroup <- cloudExtensions.getOrCreateAllUsersGroup(directoryDAO)
           allUsersStatus <- directoryDAO.isGroupMember(allUsersGroup.id, user.id).unsafeToFuture() recover { case e: NameNotFoundException => false }
-          ldapStatus <- directoryDAO.isEnabled(user.id).unsafeToFuture()
+          ldapStatus <- registrationDAO.isEnabled(user.id).unsafeToFuture()
         } yield {
           Option(UserStatus(UserStatusDetails(user.id, user.email), Map("ldap" -> ldapStatus, "allUsersGroup" -> allUsersStatus, "google" -> googleStatus)))
         }
@@ -111,7 +112,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
   def getUserStatusInfo(userId: WorkbenchUserId): IO[Option[UserStatusInfo]] =
     directoryDAO.loadUser(userId).flatMap {
       case Some(user) =>
-        directoryDAO.isEnabled(user.id).flatMap { ldapStatus =>
+        registrationDAO.isEnabled(user.id).flatMap { ldapStatus =>
           IO.pure(Option(UserStatusInfo(user.id.value, user.email.value, ldapStatus)))
         }
       case None => IO.pure(None)
@@ -121,7 +122,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
     directoryDAO.loadUser(userId).unsafeToFuture().flatMap {
       case Some(user) => {
         // pulled out of for comprehension to allow concurrent execution
-        val ldapStatus = directoryDAO.isEnabled(user.id).unsafeToFuture()
+        val ldapStatus = registrationDAO.isEnabled(user.id).unsafeToFuture()
         val allUsersStatus = cloudExtensions.getOrCreateAllUsersGroup(directoryDAO).flatMap { allUsersGroup =>
           directoryDAO.isGroupMember(allUsersGroup.id, user.id).unsafeToFuture() recover { case e: NameNotFoundException => false }
         }
@@ -169,6 +170,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
   private def enableUserInternal(user: WorkbenchUser): Future[Unit] = {
     for {
       _ <- directoryDAO.enableIdentity(user.id).unsafeToFuture()
+      _ <- registrationDAO.enableIdentity(user.id).unsafeToFuture()
       _ <- cloudExtensions.onUserEnable(user)
     } yield ()
   }
@@ -178,6 +180,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
       case Some(user) =>
         for {
           _ <- directoryDAO.disableIdentity(user.id).unsafeToFuture()
+          _ <- registrationDAO.disableIdentity(user.id).unsafeToFuture()
           _ <- cloudExtensions.onUserDisable(user)
           userStatus <- getUserStatus(user.id)
         } yield {
@@ -191,6 +194,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
       allUsersGroup <- cloudExtensions.getOrCreateAllUsersGroup(directoryDAO)
       _ <- directoryDAO.removeGroupMember(allUsersGroup.id, userId).unsafeToFuture()
       _ <- cloudExtensions.onUserDelete(userId)
+      _ <- registrationDAO.deleteUser(userId).unsafeToFuture()
       deleteResult <- directoryDAO.deleteUser(userId).unsafeToFuture()
     } yield deleteResult
 }

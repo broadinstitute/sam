@@ -36,13 +36,14 @@ object TestSamRoutes {
     // need to make sure MockDirectoryDAO and MockAccessPolicyDAO share the same groups
     val groups: mutable.Map[WorkbenchGroupIdentity, WorkbenchGroup] = policies.getOrElse(new TrieMap())
     val directoryDAO = new MockDirectoryDAO(groups)
+    val registrationDAO = new MockDirectoryDAO()
     val googleDirectoryDAO = new MockGoogleDirectoryDAO()
     val policyDAO = policyAccessDAO.getOrElse(new MockAccessPolicyDAO(groups))
 
     val emailDomain = "example.com"
     val policyEvaluatorService = PolicyEvaluatorService(emailDomain, resourceTypes, policyDAO, directoryDAO)
     val mockResourceService = new ResourceService(resourceTypes, policyEvaluatorService, policyDAO, directoryDAO, NoExtensions, emailDomain)
-    val mockUserService = new UserService(directoryDAO, NoExtensions)
+    val mockUserService = new UserService(directoryDAO, NoExtensions, registrationDAO)
     val mockManagedGroupService = new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, policyDAO, directoryDAO, NoExtensions, emailDomain)
     TestSupport.runAndWait(mockUserService.createUser(
       CreateWorkbenchUser(userInfo.userId, defaultGoogleSubjectId, userInfo.userEmail)))

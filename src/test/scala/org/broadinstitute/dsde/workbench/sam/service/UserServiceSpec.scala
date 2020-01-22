@@ -12,7 +12,7 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.Generator.{arbNonPetEmail => _, _}
 import org.broadinstitute.dsde.workbench.sam.TestSupport.eqWorkbenchExceptionErrorReport
 import org.broadinstitute.dsde.workbench.sam.api.{CreateWorkbenchUser, InviteUser}
-import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryDAO, LdapDirectoryDAO, PostgresDirectoryDAO}
+import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryDAO, LdapRegistrationDAO, PostgresDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
@@ -48,7 +48,8 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
   lazy val petServiceAccountConfig = TestSupport.appConfig.googleConfig.get.petServiceAccountConfig
   lazy val dirURI = new URI(directoryConfig.directoryUrl)
   lazy val connectionPool = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
-  lazy val dirDAO: DirectoryDAO = new LdapDirectoryDAO(connectionPool, directoryConfig, TestSupport.blockingEc, TestSupport.testMemberOfCache)
+  lazy val dirDAO: DirectoryDAO = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.blockingEc)
+  lazy val registrationDAO = new LdapRegistrationDAO(connectionPool, directoryConfig, TestSupport.blockingEc)
   lazy val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
   var service: UserService = _
@@ -72,12 +73,16 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
     when(googleExtensions.onUserEnable(any[WorkbenchUser])).thenReturn(Future.successful(()))
     when(googleExtensions.onGroupUpdate(any[Seq[WorkbenchGroupIdentity]])).thenReturn(Future.successful(()))
 
-    service = new UserService(dirDAO, googleExtensions)
+    service = new UserService(dirDAO, googleExtensions, registrationDAO)
   }
 
   protected def clearDatabase(): Unit = {
+    val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
     runAndWait(schemaDao.clearDatabase())
+    runAndWait(schemaDao.init())
     runAndWait(schemaDao.createOrgUnits())
+
+    TestSupport.truncateAll
   }
 
   "UserService" should "create a user" in {
@@ -88,7 +93,9 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
 
     // check ldap
     dirDAO.loadUser(defaultUserId).unsafeRunSync() shouldBe Some(WorkbenchUser(defaultUser.id, Some(defaultUser.googleSubjectId), defaultUser.email))
+    registrationDAO.loadUser(defaultUserId).unsafeRunSync() shouldBe Some(WorkbenchUser(defaultUser.id, Some(defaultUser.googleSubjectId), defaultUser.email))
     dirDAO.isEnabled(defaultUserId).unsafeRunSync() shouldBe true
+    registrationDAO.isEnabled(defaultUserId).unsafeRunSync() shouldBe true
     dirDAO.loadGroup(service.cloudExtensions.allUsersGroupName).unsafeRunSync() shouldBe
       Some(BasicWorkbenchGroup(service.cloudExtensions.allUsersGroupName, Set(defaultUserId), service.cloudExtensions.getOrCreateAllUsersGroup(dirDAO).futureValue.email))
   }
@@ -146,6 +153,7 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
 
     // it should be enabled
     dirDAO.isEnabled(defaultUserId).unsafeRunSync() shouldBe true
+    registrationDAO.isEnabled(defaultUserId).unsafeRunSync() shouldBe true
 
     // disable the user
     val response = service.disableUser(defaultUserId, userInfo).futureValue
@@ -153,6 +161,7 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
 
     // check ldap
     dirDAO.isEnabled(defaultUserId).unsafeRunSync() shouldBe false
+    registrationDAO.isEnabled(defaultUserId).unsafeRunSync() shouldBe false
   }
 
   it should "delete a user" in {
@@ -163,8 +172,9 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
     // delete the user
     service.deleteUser(defaultUserId, userInfo).futureValue
 
-    // check ldap
+    // check
     dirDAO.loadUser(defaultUserId).unsafeRunSync() shouldBe None
+    registrationDAO.loadUser(defaultUserId).unsafeRunSync() shouldBe None
   }
 
   it should "generate unique identifier properly" in {
@@ -352,9 +362,4 @@ object GenEmail {
   val genEmailServerChar = Gen.frequency((9, Gen.alphaNumChar), (1, Gen.const('-')))
   val genEmailServerPart = Gen.nonEmptyListOf(genEmailServerChar).map(_.mkString)
   val genEmailLastPart = Gen.listOfN(2, Gen.alphaChar).map(_.mkString)
-}
-
-class UserServiceWithPostgresSpec extends UserServiceSpec {
-  override lazy val dirDAO: DirectoryDAO = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.blockingEc)
-  override protected def clearDatabase(): Unit = TestSupport.truncateAll
 }

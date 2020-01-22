@@ -44,11 +44,12 @@ class StatusRouteSpec extends FlatSpec with Matchers with ScalatestRouteTest wit
 
   it should "give 500 for not ok" in {
     val directoryDAO = new MockDirectoryDAO()
+    val registrationDAO = new MockDirectoryDAO()
     val policyDAO = new MockAccessPolicyDAO()
 
     val emailDomain = "example.com"
     val mockResourceService = new ResourceService(Map.empty, null, policyDAO, directoryDAO, NoExtensions, emailDomain)
-    val mockUserService = new UserService(directoryDAO, NoExtensions)
+    val mockUserService = new UserService(directoryDAO, NoExtensions, registrationDAO)
     val mockStatusService = new StatusService(directoryDAO, NoExtensions, TestSupport.dbRef)
     val mockManagedGroupService = new ManagedGroupService(mockResourceService, null, Map.empty, policyDAO, directoryDAO, NoExtensions, emailDomain)
     val policyEvaluatorService = PolicyEvaluatorService(emailDomain, Map.empty, policyDAO, directoryDAO)
