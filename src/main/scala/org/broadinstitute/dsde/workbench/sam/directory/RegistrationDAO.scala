@@ -18,4 +18,5 @@ trait RegistrationDAO {
   def createPetServiceAccount(petServiceAccount: PetServiceAccount): IO[PetServiceAccount]
   def loadPetServiceAccount(petServiceAccountId: PetServiceAccountId): IO[Option[PetServiceAccount]]
   def deletePetServiceAccount(petServiceAccountId: PetServiceAccountId): IO[Unit]
+  def setGoogleSubjectId(userId: WorkbenchUserId, googleSubjectId: GoogleSubjectId): IO[Unit]
 }

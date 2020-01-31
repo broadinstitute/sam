@@ -197,7 +197,9 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
     val user = genCreateWorkbenchUser.sample.get
     service.registerUser(user).unsafeRunSync()
     val res = dirDAO.loadUser(user.id).unsafeRunSync()
+    val registrationRes = registrationDAO.loadUser(user.id).unsafeRunSync()
     res shouldBe Some(WorkbenchUser(user.id, Some(user.googleSubjectId), user.email))
+    registrationRes shouldEqual res
   }
 
   /**
@@ -206,10 +208,12 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
     */
   it should "update googleSubjectId when there's no existing subject for a given googleSubjectId and but there is one for email" in{
     val user = genCreateWorkbenchUser.sample.get
-    dirDAO.createUser(WorkbenchUser(user.id, None, user.email)).unsafeRunSync()
+    service.inviteUser(InviteUser(user.id, user.email)).unsafeRunSync()
     service.registerUser(user).unsafeRunSync()
     val res = dirDAO.loadUser(user.id).unsafeRunSync()
+    val registrationRes = registrationDAO.loadUser(user.id).unsafeRunSync()
     res shouldBe Some(WorkbenchUser(user.id, Some(user.googleSubjectId), user.email))
+    registrationRes shouldEqual res
   }
 
   /**
@@ -239,7 +243,9 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
     val user = genInviteUser.sample.get
     service.inviteUser(user).unsafeRunSync()
     val res = dirDAO.loadUser(user.inviteeId).unsafeRunSync()
+    val registrationRes = registrationDAO.loadUser(user.inviteeId).unsafeRunSync()
     res shouldBe Some(WorkbenchUser(user.inviteeId, None, user.inviteeEmail))
+    registrationRes shouldEqual res
   }
 
   it should "return conflict when there's an existing subject for a given userId" in{
@@ -262,11 +268,15 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
     val user = genCreateWorkbenchUser.sample.get
     service.inviteUser(InviteUser(user.id, user.email)).unsafeRunSync()
     val res = dirDAO.loadUser(user.id).unsafeRunSync()
+    val registrationRes = registrationDAO.loadUser(user.id).unsafeRunSync()
     res shouldBe Some(WorkbenchUser(user.id, None, user.email))
+    registrationRes shouldEqual res
 
     service.createUser(user).futureValue
     val updated = dirDAO.loadUser(user.id).unsafeRunSync()
+    val updatedRegistrationRes = registrationDAO.loadUser(user.id).unsafeRunSync()
     updated shouldBe Some(WorkbenchUser(user.id, Some(user.googleSubjectId), user.email))
+    updatedRegistrationRes shouldEqual updated
   }
 
   "UserService getUserIdInfoFromEmail" should "return the email along with the userSubjectId and googleSubjectId" in {
