@@ -148,4 +148,6 @@ class LdapRegistrationDAO(
   override def deletePetServiceAccount(petServiceAccountId: PetServiceAccountId): IO[Unit] =
     executeLdap(IO(ldapConnectionPool.delete(petDn(petServiceAccountId))))
 
+  override def setGoogleSubjectId(userId: WorkbenchUserId, googleSubjectId: GoogleSubjectId): IO[Unit] =
+    executeLdap(IO(ldapConnectionPool.modify(userDn(userId), new Modification(ModificationType.ADD, Attr.googleSubjectId, googleSubjectId.value))))
 }
