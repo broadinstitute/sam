@@ -148,6 +148,13 @@ class LdapRegistrationDAO(
   override def deletePetServiceAccount(petServiceAccountId: PetServiceAccountId): IO[Unit] =
     executeLdap(IO(ldapConnectionPool.delete(petDn(petServiceAccountId))))
 
+  override def updatePetServiceAccount(petServiceAccount: PetServiceAccount): IO[PetServiceAccount] = {
+    val modifications = createPetServiceAccountAttributes(petServiceAccount).map { attribute =>
+      new Modification(ModificationType.REPLACE, attribute.getName, attribute.getRawValues)
+    }
+    executeLdap(IO(ldapConnectionPool.modify(petDn(petServiceAccount.id), modifications.asJava))) *> IO.pure(petServiceAccount)
+  }
+
   override def setGoogleSubjectId(userId: WorkbenchUserId, googleSubjectId: GoogleSubjectId): IO[Unit] =
     executeLdap(IO(ldapConnectionPool.modify(userDn(userId), new Modification(ModificationType.ADD, Attr.googleSubjectId, googleSubjectId.value))))
 }
