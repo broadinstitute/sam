@@ -388,7 +388,9 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
 
     val petServiceAccount2 = googleExtensions.createUserPetServiceAccount(defaultUser, googleProject).unsafeRunSync()
     petServiceAccount.serviceAccount shouldNot equal(petServiceAccount2.serviceAccount)
-    regDAO.loadPetServiceAccount(petServiceAccount.id).unsafeRunSync() shouldBe Some(petServiceAccount2)
+    val res = dirDAO.loadPetServiceAccount(petServiceAccount.id).unsafeRunSync()
+    res shouldBe Some(petServiceAccount2)
+    regDAO.loadPetServiceAccount(petServiceAccount.id).unsafeRunSync() shouldBe res
     mockGoogleIamDAO.findServiceAccount(googleProject, petServiceAccount.serviceAccount.email).futureValue shouldBe Some(petServiceAccount2.serviceAccount)
   }
 
