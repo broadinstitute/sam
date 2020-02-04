@@ -341,8 +341,10 @@ class GoogleExtensions(
           } yield p
         // pet already exists in ldap, but a new SA was created so update ldap with new SA info
         case (Some(p), None) =>
-          directoryDAO.updatePetServiceAccount(p.copy(serviceAccount = serviceAccount))
-          registrationDAO.updatePetServiceAccount(p.copy(serviceAccount = serviceAccount))
+          for {
+            p <- directoryDAO.updatePetServiceAccount(p.copy(serviceAccount = serviceAccount))
+            _ <- registrationDAO.updatePetServiceAccount(p.copy(serviceAccount = serviceAccount))
+          } yield p
 
         // everything already existed
         case (Some(p), Some(_)) => IO.pure(p)
