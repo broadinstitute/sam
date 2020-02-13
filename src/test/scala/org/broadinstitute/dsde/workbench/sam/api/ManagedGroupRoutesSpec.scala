@@ -7,6 +7,7 @@ import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import akka.http.scaladsl.model.{StatusCode, StatusCodes}
 import akka.http.scaladsl.testkit.ScalatestRouteTest
 import akka.stream.Materializer
+import cats.effect.{ContextShift, IO}
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.api.ManagedGroupRoutesSpec._
@@ -68,7 +69,7 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
   // Makes an anonymous object for a user acting on the same data as the user specified in samRoutes
   def makeOtherUser(samRoutes: TestSamRoutes, userInfo: UserInfo = defaultNewUser) = new {
     runAndWait(samRoutes.userService.createUser(
-      CreateWorkbenchUser(userInfo.userId, defaultGoogleSubjectId, userInfo.userEmail)))
+      CreateWorkbenchUser(userInfo.userId, defaultGoogleSubjectId, userInfo.userEmail, None)))
     val email = userInfo.userEmail
     val routes = new TestSamRoutes(samRoutes.resourceService, samRoutes.policyEvaluatorService, samRoutes.userService, samRoutes.statusService, samRoutes.managedGroupService, userInfo, samRoutes.mockDirectoryDao)
   }
@@ -108,7 +109,7 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
     assertGetGroup(samRoutes)
 
     runAndWait(samRoutes.userService.createUser(
-      CreateWorkbenchUser(newGuy.userId, defaultGoogleSubjectId, newGuy.userEmail)))
+      CreateWorkbenchUser(newGuy.userId, defaultGoogleSubjectId, newGuy.userEmail, None)))
 
     setGroupMembers(samRoutes, Set(newGuyEmail), expectedStatus = StatusCodes.Created)
 
@@ -712,7 +713,7 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
 }
 
 object ManagedGroupRoutesSpec{
-  def createSamRoutesWithResource(resourceTypeMap: Map[ResourceTypeName, ResourceType], resource: Resource)(implicit sysmtem: ActorSystem, materializer: Materializer, ec: ExecutionContext): TestSamRoutes ={
+  def createSamRoutesWithResource(resourceTypeMap: Map[ResourceTypeName, ResourceType], resource: Resource)(implicit sysmtem: ActorSystem, materializer: Materializer, ec: ExecutionContext, contextShift: ContextShift[IO]): TestSamRoutes ={
     val groups = TrieMap.empty[WorkbenchGroupIdentity, WorkbenchGroup]
     val policyDao = new MockAccessPolicyDAO(groups)
     val samRoutes = TestSamRoutes(resourceTypeMap, policyAccessDAO = Some(policyDao), policies = Some(groups))

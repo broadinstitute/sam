@@ -16,17 +16,17 @@ import org.scalatest.concurrent.ScalaFutures
   */
 class GoogleExtensionRoutesV1Spec extends GoogleExtensionRoutesSpecHelper with ScalaFutures{
   "GET /api/google/v1/user/petServiceAccount" should "get or create a pet service account for a user" in {
-    val (user, headers, _, routes) = createTestUser()
+    val (user, _, routes) = createTestUser()
 
     // create a pet service account
-    Get("/api/google/v1/user/petServiceAccount/myproject").withHeaders(headers) ~> routes.route ~> check {
+    Get("/api/google/v1/user/petServiceAccount/myproject") ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK
       val response = responseAs[WorkbenchEmail]
       response.value should endWith (s"@myproject.iam.gserviceaccount.com")
     }
 
     // same result a second time
-    Get("/api/google/v1/user/petServiceAccount/myproject").withHeaders(headers) ~> routes.route ~> check {
+    Get("/api/google/v1/user/petServiceAccount/myproject") ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK
       val response = responseAs[WorkbenchEmail]
       response.value should endWith (s"@myproject.iam.gserviceaccount.com")
@@ -34,8 +34,8 @@ class GoogleExtensionRoutesV1Spec extends GoogleExtensionRoutesSpecHelper with S
   }
 
   "GET /api/google/v1/user/proxyGroup/{email}" should "return a user's proxy group" in {
-    val (user, headers, _, routes) = createTestUser()
-    Get(s"/api/google/v1/user/proxyGroup/$defaultUserEmail").withHeaders(headers) ~> routes.route ~> check {
+    val (user, _, routes) = createTestUser()
+    Get(s"/api/google/v1/user/proxyGroup/$defaultUserEmail") ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK
       val response = responseAs[WorkbenchEmail]
       response shouldBe WorkbenchEmail(s"PROXY_${user.id}@${googleServicesConfig.appsDomain}")
@@ -43,16 +43,16 @@ class GoogleExtensionRoutesV1Spec extends GoogleExtensionRoutesSpecHelper with S
   }
 
   it should "return a user's proxy group from a pet service account" in {
-    val (user, headers, _, routes) = createTestUser()
+    val (user, _, routes) = createTestUser()
 
-    val petEmail = Get("/api/google/v1/user/petServiceAccount/myproject").withHeaders(headers) ~> routes.route ~> check {
+    val petEmail = Get("/api/google/v1/user/petServiceAccount/myproject") ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK
       val response = responseAs[WorkbenchEmail]
       response.value should endWith (s"@myproject.iam.gserviceaccount.com")
       response.value
     }
 
-    Get(s"/api/google/v1/user/proxyGroup/$petEmail").withHeaders(headers) ~> routes.route ~> check {
+    Get(s"/api/google/v1/user/proxyGroup/$petEmail") ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK
       val response = responseAs[WorkbenchEmail]
       response shouldBe WorkbenchEmail(s"PROXY_${user.id.value}@${googleServicesConfig.appsDomain}")
@@ -75,20 +75,20 @@ class GoogleExtensionRoutesV1Spec extends GoogleExtensionRoutesSpecHelper with S
     val resourceTypes = Map(resourceType.name -> resourceType)
 //    val defaultUserInfo = UserInfo(OAuth2BearerToken("accessToken"), WorkbenchUserId("user123"), WorkbenchEmail("user1@example.com"), 0)
 
-    val (user, headers, _, routes) = createTestUser(resourceTypes)
+    val (user, _, routes) = createTestUser(resourceTypes)
 
-    Post(s"/api/resource/${resourceType.name}/foo").withHeaders(headers) ~> routes.route ~> check {
+    Post(s"/api/resource/${resourceType.name}/foo") ~> routes.route ~> check {
       status shouldEqual StatusCodes.NoContent
     }
 
     import spray.json.DefaultJsonProtocol._
-    val createdPolicy = Get(s"/api/resource/${resourceType.name}/foo/policies").withHeaders(headers) ~> routes.route ~> check {
+    val createdPolicy = Get(s"/api/resource/${resourceType.name}/foo/policies") ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK
       responseAs[Seq[AccessPolicyResponseEntry]].find(_.policyName == AccessPolicyName(resourceType.ownerRoleName.value)).getOrElse(fail("created policy not returned by get request"))
     }
 
     import GoogleModelJsonSupport._
-    Post(s"/api/google/v1/resource/${resourceType.name}/foo/${resourceType.ownerRoleName.value}/sync").withHeaders(headers) ~> routes.route ~> check {
+    Post(s"/api/google/v1/resource/${resourceType.name}/foo/${resourceType.ownerRoleName.value}/sync") ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK
       val proxyEmail = WorkbenchEmail(s"PROXY_${user.id}@${googleServicesConfig.appsDomain}")
       assertResult(Map(createdPolicy.email -> Seq(SyncReportItem("added", proxyEmail.value.toLowerCase, None)))) {
@@ -99,29 +99,29 @@ class GoogleExtensionRoutesV1Spec extends GoogleExtensionRoutesSpecHelper with S
 
   "GET /api/google/v1/policy/{resourceTypeName}/{resourceId}/{accessPolicyName}/sync" should "200 with sync date and policy email" in {
     val resourceTypes = Map(resourceType.name -> resourceType)
-    val (user, headers, samDep, routes) = createTestUser(resourceTypes)
+    val (user, samDep, routes) = createTestUser(resourceTypes)
 
-    Post(s"/api/resource/${resourceType.name}/foo").withHeaders(headers) ~> routes.route ~> check {
+    Post(s"/api/resource/${resourceType.name}/foo") ~> routes.route ~> check {
       status shouldEqual StatusCodes.NoContent
       assertResult("") {
         responseAs[String]
       }
     }
 
-    Get(s"/api/google/v1/resource/${resourceType.name}/foo/${resourceType.ownerRoleName.value}/sync").withHeaders(headers) ~> routes.route ~> check {
+    Get(s"/api/google/v1/resource/${resourceType.name}/foo/${resourceType.ownerRoleName.value}/sync") ~> routes.route ~> check {
       status shouldEqual StatusCodes.NoContent
       assertResult("") {
         responseAs[String]
       }
     }
 
-    Post(s"/api/google/v1/resource/${resourceType.name}/foo/${resourceType.ownerRoleName.value}/sync").withHeaders(headers) ~> routes.route ~> check {
+    Post(s"/api/google/v1/resource/${resourceType.name}/foo/${resourceType.ownerRoleName.value}/sync") ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK
     }
 
     samDep.directoryDAO.createGroup(BasicWorkbenchGroup(WorkbenchGroupName(resourceType.ownerRoleName.value + ".foo." + resourceType.name), Set.empty, WorkbenchEmail("foo@bar.com"))).unsafeRunSync()
 
-    Get(s"/api/google/v1/resource/${resourceType.name}/foo/${resourceType.ownerRoleName.value}/sync").withHeaders(headers) ~> routes.route ~> check {
+    Get(s"/api/google/v1/resource/${resourceType.name}/foo/${resourceType.ownerRoleName.value}/sync") ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK
       responseAs[String] should not be empty
     }
@@ -131,17 +131,17 @@ class GoogleExtensionRoutesV1Spec extends GoogleExtensionRoutesSpecHelper with S
     val resourceTypes = Map(resourceType.name -> resourceType)
     val (googleIamDAO, expectedJson: String) = createMockGoogleIamDaoForSAKeyTests
 
-    val (user, headers, _, routes) = createTestUser(resourceTypes, Some(googleIamDAO))
+    val (user, _, routes) = createTestUser(resourceTypes, Some(googleIamDAO))
 
     // create a pet service account
-    Get("/api/google/v1/user/petServiceAccount/myproject").withHeaders(headers) ~> routes.route ~> check {
+    Get("/api/google/v1/user/petServiceAccount/myproject") ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK
       val response = responseAs[WorkbenchEmail]
       response.value should endWith (s"@myproject.iam.gserviceaccount.com")
     }
 
     // create a pet service account key
-    Get("/api/google/v1/user/petServiceAccount/myproject/key").withHeaders(headers) ~> routes.route ~> check {
+    Get("/api/google/v1/user/petServiceAccount/myproject/key") ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK
       val response = responseAs[String]
       response shouldEqual(expectedJson)
@@ -153,38 +153,38 @@ class GoogleExtensionRoutesV1Spec extends GoogleExtensionRoutesSpecHelper with S
     val resourceTypes = Map(resourceType.name -> resourceType)
     val (googleIamDAO, expectedJson: String) = createMockGoogleIamDaoForSAKeyTests
 
-    val (user, headers, _, routes) = createTestUser(resourceTypes, Some(googleIamDAO))
+    val (user, _, routes) = createTestUser(resourceTypes, Some(googleIamDAO))
 
     // create a pet service account
-    Get("/api/google/v1/user/petServiceAccount/myproject").withHeaders(headers) ~> routes.route ~> check {
+    Get("/api/google/v1/user/petServiceAccount/myproject") ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK
       val response = responseAs[WorkbenchEmail]
       response.value should endWith (s"@myproject.iam.gserviceaccount.com")
     }
 
     // create a pet service account key
-    Get("/api/google/v1/user/petServiceAccount/myproject/key").withHeaders(headers) ~> routes.route ~> check {
+    Get("/api/google/v1/user/petServiceAccount/myproject/key") ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK
       val response = responseAs[String]
       response shouldEqual(expectedJson)
     }
 
     // create a pet service account key
-    Delete("/api/google/v1/user/petServiceAccount/myproject/key/123").withHeaders(headers) ~> routes.route ~> check {
+    Delete("/api/google/v1/user/petServiceAccount/myproject/key/123") ~> routes.route ~> check {
       status shouldEqual StatusCodes.NoContent
     }
   }
 
   "GET /api/google/v1/petServiceAccount/{project}/{userEmail}" should "200 with a key" in {
-    val (defaultUserInfo, samRoutes, expectedJson, headers) = setupPetSATest()
+    val (defaultUserInfo, samRoutes, expectedJson) = setupPetSATest()
 
     val members = AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set(GoogleExtensions.getPetPrivateKeyAction), Set.empty)
-    Put(s"/api/resource/${CloudExtensions.resourceTypeName.value}/${GoogleExtensions.resourceId.value}/policies/foo", members).withHeaders(headers) ~> samRoutes.route ~> check {
+    Put(s"/api/resource/${CloudExtensions.resourceTypeName.value}/${GoogleExtensions.resourceId.value}/policies/foo", members) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
     }
 
     // create a pet service account key
-    Get(s"/api/google/v1/petServiceAccount/myproject/${defaultUserInfo.userEmail.value}").withHeaders(headers) ~> samRoutes.route ~> check {
+    Get(s"/api/google/v1/petServiceAccount/myproject/${defaultUserInfo.userEmail.value}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
       val response = responseAs[String]
       response shouldEqual(expectedJson)
@@ -192,24 +192,24 @@ class GoogleExtensionRoutesV1Spec extends GoogleExtensionRoutesSpecHelper with S
   }
 
   it should "404 when user does not exist" in {
-    val (defaultUserInfo, samRoutes, _, headers) = setupPetSATest()
+    val (defaultUserInfo, samRoutes, _) = setupPetSATest()
 
     val members = AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set(GoogleExtensions.getPetPrivateKeyAction), Set.empty)
-    Put(s"/api/resource/${CloudExtensions.resourceTypeName.value}/${GoogleExtensions.resourceId.value}/policies/foo", members).withHeaders(headers) ~> samRoutes.route ~> check {
+    Put(s"/api/resource/${CloudExtensions.resourceTypeName.value}/${GoogleExtensions.resourceId.value}/policies/foo", members) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
     }
 
     // create a pet service account key
-    Get(s"/api/google/v1/petServiceAccount/myproject/I-do-not-exist@foo.bar").withHeaders(headers) ~> samRoutes.route ~> check {
+    Get(s"/api/google/v1/petServiceAccount/myproject/I-do-not-exist@foo.bar") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
   }
 
   it should "403 when caller does not have action" in {
-    val (_, samRoutes, _, headers) = setupPetSATest()
+    val (_, samRoutes, _) = setupPetSATest()
 
     // create a pet service account key
-    Get(s"/api/google/v1/petServiceAccount/myproject/I-do-not-exist@foo.bar").withHeaders(headers) ~> samRoutes.route ~> check {
+    Get(s"/api/google/v1/petServiceAccount/myproject/I-do-not-exist@foo.bar") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Forbidden
     }
   }

@@ -7,14 +7,16 @@ object Dependencies {
   val scalaLoggingV = "3.5.0"
   val scalaTestV    = "3.0.5"
   val scalaCheckV    = "1.14.0"
-  val catsEffectV         = "1.2.0"
+  val catsEffectV         = "2.1.1"
   val scalikejdbcVersion    = "3.3.5"
   val postgresDriverVersion = "42.2.8"
+  val http4sVersion = "0.21.1"
+  val circeVersion = "0.13.0"
 
   val workbenchUtilV   = "0.5-6942040"
   val workbenchModelV  = "0.14-3c0b510"
   val workbenchGoogleV = "0.20-a9f29eb"
-  val workbenchGoogle2V = "0.1-8328aae"
+  val workbenchGoogle2V = "0.6-31cacc4"
   val workbenchNotificationsV = "0.1-f2a0020"
   val workbenchNewRelicV = "0.2-24dabc8"
   val monocleVersion = "1.5.1-cats"
@@ -26,7 +28,8 @@ object Dependencies {
   val excludeWorkbenchMetrics = ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-metrics_2.12")
   val excludeWorkbenchGoogle =  ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-google_2.12")
 
-  val jwt: ModuleID = "com.pauldijou" %% "jwt-spray-json" % "4.2.0"
+  val jwtSpray: ModuleID = "com.pauldijou" %% "jwt-spray-json" % "4.2.0"
+  val jwtCirce: ModuleID = "com.pauldijou" %% "jwt-circe" % "4.2.0"
   val newRelic: ModuleID = "com.newrelic.agent.java" % "newrelic-api" % newRelicVersion
   val jacksonAnnotations: ModuleID = "com.fasterxml.jackson.core" % "jackson-annotations" % jacksonV
   val jacksonDatabind: ModuleID =    "com.fasterxml.jackson.core" % "jackson-databind"    % jacksonV
@@ -47,6 +50,13 @@ object Dependencies {
   val akkaHttpTestKit: ModuleID =   "com.typesafe.akka"   %%  "akka-http-testkit"    % akkaHttpV % "test"
   val scalaCheck: ModuleID =        "org.scalacheck"      %%  "scalacheck"           % scalaCheckV % "test"
   val catsEffect: ModuleID = "org.typelevel" %% "cats-effect" % catsEffectV
+
+  val http4s: ModuleID = "org.http4s" %% "http4s-dsl" % http4sVersion
+  val http4sClient: ModuleID = "org.http4s" %% "http4s-blaze-client" % http4sVersion
+  val http4sCirce: ModuleID = "org.http4s" %% "http4s-circe" % http4sVersion
+  val circe: ModuleID = "io.circe" %% "circe-core" % circeVersion
+  val circeGeneric: ModuleID = "io.circe" %% "circe-generic" % circeVersion
+  val circeParser: ModuleID = "io.circe" %% "circe-parser" % circeVersion
 
   val excludIoGrpc =  ExclusionRule(organization = "io.grpc", name = "grpc-core")
   val ioGrpc: ModuleID = "io.grpc" % "grpc-core" % "1.19.0"
@@ -146,6 +156,14 @@ object Dependencies {
     scalikeCoreConfig,
     scalikeCoreTest,
     postgres,
-    jwt
+    jwtSpray,
+    jwtCirce,
+
+    http4s,
+    http4sClient,
+    http4sCirce,
+    circe,
+    circeGeneric,
+    circeParser
   ) ++ openCensusDependencies
 }

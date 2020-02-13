@@ -86,7 +86,7 @@ class MockAccessPolicyDAOSpec extends FlatSpec with Matchers with TestSupport wi
     val real = realServicesFixture
     val mock = mockServicesFixture
 
-    val dummyUser = CreateWorkbenchUser(dummyUserInfo.userId, GoogleSubjectId(dummyUserInfo.userId.value), dummyUserInfo.userEmail)
+    val dummyUser = CreateWorkbenchUser(dummyUserInfo.userId, GoogleSubjectId(dummyUserInfo.userId.value), dummyUserInfo.userEmail, None)
     runAndWait(real.userService.createUser(dummyUser))
     runAndWait(mock.userService.createUser(dummyUser))
 

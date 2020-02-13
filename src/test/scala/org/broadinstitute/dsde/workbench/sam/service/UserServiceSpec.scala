@@ -40,7 +40,7 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
   val defaultUserId = genWorkbenchUserId(System.currentTimeMillis())
   val defaultGoogleSubjectId = GoogleSubjectId(defaultUserId.value)
   val defaultUserEmail = WorkbenchEmail("newuser@new.com")
-  val defaultUser = CreateWorkbenchUser(defaultUserId, defaultGoogleSubjectId, defaultUserEmail)
+  val defaultUser = CreateWorkbenchUser(defaultUserId, defaultGoogleSubjectId, defaultUserEmail, None)
   val userInfo = UserInfo(OAuth2BearerToken("token"), WorkbenchUserId(UUID.randomUUID().toString), WorkbenchEmail("user@company.com"), 0)
 
   lazy val directoryConfig = TestSupport.appConfig.directoryConfig
@@ -221,7 +221,7 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
     *      no             yes      ---> Someone invited this user previous and we have a record for this user already. We just need to update GoogleSubjetId field for this user.
     */
   it should "return BadRequest when there's no existing subject for a given googleSubjectId and but there is one for email, and the returned subject is not a regular user" in{
-    val user = genCreateWorkbenchUser.sample.get.copy(email = genNonPetEmail.sample.get)
+    val user = genCreateWorkbenchUser.sample.get.copy(email = genNonPetEmail.sample.get, identityConcentratorId = None)
     val group = genBasicWorkbenchGroup.sample.get.copy(email = user.email, members = Set.empty)
     dirDAO.createGroup(group).unsafeRunSync()
     val res = service.registerUser(user).attempt.unsafeRunSync().swap.toOption.get.asInstanceOf[WorkbenchExceptionWithErrorReport]

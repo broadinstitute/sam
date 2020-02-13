@@ -7,11 +7,13 @@ import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import akka.stream.ActorMaterializer
 import cats.data.NonEmptyList
-import cats.effect.{ExitCode, IO, IOApp}
+import cats.effect.{Blocker, ExitCode, IO, IOApp}
 import cats.implicits._
 import com.typesafe.config.ConfigFactory
 import com.typesafe.scalalogging.LazyLogging
 import com.unboundid.ldap.sdk._
+import io.chrisdavenport.log4cats.StructuredLogger
+import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
 import javax.net.SocketFactory
 import javax.net.ssl.SSLContext
 import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
@@ -123,16 +125,18 @@ object Boot extends IOApp with LazyLogging {
             googleFire <- GoogleFirestoreInterpreter.firestore[IO](
               config.googleServicesConfig.serviceAccountCredentialJson.firestoreServiceAccountJsonPath.asString)
             googleStorage <- GoogleStorageInterpreter.storage[IO](
-              config.googleServicesConfig.serviceAccountCredentialJson.defaultServiceAccountJsonPath.asString)
+              config.googleServicesConfig.serviceAccountCredentialJson.defaultServiceAccountJsonPath.asString, Blocker.liftExecutionContext(blockingEc), None)
             googleKmsClient <- GoogleKmsInterpreter.client[IO](
               config.googleServicesConfig.serviceAccountCredentialJson.defaultServiceAccountJsonPath.asString)
           } yield {
+            implicit val loggerIO: StructuredLogger[IO] = Slf4jLogger.getLogger[IO]
+
             val ioFireStore = GoogleFirestoreInterpreter[IO](googleFire)
             // googleServicesConfig.resourceNamePrefix is an environment specific variable passed in https://github.com/broadinstitute/firecloud-develop/blob/fade9286ff0aec8449121ed201ebc44c8a4d57dd/run-context/fiab/configs/sam/docker-compose.yaml.ctmpl#L24
             // Use resourceNamePrefix to avoid collision between different fiab environments (we share same firestore for fiabs)
             val lock =
               DistributedLock[IO](s"sam-${config.googleServicesConfig.resourceNamePrefix.getOrElse("local")}", appConfig.distributedLockConfig, ioFireStore)
-            val newGoogleStorage = GoogleStorageInterpreter[IO](googleStorage, blockingEc)
+            val newGoogleStorage = GoogleStorageInterpreter[IO](googleStorage, Blocker.liftExecutionContext(blockingEc), None)
             val googleKmsInterpreter = GoogleKmsInterpreter[IO](googleKmsClient, blockingEc)
             val resourceTypeMap = appConfig.resourceTypes.map(rt => rt.name -> rt).toMap
             val cloudExtension = createGoogleCloudExt(foregroundAccessPolicyDAO, foregroundDirectoryDAO, registrationDAO, config, resourceTypeMap, lock, newGoogleStorage, googleKmsInterpreter)

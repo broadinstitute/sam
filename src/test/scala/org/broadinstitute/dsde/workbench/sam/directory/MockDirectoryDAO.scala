@@ -279,4 +279,17 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
 
   override def loadUserByIdentityConcentratorId(userId: IdentityConcentratorId)
       : IO[Option[WorkbenchUser]] = IO.pure(users.values.find(_.identityConcentratorId.contains(userId)))
+
+  override def setUserIdentityConcentratorId(
+      googleSubjectId: GoogleSubjectId,
+      icId: IdentityConcentratorId): IO[Int] = IO {
+    val result = for {
+      userId <- usersWithGoogleSubjectIds.get(googleSubjectId)
+      user <- users.get(userId.asInstanceOf[WorkbenchUserId])
+    } yield {
+      users += user.id -> user.copy(identityConcentratorId = Option(icId))
+      1
+    }
+    result.getOrElse(0)
+  }
 }
