@@ -5,5 +5,6 @@
     <include file="changesets/20191007_exactly_one_null_member.xml" relativeToChangelogFile="true"/>
     <include file="changesets/20191021_citext_support.xml" relativeToChangelogFile="true"/>
     <include file="changesets/20191114_cascade_delete_user_membership.xml" relativeToChangelogFile="true"/>
+    <include file="changesets/20200212_identity_concentrator_id.xml" relativeToChangelogFile="true"/>
 
 </databaseChangeLog>

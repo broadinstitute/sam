@@ -82,6 +82,7 @@ object TestSupport extends TestSupport {
   def proxyEmail(workbenchUserId: WorkbenchUserId) = WorkbenchEmail(s"PROXY_$workbenchUserId@${googleServicesConfig.appsDomain}")
   def googleSubjectIdHeaderWithId(googleSubjectId: GoogleSubjectId) = RawHeader(googleSubjectIdHeader, googleSubjectId.value)
   def genGoogleSubjectId(): GoogleSubjectId = GoogleSubjectId(genRandom(System.currentTimeMillis()))
+  def genIdentityConcentratorId(): IdentityConcentratorId = IdentityConcentratorId(genRandom(System.currentTimeMillis()))
 
   def genGoogleSubjectIdHeader = RawHeader(googleSubjectIdHeader, genRandom(System.currentTimeMillis()))
   val defaultEmailHeader = RawHeader(emailHeader, defaultUserEmail.value)

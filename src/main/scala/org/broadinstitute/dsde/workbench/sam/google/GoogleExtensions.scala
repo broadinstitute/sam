@@ -390,7 +390,7 @@ class GoogleExtensions(
     for {
       subject <- directoryDAO.loadSubjectFromEmail(userEmail)
       key <- subject match {
-        case Some(userId: WorkbenchUserId) => getPetServiceAccountKey(WorkbenchUser(userId, None, userEmail), project).map(Option(_))
+        case Some(userId: WorkbenchUserId) => getPetServiceAccountKey(WorkbenchUser(userId, None, userEmail, None), project).map(Option(_))
         case _ => IO.pure(None)
       }
     } yield key

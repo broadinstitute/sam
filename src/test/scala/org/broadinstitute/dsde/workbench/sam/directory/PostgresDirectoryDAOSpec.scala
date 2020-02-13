@@ -22,7 +22,7 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
   val defaultGroupName = WorkbenchGroupName("group")
   val defaultGroup = BasicWorkbenchGroup(defaultGroupName, Set.empty, WorkbenchEmail("foo@bar.com"))
   val defaultUserId = WorkbenchUserId("testUser")
-  val defaultUser = WorkbenchUser(defaultUserId, Option(GoogleSubjectId("testGoogleSubject")), WorkbenchEmail("user@foo.com"))
+  val defaultUser = WorkbenchUser(defaultUserId, Option(GoogleSubjectId("testGoogleSubject")), WorkbenchEmail("user@foo.com"), Option(IdentityConcentratorId("testICid")))
   val defaultPetSA = PetServiceAccount(PetServiceAccountId(defaultUser.id, GoogleProject("testProject")), ServiceAccount(ServiceAccountSubjectId("testGoogleSubjectId"), WorkbenchEmail("test@pet.co"), ServiceAccountDisplayName("whoCares")))
 
   val actionPatterns = Set(ResourceActionPattern("write", "description of pattern1", false),
@@ -448,7 +448,7 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
     "loadUsers" - {
       "load multiple users at once" in {
         val user1 = defaultUser
-        val user2 = WorkbenchUser(WorkbenchUserId("testUser2"), Option(GoogleSubjectId("testGoogleSubjectId2")), WorkbenchEmail("user2@test.com"))
+        val user2 = WorkbenchUser(WorkbenchUserId("testUser2"), Option(GoogleSubjectId("testGoogleSubjectId2")), WorkbenchEmail("user2@test.com"), None)
 
         dao.createUser(user1).unsafeRunSync() shouldEqual user1
         dao.createUser(user2).unsafeRunSync() shouldEqual user2
@@ -726,13 +726,13 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
       "intersect groups" in {
         for (groupCount <- 1 to 3) {
           beforeEach
-          val inAllGroups = WorkbenchUser(WorkbenchUserId("allgroups"), None, WorkbenchEmail("allgroups"))
+          val inAllGroups = WorkbenchUser(WorkbenchUserId("allgroups"), None, WorkbenchEmail("allgroups"), None)
           dao.createUser(inAllGroups).unsafeRunSync()
 
           val allGroups = for (i <- 1 to groupCount) yield {
             // create a group with 1 user and 1 subgroup, subgroup with "allgroups" users and another user
-            val userInGroup = WorkbenchUser(WorkbenchUserId(s"ingroup$i"), None, WorkbenchEmail(s"ingroup$i"))
-            val userInSubGroup = WorkbenchUser(WorkbenchUserId(s"insubgroup$i"), None, WorkbenchEmail(s"insubgroup$i"))
+            val userInGroup = WorkbenchUser(WorkbenchUserId(s"ingroup$i"), None, WorkbenchEmail(s"ingroup$i"), None)
+            val userInSubGroup = WorkbenchUser(WorkbenchUserId(s"insubgroup$i"), None, WorkbenchEmail(s"insubgroup$i"), None)
             val subGroup = BasicWorkbenchGroup(WorkbenchGroupName(s"subgroup$i"), Set(inAllGroups.id, userInSubGroup.id), WorkbenchEmail(s"subgroup$i"))
             val group = BasicWorkbenchGroup(WorkbenchGroupName(s"group$i"), Set(userInGroup.id, subGroup.id), WorkbenchEmail(s"group$i"))
             dao.createUser(userInSubGroup).unsafeRunSync()
@@ -753,7 +753,7 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
 
         // create a user and a group containing that single user
         val allUserGroups = for (i <- 1 to userCount) yield {
-          val user = dao.createUser(WorkbenchUser(WorkbenchUserId(s"user$i"), None, WorkbenchEmail(s"user$i"))).unsafeRunSync()
+          val user = dao.createUser(WorkbenchUser(WorkbenchUserId(s"user$i"), None, WorkbenchEmail(s"user$i"), None)).unsafeRunSync()
           val group = BasicWorkbenchGroup(WorkbenchGroupName(s"usergroup$i"), Set(user.id), WorkbenchEmail(s"usergroup$i"))
           dao.createGroup(group).unsafeRunSync()
         }
@@ -1081,7 +1081,7 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
       }
 
       "two emails that do exist" in {
-        val secondUser = WorkbenchUser(WorkbenchUserId("secondUser"), Option(GoogleSubjectId("testGoogleSubject2")), WorkbenchEmail("secondUser@foo.com"))
+        val secondUser = WorkbenchUser(WorkbenchUserId("secondUser"), Option(GoogleSubjectId("testGoogleSubject2")), WorkbenchEmail("secondUser@foo.com"), None)
 
         dao.createUser(defaultUser).unsafeRunSync()
         dao.createUser(secondUser).unsafeRunSync()

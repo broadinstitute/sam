@@ -12,7 +12,7 @@ object Dependencies {
   val postgresDriverVersion = "42.2.8"
 
   val workbenchUtilV   = "0.5-6942040"
-  val workbenchModelV  = "0.13-d4e0782"
+  val workbenchModelV  = "0.14-f585b27-SNAP"
   val workbenchGoogleV = "0.20-a9f29eb"
   val workbenchGoogle2V = "0.1-8328aae"
   val workbenchNotificationsV = "0.1-f2a0020"
@@ -26,6 +26,7 @@ object Dependencies {
   val excludeWorkbenchMetrics = ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-metrics_2.12")
   val excludeWorkbenchGoogle =  ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-google_2.12")
 
+  val jwt: ModuleID = "com.pauldijou" %% "jwt-spray-json" % "4.2.0"
   val newRelic: ModuleID = "com.newrelic.agent.java" % "newrelic-api" % newRelicVersion
   val jacksonAnnotations: ModuleID = "com.fasterxml.jackson.core" % "jackson-annotations" % jacksonV
   val jacksonDatabind: ModuleID =    "com.fasterxml.jackson.core" % "jackson-databind"    % jacksonV
@@ -144,6 +145,7 @@ object Dependencies {
     scalikeCore,
     scalikeCoreConfig,
     scalikeCoreTest,
-    postgres
+    postgres,
+    jwt
   ) ++ openCensusDependencies
 }

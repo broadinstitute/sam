@@ -756,14 +756,11 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
 
     runInTransaction { implicit session =>
       val query = samsql"""with recursive ${recursiveMembersQuery(policyId, subGroupMemberTable)}
-        select ${sg.result.memberUserId}, ${u.result.googleSubjectId}, ${u.result.email}
+        select ${u.resultAll}
         from ${subGroupMemberTable as sg}
         join ${UserTable as u} on ${u.id} = ${sg.memberUserId}"""
 
-      import SamTypeBinders._
-      query.map { rs =>
-        WorkbenchUser(rs.get[WorkbenchUserId](sg.resultName.memberUserId), rs.stringOpt(u.resultName.googleSubjectId).map(GoogleSubjectId), rs.get[WorkbenchEmail](u.resultName.email))
-      }.list().apply().toSet
+      query.map(UserTable(u)).list().apply().toSet.map(UserTable.unmarshalUserRecord)
     }
   }
 

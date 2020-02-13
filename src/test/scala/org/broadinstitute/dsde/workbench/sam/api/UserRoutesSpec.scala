@@ -205,7 +205,7 @@ trait UserRoutesSpecHelper extends FlatSpec with Matchers with ScalatestRouteTes
     (user, routes)
   }
 
-  def createTestUser(googSubjectId: Option[GoogleSubjectId] = None, cloudExtensions: Option[CloudExtensions] = None, googleDirectoryDAO: Option[GoogleDirectoryDAO] = None): (WorkbenchUser, List[RawHeader], SamDependencies, SamRoutes) = {
+  def createTestUser(googSubjectId: Option[GoogleSubjectId] = None, cloudExtensions: Option[CloudExtensions] = None, googleDirectoryDAO: Option[GoogleDirectoryDAO] = None, identityConcentratorId: Option[IdentityConcentratorId] = None): (WorkbenchUser, List[RawHeader], SamDependencies, SamRoutes) = {
     val googleSubjectId = googSubjectId.map(_.value).getOrElse(genRandom(System.currentTimeMillis()))
     val googleSubjectheader = RawHeader(googleSubjectIdHeader, googleSubjectId)
     val emHeader = RawHeader(emailHeader, defaultUserEmail.value)
@@ -220,7 +220,7 @@ trait UserRoutesSpecHelper extends FlatSpec with Matchers with ScalatestRouteTes
       res.userInfo.userEmail shouldBe defaultUserEmail
       res.enabled shouldBe Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true)
 
-      WorkbenchUser(res.userInfo.userSubjectId, Some(GoogleSubjectId(googleSubjectId)), res.userInfo.userEmail)
+      WorkbenchUser(res.userInfo.userSubjectId, Some(GoogleSubjectId(googleSubjectId)), res.userInfo.userEmail, identityConcentratorId)
     }
     val headers = List(
       RawHeader(emailHeader, user.email.value),

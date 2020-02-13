@@ -51,7 +51,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                   complete {
                     import spray.json._
                     googleExtensions
-                      .getArbitraryPetServiceAccountKey(WorkbenchUser(userInfo.userId, None, userInfo.userEmail))
+                      .getArbitraryPetServiceAccountKey(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None))
                       .map(key => StatusCodes.OK -> key.parseJson)
                   }
                 }
@@ -62,7 +62,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                   post {
                     entity(as[Set[String]]) { scopes =>
                       complete {
-                        googleExtensions.getArbitraryPetServiceAccountToken(WorkbenchUser(userInfo.userId, None, userInfo.userEmail), scopes).map { token =>
+                        googleExtensions.getArbitraryPetServiceAccountToken(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None), scopes).map { token =>
                           StatusCodes.OK -> JsString(token)
                         }
                       }
@@ -77,7 +77,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                       import spray.json._
                       // parse json to ensure it is json and tells akka http the right content-type
                       googleExtensions
-                        .getPetServiceAccountKey(WorkbenchUser(userInfo.userId, None, userInfo.userEmail), GoogleProject(project))
+                        .getPetServiceAccountKey(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None), GoogleProject(project))
                         .map { key =>
                           StatusCodes.OK -> key.parseJson
                         }
@@ -98,7 +98,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                       entity(as[Set[String]]) { scopes =>
                         complete {
                           googleExtensions
-                            .getPetServiceAccountToken(WorkbenchUser(userInfo.userId, None, userInfo.userEmail), GoogleProject(project), scopes)
+                            .getPetServiceAccountToken(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None), GoogleProject(project), scopes)
                             .map { token =>
                               StatusCodes.OK -> JsString(token)
                             }
@@ -109,7 +109,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                   pathEnd {
                     get {
                       complete {
-                        googleExtensions.createUserPetServiceAccount(WorkbenchUser(userInfo.userId, None, userInfo.userEmail), GoogleProject(project)).map {
+                        googleExtensions.createUserPetServiceAccount(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None), GoogleProject(project)).map {
                           petSA =>
                             StatusCodes.OK -> petSA.serviceAccount.email
                         }
