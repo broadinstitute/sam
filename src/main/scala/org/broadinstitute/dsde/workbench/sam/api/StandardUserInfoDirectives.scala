@@ -30,19 +30,8 @@ trait StandardUserInfoDirectives extends UserInfoDirectives {
         optionalHeaderValueByName(emailHeader)
     ) tflatMap {
       case (token, googleSubjectIdOpt, expiresInOpt, emailOpt) =>
-        val bearerToken = OAuth2BearerToken(token)
         onSuccess {
-          val x = (googleSubjectIdOpt, expiresInOpt, emailOpt) match {
-            case (Some(googleSubjectId), Some(expiresIn), Some(email)) =>
-              // opaque google token coming through Apache proxy
-              Try(expiresIn.toLong).fold[Future[UserInfo]](
-                t => Future.failed(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"expiresIn $expiresIn can't be converted to Long because  of $t"))),
-                expiresInLong => getUserInfo(bearerToken, GoogleSubjectId(googleSubjectId), WorkbenchEmail(email), expiresInLong, directoryDAO).unsafeToFuture())
-            case _ =>
-              // JWT coming from Identity Concentrator - already validated by proxy
-              getUserInfo(bearerToken, directoryDAO).unsafeToFuture()
-            }
-          x
+          getUserInfoFromHeaders(googleSubjectIdOpt, expiresInOpt, emailOpt, OAuth2BearerToken(token), directoryDAO).unsafeToFuture()
         }
     }
 
@@ -68,6 +57,24 @@ object StandardUserInfoDirectives {
   def isServiceAccount(email: WorkbenchEmail) =
     SAdomain.pattern.matcher(email.value).matches
 
+  private def getUserInfoFromHeaders(googleSubjectIdOpt: Option[String],
+                                     expiresInOpt: Option[String],
+                                     emailOpt: Option[String],
+                                     bearerToken: OAuth2BearerToken,
+                                     directoryDAO: DirectoryDAO): IO[UserInfo] =
+    (googleSubjectIdOpt, expiresInOpt, emailOpt) match {
+      case (Some(googleSubjectId), Some(expiresIn), Some(email)) =>
+        // opaque google token coming through Apache proxy
+        Try(expiresIn.toLong).fold(
+          t => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"expiresIn $expiresIn can't be converted to Long because  of $t"))),
+          expiresInLong => getUserInfo(bearerToken, GoogleSubjectId(googleSubjectId), WorkbenchEmail(email), expiresInLong, directoryDAO)
+        )
+      case _ =>
+        // JWT coming from Identity Concentrator - already validated by proxy
+        getUserInfoFromJwt(bearerToken, directoryDAO)
+    }
+
+
   def getUserInfo(
       token: OAuth2BearerToken,
       googleSubjectId: GoogleSubjectId,
@@ -84,7 +91,7 @@ object StandardUserInfoDirectives {
       lookUpByGoogleSubjectId(googleSubjectId, directoryDAO).map(uid => UserInfo(token, uid, email, expiresIn))
     }
 
-  def getUserInfo(bearerToken: OAuth2BearerToken, directoryDAO: DirectoryDAO): IO[UserInfo] = {
+  def getUserInfoFromJwt(bearerToken: OAuth2BearerToken, directoryDAO: DirectoryDAO): IO[UserInfo] = {
     import DefaultJsonProtocol._
     import WorkbenchIdentityJsonSupport.identityConcentratorIdFormat
     implicit val jwtPayloadFormat = jsonFormat2(JwtUserInfo)
