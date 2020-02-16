@@ -278,5 +278,5 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
   }
 
   override def loadUserByIdentityConcentratorId(userId: IdentityConcentratorId)
-      : IO[Option[WorkbenchUser]] = ???
+      : IO[Option[WorkbenchUser]] = IO.pure(users.values.find(_.identityConcentratorId.contains(userId)))
 }

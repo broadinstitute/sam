@@ -267,6 +267,7 @@ trait GoogleExtensionRoutesSpecHelper extends FlatSpec with Matchers with Scalat
       RawHeader(emailHeader, user.email.value),
       RawHeader(googleSubjectIdHeader, googleSubjectId),
       RawHeader(accessTokenHeader, ""),
+      RawHeader(authorizationHeader, ""),
       RawHeader(expiresInHeader, "1000")
     )
     (user, headers, samDependencies, createRoutes)

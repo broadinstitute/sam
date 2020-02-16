@@ -56,6 +56,7 @@ class UserRoutesSpec extends UserRoutesSpecHelper {
       RawHeader(emailHeader, petEmail),
       TestSupport.googleSubjectIdHeaderWithId(user.googleSubjectId.get),
       RawHeader(accessTokenHeader, ""),
+      RawHeader(authorizationHeader, ""),
       RawHeader(expiresInHeader, "1000")
     )
     //create a PET service account owned by test user
@@ -174,6 +175,7 @@ trait UserRoutesSpecHelper extends FlatSpec with Matchers with ScalatestRouteTes
   val adminUserEmail = WorkbenchEmail("adminuser@new.com")
   val adminHeaders = List(
     RawHeader(accessTokenHeader, ""),
+    RawHeader(authorizationHeader, ""),
     RawHeader(googleSubjectIdHeader, adminGoogleSubjectId.value),
     RawHeader(emailHeader, adminUserEmail.value),
     RawHeader(expiresInHeader, "1000"),
@@ -226,7 +228,9 @@ trait UserRoutesSpecHelper extends FlatSpec with Matchers with ScalatestRouteTes
       RawHeader(emailHeader, user.email.value),
       TestSupport.googleSubjectIdHeaderWithId(user.googleSubjectId.get),
       RawHeader(accessTokenHeader, ""),
-      RawHeader(expiresInHeader, "1000")
+      RawHeader(authorizationHeader, ""),
+      RawHeader(expiresInHeader, "1000"),
+      RawHeader(authorizationHeader, "")
     )
     (user, headers, samDependencies, routes)
   }

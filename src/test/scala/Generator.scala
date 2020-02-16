@@ -25,6 +25,7 @@ object Generator {
     RawHeader(emailHeader, email.value),
     RawHeader(googleSubjectIdHeader, genRandom(System.currentTimeMillis())),
     RawHeader(accessTokenHeader, accessToken.value),
+    RawHeader(authorizationHeader, accessToken.toString())
   )
 
   val genUserInfoHeadersWithInvalidExpiresIn: Gen[List[RawHeader]] = for{

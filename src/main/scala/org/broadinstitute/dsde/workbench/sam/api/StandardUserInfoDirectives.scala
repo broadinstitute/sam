@@ -15,7 +15,7 @@ import org.broadinstitute.dsde.workbench.sam.service.UserService._
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Try
-import pdi.jwt.JwtSprayJson
+import pdi.jwt.{JwtOptions, JwtSprayJson}
 import spray.json._
 import java.time.Instant
 
@@ -24,14 +24,21 @@ trait StandardUserInfoDirectives extends UserInfoDirectives {
 
   def requireUserInfo: Directive1[UserInfo] =
     (
-      headerValueByName(accessTokenHeader) &
+      optionalHeaderValueByName(accessTokenHeader) &
         optionalHeaderValueByName(googleSubjectIdHeader) &
         optionalHeaderValueByName(expiresInHeader) &
-        optionalHeaderValueByName(emailHeader)
+        optionalHeaderValueByName(emailHeader) &
+        headerValueByName(authorizationHeader)
     ) tflatMap {
-      case (token, googleSubjectIdOpt, expiresInOpt, emailOpt) =>
+      case (Some(token), Some(googleSubjectId), Some(expiresIn), Some(email), _) =>
+        // request coming through Apache proxy
         onSuccess {
-          getUserInfoFromHeaders(googleSubjectIdOpt, expiresInOpt, emailOpt, OAuth2BearerToken(token), directoryDAO).unsafeToFuture()
+          getUserInfoFromOidcHeaders(directoryDAO, googleSubjectId, expiresIn, email, OAuth2BearerToken(token)).unsafeToFuture()
+        }
+      case (_, _, _, _, authHeader) =>
+        // JWT issued by Identity Concentrator - already validated by proxy
+        onSuccess {
+          getUserInfoFromJwt(authHeader, directoryDAO).unsafeToFuture()
         }
     }
 
@@ -53,27 +60,21 @@ object StandardUserInfoDirectives {
   val expiresInHeader = "OIDC_CLAIM_expires_in"
   val emailHeader = "OIDC_CLAIM_email"
   val googleSubjectIdHeader = "OIDC_CLAIM_user_id"
+  val authorizationHeader = "Authorization"
 
   def isServiceAccount(email: WorkbenchEmail) =
     SAdomain.pattern.matcher(email.value).matches
 
-  private def getUserInfoFromHeaders(googleSubjectIdOpt: Option[String],
-                                     expiresInOpt: Option[String],
-                                     emailOpt: Option[String],
-                                     bearerToken: OAuth2BearerToken,
-                                     directoryDAO: DirectoryDAO): IO[UserInfo] =
-    (googleSubjectIdOpt, expiresInOpt, emailOpt) match {
-      case (Some(googleSubjectId), Some(expiresIn), Some(email)) =>
-        // opaque google token coming through Apache proxy
-        Try(expiresIn.toLong).fold(
-          t => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"expiresIn $expiresIn can't be converted to Long because  of $t"))),
-          expiresInLong => getUserInfo(bearerToken, GoogleSubjectId(googleSubjectId), WorkbenchEmail(email), expiresInLong, directoryDAO)
-        )
-      case _ =>
-        // JWT coming from Identity Concentrator - already validated by proxy
-        getUserInfoFromJwt(bearerToken, directoryDAO)
-    }
-
+  def getUserInfoFromOidcHeaders(
+      directoryDAO: DirectoryDAO,
+      googleSubjectId: String,
+      expiresIn: String,
+      email: String,
+      bearerToken: OAuth2BearerToken): IO[UserInfo] =
+    Try(expiresIn.toLong).fold(
+      t => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"expiresIn $expiresIn can't be converted to Long because  of $t"))),
+      expiresInLong => getUserInfo(bearerToken, GoogleSubjectId(googleSubjectId), WorkbenchEmail(email), expiresInLong, directoryDAO)
+    )
 
   def getUserInfo(
       token: OAuth2BearerToken,
@@ -91,26 +92,36 @@ object StandardUserInfoDirectives {
       lookUpByGoogleSubjectId(googleSubjectId, directoryDAO).map(uid => UserInfo(token, uid, email, expiresIn))
     }
 
-  def getUserInfoFromJwt(bearerToken: OAuth2BearerToken, directoryDAO: DirectoryDAO): IO[UserInfo] = {
+  def getUserInfoFromJwt(authorizationHeader: String, directoryDAO: DirectoryDAO): IO[UserInfo] = {
     import DefaultJsonProtocol._
     import WorkbenchIdentityJsonSupport.identityConcentratorIdFormat
     implicit val jwtPayloadFormat = jsonFormat2(JwtUserInfo)
 
-    JwtSprayJson.decodeJson(bearerToken.token).fold[IO[UserInfo]](
-      t => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Unauthorized, "could not parse authorization header", t))),
-      parsedJwt => {
-        val jwtUserInfo = parsedJwt.convertTo[JwtUserInfo]
-        for {
-          maybeUser <- directoryDAO.loadUserByIdentityConcentratorId(jwtUserInfo.sub)
-          user <- maybeUser match {
-            case Some(user) => IO.pure(UserInfo(bearerToken, user.id, user.email, jwtUserInfo.exp - Instant.now().getEpochSecond))
-            case None =>
-              // TODO in the next iteration call to IC to find user's google subject id and populate sam_user table
-              IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Identity Concentrator Id ${jwtUserInfo.sub} not found in sam")))
-          }
-        } yield user
-      }
-    )
+    val bearerPrefix = "bearer "
+    // need to be case insensitive when looking for the 'bearer' prefix so can't use stripPrefix
+    if (authorizationHeader.toLowerCase.startsWith(bearerPrefix)) {
+      val bearerToken = OAuth2BearerToken(authorizationHeader.drop(bearerPrefix.size))
+      // Assumption: JWT is already validated
+      JwtSprayJson.decodeJson(bearerToken.token, JwtOptions(signature = false, expiration = false)).fold[IO[UserInfo]](
+        t => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Unauthorized, "could not parse authorization header, invalid jwt", t))),
+        parsedJwt => {
+          for {
+            jwtUserInfo <- IO(parsedJwt.convertTo[JwtUserInfo]).handleErrorWith {
+              case t: DeserializationException => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Unauthorized, "could not parse authorization header, jwt missing required fields", t)))
+            }
+            maybeUser <- directoryDAO.loadUserByIdentityConcentratorId(jwtUserInfo.sub)
+            user <- maybeUser match {
+              case Some(user) => IO.pure(UserInfo(bearerToken, user.id, user.email, jwtUserInfo.exp - Instant.now().getEpochSecond))
+              case None =>
+                // TODO in the next iteration call to IC to find user's google subject id and populate sam_user table
+                IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Identity Concentrator Id ${jwtUserInfo.sub} not found in sam")))
+            }
+          } yield user
+        }
+      )
+    } else {
+      IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Unauthorized, "could not parse authorization header, not a bearer token")))
+    }
   }
 
   private def lookUpByGoogleSubjectId(googleSubjectId: GoogleSubjectId, directoryDAO: DirectoryDAO): IO[WorkbenchUserId] =
