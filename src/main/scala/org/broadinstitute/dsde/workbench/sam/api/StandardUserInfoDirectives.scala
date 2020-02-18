@@ -93,37 +93,47 @@ object StandardUserInfoDirectives {
     }
 
   def getUserInfoFromJwt(authorizationHeader: String, directoryDAO: DirectoryDAO): IO[UserInfo] = {
-    import DefaultJsonProtocol._
-    import WorkbenchIdentityJsonSupport.identityConcentratorIdFormat
-    implicit val jwtPayloadFormat = jsonFormat2(JwtUserInfo)
+    for {
+      bearerToken <- getBearerTokenFromAuthHeader(authorizationHeader)
+      jwtUserInfo <- parseJwtBearerToken(bearerToken)
+      maybeUser <- directoryDAO.loadUserByIdentityConcentratorId(jwtUserInfo.sub)
+      user <- maybeUser match {
+        case Some(user) => IO.pure(UserInfo(bearerToken, user.id, user.email, jwtUserInfo.exp - Instant.now().getEpochSecond))
+        case None =>
+          // TODO in the next iteration call to IC to find user's google subject id and populate sam_user table
+          IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Identity Concentrator Id ${jwtUserInfo.sub} not found in sam")))
+      }
+    } yield user
+  }
 
+  private def getBearerTokenFromAuthHeader(authorizationHeader: String): IO[OAuth2BearerToken] = {
     val bearerPrefix = "bearer "
     // need to be case insensitive when looking for the 'bearer' prefix so can't use stripPrefix
     if (authorizationHeader.toLowerCase.startsWith(bearerPrefix)) {
-      val bearerToken = OAuth2BearerToken(authorizationHeader.drop(bearerPrefix.size))
-      // Assumption: JWT is already validated
-      JwtSprayJson.decodeJson(bearerToken.token, JwtOptions(signature = false, expiration = false)).fold[IO[UserInfo]](
-        t => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Unauthorized, "could not parse authorization header, invalid jwt", t))),
-        parsedJwt => {
-          for {
-            jwtUserInfo <- IO(parsedJwt.convertTo[JwtUserInfo]).handleErrorWith {
-              case t: DeserializationException => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Unauthorized, "could not parse authorization header, jwt missing required fields", t)))
-            }
-            maybeUser <- directoryDAO.loadUserByIdentityConcentratorId(jwtUserInfo.sub)
-            user <- maybeUser match {
-              case Some(user) => IO.pure(UserInfo(bearerToken, user.id, user.email, jwtUserInfo.exp - Instant.now().getEpochSecond))
-              case None =>
-                // TODO in the next iteration call to IC to find user's google subject id and populate sam_user table
-                IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Identity Concentrator Id ${jwtUserInfo.sub} not found in sam")))
-            }
-          } yield user
-        }
-      )
+      IO.pure(OAuth2BearerToken(authorizationHeader.drop(bearerPrefix.size)))
     } else {
       IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Unauthorized, "could not parse authorization header, not a bearer token")))
     }
   }
 
+  private def parseJwtBearerToken(bearerToken: OAuth2BearerToken): IO[JwtUserInfo] = {
+    import DefaultJsonProtocol._
+    import WorkbenchIdentityJsonSupport.identityConcentratorIdFormat
+    implicit val jwtPayloadFormat = jsonFormat2(JwtUserInfo)
+
+    // Assumption: JWT is already validated
+    JwtSprayJson.decodeJson(bearerToken.token, JwtOptions(signature = false, expiration = false)).fold[IO[JwtUserInfo]](
+      t => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Unauthorized, "could not parse authorization header, invalid jwt", t))),
+      parsedJwt => {
+        for {
+          jwtUserInfo <- IO(parsedJwt.convertTo[JwtUserInfo]).handleErrorWith {
+            case t: DeserializationException =>
+              IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Unauthorized, "could not parse authorization header, jwt missing required fields", t)))
+          }
+        } yield jwtUserInfo
+      }
+    )
+  }
   private def lookUpByGoogleSubjectId(googleSubjectId: GoogleSubjectId, directoryDAO: DirectoryDAO): IO[WorkbenchUserId] =
     for {
       subject <- directoryDAO.loadSubjectFromGoogleSubjectId(googleSubjectId)
