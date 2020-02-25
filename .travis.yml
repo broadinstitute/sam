@@ -10,7 +10,16 @@ services:
 before_install:
 - sh docker/run-opendj.sh start
 - sh docker/run-postgres.sh start 15432
+- >-
+  git clone https://github.com/awslabs/git-secrets.git git-secrets &&
+  pushd git-secrets > /dev/null &&
+  git checkout ad82d68ee924906a0401dfd48de5057731a9bc84 &&
+  export PATH="${PATH}:${PWD}" &&
+  popd > /dev/null
 script:
+- >-
+  ./minnie-kenny.sh --force &&
+  git secrets --scan-history &&
 - export SBT_OPTS="-J-Xmx3g -Denv.type=test -Ddirectory.url=ldap://localhost:3389
   -Ddirectory.password=testtesttest -Dpostgres.host=localhost -Dpostgres.port=15432"
 - sbt clean "testOnly -- -n org.broadinstitute.tags.SchemaInit"
