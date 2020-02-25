@@ -6,6 +6,6 @@
     allowed = AKIAIOSFODNN7EXAMPLE
     allowed = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
     patterns = private_key
-    patterns = private_key_id
+    patterns = \"private_key_id\":
     allowed = .Data.private_key
     allowed = apply-git-secrets.sh
