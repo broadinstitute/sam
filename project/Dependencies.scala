@@ -12,7 +12,7 @@ object Dependencies {
   val postgresDriverVersion = "42.2.8"
 
   val workbenchUtilV   = "0.5-6942040"
-  val workbenchModelV  = "0.14-f585b27-SNAP"
+  val workbenchModelV  = "0.14-3c0b510"
   val workbenchGoogleV = "0.20-a9f29eb"
   val workbenchGoogle2V = "0.1-8328aae"
   val workbenchNotificationsV = "0.1-f2a0020"
