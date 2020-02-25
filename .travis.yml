@@ -19,7 +19,7 @@ before_install:
 script:
 - >-
   ./minnie-kenny.sh --force &&
-  git secrets --scan-history &&
+  git secrets --scan-history
 - export SBT_OPTS="-J-Xmx3g -Denv.type=test -Ddirectory.url=ldap://localhost:3389
   -Ddirectory.password=testtesttest -Dpostgres.host=localhost -Dpostgres.port=15432"
 - sbt clean "testOnly -- -n org.broadinstitute.tags.SchemaInit"
