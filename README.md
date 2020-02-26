@@ -115,7 +115,6 @@ Note that Sam does not actually launch workflows create VMs but appears to in th
   * create service accounts and keys in desired projects (usually easiest to grant this at the org level)
 
 ## Development
-
 ### To build 
 Make sure git secrets is installed:
 ```$xslt
@@ -126,6 +125,10 @@ Ensure git-secrets is run:
 ```$xslt
 cp -r hooks/ .git/hooks/
 chmod 755 .git/hooks/apply-git-secrets.sh
+```
+Run minnie-kenny.sh with -f first time after git-clone 
+```
+./minnie-kenny.sh -f
 ```
 Build jar:
 ```
