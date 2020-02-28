@@ -557,7 +557,9 @@ class GoogleExtensions(
         groupOption <- googleDirectoryDAO.getGoogleGroup(allUsersGroupEmail)
       } yield {
         groupOption match {
+          // $COVERAGE-OFF$Disabling highlighting by default because this confuses coveralls.
           case Some(_) => OkStatus
+          // $COVERAGE-ON$
           case None => failedStatus(s"could not find group ${allUsersGroupEmail} in google")
         }
       }
