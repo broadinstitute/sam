@@ -89,11 +89,11 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
     // create a user
     val newUser = service.createUser(defaultUser).futureValue
     newUser shouldBe UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
-    verify(googleExtensions).onUserCreate(WorkbenchUser(defaultUser.id, Some(defaultUser.googleSubjectId), defaultUser.email))
+    verify(googleExtensions).onUserCreate(WorkbenchUser(defaultUser.id,  Some(defaultUser.googleSubjectId), defaultUser.email, defaultUser.identityConcentratorId))
 
     // check ldap
-    dirDAO.loadUser(defaultUserId).unsafeRunSync() shouldBe Some(WorkbenchUser(defaultUser.id, Some(defaultUser.googleSubjectId), defaultUser.email))
-    registrationDAO.loadUser(defaultUserId).unsafeRunSync() shouldBe Some(WorkbenchUser(defaultUser.id, Some(defaultUser.googleSubjectId), defaultUser.email))
+    dirDAO.loadUser(defaultUserId).unsafeRunSync() shouldBe Some(WorkbenchUser(defaultUser.id,  Some(defaultUser.googleSubjectId), defaultUser.email, defaultUser.identityConcentratorId))
+    registrationDAO.loadUser(defaultUserId).unsafeRunSync() shouldBe Some(WorkbenchUser(defaultUser.id,  Some(defaultUser.googleSubjectId), defaultUser.email, defaultUser.identityConcentratorId))
     dirDAO.isEnabled(defaultUserId).unsafeRunSync() shouldBe true
     registrationDAO.isEnabled(defaultUserId).unsafeRunSync() shouldBe true
     dirDAO.loadGroup(service.cloudExtensions.allUsersGroupName).unsafeRunSync() shouldBe
@@ -198,7 +198,7 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
     service.registerUser(user).unsafeRunSync()
     val res = dirDAO.loadUser(user.id).unsafeRunSync()
     val registrationRes = registrationDAO.loadUser(user.id).unsafeRunSync()
-    res shouldBe Some(WorkbenchUser(user.id, Some(user.googleSubjectId), user.email))
+    res shouldBe Some(WorkbenchUser(user.id,  Some(user.googleSubjectId), user.email, user.identityConcentratorId))
     registrationRes shouldEqual res
   }
 
@@ -212,7 +212,7 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
     service.registerUser(user).unsafeRunSync()
     val res = dirDAO.loadUser(user.id).unsafeRunSync()
     val registrationRes = registrationDAO.loadUser(user.id).unsafeRunSync()
-    res shouldBe Some(WorkbenchUser(user.id, Some(user.googleSubjectId), user.email))
+    res shouldBe Some(WorkbenchUser(user.id,  Some(user.googleSubjectId), user.email, user.identityConcentratorId))
     registrationRes shouldEqual res
   }
 
@@ -234,7 +234,7 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
     */
   it should "return conflict when there's an existing subject for a given googleSubjectId" in{
     val user = genCreateWorkbenchUser.sample.get
-    dirDAO.createUser(WorkbenchUser(user.id, Some(user.googleSubjectId), user.email)).unsafeRunSync()
+    dirDAO.createUser(WorkbenchUser(user.id,  Some(user.googleSubjectId), user.email, user.identityConcentratorId)).unsafeRunSync()
     val res = service.registerUser(user).attempt.unsafeRunSync().swap.toOption.get.asInstanceOf[WorkbenchExceptionWithErrorReport]
     Eq[WorkbenchExceptionWithErrorReport].eqv(res, new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"user ${user} already exists"))) shouldBe true
   }
@@ -244,14 +244,14 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
     service.inviteUser(user).unsafeRunSync()
     val res = dirDAO.loadUser(user.inviteeId).unsafeRunSync()
     val registrationRes = registrationDAO.loadUser(user.inviteeId).unsafeRunSync()
-    res shouldBe Some(WorkbenchUser(user.inviteeId, None, user.inviteeEmail))
+    res shouldBe Some(WorkbenchUser(user.inviteeId, None, user.inviteeEmail, None))
     registrationRes shouldEqual res
   }
 
   it should "return conflict when there's an existing subject for a given userId" in{
     val user = genInviteUser.sample.get
     val email = genNonPetEmail.sample.get
-    dirDAO.createUser(WorkbenchUser(user.inviteeId, None, email)).unsafeRunSync()
+    dirDAO.createUser(WorkbenchUser(user.inviteeId, None, email, None)).unsafeRunSync()
     val res = service.inviteUser(user).attempt.unsafeRunSync().swap.toOption.get.asInstanceOf[WorkbenchExceptionWithErrorReport]
     Eq[WorkbenchExceptionWithErrorReport].eqv(res, new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"identity with id ${user.inviteeId} already exists"))) shouldBe true
   }
@@ -259,7 +259,7 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
   it should "return conflict when there's an existing subject for a given email" in{
     val user = genInviteUser.sample.get
     val userId = genWorkbenchUserId(System.currentTimeMillis())
-    dirDAO.createUser(WorkbenchUser(userId, None, user.inviteeEmail)).unsafeRunSync()
+    dirDAO.createUser(WorkbenchUser(userId, None, user.inviteeEmail, None)).unsafeRunSync()
     val res = service.inviteUser(user).attempt.unsafeRunSync().swap.toOption.get.asInstanceOf[WorkbenchExceptionWithErrorReport]
     Eq[WorkbenchExceptionWithErrorReport].eqv(res, new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"email ${user.inviteeEmail} already exists"))) shouldBe true
   }
@@ -269,13 +269,13 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
     service.inviteUser(InviteUser(user.id, user.email)).unsafeRunSync()
     val res = dirDAO.loadUser(user.id).unsafeRunSync()
     val registrationRes = registrationDAO.loadUser(user.id).unsafeRunSync()
-    res shouldBe Some(WorkbenchUser(user.id, None, user.email))
+    res shouldBe Some(WorkbenchUser(user.id, None, user.email, None))
     registrationRes shouldEqual res
 
     service.createUser(user).futureValue
     val updated = dirDAO.loadUser(user.id).unsafeRunSync()
     val updatedRegistrationRes = registrationDAO.loadUser(user.id).unsafeRunSync()
-    updated shouldBe Some(WorkbenchUser(user.id, Some(user.googleSubjectId), user.email))
+    updated shouldBe Some(WorkbenchUser(user.id,  Some(user.googleSubjectId), user.email, user.identityConcentratorId))
     updatedRegistrationRes shouldEqual updated
   }
 

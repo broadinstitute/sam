@@ -276,4 +276,7 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
   override def listUserDirectMemberships(userId: WorkbenchUserId): IO[Stream[WorkbenchGroupIdentity]] = {
     IO.pure(groups.filter { case (_, group) => group.members.contains(userId) }.keys.toStream)
   }
+
+  override def loadUserByIdentityConcentratorId(userId: IdentityConcentratorId)
+      : IO[Option[WorkbenchUser]] = IO.pure(users.values.find(_.identityConcentratorId.contains(userId)))
 }

@@ -441,7 +441,7 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
     val defaultGroupName = WorkbenchGroupName("group")
     val defaultGroup = BasicWorkbenchGroup(defaultGroupName, Set.empty, WorkbenchEmail("foo@bar.com"))
     val defaultUserId = WorkbenchUserId("testUser")
-    val defaultUser = WorkbenchUser(defaultUserId, Option(GoogleSubjectId("testGoogleSubject")), WorkbenchEmail("user@foo.com"))
+    val defaultUser = WorkbenchUser(defaultUserId, Option(GoogleSubjectId("testGoogleSubject")), WorkbenchEmail("user@foo.com"), Option(IdentityConcentratorId("testICId")))
     "createPolicy" - {
       "creates a policy" in {
         dao.createResourceType(resourceType).unsafeRunSync()
@@ -602,10 +602,10 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
 
     "listFlattenedPolicyMembers" - {
       "lists all members of a policy" in {
-        val directMember = WorkbenchUser(WorkbenchUserId("direct"), None, WorkbenchEmail("direct@member.biz"))
-        val subGroupMember = WorkbenchUser(WorkbenchUserId("indirect"), Option(GoogleSubjectId("googley")), WorkbenchEmail("subGroup@member.edu.biz"))
-        val subSubGroupMember = WorkbenchUser(WorkbenchUserId("veryIndirect"), None, WorkbenchEmail("very@indirect.net"))
-        val inTwoGroupsMember = WorkbenchUser(WorkbenchUserId("multipleGroups"), None, WorkbenchEmail("member@members.com"))
+        val directMember = WorkbenchUser(WorkbenchUserId("direct"), None, WorkbenchEmail("direct@member.biz"), None)
+        val subGroupMember = WorkbenchUser(WorkbenchUserId("indirect"), Option(GoogleSubjectId("googley")), WorkbenchEmail("subGroup@member.edu.biz"), Option(IdentityConcentratorId("icy")))
+        val subSubGroupMember = WorkbenchUser(WorkbenchUserId("veryIndirect"), None, WorkbenchEmail("very@indirect.net"), None)
+        val inTwoGroupsMember = WorkbenchUser(WorkbenchUserId("multipleGroups"), None, WorkbenchEmail("member@members.com"), None)
         val allMembers = Set(directMember, subGroupMember, subSubGroupMember, inTwoGroupsMember)
 
         val subSubGroup = BasicWorkbenchGroup(WorkbenchGroupName("subSubGroup"), Set(subSubGroupMember.id), WorkbenchEmail("subSub@groups.com"))
@@ -628,7 +628,7 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
 
     "listAccessPoliciesForUser" - {
       "lists the access policies on a resource that a user is a member of" in {
-        val user = WorkbenchUser(WorkbenchUserId("user"), None, WorkbenchEmail("user@user.edu"))
+        val user = WorkbenchUser(WorkbenchUserId("user"), None, WorkbenchEmail("user@user.edu"), None)
 
         val subGroup = BasicWorkbenchGroup(WorkbenchGroupName("subGroup"), Set(user.id), WorkbenchEmail("sub@groups.com"))
         val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName("parent"), Set(subGroup.id), WorkbenchEmail("parent@groups.com"))
@@ -650,7 +650,7 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
       }
 
       "does not list policies on other resources the user is a member of" in {
-        val user = WorkbenchUser(WorkbenchUserId("user"), None, WorkbenchEmail("user@user.edu"))
+        val user = WorkbenchUser(WorkbenchUserId("user"), None, WorkbenchEmail("user@user.edu"), None)
 
         val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
         val policy = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("thisOne")), Set(user.id), WorkbenchEmail("correct@policy.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), false)
@@ -724,8 +724,8 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
         val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
         dao.createResource(resource).unsafeRunSync()
 
-        val secondUser = defaultUser.copy(id = WorkbenchUserId("foo"), googleSubjectId = Some(GoogleSubjectId("blablabla")), email = WorkbenchEmail("bar@baz.com"))
 
+        val secondUser = defaultUser.copy(id = WorkbenchUserId("foo"), googleSubjectId = Some(GoogleSubjectId("blablabla")), email = WorkbenchEmail("bar@baz.com"), identityConcentratorId = Some(IdentityConcentratorId("ooo")))
         dirDao.createUser(defaultUser).unsafeRunSync()
         dirDao.createUser(secondUser).unsafeRunSync()
 
@@ -745,7 +745,7 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
         val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
         dao.createResource(resource).unsafeRunSync()
 
-        val secondUser = defaultUser.copy(id = WorkbenchUserId("foo"), googleSubjectId = Some(GoogleSubjectId("blablabla")), email = WorkbenchEmail("bar@baz.com"))
+        val secondUser = defaultUser.copy(id = WorkbenchUserId("foo"), googleSubjectId = Some(GoogleSubjectId("blablabla")), email = WorkbenchEmail("bar@baz.com"), identityConcentratorId = Some(IdentityConcentratorId("ooo")))
 
         dirDao.createUser(defaultUser).unsafeRunSync()
         dirDao.createUser(secondUser).unsafeRunSync()
@@ -768,7 +768,7 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
         val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
         dao.createResource(resource).unsafeRunSync()
 
-        val secondUser = defaultUser.copy(id = WorkbenchUserId("foo"), googleSubjectId = Some(GoogleSubjectId("blablabla")), email = WorkbenchEmail("bar@baz.com"))
+        val secondUser = defaultUser.copy(id = WorkbenchUserId("foo"), googleSubjectId = Some(GoogleSubjectId("blablabla")), email = WorkbenchEmail("bar@baz.com"), identityConcentratorId = Some(IdentityConcentratorId("ooo")))
 
         dirDao.createUser(defaultUser).unsafeRunSync()
         dirDao.createUser(secondUser).unsafeRunSync()
@@ -788,7 +788,7 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
         val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
         dao.createResource(resource).unsafeRunSync()
 
-        val secondUser = defaultUser.copy(id = WorkbenchUserId("foo"), googleSubjectId = Some(GoogleSubjectId("blablabla")), email = WorkbenchEmail("bar@baz.com"))
+        val secondUser = defaultUser.copy(id = WorkbenchUserId("foo"), googleSubjectId = Some(GoogleSubjectId("blablabla")), email = WorkbenchEmail("bar@baz.com"), identityConcentratorId = Some(IdentityConcentratorId("ooo")))
 
         dirDao.createUser(defaultUser).unsafeRunSync()
 

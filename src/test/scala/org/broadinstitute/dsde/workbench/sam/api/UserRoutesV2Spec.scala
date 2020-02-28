@@ -49,6 +49,7 @@ class UserRoutesV2Spec extends UserRoutesSpecHelper {
       defaultEmailHeader,
       TestSupport.googleSubjectIdHeaderWithId(googleSubjectId),
       RawHeader(accessTokenHeader, ""),
+      RawHeader(authorizationHeader, ""),
       RawHeader(expiresInHeader, "1000")
     )
     Get("/register/user/v2/self/info").withHeaders(firstGetHeaders) ~> samRoutes.route ~> check {
@@ -67,6 +68,7 @@ class UserRoutesV2Spec extends UserRoutesSpecHelper {
       defaultEmailHeader,
       TestSupport.googleSubjectIdHeaderWithId(googleSubjectId),
       RawHeader(accessTokenHeader, ""),
+      RawHeader(authorizationHeader, ""),
       RawHeader(expiresInHeader, "1000")
     )
     Get("/register/user/v2/self/diagnostics").withHeaders(firstGetHeaders) ~> samRoutes.route ~> check {
@@ -87,6 +89,7 @@ class UserRoutesV2Spec extends UserRoutesSpecHelper {
       RawHeader(emailHeader, petEmail),
       TestSupport.googleSubjectIdHeaderWithId(user.googleSubjectId.get),
       RawHeader(accessTokenHeader, ""),
+      RawHeader(authorizationHeader, ""),
       RawHeader(expiresInHeader, "1000")
     )
     //create a PET service account owned by test user

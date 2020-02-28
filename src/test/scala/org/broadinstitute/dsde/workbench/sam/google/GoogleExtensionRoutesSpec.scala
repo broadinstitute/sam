@@ -242,7 +242,8 @@ trait GoogleExtensionRoutesSpecHelper extends FlatSpec with Matchers with Scalat
                              googIamDAO: Option[GoogleIamDAO] = None,
                              googleServicesConfig: GoogleServicesConfig = TestSupport.googleServicesConfig,
                              googSubjectId: Option[GoogleSubjectId] = None,
-                             email: Option[WorkbenchEmail] = None
+                             email: Option[WorkbenchEmail] = None,
+                             identityConcentratorId: Option[IdentityConcentratorId] = None,
                     ): (WorkbenchUser, List[RawHeader], SamDependencies, SamRoutes) = {
     val em = email.getOrElse(defaultUserEmail)
     val googleSubjectId = googSubjectId.map(_.value).getOrElse(genRandom(System.currentTimeMillis()))
@@ -259,13 +260,14 @@ trait GoogleExtensionRoutesSpecHelper extends FlatSpec with Matchers with Scalat
       res.userInfo.userEmail shouldBe em
       res.enabled shouldBe Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true)
 
-      WorkbenchUser(res.userInfo.userSubjectId, Some(GoogleSubjectId(googleSubjectId)), res.userInfo.userEmail)
+      WorkbenchUser(res.userInfo.userSubjectId, Some(GoogleSubjectId(googleSubjectId)), res.userInfo.userEmail, identityConcentratorId)
     }
 
     val headers = List(
       RawHeader(emailHeader, user.email.value),
       RawHeader(googleSubjectIdHeader, googleSubjectId),
       RawHeader(accessTokenHeader, ""),
+      RawHeader(authorizationHeader, ""),
       RawHeader(expiresInHeader, "1000")
     )
     (user, headers, samDependencies, createRoutes)

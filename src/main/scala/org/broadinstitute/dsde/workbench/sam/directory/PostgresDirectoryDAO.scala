@@ -452,7 +452,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     runInTransaction { implicit session =>
       val userColumn = UserTable.column
 
-      val insertUserQuery = samsql"insert into ${UserTable.table} (${userColumn.id}, ${userColumn.email}, ${userColumn.googleSubjectId}, ${userColumn.enabled}) values (${user.id}, ${user.email}, ${user.googleSubjectId}, false)"
+      val insertUserQuery = samsql"insert into ${UserTable.table} (${userColumn.id}, ${userColumn.email}, ${userColumn.googleSubjectId}, ${userColumn.enabled}, ${userColumn.identityConcentratorId}) values (${user.id}, ${user.email}, ${user.googleSubjectId}, false, ${user.identityConcentratorId})"
 
       Try {
         insertUserQuery.update.apply
@@ -470,7 +470,17 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
 
       val loadUserQuery = samsql"select ${userTable.resultAll} from ${UserTable as userTable} where ${userTable.id} = ${userId}"
       loadUserQuery.map(UserTable(userTable))
-        .single().apply().map(unmarshalUserRecord)
+        .single().apply().map(UserTable.unmarshalUserRecord)
+    }
+  }
+
+  override def loadUserByIdentityConcentratorId(userId: IdentityConcentratorId): IO[Option[WorkbenchUser]] = {
+    runInTransaction { implicit session =>
+      val userTable = UserTable.syntax
+
+      val loadUserQuery = samsql"select ${userTable.resultAll} from ${UserTable as userTable} where ${userTable.identityConcentratorId} = ${userId}"
+      loadUserQuery.map(UserTable(userTable))
+        .single().apply().map(UserTable.unmarshalUserRecord)
     }
   }
 
@@ -481,7 +491,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
 
         val loadUsersQuery = samsql"select ${userTable.resultAll} from ${UserTable as userTable} where ${userTable.id} in (${userIds})"
         loadUsersQuery.map(UserTable(userTable))
-          .list().apply().map(unmarshalUserRecord).toStream
+          .list().apply().map(UserTable.unmarshalUserRecord).toStream
       }
     } else IO.pure(Stream.empty)
   }
@@ -683,7 +693,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
                 where ${petServiceAccountTable.googleSubjectId} = ${petSA}"""
 
       val userRecordOpt: Option[UserRecord] = loadUserQuery.map(UserTable(userTable)).single().apply()
-      userRecordOpt.map(unmarshalUserRecord)
+      userRecordOpt.map(UserTable.unmarshalUserRecord)
     }
   }
 
@@ -752,10 +762,6 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
 
   private def unmarshalPetServiceAccountRecord(petRecord: PetServiceAccountRecord): PetServiceAccount = {
     PetServiceAccount(PetServiceAccountId(petRecord.userId, petRecord.project), ServiceAccount(petRecord.googleSubjectId, petRecord.email, petRecord.displayName))
-  }
-
-  private def unmarshalUserRecord(userRecord: UserRecord): WorkbenchUser = {
-    WorkbenchUser(userRecord.id, userRecord.googleSubjectId, userRecord.email)
   }
 
   case class SubjectConglomerate(

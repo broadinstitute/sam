@@ -37,7 +37,7 @@ class LdapRegistrationDAOSpec extends FlatSpec with Matchers with TestSupport wi
 
   "LdapGroupDirectoryDAO"  should "create, read, delete users" in {
     val userId = WorkbenchUserId(UUID.randomUUID().toString)
-    val user = WorkbenchUser(userId, None, WorkbenchEmail("foo@bar.com"))
+    val user = WorkbenchUser(userId, None, WorkbenchEmail("foo@bar.com"), None)
 
     assertResult(None) {
       dao.loadUser(user.id).unsafeRunSync()
@@ -60,7 +60,7 @@ class LdapRegistrationDAOSpec extends FlatSpec with Matchers with TestSupport wi
 
   it should "create, load, delete pet service accounts" in {
     val userId = WorkbenchUserId(UUID.randomUUID().toString)
-    val user = WorkbenchUser(userId, None, WorkbenchEmail("foo@bar.com"))
+    val user = WorkbenchUser(userId, None, WorkbenchEmail("foo@bar.com"), None)
     val serviceAccountUniqueId = ServiceAccountSubjectId(UUID.randomUUID().toString)
     val serviceAccount = ServiceAccount(serviceAccountUniqueId, WorkbenchEmail("foo@bar.com"), ServiceAccountDisplayName(""))
     val project = GoogleProject("testproject")
@@ -91,7 +91,7 @@ class LdapRegistrationDAOSpec extends FlatSpec with Matchers with TestSupport wi
 
   it should "succeed if the user has been created" in {
     val userId = WorkbenchUserId(UUID.randomUUID().toString)
-    val user = WorkbenchUser(userId, None, WorkbenchEmail("foo@bar.com"))
+    val user = WorkbenchUser(userId, None, WorkbenchEmail("foo@bar.com"), None)
 
     assertResult(None) {
       dao.loadUser(user.id).unsafeRunSync()

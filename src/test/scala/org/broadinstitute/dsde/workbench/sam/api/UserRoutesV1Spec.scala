@@ -74,6 +74,7 @@ class UserRoutesV1Spec extends UserRoutesSpecHelper{
       RawHeader(emailHeader, petEmail),
       TestSupport.googleSubjectIdHeaderWithId(user.googleSubjectId.get),
       RawHeader(accessTokenHeader, ""),
+      RawHeader(authorizationHeader, ""),
       RawHeader(expiresInHeader, "1000")
     )
     //create a PET service account owned by test user

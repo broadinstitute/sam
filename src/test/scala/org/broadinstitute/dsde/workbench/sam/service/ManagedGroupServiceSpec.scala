@@ -88,7 +88,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
 
   before {
     clearDatabase()
-    dirDAO.createUser(WorkbenchUser(dummyUserInfo.userId, Some(TestSupport.genGoogleSubjectId()), dummyUserInfo.userEmail)).unsafeRunSync()
+    dirDAO.createUser(WorkbenchUser(dummyUserInfo.userId, Some(TestSupport.genGoogleSubjectId()), dummyUserInfo.userEmail, Some(TestSupport.genIdentityConcentratorId()))).unsafeRunSync()
   }
 
   protected def clearDatabase(): Unit = TestSupport.truncateAll
@@ -213,8 +213,8 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
   }
 
   "ManagedGroupService.overwritePolicyMemberEmails" should "permit overwriting the admin policy" in {
-    val dummyAdmin = WorkbenchUser(dummyUserInfo.userId, None, dummyUserInfo.userEmail)
-    val otherAdmin = WorkbenchUser(WorkbenchUserId("admin2"), None, WorkbenchEmail("admin2@foo.test"))
+    val dummyAdmin = WorkbenchUser(dummyUserInfo.userId, None, dummyUserInfo.userEmail, None)
+    val otherAdmin = WorkbenchUser(WorkbenchUserId("admin2"), None, WorkbenchEmail("admin2@foo.test"), None)
     val someGroupEmail = WorkbenchEmail("someGroup@some.org")
     dirDAO.createUser(otherAdmin).unsafeRunSync()
     val managedGroup = assertMakeGroup()
@@ -235,7 +235,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
 
   it should "throw an exception if any of the email addresses do not match an existing subject" in {
     val managedGroup = assertMakeGroup()
-    val badAdmin = WorkbenchUser(WorkbenchUserId("admin2"), None, WorkbenchEmail("admin2@foo.test"))
+    val badAdmin = WorkbenchUser(WorkbenchUserId("admin2"), None, WorkbenchEmail("admin2@foo.test"), None)
 
     intercept[WorkbenchExceptionWithErrorReport] {
       runAndWait(managedGroupService.overwritePolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName, Set(badAdmin.email)))
@@ -245,7 +245,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
   it should "permit overwriting the member policy" in {
     val managedGroup = assertMakeGroup()
 
-    val someUser = WorkbenchUser(WorkbenchUserId("someUser"), None, WorkbenchEmail("someUser@foo.test"))
+    val someUser = WorkbenchUser(WorkbenchUserId("someUser"), None, WorkbenchEmail("someUser@foo.test"), None)
     val someGroupEmail = WorkbenchEmail("someGroup@some.org")
     dirDAO.createUser(someUser).unsafeRunSync()
     dirDAO.createGroup(BasicWorkbenchGroup(WorkbenchGroupName("someGroup"), Set.empty, someGroupEmail)).unsafeRunSync()
@@ -259,13 +259,13 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
   }
 
   "ManagedGroupService addSubjectToPolicy" should "successfully add the subject to the existing policy for the group" in {
-    val adminUser = WorkbenchUser(dummyUserInfo.userId, None, dummyUserInfo.userEmail)
+    val adminUser = WorkbenchUser(dummyUserInfo.userId, None, dummyUserInfo.userEmail, None)
 
     val managedGroup = assertMakeGroup()
 
     managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName).unsafeRunSync() should contain theSameElementsAs Set(adminUser.email)
 
-    val someUser = WorkbenchUser(WorkbenchUserId("someUser"), None, WorkbenchEmail("someUser@foo.test"))
+    val someUser = WorkbenchUser(WorkbenchUserId("someUser"), None, WorkbenchEmail("someUser@foo.test"), None)
     dirDAO.createUser(someUser).unsafeRunSync()
     runAndWait(managedGroupService.addSubjectToPolicy(managedGroup.resourceId, ManagedGroupService.adminPolicyName, someUser.id))
 
@@ -274,7 +274,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
   }
 
   it should "succeed without changing if the email address is already in the policy" in {
-    val adminUser = WorkbenchUser(dummyUserInfo.userId, None, dummyUserInfo.userEmail)
+    val adminUser = WorkbenchUser(dummyUserInfo.userId, None, dummyUserInfo.userEmail, None)
 
     val managedGroup = assertMakeGroup()
 
@@ -284,7 +284,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
   }
 
   "ManagedGroupService removeSubjectFromPolicy" should "successfully remove the subject from the policy for the group" in {
-    val adminUser = WorkbenchUser(dummyUserInfo.userId, None, dummyUserInfo.userEmail)
+    val adminUser = WorkbenchUser(dummyUserInfo.userId, None, dummyUserInfo.userEmail, None)
 
     val managedGroup = assertMakeGroup()
 
@@ -296,7 +296,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
   }
 
   it should "not do anything if the subject is not a member of the policy" in {
-    val adminUser = WorkbenchUser(dummyUserInfo.userId, None, dummyUserInfo.userEmail)
+    val adminUser = WorkbenchUser(dummyUserInfo.userId, None, dummyUserInfo.userEmail, None)
 
     val managedGroup = assertMakeGroup()
 
@@ -323,8 +323,8 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
 
     val user1 = UserInfo(OAuth2BearerToken("token1"), WorkbenchUserId("userId1"), WorkbenchEmail("user1@company.com"), 0)
     val user2 = UserInfo(OAuth2BearerToken("token2"), WorkbenchUserId("userId2"), WorkbenchEmail("user2@company.com"), 0)
-    dirDAO.createUser(WorkbenchUser(user1.userId, None, user1.userEmail)).unsafeRunSync()
-    dirDAO.createUser(WorkbenchUser(user2.userId, None, user2.userEmail)).unsafeRunSync()
+    dirDAO.createUser(WorkbenchUser(user1.userId, None, user1.userEmail, None)).unsafeRunSync()
+    dirDAO.createUser(WorkbenchUser(user2.userId, None, user2.userEmail, None)).unsafeRunSync()
 
     val user1Groups = Set("foo", "bar", "baz")
     val user2Groups = Set("qux", "quux")
@@ -410,7 +410,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
 
     assertMakeGroup(groupId = resourceId.value, managedGroupService = testManagedGroupService)
 
-    val requester = dirDAO.createUser(WorkbenchUser(WorkbenchUserId("userId1"), Some(GoogleSubjectId("not the user id")), WorkbenchEmail("user1@company.com"))).unsafeRunSync()
+    val requester = dirDAO.createUser(WorkbenchUser(WorkbenchUserId("userId1"), Some(GoogleSubjectId("not the user id")), WorkbenchEmail("user1@company.com"), None)).unsafeRunSync()
     val adminGoogleSubjectId = WorkbenchUserId(dirDAO.loadUser(dummyUserInfo.userId).unsafeRunSync().flatMap(_.googleSubjectId).getOrElse(fail("could not find admin google subject id")).value)
 
     val expectedNotificationMessages = Set(

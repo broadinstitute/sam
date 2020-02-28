@@ -128,7 +128,7 @@ class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdenti
       case (`policyIdentity`, policy: AccessPolicy) => policy.members
     }
     members.flatten.collect {
-      case u: WorkbenchUserId => WorkbenchUser(u, Some(GoogleSubjectId(u.value)), WorkbenchEmail("dummy"))
+      case u: WorkbenchUserId => WorkbenchUser(u, Some(GoogleSubjectId(u.value)), WorkbenchEmail("dummy"), None)
     }.toSet
   }
 

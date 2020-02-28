@@ -56,6 +56,7 @@ class UserRoutesSpec extends UserRoutesSpecHelper {
       RawHeader(emailHeader, petEmail),
       TestSupport.googleSubjectIdHeaderWithId(user.googleSubjectId.get),
       RawHeader(accessTokenHeader, ""),
+      RawHeader(authorizationHeader, ""),
       RawHeader(expiresInHeader, "1000")
     )
     //create a PET service account owned by test user
@@ -174,6 +175,7 @@ trait UserRoutesSpecHelper extends FlatSpec with Matchers with ScalatestRouteTes
   val adminUserEmail = WorkbenchEmail("adminuser@new.com")
   val adminHeaders = List(
     RawHeader(accessTokenHeader, ""),
+    RawHeader(authorizationHeader, ""),
     RawHeader(googleSubjectIdHeader, adminGoogleSubjectId.value),
     RawHeader(emailHeader, adminUserEmail.value),
     RawHeader(expiresInHeader, "1000"),
@@ -205,7 +207,7 @@ trait UserRoutesSpecHelper extends FlatSpec with Matchers with ScalatestRouteTes
     (user, routes)
   }
 
-  def createTestUser(googSubjectId: Option[GoogleSubjectId] = None, cloudExtensions: Option[CloudExtensions] = None, googleDirectoryDAO: Option[GoogleDirectoryDAO] = None): (WorkbenchUser, List[RawHeader], SamDependencies, SamRoutes) = {
+  def createTestUser(googSubjectId: Option[GoogleSubjectId] = None, cloudExtensions: Option[CloudExtensions] = None, googleDirectoryDAO: Option[GoogleDirectoryDAO] = None, identityConcentratorId: Option[IdentityConcentratorId] = None): (WorkbenchUser, List[RawHeader], SamDependencies, SamRoutes) = {
     val googleSubjectId = googSubjectId.map(_.value).getOrElse(genRandom(System.currentTimeMillis()))
     val googleSubjectheader = RawHeader(googleSubjectIdHeader, googleSubjectId)
     val emHeader = RawHeader(emailHeader, defaultUserEmail.value)
@@ -220,13 +222,15 @@ trait UserRoutesSpecHelper extends FlatSpec with Matchers with ScalatestRouteTes
       res.userInfo.userEmail shouldBe defaultUserEmail
       res.enabled shouldBe Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true)
 
-      WorkbenchUser(res.userInfo.userSubjectId, Some(GoogleSubjectId(googleSubjectId)), res.userInfo.userEmail)
+      WorkbenchUser(res.userInfo.userSubjectId, Some(GoogleSubjectId(googleSubjectId)), res.userInfo.userEmail, identityConcentratorId)
     }
     val headers = List(
       RawHeader(emailHeader, user.email.value),
       TestSupport.googleSubjectIdHeaderWithId(user.googleSubjectId.get),
       RawHeader(accessTokenHeader, ""),
-      RawHeader(expiresInHeader, "1000")
+      RawHeader(authorizationHeader, ""),
+      RawHeader(expiresInHeader, "1000"),
+      RawHeader(authorizationHeader, "")
     )
     (user, headers, samDependencies, routes)
   }

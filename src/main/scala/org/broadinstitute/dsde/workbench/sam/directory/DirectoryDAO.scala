@@ -39,6 +39,7 @@ trait DirectoryDAO extends RegistrationDAO {
 
   def createUser(user: WorkbenchUser): IO[WorkbenchUser]
   def loadUser(userId: WorkbenchUserId): IO[Option[WorkbenchUser]]
+  def loadUserByIdentityConcentratorId(userId: IdentityConcentratorId): IO[Option[WorkbenchUser]]
   def loadUsers(userIds: Set[WorkbenchUserId]): IO[Stream[WorkbenchUser]]
   def deleteUser(userId: WorkbenchUserId): IO[Unit]
 

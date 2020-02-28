@@ -25,6 +25,7 @@ object Generator {
     RawHeader(emailHeader, email.value),
     RawHeader(googleSubjectIdHeader, genRandom(System.currentTimeMillis())),
     RawHeader(accessTokenHeader, accessToken.value),
+    RawHeader(authorizationHeader, accessToken.toString())
   )
 
   val genUserInfoHeadersWithInvalidExpiresIn: Gen[List[RawHeader]] = for{
@@ -51,7 +52,8 @@ object Generator {
     email <- genNonPetEmail
     userId = genWorkbenchUserId(System.currentTimeMillis())
     googleSubjectId <- Gen.option[GoogleSubjectId](Gen.const(GoogleSubjectId(userId.value)))
-  } yield WorkbenchUser(userId, googleSubjectId, email)
+    identityConcentratorId <- Gen.option[IdentityConcentratorId](Gen.const(IdentityConcentratorId(userId.value)))
+  } yield WorkbenchUser(userId, googleSubjectId, email, identityConcentratorId)
 
   val genInviteUser = for{
     email <- genNonPetEmail

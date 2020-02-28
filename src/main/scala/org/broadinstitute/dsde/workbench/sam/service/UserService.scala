@@ -39,7 +39,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
       _ <- UserService.validateEmailAddress(invitee.inviteeEmail)
       existingSubject <- directoryDAO.loadSubjectFromEmail(invitee.inviteeEmail)
       createdUser <- existingSubject match {
-        case None => createUserInternal(WorkbenchUser(invitee.inviteeId, None, invitee.inviteeEmail))
+        case None => createUserInternal(WorkbenchUser(invitee.inviteeId, None, invitee.inviteeEmail, None))
         case Some(_) =>
           IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"email ${invitee.inviteeEmail} already exists")))
       }
@@ -70,14 +70,14 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
                   _ <- directoryDAO.setGoogleSubjectId(uid, user.googleSubjectId)
                   _ <- registrationDAO.setGoogleSubjectId(uid, user.googleSubjectId)
                   _ <- IO.fromFuture(IO(cloudExtensions.onGroupUpdate(groups)))
-                } yield WorkbenchUser(uid, Some(user.googleSubjectId), user.email)
+                } yield WorkbenchUser(uid, Some(user.googleSubjectId), user.email, user.identityConcentratorId)
 
               case Some(_) =>
                 //We don't support inviting a group account or pet service account
                 IO.raiseError[WorkbenchUser](
                   new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"$user is not a regular user. Please use a different endpoint")))
               case None =>
-                createUserInternal(WorkbenchUser(WorkbenchUserId(user.googleSubjectId.value), Some(user.googleSubjectId), user.email)) //For completely new users, we still use googleSubjectId as their userId
+                createUserInternal(WorkbenchUser(WorkbenchUserId(user.googleSubjectId.value), Some(user.googleSubjectId), user.email, user.identityConcentratorId)) //For completely new users, we still use googleSubjectId as their userId
 
             }
           } yield updated

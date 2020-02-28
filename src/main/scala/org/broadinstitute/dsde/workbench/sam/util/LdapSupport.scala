@@ -38,7 +38,7 @@ trait LdapSupport {
     for {
       uid <- getAttribute(results, Attr.uid).toRight(s"${Attr.uid} attribute missing")
       email <- getAttribute(results, Attr.email).toRight(s"${Attr.email} attribute missing")
-    } yield WorkbenchUser(WorkbenchUserId(uid), getAttribute(results, Attr.googleSubjectId).map(GoogleSubjectId), WorkbenchEmail(email))
+    } yield WorkbenchUser(WorkbenchUserId(uid), getAttribute(results, Attr.googleSubjectId).map(GoogleSubjectId), WorkbenchEmail(email), None)
 
   protected def executeLdap[A](ioa: IO[A]): IO[A] = cs.evalOn(ecForLdapBlockingIO)(ioa)
 }
