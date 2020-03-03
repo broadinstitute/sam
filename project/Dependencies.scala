@@ -1,8 +1,8 @@
 import sbt._
 
 object Dependencies {
-  val akkaV = "2.5.19"
-  val akkaHttpV = "10.1.7"
+  val akkaV = "2.5.22"
+  val akkaHttpV = "10.1.8"
   val jacksonV = "2.9.5"
   val scalaLoggingV = "3.5.0"
   val scalaTestV    = "3.0.5"
@@ -10,8 +10,8 @@ object Dependencies {
   val catsEffectV         = "2.1.1"
   val scalikejdbcVersion    = "3.3.5"
   val postgresDriverVersion = "42.2.8"
-  val http4sVersion = "0.21.1"
-  val circeVersion = "0.13.0"
+  val http4sVersion = "0.21.0-M5"
+  val circeVersion = "0.12.2"
 
   val workbenchUtilV   = "0.5-6942040"
   val workbenchModelV  = "0.14-3c0b510"
@@ -28,8 +28,8 @@ object Dependencies {
   val excludeWorkbenchMetrics = ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-metrics_2.12")
   val excludeWorkbenchGoogle =  ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-google_2.12")
 
-  val jwtSpray: ModuleID = "com.pauldijou" %% "jwt-spray-json" % "4.2.0"
-  val jwtCirce: ModuleID = "com.pauldijou" %% "jwt-circe" % "4.2.0"
+  val jwtSpray: ModuleID = "com.pauldijou" %% "jwt-spray-json" % "4.1.0"
+  val jwtCirce: ModuleID = "com.pauldijou" %% "jwt-circe" % "4.1.0"
   val newRelic: ModuleID = "com.newrelic.agent.java" % "newrelic-api" % newRelicVersion
   val jacksonAnnotations: ModuleID = "com.fasterxml.jackson.core" % "jackson-annotations" % jacksonV
   val jacksonDatabind: ModuleID =    "com.fasterxml.jackson.core" % "jackson-databind"    % jacksonV
@@ -59,7 +59,7 @@ object Dependencies {
   val circeParser: ModuleID = "io.circe" %% "circe-parser" % circeVersion
 
   val excludIoGrpc =  ExclusionRule(organization = "io.grpc", name = "grpc-core")
-  val ioGrpc: ModuleID = "io.grpc" % "grpc-core" % "1.19.0"
+  val ioGrpc: ModuleID = "io.grpc" % "grpc-core" % "1.24.1"
 
   val googleOAuth2: ModuleID = "com.google.auth" % "google-auth-library-oauth2-http" % "0.9.0" excludeAll(excludIoGrpc)
   val googleStorage: ModuleID = "com.google.apis" % "google-api-services-storage" % "v1-rev20181013-1.27.0" excludeAll(excludIoGrpc) //force this version
