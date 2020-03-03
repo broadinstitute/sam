@@ -177,38 +177,31 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
   }
 
   it should "accept request with oidc headers" in {
-    val email = genNonPetEmail.sample.get
+    val user = genWorkbenchUser.sample.get
     val services = directives
-    val googleSubjectId = GoogleSubjectId(genRandom(System.currentTimeMillis()))
-    val uid = genWorkbenchUserId(System.currentTimeMillis())
-    val someIdentityConcentratorId = None
     val accessToken = OAuth2BearerToken("not jwt")
     val headers = List(
-      RawHeader(emailHeader, email.value),
-      RawHeader(googleSubjectIdHeader, googleSubjectId.value),
+      RawHeader(emailHeader, user.email.value),
+      RawHeader(googleSubjectIdHeader, user.googleSubjectId.get.value),
       RawHeader(accessTokenHeader, accessToken.token),
       RawHeader(authorizationHeader, accessToken.toString()),
       RawHeader(expiresInHeader, (System.currentTimeMillis() + 1000).toString)
     )
-    services.directoryDAO.createUser(WorkbenchUser(uid, Some(googleSubjectId), email, someIdentityConcentratorId)).unsafeRunSync()
+    services.directoryDAO.createUser(user).unsafeRunSync()
     Get("/").withHeaders(headers) ~>
       handleExceptions(myExceptionHandler){services.requireUserInfo(x => complete(x.copy(tokenExpiresIn = 0).toString))} ~> check {
       status shouldBe StatusCodes.OK
-      responseAs[String] shouldEqual UserInfo(accessToken, uid, email, 0).toString
+      responseAs[String] shouldEqual UserInfo(accessToken, user.id, user.email, 0).toString
     }
   }
 
   it should "401 when not jwt but no oidc headers given" in {
-    val email = genNonPetEmail.sample.get
     val services = directives
-    val googleSubjectId = GoogleSubjectId(genRandom(System.currentTimeMillis()))
-    val uid = genWorkbenchUserId(System.currentTimeMillis())
-    val someIdentityConcentratorId = None
     val accessToken = OAuth2BearerToken("not jwt")
     val headers = List(
       RawHeader(authorizationHeader, accessToken.toString())
     )
-    services.directoryDAO.createUser(WorkbenchUser(uid, Some(googleSubjectId), email, someIdentityConcentratorId)).unsafeRunSync()
+
     Get("/").withHeaders(headers) ~>
       handleExceptions(myExceptionHandler){services.requireUserInfo(x => complete(x.copy(tokenExpiresIn = 0).toString))} ~> check {
       status shouldBe StatusCodes.Unauthorized
@@ -216,27 +209,24 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
   }
 
   it should "401 when parsable yet invalid jwt and oidc headers given" in {
-    val email = genNonPetEmail.sample.get
+    val user = genWorkbenchUser.sample.get
     val services = directives
-    val googleSubjectId = GoogleSubjectId(genRandom(System.currentTimeMillis()))
-    val uid = genWorkbenchUserId(System.currentTimeMillis())
-    val someIdentityConcentratorId = None
     val accessToken = OAuth2BearerToken(JwtSprayJson.encode("""{"foo": "bar"}"""))
     val headers = List(
-      RawHeader(emailHeader, email.value),
-      RawHeader(googleSubjectIdHeader, googleSubjectId.value),
+      RawHeader(emailHeader, user.email.value),
+      RawHeader(googleSubjectIdHeader, user.googleSubjectId.get.value),
       RawHeader(accessTokenHeader, accessToken.token),
       RawHeader(authorizationHeader, accessToken.toString()),
       RawHeader(expiresInHeader, (System.currentTimeMillis() + 1000).toString)
     )
-    services.directoryDAO.createUser(WorkbenchUser(uid, Some(googleSubjectId), email, someIdentityConcentratorId)).unsafeRunSync()
+    services.directoryDAO.createUser(user).unsafeRunSync()
     Get("/").withHeaders(headers) ~>
       handleExceptions(myExceptionHandler){services.requireUserInfo(x => complete(x.copy(tokenExpiresIn = 0).toString))} ~> check {
       status shouldBe StatusCodes.Unauthorized
     }
   }
 
-  it should "accept request with only jwt header" in {
+  it should "use info from jwt instead of oidc headers" in {
     val services = directives
     val userGood = genWorkbenchUser.sample.get
     val userBad = genWorkbenchUser.sample.get
@@ -261,20 +251,17 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
     }
   }
 
-  it should "use info from jwt instead of oidc headers" in {
+  it should "accept request with only jwt header" in {
+    val user = genWorkbenchUser.sample.get
     val services = directives
-    val googleSubjectId = GoogleSubjectId(genRandom(System.currentTimeMillis()))
-    val uid = genWorkbenchUserId(System.currentTimeMillis())
-    val identityConcentratorId = TestSupport.genIdentityConcentratorId()
-    val email = genNonPetEmail.sample.get
-    val authHeader = genAuthorizationHeader(Option(identityConcentratorId))
-    services.directoryDAO.createUser(WorkbenchUser(uid, Some(googleSubjectId), email, Option(identityConcentratorId))).unsafeRunSync()
+    val authHeader = genAuthorizationHeader(user.identityConcentratorId)
+    services.directoryDAO.createUser(user).unsafeRunSync()
     Get("/").withHeaders(authHeader) ~>
       handleExceptions(myExceptionHandler){services.requireUserInfo(x => complete(x.userId.value))} ~> check {
       withClue(responseAs[String]) {
         status shouldBe StatusCodes.OK
       }
-      responseAs[String] shouldEqual uid.value
+      responseAs[String] shouldEqual user.id.value
     }
   }
 
