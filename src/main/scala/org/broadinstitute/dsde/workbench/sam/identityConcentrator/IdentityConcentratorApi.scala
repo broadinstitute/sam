@@ -3,8 +3,6 @@ package org.broadinstitute.dsde.workbench.sam.identityConcentrator
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import cats.effect.{ContextShift, IO}
 import com.typesafe.scalalogging.LazyLogging
-import org.broadinstitute.dsde.workbench.model.IdentityConcentratorId
-import org.broadinstitute.dsde.workbench.model.google.ServiceAccount
 import org.broadinstitute.dsde.workbench.sam.identityConcentrator.IdentityConcentratorModel.{OpenIdConfiguration, UserInfo}
 import org.http4s.{AuthScheme, Credentials, MediaType}
 import org.http4s.Method._
@@ -14,9 +12,6 @@ import org.http4s.headers.{Accept, Authorization}
 
 trait IdentityConcentratorApi {
   def getUserInfo(accessToken: OAuth2BearerToken): IO[UserInfo]
-  def linkServiceAccount(accessToken: OAuth2BearerToken, serviceAccount: ServiceAccount): IO[Unit]
-  def enableUser(userId: IdentityConcentratorId): IO[Unit]
-  def disableUser(userId: IdentityConcentratorId): IO[Unit]
 }
 
 class StandardIdentityConcentratorApi(icBaseUrl: String, httpClient: Client[IO])(implicit contextShift: ContextShift[IO]) extends IdentityConcentratorApi with LazyLogging {
@@ -37,8 +32,4 @@ class StandardIdentityConcentratorApi(icBaseUrl: String, httpClient: Client[IO])
     )
     httpClient.expect[UserInfo](request)
   }
-
-  override def linkServiceAccount(accessToken: OAuth2BearerToken, serviceAccount: ServiceAccount): IO[Unit] = ???
-  override def enableUser(userId: IdentityConcentratorId): IO[Unit] = ???
-  override def disableUser(userId: IdentityConcentratorId): IO[Unit] = ???
 }

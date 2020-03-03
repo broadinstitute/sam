@@ -4,8 +4,7 @@ import java.nio.charset.StandardCharsets
 
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import cats.effect.IO
-import org.broadinstitute.dsde.workbench.model.{GoogleSubjectId, IdentityConcentratorId, WorkbenchEmail}
-import org.broadinstitute.dsde.workbench.model.google.ServiceAccount
+import org.broadinstitute.dsde.workbench.model.{GoogleSubjectId, WorkbenchEmail}
 import org.scalatest.{FlatSpec, Matchers}
 import IdentityConcentratorModel._
 import pdi.jwt.JwtCirce
@@ -15,9 +14,6 @@ class IdentityConcentratorServiceSpec extends FlatSpec with Matchers {
     override def getUserInfo(accessToken: OAuth2BearerToken): IO[UserInfo] = {
       IO.pure(userInfo)
     }
-    override def linkServiceAccount(accessToken: OAuth2BearerToken, serviceAccount: ServiceAccount): IO[Unit] = ???
-    override def enableUser(userId: IdentityConcentratorId): IO[Unit] = ???
-    override def disableUser(userId: IdentityConcentratorId): IO[Unit] = ???
   }
 
   "getGoogleIdentities" should "return google LinkedIdentities" in {
