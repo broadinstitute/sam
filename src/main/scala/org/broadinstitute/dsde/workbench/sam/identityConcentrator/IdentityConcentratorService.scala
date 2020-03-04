@@ -46,8 +46,6 @@ class IdentityConcentratorService(identityConcentratorApi: IdentityConcentratorA
   }
 
   private[identityConcentrator] def getLinkedAccountsFromVisaJwt(jwt: String): Either[ErrorReport, Seq[LinkedAccount]] = {
-    val linkedIdPattern = "([^,]+),([^,]+)".r
-
     // JWT from trusted source
     JwtCirce.decodeJson(jwt, JwtOptions(signature = false, expiration = false)) match {
       case Failure(t) => Left(ErrorReport("jwt not parsable", ErrorReport(t)))
@@ -59,8 +57,8 @@ class IdentityConcentratorService(identityConcentratorApi: IdentityConcentratorA
             // see https://github.com/ga4gh-duri/ga4gh-duri.github.io/blob/master/researcher_ids/ga4gh_passport_v1.md#linkedidentities
             // The "value" field format is a semicolon-delimited list of "<uri-encoded-sub>,<uri-encoded-iss>" entries with no added whitespace between entries.
             // note that this ignores any entries that not formatted correctly
-            visaEnvelope.ga4gh_visa_v1.value.split(";").collect {
-              case linkedIdPattern(subject, issuer) => LinkedAccount(urlDecode(subject), urlDecode(issuer))
+            visaEnvelope.ga4gh_visa_v1.value.split(";").map(_.split(",")).collect {
+              case Array(subject, issuer) => LinkedAccount(urlDecode(subject), urlDecode(issuer))
             }
           } else {
             // visa is not of type LinkedIdentities so return none
