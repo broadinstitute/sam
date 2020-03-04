@@ -82,6 +82,9 @@ trait StandardUserInfoDirectives extends UserInfoDirectives with LazyLogging {
       case (_, _, _, None) =>
         logger.error("requireCreateUser with JWT attempted but Identity Concentrator not configured")
         failWith(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.InternalServerError, "Identity Concentrator not configured")))
+
+      case _ =>
+        failWith(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Unauthorized, "Missing OIDC headers or valid jwt")))
     }
 }
 

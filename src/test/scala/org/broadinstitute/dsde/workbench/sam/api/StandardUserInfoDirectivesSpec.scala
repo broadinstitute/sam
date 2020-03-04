@@ -39,11 +39,15 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
   }
 
   def genAuthorizationHeader(id: Option[IdentityConcentratorId] = None): RawHeader = {
-    import spray.json._
-    import org.broadinstitute.dsde.workbench.sam.api.StandardUserInfoDirectives.jwtPayloadFormat
-    RawHeader(authorizationHeader, OAuth2BearerToken(JwtSprayJson.encode(JwtUserInfo(id.getOrElse(genIdentityConcentratorId()), Instant.now().getEpochSecond + 3600).toJson.asJsObject)).toString())
+    RawHeader(authorizationHeader, genJwtBearerToken(id).toString())
   }
 
+
+  private def genJwtBearerToken(id: Option[IdentityConcentratorId]) = {
+    import spray.json._
+    import org.broadinstitute.dsde.workbench.sam.api.StandardUserInfoDirectives.jwtPayloadFormat
+    OAuth2BearerToken(JwtSprayJson.encode(JwtUserInfo(id.getOrElse(genIdentityConcentratorId()), Instant.now().getEpochSecond + 3600).toJson.asJsObject))
+  }
 
   "isServiceAccount" should "be able to tell whether an email is a PET email" in {
     forAll(genPetEmail, genNonPetEmail){
@@ -165,7 +169,7 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
     t.errorReport.statusCode shouldBe Some(StatusCodes.Unauthorized)
   }
 
-  "StandardUserInfoDirectives" should "fail if expiresIn is in illegal format" in {
+  "StandardUserInfoDirectives.requireUserInfo" should "fail if expiresIn is in illegal format" in {
     forAll(genUserInfoHeadersWithInvalidExpiresIn){
       headers: List[RawHeader] =>
         Get("/").withHeaders(headers) ~> handleExceptions(myExceptionHandler){directives.requireUserInfo(x => complete(x.toString))} ~> check {
@@ -267,6 +271,99 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
 
   it should "fail if required headers are missing" in {
     Get("/") ~> handleExceptions(myExceptionHandler){directives.requireUserInfo(x => complete(x.toString))} ~> check {
+      rejection shouldBe MissingHeaderRejection(authorizationHeader)
+    }
+  }
+
+  "StandardUserInfoDirectives.requireCreateUser" should "accept request with oidc headers" in {
+    val user = genWorkbenchUser.sample.get
+    val services = directives
+    val accessToken = OAuth2BearerToken("not jwt")
+    val headers = List(
+      RawHeader(emailHeader, user.email.value),
+      RawHeader(googleSubjectIdHeader, user.googleSubjectId.get.value),
+      RawHeader(authorizationHeader, accessToken.toString())
+    )
+    Get("/").withHeaders(headers) ~>
+      handleExceptions(myExceptionHandler){services.requireCreateUser(x => complete(x.copy(id = WorkbenchUserId("")).toString))} ~> check {
+      status shouldBe StatusCodes.OK
+      responseAs[String] shouldEqual CreateWorkbenchUser(WorkbenchUserId(""), user.googleSubjectId.get, user.email, None).toString
+    }
+  }
+
+  it should "401 when not jwt but no oidc headers given" in {
+    val services = directives
+    val accessToken = OAuth2BearerToken("not jwt")
+    val headers = List(
+      RawHeader(authorizationHeader, accessToken.toString())
+    )
+
+    Get("/").withHeaders(headers) ~>
+      handleExceptions(myExceptionHandler){services.requireCreateUser(x => complete(x.toString))} ~> check {
+      status shouldBe StatusCodes.Unauthorized
+    }
+  }
+
+  it should "401 when parsable yet invalid jwt and oidc headers given" in {
+    val user = genWorkbenchUser.sample.get
+    val services = directives
+    val accessToken = OAuth2BearerToken(JwtSprayJson.encode("""{"foo": "bar"}"""))
+    val headers = List(
+      RawHeader(emailHeader, user.email.value),
+      RawHeader(googleSubjectIdHeader, user.googleSubjectId.get.value),
+      RawHeader(authorizationHeader, accessToken.toString())
+    )
+    Get("/").withHeaders(headers) ~>
+      handleExceptions(myExceptionHandler){services.requireCreateUser(x => complete(x.toString))} ~> check {
+      status shouldBe StatusCodes.Unauthorized
+    }
+  }
+
+  it should "use info from jwt instead of oidc headers" in {
+    val services = directives
+    val userGood = genWorkbenchUser.sample.get
+    val userBad = genWorkbenchUser.sample.get
+
+    val headers = List(
+      RawHeader(emailHeader, userBad.email.value),
+      RawHeader(googleSubjectIdHeader, userBad.googleSubjectId.get.value),
+      genAuthorizationHeader(Option(userGood.identityConcentratorId.get))
+    )
+
+    services.identityConcentratorService.map { icService =>
+      when(icService.getGoogleIdentities(genJwtBearerToken(userGood.identityConcentratorId))).thenReturn(IO.pure(Seq((userGood.googleSubjectId.get, userGood.email))))
+      when(icService.getGoogleIdentities(genJwtBearerToken(userBad.identityConcentratorId))).thenReturn(IO.pure(Seq((userBad.googleSubjectId.get, userBad.email))))
+    }
+
+    Get("/").withHeaders(headers) ~>
+      handleExceptions(myExceptionHandler){services.requireCreateUser(x => complete(x.copy(id = WorkbenchUserId("")).toString))} ~> check {
+      withClue(responseAs[String]) {
+        status shouldBe StatusCodes.OK
+      }
+      responseAs[String] shouldEqual CreateWorkbenchUser(WorkbenchUserId(""), userGood.googleSubjectId.get, userGood.email, userGood.identityConcentratorId).toString
+    }
+  }
+
+  it should "accept request with only jwt header" in {
+    val user = genWorkbenchUser.sample.get
+    val services = directives
+    val authHeader = genAuthorizationHeader(user.identityConcentratorId)
+
+    services.identityConcentratorService.map { icService =>
+      when(icService.getGoogleIdentities(genJwtBearerToken(user.identityConcentratorId))).thenReturn(IO.pure(Seq((user.googleSubjectId.get, user.email))))
+    }
+
+    Get("/").withHeaders(authHeader) ~>
+      handleExceptions(myExceptionHandler){services.requireCreateUser(x => complete(x.identityConcentratorId.toString))} ~> check {
+      withClue(responseAs[String]) {
+        status shouldBe StatusCodes.OK
+      }
+      responseAs[String] shouldEqual user.identityConcentratorId.toString
+    }
+  }
+
+  it should "fail if required headers are missing" in {
+    Get("/") ~> handleExceptions(myExceptionHandler){directives.requireCreateUser(x => complete(x.toString))} ~> check {
       rejection shouldBe MissingHeaderRejection(authorizationHeader)
     }
   }
