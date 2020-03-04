@@ -139,6 +139,40 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
     userInfo.copy(tokenExpiresIn = 0) shouldEqual UserInfo(OAuth2BearerToken(""), uid, email, 0)
   }
 
+  it should "update existing user with ic id" in {
+    val directoryDAO = new MockDirectoryDAO()
+    val googleSubjectId = GoogleSubjectId(genRandom(System.currentTimeMillis()))
+    val uid = genWorkbenchUserId(System.currentTimeMillis())
+    val identityConcentratorId = TestSupport.genIdentityConcentratorId()
+    val email = genNonPetEmail.sample.get
+
+    directoryDAO.createUser(WorkbenchUser(uid, Some(googleSubjectId), email, None)).unsafeRunSync()
+
+    val icService = mock[IdentityConcentratorService]
+    val bearerToken = OAuth2BearerToken("shhhh, secret")
+    when(icService.getGoogleIdentities(bearerToken)).thenReturn(IO.pure(Seq((googleSubjectId, email))))
+    getUserInfoFromJwt(validJwtJsObject(identityConcentratorId), bearerToken, directoryDAO, icService).unsafeRunSync()
+
+    directoryDAO.loadUser(uid).unsafeRunSync().flatMap(_.identityConcentratorId) shouldBe Some(identityConcentratorId)
+  }
+
+  it should "500 when user is linked to more than 1 google account" in {
+    val directoryDAO = new MockDirectoryDAO()
+    val identityConcentratorId = TestSupport.genIdentityConcentratorId()
+    val icService = mock[IdentityConcentratorService]
+    val bearerToken = OAuth2BearerToken("shhhh, secret")
+
+    when(icService.getGoogleIdentities(bearerToken)).thenReturn(IO.pure(Seq(
+      (GoogleSubjectId(genRandom(System.currentTimeMillis())), genNonPetEmail.sample.get),
+      (GoogleSubjectId(genRandom(System.currentTimeMillis())), genNonPetEmail.sample.get))))
+
+    val expectedError = intercept[WorkbenchExceptionWithErrorReport] {
+      getUserInfoFromJwt(validJwtJsObject(identityConcentratorId), bearerToken, directoryDAO, icService).unsafeRunSync()
+    }
+
+    expectedError.errorReport.statusCode shouldBe Some(StatusCodes.InternalServerError)
+  }
+
   private def validJwtJsObject(identityConcentratorId: IdentityConcentratorId) = JsObject(Map("sub" -> JsString(identityConcentratorId.value), "exp" -> JsNumber(Instant.now().getEpochSecond)))
 
   it should "404 for valid jwt but user does not exist in sam db" in {
@@ -150,6 +184,18 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
     }
     withClue(t.errorReport) {
       t.errorReport.statusCode shouldBe Some(StatusCodes.NotFound)
+    }
+  }
+
+  it should "500 for valid jwt but no linked accounts in ic" in {
+    val directoryDAO = new MockDirectoryDAO()
+    val t = intercept[WorkbenchExceptionWithErrorReport] {
+      val identityConcentratorService = mock[IdentityConcentratorService]
+      when(identityConcentratorService.getGoogleIdentities(any[OAuth2BearerToken])).thenReturn(IO.pure(Seq.empty))
+      getUserInfoFromJwt(validJwtJsObject(TestSupport.genIdentityConcentratorId()), OAuth2BearerToken(""), directoryDAO, identityConcentratorService).unsafeRunSync()
+    }
+    withClue(t.errorReport) {
+      t.errorReport.statusCode shouldBe Some(StatusCodes.InternalServerError)
     }
   }
 
@@ -169,7 +215,52 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
     t.errorReport.statusCode shouldBe Some(StatusCodes.Unauthorized)
   }
 
-  "StandardUserInfoDirectives.requireUserInfo" should "fail if expiresIn is in illegal format" in {
+  "newCreateWorkbenchUserFromJwt" should "create new CreateWorkbenchUser" in {
+    val googleSubjectId = GoogleSubjectId(genRandom(System.currentTimeMillis()))
+    val identityConcentratorId = TestSupport.genIdentityConcentratorId()
+    val email = genNonPetEmail.sample.get
+
+    val icService = mock[IdentityConcentratorService]
+    val bearerToken = OAuth2BearerToken("shhhh, secret")
+    when(icService.getGoogleIdentities(bearerToken)).thenReturn(IO.pure(Seq((googleSubjectId, email))))
+    val createUser = newCreateWorkbenchUserFromJwt(validJwtJsObject(identityConcentratorId), bearerToken, icService).unsafeRunSync()
+
+    createUser.identityConcentratorId shouldBe Some(identityConcentratorId)
+    createUser.googleSubjectId shouldBe googleSubjectId
+    createUser.email shouldBe email
+  }
+
+  it should "500 for 0 google accounts" in {
+    val identityConcentratorId = TestSupport.genIdentityConcentratorId()
+
+    val icService = mock[IdentityConcentratorService]
+    val bearerToken = OAuth2BearerToken("shhhh, secret")
+    when(icService.getGoogleIdentities(bearerToken)).thenReturn(IO.pure(Seq.empty))
+    val t = intercept[WorkbenchExceptionWithErrorReport] {
+      newCreateWorkbenchUserFromJwt(validJwtJsObject(identityConcentratorId), bearerToken, icService).unsafeRunSync()
+    }
+
+    t.errorReport.statusCode shouldBe Some(StatusCodes.InternalServerError)
+  }
+
+  it should "500 for more than 1 google account" in {
+    val identityConcentratorId = TestSupport.genIdentityConcentratorId()
+
+    val icService = mock[IdentityConcentratorService]
+    val bearerToken = OAuth2BearerToken("shhhh, secret")
+    when(icService.getGoogleIdentities(bearerToken)).thenReturn(IO.pure(Seq(
+      (GoogleSubjectId(genRandom(System.currentTimeMillis())), genNonPetEmail.sample.get),
+      (GoogleSubjectId(genRandom(System.currentTimeMillis())), genNonPetEmail.sample.get))))
+
+    val t = intercept[WorkbenchExceptionWithErrorReport] {
+      newCreateWorkbenchUserFromJwt(validJwtJsObject(identityConcentratorId), bearerToken, icService).unsafeRunSync()
+    }
+
+    t.errorReport.statusCode shouldBe Some(StatusCodes.InternalServerError)
+
+  }
+
+  "requireUserInfo" should "fail if expiresIn is in illegal format" in {
     forAll(genUserInfoHeadersWithInvalidExpiresIn){
       headers: List[RawHeader] =>
         Get("/").withHeaders(headers) ~> handleExceptions(myExceptionHandler){directives.requireUserInfo(x => complete(x.toString))} ~> check {
@@ -275,7 +366,7 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
     }
   }
 
-  "StandardUserInfoDirectives.requireCreateUser" should "accept request with oidc headers" in {
+  "requireCreateUser" should "accept request with oidc headers" in {
     val user = genWorkbenchUser.sample.get
     val services = directives
     val accessToken = OAuth2BearerToken("not jwt")
