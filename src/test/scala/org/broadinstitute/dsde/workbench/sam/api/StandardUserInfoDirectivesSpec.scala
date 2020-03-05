@@ -356,7 +356,9 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
     val headers = List(
       RawHeader(emailHeader, user.email.value),
       RawHeader(googleSubjectIdHeader, user.googleSubjectId.get.value),
-      RawHeader(authorizationHeader, accessToken.toString())
+      RawHeader(accessTokenHeader, accessToken.token),
+      RawHeader(authorizationHeader, accessToken.toString()),
+      RawHeader(expiresInHeader, (System.currentTimeMillis() + 1000).toString)
     )
     Get("/").withHeaders(headers) ~>
       handleExceptions(myExceptionHandler){services.requireCreateUser(x => complete(x.copy(id = WorkbenchUserId("")).toString))} ~> check {

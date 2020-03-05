@@ -41,7 +41,7 @@ trait StandardUserInfoDirectives extends UserInfoDirectives with LazyLogging {
     * @tparam T type this request returns
     * @return
     */
-  private def handleAuthHeaders[T](fromJwt: (JwtUserInfo, OAuth2BearerToken, IdentityConcentratorService) => Directive1[T], fromOIDC: => Directive1[T]): Directive1[T] =
+  private def handleAuthHeaders[T](fromJwt: (JwtUserInfo, OAuth2BearerToken, IdentityConcentratorService) => Directive1[T], fromOIDC: OIDCHeaders => Directive1[T]): Directive1[T] =
     (headerValueByName(authorizationHeader) &
       provide(identityConcentratorService)) tflatMap {
       // order of these cases is important: if the authorization header is a valid jwt we must ignore
@@ -59,34 +59,29 @@ trait StandardUserInfoDirectives extends UserInfoDirectives with LazyLogging {
 
       case _ =>
         // request coming through Apache proxy with OIDC headers
-        fromOIDC
+        (headerValueByName(accessTokenHeader).as(OAuth2BearerToken) &
+          headerValueByName(googleSubjectIdHeader).as(GoogleSubjectId) &
+          headerValueByName(expiresInHeader) &
+          headerValueByName(emailHeader).as(WorkbenchEmail)).as(OIDCHeaders).flatMap(fromOIDC)
     }
 
-  private def requireUserInfoFromJwt(jwtUserInfo: JwtUserInfo, bearerToken: OAuth2BearerToken, icService: IdentityConcentratorService): Directive1[UserInfo] = onSuccess {
-    getUserInfoFromJwt(jwtUserInfo, bearerToken, directoryDAO, icService).unsafeToFuture()
-  }
-
-  private def requireUserInfoFromOIDC: Directive1[UserInfo] =
-    (headerValueByName(accessTokenHeader) &
-      headerValueByName(googleSubjectIdHeader) &
-      headerValueByName(expiresInHeader) &
-      headerValueByName(emailHeader)) tflatMap {
-      case (token, googleSubjectId, expiresIn, email) =>
-        onSuccess {
-          getUserInfoFromOidcHeaders(directoryDAO, googleSubjectId, expiresIn, email, OAuth2BearerToken(token)).unsafeToFuture()
-        }
+  private def requireUserInfoFromJwt(jwtUserInfo: JwtUserInfo, bearerToken: OAuth2BearerToken, icService: IdentityConcentratorService): Directive1[UserInfo] =
+    onSuccess {
+      getUserInfoFromJwt(jwtUserInfo, bearerToken, directoryDAO, icService).unsafeToFuture()
     }
 
-  private def requireCreateUserInfoFromJwt(jwtUserInfo: JwtUserInfo, bearerToken: OAuth2BearerToken, icService: IdentityConcentratorService): Directive1[CreateWorkbenchUser] = onSuccess {
-    newCreateWorkbenchUserFromJwt(jwtUserInfo, bearerToken, icService).unsafeToFuture()
-  }
-
-  private def requireCreateUserInfoFromOIDC: Directive1[CreateWorkbenchUser] =
-    (headerValueByName(googleSubjectIdHeader) &
-      headerValueByName(emailHeader)) tflatMap {
-      case (googleSubjectId, email) =>
-        provide(CreateWorkbenchUser(genWorkbenchUserId(System.currentTimeMillis()), GoogleSubjectId(googleSubjectId), WorkbenchEmail(email), None))
+  private def requireUserInfoFromOIDC(oidcHeaders: OIDCHeaders): Directive1[UserInfo] =
+    onSuccess {
+      getUserInfoFromOidcHeaders(directoryDAO, oidcHeaders).unsafeToFuture()
     }
+
+  private def requireCreateUserInfoFromJwt(jwtUserInfo: JwtUserInfo, bearerToken: OAuth2BearerToken, icService: IdentityConcentratorService): Directive1[CreateWorkbenchUser] =
+    onSuccess {
+      newCreateWorkbenchUserFromJwt(jwtUserInfo, bearerToken, icService).unsafeToFuture()
+    }
+
+  private def requireCreateUserInfoFromOIDC(oidcHeaders: OIDCHeaders): Directive1[CreateWorkbenchUser] =
+    provide(CreateWorkbenchUser(genWorkbenchUserId(System.currentTimeMillis()), oidcHeaders.googleSubjectId, oidcHeaders.email, None))
 }
 
 object StandardUserInfoDirectives {
@@ -104,13 +99,10 @@ object StandardUserInfoDirectives {
 
   def getUserInfoFromOidcHeaders(
       directoryDAO: DirectoryDAO,
-      googleSubjectId: String,
-      expiresIn: String,
-      email: String,
-      bearerToken: OAuth2BearerToken): IO[UserInfo] =
-    Try(expiresIn.toLong).fold(
-      t => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"expiresIn $expiresIn can't be converted to Long because  of $t"))),
-      expiresInLong => getUserInfo(bearerToken, GoogleSubjectId(googleSubjectId), WorkbenchEmail(email), expiresInLong, directoryDAO)
+      oidcHeaders: OIDCHeaders): IO[UserInfo] =
+    Try(oidcHeaders.expiresIn.toLong).fold(
+      t => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"expiresIn ${oidcHeaders.expiresIn} can't be converted to Long because  of $t"))),
+      expiresInLong => getUserInfo(oidcHeaders.token, oidcHeaders.googleSubjectId, oidcHeaders.email, expiresInLong, directoryDAO)
     )
 
   def getUserInfo(
@@ -191,6 +183,8 @@ object StandardUserInfoDirectives {
 final case class CreateWorkbenchUser(id: WorkbenchUserId, googleSubjectId: GoogleSubjectId, email: WorkbenchEmail, identityConcentratorId: Option[IdentityConcentratorId])
 
 final case class JwtUserInfo(sub: IdentityConcentratorId, exp: Long)
+
+final case class OIDCHeaders(token: OAuth2BearerToken, googleSubjectId: GoogleSubjectId, expiresIn: String, email: WorkbenchEmail)
 
 object JwtAuthorizationHeader extends LazyLogging {
   /**
