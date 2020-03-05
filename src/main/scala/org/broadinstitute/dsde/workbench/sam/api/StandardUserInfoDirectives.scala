@@ -30,61 +30,62 @@ trait StandardUserInfoDirectives extends UserInfoDirectives with LazyLogging {
   implicit val executionContext: ExecutionContext
   val identityConcentratorService: Option[IdentityConcentratorService] = None
 
-  def requireUserInfo: Directive1[UserInfo] =
-    (optionalHeaderValueByName(accessTokenHeader) &
-      optionalHeaderValueByName(googleSubjectIdHeader) &
-      optionalHeaderValueByName(expiresInHeader) &
-      optionalHeaderValueByName(emailHeader) &
-      headerValueByName(authorizationHeader) &
-      provide(identityConcentratorService)
-    ) tflatMap {
+  def requireUserInfo: Directive1[UserInfo] = handleAuthHeaders(requireUserInfoFromJwt, requireUserInfoFromOIDC)
+  def requireCreateUser: Directive1[CreateWorkbenchUser] = handleAuthHeaders(requireCreateUserInfoFromJwt, requireCreateUserInfoFromOIDC)
+
+  /**
+    * Utility function that knows how to handle the request based on whether or not JWT is present.
+    *
+    * @param fromJwt function to call when jwt is present
+    * @param fromOIDC function to call when jwt is not present
+    * @tparam T type this request returns
+    * @return
+    */
+  private def handleAuthHeaders[T](fromJwt: (JwtUserInfo, OAuth2BearerToken, IdentityConcentratorService) => Directive1[T], fromOIDC: => Directive1[T]): Directive1[T] =
+    (headerValueByName(authorizationHeader) &
+      provide(identityConcentratorService)) tflatMap {
       // order of these cases is important: if the authorization header is a valid jwt we must ignore
       // any OIDC headers otherwise we may be vulnerable to a malicious user specifying a valid JWT
       // but different user information in the OIDC headers
-      case (_, _, _, _, JwtAuthorizationHeader((jwtJson, bearerToken)), Some(icService)) =>
-        onSuccess {
-          getUserInfoFromJwt(jwtJson, bearerToken, directoryDAO, icService).unsafeToFuture()
-        }
-      case (Some(token), Some(googleSubjectId), Some(expiresIn), Some(email), _, _) =>
-        // request coming through Apache proxy
-        onSuccess {
-          getUserInfoFromOidcHeaders(directoryDAO, googleSubjectId, expiresIn, email, OAuth2BearerToken(token)).unsafeToFuture()
-        }
+      case (JwtAuthorizationHeader(Success(jwtUserInfo), bearerToken), Some(icService)) =>
+        fromJwt(jwtUserInfo, bearerToken, icService)
 
-      case (_, _, _, _, _, None) =>
+      case (JwtAuthorizationHeader(Failure(regrets), _), _) =>
+        failWith(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Unauthorized, "could not parse authorization header, jwt missing required fields", regrets)))
+
+      case (JwtAuthorizationHeader(_, _), None) =>
         logger.error("requireUserInfo with JWT attempted but Identity Concentrator not configured")
         failWith(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.InternalServerError, "Identity Concentrator not configured")))
 
       case _ =>
-        failWith(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Unauthorized, "Missing OIDC headers or valid jwt")))
-
+        // request coming through Apache proxy with OIDC headers
+        fromOIDC
     }
 
-  def requireCreateUser: Directive1[CreateWorkbenchUser] =
-    (optionalHeaderValueByName(googleSubjectIdHeader) &
-      optionalHeaderValueByName(emailHeader) &
-      headerValueByName(authorizationHeader) &
-      provide(identityConcentratorService)
-    ) tflatMap {
-      // order of these cases is important: if the authorization header is a valid jwt we must ignore
-      // any OIDC headers otherwise we may be vulnerable to a malicious user specifying a valid JWT
-      // but different user information in the OIDC headers
-      case (_, _, JwtAuthorizationHeader((jwtJson, bearerToken)), Some(icService)) =>
-        // JWT issued by Identity Concentrator - already validated by proxy
+  private def requireUserInfoFromJwt(jwtUserInfo: JwtUserInfo, bearerToken: OAuth2BearerToken, icService: IdentityConcentratorService): Directive1[UserInfo] = onSuccess {
+    getUserInfoFromJwt(jwtUserInfo, bearerToken, directoryDAO, icService).unsafeToFuture()
+  }
+
+  private def requireUserInfoFromOIDC: Directive1[UserInfo] =
+    (headerValueByName(accessTokenHeader) &
+      headerValueByName(googleSubjectIdHeader) &
+      headerValueByName(expiresInHeader) &
+      headerValueByName(emailHeader)) tflatMap {
+      case (token, googleSubjectId, expiresIn, email) =>
         onSuccess {
-          newCreateWorkbenchUserFromJwt(jwtJson, bearerToken, icService).unsafeToFuture()
+          getUserInfoFromOidcHeaders(directoryDAO, googleSubjectId, expiresIn, email, OAuth2BearerToken(token)).unsafeToFuture()
         }
+    }
 
-      case (Some(googleSubjectId), Some(email), _, _) =>
-        // request coming through Apache proxy
+  private def requireCreateUserInfoFromJwt(jwtUserInfo: JwtUserInfo, bearerToken: OAuth2BearerToken, icService: IdentityConcentratorService): Directive1[CreateWorkbenchUser] = onSuccess {
+    newCreateWorkbenchUserFromJwt(jwtUserInfo, bearerToken, icService).unsafeToFuture()
+  }
+
+  private def requireCreateUserInfoFromOIDC: Directive1[CreateWorkbenchUser] =
+    (headerValueByName(googleSubjectIdHeader) &
+      headerValueByName(emailHeader)) tflatMap {
+      case (googleSubjectId, email) =>
         provide(CreateWorkbenchUser(genWorkbenchUserId(System.currentTimeMillis()), GoogleSubjectId(googleSubjectId), WorkbenchEmail(email), None))
-
-      case (_, _, _, None) =>
-        logger.error("requireCreateUser with JWT attempted but Identity Concentrator not configured")
-        failWith(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.InternalServerError, "Identity Concentrator not configured")))
-
-      case _ =>
-        failWith(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Unauthorized, "Missing OIDC headers or valid jwt")))
     }
 }
 
@@ -128,9 +129,8 @@ object StandardUserInfoDirectives {
       lookUpByGoogleSubjectId(googleSubjectId, directoryDAO).map(uid => UserInfo(token, uid, email, expiresIn))
     }
 
-  def getUserInfoFromJwt(jwtJson: JsObject, bearerToken: OAuth2BearerToken, directoryDAO: DirectoryDAO, identityConcentratorService: IdentityConcentratorService): IO[UserInfo] = {
+  def getUserInfoFromJwt(jwtUserInfo: JwtUserInfo, bearerToken: OAuth2BearerToken, directoryDAO: DirectoryDAO, identityConcentratorService: IdentityConcentratorService): IO[UserInfo] = {
     for {
-      jwtUserInfo <- parseJwtBearerToken(jwtJson)
       maybeUser <- loadUserMaybeUpdateIdentityConcentratorId(jwtUserInfo, bearerToken, directoryDAO, identityConcentratorService)
       user <- maybeUser match {
         case Some(user) => IO.pure(UserInfo(bearerToken, user.id, user.email, jwtUserInfo.exp - Instant.now().getEpochSecond))
@@ -169,14 +169,6 @@ object StandardUserInfoDirectives {
           ErrorReport(StatusCodes.InternalServerError, s"too many linked google identities for $identityConcentratorId: ${googleIdentities.mkString("'")}")))
     }
 
-  private def parseJwtBearerToken(jwtJson: JsObject): IO[JwtUserInfo] = {
-    for {
-      jwtUserInfo <- IO(jwtJson.convertTo[JwtUserInfo]).handleErrorWith {
-        case t: DeserializationException =>
-          IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Unauthorized, "could not parse authorization header, jwt missing required fields", t)))
-      }
-    } yield jwtUserInfo
-  }
   private def lookUpByGoogleSubjectId(googleSubjectId: GoogleSubjectId, directoryDAO: DirectoryDAO): IO[WorkbenchUserId] =
     for {
       subject <- directoryDAO.loadSubjectFromGoogleSubjectId(googleSubjectId)
@@ -189,9 +181,8 @@ object StandardUserInfoDirectives {
       }
     } yield userInfo
 
-  def newCreateWorkbenchUserFromJwt(jwtJson: JsObject, bearerToken: OAuth2BearerToken, icService: IdentityConcentratorService): IO[CreateWorkbenchUser] =
+  def newCreateWorkbenchUserFromJwt(jwtUserInfo: JwtUserInfo, bearerToken: OAuth2BearerToken, icService: IdentityConcentratorService): IO[CreateWorkbenchUser] =
     for {
-      jwtUserInfo <- parseJwtBearerToken(jwtJson)
       googleIdentities <- icService.getGoogleIdentities(bearerToken)
       (googleSubjectId, email) <- singleGoogleIdentity(jwtUserInfo.sub, googleIdentities)
     } yield CreateWorkbenchUser(genWorkbenchUserId(System.currentTimeMillis()), googleSubjectId, email, Option(jwtUserInfo.sub))
@@ -203,17 +194,20 @@ final case class JwtUserInfo(sub: IdentityConcentratorId, exp: Long)
 
 object JwtAuthorizationHeader extends LazyLogging {
   /**
-    * Pattern matcher for JWT authorization header.
+    * Pattern matcher for JWT authorization header. Expected cases:
+    * - not a jwt or bearer token: return None
+    * - is a jwt but missing required fields: return Some(Failure, OAuth2BearerToken)
+    * - is a jwt that is parsable to JwtUserInfo: return Some(Success(JwtUserInfo), OAuth2BearerToken)
     *
     * @param authorizationHeader unprocessed value of the Authorization http header
     * @return None if the header is not a bearer token or is not a parsable JWT.
-    * Otherwise it will extract the parsed json of the JWT payload and an OAuth2BearerToken.
+    * Otherwise it will Try to parse the JWT payload to a JwtUserInfo and an OAuth2BearerToken.
     */
-  def unapply(authorizationHeader: String): Option[(JsObject, OAuth2BearerToken)] = {
+  def unapply(authorizationHeader: String): Option[(Try[JwtUserInfo], OAuth2BearerToken)] = {
     for {
       bearerToken <- getBearerTokenFromAuthHeader(authorizationHeader)
-      json <- parseJwtBearerToken(bearerToken)
-    } yield (json, bearerToken)
+      jwtJson <- parseJwtBearerToken(bearerToken)
+    } yield (Try(jwtJson.convertTo[JwtUserInfo]), bearerToken)
   }
 
   private def getBearerTokenFromAuthHeader(authorizationHeader: String): Option[OAuth2BearerToken] = {

@@ -75,10 +75,10 @@ class IdentityConcentratorServiceSpec extends FlatSpec with Matchers {
     service.getGoogleIdentities(OAuth2BearerToken("foo")).unsafeRunSync() should be(empty)
   }
 
-  "getLinkedAccountsFromVisaJwt" should "fail for invalid claim jwt" in {
+  "getLinkedIdentitiesFromVisaJwt" should "fail for invalid claim jwt" in {
     val service = new IdentityConcentratorService(new TestICApi(UserInfo(None)))
 
-    service.getLinkedAccountsFromVisaJwt("not a jwt") match {
+    service.getLinkedIdentitiesFromVisaJwt("not a jwt") match {
       case Left(errorReport) => errorReport.message shouldEqual "jwt not parsable"
       case Right(_) => fail("expected jwt not parsable error")
     }
@@ -88,7 +88,7 @@ class IdentityConcentratorServiceSpec extends FlatSpec with Matchers {
     val jwt = JwtCirce.encode(s"""{"ga4gh_visa_v1":{}}""")
 
     val service = new IdentityConcentratorService(new TestICApi(UserInfo(None)))
-    service.getLinkedAccountsFromVisaJwt(jwt) match {
+    service.getLinkedIdentitiesFromVisaJwt(jwt) match {
       case Left(errorReport) => errorReport.message shouldEqual "visa not parsable"
       case Right(_) => fail("expected visa not parsable error")
     }

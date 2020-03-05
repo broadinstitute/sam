@@ -19,10 +19,18 @@ object IdentityConcentratorModel {
   implicit val openIdConfigurationEntityDecoder: EntityDecoder[IO, OpenIdConfiguration] = jsonOf[IO, OpenIdConfiguration]
   implicit val userInfoEntityDecoder: EntityDecoder[IO, UserInfo] = jsonOf[IO, UserInfo]
 
+  // see https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
   final case class OpenIdConfiguration(userinfo_endpoint: Uri)
-  final case class UserInfo(ga4gh_passport_v1: Option[Seq[String]])
-  final case class Visa(`type`: String, value: String)
-  final case class VisaEnvelope(ga4gh_visa_v1: Visa)
-  final case class LinkedAccount(subject: String, issuer: String)
 
+  // see https://github.com/ga4gh-duri/ga4gh-duri.github.io/blob/master/researcher_ids/ga4gh_passport_v1.md#passport-claim
+  final case class UserInfo(ga4gh_passport_v1: Option[Seq[String]])
+
+  // see https://github.com/ga4gh-duri/ga4gh-duri.github.io/blob/master/researcher_ids/ga4gh_passport_v1.md#passport-visa-fields
+  final case class Visa(`type`: String, value: String)
+
+  // see https://github.com/ga4gh-duri/ga4gh-duri.github.io/blob/master/researcher_ids/ga4gh_passport_v1.md#passport-claim
+  final case class VisaEnvelope(ga4gh_visa_v1: Visa)
+
+  // see https://github.com/ga4gh-duri/ga4gh-duri.github.io/blob/master/researcher_ids/ga4gh_passport_v1.md#linkedidentities
+  final case class LinkedIdentity(subject: String, issuer: String)
 }

@@ -10,6 +10,11 @@ import org.http4s.client.Client
 import org.http4s.client.dsl.io._
 import org.http4s.headers.{Accept, Authorization}
 
+/**
+  * Trait encompassing the raw requests to Identity Concentrator. Implementations should be concerned only with
+  * marshalling a request, performing that request and unmarshalling the response. Any other logic should be within
+  * IdentityConcentratorService. This model allows for easy unit testing.
+  */
 trait IdentityConcentratorApi {
   def getUserInfo(accessToken: OAuth2BearerToken): IO[UserInfo]
 }

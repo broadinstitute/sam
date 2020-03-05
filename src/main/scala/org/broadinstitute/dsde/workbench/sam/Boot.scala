@@ -327,7 +327,9 @@ object Boot extends IOApp with LazyLogging {
         AppDependencies(routes, samApplication, cloudExtensionsInitializer, directoryDAO, accessPolicyDAO, policyEvaluatorService)
       case _ =>
         val routes = new SamRoutes(resourceService, userService, statusService, managedGroupService, config.swaggerConfig, directoryDAO, policyEvaluatorService, config.liquibaseConfig)
-        with StandardUserInfoDirectives with NoExtensionRoutes
+        with StandardUserInfoDirectives with NoExtensionRoutes {
+          override val identityConcentratorService = identityConcentrator
+        }
         AppDependencies(routes, samApplication, NoExtensionsInitializer, directoryDAO, accessPolicyDAO, policyEvaluatorService)
     }
   }

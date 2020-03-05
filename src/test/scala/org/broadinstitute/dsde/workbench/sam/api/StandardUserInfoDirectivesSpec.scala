@@ -22,7 +22,6 @@ import org.broadinstitute.dsde.workbench.sam.service.CloudExtensions
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
 import org.scalatest.FlatSpec
 import pdi.jwt.JwtSprayJson
-import spray.json.{JsNumber, JsObject, JsString}
 import org.mockito.ArgumentMatchers._
 import org.mockito.Mockito._
 import org.scalatest.mockito.MockitoSugar
@@ -133,7 +132,7 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
     val identityConcentratorId = TestSupport.genIdentityConcentratorId()
     val email = genNonPetEmail.sample.get
     directoryDAO.createUser(WorkbenchUser(uid, Some(googleSubjectId), email, Option(identityConcentratorId))).unsafeRunSync()
-    val userInfo = getUserInfoFromJwt(validJwtJsObject(identityConcentratorId), OAuth2BearerToken(""), directoryDAO, mock[IdentityConcentratorService]).unsafeRunSync()
+    val userInfo = getUserInfoFromJwt(validJwtUserInfo(identityConcentratorId), OAuth2BearerToken(""), directoryDAO, mock[IdentityConcentratorService]).unsafeRunSync()
     assert(userInfo.tokenExpiresIn <= 0)
     assert(userInfo.tokenExpiresIn > -30)
     userInfo.copy(tokenExpiresIn = 0) shouldEqual UserInfo(OAuth2BearerToken(""), uid, email, 0)
@@ -151,7 +150,7 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
     val icService = mock[IdentityConcentratorService]
     val bearerToken = OAuth2BearerToken("shhhh, secret")
     when(icService.getGoogleIdentities(bearerToken)).thenReturn(IO.pure(Seq((googleSubjectId, email))))
-    getUserInfoFromJwt(validJwtJsObject(identityConcentratorId), bearerToken, directoryDAO, icService).unsafeRunSync()
+    getUserInfoFromJwt(validJwtUserInfo(identityConcentratorId), bearerToken, directoryDAO, icService).unsafeRunSync()
 
     directoryDAO.loadUser(uid).unsafeRunSync().flatMap(_.identityConcentratorId) shouldBe Some(identityConcentratorId)
   }
@@ -167,20 +166,20 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
       (GoogleSubjectId(genRandom(System.currentTimeMillis())), genNonPetEmail.sample.get))))
 
     val expectedError = intercept[WorkbenchExceptionWithErrorReport] {
-      getUserInfoFromJwt(validJwtJsObject(identityConcentratorId), bearerToken, directoryDAO, icService).unsafeRunSync()
+      getUserInfoFromJwt(validJwtUserInfo(identityConcentratorId), bearerToken, directoryDAO, icService).unsafeRunSync()
     }
 
     expectedError.errorReport.statusCode shouldBe Some(StatusCodes.InternalServerError)
   }
 
-  private def validJwtJsObject(identityConcentratorId: IdentityConcentratorId) = JsObject(Map("sub" -> JsString(identityConcentratorId.value), "exp" -> JsNumber(Instant.now().getEpochSecond)))
+  private def validJwtUserInfo(identityConcentratorId: IdentityConcentratorId) = JwtUserInfo(identityConcentratorId, Instant.now().getEpochSecond)
 
   it should "404 for valid jwt but user does not exist in sam db" in {
     val directoryDAO = new MockDirectoryDAO()
     val t = intercept[WorkbenchExceptionWithErrorReport] {
       val identityConcentratorService = mock[IdentityConcentratorService]
       when(identityConcentratorService.getGoogleIdentities(any[OAuth2BearerToken])).thenReturn(IO.pure(Seq((GoogleSubjectId(""), WorkbenchEmail("")))))
-      getUserInfoFromJwt(validJwtJsObject(TestSupport.genIdentityConcentratorId()), OAuth2BearerToken(""), directoryDAO, identityConcentratorService).unsafeRunSync()
+      getUserInfoFromJwt(validJwtUserInfo(TestSupport.genIdentityConcentratorId()), OAuth2BearerToken(""), directoryDAO, identityConcentratorService).unsafeRunSync()
     }
     withClue(t.errorReport) {
       t.errorReport.statusCode shouldBe Some(StatusCodes.NotFound)
@@ -192,27 +191,11 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
     val t = intercept[WorkbenchExceptionWithErrorReport] {
       val identityConcentratorService = mock[IdentityConcentratorService]
       when(identityConcentratorService.getGoogleIdentities(any[OAuth2BearerToken])).thenReturn(IO.pure(Seq.empty))
-      getUserInfoFromJwt(validJwtJsObject(TestSupport.genIdentityConcentratorId()), OAuth2BearerToken(""), directoryDAO, identityConcentratorService).unsafeRunSync()
+      getUserInfoFromJwt(validJwtUserInfo(TestSupport.genIdentityConcentratorId()), OAuth2BearerToken(""), directoryDAO, identityConcentratorService).unsafeRunSync()
     }
     withClue(t.errorReport) {
       t.errorReport.statusCode shouldBe Some(StatusCodes.InternalServerError)
     }
-  }
-
-  it should "401 with no exp" in {
-    val directoryDAO = new MockDirectoryDAO()
-    val t = intercept[WorkbenchExceptionWithErrorReport] {
-      getUserInfoFromJwt(JsObject(Map("sub" -> JsString("foo"))), OAuth2BearerToken(""), directoryDAO, mock[IdentityConcentratorService]).unsafeRunSync()
-    }
-    t.errorReport.statusCode shouldBe Some(StatusCodes.Unauthorized)
-  }
-
-  it should "401 with no sub" in {
-    val directoryDAO = new MockDirectoryDAO()
-    val t = intercept[WorkbenchExceptionWithErrorReport] {
-      getUserInfoFromJwt(JsObject(Map("exp" -> JsNumber(0))), OAuth2BearerToken(""), directoryDAO, mock[IdentityConcentratorService]).unsafeRunSync()
-    }
-    t.errorReport.statusCode shouldBe Some(StatusCodes.Unauthorized)
   }
 
   "newCreateWorkbenchUserFromJwt" should "create new CreateWorkbenchUser" in {
@@ -223,7 +206,7 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
     val icService = mock[IdentityConcentratorService]
     val bearerToken = OAuth2BearerToken("shhhh, secret")
     when(icService.getGoogleIdentities(bearerToken)).thenReturn(IO.pure(Seq((googleSubjectId, email))))
-    val createUser = newCreateWorkbenchUserFromJwt(validJwtJsObject(identityConcentratorId), bearerToken, icService).unsafeRunSync()
+    val createUser = newCreateWorkbenchUserFromJwt(validJwtUserInfo(identityConcentratorId), bearerToken, icService).unsafeRunSync()
 
     createUser.identityConcentratorId shouldBe Some(identityConcentratorId)
     createUser.googleSubjectId shouldBe googleSubjectId
@@ -237,7 +220,7 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
     val bearerToken = OAuth2BearerToken("shhhh, secret")
     when(icService.getGoogleIdentities(bearerToken)).thenReturn(IO.pure(Seq.empty))
     val t = intercept[WorkbenchExceptionWithErrorReport] {
-      newCreateWorkbenchUserFromJwt(validJwtJsObject(identityConcentratorId), bearerToken, icService).unsafeRunSync()
+      newCreateWorkbenchUserFromJwt(validJwtUserInfo(identityConcentratorId), bearerToken, icService).unsafeRunSync()
     }
 
     t.errorReport.statusCode shouldBe Some(StatusCodes.InternalServerError)
@@ -253,7 +236,7 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
       (GoogleSubjectId(genRandom(System.currentTimeMillis())), genNonPetEmail.sample.get))))
 
     val t = intercept[WorkbenchExceptionWithErrorReport] {
-      newCreateWorkbenchUserFromJwt(validJwtJsObject(identityConcentratorId), bearerToken, icService).unsafeRunSync()
+      newCreateWorkbenchUserFromJwt(validJwtUserInfo(identityConcentratorId), bearerToken, icService).unsafeRunSync()
     }
 
     t.errorReport.statusCode shouldBe Some(StatusCodes.InternalServerError)
@@ -290,7 +273,7 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
     }
   }
 
-  it should "401 when not jwt but no oidc headers given" in {
+  it should "MissingHeaderRejection when not jwt but no oidc headers given" in {
     val services = directives
     val accessToken = OAuth2BearerToken("not jwt")
     val headers = List(
@@ -299,7 +282,7 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
 
     Get("/").withHeaders(headers) ~>
       handleExceptions(myExceptionHandler){services.requireUserInfo(x => complete(x.copy(tokenExpiresIn = 0).toString))} ~> check {
-      status shouldBe StatusCodes.Unauthorized
+      assert(rejection.isInstanceOf[MissingHeaderRejection])
     }
   }
 
@@ -382,7 +365,7 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
     }
   }
 
-  it should "401 when not jwt but no oidc headers given" in {
+  it should "MissingHeaderRejection when not jwt but no oidc headers given" in {
     val services = directives
     val accessToken = OAuth2BearerToken("not jwt")
     val headers = List(
@@ -391,7 +374,7 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
 
     Get("/").withHeaders(headers) ~>
       handleExceptions(myExceptionHandler){services.requireCreateUser(x => complete(x.toString))} ~> check {
-      status shouldBe StatusCodes.Unauthorized
+      assert(rejection.isInstanceOf[MissingHeaderRejection])
     }
   }
 
