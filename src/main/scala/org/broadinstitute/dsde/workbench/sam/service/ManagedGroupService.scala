@@ -1,7 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.service
 
 import akka.http.scaladsl.model.StatusCodes
-import cats.effect.IO
+import cats.effect.{ContextShift, IO}
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam._
@@ -23,7 +23,7 @@ class ManagedGroupService(
     private val accessPolicyDAO: AccessPolicyDAO,
     private val directoryDAO: DirectoryDAO,
     private val cloudExtensions: CloudExtensions,
-    private val emailDomain: String)
+    private val emailDomain: String)(implicit contextShift: ContextShift[IO])
     extends LazyLogging {
 
   def managedGroupType: ResourceType =

@@ -344,7 +344,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val defaultUserEmail = WorkbenchEmail("newuser@new.com")
     val defaultUserProxyEmail = WorkbenchEmail(s"PROXY_newuser123@${googleServicesConfig.appsDomain}")
 
-    val defaultUser = CreateWorkbenchUser(defaultUserId, GoogleSubjectId(defaultUserId.value), defaultUserEmail)
+    val defaultUser = CreateWorkbenchUser(defaultUserId, GoogleSubjectId(defaultUserId.value), defaultUserEmail, None)
     (dirDAO, regDAO, mockGoogleIamDAO, mockGoogleDirectoryDAO, googleExtensions, service, defaultUserId, defaultUserEmail, defaultUserProxyEmail, defaultUser)
   }
 
@@ -758,7 +758,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
 
     val defaultUserId = WorkbenchUserId("newuser")
     val defaultUserEmail = WorkbenchEmail("newuser@new.com")
-    val createDefaultUser = CreateWorkbenchUser(defaultUserId, GoogleSubjectId(defaultUserId.value), defaultUserEmail)
+    val createDefaultUser = CreateWorkbenchUser(defaultUserId, GoogleSubjectId(defaultUserId.value), defaultUserEmail, None)
     val defaultUser = WorkbenchUser(defaultUserId, None, defaultUserEmail, None)
 
     // create a user
@@ -806,11 +806,9 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
 
     //remove the key we just created behind the scenes
     val removedKeyObjects = (for {
-      keyObjects <- googleExtensions.googleKeyCache.googleStorageAlg.listObjectsWithPrefix(googleExtensions.googleServicesConfig.googleKeyCacheConfig.bucketName, googleExtensions.googleKeyCache.keyNamePrefix(googleProject, petServiceAccount.serviceAccount.email)).map(List(_)).compile.foldMonoid
-      _ <- keyObjects.parTraverse { keyObject =>
-        googleExtensions.googleKeyCache.googleStorageAlg.removeObject(googleExtensions.googleServicesConfig.googleKeyCacheConfig.bucketName, GcsBlobName(keyObject.value))
-      }
-    } yield (keyObjects)).unsafeRunSync()
+      keyObject <- googleExtensions.googleKeyCache.googleStorageAlg.listObjectsWithPrefix(googleExtensions.googleServicesConfig.googleKeyCacheConfig.bucketName, googleExtensions.googleKeyCache.keyNamePrefix(googleProject, petServiceAccount.serviceAccount.email))
+      _ <- googleExtensions.googleKeyCache.googleStorageAlg.removeObject(googleExtensions.googleServicesConfig.googleKeyCacheConfig.bucketName, GcsBlobName(keyObject.value))
+    } yield keyObject).compile.toList.unsafeRunSync()
 
     // assert that keys still exist on service account
     assert(removedKeyObjects.forall { removed =>

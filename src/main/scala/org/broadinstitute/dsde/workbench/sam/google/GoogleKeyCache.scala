@@ -52,10 +52,10 @@ class GoogleKeyCache(
       ))
 
     googleStorageAlg
-      .createBucket(googleServicesConfig.serviceAccountClientProject, googleServicesConfig.googleKeyCacheConfig.bucketName, List.empty)
+      .insertBucket(googleServicesConfig.serviceAccountClientProject, googleServicesConfig.googleKeyCacheConfig.bucketName)
       .recoverWith {
         case t: StorageException if t.getCode == 409 && t.getMessage.contains("You already own this bucket") =>
-          IO(logger.info(t.getMessage))
+          fs2.Stream(logger.info(t.getMessage))
       } flatMap { _ =>
       val lifecycleCondition = BucketInfo.LifecycleRule.LifecycleCondition
         .newBuilder()
@@ -64,7 +64,7 @@ class GoogleKeyCache(
       val lifecycleRule = new LifecycleRule(LifecycleRule.LifecycleAction.newDeleteAction(), lifecycleCondition)
       googleStorageAlg.setBucketLifecycle(googleServicesConfig.googleKeyCacheConfig.bucketName, List(lifecycleRule))
     }
-  }
+  }.compile.drain
 
   override def getKey(pet: PetServiceAccount): IO[String] = {
     def maybeCreateKey(createKey: (List[GcsObjectName], List[ServiceAccountKey]) => IO[String]): IO[String] = {
@@ -105,7 +105,7 @@ class GoogleKeyCache(
       mostRecentKey <- maybeMostRecentKey match {
         case Some(mostRecentKey) if isKeyActive(mostRecentKey, keysFromIam) =>
           googleStorageAlg
-            .unsafeGetObject(googleServicesConfig.googleKeyCacheConfig.bucketName, GcsBlobName(mostRecentKey.value))
+            .unsafeGetBlobBody(googleServicesConfig.googleKeyCacheConfig.bucketName, GcsBlobName(mostRecentKey.value))
 
         case _ => IO.pure(None)
       }
@@ -114,7 +114,7 @@ class GoogleKeyCache(
 
   override def removeKey(pet: PetServiceAccount, keyId: ServiceAccountKeyId): IO[Unit] =
     for {
-      _ <- googleStorageAlg.removeObject(googleServicesConfig.googleKeyCacheConfig.bucketName, keyNameFull(pet.id.project, pet.serviceAccount.email, keyId))
+      _ <- googleStorageAlg.removeObject(googleServicesConfig.googleKeyCacheConfig.bucketName, keyNameFull(pet.id.project, pet.serviceAccount.email, keyId)).compile.drain
       _ <- IO.fromFuture(IO(googleIamDAO.removeServiceAccountKey(pet.id.project, pet.serviceAccount.email, keyId)))
     } yield ()
 
@@ -130,12 +130,12 @@ class GoogleKeyCache(
           throw new WorkbenchException("You have reached the 10 key limit on service accounts. Please remove one to create another.")
       }
       decodedKey <- IO.fromEither(key.privateKeyData.decode.toRight(new WorkbenchException("Failed to decode retrieved key")))
-      _ <- googleStorageAlg.storeObject(
+      _ <- googleStorageAlg.createBlob(
         googleServicesConfig.googleKeyCacheConfig.bucketName,
         keyNameFull(pet.id.project, pet.serviceAccount.email, key.id),
         decodedKey.getBytes(utf8Charset),
         "text/plain"
-      )
+      ).compile.drain
     } yield decodedKey
 
   private def isKeyActive(mostRecentKey: GcsObjectName, serviceAccountKeys: List[ServiceAccountKey]): Boolean = {

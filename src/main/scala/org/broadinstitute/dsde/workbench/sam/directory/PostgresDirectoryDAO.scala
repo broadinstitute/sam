@@ -484,6 +484,13 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     }
   }
 
+  override def setUserIdentityConcentratorId(googleSubjectId: GoogleSubjectId, icId: IdentityConcentratorId): IO[Int] = {
+    runInTransaction { implicit session =>
+      val u = UserTable.column
+      samsql"update ${UserTable.table} set ${u.identityConcentratorId} = $icId where ${u.googleSubjectId} = $googleSubjectId".update().apply()
+    }
+  }
+
   override def loadUsers(userIds: Set[WorkbenchUserId]): IO[Stream[WorkbenchUser]] = {
     if(userIds.nonEmpty) {
       runInTransaction { implicit session =>

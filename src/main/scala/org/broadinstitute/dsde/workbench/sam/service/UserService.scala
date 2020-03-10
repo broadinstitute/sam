@@ -4,7 +4,7 @@ package service
 import java.security.SecureRandom
 
 import akka.http.scaladsl.model.StatusCodes
-import cats.effect.IO
+import cats.effect.{ContextShift, IO}
 import javax.naming.NameNotFoundException
 import com.typesafe.scalalogging.LazyLogging
 import io.opencensus.trace.Span
@@ -21,7 +21,7 @@ import scala.util.matching.Regex
 /**
   * Created by dvoet on 7/14/17.
   */
-class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExtensions, val registrationDAO: RegistrationDAO)(implicit val executionContext: ExecutionContext) extends LazyLogging {
+class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExtensions, val registrationDAO: RegistrationDAO)(implicit val executionContext: ExecutionContext, contextShift: ContextShift[IO]) extends LazyLogging {
 
   def createUser(user: CreateWorkbenchUser, parentSpan: Span = null): Future[UserStatus] = {
     for {
