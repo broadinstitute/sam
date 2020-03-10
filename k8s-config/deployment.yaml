@@ -5,6 +5,7 @@ metadata:
   labels:
     version: v1
 spec:
+  # TODO consider changing the replicas number or always overlaying it for different environments.
   replicas: 1
   template:
     metadata:
