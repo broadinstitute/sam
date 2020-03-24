@@ -19,7 +19,6 @@ secretGenerator:
       - sam-account.pem=rendered/sam-account.pem
       - sam-account.json=rendered/sam-account.json
       - sam-firestore-account.json=rendered/sam-firestore-account.json
-      - billing-account.pem=rendered/billing-account.pem
   - name: sqlproxy-sa-creds
     files:
       - sqlproxy-service-account.json
