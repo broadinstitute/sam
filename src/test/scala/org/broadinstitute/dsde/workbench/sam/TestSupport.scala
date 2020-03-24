@@ -5,7 +5,7 @@ import java.time.Instant
 import java.util.concurrent.Executors
 
 import akka.actor.ActorSystem
-import akka.http.scaladsl.model.headers.RawHeader
+import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import akka.stream.Materializer
 import cats.effect.IO
 import cats.kernel.Eq
@@ -19,7 +19,6 @@ import org.broadinstitute.dsde.workbench.google2.util.DistributedLock
 import org.broadinstitute.dsde.workbench.google2.{CollectionName, Document, GoogleFirestoreService}
 import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleIamDAO}
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.api.StandardUserInfoDirectives._
 import org.broadinstitute.dsde.workbench.sam.api._
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig._
 import org.broadinstitute.dsde.workbench.sam.config._
@@ -80,13 +79,8 @@ object TestSupport extends TestSupport {
 
   val fakeDistributedLock = DistributedLock[IO]("", appConfig.distributedLockConfig, FakeGoogleFirestore)
   def proxyEmail(workbenchUserId: WorkbenchUserId) = WorkbenchEmail(s"PROXY_$workbenchUserId@${googleServicesConfig.appsDomain}")
-  def googleSubjectIdHeaderWithId(googleSubjectId: GoogleSubjectId) = RawHeader(googleSubjectIdHeader, googleSubjectId.value)
   def genGoogleSubjectId(): GoogleSubjectId = GoogleSubjectId(genRandom(System.currentTimeMillis()))
   def genIdentityConcentratorId(): IdentityConcentratorId = IdentityConcentratorId(genRandom(System.currentTimeMillis()))
-
-  def genGoogleSubjectIdHeader = RawHeader(googleSubjectIdHeader, genRandom(System.currentTimeMillis()))
-  val defaultEmailHeader = RawHeader(emailHeader, defaultUserEmail.value)
-  def genDefaultEmailHeader(workbenchEmail: WorkbenchEmail) = RawHeader(emailHeader, workbenchEmail.value)
 
   def genSamDependencies(resourceTypes: Map[ResourceTypeName, ResourceType] = Map.empty, googIamDAO: Option[GoogleIamDAO] = None, googleServicesConfig: GoogleServicesConfig = googleServicesConfig, cloudExtensions: Option[CloudExtensions] = None, googleDirectoryDAO: Option[GoogleDirectoryDAO] = None, policyAccessDAO: Option[AccessPolicyDAO] = None)(implicit system: ActorSystem) = {
     val googleDirectoryDAO = new MockGoogleDirectoryDAO()
@@ -122,8 +116,8 @@ object TestSupport extends TestSupport {
     SamDependencies(mockResourceService, policyEvaluatorService, new UserService(directoryDAO, googleExt, registrationDAO), new StatusService(directoryDAO, googleExt, dbRef), mockManagedGroupService, directoryDAO, policyDAO, googleExt)
   }
 
-  def genSamRoutes(samDependencies: SamDependencies)(implicit system: ActorSystem, materializer: Materializer): SamRoutes = new SamRoutes(samDependencies.resourceService, samDependencies.userService, samDependencies.statusService, samDependencies.managedGroupService, null, samDependencies.directoryDAO, samDependencies.policyEvaluatorService, LiquibaseConfig("", false))
-    with StandardUserInfoDirectives
+  def genSamRoutes(samDependencies: SamDependencies, uInfo: UserInfo)(implicit system: ActorSystem, materializer: Materializer): SamRoutes = new SamRoutes(samDependencies.resourceService, samDependencies.userService, samDependencies.statusService, samDependencies.managedGroupService, null, samDependencies.directoryDAO, samDependencies.policyEvaluatorService, LiquibaseConfig("", false))
+    with MockUserInfoDirectives
     with GoogleExtensionRoutes {
       override val cloudExtensions: CloudExtensions = samDependencies.cloudExtensions
       override val googleExtensions: GoogleExtensions = if(samDependencies.cloudExtensions.isInstanceOf[GoogleExtensions]) samDependencies.cloudExtensions.asInstanceOf[GoogleExtensions] else null
@@ -133,9 +127,11 @@ object TestSupport extends TestSupport {
         } else null
       }
       val googleKeyCache = if(samDependencies.cloudExtensions.isInstanceOf[GoogleExtensions])samDependencies.cloudExtensions.asInstanceOf[GoogleExtensions].googleKeyCache else null
+      override val userInfo: UserInfo = uInfo
+      override val createWorkbenchUser: Option[CreateWorkbenchUser] = Option(CreateWorkbenchUser(uInfo.userId, GoogleSubjectId(uInfo.userId.value), uInfo.userEmail, Option(IdentityConcentratorId(uInfo.userId.value))))
   }
 
-  def genSamRoutesWithDefault(implicit system: ActorSystem, materializer: Materializer): SamRoutes = genSamRoutes(genSamDependencies())
+  def genSamRoutesWithDefault(implicit system: ActorSystem, materializer: Materializer): SamRoutes = genSamRoutes(genSamDependencies(), UserInfo(OAuth2BearerToken(""), genWorkbenchUserId(System.currentTimeMillis()), defaultUserEmail, 3600))
 
   lazy val dbRef = DbReference.init(config.as[LiquibaseConfig]("liquibase"), DatabaseNames.Foreground)
 

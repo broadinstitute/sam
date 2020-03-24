@@ -25,7 +25,8 @@ final case class AppConfig(
     swaggerConfig: SwaggerConfig,
     googleConfig: Option[GoogleConfig],
     resourceTypes: Set[ResourceType],
-    liquibaseConfig: LiquibaseConfig)
+    liquibaseConfig: LiquibaseConfig,
+    identityConcentratorConfig: Option[IdentityConcentratorConfig])
 
 object AppConfig {
   implicit val swaggerReader: ValueReader[SwaggerConfig] = ValueReader.relative { config =>
@@ -150,6 +151,13 @@ object AppConfig {
     )
   }
 
+  implicit val identityConcentratorConfigReader: ValueReader[IdentityConcentratorConfig] = ValueReader.relative { config =>
+    IdentityConcentratorConfig(
+      config.getString("baseUrl"),
+      config.getInt("threadPoolSize")
+    )
+  }
+
   implicit val liquibaseConfigReader: ValueReader[LiquibaseConfig] = ValueReader.relative { config =>
     LiquibaseConfig(config.getString("changelog"), config.getBoolean("initWithLiquibase"))
   }
@@ -169,7 +177,8 @@ object AppConfig {
     val emailDomain = config.as[Option[String]]("emailDomain").getOrElse(config.getString("googleServices.appsDomain"))
     val resourceTypes = config.as[Map[String, ResourceType]]("resourceTypes").values.toSet
     val liquibaseConfig = config.as[LiquibaseConfig]("liquibase")
+    val identityConcentratorConfig = config.as[Option[IdentityConcentratorConfig]]("identityConcentrator")
 
-    AppConfig(emailDomain, directoryConfig, schemaLockConfig, distributedLockConfig, swaggerConfig, googleConfigOption, resourceTypes, liquibaseConfig)
+    AppConfig(emailDomain, directoryConfig, schemaLockConfig, distributedLockConfig, swaggerConfig, googleConfigOption, resourceTypes, liquibaseConfig, identityConcentratorConfig)
   }
 }

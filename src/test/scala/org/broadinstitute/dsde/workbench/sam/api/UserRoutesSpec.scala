@@ -3,18 +3,16 @@ package api
 
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import akka.http.scaladsl.model.StatusCodes
-import akka.http.scaladsl.model.headers.{OAuth2BearerToken, RawHeader}
+import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import akka.http.scaladsl.testkit.ScalatestRouteTest
 import org.broadinstitute.dsde.workbench.google.GoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.google.mock.MockGoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.model.google.{ServiceAccount, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.sam.TestSupport.{genSamDependencies, genSamRoutes}
-import org.broadinstitute.dsde.workbench.sam.api.StandardUserInfoDirectives._
 import org.broadinstitute.dsde.workbench.sam.directory.MockDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.service.UserService.genRandom
+import org.broadinstitute.dsde.workbench.sam.service.UserService.genWorkbenchUserId
 import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, NoExtensions, StatusService, UserService}
 import org.scalatest.mockito.MockitoSugar
 import org.scalatest.{FlatSpec, Matchers}
@@ -26,8 +24,7 @@ import scala.concurrent.Future
   */
 class UserRoutesSpec extends UserRoutesSpecHelper {
   "POST /register/user" should "create user" in withDefaultRoutes { samRoutes =>
-    val header = TestSupport.genGoogleSubjectIdHeader
-    Post("/register/user").withHeaders(header, TestSupport.defaultEmailHeader) ~> samRoutes.route ~> check {
+    Post("/register/user") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
       val res = responseAs[UserStatus]
       res.userInfo.userSubjectId.value.length shouldBe 21
@@ -35,33 +32,15 @@ class UserRoutesSpec extends UserRoutesSpecHelper {
       res.enabled shouldBe Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true)
     }
 
-    Post("/register/user").withHeaders(header, TestSupport.defaultEmailHeader) ~> samRoutes.route ~> check {
+    Post("/register/user") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Conflict
     }
   }
 
   "GET /register/user" should "get the status of an enabled user" in {
-    val (user, headers, _, routes) = createTestUser()
+    val (user, _, routes) = createTestUser()
 
-    Get("/register/user").withHeaders(headers) ~> routes.route ~> check {
-      status shouldEqual StatusCodes.OK
-      responseAs[UserStatus] shouldEqual UserStatus(UserStatusDetails(user.id, user.email), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
-    }
-  }
-
-  "POST /register/user" should "retrieve PET owner's user info if a PET account is provided" in {
-    val (user, _, samDep, routes) = createTestUser()
-    val petEmail = s"pet-${user.id.value}@test.iam.gserviceaccount.com"
-    val headers = List(
-      RawHeader(emailHeader, petEmail),
-      TestSupport.googleSubjectIdHeaderWithId(user.googleSubjectId.get),
-      RawHeader(accessTokenHeader, ""),
-      RawHeader(authorizationHeader, ""),
-      RawHeader(expiresInHeader, "1000")
-    )
-    //create a PET service account owned by test user
-    samDep.directoryDAO.createPetServiceAccount(PetServiceAccount(PetServiceAccountId(user.id, null), ServiceAccount(ServiceAccountSubjectId(user.googleSubjectId.get.value), WorkbenchEmail(petEmail), null))).unsafeRunSync()
-    Get("/register/user").withHeaders(headers) ~> routes.route ~> check {
+    Get("/register/user") ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK
       responseAs[UserStatus] shouldEqual UserStatus(UserStatusDetails(user.id, user.email), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
     }
@@ -70,14 +49,14 @@ class UserRoutesSpec extends UserRoutesSpecHelper {
   "GET /admin/user/{userSubjectId}" should "get the user status of a user (as an admin)" in {
     val (user, adminRoutes) = setUpAdminTest()
 
-    Get(s"/api/admin/user/${user.id}").withHeaders(adminHeaders) ~> adminRoutes.route ~> check {
+    Get(s"/api/admin/user/${user.id}") ~> adminRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
       responseAs[UserStatus] shouldEqual UserStatus(UserStatusDetails(user.id, user.email), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
     }
   }
 
   it should "not allow a non-admin to get the status of another user" in withAdminRoutes { (samRoutes, _) =>
-    Get(s"/api/admin/user/$defaultUserId").withHeaders(adminHeaders) ~> samRoutes.route ~> check {
+    Get(s"/api/admin/user/$defaultUserId") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Forbidden
     }
   }
@@ -85,26 +64,26 @@ class UserRoutesSpec extends UserRoutesSpecHelper {
   "GET /admin/user/email/{email}" should "get the user status of a user by email (as an admin)" in {
     val (user, adminRoutes) = setUpAdminTest()
 
-    Get(s"/api/admin/user/email/${user.email}").withHeaders(adminHeaders) ~> adminRoutes.route ~> check {
+    Get(s"/api/admin/user/email/${user.email}") ~> adminRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
       responseAs[UserStatus] shouldEqual UserStatus(UserStatusDetails(user.id, user.email), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
     }
   }
 
   it should "return 404 for an unknown user by email (as an admin)" in withAdminRoutes { (samRoutes, adminRoutes) =>
-    Get(s"/api/admin/user/email/XXX${defaultUserEmail}XXX").withHeaders(adminHeaders) ~> adminRoutes.route ~> check {
+    Get(s"/api/admin/user/email/XXX${defaultUserEmail}XXX") ~> adminRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
   }
 
   it should "return 404 for an group's email (as an admin)" in withAdminRoutes { (samRoutes, adminRoutes) =>
-    Get(s"/api/admin/user/email/fc-admins@dev.test.firecloud.org").withHeaders(adminHeaders) ~> adminRoutes.route ~> check {
+    Get(s"/api/admin/user/email/fc-admins@dev.test.firecloud.org") ~> adminRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
   }
 
   it should "not allow a non-admin to get the status of another user" in withAdminRoutes { (samRoutes, _) =>
-    Get(s"/api/admin/user/email/$defaultUserEmail").withHeaders(adminHeaders) ~> samRoutes.route ~> check {
+    Get(s"/api/admin/user/email/$defaultUserEmail") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Forbidden
     }
   }
@@ -112,23 +91,23 @@ class UserRoutesSpec extends UserRoutesSpecHelper {
   "PUT /admin/user/{userSubjectId}/(re|dis)able" should "disable and then re-enable a user (as an admin)" in {
     val (user, adminRoutes) = setUpAdminTest()
 
-    Put(s"/api/admin/user/${user.id}/disable").withHeaders(adminHeaders) ~> adminRoutes.route ~> check {
+    Put(s"/api/admin/user/${user.id}/disable") ~> adminRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
       responseAs[UserStatus] shouldEqual UserStatus(UserStatusDetails({user.id}, user.email), Map("ldap" -> false, "allUsersGroup" -> true, "google" -> true))
     }
 
-    Put(s"/api/admin/user/${user.id}/enable").withHeaders(adminHeaders) ~> adminRoutes.route ~> check {
+    Put(s"/api/admin/user/${user.id}/enable") ~> adminRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
       responseAs[UserStatus] shouldEqual UserStatus(UserStatusDetails({user.id}, user.email), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
     }
   }
 
   it should "not allow a non-admin to enable or disable a user" in withAdminRoutes { (samRoutes, _) =>
-    Put(s"/api/admin/user/$defaultUserId/disable").withHeaders(adminHeaders) ~> samRoutes.route ~> check {
+    Put(s"/api/admin/user/$defaultUserId/disable") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Forbidden
     }
 
-    Put(s"/api/admin/user/$defaultUserId/enable").withHeaders(adminHeaders) ~> samRoutes.route ~> check {
+    Put(s"/api/admin/user/$defaultUserId/enable") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Forbidden
     }
   }
@@ -136,17 +115,17 @@ class UserRoutesSpec extends UserRoutesSpecHelper {
   "DELETE /admin/user/{userSubjectId}" should "delete a user (as an admin)" in {
     val (user, adminRoutes) = setUpAdminTest()
 
-    Delete(s"/api/admin/user/${user.id}").withHeaders(adminHeaders) ~> adminRoutes.route ~> check {
+    Delete(s"/api/admin/user/${user.id}") ~> adminRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
     }
 
-    Get(s"/api/admin/user/${user.id}").withHeaders(adminHeaders) ~> adminRoutes.route ~> check {
+    Get(s"/api/admin/user/${user.id}") ~> adminRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
   }
 
   it should "not allow a non-admin to delete a user" in withAdminRoutes { (samRoutes, _) =>
-    Delete(s"/api/admin/user/$defaultUserId").withHeaders(adminHeaders) ~> samRoutes.route ~> check {
+    Delete(s"/api/admin/user/$defaultUserId") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Forbidden
     }
   }
@@ -154,13 +133,13 @@ class UserRoutesSpec extends UserRoutesSpecHelper {
   "DELETE /admin/user/{userSubjectId}/petServiceAccount/{project}" should "delete a pet (as an admin)" in {
     val (user, adminRoutes) = setUpAdminTest()
 
-    Delete(s"/api/admin/user/${user.id}/petServiceAccount/myproject").withHeaders(adminHeaders) ~> adminRoutes.route ~> check {
+    Delete(s"/api/admin/user/${user.id}/petServiceAccount/myproject") ~> adminRoutes.route ~> check {
       status shouldEqual StatusCodes.NoContent
     }
   }
 
   it should "not allow a non-admin to delete a pet" in withAdminRoutes { (samRoutes, _) =>
-    Delete(s"/api/admin/user/$defaultUserId/petServiceAccount/myproject").withHeaders(adminHeaders) ~> samRoutes.route ~> check {
+    Delete(s"/api/admin/user/$defaultUserId/petServiceAccount/myproject") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Forbidden
     }
   }
@@ -173,14 +152,6 @@ trait UserRoutesSpecHelper extends FlatSpec with Matchers with ScalatestRouteTes
   val adminUserId = WorkbenchUserId("adminuser")
   val adminGoogleSubjectId = GoogleSubjectId("adminuserGoog")
   val adminUserEmail = WorkbenchEmail("adminuser@new.com")
-  val adminHeaders = List(
-    RawHeader(accessTokenHeader, ""),
-    RawHeader(authorizationHeader, ""),
-    RawHeader(googleSubjectIdHeader, adminGoogleSubjectId.value),
-    RawHeader(emailHeader, adminUserEmail.value),
-    RawHeader(expiresInHeader, "1000"),
-    TestSupport.genGoogleSubjectIdHeader,
-  )
 
   val petSAUserId = WorkbenchUserId("123")
   val petSAEmail = WorkbenchEmail("pet-newuser@test.iam.gserviceaccount.com")
@@ -200,39 +171,28 @@ trait UserRoutesSpecHelper extends FlatSpec with Matchers with ScalatestRouteTes
     val cloudExtensions = new NoExtensions {
       override def isWorkbenchAdmin(memberEmail: WorkbenchEmail): Future[Boolean] = googDirectoryDAO.isGroupMember(adminGroupEmail, memberEmail)
     }
-    val (user, _, _, routes) = createTestUser(cloudExtensions = Some(cloudExtensions), googleDirectoryDAO = Some(googDirectoryDAO))
-    Post("/register/user/v1/").withHeaders(adminHeaders) ~> routes.route ~> check {
-      status shouldEqual StatusCodes.Created
-    }
-    (user, routes)
+    val (_, _, routes) = createTestUser(cloudExtensions = Some(cloudExtensions), googleDirectoryDAO = Some(googDirectoryDAO), userEmail = adminUserEmail)
+    val userId = genWorkbenchUserId(System.currentTimeMillis())
+    val userStatus = runAndWait(routes.userService.createUser(CreateWorkbenchUser(userId, GoogleSubjectId(userId.value), defaultUserEmail, None)))
+    (WorkbenchUser(userStatus.userInfo.userSubjectId, Some(GoogleSubjectId(userStatus.userInfo.userSubjectId.value)), userStatus.userInfo.userEmail, None), routes)
   }
 
-  def createTestUser(googSubjectId: Option[GoogleSubjectId] = None, cloudExtensions: Option[CloudExtensions] = None, googleDirectoryDAO: Option[GoogleDirectoryDAO] = None, identityConcentratorId: Option[IdentityConcentratorId] = None): (WorkbenchUser, List[RawHeader], SamDependencies, SamRoutes) = {
-    val googleSubjectId = googSubjectId.map(_.value).getOrElse(genRandom(System.currentTimeMillis()))
-    val googleSubjectheader = RawHeader(googleSubjectIdHeader, googleSubjectId)
-    val emHeader = RawHeader(emailHeader, defaultUserEmail.value)
+  def createTestUser(googSubjectId: Option[GoogleSubjectId] = None, cloudExtensions: Option[CloudExtensions] = None, googleDirectoryDAO: Option[GoogleDirectoryDAO] = None, identityConcentratorId: Option[IdentityConcentratorId] = None, userEmail: WorkbenchEmail = defaultUserEmail): (WorkbenchUser, SamDependencies, SamRoutes) = {
+    val userInfo = UserInfo(OAuth2BearerToken(""), genWorkbenchUserId(System.currentTimeMillis()), userEmail, 3600)
 
     val samDependencies = genSamDependencies(cloudExtensions = cloudExtensions, googleDirectoryDAO = googleDirectoryDAO)
-    val routes = genSamRoutes(samDependencies)
+    val routes = genSamRoutes(samDependencies, userInfo)
 
     // create a user
-    val user = Post("/register/user/v1/").withHeaders(googleSubjectheader, emHeader) ~> routes.route ~> check {
+    val user = Post("/register/user/v1/") ~> routes.route ~> check {
       status shouldEqual StatusCodes.Created
       val res = responseAs[UserStatus]
-      res.userInfo.userEmail shouldBe defaultUserEmail
+      res.userInfo.userEmail shouldBe userEmail
       res.enabled shouldBe Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true)
 
-      WorkbenchUser(res.userInfo.userSubjectId, Some(GoogleSubjectId(googleSubjectId)), res.userInfo.userEmail, identityConcentratorId)
+      WorkbenchUser(res.userInfo.userSubjectId, Some(GoogleSubjectId(res.userInfo.userSubjectId.value)), res.userInfo.userEmail, identityConcentratorId)
     }
-    val headers = List(
-      RawHeader(emailHeader, user.email.value),
-      TestSupport.googleSubjectIdHeaderWithId(user.googleSubjectId.get),
-      RawHeader(accessTokenHeader, ""),
-      RawHeader(authorizationHeader, ""),
-      RawHeader(expiresInHeader, "1000"),
-      RawHeader(authorizationHeader, "")
-    )
-    (user, headers, samDependencies, routes)
+    (user, samDependencies, routes)
   }
 
   def withAdminRoutes[T](testCode: (TestSamRoutes, TestSamRoutes) => T): T = {
@@ -255,7 +215,9 @@ trait UserRoutesSpecHelper extends FlatSpec with Matchers with ScalatestRouteTes
     val directoryDAO = new MockDirectoryDAO()
     val registrationDAO = new MockDirectoryDAO()
 
-    val samRoutes = new TestSamRoutes(null, null, new UserService(directoryDAO, NoExtensions, registrationDAO), new StatusService(directoryDAO, NoExtensions, TestSupport.dbRef), null, UserInfo(OAuth2BearerToken(""), defaultUserId, defaultUserEmail, 0), directoryDAO)
+    val samRoutes = new TestSamRoutes(null, null, new UserService(directoryDAO, NoExtensions, registrationDAO), new StatusService(directoryDAO, NoExtensions, TestSupport.dbRef), null, UserInfo(OAuth2BearerToken(""), defaultUserId, defaultUserEmail, 0), directoryDAO,
+      createWorkbenchUser = Option(CreateWorkbenchUser(UserService.genWorkbenchUserId(System.currentTimeMillis()), TestSupport.genGoogleSubjectId(), defaultUserEmail, None)))
+
     testCode(samRoutes)
   }
 }

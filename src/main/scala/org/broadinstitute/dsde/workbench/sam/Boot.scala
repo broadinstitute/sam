@@ -7,11 +7,14 @@ import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import akka.stream.ActorMaterializer
 import cats.data.NonEmptyList
-import cats.effect.{ExitCode, IO, IOApp}
+import cats.effect
+import cats.effect.{Blocker, ExitCode, IO, IOApp}
 import cats.implicits._
 import com.typesafe.config.ConfigFactory
 import com.typesafe.scalalogging.LazyLogging
 import com.unboundid.ldap.sdk._
+import io.chrisdavenport.log4cats.StructuredLogger
+import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
 import javax.net.SocketFactory
 import javax.net.ssl.SSLContext
 import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
@@ -21,16 +24,18 @@ import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleKmsIn
 import org.broadinstitute.dsde.workbench.google2.{GoogleFirestoreInterpreter, GoogleStorageInterpreter, GoogleStorageService}
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException}
 import org.broadinstitute.dsde.workbench.sam.api.{SamRoutes, StandardUserInfoDirectives}
-import org.broadinstitute.dsde.workbench.sam.config.{AppConfig, GoogleConfig}
+import org.broadinstitute.dsde.workbench.sam.config.{AppConfig, GoogleConfig, IdentityConcentratorConfig}
 import org.broadinstitute.dsde.workbench.sam.db.DatabaseNames.DatabaseName
 import org.broadinstitute.dsde.workbench.sam.db.{DatabaseNames, DbReference}
 import org.broadinstitute.dsde.workbench.sam.directory._
 import org.broadinstitute.dsde.workbench.sam.google._
+import org.broadinstitute.dsde.workbench.sam.identityConcentrator.{IdentityConcentratorService, StandardIdentityConcentratorApi}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam._
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.util.{DelegatePool, ExecutionContexts}
+import org.http4s.client.blaze.BlazeClientBuilder
 import scalikejdbc.config.DBs
 
 import scala.concurrent.ExecutionContext
@@ -117,32 +122,78 @@ object Boot extends IOApp with LazyLogging {
       (backgroundDirectoryDAO, backgroundAccessPolicyDAO, backgroundLdapExecutionContext, _) <- createDAOs(appConfig, DatabaseNames.Background, appConfig.directoryConfig.backgroundConnectionPoolSize, "background")
 
       blockingEc <- ExecutionContexts.fixedThreadPool[IO](24)
-      appDependencies <- appConfig.googleConfig match {
-        case Some(config) =>
-          for {
-            googleFire <- GoogleFirestoreInterpreter.firestore[IO](
-              config.googleServicesConfig.serviceAccountCredentialJson.firestoreServiceAccountJsonPath.asString)
-            googleStorage <- GoogleStorageInterpreter.storage[IO](
-              config.googleServicesConfig.serviceAccountCredentialJson.defaultServiceAccountJsonPath.asString)
-            googleKmsClient <- GoogleKmsInterpreter.client[IO](
-              config.googleServicesConfig.serviceAccountCredentialJson.defaultServiceAccountJsonPath.asString)
-          } yield {
-            val ioFireStore = GoogleFirestoreInterpreter[IO](googleFire)
-            // googleServicesConfig.resourceNamePrefix is an environment specific variable passed in https://github.com/broadinstitute/firecloud-develop/blob/fade9286ff0aec8449121ed201ebc44c8a4d57dd/run-context/fiab/configs/sam/docker-compose.yaml.ctmpl#L24
-            // Use resourceNamePrefix to avoid collision between different fiab environments (we share same firestore for fiabs)
-            val lock =
-              DistributedLock[IO](s"sam-${config.googleServicesConfig.resourceNamePrefix.getOrElse("local")}", appConfig.distributedLockConfig, ioFireStore)
-            val newGoogleStorage = GoogleStorageInterpreter[IO](googleStorage, blockingEc)
-            val googleKmsInterpreter = GoogleKmsInterpreter[IO](googleKmsClient, blockingEc)
-            val resourceTypeMap = appConfig.resourceTypes.map(rt => rt.name -> rt).toMap
-            val cloudExtension = createGoogleCloudExt(foregroundAccessPolicyDAO, foregroundDirectoryDAO, registrationDAO, config, resourceTypeMap, lock, newGoogleStorage, googleKmsInterpreter)
-            val googleGroupSynchronizer = new GoogleGroupSynchronizer(backgroundDirectoryDAO, backgroundAccessPolicyDAO, cloudExtension.googleDirectoryDAO, cloudExtension, resourceTypeMap)(backgroundLdapExecutionContext)
-            val cloudExtensionsInitializer = new GoogleExtensionsInitializer(cloudExtension, googleGroupSynchronizer)
-            createAppDepenciesWithSamRoutes(appConfig, cloudExtensionsInitializer, foregroundAccessPolicyDAO, foregroundDirectoryDAO, registrationDAO)
-          }
-        case None => cats.effect.Resource.pure[IO, AppDependencies](createAppDepenciesWithSamRoutes(appConfig, NoExtensionsInitializer, foregroundAccessPolicyDAO, foregroundDirectoryDAO, registrationDAO))
-      }
-    } yield appDependencies
+
+      identityConcentrator <- identityConcentratorResource(appConfig)
+
+      cloudExtensionsInitializer <- cloudExtensionsInitializerResource(
+        appConfig,
+        foregroundDirectoryDAO,
+        foregroundAccessPolicyDAO,
+        registrationDAO,
+        backgroundDirectoryDAO,
+        backgroundAccessPolicyDAO,
+        backgroundLdapExecutionContext,
+        blockingEc)
+    } yield createAppDepenciesWithSamRoutes(appConfig, cloudExtensionsInitializer, foregroundAccessPolicyDAO, foregroundDirectoryDAO, registrationDAO, identityConcentrator)
+
+  private def cloudExtensionsInitializerResource(
+      appConfig: AppConfig,
+      foregroundDirectoryDAO: DirectoryDAO,
+      foregroundAccessPolicyDAO: AccessPolicyDAO,
+      registrationDAO: RegistrationDAO,
+      backgroundDirectoryDAO: DirectoryDAO,
+      backgroundAccessPolicyDAO: AccessPolicyDAO,
+      backgroundLdapExecutionContext: ExecutionContext,
+      blockingEc: ExecutionContext)(implicit actorSystem: ActorSystem): effect.Resource[IO, CloudExtensionsInitializer] =
+    appConfig.googleConfig match {
+      case Some(config) =>
+        for {
+          googleFire <- GoogleFirestoreInterpreter.firestore[IO](
+            config.googleServicesConfig.serviceAccountCredentialJson.firestoreServiceAccountJsonPath.asString)
+          googleStorage <- GoogleStorageInterpreter.storage[IO](
+            config.googleServicesConfig.serviceAccountCredentialJson.defaultServiceAccountJsonPath.asString,
+            Blocker.liftExecutionContext(blockingEc),
+            None)
+          googleKmsClient <- GoogleKmsInterpreter.client[IO](config.googleServicesConfig.serviceAccountCredentialJson.defaultServiceAccountJsonPath.asString)
+        } yield {
+          implicit val loggerIO: StructuredLogger[IO] = Slf4jLogger.getLogger[IO]
+
+          val ioFireStore = GoogleFirestoreInterpreter[IO](googleFire)
+          // googleServicesConfig.resourceNamePrefix is an environment specific variable passed in https://github.com/broadinstitute/firecloud-develop/blob/fade9286ff0aec8449121ed201ebc44c8a4d57dd/run-context/fiab/configs/sam/docker-compose.yaml.ctmpl#L24
+          // Use resourceNamePrefix to avoid collision between different fiab environments (we share same firestore for fiabs)
+          val lock =
+            DistributedLock[IO](s"sam-${config.googleServicesConfig.resourceNamePrefix.getOrElse("local")}", appConfig.distributedLockConfig, ioFireStore)
+          val newGoogleStorage = GoogleStorageInterpreter[IO](googleStorage, Blocker.liftExecutionContext(blockingEc), None)
+          val googleKmsInterpreter = GoogleKmsInterpreter[IO](googleKmsClient, blockingEc)
+          val resourceTypeMap = appConfig.resourceTypes.map(rt => rt.name -> rt).toMap
+          val cloudExtension = createGoogleCloudExt(
+            foregroundAccessPolicyDAO,
+            foregroundDirectoryDAO,
+            registrationDAO,
+            config,
+            resourceTypeMap,
+            lock,
+            newGoogleStorage,
+            googleKmsInterpreter)
+          val googleGroupSynchronizer =
+            new GoogleGroupSynchronizer(backgroundDirectoryDAO, backgroundAccessPolicyDAO, cloudExtension.googleDirectoryDAO, cloudExtension, resourceTypeMap)(
+              backgroundLdapExecutionContext)
+          new GoogleExtensionsInitializer(cloudExtension, googleGroupSynchronizer)
+        }
+      case None => cats.effect.Resource.pure[IO, CloudExtensionsInitializer](NoExtensionsInitializer)
+    }
+
+  private def identityConcentratorResource(appConfig: AppConfig): effect.Resource[IO, Option[IdentityConcentratorService]] =
+    appConfig.identityConcentratorConfig match {
+      case Some(IdentityConcentratorConfig(baseUrl, threadPoolSize)) =>
+        for {
+          identityConcentratorEc <- ExecutionContexts.fixedThreadPool[IO](threadPoolSize)
+          httpClient <- BlazeClientBuilder.apply[IO](identityConcentratorEc).resource
+        } yield {
+          Option(new IdentityConcentratorService(new StandardIdentityConcentratorApi(baseUrl, httpClient)))
+        }
+      case _ => cats.effect.Resource.pure[IO, Option[IdentityConcentratorService]](None)
+    }
 
   private def createDAOs(appConfig: AppConfig,
                          dbName: DatabaseName,
@@ -253,7 +304,8 @@ object Boot extends IOApp with LazyLogging {
       cloudExtensionsInitializer: CloudExtensionsInitializer,
       accessPolicyDAO: AccessPolicyDAO,
       directoryDAO: DirectoryDAO,
-      registrationDAO: RegistrationDAO)(implicit actorSystem: ActorSystem, actorMaterializer: ActorMaterializer): AppDependencies = {
+      registrationDAO: RegistrationDAO,
+      identityConcentrator: Option[IdentityConcentratorService])(implicit actorSystem: ActorSystem, actorMaterializer: ActorMaterializer): AppDependencies = {
     val resourceTypeMap = config.resourceTypes.map(rt => rt.name -> rt).toMap
     val policyEvaluatorService = PolicyEvaluatorService(config.emailDomain, resourceTypeMap, accessPolicyDAO, directoryDAO)
     val resourceService = new ResourceService(resourceTypeMap, policyEvaluatorService, accessPolicyDAO, directoryDAO, cloudExtensionsInitializer.cloudExtensions, config.emailDomain)
@@ -270,11 +322,14 @@ object Boot extends IOApp with LazyLogging {
           val googleExtensions = googleExt
           val cloudExtensions = googleExt
           val googleGroupSynchronizer = synchronizer
+          override val identityConcentratorService = identityConcentrator
         }
         AppDependencies(routes, samApplication, cloudExtensionsInitializer, directoryDAO, accessPolicyDAO, policyEvaluatorService)
       case _ =>
         val routes = new SamRoutes(resourceService, userService, statusService, managedGroupService, config.swaggerConfig, directoryDAO, policyEvaluatorService, config.liquibaseConfig)
-        with StandardUserInfoDirectives with NoExtensionRoutes
+        with StandardUserInfoDirectives with NoExtensionRoutes {
+          override val identityConcentratorService = identityConcentrator
+        }
         AppDependencies(routes, samApplication, NoExtensionsInitializer, directoryDAO, accessPolicyDAO, policyEvaluatorService)
     }
   }

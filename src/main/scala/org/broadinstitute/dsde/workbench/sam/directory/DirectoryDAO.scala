@@ -42,6 +42,8 @@ trait DirectoryDAO extends RegistrationDAO {
   def loadUserByIdentityConcentratorId(userId: IdentityConcentratorId): IO[Option[WorkbenchUser]]
   def loadUsers(userIds: Set[WorkbenchUserId]): IO[Stream[WorkbenchUser]]
   def deleteUser(userId: WorkbenchUserId): IO[Unit]
+  def setUserIdentityConcentratorId(googleSubjectId: GoogleSubjectId, icId: IdentityConcentratorId): IO[Int]
+
 
   def listUsersGroups(userId: WorkbenchUserId): IO[Set[WorkbenchGroupIdentity]]
   def listUserDirectMemberships(userId: WorkbenchUserId): IO[Stream[WorkbenchGroupIdentity]]

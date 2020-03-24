@@ -1,20 +1,22 @@
 import sbt._
 
 object Dependencies {
-  val akkaV = "2.5.19"
-  val akkaHttpV = "10.1.7"
+  val akkaV = "2.5.22"
+  val akkaHttpV = "10.1.8"
   val jacksonV = "2.9.5"
   val scalaLoggingV = "3.5.0"
   val scalaTestV    = "3.0.5"
   val scalaCheckV    = "1.14.0"
-  val catsEffectV         = "1.2.0"
+  val catsEffectV         = "2.1.1"
   val scalikejdbcVersion    = "3.3.5"
   val postgresDriverVersion = "42.2.8"
+  val http4sVersion = "0.21.0-M5"
+  val circeVersion = "0.12.2"
 
   val workbenchUtilV   = "0.5-6942040"
   val workbenchModelV  = "0.14-3c0b510"
   val workbenchGoogleV = "0.20-a9f29eb"
-  val workbenchGoogle2V = "0.1-8328aae"
+  val workbenchGoogle2V = "0.6-31cacc4"
   val workbenchNotificationsV = "0.1-f2a0020"
   val workbenchNewRelicV = "0.2-24dabc8"
   val monocleVersion = "1.5.1-cats"
@@ -26,7 +28,8 @@ object Dependencies {
   val excludeWorkbenchMetrics = ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-metrics_2.12")
   val excludeWorkbenchGoogle =  ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-google_2.12")
 
-  val jwt: ModuleID = "com.pauldijou" %% "jwt-spray-json" % "4.2.0"
+  val jwtSpray: ModuleID = "com.pauldijou" %% "jwt-spray-json" % "4.1.0"
+  val jwtCirce: ModuleID = "com.pauldijou" %% "jwt-circe" % "4.1.0"
   val newRelic: ModuleID = "com.newrelic.agent.java" % "newrelic-api" % newRelicVersion
   val jacksonAnnotations: ModuleID = "com.fasterxml.jackson.core" % "jackson-annotations" % jacksonV
   val jacksonDatabind: ModuleID =    "com.fasterxml.jackson.core" % "jackson-databind"    % jacksonV
@@ -48,10 +51,17 @@ object Dependencies {
   val scalaCheck: ModuleID =        "org.scalacheck"      %%  "scalacheck"           % scalaCheckV % "test"
   val catsEffect: ModuleID = "org.typelevel" %% "cats-effect" % catsEffectV
 
-  val excludIoGrpc =  ExclusionRule(organization = "io.grpc", name = "grpc-core")
-  val ioGrpc: ModuleID = "io.grpc" % "grpc-core" % "1.19.0"
+  val http4s: ModuleID = "org.http4s" %% "http4s-dsl" % http4sVersion
+  val http4sClient: ModuleID = "org.http4s" %% "http4s-blaze-client" % http4sVersion
+  val http4sCirce: ModuleID = "org.http4s" %% "http4s-circe" % http4sVersion
+  val circe: ModuleID = "io.circe" %% "circe-core" % circeVersion
+  val circeGeneric: ModuleID = "io.circe" %% "circe-generic" % circeVersion
+  val circeParser: ModuleID = "io.circe" %% "circe-parser" % circeVersion
 
-  val googleOAuth2: ModuleID = "com.google.auth" % "google-auth-library-oauth2-http" % "0.9.0" excludeAll(excludIoGrpc)
+  val excludIoGrpc =  ExclusionRule(organization = "io.grpc", name = "grpc-core")
+  val ioGrpc: ModuleID = "io.grpc" % "grpc-core" % "1.24.1"
+
+  val googleOAuth2: ModuleID = "com.google.auth" % "google-auth-library-oauth2-http" % "0.18.0" excludeAll(excludIoGrpc)
   val googleStorage: ModuleID = "com.google.apis" % "google-api-services-storage" % "v1-rev20181013-1.27.0" excludeAll(excludIoGrpc) //force this version
 
   val monocle: ModuleID = "com.github.julien-truffaut" %%  "monocle-core"  % monocleVersion
@@ -67,7 +77,11 @@ object Dependencies {
   val workbenchUtil: ModuleID =      "org.broadinstitute.dsde.workbench" %% "workbench-util"   % workbenchUtilV excludeAll(excludeWorkbenchModel)
   val workbenchModel: ModuleID =     "org.broadinstitute.dsde.workbench" %% "workbench-model"  % workbenchModelV
   val workbenchGoogle: ModuleID =    "org.broadinstitute.dsde.workbench" %% "workbench-google" % workbenchGoogleV excludeAll(excludeWorkbenchModel, excludeWorkbenchUtil)
-  val workbenchGoogle2: ModuleID =    "org.broadinstitute.dsde.workbench" %% "workbench-google2" % workbenchGoogle2V excludeAll(excludeWorkbenchModel, excludeWorkbenchUtil)
+  // the name of the auto-value package changed from auto-value to auto-value-annotations so old libraries are not evicted
+  // leading to merge errors during sbt assembly. At this time the old version of auto-value is pulled in through the google2
+  // workbench-libs dependency so exclude auto-value from there
+  val excludGoogleAutoValue =  ExclusionRule(organization = "com.google.auto.value", name = "auto-value")
+  val workbenchGoogle2: ModuleID =    "org.broadinstitute.dsde.workbench" %% "workbench-google2" % workbenchGoogle2V excludeAll(excludeWorkbenchModel, excludeWorkbenchUtil, excludGoogleAutoValue)
   val workbenchNotifications: ModuleID =  "org.broadinstitute.dsde.workbench" %% "workbench-notifications" % workbenchNotificationsV excludeAll(excludeWorkbenchGoogle, excludeWorkbenchModel)
   val workbenchGoogleTests: ModuleID =    "org.broadinstitute.dsde.workbench" %% "workbench-google" % workbenchGoogleV % "test" classifier "tests" excludeAll(excludeWorkbenchUtil, excludeWorkbenchModel)
   val workbenchGoogle2Tests: ModuleID =    "org.broadinstitute.dsde.workbench" %% "workbench-google2" % workbenchGoogle2V % "test" classifier "tests" excludeAll(excludeWorkbenchUtil, excludeWorkbenchModel)
@@ -146,6 +160,14 @@ object Dependencies {
     scalikeCoreConfig,
     scalikeCoreTest,
     postgres,
-    jwt
+    jwtSpray,
+    jwtCirce,
+
+    http4s,
+    http4sClient,
+    http4sCirce,
+    circe,
+    circeGeneric,
+    circeParser
   ) ++ openCensusDependencies
 }
