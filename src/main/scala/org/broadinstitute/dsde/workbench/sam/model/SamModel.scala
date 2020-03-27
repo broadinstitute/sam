@@ -149,9 +149,13 @@ ldap but it felt unnatural.
     roles: Set[ResourceRoleName],
     actions: Set[ResourceAction],
     public: Boolean)
-    extends WorkbenchGroup
+    extends WorkbenchGroup {
+  def metadata: AccessPolicyMetadata = AccessPolicyMetadata(id, email, roles, actions, public)
+}
 @Lenses final case class AccessPolicyMembership(memberEmails: Set[WorkbenchEmail], actions: Set[ResourceAction], roles: Set[ResourceRoleName])
 @Lenses final case class AccessPolicyResponseEntry(policyName: AccessPolicyName, policy: AccessPolicyMembership, email: WorkbenchEmail)
+// Access Policy with no membership info
+@Lenses final case class AccessPolicyMetadata(id: FullyQualifiedPolicyId, email: WorkbenchEmail, roles: Set[ResourceRoleName], actions: Set[ResourceAction], public: Boolean)
 
 @Lenses final case class BasicWorkbenchGroup(id: WorkbenchGroupName, members: Set[WorkbenchSubject], email: WorkbenchEmail) extends WorkbenchGroup
 

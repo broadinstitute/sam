@@ -28,7 +28,7 @@ trait AccessPolicyDAO {
   def listResourceWithAuthdomains(resourceId: FullyQualifiedResourceId): IO[Option[Resource]]
   def listAccessPolicies(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId): IO[Set[ResourceIdAndPolicyName]]
   def listAccessPolicies(resource: FullyQualifiedResourceId): IO[Stream[AccessPolicy]]
-  def listAccessPoliciesForUser(resource: FullyQualifiedResourceId, user: WorkbenchUserId): IO[Set[AccessPolicy]]
+  def listAccessPoliciesForUser(resource: FullyQualifiedResourceId, user: WorkbenchUserId): IO[Set[AccessPolicyMetadata]]
   def listFlattenedPolicyMembers(policyId: FullyQualifiedPolicyId): IO[Set[WorkbenchUser]]
   def setPolicyIsPublic(policyId: FullyQualifiedPolicyId, isPublic: Boolean): IO[Unit]
 

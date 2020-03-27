@@ -646,7 +646,7 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
         dao.createResource(resource).unsafeRunSync()
         allPolicies.map(dao.createPolicy(_).unsafeRunSync())
 
-        dao.listAccessPoliciesForUser(resource.fullyQualifiedId, user.id).unsafeRunSync() should contain theSameElementsAs allPolicies
+        dao.listAccessPoliciesForUser(resource.fullyQualifiedId, user.id).unsafeRunSync() should contain theSameElementsAs allPolicies.map(_.metadata)
       }
 
       "does not list policies on other resources the user is a member of" in {
@@ -665,7 +665,7 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
         dao.createResource(otherResource).unsafeRunSync()
         allPolicies.map(dao.createPolicy(_).unsafeRunSync())
 
-        dao.listAccessPoliciesForUser(resource.fullyQualifiedId, user.id).unsafeRunSync() should contain theSameElementsAs Set(policy)
+        dao.listAccessPoliciesForUser(resource.fullyQualifiedId, user.id).unsafeRunSync() should contain theSameElementsAs Set(policy.metadata)
       }
     }
 
