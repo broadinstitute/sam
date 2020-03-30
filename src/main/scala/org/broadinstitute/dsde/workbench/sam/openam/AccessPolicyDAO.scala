@@ -23,7 +23,7 @@ trait AccessPolicyDAO {
   def overwritePolicyMembers(id: FullyQualifiedPolicyId, memberList: Set[WorkbenchSubject]): IO[Unit]
   def overwritePolicy(newPolicy: AccessPolicy): IO[AccessPolicy]
   def listPublicAccessPolicies(resourceTypeName: ResourceTypeName): IO[Stream[ResourceIdAndPolicyName]]
-  def listPublicAccessPoliciesWithoutMembers(resource: FullyQualifiedResourceId): IO[Stream[AccessPolicyWithoutMembers]]
+  def listPublicAccessPolicies(resource: FullyQualifiedResourceId): IO[Stream[AccessPolicyWithoutMembers]]
   def listResourcesWithAuthdomains(resourceTypeName: ResourceTypeName, resourceId: Set[ResourceId]): IO[Set[Resource]]
   def listResourceWithAuthdomains(resourceId: FullyQualifiedResourceId): IO[Option[Resource]]
   def listAccessPolicies(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId): IO[Set[ResourceIdAndPolicyName]]

@@ -538,7 +538,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     }
   }
 
-  override def listPublicAccessPoliciesWithoutMembers(resource: FullyQualifiedResourceId): IO[Stream[AccessPolicyWithoutMembers]] = {
+  override def listPublicAccessPolicies(resource: FullyQualifiedResourceId): IO[Stream[AccessPolicyWithoutMembers]] = {
     val g = GroupTable.syntax("g")
     val r = ResourceTable.syntax("r")
     val rt = ResourceTypeTable.syntax("rt")
@@ -577,6 +577,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     }
   }
 
+  // Abstracts logic to load and unmarshal one or more policies, use to get full AccessPolicy objects from Postgres
   private def listPolicies(resource: FullyQualifiedResourceId, limitOnePolicy: Option[AccessPolicyName] = None): IO[Stream[AccessPolicy]] = {
     val g = GroupTable.syntax("g")
     val r = ResourceTable.syntax("r")
@@ -686,12 +687,12 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     runInTransaction { implicit session =>
       import SamTypeBinders._
 
-      samsql"""with recursive ${ancestorGroupsTable.table}(${agColumn.parentGroupId}, ${agColumn.memberGroupId}) as (
-                  select ${gm.groupId}, ${gm.memberGroupId}
+      samsql"""with recursive ${ancestorGroupsTable.table}(${agColumn.parentGroupId}) as (
+                  select ${gm.groupId}
                   from ${GroupMemberTable as gm}
                   where ${gm.memberUserId} = ${userId}
                   union
-                  select ${pg.groupId}, ${pg.memberGroupId}
+                  select ${pg.groupId}
                   from ${GroupMemberTable as pg}
                   join ${ancestorGroupsTable as ag} on ${agColumn.parentGroupId} = ${pg.memberGroupId}
         ) select ${r.result.name}, ${p.result.name}

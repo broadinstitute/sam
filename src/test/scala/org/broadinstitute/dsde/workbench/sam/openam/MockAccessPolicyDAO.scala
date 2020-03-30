@@ -139,7 +139,7 @@ class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdenti
 
   override def listResourceWithAuthdomains(resourceId: FullyQualifiedResourceId): IO[Option[Resource]] = IO.pure(None)
 
-  override def listPublicAccessPoliciesWithoutMembers(resource: FullyQualifiedResourceId): IO[Stream[AccessPolicyWithoutMembers]] = {
+  override def listPublicAccessPolicies(resource: FullyQualifiedResourceId): IO[Stream[AccessPolicyWithoutMembers]] = {
     IO.pure(
       policies.collect {
         case (_, policy: AccessPolicy) if policy.public =>

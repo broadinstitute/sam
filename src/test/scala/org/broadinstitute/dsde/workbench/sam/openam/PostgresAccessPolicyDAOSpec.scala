@@ -599,7 +599,7 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
         val expectedResults = Set(publicPolicy1, publicPolicy2).map(policy =>
           AccessPolicyWithoutMembers(policy.id, policy.email, policy.roles, policy.actions, policy.public))
 
-        dao.listPublicAccessPoliciesWithoutMembers(resource.fullyQualifiedId).unsafeRunSync() should contain theSameElementsAs expectedResults
+        dao.listPublicAccessPolicies(resource.fullyQualifiedId).unsafeRunSync() should contain theSameElementsAs expectedResults
       }
     }
 
