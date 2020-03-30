@@ -92,11 +92,11 @@ class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdenti
     }.toStream
   }
 
-  override def listAccessPoliciesForUser(resource: FullyQualifiedResourceId, user: WorkbenchUserId): IO[Set[AccessPolicy]] = IO {
+  override def listAccessPoliciesForUser(resource: FullyQualifiedResourceId, user: WorkbenchUserId): IO[Set[AccessPolicyWithoutMembers]] = IO {
     policies.collect {
-      case (FullyQualifiedPolicyId(`resource`, _), policy: AccessPolicy) if policy.members.contains(user) => policy
+      case (FullyQualifiedPolicyId(`resource`, _), policy: AccessPolicy) if policy.members.contains(user) =>
+        AccessPolicyWithoutMembers(policy.id, policy.email, policy.roles, policy.actions, policy.public)
     }.toSet
-
   }
 
   override def setPolicyIsPublic(resourceAndPolicyName: FullyQualifiedPolicyId, isPublic: Boolean): IO[Unit] = {
@@ -139,10 +139,11 @@ class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdenti
 
   override def listResourceWithAuthdomains(resourceId: FullyQualifiedResourceId): IO[Option[Resource]] = IO.pure(None)
 
-  override def listPublicAccessPolicies(resource: FullyQualifiedResourceId): IO[Stream[AccessPolicy]] = {
+  override def listPublicAccessPolicies(resource: FullyQualifiedResourceId): IO[Stream[AccessPolicyWithoutMembers]] = {
     IO.pure(
       policies.collect {
-        case (_, policy: AccessPolicy) if policy.public => policy
+        case (_, policy: AccessPolicy) if policy.public =>
+          AccessPolicyWithoutMembers(policy.id, policy.email, policy.roles, policy.actions, policy.public)
       }.toStream
     )
   }
