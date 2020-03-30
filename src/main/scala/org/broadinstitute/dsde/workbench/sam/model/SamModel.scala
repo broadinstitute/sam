@@ -138,9 +138,9 @@ object SamResourceTypes {
     returnResource: Option[Boolean] = Some(false))
 
 /*
-Note that AccessPolicy IS A group, does not have a group. This makes the ldap query to list all a user's policies
-and thus resources much easier. We tried modeling with a "has a" relationship in code but a "is a" relationship in
-ldap but it felt unnatural.
+Note that AccessPolicy IS A group because it was easier and more efficient to work with in ldap. In Postgres, it is
+modeled with a "has a" relationship, but it retains the legacy "is a" relationship in code. Refactoring this into a
+consistent "has a" relationship is tracked by this ticket: https://broadworkbench.atlassian.net/browse/CA-778
  */
 @Lenses final case class AccessPolicy(
     id: FullyQualifiedPolicyId,
@@ -149,13 +149,13 @@ ldap but it felt unnatural.
     roles: Set[ResourceRoleName],
     actions: Set[ResourceAction],
     public: Boolean)
-    extends WorkbenchGroup {
-  def metadata: AccessPolicyMetadata = AccessPolicyMetadata(id, email, roles, actions, public)
-}
+    extends WorkbenchGroup
+
 @Lenses final case class AccessPolicyMembership(memberEmails: Set[WorkbenchEmail], actions: Set[ResourceAction], roles: Set[ResourceRoleName])
 @Lenses final case class AccessPolicyResponseEntry(policyName: AccessPolicyName, policy: AccessPolicyMembership, email: WorkbenchEmail)
-// Access Policy with no membership info
-@Lenses final case class AccessPolicyMetadata(id: FullyQualifiedPolicyId, email: WorkbenchEmail, roles: Set[ResourceRoleName], actions: Set[ResourceAction], public: Boolean)
+
+// Access Policy with no membership info to improve efficiency for calls that care about only the roles and actions of a policy, not the membership
+@Lenses final case class AccessPolicyWithoutMembers(id: FullyQualifiedPolicyId, email: WorkbenchEmail, roles: Set[ResourceRoleName], actions: Set[ResourceAction], public: Boolean)
 
 @Lenses final case class BasicWorkbenchGroup(id: WorkbenchGroupName, members: Set[WorkbenchSubject], email: WorkbenchEmail) extends WorkbenchGroup
 

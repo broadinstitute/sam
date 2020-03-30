@@ -538,11 +538,46 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     }
   }
 
-  override def listPublicAccessPolicies(resource: FullyQualifiedResourceId): IO[Stream[AccessPolicy]] = {
-    listPolicies(resource, true)
+  override def listPublicAccessPoliciesWithoutMembers(resource: FullyQualifiedResourceId): IO[Stream[AccessPolicyWithoutMembers]] = {
+    val g = GroupTable.syntax("g")
+    val r = ResourceTable.syntax("r")
+    val rt = ResourceTypeTable.syntax("rt")
+    val p = PolicyTable.syntax("p")
+    val pr = PolicyRoleTable.syntax("pr")
+    val rr = ResourceRoleTable.syntax("rr")
+    val pa = PolicyActionTable.syntax("pa")
+    val ra = ResourceActionTable.syntax("ra")
+
+    val listPoliciesQuery =
+      samsql"""select ${p.result.name}, ${r.result.name}, ${rt.result.name}, ${g.result.email}, ${p.result.public}, ${rr.result.role}, ${ra.result.action}
+          from ${GroupTable as g}
+          join ${PolicyTable as p} on ${g.id} = ${p.groupId}
+          join ${ResourceTable as r} on ${p.resourceId} = ${r.id}
+          join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
+          left join ${PolicyRoleTable as pr} on ${p.id} = ${pr.resourcePolicyId}
+          left join ${ResourceRoleTable as rr} on ${pr.resourceRoleId} = ${rr.id}
+          left join ${PolicyActionTable as pa} on ${p.id} = ${pa.resourcePolicyId}
+          left join ${ResourceActionTable as ra} on ${pa.resourceActionId} = ${ra.id}
+          where ${r.name} = ${resource.resourceId}
+          and ${rt.name} = ${resource.resourceTypeName}
+          and ${p.public} = true"""
+
+    import SamTypeBinders._
+    runInTransaction { implicit session =>
+      val results = listPoliciesQuery.map(rs => (PolicyInfo(rs.get[AccessPolicyName](p.resultName.name), rs.get[ResourceId](r.resultName.name), rs.get[ResourceTypeName](rt.resultName.name), rs.get[WorkbenchEmail](g.resultName.email), rs.boolean(p.resultName.public)),
+        (rs.stringOpt(rr.resultName.role).map(ResourceRoleName(_)), rs.stringOpt(ra.resultName.action).map(ResourceAction(_))))).list().apply().groupBy(_._1)
+
+      results.map { case (policyInfo, resultsByPolicy) =>
+        val (_, roleActionResults) = resultsByPolicy.unzip
+
+        val (roles, actions) = roleActionResults.unzip
+
+        AccessPolicyWithoutMembers(FullyQualifiedPolicyId(FullyQualifiedResourceId(policyInfo.resourceTypeName, policyInfo.resourceId), policyInfo.name), policyInfo.email, roles.flatten.toSet, actions.flatten.toSet, policyInfo.public)
+      }.toStream
+    }
   }
 
-  private def listPolicies(resource: FullyQualifiedResourceId, publicOnly: Boolean = false, limitOnePolicy: Option[AccessPolicyName] = None): IO[Stream[AccessPolicy]] = {
+  private def listPolicies(resource: FullyQualifiedResourceId, limitOnePolicy: Option[AccessPolicyName] = None): IO[Stream[AccessPolicy]] = {
     val g = GroupTable.syntax("g")
     val r = ResourceTable.syntax("r")
     val rt = ResourceTypeTable.syntax("rt")
@@ -556,12 +591,6 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     val sp = PolicyTable.syntax("sp")
     val sr = ResourceTable.syntax("sr")
     val srt = ResourceTypeTable.syntax("srt")
-
-    val publicOnlyClause: SQLSyntax = if (publicOnly) {
-      samsqls"and ${p.public} = true"
-    } else {
-      samsqls""
-    }
 
     val limitOnePolicyClause: SQLSyntax = limitOnePolicy match {
       case Some(policyName) => samsqls"and ${p.name} = ${policyName}"
@@ -585,8 +614,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
           left join ${ResourceActionTable as ra} on ${pa.resourceActionId} = ${ra.id}
           where ${r.name} = ${resource.resourceId}
           and ${rt.name} = ${resource.resourceTypeName}
-          ${limitOnePolicyClause}
-          ${publicOnlyClause}"""
+          ${limitOnePolicyClause}"""
 
     import SamTypeBinders._
     runInTransaction { implicit session =>
@@ -679,7 +707,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     listPolicies(resource)
   }
 
-  override def listAccessPoliciesForUser(resource: FullyQualifiedResourceId, user: WorkbenchUserId): IO[Set[AccessPolicyMetadata]] = {
+  override def listAccessPoliciesForUser(resource: FullyQualifiedResourceId, user: WorkbenchUserId): IO[Set[AccessPolicyWithoutMembers]] = {
     runInTransaction { implicit session =>
       val ancestorGroupsTable = SubGroupMemberTable("ancestor_groups")
       val ag = ancestorGroupsTable.syntax("ag")
@@ -698,12 +726,12 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
       val ra = ResourceActionTable.syntax("ra")
 
       val listPoliciesQuery =
-        samsql"""with recursive ${ancestorGroupsTable.table}(${agColumn.parentGroupId}, ${agColumn.memberGroupId}) as (
-                  select ${gm.groupId}, ${gm.memberGroupId}
+        samsql"""with recursive ${ancestorGroupsTable.table}(${agColumn.parentGroupId}) as (
+                  select ${gm.groupId}
                   from ${GroupMemberTable as gm}
                   where ${gm.memberUserId} = ${user}
                   union
-                  select ${pg.groupId}, ${pg.memberGroupId}
+                  select ${pg.groupId}
                   from ${GroupMemberTable as pg}
                   join ${ancestorGroupsTable as ag} on ${agColumn.parentGroupId} = ${pg.memberGroupId}
         ) select ${p.result.name}, ${r.result.name}, ${rt.result.name}, ${g.result.email}, ${p.result.public}, ${rr.result.role}, ${ra.result.action}
@@ -728,7 +756,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
 
         val (roles, actions) = roleActionResults.unzip
 
-        AccessPolicyMetadata(FullyQualifiedPolicyId(FullyQualifiedResourceId(policyInfo.resourceTypeName, policyInfo.resourceId), policyInfo.name), policyInfo.email, roles.flatten.toSet, actions.flatten.toSet, policyInfo.public)
+        AccessPolicyWithoutMembers(FullyQualifiedPolicyId(FullyQualifiedResourceId(policyInfo.resourceTypeName, policyInfo.resourceId), policyInfo.name), policyInfo.email, roles.flatten.toSet, actions.flatten.toSet, policyInfo.public)
       }.toSet
     }
   }

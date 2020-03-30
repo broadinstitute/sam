@@ -120,7 +120,7 @@ class PolicyEvaluatorService(
     * @return
     */
   def listUserResourceActions(resource: FullyQualifiedResourceId, userId: WorkbenchUserId, force: Boolean = false): IO[Set[ResourceAction]] = {
-    def allActions(policy: AccessPolicyMetadata, resourceType: ResourceType): Set[ResourceAction] = {
+    def allActions(policy: AccessPolicyWithoutMembers, resourceType: ResourceType): Set[ResourceAction] = {
       val roleActions = policy.roles.flatMap { role =>
         resourceType.roles.filter(_.roleName == role).flatMap(_.actions)
       }
@@ -205,12 +205,11 @@ class PolicyEvaluatorService(
       policies.map(_.groupName)
     }
 
-  def listResourceAccessPoliciesForUser(resource: FullyQualifiedResourceId, userId: WorkbenchUserId, parentSpan: Span = null): IO[Set[AccessPolicyMetadata]] =
+  def listResourceAccessPoliciesForUser(resource: FullyQualifiedResourceId, userId: WorkbenchUserId, parentSpan: Span = null): IO[Set[AccessPolicyWithoutMembers]] =
     for {
       policies <- traceIOWithParent("listAccessPoliciesForUser", parentSpan)(_ => accessPolicyDAO.listAccessPoliciesForUser(resource, userId))
-      publicPolicies <- traceIOWithParent("listPublicAccessPolicies", parentSpan)(_ => accessPolicyDAO.listPublicAccessPolicies(resource))
-      publicPoliciesMetadata = publicPolicies.map(_.metadata)
-    } yield policies ++ publicPoliciesMetadata
+      publicPolicies <- traceIOWithParent("listPublicAccessPolicies", parentSpan)(_ => accessPolicyDAO.listPublicAccessPoliciesWithoutMembers(resource))
+    } yield policies ++ publicPolicies
 }
 
 object PolicyEvaluatorService {
