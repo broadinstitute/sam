@@ -1,0 +1,26 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+commonLabels:
+  app: sam
+resources:
+  - service-account.yaml
+  - psp.yaml
+  - role.yaml
+  - rolebinding.yaml
+  - istio-service.yaml
+  - deployment.yaml
+  - service.yaml
+secretGenerator:
+  - name: sam-configs
+    files:
+      - sam.conf=rendered/sam.conf
+      - newrelic.yml=rendered/newrelic.yml
+      - newrelic.jar=rendered/newrelic.jar
+      - sam-account.pem=rendered/sam-account.pem
+      - sam-account.json=rendered/sam-account.json
+      - sam-firestore-account.json=rendered/sam-firestore-account.json
+  - name: sqlproxy-sa-creds
+    files:
+      - sqlproxy-service-account.json
+  - name: sqlproxy-env
+    env: sqlproxy.env

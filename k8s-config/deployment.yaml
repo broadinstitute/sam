@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sam-deployment
+  labels:
+    version: v1
+spec:
+  # TODO consider changing the replicas number or always overlaying it for different environments.
+  replicas: 1
+  template:
+    metadata:
+      name: sam
+      labels:
+        version: v1
+    spec:
+      serviceAccountName: sam-sa
+      containers:
+        - name: sam-service
+          image: gcr.io/broad-dsp-gcr-public/sam:0.0.0
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+          # TODO do we want a livenessProbe or a readinessProbe?
+          env:
+            - name: JAVA_OPTS
+              value: >-
+                server -Xms8g -Xmx8g -XX:NewSize=1g -XX:MaxNewSize=1g -XX:SurvivorRatio=8 -XX:+UseParNewGC
+                -XX:+UseConcMarkSweepGC -XX:+CMSParallelRemarkEnabled -XX:+UseCMSInitiatingOccupancyOnly
+                -XX:CMSInitiatingOccupancyFraction=60 -XX:+ScavengeBeforeFullGC -XX:+CMSScavengeBeforeRemark
+                -Xloggc:/var/log/gc/sam-gc.log -XX:+UseGCLogFileRotation -XX:NumberOfGCLogFiles=2 -XX:GCLogFileSize=100M
+                -XX:+PrintGCDateStamps -verbose:gc -XX:+PrintGCDetails -XX:+PrintClassHistogramBeforeFullGC
+                -XX:+PrintClassHistogramAfterFullGC -Dconfig.file=/etc/sam.conf
+                -Dcom.sun.jndi.ldap.connect.pool.protocol=ssl -Dcom.sun.jndi.ldap.connect.pool.maxsize=100
+                -javaagent:/etc/newrelic.jar
+          volumeMounts:
+            - name: sam-configs
+              mountPath: /etc
+              readOnly: true
+        - name: sam-sqlproxy
+          image: broadinstitute/cloudsqlproxy:1.11_20180808
+          envFrom:
+            secretRef:
+              sqlproxy-env
+          env:
+            - name: CLOUDSQL_CREDENTIAL_FILE
+              value: /etc/sa/sqlproxy-service-account.json
+          volumeMounts:
+            - name: sqlproxy-sa-creds
+              mountPath: /etc/sa
+              readOnly: true
+          securityContext:
+            runAsUser: 2  # non-root user
+            allowPrivilegeEscalation: false
+      volumes:
+        - name: sam-configs
+          secret:
+            secretName: sam-configs
+        - name: sqlproxy-env
+          secret:
+            secretName: sqlproxy-env
+        - name: sqlproxy-sa-creds
+          secret:
+            secretName: sqlproxy-sa-creds
