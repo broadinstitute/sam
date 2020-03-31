@@ -105,6 +105,30 @@ class LdapRegistrationDAOSpec extends FlatSpec with Matchers with TestSupport wi
       dao.loadUser(user.id).unsafeRunSync()
     }
   }
+
+  it should "disable users when deleting them" in {
+    val user = WorkbenchUser(WorkbenchUserId(UUID.randomUUID().toString), None, WorkbenchEmail("foo@bar.com"), None)
+
+    assertResult(user) {
+      dao.createUser(user).unsafeRunSync()
+    }
+
+    dao.enableIdentity(user.id).unsafeRunSync()
+
+    assertResult(true) {
+      dao.isEnabled(user.id).unsafeRunSync()
+    }
+
+    dao.deleteUser(user.id).unsafeRunSync()
+
+    assertResult(None) {
+      dao.loadUser(user.id).unsafeRunSync()
+    }
+
+    assertResult(false) {
+      dao.isEnabled(user.id).unsafeRunSync()
+    }
+  }
 }
 
 

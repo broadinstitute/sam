@@ -63,7 +63,10 @@ class LdapRegistrationDAO(
     }
 
   override def deleteUser(userId: WorkbenchUserId): IO[Unit] =
-    executeLdap(IO(ldapConnectionPool.delete(userDn(userId))))
+    executeLdap(for {
+      _ <- disableIdentity(userId)
+      _ <- IO(ldapConnectionPool.delete(userDn(userId)))
+    } yield ())
 
   override def enableIdentity(subject: WorkbenchSubject): IO[Unit] =
     retryLdapBusyWithBackoff(100.millisecond, 4) {
@@ -85,7 +88,8 @@ class LdapRegistrationDAO(
     executeLdap(
       IO(ldapConnectionPool.modify(directoryConfig.enabledUsersGroupDn, new Modification(ModificationType.DELETE, Attr.member, subjectDn(subject)))).void
     ).recover {
-      case ldape: LDAPException if ldape.getResultCode == ResultCode.NO_SUCH_ATTRIBUTE =>
+      case ldape: LDAPException if ldape.getResultCode == ResultCode.NO_SUCH_ATTRIBUTE
+        || ldape.getResultCode == ResultCode.NO_SUCH_OBJECT =>
     }
   }
 
