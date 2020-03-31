@@ -62,6 +62,7 @@ class LdapRegistrationDAO(
       unmarshalUser(results).toOption
     }
 
+  // Deleting a user in ldap will also disable them to clear them out of the enabled-users group
   override def deleteUser(userId: WorkbenchUserId): IO[Unit] =
     executeLdap(for {
       _ <- disableIdentity(userId)
