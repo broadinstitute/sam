@@ -41,8 +41,7 @@ class PolicyEvaluatorService(
   def hasPermission(resource: FullyQualifiedResourceId, action: ResourceAction, userId: WorkbenchUserId, parentSpan: Span = null): IO[Boolean] = {
     // first attempt the shallow check and fallback to the full check if it returns false
     for {
-      attempt1 <- hasPermissionShallowCheck(resource, action, userId)
-      attempt2 <- if (attempt1) IO.pure(attempt1) else traceIOWithParent("fullCheck", parentSpan)(_ => hasPermissionFullCheck(resource, action, userId))
+      attempt2 <- traceIOWithParent("fullCheck", parentSpan)(_ => hasPermissionFullCheck(resource, action, userId))
     } yield {
       attempt2
     }
