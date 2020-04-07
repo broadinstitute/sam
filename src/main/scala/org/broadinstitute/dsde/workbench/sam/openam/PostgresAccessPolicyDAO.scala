@@ -746,7 +746,20 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
           left join ${PolicyActionTable as pa} on ${p.id} = ${pa.resourcePolicyId}
           left join ${ResourceActionTable as ra} on ${pa.resourceActionId} = ${ra.id}
           where ${r.name} = ${resource.resourceId}
-          and ${rt.name} = ${resource.resourceTypeName}"""
+          and ${rt.name} = ${resource.resourceTypeName}
+          union
+          select ${p.result.name}, ${r.result.name}, ${rt.result.name}, ${g.result.email}, ${p.result.public}, ${rr.result.role}, ${ra.result.action}
+          from ${GroupTable as g}
+          join ${PolicyTable as p} on ${g.id} = ${p.groupId}
+          join ${ResourceTable as r} on ${p.resourceId} = ${r.id}
+          join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
+          left join ${PolicyRoleTable as pr} on ${p.id} = ${pr.resourcePolicyId}
+          left join ${ResourceRoleTable as rr} on ${pr.resourceRoleId} = ${rr.id}
+          left join ${PolicyActionTable as pa} on ${p.id} = ${pa.resourcePolicyId}
+          left join ${ResourceActionTable as ra} on ${pa.resourceActionId} = ${ra.id}
+          where ${r.name} = ${resource.resourceId}
+          and ${rt.name} = ${resource.resourceTypeName}
+          and ${p.public} = true"""
 
       import SamTypeBinders._
       val results = listPoliciesQuery.map(rs => (PolicyInfo(rs.get[AccessPolicyName](p.resultName.name), rs.get[ResourceId](r.resultName.name), rs.get[ResourceTypeName](rt.resultName.name), rs.get[WorkbenchEmail](g.resultName.email), rs.boolean(p.resultName.public)),

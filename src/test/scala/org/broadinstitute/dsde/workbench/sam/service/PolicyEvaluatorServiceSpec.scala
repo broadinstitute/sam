@@ -636,4 +636,31 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
 
     res.unsafeRunSync()
   }
+
+  "listResourceAccessPoliciesForUser" should "return all of a user's policies and all public policies" in {
+    val user = dummyUserInfo
+    val resource = genResource.sample.get.copy(resourceTypeName = defaultResourceType.name)
+    val memberPolicyName = AccessPolicyName("user-in-policy")
+    val notMemberPolicyName = AccessPolicyName("user-not-policy")
+    val publicPolicyName = AccessPolicyName("public-policy")
+
+    val memberPolicyMembership = AccessPolicyMembership(Set(user.userEmail), Set.empty, Set(defaultResourceType.ownerRoleName))
+    val notMemberPolicyMembership = AccessPolicyMembership(Set.empty, Set.empty, Set.empty)
+    val publicPolicyMembership = AccessPolicyMembership(Set.empty, Set.empty, Set.empty)
+    val resourcePolicyMap = Map(memberPolicyName -> memberPolicyMembership, notMemberPolicyName -> notMemberPolicyMembership, publicPolicyName -> publicPolicyMembership)
+
+    val res = for {
+      _ <- setup()
+      _ <- service.createResourceType(defaultResourceType)
+      _ <- service.createResource(defaultResourceType, resource.resourceId, resourcePolicyMap, Set.empty, user.userId)
+      _ <- service.setPublic(FullyQualifiedPolicyId(resource.fullyQualifiedId, publicPolicyName), true)
+      r <- service.policyEvaluatorService.listResourceAccessPoliciesForUser(resource.fullyQualifiedId, user.userId)
+    } yield {
+      val expected = Set(FullyQualifiedPolicyId(resource.fullyQualifiedId, memberPolicyName),
+        FullyQualifiedPolicyId(resource.fullyQualifiedId, publicPolicyName))
+      r.map(_.id) shouldBe expected
+    }
+
+    res.unsafeRunSync()
+  }
 }

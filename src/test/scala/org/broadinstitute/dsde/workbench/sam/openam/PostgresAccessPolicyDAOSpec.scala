@@ -630,7 +630,7 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
     }
 
     "listAccessPoliciesForUser" - {
-      "lists the access policies on a resource that a user is a member of" in {
+      "lists the access policies on a resource that a user is a member of including public policies" in {
         val user = WorkbenchUser(WorkbenchUserId("user"), None, WorkbenchEmail("user@user.edu"), None)
 
         val subGroup = BasicWorkbenchGroup(WorkbenchGroupName("subGroup"), Set(user.id), WorkbenchEmail("sub@groups.com"))
@@ -639,9 +639,9 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
         val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
         val indirectPolicy = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("indirect")), Set(parentGroup.id), WorkbenchEmail("indirect@policy.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), false)
         val directPolicy = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("direct")), Set(user.id), WorkbenchEmail("direct@policy.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), false)
-        val allPolicies = Set(indirectPolicy, directPolicy)
-        val expectedResults = allPolicies.map(policy =>
-          AccessPolicyWithoutMembers(policy.id, policy.email, policy.roles, policy.actions, policy.public))
+        val notInPolicy = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("notIn")), Set.empty, WorkbenchEmail("notIn@policy.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), false)
+        val publicPolicy = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("public")), Set.empty, WorkbenchEmail("public@policy.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), true)
+        val allPolicies = Set(indirectPolicy, directPolicy, notInPolicy, publicPolicy)
 
         dirDao.createUser(user).unsafeRunSync()
         dirDao.createGroup(subGroup).unsafeRunSync()
@@ -650,6 +650,9 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
         dao.createResourceType(resourceType).unsafeRunSync()
         dao.createResource(resource).unsafeRunSync()
         allPolicies.map(dao.createPolicy(_).unsafeRunSync())
+
+        val expectedResults = allPolicies.filter(_.id != notInPolicy.id).map(policy =>
+          AccessPolicyWithoutMembers(policy.id, policy.email, policy.roles, policy.actions, policy.public))
 
         dao.listAccessPoliciesForUser(resource.fullyQualifiedId, user.id).unsafeRunSync() should contain theSameElementsAs expectedResults
       }
