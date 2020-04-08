@@ -169,13 +169,69 @@ Stop your local postgres:
 sh docker/run-postgres.sh stop
 ```
 
+### To run Sam locally
+
+#### Local setup
+
+Add `127.0.0.1       local.broadinstitute.org` to `/etc/hosts` if it isn't already:
+```
+sudo sh -c "echo '127.0.0.1       local.broadinstitute.org' >> /etc/hosts"
+```
+
+
+Set up configs from the [firecloud-develop repo](https://github.com/broadinstitute/firecloud-develop/)
+```
+# Run from the root directory of firecloud-develop and follow the instructions
+sh run-context/local/scripts/firecloud-setup.sh
+```
+
+Make sure Docker is running.
+
+You can start Sam against dev DBs or local DBs following the instructions below.
+
+
+#### Using dev DBs
+You will need to be connected to the Broad Internal network to connect to the Dev DBs.
+
+```
+# Start up local Sam
+sh config/docker-rsync-local-sam.sh
+```
+
+
+Then you can verify that it is running by using the commands that are a couple sections down.
+
+
+#### Using local DBs
+
+```
+# Start up local opendj and postgres
+sh docker/run-opendj.sh start
+sh docker/run-postgres.sh start 
+
+# Set environment variables for using local opendj and postgres
+LOCAL_OPENDJ=true
+LOCAL_POSTGRES=true
+
+# Start up local Sam
+sh config/docker-rsync-local-sam.sh
+```
+
+#### Verify that local Sam is running
+Sam Status endpoint:
+https://local.broadinstitute.org:50443/status
+
+Swagger page:
+https://local.broadinstitute.org:50443/#/
+
+
 ### Test newrelic metrics locally
 * Download a newrelic agent jar from https://docs.newrelic.com/docs/release-notes/agent-release-notes/java-release-notes
 * Put `newrelic-agent-x.x.x.jar` under `config` directory (If you haven't set up config, follow instructions [here](https://github.com/broadinstitute/firecloud-develop#quick-start---how-do-i-set-up-my-configs))
 * In newrelic.yml, update `agent_enabled` to `true`
 * In `docker-rsync-local-sam.sh` file, add `-javaagent:/app/config/newrelic-agent-4.11.0.jar` to server startup java options.
 * Start sam locally, `./config/docker-rsync-local-sam.sh`
-* Send some requests to local sam.
+* Send some requests to local Sam.
 * Go to `https://newrelic.com/`, and log in
 * Look for `sam - local - dev` and check if metrics look good.
 
