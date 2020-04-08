@@ -182,7 +182,6 @@ sudo sh -c "echo '127.0.0.1       local.broadinstitute.org' >> /etc/hosts"
 
 You can then start Sam against dev DBs or local DBs following the instructions below.
 
-
 #### Using dev DBs
 You must be connected to the Broad Internal network to connect to the Dev DBs.
 
@@ -190,7 +189,6 @@ You must be connected to the Broad Internal network to connect to the Dev DBs.
 # Start up local Sam
 sh config/docker-rsync-local-sam.sh
 ```
-
 
 #### Using local DBs
 
@@ -214,17 +212,16 @@ https://local.broadinstitute.org:50443/status](https://local.broadinstitute.org:
 [Swagger page:
 https://local.broadinstitute.org:50443/#/](https://local.broadinstitute.org:50443/#/)
 
-
 ### Test newrelic metrics locally
-* Follow directions above for Local Setup
-* Download a newrelic agent jar from https://docs.newrelic.com/docs/release-notes/agent-release-notes/java-release-notes
-* Put `newrelic-agent-x.x.x.jar` under `config` directory
-* In `config/newrelic.yml`, update `agent_enabled` to `true`
-* In `config/docker-rsync-local-sam.sh`, add `-javaagent:/app/config/newrelic-agent-4.11.0.jar` to server startup java options.
-* Follow directions above Using dev or local DBs when starting up local Sam.
-* Send some requests to local Sam.
-* Go to `https://newrelic.com/`, and log in
-* Look for `sam - local - dev` and check if metrics look good.
+*  Follow directions above for Local Setup
+*  Download a newrelic agent jar from https://docs.newrelic.com/docs/release-notes/agent-release-notes/java-release-notes
+*  Put `newrelic-agent-x.x.x.jar` under `config` directory
+*  In `config/newrelic.yml`, update `agent_enabled` to `true`
+*  In `config/docker-rsync-local-sam.sh`, add `-javaagent:/app/config/newrelic-agent-4.11.0.jar` to server startup java options.
+*  Follow directions above Using dev or local DBs when starting up local Sam.
+*  Send some requests to local Sam.
+*  Go to `https://newrelic.com/`, and log in
+*  Look for `sam - local - dev` and check if metrics look good.
 
 ### [CONTRIBUTING.md](../CONTRIBUTING.md)
 
