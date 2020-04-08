@@ -40,7 +40,7 @@ spec:
           image: broadinstitute/cloudsqlproxy:1.11_20180808
           envFrom:
             secretRef:
-              sqlproxy-env
+              name: sqlproxy-env
           env:
             - name: CLOUDSQL_CREDENTIAL_FILE
               value: /etc/sa/sqlproxy-service-account.json
