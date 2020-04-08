@@ -173,7 +173,7 @@ sh docker/run-postgres.sh stop
 
 #### Local setup
 
-Set up configs using the [firecloud-develop config quick start guide](https://github.com/broadinstitute/firecloud-develop#quick-start---how-do-i-set-up-my-configs).
+Set up configs using the [firecloud-develop quick start guide for configs](https://github.com/broadinstitute/firecloud-develop#quick-start---how-do-i-set-up-my-configs).
 
 If you haven't already, add `127.0.0.1       local.broadinstitute.org` to `/etc/hosts`:
 ```
@@ -190,8 +190,6 @@ You must be connected to the Broad Internal network to connect to the Dev DBs.
 # Start up local Sam
 sh config/docker-rsync-local-sam.sh
 ```
-
-Then you can verify that it is running by using the commands that are a couple sections down.
 
 
 #### Using local DBs
@@ -210,11 +208,11 @@ sh config/docker-rsync-local-sam.sh
 ```
 
 #### Verify that local Sam is running
-Sam Status endpoint:
-https://local.broadinstitute.org:50443/status
+[Status endpoint:
+https://local.broadinstitute.org:50443/status](https://local.broadinstitute.org:50443/status)
 
-Swagger page:
-https://local.broadinstitute.org:50443/#/
+[Swagger page:
+https://local.broadinstitute.org:50443/#/](https://local.broadinstitute.org:50443/#/)
 
 
 ### Test newrelic metrics locally
