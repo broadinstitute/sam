@@ -10,6 +10,7 @@ resources:
   - istio-service.yaml
   - deployment.yaml
   - service.yaml
+  - rendered
 secretGenerator:
   - name: sam-configs
     files:
