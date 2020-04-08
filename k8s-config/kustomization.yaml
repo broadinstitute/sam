@@ -23,4 +23,5 @@ secretGenerator:
     files:
       - sqlproxy-service-account.json
   - name: sqlproxy-env
-    env: sqlproxy.env
+    envs:
+      - sqlproxy.env
