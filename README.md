@@ -182,7 +182,7 @@ sudo sh -c "echo '127.0.0.1       local.broadinstitute.org' >> /etc/hosts"
 
 You can then start Sam against dev DBs or local DBs following the instructions below.
 
-#### Using dev DBs
+##### Using dev DBs
 You must be connected to the Broad Internal network to connect to the Dev DBs.
 
 ```
@@ -190,19 +190,11 @@ You must be connected to the Broad Internal network to connect to the Dev DBs.
 sh config/docker-rsync-local-sam.sh
 ```
 
-#### Using local DBs
+##### Using local DBs
 
 ```
-# Start up local opendj and postgres
-sh docker/run-opendj.sh start
-sh docker/run-postgres.sh start 
-
-# Set environment variables for using local opendj and postgres
-LOCAL_OPENDJ=true
-LOCAL_POSTGRES=true
-
-# Start up local Sam
-sh config/docker-rsync-local-sam.sh
+# Start up local Sam with local opendj and postgres
+LOCAL_OPENDJ=true LOCAL_POSTGRES=true sh config/docker-rsync-local-sam.sh
 ```
 
 #### Verify that local Sam is running
