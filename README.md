@@ -169,13 +169,49 @@ Stop your local postgres:
 sh docker/run-postgres.sh stop
 ```
 
+### To run Sam locally
+
+#### Local setup
+
+Set up configs using the [firecloud-develop quick start guide for configs](https://github.com/broadinstitute/firecloud-develop#quick-start---how-do-i-set-up-my-configs).
+
+If you haven't already, add `127.0.0.1       local.broadinstitute.org` to `/etc/hosts`:
+```
+sudo sh -c "echo '127.0.0.1       local.broadinstitute.org' >> /etc/hosts"
+```
+
+You can then start Sam against dev DBs or local DBs following the instructions below.
+
+##### Using dev DBs
+You must be connected to the Broad Internal network to connect to the Dev DBs.
+
+```
+# Start up local Sam
+sh config/docker-rsync-local-sam.sh
+```
+
+##### Using local DBs
+
+```
+# Start up local Sam with local opendj and postgres
+LOCAL_OPENDJ=true LOCAL_POSTGRES=true sh config/docker-rsync-local-sam.sh
+```
+
+#### Verify that local Sam is running
+[Status endpoint:
+https://local.broadinstitute.org:50443/status](https://local.broadinstitute.org:50443/status)
+
+[Swagger page:
+https://local.broadinstitute.org:50443/#/](https://local.broadinstitute.org:50443/#/)
+
 ### Test newrelic metrics locally
+* Follow directions above for Local Setup
 * Download a newrelic agent jar from https://docs.newrelic.com/docs/release-notes/agent-release-notes/java-release-notes
-* Put `newrelic-agent-x.x.x.jar` under `config` directory (If you haven't set up config, follow instructions [here](https://github.com/broadinstitute/firecloud-develop#quick-start---how-do-i-set-up-my-configs))
-* In newrelic.yml, update `agent_enabled` to `true`
-* In `docker-rsync-local-sam.sh` file, add `-javaagent:/app/config/newrelic-agent-4.11.0.jar` to server startup java options.
-* Start sam locally, `./config/docker-rsync-local-sam.sh`
-* Send some requests to local sam.
+* Put `newrelic-agent-x.x.x.jar` under `config` directory
+* In `config/newrelic.yml`, update `agent_enabled` to `true`
+* In `config/docker-rsync-local-sam.sh`, add `-javaagent:/app/config/newrelic-agent-4.11.0.jar` to server startup java options.
+* Follow directions above Using dev or local DBs when starting up local Sam.
+* Send some requests to local Sam.
 * Go to `https://newrelic.com/`, and log in
 * Look for `sam - local - dev` and check if metrics look good.
 
