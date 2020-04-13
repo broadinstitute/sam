@@ -3,6 +3,7 @@ package org.broadinstitute.dsde.workbench.sam.directory
 import java.util.Date
 
 import cats.effect.IO
+import io.opencensus.trace.Span
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google._
 import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
@@ -38,7 +39,7 @@ trait DirectoryDAO extends RegistrationDAO {
   def loadSubjectFromGoogleSubjectId(googleSubjectId: GoogleSubjectId): IO[Option[WorkbenchSubject]]
 
   def createUser(user: WorkbenchUser): IO[WorkbenchUser]
-  def loadUser(userId: WorkbenchUserId): IO[Option[WorkbenchUser]]
+  def loadUser(userId: WorkbenchUserId, parentSpan: Span): IO[Option[WorkbenchUser]]
   def loadUserByIdentityConcentratorId(userId: IdentityConcentratorId): IO[Option[WorkbenchUser]]
   def loadUsers(userIds: Set[WorkbenchUserId]): IO[Stream[WorkbenchUser]]
   def deleteUser(userId: WorkbenchUserId): IO[Unit]

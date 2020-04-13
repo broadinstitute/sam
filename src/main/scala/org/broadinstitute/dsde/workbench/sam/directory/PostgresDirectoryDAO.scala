@@ -13,9 +13,11 @@ import org.broadinstitute.dsde.workbench.sam.util.DatabaseSupport
 import scalikejdbc._
 import SamParameterBinderFactory._
 import akka.http.scaladsl.model.StatusCodes
+import io.opencensus.trace.Span
 import org.broadinstitute.dsde.workbench.sam.db.dao.{PostgresGroupDAO, SubGroupMemberTable}
 import org.postgresql.util.PSQLException
 import org.broadinstitute.dsde.workbench.sam._
+import org.broadinstitute.dsde.workbench.sam.util.OpenCensusIOUtils.traceIOWithParent
 
 import scala.concurrent.ExecutionContext
 import scala.util.{Failure, Try}
@@ -464,14 +466,15 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     }
   }
 
-  override def loadUser(userId: WorkbenchUserId): IO[Option[WorkbenchUser]] = {
-    runInTransaction { implicit session =>
+  override def loadUser(userId: WorkbenchUserId, parentSpan: Span = null): IO[Option[WorkbenchUser]] = {
+    traceIOWithParent("loadUser-PostgresDirectoryDAO", parentSpan)(_ => runInTransaction { implicit session =>
       val userTable = UserTable.syntax
 
       val loadUserQuery = samsql"select ${userTable.resultAll} from ${UserTable as userTable} where ${userTable.id} = ${userId}"
       loadUserQuery.map(UserTable(userTable))
         .single().apply().map(UserTable.unmarshalUserRecord)
     }
+      )
   }
 
   override def loadUserByIdentityConcentratorId(userId: IdentityConcentratorId): IO[Option[WorkbenchUser]] = {

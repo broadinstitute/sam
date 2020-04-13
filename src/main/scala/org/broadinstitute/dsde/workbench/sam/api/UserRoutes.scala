@@ -64,13 +64,15 @@ trait UserRoutes extends UserInfoDirectives {
           } ~ requireUserInfo { user =>
             path("info") {
               get {
-                complete {
-                  userService.getUserStatusInfo(user.userId).map { statusOption =>
-                    statusOption
-                      .map { status =>
-                        StatusCodes.OK -> Option(status)
-                      }
-                      .getOrElse(StatusCodes.NotFound -> None)
+                traceRequest { span =>
+                  complete {
+                    userService.getUserStatusInfo(user.userId, span).map { statusOption =>
+                      statusOption
+                        .map { status =>
+                          StatusCodes.OK -> Option(status)
+                        }
+                        .getOrElse(StatusCodes.NotFound -> None)
+                    }
                   }
                 }
               }

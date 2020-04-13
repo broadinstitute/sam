@@ -15,6 +15,8 @@ import org.broadinstitute.dsde.workbench.util.health.{HealthMonitor, StatusCheck
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.language.postfixOps
+//import io.opencensus.trace.Span
+//import org.broadinstitute.dsde.workbench.sam.util.OpenCensusIOUtils._
 
 class StatusService(
     val directoryDAO: DirectoryDAO,
@@ -28,7 +30,15 @@ class StatusService(
   private val healthMonitor = system.actorOf(HealthMonitor.props(cloudExtensions.allSubSystems + OpenDJ)(checkStatus _))
   system.scheduler.schedule(initialDelay, pollInterval, healthMonitor, HealthMonitor.CheckAll)
 
-  def getStatus(): Future[StatusCheckResponse] = (healthMonitor ? GetCurrentStatus).asInstanceOf[Future[StatusCheckResponse]]
+  //  def getStatus(): Future[StatusCheckResponse] = (healthMonitor ? GetCurrentStatus).asInstanceOf[Future[StatusCheckResponse]]
+//    def getStatus(parentSpan: Span = null): Future[StatusCheckResponse] = traceIOWithParent("statusCheck", parentSpan)(_ => (healthMonitor ? GetCurrentStatus)).asInstanceOf[Future[StatusCheckResponse]]
+//    def getStatus(parentSpan: Span = null): Future[StatusCheckResponse] = (healthMonitor ? traceIOWithParent("statusCheck", parentSpan)(_ => GetCurrentStatus)).asInstanceOf[Future[StatusCheckResponse]]
+/* error:
+[error]  found   : scala.concurrent.Future[org.broadinstitute.dsde.workbench.util.health.StatusCheckResponse]
+[error]  required: cats.effect.IO[?]
+[error] Error occurred in an application involving default arguments.
+[error]     def getStatus(parentSpan: Span = null): Future[StatusCheckResponse] = traceIOWithParent("statusCheck", parentSpan)(_ => (healthMonitor ? GetCurrentStatus).asInstanceOf[Future[StatusCheckResponse]])
+ */
 
   private def checkStatus(): Map[Subsystem, Future[SubsystemStatus]] =
     cloudExtensions.checkStatus + (OpenDJ -> checkOpenDJ(cloudExtensions.allUsersGroupName).unsafeToFuture()) + (Database -> checkDatabase().unsafeToFuture())

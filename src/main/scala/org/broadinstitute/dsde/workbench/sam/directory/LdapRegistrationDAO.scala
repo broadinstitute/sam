@@ -5,6 +5,7 @@ import cats.effect.{ContextShift, IO, Timer}
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
 import com.unboundid.ldap.sdk._
+import io.opencensus.trace.Span
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{ServiceAccount, ServiceAccountDisplayName, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.sam._
@@ -55,7 +56,7 @@ class LdapRegistrationDAO(
     } *> IO.pure(user)
   }
 
-  override def loadUser(userId: WorkbenchUserId): IO[Option[WorkbenchUser]] = executeLdap(IO(loadUserInternal(userId)))
+  override def loadUser(userId: WorkbenchUserId, parentSpan: Span = null): IO[Option[WorkbenchUser]] = executeLdap(IO(loadUserInternal(userId)))
 
   def loadUserInternal(userId: WorkbenchUserId) =
     Option(ldapConnectionPool.getEntry(userDn(userId))) flatMap { results =>

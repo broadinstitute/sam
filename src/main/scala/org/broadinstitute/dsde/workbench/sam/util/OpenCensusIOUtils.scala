@@ -14,6 +14,7 @@ object OpenCensusIOUtils {
                           )(f: Span => IO[T]): IO[T] =
     traceIOSpan(IO(startSpanWithParent(name, parentSpan)), failureStatus)(f)
 
+  // todo: this is unused
   def traceIO[T](
                   name: String,
                   failureStatus: Throwable => Status = (_: Throwable) => Status.UNKNOWN

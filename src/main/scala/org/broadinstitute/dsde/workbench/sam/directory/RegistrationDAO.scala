@@ -1,5 +1,6 @@
 package org.broadinstitute.dsde.workbench.sam.directory
 import cats.effect.IO
+import io.opencensus.trace.Span
 import org.broadinstitute.dsde.workbench.model._
 
 /**
@@ -10,7 +11,7 @@ import org.broadinstitute.dsde.workbench.model._
   */
 trait RegistrationDAO {
   def createUser(user: WorkbenchUser): IO[WorkbenchUser]
-  def loadUser(userId: WorkbenchUserId): IO[Option[WorkbenchUser]]
+  def loadUser(userId: WorkbenchUserId, parentSpan: Span = null): IO[Option[WorkbenchUser]]
   def deleteUser(userId: WorkbenchUserId): IO[Unit]
   def enableIdentity(subject: WorkbenchSubject): IO[Unit]
   def disableIdentity(subject: WorkbenchSubject): IO[Unit]

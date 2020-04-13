@@ -9,6 +9,7 @@ import spray.json.{JsObject, JsString}
 import org.broadinstitute.dsde.workbench.util.health.StatusJsonSupport._
 
 import scala.concurrent.ExecutionContext
+import io.opencensus.scala.akka.http.TracingDirective._
 
 object BuildTimeVersion {
   val version = Option(getClass.getPackage.getImplementationVersion)
@@ -23,17 +24,22 @@ trait StatusRoutes {
     pathPrefix("status") {
       pathEndOrSingleSlash {
         get {
-          complete(statusService.getStatus().map { statusResponse =>
-            val httpStatus = if (statusResponse.ok) StatusCodes.OK else StatusCodes.InternalServerError
-            (httpStatus, statusResponse)
-          })
+          traceRequest { _ =>
+            complete(statusService.getStatus().map { statusResponse =>
+              val httpStatus = if (statusResponse.ok) StatusCodes.OK else StatusCodes.InternalServerError
+              (httpStatus, statusResponse)
+            })
+          }
+
         }
       }
     } ~
       pathPrefix("version") {
         pathEndOrSingleSlash {
           get {
-            complete((StatusCodes.OK, BuildTimeVersion.versionJson))
+            traceRequest { _ =>
+              complete((StatusCodes.OK, BuildTimeVersion.versionJson))
+            }
           }
         }
       }
