@@ -30,7 +30,7 @@ class StatusService(
   private val healthMonitor = system.actorOf(HealthMonitor.props(cloudExtensions.allSubSystems + OpenDJ)(checkStatus _))
   system.scheduler.schedule(initialDelay, pollInterval, healthMonitor, HealthMonitor.CheckAll)
 
-  //  def getStatus(): Future[StatusCheckResponse] = (healthMonitor ? GetCurrentStatus).asInstanceOf[Future[StatusCheckResponse]]
+    def getStatus(): Future[StatusCheckResponse] = (healthMonitor ? GetCurrentStatus).asInstanceOf[Future[StatusCheckResponse]]
 //    def getStatus(parentSpan: Span = null): Future[StatusCheckResponse] = traceIOWithParent("statusCheck", parentSpan)(_ => (healthMonitor ? GetCurrentStatus)).asInstanceOf[Future[StatusCheckResponse]]
 //    def getStatus(parentSpan: Span = null): Future[StatusCheckResponse] = (healthMonitor ? traceIOWithParent("statusCheck", parentSpan)(_ => GetCurrentStatus)).asInstanceOf[Future[StatusCheckResponse]]
 /* error:
