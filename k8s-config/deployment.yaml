@@ -26,7 +26,7 @@ spec:
               # This omits a newrelic agent. I had some initial size issues uploading it to be mounted, so it's removed
               # for now. Would be another flag '-javaagent:/etc/newrelic.jar'
               value: >-
-                server -Xms8g -Xmx8g -XX:NewSize=1g -XX:MaxNewSize=1g -XX:SurvivorRatio=8 -XX:+UseParNewGC
+                -Xms8g -Xmx8g -XX:NewSize=1g -XX:MaxNewSize=1g -XX:SurvivorRatio=8 -XX:+UseParNewGC
                 -XX:+UseConcMarkSweepGC -XX:+CMSParallelRemarkEnabled -XX:+UseCMSInitiatingOccupancyOnly
                 -XX:CMSInitiatingOccupancyFraction=60 -XX:+ScavengeBeforeFullGC -XX:+CMSScavengeBeforeRemark
                 -Xloggc:/var/log/gc/sam-gc.log -XX:+UseGCLogFileRotation -XX:NumberOfGCLogFiles=2 -XX:GCLogFileSize=100M
