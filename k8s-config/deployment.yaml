@@ -31,11 +31,12 @@ spec:
                 -XX:CMSInitiatingOccupancyFraction=60 -XX:+ScavengeBeforeFullGC -XX:+CMSScavengeBeforeRemark
                 -Xloggc:/var/log/gc/sam-gc.log -XX:+UseGCLogFileRotation -XX:NumberOfGCLogFiles=2 -XX:GCLogFileSize=100M
                 -XX:+PrintGCDateStamps -verbose:gc -XX:+PrintGCDetails -XX:+PrintClassHistogramBeforeFullGC
-                -XX:+PrintClassHistogramAfterFullGC -Dconfig.file=/etc/sam.conf
+                -XX:+PrintClassHistogramAfterFullGC -Dconfig.file=/etc/sam-configs/sam.conf
                 -Dcom.sun.jndi.ldap.connect.pool.protocol=ssl -Dcom.sun.jndi.ldap.connect.pool.maxsize=100
           volumeMounts:
             - name: sam-configs
-              mountPath: /etc
+              # TODO need to change rendered sam.conf references to add sam-configs subdir.
+              mountPath: /etc/sam-configs
               readOnly: true
         - name: sam-sqlproxy
           image: broadinstitute/cloudsqlproxy:1.11_20180808
