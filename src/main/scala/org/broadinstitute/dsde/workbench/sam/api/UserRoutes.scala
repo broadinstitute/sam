@@ -12,7 +12,6 @@ import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.service.UserService
 import org.broadinstitute.dsde.workbench.sam.service.UserService.genWorkbenchUserId
 import org.broadinstitute.dsde.workbench.sam.util.OpenCensusIOUtils.completeWithTrace
-
 import scala.concurrent.ExecutionContext
 
 /**
@@ -37,7 +36,7 @@ trait UserRoutes extends UserInfoDirectives {
           } ~ requireUserInfo { user =>
             get {
               parameter("userDetailsOnly".?) { userDetailsOnly =>
-                completeWithTrace {
+                completeWithTrace { span =>
                   userService.getUserStatus(user.userId, userDetailsOnly.exists(_.equalsIgnoreCase("true"))).map { statusOption =>
                     statusOption
                       .map { status =>
@@ -65,9 +64,8 @@ trait UserRoutes extends UserInfoDirectives {
           } ~ requireUserInfo { user =>
             path("info") {
               get {
-                completeWithTrace { //span =>
-                  userService.getUserStatusInfo(user.userId).map { statusOption =>
-//                  userService.getUserStatusInfo(user.userId, span).map { statusOption =>
+                completeWithTrace { span =>
+                  userService.getUserStatusInfo(user.userId, span).map { statusOption =>
                     statusOption
                       .map { status =>
                         StatusCodes.OK -> Option(status)
@@ -79,7 +77,7 @@ trait UserRoutes extends UserInfoDirectives {
             } ~
               path("diagnostics") {
                 get {
-                  completeWithTrace {
+                  completeWithTrace { span =>
                     userService.getUserStatusDiagnostics(user.userId).map { statusOption =>
                       statusOption
                         .map { status =>
@@ -101,7 +99,7 @@ trait UserRoutes extends UserInfoDirectives {
         asWorkbenchAdmin(userInfo) {
           pathPrefix("user") {
             path("email" / Segment) { email =>
-              completeWithTrace {
+              completeWithTrace { span =>
                 userService.getUserStatusFromEmail(WorkbenchEmail(email)).map { statusOption =>
                   statusOption
                     .map { status =>
@@ -114,12 +112,12 @@ trait UserRoutes extends UserInfoDirectives {
               pathPrefix(Segment) { userId =>
                 pathEnd {
                   delete {
-                    completeWithTrace {
+                    completeWithTrace { span =>
                       userService.deleteUser(WorkbenchUserId(userId), userInfo).map(_ => StatusCodes.OK)
                     }
                   } ~
                     get {
-                      completeWithTrace {
+                      completeWithTrace { span =>
                         userService.getUserStatus(WorkbenchUserId(userId)).map { statusOption =>
                           statusOption
                             .map { status =>
@@ -133,7 +131,7 @@ trait UserRoutes extends UserInfoDirectives {
                   pathPrefix("enable") {
                     pathEndOrSingleSlash {
                       put {
-                        completeWithTrace {
+                        completeWithTrace { span =>
                           userService.enableUser(WorkbenchUserId(userId), userInfo).map { statusOption =>
                             statusOption
                               .map { status =>
@@ -148,7 +146,7 @@ trait UserRoutes extends UserInfoDirectives {
                   pathPrefix("disable") {
                     pathEndOrSingleSlash {
                       put {
-                        completeWithTrace {
+                        completeWithTrace { span =>
                           userService.disableUser(WorkbenchUserId(userId), userInfo).map { statusOption =>
                             statusOption
                               .map { status =>
@@ -163,7 +161,7 @@ trait UserRoutes extends UserInfoDirectives {
                   pathPrefix("petServiceAccount") {
                     path(Segment) { project =>
                       delete {
-                        completeWithTrace {
+                        completeWithTrace { span =>
                           cloudExtensions
                             .deleteUserPetServiceAccount(WorkbenchUserId(userId), GoogleProject(project))
                             .map(_ => StatusCodes.NoContent)
@@ -183,7 +181,7 @@ trait UserRoutes extends UserInfoDirectives {
         get {
           path(Segment) { email =>
             pathEnd {
-              completeWithTrace {
+              completeWithTrace { span =>
                 userService.getUserIdInfoFromEmail(WorkbenchEmail(email)).map {
                   case Left(_) => StatusCodes.NotFound -> None
                   case Right(None) => StatusCodes.NoContent -> None
@@ -196,7 +194,7 @@ trait UserRoutes extends UserInfoDirectives {
           pathPrefix("invite") {
             post {
               path(Segment) { inviteeEmail =>
-                completeWithTrace {
+                completeWithTrace { span =>
                   userService
                     .inviteUser(InviteUser(genWorkbenchUserId(System.currentTimeMillis()), WorkbenchEmail(inviteeEmail.trim)))
                     .map(userStatus => StatusCodes.Created -> userStatus)

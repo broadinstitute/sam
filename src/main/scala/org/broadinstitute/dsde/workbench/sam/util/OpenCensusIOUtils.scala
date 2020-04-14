@@ -35,10 +35,10 @@ object OpenCensusIOUtils {
     } yield result.toTry.get
   }
 
-  def completeWithTrace(request: => ToResponseMarshallable): Route =
+  def completeWithTrace(request: Span => ToResponseMarshallable): Route =
     traceRequest {span =>
       complete {
-        request
+        request(span)
       }
     }
 }

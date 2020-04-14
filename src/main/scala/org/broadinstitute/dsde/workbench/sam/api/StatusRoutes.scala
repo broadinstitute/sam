@@ -25,17 +25,21 @@ trait StatusRoutes {
     pathPrefix("status") {
       pathEndOrSingleSlash {
         get {
-          completeWithTrace (statusService.getStatus().map { statusResponse =>
-            val httpStatus = if (statusResponse.ok) StatusCodes.OK else StatusCodes.InternalServerError
-            (httpStatus, statusResponse)
-          })
+          completeWithTrace { span =>
+            statusService.getStatus().map { statusResponse =>
+              val httpStatus = if (statusResponse.ok) StatusCodes.OK else StatusCodes.InternalServerError
+              (httpStatus, statusResponse)
+            }
+          }
         }
       }
     } ~
       pathPrefix("version") {
         pathEndOrSingleSlash {
           get {
-            completeWithTrace((StatusCodes.OK, BuildTimeVersion.versionJson))
+            completeWithTrace { span =>
+              (StatusCodes.OK, BuildTimeVersion.versionJson)
+            }
           }
         }
       }
