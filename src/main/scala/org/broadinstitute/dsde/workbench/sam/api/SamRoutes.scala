@@ -19,6 +19,7 @@ import org.broadinstitute.dsde.workbench.sam.api.SamRoutes._
 import org.broadinstitute.dsde.workbench.sam.config.{LiquibaseConfig, SwaggerConfig}
 import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.service._
+import org.broadinstitute.dsde.workbench.sam.util.OpenCensusIOUtils.completeWithTrace
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -89,9 +90,9 @@ object SamRoutes {
 
     ExceptionHandler {
       case withErrorReport: WorkbenchExceptionWithErrorReport =>
-        complete((withErrorReport.errorReport.statusCode.getOrElse(StatusCodes.InternalServerError), withErrorReport.errorReport))
+        completeWithTrace((withErrorReport.errorReport.statusCode.getOrElse(StatusCodes.InternalServerError), withErrorReport.errorReport))
       case e: Throwable =>
-        complete((StatusCodes.InternalServerError, ErrorReport(e)))
+        completeWithTrace((StatusCodes.InternalServerError, ErrorReport(e)))
     }
   }
 }

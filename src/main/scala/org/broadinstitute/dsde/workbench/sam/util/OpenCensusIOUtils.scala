@@ -1,8 +1,11 @@
 package org.broadinstitute.dsde.workbench.sam.util
 
+import akka.http.scaladsl.marshalling.ToResponseMarshallable
+import akka.http.scaladsl.server.{Route}
+import akka.http.scaladsl.server.Directives._
 import io.opencensus.trace.{Span, Status}
 import io.opencensus.scala.Tracing._
-
+import io.opencensus.scala.akka.http.TracingDirective.traceRequest
 import cats.effect.IO
 
 object OpenCensusIOUtils {
@@ -32,4 +35,10 @@ object OpenCensusIOUtils {
     } yield result.toTry.get
   }
 
+  def completeWithTrace(request: => ToResponseMarshallable): Route =
+    traceRequest {span =>
+      complete {
+        request
+      }
+    }
 }

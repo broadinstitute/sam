@@ -13,6 +13,7 @@ import org.broadinstitute.dsde.workbench.sam.api.{ExtensionRoutes, SecurityDirec
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.CloudExtensions
+import org.broadinstitute.dsde.workbench.sam.util.OpenCensusIOUtils.completeWithTrace
 import spray.json.DefaultJsonProtocol._
 import spray.json.JsString
 
@@ -32,7 +33,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
               FullyQualifiedResourceId(CloudExtensions.resourceTypeName, GoogleExtensions.resourceId),
               GoogleExtensions.getPetPrivateKeyAction,
               userInfo.userId) {
-              complete {
+              completeWithTrace {
                 import spray.json._
                 googleExtensions.getPetServiceAccountKey(WorkbenchEmail(userEmail), GoogleProject(project)) map {
                   // parse json to ensure it is json and tells akka http the right content-type
@@ -48,7 +49,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
             pathPrefix("key") {
               pathEndOrSingleSlash {
                 get {
-                  complete {
+                  completeWithTrace {
                     import spray.json._
                     googleExtensions
                       .getArbitraryPetServiceAccountKey(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None))
@@ -61,7 +62,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                 pathEndOrSingleSlash {
                   post {
                     entity(as[Set[String]]) { scopes =>
-                      complete {
+                      completeWithTrace {
                         googleExtensions.getArbitraryPetServiceAccountToken(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None), scopes).map { token =>
                           StatusCodes.OK -> JsString(token)
                         }
@@ -73,7 +74,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
               pathPrefix(Segment) { project =>
                 pathPrefix("key") {
                   get {
-                    complete {
+                    completeWithTrace {
                       import spray.json._
                       // parse json to ensure it is json and tells akka http the right content-type
                       googleExtensions
@@ -85,7 +86,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                   } ~
                     path(Segment) { keyId =>
                       delete {
-                        complete {
+                        completeWithTrace {
                           googleExtensions
                             .removePetServiceAccountKey(userInfo.userId, GoogleProject(project), ServiceAccountKeyId(keyId))
                             .map(_ => StatusCodes.NoContent)
@@ -96,7 +97,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                   pathPrefix("token") {
                     post {
                       entity(as[Set[String]]) { scopes =>
-                        complete {
+                        completeWithTrace {
                           googleExtensions
                             .getPetServiceAccountToken(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None), GoogleProject(project), scopes)
                             .map { token =>
@@ -108,7 +109,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                   } ~
                   pathEnd {
                     get {
-                      complete {
+                      completeWithTrace {
                         googleExtensions.createUserPetServiceAccount(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None), GoogleProject(project)).map {
                           petSA =>
                             StatusCodes.OK -> petSA.serviceAccount.email
@@ -116,7 +117,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                       }
                     } ~
                       delete { // NOTE: This endpoint is not visible in Swagger
-                        complete {
+                        completeWithTrace {
                           googleExtensions.deleteUserPetServiceAccount(userInfo.userId, GoogleProject(project)).map(_ => StatusCodes.NoContent)
                         }
                       }
@@ -125,7 +126,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
           } ~
           pathPrefix("user") {
             path("proxyGroup" / Segment) { targetUserEmail =>
-              complete {
+              completeWithTrace {
                 googleExtensions.getUserProxy(WorkbenchEmail(targetUserEmail)).map {
                   case Some(proxyEmail) => StatusCodes.OK -> Option(proxyEmail)
                   case _ => StatusCodes.NotFound -> None
@@ -139,7 +140,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
               val policyId = FullyQualifiedPolicyId(resource, AccessPolicyName(accessPolicyName))
               pathEndOrSingleSlash {
                 post {
-                  complete {
+                  completeWithTrace {
                     import GoogleModelJsonSupport._
                     googleGroupSynchronizer.synchronizeGroupMembers(policyId).map { syncReport =>
                       StatusCodes.OK -> syncReport
@@ -147,7 +148,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                   }
                 } ~
                   get {
-                    complete {
+                    completeWithTrace {
                       googleExtensions.getSynchronizedState(policyId).map {
                         case Some(syncState) => StatusCodes.OK -> Option(syncState)
                         case None => StatusCodes.NoContent -> None
