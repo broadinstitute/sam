@@ -10,7 +10,6 @@ import org.broadinstitute.dsde.workbench.util.health.StatusJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.util.OpenCensusIOUtils.completeWithTrace
 
 import scala.concurrent.ExecutionContext
-//import io.opencensus.scala.akka.http.TracingDirective._
 
 object BuildTimeVersion {
   val version = Option(getClass.getPackage.getImplementationVersion)
