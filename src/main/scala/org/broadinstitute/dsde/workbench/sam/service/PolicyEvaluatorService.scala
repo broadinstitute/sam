@@ -38,11 +38,7 @@ class PolicyEvaluatorService(
       }
   }
 
-  def hasPermission(resource: FullyQualifiedResourceId, action: ResourceAction, userId: WorkbenchUserId, parentSpan: Span = null): IO[Boolean] = {
-    traceIOWithParent("fullCheck", parentSpan)(_ => hasPermissionFullCheck(resource, action, userId))
-  }
-
-  def hasPermissionFullCheck(resource: FullyQualifiedResourceId, action: ResourceAction, userId: WorkbenchUserId, parentSpan: Span = null): IO[Boolean] = {
+  def hasPermission(resource: FullyQualifiedResourceId, action: ResourceAction, userId: WorkbenchUserId, parentSpan: Span = null): IO[Boolean] = traceIOWithParent("hasPermission", parentSpan)(_ => {
     def checkPermission(force: Boolean) =
       listUserResourceActions(resource, userId, force).map { _.contains(action) }
 
@@ -54,7 +50,7 @@ class PolicyEvaluatorService(
     } yield {
       attempt2
     }
-  }
+  })
 
   /**
     * Lists all the actions a user has on the specified resource

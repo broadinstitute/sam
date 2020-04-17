@@ -45,5 +45,5 @@ trait SecurityDirectives {
     }
 
   private def hasPermissionOneOf(resource: FullyQualifiedResourceId, actions: Iterable[ResourceAction], userId: WorkbenchUserId): IO[Boolean] =
-    actions.toList.existsM(policyEvaluatorService.hasPermissionFullCheck(resource, _, userId))
+    actions.toList.existsM(policyEvaluatorService.hasPermission(resource, _, userId))
 }
