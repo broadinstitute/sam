@@ -15,6 +15,7 @@ import com.google.auth.oauth2.ServiceAccountCredentials
 import com.google.protobuf.{Duration, Timestamp}
 import com.google.rpc.Code
 import com.typesafe.scalalogging.LazyLogging
+import io.opencensus.trace.Span
 import org.broadinstitute.dsde.workbench.dataaccess.NotificationDAO
 import org.broadinstitute.dsde.workbench.google2.util.{DistributedLock, LockPath}
 import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleIamDAO, GoogleKmsService, GoogleProjectDAO, GooglePubSubDAO, GoogleStorageDAO}
@@ -75,10 +76,10 @@ class GoogleExtensions(
   private[google] val allUsersGroupEmail = WorkbenchEmail(
     s"${googleServicesConfig.resourceNamePrefix.getOrElse("")}GROUP_${allUsersGroupName.value}@$emailDomain")
 
-  override def getOrCreateAllUsersGroup(directoryDAO: DirectoryDAO)(implicit executionContext: ExecutionContext): Future[WorkbenchGroup] = {
+  override def getOrCreateAllUsersGroup(directoryDAO: DirectoryDAO, parentSpan: Span)(implicit executionContext: ExecutionContext): Future[WorkbenchGroup] = {
     val allUsersGroup = BasicWorkbenchGroup(allUsersGroupName, Set.empty, allUsersGroupEmail)
     for {
-      createdGroup <- directoryDAO.createGroup(allUsersGroup).unsafeToFuture() recover {
+      createdGroup <- directoryDAO.createGroup(allUsersGroup, parentSpan = parentSpan).unsafeToFuture() recover {
         case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode == Option(StatusCodes.Conflict) => allUsersGroup
       }
       existingGoogleGroup <- googleDirectoryDAO.getGoogleGroup(createdGroup.email)
@@ -98,14 +99,16 @@ class GoogleExtensions(
       case t => throw new WorkbenchException("Unable to query for admin status.", t)
     }
 
-  def onBoot(samApplication: SamApplication)(implicit system: ActorSystem): IO[Unit] = {
+  //todo: maybe we don't need tracing for onboot....
+  //todo: create a root span here?
+  def onBoot(samApplication: SamApplication, parentSpan: Span)(implicit system: ActorSystem): IO[Unit] = {
     val extensionResourceType =
       resourceTypes.getOrElse(CloudExtensions.resourceTypeName, throw new Exception(s"${CloudExtensions.resourceTypeName} resource type not found"))
     val ownerGoogleSubjectId = GoogleSubjectId(googleServicesConfig.serviceAccountClientId)
     for {
-      user <- directoryDAO.loadSubjectFromGoogleSubjectId(ownerGoogleSubjectId)
+      user <- directoryDAO.loadSubjectFromGoogleSubjectId(ownerGoogleSubjectId, parentSpan)
 
-      subject <- directoryDAO.loadSubjectFromGoogleSubjectId(GoogleSubjectId(googleServicesConfig.serviceAccountClientId))
+      subject <- directoryDAO.loadSubjectFromGoogleSubjectId(GoogleSubjectId(googleServicesConfig.serviceAccountClientId), parentSpan)
       serviceAccountUserInfo <- subject match {
         case Some(uid: WorkbenchUserId) => IO.pure(UserInfo(OAuth2BearerToken(""), uid, googleServicesConfig.serviceAccountClientEmail, 0))
         case Some(_) =>
@@ -120,7 +123,7 @@ class GoogleExtensions(
             serviceAccountUserInfo.userId,
             GoogleSubjectId(googleServicesConfig.serviceAccountClientId),
             serviceAccountUserInfo.userEmail,
-            None)) recover {
+            None), parentSpan) recover {
             case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode == Option(StatusCodes.Conflict) =>
           }))
 
@@ -143,9 +146,9 @@ class GoogleExtensions(
         s"group:$allUsersGroupEmail",
         "roles/cloudkms.cryptoKeyEncrypterDecrypter")
 
-      _ <- samApplication.resourceService.createResourceType(extensionResourceType)
+      _ <- samApplication.resourceService.createResourceType(extensionResourceType, parentSpan)
 
-      _ <- samApplication.resourceService.createResource(extensionResourceType, GoogleExtensions.resourceId, serviceAccountUserInfo) handleErrorWith {
+      _ <- samApplication.resourceService.createResource(extensionResourceType, GoogleExtensions.resourceId, serviceAccountUserInfo, parentSpan) handleErrorWith {
         case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode == Option(StatusCodes.Conflict) => IO.unit
       }
       _ <- googleKeyCache.onBoot()
@@ -180,22 +183,22 @@ class GoogleExtensions(
 
      see GoogleGroupSynchronizer for the background process that does the group synchronization
    */
-  override def onGroupUpdate(groupIdentities: Seq[WorkbenchGroupIdentity]): Future[Unit] = {
+  override def onGroupUpdate(groupIdentities: Seq[WorkbenchGroupIdentity], parentSpan: Span): Future[Unit] = {
     for {
       // only sync groups that have been synchronized in the past
       previouslySyncedIds <- groupIdentities.toList.traverseFilter { id =>
-        directoryDAO.getSynchronizedDate(id).map(dateOption => dateOption.map(_ => id))
+        directoryDAO.getSynchronizedDate(id, parentSpan).map(dateOption => dateOption.map(_ => id))
       }
 
       // make all the publish messages for the previously synced groups
       messages <- previouslySyncedIds.traverse {
           // it is a group that isn't an access policy, could be a managed group
           case groupName: WorkbenchGroupName =>
-            makeConstrainedResourceAccessPolicyMessages(groupName).map(_  :+ groupName.toJson.compactPrint)
+            makeConstrainedResourceAccessPolicyMessages(groupName, parentSpan).map(_  :+ groupName.toJson.compactPrint)
 
           // it is the admin or member access policy of a managed group
           case accessPolicyId@FullyQualifiedPolicyId(FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, id), ManagedGroupService.adminPolicyName | ManagedGroupService.memberPolicyName) =>
-            makeConstrainedResourceAccessPolicyMessages(accessPolicyId).map(_  :+ accessPolicyId.toJson.compactPrint)
+            makeConstrainedResourceAccessPolicyMessages(accessPolicyId, parentSpan).map(_  :+ accessPolicyId.toJson.compactPrint)
 
           // it is an access policy on a resource that's not a managed group
           case accessPolicyId: FullyQualifiedPolicyId => IO.pure(List(accessPolicyId.toJson.compactPrint))
@@ -207,11 +210,11 @@ class GoogleExtensions(
     } yield ()
   }.unsafeToFuture()
 
-  private def makeConstrainedResourceAccessPolicyMessages(groupIdentity: WorkbenchGroupIdentity): IO[List[String]] = {
+  private def makeConstrainedResourceAccessPolicyMessages(groupIdentity: WorkbenchGroupIdentity, parentSpan: Span): IO[List[String]] = {
    // start with a group
     for {
       // get all the ancestors of that group
-      ancestorGroupsOfManagedGroups <- directoryDAO.listAncestorGroups(groupIdentity)
+      ancestorGroupsOfManagedGroups <- directoryDAO.listAncestorGroups(groupIdentity, parentSpan)
 
       // get all the ids of the group and its ancestors
       managedGroupIds = (ancestorGroupsOfManagedGroups + groupIdentity).collect {
@@ -219,7 +222,7 @@ class GoogleExtensions(
       }
 
       // get all access policies on any resource that is constrained by the groups
-      constrainedResourceAccessPolicies <- managedGroupIds.toList.traverse(id => getAccessPoliciesOnResourcesConstrainedByGroup(id))
+      constrainedResourceAccessPolicies <- managedGroupIds.toList.traverse(id => getAccessPoliciesOnResourcesConstrainedByGroup(id, parentSpan))
 
       // return messages for all the affected access policies and the original group we started with
     } yield constrainedResourceAccessPolicies.flatten.map(accessPolicy => accessPolicy.id.toJson.compactPrint)
@@ -230,22 +233,22 @@ class GoogleExtensions(
   }
 
 
-  private def getAccessPoliciesOnResourcesConstrainedByGroup(groupId: ResourceId): IO[List[AccessPolicy]] = {
+  private def getAccessPoliciesOnResourcesConstrainedByGroup(groupId: ResourceId, parentSpan: Span): IO[List[AccessPolicy]] = {
     for {
-      resources <- accessPolicyDAO.listResourcesConstrainedByGroup(WorkbenchGroupName(groupId.value))
+      resources <- accessPolicyDAO.listResourcesConstrainedByGroup(WorkbenchGroupName(groupId.value), parentSpan)
       policies <- resources.toList.traverse { resource =>
-        accessPolicyDAO.listAccessPolicies(resource.fullyQualifiedId)
+        accessPolicyDAO.listAccessPolicies(resource.fullyQualifiedId, parentSpan)
       }
     } yield policies.flatten
   }
 
-  override def onUserCreate(user: WorkbenchUser): Future[Unit] = {
+  override def onUserCreate(user: WorkbenchUser, parentSpan: Span): Future[Unit] = {
     val proxyEmail = toProxyFromUser(user.id)
     for {
       _ <- googleDirectoryDAO.createGroup(user.email.value, proxyEmail, Option(googleDirectoryDAO.lockedDownGroupSettings)) recover {
         case e: GoogleJsonResponseException if e.getDetails.getCode == StatusCodes.Conflict.intValue => ()
       }
-      allUsersGroup <- getOrCreateAllUsersGroup(directoryDAO)
+      allUsersGroup <- getOrCreateAllUsersGroup(directoryDAO, parentSpan)
       _ <- googleDirectoryDAO.addMemberToGroup(allUsersGroup.email, proxyEmail)
 
     } yield ()
@@ -260,33 +263,33 @@ class GoogleExtensions(
   /**
     * Evaluate a future for each pet in parallel.
     */
-  private def forAllPets[T](userId: WorkbenchUserId)(f: PetServiceAccount => Future[T]): Future[Seq[T]] =
+  private def forAllPets[T](userId: WorkbenchUserId, parentSpan: Span)(f: PetServiceAccount => Future[T]): Future[Seq[T]] =
     for {
-      pets <- directoryDAO.getAllPetServiceAccountsForUser(userId).unsafeToFuture()
+      pets <- directoryDAO.getAllPetServiceAccountsForUser(userId, parentSpan).unsafeToFuture()
       a <- Future.traverse(pets) { pet =>
         f(pet)
       }
     } yield a
 
-  override def onUserEnable(user: WorkbenchUser): Future[Unit] =
+  override def onUserEnable(user: WorkbenchUser, parentSpan: Span): Future[Unit] =
     for {
       _ <- withProxyEmail(user.id) { proxyEmail =>
         googleDirectoryDAO.addMemberToGroup(proxyEmail, WorkbenchEmail(user.email.value))
       }
-      _ <- forAllPets(user.id) { enablePetServiceAccount }
+      _ <- forAllPets(user.id, parentSpan) { enablePetServiceAccount(_, parentSpan) } //todo: does this notation work?
     } yield ()
 
-  override def onUserDisable(user: WorkbenchUser): Future[Unit] =
+  override def onUserDisable(user: WorkbenchUser, parentSpan: Span): Future[Unit] =
     for {
-      _ <- forAllPets(user.id) { disablePetServiceAccount }
+      _ <- forAllPets(user.id, parentSpan) { disablePetServiceAccount(_, parentSpan) }
       _ <- withProxyEmail(user.id) { proxyEmail =>
         googleDirectoryDAO.removeMemberFromGroup(proxyEmail, WorkbenchEmail(user.email.value))
       }
     } yield ()
 
-  override def onUserDelete(userId: WorkbenchUserId): Future[Unit] =
+  override def onUserDelete(userId: WorkbenchUserId, parentSpan: Span): Future[Unit] =
     for {
-      _ <- forAllPets(userId)(removePetServiceAccount)
+      _ <- forAllPets(userId, parentSpan)(removePetServiceAccount(_, parentSpan))
       _ <- withProxyEmail(userId) { googleDirectoryDAO.deleteGroup }
     } yield ()
 
@@ -294,30 +297,30 @@ class GoogleExtensions(
     googleDirectoryDAO.deleteGroup(groupEmail)
 
   @deprecated("Use new two-argument version of this function", "Sam Phase 3")
-  def createUserPetServiceAccount(user: WorkbenchUser): Future[PetServiceAccount] =
-    createUserPetServiceAccount(user, petServiceAccountConfig.googleProject).unsafeToFuture()
+  def createUserPetServiceAccount(user: WorkbenchUser, parentSpan: Span): Future[PetServiceAccount] =
+    createUserPetServiceAccount(user, petServiceAccountConfig.googleProject, parentSpan).unsafeToFuture()
 
   @deprecated("Use new two-argument version of this function", "Sam Phase 3")
   def deleteUserPetServiceAccount(userId: WorkbenchUserId): Future[Boolean] =
-    deleteUserPetServiceAccount(userId, petServiceAccountConfig.googleProject).unsafeToFuture() //TODO: shall we delete these deprecated methods
+    deleteUserPetServiceAccount(userId, petServiceAccountConfig.googleProject, null).unsafeToFuture() //TODO: shall we delete these deprecated methods // doesn't seem like it's being used anywhere?
 
-  def deleteUserPetServiceAccount(userId: WorkbenchUserId, project: GoogleProject): IO[Boolean] =
+  def deleteUserPetServiceAccount(userId: WorkbenchUserId, project: GoogleProject, parentSpan: Span): IO[Boolean] =
     for {
-      maybePet <- directoryDAO.loadPetServiceAccount(PetServiceAccountId(userId, project))
+      maybePet <- directoryDAO.loadPetServiceAccount(PetServiceAccountId(userId, project), parentSpan)
       deletedSomething <- maybePet match {
-        case Some(pet) => IO.fromFuture(IO(removePetServiceAccount(pet))).map(_ => true)
+        case Some(pet) => IO.fromFuture(IO(removePetServiceAccount(pet, parentSpan))).map(_ => true)
         case None => IO.pure(false) // didn't find the pet, nothing to delete
       }
     } yield deletedSomething
 
-  def createUserPetServiceAccount(user: WorkbenchUser, project: GoogleProject): IO[PetServiceAccount] = {
+  def createUserPetServiceAccount(user: WorkbenchUser, project: GoogleProject, parentSpan: Span): IO[PetServiceAccount] = {
     val (petSaName, petSaDisplayName) = toPetSAFromUser(user)
     // The normal situation is that the pet either exists in both ldap and google or neither.
     // Sometimes, especially in tests, the pet may be removed from ldap, but not google or the other way around.
     // This code is a little extra complicated to detect the cases when a pet does not exist in google, ldap or both
     // and do the right thing.
     val createPet = for {
-      (maybePet, maybeServiceAccount) <- retrievePetAndSA(user.id, petSaName, project)
+      (maybePet, maybeServiceAccount) <- retrievePetAndSA(user.id, petSaName, project, parentSpan)
       serviceAccount <- maybeServiceAccount match {
         // SA does not exist in google, create it and add it to the proxy group
         case None =>
@@ -335,16 +338,16 @@ class GoogleExtensions(
         // pet does not exist in ldap, create it and enable the identity
         case (None, _) =>
           for {
-            p <- directoryDAO.createPetServiceAccount(PetServiceAccount(PetServiceAccountId(user.id, project), serviceAccount))
-            _ <- registrationDAO.createPetServiceAccount(PetServiceAccount(PetServiceAccountId(user.id, project), serviceAccount))
-            _ <- directoryDAO.enableIdentity(p.id)
-            _ <- registrationDAO.enableIdentity(p.id)
+            p <- directoryDAO.createPetServiceAccount(PetServiceAccount(PetServiceAccountId(user.id, project), serviceAccount), parentSpan)
+            _ <- registrationDAO.createPetServiceAccount(PetServiceAccount(PetServiceAccountId(user.id, project), serviceAccount), parentSpan)
+            _ <- directoryDAO.enableIdentity(p.id, parentSpan)
+            _ <- registrationDAO.enableIdentity(p.id, parentSpan)
           } yield p
         // pet already exists in ldap, but a new SA was created so update ldap with new SA info
         case (Some(p), None) =>
           for {
-            p <- directoryDAO.updatePetServiceAccount(p.copy(serviceAccount = serviceAccount))
-            _ <- registrationDAO.updatePetServiceAccount(p.copy(serviceAccount = serviceAccount))
+            p <- directoryDAO.updatePetServiceAccount(p.copy(serviceAccount = serviceAccount), parentSpan)
+            _ <- registrationDAO.updatePetServiceAccount(p.copy(serviceAccount = serviceAccount), parentSpan)
           } yield p
 
         // everything already existed
@@ -355,7 +358,7 @@ class GoogleExtensions(
     val lock = LockPath(CollectionName(s"${project.value}-createPet"), Document(user.id.value), 30 seconds)
 
     for {
-      (pet, sa) <- retrievePetAndSA(user.id, petSaName, project) //I'm loving better-monadic-for
+      (pet, sa) <- retrievePetAndSA(user.id, petSaName, project, parentSpan) //I'm loving better-monadic-for
       shouldLock = !(pet.isDefined && sa.isDefined) // if either is not defined, we need to lock and potentially create them; else we return the pet
       p <- if (shouldLock) distributedLock.withLock(lock).use(_ => createPet) else pet.get.pure[IO]
     } yield p
@@ -381,41 +384,42 @@ class GoogleExtensions(
   private def retrievePetAndSA(
       userId: WorkbenchUserId,
       petServiceAccountName: ServiceAccountName,
-      project: GoogleProject): IO[(Option[PetServiceAccount], Option[ServiceAccount])] = {
+      project: GoogleProject,
+      parentSpan: Span): IO[(Option[PetServiceAccount], Option[ServiceAccount])] = {
     val serviceAccount = IO.fromFuture(IO(googleIamDAO.findServiceAccount(project, petServiceAccountName)))
-    val pet = directoryDAO.loadPetServiceAccount(PetServiceAccountId(userId, project))
+    val pet = directoryDAO.loadPetServiceAccount(PetServiceAccountId(userId, project), parentSpan)
     (pet, serviceAccount).parTupled
   }
 
-  def getPetServiceAccountKey(userEmail: WorkbenchEmail, project: GoogleProject): IO[Option[String]] =
+  def getPetServiceAccountKey(userEmail: WorkbenchEmail, project: GoogleProject, parentSpan: Span): IO[Option[String]] =
     for {
-      subject <- directoryDAO.loadSubjectFromEmail(userEmail)
+      subject <- directoryDAO.loadSubjectFromEmail(userEmail, parentSpan)
       key <- subject match {
-        case Some(userId: WorkbenchUserId) => getPetServiceAccountKey(WorkbenchUser(userId, None, userEmail, None), project).map(Option(_))
+        case Some(userId: WorkbenchUserId) => getPetServiceAccountKey(WorkbenchUser(userId, None, userEmail, None), project, parentSpan).map(Option(_))
         case _ => IO.pure(None)
       }
     } yield key
 
-  def getPetServiceAccountKey(user: WorkbenchUser, project: GoogleProject): IO[String] =
+  def getPetServiceAccountKey(user: WorkbenchUser, project: GoogleProject, parentSpan: Span): IO[String] =
     for {
-      pet <- createUserPetServiceAccount(user, project)
+      pet <- createUserPetServiceAccount(user, project, parentSpan)
       key <- googleKeyCache.getKey(pet)
     } yield key
 
-  def getPetServiceAccountToken(user: WorkbenchUser, project: GoogleProject, scopes: Set[String]): Future[String] =
-    getPetServiceAccountKey(user, project).unsafeToFuture().flatMap { key =>
+  def getPetServiceAccountToken(user: WorkbenchUser, project: GoogleProject, scopes: Set[String], parentSpan: Span): Future[String] =
+    getPetServiceAccountKey(user, project, parentSpan).unsafeToFuture().flatMap { key =>
       getAccessTokenUsingJson(key, scopes)
     }
 
-  def getArbitraryPetServiceAccountKey(user: WorkbenchUser): Future[String] =
-    getDefaultServiceAccountForShellProject(user)
+  def getArbitraryPetServiceAccountKey(user: WorkbenchUser, parentSpan: Span): Future[String] =
+    getDefaultServiceAccountForShellProject(user, parentSpan)
 
-  def getArbitraryPetServiceAccountToken(user: WorkbenchUser, scopes: Set[String]): Future[String] =
-    getArbitraryPetServiceAccountKey(user).flatMap { key =>
+  def getArbitraryPetServiceAccountToken(user: WorkbenchUser, scopes: Set[String], parentSpan: Span): Future[String] =
+    getArbitraryPetServiceAccountKey(user, parentSpan).flatMap { key =>
       getAccessTokenUsingJson(key, scopes)
     }
 
-  private def getDefaultServiceAccountForShellProject(user: WorkbenchUser): Future[String] = {
+  private def getDefaultServiceAccountForShellProject(user: WorkbenchUser, parentSpan: Span): Future[String] = {
     val projectName = s"fc-${googleServicesConfig.environment.substring(0, Math.min(googleServicesConfig.environment.length(), 5))}-${user.id.value}" //max 30 characters. subject ID is 21
     for {
       creationOperationId <- googleProjectDAO.createProject(projectName, googleServicesConfig.terraGoogleOrgNumber, GoogleResourceTypes.Organization).map(opId => Option(opId)) recover {
@@ -425,7 +429,7 @@ class GoogleExtensions(
         case Some(opId) => pollShellProjectCreation(opId) //poll until it's created
         case None => Future.successful(())
       }
-      key <- getPetServiceAccountKey(user, GoogleProject(projectName)).unsafeToFuture()
+      key <- getPetServiceAccountKey(user, GoogleProject(projectName), parentSpan).unsafeToFuture()
     } yield key
   }
 
@@ -454,47 +458,47 @@ class GoogleExtensions(
     credential.refreshAccessToken.getTokenValue
   }
 
-  def removePetServiceAccountKey(userId: WorkbenchUserId, project: GoogleProject, keyId: ServiceAccountKeyId): IO[Unit] =
+  def removePetServiceAccountKey(userId: WorkbenchUserId, project: GoogleProject, keyId: ServiceAccountKeyId, parentSpan: Span): IO[Unit] =
     for {
-      maybePet <- directoryDAO.loadPetServiceAccount(PetServiceAccountId(userId, project))
+      maybePet <- directoryDAO.loadPetServiceAccount(PetServiceAccountId(userId, project), parentSpan)
       result <- maybePet match {
         case Some(pet) => googleKeyCache.removeKey(pet, keyId)
         case None => IO.unit
       }
     } yield result
 
-  private def enablePetServiceAccount(petServiceAccount: PetServiceAccount): Future[Unit] =
+  private def enablePetServiceAccount(petServiceAccount: PetServiceAccount, parentSpan: Span): Future[Unit] =
     for {
-      _ <- directoryDAO.enableIdentity(petServiceAccount.id).unsafeToFuture()
-      _ <- registrationDAO.enableIdentity(petServiceAccount.id).unsafeToFuture()
+      _ <- directoryDAO.enableIdentity(petServiceAccount.id, parentSpan).unsafeToFuture()
+      _ <- registrationDAO.enableIdentity(petServiceAccount.id, parentSpan).unsafeToFuture()
       _ <- withProxyEmail(petServiceAccount.id.userId) { proxyEmail =>
         googleDirectoryDAO.addMemberToGroup(proxyEmail, petServiceAccount.serviceAccount.email)
       }
     } yield ()
 
-  private def disablePetServiceAccount(petServiceAccount: PetServiceAccount): Future[Unit] =
+  private def disablePetServiceAccount(petServiceAccount: PetServiceAccount, parentSpan: Span): Future[Unit] =
     for {
-      _ <- directoryDAO.disableIdentity(petServiceAccount.id).unsafeToFuture()
-      _ <- registrationDAO.disableIdentity(petServiceAccount.id).unsafeToFuture()
+      _ <- directoryDAO.disableIdentity(petServiceAccount.id, parentSpan).unsafeToFuture()
+      _ <- registrationDAO.disableIdentity(petServiceAccount.id, parentSpan).unsafeToFuture()
       _ <- withProxyEmail(petServiceAccount.id.userId) { proxyEmail =>
         googleDirectoryDAO.removeMemberFromGroup(proxyEmail, petServiceAccount.serviceAccount.email)
       }
     } yield ()
 
-  private def removePetServiceAccount(petServiceAccount: PetServiceAccount): Future[Unit] =
+  private def removePetServiceAccount(petServiceAccount: PetServiceAccount, parentSpan: Span): Future[Unit] =
     for {
       // disable the pet service account
-      _ <- disablePetServiceAccount(petServiceAccount)
+      _ <- disablePetServiceAccount(petServiceAccount, parentSpan)
       // remove the record for the pet service account
-      _ <- directoryDAO.deletePetServiceAccount(petServiceAccount.id).unsafeToFuture()
-      _ <- registrationDAO.deletePetServiceAccount(petServiceAccount.id).unsafeToFuture()
+      _ <- directoryDAO.deletePetServiceAccount(petServiceAccount.id, parentSpan).unsafeToFuture()
+      _ <- registrationDAO.deletePetServiceAccount(petServiceAccount.id, parentSpan).unsafeToFuture()
       // remove the service account itself in Google
       _ <- googleIamDAO.removeServiceAccount(petServiceAccount.id.project, toAccountName(petServiceAccount.serviceAccount.email))
     } yield ()
 
-  def getSynchronizedState(groupId: WorkbenchGroupIdentity): IO[Option[GroupSyncResponse]] = {
-    val groupDate = getSynchronizedDate(groupId)
-    val groupEmail = getSynchronizedEmail(groupId)
+  def getSynchronizedState(groupId: WorkbenchGroupIdentity, parentSpan: Span): IO[Option[GroupSyncResponse]] = {
+    val groupDate = getSynchronizedDate(groupId, parentSpan)
+    val groupEmail = getSynchronizedEmail(groupId, parentSpan)
 
     for {
       dateOpt <- groupDate
@@ -507,11 +511,11 @@ class GoogleExtensions(
     }
   }
 
-  def getSynchronizedDate(groupId: WorkbenchGroupIdentity): IO[Option[Date]] =
-    directoryDAO.getSynchronizedDate(groupId)
+  def getSynchronizedDate(groupId: WorkbenchGroupIdentity, parentSpan: Span): IO[Option[Date]] =
+    directoryDAO.getSynchronizedDate(groupId, parentSpan)
 
-  def getSynchronizedEmail(groupId: WorkbenchGroupIdentity): IO[Option[WorkbenchEmail]] =
-    directoryDAO.getSynchronizedEmail(groupId)
+  def getSynchronizedEmail(groupId: WorkbenchGroupIdentity, parentSpan: Span): IO[Option[WorkbenchEmail]] =
+    directoryDAO.getSynchronizedEmail(groupId, parentSpan)
 
   private[google] def toPetSAFromUser(user: WorkbenchUser): (ServiceAccountName, ServiceAccountDisplayName) = {
     /*
@@ -532,8 +536,8 @@ class GoogleExtensions(
   override def fireAndForgetNotifications[T <: Notification](notifications: Set[T]): Unit =
     notificationDAO.fireAndForgetNotifications(notifications)
 
-  override def getUserProxy(userEmail: WorkbenchEmail): Future[Option[WorkbenchEmail]] =
-    directoryDAO.loadSubjectFromEmail(userEmail).unsafeToFuture().flatMap {
+  override def getUserProxy(userEmail: WorkbenchEmail, parentSpan: Span): Future[Option[WorkbenchEmail]] =
+    directoryDAO.loadSubjectFromEmail(userEmail, parentSpan).unsafeToFuture().flatMap {
       case Some(user: WorkbenchUserId) => getUserProxy(user)
       case Some(pet: PetServiceAccountId) => getUserProxy(pet.userId)
       case _ => Future.successful(None)
@@ -603,6 +607,6 @@ case class GoogleExtensionsInitializer(cloudExtensions: GoogleExtensions, google
         googleGroupSynchronizer
       ))
 
-    cloudExtensions.onBoot(samApplication)
+    cloudExtensions.onBoot(samApplication, null) // todo: boot parent span seems unnecessary
   }
 }

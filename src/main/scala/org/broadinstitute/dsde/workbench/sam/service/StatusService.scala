@@ -15,8 +15,6 @@ import org.broadinstitute.dsde.workbench.util.health.{HealthMonitor, StatusCheck
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.language.postfixOps
-//import io.opencensus.trace.Span
-//import org.broadinstitute.dsde.workbench.sam.util.OpenCensusIOUtils._
 
 class StatusService(
     val directoryDAO: DirectoryDAO,
@@ -37,7 +35,7 @@ class StatusService(
 
   private def checkOpenDJ(groupToLoad: WorkbenchGroupName): IO[SubsystemStatus] = {
     logger.info("checking opendj connection")
-    directoryDAO.loadGroupEmail(groupToLoad).map {
+    directoryDAO.loadGroupEmail(groupToLoad, null).map {//todo: create a root span here?
       case Some(_) => HealthMonitor.OkStatus
       case None => HealthMonitor.failedStatus(s"could not find group $groupToLoad in opendj")
     }

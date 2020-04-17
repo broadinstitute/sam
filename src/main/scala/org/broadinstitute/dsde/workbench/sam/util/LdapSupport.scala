@@ -42,7 +42,7 @@ trait LdapSupport {
       email <- getAttribute(results, Attr.email).toRight(s"${Attr.email} attribute missing")
     } yield WorkbenchUser(WorkbenchUserId(uid), getAttribute(results, Attr.googleSubjectId).map(GoogleSubjectId), WorkbenchEmail(email), None)
 
-  protected def executeLdap[A](ioa: IO[A], dbQueryName: String = "", parentSpan: Span = null): IO[A] = {
+  protected def executeLdap[A](ioa: IO[A], dbQueryName: String, parentSpan: Span): IO[A] = {
     traceIOWithParent("ldap-" + dbQueryName, parentSpan)(_ => cs.evalOn(ecForLdapBlockingIO)(ioa))
   }
 }

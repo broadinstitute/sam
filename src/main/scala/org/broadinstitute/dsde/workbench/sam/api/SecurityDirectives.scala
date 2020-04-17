@@ -10,23 +10,24 @@ import org.broadinstitute.dsde.workbench.sam.service.PolicyEvaluatorService
 import ImplicitConversions.ioOnSuccessMagnet
 import cats.implicits._
 import cats.effect.IO
+import io.opencensus.trace.Span
 
 trait SecurityDirectives {
   def policyEvaluatorService: PolicyEvaluatorService
 
-  def requireAction(resource: FullyQualifiedResourceId, action: ResourceAction, userId: WorkbenchUserId): Directive0 =
-    requireOneOfAction(resource, Set(action), userId)
+  def requireAction(resource: FullyQualifiedResourceId, action: ResourceAction, userId: WorkbenchUserId, parentSpan: Span = null): Directive0 = //todo: create a root span here instead of allowing null?
+    requireOneOfAction(resource, Set(action), userId, parentSpan)
 
-  def requireOneOfAction(resource: FullyQualifiedResourceId, requestedActions: Set[ResourceAction], userId: WorkbenchUserId): Directive0 =
+  def requireOneOfAction(resource: FullyQualifiedResourceId, requestedActions: Set[ResourceAction], userId: WorkbenchUserId, parentSpan: Span = null): Directive0 = //todo: create a root span here instead of allowing null?
     Directives.mapInnerRoute { innerRoute =>
-      onSuccess(hasPermissionOneOf(resource, requestedActions, userId)) { hasPermission =>
+      onSuccess(hasPermissionOneOf(resource, requestedActions, userId, parentSpan)) { hasPermission =>
         if (hasPermission) {
           innerRoute
         } else {
 
           // in the case where we don't have the required action, we need to figure out if we should return
           // a Not Found (you have no access) vs a Forbidden (you have access, just not the right kind)
-          onSuccess(policyEvaluatorService.listResourceAccessPoliciesForUser(resource, userId)) { policies =>
+          onSuccess(policyEvaluatorService.listResourceAccessPoliciesForUser(resource, userId, parentSpan)) { policies =>
 
             if (policies.isEmpty) {
               Directives.failWith(
@@ -44,11 +45,11 @@ trait SecurityDirectives {
       }
     }
 
-  private def hasPermissionOneOf(resource: FullyQualifiedResourceId, actions: Iterable[ResourceAction], userId: WorkbenchUserId): IO[Boolean] =
+  private def hasPermissionOneOf(resource: FullyQualifiedResourceId, actions: Iterable[ResourceAction], userId: WorkbenchUserId, parentSpan: Span): IO[Boolean] =
     //  first quickly check if we have permission using the shallow check across all actions, then try the full check
     for {
-      attempt1 <- actions.toList.existsM(policyEvaluatorService.hasPermissionShallowCheck(resource, _, userId))
-      attempt2 <- if (attempt1) IO.pure(attempt1) else actions.toList.existsM(policyEvaluatorService.hasPermissionFullCheck(resource, _, userId))
+      attempt1 <- actions.toList.existsM(policyEvaluatorService.hasPermissionShallowCheck(resource, _, userId, parentSpan))
+      attempt2 <- if (attempt1) IO.pure(attempt1) else actions.toList.existsM(policyEvaluatorService.hasPermissionFullCheck(resource, _, userId, parentSpan))
     } yield {
       attempt2
     }

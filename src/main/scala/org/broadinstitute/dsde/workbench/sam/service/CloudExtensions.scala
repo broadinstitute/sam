@@ -5,6 +5,7 @@ import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directives._
 import cats.effect.IO
+import io.opencensus.trace.Span
 import org.broadinstitute.dsde.workbench.model.Notifications.Notification
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.GoogleProject
@@ -28,26 +29,26 @@ trait CloudExtensions {
 
   def publishGroup(id: WorkbenchGroupName): Future[Unit]
 
-  def onGroupUpdate(groupIdentities: Seq[WorkbenchGroupIdentity]): Future[Unit]
+  def onGroupUpdate(groupIdentities: Seq[WorkbenchGroupIdentity], parentSpan: Span): Future[Unit]
 
   def onGroupDelete(groupEmail: WorkbenchEmail): Future[Unit]
 
-  def onUserCreate(user: WorkbenchUser): Future[Unit]
+  def onUserCreate(user: WorkbenchUser, parentSpan: Span): Future[Unit]
 
   def getUserStatus(user: WorkbenchUser): Future[Boolean]
 
-  def onUserEnable(user: WorkbenchUser): Future[Unit]
+  def onUserEnable(user: WorkbenchUser, parentSpan: Span): Future[Unit]
 
-  def onUserDisable(user: WorkbenchUser): Future[Unit]
+  def onUserDisable(user: WorkbenchUser, parentSpan: Span): Future[Unit]
 
-  def onUserDelete(userId: WorkbenchUserId): Future[Unit]
+  def onUserDelete(userId: WorkbenchUserId, parentSpan: Span): Future[Unit]
 
   @deprecated("Use new two-argument version of this function", "Sam Phase 3")
   def deleteUserPetServiceAccount(userId: WorkbenchUserId): Future[Boolean]
 
-  def deleteUserPetServiceAccount(userId: WorkbenchUserId, project: GoogleProject): IO[Boolean]
+  def deleteUserPetServiceAccount(userId: WorkbenchUserId, project: GoogleProject, parentSpan: Span): IO[Boolean]
 
-  def getUserProxy(userEmail: WorkbenchEmail): Future[Option[WorkbenchEmail]]
+  def getUserProxy(userEmail: WorkbenchEmail, parentSpan: Span): Future[Option[WorkbenchEmail]]
 
   def fireAndForgetNotifications[T <: Notification](notifications: Set[T]): Unit
 
@@ -57,7 +58,7 @@ trait CloudExtensions {
 
   def emailDomain: String
 
-  def getOrCreateAllUsersGroup(directoryDAO: DirectoryDAO)(implicit executionContext: ExecutionContext): Future[WorkbenchGroup]
+  def getOrCreateAllUsersGroup(directoryDAO: DirectoryDAO, parentSpan: Span)(implicit executionContext: ExecutionContext): Future[WorkbenchGroup]
 }
 
 trait CloudExtensionsInitializer {
@@ -70,26 +71,26 @@ trait NoExtensions extends CloudExtensions {
 
   override def publishGroup(id: WorkbenchGroupName): Future[Unit] = Future.successful(())
 
-  override def onGroupUpdate(groupIdentities: Seq[WorkbenchGroupIdentity]): Future[Unit] = Future.successful(())
+  override def onGroupUpdate(groupIdentities: Seq[WorkbenchGroupIdentity], parentSpan: Span): Future[Unit] = Future.successful(())
 
   override def onGroupDelete(groupEmail: WorkbenchEmail): Future[Unit] = Future.successful(())
 
-  override def onUserCreate(user: WorkbenchUser): Future[Unit] = Future.successful(())
+  override def onUserCreate(user: WorkbenchUser, parentSpan: Span): Future[Unit] = Future.successful(())
 
   override def getUserStatus(user: WorkbenchUser): Future[Boolean] = Future.successful(true)
 
-  override def onUserEnable(user: WorkbenchUser): Future[Unit] = Future.successful(())
+  override def onUserEnable(user: WorkbenchUser, parentSpan: Span): Future[Unit] = Future.successful(())
 
-  override def onUserDisable(user: WorkbenchUser): Future[Unit] = Future.successful(())
+  override def onUserDisable(user: WorkbenchUser, parentSpan: Span): Future[Unit] = Future.successful(())
 
-  override def onUserDelete(userId: WorkbenchUserId): Future[Unit] = Future.successful(())
+  override def onUserDelete(userId: WorkbenchUserId, parentSpan: Span): Future[Unit] = Future.successful(())
 
   @deprecated("Use new two-argument version of this function", "Sam Phase 3")
   override def deleteUserPetServiceAccount(userId: WorkbenchUserId): Future[Boolean] = Future.successful(true)
 
-  override def deleteUserPetServiceAccount(userId: WorkbenchUserId, project: GoogleProject): IO[Boolean] = IO.pure(true)
+  override def deleteUserPetServiceAccount(userId: WorkbenchUserId, project: GoogleProject, parentSpan: Span): IO[Boolean] = IO.pure(true)
 
-  override def getUserProxy(userEmail: WorkbenchEmail): Future[Option[WorkbenchEmail]] = Future.successful(Option(userEmail))
+  override def getUserProxy(userEmail: WorkbenchEmail, parentSpan: Span): Future[Option[WorkbenchEmail]] = Future.successful(Option(userEmail))
 
   override def fireAndForgetNotifications[T <: Notification](notifications: Set[T]): Unit = ()
 
@@ -99,10 +100,10 @@ trait NoExtensions extends CloudExtensions {
 
   override val emailDomain = "example.com"
 
-  override def getOrCreateAllUsersGroup(directoryDAO: DirectoryDAO)(implicit executionContext: ExecutionContext): Future[WorkbenchGroup] = {
+  override def getOrCreateAllUsersGroup(directoryDAO: DirectoryDAO, parentSpan: Span)(implicit executionContext: ExecutionContext): Future[WorkbenchGroup] = {
     val allUsersGroup = BasicWorkbenchGroup(allUsersGroupName, Set.empty, WorkbenchEmail(s"GROUP_${allUsersGroupName.value}@$emailDomain"))
     for {
-      createdGroup <- directoryDAO.createGroup(allUsersGroup).unsafeToFuture() recover {
+      createdGroup <- directoryDAO.createGroup(allUsersGroup, parentSpan = parentSpan).unsafeToFuture() recover {
         case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode == Option(StatusCodes.Conflict) => allUsersGroup
       }
     } yield createdGroup

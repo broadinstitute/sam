@@ -41,7 +41,7 @@ class LdapRegistrationDAO(
     }
   }
 
-  override def createUser(user: WorkbenchUser): IO[WorkbenchUser] = {
+  override def createUser(user: WorkbenchUser, parentSpan: Span): IO[WorkbenchUser] = {
     val attrs = List(
       new Attribute(Attr.email, user.email.value),
       new Attribute(Attr.sn, user.id.value),
@@ -50,13 +50,13 @@ class LdapRegistrationDAO(
       new Attribute("objectclass", Seq("top", "workbenchPerson").asJava)
     ) ++ user.googleSubjectId.map(gsid => List(new Attribute(Attr.googleSubjectId, gsid.value))).getOrElse(List.empty)
 
-    executeLdap(IO(ldapConnectionPool.add(userDn(user.id), attrs: _*))).adaptError {
+    executeLdap(IO(ldapConnectionPool.add(userDn(user.id), attrs: _*)), "createUser", parentSpan).adaptError {
       case ldape: LDAPException if ldape.getResultCode == ResultCode.ENTRY_ALREADY_EXISTS =>
         new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"identity with id ${user.id} already exists"))
     } *> IO.pure(user)
   }
 
-  override def loadUser(userId: WorkbenchUserId, parentSpan: Span = null): IO[Option[WorkbenchUser]] = executeLdap(IO(loadUserInternal(userId)))
+  override def loadUser(userId: WorkbenchUserId, parentSpan: Span): IO[Option[WorkbenchUser]] = executeLdap(IO(loadUserInternal(userId)), "loadUser", parentSpan)
 
   def loadUserInternal(userId: WorkbenchUserId) =
     Option(ldapConnectionPool.getEntry(userDn(userId))) flatMap { results =>
@@ -64,16 +64,16 @@ class LdapRegistrationDAO(
     }
 
   // Deleting a user in ldap will also disable them to clear them out of the enabled-users group
-  override def deleteUser(userId: WorkbenchUserId): IO[Unit] =
+  override def deleteUser(userId: WorkbenchUserId, parentSpan: Span): IO[Unit] =
     executeLdap(for {
-      _ <- disableIdentity(userId)
+      _ <- disableIdentity(userId, parentSpan)
       _ <- IO(ldapConnectionPool.delete(userDn(userId)))
-    } yield ())
+    } yield (), "deleteUser", parentSpan)
 
-  override def enableIdentity(subject: WorkbenchSubject): IO[Unit] =
+  override def enableIdentity(subject: WorkbenchSubject, parentSpan: Span): IO[Unit] =
     retryLdapBusyWithBackoff(100.millisecond, 4) {
       executeLdap(
-        IO(ldapConnectionPool.modify(directoryConfig.enabledUsersGroupDn, new Modification(ModificationType.ADD, Attr.member, subjectDn(subject)))).void
+        IO(ldapConnectionPool.modify(directoryConfig.enabledUsersGroupDn, new Modification(ModificationType.ADD, Attr.member, subjectDn(subject)))).void, "enableIdentity-modify", parentSpan
       ).recoverWith {
         case ldape: LDAPException if ldape.getResultCode == ResultCode.NO_SUCH_OBJECT =>
           executeLdap(
@@ -81,21 +81,21 @@ class LdapRegistrationDAO(
               ldapConnectionPool.add(
                 directoryConfig.enabledUsersGroupDn,
                 new Attribute("objectclass", Seq("top", "groupofnames").asJava),
-                new Attribute(Attr.member, subjectDn(subject))))).void
+                new Attribute(Attr.member, subjectDn(subject)))), "enableIdentity-add", parentSpan).void
         case ldape: LDAPException if ldape.getResultCode == ResultCode.ATTRIBUTE_OR_VALUE_EXISTS => IO.unit
       }
     }
 
-  override def disableIdentity(subject: WorkbenchSubject): IO[Unit] = {
+  override def disableIdentity(subject: WorkbenchSubject, parentSpan: Span): IO[Unit] = {
     executeLdap(
-      IO(ldapConnectionPool.modify(directoryConfig.enabledUsersGroupDn, new Modification(ModificationType.DELETE, Attr.member, subjectDn(subject)))).void
+      IO(ldapConnectionPool.modify(directoryConfig.enabledUsersGroupDn, new Modification(ModificationType.DELETE, Attr.member, subjectDn(subject)))).void, "disableIdentity", parentSpan
     ).recover {
       case ldape: LDAPException if ldape.getResultCode == ResultCode.NO_SUCH_ATTRIBUTE
         || ldape.getResultCode == ResultCode.NO_SUCH_OBJECT =>
     }
   }
 
-  override def isEnabled(subject: WorkbenchSubject, parentSpan: Span = null): IO[Boolean] =
+  override def isEnabled(subject: WorkbenchSubject, parentSpan: Span): IO[Boolean] =
     for {
       entry <- executeLdap(IO(ldapConnectionPool.getEntry(directoryConfig.enabledUsersGroupDn, Attr.member)), "isEnabled", parentSpan)
     } yield {
@@ -106,11 +106,11 @@ class LdapRegistrationDAO(
       result.getOrElse(false)
     }
 
-  override def createPetServiceAccount(petServiceAccount: PetServiceAccount): IO[PetServiceAccount] = {
+  override def createPetServiceAccount(petServiceAccount: PetServiceAccount, parentSpan: Span): IO[PetServiceAccount] = {
     val attributes = createPetServiceAccountAttributes(petServiceAccount) ++
       Seq(new Attribute("objectclass", Seq("top", ObjectClass.petServiceAccount).asJava), new Attribute(Attr.project, petServiceAccount.id.project.value))
 
-    executeLdap(IO(ldapConnectionPool.add(petDn(petServiceAccount.id), attributes: _*)))
+    executeLdap(IO(ldapConnectionPool.add(petDn(petServiceAccount.id), attributes: _*)), "createPetServiceAccount", parentSpan)
       .handleErrorWith {
         case ldape: LDAPException if ldape.getResultCode == ResultCode.ENTRY_ALREADY_EXISTS =>
           IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"identity with id ${petServiceAccount.id} already exists")))
@@ -136,9 +136,8 @@ class LdapRegistrationDAO(
     attributes ++ displayNameAttribute
   }
 
-  override def loadPetServiceAccount(petServiceAccountId: PetServiceAccountId): IO[Option[PetServiceAccount]] = executeLdap {
-    IO(Option(ldapConnectionPool.getEntry(petDn(petServiceAccountId))).map(unmarshalPetServiceAccount))
-  }
+  override def loadPetServiceAccount(petServiceAccountId: PetServiceAccountId, parentSpan: Span): IO[Option[PetServiceAccount]] =
+    executeLdap(IO(Option(ldapConnectionPool.getEntry(petDn(petServiceAccountId))).map(unmarshalPetServiceAccount)), "loadPetServiceAccount", parentSpan)
 
   private def unmarshalPetServiceAccount(entry: Entry): PetServiceAccount = {
     val uid = getAttribute(entry, Attr.uid).getOrElse(throw new WorkbenchException(s"${Attr.uid} attribute missing"))
@@ -151,16 +150,16 @@ class LdapRegistrationDAO(
     )
   }
 
-  override def deletePetServiceAccount(petServiceAccountId: PetServiceAccountId): IO[Unit] =
-    executeLdap(IO(ldapConnectionPool.delete(petDn(petServiceAccountId))))
+  override def deletePetServiceAccount(petServiceAccountId: PetServiceAccountId, parentSpan: Span): IO[Unit] =
+    executeLdap(IO(ldapConnectionPool.delete(petDn(petServiceAccountId))), "deletePetServiceAccount", parentSpan)
 
-  override def updatePetServiceAccount(petServiceAccount: PetServiceAccount): IO[PetServiceAccount] = {
+  override def updatePetServiceAccount(petServiceAccount: PetServiceAccount, parentSpan: Span): IO[PetServiceAccount] = {
     val modifications = createPetServiceAccountAttributes(petServiceAccount).map { attribute =>
       new Modification(ModificationType.REPLACE, attribute.getName, attribute.getRawValues)
     }
-    executeLdap(IO(ldapConnectionPool.modify(petDn(petServiceAccount.id), modifications.asJava))) *> IO.pure(petServiceAccount)
+    executeLdap(IO(ldapConnectionPool.modify(petDn(petServiceAccount.id), modifications.asJava)), "updatePetServiceAccount", parentSpan) *> IO.pure(petServiceAccount)
   }
 
-  override def setGoogleSubjectId(userId: WorkbenchUserId, googleSubjectId: GoogleSubjectId): IO[Unit] =
-    executeLdap(IO(ldapConnectionPool.modify(userDn(userId), new Modification(ModificationType.ADD, Attr.googleSubjectId, googleSubjectId.value))))
+  override def setGoogleSubjectId(userId: WorkbenchUserId, googleSubjectId: GoogleSubjectId, parentSpan: Span): IO[Unit] =
+    executeLdap(IO(ldapConnectionPool.modify(userDn(userId), new Modification(ModificationType.ADD, Attr.googleSubjectId, googleSubjectId.value))), "setGoogleSubjectId", parentSpan)
 }

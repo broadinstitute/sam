@@ -10,15 +10,15 @@ import org.broadinstitute.dsde.workbench.model._
   * away from a solution that requires that the Apache proxies query this group, we can remove the RegistrationDAO.
   */
 trait RegistrationDAO {
-  def createUser(user: WorkbenchUser): IO[WorkbenchUser]
-  def loadUser(userId: WorkbenchUserId, parentSpan: Span = null): IO[Option[WorkbenchUser]]
-  def deleteUser(userId: WorkbenchUserId): IO[Unit]
-  def enableIdentity(subject: WorkbenchSubject): IO[Unit]
-  def disableIdentity(subject: WorkbenchSubject): IO[Unit]
-  def isEnabled(subject: WorkbenchSubject, parentSpan: Span = null): IO[Boolean]
-  def createPetServiceAccount(petServiceAccount: PetServiceAccount): IO[PetServiceAccount]
-  def loadPetServiceAccount(petServiceAccountId: PetServiceAccountId): IO[Option[PetServiceAccount]]
-  def deletePetServiceAccount(petServiceAccountId: PetServiceAccountId): IO[Unit]
-  def updatePetServiceAccount(petServiceAccount: PetServiceAccount): IO[PetServiceAccount]
-  def setGoogleSubjectId(userId: WorkbenchUserId, googleSubjectId: GoogleSubjectId): IO[Unit]
+  def createUser(user: WorkbenchUser, parentSpan: Span): IO[WorkbenchUser]
+  def loadUser(userId: WorkbenchUserId, parentSpan: Span): IO[Option[WorkbenchUser]]
+  def deleteUser(userId: WorkbenchUserId, parentSpan: Span): IO[Unit]
+  def enableIdentity(subject: WorkbenchSubject, parentSpan: Span): IO[Unit]
+  def disableIdentity(subject: WorkbenchSubject, parentSpan: Span): IO[Unit]
+  def isEnabled(subject: WorkbenchSubject, parentSpan: Span): IO[Boolean]
+  def createPetServiceAccount(petServiceAccount: PetServiceAccount, parentSpan: Span): IO[PetServiceAccount]
+  def loadPetServiceAccount(petServiceAccountId: PetServiceAccountId, parentSpan: Span): IO[Option[PetServiceAccount]]
+  def deletePetServiceAccount(petServiceAccountId: PetServiceAccountId, parentSpan: Span): IO[Unit]
+  def updatePetServiceAccount(petServiceAccount: PetServiceAccount, parentSpan: Span): IO[PetServiceAccount]
+  def setGoogleSubjectId(userId: WorkbenchUserId, googleSubjectId: GoogleSubjectId, parentSpan: Span): IO[Unit]
 }

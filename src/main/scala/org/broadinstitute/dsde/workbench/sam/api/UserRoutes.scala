@@ -37,7 +37,7 @@ trait UserRoutes extends UserInfoDirectives {
             get {
               parameter("userDetailsOnly".?) { userDetailsOnly =>
                 completeWithTrace { span =>
-                  userService.getUserStatus(user.userId, userDetailsOnly.exists(_.equalsIgnoreCase("true"))).map { statusOption =>
+                  userService.getUserStatus(user.userId, span, userDetailsOnly.exists(_.equalsIgnoreCase("true"))).map { statusOption =>
                     statusOption
                       .map { status =>
                         StatusCodes.OK -> Option(status)
@@ -76,7 +76,7 @@ trait UserRoutes extends UserInfoDirectives {
               path("diagnostics") {
                 get {
                   completeWithTrace { span =>
-                    userService.getUserStatusDiagnostics(user.userId).map { statusOption =>
+                    userService.getUserStatusDiagnostics(user.userId, span).map { statusOption =>
                       statusOption
                         .map { status =>
                           StatusCodes.OK -> Option(status)
@@ -98,7 +98,7 @@ trait UserRoutes extends UserInfoDirectives {
           pathPrefix("user") {
             path("email" / Segment) { email =>
               completeWithTrace { span =>
-                userService.getUserStatusFromEmail(WorkbenchEmail(email)).map { statusOption =>
+                userService.getUserStatusFromEmail(WorkbenchEmail(email), span).map { statusOption =>
                   statusOption
                     .map { status =>
                       StatusCodes.OK -> Option(status)
@@ -111,12 +111,12 @@ trait UserRoutes extends UserInfoDirectives {
                 pathEnd {
                   delete {
                     completeWithTrace { span =>
-                      userService.deleteUser(WorkbenchUserId(userId), userInfo).map(_ => StatusCodes.OK)
+                      userService.deleteUser(WorkbenchUserId(userId), userInfo, span).map(_ => StatusCodes.OK)
                     }
                   } ~
                     get {
                       completeWithTrace { span =>
-                        userService.getUserStatus(WorkbenchUserId(userId)).map { statusOption =>
+                        userService.getUserStatus(WorkbenchUserId(userId), span).map { statusOption =>
                           statusOption
                             .map { status =>
                               StatusCodes.OK -> Option(status)
@@ -130,7 +130,7 @@ trait UserRoutes extends UserInfoDirectives {
                     pathEndOrSingleSlash {
                       put {
                         completeWithTrace { span =>
-                          userService.enableUser(WorkbenchUserId(userId), userInfo).map { statusOption =>
+                          userService.enableUser(WorkbenchUserId(userId), userInfo, span).map { statusOption =>
                             statusOption
                               .map { status =>
                                 StatusCodes.OK -> Option(status)
@@ -145,7 +145,7 @@ trait UserRoutes extends UserInfoDirectives {
                     pathEndOrSingleSlash {
                       put {
                         completeWithTrace { span =>
-                          userService.disableUser(WorkbenchUserId(userId), userInfo).map { statusOption =>
+                          userService.disableUser(WorkbenchUserId(userId), userInfo, span).map { statusOption =>
                             statusOption
                               .map { status =>
                                 StatusCodes.OK -> Option(status)
@@ -161,7 +161,7 @@ trait UserRoutes extends UserInfoDirectives {
                       delete {
                         completeWithTrace { span =>
                           cloudExtensions
-                            .deleteUserPetServiceAccount(WorkbenchUserId(userId), GoogleProject(project))
+                            .deleteUserPetServiceAccount(WorkbenchUserId(userId), GoogleProject(project), span)
                             .map(_ => StatusCodes.NoContent)
                         }
                       }
@@ -180,7 +180,7 @@ trait UserRoutes extends UserInfoDirectives {
           path(Segment) { email =>
             pathEnd {
               completeWithTrace { span =>
-                userService.getUserIdInfoFromEmail(WorkbenchEmail(email)).map {
+                userService.getUserIdInfoFromEmail(WorkbenchEmail(email), span).map {
                   case Left(_) => StatusCodes.NotFound -> None
                   case Right(None) => StatusCodes.NoContent -> None
                   case Right(Some(userIdInfo)) => StatusCodes.OK -> Some(userIdInfo)
@@ -194,7 +194,7 @@ trait UserRoutes extends UserInfoDirectives {
               path(Segment) { inviteeEmail =>
                 completeWithTrace { span =>
                   userService
-                    .inviteUser(InviteUser(genWorkbenchUserId(System.currentTimeMillis()), WorkbenchEmail(inviteeEmail.trim)))
+                    .inviteUser(InviteUser(genWorkbenchUserId(System.currentTimeMillis()), WorkbenchEmail(inviteeEmail.trim)), span)
                     .map(userStatus => StatusCodes.Created -> userStatus)
                 }
               }

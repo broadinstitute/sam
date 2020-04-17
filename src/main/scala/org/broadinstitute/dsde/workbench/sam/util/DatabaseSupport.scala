@@ -13,7 +13,7 @@ trait DatabaseSupport {
   protected val cs: ContextShift[IO]
   protected val dbRef: DbReference
 
-  protected def runInTransaction[A](dbQueryName: String = "dbCall", parentSpan: Span = null)(databaseFunction: DBSession => A): IO[A] = {
+  protected def runInTransaction[A](dbQueryName: String, parentSpan: Span)(databaseFunction: DBSession => A): IO[A] = {
     val spanName = "postgres-" + dbQueryName
     traceIOWithParent(spanName, parentSpan) { _ =>
       cs.evalOn(ecForDatabaseIO)(IO {
