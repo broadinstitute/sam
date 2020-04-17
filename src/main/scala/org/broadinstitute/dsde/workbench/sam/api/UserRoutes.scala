@@ -54,10 +54,8 @@ trait UserRoutes extends UserInfoDirectives {
           pathEndOrSingleSlash {
             post {
               requireCreateUser { createUser =>
-                traceRequest { span =>
-                  complete {
-                    userService.createUser(createUser, span).map(userStatus => StatusCodes.Created -> userStatus)
-                  }
+                completeWithTrace { span =>
+                  userService.createUser(createUser, span).map(userStatus => StatusCodes.Created -> userStatus)
                 }
               }
             }

@@ -95,9 +95,9 @@ class LdapRegistrationDAO(
     }
   }
 
-  override def isEnabled(subject: WorkbenchSubject): IO[Boolean] =
+  override def isEnabled(subject: WorkbenchSubject, parentSpan: Span = null): IO[Boolean] =
     for {
-      entry <- executeLdap(IO(ldapConnectionPool.getEntry(directoryConfig.enabledUsersGroupDn, Attr.member)))
+      entry <- executeLdap(IO(ldapConnectionPool.getEntry(directoryConfig.enabledUsersGroupDn, Attr.member)), "isEnabled", parentSpan)
     } yield {
       val result = for {
         e <- Option(entry)

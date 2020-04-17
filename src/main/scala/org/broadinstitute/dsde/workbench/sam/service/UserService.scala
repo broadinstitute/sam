@@ -14,7 +14,6 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.api.{CreateWorkbenchUser, InviteUser}
 import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryDAO, RegistrationDAO}
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.util.OpenCensusIOUtils.traceIOWithParent
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.matching.Regex
@@ -112,14 +111,13 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
     }
 
   def getUserStatusInfo(userId: WorkbenchUserId, parentSpan: Span = null): IO[Option[UserStatusInfo]] =
-    traceIOWithParent("info", parentSpan)(span => directoryDAO.loadUser(userId, span).flatMap {
+    directoryDAO.loadUser(userId, parentSpan).flatMap {
       case Some(user) =>
-        traceIOWithParent("isEnabled", span)(_ => registrationDAO.isEnabled(user.id).flatMap { ldapStatus =>
+        registrationDAO.isEnabled(user.id, parentSpan).flatMap { ldapStatus =>
           IO.pure(Option(UserStatusInfo(user.id.value, user.email.value, ldapStatus)))
-        })
+        }
       case None => IO.pure(None)
-    })
-
+    }
 
   def getUserStatusDiagnostics(userId: WorkbenchUserId): Future[Option[UserStatusDiagnostics]] =
     directoryDAO.loadUser(userId).unsafeToFuture().flatMap {

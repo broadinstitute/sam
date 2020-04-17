@@ -53,7 +53,7 @@ trait DirectoryDAO extends RegistrationDAO {
 
   def enableIdentity(subject: WorkbenchSubject): IO[Unit]
   def disableIdentity(subject: WorkbenchSubject): IO[Unit]
-  def isEnabled(subject: WorkbenchSubject): IO[Boolean]
+  def isEnabled(subject: WorkbenchSubject, parentSpan: Span = null): IO[Boolean]
 
   def getUserFromPetServiceAccount(petSA: ServiceAccountSubjectId): IO[Option[WorkbenchUser]]
   def createPetServiceAccount(petServiceAccount: PetServiceAccount): IO[PetServiceAccount]

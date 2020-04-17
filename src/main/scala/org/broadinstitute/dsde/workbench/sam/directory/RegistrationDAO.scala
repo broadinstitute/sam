@@ -15,7 +15,7 @@ trait RegistrationDAO {
   def deleteUser(userId: WorkbenchUserId): IO[Unit]
   def enableIdentity(subject: WorkbenchSubject): IO[Unit]
   def disableIdentity(subject: WorkbenchSubject): IO[Unit]
-  def isEnabled(subject: WorkbenchSubject): IO[Boolean]
+  def isEnabled(subject: WorkbenchSubject, parentSpan: Span = null): IO[Boolean]
   def createPetServiceAccount(petServiceAccount: PetServiceAccount): IO[PetServiceAccount]
   def loadPetServiceAccount(petServiceAccountId: PetServiceAccountId): IO[Option[PetServiceAccount]]
   def deletePetServiceAccount(petServiceAccountId: PetServiceAccountId): IO[Unit]

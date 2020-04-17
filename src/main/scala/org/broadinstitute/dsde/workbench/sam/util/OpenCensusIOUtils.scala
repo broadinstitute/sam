@@ -1,7 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.util
 
 import akka.http.scaladsl.marshalling.ToResponseMarshallable
-import akka.http.scaladsl.server.{Route}
+import akka.http.scaladsl.server.Route
 import akka.http.scaladsl.server.Directives._
 import io.opencensus.trace.{Span, Status}
 import io.opencensus.scala.Tracing._
@@ -18,6 +18,7 @@ object OpenCensusIOUtils {
     traceIOSpan(IO(startSpanWithParent(name, parentSpan)), failureStatus)(f)
 
   // todo: this is unused
+  // creates a root span
   def traceIO[T](
                   name: String,
                   failureStatus: Throwable => Status = (_: Throwable) => Status.UNKNOWN
@@ -35,6 +36,7 @@ object OpenCensusIOUtils {
     } yield result.toTry.get
   }
 
+  // Makes a complete() akka-http call, with tracing added, at the rate specified in config/sam.conf (a generated conf file)
   def completeWithTrace(request: Span => ToResponseMarshallable): Route =
     traceRequest {span =>
       complete {
