@@ -7,7 +7,7 @@ rules:
     resources: ['podsecuritypolicies']
     verbs:     ['use']
     resourceNames:
-      - sam-psp
+      - terra-default-psp
   - apiGroups: ['']
     resources: ['secrets']
     verbs: ['get', 'create']
