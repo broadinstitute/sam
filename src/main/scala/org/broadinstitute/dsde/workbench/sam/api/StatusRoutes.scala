@@ -24,21 +24,21 @@ trait StatusRoutes {
     pathPrefix("status") {
       pathEndOrSingleSlash {
         get {
-          completeWithTrace { span =>
+          completeWithTrace({ traceContext =>
             statusService.getStatus().map { statusResponse =>
               val httpStatus = if (statusResponse.ok) StatusCodes.OK else StatusCodes.InternalServerError
               (httpStatus, statusResponse)
             }
-          }
+          })
         }
       }
     } ~
       pathPrefix("version") {
         pathEndOrSingleSlash {
           get {
-            completeWithTrace { span =>
+            completeWithTrace({ traceContext =>
               (StatusCodes.OK, BuildTimeVersion.versionJson)
-            }
+            })
           }
         }
       }

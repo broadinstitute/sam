@@ -81,37 +81,34 @@ trait ManagedGroupRoutes extends UserInfoDirectives with SecurityDirectives with
   }
 
   private def handleListGroups(userInfo: UserInfo): Route =
-    completeWithTrace(span => managedGroupService.listGroups(userInfo.userId, span).map(StatusCodes.OK -> _))
+    completeWithTrace(traceContext => managedGroupService.listGroups(userInfo.userId, traceContext).map(StatusCodes.OK -> _))
 
   private def handleGetGroup(resourceId: ResourceId): Route =
-    completeWithTrace(span =>
-      managedGroupService.loadManagedGroup(resourceId, span).flatMap {
+    completeWithTrace(traceContext =>
+      managedGroupService.loadManagedGroup(resourceId, traceContext).flatMap {
         case Some(response) => IO.pure(StatusCodes.OK -> response)
         case None => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "group not found")))
-      }
-    )
+      })
 
   private def handleCreateGroup(resourceId: ResourceId, userInfo: UserInfo): Route =
-    completeWithTrace(span => managedGroupService.createManagedGroup(resourceId, userInfo, parentSpan = span).map(_ => StatusCodes.Created))
+    completeWithTrace(traceContext => managedGroupService.createManagedGroup(resourceId, userInfo, traceContext = traceContext).map(_ => StatusCodes.Created))
 
   private def handleDeleteGroup(managedGroup: FullyQualifiedResourceId, userInfo: UserInfo): Route =
     requireAction(managedGroup, SamResourceActions.delete, userInfo.userId) {
-      completeWithTrace(span => managedGroupService.deleteManagedGroup(managedGroup.resourceId, span).map(_ => StatusCodes.NoContent))
+      completeWithTrace(traceContext => managedGroupService.deleteManagedGroup(managedGroup.resourceId, traceContext).map(_ => StatusCodes.NoContent))
     }
 
   private def handleListEmails(managedGroup: FullyQualifiedResourceId, accessPolicyName: ManagedGroupPolicyName, userInfo: UserInfo): Route =
     requireAction(managedGroup, SamResourceActions.readPolicy(accessPolicyName), userInfo.userId) {
-      completeWithTrace(span =>
-        managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, accessPolicyName, span).map(x => StatusCodes.OK -> x.toSet)
-      )
+      completeWithTrace(traceContext =>
+        managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, accessPolicyName, traceContext).map(x => StatusCodes.OK -> x.toSet))
     }
 
   private def handleOverwriteEmails(managedGroup: FullyQualifiedResourceId, accessPolicyName: ManagedGroupPolicyName, userInfo: UserInfo): Route =
     requireAction(managedGroup, SamResourceActions.sharePolicy(accessPolicyName), userInfo.userId) {
       entity(as[Set[WorkbenchEmail]]) { members =>
-        completeWithTrace(span =>
-          managedGroupService.overwritePolicyMemberEmails(managedGroup.resourceId, accessPolicyName, members, span).map(_ => StatusCodes.Created)
-        )
+        completeWithTrace(traceContext =>
+          managedGroupService.overwritePolicyMemberEmails(managedGroup.resourceId, accessPolicyName, members, traceContext).map(_ => StatusCodes.Created))
       }
     }
 
@@ -122,9 +119,8 @@ trait ManagedGroupRoutes extends UserInfoDirectives with SecurityDirectives with
       userInfo: UserInfo): Route =
     requireAction(managedGroup, SamResourceActions.sharePolicy(accessPolicyName), userInfo.userId) {
       withSubject(WorkbenchEmail(email)) { subject =>
-        completeWithTrace(span =>
-          managedGroupService.addSubjectToPolicy(managedGroup.resourceId, accessPolicyName, subject, span).map(_ => StatusCodes.NoContent)
-        )
+        completeWithTrace(traceContext =>
+          managedGroupService.addSubjectToPolicy(managedGroup.resourceId, accessPolicyName, subject, traceContext).map(_ => StatusCodes.NoContent))
       }
     }
 
@@ -135,17 +131,15 @@ trait ManagedGroupRoutes extends UserInfoDirectives with SecurityDirectives with
       userInfo: UserInfo): Route =
     requireAction(managedGroup, SamResourceActions.sharePolicy(accessPolicyName), userInfo.userId) {
       withSubject(WorkbenchEmail(email)) { subject =>
-        completeWithTrace(span =>
-          managedGroupService.removeSubjectFromPolicy(managedGroup.resourceId, accessPolicyName, subject, span).map(_ => StatusCodes.NoContent)
-        )
+        completeWithTrace(traceContext =>
+          managedGroupService.removeSubjectFromPolicy(managedGroup.resourceId, accessPolicyName, subject, traceContext).map(_ => StatusCodes.NoContent))
       }
     }
 
   private def handleRequestAccess(managedGroup: FullyQualifiedResourceId, userInfo: UserInfo): Route =
     requireAction(managedGroup, SamResourceActions.notifyAdmins, userInfo.userId) {
-      completeWithTrace(span =>
-        managedGroupService.requestAccess(managedGroup.resourceId, userInfo.userId, span).map(_ => StatusCodes.NoContent)
-      )
+      completeWithTrace(traceContext =>
+        managedGroupService.requestAccess(managedGroup.resourceId, userInfo.userId, traceContext).map(_ => StatusCodes.NoContent))
     }
 
   private def handleSetAccessInstructions(
@@ -153,16 +147,14 @@ trait ManagedGroupRoutes extends UserInfoDirectives with SecurityDirectives with
       accessInstructions: ManagedGroupAccessInstructions,
       userInfo: UserInfo): Route =
     requireAction(managedGroup, SamResourceActions.setAccessInstructions, userInfo.userId) {
-      completeWithTrace(span =>
-        managedGroupService.setAccessInstructions(managedGroup.resourceId, accessInstructions.value, span).map(_ => StatusCodes.NoContent)
-      )
+      completeWithTrace(traceContext =>
+        managedGroupService.setAccessInstructions(managedGroup.resourceId, accessInstructions.value, traceContext).map(_ => StatusCodes.NoContent))
     }
 
   private def handleGetAccessInstructions(managedGroup: FullyQualifiedResourceId): Route =
-    completeWithTrace(span =>
-      managedGroupService.getAccessInstructions(managedGroup.resourceId, span).map {
+    completeWithTrace(traceContext =>
+      managedGroupService.getAccessInstructions(managedGroup.resourceId, traceContext).map {
         case Some(accessInstructions) => StatusCodes.OK -> Option(accessInstructions)
         case None => StatusCodes.NoContent -> None
-      }
-    )
+      })
 }

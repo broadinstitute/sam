@@ -2,10 +2,9 @@ package org.broadinstitute.dsde.workbench.sam.util
 
 import cats.effect.{ContextShift, IO}
 import com.unboundid.ldap.sdk._
-import io.opencensus.trace.Span
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO.Attr
-import org.broadinstitute.dsde.workbench.sam.util.OpenCensusIOUtils.traceIOWithParent
+import org.broadinstitute.dsde.workbench.sam.util.OpenCensusIOUtils.traceIOWithContext
 
 import scala.concurrent.ExecutionContext
 
@@ -42,7 +41,7 @@ trait LdapSupport {
       email <- getAttribute(results, Attr.email).toRight(s"${Attr.email} attribute missing")
     } yield WorkbenchUser(WorkbenchUserId(uid), getAttribute(results, Attr.googleSubjectId).map(GoogleSubjectId), WorkbenchEmail(email), None)
 
-  protected def executeLdap[A](ioa: IO[A], dbQueryName: String, parentSpan: Span): IO[A] = {
-    traceIOWithParent("ldap-" + dbQueryName, parentSpan)(_ => cs.evalOn(ecForLdapBlockingIO)(ioa))
+  protected def executeLdap[A](ioa: IO[A], dbQueryName: String, traceContext: TraceContext): IO[A] = {
+    traceIOWithContext("ldap-" + dbQueryName, traceContext)(_ => cs.evalOn(ecForLdapBlockingIO)(ioa))
   }
 }

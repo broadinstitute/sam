@@ -1,9 +1,8 @@
 package org.broadinstitute.dsde.workbench.sam.util
 
 import cats.effect.{ContextShift, IO}
-import io.opencensus.trace.Span
 import org.broadinstitute.dsde.workbench.sam.db.DbReference
-import org.broadinstitute.dsde.workbench.sam.util.OpenCensusIOUtils.traceIOWithParent
+import org.broadinstitute.dsde.workbench.sam.util.OpenCensusIOUtils.traceIOWithContext
 import scalikejdbc.DBSession
 
 import scala.concurrent.ExecutionContext
@@ -13,9 +12,9 @@ trait DatabaseSupport {
   protected val cs: ContextShift[IO]
   protected val dbRef: DbReference
 
-  protected def runInTransaction[A](dbQueryName: String, parentSpan: Span)(databaseFunction: DBSession => A): IO[A] = {
+  protected def runInTransaction[A](dbQueryName: String, traceContext: TraceContext)(databaseFunction: DBSession => A): IO[A] = {
     val spanName = "postgres-" + dbQueryName
-    traceIOWithParent(spanName, parentSpan) { _ =>
+    traceIOWithContext(spanName, traceContext) { _ =>
       cs.evalOn(ecForDatabaseIO)(IO {
         dbRef.inLocalTransaction(databaseFunction)
       })

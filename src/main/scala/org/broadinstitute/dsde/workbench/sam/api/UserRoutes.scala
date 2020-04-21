@@ -5,7 +5,6 @@ import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directives._
-import io.opencensus.scala.akka.http.TracingDirective.traceRequest
 import org.broadinstitute.dsde.workbench.model.google.GoogleProject
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
@@ -27,24 +26,22 @@ trait UserRoutes extends UserInfoDirectives {
         pathEndOrSingleSlash {
           post {
             requireCreateUser { createUser =>
-              traceRequest { span =>
-                complete {
-                  userService.createUser(createUser, span).map(userStatus => StatusCodes.Created -> userStatus)
-                }
+              completeWithTrace { traceContext =>
+                userService.createUser(createUser, traceContext).map(userStatus => StatusCodes.Created -> userStatus)
               }
             }
           } ~ requireUserInfo { user =>
             get {
               parameter("userDetailsOnly".?) { userDetailsOnly =>
-                completeWithTrace { span =>
-                  userService.getUserStatus(user.userId, span, userDetailsOnly.exists(_.equalsIgnoreCase("true"))).map { statusOption =>
+                completeWithTrace({ traceContext =>
+                  userService.getUserStatus(user.userId, traceContext, userDetailsOnly.exists(_.equalsIgnoreCase("true"))).map { statusOption =>
                     statusOption
                       .map { status =>
                         StatusCodes.OK -> Option(status)
                       }
                       .getOrElse(StatusCodes.NotFound -> None)
                   }
-                }
+                })
               }
             }
           }
@@ -54,36 +51,36 @@ trait UserRoutes extends UserInfoDirectives {
           pathEndOrSingleSlash {
             post {
               requireCreateUser { createUser =>
-                completeWithTrace { span =>
-                  userService.createUser(createUser, span).map(userStatus => StatusCodes.Created -> userStatus)
+                completeWithTrace { traceContext =>
+                  userService.createUser(createUser, traceContext).map(userStatus => StatusCodes.Created -> userStatus)
                 }
               }
             }
           } ~ requireUserInfo { user =>
             path("info") {
               get {
-                completeWithTrace { span =>
-                  userService.getUserStatusInfo(user.userId, span).map { statusOption =>
+                completeWithTrace({ traceContext =>
+                  userService.getUserStatusInfo(user.userId, traceContext).map { statusOption =>
                     statusOption
                       .map { status =>
                         StatusCodes.OK -> Option(status)
                       }
                       .getOrElse(StatusCodes.NotFound -> None)
                   }
-                }
+                })
               }
             } ~
               path("diagnostics") {
                 get {
-                  completeWithTrace { span =>
-                    userService.getUserStatusDiagnostics(user.userId, span).map { statusOption =>
+                  completeWithTrace({ traceContext =>
+                    userService.getUserStatusDiagnostics(user.userId, traceContext).map { statusOption =>
                       statusOption
                         .map { status =>
                           StatusCodes.OK -> Option(status)
                         }
                         .getOrElse(StatusCodes.NotFound -> None)
                     }
-                  }
+                  })
                 }
               }
           }
@@ -97,73 +94,73 @@ trait UserRoutes extends UserInfoDirectives {
         asWorkbenchAdmin(userInfo) {
           pathPrefix("user") {
             path("email" / Segment) { email =>
-              completeWithTrace { span =>
-                userService.getUserStatusFromEmail(WorkbenchEmail(email), span).map { statusOption =>
+              completeWithTrace({ traceContext =>
+                userService.getUserStatusFromEmail(WorkbenchEmail(email), traceContext).map { statusOption =>
                   statusOption
                     .map { status =>
                       StatusCodes.OK -> Option(status)
                     }
                     .getOrElse(StatusCodes.NotFound -> None)
                 }
-              }
+              })
             } ~
               pathPrefix(Segment) { userId =>
                 pathEnd {
                   delete {
-                    completeWithTrace { span =>
-                      userService.deleteUser(WorkbenchUserId(userId), userInfo, span).map(_ => StatusCodes.OK)
-                    }
+                    completeWithTrace({ traceContext =>
+                      userService.deleteUser(WorkbenchUserId(userId), userInfo, traceContext).map(_ => StatusCodes.OK)
+                    })
                   } ~
                     get {
-                      completeWithTrace { span =>
-                        userService.getUserStatus(WorkbenchUserId(userId), span).map { statusOption =>
+                      completeWithTrace({ traceContext =>
+                        userService.getUserStatus(WorkbenchUserId(userId), traceContext).map { statusOption =>
                           statusOption
                             .map { status =>
                               StatusCodes.OK -> Option(status)
                             }
                             .getOrElse(StatusCodes.NotFound -> None)
                         }
-                      }
+                      })
                     }
                 } ~
                   pathPrefix("enable") {
                     pathEndOrSingleSlash {
                       put {
-                        completeWithTrace { span =>
-                          userService.enableUser(WorkbenchUserId(userId), userInfo, span).map { statusOption =>
+                        completeWithTrace({ traceContext =>
+                          userService.enableUser(WorkbenchUserId(userId), userInfo, traceContext).map { statusOption =>
                             statusOption
                               .map { status =>
                                 StatusCodes.OK -> Option(status)
                               }
                               .getOrElse(StatusCodes.NotFound -> None)
                           }
-                        }
+                        })
                       }
                     }
                   } ~
                   pathPrefix("disable") {
                     pathEndOrSingleSlash {
                       put {
-                        completeWithTrace { span =>
-                          userService.disableUser(WorkbenchUserId(userId), userInfo, span).map { statusOption =>
+                        completeWithTrace({ traceContext =>
+                          userService.disableUser(WorkbenchUserId(userId), userInfo, traceContext).map { statusOption =>
                             statusOption
                               .map { status =>
                                 StatusCodes.OK -> Option(status)
                               }
                               .getOrElse(StatusCodes.NotFound -> None)
                           }
-                        }
+                        })
                       }
                     }
                   } ~
                   pathPrefix("petServiceAccount") {
                     path(Segment) { project =>
                       delete {
-                        completeWithTrace { span =>
+                        completeWithTrace({ traceContext =>
                           cloudExtensions
-                            .deleteUserPetServiceAccount(WorkbenchUserId(userId), GoogleProject(project), span)
+                            .deleteUserPetServiceAccount(WorkbenchUserId(userId), GoogleProject(project), traceContext)
                             .map(_ => StatusCodes.NoContent)
-                        }
+                        })
                       }
                     }
                   }
@@ -179,24 +176,24 @@ trait UserRoutes extends UserInfoDirectives {
         get {
           path(Segment) { email =>
             pathEnd {
-              completeWithTrace { span =>
-                userService.getUserIdInfoFromEmail(WorkbenchEmail(email), span).map {
+              completeWithTrace({ traceContext =>
+                userService.getUserIdInfoFromEmail(WorkbenchEmail(email), traceContext).map {
                   case Left(_) => StatusCodes.NotFound -> None
                   case Right(None) => StatusCodes.NoContent -> None
                   case Right(Some(userIdInfo)) => StatusCodes.OK -> Some(userIdInfo)
                 }
-              }
+              })
             }
           }
         } ~
           pathPrefix("invite") {
             post {
               path(Segment) { inviteeEmail =>
-                completeWithTrace { span =>
+                completeWithTrace({ traceContext =>
                   userService
-                    .inviteUser(InviteUser(genWorkbenchUserId(System.currentTimeMillis()), WorkbenchEmail(inviteeEmail.trim)), span)
+                    .inviteUser(InviteUser(genWorkbenchUserId(System.currentTimeMillis()), WorkbenchEmail(inviteeEmail.trim)), traceContext)
                     .map(userStatus => StatusCodes.Created -> userStatus)
-                }
+                })
               }
             }
           }

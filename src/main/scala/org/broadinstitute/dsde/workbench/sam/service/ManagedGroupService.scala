@@ -3,13 +3,13 @@ package org.broadinstitute.dsde.workbench.sam.service
 import akka.http.scaladsl.model.StatusCodes
 import cats.effect.{ContextShift, IO}
 import com.typesafe.scalalogging.LazyLogging
-import io.opencensus.trace.Span
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.AccessPolicyDAO
 import org.broadinstitute.dsde.workbench.sam.service.ManagedGroupService.ManagedGroupPolicyName
+import org.broadinstitute.dsde.workbench.sam.util.TraceContext
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
@@ -32,7 +32,7 @@ class ManagedGroupService(
       ManagedGroupService.managedGroupTypeName,
       throw new WorkbenchException(s"resource type ${ManagedGroupService.managedGroupTypeName.value} not found"))
 
-  def createManagedGroup(groupId: ResourceId, userInfo: UserInfo, accessInstructionsOpt: Option[String] = None, parentSpan: Span): IO[Resource] = {
+  def createManagedGroup(groupId: ResourceId, userInfo: UserInfo, accessInstructionsOpt: Option[String] = None, traceContext: TraceContext): IO[Resource] = {
     def adminRole = managedGroupType.ownerRoleName
 
     val memberPolicy = ManagedGroupService.memberPolicyName -> AccessPolicyMembership(Set.empty, Set.empty, Set(ManagedGroupService.memberRoleName))
@@ -50,21 +50,21 @@ class ManagedGroupService(
         Map(adminPolicy, memberPolicy, adminNotificationPolicy),
         Set.empty,
         userInfo.userId,
-        parentSpan)
-      policies <- accessPolicyDAO.listAccessPolicies(managedGroup.fullyQualifiedId, parentSpan)
-      workbenchGroup <- createAggregateGroup(managedGroup, policies.toSet, accessInstructionsOpt, parentSpan)
+        traceContext)
+      policies <- accessPolicyDAO.listAccessPolicies(managedGroup.fullyQualifiedId, traceContext)
+      workbenchGroup <- createAggregateGroup(managedGroup, policies.toSet, accessInstructionsOpt, traceContext)
       _ <- IO.fromFuture(IO(cloudExtensions.publishGroup(workbenchGroup.id)))
     } yield managedGroup
   }
 
-  private def createAggregateGroup(resource: Resource, componentPolicies: Set[AccessPolicy], accessInstructionsOpt: Option[String], parentSpan: Span): IO[BasicWorkbenchGroup] = {
+  private def createAggregateGroup(resource: Resource, componentPolicies: Set[AccessPolicy], accessInstructionsOpt: Option[String], traceContext: TraceContext): IO[BasicWorkbenchGroup] = {
     val email = WorkbenchEmail(constructEmail(resource.resourceId.value))
     val workbenchGroupName = WorkbenchGroupName(resource.resourceId.value)
     val groupMembers: Set[WorkbenchSubject] = componentPolicies.collect {
       // collect only member and admin policies
       case AccessPolicy(id @ FullyQualifiedPolicyId(_, ManagedGroupService.memberPolicyName | ManagedGroupService.adminPolicyName), _, _, _, _, _) => id
     }
-    directoryDAO.createGroup(BasicWorkbenchGroup(workbenchGroupName, groupMembers, email), accessInstructionsOpt, parentSpan = parentSpan)
+    directoryDAO.createGroup(BasicWorkbenchGroup(workbenchGroupName, groupMembers, email), accessInstructionsOpt, traceContext = traceContext)
   }
 
   private def constructEmail(groupName: String) =
@@ -93,25 +93,25 @@ class ManagedGroupService(
       None
 
   // Per dvoet, when asking for a group, we will just return the group email
-  def loadManagedGroup(groupId: ResourceId, parentSpan: Span): IO[Option[WorkbenchEmail]] =
-    directoryDAO.loadGroup(WorkbenchGroupName(groupId.value), parentSpan).map(_.map(_.email))
+  def loadManagedGroup(groupId: ResourceId, traceContext: TraceContext): IO[Option[WorkbenchEmail]] =
+    directoryDAO.loadGroup(WorkbenchGroupName(groupId.value), traceContext).map(_.map(_.email))
 
-  def deleteManagedGroup(groupId: ResourceId, parentSpan: Span): Future[Unit] =
+  def deleteManagedGroup(groupId: ResourceId, traceContext: TraceContext): Future[Unit] =
     for {
       // order is important here, we want to make sure we do all the cloudExtensions calls before we touch ldap
       // so failures there do not leave ldap in a bad state
       // resourceService.deleteResource also does cloudExtensions.onGroupDelete first thing
       _ <- cloudExtensions.onGroupDelete(WorkbenchEmail(constructEmail(groupId.value)))
       managedGroupResourceId = FullyQualifiedResourceId(managedGroupType.name, groupId)
-      _ <- resourceService.cloudDeletePolicies(managedGroupResourceId, parentSpan)
-      _ <- directoryDAO.deleteGroup(WorkbenchGroupName(groupId.value), parentSpan).unsafeToFuture()
-      _ <- resourceService.deleteResource(managedGroupResourceId, parentSpan)
+      _ <- resourceService.cloudDeletePolicies(managedGroupResourceId, traceContext)
+      _ <- directoryDAO.deleteGroup(WorkbenchGroupName(groupId.value), traceContext).unsafeToFuture()
+      _ <- resourceService.deleteResource(managedGroupResourceId, traceContext)
     } yield ()
 
-  def listGroups(userId: WorkbenchUserId, parentSpan: Span): IO[Set[ManagedGroupMembershipEntry]] =
+  def listGroups(userId: WorkbenchUserId, traceContext: TraceContext): IO[Set[ManagedGroupMembershipEntry]] =
     for {
-      managedGroupsWithRole <- policyEvaluatorService.listUserManagedGroupsWithRole(userId, parentSpan)
-      emailLookup <- directoryDAO.batchLoadGroupEmail(managedGroupsWithRole.map(_.groupName), parentSpan)
+      managedGroupsWithRole <- policyEvaluatorService.listUserManagedGroupsWithRole(userId, traceContext)
+      emailLookup <- directoryDAO.batchLoadGroupEmail(managedGroupsWithRole.map(_.groupName), traceContext)
     } yield {
       val emailLookupMap = emailLookup.toMap
       // This will silently ignore any group where the email could not be loaded. This can happen when a
@@ -124,41 +124,41 @@ class ManagedGroupService(
       }
     }
 
-  def listPolicyMemberEmails(resourceId: ResourceId, policyName: ManagedGroupPolicyName, parentSpan: Span): IO[Stream[WorkbenchEmail]] = {
+  def listPolicyMemberEmails(resourceId: ResourceId, policyName: ManagedGroupPolicyName, traceContext: TraceContext): IO[Stream[WorkbenchEmail]] = {
     val policyIdentity =
       FullyQualifiedPolicyId(FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, resourceId), policyName)
-    accessPolicyDAO.loadPolicy(policyIdentity, parentSpan) flatMap {
-      case Some(policy) => directoryDAO.loadSubjectEmails(policy.members, parentSpan)
+    accessPolicyDAO.loadPolicy(policyIdentity, traceContext) flatMap {
+      case Some(policy) => directoryDAO.loadSubjectEmails(policy.members, traceContext)
       case None =>
         IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Group or policy could not be found: $policyIdentity")))
     }
   }
 
-  def overwritePolicyMemberEmails(resourceId: ResourceId, policyName: ManagedGroupPolicyName, emails: Set[WorkbenchEmail], parentSpan: Span): IO[AccessPolicy] = {
+  def overwritePolicyMemberEmails(resourceId: ResourceId, policyName: ManagedGroupPolicyName, emails: Set[WorkbenchEmail], traceContext: TraceContext): IO[AccessPolicy] = {
     val resourceAndPolicyName =
       FullyQualifiedPolicyId(FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, resourceId), policyName)
-    accessPolicyDAO.loadPolicy(resourceAndPolicyName, parentSpan).flatMap {
+    accessPolicyDAO.loadPolicy(resourceAndPolicyName, traceContext).flatMap {
       case Some(policy) => {
         val updatedPolicy = AccessPolicyMembership(emails, policy.actions, policy.roles)
-        resourceService.overwritePolicy(managedGroupType, resourceAndPolicyName.accessPolicyName, resourceAndPolicyName.resource, updatedPolicy, parentSpan)
+        resourceService.overwritePolicy(managedGroupType, resourceAndPolicyName.accessPolicyName, resourceAndPolicyName.resource, updatedPolicy, traceContext)
       }
       case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Group or policy could not be found: $resourceAndPolicyName"))
     }
   }
 
-  def addSubjectToPolicy(resourceId: ResourceId, policyName: ManagedGroupPolicyName, subject: WorkbenchSubject, parentSpan: Span): Future[Unit] = {
+  def addSubjectToPolicy(resourceId: ResourceId, policyName: ManagedGroupPolicyName, subject: WorkbenchSubject, traceContext: TraceContext): Future[Unit] = {
     val resourceAndPolicyName =
       FullyQualifiedPolicyId(FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, resourceId), policyName)
-    resourceService.addSubjectToPolicy(resourceAndPolicyName, subject, parentSpan)
+    resourceService.addSubjectToPolicy(resourceAndPolicyName, subject, traceContext)
   }
 
-  def removeSubjectFromPolicy(resourceId: ResourceId, policyName: ManagedGroupPolicyName, subject: WorkbenchSubject, parentSpan: Span): Future[Unit] = {
+  def removeSubjectFromPolicy(resourceId: ResourceId, policyName: ManagedGroupPolicyName, subject: WorkbenchSubject, traceContext: TraceContext): Future[Unit] = {
     val resourceAndPolicyName =
       FullyQualifiedPolicyId(FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, resourceId), policyName)
-    resourceService.removeSubjectFromPolicy(resourceAndPolicyName, subject, parentSpan)
+    resourceService.removeSubjectFromPolicy(resourceAndPolicyName, subject, traceContext)
   }
 
-  def requestAccess(resourceId: ResourceId, requesterUserId: WorkbenchUserId, parentSpan: Span): IO[Unit] = {
+  def requestAccess(resourceId: ResourceId, requesterUserId: WorkbenchUserId, traceContext: TraceContext): IO[Unit] = {
     def extractGoogleSubjectId(requesterUser: Option[WorkbenchUser]): IO[WorkbenchUserId] =
       (for { u <- requesterUser; s <- u.googleSubjectId } yield s) match {
         case Some(subjectId) => IO.pure(WorkbenchUserId(subjectId.value))
@@ -166,7 +166,7 @@ class ManagedGroupService(
         case None => IO.raiseError(new WorkbenchException(s"unable to find subject id for $requesterUserId"))
       }
 
-    getAccessInstructions(resourceId, parentSpan).flatMap {
+    getAccessInstructions(resourceId, traceContext).flatMap {
       case Some(accessInstructions) =>
         IO.raiseError(
           new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"Please follow special access instructions: $accessInstructions")))
@@ -177,9 +177,9 @@ class ManagedGroupService(
           FullyQualifiedPolicyId(FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, resourceId), ManagedGroupService.adminPolicyName)
 
         for {
-          requesterUser <- directoryDAO.loadUser(requesterUserId, parentSpan)
+          requesterUser <- directoryDAO.loadUser(requesterUserId, traceContext)
           requesterSubjectId <- extractGoogleSubjectId(requesterUser)
-          admins <- accessPolicyDAO.listFlattenedPolicyMembers(resourceAndAdminPolicyName, parentSpan)
+          admins <- accessPolicyDAO.listFlattenedPolicyMembers(resourceAndAdminPolicyName, traceContext)
           // ignore any admin that does not have a google subject id (they have not registered yet anyway)
           adminUserIds = admins.flatMap { admin =>
             admin.googleSubjectId.map(id => WorkbenchUserId(id.value))
@@ -193,11 +193,11 @@ class ManagedGroupService(
     }
   }
 
-  def getAccessInstructions(groupId: ResourceId, parentSpan: Span): IO[Option[String]] =
-    directoryDAO.getManagedGroupAccessInstructions(WorkbenchGroupName(groupId.value), parentSpan)
+  def getAccessInstructions(groupId: ResourceId, traceContext: TraceContext): IO[Option[String]] =
+    directoryDAO.getManagedGroupAccessInstructions(WorkbenchGroupName(groupId.value), traceContext)
 
-  def setAccessInstructions(groupId: ResourceId, accessInstructions: String, parentSpan: Span): IO[Unit] =
-    directoryDAO.setManagedGroupAccessInstructions(WorkbenchGroupName(groupId.value), accessInstructions, parentSpan)
+  def setAccessInstructions(groupId: ResourceId, accessInstructions: String, traceContext: TraceContext): IO[Unit] =
+    directoryDAO.setManagedGroupAccessInstructions(WorkbenchGroupName(groupId.value), accessInstructions, traceContext)
 }
 
 object ManagedGroupService {

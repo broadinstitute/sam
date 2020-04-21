@@ -90,9 +90,9 @@ object SamRoutes {
 
     ExceptionHandler {
       case withErrorReport: WorkbenchExceptionWithErrorReport =>
-        completeWithTrace(span => (withErrorReport.errorReport.statusCode.getOrElse(StatusCodes.InternalServerError), withErrorReport.errorReport))
+        completeWithTrace(traceContext => (withErrorReport.errorReport.statusCode.getOrElse(StatusCodes.InternalServerError), withErrorReport.errorReport))
       case e: Throwable =>
-        completeWithTrace(span => (StatusCodes.InternalServerError, ErrorReport(e)))
+        completeWithTrace(traceContext => (StatusCodes.InternalServerError, ErrorReport(e)))
     }
   }
 }

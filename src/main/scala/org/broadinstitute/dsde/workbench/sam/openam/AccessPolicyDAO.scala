@@ -2,38 +2,38 @@ package org.broadinstitute.dsde.workbench.sam.openam
 
 import cats.data.NonEmptyList
 import cats.effect.IO
-import io.opencensus.trace.Span
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.model.{FullyQualifiedResourceId, _}
+import org.broadinstitute.dsde.workbench.sam.util.TraceContext
 
 /**
   * Created by dvoet on 6/26/17.
   */
 trait AccessPolicyDAO {
-  def createResourceType(resourceType: ResourceType, parentSpan: Span): IO[ResourceType]
+  def createResourceType(resourceType: ResourceType, traceContext: TraceContext): IO[ResourceType]
 
-  def createResource(resource: Resource, parentSpan: Span): IO[Resource]
-  def deleteResource(resource: FullyQualifiedResourceId, parentSpan: Span): IO[Unit]
-  def loadResourceAuthDomain(resource: FullyQualifiedResourceId, parentSpan: Span): IO[LoadResourceAuthDomainResult]
-  def listResourcesConstrainedByGroup(groupId: WorkbenchGroupIdentity, parentSpan: Span): IO[Set[Resource]]
-  def removeAuthDomainFromResource(resource: FullyQualifiedResourceId, parentSpan: Span): IO[Unit]
+  def createResource(resource: Resource, traceContext: TraceContext): IO[Resource]
+  def deleteResource(resource: FullyQualifiedResourceId, traceContext: TraceContext): IO[Unit]
+  def loadResourceAuthDomain(resource: FullyQualifiedResourceId, traceContext: TraceContext): IO[LoadResourceAuthDomainResult]
+  def listResourcesConstrainedByGroup(groupId: WorkbenchGroupIdentity, traceContext: TraceContext): IO[Set[Resource]]
+  def removeAuthDomainFromResource(resource: FullyQualifiedResourceId, traceContext: TraceContext): IO[Unit]
 
-  def createPolicy(policy: AccessPolicy, parentSpan: Span): IO[AccessPolicy]
-  def deletePolicy(policy: FullyQualifiedPolicyId, parentSpan: Span): IO[Unit]
-  def loadPolicy(resourceAndPolicyName: FullyQualifiedPolicyId, parentSpan: Span): IO[Option[AccessPolicy]]
-  def overwritePolicyMembers(id: FullyQualifiedPolicyId, memberList: Set[WorkbenchSubject], parentSpan: Span): IO[Unit]
-  def overwritePolicy(newPolicy: AccessPolicy, parentSpan: Span): IO[AccessPolicy]
-  def listPublicAccessPolicies(resourceTypeName: ResourceTypeName, parentSpan: Span): IO[Stream[ResourceIdAndPolicyName]]
-  def listPublicAccessPolicies(resource: FullyQualifiedResourceId, parentSpan: Span): IO[Stream[AccessPolicyWithoutMembers]]
-  def listResourcesWithAuthdomains(resourceTypeName: ResourceTypeName, resourceId: Set[ResourceId], parentSpan: Span): IO[Set[Resource]]
-  def listResourceWithAuthdomains(resourceId: FullyQualifiedResourceId, parentSpan: Span): IO[Option[Resource]]
-  def listAccessPolicies(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId, parentSpan: Span): IO[Set[ResourceIdAndPolicyName]]
-  def listAccessPolicies(resource: FullyQualifiedResourceId, parentSpan: Span): IO[Stream[AccessPolicy]]
-  def listAccessPoliciesForUser(resource: FullyQualifiedResourceId, user: WorkbenchUserId, parentSpan: Span): IO[Set[AccessPolicyWithoutMembers]]
-  def listFlattenedPolicyMembers(policyId: FullyQualifiedPolicyId, parentSpan: Span): IO[Set[WorkbenchUser]]
-  def setPolicyIsPublic(policyId: FullyQualifiedPolicyId, isPublic: Boolean, parentSpan: Span): IO[Unit]
+  def createPolicy(policy: AccessPolicy, traceContext: TraceContext): IO[AccessPolicy]
+  def deletePolicy(policy: FullyQualifiedPolicyId, traceContext: TraceContext): IO[Unit]
+  def loadPolicy(resourceAndPolicyName: FullyQualifiedPolicyId, traceContext: TraceContext): IO[Option[AccessPolicy]]
+  def overwritePolicyMembers(id: FullyQualifiedPolicyId, memberList: Set[WorkbenchSubject], traceContext: TraceContext): IO[Unit]
+  def overwritePolicy(newPolicy: AccessPolicy, traceContext: TraceContext): IO[AccessPolicy]
+  def listPublicAccessPolicies(resourceTypeName: ResourceTypeName, traceContext: TraceContext): IO[Stream[ResourceIdAndPolicyName]]
+  def listPublicAccessPolicies(resource: FullyQualifiedResourceId, traceContext: TraceContext): IO[Stream[AccessPolicyWithoutMembers]]
+  def listResourcesWithAuthdomains(resourceTypeName: ResourceTypeName, resourceId: Set[ResourceId], traceContext: TraceContext): IO[Set[Resource]]
+  def listResourceWithAuthdomains(resourceId: FullyQualifiedResourceId, traceContext: TraceContext): IO[Option[Resource]]
+  def listAccessPolicies(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId, traceContext: TraceContext): IO[Set[ResourceIdAndPolicyName]]
+  def listAccessPolicies(resource: FullyQualifiedResourceId, traceContext: TraceContext): IO[Stream[AccessPolicy]]
+  def listAccessPoliciesForUser(resource: FullyQualifiedResourceId, user: WorkbenchUserId, traceContext: TraceContext): IO[Set[AccessPolicyWithoutMembers]]
+  def listFlattenedPolicyMembers(policyId: FullyQualifiedPolicyId, traceContext: TraceContext): IO[Set[WorkbenchUser]]
+  def setPolicyIsPublic(policyId: FullyQualifiedPolicyId, isPublic: Boolean, traceContext: TraceContext): IO[Unit]
 
-  def evictIsMemberOfCache(subject: WorkbenchSubject, parentSpan: Span): IO[Unit]
+  def evictIsMemberOfCache(subject: WorkbenchSubject, traceContext: TraceContext): IO[Unit]
 }
 
 

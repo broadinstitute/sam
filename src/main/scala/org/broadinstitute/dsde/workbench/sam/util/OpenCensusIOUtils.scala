@@ -10,12 +10,20 @@ import cats.effect.IO
 
 object OpenCensusIOUtils {
 
+  // todo: this is unused
   def traceIOWithParent[T](
                             name: String,
                             parentSpan: Span,
                             failureStatus: Throwable => Status = (_: Throwable) => Status.UNKNOWN
                           )(f: Span => IO[T]): IO[T] =
     traceIOSpan(IO(startSpanWithParent(name, parentSpan)), failureStatus)(f)
+
+  def traceIOWithContext[T](
+                            name: String,
+                            traceContext: TraceContext,
+                            failureStatus: Throwable => Status = (_: Throwable) => Status.UNKNOWN
+                          )(f: Span => IO[T]): IO[T] =
+    traceIOSpan(IO(startSpanWithParent(name, traceContext.parentSpan)), failureStatus)(f)
 
   // todo: this is unused
   // creates a root span
@@ -37,10 +45,11 @@ object OpenCensusIOUtils {
   }
 
   // Makes a complete() akka-http call, with tracing added, at the rate specified in config/sam.conf (a generated conf file)
-  def completeWithTrace(request: Span => ToResponseMarshallable): Route =
+  def completeWithTrace(request: TraceContext => ToResponseMarshallable): Route =
     traceRequest {span =>
+      val traceContext = new TraceContext(span)
       complete {
-        request(span)
+        request(traceContext)
       }
     }
 }

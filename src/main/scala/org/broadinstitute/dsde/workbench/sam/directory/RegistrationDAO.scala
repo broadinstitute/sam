@@ -1,7 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.directory
 import cats.effect.IO
-import io.opencensus.trace.Span
 import org.broadinstitute.dsde.workbench.model._
+import org.broadinstitute.dsde.workbench.sam.util.TraceContext
 
 /**
   * This class is here because even though Postgres is the source of record, Apache proxies still query LDAP directly
@@ -10,15 +10,15 @@ import org.broadinstitute.dsde.workbench.model._
   * away from a solution that requires that the Apache proxies query this group, we can remove the RegistrationDAO.
   */
 trait RegistrationDAO {
-  def createUser(user: WorkbenchUser, parentSpan: Span): IO[WorkbenchUser]
-  def loadUser(userId: WorkbenchUserId, parentSpan: Span): IO[Option[WorkbenchUser]]
-  def deleteUser(userId: WorkbenchUserId, parentSpan: Span): IO[Unit]
-  def enableIdentity(subject: WorkbenchSubject, parentSpan: Span): IO[Unit]
-  def disableIdentity(subject: WorkbenchSubject, parentSpan: Span): IO[Unit]
-  def isEnabled(subject: WorkbenchSubject, parentSpan: Span): IO[Boolean]
-  def createPetServiceAccount(petServiceAccount: PetServiceAccount, parentSpan: Span): IO[PetServiceAccount]
-  def loadPetServiceAccount(petServiceAccountId: PetServiceAccountId, parentSpan: Span): IO[Option[PetServiceAccount]]
-  def deletePetServiceAccount(petServiceAccountId: PetServiceAccountId, parentSpan: Span): IO[Unit]
-  def updatePetServiceAccount(petServiceAccount: PetServiceAccount, parentSpan: Span): IO[PetServiceAccount]
-  def setGoogleSubjectId(userId: WorkbenchUserId, googleSubjectId: GoogleSubjectId, parentSpan: Span): IO[Unit]
+  def createUser(user: WorkbenchUser, traceContext: TraceContext): IO[WorkbenchUser]
+  def loadUser(userId: WorkbenchUserId, traceContext: TraceContext): IO[Option[WorkbenchUser]]
+  def deleteUser(userId: WorkbenchUserId, traceContext: TraceContext): IO[Unit]
+  def enableIdentity(subject: WorkbenchSubject, traceContext: TraceContext): IO[Unit]
+  def disableIdentity(subject: WorkbenchSubject, traceContext: TraceContext): IO[Unit]
+  def isEnabled(subject: WorkbenchSubject, traceContext: TraceContext): IO[Boolean]
+  def createPetServiceAccount(petServiceAccount: PetServiceAccount, traceContext: TraceContext): IO[PetServiceAccount]
+  def loadPetServiceAccount(petServiceAccountId: PetServiceAccountId, traceContext: TraceContext): IO[Option[PetServiceAccount]]
+  def deletePetServiceAccount(petServiceAccountId: PetServiceAccountId, traceContext: TraceContext): IO[Unit]
+  def updatePetServiceAccount(petServiceAccount: PetServiceAccount, traceContext: TraceContext): IO[PetServiceAccount]
+  def setGoogleSubjectId(userId: WorkbenchUserId, googleSubjectId: GoogleSubjectId, traceContext: TraceContext): IO[Unit]
 }
