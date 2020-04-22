@@ -103,7 +103,7 @@ trait NoExtensions extends CloudExtensions {
   override def getOrCreateAllUsersGroup(directoryDAO: DirectoryDAO)(implicit executionContext: ExecutionContext): Future[WorkbenchGroup] = {
     val allUsersGroup = BasicWorkbenchGroup(allUsersGroupName, Set.empty, WorkbenchEmail(s"GROUP_${allUsersGroupName.value}@$emailDomain"))
     for {
-      createdGroup <- directoryDAO.createGroup(allUsersGroup, traceContext = traceContext).unsafeToFuture() recover {
+      createdGroup <- directoryDAO.createGroup(allUsersGroup, samRequestContext = samRequestContext).unsafeToFuture() recover {
         case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode == Option(StatusCodes.Conflict) => allUsersGroup
       }
     } yield createdGroup

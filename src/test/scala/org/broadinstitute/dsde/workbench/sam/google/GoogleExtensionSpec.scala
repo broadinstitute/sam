@@ -263,8 +263,8 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
 
     when(mockGoogleDirectoryDAO.addMemberToGroup(any[WorkbenchEmail], any[WorkbenchEmail])).thenReturn(Future.successful(()))
     //create groups
-    mockDirectoryDAO.createGroup(topGroup).unsafeRunSync()
-    mockDirectoryDAO.createGroup(subGroup).unsafeRunSync()
+    mockDirectoryDAO.createGroup(topGroup, samRequestContext = samRequestContext).unsafeRunSync()
+    mockDirectoryDAO.createGroup(subGroup, samRequestContext = samRequestContext).unsafeRunSync()
     //add subGroup to topGroup
     runAndWait(mockGoogleDirectoryDAO.addMemberToGroup(groupEmail, subGroupEmail))
     mockDirectoryDAO.addGroupMember(topGroup.id, subGroup.id, samRequestContext).unsafeRunSync()
@@ -426,7 +426,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val regDAO = newRegistrationDAO()
     val ge = new GoogleExtensions(TestSupport.fakeDistributedLock, dirDAO, regDAO,null, null, null, null, null, null, null, null, null, googleServicesConfig, null, configResourceTypes)
     val groupName = WorkbenchGroupName("group-sync")
-    dirDAO.createGroup(BasicWorkbenchGroup(groupName, Set(), WorkbenchEmail(""))).unsafeRunSync()
+    dirDAO.createGroup(BasicWorkbenchGroup(groupName, Set(), WorkbenchEmail("")), samRequestContext = samRequestContext).unsafeRunSync()
     try {
       ge.getSynchronizedDate(groupName).unsafeRunSync() shouldBe None
     } finally {
@@ -441,7 +441,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val ge = new GoogleExtensions(TestSupport.fakeDistributedLock, dirDAO, regDAO, null, new MockGoogleDirectoryDAO(), null, null, null, null, null, null, null, googleServicesConfig, null, configResourceTypes)
     val synchronizer = new GoogleGroupSynchronizer(dirDAO, null, mockGoogleDirectoryDAO, ge, configResourceTypes)
     val groupName = WorkbenchGroupName("group-sync")
-    dirDAO.createGroup(BasicWorkbenchGroup(groupName, Set(), WorkbenchEmail("group1@test.firecloud.org"))).unsafeRunSync()
+    dirDAO.createGroup(BasicWorkbenchGroup(groupName, Set(), WorkbenchEmail("group1@test.firecloud.org")), samRequestContext = samRequestContext).unsafeRunSync()
     try {
       runAndWait(synchronizer.synchronizeGroupMembers(groupName))
       val syncDate = ge.getSynchronizedDate(groupName).unsafeRunSync().get
@@ -469,7 +469,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val ge = new GoogleExtensions(TestSupport.fakeDistributedLock, dirDAO, regDAO, null, null, null, null, null, null, null, null, null, googleServicesConfig, null, configResourceTypes)
     val groupName = WorkbenchGroupName("group-sync")
     val email = WorkbenchEmail("foo@bar.com")
-    dirDAO.createGroup(BasicWorkbenchGroup(groupName, Set(), email)).unsafeRunSync()
+    dirDAO.createGroup(BasicWorkbenchGroup(groupName, Set(), email), samRequestContext = samRequestContext).unsafeRunSync()
     try {
       ge.getSynchronizedEmail(groupName).unsafeRunSync() shouldBe Some(email)
     } finally {
@@ -483,7 +483,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val ge = new GoogleExtensions(TestSupport.fakeDistributedLock, dirDAO, regDAO, null, null, null, null, null, null, null, null, null, googleServicesConfig, null, configResourceTypes)
     val groupName = WorkbenchGroupName("group-sync")
     val email = WorkbenchEmail("foo@bar.com")
-    dirDAO.createGroup(BasicWorkbenchGroup(groupName, Set(), email)).unsafeRunSync()
+    dirDAO.createGroup(BasicWorkbenchGroup(groupName, Set(), email), samRequestContext = samRequestContext).unsafeRunSync()
     try {
       ge.getSynchronizedState(groupName).unsafeRunSync() shouldBe None
     } finally {
@@ -499,7 +499,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val synchronizer = new GoogleGroupSynchronizer(dirDAO, null, mockGoogleDirectoryDAO, ge, configResourceTypes)
     val groupName = WorkbenchGroupName("group-sync")
     val email = WorkbenchEmail("foo@bar.com")
-    dirDAO.createGroup(BasicWorkbenchGroup(groupName, Set(), email)).unsafeRunSync()
+    dirDAO.createGroup(BasicWorkbenchGroup(groupName, Set(), email), samRequestContext = samRequestContext).unsafeRunSync()
     try {
       ge.getSynchronizedState(groupName).unsafeRunSync() should equal(None)
       runAndWait(synchronizer.synchronizeGroupMembers(groupName))
@@ -583,7 +583,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val allUsersGroupMatcher = new ArgumentMatcher[BasicWorkbenchGroup] {
       override def matches(group: BasicWorkbenchGroup): Boolean = group.id == allUsersGroup.id
     }
-    when(mockDirectoryDAO.createGroup(argThat(allUsersGroupMatcher), isNull())).thenReturn(IO.pure(allUsersGroup))
+    when(mockDirectoryDAO.createGroup(argThat(allUsersGroupMatcher), isNull(), samRequestContext = samRequestContext)).thenReturn(IO.pure(allUsersGroup))
 
     when(mockGoogleDirectoryDAO.getGoogleGroup(any[WorkbenchEmail])).thenReturn(Future.successful(None))
     when(mockGoogleDirectoryDAO.createGroup(any[String], any[WorkbenchEmail], any[Option[Groups]])).thenReturn(Future.successful(()))
@@ -919,9 +919,9 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     dirDAO.createUser(WorkbenchUser(inBothSubGroupUser.userId, Some(TestSupport.genGoogleSubjectId()), inBothSubGroupUser.userEmail, Some(TestSupport.genIdentityConcentratorId())), samRequestContext).unsafeRunSync()
 
     // Create subgroups as groups in ldap
-    val inAuthDomainSubGroup = dirDAO.createGroup(BasicWorkbenchGroup(WorkbenchGroupName("inAuthDomainSubGroup"), Set(inAuthDomainSubGroupUser.userId), WorkbenchEmail("imAuthDomain@subGroup.com"))).unsafeRunSync()
-    val inPolicySubGroup = dirDAO.createGroup(BasicWorkbenchGroup(WorkbenchGroupName("inPolicySubGroup"), Set(inPolicySubGroupUser.userId), WorkbenchEmail("inPolicy@subGroup.com"))).unsafeRunSync()
-    val inBothSubGroup = dirDAO.createGroup(BasicWorkbenchGroup(WorkbenchGroupName("inBothSubGroup"), Set(inBothSubGroupUser.userId), WorkbenchEmail("inBoth@subGroup.com"))).unsafeRunSync()
+    val inAuthDomainSubGroup = dirDAO.createGroup(BasicWorkbenchGroup(WorkbenchGroupName("inAuthDomainSubGroup"), Set(inAuthDomainSubGroupUser.userId), WorkbenchEmail("imAuthDomain@subGroup.com")), samRequestContext = samRequestContext).unsafeRunSync()
+    val inPolicySubGroup = dirDAO.createGroup(BasicWorkbenchGroup(WorkbenchGroupName("inPolicySubGroup"), Set(inPolicySubGroupUser.userId), WorkbenchEmail("inPolicy@subGroup.com")), samRequestContext = samRequestContext).unsafeRunSync()
+    val inBothSubGroup = dirDAO.createGroup(BasicWorkbenchGroup(WorkbenchGroupName("inBothSubGroup"), Set(inBothSubGroupUser.userId), WorkbenchEmail("inBoth@subGroup.com")), samRequestContext = samRequestContext).unsafeRunSync()
 
     // Create managed group to act as auth domain and add appropriate subgroups
     val managedGroupId = "fooGroup"

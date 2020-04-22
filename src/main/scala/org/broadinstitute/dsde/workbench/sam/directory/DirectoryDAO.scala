@@ -12,7 +12,7 @@ import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
   * Created by dvoet on 5/26/17.
   */
 trait DirectoryDAO extends RegistrationDAO {
-  def createGroup(group: BasicWorkbenchGroup, accessInstructionsOpt: Option[String] = None): IO[BasicWorkbenchGroup]
+  def createGroup(group: BasicWorkbenchGroup, accessInstructionsOpt: Option[String] = None, samRequestContext: SamRequestContext): IO[BasicWorkbenchGroup]
   def loadGroup(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Option[BasicWorkbenchGroup]]
   def loadGroups(groupNames: Set[WorkbenchGroupName], samRequestContext: SamRequestContext): IO[Stream[BasicWorkbenchGroup]]
   def loadGroupEmail(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Option[WorkbenchEmail]]

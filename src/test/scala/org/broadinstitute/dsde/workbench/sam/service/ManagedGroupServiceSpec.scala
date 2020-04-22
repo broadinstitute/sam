@@ -187,7 +187,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     val managedGroupName = WorkbenchGroupName(managedGroup.resourceId.value)
     val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName("parentGroup"), Set(managedGroupName), WorkbenchEmail("foo@foo.gov"))
 
-    dirDAO.createGroup(parentGroup).unsafeRunSync() shouldEqual parentGroup
+    dirDAO.createGroup(parentGroup, samRequestContext = samRequestContext).unsafeRunSync() shouldEqual parentGroup
 
     // using .get on an option here because if the Option is None and this throws an exception, that's fine
     dirDAO.loadGroup(parentGroup.id, samRequestContext).unsafeRunSync().get.members shouldEqual Set(managedGroupName)
@@ -218,7 +218,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     val someGroupEmail = WorkbenchEmail("someGroup@some.org")
     dirDAO.createUser(otherAdmin, samRequestContext).unsafeRunSync()
     val managedGroup = assertMakeGroup()
-    dirDAO.createGroup(BasicWorkbenchGroup(WorkbenchGroupName("someGroup"), Set.empty, someGroupEmail)).unsafeRunSync()
+    dirDAO.createGroup(BasicWorkbenchGroup(WorkbenchGroupName("someGroup"), Set.empty, someGroupEmail), samRequestContext = samRequestContext).unsafeRunSync()
 
     managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName).unsafeRunSync() should contain theSameElementsAs Set(dummyAdmin.email)
 
@@ -248,7 +248,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     val someUser = WorkbenchUser(WorkbenchUserId("someUser"), None, WorkbenchEmail("someUser@foo.test"), None)
     val someGroupEmail = WorkbenchEmail("someGroup@some.org")
     dirDAO.createUser(someUser, samRequestContext).unsafeRunSync()
-    dirDAO.createGroup(BasicWorkbenchGroup(WorkbenchGroupName("someGroup"), Set.empty, someGroupEmail)).unsafeRunSync()
+    dirDAO.createGroup(BasicWorkbenchGroup(WorkbenchGroupName("someGroup"), Set.empty, someGroupEmail), samRequestContext = samRequestContext).unsafeRunSync()
 
     managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.memberPolicyName).unsafeRunSync() should contain theSameElementsAs Set()
 

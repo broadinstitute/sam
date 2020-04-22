@@ -263,8 +263,8 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
         val authDomainGroupName2 = WorkbenchGroupName("authDomain2")
         val authDomainGroup2 = BasicWorkbenchGroup(authDomainGroupName2, Set(), WorkbenchEmail("authDomain2@foo.com"))
 
-        dirDao.createGroup(authDomainGroup1).unsafeRunSync()
-        dirDao.createGroup(authDomainGroup2).unsafeRunSync()
+        dirDao.createGroup(authDomainGroup1, samRequestContext = samRequestContext).unsafeRunSync()
+        dirDao.createGroup(authDomainGroup2, samRequestContext = samRequestContext).unsafeRunSync()
         dao.createResourceType(resourceType).unsafeRunSync()
 
         val resourceWithAuthDomain = Resource(resourceType.name, ResourceId("authDomainResource"), Set(authDomainGroupName1, authDomainGroupName2))
@@ -276,7 +276,7 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
         val authDomainGroup1 = BasicWorkbenchGroup(authDomainGroupName1, Set(), WorkbenchEmail("authDomain1@foo.com"))
         val authDomainGroupName2 = WorkbenchGroupName("authDomain2")
 
-        dirDao.createGroup(authDomainGroup1).unsafeRunSync()
+        dirDao.createGroup(authDomainGroup1, samRequestContext = samRequestContext).unsafeRunSync()
         dao.createResourceType(resourceType).unsafeRunSync()
         val exception = intercept[PSQLException] {
           val resourceWithAuthDomain = Resource(resourceType.name, ResourceId("authDomainResource"), Set(authDomainGroupName1, authDomainGroupName2))
@@ -306,8 +306,8 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
         val authDomainGroupName2 = WorkbenchGroupName("authDomain2")
         val authDomainGroup2 = BasicWorkbenchGroup(authDomainGroupName2, Set(), WorkbenchEmail("authDomain2@foo.com"))
 
-        dirDao.createGroup(authDomainGroup1).unsafeRunSync()
-        dirDao.createGroup(authDomainGroup2).unsafeRunSync()
+        dirDao.createGroup(authDomainGroup1, samRequestContext = samRequestContext).unsafeRunSync()
+        dirDao.createGroup(authDomainGroup2, samRequestContext = samRequestContext).unsafeRunSync()
         dao.createResourceType(resourceType).unsafeRunSync()
 
         val resourceWithAuthDomain = Resource(resourceType.name, ResourceId("authDomainResource"), Set(authDomainGroupName1, authDomainGroupName2))
@@ -323,7 +323,7 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
     "listResourceWithAuthdomains" - {
       "loads a resource with its auth domain" in {
         val authDomain = BasicWorkbenchGroup(WorkbenchGroupName("aufthDomain"), Set.empty, WorkbenchEmail("authDomain@groups.com"))
-        dirDao.createGroup(authDomain).unsafeRunSync()
+        dirDao.createGroup(authDomain, samRequestContext = samRequestContext).unsafeRunSync()
         dao.createResourceType(resourceType).unsafeRunSync()
 
         val resource = Resource(resourceType.name, ResourceId("resource"), Set(authDomain.id))
@@ -343,9 +343,9 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
 
       "loads the correct resource if different resource types have a resource with a common name" in {
         val authDomain1 = BasicWorkbenchGroup(WorkbenchGroupName("authDomain1"), Set.empty, WorkbenchEmail("authDomain1@groups.com"))
-        dirDao.createGroup(authDomain1).unsafeRunSync()
+        dirDao.createGroup(authDomain1, samRequestContext = samRequestContext).unsafeRunSync()
         val authDomain2 = BasicWorkbenchGroup(WorkbenchGroupName("authDomain2"), Set.empty, WorkbenchEmail("authDomain2@groups.com"))
-        dirDao.createGroup(authDomain2).unsafeRunSync()
+        dirDao.createGroup(authDomain2, samRequestContext = samRequestContext).unsafeRunSync()
 
         dao.createResourceType(resourceType).unsafeRunSync()
         val secondResourceTypeName = ResourceTypeName("superAwesomeType")
@@ -368,9 +368,9 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
     "listResourcesWithAuthdomains" - {
       "finds the auth domains for the provided resources" in {
         val authDomain1 = BasicWorkbenchGroup(WorkbenchGroupName("authDomain1"), Set.empty, WorkbenchEmail("authDomain1@groups.com"))
-        dirDao.createGroup(authDomain1).unsafeRunSync()
+        dirDao.createGroup(authDomain1, samRequestContext = samRequestContext).unsafeRunSync()
         val authDomain2 = BasicWorkbenchGroup(WorkbenchGroupName("authDomain2"), Set.empty, WorkbenchEmail("authDomain2@groups.com"))
-        dirDao.createGroup(authDomain2).unsafeRunSync()
+        dirDao.createGroup(authDomain2, samRequestContext = samRequestContext).unsafeRunSync()
 
         dao.createResourceType(resourceType).unsafeRunSync()
 
@@ -416,8 +416,8 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
 
         val sharedAuthDomain = BasicWorkbenchGroup(WorkbenchGroupName("authDomain"), Set.empty, WorkbenchEmail("authDomain@very-secure.biz"))
         val otherGroup = BasicWorkbenchGroup(WorkbenchGroupName("notShared"), Set.empty, WorkbenchEmail("selfish@very-secure.biz"))
-        dirDao.createGroup(sharedAuthDomain).unsafeRunSync()
-        dirDao.createGroup(otherGroup).unsafeRunSync()
+        dirDao.createGroup(sharedAuthDomain, samRequestContext = samRequestContext).unsafeRunSync()
+        dirDao.createGroup(otherGroup, samRequestContext = samRequestContext).unsafeRunSync()
 
         val resource1 = Resource(resourceType.name, ResourceId("resource1"), Set(sharedAuthDomain.id))
         val resource2 = Resource(secondResourceType.name, ResourceId("resource2"), Set(sharedAuthDomain.id, otherGroup.id))
@@ -429,7 +429,7 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
 
       "returns an empty list if group is not used in an auth domain" in {
         val group = BasicWorkbenchGroup(WorkbenchGroupName("boringGroup"), Set.empty, WorkbenchEmail("notAnAuthDomain@insecure.biz"))
-        dirDao.createGroup(group).unsafeRunSync()
+        dirDao.createGroup(group, samRequestContext = samRequestContext).unsafeRunSync()
 
         dao.listResourcesConstrainedByGroup(group.id).unsafeRunSync() shouldEqual Set.empty
       }
@@ -495,7 +495,7 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
         val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
         dao.createResource(resource).unsafeRunSync()
 
-        dirDao.createGroup(defaultGroup).unsafeRunSync()
+        dirDao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync()
         dirDao.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
         val policy = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("policyName")), Set(defaultGroup.id, defaultUser.id), WorkbenchEmail("policy@email.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), false)
@@ -517,7 +517,7 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
         val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
         dao.createResource(resource).unsafeRunSync()
 
-        dirDao.createGroup(defaultGroup).unsafeRunSync()
+        dirDao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync()
         dirDao.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
         val policy = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("policyName")), Set(defaultGroup.id, defaultUser.id), WorkbenchEmail("policy@email.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), false)
@@ -533,7 +533,7 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
         val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
         dao.createResource(resource).unsafeRunSync()
 
-        dirDao.createGroup(defaultGroup).unsafeRunSync()
+        dirDao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync()
         dirDao.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
         val policy = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("policyName")), Set(defaultGroup.id, defaultUser.id), WorkbenchEmail("policy@email.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), false)
@@ -619,7 +619,7 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
         val policy = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("policy")), Set(subGroup.id, secondGroup.id, directMember.id), WorkbenchEmail("policy@policy.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), false)
 
         allMembers.map(((user) => dirDao.createUser(user, samRequestContext)).unsafeRunSync())
-        Set(subSubGroup, subGroup, secondGroup).map(dirDao.createGroup(_).unsafeRunSync())
+        Set(subSubGroup, subGroup, secondGroup).map(((group) => dirDao.createGroup(group, samRequestContext = samRequestContext)).unsafeRunSync())
 
         dao.createResourceType(resourceType).unsafeRunSync()
         dao.createResource(resource).unsafeRunSync()
@@ -644,8 +644,8 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
           AccessPolicyWithoutMembers(policy.id, policy.email, policy.roles, policy.actions, policy.public))
 
         dirDao.createUser(user, samRequestContext).unsafeRunSync()
-        dirDao.createGroup(subGroup).unsafeRunSync()
-        dirDao.createGroup(parentGroup).unsafeRunSync()
+        dirDao.createGroup(subGroup, samRequestContext = samRequestContext).unsafeRunSync()
+        dirDao.createGroup(parentGroup, samRequestContext = samRequestContext).unsafeRunSync()
 
         dao.createResourceType(resourceType).unsafeRunSync()
         dao.createResource(resource).unsafeRunSync()

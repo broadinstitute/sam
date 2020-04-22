@@ -223,7 +223,7 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
   it should "return BadRequest when there's no existing subject for a given googleSubjectId and but there is one for email, and the returned subject is not a regular user" in{
     val user = genCreateWorkbenchUser.sample.get.copy(email = genNonPetEmail.sample.get, identityConcentratorId = None)
     val group = genBasicWorkbenchGroup.sample.get.copy(email = user.email, members = Set.empty)
-    dirDAO.createGroup(group).unsafeRunSync()
+    dirDAO.createGroup(group, samRequestContext = samRequestContext).unsafeRunSync()
     val res = service.registerUser(user).attempt.unsafeRunSync().swap.toOption.get.asInstanceOf[WorkbenchExceptionWithErrorReport]
     Eq[WorkbenchExceptionWithErrorReport].eqv(res, new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"$user is not a regular user. Please use a different endpoint"))) shouldBe true
   }

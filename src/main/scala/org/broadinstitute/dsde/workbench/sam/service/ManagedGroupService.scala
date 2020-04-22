@@ -64,7 +64,7 @@ class ManagedGroupService(
       // collect only member and admin policies
       case AccessPolicy(id @ FullyQualifiedPolicyId(_, ManagedGroupService.memberPolicyName | ManagedGroupService.adminPolicyName), _, _, _, _, _) => id
     }
-    directoryDAO.createGroup(BasicWorkbenchGroup(workbenchGroupName, groupMembers, email), accessInstructionsOpt, traceContext = traceContext)
+    directoryDAO.createGroup(BasicWorkbenchGroup(workbenchGroupName, groupMembers, email), accessInstructionsOpt, samRequestContext = samRequestContext)
   }
 
   private def constructEmail(groupName: String) =

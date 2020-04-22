@@ -230,7 +230,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
 
     val user = dirDAO.createUser(WorkbenchUser(WorkbenchUserId("asdfawefawea"), None, WorkbenchEmail("asdfawefawea@foo.bar"), None), samRequestContext).unsafeRunSync()
     val group = BasicWorkbenchGroup(WorkbenchGroupName("g"), Set(user.id), WorkbenchEmail("foo@bar.com"))
-    dirDAO.createGroup(group).unsafeRunSync()
+    dirDAO.createGroup(group, samRequestContext = samRequestContext).unsafeRunSync()
 
     service.createResourceType(defaultResourceType).unsafeRunSync()
     val resource = runAndWait(service.createResource(defaultResourceType, resourceName1, dummyUserInfo))
@@ -823,9 +823,9 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     val subGroup = BasicWorkbenchGroup(WorkbenchGroupName("subGroup"), Set(user6.userSubjectId), WorkbenchEmail("subgroup@fake.com"))
     val group2 = BasicWorkbenchGroup(WorkbenchGroupName("group2"), Set(user5.userSubjectId, subGroup.id), WorkbenchEmail("group2@fake.com"))
 
-    dirDAO.createGroup(group1).unsafeRunSync()
-    dirDAO.createGroup(subGroup).unsafeRunSync()
-    dirDAO.createGroup(group2).unsafeRunSync()
+    dirDAO.createGroup(group1, samRequestContext = samRequestContext).unsafeRunSync()
+    dirDAO.createGroup(subGroup, samRequestContext = samRequestContext).unsafeRunSync()
+    dirDAO.createGroup(group2, samRequestContext = samRequestContext).unsafeRunSync()
     runAndWait(service.createPolicy(FullyQualifiedPolicyId(resource, AccessPolicyName("reader")), Set(group1.id, group2.id), Set.empty, Set.empty))
 
     service.listAllFlattenedResourceUsers(resource).unsafeRunSync() should contain theSameElementsAs Set(dummyUserIdInfo, user1, user2, user3, user4, user5, user6)
@@ -867,7 +867,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     val testResult = for {
       _ <- service.createResourceType(defaultResourceType)
 
-      testGroup <- dirDAO.createGroup(BasicWorkbenchGroup(WorkbenchGroupName("mygroup"), Set.empty, WorkbenchEmail("group@a.com")))
+      testGroup <- dirDAO.createGroup(BasicWorkbenchGroup(WorkbenchGroupName("mygroup"), Set.empty, WorkbenchEmail("group@a.com")), samRequestContext = samRequestContext)
 
       res1 <- service.createResource(defaultResourceType, ResourceId("resource1"), dummyUserInfo)
       testPolicy <- service.listResourcePolicies(res1.fullyQualifiedId).map(_.head)

@@ -36,7 +36,7 @@ class StatusServiceSpec extends FreeSpec with Matchers with BeforeAndAfterAll wi
 
   private def directoryDAOWithAllUsersGroup = {
     val directoryDAO = new MockDirectoryDAO
-    directoryDAO.createGroup(BasicWorkbenchGroup(NoExtensions.allUsersGroupName, Set.empty, allUsersEmail)).unsafeRunSync()
+    directoryDAO.createGroup(BasicWorkbenchGroup(NoExtensions.allUsersGroupName, Set.empty, allUsersEmail), samRequestContext = samRequestContext).unsafeRunSync()
     directoryDAO
   }
 

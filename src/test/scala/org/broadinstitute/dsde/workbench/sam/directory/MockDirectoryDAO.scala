@@ -34,7 +34,7 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
 
   private val groupAccessInstructions: mutable.Map[WorkbenchGroupName, String] = new TrieMap()
 
-  override def createGroup(group: BasicWorkbenchGroup, accessInstruction: Option[String] = None): IO[BasicWorkbenchGroup] =
+  override def createGroup(group: BasicWorkbenchGroup, accessInstruction: Option[String] = None, samRequestContext: SamRequestContext): IO[BasicWorkbenchGroup] =
     if (groups.keySet.contains(group.id)) {
       IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"group ${group.id} already exists")))
     } else {

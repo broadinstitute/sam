@@ -23,7 +23,7 @@ import scala.util.{Failure, Try}
 class PostgresDirectoryDAO(protected val dbRef: DbReference,
                            protected val ecForDatabaseIO: ExecutionContext)(implicit val cs: ContextShift[IO]) extends DirectoryDAO with DatabaseSupport with PostgresGroupDAO {
 
-  override def createGroup(group: BasicWorkbenchGroup, accessInstructionsOpt: Option[String]): IO[BasicWorkbenchGroup] = {
+  override def createGroup(group: BasicWorkbenchGroup, accessInstructionsOpt: Option[String], samRequestContext: SamRequestContext): IO[BasicWorkbenchGroup] = {
     runInTransaction("createGroup", samRequestContext)({ implicit session =>
       val groupId: GroupPK = insertGroup(group)
 

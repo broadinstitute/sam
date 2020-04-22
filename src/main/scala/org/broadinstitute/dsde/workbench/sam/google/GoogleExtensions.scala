@@ -79,7 +79,7 @@ class GoogleExtensions(
   override def getOrCreateAllUsersGroup(directoryDAO: DirectoryDAO)(implicit executionContext: ExecutionContext): Future[WorkbenchGroup] = {
     val allUsersGroup = BasicWorkbenchGroup(allUsersGroupName, Set.empty, allUsersGroupEmail)
     for {
-      createdGroup <- directoryDAO.createGroup(allUsersGroup, traceContext = traceContext).unsafeToFuture() recover {
+      createdGroup <- directoryDAO.createGroup(allUsersGroup, samRequestContext = samRequestContext).unsafeToFuture() recover {
         case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode == Option(StatusCodes.Conflict) => allUsersGroup
       }
       existingGoogleGroup <- googleDirectoryDAO.getGoogleGroup(createdGroup.email)
