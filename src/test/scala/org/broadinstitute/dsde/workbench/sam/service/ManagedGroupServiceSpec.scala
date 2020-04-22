@@ -88,7 +88,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
 
   before {
     clearDatabase()
-    dirDAO.createUser(WorkbenchUser(dummyUserInfo.userId, Some(TestSupport.genGoogleSubjectId()), dummyUserInfo.userEmail, Some(TestSupport.genIdentityConcentratorId()))).unsafeRunSync()
+    dirDAO.createUser(WorkbenchUser(dummyUserInfo.userId, Some(TestSupport.genGoogleSubjectId()), dummyUserInfo.userEmail, Some(TestSupport.genIdentityConcentratorId())), samRequestContext).unsafeRunSync()
   }
 
   protected def clearDatabase(): Unit = TestSupport.truncateAll
@@ -216,7 +216,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     val dummyAdmin = WorkbenchUser(dummyUserInfo.userId, None, dummyUserInfo.userEmail, None)
     val otherAdmin = WorkbenchUser(WorkbenchUserId("admin2"), None, WorkbenchEmail("admin2@foo.test"), None)
     val someGroupEmail = WorkbenchEmail("someGroup@some.org")
-    dirDAO.createUser(otherAdmin).unsafeRunSync()
+    dirDAO.createUser(otherAdmin, samRequestContext).unsafeRunSync()
     val managedGroup = assertMakeGroup()
     dirDAO.createGroup(BasicWorkbenchGroup(WorkbenchGroupName("someGroup"), Set.empty, someGroupEmail)).unsafeRunSync()
 
@@ -247,7 +247,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
 
     val someUser = WorkbenchUser(WorkbenchUserId("someUser"), None, WorkbenchEmail("someUser@foo.test"), None)
     val someGroupEmail = WorkbenchEmail("someGroup@some.org")
-    dirDAO.createUser(someUser).unsafeRunSync()
+    dirDAO.createUser(someUser, samRequestContext).unsafeRunSync()
     dirDAO.createGroup(BasicWorkbenchGroup(WorkbenchGroupName("someGroup"), Set.empty, someGroupEmail)).unsafeRunSync()
 
     managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.memberPolicyName).unsafeRunSync() should contain theSameElementsAs Set()
@@ -266,7 +266,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName).unsafeRunSync() should contain theSameElementsAs Set(adminUser.email)
 
     val someUser = WorkbenchUser(WorkbenchUserId("someUser"), None, WorkbenchEmail("someUser@foo.test"), None)
-    dirDAO.createUser(someUser).unsafeRunSync()
+    dirDAO.createUser(someUser, samRequestContext).unsafeRunSync()
     runAndWait(managedGroupService.addSubjectToPolicy(managedGroup.resourceId, ManagedGroupService.adminPolicyName, someUser.id))
 
     val expectedEmails = Set(adminUser.email, someUser.email)
@@ -323,8 +323,8 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
 
     val user1 = UserInfo(OAuth2BearerToken("token1"), WorkbenchUserId("userId1"), WorkbenchEmail("user1@company.com"), 0)
     val user2 = UserInfo(OAuth2BearerToken("token2"), WorkbenchUserId("userId2"), WorkbenchEmail("user2@company.com"), 0)
-    dirDAO.createUser(WorkbenchUser(user1.userId, None, user1.userEmail, None)).unsafeRunSync()
-    dirDAO.createUser(WorkbenchUser(user2.userId, None, user2.userEmail, None)).unsafeRunSync()
+    dirDAO.createUser(WorkbenchUser(user1.userId, None, user1.userEmail, None), samRequestContext).unsafeRunSync()
+    dirDAO.createUser(WorkbenchUser(user2.userId, None, user2.userEmail, None), samRequestContext).unsafeRunSync()
 
     val user1Groups = Set("foo", "bar", "baz")
     val user2Groups = Set("qux", "quux")
@@ -410,7 +410,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
 
     assertMakeGroup(groupId = resourceId.value, managedGroupService = testManagedGroupService)
 
-    val requester = dirDAO.createUser(WorkbenchUser(WorkbenchUserId("userId1"), Some(GoogleSubjectId("not the user id")), WorkbenchEmail("user1@company.com"), None)).unsafeRunSync()
+    val requester = dirDAO.createUser(WorkbenchUser(WorkbenchUserId("userId1"), Some(GoogleSubjectId("not the user id")), WorkbenchEmail("user1@company.com"), None), samRequestContext).unsafeRunSync()
     val adminGoogleSubjectId = WorkbenchUserId(dirDAO.loadUser(dummyUserInfo.userId).unsafeRunSync().flatMap(_.googleSubjectId).getOrElse(fail("could not find admin google subject id")).value)
 
     val expectedNotificationMessages = Set(

@@ -448,7 +448,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     })
   }
 
-  override def createUser(user: WorkbenchUser): IO[WorkbenchUser] = {
+  override def createUser(user: WorkbenchUser, samRequestContext: SamRequestContext): IO[WorkbenchUser] = {
     runInTransaction("createUser", samRequestContext)({ implicit session =>
       val userColumn = UserTable.column
 

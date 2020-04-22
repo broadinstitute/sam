@@ -130,7 +130,7 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
   def setup(): IO[Unit] = {
     for{
       _ <- clearDatabase()
-      _ <- dirDAO.createUser(WorkbenchUser(dummyUserInfo.userId, Some(TestSupport.genGoogleSubjectId()), dummyUserInfo.userEmail, Some(TestSupport.genIdentityConcentratorId())))
+      _ <- dirDAO.createUser(WorkbenchUser(dummyUserInfo.userId, Some(TestSupport.genGoogleSubjectId()), dummyUserInfo.userEmail, Some(TestSupport.genIdentityConcentratorId())), samRequestContext)
     } yield ()
   }
 
@@ -138,7 +138,7 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
 
   private def savePolicyMembers(policy: AccessPolicy) = {
     policy.members.toList.parTraverse {
-      case u: WorkbenchUserId => dirDAO.createUser(WorkbenchUser(u, None, WorkbenchEmail(u.value + "@foo.bar"), None)).recoverWith {
+      case u: WorkbenchUserId => dirDAO.createUser(WorkbenchUser(u, None, WorkbenchEmail(u.value + "@foo.bar"), None), samRequestContext).recoverWith {
         case _: WorkbenchException => IO.pure(WorkbenchUser(u, None, WorkbenchEmail(u.value + "@foo.bar"), None))
       }
       case g: WorkbenchGroupName => managedGroupService.createManagedGroup(ResourceId(g.value), dummyUserInfo).recoverWith {
@@ -169,7 +169,7 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
     val res = for{
       _ <- setup()
       _ <- policyDAO.createResourceType(managedGroupResourceType)
-      _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(TestSupport.genGoogleSubjectId()), user.userEmail, Some(TestSupport.genIdentityConcentratorId())))
+      _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(TestSupport.genGoogleSubjectId()), user.userEmail, Some(TestSupport.genIdentityConcentratorId())), samRequestContext)
       _ <- resource.authDomain.toList.traverse(a => managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))
       _ <- resource2.authDomain.toList.traverse(a => managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))
       _ <- savePolicyMembers(policy)
@@ -203,7 +203,7 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
     val res = for{
       _ <- setup()
       _ <- policyDAO.createResourceType(managedGroupResourceType)
-      _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(TestSupport.genGoogleSubjectId()), user.userEmail, Some(TestSupport.genIdentityConcentratorId())))
+      _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(TestSupport.genGoogleSubjectId()), user.userEmail, Some(TestSupport.genIdentityConcentratorId())), samRequestContext)
       _ <- resource.authDomain.toList.parTraverse(a => managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))
       _ <- savePolicyMembers(policy)
       _ <- policyDAO.createResourceType(defaultResourceType)
@@ -229,7 +229,7 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
     val res = for{
       _ <- setup()
       _ <- policyDAO.createResourceType(managedGroupResourceType)
-      _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(TestSupport.genGoogleSubjectId()), user.userEmail, Some(TestSupport.genIdentityConcentratorId())))
+      _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(TestSupport.genGoogleSubjectId()), user.userEmail, Some(TestSupport.genIdentityConcentratorId())), samRequestContext)
       _ <- resource.authDomain.toList.parTraverse(a => managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))
       _ <- savePolicyMembers(policy)
       _ <- policyDAO.createResourceType(defaultResourceType)
@@ -256,7 +256,7 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
     val res = for{
       _ <- setup()
       _ <- policyDAO.createResourceType(managedGroupResourceType)
-      _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(TestSupport.genGoogleSubjectId()), user.userEmail, Some(TestSupport.genIdentityConcentratorId())))
+      _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(TestSupport.genGoogleSubjectId()), user.userEmail, Some(TestSupport.genIdentityConcentratorId())), samRequestContext)
       _ <- resource.authDomain.toList.parTraverse(a => managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))
       _ <- savePolicyMembers(policy)
 
@@ -284,7 +284,7 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
     val res = for{
       _ <- setup()
       _ <- policyDAO.createResourceType(managedGroupResourceType)
-      _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(TestSupport.genGoogleSubjectId()), user.userEmail, Some(TestSupport.genIdentityConcentratorId())))
+      _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(TestSupport.genGoogleSubjectId()), user.userEmail, Some(TestSupport.genIdentityConcentratorId())), samRequestContext)
       _ <- resource.authDomain.toList.parTraverse(a => managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))
       _ <- savePolicyMembers(policy)
 
@@ -313,7 +313,7 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
     val res = for{
       _ <- setup()
       _ <- policyDAO.createResourceType(managedGroupResourceType)
-      _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(TestSupport.genGoogleSubjectId()), user.userEmail, Some(TestSupport.genIdentityConcentratorId())))
+      _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(TestSupport.genGoogleSubjectId()), user.userEmail, Some(TestSupport.genIdentityConcentratorId())), samRequestContext)
       _ <- resource.authDomain.toList.parTraverse(a => managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))
       _ <- savePolicyMembers(policy)
 
@@ -343,7 +343,7 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
     val res = for{
       _ <- setup()
       _ <- policyDAO.createResourceType(managedGroupResourceType)
-      _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(TestSupport.genGoogleSubjectId()), user.userEmail, Some(TestSupport.genIdentityConcentratorId())))
+      _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(TestSupport.genGoogleSubjectId()), user.userEmail, Some(TestSupport.genIdentityConcentratorId())), samRequestContext)
       _ <- resource.authDomain.toList.parTraverse(a => managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))
       _ <- savePolicyMembers(policy)
 
@@ -369,7 +369,7 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
 
     val res = for{
       _ <- setup()
-      _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(TestSupport.genGoogleSubjectId()), user.userEmail, Some(TestSupport.genIdentityConcentratorId())))
+      _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(TestSupport.genGoogleSubjectId()), user.userEmail, Some(TestSupport.genIdentityConcentratorId())), samRequestContext)
       _ <- policyDAO.createResourceType(defaultResourceType)
       _ <- policyDAO.createResourceType(managedGroupResourceType)
       _ <- savePolicyMembers(policy)
@@ -398,7 +398,7 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
       _ <- resource.authDomain.toList.parTraverse(a => managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))
       // create resource that dummyUserInfo is a member of for constrainableResourceType
       _ <- constrainableService.createResource(constrainableResourceType, resource.resourceId, Map(viewPolicyName -> constrainablePolicyMembership), resource.authDomain, dummyUserInfo.userId)
-      _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(TestSupport.genGoogleSubjectId()), user.userEmail, Some(TestSupport.genIdentityConcentratorId())))
+      _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(TestSupport.genGoogleSubjectId()), user.userEmail, Some(TestSupport.genIdentityConcentratorId())), samRequestContext)
       _ <- constrainableService.createPolicy(policy.id, policy.members + user.userId, policy.roles, policy.actions)
       r <- constrainableService.policyEvaluatorService.listUserAccessPolicies(constrainableResourceType.name, user.userId)
     } yield {
@@ -419,7 +419,7 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
     val policy = AccessPolicy.actions.modify(_ + action)(policyWithResource).copy(roles = Set.empty)
 
     val res = for{
-      _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(TestSupport.genGoogleSubjectId()), user.userEmail, Some(TestSupport.genIdentityConcentratorId())))
+      _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(TestSupport.genGoogleSubjectId()), user.userEmail, Some(TestSupport.genIdentityConcentratorId())), samRequestContext)
       _ <- policyDAO.createResourceType(managedGroupResourceType)
       _ <- resource.authDomain.toList.parTraverse(a => managedGroupService.createManagedGroup(ResourceId(a.value), user))
       _ <- savePolicyMembers(policy)
@@ -444,7 +444,7 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
     val policy = AccessPolicy.actions.modify(_ + action)(policyWithResource).copy(roles = Set.empty)
 
     val res = for{
-      _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(TestSupport.genGoogleSubjectId()), user.userEmail, Some(TestSupport.genIdentityConcentratorId())))
+      _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(TestSupport.genGoogleSubjectId()), user.userEmail, Some(TestSupport.genIdentityConcentratorId())), samRequestContext)
       _ <- resource.authDomain.toList.parTraverse(a => managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))
       _ <- savePolicyMembers(policy)
       _ <- policyDAO.createResourceType(defaultResourceType)
@@ -469,7 +469,7 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
     val policy = AccessPolicy.actions.modify(_ + action)(policyWithResource).copy(roles = Set.empty)
 
     val res = for{
-      _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(TestSupport.genGoogleSubjectId()), user.userEmail, Some(TestSupport.genIdentityConcentratorId())))
+      _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(TestSupport.genGoogleSubjectId()), user.userEmail, Some(TestSupport.genIdentityConcentratorId())), samRequestContext)
       _ <- policyDAO.createResourceType(managedGroupResourceType)
       _ <- resource.authDomain.toList.parTraverse(a => managedGroupService.createManagedGroup(ResourceId(a.value), user))
       _ <- savePolicyMembers(policy)
@@ -495,8 +495,8 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
     val policy = AccessPolicy.actions.modify(_ + action)(policyWithResource).copy(roles = Set.empty)
 
     val res = for{
-      _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(TestSupport.genGoogleSubjectId()), user.userEmail, Some(TestSupport.genIdentityConcentratorId())))
-      _ <- dirDAO.createUser(WorkbenchUser(probeUser.userId, Some(TestSupport.genGoogleSubjectId()), probeUser.userEmail, Some(TestSupport.genIdentityConcentratorId())))
+      _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(TestSupport.genGoogleSubjectId()), user.userEmail, Some(TestSupport.genIdentityConcentratorId())), samRequestContext)
+      _ <- dirDAO.createUser(WorkbenchUser(probeUser.userId, Some(TestSupport.genGoogleSubjectId()), probeUser.userEmail, Some(TestSupport.genIdentityConcentratorId())), samRequestContext)
       _ <- resource.authDomain.toList.parTraverse(a => managedGroupService.createManagedGroup(ResourceId(a.value), user))
       _ <- savePolicyMembers(policy)
       _ <- policyDAO.createResourceType(defaultResourceType)
@@ -522,8 +522,8 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
     val policy = AccessPolicy.actions.modify(_ + action)(policyWithResource).copy(roles = Set.empty)
 
     val res = for{
-      _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(TestSupport.genGoogleSubjectId()), user.userEmail, Some(TestSupport.genIdentityConcentratorId())))
-      _ <- dirDAO.createUser(WorkbenchUser(probeUser.userId, Some(TestSupport.genGoogleSubjectId()), probeUser.userEmail, Some(TestSupport.genIdentityConcentratorId())))
+      _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(TestSupport.genGoogleSubjectId()), user.userEmail, Some(TestSupport.genIdentityConcentratorId())), samRequestContext)
+      _ <- dirDAO.createUser(WorkbenchUser(probeUser.userId, Some(TestSupport.genGoogleSubjectId()), probeUser.userEmail, Some(TestSupport.genIdentityConcentratorId())), samRequestContext)
       _ <- resource.authDomain.toList.parTraverse(a => managedGroupService.createManagedGroup(ResourceId(a.value), user))
       _ <- savePolicyMembers(policy)
       _ <- policyDAO.createResourceType(defaultResourceType)
@@ -626,7 +626,7 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
       _ <- savePolicyMembers(policy)
       // create resource that dummyUserInfo is a member of for constrainableResourceType
       _ <- constrainableService.createResource(constrainableResourceType, resource.resourceId, Map(viewPolicyName -> constrainablePolicyMembership), resource.authDomain, dummyUserInfo.userId)
-      _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(TestSupport.genGoogleSubjectId()), user.userEmail, Some(TestSupport.genIdentityConcentratorId())))
+      _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(TestSupport.genGoogleSubjectId()), user.userEmail, Some(TestSupport.genIdentityConcentratorId())), samRequestContext)
       _ <- constrainableService.createPolicy(policy.id, policy.members + user.userId, policy.roles, policy.actions)
       r <- constrainableService.policyEvaluatorService.listUserAccessPolicies(constrainableResourceType.name, user.userId)
     } yield {
