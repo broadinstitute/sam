@@ -302,7 +302,7 @@ class GoogleExtensions(
 
   @deprecated("Use new two-argument version of this function", "Sam Phase 3")
   def deleteUserPetServiceAccount(userId: WorkbenchUserId): Future[Boolean] =
-    deleteUserPetServiceAccount(userId, petServiceAccountConfig.googleProject, null).unsafeToFuture() //TODO: shall we delete these deprecated methods // doesn't seem like it's being used anywhere?
+    deleteUserPetServiceAccount(userId, petServiceAccountConfig.googleProject).unsafeToFuture() //TODO: shall we delete these deprecated methods // doesn't seem like it's being used anywhere?
 
   def deleteUserPetServiceAccount(userId: WorkbenchUserId, project: GoogleProject): IO[Boolean] =
     for {
@@ -607,6 +607,6 @@ case class GoogleExtensionsInitializer(cloudExtensions: GoogleExtensions, google
         googleGroupSynchronizer
       ))
 
-    cloudExtensions.onBoot(samApplication, null) // todo: boot parent span seems unnecessary
+    cloudExtensions.onBoot(samApplication)
   }
 }

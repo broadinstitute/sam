@@ -68,12 +68,12 @@ trait StandardUserInfoDirectives extends UserInfoDirectives with LazyLogging {
 
   private def requireUserInfoFromJwt(jwtUserInfo: JwtUserInfo, bearerToken: OAuth2BearerToken, icService: IdentityConcentratorService): Directive1[UserInfo] =
     onSuccess {
-      getUserInfoFromJwt(jwtUserInfo, bearerToken, directoryDAO, icService, null).unsafeToFuture()//todo: create a root span here instead of allowing null?
+      getUserInfoFromJwt(jwtUserInfo, bearerToken, directoryDAO, icService).unsafeToFuture()//todo: create a root span here instead of allowing null?
     }
 
   private def requireUserInfoFromOIDC(oidcHeaders: OIDCHeaders): Directive1[UserInfo] =
     onSuccess {
-      getUserInfoFromOidcHeaders(directoryDAO, oidcHeaders, null).unsafeToFuture()//todo: create a root span here instead of allowing null?
+      getUserInfoFromOidcHeaders(directoryDAO, oidcHeaders).unsafeToFuture()//todo: create a root span here instead of allowing null?
     }
 
   private def requireCreateUserInfoFromJwt(jwtUserInfo: JwtUserInfo, bearerToken: OAuth2BearerToken, icService: IdentityConcentratorService): Directive1[CreateWorkbenchUser] =
