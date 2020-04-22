@@ -40,7 +40,7 @@ class LdapRegistrationDAO(
     }
   }
 
-  override def createUser(user: WorkbenchUser, samRequestContext: SamRequestContext): IO[WorkbenchUser] = {
+  override def createUser(user: WorkbenchUser): IO[WorkbenchUser] = {
     val attrs = List(
       new Attribute(Attr.email, user.email.value),
       new Attribute(Attr.sn, user.id.value),

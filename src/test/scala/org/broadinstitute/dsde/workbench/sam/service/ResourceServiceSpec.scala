@@ -84,7 +84,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
 
   before {
     clearDatabase()
-    dirDAO.createUser(WorkbenchUser(dummyUserInfo.userId, Some(TestSupport.genGoogleSubjectId()), dummyUserInfo.userEmail, Some(TestSupport.genIdentityConcentratorId())), samRequestContext).unsafeRunSync()
+    dirDAO.createUser(WorkbenchUser(dummyUserInfo.userId, Some(TestSupport.genGoogleSubjectId()), dummyUserInfo.userEmail, Some(TestSupport.genIdentityConcentratorId()))).unsafeRunSync()
   }
 
   protected def clearDatabase(): Unit = TestSupport.truncateAll
@@ -228,7 +228,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
   it should "list the user's actions for a resource with nested groups" in {
     val resourceName1 = ResourceId("resource1")
 
-    val user = dirDAO.createUser(WorkbenchUser(WorkbenchUserId("asdfawefawea"), None, WorkbenchEmail("asdfawefawea@foo.bar"), None), samRequestContext).unsafeRunSync()
+    val user = dirDAO.createUser(WorkbenchUser(WorkbenchUserId("asdfawefawea"), None, WorkbenchEmail("asdfawefawea@foo.bar"), None)).unsafeRunSync()
     val group = BasicWorkbenchGroup(WorkbenchGroupName("g"), Set(user.id), WorkbenchEmail("foo@bar.com"))
     dirDAO.createGroup(group).unsafeRunSync()
 
@@ -400,7 +400,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     constrainableService.createResourceType(constrainableResourceType).unsafeRunSync()
 
     val bender = UserInfo(OAuth2BearerToken("token"), WorkbenchUserId("Bender"), WorkbenchEmail("bender@planex.com"), 0)
-    dirDAO.createUser(WorkbenchUser(bender.userId, None, bender.userEmail, None), samRequestContext).unsafeRunSync()
+    dirDAO.createUser(WorkbenchUser(bender.userId, None, bender.userEmail, None)).unsafeRunSync()
 
     constrainableService.createResourceType(managedGroupResourceType).unsafeRunSync()
     val managedGroupName1 = "firstGroup"
@@ -724,7 +724,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     val policyName = AccessPolicyName(defaultResourceType.ownerRoleName.value)
     val otherUserInfo = UserInfo(OAuth2BearerToken("token"), WorkbenchUserId("otheruserid"), WorkbenchEmail("otheruser@company.com"), 0)
 
-    dirDAO.createUser(WorkbenchUser(otherUserInfo.userId, None, otherUserInfo.userEmail, None), samRequestContext).unsafeRunSync()
+    dirDAO.createUser(WorkbenchUser(otherUserInfo.userId, None, otherUserInfo.userEmail, None)).unsafeRunSync()
 
     service.createResourceType(defaultResourceType).unsafeRunSync()
     runAndWait(service.createResource(defaultResourceType, resource.resourceId, dummyUserInfo))
@@ -808,12 +808,12 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     val user5 = UserIdInfo(WorkbenchUserId("user5"), WorkbenchEmail("user5@fake.com"), None)
     val user6 = UserIdInfo(WorkbenchUserId("user6"), WorkbenchEmail("user6@fake.com"), None)
 
-    dirDAO.createUser(WorkbenchUser(user1.userSubjectId, None, user1.userEmail, None), samRequestContext).unsafeRunSync()
-    dirDAO.createUser(WorkbenchUser(user2.userSubjectId, None, user2.userEmail, None), samRequestContext).unsafeRunSync()
-    dirDAO.createUser(WorkbenchUser(user3.userSubjectId, None, user3.userEmail, None), samRequestContext).unsafeRunSync()
-    dirDAO.createUser(WorkbenchUser(user4.userSubjectId, None, user4.userEmail, None), samRequestContext).unsafeRunSync()
-    dirDAO.createUser(WorkbenchUser(user5.userSubjectId, None, user5.userEmail, None), samRequestContext).unsafeRunSync()
-    dirDAO.createUser(WorkbenchUser(user6.userSubjectId, None, user6.userEmail, None), samRequestContext).unsafeRunSync()
+    dirDAO.createUser(WorkbenchUser(user1.userSubjectId, None, user1.userEmail, None)).unsafeRunSync()
+    dirDAO.createUser(WorkbenchUser(user2.userSubjectId, None, user2.userEmail, None)).unsafeRunSync()
+    dirDAO.createUser(WorkbenchUser(user3.userSubjectId, None, user3.userEmail, None)).unsafeRunSync()
+    dirDAO.createUser(WorkbenchUser(user4.userSubjectId, None, user4.userEmail, None)).unsafeRunSync()
+    dirDAO.createUser(WorkbenchUser(user5.userSubjectId, None, user5.userEmail, None)).unsafeRunSync()
+    dirDAO.createUser(WorkbenchUser(user6.userSubjectId, None, user6.userEmail, None)).unsafeRunSync()
 
     val ownerPolicy = FullyQualifiedPolicyId(resource, AccessPolicyName("owner"))
     runAndWait(service.addSubjectToPolicy(ownerPolicy, user1.userSubjectId))
@@ -837,8 +837,8 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     val resourceOwnerUserInfo = UserInfo(OAuth2BearerToken("token"), WorkbenchUserId("user1"), WorkbenchEmail("user1@company.com"), 0)
     val managedGroupOwnerUserInfo = UserInfo(OAuth2BearerToken("token"), WorkbenchUserId("user2"), WorkbenchEmail("user2@company.com"), 0)
 
-    dirDAO.createUser(WorkbenchUser(resourceOwnerUserInfo.userId, Some(TestSupport.genGoogleSubjectId()), resourceOwnerUserInfo.userEmail, Some(TestSupport.genIdentityConcentratorId())), samRequestContext).unsafeRunSync()
-    dirDAO.createUser(WorkbenchUser(managedGroupOwnerUserInfo.userId, Some(TestSupport.genGoogleSubjectId()), managedGroupOwnerUserInfo.userEmail, Some(TestSupport.genIdentityConcentratorId())), samRequestContext).unsafeRunSync()
+    dirDAO.createUser(WorkbenchUser(resourceOwnerUserInfo.userId, Some(TestSupport.genGoogleSubjectId()), resourceOwnerUserInfo.userEmail, Some(TestSupport.genIdentityConcentratorId()))).unsafeRunSync()
+    dirDAO.createUser(WorkbenchUser(managedGroupOwnerUserInfo.userId, Some(TestSupport.genGoogleSubjectId()), managedGroupOwnerUserInfo.userEmail, Some(TestSupport.genIdentityConcentratorId()))).unsafeRunSync()
 
     val resourceOwner = dirDAO.loadUser(resourceOwnerUserInfo.userId).unsafeRunSync().map { user => UserIdInfo(user.id, user.email, user.googleSubjectId) }.get
     val managedGroupOwner = dirDAO.loadUser(managedGroupOwnerUserInfo.userId).unsafeRunSync().map { user => UserIdInfo(user.id, user.email, user.googleSubjectId) }.get
@@ -847,9 +847,9 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     val user3 = UserIdInfo(WorkbenchUserId("user3"), WorkbenchEmail("user3@fake.com"), None)
     val user4 = UserIdInfo(WorkbenchUserId("user4"), WorkbenchEmail("user4@fake.com"), None)
 
-    dirDAO.createUser(WorkbenchUser(directPolicyMember.userSubjectId, None, directPolicyMember.userEmail, None), samRequestContext).unsafeRunSync()
-    dirDAO.createUser(WorkbenchUser(user3.userSubjectId, None, user3.userEmail, None), samRequestContext).unsafeRunSync()
-    dirDAO.createUser(WorkbenchUser(user4.userSubjectId, None, user4.userEmail, None), samRequestContext).unsafeRunSync()
+    dirDAO.createUser(WorkbenchUser(directPolicyMember.userSubjectId, None, directPolicyMember.userEmail, None)).unsafeRunSync()
+    dirDAO.createUser(WorkbenchUser(user3.userSubjectId, None, user3.userEmail, None)).unsafeRunSync()
+    dirDAO.createUser(WorkbenchUser(user4.userSubjectId, None, user4.userEmail, None)).unsafeRunSync()
 
     service.createResourceType(defaultResourceType).unsafeRunSync()
     service.createResourceType(managedGroupResourceType).unsafeRunSync()

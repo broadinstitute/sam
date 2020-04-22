@@ -38,7 +38,7 @@ trait DirectoryDAO extends RegistrationDAO {
   def loadSubjectEmails(subjects: Set[WorkbenchSubject]): IO[Stream[WorkbenchEmail]]
   def loadSubjectFromGoogleSubjectId(googleSubjectId: GoogleSubjectId): IO[Option[WorkbenchSubject]]
 
-  def createUser(user: WorkbenchUser, samRequestContext: SamRequestContext): IO[WorkbenchUser]
+  def createUser(user: WorkbenchUser): IO[WorkbenchUser]
   def loadUser(userId: WorkbenchUserId): IO[Option[WorkbenchUser]]
   def loadUserByIdentityConcentratorId(userId: IdentityConcentratorId): IO[Option[WorkbenchUser]]
   def loadUsers(userIds: Set[WorkbenchUserId]): IO[Stream[WorkbenchUser]]

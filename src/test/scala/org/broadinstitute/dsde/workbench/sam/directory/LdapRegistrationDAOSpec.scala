@@ -44,7 +44,7 @@ class LdapRegistrationDAOSpec extends FlatSpec with Matchers with TestSupport wi
     }
 
     assertResult(user) {
-      dao.createUser(user, samRequestContext).unsafeRunSync()
+      dao.createUser(user).unsafeRunSync()
     }
 
     assertResult(Some(user)) {
@@ -67,7 +67,7 @@ class LdapRegistrationDAOSpec extends FlatSpec with Matchers with TestSupport wi
     val petServiceAccount = PetServiceAccount(PetServiceAccountId(userId, project), serviceAccount)
 
     assertResult(user) {
-      dao.createUser(user, samRequestContext).unsafeRunSync()
+      dao.createUser(user).unsafeRunSync()
     }
 
     assertResult(None) {
@@ -98,7 +98,7 @@ class LdapRegistrationDAOSpec extends FlatSpec with Matchers with TestSupport wi
     }
 
     assertResult(user) {
-      dao.createUser(user, samRequestContext).unsafeRunSync()
+      dao.createUser(user).unsafeRunSync()
     }
 
     assertResult(Some(user)) {
@@ -110,7 +110,7 @@ class LdapRegistrationDAOSpec extends FlatSpec with Matchers with TestSupport wi
     val user = WorkbenchUser(WorkbenchUserId(UUID.randomUUID().toString), None, WorkbenchEmail("foo@bar.com"), None)
 
     assertResult(user) {
-      dao.createUser(user, samRequestContext).unsafeRunSync()
+      dao.createUser(user).unsafeRunSync()
     }
 
     dao.enableIdentity(user.id).unsafeRunSync()
