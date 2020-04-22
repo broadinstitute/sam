@@ -106,9 +106,9 @@ class GoogleExtensions(
       resourceTypes.getOrElse(CloudExtensions.resourceTypeName, throw new Exception(s"${CloudExtensions.resourceTypeName} resource type not found"))
     val ownerGoogleSubjectId = GoogleSubjectId(googleServicesConfig.serviceAccountClientId)
     for {
-      user <- directoryDAO.loadSubjectFromGoogleSubjectId(ownerGoogleSubjectId)
+      user <- directoryDAO.loadSubjectFromGoogleSubjectId(ownerGoogleSubjectId, samRequestContext)
 
-      subject <- directoryDAO.loadSubjectFromGoogleSubjectId(GoogleSubjectId(googleServicesConfig.serviceAccountClientId))
+      subject <- directoryDAO.loadSubjectFromGoogleSubjectId(GoogleSubjectId(googleServicesConfig.serviceAccountClientId), samRequestContext)
       serviceAccountUserInfo <- subject match {
         case Some(uid: WorkbenchUserId) => IO.pure(UserInfo(OAuth2BearerToken(""), uid, googleServicesConfig.serviceAccountClientEmail, 0))
         case Some(_) =>
@@ -187,7 +187,7 @@ class GoogleExtensions(
     for {
       // only sync groups that have been synchronized in the past
       previouslySyncedIds <- groupIdentities.toList.traverseFilter { id =>
-        directoryDAO.getSynchronizedDate(id).map(dateOption => dateOption.map(_ => id))
+        directoryDAO.getSynchronizedDate(id, samRequestContext).map(dateOption => dateOption.map(_ => id))
       }
 
       // make all the publish messages for the previously synced groups
@@ -214,7 +214,7 @@ class GoogleExtensions(
    // start with a group
     for {
       // get all the ancestors of that group
-      ancestorGroupsOfManagedGroups <- directoryDAO.listAncestorGroups(groupIdentity)
+      ancestorGroupsOfManagedGroups <- directoryDAO.listAncestorGroups(groupIdentity, samRequestContext)
 
       // get all the ids of the group and its ancestors
       managedGroupIds = (ancestorGroupsOfManagedGroups + groupIdentity).collect {
@@ -265,7 +265,7 @@ class GoogleExtensions(
     */
   private def forAllPets[T](userId: WorkbenchUserId)(f: PetServiceAccount => Future[T]): Future[Seq[T]] =
     for {
-      pets <- directoryDAO.getAllPetServiceAccountsForUser(userId).unsafeToFuture()
+      pets <- directoryDAO.getAllPetServiceAccountsForUser(userId, samRequestContext).unsafeToFuture()
       a <- Future.traverse(pets) { pet =>
         f(pet)
       }
@@ -393,7 +393,7 @@ class GoogleExtensions(
 
   def getPetServiceAccountKey(userEmail: WorkbenchEmail, project: GoogleProject): IO[Option[String]] =
     for {
-      subject <- directoryDAO.loadSubjectFromEmail(userEmail)
+      subject <- directoryDAO.loadSubjectFromEmail(userEmail, samRequestContext)
       key <- subject match {
         case Some(userId: WorkbenchUserId) => getPetServiceAccountKey(WorkbenchUser(userId, None, userEmail, None), project).map(Option(_))
         case _ => IO.pure(None)
@@ -512,10 +512,10 @@ class GoogleExtensions(
   }
 
   def getSynchronizedDate(groupId: WorkbenchGroupIdentity): IO[Option[Date]] =
-    directoryDAO.getSynchronizedDate(groupId)
+    directoryDAO.getSynchronizedDate(groupId, samRequestContext)
 
   def getSynchronizedEmail(groupId: WorkbenchGroupIdentity): IO[Option[WorkbenchEmail]] =
-    directoryDAO.getSynchronizedEmail(groupId)
+    directoryDAO.getSynchronizedEmail(groupId, samRequestContext)
 
   private[google] def toPetSAFromUser(user: WorkbenchUser): (ServiceAccountName, ServiceAccountDisplayName) = {
     /*
@@ -537,7 +537,7 @@ class GoogleExtensions(
     notificationDAO.fireAndForgetNotifications(notifications)
 
   override def getUserProxy(userEmail: WorkbenchEmail): Future[Option[WorkbenchEmail]] =
-    directoryDAO.loadSubjectFromEmail(userEmail).unsafeToFuture().flatMap {
+    directoryDAO.loadSubjectFromEmail(userEmail, samRequestContext).unsafeToFuture().flatMap {
       case Some(user: WorkbenchUserId) => getUserProxy(user)
       case Some(pet: PetServiceAccountId) => getUserProxy(pet.userId)
       case _ => Future.successful(None)

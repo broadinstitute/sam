@@ -116,7 +116,7 @@ object StandardUserInfoDirectives {
       ): IO[UserInfo] =
     if (isServiceAccount(email)) {
       // If it's a PET account, we treat it as its owner
-      directoryDAO.getUserFromPetServiceAccount(ServiceAccountSubjectId(googleSubjectId.value)).flatMap {
+      directoryDAO.getUserFromPetServiceAccount(ServiceAccountSubjectId(googleSubjectId.value), samRequestContext).flatMap {
         case Some(pet) => IO.pure(UserInfo(token, pet.id, pet.email, expiresIn.toLong))
         case None => lookUpByGoogleSubjectId(googleSubjectId, directoryDAO).map(uid => UserInfo(token, uid, email, expiresIn))
       }
@@ -137,7 +137,7 @@ object StandardUserInfoDirectives {
 
   private def loadUserMaybeUpdateIdentityConcentratorId(jwtUserInfo: JwtUserInfo, bearerToken: OAuth2BearerToken, directoryDAO: DirectoryDAO, identityConcentratorService: IdentityConcentratorService): IO[Option[WorkbenchUser]] = {
     for {
-      maybeUser <- directoryDAO.loadUserByIdentityConcentratorId(jwtUserInfo.sub)
+      maybeUser <- directoryDAO.loadUserByIdentityConcentratorId(jwtUserInfo.sub, samRequestContext)
       maybeUserAgain <- maybeUser match {
         case None => updateUserIdentityConcentratorId(jwtUserInfo, bearerToken, directoryDAO, identityConcentratorService)
         case _ => IO.pure(maybeUser)
@@ -149,8 +149,8 @@ object StandardUserInfoDirectives {
     for {
       googleIdentities <- identityConcentratorService.getGoogleIdentities(bearerToken)
       (googleSubjectId, _) <- singleGoogleIdentity(jwtUserInfo.sub, googleIdentities)
-      _ <- directoryDAO.setUserIdentityConcentratorId(googleSubjectId, jwtUserInfo.sub)
-      maybeUser <- directoryDAO.loadUserByIdentityConcentratorId(jwtUserInfo.sub)
+      _ <- directoryDAO.setUserIdentityConcentratorId(googleSubjectId, jwtUserInfo.sub, samRequestContext)
+      maybeUser <- directoryDAO.loadUserByIdentityConcentratorId(jwtUserInfo.sub, samRequestContext)
     } yield maybeUser
   }
 
@@ -166,7 +166,7 @@ object StandardUserInfoDirectives {
 
   private def lookUpByGoogleSubjectId(googleSubjectId: GoogleSubjectId, directoryDAO: DirectoryDAO): IO[WorkbenchUserId] =
     for {
-      subject <- directoryDAO.loadSubjectFromGoogleSubjectId(googleSubjectId)
+      subject <- directoryDAO.loadSubjectFromGoogleSubjectId(googleSubjectId, samRequestContext)
       userInfo <- subject match {
         case Some(uid: WorkbenchUserId) => IO.pure(uid)
         case Some(_) =>

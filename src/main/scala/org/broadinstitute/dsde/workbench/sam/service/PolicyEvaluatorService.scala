@@ -93,7 +93,7 @@ class PolicyEvaluatorService(
                   if (authDomains.size > 1) {
                     IO.pure(false)
                   } else {
-                    directoryDAO.isGroupMember(authDomains.head, userId)
+                    directoryDAO.isGroupMember(authDomains.head, userId, samRequestContext)
                   }
               }
               res2 <- if (authConstraintOk) hasAction else IO.pure(false)

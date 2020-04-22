@@ -333,7 +333,7 @@ class ResourceService(
 
   private def mapEmailsToSubjects(workbenchEmails: Set[WorkbenchEmail]): IO[Map[WorkbenchEmail, Option[WorkbenchSubject]]] = {
     val eventualSubjects = workbenchEmails.map { workbenchEmail =>
-      directoryDAO.loadSubjectFromEmail(workbenchEmail).map(workbenchEmail -> _)
+      directoryDAO.loadSubjectFromEmail(workbenchEmail, samRequestContext).map(workbenchEmail -> _)
     }
 
     eventualSubjects.toList.sequence.map(_.toMap)
@@ -415,7 +415,7 @@ class ResourceService(
       case subject: FullyQualifiedPolicyId if policyIdentity.resource.resourceTypeName.equals(ManagedGroupService.managedGroupTypeName) =>
         Future.failed(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"Access policies cannot be added to managed groups.")))
       case _ =>    {
-        directoryDAO.addGroupMember(policyIdentity, subject).unsafeToFuture().map(_ => ()) andThen {
+        directoryDAO.addGroupMember(policyIdentity, subject, samRequestContext).unsafeToFuture().map(_ => ()) andThen {
           case Success(_) => fireGroupUpdateNotification(policyIdentity)
         }
       }
@@ -423,7 +423,7 @@ class ResourceService(
   }
 
   def removeSubjectFromPolicy(policyIdentity: FullyQualifiedPolicyId, subject: WorkbenchSubject): Future[Unit] =
-    directoryDAO.removeGroupMember(policyIdentity, subject).void.unsafeToFuture() andThen {
+    directoryDAO.removeGroupMember(policyIdentity, subject, samRequestContext).void.unsafeToFuture() andThen {
       case Success(_) => fireGroupUpdateNotification(policyIdentity)
     }
 
@@ -433,8 +433,8 @@ class ResourceService(
     val policyMembers = policy.members.collect { case policyId: FullyQualifiedPolicyId => policyId }
 
     for {
-      userEmails <- directoryDAO.loadUsers(users)
-      groupEmails <- directoryDAO.loadGroups(groups)
+      userEmails <- directoryDAO.loadUsers(users, samRequestContext)
+      groupEmails <- directoryDAO.loadGroups(groups, samRequestContext)
       policyEmails <- policyMembers.toList.parTraverse(accessPolicyDAO.loadPolicy(_))
     } yield
       AccessPolicyMembership(

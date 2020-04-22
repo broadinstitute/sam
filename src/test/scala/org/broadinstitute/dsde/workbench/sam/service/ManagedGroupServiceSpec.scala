@@ -101,13 +101,13 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
 
   it should "create a workbenchGroup with the same name as the Managed Group" in {
     assertMakeGroup()
-    val samGroup: Option[BasicWorkbenchGroup] = dirDAO.loadGroup(WorkbenchGroupName(resourceId.value)).unsafeRunSync()
+    val samGroup: Option[BasicWorkbenchGroup] = dirDAO.loadGroup(WorkbenchGroupName(resourceId.value), samRequestContext).unsafeRunSync()
     samGroup.value.id.value shouldEqual resourceId.value
   }
 
   it should "create a workbenchGroup with 2 member WorkbenchSubjects" in {
     assertMakeGroup()
-    val samGroup: Option[BasicWorkbenchGroup] = dirDAO.loadGroup(WorkbenchGroupName(resourceId.value)).unsafeRunSync()
+    val samGroup: Option[BasicWorkbenchGroup] = dirDAO.loadGroup(WorkbenchGroupName(resourceId.value), samRequestContext).unsafeRunSync()
     samGroup.value.members shouldEqual Set(adminPolicy, memberPolicy)
   }
 
@@ -190,14 +190,14 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     dirDAO.createGroup(parentGroup).unsafeRunSync() shouldEqual parentGroup
 
     // using .get on an option here because if the Option is None and this throws an exception, that's fine
-    dirDAO.loadGroup(parentGroup.id).unsafeRunSync().get.members shouldEqual Set(managedGroupName)
+    dirDAO.loadGroup(parentGroup.id, samRequestContext).unsafeRunSync().get.members shouldEqual Set(managedGroupName)
 
     intercept[WorkbenchExceptionWithErrorReport] {
       runAndWait(managedGroupService.deleteManagedGroup(managedGroup.resourceId))
     }
 
     managedGroupService.loadManagedGroup(managedGroup.resourceId).unsafeRunSync() shouldNot be (None)
-    dirDAO.loadGroup(parentGroup.id).unsafeRunSync().get.members shouldEqual Set(managedGroupName)
+    dirDAO.loadGroup(parentGroup.id, samRequestContext).unsafeRunSync().get.members shouldEqual Set(managedGroupName)
   }
 
   "ManagedGroupService listPolicyMemberEmails" should "return a list of email addresses for the groups admin policy" in {

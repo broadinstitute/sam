@@ -525,7 +525,7 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
         dao.loadPolicy(policy.id).unsafeRunSync() shouldBe Option(policy)
         dao.deletePolicy(policy.id).unsafeRunSync()
         dao.loadPolicy(policy.id).unsafeRunSync() shouldBe None
-        dirDao.loadGroup(WorkbenchGroupName(s"${resourceType.name}_${resource.resourceId}_${policy.id.accessPolicyName}")).unsafeRunSync() shouldBe None
+        dirDao.loadGroup(WorkbenchGroupName(s"${resourceType.name}_${resource.resourceId}_${policy.id.accessPolicyName}"), samRequestContext).unsafeRunSync() shouldBe None
       }
 
       "can handle deleting a policy that has already been deleted" in {

@@ -7,6 +7,7 @@ import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.db.{DatabaseNames, DbReference}
 import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryDAO, MockDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
+import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.util.health.Subsystems.{Database, GoogleGroups, OpenDJ}
 import org.broadinstitute.dsde.workbench.util.health.{StatusCheckResponse, SubsystemStatus, Subsystems}
 import org.scalatest.concurrent.Eventually
@@ -52,7 +53,7 @@ class StatusServiceSpec extends FreeSpec with Matchers with BeforeAndAfterAll wi
 
   private def failingOpenDJ = {
     val service = new StatusService(new MockDirectoryDAO {
-      override def loadGroupEmail(groupName: WorkbenchGroupName): IO[Option[WorkbenchEmail]] = IO.raiseError(new WorkbenchException("bad opendj"))
+      override def loadGroupEmail(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Option[WorkbenchEmail]] = IO.raiseError(new WorkbenchException("bad opendj"))
     }, NoExtensions, dbReference, pollInterval = 10 milliseconds)
     service
   }

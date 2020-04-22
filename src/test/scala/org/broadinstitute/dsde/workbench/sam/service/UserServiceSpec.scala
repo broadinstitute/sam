@@ -96,7 +96,7 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
     registrationDAO.loadUser(defaultUserId, samRequestContext).unsafeRunSync() shouldBe Some(WorkbenchUser(defaultUser.id,  Some(defaultUser.googleSubjectId), defaultUser.email, defaultUser.identityConcentratorId))
     dirDAO.isEnabled(defaultUserId, samRequestContext).unsafeRunSync() shouldBe true
     registrationDAO.isEnabled(defaultUserId, samRequestContext).unsafeRunSync() shouldBe true
-    dirDAO.loadGroup(service.cloudExtensions.allUsersGroupName).unsafeRunSync() shouldBe
+    dirDAO.loadGroup(service.cloudExtensions.allUsersGroupName, samRequestContext).unsafeRunSync() shouldBe
       Some(BasicWorkbenchGroup(service.cloudExtensions.allUsersGroupName, Set(defaultUserId), service.cloudExtensions.getOrCreateAllUsersGroup(dirDAO).futureValue.email))
   }
 

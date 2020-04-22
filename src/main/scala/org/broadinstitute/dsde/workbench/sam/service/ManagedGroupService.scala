@@ -94,7 +94,7 @@ class ManagedGroupService(
 
   // Per dvoet, when asking for a group, we will just return the group email
   def loadManagedGroup(groupId: ResourceId): IO[Option[WorkbenchEmail]] =
-    directoryDAO.loadGroup(WorkbenchGroupName(groupId.value)).map(_.map(_.email))
+    directoryDAO.loadGroup(WorkbenchGroupName(groupId.value), samRequestContext).map(_.map(_.email))
 
   def deleteManagedGroup(groupId: ResourceId): Future[Unit] =
     for {
@@ -104,14 +104,14 @@ class ManagedGroupService(
       _ <- cloudExtensions.onGroupDelete(WorkbenchEmail(constructEmail(groupId.value)))
       managedGroupResourceId = FullyQualifiedResourceId(managedGroupType.name, groupId)
       _ <- resourceService.cloudDeletePolicies(managedGroupResourceId)
-      _ <- directoryDAO.deleteGroup(WorkbenchGroupName(groupId.value)).unsafeToFuture()
+      _ <- directoryDAO.deleteGroup(WorkbenchGroupName(groupId.value), samRequestContext).unsafeToFuture()
       _ <- resourceService.deleteResource(managedGroupResourceId)
     } yield ()
 
   def listGroups(userId: WorkbenchUserId): IO[Set[ManagedGroupMembershipEntry]] =
     for {
       managedGroupsWithRole <- policyEvaluatorService.listUserManagedGroupsWithRole(userId)
-      emailLookup <- directoryDAO.batchLoadGroupEmail(managedGroupsWithRole.map(_.groupName))
+      emailLookup <- directoryDAO.batchLoadGroupEmail(managedGroupsWithRole.map(_.groupName), samRequestContext)
     } yield {
       val emailLookupMap = emailLookup.toMap
       // This will silently ignore any group where the email could not be loaded. This can happen when a
@@ -128,7 +128,7 @@ class ManagedGroupService(
     val policyIdentity =
       FullyQualifiedPolicyId(FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, resourceId), policyName)
     accessPolicyDAO.loadPolicy(policyIdentity) flatMap {
-      case Some(policy) => directoryDAO.loadSubjectEmails(policy.members)
+      case Some(policy) => directoryDAO.loadSubjectEmails(policy.members, samRequestContext)
       case None =>
         IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Group or policy could not be found: $policyIdentity")))
     }
@@ -194,10 +194,10 @@ class ManagedGroupService(
   }
 
   def getAccessInstructions(groupId: ResourceId): IO[Option[String]] =
-    directoryDAO.getManagedGroupAccessInstructions(WorkbenchGroupName(groupId.value))
+    directoryDAO.getManagedGroupAccessInstructions(WorkbenchGroupName(groupId.value), samRequestContext)
 
   def setAccessInstructions(groupId: ResourceId, accessInstructions: String): IO[Unit] =
-    directoryDAO.setManagedGroupAccessInstructions(WorkbenchGroupName(groupId.value), accessInstructions)
+    directoryDAO.setManagedGroupAccessInstructions(WorkbenchGroupName(groupId.value), accessInstructions, samRequestContext)
 }
 
 object ManagedGroupService {
