@@ -705,7 +705,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
   }
 
   override def listAccessPolicies(resource: FullyQualifiedResourceId): IO[Stream[AccessPolicy]] = {
-    listPolicies(resource, traceContext = traceContext)
+    listPolicies(resource)
   }
 
   override def listAccessPoliciesForUser(resource: FullyQualifiedResourceId, user: WorkbenchUserId): IO[Set[AccessPolicyWithoutMembers]] = {

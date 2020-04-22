@@ -49,8 +49,7 @@ class ManagedGroupService(
         groupId,
         Map(adminPolicy, memberPolicy, adminNotificationPolicy),
         Set.empty,
-        userInfo.userId,
-        traceContext)
+        userInfo.userId)
       policies <- accessPolicyDAO.listAccessPolicies(managedGroup.fullyQualifiedId)
       workbenchGroup <- createAggregateGroup(managedGroup, policies.toSet, accessInstructionsOpt)
       _ <- IO.fromFuture(IO(cloudExtensions.publishGroup(workbenchGroup.id)))

@@ -26,15 +26,15 @@ trait UserRoutes extends UserInfoDirectives {
         pathEndOrSingleSlash {
           post {
             requireCreateUser { createUser =>
-              completeWithTrace { traceContext =>
+              completeWithTrace { samRequestContext =>
                 userService.createUser(createUser).map(userStatus => StatusCodes.Created -> userStatus)
               }
             }
           } ~ requireUserInfo { user =>
             get {
               parameter("userDetailsOnly".?) { userDetailsOnly =>
-                completeWithTrace({ traceContext =>
-                  userService.getUserStatus(user.userId, traceContext, userDetailsOnly.exists(_.equalsIgnoreCase("true"))).map { statusOption =>
+                completeWithTrace({ samRequestContext =>
+                  userService.getUserStatus(user.userId, userDetailsOnly.exists(_.equalsIgnoreCase("true"))).map { statusOption =>
                     statusOption
                       .map { status =>
                         StatusCodes.OK -> Option(status)
@@ -51,7 +51,7 @@ trait UserRoutes extends UserInfoDirectives {
           pathEndOrSingleSlash {
             post {
               requireCreateUser { createUser =>
-                completeWithTrace { traceContext =>
+                completeWithTrace { samRequestContext =>
                   userService.createUser(createUser).map(userStatus => StatusCodes.Created -> userStatus)
                 }
               }
@@ -59,7 +59,7 @@ trait UserRoutes extends UserInfoDirectives {
           } ~ requireUserInfo { user =>
             path("info") {
               get {
-                completeWithTrace({ traceContext =>
+                completeWithTrace({ samRequestContext =>
                   userService.getUserStatusInfo(user.userId).map { statusOption =>
                     statusOption
                       .map { status =>
@@ -72,7 +72,7 @@ trait UserRoutes extends UserInfoDirectives {
             } ~
               path("diagnostics") {
                 get {
-                  completeWithTrace({ traceContext =>
+                  completeWithTrace({ samRequestContext =>
                     userService.getUserStatusDiagnostics(user.userId).map { statusOption =>
                       statusOption
                         .map { status =>
@@ -94,7 +94,7 @@ trait UserRoutes extends UserInfoDirectives {
         asWorkbenchAdmin(userInfo) {
           pathPrefix("user") {
             path("email" / Segment) { email =>
-              completeWithTrace({ traceContext =>
+              completeWithTrace({ samRequestContext =>
                 userService.getUserStatusFromEmail(WorkbenchEmail(email)).map { statusOption =>
                   statusOption
                     .map { status =>
@@ -107,12 +107,12 @@ trait UserRoutes extends UserInfoDirectives {
               pathPrefix(Segment) { userId =>
                 pathEnd {
                   delete {
-                    completeWithTrace({ traceContext =>
+                    completeWithTrace({ samRequestContext =>
                       userService.deleteUser(WorkbenchUserId(userId), userInfo).map(_ => StatusCodes.OK)
                     })
                   } ~
                     get {
-                      completeWithTrace({ traceContext =>
+                      completeWithTrace({ samRequestContext =>
                         userService.getUserStatus(WorkbenchUserId(userId)).map { statusOption =>
                           statusOption
                             .map { status =>
@@ -126,7 +126,7 @@ trait UserRoutes extends UserInfoDirectives {
                   pathPrefix("enable") {
                     pathEndOrSingleSlash {
                       put {
-                        completeWithTrace({ traceContext =>
+                        completeWithTrace({ samRequestContext =>
                           userService.enableUser(WorkbenchUserId(userId), userInfo).map { statusOption =>
                             statusOption
                               .map { status =>
@@ -141,7 +141,7 @@ trait UserRoutes extends UserInfoDirectives {
                   pathPrefix("disable") {
                     pathEndOrSingleSlash {
                       put {
-                        completeWithTrace({ traceContext =>
+                        completeWithTrace({ samRequestContext =>
                           userService.disableUser(WorkbenchUserId(userId), userInfo).map { statusOption =>
                             statusOption
                               .map { status =>
@@ -156,7 +156,7 @@ trait UserRoutes extends UserInfoDirectives {
                   pathPrefix("petServiceAccount") {
                     path(Segment) { project =>
                       delete {
-                        completeWithTrace({ traceContext =>
+                        completeWithTrace({ samRequestContext =>
                           cloudExtensions
                             .deleteUserPetServiceAccount(WorkbenchUserId(userId), GoogleProject(project))
                             .map(_ => StatusCodes.NoContent)
@@ -176,7 +176,7 @@ trait UserRoutes extends UserInfoDirectives {
         get {
           path(Segment) { email =>
             pathEnd {
-              completeWithTrace({ traceContext =>
+              completeWithTrace({ samRequestContext =>
                 userService.getUserIdInfoFromEmail(WorkbenchEmail(email)).map {
                   case Left(_) => StatusCodes.NotFound -> None
                   case Right(None) => StatusCodes.NoContent -> None
@@ -189,7 +189,7 @@ trait UserRoutes extends UserInfoDirectives {
           pathPrefix("invite") {
             post {
               path(Segment) { inviteeEmail =>
-                completeWithTrace({ traceContext =>
+                completeWithTrace({ samRequestContext =>
                   userService
                     .inviteUser(InviteUser(genWorkbenchUserId(System.currentTimeMillis()), WorkbenchEmail(inviteeEmail.trim)))
                     .map(userStatus => StatusCodes.Created -> userStatus)

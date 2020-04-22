@@ -24,7 +24,7 @@ trait StatusRoutes {
     pathPrefix("status") {
       pathEndOrSingleSlash {
         get {
-          completeWithTrace({ traceContext =>
+          completeWithTrace({ samRequestContext =>
             statusService.getStatus().map { statusResponse =>
               val httpStatus = if (statusResponse.ok) StatusCodes.OK else StatusCodes.InternalServerError
               (httpStatus, statusResponse)
@@ -36,7 +36,7 @@ trait StatusRoutes {
       pathPrefix("version") {
         pathEndOrSingleSlash {
           get {
-            completeWithTrace({ traceContext =>
+            completeWithTrace({ samRequestContext =>
               (StatusCodes.OK, BuildTimeVersion.versionJson)
             })
           }
