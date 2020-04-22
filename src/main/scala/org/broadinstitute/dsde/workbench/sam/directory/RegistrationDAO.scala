@@ -10,15 +10,15 @@ import org.broadinstitute.dsde.workbench.sam.util.TraceContext
   * away from a solution that requires that the Apache proxies query this group, we can remove the RegistrationDAO.
   */
 trait RegistrationDAO {
-  def createUser(user: WorkbenchUser, traceContext: TraceContext): IO[WorkbenchUser]
-  def loadUser(userId: WorkbenchUserId, traceContext: TraceContext): IO[Option[WorkbenchUser]]
-  def deleteUser(userId: WorkbenchUserId, traceContext: TraceContext): IO[Unit]
-  def enableIdentity(subject: WorkbenchSubject, traceContext: TraceContext): IO[Unit]
-  def disableIdentity(subject: WorkbenchSubject, traceContext: TraceContext): IO[Unit]
-  def isEnabled(subject: WorkbenchSubject, traceContext: TraceContext): IO[Boolean]
-  def createPetServiceAccount(petServiceAccount: PetServiceAccount, traceContext: TraceContext): IO[PetServiceAccount]
-  def loadPetServiceAccount(petServiceAccountId: PetServiceAccountId, traceContext: TraceContext): IO[Option[PetServiceAccount]]
-  def deletePetServiceAccount(petServiceAccountId: PetServiceAccountId, traceContext: TraceContext): IO[Unit]
-  def updatePetServiceAccount(petServiceAccount: PetServiceAccount, traceContext: TraceContext): IO[PetServiceAccount]
-  def setGoogleSubjectId(userId: WorkbenchUserId, googleSubjectId: GoogleSubjectId, traceContext: TraceContext): IO[Unit]
+  def createUser(user: WorkbenchUser): IO[WorkbenchUser]
+  def loadUser(userId: WorkbenchUserId): IO[Option[WorkbenchUser]]
+  def deleteUser(userId: WorkbenchUserId): IO[Unit]
+  def enableIdentity(subject: WorkbenchSubject): IO[Unit]
+  def disableIdentity(subject: WorkbenchSubject): IO[Unit]
+  def isEnabled(subject: WorkbenchSubject): IO[Boolean]
+  def createPetServiceAccount(petServiceAccount: PetServiceAccount): IO[PetServiceAccount]
+  def loadPetServiceAccount(petServiceAccountId: PetServiceAccountId): IO[Option[PetServiceAccount]]
+  def deletePetServiceAccount(petServiceAccountId: PetServiceAccountId): IO[Unit]
+  def updatePetServiceAccount(petServiceAccount: PetServiceAccount): IO[PetServiceAccount]
+  def setGoogleSubjectId(userId: WorkbenchUserId, googleSubjectId: GoogleSubjectId): IO[Unit]
 }

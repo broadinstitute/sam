@@ -54,7 +54,7 @@ class ResourceService(
       case Some(resourceTypeAdmin) =>
         for {
           // make sure resource type admin is added first because the rest depends on it
-          createdAdminType <- createResourceType(resourceTypeAdmin, traceContext)
+          createdAdminType <- createResourceType(resourceTypeAdmin)
 
           // sleep added so shadow dao can catch up, remove when removing opendj
           // https://broadworkbench.atlassian.net/browse/CA-526
@@ -62,7 +62,7 @@ class ResourceService(
 
           result <- resourceTypes.values.filterNot(_.name == SamResourceTypes.resourceTypeAdminName).toList.traverse { rt =>
             for {
-              _ <- createResourceType(rt, traceContext)
+              _ <- createResourceType(rt)
 
               // sleep added so shadow dao can catch up, remove when removing opendj
               // https://broadworkbench.atlassian.net/browse/CA-526
@@ -75,7 +75,7 @@ class ResourceService(
                 Set.empty)
               // note that this skips all validations and just creates a resource with owner policies with no members
               // it will require someone with direct ldap access to bootstrap
-              _ <- persistResource(resourceTypeAdmin, ResourceId(rt.name.value), Set(policy), Set.empty, traceContext).recover {
+              _ <- persistResource(resourceTypeAdmin, ResourceId(rt.name.value), Set(policy), Set.empty).recover {
                 case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode.contains(StatusCodes.Conflict) =>
                   // ok if the resource already exists
                   Resource(rt.name, ResourceId(rt.name.value), Set.empty)
@@ -85,8 +85,8 @@ class ResourceService(
         } yield result :+ resourceTypeAdmin
     }
 
-  def createResourceType(resourceType: ResourceType, traceContext: TraceContext): IO[ResourceType] =
-    accessPolicyDAO.createResourceType(resourceType, traceContext)
+  def createResourceType(resourceType: ResourceType): IO[ResourceType] =
+    accessPolicyDAO.createResourceType(resourceType)
 
   /**
     * Create a resource with default policies. The default policies contain 1 policy with the same name as the
@@ -96,13 +96,13 @@ class ResourceService(
     * @param userInfo
     * @return
     */
-  def createResource(resourceType: ResourceType, resourceId: ResourceId, userInfo: UserInfo, traceContext: TraceContext): IO[Resource] = {
+  def createResource(resourceType: ResourceType, resourceId: ResourceId, userInfo: UserInfo): IO[Resource] = {
     val ownerRole = resourceType.roles
       .find(_.roleName == resourceType.ownerRoleName)
       .getOrElse(throw new WorkbenchException(s"owner role ${resourceType.ownerRoleName} does not exist in $resourceType"))
     val defaultPolicies: Map[AccessPolicyName, AccessPolicyMembership] = Map(
       AccessPolicyName(ownerRole.roleName.value) -> AccessPolicyMembership(Set(userInfo.userEmail), Set.empty, Set(ownerRole.roleName)))
-    createResource(resourceType, resourceId, defaultPolicies, Set.empty, userInfo.userId, traceContext)
+    createResource(resourceType, resourceId, defaultPolicies, Set.empty, userInfo.userId)
   }
 
   /**
@@ -120,10 +120,10 @@ class ResourceService(
       policiesMap: Map[AccessPolicyName, AccessPolicyMembership],
       authDomain: Set[WorkbenchGroupName],
       userId: WorkbenchUserId,
-      traceContext: TraceContext): IO[Resource] =
-    makeValidatablePolicies(policiesMap, traceContext).flatMap { policies =>
-      validateCreateResource(resourceType, resourceId, policies, authDomain, userId, traceContext).flatMap {
-        case Seq() => persistResource(resourceType, resourceId, policies, authDomain, traceContext)
+      ): IO[Resource] =
+    makeValidatablePolicies(policiesMap).flatMap { policies =>
+      validateCreateResource(resourceType, resourceId, policies, authDomain, userId).flatMap {
+        case Seq() => persistResource(resourceType, resourceId, policies, authDomain)
         case errorReports: Seq[ErrorReport] =>
           throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "Cannot create resource", errorReports))
       }
@@ -139,10 +139,10 @@ class ResourceService(
     * @param authDomain
     * @return Future[Resource]
     */
-  private def persistResource(resourceType: ResourceType, resourceId: ResourceId, policies: Set[ValidatableAccessPolicy], authDomain: Set[WorkbenchGroupName], traceContext: TraceContext) =
+  private def persistResource(resourceType: ResourceType, resourceId: ResourceId, policies: Set[ValidatableAccessPolicy], authDomain: Set[WorkbenchGroupName]) =
     for {
-      resource <- accessPolicyDAO.createResource(Resource(resourceType.name, resourceId, authDomain), traceContext)
-      policies <- policies.toList.traverse(p => createOrUpdatePolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, p.policyName), p, traceContext))
+      resource <- accessPolicyDAO.createResource(Resource(resourceType.name, resourceId, authDomain))
+      policies <- policies.toList.traverse(p => createOrUpdatePolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, p.policyName), p))
     } yield resource.copy(accessPolicies=policies.toSet)
 
   private def validateCreateResource(
@@ -151,12 +151,12 @@ class ResourceService(
       policies: Set[ValidatableAccessPolicy],
       authDomain: Set[WorkbenchGroupName],
       userId: WorkbenchUserId,
-      traceContext: TraceContext) =
+      ) =
     for {
       resourceIdErrors <- IO.pure(validateUrlSafe(resourceId.value))
       ownerPolicyErrors <- IO.pure(validateOwnerPolicyExists(resourceType, policies))
       policyErrors <- IO.pure(policies.flatMap(policy => validatePolicy(resourceType, policy)))
-      authDomainErrors <- validateAuthDomain(resourceType, authDomain, userId, traceContext)
+      authDomainErrors <- validateAuthDomain(resourceType, authDomain, userId)
     } yield (resourceIdErrors ++ ownerPolicyErrors ++ policyErrors ++ authDomainErrors).toSeq
 
   private val validUrlSafePattern = "[-a-zA-Z0-9._~%]+".r
@@ -177,8 +177,8 @@ class ResourceService(
         Option(ErrorReport(s"Cannot create resource without at least 1 policy with ${resourceType.ownerRoleName.value} role and non-empty membership"))
     }
 
-  private def validateAuthDomain(resourceType: ResourceType, authDomain: Set[WorkbenchGroupName], userId: WorkbenchUserId, traceContext: TraceContext): IO[Option[ErrorReport]] =
-    validateAuthDomainPermissions(authDomain, userId, traceContext).map { permissionsErrors =>
+  private def validateAuthDomain(resourceType: ResourceType, authDomain: Set[WorkbenchGroupName], userId: WorkbenchUserId): IO[Option[ErrorReport]] =
+    validateAuthDomainPermissions(authDomain, userId).map { permissionsErrors =>
       val constrainableErrors = validateAuthDomainConstraints(resourceType, authDomain).toSeq
       val errors = constrainableErrors ++ permissionsErrors.flatten
       if (errors.nonEmpty) {
@@ -186,10 +186,10 @@ class ResourceService(
       } else None
     }
 
-  private def validateAuthDomainPermissions(authDomain: Set[WorkbenchGroupName], userId: WorkbenchUserId, traceContext: TraceContext): IO[List[Option[ErrorReport]]] =
+  private def validateAuthDomainPermissions(authDomain: Set[WorkbenchGroupName], userId: WorkbenchUserId): IO[List[Option[ErrorReport]]] =
     authDomain.toList.traverse { groupName =>
       val resource = FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, ResourceId(groupName.value))
-      policyEvaluatorService.hasPermission(resource, ManagedGroupService.useAction, userId, traceContext).map {
+      policyEvaluatorService.hasPermission(resource, ManagedGroupService.useAction, userId).map {
         case false => Option(ErrorReport(s"You do not have access to $groupName or $groupName does not exist"))
         case _ => None
       }
@@ -200,8 +200,8 @@ class ResourceService(
       Option(ErrorReport(s"Auth Domain is not permitted on resource of type: ${resourceType.name}"))
     } else None
 
-  def loadResourceAuthDomain(resource: FullyQualifiedResourceId, traceContext: TraceContext): IO[Set[WorkbenchGroupName]] =
-    accessPolicyDAO.loadResourceAuthDomain(resource, traceContext).flatMap(result => result match {
+  def loadResourceAuthDomain(resource: FullyQualifiedResourceId): IO[Set[WorkbenchGroupName]] =
+    accessPolicyDAO.loadResourceAuthDomain(resource).flatMap(result => result match {
       case LoadResourceAuthDomainResult.Constrained(authDomain) => IO.pure(authDomain.toList.toSet)
       case LoadResourceAuthDomainResult.NotConstrained => IO.pure(Set.empty)
       case LoadResourceAuthDomainResult.ResourceNotFound => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Resource ${resource} not found")))
@@ -212,8 +212,8 @@ class ResourceService(
       members: Set[WorkbenchSubject],
       roles: Set[ResourceRoleName],
       actions: Set[ResourceAction],
-      traceContext: TraceContext): IO[AccessPolicy] =
-    createPolicy(policyIdentity, members, generateGroupEmail(), roles, actions, traceContext)
+      ): IO[AccessPolicy] =
+    createPolicy(policyIdentity, members, generateGroupEmail(), roles, actions)
 
   def createPolicy(
       policyIdentity: FullyQualifiedPolicyId,
@@ -221,40 +221,40 @@ class ResourceService(
       email: WorkbenchEmail,
       roles: Set[ResourceRoleName],
       actions: Set[ResourceAction],
-      traceContext: TraceContext): IO[AccessPolicy] =
-    accessPolicyDAO.createPolicy(AccessPolicy(policyIdentity, members, email, roles, actions, public = false), traceContext)
+      ): IO[AccessPolicy] =
+    accessPolicyDAO.createPolicy(AccessPolicy(policyIdentity, members, email, roles, actions, public = false))
 
   // IF Resource ID reuse is allowed (as defined by the Resource Type), then we can delete the resource
   // ELSE Resource ID reuse is not allowed, and we enforce this by deleting all policies associated with the Resource,
   //      but not the Resource itself, thereby orphaning the Resource so that it cannot be used or accessed anymore and
   //      preventing a new Resource with the same ID from being created
-  def deleteResource(resource: FullyQualifiedResourceId, traceContext: TraceContext): Future[Unit] =
+  def deleteResource(resource: FullyQualifiedResourceId): Future[Unit] =
     for {
       // remove from cloud extensions first so a failure there does not leave ldap in a bad state
-      policiesToDelete <- cloudDeletePolicies(resource, traceContext)
+      policiesToDelete <- cloudDeletePolicies(resource)
 
-      _ <- policiesToDelete.toList.parTraverse(p => accessPolicyDAO.deletePolicy(p.id, traceContext)).unsafeToFuture()
-      _ <- maybeDeleteResource(resource, traceContext)
+      _ <- policiesToDelete.toList.parTraverse(p => accessPolicyDAO.deletePolicy(p.id)).unsafeToFuture()
+      _ <- maybeDeleteResource(resource)
     } yield ()
 
-  def cloudDeletePolicies(resource: FullyQualifiedResourceId, traceContext: TraceContext): Future[Stream[AccessPolicy]] = {
+  def cloudDeletePolicies(resource: FullyQualifiedResourceId): Future[Stream[AccessPolicy]] = {
     for {
-      policiesToDelete <- accessPolicyDAO.listAccessPolicies(resource, traceContext).unsafeToFuture()
+      policiesToDelete <- accessPolicyDAO.listAccessPolicies(resource).unsafeToFuture()
       _ <- Future.traverse(policiesToDelete) { policy =>
         cloudExtensions.onGroupDelete(policy.email)
       }
     } yield policiesToDelete
   }
 
-  private def maybeDeleteResource(resource: FullyQualifiedResourceId, traceContext: TraceContext): Future[Unit] =
+  private def maybeDeleteResource(resource: FullyQualifiedResourceId): Future[Unit] =
     resourceTypes.get(resource.resourceTypeName) match {
-      case Some(resourceType) if resourceType.reuseIds => accessPolicyDAO.deleteResource(resource, traceContext).unsafeToFuture()
-      case _ => accessPolicyDAO.removeAuthDomainFromResource(resource, traceContext).unsafeToFuture()
+      case Some(resourceType) if resourceType.reuseIds => accessPolicyDAO.deleteResource(resource).unsafeToFuture()
+      case _ => accessPolicyDAO.removeAuthDomainFromResource(resource).unsafeToFuture()
     }
 
-  def listUserResourceRoles(resource: FullyQualifiedResourceId, userInfo: UserInfo, traceContext: TraceContext): Future[Set[ResourceRoleName]] =
+  def listUserResourceRoles(resource: FullyQualifiedResourceId, userInfo: UserInfo): Future[Set[ResourceRoleName]] =
     policyEvaluatorService
-      .listResourceAccessPoliciesForUser(resource, userInfo.userId, traceContext)
+      .listResourceAccessPoliciesForUser(resource, userInfo.userId)
       .map { matchingPolicies =>
         matchingPolicies.flatMap(_.roles)
       }
@@ -273,12 +273,12 @@ class ResourceService(
       policyName: AccessPolicyName,
       resource: FullyQualifiedResourceId,
       policyMembership: AccessPolicyMembership,
-      traceContext: TraceContext): IO[AccessPolicy] =
-    makeCreatablePolicy(policyName, policyMembership, traceContext).flatMap { policy =>
+      ): IO[AccessPolicy] =
+    makeCreatablePolicy(policyName, policyMembership).flatMap { policy =>
       validatePolicy(resourceType, policy) match {
         case Some(errorReport) =>
           throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "You have specified an invalid policy", errorReport))
-        case None => createOrUpdatePolicy(FullyQualifiedPolicyId(resource, policyName), policy, traceContext)
+        case None => createOrUpdatePolicy(FullyQualifiedPolicyId(resource, policyName), policy)
       }
     }
 
@@ -295,12 +295,12 @@ class ResourceService(
       policyName: AccessPolicyName,
       resource: FullyQualifiedResourceId,
       membersList: Set[WorkbenchEmail],
-      traceContext: TraceContext): IO[Unit] =
-    mapEmailsToSubjects(membersList, traceContext).flatMap { emailsToSubjects =>
+      ): IO[Unit] =
+    mapEmailsToSubjects(membersList).flatMap { emailsToSubjects =>
       validateMemberEmails(emailsToSubjects) match {
         case Some(error) => IO.raiseError(new WorkbenchExceptionWithErrorReport(error))
         case None =>
-          accessPolicyDAO.overwritePolicyMembers(model.FullyQualifiedPolicyId(resource, policyName), emailsToSubjects.values.flatten.toSet, traceContext)
+          accessPolicyDAO.overwritePolicyMembers(model.FullyQualifiedPolicyId(resource, policyName), emailsToSubjects.values.flatten.toSet)
       }
     }
 
@@ -314,14 +314,14 @@ class ResourceService(
     * @param policy
     * @return
     */
-  private def createOrUpdatePolicy(policyIdentity: FullyQualifiedPolicyId, policy: ValidatableAccessPolicy, traceContext: TraceContext): IO[AccessPolicy] = {
+  private def createOrUpdatePolicy(policyIdentity: FullyQualifiedPolicyId, policy: ValidatableAccessPolicy): IO[AccessPolicy] = {
     val workbenchSubjects = policy.emailsToSubjects.values.flatten.toSet
-    accessPolicyDAO.loadPolicy(policyIdentity, traceContext).flatMap {
-      case None => createPolicy(policyIdentity, workbenchSubjects, generateGroupEmail(), policy.roles, policy.actions, traceContext)
+    accessPolicyDAO.loadPolicy(policyIdentity).flatMap {
+      case None => createPolicy(policyIdentity, workbenchSubjects, generateGroupEmail(), policy.roles, policy.actions)
       case Some(accessPolicy) =>
         for {
-          result <- accessPolicyDAO.overwritePolicy(AccessPolicy(policyIdentity, workbenchSubjects, accessPolicy.email, policy.roles, policy.actions, accessPolicy.public), traceContext)
-          _ <- IO.fromFuture(IO(fireGroupUpdateNotification(policyIdentity, traceContext))).runAsync {
+          result <- accessPolicyDAO.overwritePolicy(AccessPolicy(policyIdentity, workbenchSubjects, accessPolicy.email, policy.roles, policy.actions, accessPolicy.public))
+          _ <- IO.fromFuture(IO(fireGroupUpdateNotification(policyIdentity))).runAsync {
             case Left(regrets) => IO(logger.error(s"failure calling fireGroupUpdateNotification on $policyIdentity", regrets))
             case Right(_) => IO.unit
           }.toIO
@@ -331,9 +331,9 @@ class ResourceService(
     }
   }
 
-  private def mapEmailsToSubjects(workbenchEmails: Set[WorkbenchEmail], traceContext: TraceContext): IO[Map[WorkbenchEmail, Option[WorkbenchSubject]]] = {
+  private def mapEmailsToSubjects(workbenchEmails: Set[WorkbenchEmail]): IO[Map[WorkbenchEmail, Option[WorkbenchSubject]]] = {
     val eventualSubjects = workbenchEmails.map { workbenchEmail =>
-      directoryDAO.loadSubjectFromEmail(workbenchEmail, traceContext).map(workbenchEmail -> _)
+      directoryDAO.loadSubjectFromEmail(workbenchEmail).map(workbenchEmail -> _)
     }
 
     eventualSubjects.toList.sequence.map(_.toMap)
@@ -403,39 +403,39 @@ class ResourceService(
     } else None
   }
 
-  private def fireGroupUpdateNotification(groupId: WorkbenchGroupIdentity, traceContext: TraceContext): Future[Unit] =
-    cloudExtensions.onGroupUpdate(Seq(groupId), traceContext) recover {
+  private def fireGroupUpdateNotification(groupId: WorkbenchGroupIdentity): Future[Unit] =
+    cloudExtensions.onGroupUpdate(Seq(groupId)) recover {
       case t: Throwable =>
         logger.error(s"error calling cloudExtensions.onGroupUpdate for $groupId", t)
         throw t
     }
 
-  def addSubjectToPolicy(policyIdentity: FullyQualifiedPolicyId, subject: WorkbenchSubject, traceContext: TraceContext): Future[Unit] = {
+  def addSubjectToPolicy(policyIdentity: FullyQualifiedPolicyId, subject: WorkbenchSubject): Future[Unit] = {
     subject match {
       case subject: FullyQualifiedPolicyId if policyIdentity.resource.resourceTypeName.equals(ManagedGroupService.managedGroupTypeName) =>
         Future.failed(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"Access policies cannot be added to managed groups.")))
       case _ =>    {
-        directoryDAO.addGroupMember(policyIdentity, subject, traceContext).unsafeToFuture().map(_ => ()) andThen {
-          case Success(_) => fireGroupUpdateNotification(policyIdentity, traceContext)
+        directoryDAO.addGroupMember(policyIdentity, subject).unsafeToFuture().map(_ => ()) andThen {
+          case Success(_) => fireGroupUpdateNotification(policyIdentity)
         }
       }
     }
   }
 
-  def removeSubjectFromPolicy(policyIdentity: FullyQualifiedPolicyId, subject: WorkbenchSubject, traceContext: TraceContext): Future[Unit] =
-    directoryDAO.removeGroupMember(policyIdentity, subject, traceContext).void.unsafeToFuture() andThen {
-      case Success(_) => fireGroupUpdateNotification(policyIdentity, traceContext)
+  def removeSubjectFromPolicy(policyIdentity: FullyQualifiedPolicyId, subject: WorkbenchSubject): Future[Unit] =
+    directoryDAO.removeGroupMember(policyIdentity, subject).void.unsafeToFuture() andThen {
+      case Success(_) => fireGroupUpdateNotification(policyIdentity)
     }
 
-  private[service] def loadAccessPolicyWithEmails(policy: AccessPolicy, traceContext: TraceContext): IO[AccessPolicyMembership] = {
+  private[service] def loadAccessPolicyWithEmails(policy: AccessPolicy): IO[AccessPolicyMembership] = {
     val users = policy.members.collect { case userId: WorkbenchUserId => userId }
     val groups = policy.members.collect { case groupName: WorkbenchGroupName => groupName }
     val policyMembers = policy.members.collect { case policyId: FullyQualifiedPolicyId => policyId }
 
     for {
-      userEmails <- directoryDAO.loadUsers(users, traceContext)
-      groupEmails <- directoryDAO.loadGroups(groups, traceContext)
-      policyEmails <- policyMembers.toList.parTraverse(accessPolicyDAO.loadPolicy(_, traceContext))
+      userEmails <- directoryDAO.loadUsers(users)
+      groupEmails <- directoryDAO.loadGroups(groups)
+      policyEmails <- policyMembers.toList.parTraverse(accessPolicyDAO.loadPolicy(_))
     } yield
       AccessPolicyMembership(
         userEmails.toSet[WorkbenchUser].map(_.email) ++ groupEmails.map(_.email) ++ policyEmails.flatMap(_.map(_.email)),
@@ -443,35 +443,35 @@ class ResourceService(
         policy.roles)
   }
 
-  def listResourcePolicies(resource: FullyQualifiedResourceId, traceContext: TraceContext): IO[Stream[AccessPolicyResponseEntry]] =
-    accessPolicyDAO.listAccessPolicies(resource, traceContext).flatMap { policies =>
+  def listResourcePolicies(resource: FullyQualifiedResourceId): IO[Stream[AccessPolicyResponseEntry]] =
+    accessPolicyDAO.listAccessPolicies(resource).flatMap { policies =>
       policies.parTraverse { policy =>
-        loadAccessPolicyWithEmails(policy, traceContext).map { membership =>
+        loadAccessPolicyWithEmails(policy).map { membership =>
           AccessPolicyResponseEntry(policy.id.accessPolicyName, membership, policy.email)
         }
       }
     }
 
-  def loadResourcePolicy(policyIdentity: FullyQualifiedPolicyId, traceContext: TraceContext): IO[Option[AccessPolicyMembership]] =
+  def loadResourcePolicy(policyIdentity: FullyQualifiedPolicyId): IO[Option[AccessPolicyMembership]] =
     for {
-      policy <- accessPolicyDAO.loadPolicy(policyIdentity, traceContext)
-      res <- policy.traverse(p => loadAccessPolicyWithEmails(p, traceContext))
+      policy <- accessPolicyDAO.loadPolicy(policyIdentity)
+      res <- policy.traverse(p => loadAccessPolicyWithEmails(p))
     } yield res
 
-  private def makeValidatablePolicies(policies: Map[AccessPolicyName, AccessPolicyMembership], traceContext: TraceContext): IO[Set[ValidatableAccessPolicy]] =
+  private def makeValidatablePolicies(policies: Map[AccessPolicyName, AccessPolicyMembership]): IO[Set[ValidatableAccessPolicy]] =
     policies.toList.traverse {
-      case (accessPolicyName, accessPolicyMembership) => makeCreatablePolicy(accessPolicyName, accessPolicyMembership, traceContext)
+      case (accessPolicyName, accessPolicyMembership) => makeCreatablePolicy(accessPolicyName, accessPolicyMembership)
     }.map(_.toSet)
 
-  private def makeCreatablePolicy(accessPolicyName: AccessPolicyName, accessPolicyMembership: AccessPolicyMembership, traceContext: TraceContext): IO[ValidatableAccessPolicy] =
-    mapEmailsToSubjects(accessPolicyMembership.memberEmails, traceContext).map { emailsToSubjects =>
+  private def makeCreatablePolicy(accessPolicyName: AccessPolicyName, accessPolicyMembership: AccessPolicyMembership): IO[ValidatableAccessPolicy] =
+    mapEmailsToSubjects(accessPolicyMembership.memberEmails).map { emailsToSubjects =>
       ValidatableAccessPolicy(accessPolicyName, emailsToSubjects, accessPolicyMembership.roles, accessPolicyMembership.actions)
     }
 
   private def generateGroupEmail() = WorkbenchEmail(s"policy-${UUID.randomUUID}@$emailDomain")
 
-  def isPublic(resourceAndPolicyName: FullyQualifiedPolicyId, traceContext: TraceContext): IO[Boolean] =
-    accessPolicyDAO.loadPolicy(resourceAndPolicyName, traceContext).flatMap {
+  def isPublic(resourceAndPolicyName: FullyQualifiedPolicyId): IO[Boolean] =
+    accessPolicyDAO.loadPolicy(resourceAndPolicyName).flatMap {
       case None => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "policy not found")))
       case Some(accessPolicy) => IO.pure(accessPolicy.public)
     }
@@ -484,9 +484,9 @@ class ResourceService(
     * @param public true to make the policy public, false to make it private
     * @return
     */
-  def setPublic(policyId: FullyQualifiedPolicyId, public: Boolean, traceContext: TraceContext): IO[Unit] =
+  def setPublic(policyId: FullyQualifiedPolicyId, public: Boolean): IO[Unit] =
     for {
-      authDomain <- accessPolicyDAO.loadResourceAuthDomain(policyId.resource, traceContext)
+      authDomain <- accessPolicyDAO.loadResourceAuthDomain(policyId.resource)
       _ <- authDomain match {
         case LoadResourceAuthDomainResult.ResourceNotFound => IO.raiseError(
           new WorkbenchExceptionWithErrorReport(
@@ -499,14 +499,14 @@ class ResourceService(
             new WorkbenchExceptionWithErrorReport(
               ErrorReport(StatusCodes.BadRequest, "Cannot make auth domain protected resources public. Share directly with auth domain groups instead.")))
         case LoadResourceAuthDomainResult.NotConstrained =>
-          accessPolicyDAO.setPolicyIsPublic(policyId, public, traceContext) *> IO.fromFuture(IO(fireGroupUpdateNotification(policyId, traceContext)))
+          accessPolicyDAO.setPolicyIsPublic(policyId, public) *> IO.fromFuture(IO(fireGroupUpdateNotification(policyId)))
       }
     } yield ()
 
-  def listAllFlattenedResourceUsers(resourceId: FullyQualifiedResourceId, traceContext: TraceContext): IO[Set[UserIdInfo]] =
+  def listAllFlattenedResourceUsers(resourceId: FullyQualifiedResourceId): IO[Set[UserIdInfo]] =
     for {
-      accessPolicies <- accessPolicyDAO.listAccessPolicies(resourceId, traceContext)
-      members <- accessPolicies.toList.parTraverse(accessPolicy => accessPolicyDAO.listFlattenedPolicyMembers(accessPolicy.id, traceContext))
+      accessPolicies <- accessPolicyDAO.listAccessPolicies(resourceId)
+      members <- accessPolicies.toList.parTraverse(accessPolicy => accessPolicyDAO.listFlattenedPolicyMembers(accessPolicy.id))
       workbenchUsers = members.flatten.toSet
     } yield {
       workbenchUsers.map(user => UserIdInfo(user.id, user.email, user.googleSubjectId))

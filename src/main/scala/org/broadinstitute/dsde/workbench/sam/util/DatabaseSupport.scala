@@ -12,9 +12,9 @@ trait DatabaseSupport {
   protected val cs: ContextShift[IO]
   protected val dbRef: DbReference
 
-  protected def runInTransaction[A](dbQueryName: String, traceContext: TraceContext)(databaseFunction: DBSession => A): IO[A] = {
+  protected def runInTransaction[A](dbQueryName: String)(databaseFunction: DBSession => A): IO[A] = {
     val spanName = "postgres-" + dbQueryName
-    traceIOWithContext(spanName, traceContext) { _ =>
+    traceIOWithContext(spanName) { _ =>
       cs.evalOn(ecForDatabaseIO)(IO {
         dbRef.inLocalTransaction(databaseFunction)
       })

@@ -16,7 +16,7 @@ trait SamModelDirectives {
   val userService: UserService
 
   def withSubject(email: WorkbenchEmail, traceContext: TraceContext = null): Directive1[WorkbenchSubject] = //todo: create a root span here instead of allowing null?
-    onSuccess(userService.getSubjectFromEmail(email, traceContext)).map {
+    onSuccess(userService.getSubjectFromEmail(email)).map {
       case Some(subject) => subject
       case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"${email} not found"))
     }

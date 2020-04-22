@@ -28,9 +28,9 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
   // This method obtains an EXCLUSIVE lock on the ResourceType table because if we boot multiple Sam instances at once,
   // they will all try to (re)create ResourceTypes at the same time and could collide. The lock is automatically
   // released at the end of the transaction.
-  override def createResourceType(resourceType: ResourceType, traceContext: TraceContext): IO[ResourceType] = {
+  override def createResourceType(resourceType: ResourceType): IO[ResourceType] = {
     val uniqueActions = resourceType.roles.flatMap(_.actions)
-    runInTransaction("createResourceType", traceContext) { implicit session =>
+    runInTransaction("createResourceType") { implicit session =>
       samsql"lock table ${ResourceTypeTable.table} IN EXCLUSIVE MODE".execute().apply()
       val resourceTypePK = insertResourceType(resourceType.name)
 
@@ -197,8 +197,8 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
 
   // 1. Create Resource
   // 2. Create the entries in the join table for the auth domains
-  override def createResource(resource: Resource, traceContext: TraceContext): IO[Resource] = {
-    runInTransaction("createResource", traceContext) { implicit session =>
+  override def createResource(resource: Resource): IO[Resource] = {
+    runInTransaction("createResource") { implicit session =>
       val resourcePK = insertResource(resource)
 
       if (resource.authDomain.nonEmpty) {
@@ -239,15 +239,15 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     samsqls"""select ${rt.id} from ${ResourceTypeTable as rt} where ${rt.name} = ${resourceTypeName}"""
   }
 
-  override def deleteResource(resource: FullyQualifiedResourceId, traceContext: TraceContext): IO[Unit] = {
-    runInTransaction("deleteResource", traceContext) { implicit session =>
+  override def deleteResource(resource: FullyQualifiedResourceId): IO[Unit] = {
+    runInTransaction("deleteResource") { implicit session =>
       val r = ResourceTable.syntax("r")
       samsql"delete from ${ResourceTable as r} where ${r.name} = ${resource.resourceId} and ${r.resourceTypeId} = (${loadResourceTypePK(resource.resourceTypeName)})".update().apply()
     }
   }
 
-  override def loadResourceAuthDomain(resource: FullyQualifiedResourceId, traceContext: TraceContext): IO[LoadResourceAuthDomainResult] = {
-    runInTransaction("loadResourceAuthDomain", traceContext) { implicit session =>
+  override def loadResourceAuthDomain(resource: FullyQualifiedResourceId): IO[LoadResourceAuthDomainResult] = {
+    runInTransaction("loadResourceAuthDomain") { implicit session =>
       val ad = AuthDomainTable.syntax("ad")
       val r = ResourceTable.syntax("r")
       val rt = ResourceTypeTable.syntax("rt")
@@ -285,10 +285,10 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     }
   }
 
-  override def listResourcesConstrainedByGroup(groupId: WorkbenchGroupIdentity, traceContext: TraceContext): IO[Set[Resource]] = {
+  override def listResourcesConstrainedByGroup(groupId: WorkbenchGroupIdentity): IO[Set[Resource]] = {
     import SamTypeBinders._
 
-    runInTransaction("listResourcesConstrainedByGroup", traceContext) { implicit session =>
+    runInTransaction("listResourcesConstrainedByGroup") { implicit session =>
       val r = ResourceTable.syntax("r")
       val ad = AuthDomainTable.syntax("ad")
       val g = GroupTable.syntax("g")
@@ -329,12 +329,12 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     }
   }
 
-  override def removeAuthDomainFromResource(resource: FullyQualifiedResourceId, traceContext: TraceContext): IO[Unit] = {
+  override def removeAuthDomainFromResource(resource: FullyQualifiedResourceId): IO[Unit] = {
     val r = ResourceTable.syntax("r")
     val ad = AuthDomainTable.syntax("ad")
     val rt = ResourceTypeTable.syntax("rt")
 
-    runInTransaction("removeAuthDomainFromResource", traceContext) { implicit session =>
+    runInTransaction("removeAuthDomainFromResource") { implicit session =>
       samsql"""delete from ${AuthDomainTable as ad}
               where ${ad.resourceId} =
               (select ${r.id} from ${ResourceTable as r}
@@ -345,8 +345,8 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     }
   }
 
-  override def createPolicy(policy: AccessPolicy, traceContext: TraceContext): IO[AccessPolicy] = {
-    runInTransaction("createPolicy", traceContext) { implicit session =>
+  override def createPolicy(policy: AccessPolicy): IO[AccessPolicy] = {
+    runInTransaction("createPolicy") { implicit session =>
       val groupId = insertPolicyGroup(policy)
       val policyId = insertPolicy(policy, groupId)
 
@@ -442,11 +442,11 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
   }
 
   // Policies and their roles and actions are set to cascade delete when the associated group is deleted
-  override def deletePolicy(policy: FullyQualifiedPolicyId, traceContext: TraceContext): IO[Unit] = {
+  override def deletePolicy(policy: FullyQualifiedPolicyId): IO[Unit] = {
     val p = PolicyTable.syntax("p")
     val g = GroupTable.syntax("g")
 
-    runInTransaction("deletePolicy", traceContext) { implicit session =>
+    runInTransaction("deletePolicy") { implicit session =>
       val policyGroupPKOpt = samsql"""delete from ${PolicyTable as p}
         where ${p.name} = ${policy.accessPolicyName}
         and ${p.resourceId} = (${ResourceTable.loadResourcePK(policy.resource)})
@@ -459,12 +459,12 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     }
   }
 
-  override def loadPolicy(resourceAndPolicyName: FullyQualifiedPolicyId, traceContext: TraceContext): IO[Option[AccessPolicy]] = {
-    listPolicies(resourceAndPolicyName.resource, limitOnePolicy = Option(resourceAndPolicyName.accessPolicyName), traceContext).map(_.headOption)
+  override def loadPolicy(resourceAndPolicyName: FullyQualifiedPolicyId): IO[Option[AccessPolicy]] = {
+    listPolicies(resourceAndPolicyName.resource, limitOnePolicy = Option(resourceAndPolicyName.accessPolicyName)).map(_.headOption)
   }
 
-  override def overwritePolicyMembers(id: FullyQualifiedPolicyId, memberList: Set[WorkbenchSubject], traceContext: TraceContext): IO[Unit] = {
-    runInTransaction("overwritePolicyMembers", traceContext) { implicit session =>
+  override def overwritePolicyMembers(id: FullyQualifiedPolicyId, memberList: Set[WorkbenchSubject]): IO[Unit] = {
+    runInTransaction("overwritePolicyMembers") { implicit session =>
       overwritePolicyMembersInternal(id, memberList)
     }
   }
@@ -483,8 +483,8 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     insertGroupMembers(GroupPK(groupId.toLong), memberList)
   }
 
-  override def overwritePolicy(newPolicy: AccessPolicy, traceContext: TraceContext): IO[AccessPolicy] = {
-    runInTransaction("overwritePolicy", traceContext) { implicit session =>
+  override def overwritePolicy(newPolicy: AccessPolicy): IO[AccessPolicy] = {
+    runInTransaction("overwritePolicy") { implicit session =>
       overwritePolicyMembersInternal(newPolicy.id, newPolicy.members)
       overwritePolicyRolesInternal(newPolicy.id, newPolicy.roles)
       overwritePolicyActionsInternal(newPolicy.id, newPolicy.actions)
@@ -519,7 +519,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     }
   }
 
-  override def listPublicAccessPolicies(resourceTypeName: ResourceTypeName, traceContext: TraceContext): IO[Stream[ResourceIdAndPolicyName]] = {
+  override def listPublicAccessPolicies(resourceTypeName: ResourceTypeName): IO[Stream[ResourceIdAndPolicyName]] = {
     val rt = ResourceTypeTable.syntax("rt")
     val r = ResourceTable.syntax("r")
     val p = PolicyTable.syntax("p")
@@ -533,12 +533,12 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
                and ${p.public} = true"""
 
     import SamTypeBinders._
-    runInTransaction("listPublicAccessPolicies", traceContext) { implicit session =>
+    runInTransaction("listPublicAccessPolicies") { implicit session =>
       query.map(rs => ResourceIdAndPolicyName(rs.get[ResourceId](r.resultName.name), rs.get[AccessPolicyName](p.resultName.name))).list().apply().toStream
     }
   }
 
-  override def listPublicAccessPolicies(resource: FullyQualifiedResourceId, traceContext: TraceContext): IO[Stream[AccessPolicyWithoutMembers]] = {
+  override def listPublicAccessPolicies(resource: FullyQualifiedResourceId): IO[Stream[AccessPolicyWithoutMembers]] = {
     val g = GroupTable.syntax("g")
     val r = ResourceTable.syntax("r")
     val rt = ResourceTypeTable.syntax("rt")
@@ -563,7 +563,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
           and ${p.public} = true"""
 
     import SamTypeBinders._
-    runInTransaction("listPublicAccessPolicies", traceContext) { implicit session =>
+    runInTransaction("listPublicAccessPolicies") { implicit session =>
       val results = listPoliciesQuery.map(rs => (PolicyInfo(rs.get[AccessPolicyName](p.resultName.name), rs.get[ResourceId](r.resultName.name), rs.get[ResourceTypeName](rt.resultName.name), rs.get[WorkbenchEmail](g.resultName.email), rs.boolean(p.resultName.public)),
         (rs.stringOpt(rr.resultName.role).map(ResourceRoleName(_)), rs.stringOpt(ra.resultName.action).map(ResourceAction(_))))).list().apply().groupBy(_._1)
 
@@ -578,7 +578,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
   }
 
   // Abstracts logic to load and unmarshal one or more policies, use to get full AccessPolicy objects from Postgres
-  private def listPolicies(resource: FullyQualifiedResourceId, limitOnePolicy: Option[AccessPolicyName] = None, traceContext: TraceContext): IO[Stream[AccessPolicy]] = {
+  private def listPolicies(resource: FullyQualifiedResourceId, limitOnePolicy: Option[AccessPolicyName] = None): IO[Stream[AccessPolicy]] = {
     val g = GroupTable.syntax("g")
     val r = ResourceTable.syntax("r")
     val rt = ResourceTypeTable.syntax("rt")
@@ -618,7 +618,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
           ${limitOnePolicyClause}"""
 
     import SamTypeBinders._
-    runInTransaction("listPolicies", traceContext) { implicit session =>
+    runInTransaction("listPolicies") { implicit session =>
       val results = listPoliciesQuery.map(rs => (PolicyInfo(rs.get[AccessPolicyName](p.resultName.name), rs.get[ResourceId](r.resultName.name), rs.get[ResourceTypeName](rt.resultName.name), rs.get[WorkbenchEmail](g.resultName.email), rs.boolean(p.resultName.public)),
         (rs.stringOpt(gm.resultName.memberUserId).map(WorkbenchUserId), rs.stringOpt(sg.resultName.name).map(WorkbenchGroupName), rs.stringOpt(sp.resultName.name).map(AccessPolicyName(_)), rs.stringOpt(sr.resultName.name).map(ResourceId(_)), rs.stringOpt(srt.resultName.name).map(ResourceTypeName(_))),
         (rs.stringOpt(rr.resultName.role).map(ResourceRoleName(_)), rs.stringOpt(ra.resultName.action).map(ResourceAction(_))))).list().apply().groupBy(_._1)
@@ -639,11 +639,11 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     }
   }
 
-  override def listResourcesWithAuthdomains(resourceTypeName: ResourceTypeName, resourceId: Set[ResourceId], traceContext: TraceContext): IO[Set[Resource]] = {
+  override def listResourcesWithAuthdomains(resourceTypeName: ResourceTypeName, resourceId: Set[ResourceId]): IO[Set[Resource]] = {
     import SamTypeBinders._
 
     if(resourceId.nonEmpty) {
-      runInTransaction("listResourcesWithAuthdomains", traceContext) { implicit session =>
+      runInTransaction("listResourcesWithAuthdomains") { implicit session =>
         val r = ResourceTable.syntax("r")
         val ad = AuthDomainTable.syntax("ad")
         val g = GroupTable.syntax("g")
@@ -668,11 +668,11 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     } else IO.pure(Set.empty)
   }
 
-  override def listResourceWithAuthdomains(resourceId: FullyQualifiedResourceId, traceContext: TraceContext): IO[Option[Resource]] = {
-    listResourcesWithAuthdomains(resourceId.resourceTypeName, Set(resourceId.resourceId), traceContext).map(_.headOption)
+  override def listResourceWithAuthdomains(resourceId: FullyQualifiedResourceId): IO[Option[Resource]] = {
+    listResourcesWithAuthdomains(resourceId.resourceTypeName, Set(resourceId.resourceId)).map(_.headOption)
   }
 
-  override def listAccessPolicies(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId, traceContext: TraceContext): IO[Set[ResourceIdAndPolicyName]] = {
+  override def listAccessPolicies(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId): IO[Set[ResourceIdAndPolicyName]] = {
     val ancestorGroupsTable = SubGroupMemberTable("ancestor_groups")
     val ag = ancestorGroupsTable.syntax("ag")
     val agColumn = ancestorGroupsTable.column
@@ -684,7 +684,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     val g = GroupTable.syntax("g")
     val p = PolicyTable.syntax("p")
 
-    runInTransaction("listAccessPolicies", traceContext) { implicit session =>
+    runInTransaction("listAccessPolicies") { implicit session =>
       import SamTypeBinders._
 
       samsql"""with recursive ${ancestorGroupsTable.table}(${agColumn.parentGroupId}) as (
@@ -704,12 +704,12 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     }
   }
 
-  override def listAccessPolicies(resource: FullyQualifiedResourceId, traceContext: TraceContext): IO[Stream[AccessPolicy]] = {
+  override def listAccessPolicies(resource: FullyQualifiedResourceId): IO[Stream[AccessPolicy]] = {
     listPolicies(resource, traceContext = traceContext)
   }
 
-  override def listAccessPoliciesForUser(resource: FullyQualifiedResourceId, user: WorkbenchUserId, traceContext: TraceContext): IO[Set[AccessPolicyWithoutMembers]] = {
-    runInTransaction("listAccessPoliciesForUser", traceContext) { implicit session =>
+  override def listAccessPoliciesForUser(resource: FullyQualifiedResourceId, user: WorkbenchUserId): IO[Set[AccessPolicyWithoutMembers]] = {
+    runInTransaction("listAccessPoliciesForUser") { implicit session =>
       val ancestorGroupsTable = SubGroupMemberTable("ancestor_groups")
       val ag = ancestorGroupsTable.syntax("ag")
       val agColumn = ancestorGroupsTable.column
@@ -762,12 +762,12 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     }
   }
 
-  override def listFlattenedPolicyMembers(policyId: FullyQualifiedPolicyId, traceContext: TraceContext): IO[Set[WorkbenchUser]] = {
+  override def listFlattenedPolicyMembers(policyId: FullyQualifiedPolicyId): IO[Set[WorkbenchUser]] = {
     val subGroupMemberTable = SubGroupMemberTable("sub_group")
     val sg = subGroupMemberTable.syntax("sg")
     val u = UserTable.syntax("u")
 
-    runInTransaction("listFlattenedPolicyMembers", traceContext) { implicit session =>
+    runInTransaction("listFlattenedPolicyMembers") { implicit session =>
       val query = samsql"""with recursive ${recursiveMembersQuery(policyId, subGroupMemberTable)}
         select ${u.resultAll}
         from ${subGroupMemberTable as sg}
@@ -777,8 +777,8 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     }
   }
 
-  override def setPolicyIsPublic(policyId: FullyQualifiedPolicyId, isPublic: Boolean, traceContext: TraceContext): IO[Unit] = {
-    runInTransaction("setPolicyIsPublic", traceContext) { implicit session =>
+  override def setPolicyIsPublic(policyId: FullyQualifiedPolicyId, isPublic: Boolean): IO[Unit] = {
+    runInTransaction("setPolicyIsPublic") { implicit session =>
       setPolicyIsPublicInternal(policyId, isPublic)
     }
   }
@@ -799,7 +799,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
               and ${rt.name} = ${policyId.resource.resourceTypeName}""".update().apply()
   }
 
-  override def evictIsMemberOfCache(subject: WorkbenchSubject, traceContext: TraceContext): IO[Unit] = IO.unit
+  override def evictIsMemberOfCache(subject: WorkbenchSubject): IO[Unit] = IO.unit
 }
 
 private final case class PolicyInfo(name: AccessPolicyName, resourceId: ResourceId, resourceTypeName: ResourceTypeName, email: WorkbenchEmail, public: Boolean)

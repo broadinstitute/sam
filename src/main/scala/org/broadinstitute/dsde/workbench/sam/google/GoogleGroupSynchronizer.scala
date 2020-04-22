@@ -42,8 +42,7 @@ class GoogleGroupSynchronizer(directoryDAO: DirectoryDAO,
   extends LazyLogging with FutureSupport {
   def synchronizeGroupMembers(
                                groupId: WorkbenchGroupIdentity,
-                               visitedGroups: Set[WorkbenchGroupIdentity] = Set.empty[WorkbenchGroupIdentity],
-                               traceContext: TraceContext): Future[Map[WorkbenchEmail, Seq[SyncReportItem]]] = {
+                               visitedGroups: Set[WorkbenchGroupIdentity] = Set.empty[WorkbenchGroupIdentity]): Future[Map[WorkbenchEmail, Seq[SyncReportItem]]] = {
     def toSyncReportItem(operation: String, email: String, result: Try[Unit]) =
       SyncReportItem(
         operation,
@@ -59,10 +58,10 @@ class GoogleGroupSynchronizer(directoryDAO: DirectoryDAO,
     } else {
       for {
         groupOption <- groupId match {
-          case basicGroupName: WorkbenchGroupName => directoryDAO.loadGroup(basicGroupName, traceContext).unsafeToFuture()
+          case basicGroupName: WorkbenchGroupName => directoryDAO.loadGroup(basicGroupName).unsafeToFuture()
           case rpn: FullyQualifiedPolicyId =>
             accessPolicyDAO
-              .loadPolicy(rpn, traceContext)
+              .loadPolicy(rpn)
               .unsafeToFuture()
               .map(_.map { loadedPolicy =>
                 if (loadedPolicy.public) {
@@ -79,7 +78,7 @@ class GoogleGroupSynchronizer(directoryDAO: DirectoryDAO,
         members <- (group match {
           case accessPolicy: AccessPolicy =>
             if (isConstrainable(accessPolicy.id.resource, accessPolicy)) {
-              calculateIntersectionGroup(accessPolicy.id.resource, accessPolicy, traceContext)
+              calculateIntersectionGroup(accessPolicy.id.resource, accessPolicy)
             } else {
               IO.pure(accessPolicy.members)
             }
@@ -88,8 +87,8 @@ class GoogleGroupSynchronizer(directoryDAO: DirectoryDAO,
 
         subGroupSyncs <- Future.traverse(group.members) {
           case subGroup: WorkbenchGroupIdentity =>
-            directoryDAO.getSynchronizedDate(subGroup, traceContext).unsafeToFuture().flatMap {
-              case None => synchronizeGroupMembers(subGroup, visitedGroups + groupId, traceContext)
+            directoryDAO.getSynchronizedDate(subGroup).unsafeToFuture().flatMap {
+              case None => synchronizeGroupMembers(subGroup, visitedGroups + groupId)
               case _ => Future.successful(Map.empty[WorkbenchEmail, Seq[SyncReportItem]])
             }
           case _ => Future.successful(Map.empty[WorkbenchEmail, Seq[SyncReportItem]])
@@ -102,13 +101,13 @@ class GoogleGroupSynchronizer(directoryDAO: DirectoryDAO,
         }
         samMemberEmails <- Future
           .traverse(members) {
-            case group: WorkbenchGroupIdentity => directoryDAO.loadSubjectEmail(group, traceContext).unsafeToFuture()
+            case group: WorkbenchGroupIdentity => directoryDAO.loadSubjectEmail(group).unsafeToFuture()
 
             // use proxy group email instead of user's actual email
             case userSubjectId: WorkbenchUserId => googleExtensions.getUserProxy(userSubjectId)
 
             // not sure why this next case would happen but if a petSA is in a group just use its email
-            case petSA: PetServiceAccountId => directoryDAO.loadSubjectEmail(petSA, traceContext).unsafeToFuture()
+            case petSA: PetServiceAccountId => directoryDAO.loadSubjectEmail(petSA).unsafeToFuture()
           }
           .map(_.collect { case Some(email) => email.value.toLowerCase })
 
@@ -122,7 +121,7 @@ class GoogleGroupSynchronizer(directoryDAO: DirectoryDAO,
           googleDirectoryDAO.removeMemberFromGroup(group.email, WorkbenchEmail(removeEmail)).toTry.map(toSyncReportItem("removed", removeEmail, _))
         }
 
-        _ <- directoryDAO.updateSynchronizedDate(groupId, traceContext).unsafeToFuture()
+        _ <- directoryDAO.updateSynchronizedDate(groupId).unsafeToFuture()
       } yield {
         Map(group.email -> Seq(addTrials, removeTrials).flatten) ++ subGroupSyncs.flatten
       }
@@ -154,18 +153,18 @@ class GoogleGroupSynchronizer(directoryDAO: DirectoryDAO,
         throw new WorkbenchException(s"Invalid resource type specified. ${resource.resourceTypeName} is not a recognized resource type.")
     }
 
-  private[google] def calculateIntersectionGroup(resource: FullyQualifiedResourceId, policy: AccessPolicy, traceContext: TraceContext): IO[Set[WorkbenchSubject]] = {
+  private[google] def calculateIntersectionGroup(resource: FullyQualifiedResourceId, policy: AccessPolicy): IO[Set[WorkbenchSubject]] = {
     // if the policy has no members, the intersection will be empty so short circuit here
     if (policy.members.isEmpty) {
       IO.pure(Set())
     } else {
       for {
-        result <- accessPolicyDAO.loadResourceAuthDomain(resource, traceContext)
+        result <- accessPolicyDAO.loadResourceAuthDomain(resource)
         members <- result match {
           case LoadResourceAuthDomainResult.Constrained(groups) =>
             // auth domain exists, need to calculate intersection
             val groupsIdentity: Set[WorkbenchGroupIdentity] = groups.toList.toSet
-            directoryDAO.listIntersectionGroupUsers(groupsIdentity + policy.id, traceContext).map(_.map(_.asInstanceOf[WorkbenchSubject])) //Doesn't seem like I can avoid the asInstanceOf, would be interested to know if there's a way
+            directoryDAO.listIntersectionGroupUsers(groupsIdentity + policy.id).map(_.map(_.asInstanceOf[WorkbenchSubject])) //Doesn't seem like I can avoid the asInstanceOf, would be interested to know if there's a way
           case LoadResourceAuthDomainResult.NotConstrained | LoadResourceAuthDomainResult.ResourceNotFound =>
             // auth domain does not exist, return policy members as is
             IO.pure(policy.members)

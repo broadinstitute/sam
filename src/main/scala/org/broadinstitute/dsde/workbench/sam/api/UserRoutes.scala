@@ -27,7 +27,7 @@ trait UserRoutes extends UserInfoDirectives {
           post {
             requireCreateUser { createUser =>
               completeWithTrace { traceContext =>
-                userService.createUser(createUser, traceContext).map(userStatus => StatusCodes.Created -> userStatus)
+                userService.createUser(createUser).map(userStatus => StatusCodes.Created -> userStatus)
               }
             }
           } ~ requireUserInfo { user =>
@@ -52,7 +52,7 @@ trait UserRoutes extends UserInfoDirectives {
             post {
               requireCreateUser { createUser =>
                 completeWithTrace { traceContext =>
-                  userService.createUser(createUser, traceContext).map(userStatus => StatusCodes.Created -> userStatus)
+                  userService.createUser(createUser).map(userStatus => StatusCodes.Created -> userStatus)
                 }
               }
             }
@@ -60,7 +60,7 @@ trait UserRoutes extends UserInfoDirectives {
             path("info") {
               get {
                 completeWithTrace({ traceContext =>
-                  userService.getUserStatusInfo(user.userId, traceContext).map { statusOption =>
+                  userService.getUserStatusInfo(user.userId).map { statusOption =>
                     statusOption
                       .map { status =>
                         StatusCodes.OK -> Option(status)
@@ -73,7 +73,7 @@ trait UserRoutes extends UserInfoDirectives {
               path("diagnostics") {
                 get {
                   completeWithTrace({ traceContext =>
-                    userService.getUserStatusDiagnostics(user.userId, traceContext).map { statusOption =>
+                    userService.getUserStatusDiagnostics(user.userId).map { statusOption =>
                       statusOption
                         .map { status =>
                           StatusCodes.OK -> Option(status)
@@ -95,7 +95,7 @@ trait UserRoutes extends UserInfoDirectives {
           pathPrefix("user") {
             path("email" / Segment) { email =>
               completeWithTrace({ traceContext =>
-                userService.getUserStatusFromEmail(WorkbenchEmail(email), traceContext).map { statusOption =>
+                userService.getUserStatusFromEmail(WorkbenchEmail(email)).map { statusOption =>
                   statusOption
                     .map { status =>
                       StatusCodes.OK -> Option(status)
@@ -108,12 +108,12 @@ trait UserRoutes extends UserInfoDirectives {
                 pathEnd {
                   delete {
                     completeWithTrace({ traceContext =>
-                      userService.deleteUser(WorkbenchUserId(userId), userInfo, traceContext).map(_ => StatusCodes.OK)
+                      userService.deleteUser(WorkbenchUserId(userId), userInfo).map(_ => StatusCodes.OK)
                     })
                   } ~
                     get {
                       completeWithTrace({ traceContext =>
-                        userService.getUserStatus(WorkbenchUserId(userId), traceContext).map { statusOption =>
+                        userService.getUserStatus(WorkbenchUserId(userId)).map { statusOption =>
                           statusOption
                             .map { status =>
                               StatusCodes.OK -> Option(status)
@@ -127,7 +127,7 @@ trait UserRoutes extends UserInfoDirectives {
                     pathEndOrSingleSlash {
                       put {
                         completeWithTrace({ traceContext =>
-                          userService.enableUser(WorkbenchUserId(userId), userInfo, traceContext).map { statusOption =>
+                          userService.enableUser(WorkbenchUserId(userId), userInfo).map { statusOption =>
                             statusOption
                               .map { status =>
                                 StatusCodes.OK -> Option(status)
@@ -142,7 +142,7 @@ trait UserRoutes extends UserInfoDirectives {
                     pathEndOrSingleSlash {
                       put {
                         completeWithTrace({ traceContext =>
-                          userService.disableUser(WorkbenchUserId(userId), userInfo, traceContext).map { statusOption =>
+                          userService.disableUser(WorkbenchUserId(userId), userInfo).map { statusOption =>
                             statusOption
                               .map { status =>
                                 StatusCodes.OK -> Option(status)
@@ -158,7 +158,7 @@ trait UserRoutes extends UserInfoDirectives {
                       delete {
                         completeWithTrace({ traceContext =>
                           cloudExtensions
-                            .deleteUserPetServiceAccount(WorkbenchUserId(userId), GoogleProject(project), traceContext)
+                            .deleteUserPetServiceAccount(WorkbenchUserId(userId), GoogleProject(project))
                             .map(_ => StatusCodes.NoContent)
                         })
                       }
@@ -177,7 +177,7 @@ trait UserRoutes extends UserInfoDirectives {
           path(Segment) { email =>
             pathEnd {
               completeWithTrace({ traceContext =>
-                userService.getUserIdInfoFromEmail(WorkbenchEmail(email), traceContext).map {
+                userService.getUserIdInfoFromEmail(WorkbenchEmail(email)).map {
                   case Left(_) => StatusCodes.NotFound -> None
                   case Right(None) => StatusCodes.NoContent -> None
                   case Right(Some(userIdInfo)) => StatusCodes.OK -> Some(userIdInfo)
@@ -191,7 +191,7 @@ trait UserRoutes extends UserInfoDirectives {
               path(Segment) { inviteeEmail =>
                 completeWithTrace({ traceContext =>
                   userService
-                    .inviteUser(InviteUser(genWorkbenchUserId(System.currentTimeMillis()), WorkbenchEmail(inviteeEmail.trim)), traceContext)
+                    .inviteUser(InviteUser(genWorkbenchUserId(System.currentTimeMillis()), WorkbenchEmail(inviteeEmail.trim)))
                     .map(userStatus => StatusCodes.Created -> userStatus)
                 })
               }

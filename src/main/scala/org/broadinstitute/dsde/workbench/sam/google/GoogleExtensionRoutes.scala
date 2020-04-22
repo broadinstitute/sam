@@ -35,7 +35,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
               userInfo.userId) {
               completeWithTrace({traceContext =>
                 import spray.json._
-                googleExtensions.getPetServiceAccountKey(WorkbenchEmail(userEmail), GoogleProject(project), traceContext) map {
+                googleExtensions.getPetServiceAccountKey(WorkbenchEmail(userEmail), GoogleProject(project)) map {
                   // parse json to ensure it is json and tells akka http the right content-type
                   case Some(key) => StatusCodes.OK -> key.parseJson
                   case None =>
@@ -52,7 +52,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                   completeWithTrace({traceContext =>
                     import spray.json._
                     googleExtensions
-                      .getArbitraryPetServiceAccountKey(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None), traceContext)
+                      .getArbitraryPetServiceAccountKey(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None))
                       .map(key => StatusCodes.OK -> key.parseJson)
                   })
                 }
@@ -63,7 +63,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                   post {
                     entity(as[Set[String]]) { scopes =>
                       completeWithTrace({traceContext =>
-                        googleExtensions.getArbitraryPetServiceAccountToken(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None), scopes, traceContext).map { token =>
+                        googleExtensions.getArbitraryPetServiceAccountToken(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None), scopes).map { token =>
                           StatusCodes.OK -> JsString(token)
                         }
                       })
@@ -78,7 +78,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                       import spray.json._
                       // parse json to ensure it is json and tells akka http the right content-type
                       googleExtensions
-                        .getPetServiceAccountKey(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None), GoogleProject(project), traceContext)
+                        .getPetServiceAccountKey(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None), GoogleProject(project))
                         .map { key =>
                           StatusCodes.OK -> key.parseJson
                         }
@@ -88,7 +88,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                       delete {
                         completeWithTrace({traceContext =>
                           googleExtensions
-                            .removePetServiceAccountKey(userInfo.userId, GoogleProject(project), ServiceAccountKeyId(keyId), traceContext)
+                            .removePetServiceAccountKey(userInfo.userId, GoogleProject(project), ServiceAccountKeyId(keyId))
                             .map(_ => StatusCodes.NoContent)
                         })
                       }
@@ -99,7 +99,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                       entity(as[Set[String]]) { scopes =>
                         completeWithTrace({traceContext =>
                           googleExtensions
-                            .getPetServiceAccountToken(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None), GoogleProject(project), scopes, traceContext)
+                            .getPetServiceAccountToken(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None), GoogleProject(project), scopes)
                             .map { token =>
                               StatusCodes.OK -> JsString(token)
                             }
@@ -110,7 +110,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                   pathEnd {
                     get {
                       completeWithTrace({traceContext =>
-                        googleExtensions.createUserPetServiceAccount(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None), GoogleProject(project), traceContext).map {
+                        googleExtensions.createUserPetServiceAccount(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None), GoogleProject(project)).map {
                           petSA =>
                             StatusCodes.OK -> petSA.serviceAccount.email
                         }
@@ -118,7 +118,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                     } ~
                       delete { // NOTE: This endpoint is not visible in Swagger
                         completeWithTrace({traceContext =>
-                          googleExtensions.deleteUserPetServiceAccount(userInfo.userId, GoogleProject(project), traceContext).map(_ => StatusCodes.NoContent)
+                          googleExtensions.deleteUserPetServiceAccount(userInfo.userId, GoogleProject(project)).map(_ => StatusCodes.NoContent)
                         })
                       }
                   }
@@ -127,7 +127,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
           pathPrefix("user") {
             path("proxyGroup" / Segment) { targetUserEmail =>
               completeWithTrace({traceContext =>
-                googleExtensions.getUserProxy(WorkbenchEmail(targetUserEmail), traceContext).map {
+                googleExtensions.getUserProxy(WorkbenchEmail(targetUserEmail)).map {
                   case Some(proxyEmail) => StatusCodes.OK -> Option(proxyEmail)
                   case _ => StatusCodes.NotFound -> None
                 }
@@ -149,7 +149,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                 } ~
                   get {
                     completeWithTrace({traceContext =>
-                      googleExtensions.getSynchronizedState(policyId, traceContext).map {
+                      googleExtensions.getSynchronizedState(policyId).map {
                         case Some(syncState) => StatusCodes.OK -> Option(syncState)
                         case None => StatusCodes.NoContent -> None
                       }

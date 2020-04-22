@@ -157,7 +157,7 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
   def getUserPoliciesForResourceType(resourceType: ResourceType, userInfo: UserInfo): server.Route =
     traceRequest { _ =>
       get {
-        completeWithTrace(traceContext => policyEvaluatorService.listUserAccessPolicies(resourceType.name, userInfo.userId, traceContext))
+        completeWithTrace(traceContext => policyEvaluatorService.listUserAccessPolicies(resourceType.name, userInfo.userId))
       }
     }
 
@@ -168,8 +168,8 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
             throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "this api may not be used for resource types that allow both authorization domains and id reuse"))
           }
 
-          def resourceMaker(traceContext: TraceContext): IO[ToResponseMarshallable] = resourceService
-            .createResource(resourceType, createResourceRequest.resourceId, createResourceRequest.policies, createResourceRequest.authDomain, userInfo.userId, traceContext)
+          def resourceMaker(): IO[ToResponseMarshallable] = resourceService
+            .createResource(resourceType, createResourceRequest.resourceId, createResourceRequest.policies, createResourceRequest.authDomain, userInfo.userId)
             .map { r =>
               if (createResourceRequest.returnResource.contains(true)) {
                 StatusCodes.Created -> CreateResourceResponse(r.resourceTypeName, r.resourceId, r.authDomain, r.accessPolicies.map(ap => CreateResourcePolicyResponse(ap.id, ap.email)))
@@ -185,19 +185,19 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
   def deleteResource(resource: FullyQualifiedResourceId, userInfo: UserInfo): server.Route =
     delete {
       requireAction(resource, SamResourceActions.delete, userInfo.userId) {
-        completeWithTrace(traceContext => resourceService.deleteResource(resource, traceContext).map(_ => StatusCodes.NoContent))
+        completeWithTrace(traceContext => resourceService.deleteResource(resource).map(_ => StatusCodes.NoContent))
       }
     }
 
   def postDefaultResource(resourceType: ResourceType, resource: FullyQualifiedResourceId, userInfo: UserInfo): server.Route =
     post {
-      completeWithTrace(traceContext => resourceService.createResource(resourceType, resource.resourceId, userInfo, traceContext).map(_ => StatusCodes.NoContent))
+      completeWithTrace(traceContext => resourceService.createResource(resourceType, resource.resourceId, userInfo).map(_ => StatusCodes.NoContent))
     }
 
   def getActionPermissionForUser(resource: FullyQualifiedResourceId, userInfo: UserInfo, action: String): server.Route =
     get {
       completeWithTrace { traceContext =>
-        policyEvaluatorService.hasPermission(resource, ResourceAction(action), userInfo.userId, traceContext).map { hasPermission =>
+        policyEvaluatorService.hasPermission(resource, ResourceAction(action), userInfo.userId).map { hasPermission =>
           StatusCodes.OK -> JsBoolean(hasPermission)
         }
       }
@@ -213,7 +213,7 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
   def getResourceAuthDomain(resource: FullyQualifiedResourceId, userInfo: UserInfo): server.Route =
     get {
       requireAction(resource, SamResourceActions.readAuthDomain, userInfo.userId) {
-        completeWithTrace(traceContext => resourceService.loadResourceAuthDomain(resource, traceContext).map { response =>
+        completeWithTrace(traceContext => resourceService.loadResourceAuthDomain(resource).map { response =>
           StatusCodes.OK -> response
         })
       }
@@ -223,7 +223,7 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
     traceRequest { _ =>
       get {
         requireAction(resource, SamResourceActions.readPolicies, userInfo.userId) {
-          completeWithTrace(traceContext => resourceService.listResourcePolicies(resource, traceContext).map { response =>
+          completeWithTrace(traceContext => resourceService.listResourcePolicies(resource).map { response =>
             StatusCodes.OK -> response.toSet
           })
         }
@@ -234,7 +234,7 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
     traceRequest { _ =>
       get {
         requireOneOfAction(policyId.resource, Set(SamResourceActions.readPolicies, SamResourceActions.readPolicy(policyId.accessPolicyName)), userInfo.userId) {
-          completeWithTrace(traceContext => resourceService.loadResourcePolicy(policyId, traceContext).map {
+          completeWithTrace(traceContext => resourceService.loadResourcePolicy(policyId).map {
             case Some(response) => StatusCodes.OK -> response
             case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "policy not found"))
           })
@@ -246,7 +246,7 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
     put {
       requireAction(policyId.resource, SamResourceActions.alterPolicies, userInfo.userId) {
         entity(as[AccessPolicyMembership]) { membershipUpdate =>
-          completeWithTrace(traceContext => resourceService.overwritePolicy(resourceType, policyId.accessPolicyName, policyId.resource, membershipUpdate, traceContext).map(_ => StatusCodes.Created))
+          completeWithTrace(traceContext => resourceService.overwritePolicy(resourceType, policyId.accessPolicyName, policyId.resource, membershipUpdate).map(_ => StatusCodes.Created))
         }
       }
     }
@@ -256,25 +256,25 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
       requireOneOfAction(policyId.resource, Set(SamResourceActions.alterPolicies, SamResourceActions.sharePolicy(policyId.accessPolicyName)), userInfo.userId) {
         entity(as[Set[WorkbenchEmail]]) { membersList =>
           completeWithTrace(traceContext =>
-            resourceService.overwritePolicyMembers(resourceType, policyId.accessPolicyName, policyId.resource, membersList, traceContext).map(_ => StatusCodes.NoContent))
+            resourceService.overwritePolicyMembers(resourceType, policyId.accessPolicyName, policyId.resource, membersList).map(_ => StatusCodes.NoContent))
         }
       }
     }
 
   def putUserInPolicy(policyId: FullyQualifiedPolicyId, subject: WorkbenchSubject): server.Route =
     put {
-      completeWithTrace(traceContext => resourceService.addSubjectToPolicy(policyId, subject, traceContext).map(_ => StatusCodes.NoContent))
+      completeWithTrace(traceContext => resourceService.addSubjectToPolicy(policyId, subject).map(_ => StatusCodes.NoContent))
     }
 
   def deleteUserFromPolicy(policyId: FullyQualifiedPolicyId, subject: WorkbenchSubject): server.Route =
     delete {
-      completeWithTrace(traceContext => resourceService.removeSubjectFromPolicy(policyId, subject, traceContext).map(_ => StatusCodes.NoContent))
+      completeWithTrace(traceContext => resourceService.removeSubjectFromPolicy(policyId, subject).map(_ => StatusCodes.NoContent))
     }
 
   def getPublicFlag(policyId: FullyQualifiedPolicyId, userInfo: UserInfo): server.Route =
     get {
       requireOneOfAction(policyId.resource, Set(SamResourceActions.readPolicies, SamResourceActions.readPolicy(policyId.accessPolicyName)), userInfo.userId) {
-        completeWithTrace(traceContext => resourceService.isPublic(policyId, traceContext))
+        completeWithTrace(traceContext => resourceService.isPublic(policyId))
       }
     }
 
@@ -287,7 +287,7 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
           userInfo.userId
         ) {
           entity(as[Boolean]) { isPublic =>
-            completeWithTrace(traceContext => resourceService.setPublic(policyId, isPublic, traceContext).map(_ => StatusCodes.NoContent))
+            completeWithTrace(traceContext => resourceService.setPublic(policyId, isPublic).map(_ => StatusCodes.NoContent))
           }
         }
       }
@@ -296,7 +296,7 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
   def getUserResourceRoles(resource: FullyQualifiedResourceId, userInfo: UserInfo): server.Route =
     get {
       completeWithTrace { traceContext =>
-        resourceService.listUserResourceRoles(resource, userInfo, traceContext).map { roles =>
+        resourceService.listUserResourceRoles(resource, userInfo).map { roles =>
           StatusCodes.OK -> roles
         }
       }
@@ -305,7 +305,7 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
   def getAllResourceUsers(resource: FullyQualifiedResourceId, userInfo: UserInfo): server.Route =
     get {
       requireAction(resource, SamResourceActions.readPolicies, userInfo.userId) {
-        completeWithTrace(traceContext => resourceService.listAllFlattenedResourceUsers(resource, traceContext).map { allUsers =>
+        completeWithTrace(traceContext => resourceService.listAllFlattenedResourceUsers(resource).map { allUsers =>
           StatusCodes.OK -> allUsers
         })
       }

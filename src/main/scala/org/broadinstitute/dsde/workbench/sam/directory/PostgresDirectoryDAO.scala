@@ -23,8 +23,8 @@ import scala.util.{Failure, Try}
 class PostgresDirectoryDAO(protected val dbRef: DbReference,
                            protected val ecForDatabaseIO: ExecutionContext)(implicit val cs: ContextShift[IO]) extends DirectoryDAO with DatabaseSupport with PostgresGroupDAO {
 
-  override def createGroup(group: BasicWorkbenchGroup, accessInstructionsOpt: Option[String], traceContext: TraceContext): IO[BasicWorkbenchGroup] = {
-    runInTransaction("createGroup", traceContext) { implicit session =>
+  override def createGroup(group: BasicWorkbenchGroup, accessInstructionsOpt: Option[String]): IO[BasicWorkbenchGroup] = {
+    runInTransaction("createGroup") { implicit session =>
       val groupId: GroupPK = insertGroup(group)
 
       accessInstructionsOpt.map { accessInstructions =>
@@ -57,9 +57,9 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     insertAccessInstructionsQuery.update().apply()
   }
 
-  override def loadGroup(groupName: WorkbenchGroupName, traceContext: TraceContext): IO[Option[BasicWorkbenchGroup]] = {
+  override def loadGroup(groupName: WorkbenchGroupName): IO[Option[BasicWorkbenchGroup]] = {
     for {
-      results <- runInTransaction("loadGroup", traceContext) { implicit session =>
+      results <- runInTransaction("loadGroup") { implicit session =>
         val g = GroupTable.syntax("g")
         val sg = GroupTable.syntax("sg")
         val gm = GroupMemberTable.syntax("gm")
@@ -102,12 +102,12 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     }
   }
 
-  override def loadGroups(groupNames: Set[WorkbenchGroupName], traceContext: TraceContext): IO[Stream[BasicWorkbenchGroup]] = {
+  override def loadGroups(groupNames: Set[WorkbenchGroupName]): IO[Stream[BasicWorkbenchGroup]] = {
     if (groupNames.isEmpty) {
       IO.pure(Stream.empty)
     } else {
       for {
-        results <- runInTransaction("loadGroups", traceContext) { implicit session =>
+        results <- runInTransaction("loadGroups") { implicit session =>
           val g = GroupTable.syntax("g")
           val sg = GroupTable.syntax("sg")
           val gm = GroupMemberTable.syntax("gm")
@@ -148,15 +148,15 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     }
   }
 
-  override def loadGroupEmail(groupName: WorkbenchGroupName, traceContext: TraceContext): IO[Option[WorkbenchEmail]] = {
-    batchLoadGroupEmail(Set(groupName), traceContext).map(_.toMap.get(groupName))
+  override def loadGroupEmail(groupName: WorkbenchGroupName): IO[Option[WorkbenchEmail]] = {
+    batchLoadGroupEmail(Set(groupName)).map(_.toMap.get(groupName))
   }
 
-  override def batchLoadGroupEmail(groupNames: Set[WorkbenchGroupName], traceContext: TraceContext): IO[Stream[(WorkbenchGroupName, WorkbenchEmail)]] = {
+  override def batchLoadGroupEmail(groupNames: Set[WorkbenchGroupName]): IO[Stream[(WorkbenchGroupName, WorkbenchEmail)]] = {
     if (groupNames.isEmpty) {
       IO.pure(Stream.empty)
     } else {
-      runInTransaction("batchLoadGroupEmail", traceContext) { implicit session =>
+      runInTransaction("batchLoadGroupEmail") { implicit session =>
         val g = GroupTable.column
 
         import SamTypeBinders._
@@ -167,8 +167,8 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     }
   }
 
-  override def deleteGroup(groupName: WorkbenchGroupName, traceContext: TraceContext): IO[Unit] = {
-    runInTransaction("deleteGroup", traceContext) { implicit session =>
+  override def deleteGroup(groupName: WorkbenchGroupName): IO[Unit] = {
+    runInTransaction("deleteGroup") { implicit session =>
       val g = GroupTable.syntax("g")
 
       Try {
@@ -187,8 +187,8 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
   /**
     * @return true if the subject was added, false if it was already there
     */
-  override def addGroupMember(groupId: WorkbenchGroupIdentity, addMember: WorkbenchSubject, traceContext: TraceContext): IO[Boolean] = {
-    runInTransaction("addGroupMember", traceContext) { implicit session =>
+  override def addGroupMember(groupId: WorkbenchGroupIdentity, addMember: WorkbenchSubject): IO[Boolean] = {
+    runInTransaction("addGroupMember") { implicit session =>
       val groupPKQuery = workbenchGroupIdentityToGroupPK(groupId)
       val groupMemberColumn = GroupMemberTable.column
 
@@ -224,8 +224,8 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
   /**
     * @return true if the subject was removed, false if it was already gone
     */
-  override def removeGroupMember(groupId: WorkbenchGroupIdentity, removeMember: WorkbenchSubject, traceContext: TraceContext): IO[Boolean] = {
-    runInTransaction("removeGroupMember", traceContext) { implicit session =>
+  override def removeGroupMember(groupId: WorkbenchGroupIdentity, removeMember: WorkbenchSubject): IO[Boolean] = {
+    runInTransaction("removeGroupMember") { implicit session =>
       val groupPKQuery = workbenchGroupIdentityToGroupPK(groupId)
       val groupMemberColumn = GroupMemberTable.column
 
@@ -247,7 +247,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     }
   }
 
-  override def isGroupMember(groupId: WorkbenchGroupIdentity, member: WorkbenchSubject, traceContext: TraceContext): IO[Boolean] = {
+  override def isGroupMember(groupId: WorkbenchGroupIdentity, member: WorkbenchSubject): IO[Boolean] = {
     val subGroupMemberTable = SubGroupMemberTable("sub_group")
     val sg = subGroupMemberTable.syntax("sg")
 
@@ -257,7 +257,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
       case _ => throw new WorkbenchException(s"illegal member $member")
     }
 
-    runInTransaction("isGroupMember", traceContext) { implicit session =>
+    runInTransaction("isGroupMember") { implicit session =>
       // https://www.postgresql.org/docs/9.6/queries-with.html
       // in the recursive query below, UNION, as opposed to UNION ALL, should break out of cycles because it removes duplicates
       val query = samsql"""WITH RECURSIVE ${recursiveMembersQuery(groupId, subGroupMemberTable)}
@@ -268,15 +268,15 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     }
   }
 
-  override def updateSynchronizedDate(groupId: WorkbenchGroupIdentity, traceContext: TraceContext): IO[Unit] = {
-    runInTransaction("updateSynchronizedDate", traceContext) { implicit session =>
+  override def updateSynchronizedDate(groupId: WorkbenchGroupIdentity): IO[Unit] = {
+    runInTransaction("updateSynchronizedDate") { implicit session =>
       val g = GroupTable.column
       samsql"update ${GroupTable.table} set ${g.synchronizedDate} = ${Instant.now()} where ${g.id} = (${workbenchGroupIdentityToGroupPK(groupId)})".update().apply()
     }
   }
 
-  override def getSynchronizedDate(groupId: WorkbenchGroupIdentity, traceContext: TraceContext): IO[Option[Date]] = {
-    runInTransaction("getSynchronizedDate", traceContext) { implicit session =>
+  override def getSynchronizedDate(groupId: WorkbenchGroupIdentity): IO[Option[Date]] = {
+    runInTransaction("getSynchronizedDate") { implicit session =>
       val g = GroupTable.column
       samsql"select ${g.synchronizedDate} from ${GroupTable.table} where ${g.id} = (${workbenchGroupIdentityToGroupPK(groupId)})"
         .map(rs => rs.timestampOpt(g.synchronizedDate).map(_.toJavaUtilDate)).single().apply()
@@ -284,9 +284,9 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     }
   }
 
-  override def getSynchronizedEmail(groupId: WorkbenchGroupIdentity, traceContext: TraceContext): IO[Option[WorkbenchEmail]] = {
+  override def getSynchronizedEmail(groupId: WorkbenchGroupIdentity): IO[Option[WorkbenchEmail]] = {
     import SamTypeBinders._
-    runInTransaction("getSynchronizedEmail", traceContext) { implicit session =>
+    runInTransaction("getSynchronizedEmail") { implicit session =>
       val g = GroupTable.column
 
       samsql"select ${g.email} from ${GroupTable.table} where ${g.id} = (${workbenchGroupIdentityToGroupPK(groupId)})"
@@ -307,8 +307,8 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     each of the four tables.
    */
 
-  override def loadSubjectFromEmail(email: WorkbenchEmail, traceContext: TraceContext): IO[Option[WorkbenchSubject]] = {
-    runInTransaction("loadSubjectFromEmail", traceContext) { implicit session =>
+  override def loadSubjectFromEmail(email: WorkbenchEmail): IO[Option[WorkbenchSubject]] = {
+    runInTransaction("loadSubjectFromEmail") { implicit session =>
       val u = UserTable.syntax
       val g = GroupTable.syntax
       val pet = PetServiceAccountTable.syntax
@@ -364,8 +364,8 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     }
   }
 
-  def loadPolicyEmail(policyId: FullyQualifiedPolicyId, traceContext: TraceContext): IO[Option[WorkbenchEmail]] = {
-    runInTransaction("loadPolicyEmail", traceContext) { implicit session =>
+  def loadPolicyEmail(policyId: FullyQualifiedPolicyId): IO[Option[WorkbenchEmail]] = {
+    runInTransaction("loadPolicyEmail") { implicit session =>
       val g = GroupTable.syntax
       val pol = PolicyTable.syntax
       val srt = ResourceTypeTable.syntax
@@ -390,16 +390,16 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     }
   }
 
-  override def loadSubjectEmail(subject: WorkbenchSubject, traceContext: TraceContext): IO[Option[WorkbenchEmail]] = {
+  override def loadSubjectEmail(subject: WorkbenchSubject): IO[Option[WorkbenchEmail]] = {
     subject match {
-      case subject: WorkbenchGroupName => loadGroupEmail(subject, traceContext)
+      case subject: WorkbenchGroupName => loadGroupEmail(subject)
       case subject: PetServiceAccountId => for {
-        petSA <- loadPetServiceAccount(subject, traceContext)
+        petSA <- loadPetServiceAccount(subject)
       } yield petSA.map(_.serviceAccount.email)
       case subject: WorkbenchUserId => for {
-        user <- loadUser(subject, traceContext)
+        user <- loadUser(subject)
       } yield user.map(_.email)
-      case subject: FullyQualifiedPolicyId => loadPolicyEmail(subject, traceContext)
+      case subject: FullyQualifiedPolicyId => loadPolicyEmail(subject)
       case _ => throw new WorkbenchException(s"unexpected subject [$subject]")
     }
   }
@@ -407,12 +407,12 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
   // NOTE: This implementation is a copy/paste of the implementation from LdapDirectoryDAO.  The question was raised
   // whether this should also handle Pets and Policies.  At this time, we don't know if it should, but for backwards
   // compatibility with LdapDirectoryDAO, we're going to use the same implementation for now.
-  override def loadSubjectEmails(subjects: Set[WorkbenchSubject], traceContext: TraceContext): IO[Stream[WorkbenchEmail]] = {
+  override def loadSubjectEmails(subjects: Set[WorkbenchSubject]): IO[Stream[WorkbenchEmail]] = {
     val userSubjects = subjects collect { case userId: WorkbenchUserId => userId }
     val groupSubjects = subjects collect { case groupName: WorkbenchGroupName => groupName }
 
-    val users = loadUsers(userSubjects, traceContext)
-    val groups = loadGroups(groupSubjects, traceContext)
+    val users = loadUsers(userSubjects)
+    val groups = loadGroups(groupSubjects)
 
     for {
       userEmails <- users.map(_.map(_.email))
@@ -420,8 +420,8 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     } yield userEmails ++ groupEmails
   }
 
-  override def loadSubjectFromGoogleSubjectId(googleSubjectId: GoogleSubjectId, traceContext: TraceContext): IO[Option[WorkbenchSubject]] = {
-    runInTransaction("loadSubjectFromGoogleSubjectId", traceContext) { implicit session =>
+  override def loadSubjectFromGoogleSubjectId(googleSubjectId: GoogleSubjectId): IO[Option[WorkbenchSubject]] = {
+    runInTransaction("loadSubjectFromGoogleSubjectId") { implicit session =>
       val u = UserTable.syntax
       val pet = PetServiceAccountTable.syntax
 
@@ -448,8 +448,8 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     }
   }
 
-  override def createUser(user: WorkbenchUser, traceContext: TraceContext): IO[WorkbenchUser] = {
-    runInTransaction("createUser", traceContext) { implicit session =>
+  override def createUser(user: WorkbenchUser): IO[WorkbenchUser] = {
+    runInTransaction("createUser") { implicit session =>
       val userColumn = UserTable.column
 
       val insertUserQuery = samsql"insert into ${UserTable.table} (${userColumn.id}, ${userColumn.email}, ${userColumn.googleSubjectId}, ${userColumn.enabled}, ${userColumn.identityConcentratorId}) values (${user.id}, ${user.email}, ${user.googleSubjectId}, false, ${user.identityConcentratorId})"
@@ -464,8 +464,8 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     }
   }
 
-  override def loadUser(userId: WorkbenchUserId, traceContext: TraceContext): IO[Option[WorkbenchUser]] = {
-    runInTransaction("loadUser", traceContext) { implicit session =>
+  override def loadUser(userId: WorkbenchUserId): IO[Option[WorkbenchUser]] = {
+    runInTransaction("loadUser") { implicit session =>
       val userTable = UserTable.syntax
 
       val loadUserQuery = samsql"select ${userTable.resultAll} from ${UserTable as userTable} where ${userTable.id} = ${userId}"
@@ -474,8 +474,8 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     }
   }
 
-  override def loadUserByIdentityConcentratorId(userId: IdentityConcentratorId, traceContext: TraceContext): IO[Option[WorkbenchUser]] = {
-    runInTransaction("loadUserByIdentityConcentratorId", traceContext) { implicit session =>
+  override def loadUserByIdentityConcentratorId(userId: IdentityConcentratorId): IO[Option[WorkbenchUser]] = {
+    runInTransaction("loadUserByIdentityConcentratorId") { implicit session =>
       val userTable = UserTable.syntax
 
       val loadUserQuery = samsql"select ${userTable.resultAll} from ${UserTable as userTable} where ${userTable.identityConcentratorId} = ${userId}"
@@ -484,16 +484,16 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     }
   }
 
-  override def setUserIdentityConcentratorId(googleSubjectId: GoogleSubjectId, icId: IdentityConcentratorId, traceContext: TraceContext): IO[Int] = {
-    runInTransaction("setUserIdentityConcentratorId", traceContext) { implicit session =>
+  override def setUserIdentityConcentratorId(googleSubjectId: GoogleSubjectId, icId: IdentityConcentratorId): IO[Int] = {
+    runInTransaction("setUserIdentityConcentratorId") { implicit session =>
       val u = UserTable.column
       samsql"update ${UserTable.table} set ${u.identityConcentratorId} = $icId where ${u.googleSubjectId} = $googleSubjectId".update().apply()
     }
   }
 
-  override def loadUsers(userIds: Set[WorkbenchUserId], traceContext: TraceContext): IO[Stream[WorkbenchUser]] = {
+  override def loadUsers(userIds: Set[WorkbenchUserId]): IO[Stream[WorkbenchUser]] = {
     if(userIds.nonEmpty) {
-      runInTransaction("loadUsers", traceContext) { implicit session =>
+      runInTransaction("loadUsers") { implicit session =>
         val userTable = UserTable.syntax
 
         val loadUsersQuery = samsql"select ${userTable.resultAll} from ${UserTable as userTable} where ${userTable.id} in (${userIds})"
@@ -504,15 +504,15 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
   }
 
   // Not worrying about cascading deletion of user's pet SAs because LDAP doesn't delete user's pet SAs automatically
-  override def deleteUser(userId: WorkbenchUserId, traceContext: TraceContext): IO[Unit] = {
-    runInTransaction("deleteUser", traceContext) { implicit session =>
+  override def deleteUser(userId: WorkbenchUserId): IO[Unit] = {
+    runInTransaction("deleteUser") { implicit session =>
       val userTable = UserTable.syntax
       samsql"delete from ${UserTable.table} where ${userTable.id} = ${userId}".update().apply()
     }
   }
 
-  override def listUsersGroups(userId: WorkbenchUserId, traceContext: TraceContext): IO[Set[WorkbenchGroupIdentity]] = {
-    listMemberOfGroups(userId, traceContext) // todo: don't miss these
+  override def listUsersGroups(userId: WorkbenchUserId): IO[Set[WorkbenchGroupIdentity]] = {
+    listMemberOfGroups(userId) // todo: don't miss these
   }
 
   /** Extracts a WorkbenchGroupIdentity from a SQL query
@@ -540,8 +540,8 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     }
   }
 
-  override def listUserDirectMemberships(userId: WorkbenchUserId, traceContext: TraceContext): IO[Stream[WorkbenchGroupIdentity]] = {
-    runInTransaction("listUserDirectMemberships", traceContext) { implicit session =>
+  override def listUserDirectMemberships(userId: WorkbenchUserId): IO[Stream[WorkbenchGroupIdentity]] = {
+    runInTransaction("listUserDirectMemberships") { implicit session =>
       val gm = GroupMemberTable.syntax("gm")
       val g = GroupTable.syntax("g")
       val p = PolicyTable.syntax("p")
@@ -579,7 +579,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     * @param groupIds
     * @return Set of WorkbenchUserIds that are members of each group specified by groupIds
     */
-  override def listIntersectionGroupUsers(groupIds: Set[WorkbenchGroupIdentity], traceContext: TraceContext): IO[Set[WorkbenchUserId]] = {
+  override def listIntersectionGroupUsers(groupIds: Set[WorkbenchGroupIdentity]): IO[Set[WorkbenchUserId]] = {
     // the implementation of this is a little fancy and is able to do the entire intersection in a single request
     // the general structure of the query is:
     // WITH RECURSIVE [subGroupsQuery for each group] [SELECT user_id FROM subGroupsQuery_1 INTERSECT SELECT user_id FROM subGroupsQuery_2 INTERSECT ...]
@@ -601,12 +601,12 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
       samsqls"select ${sg.memberUserId} from ${queryAndTable.table as sg} where ${sg.memberUserId} is not null"
     }.reduce((left, right) => samsqls"$left INTERSECT $right")
 
-    runInTransaction("listIntersectionGroupUsers", traceContext) { implicit session =>
+    runInTransaction("listIntersectionGroupUsers") { implicit session =>
       samsql"""with recursive $allRecursiveMembersQueries $intersectionQuery""".map(rs => WorkbenchUserId(rs.string(1))).list().apply().toSet
     }
   }
 
-  private def listMemberOfGroups(subject: WorkbenchSubject, traceContext: TraceContext): IO[Set[WorkbenchGroupIdentity]] = {
+  private def listMemberOfGroups(subject: WorkbenchSubject): IO[Set[WorkbenchGroupIdentity]] = {
     val gm = GroupMemberTable.syntax("gm")
     val g = GroupTable.syntax("g")
     val p = PolicyTable.syntax("p")
@@ -617,7 +617,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
       case _ => throw new WorkbenchException(s"Unexpected WorkbenchSubject. Expected WorkbenchUserId or WorkbenchGroupIdentity but got ${subject}")
     }
 
-    runInTransaction("listMemberOfGroups", traceContext) { implicit session =>
+    runInTransaction("listMemberOfGroups") { implicit session =>
       val ancestorGroupsTable = SubGroupMemberTable("ancestor_groups")
       val ag = ancestorGroupsTable.syntax("ag")
       val agColumn = ancestorGroupsTable.column
@@ -646,14 +646,14 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     }
   }
 
-  override def listAncestorGroups(groupId: WorkbenchGroupIdentity, traceContext: TraceContext): IO[Set[WorkbenchGroupIdentity]] = {
-    listMemberOfGroups(groupId, traceContext)
+  override def listAncestorGroups(groupId: WorkbenchGroupIdentity): IO[Set[WorkbenchGroupIdentity]] = {
+    listMemberOfGroups(groupId)
   }
 
-  override def enableIdentity(subject: WorkbenchSubject, traceContext: TraceContext): IO[Unit] = {
+  override def enableIdentity(subject: WorkbenchSubject): IO[Unit] = {
     subject match {
       case userId: WorkbenchUserId =>
-        runInTransaction("enableIdentity", traceContext) { implicit session =>
+        runInTransaction("enableIdentity") { implicit session =>
         val u = UserTable.column
         samsql"update ${UserTable.table} set ${u.enabled} = true where ${u.id} = ${userId}".update().apply()
       }
@@ -661,8 +661,8 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     }
   }
 
-  override def disableIdentity(subject: WorkbenchSubject, traceContext: TraceContext): IO[Unit] = {
-    runInTransaction("disableIdentity", traceContext) { implicit session =>
+  override def disableIdentity(subject: WorkbenchSubject): IO[Unit] = {
+    runInTransaction("disableIdentity") { implicit session =>
       subject match {
         case userId: WorkbenchUserId =>
           val u = UserTable.column
@@ -672,8 +672,8 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     }
   }
 
-  override def isEnabled(subject: WorkbenchSubject, traceContext: TraceContext): IO[Boolean] = {
-    runInTransaction("isEnabled", traceContext) { implicit session =>
+  override def isEnabled(subject: WorkbenchSubject): IO[Boolean] = {
+    runInTransaction("isEnabled") { implicit session =>
       val userIdOpt = subject match {
         case user: WorkbenchUserId => Option(user)
         case PetServiceAccountId(user, _) => Option(user)
@@ -689,8 +689,8 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     }
   }
 
-  override def getUserFromPetServiceAccount(petSA: ServiceAccountSubjectId, traceContext: TraceContext): IO[Option[WorkbenchUser]] = {
-    runInTransaction("getUserFromPetServiceAccount", traceContext) { implicit session =>
+  override def getUserFromPetServiceAccount(petSA: ServiceAccountSubjectId): IO[Option[WorkbenchUser]] = {
+    runInTransaction("getUserFromPetServiceAccount") { implicit session =>
       val petServiceAccountTable = PetServiceAccountTable.syntax
       val userTable = UserTable.syntax
 
@@ -704,8 +704,8 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     }
   }
 
-  override def createPetServiceAccount(petServiceAccount: PetServiceAccount, traceContext: TraceContext): IO[PetServiceAccount] = {
-    runInTransaction("createPetServiceAccount", traceContext) { implicit session =>
+  override def createPetServiceAccount(petServiceAccount: PetServiceAccount): IO[PetServiceAccount] = {
+    runInTransaction("createPetServiceAccount") { implicit session =>
       val petServiceAccountColumn = PetServiceAccountTable.column
 
       samsql"""insert into ${PetServiceAccountTable.table} (${petServiceAccountColumn.userId}, ${petServiceAccountColumn.project}, ${petServiceAccountColumn.googleSubjectId}, ${petServiceAccountColumn.email}, ${petServiceAccountColumn.displayName})
@@ -715,8 +715,8 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     }
   }
 
-  override def loadPetServiceAccount(petServiceAccountId: PetServiceAccountId, traceContext: TraceContext): IO[Option[PetServiceAccount]] = {
-    runInTransaction("loadPetServiceAccount", traceContext) { implicit session =>
+  override def loadPetServiceAccount(petServiceAccountId: PetServiceAccountId): IO[Option[PetServiceAccount]] = {
+    runInTransaction("loadPetServiceAccount") { implicit session =>
       val petServiceAccountTable = PetServiceAccountTable.syntax
 
       val loadPetQuery = samsql"""select ${petServiceAccountTable.resultAll}
@@ -728,8 +728,8 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     }
   }
 
-  override def deletePetServiceAccount(petServiceAccountId: PetServiceAccountId, traceContext: TraceContext): IO[Unit] = {
-    runInTransaction("deletePetServiceAccount", traceContext) { implicit session =>
+  override def deletePetServiceAccount(petServiceAccountId: PetServiceAccountId): IO[Unit] = {
+    runInTransaction("deletePetServiceAccount") { implicit session =>
       val petServiceAccountTable = PetServiceAccountTable.syntax
       val deletePetQuery = samsql"delete from ${PetServiceAccountTable.table} where ${petServiceAccountTable.userId} = ${petServiceAccountId.userId} and ${petServiceAccountTable.project} = ${petServiceAccountId.project}"
       if (deletePetQuery.update().apply() != 1) {
@@ -738,8 +738,8 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     }
   }
 
-  override def getAllPetServiceAccountsForUser(userId: WorkbenchUserId, traceContext: TraceContext): IO[Seq[PetServiceAccount]] = {
-    runInTransaction("getAllPetServiceAccountsForUser", traceContext) { implicit session =>
+  override def getAllPetServiceAccountsForUser(userId: WorkbenchUserId): IO[Seq[PetServiceAccount]] = {
+    runInTransaction("getAllPetServiceAccountsForUser") { implicit session =>
       val petServiceAccountTable = PetServiceAccountTable.syntax
 
       val loadPetsQuery = samsql"""select ${petServiceAccountTable.resultAll}
@@ -750,8 +750,8 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     }
   }
 
-  override def updatePetServiceAccount(petServiceAccount: PetServiceAccount, traceContext: TraceContext): IO[PetServiceAccount] = {
-    runInTransaction("updatePetServiceAccount", traceContext) { implicit session =>
+  override def updatePetServiceAccount(petServiceAccount: PetServiceAccount): IO[PetServiceAccount] = {
+    runInTransaction("updatePetServiceAccount") { implicit session =>
       val petServiceAccountColumn = PetServiceAccountTable.column
       val updatePetQuery = samsql"""update ${PetServiceAccountTable.table} set
         ${petServiceAccountColumn.googleSubjectId} = ${petServiceAccount.serviceAccount.subjectId},
@@ -790,8 +790,8 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     }
   }
 
-  override def getManagedGroupAccessInstructions(groupName: WorkbenchGroupName, traceContext: TraceContext): IO[Option[String]] = {
-    runInTransaction("getManagedGroupAccessInstructions", traceContext) { implicit session =>
+  override def getManagedGroupAccessInstructions(groupName: WorkbenchGroupName): IO[Option[String]] = {
+    runInTransaction("getManagedGroupAccessInstructions") { implicit session =>
       val groupTable = GroupTable.syntax
       val accessInstructionsTable = AccessInstructionsTable.syntax
 
@@ -815,8 +815,8 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     }
   }
 
-  override def setManagedGroupAccessInstructions(groupName: WorkbenchGroupName, accessInstructions: String, traceContext: TraceContext): IO[Unit] = {
-    runInTransaction("setManagedGroupAccessInstructions", traceContext) { implicit session =>
+  override def setManagedGroupAccessInstructions(groupName: WorkbenchGroupName, accessInstructions: String): IO[Unit] = {
+    runInTransaction("setManagedGroupAccessInstructions") { implicit session =>
       val groupPKQuery = workbenchGroupIdentityToGroupPK(groupName)
       val accessInstructionsColumn = AccessInstructionsTable.column
 
@@ -831,8 +831,8 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     }
   }
 
-  override def setGoogleSubjectId(userId: WorkbenchUserId, googleSubjectId: GoogleSubjectId, traceContext: TraceContext): IO[Unit] = {
-    runInTransaction("setGoogleSubjectId", traceContext) { implicit session =>
+  override def setGoogleSubjectId(userId: WorkbenchUserId, googleSubjectId: GoogleSubjectId): IO[Unit] = {
+    runInTransaction("setGoogleSubjectId") { implicit session =>
       val u = UserTable.column
       samsql"update ${UserTable.table} set ${u.googleSubjectId} = ${googleSubjectId} where ${u.id} = ${userId}".update().apply()
     }
