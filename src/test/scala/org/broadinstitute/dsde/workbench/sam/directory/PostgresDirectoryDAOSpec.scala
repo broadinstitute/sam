@@ -383,7 +383,7 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
     "createUser" - {
       "create a user" in {
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync() shouldEqual defaultUser
-        val loadedUser = dao.loadUser(defaultUser.id).unsafeRunSync().getOrElse(fail(s"failed to load user ${defaultUser.id}"))
+        val loadedUser = dao.loadUser(defaultUser.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"failed to load user ${defaultUser.id}"))
         loadedUser shouldEqual defaultUser
       }
     }
@@ -391,17 +391,17 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
     "loadUser" - {
       "load a user without a google subject id" in {
         dao.createUser(defaultUser.copy(googleSubjectId = None), samRequestContext).unsafeRunSync()
-        dao.loadUser(defaultUser.id).unsafeRunSync().map(user => user.googleSubjectId shouldBe None)
+        dao.loadUser(defaultUser.id, samRequestContext).unsafeRunSync().map(user => user.googleSubjectId shouldBe None)
       }
     }
 
     "deleteUser" - {
       "delete users" in {
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync() shouldEqual defaultUser
-        val loadedUser = dao.loadUser(defaultUser.id).unsafeRunSync().getOrElse(fail(s"failed to load user ${defaultUser.id}"))
+        val loadedUser = dao.loadUser(defaultUser.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"failed to load user ${defaultUser.id}"))
         loadedUser shouldEqual defaultUser
-        dao.deleteUser(defaultUser.id).unsafeRunSync()
-        dao.loadUser(defaultUser.id).unsafeRunSync() shouldBe None
+        dao.deleteUser(defaultUser.id, samRequestContext).unsafeRunSync()
+        dao.loadUser(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe None
       }
 
       "delete a user that is still a member of a group" in {
@@ -411,8 +411,8 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
         dao.createUser(user, samRequestContext).unsafeRunSync()
         dao.createGroup(parentGroup).unsafeRunSync()
 
-        dao.deleteUser(user.id).unsafeRunSync()
-        dao.loadUser(user.id).unsafeRunSync() shouldEqual None
+        dao.deleteUser(user.id, samRequestContext).unsafeRunSync()
+        dao.loadUser(user.id, samRequestContext).unsafeRunSync() shouldEqual None
       }
     }
 
@@ -460,38 +460,38 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
     "createPetServiceAccount" - {
       "create pet service accounts" in {
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
-        dao.createPetServiceAccount(defaultPetSA).unsafeRunSync() shouldBe defaultPetSA
+        dao.createPetServiceAccount(defaultPetSA, samRequestContext).unsafeRunSync() shouldBe defaultPetSA
       }
     }
 
     "loadPetServiceAccount" - {
       "load pet service accounts" in {
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
-        dao.createPetServiceAccount(defaultPetSA).unsafeRunSync()
+        dao.createPetServiceAccount(defaultPetSA, samRequestContext).unsafeRunSync()
 
-        dao.loadPetServiceAccount(defaultPetSA.id).unsafeRunSync() shouldBe Some(defaultPetSA)
+        dao.loadPetServiceAccount(defaultPetSA.id, samRequestContext).unsafeRunSync() shouldBe Some(defaultPetSA)
       }
 
       "return None for nonexistent pet service accounts" in {
-        dao.loadPetServiceAccount(defaultPetSA.id).unsafeRunSync() shouldBe None
+        dao.loadPetServiceAccount(defaultPetSA.id, samRequestContext).unsafeRunSync() shouldBe None
       }
     }
 
     "deletePetServiceAccount" - {
       "delete pet service accounts" in {
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
-        dao.createPetServiceAccount(defaultPetSA).unsafeRunSync()
+        dao.createPetServiceAccount(defaultPetSA, samRequestContext).unsafeRunSync()
 
-        dao.loadPetServiceAccount(defaultPetSA.id).unsafeRunSync() shouldBe Some(defaultPetSA)
+        dao.loadPetServiceAccount(defaultPetSA.id, samRequestContext).unsafeRunSync() shouldBe Some(defaultPetSA)
 
-        dao.deletePetServiceAccount(defaultPetSA.id).unsafeRunSync()
+        dao.deletePetServiceAccount(defaultPetSA.id, samRequestContext).unsafeRunSync()
 
-        dao.loadPetServiceAccount(defaultPetSA.id).unsafeRunSync() shouldBe None
+        dao.loadPetServiceAccount(defaultPetSA.id, samRequestContext).unsafeRunSync() shouldBe None
       }
 
       "throw an exception when trying to delete a nonexistent pet service account" in {
         assertThrows[WorkbenchException] {
-          dao.deletePetServiceAccount(defaultPetSA.id).unsafeRunSync()
+          dao.deletePetServiceAccount(defaultPetSA.id, samRequestContext).unsafeRunSync()
         }
       }
     }
@@ -501,10 +501,10 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
         val petSA1 = PetServiceAccount(PetServiceAccountId(defaultUser.id, GoogleProject("testProject1")), ServiceAccount(ServiceAccountSubjectId("testGoogleSubjectId1"), WorkbenchEmail("test1@pet.co"), ServiceAccountDisplayName("whoCares")))
-        dao.createPetServiceAccount(petSA1).unsafeRunSync()
+        dao.createPetServiceAccount(petSA1, samRequestContext).unsafeRunSync()
 
         val petSA2 = PetServiceAccount(PetServiceAccountId(defaultUser.id, GoogleProject("testProject2")), ServiceAccount(ServiceAccountSubjectId("testGoogleSubjectId2"), WorkbenchEmail("test2@pet.co"), ServiceAccountDisplayName("whoCares")))
-        dao.createPetServiceAccount(petSA2).unsafeRunSync()
+        dao.createPetServiceAccount(petSA2, samRequestContext).unsafeRunSync()
 
         dao.getAllPetServiceAccountsForUser(defaultUserId).unsafeRunSync() should contain theSameElementsAs Seq(petSA1, petSA2)
       }
@@ -514,7 +514,7 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
       "get user from pet service account subject ID" in {
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
-        dao.createPetServiceAccount(defaultPetSA).unsafeRunSync()
+        dao.createPetServiceAccount(defaultPetSA, samRequestContext).unsafeRunSync()
 
         dao.getUserFromPetServiceAccount(defaultPetSA.serviceAccount.subjectId).unsafeRunSync() shouldBe Some(defaultUser)
       }
@@ -524,12 +524,12 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
       "update a pet service account" in {
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
-        dao.createPetServiceAccount(defaultPetSA).unsafeRunSync()
+        dao.createPetServiceAccount(defaultPetSA, samRequestContext).unsafeRunSync()
 
         val updatedPetSA = defaultPetSA.copy(serviceAccount = ServiceAccount(ServiceAccountSubjectId("updatedTestGoogleSubjectId"), WorkbenchEmail("new@pet.co"), ServiceAccountDisplayName("whoCares")))
-        dao.updatePetServiceAccount(updatedPetSA).unsafeRunSync() shouldBe updatedPetSA
+        dao.updatePetServiceAccount(updatedPetSA, samRequestContext).unsafeRunSync() shouldBe updatedPetSA
 
-        dao.loadPetServiceAccount(updatedPetSA.id).unsafeRunSync() shouldBe Some(updatedPetSA)
+        dao.loadPetServiceAccount(updatedPetSA.id, samRequestContext).unsafeRunSync() shouldBe Some(updatedPetSA)
       }
 
       "throw an exception when updating a nonexistent pet SA" in {
@@ -537,7 +537,7 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
 
         val updatedPetSA = defaultPetSA.copy(serviceAccount = ServiceAccount(ServiceAccountSubjectId("updatedTestGoogleSubjectId"), WorkbenchEmail("new@pet.co"), ServiceAccountDisplayName("whoCares")))
         assertThrows[WorkbenchException] {
-          dao.updatePetServiceAccount(updatedPetSA).unsafeRunSync() shouldBe updatedPetSA
+          dao.updatePetServiceAccount(updatedPetSA, samRequestContext).unsafeRunSync() shouldBe updatedPetSA
         }
       }
     }
@@ -782,49 +782,49 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
     "enableIdentity and disableIdentity" - {
       "can enable and disable users" in {
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
-        dao.isEnabled(defaultUser.id).unsafeRunSync() shouldBe false
+        dao.isEnabled(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe false
 
-        dao.enableIdentity(defaultUser.id).unsafeRunSync()
-        dao.isEnabled(defaultUser.id).unsafeRunSync() shouldBe true
+        dao.enableIdentity(defaultUser.id, samRequestContext).unsafeRunSync()
+        dao.isEnabled(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe true
 
-        dao.disableIdentity(defaultUser.id).unsafeRunSync()
-        dao.isEnabled(defaultUser.id).unsafeRunSync() shouldBe false
+        dao.disableIdentity(defaultUser.id, samRequestContext).unsafeRunSync()
+        dao.isEnabled(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe false
       }
 
       "cannot enable and disable pet service accounts" in {
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
-        dao.createPetServiceAccount(defaultPetSA).unsafeRunSync()
-        val initialEnabledStatus = dao.isEnabled(defaultPetSA.id).unsafeRunSync()
+        dao.createPetServiceAccount(defaultPetSA, samRequestContext).unsafeRunSync()
+        val initialEnabledStatus = dao.isEnabled(defaultPetSA.id, samRequestContext).unsafeRunSync()
 
-        dao.disableIdentity(defaultPetSA.id).unsafeRunSync()
-        dao.isEnabled(defaultPetSA.id).unsafeRunSync() shouldBe initialEnabledStatus
+        dao.disableIdentity(defaultPetSA.id, samRequestContext).unsafeRunSync()
+        dao.isEnabled(defaultPetSA.id, samRequestContext).unsafeRunSync() shouldBe initialEnabledStatus
 
-        dao.enableIdentity(defaultPetSA.id).unsafeRunSync()
-        dao.isEnabled(defaultPetSA.id).unsafeRunSync() shouldBe initialEnabledStatus
+        dao.enableIdentity(defaultPetSA.id, samRequestContext).unsafeRunSync()
+        dao.isEnabled(defaultPetSA.id, samRequestContext).unsafeRunSync() shouldBe initialEnabledStatus
       }
 
       "cannot enable and disable groups" in {
         dao.createGroup(defaultGroup).unsafeRunSync()
-        val initialEnabledStatus = dao.isEnabled(defaultGroup.id).unsafeRunSync()
+        val initialEnabledStatus = dao.isEnabled(defaultGroup.id, samRequestContext).unsafeRunSync()
 
-        dao.disableIdentity(defaultGroup.id).unsafeRunSync()
-        dao.isEnabled(defaultGroup.id).unsafeRunSync() shouldBe initialEnabledStatus
+        dao.disableIdentity(defaultGroup.id, samRequestContext).unsafeRunSync()
+        dao.isEnabled(defaultGroup.id, samRequestContext).unsafeRunSync() shouldBe initialEnabledStatus
 
-        dao.enableIdentity(defaultGroup.id).unsafeRunSync()
-        dao.isEnabled(defaultGroup.id).unsafeRunSync() shouldBe initialEnabledStatus
+        dao.enableIdentity(defaultGroup.id, samRequestContext).unsafeRunSync()
+        dao.isEnabled(defaultGroup.id, samRequestContext).unsafeRunSync() shouldBe initialEnabledStatus
       }
 
       "cannot enable and disable policies" in {
         policyDAO.createResourceType(resourceType).unsafeRunSync()
         policyDAO.createResource(defaultResource).unsafeRunSync()
         policyDAO.createPolicy(defaultPolicy).unsafeRunSync()
-        val initialEnabledStatus = dao.isEnabled(defaultPolicy.id).unsafeRunSync()
+        val initialEnabledStatus = dao.isEnabled(defaultPolicy.id, samRequestContext).unsafeRunSync()
 
-        dao.disableIdentity(defaultPolicy.id).unsafeRunSync()
-        dao.isEnabled(defaultPolicy.id).unsafeRunSync() shouldBe initialEnabledStatus
+        dao.disableIdentity(defaultPolicy.id, samRequestContext).unsafeRunSync()
+        dao.isEnabled(defaultPolicy.id, samRequestContext).unsafeRunSync() shouldBe initialEnabledStatus
 
-        dao.enableIdentity(defaultPolicy.id).unsafeRunSync()
-        dao.isEnabled(defaultPolicy.id).unsafeRunSync() shouldBe initialEnabledStatus
+        dao.enableIdentity(defaultPolicy.id, samRequestContext).unsafeRunSync()
+        dao.isEnabled(defaultPolicy.id, samRequestContext).unsafeRunSync() shouldBe initialEnabledStatus
       }
     }
 
@@ -832,30 +832,30 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
       "gets a user's enabled status" in {
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
-        dao.disableIdentity(defaultUser.id).unsafeRunSync()
-        dao.isEnabled(defaultUser.id).unsafeRunSync() shouldBe false
+        dao.disableIdentity(defaultUser.id, samRequestContext).unsafeRunSync()
+        dao.isEnabled(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe false
 
-        dao.enableIdentity(defaultUser.id).unsafeRunSync()
-        dao.isEnabled(defaultUser.id).unsafeRunSync() shouldBe true
+        dao.enableIdentity(defaultUser.id, samRequestContext).unsafeRunSync()
+        dao.isEnabled(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe true
       }
 
       "gets a pet's user's enabled status" in {
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
-        dao.createPetServiceAccount(defaultPetSA).unsafeRunSync()
+        dao.createPetServiceAccount(defaultPetSA, samRequestContext).unsafeRunSync()
 
-        dao.disableIdentity(defaultUser.id).unsafeRunSync()
-        dao.isEnabled(defaultPetSA.id).unsafeRunSync() shouldBe false
+        dao.disableIdentity(defaultUser.id, samRequestContext).unsafeRunSync()
+        dao.isEnabled(defaultPetSA.id, samRequestContext).unsafeRunSync() shouldBe false
 
-        dao.enableIdentity(defaultUser.id).unsafeRunSync()
-        dao.isEnabled(defaultPetSA.id).unsafeRunSync() shouldBe true
+        dao.enableIdentity(defaultUser.id, samRequestContext).unsafeRunSync()
+        dao.isEnabled(defaultPetSA.id, samRequestContext).unsafeRunSync() shouldBe true
       }
 
       "returns false for groups" in {
         dao.createGroup(defaultGroup).unsafeRunSync()
 
-        dao.isEnabled(defaultGroup.id).unsafeRunSync() shouldBe false
-        dao.enableIdentity(defaultGroup.id).unsafeRunSync()
-        dao.isEnabled(defaultGroup.id).unsafeRunSync() shouldBe false
+        dao.isEnabled(defaultGroup.id, samRequestContext).unsafeRunSync() shouldBe false
+        dao.enableIdentity(defaultGroup.id, samRequestContext).unsafeRunSync()
+        dao.isEnabled(defaultGroup.id, samRequestContext).unsafeRunSync() shouldBe false
       }
 
       "returns false for policies" in {
@@ -863,9 +863,9 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
         policyDAO.createResource(defaultResource).unsafeRunSync()
         policyDAO.createPolicy(defaultPolicy).unsafeRunSync()
 
-        dao.isEnabled(defaultPolicy.id).unsafeRunSync() shouldBe false
-        dao.enableIdentity(defaultPolicy.id).unsafeRunSync()
-        dao.isEnabled(defaultPolicy.id).unsafeRunSync() shouldBe false
+        dao.isEnabled(defaultPolicy.id, samRequestContext).unsafeRunSync() shouldBe false
+        dao.enableIdentity(defaultPolicy.id, samRequestContext).unsafeRunSync()
+        dao.isEnabled(defaultPolicy.id, samRequestContext).unsafeRunSync() shouldBe false
       }
     }
 
@@ -1006,10 +1006,10 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
         val newGoogleSubjectId = GoogleSubjectId("newGoogleSubjectId")
         dao.createUser(defaultUser.copy(googleSubjectId = None), samRequestContext).unsafeRunSync()
 
-        dao.loadUser(defaultUser.id).unsafeRunSync().flatMap(_.googleSubjectId) shouldBe None
-        dao.setGoogleSubjectId(defaultUser.id, newGoogleSubjectId).unsafeRunSync()
+        dao.loadUser(defaultUser.id, samRequestContext).unsafeRunSync().flatMap(_.googleSubjectId) shouldBe None
+        dao.setGoogleSubjectId(defaultUser.id, newGoogleSubjectId, samRequestContext).unsafeRunSync()
 
-        dao.loadUser(defaultUser.id).unsafeRunSync().flatMap(_.googleSubjectId) shouldBe Option(newGoogleSubjectId)
+        dao.loadUser(defaultUser.id, samRequestContext).unsafeRunSync().flatMap(_.googleSubjectId) shouldBe Option(newGoogleSubjectId)
       }
     }
 
@@ -1035,7 +1035,7 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
 
       "load a pet service account subject from its email" in {
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
-        dao.createPetServiceAccount(defaultPetSA).unsafeRunSync()
+        dao.createPetServiceAccount(defaultPetSA, samRequestContext).unsafeRunSync()
 
         dao.loadSubjectFromEmail(defaultPetSA.serviceAccount.email).unsafeRunSync() shouldBe Some(defaultPetSA.id)
       }
@@ -1052,7 +1052,7 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
 
       "throw an exception when an email refers to more than one subject" in {
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
-        dao.createPetServiceAccount(defaultPetSA.copy(serviceAccount = defaultPetSA.serviceAccount.copy(email = defaultUser.email))).unsafeRunSync()
+        dao.createPetServiceAccount(defaultPetSA.copy(serviceAccount = defaultPetSA.serviceAccount.copy(email = defaultUser.email)), samRequestContext).unsafeRunSync()
 
         assertThrows[WorkbenchException] {
           dao.loadSubjectFromEmail(defaultUser.email).unsafeRunSync() shouldBe Some(defaultPetSA.id)
@@ -1069,7 +1069,7 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
 
       "load a pet service account subject from its google subject id" in {
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
-        dao.createPetServiceAccount(defaultPetSA).unsafeRunSync()
+        dao.createPetServiceAccount(defaultPetSA, samRequestContext).unsafeRunSync()
 
         dao.loadSubjectFromGoogleSubjectId(GoogleSubjectId(defaultPetSA.serviceAccount.subjectId.value)).unsafeRunSync() shouldBe Some(defaultPetSA.id)
       }
@@ -1113,7 +1113,7 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
 
       "load the email for a pet service account" in {
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
-        dao.createPetServiceAccount(defaultPetSA).unsafeRunSync()
+        dao.createPetServiceAccount(defaultPetSA, samRequestContext).unsafeRunSync()
 
         dao.loadSubjectEmail(defaultPetSA.id).unsafeRunSync() shouldBe Some(defaultPetSA.serviceAccount.email)
       }

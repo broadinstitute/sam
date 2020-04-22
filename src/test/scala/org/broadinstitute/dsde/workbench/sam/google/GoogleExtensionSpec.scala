@@ -292,10 +292,10 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     petServiceAccount.serviceAccount.email.value should endWith(s"@${googleProject.value}.iam.gserviceaccount.com")
 
     // verify ldap
-    dirDAO.loadPetServiceAccount(PetServiceAccountId(defaultUserId, googleProject)).unsafeRunSync() shouldBe Some(petServiceAccount)
+    dirDAO.loadPetServiceAccount(PetServiceAccountId(defaultUserId, googleProject), samRequestContext).unsafeRunSync() shouldBe Some(petServiceAccount)
 
     val ldapPetOpt = dirDAO.loadSubjectFromEmail(petServiceAccount.serviceAccount.email).flatMap {
-      case Some(subject: PetServiceAccountId) => dirDAO.loadPetServiceAccount(subject)
+      case Some(subject: PetServiceAccountId) => dirDAO.loadPetServiceAccount(subject, samRequestContext)
       case _ => fail(s"could not load pet LDAP entry from ${petServiceAccount.serviceAccount.email.value}")
     }.unsafeRunSync()
 
@@ -317,10 +317,10 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     googleExtensions.deleteUserPetServiceAccount(newUser.userInfo.userSubjectId, googleProject).unsafeRunSync() shouldBe true
 
     // the user should still exist in LDAP
-    dirDAO.loadUser(defaultUserId).unsafeRunSync() shouldBe Some(defaultUser)
+    dirDAO.loadUser(defaultUserId, samRequestContext).unsafeRunSync() shouldBe Some(defaultUser)
 
     // the pet should not exist in LDAP
-    dirDAO.loadPetServiceAccount(PetServiceAccountId(defaultUserId, googleProject)).unsafeRunSync() shouldBe None
+    dirDAO.loadPetServiceAccount(PetServiceAccountId(defaultUserId, googleProject), samRequestContext).unsafeRunSync() shouldBe None
 
     // the pet should not exist in Google
     mockGoogleIamDAO.serviceAccounts should not contain key (petServiceAccount.serviceAccount.email)
@@ -388,9 +388,9 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
 
     val petServiceAccount2 = googleExtensions.createUserPetServiceAccount(defaultUser, googleProject).unsafeRunSync()
     petServiceAccount.serviceAccount shouldNot equal(petServiceAccount2.serviceAccount)
-    val res = dirDAO.loadPetServiceAccount(petServiceAccount.id).unsafeRunSync()
+    val res = dirDAO.loadPetServiceAccount(petServiceAccount.id, samRequestContext).unsafeRunSync()
     res shouldBe Some(petServiceAccount2)
-    regDAO.loadPetServiceAccount(petServiceAccount.id).unsafeRunSync() shouldBe res
+    regDAO.loadPetServiceAccount(petServiceAccount.id, samRequestContext).unsafeRunSync() shouldBe res
     mockGoogleIamDAO.findServiceAccount(googleProject, petServiceAccount.serviceAccount.email).futureValue shouldBe Some(petServiceAccount2.serviceAccount)
   }
 
@@ -527,13 +527,13 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val app = SamApplication(new UserService(mockDirectoryDAO, ge, mockRegistrationDAO), new ResourceService(configResourceTypes, null, mockAccessPolicyDAO, mockDirectoryDAO, ge, "example.com"), null)
     val resourceAndPolicyName = FullyQualifiedPolicyId(FullyQualifiedResourceId(CloudExtensions.resourceTypeName, GoogleExtensions.resourceId), AccessPolicyName("owner"))
 
-    mockDirectoryDAO.loadUser(WorkbenchUserId(googleServicesConfig.serviceAccountClientId)).unsafeRunSync() shouldBe None
+    mockDirectoryDAO.loadUser(WorkbenchUserId(googleServicesConfig.serviceAccountClientId), samRequestContext).unsafeRunSync() shouldBe None
     mockAccessPolicyDAO.loadPolicy(resourceAndPolicyName).unsafeRunSync() shouldBe None
 
     ge.onBoot(app).unsafeRunSync()
 
     val uid = mockDirectoryDAO.loadSubjectFromGoogleSubjectId(GoogleSubjectId(googleServicesConfig.serviceAccountClientId)).unsafeRunSync().get.asInstanceOf[WorkbenchUserId]
-    val owner = mockDirectoryDAO.loadUser(uid).unsafeRunSync().get
+    val owner = mockDirectoryDAO.loadUser(uid, samRequestContext).unsafeRunSync().get
     owner.googleSubjectId shouldBe Some(GoogleSubjectId(googleServicesConfig.serviceAccountClientId))
     owner.email shouldBe googleServicesConfig.serviceAccountClientEmail
     val res = mockAccessPolicyDAO.loadPolicy(resourceAndPolicyName).unsafeRunSync().get

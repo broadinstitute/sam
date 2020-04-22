@@ -306,7 +306,7 @@ class GoogleExtensions(
 
   def deleteUserPetServiceAccount(userId: WorkbenchUserId, project: GoogleProject): IO[Boolean] =
     for {
-      maybePet <- directoryDAO.loadPetServiceAccount(PetServiceAccountId(userId, project))
+      maybePet <- directoryDAO.loadPetServiceAccount(PetServiceAccountId(userId, project), samRequestContext)
       deletedSomething <- maybePet match {
         case Some(pet) => IO.fromFuture(IO(removePetServiceAccount(pet))).map(_ => true)
         case None => IO.pure(false) // didn't find the pet, nothing to delete
@@ -338,16 +338,16 @@ class GoogleExtensions(
         // pet does not exist in ldap, create it and enable the identity
         case (None, _) =>
           for {
-            p <- directoryDAO.createPetServiceAccount(PetServiceAccount(PetServiceAccountId(user.id, project), serviceAccount))
-            _ <- registrationDAO.createPetServiceAccount(PetServiceAccount(PetServiceAccountId(user.id, project), serviceAccount))
-            _ <- directoryDAO.enableIdentity(p.id)
-            _ <- registrationDAO.enableIdentity(p.id)
+            p <- directoryDAO.createPetServiceAccount(PetServiceAccount(PetServiceAccountId(user.id, project), serviceAccount), samRequestContext)
+            _ <- registrationDAO.createPetServiceAccount(PetServiceAccount(PetServiceAccountId(user.id, project), serviceAccount), samRequestContext)
+            _ <- directoryDAO.enableIdentity(p.id, samRequestContext)
+            _ <- registrationDAO.enableIdentity(p.id, samRequestContext)
           } yield p
         // pet already exists in ldap, but a new SA was created so update ldap with new SA info
         case (Some(p), None) =>
           for {
-            p <- directoryDAO.updatePetServiceAccount(p.copy(serviceAccount = serviceAccount))
-            _ <- registrationDAO.updatePetServiceAccount(p.copy(serviceAccount = serviceAccount))
+            p <- directoryDAO.updatePetServiceAccount(p.copy(serviceAccount = serviceAccount), samRequestContext)
+            _ <- registrationDAO.updatePetServiceAccount(p.copy(serviceAccount = serviceAccount), samRequestContext)
           } yield p
 
         // everything already existed
@@ -387,7 +387,7 @@ class GoogleExtensions(
       project: GoogleProject,
       ): IO[(Option[PetServiceAccount], Option[ServiceAccount])] = {
     val serviceAccount = IO.fromFuture(IO(googleIamDAO.findServiceAccount(project, petServiceAccountName)))
-    val pet = directoryDAO.loadPetServiceAccount(PetServiceAccountId(userId, project))
+    val pet = directoryDAO.loadPetServiceAccount(PetServiceAccountId(userId, project), samRequestContext)
     (pet, serviceAccount).parTupled
   }
 
@@ -460,7 +460,7 @@ class GoogleExtensions(
 
   def removePetServiceAccountKey(userId: WorkbenchUserId, project: GoogleProject, keyId: ServiceAccountKeyId): IO[Unit] =
     for {
-      maybePet <- directoryDAO.loadPetServiceAccount(PetServiceAccountId(userId, project))
+      maybePet <- directoryDAO.loadPetServiceAccount(PetServiceAccountId(userId, project), samRequestContext)
       result <- maybePet match {
         case Some(pet) => googleKeyCache.removeKey(pet, keyId)
         case None => IO.unit
@@ -469,8 +469,8 @@ class GoogleExtensions(
 
   private def enablePetServiceAccount(petServiceAccount: PetServiceAccount): Future[Unit] =
     for {
-      _ <- directoryDAO.enableIdentity(petServiceAccount.id).unsafeToFuture()
-      _ <- registrationDAO.enableIdentity(petServiceAccount.id).unsafeToFuture()
+      _ <- directoryDAO.enableIdentity(petServiceAccount.id, samRequestContext).unsafeToFuture()
+      _ <- registrationDAO.enableIdentity(petServiceAccount.id, samRequestContext).unsafeToFuture()
       _ <- withProxyEmail(petServiceAccount.id.userId) { proxyEmail =>
         googleDirectoryDAO.addMemberToGroup(proxyEmail, petServiceAccount.serviceAccount.email)
       }
@@ -478,8 +478,8 @@ class GoogleExtensions(
 
   private def disablePetServiceAccount(petServiceAccount: PetServiceAccount): Future[Unit] =
     for {
-      _ <- directoryDAO.disableIdentity(petServiceAccount.id).unsafeToFuture()
-      _ <- registrationDAO.disableIdentity(petServiceAccount.id).unsafeToFuture()
+      _ <- directoryDAO.disableIdentity(petServiceAccount.id, samRequestContext).unsafeToFuture()
+      _ <- registrationDAO.disableIdentity(petServiceAccount.id, samRequestContext).unsafeToFuture()
       _ <- withProxyEmail(petServiceAccount.id.userId) { proxyEmail =>
         googleDirectoryDAO.removeMemberFromGroup(proxyEmail, petServiceAccount.serviceAccount.email)
       }
@@ -490,8 +490,8 @@ class GoogleExtensions(
       // disable the pet service account
       _ <- disablePetServiceAccount(petServiceAccount)
       // remove the record for the pet service account
-      _ <- directoryDAO.deletePetServiceAccount(petServiceAccount.id).unsafeToFuture()
-      _ <- registrationDAO.deletePetServiceAccount(petServiceAccount.id).unsafeToFuture()
+      _ <- directoryDAO.deletePetServiceAccount(petServiceAccount.id, samRequestContext).unsafeToFuture()
+      _ <- registrationDAO.deletePetServiceAccount(petServiceAccount.id, samRequestContext).unsafeToFuture()
       // remove the service account itself in Google
       _ <- googleIamDAO.removeServiceAccount(petServiceAccount.id.project, toAccountName(petServiceAccount.serviceAccount.email))
     } yield ()

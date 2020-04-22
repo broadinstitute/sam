@@ -177,7 +177,7 @@ class ManagedGroupService(
           FullyQualifiedPolicyId(FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, resourceId), ManagedGroupService.adminPolicyName)
 
         for {
-          requesterUser <- directoryDAO.loadUser(requesterUserId)
+          requesterUser <- directoryDAO.loadUser(requesterUserId, samRequestContext)
           requesterSubjectId <- extractGoogleSubjectId(requesterUser)
           admins <- accessPolicyDAO.listFlattenedPolicyMembers(resourceAndAdminPolicyName)
           // ignore any admin that does not have a google subject id (they have not registered yet anyway)

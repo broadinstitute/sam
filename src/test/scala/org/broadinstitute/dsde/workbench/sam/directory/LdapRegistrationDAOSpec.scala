@@ -40,7 +40,7 @@ class LdapRegistrationDAOSpec extends FlatSpec with Matchers with TestSupport wi
     val user = WorkbenchUser(userId, None, WorkbenchEmail("foo@bar.com"), None)
 
     assertResult(None) {
-      dao.loadUser(user.id).unsafeRunSync()
+      dao.loadUser(user.id, samRequestContext).unsafeRunSync()
     }
 
     assertResult(user) {
@@ -48,13 +48,13 @@ class LdapRegistrationDAOSpec extends FlatSpec with Matchers with TestSupport wi
     }
 
     assertResult(Some(user)) {
-      dao.loadUser(user.id).unsafeRunSync()
+      dao.loadUser(user.id, samRequestContext).unsafeRunSync()
     }
 
-    dao.deleteUser(user.id).unsafeRunSync()
+    dao.deleteUser(user.id, samRequestContext).unsafeRunSync()
 
     assertResult(None) {
-      dao.loadUser(user.id).unsafeRunSync()
+      dao.loadUser(user.id, samRequestContext).unsafeRunSync()
     }
   }
 
@@ -71,21 +71,21 @@ class LdapRegistrationDAOSpec extends FlatSpec with Matchers with TestSupport wi
     }
 
     assertResult(None) {
-      dao.loadPetServiceAccount(petServiceAccount.id).unsafeRunSync()
+      dao.loadPetServiceAccount(petServiceAccount.id, samRequestContext).unsafeRunSync()
     }
 
     assertResult(petServiceAccount) {
-      dao.createPetServiceAccount(petServiceAccount).unsafeRunSync()
+      dao.createPetServiceAccount(petServiceAccount, samRequestContext).unsafeRunSync()
     }
 
     assertResult(Some(petServiceAccount)) {
-      dao.loadPetServiceAccount(petServiceAccount.id).unsafeRunSync()
+      dao.loadPetServiceAccount(petServiceAccount.id, samRequestContext).unsafeRunSync()
     }
 
-    dao.deletePetServiceAccount(petServiceAccount.id).unsafeRunSync()
+    dao.deletePetServiceAccount(petServiceAccount.id, samRequestContext).unsafeRunSync()
 
     assertResult(None) {
-      dao.loadPetServiceAccount(petServiceAccount.id).unsafeRunSync()
+      dao.loadPetServiceAccount(petServiceAccount.id, samRequestContext).unsafeRunSync()
     }
   }
 
@@ -94,7 +94,7 @@ class LdapRegistrationDAOSpec extends FlatSpec with Matchers with TestSupport wi
     val user = WorkbenchUser(userId, None, WorkbenchEmail("foo@bar.com"), None)
 
     assertResult(None) {
-      dao.loadUser(user.id).unsafeRunSync()
+      dao.loadUser(user.id, samRequestContext).unsafeRunSync()
     }
 
     assertResult(user) {
@@ -102,7 +102,7 @@ class LdapRegistrationDAOSpec extends FlatSpec with Matchers with TestSupport wi
     }
 
     assertResult(Some(user)) {
-      dao.loadUser(user.id).unsafeRunSync()
+      dao.loadUser(user.id, samRequestContext).unsafeRunSync()
     }
   }
 
@@ -113,20 +113,20 @@ class LdapRegistrationDAOSpec extends FlatSpec with Matchers with TestSupport wi
       dao.createUser(user, samRequestContext).unsafeRunSync()
     }
 
-    dao.enableIdentity(user.id).unsafeRunSync()
+    dao.enableIdentity(user.id, samRequestContext).unsafeRunSync()
 
     assertResult(true) {
-      dao.isEnabled(user.id).unsafeRunSync()
+      dao.isEnabled(user.id, samRequestContext).unsafeRunSync()
     }
 
-    dao.deleteUser(user.id).unsafeRunSync()
+    dao.deleteUser(user.id, samRequestContext).unsafeRunSync()
 
     assertResult(None) {
-      dao.loadUser(user.id).unsafeRunSync()
+      dao.loadUser(user.id, samRequestContext).unsafeRunSync()
     }
 
     assertResult(false) {
-      dao.isEnabled(user.id).unsafeRunSync()
+      dao.isEnabled(user.id, samRequestContext).unsafeRunSync()
     }
   }
 }

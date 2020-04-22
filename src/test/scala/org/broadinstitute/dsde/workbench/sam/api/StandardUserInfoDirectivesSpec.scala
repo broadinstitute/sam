@@ -74,7 +74,7 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
       val directoryDAO = new MockDirectoryDAO()
       val uid = genWorkbenchUserId(System.currentTimeMillis())
       directoryDAO.createUser(WorkbenchUser(uid, Some(googleSubjectId), email, None), samRequestContext).unsafeRunSync()
-      directoryDAO.createPetServiceAccount(PetServiceAccount(PetServiceAccountId(uid, GoogleProject("")), ServiceAccount(serviceSubjectId, email, ServiceAccountDisplayName("")))).unsafeRunSync()
+      directoryDAO.createPetServiceAccount(PetServiceAccount(PetServiceAccountId(uid, GoogleProject("")), ServiceAccount(serviceSubjectId, email, ServiceAccountDisplayName(""))), samRequestContext).unsafeRunSync()
       val res = getUserInfo(token, googleSubjectId, email, 10L, directoryDAO).unsafeRunSync()
       res should be (UserInfo(token, uid, email, 10L))
     }
@@ -118,7 +118,7 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
         val directoryDAO = new MockDirectoryDAO()
         val gSid = GoogleSubjectId(serviceSubjectId.value)
         val uid = genWorkbenchUserId(System.currentTimeMillis())
-        directoryDAO.createPetServiceAccount(PetServiceAccount(PetServiceAccountId(uid, GoogleProject("")), ServiceAccount(serviceSubjectId, email, ServiceAccountDisplayName("")))).unsafeRunSync()
+        directoryDAO.createPetServiceAccount(PetServiceAccount(PetServiceAccountId(uid, GoogleProject("")), ServiceAccount(serviceSubjectId, email, ServiceAccountDisplayName(""))), samRequestContext).unsafeRunSync()
         val res = getUserInfo(token, gSid, email, 10L, directoryDAO).attempt.unsafeRunSync().swap.toOption.get.asInstanceOf[WorkbenchExceptionWithErrorReport]
 
         Eq[WorkbenchExceptionWithErrorReport].eqv(res, new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"subjectId $gSid is not a WorkbenchUser"))) shouldBe(true)
@@ -152,7 +152,7 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
     when(icService.getGoogleIdentities(bearerToken)).thenReturn(IO.pure(Seq((googleSubjectId, email))))
     getUserInfoFromJwt(validJwtUserInfo(identityConcentratorId), bearerToken, directoryDAO, icService).unsafeRunSync()
 
-    directoryDAO.loadUser(uid).unsafeRunSync().flatMap(_.identityConcentratorId) shouldBe Some(identityConcentratorId)
+    directoryDAO.loadUser(uid, samRequestContext).unsafeRunSync().flatMap(_.identityConcentratorId) shouldBe Some(identityConcentratorId)
   }
 
   it should "500 when user is linked to more than 1 google account" in {

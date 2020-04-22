@@ -39,10 +39,10 @@ trait DirectoryDAO extends RegistrationDAO {
   def loadSubjectFromGoogleSubjectId(googleSubjectId: GoogleSubjectId): IO[Option[WorkbenchSubject]]
 
   def createUser(user: WorkbenchUser, samRequestContext: SamRequestContext): IO[WorkbenchUser]
-  def loadUser(userId: WorkbenchUserId): IO[Option[WorkbenchUser]]
+  def loadUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[WorkbenchUser]]
   def loadUserByIdentityConcentratorId(userId: IdentityConcentratorId): IO[Option[WorkbenchUser]]
   def loadUsers(userIds: Set[WorkbenchUserId]): IO[Stream[WorkbenchUser]]
-  def deleteUser(userId: WorkbenchUserId): IO[Unit]
+  def deleteUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit]
   def setUserIdentityConcentratorId(googleSubjectId: GoogleSubjectId, icId: IdentityConcentratorId): IO[Int]
 
 
@@ -51,17 +51,17 @@ trait DirectoryDAO extends RegistrationDAO {
   def listIntersectionGroupUsers(groupId: Set[WorkbenchGroupIdentity]): IO[Set[WorkbenchUserId]]
   def listAncestorGroups(groupId: WorkbenchGroupIdentity): IO[Set[WorkbenchGroupIdentity]]
 
-  def enableIdentity(subject: WorkbenchSubject): IO[Unit]
-  def disableIdentity(subject: WorkbenchSubject): IO[Unit]
-  def isEnabled(subject: WorkbenchSubject): IO[Boolean]
+  def enableIdentity(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Unit]
+  def disableIdentity(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Unit]
+  def isEnabled(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean]
 
   def getUserFromPetServiceAccount(petSA: ServiceAccountSubjectId): IO[Option[WorkbenchUser]]
-  def createPetServiceAccount(petServiceAccount: PetServiceAccount): IO[PetServiceAccount]
-  def loadPetServiceAccount(petServiceAccountId: PetServiceAccountId): IO[Option[PetServiceAccount]]
-  def deletePetServiceAccount(petServiceAccountId: PetServiceAccountId): IO[Unit]
+  def createPetServiceAccount(petServiceAccount: PetServiceAccount, samRequestContext: SamRequestContext): IO[PetServiceAccount]
+  def loadPetServiceAccount(petServiceAccountId: PetServiceAccountId, samRequestContext: SamRequestContext): IO[Option[PetServiceAccount]]
+  def deletePetServiceAccount(petServiceAccountId: PetServiceAccountId, samRequestContext: SamRequestContext): IO[Unit]
   def getAllPetServiceAccountsForUser(userId: WorkbenchUserId): IO[Seq[PetServiceAccount]]
-  def updatePetServiceAccount(petServiceAccount: PetServiceAccount): IO[PetServiceAccount]
+  def updatePetServiceAccount(petServiceAccount: PetServiceAccount, samRequestContext: SamRequestContext): IO[PetServiceAccount]
   def getManagedGroupAccessInstructions(groupName: WorkbenchGroupName): IO[Option[String]]
   def setManagedGroupAccessInstructions(groupName: WorkbenchGroupName, accessInstructions: String): IO[Unit]
-  def setGoogleSubjectId(userId: WorkbenchUserId, googleSubjectId: GoogleSubjectId): IO[Unit]
+  def setGoogleSubjectId(userId: WorkbenchUserId, googleSubjectId: GoogleSubjectId, samRequestContext: SamRequestContext): IO[Unit]
 }

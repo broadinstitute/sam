@@ -411,7 +411,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     assertMakeGroup(groupId = resourceId.value, managedGroupService = testManagedGroupService)
 
     val requester = dirDAO.createUser(WorkbenchUser(WorkbenchUserId("userId1"), Some(GoogleSubjectId("not the user id")), WorkbenchEmail("user1@company.com"), None), samRequestContext).unsafeRunSync()
-    val adminGoogleSubjectId = WorkbenchUserId(dirDAO.loadUser(dummyUserInfo.userId).unsafeRunSync().flatMap(_.googleSubjectId).getOrElse(fail("could not find admin google subject id")).value)
+    val adminGoogleSubjectId = WorkbenchUserId(dirDAO.loadUser(dummyUserInfo.userId, samRequestContext).unsafeRunSync().flatMap(_.googleSubjectId).getOrElse(fail("could not find admin google subject id")).value)
 
     val expectedNotificationMessages = Set(
       Notifications.GroupAccessRequestNotification(

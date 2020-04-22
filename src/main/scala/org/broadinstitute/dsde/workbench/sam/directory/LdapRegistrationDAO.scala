@@ -55,7 +55,7 @@ class LdapRegistrationDAO(
     } *> IO.pure(user)
   }
 
-  override def loadUser(userId: WorkbenchUserId): IO[Option[WorkbenchUser]] = executeLdap(IO(loadUserInternal(userId)), "loadUser", samRequestContext)
+  override def loadUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[WorkbenchUser]] = executeLdap(IO(loadUserInternal(userId)), "loadUser", samRequestContext)
 
   def loadUserInternal(userId: WorkbenchUserId) =
     Option(ldapConnectionPool.getEntry(userDn(userId))) flatMap { results =>
@@ -63,13 +63,13 @@ class LdapRegistrationDAO(
     }
 
   // Deleting a user in ldap will also disable them to clear them out of the enabled-users group
-  override def deleteUser(userId: WorkbenchUserId): IO[Unit] =
+  override def deleteUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit] =
     executeLdap(for {
-      _ <- disableIdentity(userId)
+      _ <- disableIdentity(userId, samRequestContext)
       _ <- IO(ldapConnectionPool.delete(userDn(userId)))
     } yield (), "deleteUser", samRequestContext)
 
-  override def enableIdentity(subject: WorkbenchSubject): IO[Unit] =
+  override def enableIdentity(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Unit] =
     retryLdapBusyWithBackoff(100.millisecond, 4) {
       executeLdap(IO(ldapConnectionPool.modify(directoryConfig.enabledUsersGroupDn, new Modification(ModificationType.ADD, Attr.member, subjectDn(subject)))).void, "enableIdentity-modify", samRequestContext).recoverWith {
         case ldape: LDAPException if ldape.getResultCode == ResultCode.NO_SUCH_OBJECT =>
@@ -82,14 +82,14 @@ class LdapRegistrationDAO(
       }
     }
 
-  override def disableIdentity(subject: WorkbenchSubject): IO[Unit] = {
+  override def disableIdentity(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Unit] = {
     executeLdap(IO(ldapConnectionPool.modify(directoryConfig.enabledUsersGroupDn, new Modification(ModificationType.DELETE, Attr.member, subjectDn(subject)))).void, "disableIdentity", samRequestContext).recover {
       case ldape: LDAPException if ldape.getResultCode == ResultCode.NO_SUCH_ATTRIBUTE
         || ldape.getResultCode == ResultCode.NO_SUCH_OBJECT =>
     }
   }
 
-  override def isEnabled(subject: WorkbenchSubject): IO[Boolean] =
+  override def isEnabled(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean] =
     for {
       entry <- executeLdap(IO(ldapConnectionPool.getEntry(directoryConfig.enabledUsersGroupDn, Attr.member)), "isEnabled", samRequestContext)
     } yield {
@@ -100,7 +100,7 @@ class LdapRegistrationDAO(
       result.getOrElse(false)
     }
 
-  override def createPetServiceAccount(petServiceAccount: PetServiceAccount): IO[PetServiceAccount] = {
+  override def createPetServiceAccount(petServiceAccount: PetServiceAccount, samRequestContext: SamRequestContext): IO[PetServiceAccount] = {
     val attributes = createPetServiceAccountAttributes(petServiceAccount) ++
       Seq(new Attribute("objectclass", Seq("top", ObjectClass.petServiceAccount).asJava), new Attribute(Attr.project, petServiceAccount.id.project.value))
 
@@ -130,7 +130,7 @@ class LdapRegistrationDAO(
     attributes ++ displayNameAttribute
   }
 
-  override def loadPetServiceAccount(petServiceAccountId: PetServiceAccountId): IO[Option[PetServiceAccount]] =
+  override def loadPetServiceAccount(petServiceAccountId: PetServiceAccountId, samRequestContext: SamRequestContext): IO[Option[PetServiceAccount]] =
     executeLdap(IO(Option(ldapConnectionPool.getEntry(petDn(petServiceAccountId))).map(unmarshalPetServiceAccount)), "loadPetServiceAccount", samRequestContext)
 
   private def unmarshalPetServiceAccount(entry: Entry): PetServiceAccount = {
@@ -144,16 +144,16 @@ class LdapRegistrationDAO(
     )
   }
 
-  override def deletePetServiceAccount(petServiceAccountId: PetServiceAccountId): IO[Unit] =
+  override def deletePetServiceAccount(petServiceAccountId: PetServiceAccountId, samRequestContext: SamRequestContext): IO[Unit] =
     executeLdap(IO(ldapConnectionPool.delete(petDn(petServiceAccountId))), "deletePetServiceAccount", samRequestContext)
 
-  override def updatePetServiceAccount(petServiceAccount: PetServiceAccount): IO[PetServiceAccount] = {
+  override def updatePetServiceAccount(petServiceAccount: PetServiceAccount, samRequestContext: SamRequestContext): IO[PetServiceAccount] = {
     val modifications = createPetServiceAccountAttributes(petServiceAccount).map { attribute =>
       new Modification(ModificationType.REPLACE, attribute.getName, attribute.getRawValues)
     }
     executeLdap(IO(ldapConnectionPool.modify(petDn(petServiceAccount.id), modifications.asJava)), "updatePetServiceAccount", samRequestContext) *> IO.pure(petServiceAccount)
   }
 
-  override def setGoogleSubjectId(userId: WorkbenchUserId, googleSubjectId: GoogleSubjectId): IO[Unit] =
+  override def setGoogleSubjectId(userId: WorkbenchUserId, googleSubjectId: GoogleSubjectId, samRequestContext: SamRequestContext): IO[Unit] =
     executeLdap(IO(ldapConnectionPool.modify(userDn(userId), new Modification(ModificationType.ADD, Attr.googleSubjectId, googleSubjectId.value))), "setGoogleSubjectId", samRequestContext)
 }

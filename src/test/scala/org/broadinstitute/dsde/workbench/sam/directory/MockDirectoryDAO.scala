@@ -101,7 +101,7 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
       IO.pure(user)
     }
 
-  override def loadUser(userId: WorkbenchUserId): IO[Option[WorkbenchUser]] = IO {
+  override def loadUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[WorkbenchUser]] = IO {
     users.get(userId)
   }
 
@@ -109,7 +109,7 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     users.filterKeys(userIds).values.toStream
   }
 
-  override def deleteUser(userId: WorkbenchUserId): IO[Unit] = IO {
+  override def deleteUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit] = IO {
     users -= userId
   }
 
@@ -152,13 +152,13 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     listSubjectsGroups(groupName, Set.empty).map(_.id)
   }
 
-  override def enableIdentity(subject: WorkbenchSubject): IO[Unit] = IO.pure(enabledUsers += ((subject, ())))
+  override def enableIdentity(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Unit] = IO.pure(enabledUsers += ((subject, ())))
 
-  override def disableIdentity(subject: WorkbenchSubject): IO[Unit] = IO {
+  override def disableIdentity(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Unit] = IO {
     enabledUsers -= subject
   }
 
-  override def isEnabled(subject: WorkbenchSubject): IO[Boolean] = IO {
+  override def isEnabled(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean] = IO {
     enabledUsers.contains(subject)
   }
 
@@ -168,7 +168,7 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     loadGroupEmail(name).map { y => (name -> y.get)}
   }
 
-  override def createPetServiceAccount(petServiceAccount: PetServiceAccount): IO[PetServiceAccount] = {
+  override def createPetServiceAccount(petServiceAccount: PetServiceAccount, samRequestContext: SamRequestContext): IO[PetServiceAccount] = {
     if (petServiceAccountsByUser.keySet.contains(petServiceAccount.id)) {
       IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"pet service account ${petServiceAccount.id} already exists")))
     }
@@ -178,11 +178,11 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     IO.pure(petServiceAccount)
   }
 
-  override def loadPetServiceAccount(petServiceAccountUniqueId: PetServiceAccountId): IO[Option[PetServiceAccount]] = IO {
+  override def loadPetServiceAccount(petServiceAccountUniqueId: PetServiceAccountId, samRequestContext: SamRequestContext): IO[Option[PetServiceAccount]] = IO {
     petServiceAccountsByUser.get(petServiceAccountUniqueId)
   }
 
-  override def deletePetServiceAccount(petServiceAccountUniqueId: PetServiceAccountId): IO[Unit] = IO {
+  override def deletePetServiceAccount(petServiceAccountUniqueId: PetServiceAccountId, samRequestContext: SamRequestContext): IO[Unit] = IO {
     petServiceAccountsByUser -= petServiceAccountUniqueId
   }
 
@@ -223,12 +223,12 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     }
     userIds match {
       case Seq() => IO.pure(None)
-      case Seq(userId) => loadUser(userId)
+      case Seq(userId) => loadUser(userId, samRequestContext)
       case _ => IO.raiseError(new WorkbenchException(s"id $petSAId refers to too many subjects: $userIds"))
     }
   }
 
-  override def updatePetServiceAccount(petServiceAccount: PetServiceAccount): IO[PetServiceAccount] = IO {
+  override def updatePetServiceAccount(petServiceAccount: PetServiceAccount, samRequestContext: SamRequestContext): IO[PetServiceAccount] = IO {
     petServiceAccountsByUser.update(petServiceAccount.id, petServiceAccount)
     petServiceAccount
   }
@@ -268,7 +268,7 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
    res.traverse(IO.pure)
   }
 
-  override def setGoogleSubjectId(userId: WorkbenchUserId, googleSubjectId: GoogleSubjectId): IO[Unit] = {
+  override def setGoogleSubjectId(userId: WorkbenchUserId, googleSubjectId: GoogleSubjectId, samRequestContext: SamRequestContext): IO[Unit] = {
     users.get(userId).fold[IO[Unit]](IO.pure(new Exception(s"user $userId not found")))(
       u => IO.pure(users + (userId -> u.copy(googleSubjectId = Some(googleSubjectId))))
     )

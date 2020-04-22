@@ -460,7 +460,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
 
     roles shouldEqual Set.empty
 
-    dirDAO.deleteUser(dummyUserInfo.userId).unsafeRunSync()
+    dirDAO.deleteUser(dummyUserInfo.userId, samRequestContext).unsafeRunSync()
   }
 
   "policyDao.listAccessPolicies" should "list policies for a newly created resource" in {
@@ -800,7 +800,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     service.createResourceType(defaultResourceType).unsafeRunSync()
     runAndWait(service.createResource(defaultResourceType, resource.resourceId, dummyUserInfo))
 
-    val dummyUserIdInfo = dirDAO.loadUser(dummyUserInfo.userId).unsafeRunSync().map { user => UserIdInfo(user.id, user.email, user.googleSubjectId) }.get
+    val dummyUserIdInfo = dirDAO.loadUser(dummyUserInfo.userId, samRequestContext).unsafeRunSync().map { user => UserIdInfo(user.id, user.email, user.googleSubjectId) }.get
     val user1 = UserIdInfo(WorkbenchUserId("user1"), WorkbenchEmail("user1@fake.com"), None)
     val user2 = UserIdInfo(WorkbenchUserId("user2"), WorkbenchEmail("user2@fake.com"), None)
     val user3 = UserIdInfo(WorkbenchUserId("user3"), WorkbenchEmail("user3@fake.com"), None)
@@ -840,8 +840,8 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     dirDAO.createUser(WorkbenchUser(resourceOwnerUserInfo.userId, Some(TestSupport.genGoogleSubjectId()), resourceOwnerUserInfo.userEmail, Some(TestSupport.genIdentityConcentratorId())), samRequestContext).unsafeRunSync()
     dirDAO.createUser(WorkbenchUser(managedGroupOwnerUserInfo.userId, Some(TestSupport.genGoogleSubjectId()), managedGroupOwnerUserInfo.userEmail, Some(TestSupport.genIdentityConcentratorId())), samRequestContext).unsafeRunSync()
 
-    val resourceOwner = dirDAO.loadUser(resourceOwnerUserInfo.userId).unsafeRunSync().map { user => UserIdInfo(user.id, user.email, user.googleSubjectId) }.get
-    val managedGroupOwner = dirDAO.loadUser(managedGroupOwnerUserInfo.userId).unsafeRunSync().map { user => UserIdInfo(user.id, user.email, user.googleSubjectId) }.get
+    val resourceOwner = dirDAO.loadUser(resourceOwnerUserInfo.userId, samRequestContext).unsafeRunSync().map { user => UserIdInfo(user.id, user.email, user.googleSubjectId) }.get
+    val managedGroupOwner = dirDAO.loadUser(managedGroupOwnerUserInfo.userId, samRequestContext).unsafeRunSync().map { user => UserIdInfo(user.id, user.email, user.googleSubjectId) }.get
 
     val directPolicyMember = UserIdInfo(WorkbenchUserId("directMember"), WorkbenchEmail("directMember@fake.com"), None)
     val user3 = UserIdInfo(WorkbenchUserId("user3"), WorkbenchEmail("user3@fake.com"), None)

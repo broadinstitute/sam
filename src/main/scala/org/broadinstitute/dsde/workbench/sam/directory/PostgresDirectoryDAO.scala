@@ -394,10 +394,10 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     subject match {
       case subject: WorkbenchGroupName => loadGroupEmail(subject)
       case subject: PetServiceAccountId => for {
-        petSA <- loadPetServiceAccount(subject)
+        petSA <- loadPetServiceAccount(subject, samRequestContext)
       } yield petSA.map(_.serviceAccount.email)
       case subject: WorkbenchUserId => for {
-        user <- loadUser(subject)
+        user <- loadUser(subject, samRequestContext)
       } yield user.map(_.email)
       case subject: FullyQualifiedPolicyId => loadPolicyEmail(subject)
       case _ => throw new WorkbenchException(s"unexpected subject [$subject]")
@@ -464,7 +464,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     })
   }
 
-  override def loadUser(userId: WorkbenchUserId): IO[Option[WorkbenchUser]] = {
+  override def loadUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[WorkbenchUser]] = {
     runInTransaction("loadUser", samRequestContext)({ implicit session =>
       val userTable = UserTable.syntax
 
@@ -504,7 +504,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
   }
 
   // Not worrying about cascading deletion of user's pet SAs because LDAP doesn't delete user's pet SAs automatically
-  override def deleteUser(userId: WorkbenchUserId): IO[Unit] = {
+  override def deleteUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit] = {
     runInTransaction("deleteUser", samRequestContext)({ implicit session =>
       val userTable = UserTable.syntax
       samsql"delete from ${UserTable.table} where ${userTable.id} = ${userId}".update().apply()
@@ -650,7 +650,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     listMemberOfGroups(groupId)
   }
 
-  override def enableIdentity(subject: WorkbenchSubject): IO[Unit] = {
+  override def enableIdentity(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Unit] = {
     subject match {
       case userId: WorkbenchUserId =>
         runInTransaction("enableIdentity", samRequestContext)({ implicit session =>
@@ -661,7 +661,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     }
   }
 
-  override def disableIdentity(subject: WorkbenchSubject): IO[Unit] = {
+  override def disableIdentity(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Unit] = {
     runInTransaction("disableIdentity", samRequestContext)({ implicit session =>
       subject match {
         case userId: WorkbenchUserId =>
@@ -672,7 +672,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     })
   }
 
-  override def isEnabled(subject: WorkbenchSubject): IO[Boolean] = {
+  override def isEnabled(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean] = {
     runInTransaction("isEnabled", samRequestContext)({ implicit session =>
       val userIdOpt = subject match {
         case user: WorkbenchUserId => Option(user)
@@ -704,7 +704,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     })
   }
 
-  override def createPetServiceAccount(petServiceAccount: PetServiceAccount): IO[PetServiceAccount] = {
+  override def createPetServiceAccount(petServiceAccount: PetServiceAccount, samRequestContext: SamRequestContext): IO[PetServiceAccount] = {
     runInTransaction("createPetServiceAccount", samRequestContext)({ implicit session =>
       val petServiceAccountColumn = PetServiceAccountTable.column
 
@@ -715,7 +715,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     })
   }
 
-  override def loadPetServiceAccount(petServiceAccountId: PetServiceAccountId): IO[Option[PetServiceAccount]] = {
+  override def loadPetServiceAccount(petServiceAccountId: PetServiceAccountId, samRequestContext: SamRequestContext): IO[Option[PetServiceAccount]] = {
     runInTransaction("loadPetServiceAccount", samRequestContext)({ implicit session =>
       val petServiceAccountTable = PetServiceAccountTable.syntax
 
@@ -728,7 +728,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     })
   }
 
-  override def deletePetServiceAccount(petServiceAccountId: PetServiceAccountId): IO[Unit] = {
+  override def deletePetServiceAccount(petServiceAccountId: PetServiceAccountId, samRequestContext: SamRequestContext): IO[Unit] = {
     runInTransaction("deletePetServiceAccount", samRequestContext)({ implicit session =>
       val petServiceAccountTable = PetServiceAccountTable.syntax
       val deletePetQuery = samsql"delete from ${PetServiceAccountTable.table} where ${petServiceAccountTable.userId} = ${petServiceAccountId.userId} and ${petServiceAccountTable.project} = ${petServiceAccountId.project}"
@@ -750,7 +750,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     })
   }
 
-  override def updatePetServiceAccount(petServiceAccount: PetServiceAccount): IO[PetServiceAccount] = {
+  override def updatePetServiceAccount(petServiceAccount: PetServiceAccount, samRequestContext: SamRequestContext): IO[PetServiceAccount] = {
     runInTransaction("updatePetServiceAccount", samRequestContext)({ implicit session =>
       val petServiceAccountColumn = PetServiceAccountTable.column
       val updatePetQuery = samsql"""update ${PetServiceAccountTable.table} set
@@ -831,7 +831,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     })
   }
 
-  override def setGoogleSubjectId(userId: WorkbenchUserId, googleSubjectId: GoogleSubjectId): IO[Unit] = {
+  override def setGoogleSubjectId(userId: WorkbenchUserId, googleSubjectId: GoogleSubjectId, samRequestContext: SamRequestContext): IO[Unit] = {
     runInTransaction("setGoogleSubjectId", samRequestContext)({ implicit session =>
       val u = UserTable.column
       samsql"update ${UserTable.table} set ${u.googleSubjectId} = ${googleSubjectId} where ${u.id} = ${userId}".update().apply()
