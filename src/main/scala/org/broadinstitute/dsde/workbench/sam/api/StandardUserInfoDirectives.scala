@@ -25,7 +25,7 @@ import org.broadinstitute.dsde.workbench.sam.identityConcentrator.IdentityConcen
 import scala.util.matching.Regex
 import DefaultJsonProtocol._
 import WorkbenchIdentityJsonSupport.identityConcentratorIdFormat
-import org.broadinstitute.dsde.workbench.sam.util.TraceContext
+import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 trait StandardUserInfoDirectives extends UserInfoDirectives with LazyLogging {
   implicit val executionContext: ExecutionContext

@@ -6,7 +6,7 @@ import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google._
 import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
-import org.broadinstitute.dsde.workbench.sam.util.TraceContext
+import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 /**
   * Created by dvoet on 5/26/17.

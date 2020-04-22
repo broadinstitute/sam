@@ -11,7 +11,7 @@ import org.broadinstitute.dsde.workbench.sam.{model, _}
 import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, LoadResourceAuthDomainResult}
-import org.broadinstitute.dsde.workbench.sam.util.TraceContext
+import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Success
@@ -47,7 +47,7 @@ class ResourceService(
     *
     * This will fail if SamResourceTypes.resourceTypeAdmin does not exist in resourceTypes
     */
-  def initResourceTypes(traceContext: TraceContext = null): IO[Iterable[ResourceType]] =
+  def initResourceTypes(traceContext: SamRequestContext = null): IO[Iterable[ResourceType]] =
     resourceTypes.get(SamResourceTypes.resourceTypeAdminName) match {
       case None =>
         IO.raiseError(new WorkbenchException(s"Could not initialize resource types because ${SamResourceTypes.resourceTypeAdminName.value} does not exist."))

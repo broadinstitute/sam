@@ -1,7 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.directory
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.util.TraceContext
+import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 /**
   * This class is here because even though Postgres is the source of record, Apache proxies still query LDAP directly

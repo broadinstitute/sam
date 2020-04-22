@@ -9,7 +9,7 @@ import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, LoadResourceAuthDomainResult}
 import org.broadinstitute.dsde.workbench.sam.util.OpenCensusIOUtils._
-import org.broadinstitute.dsde.workbench.sam.util.TraceContext
+import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import scala.concurrent.ExecutionContext
 
@@ -19,7 +19,7 @@ class PolicyEvaluatorService(
     private val accessPolicyDAO: AccessPolicyDAO,
     private val directoryDAO: DirectoryDAO )(implicit val executionContext: ExecutionContext)
     extends LazyLogging {
-  def initPolicy(traceContext: TraceContext = null): IO[Unit] = {
+  def initPolicy(traceContext: SamRequestContext = null): IO[Unit] = {
     val policyName = AccessPolicyName("admin-notifier-set-public")
     accessPolicyDAO
       .createPolicy(

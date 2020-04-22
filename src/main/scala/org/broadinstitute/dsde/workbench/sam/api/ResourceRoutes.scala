@@ -27,7 +27,7 @@ import org.broadinstitute.dsde.workbench.util.ExecutionContexts
 import scalikejdbc.config.DBs
 import io.opencensus.scala.akka.http.TracingDirective._
 import org.broadinstitute.dsde.workbench.sam.util.OpenCensusIOUtils.completeWithTrace
-import org.broadinstitute.dsde.workbench.sam.util.TraceContext
+import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 /**
   * Created by mbemis on 5/22/17.

@@ -9,7 +9,7 @@ import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAcc
 import org.broadinstitute.dsde.workbench.sam.db._
 import org.broadinstitute.dsde.workbench.sam.db.tables._
 import org.broadinstitute.dsde.workbench.sam.model.{FullyQualifiedPolicyId, _}
-import org.broadinstitute.dsde.workbench.sam.util.{DatabaseSupport, TraceContext}
+import org.broadinstitute.dsde.workbench.sam.util.{DatabaseSupport, SamRequestContext}
 import scalikejdbc._
 import SamParameterBinderFactory._
 import akka.http.scaladsl.model.StatusCodes

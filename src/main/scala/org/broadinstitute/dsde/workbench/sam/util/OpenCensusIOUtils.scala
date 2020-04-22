@@ -19,9 +19,9 @@ object OpenCensusIOUtils {
     traceIOSpan(IO(startSpanWithParent(name, parentSpan)), failureStatus)(f)
 
   def traceIOWithContext[T](
-                            name: String,
-                            traceContext: TraceContext,
-                            failureStatus: Throwable => Status = (_: Throwable) => Status.UNKNOWN
+                             name: String,
+                             traceContext: SamRequestContext,
+                             failureStatus: Throwable => Status = (_: Throwable) => Status.UNKNOWN
                           )(f: Span => IO[T]): IO[T] =
     traceIOSpan(IO(startSpanWithParent(name, traceContext.parentSpan)), failureStatus)(f)
 
@@ -45,9 +45,9 @@ object OpenCensusIOUtils {
   }
 
   // Makes a complete() akka-http call, with tracing added, at the rate specified in config/sam.conf (a generated conf file)
-  def completeWithTrace(request: TraceContext => ToResponseMarshallable): Route =
+  def completeWithTrace(request: SamRequestContext => ToResponseMarshallable): Route =
     traceRequest {span =>
-      val traceContext = new TraceContext(span)
+      val traceContext = new SamRequestContext(span)
       complete {
         request(traceContext)
       }

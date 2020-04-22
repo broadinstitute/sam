@@ -10,15 +10,15 @@ import org.broadinstitute.dsde.workbench.sam.service.PolicyEvaluatorService
 import ImplicitConversions.ioOnSuccessMagnet
 import cats.implicits._
 import cats.effect.IO
-import org.broadinstitute.dsde.workbench.sam.util.TraceContext
+import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 trait SecurityDirectives {
   def policyEvaluatorService: PolicyEvaluatorService
 
-  def requireAction(resource: FullyQualifiedResourceId, action: ResourceAction, userId: WorkbenchUserId, traceContext: TraceContext = null): Directive0 = //todo: create a root span here instead of allowing null?
+  def requireAction(resource: FullyQualifiedResourceId, action: ResourceAction, userId: WorkbenchUserId, traceContext: SamRequestContext = null): Directive0 = //todo: create a root span here instead of allowing null?
     requireOneOfAction(resource, Set(action), userId)
 
-  def requireOneOfAction(resource: FullyQualifiedResourceId, requestedActions: Set[ResourceAction], userId: WorkbenchUserId, traceContext: TraceContext = null): Directive0 = //todo: create a root span here instead of allowing null?
+  def requireOneOfAction(resource: FullyQualifiedResourceId, requestedActions: Set[ResourceAction], userId: WorkbenchUserId, traceContext: SamRequestContext = null): Directive0 = //todo: create a root span here instead of allowing null?
     Directives.mapInnerRoute { innerRoute =>
       onSuccess(hasPermissionOneOf(resource, requestedActions, userId)) { hasPermission =>
         if (hasPermission) {

@@ -10,7 +10,7 @@ import org.broadinstitute.dsde.workbench.model.google.{ServiceAccount, ServiceAc
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO.{Attr, ObjectClass}
-import org.broadinstitute.dsde.workbench.sam.util.{LdapSupport, TraceContext}
+import org.broadinstitute.dsde.workbench.sam.util.{LdapSupport, SamRequestContext}
 
 import scala.collection.JavaConverters._
 import scala.concurrent.ExecutionContext

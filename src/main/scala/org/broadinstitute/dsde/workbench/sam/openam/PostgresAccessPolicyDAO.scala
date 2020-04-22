@@ -15,7 +15,7 @@ import org.broadinstitute.dsde.workbench.sam.db.dao.{PostgresGroupDAO, SubGroupM
 import org.broadinstitute.dsde.workbench.sam.db.tables._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.LoadResourceAuthDomainResult.{Constrained, NotConstrained, ResourceNotFound}
-import org.broadinstitute.dsde.workbench.sam.util.{DatabaseSupport, TraceContext}
+import org.broadinstitute.dsde.workbench.sam.util.{DatabaseSupport, SamRequestContext}
 import org.postgresql.util.PSQLException
 import scalikejdbc._
 
