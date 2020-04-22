@@ -38,17 +38,7 @@ class PolicyEvaluatorService(
       }
   }
 
-  def hasPermission(resource: FullyQualifiedResourceId, action: ResourceAction, userId: WorkbenchUserId, parentSpan: Span = null): IO[Boolean] = {
-    // first attempt the shallow check and fallback to the full check if it returns false
-    for {
-      attempt1 <- hasPermissionShallowCheck(resource, action, userId)
-      attempt2 <- if (attempt1) IO.pure(attempt1) else traceIOWithParent("fullCheck", parentSpan)(_ => hasPermissionFullCheck(resource, action, userId))
-    } yield {
-      attempt2
-    }
-  }
-
-  def hasPermissionFullCheck(resource: FullyQualifiedResourceId, action: ResourceAction, userId: WorkbenchUserId, parentSpan: Span = null): IO[Boolean] = {
+  def hasPermission(resource: FullyQualifiedResourceId, action: ResourceAction, userId: WorkbenchUserId, parentSpan: Span = null): IO[Boolean] = traceIOWithParent("hasPermission", parentSpan)(_ => {
     def checkPermission(force: Boolean) =
       listUserResourceActions(resource, userId, force).map { _.contains(action) }
 
@@ -60,56 +50,7 @@ class PolicyEvaluatorService(
     } yield {
       attempt2
     }
-  }
-
-  /**
-    * Check if the user has the action on the resource.  A true result means they do, and can be trusted.  A false result only means that
-    * the shallow check did not find that to be true, but a more exhaustive check might.
-    *
-    * In many cases users are direct members of policies, and it is very fast to query direct members of a policy (as opposed to
-    * calling isMemberOf for a user), this method leverages that to do a fast check for presence
-    */
-  def hasPermissionShallowCheck(resource: FullyQualifiedResourceId, action: ResourceAction, userId: WorkbenchUserId): IO[Boolean] = {
-
-    for {
-      res <- resourceTypes.get(resource.resourceTypeName).traverse {
-        rt =>
-
-          val roleNamesWithAction = rt.roles.filter(_.actions.contains(action)).map(_.roleName)
-          val hasAction = directMemberHasActionOnResource(resource, roleNamesWithAction, action, userId)
-
-          // if the resource type OR action are NOT auth domain constrainable... just return
-          if (!rt.isAuthDomainConstrainable || !rt.actionPatterns.exists( ap => ap.authDomainConstrainable && ap.matches(action)) ) {
-            hasAction
-          } else {
-            for {
-              // check if our result should be modulated by the auth domain constraint (ie we are not a member)
-              authDomainsResult <- accessPolicyDAO.loadResourceAuthDomain(resource)
-              authConstraintOk <- authDomainsResult match {
-                case LoadResourceAuthDomainResult.NotConstrained | LoadResourceAuthDomainResult.ResourceNotFound =>
-                  IO.pure(true)
-                case LoadResourceAuthDomainResult.Constrained(authDomains) =>
-                  // if there is more than one group, just fallback
-                  if (authDomains.size > 1) {
-                    IO.pure(false)
-                  } else {
-                    directoryDAO.isGroupMember(authDomains.head, userId)
-                  }
-              }
-              res2 <- if (authConstraintOk) hasAction else IO.pure(false)
-            } yield res2
-          }
-      }
-    } yield res.getOrElse(false)
-  }
-
-  private def directMemberHasActionOnResource(resource: FullyQualifiedResourceId, roleNamesWithAction: Set[ResourceRoleName], action: ResourceAction, userId: WorkbenchUserId ): IO[Boolean] = {
-    for {
-      // get the policies for this resource and filter to ones that contain the roles with the action, or the action directly
-      policies <- accessPolicyDAO.listAccessPolicies(resource).map(_.toList.filter(p => p.roles.intersect(roleNamesWithAction).nonEmpty || p.actions.contains(action)))
-      members = policies.flatMap(_.members)
-    } yield members.contains(userId)
-  }
+  })
 
   /**
     * Lists all the actions a user has on the specified resource
