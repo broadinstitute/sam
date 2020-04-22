@@ -86,7 +86,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
   private def createUserInternal(user: WorkbenchUser) = {
     for {
       createdUser <- directoryDAO.createUser(user, samRequestContext)
-      _ <- registrationDAO.createUser(samRequestContext = samRequestContext)
+      _ <- registrationDAO.createUser(user, samRequestContext)
       _ <- IO.fromFuture(IO(cloudExtensions.onUserCreate(createdUser)))
     } yield createdUser
   }

@@ -496,7 +496,7 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
         dao.createResource(resource).unsafeRunSync()
 
         dirDao.createGroup(defaultGroup).unsafeRunSync()
-        dirDao.createUser(samRequestContext = samRequestContext).unsafeRunSync()
+        dirDao.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
         val policy = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("policyName")), Set(defaultGroup.id, defaultUser.id), WorkbenchEmail("policy@email.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), false)
         dao.createPolicy(policy).unsafeRunSync()
@@ -518,7 +518,7 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
         dao.createResource(resource).unsafeRunSync()
 
         dirDao.createGroup(defaultGroup).unsafeRunSync()
-        dirDao.createUser(samRequestContext = samRequestContext).unsafeRunSync()
+        dirDao.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
         val policy = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("policyName")), Set(defaultGroup.id, defaultUser.id), WorkbenchEmail("policy@email.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), false)
         dao.createPolicy(policy).unsafeRunSync()
@@ -534,7 +534,7 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
         dao.createResource(resource).unsafeRunSync()
 
         dirDao.createGroup(defaultGroup).unsafeRunSync()
-        dirDao.createUser(samRequestContext = samRequestContext).unsafeRunSync()
+        dirDao.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
         val policy = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("policyName")), Set(defaultGroup.id, defaultUser.id), WorkbenchEmail("policy@email.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), false)
         dao.createPolicy(policy).unsafeRunSync()
