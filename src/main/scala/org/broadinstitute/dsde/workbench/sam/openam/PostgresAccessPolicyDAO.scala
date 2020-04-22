@@ -30,7 +30,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
   // released at the end of the transaction.
   override def createResourceType(resourceType: ResourceType): IO[ResourceType] = {
     val uniqueActions = resourceType.roles.flatMap(_.actions)
-    runInTransaction("createResourceType") { implicit session =>
+    runInTransaction("createResourceType", samRequestContext)({ implicit session =>
       samsql"lock table ${ResourceTypeTable.table} IN EXCLUSIVE MODE".execute().apply()
       val resourceTypePK = insertResourceType(resourceType.name)
 
@@ -40,7 +40,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
       overwriteRoleActions(resourceType.roles, resourceTypePK)
 
       resourceType
-    }
+    })
   }
 
   private def overwriteRoleActions(roles: Set[ResourceRole], resourceTypePK: ResourceTypePK)(implicit session: DBSession): Int = {
@@ -198,7 +198,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
   // 1. Create Resource
   // 2. Create the entries in the join table for the auth domains
   override def createResource(resource: Resource): IO[Resource] = {
-    runInTransaction("createResource") { implicit session =>
+    runInTransaction("createResource", samRequestContext)({ implicit session =>
       val resourcePK = insertResource(resource)
 
       if (resource.authDomain.nonEmpty) {
@@ -206,7 +206,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
       }
 
       resource
-    }
+    })
   }
 
   private def insertResource(resource: Resource)(implicit session: DBSession): ResourcePK = {
@@ -240,14 +240,14 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
   }
 
   override def deleteResource(resource: FullyQualifiedResourceId): IO[Unit] = {
-    runInTransaction("deleteResource") { implicit session =>
+    runInTransaction("deleteResource", samRequestContext)({ implicit session =>
       val r = ResourceTable.syntax("r")
       samsql"delete from ${ResourceTable as r} where ${r.name} = ${resource.resourceId} and ${r.resourceTypeId} = (${loadResourceTypePK(resource.resourceTypeName)})".update().apply()
-    }
+    })
   }
 
   override def loadResourceAuthDomain(resource: FullyQualifiedResourceId): IO[LoadResourceAuthDomainResult] = {
-    runInTransaction("loadResourceAuthDomain") { implicit session =>
+    runInTransaction("loadResourceAuthDomain", samRequestContext)({ implicit session =>
       val ad = AuthDomainTable.syntax("ad")
       val r = ResourceTable.syntax("r")
       val rt = ResourceTypeTable.syntax("rt")
@@ -282,13 +282,13 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
           }
         case Some(nel) => Constrained(nel.map(WorkbenchGroupName)) // case 3
       }
-    }
+    })
   }
 
   override def listResourcesConstrainedByGroup(groupId: WorkbenchGroupIdentity): IO[Set[Resource]] = {
     import SamTypeBinders._
 
-    runInTransaction("listResourcesConstrainedByGroup") { implicit session =>
+    runInTransaction("listResourcesConstrainedByGroup", samRequestContext)({ implicit session =>
       val r = ResourceTable.syntax("r")
       val ad = AuthDomainTable.syntax("ad")
       val g = GroupTable.syntax("g")
@@ -326,7 +326,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
           case (_, _, authDomainGroupName) => authDomainGroupName
         }.toSet)
       }.toSet
-    }
+    })
   }
 
   override def removeAuthDomainFromResource(resource: FullyQualifiedResourceId): IO[Unit] = {
@@ -334,7 +334,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     val ad = AuthDomainTable.syntax("ad")
     val rt = ResourceTypeTable.syntax("rt")
 
-    runInTransaction("removeAuthDomainFromResource") { implicit session =>
+    runInTransaction("removeAuthDomainFromResource", samRequestContext)({ implicit session =>
       samsql"""delete from ${AuthDomainTable as ad}
               where ${ad.resourceId} =
               (select ${r.id} from ${ResourceTable as r}
@@ -342,11 +342,11 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
               on ${r.resourceTypeId} = ${rt.id}
               where ${r.name} = ${resource.resourceId}
               and ${rt.name} = ${resource.resourceTypeName})""".update().apply()
-    }
+    })
   }
 
   override def createPolicy(policy: AccessPolicy): IO[AccessPolicy] = {
-    runInTransaction("createPolicy") { implicit session =>
+    runInTransaction("createPolicy", samRequestContext)({ implicit session =>
       val groupId = insertPolicyGroup(policy)
       val policyId = insertPolicy(policy, groupId)
 
@@ -356,7 +356,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
       insertPolicyActions(policy.actions, policyId)
 
       policy
-    }.recoverWith {
+    }).recoverWith {
       case duplicateException: PSQLException if duplicateException.getSQLState == PSQLStateExtensions.UNIQUE_VIOLATION =>
         IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"policy $policy already exists")))
     }
@@ -446,7 +446,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     val p = PolicyTable.syntax("p")
     val g = GroupTable.syntax("g")
 
-    runInTransaction("deletePolicy") { implicit session =>
+    runInTransaction("deletePolicy", samRequestContext)({ implicit session =>
       val policyGroupPKOpt = samsql"""delete from ${PolicyTable as p}
         where ${p.name} = ${policy.accessPolicyName}
         and ${p.resourceId} = (${ResourceTable.loadResourcePK(policy.resource)})
@@ -456,7 +456,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
         samsql"""delete from ${GroupTable as g}
            where ${g.id} = ${policyGroupPK}""".update().apply()
       }
-    }
+    })
   }
 
   override def loadPolicy(resourceAndPolicyName: FullyQualifiedPolicyId): IO[Option[AccessPolicy]] = {
@@ -464,9 +464,9 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
   }
 
   override def overwritePolicyMembers(id: FullyQualifiedPolicyId, memberList: Set[WorkbenchSubject]): IO[Unit] = {
-    runInTransaction("overwritePolicyMembers") { implicit session =>
+    runInTransaction("overwritePolicyMembers", samRequestContext)({ implicit session =>
       overwritePolicyMembersInternal(id, memberList)
-    }
+    })
   }
 
   //Steps: Delete every member from the underlying group and then add all of the new members. Do this in a *single*
@@ -484,14 +484,14 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
   }
 
   override def overwritePolicy(newPolicy: AccessPolicy): IO[AccessPolicy] = {
-    runInTransaction("overwritePolicy") { implicit session =>
+    runInTransaction("overwritePolicy", samRequestContext)({ implicit session =>
       overwritePolicyMembersInternal(newPolicy.id, newPolicy.members)
       overwritePolicyRolesInternal(newPolicy.id, newPolicy.roles)
       overwritePolicyActionsInternal(newPolicy.id, newPolicy.actions)
       setPolicyIsPublicInternal(newPolicy.id, newPolicy.public)
 
       newPolicy
-    }
+    })
   }
 
   private def overwritePolicyRolesInternal(id: FullyQualifiedPolicyId, roles: Set[ResourceRoleName])(implicit session: DBSession): Int = {
@@ -533,9 +533,9 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
                and ${p.public} = true"""
 
     import SamTypeBinders._
-    runInTransaction("listPublicAccessPolicies") { implicit session =>
+    runInTransaction("listPublicAccessPolicies", samRequestContext)({ implicit session =>
       query.map(rs => ResourceIdAndPolicyName(rs.get[ResourceId](r.resultName.name), rs.get[AccessPolicyName](p.resultName.name))).list().apply().toStream
-    }
+    })
   }
 
   override def listPublicAccessPolicies(resource: FullyQualifiedResourceId): IO[Stream[AccessPolicyWithoutMembers]] = {
@@ -563,7 +563,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
           and ${p.public} = true"""
 
     import SamTypeBinders._
-    runInTransaction("listPublicAccessPolicies") { implicit session =>
+    runInTransaction("listPublicAccessPolicies", samRequestContext)({ implicit session =>
       val results = listPoliciesQuery.map(rs => (PolicyInfo(rs.get[AccessPolicyName](p.resultName.name), rs.get[ResourceId](r.resultName.name), rs.get[ResourceTypeName](rt.resultName.name), rs.get[WorkbenchEmail](g.resultName.email), rs.boolean(p.resultName.public)),
         (rs.stringOpt(rr.resultName.role).map(ResourceRoleName(_)), rs.stringOpt(ra.resultName.action).map(ResourceAction(_))))).list().apply().groupBy(_._1)
 
@@ -574,7 +574,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
 
         AccessPolicyWithoutMembers(FullyQualifiedPolicyId(FullyQualifiedResourceId(policyInfo.resourceTypeName, policyInfo.resourceId), policyInfo.name), policyInfo.email, roles.flatten.toSet, actions.flatten.toSet, policyInfo.public)
       }.toStream
-    }
+    })
   }
 
   // Abstracts logic to load and unmarshal one or more policies, use to get full AccessPolicy objects from Postgres
@@ -618,7 +618,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
           ${limitOnePolicyClause}"""
 
     import SamTypeBinders._
-    runInTransaction("listPolicies") { implicit session =>
+    runInTransaction("listPolicies", samRequestContext)({ implicit session =>
       val results = listPoliciesQuery.map(rs => (PolicyInfo(rs.get[AccessPolicyName](p.resultName.name), rs.get[ResourceId](r.resultName.name), rs.get[ResourceTypeName](rt.resultName.name), rs.get[WorkbenchEmail](g.resultName.email), rs.boolean(p.resultName.public)),
         (rs.stringOpt(gm.resultName.memberUserId).map(WorkbenchUserId), rs.stringOpt(sg.resultName.name).map(WorkbenchGroupName), rs.stringOpt(sp.resultName.name).map(AccessPolicyName(_)), rs.stringOpt(sr.resultName.name).map(ResourceId(_)), rs.stringOpt(srt.resultName.name).map(ResourceTypeName(_))),
         (rs.stringOpt(rr.resultName.role).map(ResourceRoleName(_)), rs.stringOpt(ra.resultName.action).map(ResourceAction(_))))).list().apply().groupBy(_._1)
@@ -636,14 +636,14 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
 
         AccessPolicy(FullyQualifiedPolicyId(FullyQualifiedResourceId(policyInfo.resourceTypeName, policyInfo.resourceId), policyInfo.name), members, policyInfo.email, roles.flatten.toSet, actions.flatten.toSet, policyInfo.public)
       }.toStream
-    }
+    })
   }
 
   override def listResourcesWithAuthdomains(resourceTypeName: ResourceTypeName, resourceId: Set[ResourceId]): IO[Set[Resource]] = {
     import SamTypeBinders._
 
     if(resourceId.nonEmpty) {
-      runInTransaction("listResourcesWithAuthdomains") { implicit session =>
+      runInTransaction("listResourcesWithAuthdomains", samRequestContext)({ implicit session =>
         val r = ResourceTable.syntax("r")
         val ad = AuthDomainTable.syntax("ad")
         val g = GroupTable.syntax("g")
@@ -664,7 +664,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
             case (_, Some(authDomainGroupName)) => authDomainGroupName
           }.toSet)
         }.toSet
-      }
+      })
     } else IO.pure(Set.empty)
   }
 
@@ -684,7 +684,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     val g = GroupTable.syntax("g")
     val p = PolicyTable.syntax("p")
 
-    runInTransaction("listAccessPolicies") { implicit session =>
+    runInTransaction("listAccessPolicies", samRequestContext)({ implicit session =>
       import SamTypeBinders._
 
       samsql"""with recursive ${ancestorGroupsTable.table}(${agColumn.parentGroupId}) as (
@@ -701,7 +701,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
          join ${ResourceTable as r} on ${r.id} = ${p.resourceId}
          join ${ResourceTypeTable as rt} on ${rt.id} = ${r.resourceTypeId}
          where ${rt.name} = ${resourceTypeName}""".map(rs => ResourceIdAndPolicyName(rs.get[ResourceId](r.resultName.name), rs.get[AccessPolicyName](p.resultName.name))).list().apply().toSet
-    }
+    })
   }
 
   override def listAccessPolicies(resource: FullyQualifiedResourceId): IO[Stream[AccessPolicy]] = {
@@ -709,7 +709,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
   }
 
   override def listAccessPoliciesForUser(resource: FullyQualifiedResourceId, user: WorkbenchUserId): IO[Set[AccessPolicyWithoutMembers]] = {
-    runInTransaction("listAccessPoliciesForUser") { implicit session =>
+    runInTransaction("listAccessPoliciesForUser", samRequestContext)({ implicit session =>
       val ancestorGroupsTable = SubGroupMemberTable("ancestor_groups")
       val ag = ancestorGroupsTable.syntax("ag")
       val agColumn = ancestorGroupsTable.column
@@ -759,7 +759,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
 
         AccessPolicyWithoutMembers(FullyQualifiedPolicyId(FullyQualifiedResourceId(policyInfo.resourceTypeName, policyInfo.resourceId), policyInfo.name), policyInfo.email, roles.flatten.toSet, actions.flatten.toSet, policyInfo.public)
       }.toSet
-    }
+    })
   }
 
   override def listFlattenedPolicyMembers(policyId: FullyQualifiedPolicyId): IO[Set[WorkbenchUser]] = {
@@ -767,20 +767,20 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     val sg = subGroupMemberTable.syntax("sg")
     val u = UserTable.syntax("u")
 
-    runInTransaction("listFlattenedPolicyMembers") { implicit session =>
+    runInTransaction("listFlattenedPolicyMembers", samRequestContext)({ implicit session =>
       val query = samsql"""with recursive ${recursiveMembersQuery(policyId, subGroupMemberTable)}
         select ${u.resultAll}
         from ${subGroupMemberTable as sg}
         join ${UserTable as u} on ${u.id} = ${sg.memberUserId}"""
 
       query.map(UserTable(u)).list().apply().toSet.map(UserTable.unmarshalUserRecord)
-    }
+    })
   }
 
   override def setPolicyIsPublic(policyId: FullyQualifiedPolicyId, isPublic: Boolean): IO[Unit] = {
-    runInTransaction("setPolicyIsPublic") { implicit session =>
+    runInTransaction("setPolicyIsPublic", samRequestContext)({ implicit session =>
       setPolicyIsPublicInternal(policyId, isPublic)
-    }
+    })
   }
 
   private def setPolicyIsPublicInternal(policyId: FullyQualifiedPolicyId, isPublic: Boolean)(implicit session: DBSession): Int = {
