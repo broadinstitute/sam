@@ -223,7 +223,7 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
 
       "add users to groups" in {
         dao.createGroup(defaultGroup).unsafeRunSync()
-        dao.createUser(defaultUser).unsafeRunSync()
+        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
         dao.addGroupMember(defaultGroup.id, defaultUser.id).unsafeRunSync() shouldBe true
 
