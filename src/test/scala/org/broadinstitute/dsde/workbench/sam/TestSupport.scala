@@ -30,6 +30,7 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, MockAccessPolicyDAO}
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
 import org.broadinstitute.dsde.workbench.sam.service._
+import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.scalatest.Matchers
 import org.scalatest.concurrent.PatienceConfiguration.Timeout
 import org.scalatest.prop.{Configuration, PropertyChecks}
@@ -52,6 +53,8 @@ trait TestSupport{
   implicit val cs = IO.contextShift(scala.concurrent.ExecutionContext.global)
   implicit val timer = IO.timer(scala.concurrent.ExecutionContext.global)
   implicit val eqWorkbenchException: Eq[WorkbenchException] = (x: WorkbenchException, y: WorkbenchException) => x.getMessage == y.getMessage
+
+  val samRequestContext = SamRequestContext(null)
 
   def dummyResourceType(name: ResourceTypeName) = ResourceType(name, Set.empty, Set(ResourceRole(ResourceRoleName("owner"), Set.empty)), ResourceRoleName("owner"))
 }
