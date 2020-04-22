@@ -223,7 +223,7 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
 
       "add users to groups" in {
         dao.createGroup(defaultGroup).unsafeRunSync()
-        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
+        dao.createUser(samRequestContext = samRequestContext).unsafeRunSync()
 
         dao.addGroupMember(defaultGroup.id, defaultUser.id).unsafeRunSync() shouldBe true
 
@@ -256,7 +256,7 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
       }
 
       "add users to policies" in {
-        dao.createUser(defaultUser).unsafeRunSync()
+        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         policyDAO.createResourceType(resourceType).unsafeRunSync()
         policyDAO.createResource(defaultResource).unsafeRunSync()
         policyDAO.createPolicy(defaultPolicy).unsafeRunSync()
@@ -317,7 +317,7 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
 
       "remove users from groups" in {
         dao.createGroup(defaultGroup).unsafeRunSync()
-        dao.createUser(defaultUser).unsafeRunSync()
+        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
         dao.addGroupMember(defaultGroup.id, defaultUser.id).unsafeRunSync() shouldBe true
         dao.removeGroupMember(defaultGroup.id, defaultUser.id).unsafeRunSync() shouldBe true
@@ -353,7 +353,7 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
       }
 
       "remove users from policies" in {
-        dao.createUser(defaultUser).unsafeRunSync()
+        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         policyDAO.createResourceType(resourceType).unsafeRunSync()
         policyDAO.createResource(defaultResource).unsafeRunSync()
         policyDAO.createPolicy(defaultPolicy).unsafeRunSync()
@@ -382,7 +382,7 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
 
     "createUser" - {
       "create a user" in {
-        dao.createUser(defaultUser).unsafeRunSync() shouldEqual defaultUser
+        dao.createUser(defaultUser, samRequestContext).unsafeRunSync() shouldEqual defaultUser
         val loadedUser = dao.loadUser(defaultUser.id).unsafeRunSync().getOrElse(fail(s"failed to load user ${defaultUser.id}"))
         loadedUser shouldEqual defaultUser
       }
@@ -390,14 +390,14 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
 
     "loadUser" - {
       "load a user without a google subject id" in {
-        dao.createUser(defaultUser.copy(googleSubjectId = None)).unsafeRunSync()
+        dao.createUser(defaultUser.copy(googleSubjectId = None), samRequestContext).unsafeRunSync()
         dao.loadUser(defaultUser.id).unsafeRunSync().map(user => user.googleSubjectId shouldBe None)
       }
     }
 
     "deleteUser" - {
       "delete users" in {
-        dao.createUser(defaultUser).unsafeRunSync() shouldEqual defaultUser
+        dao.createUser(defaultUser, samRequestContext).unsafeRunSync() shouldEqual defaultUser
         val loadedUser = dao.loadUser(defaultUser.id).unsafeRunSync().getOrElse(fail(s"failed to load user ${defaultUser.id}"))
         loadedUser shouldEqual defaultUser
         dao.deleteUser(defaultUser.id).unsafeRunSync()
@@ -408,7 +408,7 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
         val user = defaultUser
         val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName("parentGroup"), Set(user.id), WorkbenchEmail("bar@baz.com"))
 
-        dao.createUser(user).unsafeRunSync()
+        dao.createUser(user, samRequestContext).unsafeRunSync()
         dao.createGroup(parentGroup).unsafeRunSync()
 
         dao.deleteUser(user.id).unsafeRunSync()
@@ -423,7 +423,7 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
         val parentGroupId = WorkbenchGroupName("parentGroup")
         val parentGroup = BasicWorkbenchGroup(parentGroupId, Set(defaultUserId, subGroupId), WorkbenchEmail("parentGroup@foo.com"))
 
-        dao.createUser(defaultUser).unsafeRunSync()
+        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         dao.createGroup(subGroup).unsafeRunSync()
         dao.createGroup(parentGroup).unsafeRunSync()
 
@@ -435,7 +435,7 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
         val subPolicy = defaultPolicy.copy(id = defaultPolicy.id.copy(accessPolicyName = AccessPolicyName("sp")), email = WorkbenchEmail("sp@policy.com"), members = Set(defaultUser.id))
         val parentPolicy = defaultPolicy.copy(id = defaultPolicy.id.copy(accessPolicyName = AccessPolicyName("pp")), email = WorkbenchEmail("pp@policy.com"), members = Set(subPolicy.id))
 
-        dao.createUser(defaultUser).unsafeRunSync()
+        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         policyDAO.createResourceType(resourceType).unsafeRunSync()
         policyDAO.createResource(defaultResource).unsafeRunSync()
         policyDAO.createPolicy(subPolicy).unsafeRunSync()
@@ -450,8 +450,8 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
         val user1 = defaultUser
         val user2 = WorkbenchUser(WorkbenchUserId("testUser2"), Option(GoogleSubjectId("testGoogleSubjectId2")), WorkbenchEmail("user2@test.com"), None)
 
-        dao.createUser(user1).unsafeRunSync() shouldEqual user1
-        dao.createUser(user2).unsafeRunSync() shouldEqual user2
+        dao.createUser(user1, samRequestContext).unsafeRunSync() shouldEqual user1
+        dao.createUser(user2, samRequestContext).unsafeRunSync() shouldEqual user2
 
         dao.loadUsers(Set(user1.id, user2.id)).unsafeRunSync() should contain theSameElementsAs Set(user1, user2)
       }
@@ -459,14 +459,14 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
 
     "createPetServiceAccount" - {
       "create pet service accounts" in {
-        dao.createUser(defaultUser).unsafeRunSync()
+        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         dao.createPetServiceAccount(defaultPetSA).unsafeRunSync() shouldBe defaultPetSA
       }
     }
 
     "loadPetServiceAccount" - {
       "load pet service accounts" in {
-        dao.createUser(defaultUser).unsafeRunSync()
+        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         dao.createPetServiceAccount(defaultPetSA).unsafeRunSync()
 
         dao.loadPetServiceAccount(defaultPetSA.id).unsafeRunSync() shouldBe Some(defaultPetSA)
@@ -479,7 +479,7 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
 
     "deletePetServiceAccount" - {
       "delete pet service accounts" in {
-        dao.createUser(defaultUser).unsafeRunSync()
+        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         dao.createPetServiceAccount(defaultPetSA).unsafeRunSync()
 
         dao.loadPetServiceAccount(defaultPetSA.id).unsafeRunSync() shouldBe Some(defaultPetSA)
@@ -498,7 +498,7 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
 
     "getAllPetServiceAccountsForUser" - {
       "get all pet service accounts for user" in {
-        dao.createUser(defaultUser).unsafeRunSync()
+        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
         val petSA1 = PetServiceAccount(PetServiceAccountId(defaultUser.id, GoogleProject("testProject1")), ServiceAccount(ServiceAccountSubjectId("testGoogleSubjectId1"), WorkbenchEmail("test1@pet.co"), ServiceAccountDisplayName("whoCares")))
         dao.createPetServiceAccount(petSA1).unsafeRunSync()
@@ -512,7 +512,7 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
 
     "getUserFromPetServiceAccount" - {
       "get user from pet service account subject ID" in {
-        dao.createUser(defaultUser).unsafeRunSync()
+        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
         dao.createPetServiceAccount(defaultPetSA).unsafeRunSync()
 
@@ -522,7 +522,7 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
 
     "updatePetServiceAccount" - {
       "update a pet service account" in {
-        dao.createUser(defaultUser).unsafeRunSync()
+        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
         dao.createPetServiceAccount(defaultPetSA).unsafeRunSync()
 
@@ -533,7 +533,7 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
       }
 
       "throw an exception when updating a nonexistent pet SA" in {
-        dao.createUser(defaultUser).unsafeRunSync()
+        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
         val updatedPetSA = defaultPetSA.copy(serviceAccount = ServiceAccount(ServiceAccountSubjectId("updatedTestGoogleSubjectId"), WorkbenchEmail("new@pet.co"), ServiceAccountDisplayName("whoCares")))
         assertThrows[WorkbenchException] {
@@ -590,7 +590,7 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
         val subGroup = defaultGroup.copy(members = Set(user.id))
         val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName("parentGroup"), Set(subGroup.id), WorkbenchEmail("parent@group.com"))
 
-        dao.createUser(user).unsafeRunSync()
+        dao.createUser(user, samRequestContext).unsafeRunSync()
         dao.createGroup(subGroup).unsafeRunSync()
         dao.createGroup(parentGroup).unsafeRunSync()
 
@@ -604,7 +604,7 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
         val subGroup2 = BasicWorkbenchGroup(WorkbenchGroupName("subGroup2"), Set(user.id), WorkbenchEmail("group2@foo.com"))
         val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName("parentGroup"), Set(subGroup1.id, subGroup2.id), WorkbenchEmail("baz@qux.com"))
 
-        dao.createUser(user).unsafeRunSync()
+        dao.createUser(user, samRequestContext).unsafeRunSync()
         dao.createGroup(subGroup1).unsafeRunSync()
         dao.createGroup(subGroup2).unsafeRunSync()
         dao.createGroup(parentGroup).unsafeRunSync()
@@ -617,7 +617,7 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
         val subGroup = defaultGroup.copy(members = Set(user.id))
         val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName("parentGroup"), Set.empty, WorkbenchEmail("parent@group.com"))
 
-        dao.createUser(user).unsafeRunSync()
+        dao.createUser(user, samRequestContext).unsafeRunSync()
         dao.createGroup(subGroup).unsafeRunSync()
         dao.createGroup(parentGroup).unsafeRunSync()
 
@@ -628,7 +628,7 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
         val user = defaultUser
         val policy = defaultPolicy.copy(members = Set(user.id))
 
-        dao.createUser(user).unsafeRunSync()
+        dao.createUser(user, samRequestContext).unsafeRunSync()
         policyDAO.createResourceType(resourceType).unsafeRunSync()
         policyDAO.createResource(defaultResource).unsafeRunSync()
         policyDAO.createPolicy(policy).unsafeRunSync()
@@ -640,7 +640,7 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
         val user = defaultUser
         val policy = defaultPolicy
 
-        dao.createUser(user).unsafeRunSync()
+        dao.createUser(user, samRequestContext).unsafeRunSync()
         policyDAO.createResourceType(resourceType).unsafeRunSync()
         policyDAO.createResource(defaultResource).unsafeRunSync()
         policyDAO.createPolicy(policy).unsafeRunSync()
@@ -727,7 +727,7 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
         for (groupCount <- 1 to 3) {
           beforeEach
           val inAllGroups = WorkbenchUser(WorkbenchUserId("allgroups"), None, WorkbenchEmail("allgroups"), None)
-          dao.createUser(inAllGroups).unsafeRunSync()
+          dao.createUser(inAllGroups, samRequestContext).unsafeRunSync()
 
           val allGroups = for (i <- 1 to groupCount) yield {
             // create a group with 1 user and 1 subgroup, subgroup with "allgroups" users and another user
@@ -735,8 +735,8 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
             val userInSubGroup = WorkbenchUser(WorkbenchUserId(s"insubgroup$i"), None, WorkbenchEmail(s"insubgroup$i"), None)
             val subGroup = BasicWorkbenchGroup(WorkbenchGroupName(s"subgroup$i"), Set(inAllGroups.id, userInSubGroup.id), WorkbenchEmail(s"subgroup$i"))
             val group = BasicWorkbenchGroup(WorkbenchGroupName(s"group$i"), Set(userInGroup.id, subGroup.id), WorkbenchEmail(s"group$i"))
-            dao.createUser(userInSubGroup).unsafeRunSync()
-            dao.createUser(userInGroup).unsafeRunSync()
+            dao.createUser(userInSubGroup, samRequestContext).unsafeRunSync()
+            dao.createUser(userInGroup, samRequestContext).unsafeRunSync()
             dao.createGroup(subGroup).unsafeRunSync()
             dao.createGroup(group).unsafeRunSync()
           }
@@ -753,7 +753,7 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
 
         // create a user and a group containing that single user
         val allUserGroups = for (i <- 1 to userCount) yield {
-          val user = dao.createUser(WorkbenchUser(WorkbenchUserId(s"user$i"), None, WorkbenchEmail(s"user$i"), None)).unsafeRunSync()
+          val user = dao.createUser(WorkbenchUser(WorkbenchUserId(s"user$i"), None, WorkbenchEmail(s"user$i"), None), samRequestContext).unsafeRunSync()
           val group = BasicWorkbenchGroup(WorkbenchGroupName(s"usergroup$i"), Set(user.id), WorkbenchEmail(s"usergroup$i"))
           dao.createGroup(group).unsafeRunSync()
         }
@@ -781,7 +781,7 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
 
     "enableIdentity and disableIdentity" - {
       "can enable and disable users" in {
-        dao.createUser(defaultUser).unsafeRunSync()
+        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         dao.isEnabled(defaultUser.id).unsafeRunSync() shouldBe false
 
         dao.enableIdentity(defaultUser.id).unsafeRunSync()
@@ -792,7 +792,7 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
       }
 
       "cannot enable and disable pet service accounts" in {
-        dao.createUser(defaultUser).unsafeRunSync()
+        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         dao.createPetServiceAccount(defaultPetSA).unsafeRunSync()
         val initialEnabledStatus = dao.isEnabled(defaultPetSA.id).unsafeRunSync()
 
@@ -830,7 +830,7 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
 
     "isEnabled" - {
       "gets a user's enabled status" in {
-        dao.createUser(defaultUser).unsafeRunSync()
+        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
         dao.disableIdentity(defaultUser.id).unsafeRunSync()
         dao.isEnabled(defaultUser.id).unsafeRunSync() shouldBe false
@@ -840,7 +840,7 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
       }
 
       "gets a pet's user's enabled status" in {
-        dao.createUser(defaultUser).unsafeRunSync()
+        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         dao.createPetServiceAccount(defaultPetSA).unsafeRunSync()
 
         dao.disableIdentity(defaultUser.id).unsafeRunSync()
@@ -875,7 +875,7 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
         val subGroup = BasicWorkbenchGroup(WorkbenchGroupName("sg"), Set(defaultUser.id, subSubGroup.id), WorkbenchEmail("sg@groups.r.us"))
         val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName("pg"), Set(subGroup.id), WorkbenchEmail("pg@groups.r.us"))
 
-        dao.createUser(defaultUser).unsafeRunSync()
+        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         dao.createGroup(subSubGroup).unsafeRunSync()
         dao.createGroup(subGroup).unsafeRunSync()
         dao.createGroup(parentGroup).unsafeRunSync()
@@ -889,7 +889,7 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
         val subPolicy = defaultPolicy.copy(id = defaultPolicy.id.copy(accessPolicyName = AccessPolicyName("sp")), email = WorkbenchEmail("sp@policy.com"), members = Set(subSubPolicy.id, defaultUser.id))
         val parentPolicy = defaultPolicy.copy(id = defaultPolicy.id.copy(accessPolicyName = AccessPolicyName("pp")), email = WorkbenchEmail("pp@policy.com"), members = Set(subPolicy.id))
 
-        dao.createUser(defaultUser).unsafeRunSync()
+        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         policyDAO.createResourceType(resourceType).unsafeRunSync()
         policyDAO.createResource(defaultResource).unsafeRunSync()
         policyDAO.createPolicy(subSubPolicy).unsafeRunSync()
@@ -1004,7 +1004,7 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
     "setGoogleSubjectId" - {
       "update the googleSubjectId for a user" in {
         val newGoogleSubjectId = GoogleSubjectId("newGoogleSubjectId")
-        dao.createUser(defaultUser.copy(googleSubjectId = None)).unsafeRunSync()
+        dao.createUser(defaultUser.copy(googleSubjectId = None), samRequestContext).unsafeRunSync()
 
         dao.loadUser(defaultUser.id).unsafeRunSync().flatMap(_.googleSubjectId) shouldBe None
         dao.setGoogleSubjectId(defaultUser.id, newGoogleSubjectId).unsafeRunSync()
@@ -1015,14 +1015,14 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
 
     "loadSubjectFromEmail" - {
       "load a user subject from their email" in {
-        dao.createUser(defaultUser).unsafeRunSync()
+        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
         dao.loadSubjectFromEmail(defaultUser.email).unsafeRunSync() shouldBe Some(defaultUser.id)
       }
 
       "load a user subject from their email case insensitive" in {
         val email = WorkbenchEmail("Mixed.Case.Email@foo.com")
-        dao.createUser(defaultUser.copy(email = email)).unsafeRunSync()
+        dao.createUser(defaultUser.copy(email = email), samRequestContext).unsafeRunSync()
 
         dao.loadSubjectFromEmail(new WorkbenchEmail(email.value.toLowerCase())).unsafeRunSync() shouldBe Some(defaultUser.id)
       }
@@ -1034,7 +1034,7 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
       }
 
       "load a pet service account subject from its email" in {
-        dao.createUser(defaultUser).unsafeRunSync()
+        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         dao.createPetServiceAccount(defaultPetSA).unsafeRunSync()
 
         dao.loadSubjectFromEmail(defaultPetSA.serviceAccount.email).unsafeRunSync() shouldBe Some(defaultPetSA.id)
@@ -1051,7 +1051,7 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
       }
 
       "throw an exception when an email refers to more than one subject" in {
-        dao.createUser(defaultUser).unsafeRunSync()
+        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         dao.createPetServiceAccount(defaultPetSA.copy(serviceAccount = defaultPetSA.serviceAccount.copy(email = defaultUser.email))).unsafeRunSync()
 
         assertThrows[WorkbenchException] {
@@ -1062,13 +1062,13 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
 
     "loadSubjectFromGoogleSubjectId" - {
       "load a user subject from their google subject id" in {
-        dao.createUser(defaultUser).unsafeRunSync()
+        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
         dao.loadSubjectFromGoogleSubjectId(defaultUser.googleSubjectId.get).unsafeRunSync() shouldBe Some(defaultUser.id)
       }
 
       "load a pet service account subject from its google subject id" in {
-        dao.createUser(defaultUser).unsafeRunSync()
+        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         dao.createPetServiceAccount(defaultPetSA).unsafeRunSync()
 
         dao.loadSubjectFromGoogleSubjectId(GoogleSubjectId(defaultPetSA.serviceAccount.subjectId.value)).unsafeRunSync() shouldBe Some(defaultPetSA.id)
@@ -1083,14 +1083,14 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
       "two emails that do exist" in {
         val secondUser = WorkbenchUser(WorkbenchUserId("secondUser"), Option(GoogleSubjectId("testGoogleSubject2")), WorkbenchEmail("secondUser@foo.com"), None)
 
-        dao.createUser(defaultUser).unsafeRunSync()
-        dao.createUser(secondUser).unsafeRunSync()
+        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
+        dao.createUser(secondUser, samRequestContext).unsafeRunSync()
 
         dao.loadSubjectEmails(Set(defaultUser.id, secondUser.id)).unsafeRunSync() should contain theSameElementsAs Set(defaultUser.email, secondUser.email)
       }
 
       "two emails of different types that do exist" in {
-        dao.createUser(defaultUser).unsafeRunSync()
+        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         dao.createGroup(defaultGroup).unsafeRunSync()
 
         dao.loadSubjectEmails(Set(defaultUser.id, defaultGroupName)).unsafeRunSync() should contain theSameElementsAs Set(defaultUser.email, defaultGroup.email)
@@ -1100,7 +1100,7 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
 
     "loadSubjectEmail" - {
       "load the email for a user" in {
-        dao.createUser(defaultUser).unsafeRunSync()
+        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
         dao.loadSubjectEmail(defaultUser.id).unsafeRunSync() shouldBe Some(defaultUser.email)
       }
@@ -1112,7 +1112,7 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
       }
 
       "load the email for a pet service account" in {
-        dao.createUser(defaultUser).unsafeRunSync()
+        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         dao.createPetServiceAccount(defaultPetSA).unsafeRunSync()
 
         dao.loadSubjectEmail(defaultPetSA.id).unsafeRunSync() shouldBe Some(defaultPetSA.serviceAccount.email)
