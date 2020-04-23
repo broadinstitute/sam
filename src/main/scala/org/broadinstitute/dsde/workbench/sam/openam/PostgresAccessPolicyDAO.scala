@@ -345,7 +345,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     })
   }
 
-  override def createPolicy(policy: AccessPolicy): IO[AccessPolicy] = {
+  override def createPolicy(policy: AccessPolicy, samRequestContext: SamRequestContext): IO[AccessPolicy] = {
     runInTransaction("createPolicy", samRequestContext)({ implicit session =>
       val groupId = insertPolicyGroup(policy)
       val policyId = insertPolicy(policy, groupId)

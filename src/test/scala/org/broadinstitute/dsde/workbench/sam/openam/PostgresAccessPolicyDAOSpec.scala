@@ -669,7 +669,7 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
         dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         dao.createResource(resource, samRequestContext).unsafeRunSync()
         dao.createResource(otherResource, samRequestContext).unsafeRunSync()
-        allPolicies.map(((policy) => dao.createPolicy(policy)).unsafeRunSync())
+        allPolicies.map(((policy) => dao.createPolicy(policy, samRequestContext)).unsafeRunSync())
 
         dao.listAccessPoliciesForUser(resource.fullyQualifiedId, user.id, samRequestContext).unsafeRunSync() should contain theSameElementsAs expectedResults
       }
@@ -682,7 +682,7 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
 
         dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         dao.createResource(resource, samRequestContext).unsafeRunSync()
-        dao.createPolicy(policy).unsafeRunSync()
+        dao.createPolicy(policy, samRequestContext).unsafeRunSync()
         dao.loadPolicy(policy.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"failed to load policy ${policy.id}")).public shouldBe false
 
         dao.setPolicyIsPublic(policy.id, true, samRequestContext).unsafeRunSync()
@@ -704,8 +704,8 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
         dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         dao.createResource(resource1, samRequestContext).unsafeRunSync()
         dao.createResource(resource2, samRequestContext).unsafeRunSync()
-        dao.createPolicy(policy1).unsafeRunSync()
-        dao.createPolicy(policy2).unsafeRunSync()
+        dao.createPolicy(policy1, samRequestContext).unsafeRunSync()
+        dao.createPolicy(policy2, samRequestContext).unsafeRunSync()
 
         dao.listAccessPolicies(resourceType.name, defaultUser.id, samRequestContext).unsafeRunSync() should contain theSameElementsAs Set(ResourceIdAndPolicyName(resource1.resourceId, policy1.id.accessPolicyName), ResourceIdAndPolicyName(resource2.resourceId, policy2.id.accessPolicyName))
       }
@@ -718,7 +718,7 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
         dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         dao.createResource(resource, samRequestContext).unsafeRunSync()
         dao.createPolicy(owner, samRequestContext).unsafeRunSync()
-        dao.createPolicy(reader).unsafeRunSync()
+        dao.createPolicy(reader, samRequestContext).unsafeRunSync()
 
         dao.listAccessPolicies(resource.fullyQualifiedId, samRequestContext).unsafeRunSync() should contain theSameElementsAs Set(owner, reader)
       }
@@ -736,7 +736,7 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
         dirDao.createUser(secondUser, samRequestContext).unsafeRunSync()
 
         val policy = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("policyName")), Set(defaultUserId), WorkbenchEmail("policy@email.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), false)
-        dao.createPolicy(policy).unsafeRunSync()
+        dao.createPolicy(policy, samRequestContext).unsafeRunSync()
         dao.loadPolicy(policy.id, samRequestContext).unsafeRunSync() shouldEqual Option(policy)
 
         dao.listFlattenedPolicyMembers(policy.id, samRequestContext).unsafeRunSync() shouldBe Set(defaultUser)
@@ -799,7 +799,7 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
         dirDao.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
         val policy = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("policyName")), Set(defaultUserId), WorkbenchEmail("policy@email.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), false)
-        dao.createPolicy(policy).unsafeRunSync()
+        dao.createPolicy(policy, samRequestContext).unsafeRunSync()
         dao.loadPolicy(policy.id, samRequestContext).unsafeRunSync() shouldEqual Option(policy)
 
         val newPolicy = policy.copy(members = Set(defaultUserId, secondUser.id), actions = Set(ResourceAction("fakeAction")), roles = Set.empty, public = true)

@@ -973,7 +973,7 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
       "load the email for a policy" in {
         policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         policyDAO.createResource(defaultResource, samRequestContext).unsafeRunSync()
-        policyDAO.createPolicy(defaultPolicy).unsafeRunSync()
+        policyDAO.createPolicy(defaultPolicy, samRequestContext).unsafeRunSync()
 
         dao.getSynchronizedEmail(defaultPolicy.id, samRequestContext).unsafeRunSync() shouldEqual Option(defaultPolicy.email)
       }
@@ -992,7 +992,7 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
       "load the synchronized date for a policy" in {
         policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         policyDAO.createResource(defaultResource, samRequestContext).unsafeRunSync()
-        policyDAO.createPolicy(defaultPolicy).unsafeRunSync()
+        policyDAO.createPolicy(defaultPolicy, samRequestContext).unsafeRunSync()
 
         dao.updateSynchronizedDate(defaultPolicy.id, samRequestContext).unsafeRunSync()
 
@@ -1045,7 +1045,7 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
 
         policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         policyDAO.createResource(defaultResource, samRequestContext).unsafeRunSync()
-        policyDAO.createPolicy(memberPolicy).unsafeRunSync()
+        policyDAO.createPolicy(memberPolicy, samRequestContext).unsafeRunSync()
 
         dao.loadSubjectFromEmail(defaultPolicy.email, samRequestContext).unsafeRunSync() shouldBe Some(defaultPolicy.id)
       }
@@ -1123,7 +1123,7 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
 
         policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         policyDAO.createResource(defaultResource, samRequestContext).unsafeRunSync()
-        policyDAO.createPolicy(memberPolicy).unsafeRunSync()
+        policyDAO.createPolicy(memberPolicy, samRequestContext).unsafeRunSync()
 
         dao.loadSubjectEmail(defaultPolicy.id, samRequestContext).unsafeRunSync() shouldBe Some(defaultPolicy.email)
       }

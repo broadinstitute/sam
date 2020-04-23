@@ -53,7 +53,7 @@ class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdenti
 
   override def listResourcesConstrainedByGroup(groupId: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[Set[Resource]] = IO.pure(Set.empty)
 
-  override def createPolicy(policy: AccessPolicy): IO[AccessPolicy] = IO {
+  override def createPolicy(policy: AccessPolicy, samRequestContext: SamRequestContext): IO[AccessPolicy] = IO {
     policies += policy.id -> policy
     policy
   }
