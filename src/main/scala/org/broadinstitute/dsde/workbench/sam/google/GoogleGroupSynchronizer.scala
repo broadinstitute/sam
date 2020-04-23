@@ -151,7 +151,7 @@ class GoogleGroupSynchronizer(directoryDAO: DirectoryDAO,
         throw new WorkbenchException(s"Invalid resource type specified. ${resource.resourceTypeName} is not a recognized resource type.")
     }
 
-  private def calculateIntersectionGroup(resource: FullyQualifiedResourceId, policy: AccessPolicy, samRequestContext: SamRequestContext) = {
+  private[google] def calculateIntersectionGroup(resource: FullyQualifiedResourceId, policy: AccessPolicy, samRequestContext: SamRequestContext): IO[Set[WorkbenchSubject]] = {
     // if the policy has no members, the intersection will be empty so short circuit here
     if (policy.members.isEmpty) {
       IO.pure(Set())
