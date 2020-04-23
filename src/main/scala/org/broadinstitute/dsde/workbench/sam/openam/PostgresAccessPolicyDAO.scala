@@ -460,7 +460,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
   }
 
   override def loadPolicy(resourceAndPolicyName: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[Option[AccessPolicy]] = {
-    listPolicies(resourceAndPolicyName.resource, limitOnePolicy = Option(resourceAndPolicyName.accessPolicyName)).map(_.headOption)
+    listPolicies(resourceAndPolicyName.resource, limitOnePolicy = Option(resourceAndPolicyName.accessPolicyName), samRequestContext).map(_.headOption)
   }
 
   override def overwritePolicyMembers(id: FullyQualifiedPolicyId, memberList: Set[WorkbenchSubject], samRequestContext: SamRequestContext): IO[Unit] = {
@@ -578,7 +578,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
   }
 
   // Abstracts logic to load and unmarshal one or more policies, use to get full AccessPolicy objects from Postgres
-  private def listPolicies(resource: FullyQualifiedResourceId, limitOnePolicy: Option[AccessPolicyName] = None): IO[Stream[AccessPolicy]] = {
+  private def listPolicies(resource: FullyQualifiedResourceId, limitOnePolicy: Option[AccessPolicyName] = None, samRequestContext: SamRequestContext) = {
     val g = GroupTable.syntax("g")
     val r = ResourceTable.syntax("r")
     val rt = ResourceTypeTable.syntax("rt")
@@ -705,7 +705,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
   }
 
   override def listAccessPolicies(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Stream[AccessPolicy]] = {
-    listPolicies(resource)
+    listPolicies(resource, samRequestContext = samRequestContext)
   }
 
   override def listAccessPoliciesForUser(resource: FullyQualifiedResourceId, user: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[AccessPolicyWithoutMembers]] = {

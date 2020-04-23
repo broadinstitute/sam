@@ -68,7 +68,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
                   groups <- directoryDAO.listUserDirectMemberships(uid, samRequestContext)
                   _ <- directoryDAO.setGoogleSubjectId(uid, user.googleSubjectId, samRequestContext)
                   _ <- registrationDAO.setGoogleSubjectId(uid, user.googleSubjectId, samRequestContext)
-                  _ <- IO.fromFuture(IO(cloudExtensions.onGroupUpdate(groups)))
+                  _ <- IO.fromFuture(IO(cloudExtensions.onGroupUpdate(groups, samRequestContext)))
                 } yield WorkbenchUser(uid, Some(user.googleSubjectId), user.email, user.identityConcentratorId)
 
               case Some(_) =>
@@ -171,7 +171,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
     for {
       _ <- directoryDAO.enableIdentity(user.id, samRequestContext).unsafeToFuture()
       _ <- registrationDAO.enableIdentity(user.id, samRequestContext).unsafeToFuture()
-      _ <- cloudExtensions.onUserEnable(user)
+      _ <- cloudExtensions.onUserEnable(user, samRequestContext)
     } yield ()
   }
 
@@ -181,7 +181,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
         for {
           _ <- directoryDAO.disableIdentity(user.id, samRequestContext).unsafeToFuture()
           _ <- registrationDAO.disableIdentity(user.id, samRequestContext).unsafeToFuture()
-          _ <- cloudExtensions.onUserDisable(user)
+          _ <- cloudExtensions.onUserDisable(user, samRequestContext)
           userStatus <- getUserStatus(user.id)
         } yield {
           userStatus
@@ -193,7 +193,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
     for {
       allUsersGroup <- cloudExtensions.getOrCreateAllUsersGroup(directoryDAO)
       _ <- directoryDAO.removeGroupMember(allUsersGroup.id, userId, samRequestContext).unsafeToFuture()
-      _ <- cloudExtensions.onUserDelete(userId)
+      _ <- cloudExtensions.onUserDelete(userId, samRequestContext)
       _ <- registrationDAO.deleteUser(userId, samRequestContext).unsafeToFuture()
       deleteResult <- directoryDAO.deleteUser(userId, samRequestContext).unsafeToFuture()
     } yield deleteResult

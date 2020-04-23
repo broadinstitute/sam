@@ -158,7 +158,7 @@ trait UserRoutes extends UserInfoDirectives {
                       delete {
                         completeWithTrace({ samRequestContext =>
                           cloudExtensions
-                            .deleteUserPetServiceAccount(WorkbenchUserId(userId), GoogleProject(project))
+                            .deleteUserPetServiceAccount(WorkbenchUserId(userId), GoogleProject(project), samRequestContext)
                             .map(_ => StatusCodes.NoContent)
                         })
                       }

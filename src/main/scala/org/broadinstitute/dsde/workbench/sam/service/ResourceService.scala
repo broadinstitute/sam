@@ -404,7 +404,7 @@ class ResourceService(
   }
 
   private def fireGroupUpdateNotification(groupId: WorkbenchGroupIdentity): Future[Unit] =
-    cloudExtensions.onGroupUpdate(Seq(groupId)) recover {
+    cloudExtensions.onGroupUpdate(Seq(groupId), samRequestContext) recover {
       case t: Throwable =>
         logger.error(s"error calling cloudExtensions.onGroupUpdate for $groupId", t)
         throw t

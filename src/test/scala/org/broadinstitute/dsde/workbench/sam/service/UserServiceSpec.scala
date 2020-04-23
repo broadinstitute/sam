@@ -67,11 +67,11 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
     when(googleExtensions.allUsersGroupName).thenReturn(NoExtensions.allUsersGroupName)
     when(googleExtensions.getOrCreateAllUsersGroup(any[DirectoryDAO])(any[ExecutionContext])).thenReturn(NoExtensions.getOrCreateAllUsersGroup(dirDAO))
     when(googleExtensions.onUserCreate(any[WorkbenchUser])).thenReturn(Future.successful(()))
-    when(googleExtensions.onUserDelete(any[WorkbenchUserId])).thenReturn(Future.successful(()))
+    when(googleExtensions.onUserDelete(any[WorkbenchUserId], samRequestContext)).thenReturn(Future.successful(()))
     when(googleExtensions.getUserStatus(any[WorkbenchUser])).thenReturn(Future.successful(true))
-    when(googleExtensions.onUserDisable(any[WorkbenchUser])).thenReturn(Future.successful(()))
-    when(googleExtensions.onUserEnable(any[WorkbenchUser])).thenReturn(Future.successful(()))
-    when(googleExtensions.onGroupUpdate(any[Seq[WorkbenchGroupIdentity]])).thenReturn(Future.successful(()))
+    when(googleExtensions.onUserDisable(any[WorkbenchUser], samRequestContext)).thenReturn(Future.successful(()))
+    when(googleExtensions.onUserEnable(any[WorkbenchUser], samRequestContext)).thenReturn(Future.successful(()))
+    when(googleExtensions.onGroupUpdate(any[Seq[WorkbenchGroupIdentity]], samRequestContext)).thenReturn(Future.successful(()))
 
     service = new UserService(dirDAO, googleExtensions, registrationDAO)
   }
