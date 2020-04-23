@@ -649,7 +649,7 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
 
         dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         dao.createResource(resource, samRequestContext).unsafeRunSync()
-        allPolicies.map(((policy) => dao.createPolicy(policy)).unsafeRunSync())
+        allPolicies.map(((policy) => dao.createPolicy(policy, samRequestContext)).unsafeRunSync())
 
         dao.listAccessPoliciesForUser(resource.fullyQualifiedId, user.id, samRequestContext).unsafeRunSync() should contain theSameElementsAs expectedResults
       }
@@ -669,7 +669,7 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
         dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         dao.createResource(resource, samRequestContext).unsafeRunSync()
         dao.createResource(otherResource, samRequestContext).unsafeRunSync()
-        allPolicies.map(dao.createPolicy(_).unsafeRunSync())
+        allPolicies.map(((policy) => dao.createPolicy(policy)).unsafeRunSync())
 
         dao.listAccessPoliciesForUser(resource.fullyQualifiedId, user.id, samRequestContext).unsafeRunSync() should contain theSameElementsAs expectedResults
       }
@@ -717,7 +717,7 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
 
         dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         dao.createResource(resource, samRequestContext).unsafeRunSync()
-        dao.createPolicy(owner).unsafeRunSync()
+        dao.createPolicy(owner, samRequestContext).unsafeRunSync()
         dao.createPolicy(reader).unsafeRunSync()
 
         dao.listAccessPolicies(resource.fullyQualifiedId, samRequestContext).unsafeRunSync() should contain theSameElementsAs Set(owner, reader)
@@ -757,7 +757,7 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
         dirDao.createUser(secondUser, samRequestContext).unsafeRunSync()
 
         val policy = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("policyName")), Set.empty, WorkbenchEmail("policy@email.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), false)
-        dao.createPolicy(policy).unsafeRunSync()
+        dao.createPolicy(policy, samRequestContext).unsafeRunSync()
         dao.loadPolicy(policy.id, samRequestContext).unsafeRunSync() shouldEqual Option(policy)
 
         dao.listFlattenedPolicyMembers(policy.id, samRequestContext).unsafeRunSync() shouldBe Set.empty
@@ -780,7 +780,7 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
         dirDao.createUser(secondUser, samRequestContext).unsafeRunSync()
 
         val policy = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("policyName")), Set(defaultUserId), WorkbenchEmail("policy@email.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), false)
-        dao.createPolicy(policy).unsafeRunSync()
+        dao.createPolicy(policy, samRequestContext).unsafeRunSync()
         dao.loadPolicy(policy.id, samRequestContext).unsafeRunSync() shouldEqual Option(policy)
 
         val newPolicy = policy.copy(members = Set(defaultUserId, secondUser.id), actions = Set(readAction), roles = Set.empty, public = true)
