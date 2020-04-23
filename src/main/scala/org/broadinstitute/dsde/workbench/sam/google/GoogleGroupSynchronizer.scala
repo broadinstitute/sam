@@ -61,7 +61,7 @@ class GoogleGroupSynchronizer(directoryDAO: DirectoryDAO,
           case basicGroupName: WorkbenchGroupName => directoryDAO.loadGroup(basicGroupName, samRequestContext).unsafeToFuture()
           case rpn: FullyQualifiedPolicyId =>
             accessPolicyDAO
-              .loadPolicy(rpn)
+              .loadPolicy(rpn, samRequestContext)
               .unsafeToFuture()
               .map(_.map { loadedPolicy =>
                 if (loadedPolicy.public) {
@@ -159,7 +159,7 @@ class GoogleGroupSynchronizer(directoryDAO: DirectoryDAO,
       IO.pure(Set())
     } else {
       for {
-        result <- accessPolicyDAO.loadResourceAuthDomain(resource)
+        result <- accessPolicyDAO.loadResourceAuthDomain(resource, samRequestContext)
         members <- result match {
           case LoadResourceAuthDomainResult.Constrained(groups) =>
             // auth domain exists, need to calculate intersection

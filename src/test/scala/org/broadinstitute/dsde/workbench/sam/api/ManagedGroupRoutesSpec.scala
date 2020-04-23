@@ -608,7 +608,7 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
     val policyDao = new MockAccessPolicyDAO(groups)
     val samRoutes = TestSamRoutes(resourceTypes, policyAccessDAO = Some(policyDao), policies = Some(groups))
 
-    policyDao.createResource(Resource(ManagedGroupService.managedGroupTypeName, ResourceId("foo"), Set.empty)).unsafeRunSync()
+    policyDao.createResource(Resource(ManagedGroupService.managedGroupTypeName, ResourceId("foo"), Set.empty), samRequestContext).unsafeRunSync()
 
     Get(s"/api/group/$groupId/admin") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
@@ -718,7 +718,7 @@ object ManagedGroupRoutesSpec{
     val policyDao = new MockAccessPolicyDAO(groups)
     val samRoutes = TestSamRoutes(resourceTypeMap, policyAccessDAO = Some(policyDao), policies = Some(groups))
 
-    policyDao.createResource(resource).unsafeRunSync()
+    policyDao.createResource(resource, samRequestContext).unsafeRunSync()
     samRoutes
   }
 }

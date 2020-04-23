@@ -105,7 +105,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
         case g: BasicWorkbenchGroup =>
           when(mockDirectoryDAO.loadGroup(g.id, samRequestContext)).thenReturn(IO.pure(Option(testGroup)))
         case p: AccessPolicy =>
-          when(mockAccessPolicyDAO.loadPolicy(p.id)).thenReturn(IO.pure(Option(testPolicy)))
+          when(mockAccessPolicyDAO.loadPolicy(p.id, samRequestContext)).thenReturn(IO.pure(Option(testPolicy)))
       }
       when(mockDirectoryDAO.loadGroup(ge.allUsersGroupName, samRequestContext)).thenReturn(IO.pure(Option(BasicWorkbenchGroup(ge.allUsersGroupName, Set.empty, ge.allUsersGroupEmail))))
       when(mockDirectoryDAO.updateSynchronizedDate(any[WorkbenchGroupIdentity], samRequestContext)).thenReturn(IO.unit)
@@ -207,8 +207,8 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val ge = new GoogleExtensions(TestSupport.fakeDistributedLock, mockDirectoryDAO, mock[RegistrationDAO], mockAccessPolicyDAO, mockGoogleDirectoryDAO, null, null, null,null, null, null, null, googleServicesConfig, petServiceAccountConfig, constrainableResourceTypes)
     val synchronizer = new GoogleGroupSynchronizer(mockDirectoryDAO, mockAccessPolicyDAO, mockGoogleDirectoryDAO,ge, constrainableResourceTypes)
 
-    when(mockAccessPolicyDAO.loadPolicy(testPolicy.id)).thenReturn(IO.pure(Option(testPolicy)))
-    when(mockAccessPolicyDAO.loadResourceAuthDomain(resource.fullyQualifiedId)).thenReturn(IO.pure(LoadResourceAuthDomainResult.Constrained(NonEmptyList.one(managedGroupId)): LoadResourceAuthDomainResult))
+    when(mockAccessPolicyDAO.loadPolicy(testPolicy.id, samRequestContext)).thenReturn(IO.pure(Option(testPolicy)))
+    when(mockAccessPolicyDAO.loadResourceAuthDomain(resource.fullyQualifiedId, samRequestContext)).thenReturn(IO.pure(LoadResourceAuthDomainResult.Constrained(NonEmptyList.one(managedGroupId)): LoadResourceAuthDomainResult))
 
     when(mockDirectoryDAO.listIntersectionGroupUsers(Set(managedGroupId, testPolicy.id), samRequestContext)).thenReturn(IO.pure(Set(intersectionSamUserId, authorizedGoogleUserId, subIntersectionSamGroupUserId, subAuthorizedGoogleGroupUserId, addError)))
 
@@ -528,7 +528,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val resourceAndPolicyName = FullyQualifiedPolicyId(FullyQualifiedResourceId(CloudExtensions.resourceTypeName, GoogleExtensions.resourceId), AccessPolicyName("owner"))
 
     mockDirectoryDAO.loadUser(WorkbenchUserId(googleServicesConfig.serviceAccountClientId), samRequestContext).unsafeRunSync() shouldBe None
-    mockAccessPolicyDAO.loadPolicy(resourceAndPolicyName).unsafeRunSync() shouldBe None
+    mockAccessPolicyDAO.loadPolicy(resourceAndPolicyName, samRequestContext).unsafeRunSync() shouldBe None
 
     ge.onBoot(app).unsafeRunSync()
 
@@ -536,7 +536,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val owner = mockDirectoryDAO.loadUser(uid, samRequestContext).unsafeRunSync().get
     owner.googleSubjectId shouldBe Some(GoogleSubjectId(googleServicesConfig.serviceAccountClientId))
     owner.email shouldBe googleServicesConfig.serviceAccountClientEmail
-    val res = mockAccessPolicyDAO.loadPolicy(resourceAndPolicyName).unsafeRunSync().get
+    val res = mockAccessPolicyDAO.loadPolicy(resourceAndPolicyName, samRequestContext).unsafeRunSync().get
     res.id shouldBe resourceAndPolicyName
     res.members shouldBe Set(owner.id)
     res.roles shouldBe Set(ResourceRoleName("owner"))
@@ -632,8 +632,8 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     when(mockGooglePubSubDAO.publishMessages(any[String], any[Seq[String]])).thenReturn(Future.successful(()))
 
     // mock responses for onManagedGroupUpdate
-    when(mockAccessPolicyDAO.listResourcesConstrainedByGroup(WorkbenchGroupName(managedGroupId))).thenReturn(IO.pure(Set(resource)))
-    when(mockAccessPolicyDAO.listAccessPolicies(resource.fullyQualifiedId)).thenReturn(IO.pure(Stream(ownerPolicy, readerPolicy)))
+    when(mockAccessPolicyDAO.listResourcesConstrainedByGroup(WorkbenchGroupName(managedGroupId), samRequestContext)).thenReturn(IO.pure(Set(resource)))
+    when(mockAccessPolicyDAO.listAccessPolicies(resource.fullyQualifiedId, samRequestContext)).thenReturn(IO.pure(Stream(ownerPolicy, readerPolicy)))
 
     runAndWait(googleExtensions.onGroupUpdate(Seq(managedGroupRPN)))
 
@@ -666,8 +666,8 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     when(mockDirectoryDAO.listAncestorGroups(WorkbenchGroupName(subGroupId), samRequestContext)).thenReturn(IO.pure(Set(managedGroupRPN).asInstanceOf[Set[WorkbenchGroupIdentity]]))
 
     // mock responses for onManagedGroupUpdate
-    when(mockAccessPolicyDAO.listResourcesConstrainedByGroup(WorkbenchGroupName(managedGroupId))).thenReturn(IO.pure(Set(resource)))
-    when(mockAccessPolicyDAO.listAccessPolicies(resource.fullyQualifiedId)).thenReturn(IO.pure(Stream(ownerPolicy, readerPolicy)))
+    when(mockAccessPolicyDAO.listResourcesConstrainedByGroup(WorkbenchGroupName(managedGroupId), samRequestContext)).thenReturn(IO.pure(Set(resource)))
+    when(mockAccessPolicyDAO.listAccessPolicies(resource.fullyQualifiedId, samRequestContext)).thenReturn(IO.pure(Stream(ownerPolicy, readerPolicy)))
 
     runAndWait(googleExtensions.onGroupUpdate(Seq(WorkbenchGroupName(subGroupId))))
 
@@ -701,8 +701,8 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     when(mockDirectoryDAO.listAncestorGroups(ownerRPN, samRequestContext)).thenReturn(IO.pure(Set(managedGroupRPN).asInstanceOf[Set[WorkbenchGroupIdentity]]))
 
     // mock responses for onManagedGroupUpdate
-    when(mockAccessPolicyDAO.listResourcesConstrainedByGroup(WorkbenchGroupName(managedGroupId))).thenReturn(IO.pure(Set(resource)))
-    when(mockAccessPolicyDAO.listAccessPolicies(resource.fullyQualifiedId)).thenReturn(IO.pure(Stream(ownerPolicy, readerPolicy)))
+    when(mockAccessPolicyDAO.listResourcesConstrainedByGroup(WorkbenchGroupName(managedGroupId), samRequestContext)).thenReturn(IO.pure(Set(resource)))
+    when(mockAccessPolicyDAO.listAccessPolicies(resource.fullyQualifiedId, samRequestContext)).thenReturn(IO.pure(Stream(ownerPolicy, readerPolicy)))
 
     runAndWait(googleExtensions.onGroupUpdate(Seq(WorkbenchGroupName(subGroupId))))
 

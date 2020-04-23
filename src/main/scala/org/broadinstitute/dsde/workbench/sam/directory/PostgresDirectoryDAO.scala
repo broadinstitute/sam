@@ -364,7 +364,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     })
   }
 
-  def loadPolicyEmail(policyId: FullyQualifiedPolicyId): IO[Option[WorkbenchEmail]] = {
+  def loadPolicyEmail(policyId: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[Option[WorkbenchEmail]] = {
     runInTransaction("loadPolicyEmail", samRequestContext)({ implicit session =>
       val g = GroupTable.syntax
       val pol = PolicyTable.syntax
@@ -399,7 +399,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
       case subject: WorkbenchUserId => for {
         user <- loadUser(subject, samRequestContext)
       } yield user.map(_.email)
-      case subject: FullyQualifiedPolicyId => loadPolicyEmail(subject)
+      case subject: FullyQualifiedPolicyId => loadPolicyEmail(subject, samRequestContext)
       case _ => throw new WorkbenchException(s"unexpected subject [$subject]")
     }
   }
@@ -512,7 +512,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
   }
 
   override def listUsersGroups(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[WorkbenchGroupIdentity]] = {
-    listMemberOfGroups(userId) // todo: don't miss these
+    listMemberOfGroups(userId, samRequestContext) // todo: don't miss these
   }
 
   /** Extracts a WorkbenchGroupIdentity from a SQL query
@@ -606,7 +606,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     })
   }
 
-  private def listMemberOfGroups(subject: WorkbenchSubject): IO[Set[WorkbenchGroupIdentity]] = {
+  private def listMemberOfGroups(subject: WorkbenchSubject, samRequestContext: SamRequestContext) = {
     val gm = GroupMemberTable.syntax("gm")
     val g = GroupTable.syntax("g")
     val p = PolicyTable.syntax("p")
@@ -647,7 +647,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
   }
 
   override def listAncestorGroups(groupId: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[Set[WorkbenchGroupIdentity]] = {
-    listMemberOfGroups(groupId)
+    listMemberOfGroups(groupId, samRequestContext)
   }
 
   override def enableIdentity(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Unit] = {

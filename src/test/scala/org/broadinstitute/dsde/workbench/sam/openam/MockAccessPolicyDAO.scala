@@ -5,6 +5,7 @@ import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import scala.collection.concurrent.TrieMap
 import scala.collection.mutable
@@ -15,9 +16,9 @@ import scala.collection.mutable
 class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdentity, WorkbenchGroup] = new TrieMap()) extends AccessPolicyDAO {
   val resources = new TrieMap[FullyQualifiedResourceId, Resource]()
 
-  override def createResourceType(resourceType: ResourceType): IO[ResourceType] = IO.pure(resourceType)
+  override def createResourceType(resourceType: ResourceType, samRequestContext: SamRequestContext): IO[ResourceType] = IO.pure(resourceType)
 
-  override def createResource(resource: Resource): IO[Resource] = IO {
+  override def createResource(resource: Resource, samRequestContext: SamRequestContext): IO[Resource] = IO {
     resources += resource.fullyQualifiedId -> resource
     if (policies.exists {
       case (FullyQualifiedPolicyId(FullyQualifiedResourceId(`resource`.resourceTypeName, `resource`.resourceId), _), _) =>
@@ -27,7 +28,7 @@ class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdenti
     resource
   }
 
-  override def deleteResource(resource: FullyQualifiedResourceId): IO[Unit] = IO {
+  override def deleteResource(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] = IO {
     val toRemove = policies.collect {
       case (riapn @ FullyQualifiedPolicyId(`resource`, _), policy: AccessPolicy) => riapn
     }.toSet
@@ -36,7 +37,7 @@ class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdenti
     policies -- toRemove
   }
 
-  override def loadResourceAuthDomain(resource: FullyQualifiedResourceId): IO[LoadResourceAuthDomainResult] =
+  override def loadResourceAuthDomain(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[LoadResourceAuthDomainResult] =
     IO(resources.get(resource)).map{
       rs =>
         rs match {
@@ -45,30 +46,30 @@ class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdenti
         }
     }
 
-  override def removeAuthDomainFromResource(resource: FullyQualifiedResourceId): IO[Unit] = IO {
+  override def removeAuthDomainFromResource(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] = IO {
     val resourceToRemoveOpt = resources.get(resource)
     resourceToRemoveOpt.map( resourceToRemove => resources += resource -> resourceToRemove.copy(authDomain = Set.empty))
   }
 
-  override def listResourcesConstrainedByGroup(groupId: WorkbenchGroupIdentity): IO[Set[Resource]] = IO.pure(Set.empty)
+  override def listResourcesConstrainedByGroup(groupId: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[Set[Resource]] = IO.pure(Set.empty)
 
   override def createPolicy(policy: AccessPolicy): IO[AccessPolicy] = IO {
     policies += policy.id -> policy
     policy
   }
 
-  override def deletePolicy(policy: FullyQualifiedPolicyId): IO[Unit] = IO {
+  override def deletePolicy(policy: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[Unit] = IO {
     policies -= policy
   }
 
-  override def listAccessPolicies(resourceTypeName: ResourceTypeName, user: WorkbenchUserId): IO[Set[ResourceIdAndPolicyName]] = IO {
+  override def listAccessPolicies(resourceTypeName: ResourceTypeName, user: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[ResourceIdAndPolicyName]] = IO {
     policies.collect {
       case (riapn @ FullyQualifiedPolicyId(FullyQualifiedResourceId(`resourceTypeName`, _), _), accessPolicy) if accessPolicy.members.contains(user) => ResourceIdAndPolicyName(riapn.resource.resourceId, riapn.accessPolicyName)
     }.toSet
   }
 
-  override def loadPolicy(policyIdentity: FullyQualifiedPolicyId): IO[Option[AccessPolicy]] = {
-    listAccessPolicies(policyIdentity.resource).map { policies =>
+  override def loadPolicy(policyIdentity: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[Option[AccessPolicy]] = {
+    listAccessPolicies(policyIdentity.resource, samRequestContext).map { policies =>
       policies.filter(_.id.accessPolicyName == policyIdentity.accessPolicyName).toSeq match {
         case Seq() => None
         case Seq(policy) => Option(policy)
@@ -77,29 +78,29 @@ class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdenti
     }
   }
 
-  override def overwritePolicy(newPolicy: AccessPolicy): IO[AccessPolicy] = createPolicy(newPolicy)
+  override def overwritePolicy(newPolicy: AccessPolicy, samRequestContext: SamRequestContext): IO[AccessPolicy] = createPolicy(newPolicy, samRequestContext)
 
-  override def overwritePolicyMembers(id: FullyQualifiedPolicyId, memberList: Set[WorkbenchSubject]): IO[Unit] = {
-    loadPolicy(id) flatMap {
+  override def overwritePolicyMembers(id: FullyQualifiedPolicyId, memberList: Set[WorkbenchSubject], samRequestContext: SamRequestContext): IO[Unit] = {
+    loadPolicy(id, samRequestContext) flatMap {
       case None => throw new Exception("not found")
-      case Some(policy) => overwritePolicy(policy.copy(members = memberList)).map(_ => ())
+      case Some(policy) => overwritePolicy(policy.copy(members = memberList), samRequestContext).map(_ => ())
     }
   }
 
-  override def listAccessPolicies(resource: FullyQualifiedResourceId): IO[Stream[AccessPolicy]] = IO {
+  override def listAccessPolicies(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Stream[AccessPolicy]] = IO {
     policies.collect {
       case (FullyQualifiedPolicyId(`resource`, _), policy: AccessPolicy) => policy
     }.toStream
   }
 
-  override def listAccessPoliciesForUser(resource: FullyQualifiedResourceId, user: WorkbenchUserId): IO[Set[AccessPolicyWithoutMembers]] = IO {
+  override def listAccessPoliciesForUser(resource: FullyQualifiedResourceId, user: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[AccessPolicyWithoutMembers]] = IO {
     policies.collect {
       case (FullyQualifiedPolicyId(`resource`, _), policy: AccessPolicy) if policy.members.contains(user) =>
         AccessPolicyWithoutMembers(policy.id, policy.email, policy.roles, policy.actions, policy.public)
     }.toSet
   }
 
-  override def setPolicyIsPublic(resourceAndPolicyName: FullyQualifiedPolicyId, isPublic: Boolean): IO[Unit] = {
+  override def setPolicyIsPublic(resourceAndPolicyName: FullyQualifiedPolicyId, isPublic: Boolean, samRequestContext: SamRequestContext): IO[Unit] = {
     val maybePolicy = policies.find {
       case (`resourceAndPolicyName`, policy: AccessPolicy) => true
       case _ => false
@@ -113,7 +114,7 @@ class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdenti
     }
   }
 
-  override def listPublicAccessPolicies(resourceTypeName: ResourceTypeName): IO[Stream[ResourceIdAndPolicyName]] = {
+  override def listPublicAccessPolicies(resourceTypeName: ResourceTypeName, samRequestContext: SamRequestContext): IO[Stream[ResourceIdAndPolicyName]] = {
     IO.pure(
       policies.collect {
         case (_, policy: AccessPolicy) if policy.public => ResourceIdAndPolicyName(policy.id.resource.resourceId, policy.id.accessPolicyName)
@@ -123,7 +124,7 @@ class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdenti
 
   // current implementation returns only the WorkbenchUserIds in this policy. it does not fully mock the behavior of LdapAccessPolicyDAO.
   // this function previously just returned an empty set and this is sufficient for the test I'm using it in (as of 10/25/18), so good enough for now
-  override def listFlattenedPolicyMembers(policyIdentity: FullyQualifiedPolicyId): IO[Set[WorkbenchUser]] = IO {
+  override def listFlattenedPolicyMembers(policyIdentity: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[Set[WorkbenchUser]] = IO {
     val members = policies.collect {
       case (`policyIdentity`, policy: AccessPolicy) => policy.members
     }
@@ -132,14 +133,12 @@ class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdenti
     }.toSet
   }
 
-  override def listResourcesWithAuthdomains(
-      resourceTypeName: ResourceTypeName,
-      resourceId: Set[ResourceId])
+  override def listResourcesWithAuthdomains(resourceTypeName: ResourceTypeName, resourceId: Set[ResourceId], samRequestContext: SamRequestContext)
     : IO[Set[Resource]] = IO.pure(Set.empty)
 
-  override def listResourceWithAuthdomains(resourceId: FullyQualifiedResourceId): IO[Option[Resource]] = IO.pure(None)
+  override def listResourceWithAuthdomains(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Option[Resource]] = IO.pure(None)
 
-  override def listPublicAccessPolicies(resource: FullyQualifiedResourceId): IO[Stream[AccessPolicyWithoutMembers]] = {
+  override def listPublicAccessPolicies(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Stream[AccessPolicyWithoutMembers]] = {
     IO.pure(
       policies.collect {
         case (_, policy: AccessPolicy) if policy.public =>

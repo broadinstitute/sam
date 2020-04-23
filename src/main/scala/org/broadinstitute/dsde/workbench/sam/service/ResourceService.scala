@@ -86,7 +86,7 @@ class ResourceService(
     }
 
   def createResourceType(resourceType: ResourceType): IO[ResourceType] =
-    accessPolicyDAO.createResourceType(resourceType)
+    accessPolicyDAO.createResourceType(resourceType, samRequestContext)
 
   /**
     * Create a resource with default policies. The default policies contain 1 policy with the same name as the
@@ -141,7 +141,7 @@ class ResourceService(
     */
   private def persistResource(resourceType: ResourceType, resourceId: ResourceId, policies: Set[ValidatableAccessPolicy], authDomain: Set[WorkbenchGroupName]) =
     for {
-      resource <- accessPolicyDAO.createResource(Resource(resourceType.name, resourceId, authDomain))
+      resource <- accessPolicyDAO.createResource(Resource(resourceType.name, resourceId, authDomain), samRequestContext)
       policies <- policies.toList.traverse(p => createOrUpdatePolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, p.policyName), p))
     } yield resource.copy(accessPolicies=policies.toSet)
 
@@ -201,7 +201,7 @@ class ResourceService(
     } else None
 
   def loadResourceAuthDomain(resource: FullyQualifiedResourceId): IO[Set[WorkbenchGroupName]] =
-    accessPolicyDAO.loadResourceAuthDomain(resource).flatMap(result => result match {
+    accessPolicyDAO.loadResourceAuthDomain(resource, samRequestContext).flatMap(result => result match {
       case LoadResourceAuthDomainResult.Constrained(authDomain) => IO.pure(authDomain.toList.toSet)
       case LoadResourceAuthDomainResult.NotConstrained => IO.pure(Set.empty)
       case LoadResourceAuthDomainResult.ResourceNotFound => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Resource ${resource} not found")))
@@ -222,7 +222,7 @@ class ResourceService(
       roles: Set[ResourceRoleName],
       actions: Set[ResourceAction],
       ): IO[AccessPolicy] =
-    accessPolicyDAO.createPolicy(AccessPolicy(policyIdentity, members, email, roles, actions, public = false))
+    accessPolicyDAO.createPolicy(AccessPolicy(policyIdentity, members, email, roles, actions, public = false), samRequestContext)
 
   // IF Resource ID reuse is allowed (as defined by the Resource Type), then we can delete the resource
   // ELSE Resource ID reuse is not allowed, and we enforce this by deleting all policies associated with the Resource,
@@ -233,13 +233,13 @@ class ResourceService(
       // remove from cloud extensions first so a failure there does not leave ldap in a bad state
       policiesToDelete <- cloudDeletePolicies(resource)
 
-      _ <- policiesToDelete.toList.parTraverse(p => accessPolicyDAO.deletePolicy(p.id)).unsafeToFuture()
+      _ <- policiesToDelete.toList.parTraverse(p => accessPolicyDAO.deletePolicy(p.id, samRequestContext)).unsafeToFuture()
       _ <- maybeDeleteResource(resource)
     } yield ()
 
   def cloudDeletePolicies(resource: FullyQualifiedResourceId): Future[Stream[AccessPolicy]] = {
     for {
-      policiesToDelete <- accessPolicyDAO.listAccessPolicies(resource).unsafeToFuture()
+      policiesToDelete <- accessPolicyDAO.listAccessPolicies(resource, samRequestContext).unsafeToFuture()
       _ <- Future.traverse(policiesToDelete) { policy =>
         cloudExtensions.onGroupDelete(policy.email)
       }
@@ -248,8 +248,8 @@ class ResourceService(
 
   private def maybeDeleteResource(resource: FullyQualifiedResourceId): Future[Unit] =
     resourceTypes.get(resource.resourceTypeName) match {
-      case Some(resourceType) if resourceType.reuseIds => accessPolicyDAO.deleteResource(resource).unsafeToFuture()
-      case _ => accessPolicyDAO.removeAuthDomainFromResource(resource).unsafeToFuture()
+      case Some(resourceType) if resourceType.reuseIds => accessPolicyDAO.deleteResource(resource, samRequestContext).unsafeToFuture()
+      case _ => accessPolicyDAO.removeAuthDomainFromResource(resource, samRequestContext).unsafeToFuture()
     }
 
   def listUserResourceRoles(resource: FullyQualifiedResourceId, userInfo: UserInfo): Future[Set[ResourceRoleName]] =
@@ -300,7 +300,7 @@ class ResourceService(
       validateMemberEmails(emailsToSubjects) match {
         case Some(error) => IO.raiseError(new WorkbenchExceptionWithErrorReport(error))
         case None =>
-          accessPolicyDAO.overwritePolicyMembers(model.FullyQualifiedPolicyId(resource, policyName), emailsToSubjects.values.flatten.toSet)
+          accessPolicyDAO.overwritePolicyMembers(model.FullyQualifiedPolicyId(resource, policyName), emailsToSubjects.values.flatten.toSet, samRequestContext)
       }
     }
 
@@ -316,11 +316,11 @@ class ResourceService(
     */
   private def createOrUpdatePolicy(policyIdentity: FullyQualifiedPolicyId, policy: ValidatableAccessPolicy): IO[AccessPolicy] = {
     val workbenchSubjects = policy.emailsToSubjects.values.flatten.toSet
-    accessPolicyDAO.loadPolicy(policyIdentity).flatMap {
+    accessPolicyDAO.loadPolicy(policyIdentity, samRequestContext).flatMap {
       case None => createPolicy(policyIdentity, workbenchSubjects, generateGroupEmail(), policy.roles, policy.actions)
       case Some(accessPolicy) =>
         for {
-          result <- accessPolicyDAO.overwritePolicy(AccessPolicy(policyIdentity, workbenchSubjects, accessPolicy.email, policy.roles, policy.actions, accessPolicy.public))
+          result <- accessPolicyDAO.overwritePolicy(AccessPolicy(policyIdentity, workbenchSubjects, accessPolicy.email, policy.roles, policy.actions, accessPolicy.public), samRequestContext)
           _ <- IO.fromFuture(IO(fireGroupUpdateNotification(policyIdentity))).runAsync {
             case Left(regrets) => IO(logger.error(s"failure calling fireGroupUpdateNotification on $policyIdentity", regrets))
             case Right(_) => IO.unit
@@ -435,7 +435,7 @@ class ResourceService(
     for {
       userEmails <- directoryDAO.loadUsers(users, samRequestContext)
       groupEmails <- directoryDAO.loadGroups(groups, samRequestContext)
-      policyEmails <- policyMembers.toList.parTraverse(accessPolicyDAO.loadPolicy(_))
+      policyEmails <- policyMembers.toList.parTraverse((resourceAndPolicyName: FullyQualifiedPolicyId) => accessPolicyDAO.loadPolicy(resourceAndPolicyName, samRequestContext))
     } yield
       AccessPolicyMembership(
         userEmails.toSet[WorkbenchUser].map(_.email) ++ groupEmails.map(_.email) ++ policyEmails.flatMap(_.map(_.email)),
@@ -444,7 +444,7 @@ class ResourceService(
   }
 
   def listResourcePolicies(resource: FullyQualifiedResourceId): IO[Stream[AccessPolicyResponseEntry]] =
-    accessPolicyDAO.listAccessPolicies(resource).flatMap { policies =>
+    accessPolicyDAO.listAccessPolicies(resource, samRequestContext).flatMap { policies =>
       policies.parTraverse { policy =>
         loadAccessPolicyWithEmails(policy).map { membership =>
           AccessPolicyResponseEntry(policy.id.accessPolicyName, membership, policy.email)
@@ -454,7 +454,7 @@ class ResourceService(
 
   def loadResourcePolicy(policyIdentity: FullyQualifiedPolicyId): IO[Option[AccessPolicyMembership]] =
     for {
-      policy <- accessPolicyDAO.loadPolicy(policyIdentity)
+      policy <- accessPolicyDAO.loadPolicy(policyIdentity, samRequestContext)
       res <- policy.traverse(p => loadAccessPolicyWithEmails(p))
     } yield res
 
@@ -471,7 +471,7 @@ class ResourceService(
   private def generateGroupEmail() = WorkbenchEmail(s"policy-${UUID.randomUUID}@$emailDomain")
 
   def isPublic(resourceAndPolicyName: FullyQualifiedPolicyId): IO[Boolean] =
-    accessPolicyDAO.loadPolicy(resourceAndPolicyName).flatMap {
+    accessPolicyDAO.loadPolicy(resourceAndPolicyName, samRequestContext).flatMap {
       case None => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "policy not found")))
       case Some(accessPolicy) => IO.pure(accessPolicy.public)
     }
@@ -486,7 +486,7 @@ class ResourceService(
     */
   def setPublic(policyId: FullyQualifiedPolicyId, public: Boolean): IO[Unit] =
     for {
-      authDomain <- accessPolicyDAO.loadResourceAuthDomain(policyId.resource)
+      authDomain <- accessPolicyDAO.loadResourceAuthDomain(policyId.resource, samRequestContext)
       _ <- authDomain match {
         case LoadResourceAuthDomainResult.ResourceNotFound => IO.raiseError(
           new WorkbenchExceptionWithErrorReport(
@@ -499,14 +499,14 @@ class ResourceService(
             new WorkbenchExceptionWithErrorReport(
               ErrorReport(StatusCodes.BadRequest, "Cannot make auth domain protected resources public. Share directly with auth domain groups instead.")))
         case LoadResourceAuthDomainResult.NotConstrained =>
-          accessPolicyDAO.setPolicyIsPublic(policyId, public) *> IO.fromFuture(IO(fireGroupUpdateNotification(policyId)))
+          accessPolicyDAO.setPolicyIsPublic(policyId, public, samRequestContext) *> IO.fromFuture(IO(fireGroupUpdateNotification(policyId)))
       }
     } yield ()
 
   def listAllFlattenedResourceUsers(resourceId: FullyQualifiedResourceId): IO[Set[UserIdInfo]] =
     for {
-      accessPolicies <- accessPolicyDAO.listAccessPolicies(resourceId)
-      members <- accessPolicies.toList.parTraverse(accessPolicy => accessPolicyDAO.listFlattenedPolicyMembers(accessPolicy.id))
+      accessPolicies <- accessPolicyDAO.listAccessPolicies(resourceId, samRequestContext)
+      members <- accessPolicies.toList.parTraverse(accessPolicy => accessPolicyDAO.listFlattenedPolicyMembers(accessPolicy.id, samRequestContext))
       workbenchUsers = members.flatten.toSet
     } yield {
       workbenchUsers.map(user => UserIdInfo(user.id, user.email, user.googleSubjectId))

@@ -22,15 +22,14 @@ class PolicyEvaluatorService(
   def initPolicy(traceContext: SamRequestContext = null): IO[Unit] = {
     val policyName = AccessPolicyName("admin-notifier-set-public")
     accessPolicyDAO
-      .createPolicy(
-        AccessPolicy(
+      .createPolicy(AccessPolicy(
           FullyQualifiedPolicyId(FullyQualifiedResourceId(SamResourceTypes.resourceTypeAdminName, ResourceId("managed-group")), policyName),
           Set.empty,
           WorkbenchEmail(s"dummy@$emailDomain"),
           Set.empty,
           Set(SamResourceActions.setPublicPolicy(ManagedGroupService.adminNotifierPolicyName)),
           true
-        ))
+        ), samRequestContext)
       .void
       .recoverWith {
         case duplicateException: WorkbenchExceptionWithErrorReport if duplicateException.errorReport.statusCode.contains(StatusCodes.Conflict) =>
@@ -84,7 +83,7 @@ class PolicyEvaluatorService(
           } else {
             for {
               // check if our result should be modulated by the auth domain constraint (ie we are not a member)
-              authDomainsResult <- accessPolicyDAO.loadResourceAuthDomain(resource)
+              authDomainsResult <- accessPolicyDAO.loadResourceAuthDomain(resource, samRequestContext)
               authConstraintOk <- authDomainsResult match {
                 case LoadResourceAuthDomainResult.NotConstrained | LoadResourceAuthDomainResult.ResourceNotFound =>
                   IO.pure(true)
@@ -106,7 +105,7 @@ class PolicyEvaluatorService(
   private def directMemberHasActionOnResource(resource: FullyQualifiedResourceId, roleNamesWithAction: Set[ResourceRoleName], action: ResourceAction, userId: WorkbenchUserId): IO[Boolean] = {
     for {
       // get the policies for this resource and filter to ones that contain the roles with the action, or the action directly
-      policies <- accessPolicyDAO.listAccessPolicies(resource).map(_.toList.filter(p => p.roles.intersect(roleNamesWithAction).nonEmpty || p.actions.contains(action)))
+      policies <- accessPolicyDAO.listAccessPolicies(resource, samRequestContext).map(_.toList.filter(p => p.roles.intersect(roleNamesWithAction).nonEmpty || p.actions.contains(action)))
       members = policies.flatMap(_.members)
     } yield members.contains(userId)
   }
@@ -137,7 +136,7 @@ class PolicyEvaluatorService(
       allPolicyActions = policiesForResource.flatMap(p => allActions(p, rt))
       res <- if (isConstrainable) {
         for {
-          authDomainsResult <- accessPolicyDAO.loadResourceAuthDomain(resource)
+          authDomainsResult <- accessPolicyDAO.loadResourceAuthDomain(resource, samRequestContext)
           policyActions <- authDomainsResult match {
             case LoadResourceAuthDomainResult.Constrained(authDomains) =>
               listUserManagedGroups(userId).map{
@@ -165,10 +164,10 @@ class PolicyEvaluatorService(
           .get(resourceTypeName)
           .toRight(new WorkbenchException(s"missing configration for resourceType ${resourceTypeName}")))
       isConstrained = rt.isAuthDomainConstrainable
-      ridAndPolicyName <- accessPolicyDAO.listAccessPolicies(resourceTypeName, userId) // List all policies of a given resourceType the user is a member of
+      ridAndPolicyName <- accessPolicyDAO.listAccessPolicies(resourceTypeName, userId, samRequestContext) // List all policies of a given resourceType the user is a member of
       rids = ridAndPolicyName.map(_.resourceId)
 
-      resources <- if (isConstrained) accessPolicyDAO.listResourcesWithAuthdomains(resourceTypeName, rids)
+      resources <- if (isConstrained) accessPolicyDAO.listResourcesWithAuthdomains(resourceTypeName, rids, samRequestContext)
       else IO.pure(Set.empty)
       authDomainMap = resources.map(x => x.resourceId -> x.authDomain).toMap
 
@@ -186,12 +185,12 @@ class PolicyEvaluatorService(
           }
         } else UserPolicyResponse(rnp.resourceId, rnp.accessPolicyName, Set.empty, Set.empty, false).some
       }
-      publicPolicies <- accessPolicyDAO.listPublicAccessPolicies(resourceTypeName)
+      publicPolicies <- accessPolicyDAO.listPublicAccessPolicies(resourceTypeName, samRequestContext)
     } yield results.flatten ++ publicPolicies.map(p => UserPolicyResponse(p.resourceId, p.accessPolicyName, Set.empty, Set.empty, public = true))
 
   def listUserManagedGroupsWithRole(userId: WorkbenchUserId): IO[Set[ManagedGroupAndRole]] =
     for {
-      ripns <- accessPolicyDAO.listAccessPolicies(ManagedGroupService.managedGroupTypeName, userId)
+      ripns <- accessPolicyDAO.listAccessPolicies(ManagedGroupService.managedGroupTypeName, userId, samRequestContext)
     } yield {
       ripns
         .filter(ripn => ManagedGroupService.userMembershipPolicyNames.contains(ripn.accessPolicyName))
@@ -207,8 +206,8 @@ class PolicyEvaluatorService(
 
   def listResourceAccessPoliciesForUser(resource: FullyQualifiedResourceId, userId: WorkbenchUserId): IO[Set[AccessPolicyWithoutMembers]] =
     for {
-      policies <- traceIOWithContext("listAccessPoliciesForUser")(_ => accessPolicyDAO.listAccessPoliciesForUser(resource, userId))
-      publicPolicies <- traceIOWithContext("listPublicAccessPolicies")(_ => accessPolicyDAO.listPublicAccessPolicies(resource))
+      policies <- traceIOWithContext("listAccessPoliciesForUser")(_ => accessPolicyDAO.listAccessPoliciesForUser(resource, userId, samRequestContext))
+      publicPolicies <- traceIOWithContext("listPublicAccessPolicies")(_ => accessPolicyDAO.listPublicAccessPolicies(resource, samRequestContext))
     } yield policies ++ publicPolicies
 }
 

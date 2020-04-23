@@ -50,7 +50,7 @@ class ManagedGroupService(
         Map(adminPolicy, memberPolicy, adminNotificationPolicy),
         Set.empty,
         userInfo.userId)
-      policies <- accessPolicyDAO.listAccessPolicies(managedGroup.fullyQualifiedId)
+      policies <- accessPolicyDAO.listAccessPolicies(managedGroup.fullyQualifiedId, samRequestContext)
       workbenchGroup <- createAggregateGroup(managedGroup, policies.toSet, accessInstructionsOpt)
       _ <- IO.fromFuture(IO(cloudExtensions.publishGroup(workbenchGroup.id)))
     } yield managedGroup
@@ -126,7 +126,7 @@ class ManagedGroupService(
   def listPolicyMemberEmails(resourceId: ResourceId, policyName: ManagedGroupPolicyName): IO[Stream[WorkbenchEmail]] = {
     val policyIdentity =
       FullyQualifiedPolicyId(FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, resourceId), policyName)
-    accessPolicyDAO.loadPolicy(policyIdentity) flatMap {
+    accessPolicyDAO.loadPolicy(policyIdentity, samRequestContext) flatMap {
       case Some(policy) => directoryDAO.loadSubjectEmails(policy.members, samRequestContext)
       case None =>
         IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Group or policy could not be found: $policyIdentity")))
@@ -136,7 +136,7 @@ class ManagedGroupService(
   def overwritePolicyMemberEmails(resourceId: ResourceId, policyName: ManagedGroupPolicyName, emails: Set[WorkbenchEmail]): IO[AccessPolicy] = {
     val resourceAndPolicyName =
       FullyQualifiedPolicyId(FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, resourceId), policyName)
-    accessPolicyDAO.loadPolicy(resourceAndPolicyName).flatMap {
+    accessPolicyDAO.loadPolicy(resourceAndPolicyName, samRequestContext).flatMap {
       case Some(policy) => {
         val updatedPolicy = AccessPolicyMembership(emails, policy.actions, policy.roles)
         resourceService.overwritePolicy(managedGroupType, resourceAndPolicyName.accessPolicyName, resourceAndPolicyName.resource, updatedPolicy)
@@ -178,7 +178,7 @@ class ManagedGroupService(
         for {
           requesterUser <- directoryDAO.loadUser(requesterUserId, samRequestContext)
           requesterSubjectId <- extractGoogleSubjectId(requesterUser)
-          admins <- accessPolicyDAO.listFlattenedPolicyMembers(resourceAndAdminPolicyName)
+          admins <- accessPolicyDAO.listFlattenedPolicyMembers(resourceAndAdminPolicyName, samRequestContext)
           // ignore any admin that does not have a google subject id (they have not registered yet anyway)
           adminUserIds = admins.flatMap { admin =>
             admin.googleSubjectId.map(id => WorkbenchUserId(id.value))

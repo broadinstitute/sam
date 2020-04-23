@@ -28,7 +28,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
   // This method obtains an EXCLUSIVE lock on the ResourceType table because if we boot multiple Sam instances at once,
   // they will all try to (re)create ResourceTypes at the same time and could collide. The lock is automatically
   // released at the end of the transaction.
-  override def createResourceType(resourceType: ResourceType): IO[ResourceType] = {
+  override def createResourceType(resourceType: ResourceType, samRequestContext: SamRequestContext): IO[ResourceType] = {
     val uniqueActions = resourceType.roles.flatMap(_.actions)
     runInTransaction("createResourceType", samRequestContext)({ implicit session =>
       samsql"lock table ${ResourceTypeTable.table} IN EXCLUSIVE MODE".execute().apply()
@@ -197,7 +197,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
 
   // 1. Create Resource
   // 2. Create the entries in the join table for the auth domains
-  override def createResource(resource: Resource): IO[Resource] = {
+  override def createResource(resource: Resource, samRequestContext: SamRequestContext): IO[Resource] = {
     runInTransaction("createResource", samRequestContext)({ implicit session =>
       val resourcePK = insertResource(resource)
 
@@ -239,14 +239,14 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     samsqls"""select ${rt.id} from ${ResourceTypeTable as rt} where ${rt.name} = ${resourceTypeName}"""
   }
 
-  override def deleteResource(resource: FullyQualifiedResourceId): IO[Unit] = {
+  override def deleteResource(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] = {
     runInTransaction("deleteResource", samRequestContext)({ implicit session =>
       val r = ResourceTable.syntax("r")
       samsql"delete from ${ResourceTable as r} where ${r.name} = ${resource.resourceId} and ${r.resourceTypeId} = (${loadResourceTypePK(resource.resourceTypeName)})".update().apply()
     })
   }
 
-  override def loadResourceAuthDomain(resource: FullyQualifiedResourceId): IO[LoadResourceAuthDomainResult] = {
+  override def loadResourceAuthDomain(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[LoadResourceAuthDomainResult] = {
     runInTransaction("loadResourceAuthDomain", samRequestContext)({ implicit session =>
       val ad = AuthDomainTable.syntax("ad")
       val r = ResourceTable.syntax("r")
@@ -285,7 +285,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     })
   }
 
-  override def listResourcesConstrainedByGroup(groupId: WorkbenchGroupIdentity): IO[Set[Resource]] = {
+  override def listResourcesConstrainedByGroup(groupId: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[Set[Resource]] = {
     import SamTypeBinders._
 
     runInTransaction("listResourcesConstrainedByGroup", samRequestContext)({ implicit session =>
@@ -329,7 +329,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     })
   }
 
-  override def removeAuthDomainFromResource(resource: FullyQualifiedResourceId): IO[Unit] = {
+  override def removeAuthDomainFromResource(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] = {
     val r = ResourceTable.syntax("r")
     val ad = AuthDomainTable.syntax("ad")
     val rt = ResourceTypeTable.syntax("rt")
@@ -442,7 +442,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
   }
 
   // Policies and their roles and actions are set to cascade delete when the associated group is deleted
-  override def deletePolicy(policy: FullyQualifiedPolicyId): IO[Unit] = {
+  override def deletePolicy(policy: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[Unit] = {
     val p = PolicyTable.syntax("p")
     val g = GroupTable.syntax("g")
 
@@ -459,11 +459,11 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     })
   }
 
-  override def loadPolicy(resourceAndPolicyName: FullyQualifiedPolicyId): IO[Option[AccessPolicy]] = {
+  override def loadPolicy(resourceAndPolicyName: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[Option[AccessPolicy]] = {
     listPolicies(resourceAndPolicyName.resource, limitOnePolicy = Option(resourceAndPolicyName.accessPolicyName)).map(_.headOption)
   }
 
-  override def overwritePolicyMembers(id: FullyQualifiedPolicyId, memberList: Set[WorkbenchSubject]): IO[Unit] = {
+  override def overwritePolicyMembers(id: FullyQualifiedPolicyId, memberList: Set[WorkbenchSubject], samRequestContext: SamRequestContext): IO[Unit] = {
     runInTransaction("overwritePolicyMembers", samRequestContext)({ implicit session =>
       overwritePolicyMembersInternal(id, memberList)
     })
@@ -483,7 +483,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     insertGroupMembers(GroupPK(groupId.toLong), memberList)
   }
 
-  override def overwritePolicy(newPolicy: AccessPolicy): IO[AccessPolicy] = {
+  override def overwritePolicy(newPolicy: AccessPolicy, samRequestContext: SamRequestContext): IO[AccessPolicy] = {
     runInTransaction("overwritePolicy", samRequestContext)({ implicit session =>
       overwritePolicyMembersInternal(newPolicy.id, newPolicy.members)
       overwritePolicyRolesInternal(newPolicy.id, newPolicy.roles)
@@ -519,7 +519,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     }
   }
 
-  override def listPublicAccessPolicies(resourceTypeName: ResourceTypeName): IO[Stream[ResourceIdAndPolicyName]] = {
+  override def listPublicAccessPolicies(resourceTypeName: ResourceTypeName, samRequestContext: SamRequestContext): IO[Stream[ResourceIdAndPolicyName]] = {
     val rt = ResourceTypeTable.syntax("rt")
     val r = ResourceTable.syntax("r")
     val p = PolicyTable.syntax("p")
@@ -538,7 +538,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     })
   }
 
-  override def listPublicAccessPolicies(resource: FullyQualifiedResourceId): IO[Stream[AccessPolicyWithoutMembers]] = {
+  override def listPublicAccessPolicies(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Stream[AccessPolicyWithoutMembers]] = {
     val g = GroupTable.syntax("g")
     val r = ResourceTable.syntax("r")
     val rt = ResourceTypeTable.syntax("rt")
@@ -639,7 +639,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     })
   }
 
-  override def listResourcesWithAuthdomains(resourceTypeName: ResourceTypeName, resourceId: Set[ResourceId]): IO[Set[Resource]] = {
+  override def listResourcesWithAuthdomains(resourceTypeName: ResourceTypeName, resourceId: Set[ResourceId], samRequestContext: SamRequestContext): IO[Set[Resource]] = {
     import SamTypeBinders._
 
     if(resourceId.nonEmpty) {
@@ -668,11 +668,11 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     } else IO.pure(Set.empty)
   }
 
-  override def listResourceWithAuthdomains(resourceId: FullyQualifiedResourceId): IO[Option[Resource]] = {
-    listResourcesWithAuthdomains(resourceId.resourceTypeName, Set(resourceId.resourceId)).map(_.headOption)
+  override def listResourceWithAuthdomains(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Option[Resource]] = {
+    listResourcesWithAuthdomains(resourceId.resourceTypeName, Set(resourceId.resourceId), samRequestContext).map(_.headOption)
   }
 
-  override def listAccessPolicies(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId): IO[Set[ResourceIdAndPolicyName]] = {
+  override def listAccessPolicies(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[ResourceIdAndPolicyName]] = {
     val ancestorGroupsTable = SubGroupMemberTable("ancestor_groups")
     val ag = ancestorGroupsTable.syntax("ag")
     val agColumn = ancestorGroupsTable.column
@@ -704,11 +704,11 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     })
   }
 
-  override def listAccessPolicies(resource: FullyQualifiedResourceId): IO[Stream[AccessPolicy]] = {
+  override def listAccessPolicies(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Stream[AccessPolicy]] = {
     listPolicies(resource)
   }
 
-  override def listAccessPoliciesForUser(resource: FullyQualifiedResourceId, user: WorkbenchUserId): IO[Set[AccessPolicyWithoutMembers]] = {
+  override def listAccessPoliciesForUser(resource: FullyQualifiedResourceId, user: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[AccessPolicyWithoutMembers]] = {
     runInTransaction("listAccessPoliciesForUser", samRequestContext)({ implicit session =>
       val ancestorGroupsTable = SubGroupMemberTable("ancestor_groups")
       val ag = ancestorGroupsTable.syntax("ag")
@@ -762,7 +762,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     })
   }
 
-  override def listFlattenedPolicyMembers(policyId: FullyQualifiedPolicyId): IO[Set[WorkbenchUser]] = {
+  override def listFlattenedPolicyMembers(policyId: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[Set[WorkbenchUser]] = {
     val subGroupMemberTable = SubGroupMemberTable("sub_group")
     val sg = subGroupMemberTable.syntax("sg")
     val u = UserTable.syntax("u")
@@ -777,7 +777,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     })
   }
 
-  override def setPolicyIsPublic(policyId: FullyQualifiedPolicyId, isPublic: Boolean): IO[Unit] = {
+  override def setPolicyIsPublic(policyId: FullyQualifiedPolicyId, isPublic: Boolean, samRequestContext: SamRequestContext): IO[Unit] = {
     runInTransaction("setPolicyIsPublic", samRequestContext)({ implicit session =>
       setPolicyIsPublicInternal(policyId, isPublic)
     })

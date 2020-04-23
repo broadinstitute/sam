@@ -235,9 +235,9 @@ class GoogleExtensions(
 
   private def getAccessPoliciesOnResourcesConstrainedByGroup(groupId: ResourceId): IO[List[AccessPolicy]] = {
     for {
-      resources <- accessPolicyDAO.listResourcesConstrainedByGroup(WorkbenchGroupName(groupId.value))
+      resources <- accessPolicyDAO.listResourcesConstrainedByGroup(WorkbenchGroupName(groupId.value), samRequestContext)
       policies <- resources.toList.traverse { resource =>
-        accessPolicyDAO.listAccessPolicies(resource.fullyQualifiedId)
+        accessPolicyDAO.listAccessPolicies(resource.fullyQualifiedId, samRequestContext)
       }
     } yield policies.flatten
   }

@@ -61,10 +61,10 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
   def makeResourceType(resourceType: ResourceType): ResourceType = resourceService.createResourceType(resourceType).unsafeRunSync()
 
   def assertPoliciesOnResource(resource: FullyQualifiedResourceId, policyDAO: AccessPolicyDAO = policyDAO, expectedPolicies: Stream[AccessPolicyName] = Stream(ManagedGroupService.adminPolicyName, ManagedGroupService.memberPolicyName)) = {
-    val policies = policyDAO.listAccessPolicies(resource).unsafeRunSync()
+    val policies = policyDAO.listAccessPolicies(resource, samRequestContext).unsafeRunSync()
     policies.map(_.id.accessPolicyName.value) should contain theSameElementsAs expectedPolicies.map(_.value)
     expectedPolicies.foreach { policyName =>
-      val res = policyDAO.loadPolicy(FullyQualifiedPolicyId(resource, policyName)).unsafeRunSync()
+      val res = policyDAO.loadPolicy(FullyQualifiedPolicyId(resource, policyName), samRequestContext).unsafeRunSync()
       res.isInstanceOf[Some[AccessPolicy]] shouldBe true
     }
   }
@@ -95,7 +95,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
 
   "ManagedGroupService create" should "create a managed group with admin and member policies" in {
     assertMakeGroup()
-    val policies = policyDAO.listAccessPolicies(expectedResource).unsafeRunSync()
+    val policies = policyDAO.listAccessPolicies(expectedResource, samRequestContext).unsafeRunSync()
     policies.map(_.id.accessPolicyName.value) should contain theSameElementsAs Set("admin", "member", "admin-notifier")
   }
 
@@ -177,9 +177,9 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     assertMakeGroup(managedGroupService = managedGroupService)
     runAndWait(managedGroupService.deleteManagedGroup(resourceId))
     verify(mockGoogleExtensions).onGroupDelete(groupEmail)
-    policyDAO.listAccessPolicies(expectedResource).unsafeRunSync() shouldEqual Stream.empty
-    policyDAO.loadPolicy(adminPolicy).unsafeRunSync() shouldEqual None
-    policyDAO.loadPolicy(memberPolicy).unsafeRunSync() shouldEqual None
+    policyDAO.listAccessPolicies(expectedResource, samRequestContext).unsafeRunSync() shouldEqual Stream.empty
+    policyDAO.loadPolicy(adminPolicy, samRequestContext).unsafeRunSync() shouldEqual None
+    policyDAO.loadPolicy(memberPolicy, samRequestContext).unsafeRunSync() shouldEqual None
   }
 
   it should "fail if the managed group is a sub group of any other workbench group" in {

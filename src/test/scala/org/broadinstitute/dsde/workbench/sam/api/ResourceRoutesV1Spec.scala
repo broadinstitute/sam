@@ -533,7 +533,7 @@ class ResourceRoutesV1Spec extends FlatSpec with Matchers with ScalatestRouteTes
     val groups = TrieMap.empty[WorkbenchGroupIdentity, WorkbenchGroup]
     val policyDao = new MockAccessPolicyDAO(groups)
 
-    policyDao.createResource(Resource(resourceType.name, ResourceId("foo"), Set.empty)).unsafeRunSync()
+    policyDao.createResource(Resource(resourceType.name, ResourceId("foo"), Set.empty), samRequestContext).unsafeRunSync()
 
     val otherUserSamRoutes = TestSamRoutes(Map(resourceType.name -> resourceType), UserInfo(OAuth2BearerToken("accessToken"), WorkbenchUserId("user2"), WorkbenchEmail("user2@example.com"), 0), policyAccessDAO = Some(policyDao), policies = Some(groups))
     val members = AccessPolicyMembership(Set(WorkbenchEmail("foo@bar.baz")), Set(ResourceAction("can_compute")), Set.empty)
@@ -594,7 +594,7 @@ class ResourceRoutesV1Spec extends FlatSpec with Matchers with ScalatestRouteTes
     val groups = TrieMap.empty[WorkbenchGroupIdentity, WorkbenchGroup]
     val policyDao = new MockAccessPolicyDAO(groups)
 
-    policyDao.createResource(Resource(resourceType.name, ResourceId("foo"), Set.empty)).unsafeRunSync()
+    policyDao.createResource(Resource(resourceType.name, ResourceId("foo"), Set.empty), samRequestContext).unsafeRunSync()
 
     val otherUserSamRoutes = TestSamRoutes(Map(resourceType.name -> resourceType), UserInfo(OAuth2BearerToken("accessToken"), WorkbenchUserId("user2"), WorkbenchEmail("user2@example.com"), 0), policyAccessDAO = Some(policyDao), policies = Some(groups))
 
