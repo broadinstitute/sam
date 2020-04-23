@@ -54,7 +54,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
     *      yes            skip    ---> User exists. Do nothing.
     *      yes            skip    ---> User exists. Do nothing.
     */
-  protected def registerUser(user: CreateWorkbenchUser, samRequestContext: SamRequestContext): IO[WorkbenchUser] =
+  protected[service] def registerUser(user: CreateWorkbenchUser, samRequestContext: SamRequestContext): IO[WorkbenchUser] =
     for {
       existingSubFromGoogleSubjectId <- directoryDAO.loadSubjectFromGoogleSubjectId(user.googleSubjectId, samRequestContext)
       user <- existingSubFromGoogleSubjectId match {

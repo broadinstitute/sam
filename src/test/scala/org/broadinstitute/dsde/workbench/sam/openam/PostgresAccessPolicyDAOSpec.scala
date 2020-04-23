@@ -619,8 +619,8 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
         val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
         val policy = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("policy")), Set(subGroup.id, secondGroup.id, directMember.id), WorkbenchEmail("policy@policy.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), false)
 
-        allMembers.map(((user) => dirDao.createUser(user, samRequestContext)).unsafeRunSync())
-        Set(subSubGroup, subGroup, secondGroup).map(((group) => dirDao.createGroup(group, samRequestContext = samRequestContext)).unsafeRunSync())
+        allMembers.map((user) => dirDao.createUser(user, samRequestContext).unsafeRunSync())
+        Set(subSubGroup, subGroup, secondGroup).map((group) => dirDao.createGroup(group, samRequestContext = samRequestContext).unsafeRunSync())
 
         dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         dao.createResource(resource, samRequestContext).unsafeRunSync()
@@ -650,7 +650,7 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
 
         dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         dao.createResource(resource, samRequestContext).unsafeRunSync()
-        allPolicies.map(((policy) => dao.createPolicy(policy, samRequestContext)).unsafeRunSync())
+        allPolicies.map((policy) => dao.createPolicy(policy, samRequestContext).unsafeRunSync())
 
         dao.listAccessPoliciesForUser(resource.fullyQualifiedId, user.id, samRequestContext).unsafeRunSync() should contain theSameElementsAs expectedResults
       }
@@ -670,7 +670,7 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
         dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         dao.createResource(resource, samRequestContext).unsafeRunSync()
         dao.createResource(otherResource, samRequestContext).unsafeRunSync()
-        allPolicies.map(((policy) => dao.createPolicy(policy, samRequestContext)).unsafeRunSync())
+        allPolicies.map((policy) => dao.createPolicy(policy, samRequestContext).unsafeRunSync())
 
         dao.listAccessPoliciesForUser(resource.fullyQualifiedId, user.id, samRequestContext).unsafeRunSync() should contain theSameElementsAs expectedResults
       }

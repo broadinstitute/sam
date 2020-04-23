@@ -28,7 +28,6 @@ import org.broadinstitute.dsde.workbench.sam.openam._
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.{TestSupport, model, _}
-import org.broadinstitute.dsde.workbench.sam.TestSupport.samRequestContext
 import org.mockito.ArgumentMatcher
 import org.mockito.ArgumentMatchers._
 import org.mockito.Mockito._

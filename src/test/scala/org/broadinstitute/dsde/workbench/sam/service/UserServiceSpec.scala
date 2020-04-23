@@ -65,7 +65,7 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
 
     googleExtensions = mock[GoogleExtensions]
     when(googleExtensions.allUsersGroupName).thenReturn(NoExtensions.allUsersGroupName)
-    when(googleExtensions.getOrCreateAllUsersGroup(any[DirectoryDAO], samRequestContext)(any[ExecutionContext])).thenReturn(NoExtensions.getOrCreateAllUsersGroup(dirDAO))
+    when(googleExtensions.getOrCreateAllUsersGroup(any[DirectoryDAO], samRequestContext)(any[ExecutionContext])).thenReturn(NoExtensions.getOrCreateAllUsersGroup(dirDAO, samRequestContext))
     when(googleExtensions.onUserCreate(any[WorkbenchUser], samRequestContext)).thenReturn(Future.successful(()))
     when(googleExtensions.onUserDelete(any[WorkbenchUserId], samRequestContext)).thenReturn(Future.successful(()))
     when(googleExtensions.getUserStatus(any[WorkbenchUser])).thenReturn(Future.successful(true))

@@ -394,7 +394,7 @@ class ResourceService(
       case Success(_) => fireGroupUpdateNotification(policyIdentity, samRequestContext)
     }
 
-  private def loadAccessPolicyWithEmails(policy: AccessPolicy, samRequestContext: SamRequestContext) = {
+  private[service] def loadAccessPolicyWithEmails(policy: AccessPolicy, samRequestContext: SamRequestContext): IO[AccessPolicyMembership] = {
     val users = policy.members.collect { case userId: WorkbenchUserId => userId }
     val groups = policy.members.collect { case groupName: WorkbenchGroupName => groupName }
     val policyMembers = policy.members.collect { case policyId: FullyQualifiedPolicyId => policyId }
