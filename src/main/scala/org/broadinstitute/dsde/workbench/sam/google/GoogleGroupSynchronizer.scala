@@ -40,9 +40,7 @@ class GoogleGroupSynchronizer(directoryDAO: DirectoryDAO,
                               googleExtensions: GoogleExtensions,
                               resourceTypes: Map[ResourceTypeName, ResourceType])(implicit executionContext: ExecutionContext)
   extends LazyLogging with FutureSupport {
-  def synchronizeGroupMembers(
-                               groupId: WorkbenchGroupIdentity,
-                               visitedGroups: Set[WorkbenchGroupIdentity] = Set.empty[WorkbenchGroupIdentity]): Future[Map[WorkbenchEmail, Seq[SyncReportItem]]] = {
+  def synchronizeGroupMembers(groupId: WorkbenchGroupIdentity, visitedGroups: Set[WorkbenchGroupIdentity] = Set.empty[WorkbenchGroupIdentity], samRequestContext: SamRequestContext): Future[Map[WorkbenchEmail, Seq[SyncReportItem]]] = {
     def toSyncReportItem(operation: String, email: String, result: Try[Unit]) =
       SyncReportItem(
         operation,
@@ -78,7 +76,7 @@ class GoogleGroupSynchronizer(directoryDAO: DirectoryDAO,
         members <- (group match {
           case accessPolicy: AccessPolicy =>
             if (isConstrainable(accessPolicy.id.resource, accessPolicy)) {
-              calculateIntersectionGroup(accessPolicy.id.resource, accessPolicy)
+              calculateIntersectionGroup(accessPolicy.id.resource, accessPolicy, samRequestContext)
             } else {
               IO.pure(accessPolicy.members)
             }
@@ -88,7 +86,7 @@ class GoogleGroupSynchronizer(directoryDAO: DirectoryDAO,
         subGroupSyncs <- Future.traverse(group.members) {
           case subGroup: WorkbenchGroupIdentity =>
             directoryDAO.getSynchronizedDate(subGroup, samRequestContext).unsafeToFuture().flatMap {
-              case None => synchronizeGroupMembers(subGroup, visitedGroups + groupId)
+              case None => synchronizeGroupMembers(subGroup, visitedGroups + groupId, samRequestContext)
               case _ => Future.successful(Map.empty[WorkbenchEmail, Seq[SyncReportItem]])
             }
           case _ => Future.successful(Map.empty[WorkbenchEmail, Seq[SyncReportItem]])
@@ -153,7 +151,7 @@ class GoogleGroupSynchronizer(directoryDAO: DirectoryDAO,
         throw new WorkbenchException(s"Invalid resource type specified. ${resource.resourceTypeName} is not a recognized resource type.")
     }
 
-  private[google] def calculateIntersectionGroup(resource: FullyQualifiedResourceId, policy: AccessPolicy): IO[Set[WorkbenchSubject]] = {
+  private def calculateIntersectionGroup(resource: FullyQualifiedResourceId, policy: AccessPolicy, samRequestContext: SamRequestContext) = {
     // if the policy has no members, the intersection will be empty so short circuit here
     if (policy.members.isEmpty) {
       IO.pure(Set())

@@ -52,7 +52,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                   completeWithTrace({samRequestContext =>
                     import spray.json._
                     googleExtensions
-                      .getArbitraryPetServiceAccountKey(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None))
+                      .getArbitraryPetServiceAccountKey(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None), samRequestContext)
                       .map(key => StatusCodes.OK -> key.parseJson)
                   })
                 }
@@ -63,7 +63,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                   post {
                     entity(as[Set[String]]) { scopes =>
                       completeWithTrace({samRequestContext =>
-                        googleExtensions.getArbitraryPetServiceAccountToken(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None), scopes).map { token =>
+                        googleExtensions.getArbitraryPetServiceAccountToken(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None), scopes, samRequestContext).map { token =>
                           StatusCodes.OK -> JsString(token)
                         }
                       })
@@ -99,7 +99,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                       entity(as[Set[String]]) { scopes =>
                         completeWithTrace({samRequestContext =>
                           googleExtensions
-                            .getPetServiceAccountToken(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None), GoogleProject(project), scopes)
+                            .getPetServiceAccountToken(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None), GoogleProject(project), scopes, samRequestContext)
                             .map { token =>
                               StatusCodes.OK -> JsString(token)
                             }
@@ -142,14 +142,14 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                 post {
                   completeWithTrace({samRequestContext =>
                     import GoogleModelJsonSupport._
-                    googleGroupSynchronizer.synchronizeGroupMembers(policyId).map { syncReport =>
+                    googleGroupSynchronizer.synchronizeGroupMembers(policyId, samRequestContext = samRequestContext).map { syncReport =>
                       StatusCodes.OK -> syncReport
                     }
                   })
                 } ~
                   get {
                     completeWithTrace({samRequestContext =>
-                      googleExtensions.getSynchronizedState(policyId).map {
+                      googleExtensions.getSynchronizedState(policyId, samRequestContext).map {
                         case Some(syncState) => StatusCodes.OK -> Option(syncState)
                         case None => StatusCodes.NoContent -> None
                       }

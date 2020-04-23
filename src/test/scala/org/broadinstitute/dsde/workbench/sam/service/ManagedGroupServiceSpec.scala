@@ -58,7 +58,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     runAndWait(schemaDao.init())
   }
 
-  def makeResourceType(resourceType: ResourceType): ResourceType = resourceService.createResourceType(resourceType).unsafeRunSync()
+  def makeResourceType(resourceType: ResourceType): ResourceType = resourceService.createResourceType(resourceType, samRequestContext).unsafeRunSync()
 
   def assertPoliciesOnResource(resource: FullyQualifiedResourceId, policyDAO: AccessPolicyDAO = policyDAO, expectedPolicies: Stream[AccessPolicyName] = Stream(ManagedGroupService.adminPolicyName, ManagedGroupService.memberPolicyName)) = {
     val policies = policyDAO.listAccessPolicies(resource, samRequestContext).unsafeRunSync()
@@ -83,7 +83,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
 
   private def makeGroup(groupName: String, managedGroupService: ManagedGroupService, userInfo: UserInfo = dummyUserInfo) = {
     makeResourceType(managedGroupResourceType)
-    runAndWait(managedGroupService.createManagedGroup(ResourceId(groupName), userInfo))
+    runAndWait(managedGroupService.createManagedGroup(ResourceId(groupName), userInfo, samRequestContext = samRequestContext))
   }
 
   before {
@@ -125,17 +125,17 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     val groupName = "uniqueName"
     assertMakeGroup(groupName)
     val exception = intercept[WorkbenchExceptionWithErrorReport] {
-      runAndWait(managedGroupService.createManagedGroup(ResourceId(groupName), dummyUserInfo))
+      runAndWait(managedGroupService.createManagedGroup(ResourceId(groupName), dummyUserInfo, samRequestContext = samRequestContext))
     }
     exception.getMessage should include ("A resource of this type and name already exists")
-    managedGroupService.loadManagedGroup(resourceId).unsafeRunSync() shouldEqual None
+    managedGroupService.loadManagedGroup(resourceId, samRequestContext).unsafeRunSync() shouldEqual None
   }
 
   it should "succeed after a managed group with the same name has been deleted" in {
     val groupId = ResourceId("uniqueName")
     managedGroupResourceType.reuseIds shouldEqual true
     assertMakeGroup(groupId.value)
-    runAndWait(managedGroupService.deleteManagedGroup(groupId))
+    runAndWait(managedGroupService.deleteManagedGroup(groupId, samRequestContext))
     assertMakeGroup(groupId.value)
   }
 
@@ -146,7 +146,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
       assertMakeGroup(groupName)
     }
     exception.getMessage should include (s"must be $maxLen characters or fewer")
-    managedGroupService.loadManagedGroup(resourceId).unsafeRunSync() shouldEqual None
+    managedGroupService.loadManagedGroup(resourceId, samRequestContext).unsafeRunSync() shouldEqual None
   }
 
   it should "fail when the group name has invalid characters" in {
@@ -155,12 +155,12 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
       assertMakeGroup(groupName)
     }
     exception.getMessage should include ("Group name may only contain alphanumeric characters, underscores, and dashes")
-    managedGroupService.loadManagedGroup(resourceId).unsafeRunSync() shouldEqual None
+    managedGroupService.loadManagedGroup(resourceId, samRequestContext).unsafeRunSync() shouldEqual None
   }
 
   "ManagedGroupService get" should "return the Managed Group resource" in {
     assertMakeGroup()
-    val maybeEmail = managedGroupService.loadManagedGroup(resourceId).unsafeRunSync()
+    val maybeEmail = managedGroupService.loadManagedGroup(resourceId, samRequestContext).unsafeRunSync()
     maybeEmail.value.value shouldEqual s"${resourceId.value}@$testDomain"
   }
 
@@ -175,7 +175,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     val managedGroupService = new ManagedGroupService(resourceService, null, resourceTypeMap, policyDAO, dirDAO, mockGoogleExtensions, testDomain)
 
     assertMakeGroup(managedGroupService = managedGroupService)
-    runAndWait(managedGroupService.deleteManagedGroup(resourceId))
+    runAndWait(managedGroupService.deleteManagedGroup(resourceId, samRequestContext))
     verify(mockGoogleExtensions).onGroupDelete(groupEmail)
     policyDAO.listAccessPolicies(expectedResource, samRequestContext).unsafeRunSync() shouldEqual Stream.empty
     policyDAO.loadPolicy(adminPolicy, samRequestContext).unsafeRunSync() shouldEqual None
@@ -193,22 +193,22 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     dirDAO.loadGroup(parentGroup.id, samRequestContext).unsafeRunSync().get.members shouldEqual Set(managedGroupName)
 
     intercept[WorkbenchExceptionWithErrorReport] {
-      runAndWait(managedGroupService.deleteManagedGroup(managedGroup.resourceId))
+      runAndWait(managedGroupService.deleteManagedGroup(managedGroup.resourceId, samRequestContext))
     }
 
-    managedGroupService.loadManagedGroup(managedGroup.resourceId).unsafeRunSync() shouldNot be (None)
+    managedGroupService.loadManagedGroup(managedGroup.resourceId, samRequestContext).unsafeRunSync() shouldNot be (None)
     dirDAO.loadGroup(parentGroup.id, samRequestContext).unsafeRunSync().get.members shouldEqual Set(managedGroupName)
   }
 
   "ManagedGroupService listPolicyMemberEmails" should "return a list of email addresses for the groups admin policy" in {
     val managedGroup = assertMakeGroup()
-    managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName).unsafeRunSync() should contain theSameElementsAs Set(dummyUserInfo.userEmail)
-    managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.memberPolicyName).unsafeRunSync() shouldEqual Stream.empty
+    managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName, samRequestContext).unsafeRunSync() should contain theSameElementsAs Set(dummyUserInfo.userEmail)
+    managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.memberPolicyName, samRequestContext).unsafeRunSync() shouldEqual Stream.empty
   }
 
   it should "throw an exception if the group does not exist" in {
     intercept[WorkbenchExceptionWithErrorReport] {
-      managedGroupService.listPolicyMemberEmails(resourceId, ManagedGroupService.adminPolicyName).unsafeRunSync()
+      managedGroupService.listPolicyMemberEmails(resourceId, ManagedGroupService.adminPolicyName, samRequestContext).unsafeRunSync()
     }
   }
 
@@ -220,16 +220,16 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     val managedGroup = assertMakeGroup()
     dirDAO.createGroup(BasicWorkbenchGroup(WorkbenchGroupName("someGroup"), Set.empty, someGroupEmail), samRequestContext = samRequestContext).unsafeRunSync()
 
-    managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName).unsafeRunSync() should contain theSameElementsAs Set(dummyAdmin.email)
+    managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName, samRequestContext).unsafeRunSync() should contain theSameElementsAs Set(dummyAdmin.email)
 
-    runAndWait(managedGroupService.overwritePolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName, Set(otherAdmin.email, someGroupEmail)))
+    runAndWait(managedGroupService.overwritePolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName, Set(otherAdmin.email, someGroupEmail), samRequestContext))
 
-    managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName).unsafeRunSync() should contain theSameElementsAs Set(otherAdmin.email, someGroupEmail)
+    managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName, samRequestContext).unsafeRunSync() should contain theSameElementsAs Set(otherAdmin.email, someGroupEmail)
   }
 
   it should "throw an exception if the group does not exist" in {
     intercept[WorkbenchExceptionWithErrorReport] {
-      runAndWait(managedGroupService.overwritePolicyMemberEmails(expectedResource.resourceId, ManagedGroupService.adminPolicyName, Set.empty))
+      runAndWait(managedGroupService.overwritePolicyMemberEmails(expectedResource.resourceId, ManagedGroupService.adminPolicyName, Set.empty, samRequestContext))
     }
   }
 
@@ -238,7 +238,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     val badAdmin = WorkbenchUser(WorkbenchUserId("admin2"), None, WorkbenchEmail("admin2@foo.test"), None)
 
     intercept[WorkbenchExceptionWithErrorReport] {
-      runAndWait(managedGroupService.overwritePolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName, Set(badAdmin.email)))
+      runAndWait(managedGroupService.overwritePolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName, Set(badAdmin.email), samRequestContext))
     }
   }
 
@@ -250,12 +250,12 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     dirDAO.createUser(someUser, samRequestContext).unsafeRunSync()
     dirDAO.createGroup(BasicWorkbenchGroup(WorkbenchGroupName("someGroup"), Set.empty, someGroupEmail), samRequestContext = samRequestContext).unsafeRunSync()
 
-    managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.memberPolicyName).unsafeRunSync() should contain theSameElementsAs Set()
+    managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.memberPolicyName, samRequestContext).unsafeRunSync() should contain theSameElementsAs Set()
 
     val newMembers = Set(someGroupEmail, someUser.email)
-    runAndWait(managedGroupService.overwritePolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.memberPolicyName, newMembers))
+    runAndWait(managedGroupService.overwritePolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.memberPolicyName, newMembers, samRequestContext))
 
-    managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.memberPolicyName).unsafeRunSync() should contain theSameElementsAs newMembers
+    managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.memberPolicyName, samRequestContext).unsafeRunSync() should contain theSameElementsAs newMembers
   }
 
   "ManagedGroupService addSubjectToPolicy" should "successfully add the subject to the existing policy for the group" in {
@@ -263,14 +263,14 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
 
     val managedGroup = assertMakeGroup()
 
-    managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName).unsafeRunSync() should contain theSameElementsAs Set(adminUser.email)
+    managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName, samRequestContext).unsafeRunSync() should contain theSameElementsAs Set(adminUser.email)
 
     val someUser = WorkbenchUser(WorkbenchUserId("someUser"), None, WorkbenchEmail("someUser@foo.test"), None)
     dirDAO.createUser(someUser, samRequestContext).unsafeRunSync()
-    runAndWait(managedGroupService.addSubjectToPolicy(managedGroup.resourceId, ManagedGroupService.adminPolicyName, someUser.id))
+    runAndWait(managedGroupService.addSubjectToPolicy(managedGroup.resourceId, ManagedGroupService.adminPolicyName, someUser.id, samRequestContext))
 
     val expectedEmails = Set(adminUser.email, someUser.email)
-    managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName).unsafeRunSync() should contain theSameElementsAs expectedEmails
+    managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName, samRequestContext).unsafeRunSync() should contain theSameElementsAs expectedEmails
   }
 
   it should "succeed without changing if the email address is already in the policy" in {
@@ -278,9 +278,9 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
 
     val managedGroup = assertMakeGroup()
 
-    managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName).unsafeRunSync() should contain theSameElementsAs Set(adminUser.email)
-    runAndWait(managedGroupService.addSubjectToPolicy(managedGroup.resourceId, ManagedGroupService.adminPolicyName, adminUser.id))
-    managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName).unsafeRunSync() should contain theSameElementsAs Set(adminUser.email)
+    managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName, samRequestContext).unsafeRunSync() should contain theSameElementsAs Set(adminUser.email)
+    runAndWait(managedGroupService.addSubjectToPolicy(managedGroup.resourceId, ManagedGroupService.adminPolicyName, adminUser.id, samRequestContext))
+    managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName, samRequestContext).unsafeRunSync() should contain theSameElementsAs Set(adminUser.email)
   }
 
   "ManagedGroupService removeSubjectFromPolicy" should "successfully remove the subject from the policy for the group" in {
@@ -288,11 +288,11 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
 
     val managedGroup = assertMakeGroup()
 
-    managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName).unsafeRunSync() should contain theSameElementsAs Set(adminUser.email)
+    managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName, samRequestContext).unsafeRunSync() should contain theSameElementsAs Set(adminUser.email)
 
-    runAndWait(managedGroupService.removeSubjectFromPolicy(managedGroup.resourceId, ManagedGroupService.adminPolicyName, adminUser.id))
+    runAndWait(managedGroupService.removeSubjectFromPolicy(managedGroup.resourceId, ManagedGroupService.adminPolicyName, adminUser.id, samRequestContext))
 
-    managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName).unsafeRunSync() should contain theSameElementsAs Set.empty
+    managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName, samRequestContext).unsafeRunSync() should contain theSameElementsAs Set.empty
   }
 
   it should "not do anything if the subject is not a member of the policy" in {
@@ -300,14 +300,14 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
 
     val managedGroup = assertMakeGroup()
 
-    managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName).unsafeRunSync() should contain theSameElementsAs Set(adminUser.email)
+    managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName, samRequestContext).unsafeRunSync() should contain theSameElementsAs Set(adminUser.email)
 
-    runAndWait(managedGroupService.removeSubjectFromPolicy(managedGroup.resourceId, ManagedGroupService.adminPolicyName, WorkbenchUserId("someUser")))
+    runAndWait(managedGroupService.removeSubjectFromPolicy(managedGroup.resourceId, ManagedGroupService.adminPolicyName, WorkbenchUserId("someUser"), samRequestContext))
 
-    managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName).unsafeRunSync() should contain theSameElementsAs Set(adminUser.email)
+    managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName, samRequestContext).unsafeRunSync() should contain theSameElementsAs Set(adminUser.email)
   }
 
-  private def makeResource(resourceType: ResourceType, resourceId: ResourceId, userInfo: UserInfo): Resource = runAndWait(resourceService.createResource(resourceType, resourceId, userInfo))
+  private def makeResource(resourceType: ResourceType, resourceId: ResourceId, userInfo: UserInfo): Resource = runAndWait(resourceService.createResource(resourceType, resourceId, userInfo, samRequestContext))
 
   "ManagedGroupService listGroups" should "return the list of groups that passed user belongs to" in {
     // Setup multiple managed groups owned by different users.
@@ -334,13 +334,13 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     val user1Memberships = Set(user2Groups.head)
     val user2Memberships = Set(user1Groups.head)
 
-    user1Memberships.foreach(s => runAndWait(mgService.addSubjectToPolicy(ResourceId(s), ManagedGroupService.memberPolicyName, user1.userId)))
-    user2Memberships.foreach(s => runAndWait(mgService.addSubjectToPolicy(ResourceId(s), ManagedGroupService.memberPolicyName, user2.userId)))
+    user1Memberships.foreach(s => runAndWait(mgService.addSubjectToPolicy(ResourceId(s), ManagedGroupService.memberPolicyName, user1.userId, samRequestContext)))
+    user2Memberships.foreach(s => runAndWait(mgService.addSubjectToPolicy(ResourceId(s), ManagedGroupService.memberPolicyName, user2.userId, samRequestContext)))
 
     // let everyone notify admins
     (user1Groups ++ user2Groups).foreach { g =>
-      runAndWait(mgService.addSubjectToPolicy(ResourceId(g), ManagedGroupService.adminNotifierPolicyName, user1.userId))
-      runAndWait(mgService.addSubjectToPolicy(ResourceId(g), ManagedGroupService.adminNotifierPolicyName, user2.userId))
+      runAndWait(mgService.addSubjectToPolicy(ResourceId(g), ManagedGroupService.adminNotifierPolicyName, user1.userId, samRequestContext))
+      runAndWait(mgService.addSubjectToPolicy(ResourceId(g), ManagedGroupService.adminNotifierPolicyName, user2.userId, samRequestContext))
     }
 
     val user1Resources = Set("quuz", "corge")
@@ -352,31 +352,31 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     val user1ExpectedAdmin = user1Groups.map(s => ManagedGroupMembershipEntry(ResourceId(s), ManagedGroupService.adminPolicyName, WorkbenchEmail(s"$s@example.com")))
     val user1ExpectedMember = user1Memberships.map(s => ManagedGroupMembershipEntry(ResourceId(s), ManagedGroupService.memberPolicyName, WorkbenchEmail(s"$s@example.com")))
     val user1ExpectedGroups = user1ExpectedAdmin ++ user1ExpectedMember
-    mgService.listGroups(user1.userId).unsafeRunSync() shouldEqual user1ExpectedGroups
+    mgService.listGroups(user1.userId, samRequestContext).unsafeRunSync() shouldEqual user1ExpectedGroups
 
     val user2ExpectedAdmin = user2Groups.map(s => ManagedGroupMembershipEntry(ResourceId(s), ManagedGroupService.adminPolicyName, WorkbenchEmail(s"$s@example.com")))
     val user2ExpectedMember = user2Memberships.map(s => ManagedGroupMembershipEntry(ResourceId(s), ManagedGroupService.memberPolicyName, WorkbenchEmail(s"$s@example.com")))
     val user2ExpectedGroups = user2ExpectedAdmin ++ user2ExpectedMember
-    mgService.listGroups(user2.userId).unsafeRunSync() shouldEqual user2ExpectedGroups
+    mgService.listGroups(user2.userId, samRequestContext).unsafeRunSync() shouldEqual user2ExpectedGroups
   }
 
   "ManagedGroupService getAccessInstructions" should "return access instructions when a group has them set" in {
     val managedGroup = assertMakeGroup()
     val instructions = "Test Instructions"
 
-    managedGroupService.setAccessInstructions(managedGroup.resourceId, instructions).unsafeRunSync()
-    managedGroupService.getAccessInstructions(managedGroup.resourceId).unsafeRunSync().getOrElse(None) shouldEqual instructions
+    managedGroupService.setAccessInstructions(managedGroup.resourceId, instructions, samRequestContext).unsafeRunSync()
+    managedGroupService.getAccessInstructions(managedGroup.resourceId, samRequestContext).unsafeRunSync().getOrElse(None) shouldEqual instructions
   }
 
   it should "return None when access instructions have not been set" in {
     val managedGroup = assertMakeGroup()
 
-    managedGroupService.getAccessInstructions(managedGroup.resourceId).unsafeRunSync() shouldEqual None
+    managedGroupService.getAccessInstructions(managedGroup.resourceId, samRequestContext).unsafeRunSync() shouldEqual None
   }
 
   it should "throw an exception if the group is not found" in {
     val exception = intercept[WorkbenchExceptionWithErrorReport] {
-      managedGroupService.getAccessInstructions(ResourceId("Nonexistent Group")).unsafeRunSync()
+      managedGroupService.getAccessInstructions(ResourceId("Nonexistent Group"), samRequestContext).unsafeRunSync()
     }
     exception.getMessage should include ("not found")
   }
@@ -385,22 +385,22 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     val managedGroup = assertMakeGroup()
     val instructions = "Test Instructions"
 
-    managedGroupService.getAccessInstructions(managedGroup.resourceId).unsafeRunSync() shouldEqual None
-    managedGroupService.setAccessInstructions(managedGroup.resourceId, instructions).unsafeRunSync()
-    managedGroupService.getAccessInstructions(managedGroup.resourceId).unsafeRunSync().getOrElse(None) shouldEqual instructions
+    managedGroupService.getAccessInstructions(managedGroup.resourceId, samRequestContext).unsafeRunSync() shouldEqual None
+    managedGroupService.setAccessInstructions(managedGroup.resourceId, instructions, samRequestContext).unsafeRunSync()
+    managedGroupService.getAccessInstructions(managedGroup.resourceId, samRequestContext).unsafeRunSync().getOrElse(None) shouldEqual instructions
   }
 
   it should "modify the current access instructions" in {
     makeResourceType(managedGroupResourceType)
 
     val instructions = "Test Instructions"
-    val managedGroup = runAndWait(managedGroupService.createManagedGroup(ResourceId(resourceId.value), dummyUserInfo, Option(instructions)))
+    val managedGroup = runAndWait(managedGroupService.createManagedGroup(ResourceId(resourceId.value), dummyUserInfo, Option(instructions), samRequestContext))
 
-    managedGroupService.getAccessInstructions(managedGroup.resourceId).unsafeRunSync().getOrElse(None) shouldEqual instructions
+    managedGroupService.getAccessInstructions(managedGroup.resourceId, samRequestContext).unsafeRunSync().getOrElse(None) shouldEqual instructions
 
     val newInstructions = "Much better instructions"
-    managedGroupService.setAccessInstructions(managedGroup.resourceId, newInstructions).unsafeRunSync()
-    managedGroupService.getAccessInstructions(managedGroup.resourceId).unsafeRunSync().getOrElse(None) shouldEqual newInstructions
+    managedGroupService.setAccessInstructions(managedGroup.resourceId, newInstructions, samRequestContext).unsafeRunSync()
+    managedGroupService.getAccessInstructions(managedGroup.resourceId, samRequestContext).unsafeRunSync().getOrElse(None) shouldEqual newInstructions
   }
 
   "ManagedGroupService requestAccess" should "send notifications" in {
@@ -421,16 +421,16 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
         requester.googleSubjectId.map(id => WorkbenchUserId(id.value)).getOrElse(fail("no requester google subject id"))
       ))
 
-    testManagedGroupService.requestAccess(resourceId, requester.id).unsafeRunSync()
+    testManagedGroupService.requestAccess(resourceId, requester.id, samRequestContext).unsafeRunSync()
 
     verify(mockCloudExtension).fireAndForgetNotifications(expectedNotificationMessages)
   }
 
   it should "throw an error if access instructions exist" in {
     assertMakeGroup(groupId = resourceId.value)
-    managedGroupService.setAccessInstructions(resourceId, "instructions").unsafeRunSync()
+    managedGroupService.setAccessInstructions(resourceId, "instructions", samRequestContext).unsafeRunSync()
     val error = intercept[WorkbenchExceptionWithErrorReport] {
-      managedGroupService.requestAccess(resourceId, dummyUserInfo.userId).unsafeRunSync()
+      managedGroupService.requestAccess(resourceId, dummyUserInfo.userId, samRequestContext).unsafeRunSync()
     }
     error.errorReport.statusCode should be(Some(StatusCodes.BadRequest))
   }

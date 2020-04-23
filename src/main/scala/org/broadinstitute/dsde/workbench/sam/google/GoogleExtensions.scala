@@ -99,16 +99,16 @@ class GoogleExtensions(
       case t => throw new WorkbenchException("Unable to query for admin status.", t)
     }
 
-  //todo: maybe we don't need tracing for onboot....
-  //todo: create a root span here?
+
   def onBoot(samApplication: SamApplication)(implicit system: ActorSystem): IO[Unit] = {
+    val samRequestContext = null //todo: maybe we don't need tracing for onboot.... //todo: create a root span here?
     val extensionResourceType =
       resourceTypes.getOrElse(CloudExtensions.resourceTypeName, throw new Exception(s"${CloudExtensions.resourceTypeName} resource type not found"))
     val ownerGoogleSubjectId = GoogleSubjectId(googleServicesConfig.serviceAccountClientId)
     for {
-      user <- directoryDAO.loadSubjectFromGoogleSubjectId(ownerGoogleSubjectId, null)
+      user <- directoryDAO.loadSubjectFromGoogleSubjectId(ownerGoogleSubjectId, samRequestContext)
 
-      subject <- directoryDAO.loadSubjectFromGoogleSubjectId(GoogleSubjectId(googleServicesConfig.serviceAccountClientId), null)
+      subject <- directoryDAO.loadSubjectFromGoogleSubjectId(GoogleSubjectId(googleServicesConfig.serviceAccountClientId), samRequestContext)
       serviceAccountUserInfo <- subject match {
         case Some(uid: WorkbenchUserId) => IO.pure(UserInfo(OAuth2BearerToken(""), uid, googleServicesConfig.serviceAccountClientEmail, 0))
         case Some(_) =>
@@ -123,7 +123,7 @@ class GoogleExtensions(
             serviceAccountUserInfo.userId,
             GoogleSubjectId(googleServicesConfig.serviceAccountClientId),
             serviceAccountUserInfo.userEmail,
-            None)) recover {
+            None), samRequestContext) recover {
             case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode == Option(StatusCodes.Conflict) =>
           }))
 
@@ -146,9 +146,9 @@ class GoogleExtensions(
         s"group:$allUsersGroupEmail",
         "roles/cloudkms.cryptoKeyEncrypterDecrypter")
 
-      _ <- samApplication.resourceService.createResourceType(extensionResourceType)
+      _ <- samApplication.resourceService.createResourceType(extensionResourceType, samRequestContext)
 
-      _ <- samApplication.resourceService.createResource(extensionResourceType, GoogleExtensions.resourceId, serviceAccountUserInfo) handleErrorWith {
+      _ <- samApplication.resourceService.createResource(extensionResourceType, GoogleExtensions.resourceId, serviceAccountUserInfo, samRequestContext) handleErrorWith {
         case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode == Option(StatusCodes.Conflict) => IO.unit
       }
       _ <- googleKeyCache.onBoot()
@@ -242,7 +242,7 @@ class GoogleExtensions(
     } yield policies.flatten
   }
 
-  override def onUserCreate(user: WorkbenchUser): Future[Unit] = {
+  override def onUserCreate(user: WorkbenchUser, samRequestContext: SamRequestContext): Future[Unit] = {
     val proxyEmail = toProxyFromUser(user.id)
     for {
       _ <- googleDirectoryDAO.createGroup(user.email.value, proxyEmail, Option(googleDirectoryDAO.lockedDownGroupSettings)) recover {
@@ -298,7 +298,7 @@ class GoogleExtensions(
 
   @deprecated("Use new two-argument version of this function", "Sam Phase 3")
   def createUserPetServiceAccount(user: WorkbenchUser): Future[PetServiceAccount] =
-    createUserPetServiceAccount(user, petServiceAccountConfig.googleProject, samRequestContext).unsafeToFuture()
+    createUserPetServiceAccount(user, petServiceAccountConfig.googleProject, null).unsafeToFuture() //TODO: shall we delete these deprecated methods // todo: (AJ) doesn't seem like it's being used anywhere?
 
   @deprecated("Use new two-argument version of this function", "Sam Phase 3")
   def deleteUserPetServiceAccount(userId: WorkbenchUserId): Future[Boolean] =
@@ -402,20 +402,20 @@ class GoogleExtensions(
       key <- googleKeyCache.getKey(pet)
     } yield key
 
-  def getPetServiceAccountToken(user: WorkbenchUser, project: GoogleProject, scopes: Set[String]): Future[String] =
+  def getPetServiceAccountToken(user: WorkbenchUser, project: GoogleProject, scopes: Set[String], samRequestContext: SamRequestContext): Future[String] =
     getPetServiceAccountKey(user, project, samRequestContext).unsafeToFuture().flatMap { key =>
       getAccessTokenUsingJson(key, scopes)
     }
 
-  def getArbitraryPetServiceAccountKey(user: WorkbenchUser): Future[String] =
-    getDefaultServiceAccountForShellProject(user)
+  def getArbitraryPetServiceAccountKey(user: WorkbenchUser, samRequestContext: SamRequestContext): Future[String] =
+    getDefaultServiceAccountForShellProject(user, samRequestContext)
 
-  def getArbitraryPetServiceAccountToken(user: WorkbenchUser, scopes: Set[String]): Future[String] =
-    getArbitraryPetServiceAccountKey(user).flatMap { key =>
+  def getArbitraryPetServiceAccountToken(user: WorkbenchUser, scopes: Set[String], samRequestContext: SamRequestContext): Future[String] =
+    getArbitraryPetServiceAccountKey(user, samRequestContext).flatMap { key =>
       getAccessTokenUsingJson(key, scopes)
     }
 
-  private def getDefaultServiceAccountForShellProject(user: WorkbenchUser): Future[String] = {
+  private def getDefaultServiceAccountForShellProject(user: WorkbenchUser, samRequestContext: SamRequestContext) = {
     val projectName = s"fc-${googleServicesConfig.environment.substring(0, Math.min(googleServicesConfig.environment.length(), 5))}-${user.id.value}" //max 30 characters. subject ID is 21
     for {
       creationOperationId <- googleProjectDAO.createProject(projectName, googleServicesConfig.terraGoogleOrgNumber, GoogleResourceTypes.Organization).map(opId => Option(opId)) recover {
@@ -492,7 +492,7 @@ class GoogleExtensions(
       _ <- googleIamDAO.removeServiceAccount(petServiceAccount.id.project, toAccountName(petServiceAccount.serviceAccount.email))
     } yield ()
 
-  def getSynchronizedState(groupId: WorkbenchGroupIdentity): IO[Option[GroupSyncResponse]] = {
+  def getSynchronizedState(groupId: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[Option[GroupSyncResponse]] = {
     val groupDate = getSynchronizedDate(groupId, samRequestContext)
     val groupEmail = getSynchronizedEmail(groupId, samRequestContext)
 

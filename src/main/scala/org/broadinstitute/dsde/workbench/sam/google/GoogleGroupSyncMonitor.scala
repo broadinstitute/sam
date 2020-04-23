@@ -130,7 +130,7 @@ class GoogleGroupSyncMonitorActor(
       val groupId: WorkbenchGroupIdentity = parseMessage(message)
 
       groupSynchronizer
-        .synchronizeGroupMembers(groupId, traceContext = null) //todo: create a root span here?
+        .synchronizeGroupMembers(groupId, samRequestContext = null) //todo: create a root span here?
         .toTry
         .map(sr => sr.fold(t => FailToSynchronize(t, message.ackId), x => ReportMessage(x, message.ackId))) pipeTo self
 

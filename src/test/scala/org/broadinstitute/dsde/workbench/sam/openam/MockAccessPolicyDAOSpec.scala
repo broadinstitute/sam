@@ -66,7 +66,7 @@ class MockAccessPolicyDAOSpec extends FlatSpec with Matchers with TestSupport wi
     val resourceService = new ResourceService(shared.resourceTypes, policyEvaluatorService, ldapPolicyDao, ldapDirDao, NoExtensions, shared.emailDomain)
     val userService = new UserService(ldapDirDao, NoExtensions, registrationDAO)
     val managedGroupService = new ManagedGroupService(resourceService, policyEvaluatorService, shared.resourceTypes, ldapPolicyDao, ldapDirDao, NoExtensions, shared.emailDomain)
-    shared.resourceTypes foreach {case (_, resourceType) => resourceService.createResourceType(resourceType).unsafeRunSync() }
+    shared.resourceTypes foreach {case (_, resourceType) => resourceService.createResourceType(resourceType, samRequestContext).unsafeRunSync() }
   }
 
   def mockServicesFixture = new {
@@ -87,20 +87,20 @@ class MockAccessPolicyDAOSpec extends FlatSpec with Matchers with TestSupport wi
     val mock = mockServicesFixture
 
     val dummyUser = CreateWorkbenchUser(dummyUserInfo.userId, GoogleSubjectId(dummyUserInfo.userId.value), dummyUserInfo.userEmail, None)
-    runAndWait(real.userService.createUser(dummyUser))
-    runAndWait(mock.userService.createUser(dummyUser))
+    runAndWait(real.userService.createUser(dummyUser, samRequestContext))
+    runAndWait(mock.userService.createUser(dummyUser, samRequestContext))
 
     val groupName = "fooGroup"
 
     val intendedResource = Resource(ManagedGroupService.managedGroupTypeName, ResourceId(groupName), Set.empty)
 
     // just compare top level fields because createResource returns the policies, including the default one
-    runAndWait(real.managedGroupService.createManagedGroup(ResourceId(groupName), dummyUserInfo)).copy(accessPolicies = Set.empty) shouldEqual intendedResource
-    runAndWait(mock.managedGroupService.createManagedGroup(ResourceId(groupName), dummyUserInfo)).copy(accessPolicies = Set.empty) shouldEqual intendedResource
+    runAndWait(real.managedGroupService.createManagedGroup(ResourceId(groupName), dummyUserInfo, samRequestContext = samRequestContext)).copy(accessPolicies = Set.empty) shouldEqual intendedResource
+    runAndWait(mock.managedGroupService.createManagedGroup(ResourceId(groupName), dummyUserInfo, samRequestContext = samRequestContext)).copy(accessPolicies = Set.empty) shouldEqual intendedResource
 
 
     val expectedGroups = Set(ResourceIdAndPolicyName(ResourceId(groupName), ManagedGroupService.adminPolicyName))
-    real.managedGroupService.listGroups(dummyUserInfo.userId).unsafeRunSync().map(ripn => ResourceIdAndPolicyName(ripn.groupName, ripn.role)) shouldEqual expectedGroups
-    mock.managedGroupService.listGroups(dummyUserInfo.userId).unsafeRunSync().map(ripn => ResourceIdAndPolicyName(ripn.groupName, ripn.role)) shouldEqual expectedGroups
+    real.managedGroupService.listGroups(dummyUserInfo.userId, samRequestContext).unsafeRunSync().map(ripn => ResourceIdAndPolicyName(ripn.groupName, ripn.role)) shouldEqual expectedGroups
+    mock.managedGroupService.listGroups(dummyUserInfo.userId, samRequestContext).unsafeRunSync().map(ripn => ResourceIdAndPolicyName(ripn.groupName, ripn.role)) shouldEqual expectedGroups
   }
 }

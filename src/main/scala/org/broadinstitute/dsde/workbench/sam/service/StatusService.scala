@@ -35,7 +35,7 @@ class StatusService(
 
   private def checkOpenDJ(groupToLoad: WorkbenchGroupName): IO[SubsystemStatus] = {
     logger.info("checking opendj connection")
-    directoryDAO.loadGroupEmail(groupToLoad, samRequestContext).map {//todo: create a root span here?
+    directoryDAO.loadGroupEmail(groupToLoad, null).map {//todo: create a root span here?
       case Some(_) => HealthMonitor.OkStatus
       case None => HealthMonitor.failedStatus(s"could not find group $groupToLoad in opendj")
     }

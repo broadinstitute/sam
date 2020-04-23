@@ -33,7 +33,7 @@ trait CloudExtensions {
 
   def onGroupDelete(groupEmail: WorkbenchEmail): Future[Unit]
 
-  def onUserCreate(user: WorkbenchUser): Future[Unit]
+  def onUserCreate(user: WorkbenchUser, samRequestContext: SamRequestContext): Future[Unit]
 
   def getUserStatus(user: WorkbenchUser): Future[Boolean]
 
@@ -75,7 +75,7 @@ trait NoExtensions extends CloudExtensions {
 
   override def onGroupDelete(groupEmail: WorkbenchEmail): Future[Unit] = Future.successful(())
 
-  override def onUserCreate(user: WorkbenchUser): Future[Unit] = Future.successful(())
+  override def onUserCreate(user: WorkbenchUser, samRequestContext: SamRequestContext): Future[Unit] = Future.successful(())
 
   override def getUserStatus(user: WorkbenchUser): Future[Boolean] = Future.successful(true)
 
