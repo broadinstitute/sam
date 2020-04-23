@@ -600,10 +600,10 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
 
     val listPoliciesQuery =
       samsql"""select ${p.result.name}, ${r.result.name}, ${rt.result.name}, ${g.result.email}, ${p.result.public}, ${gm.result.memberUserId}, ${sg.result.name}, ${sp.result.name}, ${sr.result.name}, ${srt.result.name}, ${rr.result.role}, ${ra.result.action}
-          from ${GroupTable as g}
-          join ${PolicyTable as p} on ${g.id} = ${p.groupId}
-          join ${ResourceTable as r} on ${p.resourceId} = ${r.id}
+          from ${ResourceTable as r}
           join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
+          join ${PolicyTable as p} on ${r.id} = ${p.resourceId}
+          join ${GroupTable as g} on ${p.groupId} = ${g.id}
           left join ${GroupMemberTable as gm} on ${g.id} = ${gm.groupId}
           left join ${GroupTable as sg} on ${gm.memberGroupId} = ${sg.id}
           left join ${PolicyTable as sp} on ${sg.id} = ${sp.groupId}
