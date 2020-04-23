@@ -22,8 +22,16 @@ object OpenCensusIOUtils {
                              name: String,
                              samRequestContext: SamRequestContext,
                              failureStatus: Throwable => Status = (_: Throwable) => Status.UNKNOWN
-                          )(f: Span => IO[T]): IO[T] =
-    traceIOSpan(IO(startSpanWithParent(name, samRequestContext.parentSpan)), failureStatus)(f)
+                          )(f: Span => IO[T]): IO[T] = { // todo: change signature of this to be SamRequestContext ; probably requires a new traceIOContext()
+    if (samRequestContext == null || samRequestContext.parentSpan == null) { // todo: once all nulls are removed, this won't be necessary.
+      for {
+        result <- f(null).attempt
+      } yield result.toTry.get
+    }
+    else {
+      traceIOSpan(IO(startSpanWithParent(name, samRequestContext.parentSpan)), failureStatus)(f)
+    }
+  }
 
   // todo: this is unused
   // creates a root span
