@@ -60,7 +60,7 @@ class MockAccessPolicyDAOSpec extends FlatSpec with Matchers with TestSupport wi
     val ldapPolicyDao = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.blockingEc)
     val ldapDirDao = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.blockingEc)
     val registrationDAO = new LdapRegistrationDAO(connectionPool, directoryConfig, TestSupport.blockingEc)
-    val allUsersGroup: WorkbenchGroup = TestSupport.runAndWait(NoExtensions.getOrCreateAllUsersGroup(ldapDirDao))
+    val allUsersGroup: WorkbenchGroup = TestSupport.runAndWait(NoExtensions.getOrCreateAllUsersGroup(ldapDirDao, samRequestContext))
 
     val policyEvaluatorService = PolicyEvaluatorService(shared.emailDomain, shared.resourceTypes, ldapPolicyDao, ldapDirDao)
     val resourceService = new ResourceService(shared.resourceTypes, policyEvaluatorService, ldapPolicyDao, ldapDirDao, NoExtensions, shared.emailDomain)
@@ -74,7 +74,7 @@ class MockAccessPolicyDAOSpec extends FlatSpec with Matchers with TestSupport wi
     val mockDirDao = new MockDirectoryDAO(shared.groups)
     val mockRegDao = new MockDirectoryDAO()
     val mockPolicyDAO = new MockAccessPolicyDAO(shared.groups)
-    val allUsersGroup: WorkbenchGroup = TestSupport.runAndWait(NoExtensions.getOrCreateAllUsersGroup(mockDirDao))
+    val allUsersGroup: WorkbenchGroup = TestSupport.runAndWait(NoExtensions.getOrCreateAllUsersGroup(mockDirDao, samRequestContext))
 
     val policyEvaluatorService = PolicyEvaluatorService(shared.emailDomain, shared.resourceTypes, mockPolicyDAO, mockDirDao)
     val resourceService = new ResourceService(shared.resourceTypes, policyEvaluatorService, mockPolicyDAO, mockDirDao, NoExtensions, shared.emailDomain)

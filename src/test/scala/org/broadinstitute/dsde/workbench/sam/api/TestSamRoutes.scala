@@ -48,7 +48,7 @@ object TestSamRoutes {
     val mockManagedGroupService = new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, policyDAO, directoryDAO, NoExtensions, emailDomain)
     TestSupport.runAndWait(mockUserService.createUser(
       CreateWorkbenchUser(userInfo.userId, defaultGoogleSubjectId, userInfo.userEmail, None)))
-    val allUsersGroup = TestSupport.runAndWait(NoExtensions.getOrCreateAllUsersGroup(directoryDAO))
+    val allUsersGroup = TestSupport.runAndWait(NoExtensions.getOrCreateAllUsersGroup(directoryDAO, samRequestContext))
     TestSupport.runAndWait(googleDirectoryDAO.createGroup(allUsersGroup.id.toString, allUsersGroup.email))
 
     val mockStatusService = new StatusService(directoryDAO, NoExtensions, TestSupport.dbRef)

@@ -65,7 +65,7 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
 
     googleExtensions = mock[GoogleExtensions]
     when(googleExtensions.allUsersGroupName).thenReturn(NoExtensions.allUsersGroupName)
-    when(googleExtensions.getOrCreateAllUsersGroup(any[DirectoryDAO])(any[ExecutionContext])).thenReturn(NoExtensions.getOrCreateAllUsersGroup(dirDAO))
+    when(googleExtensions.getOrCreateAllUsersGroup(any[DirectoryDAO], samRequestContext)(any[ExecutionContext])).thenReturn(NoExtensions.getOrCreateAllUsersGroup(dirDAO))
     when(googleExtensions.onUserCreate(any[WorkbenchUser])).thenReturn(Future.successful(()))
     when(googleExtensions.onUserDelete(any[WorkbenchUserId], samRequestContext)).thenReturn(Future.successful(()))
     when(googleExtensions.getUserStatus(any[WorkbenchUser])).thenReturn(Future.successful(true))
@@ -97,7 +97,7 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
     dirDAO.isEnabled(defaultUserId, samRequestContext).unsafeRunSync() shouldBe true
     registrationDAO.isEnabled(defaultUserId, samRequestContext).unsafeRunSync() shouldBe true
     dirDAO.loadGroup(service.cloudExtensions.allUsersGroupName, samRequestContext).unsafeRunSync() shouldBe
-      Some(BasicWorkbenchGroup(service.cloudExtensions.allUsersGroupName, Set(defaultUserId), service.cloudExtensions.getOrCreateAllUsersGroup(dirDAO).futureValue.email))
+      Some(BasicWorkbenchGroup(service.cloudExtensions.allUsersGroupName, Set(defaultUserId), service.cloudExtensions.getOrCreateAllUsersGroup(dirDAO, samRequestContext).futureValue.email))
   }
 
   it should "get user status" in {

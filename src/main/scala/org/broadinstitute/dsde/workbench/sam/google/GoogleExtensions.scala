@@ -76,7 +76,7 @@ class GoogleExtensions(
   private[google] val allUsersGroupEmail = WorkbenchEmail(
     s"${googleServicesConfig.resourceNamePrefix.getOrElse("")}GROUP_${allUsersGroupName.value}@$emailDomain")
 
-  override def getOrCreateAllUsersGroup(directoryDAO: DirectoryDAO)(implicit executionContext: ExecutionContext): Future[WorkbenchGroup] = {
+  override def getOrCreateAllUsersGroup(directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext)(implicit executionContext: ExecutionContext): Future[WorkbenchGroup] = {
     val allUsersGroup = BasicWorkbenchGroup(allUsersGroupName, Set.empty, allUsersGroupEmail)
     for {
       createdGroup <- directoryDAO.createGroup(allUsersGroup, samRequestContext = samRequestContext).unsafeToFuture() recover {
@@ -248,7 +248,7 @@ class GoogleExtensions(
       _ <- googleDirectoryDAO.createGroup(user.email.value, proxyEmail, Option(googleDirectoryDAO.lockedDownGroupSettings)) recover {
         case e: GoogleJsonResponseException if e.getDetails.getCode == StatusCodes.Conflict.intValue => ()
       }
-      allUsersGroup <- getOrCreateAllUsersGroup(directoryDAO)
+      allUsersGroup <- getOrCreateAllUsersGroup(directoryDAO, samRequestContext)
       _ <- googleDirectoryDAO.addMemberToGroup(allUsersGroup.email, proxyEmail)
 
     } yield ()

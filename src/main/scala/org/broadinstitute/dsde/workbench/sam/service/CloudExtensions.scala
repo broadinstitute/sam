@@ -58,7 +58,7 @@ trait CloudExtensions {
 
   def emailDomain: String
 
-  def getOrCreateAllUsersGroup(directoryDAO: DirectoryDAO)(implicit executionContext: ExecutionContext): Future[WorkbenchGroup]
+  def getOrCreateAllUsersGroup(directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext)(implicit executionContext: ExecutionContext): Future[WorkbenchGroup]
 }
 
 trait CloudExtensionsInitializer {
@@ -100,7 +100,7 @@ trait NoExtensions extends CloudExtensions {
 
   override val emailDomain = "example.com"
 
-  override def getOrCreateAllUsersGroup(directoryDAO: DirectoryDAO)(implicit executionContext: ExecutionContext): Future[WorkbenchGroup] = {
+  override def getOrCreateAllUsersGroup(directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext)(implicit executionContext: ExecutionContext): Future[WorkbenchGroup] = {
     val allUsersGroup = BasicWorkbenchGroup(allUsersGroupName, Set.empty, WorkbenchEmail(s"GROUP_${allUsersGroupName.value}@$emailDomain"))
     for {
       createdGroup <- directoryDAO.createGroup(allUsersGroup, samRequestContext = samRequestContext).unsafeToFuture() recover {
