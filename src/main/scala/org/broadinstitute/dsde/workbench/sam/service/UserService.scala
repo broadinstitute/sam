@@ -167,7 +167,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
       case None => Future.successful(None)
     }
 
-  private def enableUserInternal(user: WorkbenchUser, samRequestContext: SamRequestContext) = {
+  private def enableUserInternal(user: WorkbenchUser, samRequestContext: SamRequestContext): Future[Unit] = {
     for {
       _ <- directoryDAO.enableIdentity(user.id, samRequestContext).unsafeToFuture()
       _ <- registrationDAO.enableIdentity(user.id, samRequestContext).unsafeToFuture()

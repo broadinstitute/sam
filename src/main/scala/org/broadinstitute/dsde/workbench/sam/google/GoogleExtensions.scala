@@ -210,7 +210,7 @@ class GoogleExtensions(
     } yield ()
   }.unsafeToFuture()
 
-  private def makeConstrainedResourceAccessPolicyMessages(groupIdentity: WorkbenchGroupIdentity, samRequestContext: SamRequestContext) = {
+  private def makeConstrainedResourceAccessPolicyMessages(groupIdentity: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[List[String]] = {
    // start with a group
     for {
       // get all the ancestors of that group
@@ -233,7 +233,7 @@ class GoogleExtensions(
   }
 
 
-  private def getAccessPoliciesOnResourcesConstrainedByGroup(groupId: ResourceId, samRequestContext: SamRequestContext) = {
+  private def getAccessPoliciesOnResourcesConstrainedByGroup(groupId: ResourceId, samRequestContext: SamRequestContext): IO[List[AccessPolicy]] = {
     for {
       resources <- accessPolicyDAO.listResourcesConstrainedByGroup(WorkbenchGroupName(groupId.value), samRequestContext)
       policies <- resources.toList.traverse { resource =>
@@ -263,7 +263,7 @@ class GoogleExtensions(
   /**
     * Evaluate a future for each pet in parallel.
     */
-  private def forAllPets[T](userId: WorkbenchUserId, samRequestContext: SamRequestContext)(f: PetServiceAccount => Future[Any]): Future[Seq[Any]] =
+  private def forAllPets[T](userId: WorkbenchUserId, samRequestContext: SamRequestContext)(f: PetServiceAccount => Future[T]): Future[Seq[T]] =
     for {
       pets <- directoryDAO.getAllPetServiceAccountsForUser(userId, samRequestContext).unsafeToFuture()
       a <- Future.traverse(pets) { pet =>
@@ -381,7 +381,7 @@ class GoogleExtensions(
     }
   }
 
-  private def retrievePetAndSA(userId: WorkbenchUserId, petServiceAccountName: ServiceAccountName, project: GoogleProject, samRequestContext: SamRequestContext) = {
+  private def retrievePetAndSA(userId: WorkbenchUserId, petServiceAccountName: ServiceAccountName, project: GoogleProject, samRequestContext: SamRequestContext): IO[(Option[PetServiceAccount], Option[ServiceAccount])] = {
     val serviceAccount = IO.fromFuture(IO(googleIamDAO.findServiceAccount(project, petServiceAccountName)))
     val pet = directoryDAO.loadPetServiceAccount(PetServiceAccountId(userId, project), samRequestContext)
     (pet, serviceAccount).parTupled
@@ -415,7 +415,7 @@ class GoogleExtensions(
       getAccessTokenUsingJson(key, scopes)
     }
 
-  private def getDefaultServiceAccountForShellProject(user: WorkbenchUser, samRequestContext: SamRequestContext) = {
+  private def getDefaultServiceAccountForShellProject(user: WorkbenchUser, samRequestContext: SamRequestContext): Future[String] = {
     val projectName = s"fc-${googleServicesConfig.environment.substring(0, Math.min(googleServicesConfig.environment.length(), 5))}-${user.id.value}" //max 30 characters. subject ID is 21
     for {
       creationOperationId <- googleProjectDAO.createProject(projectName, googleServicesConfig.terraGoogleOrgNumber, GoogleResourceTypes.Organization).map(opId => Option(opId)) recover {
@@ -463,7 +463,7 @@ class GoogleExtensions(
       }
     } yield result
 
-  private def enablePetServiceAccount(petServiceAccount: PetServiceAccount, samRequestContext: SamRequestContext) =
+  private def enablePetServiceAccount(petServiceAccount: PetServiceAccount, samRequestContext: SamRequestContext): Future[Unit] =
     for {
       _ <- directoryDAO.enableIdentity(petServiceAccount.id, samRequestContext).unsafeToFuture()
       _ <- registrationDAO.enableIdentity(petServiceAccount.id, samRequestContext).unsafeToFuture()
@@ -472,7 +472,7 @@ class GoogleExtensions(
       }
     } yield ()
 
-  private def disablePetServiceAccount(petServiceAccount: PetServiceAccount, samRequestContext: SamRequestContext) =
+  private def disablePetServiceAccount(petServiceAccount: PetServiceAccount, samRequestContext: SamRequestContext): Future[Unit] =
     for {
       _ <- directoryDAO.disableIdentity(petServiceAccount.id, samRequestContext).unsafeToFuture()
       _ <- registrationDAO.disableIdentity(petServiceAccount.id, samRequestContext).unsafeToFuture()
@@ -481,7 +481,7 @@ class GoogleExtensions(
       }
     } yield ()
 
-  private def removePetServiceAccount(petServiceAccount: PetServiceAccount, samRequestContext: SamRequestContext) =
+  private def removePetServiceAccount(petServiceAccount: PetServiceAccount, samRequestContext: SamRequestContext): Future[Unit] =
     for {
       // disable the pet service account
       _ <- disablePetServiceAccount(petServiceAccount, samRequestContext)

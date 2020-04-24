@@ -102,7 +102,7 @@ class PolicyEvaluatorService(
     } yield res.getOrElse(false)
   }
 
-  private def directMemberHasActionOnResource(resource: FullyQualifiedResourceId, roleNamesWithAction: Set[ResourceRoleName], action: ResourceAction, userId: WorkbenchUserId, samRequestContext: SamRequestContext) = {
+  private def directMemberHasActionOnResource(resource: FullyQualifiedResourceId, roleNamesWithAction: Set[ResourceRoleName], action: ResourceAction, userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Boolean] = {
     for {
       // get the policies for this resource and filter to ones that contain the roles with the action, or the action directly
       policies <- accessPolicyDAO.listAccessPolicies(resource, samRequestContext).map(_.toList.filter(p => p.roles.intersect(roleNamesWithAction).nonEmpty || p.actions.contains(action)))

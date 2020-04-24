@@ -165,7 +165,7 @@ class ResourceService(
         Option(ErrorReport(s"Cannot create resource without at least 1 policy with ${resourceType.ownerRoleName.value} role and non-empty membership"))
     }
 
-  private def validateAuthDomain(resourceType: ResourceType, authDomain: Set[WorkbenchGroupName], userId: WorkbenchUserId, samRequestContext: SamRequestContext) =
+  private def validateAuthDomain(resourceType: ResourceType, authDomain: Set[WorkbenchGroupName], userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[ErrorReport]] =
     validateAuthDomainPermissions(authDomain, userId, samRequestContext).map { permissionsErrors =>
       val constrainableErrors = validateAuthDomainConstraints(resourceType, authDomain).toSeq
       val errors = constrainableErrors ++ permissionsErrors.flatten
@@ -174,7 +174,7 @@ class ResourceService(
       } else None
     }
 
-  private def validateAuthDomainPermissions(authDomain: Set[WorkbenchGroupName], userId: WorkbenchUserId, samRequestContext: SamRequestContext) =
+  private def validateAuthDomainPermissions(authDomain: Set[WorkbenchGroupName], userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[List[Option[ErrorReport]]] =
     authDomain.toList.traverse { groupName =>
       val resource = FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, ResourceId(groupName.value))
       policyEvaluatorService.hasPermission(resource, ManagedGroupService.useAction, userId, samRequestContext).map {
@@ -223,7 +223,7 @@ class ResourceService(
     } yield policiesToDelete
   }
 
-  private def maybeDeleteResource(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext) =
+  private def maybeDeleteResource(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): Future[Unit] =
     resourceTypes.get(resource.resourceTypeName) match {
       case Some(resourceType) if resourceType.reuseIds => accessPolicyDAO.deleteResource(resource, samRequestContext).unsafeToFuture()
       case _ => accessPolicyDAO.removeAuthDomainFromResource(resource, samRequestContext).unsafeToFuture()
@@ -281,7 +281,7 @@ class ResourceService(
     * @param policy
     * @return
     */
-  private def createOrUpdatePolicy(policyIdentity: FullyQualifiedPolicyId, policy: ValidatableAccessPolicy, samRequestContext: SamRequestContext) = {
+  private def createOrUpdatePolicy(policyIdentity: FullyQualifiedPolicyId, policy: ValidatableAccessPolicy, samRequestContext: SamRequestContext): IO[AccessPolicy] = {
     val workbenchSubjects = policy.emailsToSubjects.values.flatten.toSet
     accessPolicyDAO.loadPolicy(policyIdentity, samRequestContext).flatMap {
       case None => createPolicy(policyIdentity, workbenchSubjects, generateGroupEmail(), policy.roles, policy.actions, samRequestContext)
@@ -298,7 +298,7 @@ class ResourceService(
     }
   }
 
-  private def mapEmailsToSubjects(workbenchEmails: Set[WorkbenchEmail], samRequestContext: SamRequestContext) = {
+  private def mapEmailsToSubjects(workbenchEmails: Set[WorkbenchEmail], samRequestContext: SamRequestContext): IO[Map[WorkbenchEmail, Option[WorkbenchSubject]]] = {
     val eventualSubjects = workbenchEmails.map { workbenchEmail =>
       directoryDAO.loadSubjectFromEmail(workbenchEmail, samRequestContext).map(workbenchEmail -> _)
     }
@@ -370,7 +370,7 @@ class ResourceService(
     } else None
   }
 
-  private def fireGroupUpdateNotification(groupId: WorkbenchGroupIdentity, samRequestContext: SamRequestContext) =
+  private def fireGroupUpdateNotification(groupId: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): Future[Unit] =
     cloudExtensions.onGroupUpdate(Seq(groupId), samRequestContext) recover {
       case t: Throwable =>
         logger.error(s"error calling cloudExtensions.onGroupUpdate for $groupId", t)
@@ -425,12 +425,12 @@ class ResourceService(
       res <- policy.traverse(p => loadAccessPolicyWithEmails(p, samRequestContext))
     } yield res
 
-  private def makeValidatablePolicies(policies: Map[AccessPolicyName, AccessPolicyMembership], samRequestContext: SamRequestContext) =
+  private def makeValidatablePolicies(policies: Map[AccessPolicyName, AccessPolicyMembership], samRequestContext: SamRequestContext): IO[Set[ValidatableAccessPolicy]] =
     policies.toList.traverse {
       case (accessPolicyName, accessPolicyMembership) => makeCreatablePolicy(accessPolicyName, accessPolicyMembership, samRequestContext)
     }.map(_.toSet)
 
-  private def makeCreatablePolicy(accessPolicyName: AccessPolicyName, accessPolicyMembership: AccessPolicyMembership, samRequestContext: SamRequestContext) =
+  private def makeCreatablePolicy(accessPolicyName: AccessPolicyName, accessPolicyMembership: AccessPolicyMembership, samRequestContext: SamRequestContext): IO[ValidatableAccessPolicy] =
     mapEmailsToSubjects(accessPolicyMembership.memberEmails, samRequestContext).map { emailsToSubjects =>
       ValidatableAccessPolicy(accessPolicyName, emailsToSubjects, accessPolicyMembership.roles, accessPolicyMembership.actions)
     }

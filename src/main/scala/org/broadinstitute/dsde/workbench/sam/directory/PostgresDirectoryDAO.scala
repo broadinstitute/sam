@@ -606,7 +606,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     })
   }
 
-  private def listMemberOfGroups(subject: WorkbenchSubject, samRequestContext: SamRequestContext) = {
+  private def listMemberOfGroups(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Set[WorkbenchGroupIdentity]]  = {
     val gm = GroupMemberTable.syntax("gm")
     val g = GroupTable.syntax("g")
     val p = PolicyTable.syntax("p")

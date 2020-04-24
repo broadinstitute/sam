@@ -578,7 +578,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
   }
 
   // Abstracts logic to load and unmarshal one or more policies, use to get full AccessPolicy objects from Postgres
-  private def listPolicies(resource: FullyQualifiedResourceId, limitOnePolicy: Option[AccessPolicyName] = None, samRequestContext: SamRequestContext) = {
+  private def listPolicies(resource: FullyQualifiedResourceId, limitOnePolicy: Option[AccessPolicyName] = None, samRequestContext: SamRequestContext): IO[Stream[AccessPolicy]] = {
     val g = GroupTable.syntax("g")
     val r = ResourceTable.syntax("r")
     val rt = ResourceTypeTable.syntax("rt")
