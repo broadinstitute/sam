@@ -17,6 +17,7 @@ import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
+import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.ArgumentMatchers._
 import org.mockito.Mockito._
 import org.scalacheck.{Arbitrary, Gen}
@@ -65,13 +66,13 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
 
     googleExtensions = mock[GoogleExtensions]
     when(googleExtensions.allUsersGroupName).thenReturn(NoExtensions.allUsersGroupName)
-    when(googleExtensions.getOrCreateAllUsersGroup(any[DirectoryDAO], samRequestContext)(any[ExecutionContext])).thenReturn(NoExtensions.getOrCreateAllUsersGroup(dirDAO, samRequestContext))
-    when(googleExtensions.onUserCreate(any[WorkbenchUser], samRequestContext)).thenReturn(Future.successful(()))
-    when(googleExtensions.onUserDelete(any[WorkbenchUserId], samRequestContext)).thenReturn(Future.successful(()))
+    when(googleExtensions.getOrCreateAllUsersGroup(any[DirectoryDAO], any[SamRequestContext])(any[ExecutionContext])).thenReturn(NoExtensions.getOrCreateAllUsersGroup(dirDAO, samRequestContext))
+    when(googleExtensions.onUserCreate(any[WorkbenchUser], any[SamRequestContext])).thenReturn(Future.successful(()))
+    when(googleExtensions.onUserDelete(any[WorkbenchUserId], any[SamRequestContext])).thenReturn(Future.successful(()))
     when(googleExtensions.getUserStatus(any[WorkbenchUser])).thenReturn(Future.successful(true))
-    when(googleExtensions.onUserDisable(any[WorkbenchUser], samRequestContext)).thenReturn(Future.successful(()))
-    when(googleExtensions.onUserEnable(any[WorkbenchUser], samRequestContext)).thenReturn(Future.successful(()))
-    when(googleExtensions.onGroupUpdate(any[Seq[WorkbenchGroupIdentity]], samRequestContext)).thenReturn(Future.successful(()))
+    when(googleExtensions.onUserDisable(any[WorkbenchUser], any[SamRequestContext])).thenReturn(Future.successful(()))
+    when(googleExtensions.onUserEnable(any[WorkbenchUser], any[SamRequestContext])).thenReturn(Future.successful(()))
+    when(googleExtensions.onGroupUpdate(any[Seq[WorkbenchGroupIdentity]], any[SamRequestContext])).thenReturn(Future.successful(()))
 
     service = new UserService(dirDAO, googleExtensions, registrationDAO)
   }
