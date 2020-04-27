@@ -5,7 +5,6 @@ import java.net.URI
 
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
-import akka.stream.ActorMaterializer
 import cats.data.NonEmptyList
 import cats.effect
 import cats.effect.{Blocker, ExitCode, IO, IOApp}
@@ -55,7 +54,6 @@ object Boot extends IOApp with LazyLogging {
 
     // we need an ActorSystem to host our application in
     implicit val system = ActorSystem("sam")
-    implicit val materializer = ActorMaterializer()
 
     val config = ConfigFactory.load()
     val appConfig = AppConfig.readConfig(config)
@@ -113,7 +111,7 @@ object Boot extends IOApp with LazyLogging {
   }
 
   private[sam] def createAppDependencies(
-      appConfig: AppConfig)(implicit actorSystem: ActorSystem, actorMaterializer: ActorMaterializer): cats.effect.Resource[IO, AppDependencies] =
+      appConfig: AppConfig)(implicit actorSystem: ActorSystem): cats.effect.Resource[IO, AppDependencies] =
     for {
       (foregroundDirectoryDAO, foregroundAccessPolicyDAO, _, registrationDAO) <- createDAOs(appConfig, DatabaseNames.Foreground, appConfig.directoryConfig.connectionPoolSize, "foreground")
 
@@ -305,7 +303,7 @@ object Boot extends IOApp with LazyLogging {
       accessPolicyDAO: AccessPolicyDAO,
       directoryDAO: DirectoryDAO,
       registrationDAO: RegistrationDAO,
-      identityConcentrator: Option[IdentityConcentratorService])(implicit actorSystem: ActorSystem, actorMaterializer: ActorMaterializer): AppDependencies = {
+      identityConcentrator: Option[IdentityConcentratorService])(implicit actorSystem: ActorSystem): AppDependencies = {
     val resourceTypeMap = config.resourceTypes.map(rt => rt.name -> rt).toMap
     val policyEvaluatorService = PolicyEvaluatorService(config.emailDomain, resourceTypeMap, accessPolicyDAO, directoryDAO)
     val resourceService = new ResourceService(resourceTypeMap, policyEvaluatorService, accessPolicyDAO, directoryDAO, cloudExtensionsInitializer.cloudExtensions, config.emailDomain)
