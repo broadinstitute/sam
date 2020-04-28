@@ -19,7 +19,7 @@ class PolicyEvaluatorService(
     private val accessPolicyDAO: AccessPolicyDAO,
     private val directoryDAO: DirectoryDAO )(implicit val executionContext: ExecutionContext)
     extends LazyLogging {
-  def initPolicy(traceContext: SamRequestContext = null): IO[Unit] = {
+  def initPolicy(traceContext: SamRequestContext = SamRequestContext(null)): IO[Unit] = {
     val policyName = AccessPolicyName("admin-notifier-set-public")
     accessPolicyDAO
       .createPolicy(AccessPolicy(
