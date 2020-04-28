@@ -101,7 +101,7 @@ class GoogleExtensions(
 
 
   def onBoot(samApplication: SamApplication)(implicit system: ActorSystem): IO[Unit] = {
-    val samRequestContext = null //todo: maybe we don't need tracing for onboot.... //todo: create a root span here?
+    val samRequestContext = SamRequestContext(null) //todo: maybe we don't need tracing for onboot.... //todo: create a root span here?
     val extensionResourceType =
       resourceTypes.getOrElse(CloudExtensions.resourceTypeName, throw new Exception(s"${CloudExtensions.resourceTypeName} resource type not found"))
     val ownerGoogleSubjectId = GoogleSubjectId(googleServicesConfig.serviceAccountClientId)
