@@ -27,6 +27,7 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam._
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.broadinstitute.dsde.workbench.sam.service._
+import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.sam.{TestSupport, model, _}
 import org.mockito.ArgumentMatcher
 import org.mockito.ArgumentMatchers._
@@ -108,8 +109,8 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
           when(mockAccessPolicyDAO.loadPolicy(p.id, samRequestContext)).thenReturn(IO.pure(Option(testPolicy)))
       }
       when(mockDirectoryDAO.loadGroup(ge.allUsersGroupName, samRequestContext)).thenReturn(IO.pure(Option(BasicWorkbenchGroup(ge.allUsersGroupName, Set.empty, ge.allUsersGroupEmail))))
-      when(mockDirectoryDAO.updateSynchronizedDate(any[WorkbenchGroupIdentity], samRequestContext)).thenReturn(IO.unit)
-      when(mockDirectoryDAO.getSynchronizedDate(any[WorkbenchGroupIdentity], samRequestContext)).thenReturn(IO.pure(Some((new GregorianCalendar(2017, 11, 22).getTime()))))
+      when(mockDirectoryDAO.updateSynchronizedDate(any[WorkbenchGroupIdentity], any[SamRequestContext])).thenReturn(IO.unit)
+      when(mockDirectoryDAO.getSynchronizedDate(any[WorkbenchGroupIdentity], any[SamRequestContext])).thenReturn(IO.pure(Some((new GregorianCalendar(2017, 11, 22).getTime()))))
 
       val subGroups = Seq(inSamSubGroup, inGoogleSubGroup, inBothSubGroup)
       subGroups.foreach { g => when(mockDirectoryDAO.loadSubjectEmail(g.id, samRequestContext)).thenReturn(IO.pure(Option(g.email))) }
@@ -212,8 +213,8 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
 
     when(mockDirectoryDAO.listIntersectionGroupUsers(Set(managedGroupId, testPolicy.id), samRequestContext)).thenReturn(IO.pure(Set(intersectionSamUserId, authorizedGoogleUserId, subIntersectionSamGroupUserId, subAuthorizedGoogleGroupUserId, addError)))
 
-    when(mockDirectoryDAO.updateSynchronizedDate(any[WorkbenchGroupIdentity], samRequestContext)).thenReturn(IO.unit)
-    when(mockDirectoryDAO.getSynchronizedDate(any[WorkbenchGroupIdentity], samRequestContext)).thenReturn(IO.pure(Some(new GregorianCalendar(2017, 11, 22).getTime())))
+    when(mockDirectoryDAO.updateSynchronizedDate(any[WorkbenchGroupIdentity], any[SamRequestContext])).thenReturn(IO.unit)
+    when(mockDirectoryDAO.getSynchronizedDate(any[WorkbenchGroupIdentity], any[SamRequestContext])).thenReturn(IO.pure(Some(new GregorianCalendar(2017, 11, 22).getTime())))
 
     val added = Seq(WorkbenchEmail(intersectionSamUserProxyEmail), WorkbenchEmail(subIntersectionSamGroupUserProxyEmail))
     val removed = Seq(WorkbenchEmail(unauthorizedGoogleUserProxyEmail))
@@ -627,8 +628,8 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val readerPolicy = AccessPolicy(readerRPN, Set.empty, WorkbenchEmail("reader@example.com"), Set.empty, Set.empty, public = false)
 
     // mock responses for onGroupUpdate
-    when(mockDirectoryDAO.listAncestorGroups(any[FullyQualifiedPolicyId], samRequestContext)).thenReturn(IO.pure(Set.empty.asInstanceOf[Set[WorkbenchGroupIdentity]]))
-    when(mockDirectoryDAO.getSynchronizedDate(any[FullyQualifiedPolicyId], samRequestContext)).thenReturn(IO.pure(Some(new GregorianCalendar(2018, 8, 26).getTime())))
+    when(mockDirectoryDAO.listAncestorGroups(any[FullyQualifiedPolicyId], any[SamRequestContext])).thenReturn(IO.pure(Set.empty.asInstanceOf[Set[WorkbenchGroupIdentity]]))
+    when(mockDirectoryDAO.getSynchronizedDate(any[FullyQualifiedPolicyId], any[SamRequestContext])).thenReturn(IO.pure(Some(new GregorianCalendar(2018, 8, 26).getTime())))
     when(mockGooglePubSubDAO.publishMessages(any[String], any[Seq[String]])).thenReturn(Future.successful(()))
 
     // mock responses for onManagedGroupUpdate
@@ -658,8 +659,8 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val readerPolicy = AccessPolicy(readerRPN, Set.empty, WorkbenchEmail("reader@example.com"), Set.empty, Set.empty, public = false)
 
     // mock responses for onGroupUpdate
-    when(mockDirectoryDAO.listAncestorGroups(any[FullyQualifiedPolicyId], samRequestContext)).thenReturn(IO.pure(Set.empty.asInstanceOf[Set[WorkbenchGroupIdentity]]))
-    when(mockDirectoryDAO.getSynchronizedDate(any[FullyQualifiedPolicyId], samRequestContext)).thenReturn(IO.pure(Some(new GregorianCalendar(2018, 8, 26).getTime())))
+    when(mockDirectoryDAO.listAncestorGroups(any[FullyQualifiedPolicyId], any[SamRequestContext])).thenReturn(IO.pure(Set.empty.asInstanceOf[Set[WorkbenchGroupIdentity]]))
+    when(mockDirectoryDAO.getSynchronizedDate(any[FullyQualifiedPolicyId], any[SamRequestContext])).thenReturn(IO.pure(Some(new GregorianCalendar(2018, 8, 26).getTime())))
     when(mockGooglePubSubDAO.publishMessages(any[String], any[Seq[String]])).thenReturn(Future.successful(()))
 
     // mock ancestor call to establish subgroup relationship to managed group
@@ -692,8 +693,8 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val readerPolicy = AccessPolicy(readerRPN, Set.empty, WorkbenchEmail("reader@example.com"), Set.empty, Set.empty, public = false)
 
     // mock responses for onGroupUpdate
-    when(mockDirectoryDAO.listAncestorGroups(any[FullyQualifiedPolicyId], samRequestContext)).thenReturn(IO.pure(Set.empty.asInstanceOf[Set[WorkbenchGroupIdentity]]))
-    when(mockDirectoryDAO.getSynchronizedDate(any[FullyQualifiedPolicyId], samRequestContext)).thenReturn(IO.pure(Some(new GregorianCalendar(2018, 8, 26).getTime())))
+    when(mockDirectoryDAO.listAncestorGroups(any[FullyQualifiedPolicyId], any[SamRequestContext])).thenReturn(IO.pure(Set.empty.asInstanceOf[Set[WorkbenchGroupIdentity]]))
+    when(mockDirectoryDAO.getSynchronizedDate(any[FullyQualifiedPolicyId], any[SamRequestContext])).thenReturn(IO.pure(Some(new GregorianCalendar(2018, 8, 26).getTime())))
     when(mockGooglePubSubDAO.publishMessages(any[String], any[Seq[String]])).thenReturn(Future.successful(()))
 
     // mock ancestor call to establish nested group structure for owner policy and subgroup in managed group
