@@ -11,7 +11,7 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, LoadResourceAuthDomainResult}
 import org.broadinstitute.dsde.workbench.sam.util.OpenCensusIOUtils._
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.ExecutionContext
 
 class PolicyEvaluatorService(
     private val emailDomain: String,
@@ -53,19 +53,14 @@ class PolicyEvaluatorService(
   })
 
   /** Checks if user have permission by providing user email address. */
-  def hasPermissionOnUserEmail(resource: FullyQualifiedResourceId, action: ResourceAction, userEmail: WorkbenchEmail, parentSpan: Span = null): IO[Boolean] = traceIOWithParent("hasPermission", parentSpan)(_ => {
-    directoryDAO.loadSubjectFromEmail(userEmail).unsafeToFuture().flatMap {
-      // don't attempt to handle groups or service accounts - just users
-      case Some(user: WorkbenchUserId) =>
-        directoryDAO.loadUser(user).unsafeToFuture().map {
-          case Some(loadedUser) => {
-            return hasPermission(resource, action, loadedUser.id, parentSpan)
-          }
-          case _ => false
-        }
-      case Some(_: WorkbenchGroupName) => Future(false)
-      case _ => Future(false)
-    }
+  def hasPermissionByUserEmail(resource: FullyQualifiedResourceId, action: ResourceAction, userEmail: WorkbenchEmail, parentSpan: Span = null): IO[Boolean] = traceIOWithParent("hasPermission", parentSpan)(_ => {
+    for {
+      subjectOpt <- directoryDAO.loadSubjectFromEmail(userEmail)
+      res <- subjectOpt match {
+        case Some(userId: WorkbenchUserId) => hasPermission(resource, action, userId, parentSpan)
+        case _ => IO.pure(false)
+      }
+    } yield res
   })
 
   /**
