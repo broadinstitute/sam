@@ -11,7 +11,7 @@ import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.RootPrimitiveJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.{CreateResourcePolicyResponse, CreateResourceResponse, _}
-import org.broadinstitute.dsde.workbench.sam.service.ResourceService
+import org.broadinstitute.dsde.workbench.sam.service.{ResourceService, UserService}
 import spray.json.DefaultJsonProtocol._
 import spray.json.JsBoolean
 
@@ -33,6 +33,7 @@ import io.opencensus.scala.akka.http.TracingDirective._
 trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with SamModelDirectives {
   implicit val executionContext: ExecutionContext
   val resourceService: ResourceService
+  val userService: UserService
   val liquibaseConfig: LiquibaseConfig
 
   def withResourceType(name: ResourceTypeName): Directive1[ResourceType] =
@@ -83,6 +84,12 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
                 pathPrefix(Segment) { action =>
                   pathEndOrSingleSlash {
                     getActionPermissionForUser(resource, userInfo, action)
+                  } ~ pathPrefix("userEmail") {
+                    pathPrefix(Segment) { userEmail =>
+                      pathEndOrSingleSlash {
+                        getActionPermissionForUserEmail(resource, userInfo, action, userEmail)
+                      }
+                    }
                   }
                 }
               } ~ pathPrefix("authDomain") {
@@ -202,6 +209,21 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
         complete(policyEvaluatorService.hasPermission(resource, ResourceAction(action), userInfo.userId, span).map { hasPermission =>
           StatusCodes.OK -> JsBoolean(hasPermission)
         })
+      }
+    }
+
+  def getActionPermissionForUserEmail(resource: FullyQualifiedResourceId, userInfo: UserInfo, action: String, userEmail: String): server.Route =
+    get {
+      requireOneOfAction(resource, Set(SamResourceActions.readPolicies, SamResourceActions.testAnyActionAccess, SamResourceActions.testActionAccess(ResourceAction(action))), userInfo.userId) {
+         var userId = userService.getUserIdInfoFromEmail(WorkbenchEmail(userEmail)).map {
+           case Right(Some(userIdInfo)) => userIdInfo
+         }
+
+        traceRequest { span =>
+          complete(policyEvaluatorService.hasPermission(resource, ResourceAction(action), WorkbenchUserId(userId), span).map { hasPermission =>
+            StatusCodes.OK -> JsBoolean(hasPermission)
+          })
+        }
       }
     }
 

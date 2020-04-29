@@ -39,9 +39,11 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     val readPolicies = ResourceActionPattern("read_policies", "", false)
     val alterPolicies = ResourceActionPattern("alter_policies", "", false)
     val delete = ResourceActionPattern("delete", "", false)
+    val testAnyActionAccess = ResourceActionPattern("test_any_action_access", "", false)
 
     val sharePolicy = ResourceActionPattern("share_policy::.+", "", false)
     val readPolicy = ResourceActionPattern("read_policy::.+", "", false)
+    val testActionAccess = ResourceActionPattern("test_action_access::.+", "", false)
   }
 
   private def createSamRoutes(resourceTypes: Map[ResourceTypeName, ResourceType], userInfo: UserInfo = defaultUserInfo) = {
@@ -68,6 +70,30 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     Get("/api/resource/foo/bar/action") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
       responseAs[ErrorReport].message shouldEqual "resource type foo not found"
+    }
+  }
+
+  "GET /api/resource/{resourceType}/{resourceId}/action/{action}/userEmail/{userEmail}" should "200 if user have read_policies permission" in {
+    // Create a user called userWithEmail and has can_compute on the resource.
+    val userWithEmail = CreateWorkbenchUser(WorkbenchUserId("user1"), defaultGoogleSubjectId, WorkbenchEmail("user1@foo.com"), None)
+    val members = AccessPolicyMembership(Set(userWithEmail.email), Set(ResourceAction("can_compute")), Set.empty)
+    val resourceType = ResourceType(
+      ResourceTypeName("rt"),
+      Set(SamResourceActionPatterns.readPolicies, ResourceActionPattern("can_compute", "", false)),
+      Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.alterPolicies, SamResourceActions.readPolicies))),
+      ResourceRoleName("owner"))
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
+
+    val resourceId = ResourceId("foo")
+    val policyName = AccessPolicyName("can_compute")
+
+    runAndWait(samRoutes.userService.createUser(defaultTestUser))
+    runAndWait(samRoutes.userService.createUser(userWithEmail))
+    createUserResourcePolicy(members, resourceType, samRoutes, resourceId, policyName)
+
+    Get(s"/api/resource/${resourceType.name}/${resourceId.value}/action/can_compute/userEmail/${userWithEmail.email}") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[JsValue] shouldEqual JsBoolean(true)
     }
   }
 
