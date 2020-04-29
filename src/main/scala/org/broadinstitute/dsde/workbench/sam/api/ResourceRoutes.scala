@@ -225,6 +225,29 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
           })
         }
       }
+
+
+    }
+
+  def getActionPermissionForUserEmail2(resource: FullyQualifiedResourceId, userInfo: UserInfo, action: String, userEmail: String): server.Route =
+    get {
+      requireOneOfAction(resource, Set(SamResourceActions.readPolicies, SamResourceActions.testAnyActionAccess, SamResourceActions.testActionAccess(ResourceAction(action))), userInfo.userId) {
+        var userId = userService.getUserIdInfoFromEmail(WorkbenchEmail(userEmail)).map {
+          case Right(Some(userIdInfo)) => userIdInfo
+        }
+
+        traceRequest { span =>
+          complete(
+            userId = userService.getUserIdInfoFromEmail(WorkbenchEmail(userEmail)).map {
+
+            }
+            policyEvaluatorService.hasPermission(resource, ResourceAction(action), WorkbenchUserId(userId), span).map { hasPermission =>
+            StatusCodes.OK -> JsBoolean(hasPermission)
+          })
+        }
+      }
+
+
     }
 
   def listActionsForUser(resource: FullyQualifiedResourceId, userInfo: UserInfo): server.Route =
