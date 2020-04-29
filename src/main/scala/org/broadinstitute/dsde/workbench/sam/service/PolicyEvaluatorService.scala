@@ -54,7 +54,7 @@ class PolicyEvaluatorService(
 
   /** Checks if user have permission by providing user email address. */
   def hasPermissionOnUserEmail(resource: FullyQualifiedResourceId, action: ResourceAction, userEmail: WorkbenchEmail, parentSpan: Span = null): IO[Boolean] = traceIOWithParent("hasPermission", parentSpan)(_ => {
-    directoryDAO.loadSubjectFromEmail(userEmail).unsafeToFuture().flatMap() {
+    directoryDAO.loadSubjectFromEmail(userEmail).unsafeToFuture().flatMap {
       // don't attempt to handle groups or service accounts - just users
       case Some(user: WorkbenchUserId) =>
         directoryDAO.loadUser(user).unsafeToFuture().map {
