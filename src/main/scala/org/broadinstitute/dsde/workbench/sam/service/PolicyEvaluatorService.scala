@@ -63,8 +63,8 @@ class PolicyEvaluatorService(
           }
           case _ => false
         }
-      case Some(_: WorkbenchGroupName) => false
-      case _ => false
+      case Some(_: WorkbenchGroupName) => Future(false)
+      case _ => Future(false)
     }
   })
 
