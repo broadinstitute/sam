@@ -1,8 +1,8 @@
 import sbt._
 
 object Dependencies {
-  val akkaV = "2.6.1"
-  val akkaHttpV = "10.1.11"
+  val akkaV = "2.5.22"
+  val akkaHttpV = "10.1.8"
   val jacksonV = "2.9.5"
   val scalaLoggingV = "3.5.0"
   val scalaTestV    = "3.0.5"
@@ -42,7 +42,7 @@ object Dependencies {
   val ficus: ModuleID =          "com.iheart"                 %% "ficus"           % "1.4.0"
 
   val akkaActor: ModuleID =         "com.typesafe.akka"   %%  "akka-actor"           % akkaV
-//  val akkaContrib: ModuleID =       "com.typesafe.akka"   %%  "akka-contrib"         % "2.5.31"
+  val akkaContrib: ModuleID =       "com.typesafe.akka"   %%  "akka-contrib"         % akkaV
   val akkaSlf4j: ModuleID =         "com.typesafe.akka"   %%  "akka-slf4j"           % akkaV
   val akkaHttp: ModuleID =          "com.typesafe.akka"   %%  "akka-http"            % akkaHttpV           excludeAll(excludeAkkaActor)
   val akkaHttpSprayJson: ModuleID = "com.typesafe.akka"   %%  "akka-http-spray-json" % akkaHttpV
@@ -96,8 +96,8 @@ object Dependencies {
   val postgres = "org.postgresql"                    %  "postgresql"          % postgresDriverVersion
 
   val excludeScalaCllectionCompat =  ExclusionRule(organization = "org.scala-lang.modules", name = "scala-collection-compat_2.12")
-  val opencensusScalaCode: ModuleID = "com.github.sebruck" %% "opencensus-scala-core" % "0.7.2" excludeAll(excludeScalaCllectionCompat) // excludeAll(excludIoGrpc, excludeCatsEffect )
-  val opencensusAkkaHttp: ModuleID = "com.github.sebruck" %% "opencensus-scala-akka-http" % "0.7.2" excludeAll(excludeScalaCllectionCompat)// excludeAll(excludIoGrpc, excludeCatsEffect)
+  val opencensusScalaCode: ModuleID = "com.github.sebruck" %% "opencensus-scala-core" % "0.7.0-M2" excludeAll(excludeScalaCllectionCompat) // excludeAll(excludIoGrpc, excludeCatsEffect )
+  val opencensusAkkaHttp: ModuleID = "com.github.sebruck" %% "opencensus-scala-akka-http" % "0.7.0-M2" excludeAll(excludeScalaCllectionCompat)// excludeAll(excludIoGrpc, excludeCatsEffect)
   val opencensusStackDriverExporter: ModuleID = "io.opencensus" % "opencensus-exporter-trace-stackdriver" % "0.23.0" // excludeAll(excludIoGrpc, excludeCatsEffect)
   val opencensusLoggingExporter: ModuleID = "io.opencensus" % "opencensus-exporter-trace-logging"     % "0.23.0" // excludeAll(excludIoGrpc, excludeCatsEffect)
 
@@ -122,7 +122,7 @@ object Dependencies {
     ficus,
 
     akkaActor,
-//    akkaContrib,
+    akkaContrib,
     akkaSlf4j,
     akkaHttp,
     akkaHttpSprayJson,
