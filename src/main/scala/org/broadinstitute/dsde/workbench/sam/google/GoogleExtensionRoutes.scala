@@ -14,6 +14,7 @@ import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.CloudExtensions
 import org.broadinstitute.dsde.workbench.sam.util.OpenCensusIOUtils.completeWithTrace
+import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import spray.json.DefaultJsonProtocol._
 import spray.json.JsString
 
@@ -109,12 +110,14 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                   } ~
                   pathEnd {
                     get {
-                      completeWithTrace({samRequestContext =>
-                        googleExtensions.createUserPetServiceAccount(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None), GoogleProject(project), samRequestContext).map {
+//                      completeWithTrace({samRequestContext =>
+                      complete (
+                        googleExtensions.createUserPetServiceAccount(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None), GoogleProject(project), SamRequestContext(null)).map {
                           petSA =>
                             StatusCodes.OK -> petSA.serviceAccount.email
                         }
-                      })
+//                      })
+                      )
                     } ~
                       delete { // NOTE: This endpoint is not visible in Swagger
                         completeWithTrace({samRequestContext =>
