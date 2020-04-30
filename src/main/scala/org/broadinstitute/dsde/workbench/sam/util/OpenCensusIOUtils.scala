@@ -23,10 +23,8 @@ object OpenCensusIOUtils {
                              samRequestContext: SamRequestContext,
                              failureStatus: Throwable => Status = (_: Throwable) => Status.UNKNOWN
                           )(f: Span => IO[T]): IO[T] = { // todo: change signature of this to be SamRequestContext ; probably requires a new traceIOContext()
-    if (samRequestContext == null || samRequestContext.parentSpan == null) { // todo: once all nulls are removed, this won't be necessary.
-      for {
-        result <- f(null).attempt
-      } yield result.toTry.get
+    if (samRequestContext == null || samRequestContext.parentSpan == null) { // todo: needed for tests? since tests are using a null parentSpan
+      f(null)
     }
     else {
       traceIOSpan(IO(startSpanWithParent(name, samRequestContext.parentSpan)), failureStatus)(f)
