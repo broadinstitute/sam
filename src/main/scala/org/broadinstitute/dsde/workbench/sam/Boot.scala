@@ -5,6 +5,7 @@ import java.net.URI
 
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
+import akka.stream.ActorMaterializer
 import cats.data.NonEmptyList
 import cats.effect
 import cats.effect.{Blocker, ExitCode, IO, IOApp}
@@ -54,6 +55,7 @@ object Boot extends IOApp with LazyLogging {
 
     // we need an ActorSystem to host our application in
     implicit val system = ActorSystem("sam")
+    implicit val materializer = ActorMaterializer()
 
     val config = ConfigFactory.load()
     val appConfig = AppConfig.readConfig(config)
@@ -111,7 +113,7 @@ object Boot extends IOApp with LazyLogging {
   }
 
   private[sam] def createAppDependencies(
-      appConfig: AppConfig)(implicit actorSystem: ActorSystem): cats.effect.Resource[IO, AppDependencies] =
+                                          appConfig: AppConfig)(implicit actorSystem: ActorSystem, actorMaterializer: ActorMaterializer): cats.effect.Resource[IO, AppDependencies] =
     for {
       (foregroundDirectoryDAO, foregroundAccessPolicyDAO, _, registrationDAO) <- createDAOs(appConfig, DatabaseNames.Foreground, appConfig.directoryConfig.connectionPoolSize, "foreground")
 
@@ -135,14 +137,14 @@ object Boot extends IOApp with LazyLogging {
     } yield createAppDepenciesWithSamRoutes(appConfig, cloudExtensionsInitializer, foregroundAccessPolicyDAO, foregroundDirectoryDAO, registrationDAO, identityConcentrator)
 
   private def cloudExtensionsInitializerResource(
-      appConfig: AppConfig,
-      foregroundDirectoryDAO: DirectoryDAO,
-      foregroundAccessPolicyDAO: AccessPolicyDAO,
-      registrationDAO: RegistrationDAO,
-      backgroundDirectoryDAO: DirectoryDAO,
-      backgroundAccessPolicyDAO: AccessPolicyDAO,
-      backgroundLdapExecutionContext: ExecutionContext,
-      blockingEc: ExecutionContext)(implicit actorSystem: ActorSystem): effect.Resource[IO, CloudExtensionsInitializer] =
+                                                  appConfig: AppConfig,
+                                                  foregroundDirectoryDAO: DirectoryDAO,
+                                                  foregroundAccessPolicyDAO: AccessPolicyDAO,
+                                                  registrationDAO: RegistrationDAO,
+                                                  backgroundDirectoryDAO: DirectoryDAO,
+                                                  backgroundAccessPolicyDAO: AccessPolicyDAO,
+                                                  backgroundLdapExecutionContext: ExecutionContext,
+                                                  blockingEc: ExecutionContext)(implicit actorSystem: ActorSystem): effect.Resource[IO, CloudExtensionsInitializer] =
     appConfig.googleConfig match {
       case Some(config) =>
         for {
@@ -160,7 +162,7 @@ object Boot extends IOApp with LazyLogging {
           // googleServicesConfig.resourceNamePrefix is an environment specific variable passed in https://github.com/broadinstitute/firecloud-develop/blob/fade9286ff0aec8449121ed201ebc44c8a4d57dd/run-context/fiab/configs/sam/docker-compose.yaml.ctmpl#L24
           // Use resourceNamePrefix to avoid collision between different fiab environments (we share same firestore for fiabs)
           val lock =
-            DistributedLock[IO](s"sam-${config.googleServicesConfig.resourceNamePrefix.getOrElse("local")}", appConfig.distributedLockConfig, ioFireStore)
+          DistributedLock[IO](s"sam-${config.googleServicesConfig.resourceNamePrefix.getOrElse("local")}", appConfig.distributedLockConfig, ioFireStore)
           val newGoogleStorage = GoogleStorageInterpreter[IO](googleStorage, Blocker.liftExecutionContext(blockingEc), None)
           val googleKmsInterpreter = GoogleKmsInterpreter[IO](googleKmsClient, blockingEc)
           val resourceTypeMap = appConfig.resourceTypes.map(rt => rt.name -> rt).toMap
@@ -224,14 +226,14 @@ object Boot extends IOApp with LazyLogging {
   }
 
   private[sam] def createGoogleCloudExt(
-      accessPolicyDAO: AccessPolicyDAO,
-      directoryDAO: DirectoryDAO,
-      registrationDAO: RegistrationDAO,
-      config: GoogleConfig,
-      resourceTypeMap: Map[ResourceTypeName, ResourceType],
-      distributedLock: DistributedLock[IO],
-      googleStorageNew: GoogleStorageService[IO],
-      googleKms: GoogleKmsService[IO])(implicit actorSystem: ActorSystem): GoogleExtensions = {
+                                         accessPolicyDAO: AccessPolicyDAO,
+                                         directoryDAO: DirectoryDAO,
+                                         registrationDAO: RegistrationDAO,
+                                         config: GoogleConfig,
+                                         resourceTypeMap: Map[ResourceTypeName, ResourceType],
+                                         distributedLock: DistributedLock[IO],
+                                         googleStorageNew: GoogleStorageService[IO],
+                                         googleKms: GoogleKmsService[IO])(implicit actorSystem: ActorSystem): GoogleExtensions = {
     val googleDirDaos = (config.googleServicesConfig.adminSdkServiceAccounts match {
       case None =>
         NonEmptyList.one(
@@ -298,12 +300,12 @@ object Boot extends IOApp with LazyLogging {
   }
 
   private[sam] def createAppDepenciesWithSamRoutes(
-      config: AppConfig,
-      cloudExtensionsInitializer: CloudExtensionsInitializer,
-      accessPolicyDAO: AccessPolicyDAO,
-      directoryDAO: DirectoryDAO,
-      registrationDAO: RegistrationDAO,
-      identityConcentrator: Option[IdentityConcentratorService])(implicit actorSystem: ActorSystem): AppDependencies = {
+                                                    config: AppConfig,
+                                                    cloudExtensionsInitializer: CloudExtensionsInitializer,
+                                                    accessPolicyDAO: AccessPolicyDAO,
+                                                    directoryDAO: DirectoryDAO,
+                                                    registrationDAO: RegistrationDAO,
+                                                    identityConcentrator: Option[IdentityConcentratorService])(implicit actorSystem: ActorSystem, actorMaterializer: ActorMaterializer): AppDependencies = {
     val resourceTypeMap = config.resourceTypes.map(rt => rt.name -> rt).toMap
     val policyEvaluatorService = PolicyEvaluatorService(config.emailDomain, resourceTypeMap, accessPolicyDAO, directoryDAO)
     val resourceService = new ResourceService(resourceTypeMap, policyEvaluatorService, accessPolicyDAO, directoryDAO, cloudExtensionsInitializer.cloudExtensions, config.emailDomain)
@@ -316,7 +318,7 @@ object Boot extends IOApp with LazyLogging {
     cloudExtensionsInitializer match {
       case GoogleExtensionsInitializer(googleExt, synchronizer) =>
         val routes = new SamRoutes(resourceService, userService, statusService, managedGroupService, config.swaggerConfig, directoryDAO, policyEvaluatorService, config.liquibaseConfig)
-        with StandardUserInfoDirectives with GoogleExtensionRoutes {
+          with StandardUserInfoDirectives with GoogleExtensionRoutes {
           val googleExtensions = googleExt
           val cloudExtensions = googleExt
           val googleGroupSynchronizer = synchronizer
@@ -325,7 +327,7 @@ object Boot extends IOApp with LazyLogging {
         AppDependencies(routes, samApplication, cloudExtensionsInitializer, directoryDAO, accessPolicyDAO, policyEvaluatorService)
       case _ =>
         val routes = new SamRoutes(resourceService, userService, statusService, managedGroupService, config.swaggerConfig, directoryDAO, policyEvaluatorService, config.liquibaseConfig)
-        with StandardUserInfoDirectives with NoExtensionRoutes {
+          with StandardUserInfoDirectives with NoExtensionRoutes {
           override val identityConcentratorService = identityConcentrator
         }
         AppDependencies(routes, samApplication, NoExtensionsInitializer, directoryDAO, accessPolicyDAO, policyEvaluatorService)
@@ -334,9 +336,9 @@ object Boot extends IOApp with LazyLogging {
 }
 
 final case class AppDependencies(
-    samRoutes: SamRoutes,
-    samApplication: SamApplication,
-    cloudExtensionsInitializer: CloudExtensionsInitializer,
-    directoryDAO: DirectoryDAO,
-    accessPolicyDAO: AccessPolicyDAO,
-    policyEvaluatorService: PolicyEvaluatorService)
+                                  samRoutes: SamRoutes,
+                                  samApplication: SamApplication,
+                                  cloudExtensionsInitializer: CloudExtensionsInitializer,
+                                  directoryDAO: DirectoryDAO,
+                                  accessPolicyDAO: AccessPolicyDAO,
+                                  policyEvaluatorService: PolicyEvaluatorService)
