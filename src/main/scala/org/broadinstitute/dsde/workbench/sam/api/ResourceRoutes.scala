@@ -211,6 +211,11 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
       }
     }
 
+  /**
+    * Checks if user has permission by giver user email.
+    *
+    * <p> The caller should have readPolicies, OR testAnyActionAccess or testActionAccess::{action} to make this call.
+    */
   def getActionPermissionForUserEmail(resource: FullyQualifiedResourceId, userInfo: UserInfo, action: String, userEmail: String): server.Route =
     get {
       requireOneOfAction(resource, Set(SamResourceActions.readPolicies, SamResourceActions.testAnyActionAccess, SamResourceActions.testActionAccess(ResourceAction(action))), userInfo.userId) {

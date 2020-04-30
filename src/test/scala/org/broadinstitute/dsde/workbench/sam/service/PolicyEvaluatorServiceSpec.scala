@@ -18,7 +18,7 @@ import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.scalatest._
 import scala.concurrent.ExecutionContext.Implicits.global
 
-class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport with BeforeAndAfterEach {
+class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport with BeforeAndAfterAll {
   val dirURI = new URI(directoryConfig.directoryUrl)
   val connectionPool = new LDAPConnectionPool(
     new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password),
@@ -26,6 +26,10 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
   lazy val dirDAO: DirectoryDAO = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.blockingEc)
   lazy val policyDAO: AccessPolicyDAO = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.blockingEc)
   val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
+
+  override def beforeAll(): Unit = {
+    super.beforeAll()
+  }
 
   private val dummyUserInfo =
     UserInfo(OAuth2BearerToken("token"), WorkbenchUserId("userid"), WorkbenchEmail("user@company.com"), 0)

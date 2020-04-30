@@ -1326,6 +1326,11 @@ paths:
           name: action
           required: true
           type: string
+        - in: path
+          description: User Email address to check
+          name: userEmail
+          required: true
+          type: string
       operationId: resourceAction
       tags:
         - Resources
