@@ -518,14 +518,14 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
         5.minutes, 5.seconds)
     }
 
-//    "should not allow pet creation in a project that belongs to an external org" in {
-//      val userAuthToken = UserPool.chooseAnyUser.makeAuthToken()
-//      val restException = intercept[RestException] {
-//        Sam.user.petServiceAccountEmail(gcsConfig.serviceProject)(userAuthToken)
-//      }
-//      import spray.json._
-//      restException.message.parseJson.asJsObject.fields("statusCode") shouldBe JsNumber(400)
-//    }
+    "should not allow pet creation in a project that belongs to an external org" in {
+      val userAuthToken = UserPool.chooseAnyUser.makeAuthToken()
+      val restException = intercept[RestException] {
+        Sam.user.petServiceAccountEmail(gcsConfig.serviceProject)(userAuthToken)
+      }
+      import spray.json._
+      restException.message.parseJson.asJsObject.fields("statusCode") shouldBe JsNumber(400)
+    }
   }
 
   private def getFieldFromJson(jsonKey: String, field: String): String = {
