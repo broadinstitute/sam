@@ -42,7 +42,6 @@ object Dependencies {
   val ficus: ModuleID =          "com.iheart"                 %% "ficus"           % "1.4.0"
 
   val akkaActor: ModuleID =         "com.typesafe.akka"   %%  "akka-actor"           % akkaV
-//  val akkaContrib: ModuleID =       "com.typesafe.akka"   %%  "akka-contrib"         % "2.5.31"
   val akkaSlf4j: ModuleID =         "com.typesafe.akka"   %%  "akka-slf4j"           % akkaV
   val akkaHttp: ModuleID =          "com.typesafe.akka"   %%  "akka-http"            % akkaHttpV           excludeAll(excludeAkkaActor)
   val akkaHttpSprayJson: ModuleID = "com.typesafe.akka"   %%  "akka-http-spray-json" % akkaHttpV
@@ -122,7 +121,6 @@ object Dependencies {
     ficus,
 
     akkaActor,
-//    akkaContrib,
     akkaSlf4j,
     akkaHttp,
     akkaHttpSprayJson,
