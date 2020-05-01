@@ -4,8 +4,8 @@ object Dependencies {
   val scalaV = "2.12"
 
   val jacksonV = "2.8.4"
-  val akkaV = "2.5.7"
-  val akkaHttpV = "10.0.10"
+  val akkaV = "2.6.1"
+  val akkaHttpV = "10.1.11"
 
   val workbenchModelV  = "0.13-7e86fba"
 
@@ -53,6 +53,6 @@ object Dependencies {
 
 
     // required by workbenchGoogle
-    "com.typesafe.akka" %% "akka-http-spray-json" % "10.0.6" % "provided"
+    "com.typesafe.akka" %% "akka-http-spray-json" % "10.1.11" % "provided"
   )
 }
