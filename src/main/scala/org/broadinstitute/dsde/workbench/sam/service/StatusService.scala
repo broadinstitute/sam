@@ -26,7 +26,7 @@ class StatusService(
   implicit val askTimeout = Timeout(5 seconds)
 
   private val healthMonitor = system.actorOf(HealthMonitor.props(cloudExtensions.allSubSystems + OpenDJ)(checkStatus _))
-  system.scheduler.schedule(initialDelay, pollInterval, healthMonitor, HealthMonitor.CheckAll)
+  system.scheduler.scheduleAtFixedRate(initialDelay, pollInterval, healthMonitor, HealthMonitor.CheckAll)
 
   def getStatus(): Future[StatusCheckResponse] = (healthMonitor ? GetCurrentStatus).asInstanceOf[Future[StatusCheckResponse]]
 
@@ -35,7 +35,7 @@ class StatusService(
 
   private def checkOpenDJ(groupToLoad: WorkbenchGroupName): IO[SubsystemStatus] = {
     logger.info("checking opendj connection")
-    directoryDAO.loadGroupEmail(groupToLoad).map {
+    directoryDAO.loadGroupEmail(groupToLoad, null).map {//todo: create a root span here?
       case Some(_) => HealthMonitor.OkStatus
       case None => HealthMonitor.failedStatus(s"could not find group $groupToLoad in opendj")
     }

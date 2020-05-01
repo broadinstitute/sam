@@ -13,8 +13,10 @@ import org.broadinstitute.dsde.workbench.sam.api.{ExtensionRoutes, SecurityDirec
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.CloudExtensions
+import org.broadinstitute.dsde.workbench.sam.util.OpenCensusIOUtils.completeWithTrace
 import spray.json.DefaultJsonProtocol._
 import spray.json.JsString
+import scala.concurrent.duration._
 
 import scala.concurrent.ExecutionContext
 
@@ -27,33 +29,34 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
     (pathPrefix("google" / "v1") | pathPrefix("google")) {
       requireUserInfo { userInfo =>
         path("petServiceAccount" / Segment / Segment) { (project, userEmail) =>
+          toStrictEntity(5.seconds) {
           get {
             requireAction(
               FullyQualifiedResourceId(CloudExtensions.resourceTypeName, GoogleExtensions.resourceId),
               GoogleExtensions.getPetPrivateKeyAction,
               userInfo.userId) {
-              complete {
+              completeWithTrace({samRequestContext =>
                 import spray.json._
-                googleExtensions.getPetServiceAccountKey(WorkbenchEmail(userEmail), GoogleProject(project)) map {
+                googleExtensions.getPetServiceAccountKey(WorkbenchEmail(userEmail), GoogleProject(project), samRequestContext) map {
                   // parse json to ensure it is json and tells akka http the right content-type
                   case Some(key) => StatusCodes.OK -> key.parseJson
                   case None =>
                     throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "pet service account not found"))
                 }
-              }
+              })
             }
-          }
+          }}
         } ~
           pathPrefix("user" / "petServiceAccount") {
             pathPrefix("key") {
               pathEndOrSingleSlash {
                 get {
-                  complete {
+                  completeWithTrace({samRequestContext =>
                     import spray.json._
                     googleExtensions
-                      .getArbitraryPetServiceAccountKey(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None))
+                      .getArbitraryPetServiceAccountKey(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None), samRequestContext)
                       .map(key => StatusCodes.OK -> key.parseJson)
-                  }
+                  })
                 }
               }
             } ~
@@ -61,11 +64,11 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                 pathEndOrSingleSlash {
                   post {
                     entity(as[Set[String]]) { scopes =>
-                      complete {
-                        googleExtensions.getArbitraryPetServiceAccountToken(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None), scopes).map { token =>
+                      completeWithTrace({samRequestContext =>
+                        googleExtensions.getArbitraryPetServiceAccountToken(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None), scopes, samRequestContext).map { token =>
                           StatusCodes.OK -> JsString(token)
                         }
-                      }
+                      })
                     }
                   }
                 }
@@ -73,64 +76,64 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
               pathPrefix(Segment) { project =>
                 pathPrefix("key") {
                   get {
-                    complete {
+                    completeWithTrace({samRequestContext =>
                       import spray.json._
                       // parse json to ensure it is json and tells akka http the right content-type
                       googleExtensions
-                        .getPetServiceAccountKey(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None), GoogleProject(project))
+                        .getPetServiceAccountKey(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None), GoogleProject(project), samRequestContext)
                         .map { key =>
                           StatusCodes.OK -> key.parseJson
                         }
-                    }
+                    })
                   } ~
                     path(Segment) { keyId =>
                       delete {
-                        complete {
+                        completeWithTrace({samRequestContext =>
                           googleExtensions
-                            .removePetServiceAccountKey(userInfo.userId, GoogleProject(project), ServiceAccountKeyId(keyId))
+                            .removePetServiceAccountKey(userInfo.userId, GoogleProject(project), ServiceAccountKeyId(keyId), samRequestContext)
                             .map(_ => StatusCodes.NoContent)
-                        }
+                        })
                       }
                     }
                 } ~
                   pathPrefix("token") {
                     post {
                       entity(as[Set[String]]) { scopes =>
-                        complete {
+                        completeWithTrace({samRequestContext =>
                           googleExtensions
-                            .getPetServiceAccountToken(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None), GoogleProject(project), scopes)
+                            .getPetServiceAccountToken(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None), GoogleProject(project), scopes, samRequestContext)
                             .map { token =>
                               StatusCodes.OK -> JsString(token)
                             }
-                        }
+                        })
                       }
                     }
                   } ~
                   pathEnd {
                     get {
-                      complete {
-                        googleExtensions.createUserPetServiceAccount(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None), GoogleProject(project)).map {
+                      completeWithTrace({samRequestContext =>
+                        googleExtensions.createUserPetServiceAccount(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None), GoogleProject(project), samRequestContext).map {
                           petSA =>
                             StatusCodes.OK -> petSA.serviceAccount.email
                         }
-                      }
+                      })
                     } ~
                       delete { // NOTE: This endpoint is not visible in Swagger
-                        complete {
-                          googleExtensions.deleteUserPetServiceAccount(userInfo.userId, GoogleProject(project)).map(_ => StatusCodes.NoContent)
-                        }
+                        completeWithTrace({samRequestContext =>
+                          googleExtensions.deleteUserPetServiceAccount(userInfo.userId, GoogleProject(project), samRequestContext).map(_ => StatusCodes.NoContent)
+                        })
                       }
                   }
               }
           } ~
           pathPrefix("user") {
             path("proxyGroup" / Segment) { targetUserEmail =>
-              complete {
-                googleExtensions.getUserProxy(WorkbenchEmail(targetUserEmail)).map {
+              completeWithTrace({samRequestContext =>
+                googleExtensions.getUserProxy(WorkbenchEmail(targetUserEmail), samRequestContext).map {
                   case Some(proxyEmail) => StatusCodes.OK -> Option(proxyEmail)
                   case _ => StatusCodes.NotFound -> None
                 }
-              }
+              })
             }
           } ~
           pathPrefix("resource") {
@@ -139,20 +142,20 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
               val policyId = FullyQualifiedPolicyId(resource, AccessPolicyName(accessPolicyName))
               pathEndOrSingleSlash {
                 post {
-                  complete {
+                  completeWithTrace({samRequestContext =>
                     import GoogleModelJsonSupport._
-                    googleGroupSynchronizer.synchronizeGroupMembers(policyId).map { syncReport =>
+                    googleGroupSynchronizer.synchronizeGroupMembers(policyId, samRequestContext = samRequestContext).map { syncReport =>
                       StatusCodes.OK -> syncReport
                     }
-                  }
+                  })
                 } ~
                   get {
-                    complete {
-                      googleExtensions.getSynchronizedState(policyId).map {
+                    completeWithTrace({samRequestContext =>
+                      googleExtensions.getSynchronizedState(policyId, samRequestContext).map {
                         case Some(syncState) => StatusCodes.OK -> Option(syncState)
                         case None => StatusCodes.NoContent -> None
                       }
-                    }
+                    })
                   }
               }
             }

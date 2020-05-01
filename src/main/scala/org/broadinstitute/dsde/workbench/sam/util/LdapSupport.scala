@@ -4,6 +4,7 @@ import cats.effect.{ContextShift, IO}
 import com.unboundid.ldap.sdk._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO.Attr
+import org.broadinstitute.dsde.workbench.sam.util.OpenCensusIOUtils.traceIOWithContext
 
 import scala.concurrent.ExecutionContext
 
@@ -40,5 +41,7 @@ trait LdapSupport {
       email <- getAttribute(results, Attr.email).toRight(s"${Attr.email} attribute missing")
     } yield WorkbenchUser(WorkbenchUserId(uid), getAttribute(results, Attr.googleSubjectId).map(GoogleSubjectId), WorkbenchEmail(email), None)
 
-  protected def executeLdap[A](ioa: IO[A]): IO[A] = cs.evalOn(ecForLdapBlockingIO)(ioa)
+  protected def executeLdap[A](ioa: IO[A], dbQueryName: String, samRequestContext: SamRequestContext): IO[A] = {
+    traceIOWithContext("ldap-" + dbQueryName, samRequestContext)(_ => cs.evalOn(ecForLdapBlockingIO)(ioa))
+  }
 }

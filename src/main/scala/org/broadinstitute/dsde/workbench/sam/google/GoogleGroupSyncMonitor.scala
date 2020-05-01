@@ -10,6 +10,7 @@ import org.broadinstitute.dsde.workbench.google.GooglePubSubDAO.PubSubMessage
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.model.FullyQualifiedPolicyId
+import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.util.FutureSupport
 import spray.json._
 
@@ -130,7 +131,7 @@ class GoogleGroupSyncMonitorActor(
       val groupId: WorkbenchGroupIdentity = parseMessage(message)
 
       groupSynchronizer
-        .synchronizeGroupMembers(groupId)
+        .synchronizeGroupMembers(groupId, samRequestContext = SamRequestContext(null)) //todo: create a root span here?
         .toTry
         .map(sr => sr.fold(t => FailToSynchronize(t, message.ackId), x => ReportMessage(x, message.ackId))) pipeTo self
 

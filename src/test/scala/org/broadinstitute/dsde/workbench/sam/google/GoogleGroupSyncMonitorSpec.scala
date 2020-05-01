@@ -37,11 +37,11 @@ class GoogleGroupSyncMonitorSpec(_system: ActorSystem) extends TestKit(_system) 
 
     val groupToSyncEmail = WorkbenchEmail("testgroup@example.com")
     val groupToSyncId = WorkbenchGroupName("testgroup")
-    when(mockGoogleExtensions.synchronizeGroupMembers(groupToSyncId)).thenReturn(Future.successful(Map(groupToSyncEmail -> Seq.empty[SyncReportItem])))
+    when(mockGoogleExtensions.synchronizeGroupMembers(groupToSyncId, samRequestContext = samRequestContext)).thenReturn(Future.successful(Map(groupToSyncEmail -> Seq.empty[SyncReportItem])))
 
     val policyToSyncEmail = WorkbenchEmail("testpolicy@example.com")
     val policyToSyncId = FullyQualifiedPolicyId(FullyQualifiedResourceId(ResourceTypeName("rt"), ResourceId("rid")), AccessPolicyName("pname"))
-    when(mockGoogleExtensions.synchronizeGroupMembers(policyToSyncId)).thenReturn(Future.successful(Map(policyToSyncEmail -> Seq.empty[SyncReportItem])))
+    when(mockGoogleExtensions.synchronizeGroupMembers(policyToSyncId, samRequestContext = samRequestContext)).thenReturn(Future.successful(Map(policyToSyncEmail -> Seq.empty[SyncReportItem])))
 
     val topicName = "testtopic"
     val subscriptionName = "testsub"
@@ -57,8 +57,8 @@ class GoogleGroupSyncMonitorSpec(_system: ActorSystem) extends TestKit(_system) 
 
     eventually {
       assertResult(2) { mockGooglePubSubDAO.acks.size() }
-      verify(mockGoogleExtensions, atLeastOnce).synchronizeGroupMembers(groupToSyncId)
-      verify(mockGoogleExtensions, atLeastOnce).synchronizeGroupMembers(policyToSyncId)
+      verify(mockGoogleExtensions, atLeastOnce).synchronizeGroupMembers(groupToSyncId, samRequestContext = samRequestContext)
+      verify(mockGoogleExtensions, atLeastOnce).synchronizeGroupMembers(policyToSyncId, samRequestContext = samRequestContext)
     }
   }
 
@@ -69,7 +69,7 @@ class GoogleGroupSyncMonitorSpec(_system: ActorSystem) extends TestKit(_system) 
 
     val groupToSyncEmail = WorkbenchEmail("testgroup@example.com")
     val groupToSyncId = WorkbenchGroupName("testgroup")
-    when(mockGoogleExtensions.synchronizeGroupMembers(groupToSyncId)).thenReturn(Future.failed(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "not found"))))
+    when(mockGoogleExtensions.synchronizeGroupMembers(groupToSyncId, samRequestContext = samRequestContext)).thenReturn(Future.failed(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "not found"))))
 
     val topicName = "testtopic"
     val subscriptionName = "testsub"

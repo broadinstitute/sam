@@ -11,6 +11,7 @@ import org.broadinstitute.dsde.workbench.model.google.GoogleProject
 import org.broadinstitute.dsde.workbench.sam.api.ExtensionRoutes
 import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, ResourceTypeName}
+import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.util.health.SubsystemStatus
 import org.broadinstitute.dsde.workbench.util.health.Subsystems.Subsystem
 
@@ -28,26 +29,26 @@ trait CloudExtensions {
 
   def publishGroup(id: WorkbenchGroupName): Future[Unit]
 
-  def onGroupUpdate(groupIdentities: Seq[WorkbenchGroupIdentity]): Future[Unit]
+  def onGroupUpdate(groupIdentities: Seq[WorkbenchGroupIdentity], samRequestContext: SamRequestContext): Future[Unit]
 
   def onGroupDelete(groupEmail: WorkbenchEmail): Future[Unit]
 
-  def onUserCreate(user: WorkbenchUser): Future[Unit]
+  def onUserCreate(user: WorkbenchUser, samRequestContext: SamRequestContext): Future[Unit]
 
   def getUserStatus(user: WorkbenchUser): Future[Boolean]
 
-  def onUserEnable(user: WorkbenchUser): Future[Unit]
+  def onUserEnable(user: WorkbenchUser, samRequestContext: SamRequestContext): Future[Unit]
 
-  def onUserDisable(user: WorkbenchUser): Future[Unit]
+  def onUserDisable(user: WorkbenchUser, samRequestContext: SamRequestContext): Future[Unit]
 
-  def onUserDelete(userId: WorkbenchUserId): Future[Unit]
+  def onUserDelete(userId: WorkbenchUserId, samRequestContext: SamRequestContext): Future[Unit]
 
   @deprecated("Use new two-argument version of this function", "Sam Phase 3")
   def deleteUserPetServiceAccount(userId: WorkbenchUserId): Future[Boolean]
 
-  def deleteUserPetServiceAccount(userId: WorkbenchUserId, project: GoogleProject): IO[Boolean]
+  def deleteUserPetServiceAccount(userId: WorkbenchUserId, project: GoogleProject, samRequestContext: SamRequestContext): IO[Boolean]
 
-  def getUserProxy(userEmail: WorkbenchEmail): Future[Option[WorkbenchEmail]]
+  def getUserProxy(userEmail: WorkbenchEmail, samRequestContext: SamRequestContext): Future[Option[WorkbenchEmail]]
 
   def fireAndForgetNotifications[T <: Notification](notifications: Set[T]): Unit
 
@@ -57,7 +58,7 @@ trait CloudExtensions {
 
   def emailDomain: String
 
-  def getOrCreateAllUsersGroup(directoryDAO: DirectoryDAO)(implicit executionContext: ExecutionContext): Future[WorkbenchGroup]
+  def getOrCreateAllUsersGroup(directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext)(implicit executionContext: ExecutionContext): Future[WorkbenchGroup]
 }
 
 trait CloudExtensionsInitializer {
@@ -70,26 +71,26 @@ trait NoExtensions extends CloudExtensions {
 
   override def publishGroup(id: WorkbenchGroupName): Future[Unit] = Future.successful(())
 
-  override def onGroupUpdate(groupIdentities: Seq[WorkbenchGroupIdentity]): Future[Unit] = Future.successful(())
+  override def onGroupUpdate(groupIdentities: Seq[WorkbenchGroupIdentity], samRequestContext: SamRequestContext): Future[Unit] = Future.successful(())
 
   override def onGroupDelete(groupEmail: WorkbenchEmail): Future[Unit] = Future.successful(())
 
-  override def onUserCreate(user: WorkbenchUser): Future[Unit] = Future.successful(())
+  override def onUserCreate(user: WorkbenchUser, samRequestContext: SamRequestContext): Future[Unit] = Future.successful(())
 
   override def getUserStatus(user: WorkbenchUser): Future[Boolean] = Future.successful(true)
 
-  override def onUserEnable(user: WorkbenchUser): Future[Unit] = Future.successful(())
+  override def onUserEnable(user: WorkbenchUser, samRequestContext: SamRequestContext): Future[Unit] = Future.successful(())
 
-  override def onUserDisable(user: WorkbenchUser): Future[Unit] = Future.successful(())
+  override def onUserDisable(user: WorkbenchUser, samRequestContext: SamRequestContext): Future[Unit] = Future.successful(())
 
-  override def onUserDelete(userId: WorkbenchUserId): Future[Unit] = Future.successful(())
+  override def onUserDelete(userId: WorkbenchUserId, samRequestContext: SamRequestContext): Future[Unit] = Future.successful(())
 
   @deprecated("Use new two-argument version of this function", "Sam Phase 3")
   override def deleteUserPetServiceAccount(userId: WorkbenchUserId): Future[Boolean] = Future.successful(true)
 
-  override def deleteUserPetServiceAccount(userId: WorkbenchUserId, project: GoogleProject): IO[Boolean] = IO.pure(true)
+  override def deleteUserPetServiceAccount(userId: WorkbenchUserId, project: GoogleProject, samRequestContext: SamRequestContext): IO[Boolean] = IO.pure(true)
 
-  override def getUserProxy(userEmail: WorkbenchEmail): Future[Option[WorkbenchEmail]] = Future.successful(Option(userEmail))
+  override def getUserProxy(userEmail: WorkbenchEmail, samRequestContext: SamRequestContext): Future[Option[WorkbenchEmail]] = Future.successful(Option(userEmail))
 
   override def fireAndForgetNotifications[T <: Notification](notifications: Set[T]): Unit = ()
 
@@ -99,10 +100,10 @@ trait NoExtensions extends CloudExtensions {
 
   override val emailDomain = "example.com"
 
-  override def getOrCreateAllUsersGroup(directoryDAO: DirectoryDAO)(implicit executionContext: ExecutionContext): Future[WorkbenchGroup] = {
+  override def getOrCreateAllUsersGroup(directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext)(implicit executionContext: ExecutionContext): Future[WorkbenchGroup] = {
     val allUsersGroup = BasicWorkbenchGroup(allUsersGroupName, Set.empty, WorkbenchEmail(s"GROUP_${allUsersGroupName.value}@$emailDomain"))
     for {
-      createdGroup <- directoryDAO.createGroup(allUsersGroup).unsafeToFuture() recover {
+      createdGroup <- directoryDAO.createGroup(allUsersGroup, samRequestContext = samRequestContext).unsafeToFuture() recover {
         case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode == Option(StatusCodes.Conflict) => allUsersGroup
       }
     } yield createdGroup

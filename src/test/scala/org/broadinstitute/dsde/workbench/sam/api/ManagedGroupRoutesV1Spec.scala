@@ -63,8 +63,7 @@ class ManagedGroupRoutesV1Spec extends FlatSpec with ScalaFutures with Matchers 
 
   // Makes an anonymous object for a user acting on the same data as the user specified in samRoutes
   def makeOtherUser(samRoutes: SamRoutes, userInfo: UserInfo = defaultNewUser) = new {
-    runAndWait(samRoutes.userService.createUser(
-      CreateWorkbenchUser(userInfo.userId, GoogleSubjectId(genRandom(System.currentTimeMillis())), userInfo.userEmail, None)))
+    runAndWait(samRoutes.userService.createUser(CreateWorkbenchUser(userInfo.userId, GoogleSubjectId(genRandom(System.currentTimeMillis())), userInfo.userEmail, None), samRequestContext))
     val email = userInfo.userEmail
     val routes = new TestSamRoutes(samRoutes.resourceService, samRoutes.policyEvaluatorService, samRoutes.userService, samRoutes.statusService, samRoutes.managedGroupService, userInfo, samRoutes.directoryDAO)
   }
@@ -100,8 +99,7 @@ class ManagedGroupRoutesV1Spec extends FlatSpec with ScalaFutures with Matchers 
     assertCreateGroup(samRoutes = samRoutes)
     assertGetGroup(samRoutes = samRoutes)
 
-    samRoutes.userService.createUser(
-        CreateWorkbenchUser(newGuy.userId, GoogleSubjectId(newGuy.userId.value), newGuy.userEmail, None)).futureValue
+    samRoutes.userService.createUser(CreateWorkbenchUser(newGuy.userId, GoogleSubjectId(newGuy.userId.value), newGuy.userEmail, None), samRequestContext).futureValue
 
     setGroupMembers(samRoutes, Set(newGuyEmail), expectedStatus = StatusCodes.Created)
 
