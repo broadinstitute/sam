@@ -17,7 +17,6 @@ import org.broadinstitute.dsde.workbench.sam.util.OpenCensusIOUtils.completeWith
 import spray.json.DefaultJsonProtocol._
 import spray.json.JsString
 
-import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext
 
 trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with SecurityDirectives {
@@ -109,16 +108,14 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                     }
                   } ~
                   pathEnd {
-                    toStrictEntity(5.minutes) {
-                      get {
-                        completeWithTrace({ samRequestContext =>
-                          googleExtensions.createUserPetServiceAccount(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None), GoogleProject(project), samRequestContext).map {
-                            petSA =>
-                              StatusCodes.OK -> petSA.serviceAccount.email
-                          }
-                        })
-                      }
-                    }~
+                    get {
+                      completeWithTrace({samRequestContext =>
+                        googleExtensions.createUserPetServiceAccount(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None), GoogleProject(project), samRequestContext).map {
+                          petSA =>
+                            StatusCodes.OK -> petSA.serviceAccount.email
+                        }
+                      })
+                    } ~
                       delete { // NOTE: This endpoint is not visible in Swagger
                         completeWithTrace({samRequestContext =>
                           googleExtensions.deleteUserPetServiceAccount(userInfo.userId, GoogleProject(project), samRequestContext).map(_ => StatusCodes.NoContent)
