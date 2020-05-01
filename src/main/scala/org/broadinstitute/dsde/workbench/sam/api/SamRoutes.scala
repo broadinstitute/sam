@@ -19,10 +19,8 @@ import org.broadinstitute.dsde.workbench.sam.api.SamRoutes._
 import org.broadinstitute.dsde.workbench.sam.config.{LiquibaseConfig, SwaggerConfig}
 import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.service._
-import org.broadinstitute.dsde.workbench.sam.util.OpenCensusIOUtils.completeWithTrace
 
 import scala.concurrent.{ExecutionContext, Future}
-import scala.concurrent.duration._
 
 /**
   * Created by dvoet on 5/17/17.
@@ -91,13 +89,9 @@ object SamRoutes {
 
     ExceptionHandler {
       case withErrorReport: WorkbenchExceptionWithErrorReport =>
-        toStrictEntity(5.minutes) {
-          completeWithTrace(samRequestContext => (withErrorReport.errorReport.statusCode.getOrElse(StatusCodes.InternalServerError), withErrorReport.errorReport))
-        }
+        complete((withErrorReport.errorReport.statusCode.getOrElse(StatusCodes.InternalServerError), withErrorReport.errorReport))
       case e: Throwable =>
-        toStrictEntity(5.minutes) {
-          completeWithTrace(samRequestContext => (StatusCodes.InternalServerError, ErrorReport(e)))
-        }
+        complete((StatusCodes.InternalServerError, ErrorReport(e)))
     }
   }
 }
