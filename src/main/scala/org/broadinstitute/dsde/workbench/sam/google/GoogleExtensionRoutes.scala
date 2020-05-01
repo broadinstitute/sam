@@ -29,7 +29,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
     (pathPrefix("google" / "v1") | pathPrefix("google")) {
       requireUserInfo { userInfo =>
         path("petServiceAccount" / Segment / Segment) { (project, userEmail) =>
-          toStrictEntity(5.seconds) {
+          toStrictEntity(5.minutes) {
           get {
             requireAction(
               FullyQualifiedResourceId(CloudExtensions.resourceTypeName, GoogleExtensions.resourceId),
