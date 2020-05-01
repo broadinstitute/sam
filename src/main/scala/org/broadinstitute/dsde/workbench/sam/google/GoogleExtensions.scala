@@ -314,6 +314,8 @@ class GoogleExtensions(
     } yield deletedSomething
 
   def createUserPetServiceAccount(user: WorkbenchUser, project: GoogleProject, samRequestContext: SamRequestContext): IO[PetServiceAccount] = {
+    println("~~~~~~~~~~~2222222")
+    println(project)
     val (petSaName, petSaDisplayName) = toPetSAFromUser(user)
     // The normal situation is that the pet either exists in both ldap and google or neither.
     // Sometimes, especially in tests, the pet may be removed from ldap, but not google or the other way around.

@@ -35,6 +35,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
               FullyQualifiedResourceId(CloudExtensions.resourceTypeName, GoogleExtensions.resourceId),
               GoogleExtensions.getPetPrivateKeyAction,
               userInfo.userId) {
+              println("~~~~~~~~~~~111111")
               completeWithTrace({samRequestContext =>
                 import spray.json._
                 googleExtensions.getPetServiceAccountKey(WorkbenchEmail(userEmail), GoogleProject(project), samRequestContext) map {
@@ -110,7 +111,9 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                     }
                   } ~
                   pathEnd {
+                    toStrictEntity(5.minutes) {
                     get {
+                      println("~~~~~~~~~~~333333")
                       completeWithTrace({samRequestContext =>
                         googleExtensions.createUserPetServiceAccount(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None), GoogleProject(project), samRequestContext).map {
                           petSA =>
@@ -123,7 +126,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                           googleExtensions.deleteUserPetServiceAccount(userInfo.userId, GoogleProject(project), samRequestContext).map(_ => StatusCodes.NoContent)
                         })
                       }
-                  }
+                  }}
               }
           } ~
           pathPrefix("user") {
