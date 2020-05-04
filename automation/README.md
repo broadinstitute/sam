@@ -9,19 +9,19 @@ See [firecloud-automated-testing](https://github.com/broadinstitute/firecloud-au
 
 ### Set Up
 
-#### Render configs:
+#### Render configs
 
-##### Against dev fiab Sam:
+##### Against dev fiab Sam
 ```bash
 ./render-local-env.sh
 ```
 
-##### Against local UI pointing to dev fiab Sam:
+##### Against local UI pointing to dev fiab Sam
 ```bash
 LOCAL_UI=true ./render-local-env.sh
 ```
 
-##### Against local Sam pointing to the dev live env:
+##### Against local Sam pointing to the dev live env
 Run `./render-local-env.sh` and then update `samApiUrl` in application.conf to:
 ```
   samApiUrl = "https://local.broadinstitute.org:50443/"
