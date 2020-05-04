@@ -9,27 +9,31 @@ See [firecloud-automated-testing](https://github.com/broadinstitute/firecloud-au
 
 ### Set Up
 
-Render configs:
+#### Render configs:
+
+##### Against dev fiab Sam:
 ```bash
-./render-local-env.sh [branch of firecloud-automated-testing] [vault token] [env] [service root]
+./render-local-env.sh
 ```
 
-**Arguments:** (arguments are positional)
+##### Against local UI pointing to dev fiab Sam:
+```bash
+LOCAL_UI=true ./render-local-env.sh
+```
 
-* branch of firecloud-automated-testing
-    * Configs branch; defaults to `master`
-* Vault auth token
-	* Defaults to reading it from the .vault-token via `$(cat ~/.vault-token)`.
-* env
-	* Environment of your FiaB; defaults to `dev`
-* service root
-    * the name of your local clone of sam if not `sam`
-	
+##### Against local Sam pointing to the dev live env:
+Run `./render-local-env.sh` and then update `samApiUrl` in application.conf to:
+```
+  samApiUrl = "https://local.broadinstitute.org:50443/"
+```
+
 ### Run tests
+All test code lives in `automation/src/test/scala`.
 
 #### From IntelliJ
+It is recommended to `Open...` IntelliJ to the `automation` folder directly and import from SBT.
 
-First, you need to set some default VM parameters for ScalaTest run configurations. In IntelliJ, go to `Run` > `Edit Configurations...`, select `ScalaTest` under `Defaults`, and add these VM parameters:
+First, you need to set some default VM parameters for ScalaTest run configurations. In IntelliJ, go to `Run` > `Edit Configurations...`, select `ScalaTest` under `Templates`, and add these VM parameters:
 
 ```
 -Djsse.enableSNIExtension=false
@@ -37,7 +41,7 @@ First, you need to set some default VM parameters for ScalaTest run configuratio
 
 Also make sure that there is a `Build` task configured to run before launch.
 
-Now, simply open the test spec, right-click on the class name or a specific test string, and select `Run` or `Debug` as needed. A good one to start with is `GoogleSpec` to make sure your base configuration is correct. All test code lives in `automation/src/test/scala`. FireCloud test suites can be found in `automation/src/test/scala/org/broadinstitute/dsde/firecloud/test`.
+Now, simply open the test spec, right-click on the class name or a specific test string, and select `Run` or `Debug` as needed. If you don't see that option, you may need to right-click the `automation/src` folder, select `Mark Directory As -> Test Sources Root`.  
 
 #### From the command line
 
