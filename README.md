@@ -106,7 +106,7 @@ class SamClient(samBasePath: String) {
 
 Note that Sam does not actually launch workflows create VMs but appears to in this diagram in order to simplify interactions. The key concept is the user of service accounts.
 
-#### Google integration requires: 
+#### Google integration requires
 * a GSuite domain
 * a project with a service account for the sam application
 * service account with access to
@@ -141,7 +141,7 @@ Build jar and docker image:
 ```
 
 ### To run unit tests
-#### Set up your environment:
+#### Set up your environment
 ```
 #Spin up a local OpenDJ:
 sh docker/run-opendj.sh start
@@ -151,18 +151,18 @@ sh docker/run-postgres.sh start
 export SBT_OPTS="-Dpostgres.host=localhost -Dpostgres.port=5432 -Ddirectory.url=ldap://localhost:3389 -Ddirectory.password=testtesttest"
 ```
 
-#### Run tests in sbt:
+#### Run tests in sbt
 ```
 sbt test
 ```
 
-#### Run tests in intellij:
+#### Run tests in intellij
 In `Run` -> `Edit Configurations...`, make sure the ScalaTest template has `VM Parameters` filled in with:
 ```
 -Dpostgres.host=localhost -Dpostgres.port=5432 -Ddirectory.url=ldap://localhost:3389 -Ddirectory.password=testtesttest
 ```
 
-#### Cleaning up after tests:
+#### Cleaning up after tests
 ```
 #Stop your local opendj:
 sh docker/run-opendj.sh stop
