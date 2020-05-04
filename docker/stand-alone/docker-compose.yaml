@@ -35,4 +35,5 @@ services:
     environment:
       BASE_DN: "dc=example,dc=com"
       ROOTPASS: "testtesttest"
+
     restart: always

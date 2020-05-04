@@ -313,6 +313,7 @@ object Boot extends IOApp with LazyLogging {
       new ManagedGroupService(resourceService, policyEvaluatorService, resourceTypeMap, accessPolicyDAO, directoryDAO, cloudExtensionsInitializer.cloudExtensions, config.emailDomain)
     val samApplication = SamApplication(userService, resourceService, statusService)
 
+
     cloudExtensionsInitializer match {
       case GoogleExtensionsInitializer(googleExt, synchronizer) =>
         val routes = new SamRoutes(resourceService, userService, statusService, managedGroupService, config.swaggerConfig, directoryDAO, policyEvaluatorService, config.liquibaseConfig)
