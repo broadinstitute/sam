@@ -141,33 +141,36 @@ Build jar and docker image:
 ```
 
 ### To run unit tests
-Spin up a local OpenDJ:
+#### Set up your environment:
 ```
+#Spin up a local OpenDJ:
 sh docker/run-opendj.sh start
-```
-Spin up a local postgres:
-```
+#Spin up a local postgres:
 sh docker/run-postgres.sh start
-````
-
-
-Make sure your `SBT_OPTS` are set:
-```
+#Make sure your `SBT_OPTS` are set:
 export SBT_OPTS="-Dpostgres.host=localhost -Dpostgres.port=5432 -Ddirectory.url=ldap://localhost:3389 -Ddirectory.password=testtesttest"
 ```
 
-Run tests:
+#### Run tests in sbt:
 ```
 sbt test
 ```
-Stop your local opendj:
+
+#### Run tests in intellij:
+In `Run` -> `Edit Configurations...`, make sure the ScalaTest template has `VM Parameters` filled in with:
 ```
+-Dpostgres.host=localhost -Dpostgres.port=5432 -Ddirectory.url=ldap://localhost:3389 -Ddirectory.password=testtesttest
+```
+
+#### Cleaning up after tests:
+```
+#Stop your local opendj:
 sh docker/run-opendj.sh stop
-```
-Stop your local postgres:
-```
+#Stop your local postgres:
 sh docker/run-postgres.sh stop
 ```
+
+### [To run integration tests](../automation/README.md)
 
 ### To run Sam locally
 
