@@ -52,6 +52,17 @@ class PolicyEvaluatorService(
     }
   })
 
+  /** Checks if user have permission by providing user email address. */
+  def hasPermissionByUserEmail(resource: FullyQualifiedResourceId, action: ResourceAction, userEmail: WorkbenchEmail, parentSpan: Span = null): IO[Boolean] = traceIOWithParent("hasPermission", parentSpan)(_ => {
+    for {
+      subjectOpt <- directoryDAO.loadSubjectFromEmail(userEmail)
+      res <- subjectOpt match {
+        case Some(userId: WorkbenchUserId) => hasPermission(resource, action, userId, parentSpan)
+        case _ => IO.pure(false)
+      }
+    } yield res
+  })
+
   /**
     * Lists all the actions a user has on the specified resource
     *
