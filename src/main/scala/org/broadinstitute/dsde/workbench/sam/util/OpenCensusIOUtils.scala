@@ -10,42 +10,34 @@ import cats.effect.IO
 
 object OpenCensusIOUtils {
 
-  // todo: this is unused
-  def traceIOWithParent[T](
-                            name: String,
-                            parentSpan: Span,
-                            failureStatus: Throwable => Status = (_: Throwable) => Status.UNKNOWN
-                          )(f: Span => IO[T]): IO[T] =
-    traceIOSpan(IO(startSpanWithParent(name, parentSpan)), failureStatus)(f)
-
   def traceIOWithContext[T](
                              name: String,
                              samRequestContext: SamRequestContext,
                              failureStatus: Throwable => Status = (_: Throwable) => Status.UNKNOWN
-                          )(f: Span => IO[T]): IO[T] = { // todo: change signature of this to be SamRequestContext ; probably requires a new traceIOContext()
-    if (samRequestContext == null || samRequestContext.parentSpan == null) { // todo: needed for tests? since tests are using a null parentSpan
+                          )(f: SamRequestContext => IO[T]): IO[T] = {
+    if (samRequestContext.parentSpan == null) { // ignore calls from unit tests and calls on boot; an alternative here would be to have a MockOpenCensusIOUtils to unit tests
       f(null)
     }
     else {
-      traceIOSpan(IO(startSpanWithParent(name, samRequestContext.parentSpan)), failureStatus)(f)
+      traceIOSpan(name, IO(startSpanWithParent(name, samRequestContext.parentSpan)), samRequestContext, failureStatus)(f)
     }
   }
 
-  // todo: this is unused
   // creates a root span
   def traceIO[T](
                   name: String,
+                  samRequestContext: SamRequestContext,
                   failureStatus: Throwable => Status = (_: Throwable) => Status.UNKNOWN
-                )(f: Span => IO[T]) : IO[T] = {
+                )(f: SamRequestContext => IO[T]) : IO[T] = {
 
-    traceIOSpan(IO(startSpan(name)), failureStatus)(f)
+    traceIOSpan(name, IO(startSpan(name)), samRequestContext, failureStatus)(f)
   }
 
 
-  private def traceIOSpan[T](spanIO: IO[Span], failureStatus: Throwable => Status) (f: Span => IO[T]): IO[T] = {
+  private def traceIOSpan[T](name: String, spanIO: IO[Span], samRequestContext: SamRequestContext, failureStatus: Throwable => Status) (f: SamRequestContext => IO[T]): IO[T] = {
     for {
       span <- spanIO
-      result <- f(span).attempt
+      result <- f(samRequestContext.copy(parentSpan = span)).attempt
       _ <- IO(endSpan(span, Status.OK))
     } yield result.toTry.get
   }
