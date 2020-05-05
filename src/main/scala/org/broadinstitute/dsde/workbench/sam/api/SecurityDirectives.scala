@@ -45,12 +45,6 @@ trait SecurityDirectives {
       }
     }
 
-  private def hasPermissionOneOf(resource: FullyQualifiedResourceId, actions: Iterable[ResourceAction], userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Boolean]  =
-    //  first quickly check if we have permission using the shallow check across all actions, then try the full check
-    for {
-      attempt1 <- actions.toList.existsM((action: ResourceAction) => policyEvaluatorService.hasPermissionShallowCheck(resource, action, userId, samRequestContext))
-      attempt2 <- if (attempt1) IO.pure(attempt1) else actions.toList.existsM((action: ResourceAction) => policyEvaluatorService.hasPermissionFullCheck(resource, action, userId, samRequestContext))
-    } yield {
-      attempt2
-    }
+  private def hasPermissionOneOf(resource: FullyQualifiedResourceId, actions: Iterable[ResourceAction], userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Boolean] =
+    actions.toList.existsM(policyEvaluatorService.hasPermission(resource, _, userId, samRequestContext))
 }

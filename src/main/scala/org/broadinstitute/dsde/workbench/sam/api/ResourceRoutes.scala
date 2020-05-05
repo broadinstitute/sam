@@ -81,6 +81,12 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
                 pathPrefix(Segment) { action =>
                   pathEndOrSingleSlash {
                     getActionPermissionForUser(resource, userInfo, action)
+                  } ~ pathPrefix("userEmail") {
+                    pathPrefix(Segment) { userEmail =>
+                      pathEndOrSingleSlash {
+                        getActionPermissionForUserEmail(resource, userInfo, ResourceAction(action), WorkbenchEmail(userEmail))
+                      }
+                    }
                   }
                 }
               } ~ pathPrefix("authDomain") {
@@ -199,6 +205,22 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
       completeWithTrace { samRequestContext =>
         policyEvaluatorService.hasPermission(resource, ResourceAction(action), userInfo.userId, samRequestContext).map { hasPermission =>
           StatusCodes.OK -> JsBoolean(hasPermission)
+        }
+      }
+    }
+
+  /**
+    * Checks if user has permission by giver user email.
+    *
+    * <p> The caller should have readPolicies, OR testAnyActionAccess or testActionAccess::{action} to make this call.
+    */
+  def getActionPermissionForUserEmail(resource: FullyQualifiedResourceId, userInfo: UserInfo, action: ResourceAction, userEmail: WorkbenchEmail): server.Route =
+    get {
+      requireOneOfAction(resource, Set(SamResourceActions.readPolicies, SamResourceActions.testAnyActionAccess, SamResourceActions.testActionAccess(action)), userInfo.userId) {
+        traceRequest { span =>
+          complete(policyEvaluatorService.hasPermissionByUserEmail(resource, action, userEmail, span).map { hasPermission =>
+            StatusCodes.OK -> JsBoolean(hasPermission)
+          })
         }
       }
     }

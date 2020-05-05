@@ -1292,6 +1292,45 @@ paths:
           name: action
           required: true
           type: string
+      operationId: resourcePermission
+      tags:
+        - Resources
+
+  /api/resources/v1/{resourceTypeName}/{resourceId}/action/{action}/userEmail/{userEmail}:
+    get:
+      summary: Query if the given user may perform the action
+      responses:
+        200:
+          description: true if the user may perform the action, false if they may not or the resource does not exist
+          schema:
+            type: boolean
+        403:
+          description: You do not have permission to check user action permission
+        500:
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/ErrorReport'
+      parameters:
+        - in: path
+          description: Type of resource to query
+          name: resourceTypeName
+          required: true
+          type: string
+        - in: path
+          description: Id of resource to query
+          name: resourceId
+          required: true
+          type: string
+        - in: path
+          description: Action to perform
+          name: action
+          required: true
+          type: string
+        - in: path
+          description: User Email address to check
+          name: userEmail
+          required: true
+          type: string
       operationId: resourceAction
       tags:
         - Resources

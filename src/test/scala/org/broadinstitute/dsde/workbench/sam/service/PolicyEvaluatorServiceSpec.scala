@@ -243,121 +243,6 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
     res.unsafeRunSync()
   }
 
-
-  "hasPermission" should "return false if given action is not allowed for a user using the shallow check" in {
-    val user = genUserInfo.sample.get
-    val samplePolicy = genPolicy.sample.get
-    val action = ResourceAction("weirdAction")
-    val resource = genResource.sample.get.copy(resourceTypeName = defaultResourceType.name)
-    val policyWithUser = AccessPolicy.members.set(samplePolicy.members + user.userId)(samplePolicy)
-    val policyExcludeAction = AccessPolicy.actions.set(samplePolicy.actions - action)(policyWithUser)
-    val policy = SamLenses.resourceIdentityAccessPolicy.set(resource.fullyQualifiedId)(policyExcludeAction)
-
-    val res = for{
-      _ <- setup()
-      _ <- policyDAO.createResourceType(managedGroupResourceType, samRequestContext)
-      _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(TestSupport.genGoogleSubjectId()), user.userEmail, Some(TestSupport.genIdentityConcentratorId())), samRequestContext)
-      _ <- resource.authDomain.toList.parTraverse(a => managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo, samRequestContext = samRequestContext))
-      _ <- savePolicyMembers(policy)
-
-      _ <- policyDAO.createResourceType(defaultResourceType, samRequestContext)
-      _ <- policyDAO.createResource(resource, samRequestContext)
-      _ <- policyDAO.createPolicy(policy, samRequestContext)
-      r <- service.policyEvaluatorService.hasPermissionShallowCheck(policy.id.resource, action, user.userId, samRequestContext)
-    } yield {
-      r shouldBe false
-    }
-
-    res.unsafeRunSync()
-  }
-
-  it should "return true if given action is on a policy directly for a direct member of the policy using the shallow check" in {
-    val user = genUserInfo.sample.get
-    val samplePolicy = genPolicy.sample.get
-    val action = defaultResourceType.roles.head.actions.head
-
-    val resource = genResource.sample.get.copy(authDomain = Set.empty, resourceTypeName = defaultResourceType.name)
-    val policyWithUser = AccessPolicy.members.modify(_ + user.userId)(samplePolicy)
-    val policyWithAction = AccessPolicy.actions.modify(_ + action)(policyWithUser)
-    val policy = SamLenses.resourceIdentityAccessPolicy.set(resource.fullyQualifiedId)(policyWithAction)
-
-    val res = for{
-      _ <- setup()
-      _ <- policyDAO.createResourceType(managedGroupResourceType, samRequestContext)
-      _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(TestSupport.genGoogleSubjectId()), user.userEmail, Some(TestSupport.genIdentityConcentratorId())), samRequestContext)
-      _ <- resource.authDomain.toList.parTraverse(a => managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo, samRequestContext = samRequestContext))
-      _ <- savePolicyMembers(policy)
-
-      _ <- policyDAO.createResourceType(defaultResourceType, samRequestContext)
-      _ <- policyDAO.createResource(resource, samRequestContext)
-      _ <- policyDAO.createPolicy(policy, samRequestContext)
-      r <- service.policyEvaluatorService.hasPermissionShallowCheck(policy.id.resource, action, user.userId, samRequestContext)
-    } yield {
-      r shouldBe(true)
-    }
-
-    res.unsafeRunSync()
-  }
-
-  it should "return true if given action is allowed via a role for a direct member of the policy using the shallow check" in {
-    val user = genUserInfo.sample.get
-    val samplePolicy = genPolicy.sample.get
-    val sampleRole = defaultResourceType.roles.head.roleName
-    val action = defaultResourceType.roles.head.actions.head
-
-    val resource = genResource.sample.get.copy(authDomain = Set.empty, resourceTypeName = defaultResourceType.name)
-    val policyWithUser = AccessPolicy.members.modify(_ + user.userId)(samplePolicy)
-    val policyWithRole = AccessPolicy.roles.modify(_ + sampleRole)(policyWithUser)
-    val policy = SamLenses.resourceIdentityAccessPolicy.set(resource.fullyQualifiedId)(policyWithRole)
-
-    val res = for{
-      _ <- setup()
-      _ <- policyDAO.createResourceType(managedGroupResourceType, samRequestContext)
-      _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(TestSupport.genGoogleSubjectId()), user.userEmail, Some(TestSupport.genIdentityConcentratorId())), samRequestContext)
-      _ <- resource.authDomain.toList.parTraverse(a => managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo, samRequestContext = samRequestContext))
-      _ <- savePolicyMembers(policy)
-
-      _ <- policyDAO.createResourceType(defaultResourceType, samRequestContext)
-      _ <- policyDAO.createResource(resource, samRequestContext)
-      _ <- policyDAO.createPolicy(policy, samRequestContext)
-      r <- service.policyEvaluatorService.hasPermissionShallowCheck(policy.id.resource, action, user.userId, samRequestContext)
-    } yield {
-      r shouldBe(true)
-    }
-
-    res.unsafeRunSync()
-  }
-
-  it should "return false if given action is not present for a user via a role or directly using the shallow check" in {
-    val user = genUserInfo.sample.get
-    val samplePolicy = genPolicy.sample.get
-    val sampleRole = ResourceRoleName("owner")
-
-    val action = ResourceAction("just_a_made_up_action") // an action not given to owner
-
-    val resource = genResource.sample.get.copy(resourceTypeName = defaultResourceType.name)
-    val policyWithUser = AccessPolicy.members.modify(_ + user.userId)(samplePolicy)
-    val policyWithRole = AccessPolicy.roles.modify(_ + sampleRole)(policyWithUser)
-    val policy = SamLenses.resourceIdentityAccessPolicy.set(resource.fullyQualifiedId)(policyWithRole)
-
-    val res = for{
-      _ <- setup()
-      _ <- policyDAO.createResourceType(managedGroupResourceType, samRequestContext)
-      _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(TestSupport.genGoogleSubjectId()), user.userEmail, Some(TestSupport.genIdentityConcentratorId())), samRequestContext)
-      _ <- resource.authDomain.toList.parTraverse(a => managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo, samRequestContext = samRequestContext))
-      _ <- savePolicyMembers(policy)
-
-      _ <- policyDAO.createResourceType(defaultResourceType, samRequestContext)
-      _ <- policyDAO.createResource(resource, samRequestContext)
-      _ <- policyDAO.createPolicy(policy, samRequestContext)
-      r <- service.policyEvaluatorService.hasPermissionShallowCheck(policy.id.resource, action, user.userId, samRequestContext)
-    } yield {
-      r shouldBe(false)
-    }
-
-    res.unsafeRunSync()
-  }
-
   it should "return true if given action is allowed for a user and resource is not constrained by auth domains" in {
     val user = genUserInfo.sample.get
     val samplePolicy = genPolicy.sample.get
@@ -533,6 +418,83 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
       r <- constrainableService.policyEvaluatorService.hasPermission(policy.id.resource, action, probeUser.userId, samRequestContext)
     } yield {
       r shouldBe(true)
+    }
+
+    res.unsafeRunSync()
+  }
+
+  "hasPermissionByUserEmail" should "return true if given action is allowed for a user, action is NOT constrained by auth domains, user is not a member of auth domain" in {
+    val user = genUserInfo.sample.get
+    val probeUser = genUserInfo.sample.get
+    val samplePolicy = SamLenses.resourceTypeNameInAccessPolicy.modify(_ => constrainableResourceType.name)(genPolicy.sample.get)
+    val action = unconstrainableViewAction
+    val resource = genResource.sample.get.copy(resourceTypeName = constrainableResourceType.name)
+    val policyWithUser = AccessPolicy.members.modify(_ + probeUser.userId)(samplePolicy)
+    val policyWithResource = SamLenses.resourceIdentityAccessPolicy.set(resource.fullyQualifiedId)(policyWithUser)
+    val policy = AccessPolicy.actions.modify(_ + action)(policyWithResource).copy(roles = Set.empty)
+
+    val res = for{
+      _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(TestSupport.genGoogleSubjectId()), user.userEmail, Some(TestSupport.genIdentityConcentratorId())))
+      _ <- dirDAO.createUser(WorkbenchUser(probeUser.userId, Some(TestSupport.genGoogleSubjectId()), probeUser.userEmail, Some(TestSupport.genIdentityConcentratorId())))
+      _ <- resource.authDomain.toList.parTraverse(a => managedGroupService.createManagedGroup(ResourceId(a.value), user))
+      _ <- savePolicyMembers(policy)
+      _ <- policyDAO.createResourceType(defaultResourceType)
+      _ <- policyDAO.createResourceType(managedGroupResourceType)
+      _ <- policyDAO.createResource(resource)
+      _ <- policyDAO.createPolicy(policy)
+      r <- constrainableService.policyEvaluatorService.hasPermissionByUserEmail(policy.id.resource, action, probeUser.userEmail)
+    } yield {
+      r shouldBe(true)
+    }
+
+    res.unsafeRunSync()
+  }
+
+  it should "return false if given action is not allowed for a user" in {
+    val user = genUserInfo.sample.get
+    val samplePolicy = genPolicy.sample.get
+    val action = ResourceAction("weirdAction")
+    val resource = genResource.sample.get.copy(resourceTypeName = defaultResourceType.name)
+    val policyWithUser = AccessPolicy.members.set(samplePolicy.members + user.userId)(samplePolicy)
+    val policyExcludeAction = AccessPolicy.actions.set(samplePolicy.actions - action)(policyWithUser)
+    val policy = SamLenses.resourceIdentityAccessPolicy.set(resource.fullyQualifiedId)(policyExcludeAction)
+
+    val res = for{
+      _ <- setup()
+      _ <- policyDAO.createResourceType(managedGroupResourceType)
+      _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(TestSupport.genGoogleSubjectId()), user.userEmail, Some(TestSupport.genIdentityConcentratorId())))
+      _ <- resource.authDomain.toList.parTraverse(a => managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))
+      _ <- savePolicyMembers(policy)
+      _ <- policyDAO.createResourceType(defaultResourceType)
+      _ <- policyDAO.createResource(resource)
+      _ <- policyDAO.createPolicy(policy)
+      r <- service.policyEvaluatorService.hasPermissionByUserEmail(policy.id.resource, action, user.userEmail)
+    } yield {
+      r shouldBe false
+    }
+
+    res.unsafeRunSync()
+  }
+
+  it should "return false if user not found" in {
+    val samplePolicy = genPolicy.sample.get
+    val action = ResourceAction("weirdAction")
+    val resource = genResource.sample.get.copy(resourceTypeName = defaultResourceType.name)
+    val policyWithOutUser = AccessPolicy.members.set(samplePolicy.members)(samplePolicy)
+    val policyExcludeAction = AccessPolicy.actions.set(samplePolicy.actions - action)(policyWithOutUser)
+    val policy = SamLenses.resourceIdentityAccessPolicy.set(resource.fullyQualifiedId)(policyExcludeAction)
+
+    val res = for{
+      _ <- setup()
+      _ <- policyDAO.createResourceType(managedGroupResourceType)
+      _ <- resource.authDomain.toList.parTraverse(a => managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo))
+      _ <- savePolicyMembers(policy)
+      _ <- policyDAO.createResourceType(defaultResourceType)
+      _ <- policyDAO.createResource(resource)
+      _ <- policyDAO.createPolicy(policy)
+      r <- service.policyEvaluatorService.hasPermissionByUserEmail(policy.id.resource, action, WorkbenchEmail("randomEmail@foo.com"))
+    } yield {
+      r shouldBe false
     }
 
     res.unsafeRunSync()
