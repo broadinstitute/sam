@@ -157,10 +157,14 @@ sbt test
 ```
 
 #### Run tests in intellij
-In `Run` -> `Edit Configurations...`, make sure the ScalaTest template has `VM Parameters` filled in with:
+Set up ScalaTest Template:
+
+You need to set some default VM parameters for ScalaTest run configurations. In IntelliJ, go to `Run` > `Edit Configurations...`, select `ScalaTest` under `🔧Templates`, and add these VM parameters:
 ```
 -Dpostgres.host=localhost -Dpostgres.port=5432 -Ddirectory.url=ldap://localhost:3389 -Ddirectory.password=testtesttest
 ```
+Then you can run unit tests within IntelliJ by clicking the green play button on a unit test.
+
 
 #### Cleaning up after tests
 ```
