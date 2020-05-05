@@ -106,8 +106,8 @@ class ResourceRoutesV1Spec extends FlatSpec with Matchers with ScalatestRouteTes
     val resourceId = ResourceId("foo")
     val policyName = AccessPolicyName("can_compute")
 
-    runAndWait(samRoutes.userService.createUser(defaultTestUser))
-    runAndWait(samRoutes.userService.createUser(userWithEmail))
+    runAndWait(samRoutes.userService.createUser(defaultTestUser, samRequestContext))
+    runAndWait(samRoutes.userService.createUser(userWithEmail, samRequestContext))
     createUserResourcePolicy(members, resourceType, samRoutes, resourceId, policyName)
 
     Get(s"/api/resource/${resourceType.name}/${resourceId.value}/action/can_compute/userEmail/${userWithEmail.email}") ~> samRoutes.route ~> check {
@@ -130,8 +130,8 @@ class ResourceRoutesV1Spec extends FlatSpec with Matchers with ScalatestRouteTes
     val resourceId = ResourceId("foo")
     val policyName = AccessPolicyName("can_compute")
 
-    runAndWait(samRoutes.userService.createUser(defaultTestUser))
-    runAndWait(samRoutes.userService.createUser(userWithEmail))
+    runAndWait(samRoutes.userService.createUser(defaultTestUser, samRequestContext))
+    runAndWait(samRoutes.userService.createUser(userWithEmail, samRequestContext))
     createUserResourcePolicy(members, resourceType, samRoutes, resourceId, policyName)
 
     Get(s"/api/resource/${resourceType.name}/${resourceId.value}/action/can_compute/userEmail/${userWithEmail.email}") ~> samRoutes.route ~> check {
@@ -161,8 +161,8 @@ class ResourceRoutesV1Spec extends FlatSpec with Matchers with ScalatestRouteTes
     val resourceId = ResourceId("foo")
     val policyName = AccessPolicyName("can_compute")
 
-    runAndWait(samRoutes.userService.createUser(defaultTestUser))
-    runAndWait(samRoutes.userService.createUser(userWithEmail))
+    runAndWait(samRoutes.userService.createUser(defaultTestUser, samRequestContext))
+    runAndWait(samRoutes.userService.createUser(userWithEmail, samRequestContext))
     createUserResourcePolicy(members, resourceType, samRoutes, resourceId, policyName)
 
     // The user doesn't have can_compute permission
@@ -194,8 +194,8 @@ class ResourceRoutesV1Spec extends FlatSpec with Matchers with ScalatestRouteTes
     val resourceId = ResourceId("foo")
     val policyName = AccessPolicyName("can_compute")
 
-    runAndWait(samRoutes.userService.createUser(defaultTestUser))
-    runAndWait(samRoutes.userService.createUser(userWithEmail))
+    runAndWait(samRoutes.userService.createUser(defaultTestUser, samRequestContext))
+    runAndWait(samRoutes.userService.createUser(userWithEmail, samRequestContext))
     createUserResourcePolicy(members, resourceType, samRoutes, resourceId, policyName)
 
     // The user doesn't have can_compute permission
