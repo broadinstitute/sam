@@ -298,11 +298,11 @@ class GoogleExtensions(
 
   @deprecated("Use new two-argument version of this function", "Sam Phase 3")
   def createUserPetServiceAccount(user: WorkbenchUser): Future[PetServiceAccount] =
-    createUserPetServiceAccount(user, petServiceAccountConfig.googleProject, null).unsafeToFuture() //TODO: shall we delete these deprecated methods // todo: (AJ) doesn't seem like it's being used anywhere?
+    createUserPetServiceAccount(user, petServiceAccountConfig.googleProject, SamRequestContext(null)).unsafeToFuture() //TODO: shall we delete these deprecated methods // todo: (AJ) doesn't seem like it's being used anywhere?
 
   @deprecated("Use new two-argument version of this function", "Sam Phase 3")
   def deleteUserPetServiceAccount(userId: WorkbenchUserId): Future[Boolean] =
-    deleteUserPetServiceAccount(userId, petServiceAccountConfig.googleProject, null).unsafeToFuture() //TODO: shall we delete these deprecated methods // todo: (AJ) doesn't seem like it's being used anywhere?
+    deleteUserPetServiceAccount(userId, petServiceAccountConfig.googleProject, SamRequestContext(null)).unsafeToFuture() //TODO: shall we delete these deprecated methods // todo: (AJ) doesn't seem like it's being used anywhere?
 
   def deleteUserPetServiceAccount(userId: WorkbenchUserId, project: GoogleProject, samRequestContext: SamRequestContext): IO[Boolean] =
     for {

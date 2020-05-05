@@ -8,6 +8,7 @@ import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model.WorkbenchGroupName
 import org.broadinstitute.dsde.workbench.sam.db.DbReference
 import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
+import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.util.health.HealthMonitor.GetCurrentStatus
 import org.broadinstitute.dsde.workbench.util.health.Subsystems.{Database, OpenDJ, Subsystem}
 import org.broadinstitute.dsde.workbench.util.health.{HealthMonitor, StatusCheckResponse, SubsystemStatus}
@@ -35,7 +36,7 @@ class StatusService(
 
   private def checkOpenDJ(groupToLoad: WorkbenchGroupName): IO[SubsystemStatus] = {
     logger.info("checking opendj connection")
-    directoryDAO.loadGroupEmail(groupToLoad, null).map {//todo: create a root span here?
+    directoryDAO.loadGroupEmail(groupToLoad, SamRequestContext(null)).map {//todo: create a root span here?
       case Some(_) => HealthMonitor.OkStatus
       case None => HealthMonitor.failedStatus(s"could not find group $groupToLoad in opendj")
     }

@@ -15,7 +15,7 @@ import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 trait SecurityDirectives {
   def policyEvaluatorService: PolicyEvaluatorService
 
-  def requireAction(resource: FullyQualifiedResourceId, action: ResourceAction, userId: WorkbenchUserId, traceContext: SamRequestContext = SamRequestContext(null)): Directive0 = //todo: create a root span here instead of allowing null?
+  def requireAction(resource: FullyQualifiedResourceId, action: ResourceAction, userId: WorkbenchUserId, samRequestContext: SamRequestContext = SamRequestContext(null)): Directive0 = //todo: create a root span here instead of allowing null?
     requireOneOfAction(resource, Set(action), userId)
 
   def requireOneOfAction(resource: FullyQualifiedResourceId, requestedActions: Set[ResourceAction], userId: WorkbenchUserId, samRequestContext: SamRequestContext = SamRequestContext(null)): Directive0 = //todo: create a root span here instead of allowing null?

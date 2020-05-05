@@ -19,7 +19,7 @@ class PolicyEvaluatorService(
     private val accessPolicyDAO: AccessPolicyDAO,
     private val directoryDAO: DirectoryDAO )(implicit val executionContext: ExecutionContext)
     extends LazyLogging {
-  def initPolicy(traceContext: SamRequestContext = SamRequestContext(null)): IO[Unit] = {
+  def initPolicy(samRequestContext: SamRequestContext = SamRequestContext(null)): IO[Unit] = {
     val policyName = AccessPolicyName("admin-notifier-set-public")
     accessPolicyDAO
       .createPolicy(AccessPolicy(
@@ -29,7 +29,7 @@ class PolicyEvaluatorService(
           Set.empty,
           Set(SamResourceActions.setPublicPolicy(ManagedGroupService.adminNotifierPolicyName)),
           true
-        ), null) // todo: this is init on boot -- keep as null?
+        ), SamRequestContext(null)) // todo: this is init on boot -- keep as null?
       .void
       .recoverWith {
         case duplicateException: WorkbenchExceptionWithErrorReport if duplicateException.errorReport.statusCode.contains(StatusCodes.Conflict) =>
