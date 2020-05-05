@@ -296,14 +296,6 @@ class GoogleExtensions(
   override def onGroupDelete(groupEmail: WorkbenchEmail): Future[Unit] =
     googleDirectoryDAO.deleteGroup(groupEmail)
 
-  @deprecated("Use new two-argument version of this function", "Sam Phase 3")
-  def createUserPetServiceAccount(user: WorkbenchUser): Future[PetServiceAccount] =
-    createUserPetServiceAccount(user, petServiceAccountConfig.googleProject, SamRequestContext(null)).unsafeToFuture() //TODO: shall we delete these deprecated methods
-
-  @deprecated("Use new two-argument version of this function", "Sam Phase 3")
-  def deleteUserPetServiceAccount(userId: WorkbenchUserId): Future[Boolean] =
-    deleteUserPetServiceAccount(userId, petServiceAccountConfig.googleProject, SamRequestContext(null)).unsafeToFuture() //TODO: shall we delete these deprecated methods
-
   def deleteUserPetServiceAccount(userId: WorkbenchUserId, project: GoogleProject, samRequestContext: SamRequestContext): IO[Boolean] =
     for {
       maybePet <- directoryDAO.loadPetServiceAccount(PetServiceAccountId(userId, project), samRequestContext)
