@@ -40,8 +40,8 @@ class PolicyEvaluatorService(
   def hasPermission(resource: FullyQualifiedResourceId, action: ResourceAction, userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Boolean] = {
     // first attempt the shallow check and fallback to the full check if it returns false
     for {
-      attempt1 <- traceIOWithContext("shallowCheck", samRequestContext)(_ => hasPermissionShallowCheck(resource, action, userId, samRequestContext))
-      attempt2 <- if (attempt1) IO.pure(attempt1) else traceIOWithContext("fullCheck", samRequestContext)(_ => hasPermissionFullCheck(resource, action, userId, samRequestContext))
+      attempt1 <- traceIOWithContext("shallowCheck", samRequestContext)(samRequestContext => hasPermissionShallowCheck(resource, action, userId, samRequestContext))
+      attempt2 <- if (attempt1) IO.pure(attempt1) else traceIOWithContext("fullCheck", samRequestContext)(samRequestContext => hasPermissionFullCheck(resource, action, userId, samRequestContext))
     } yield {
       attempt2
     }
@@ -55,7 +55,7 @@ class PolicyEvaluatorService(
     // if the first attempt shows the user does not have permission, force a second attempt
     for {
       attempt1 <- traceIOWithContext("checkWithCache", samRequestContext)(_ => checkPermission(force = false))
-      attempt2 <- if (attempt1) IO.pure(attempt1) else traceIOWithContext("checkWithoutCache", samRequestContext)(_ =>checkPermission(force = true))
+      attempt2 <- if (attempt1) IO.pure(attempt1) else traceIOWithContext("checkWithoutCache", samRequestContext)(_ => checkPermission(force = true))
     } yield {
       attempt2
     }
@@ -206,8 +206,8 @@ class PolicyEvaluatorService(
 
   def listResourceAccessPoliciesForUser(resource: FullyQualifiedResourceId, userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[AccessPolicyWithoutMembers]] =
     for {
-      policies <- traceIOWithContext("listAccessPoliciesForUser", samRequestContext)(_ => accessPolicyDAO.listAccessPoliciesForUser(resource, userId, samRequestContext))
-      publicPolicies <- traceIOWithContext("listPublicAccessPolicies", samRequestContext)(_ => accessPolicyDAO.listPublicAccessPolicies(resource, samRequestContext))
+      policies <- traceIOWithContext("listAccessPoliciesForUser", samRequestContext)(samRequestContext => accessPolicyDAO.listAccessPoliciesForUser(resource, userId, samRequestContext))
+      publicPolicies <- traceIOWithContext("listPublicAccessPolicies", samRequestContext)(samRequestContext => accessPolicyDAO.listPublicAccessPolicies(resource, samRequestContext))
     } yield policies ++ publicPolicies
 }
 

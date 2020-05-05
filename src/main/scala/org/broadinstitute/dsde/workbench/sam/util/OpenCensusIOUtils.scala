@@ -16,7 +16,7 @@ object OpenCensusIOUtils {
                              failureStatus: Throwable => Status = (_: Throwable) => Status.UNKNOWN
                           )(f: SamRequestContext => IO[T]): IO[T] = {
     if (samRequestContext.parentSpan == null) { // ignore calls from unit tests and calls on boot; an alternative here would be to have a MockOpenCensusIOUtils to unit tests
-      f(null)
+      f(samRequestContext)
     }
     else {
       traceIOSpan(name, IO(startSpanWithParent(name, samRequestContext.parentSpan)), samRequestContext, failureStatus)(f)
