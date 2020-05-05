@@ -43,9 +43,6 @@ trait CloudExtensions {
 
   def onUserDelete(userId: WorkbenchUserId, samRequestContext: SamRequestContext): Future[Unit]
 
-  @deprecated("Use new two-argument version of this function", "Sam Phase 3")
-  def deleteUserPetServiceAccount(userId: WorkbenchUserId): Future[Boolean]
-
   def deleteUserPetServiceAccount(userId: WorkbenchUserId, project: GoogleProject, samRequestContext: SamRequestContext): IO[Boolean]
 
   def getUserProxy(userEmail: WorkbenchEmail, samRequestContext: SamRequestContext): Future[Option[WorkbenchEmail]]
@@ -84,9 +81,6 @@ trait NoExtensions extends CloudExtensions {
   override def onUserDisable(user: WorkbenchUser, samRequestContext: SamRequestContext): Future[Unit] = Future.successful(())
 
   override def onUserDelete(userId: WorkbenchUserId, samRequestContext: SamRequestContext): Future[Unit] = Future.successful(())
-
-  @deprecated("Use new two-argument version of this function", "Sam Phase 3")
-  override def deleteUserPetServiceAccount(userId: WorkbenchUserId): Future[Boolean] = Future.successful(true)
 
   override def deleteUserPetServiceAccount(userId: WorkbenchUserId, project: GoogleProject, samRequestContext: SamRequestContext): IO[Boolean] = IO.pure(true)
 
