@@ -15,7 +15,7 @@ import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 trait SamModelDirectives {
   val userService: UserService
 
-  def withSubject(email: WorkbenchEmail, samRequestContext: SamRequestContext = SamRequestContext(null)): Directive1[WorkbenchSubject] = //todo: create a root span here instead of allowing null?
+  def withSubject(email: WorkbenchEmail, samRequestContext: SamRequestContext = SamRequestContext(null)): Directive1[WorkbenchSubject] =
     onSuccess(userService.getSubjectFromEmail(email, samRequestContext)).map {
       case Some(subject) => subject
       case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"${email} not found"))

@@ -29,7 +29,7 @@ class PolicyEvaluatorService(
           Set.empty,
           Set(SamResourceActions.setPublicPolicy(ManagedGroupService.adminNotifierPolicyName)),
           true
-        ), SamRequestContext(null)) // todo: this is init on boot -- keep as null?
+        ), SamRequestContext(null))
       .void
       .recoverWith {
         case duplicateException: WorkbenchExceptionWithErrorReport if duplicateException.errorReport.statusCode.contains(StatusCodes.Conflict) =>
