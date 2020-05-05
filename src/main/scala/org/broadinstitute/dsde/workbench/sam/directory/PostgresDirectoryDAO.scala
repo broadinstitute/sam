@@ -512,7 +512,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
   }
 
   override def listUsersGroups(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[WorkbenchGroupIdentity]] = {
-    listMemberOfGroups(userId, samRequestContext) // todo: don't miss these
+    listMemberOfGroups(userId, samRequestContext)
   }
 
   /** Extracts a WorkbenchGroupIdentity from a SQL query
