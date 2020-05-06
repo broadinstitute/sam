@@ -14,6 +14,7 @@ import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.service.ManagedGroupService
 import org.broadinstitute.dsde.workbench.sam.service.ManagedGroupService.ManagedGroupPolicyName
 import org.broadinstitute.dsde.workbench.sam.util.OpenCensusIOUtils.completeWithTrace
+import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import spray.json.DefaultJsonProtocol._
 
 import scala.concurrent.ExecutionContext
@@ -27,61 +28,63 @@ trait ManagedGroupRoutes extends UserInfoDirectives with SecurityDirectives with
   val managedGroupService: ManagedGroupService
 
   def groupRoutes: server.Route = requireUserInfo { userInfo =>
-    (pathPrefix("groups" / "v1") | pathPrefix("group")) {
-      pathPrefix(Segment) { groupId =>
-        val managedGroup = FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, ResourceId(groupId))
-
-        pathEndOrSingleSlash {
-          get {
-            handleGetGroup(managedGroup.resourceId)
-          } ~ post {
-            handleCreateGroup(managedGroup.resourceId, userInfo)
-          } ~ delete {
-            handleDeleteGroup(managedGroup, userInfo)
-          }
-        } ~ pathPrefix("requestAccess") {
-          post {
-            handleRequestAccess(managedGroup, userInfo)
-          }
-        } ~ path("accessInstructions") {
-          put {
-            entity(as[ManagedGroupAccessInstructions]) { accessInstructions =>
-              handleSetAccessInstructions(managedGroup, accessInstructions, userInfo)
-            }
-          } ~ get {
-            handleGetAccessInstructions(managedGroup)
-          }
-        } ~ pathPrefix(Segment) { policyName =>
-          val accessPolicyName = ManagedGroupService.getPolicyName(policyName)
+    withSamRequestContext { samRequestContext =>
+      (pathPrefix("groups" / "v1") | pathPrefix("group")) {
+        pathPrefix(Segment) { groupId =>
+          val managedGroup = FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, ResourceId(groupId))
 
           pathEndOrSingleSlash {
             get {
-              handleListEmails(managedGroup, accessPolicyName, userInfo)
-            } ~ put {
-              handleOverwriteEmails(managedGroup, accessPolicyName, userInfo)
+              handleGetGroup(managedGroup.resourceId)
+            } ~ post {
+              handleCreateGroup(managedGroup.resourceId, userInfo)
+            } ~ delete {
+              handleDeleteGroup(managedGroup, userInfo)
             }
-          } ~ pathPrefix(Segment) { email =>
+          } ~ pathPrefix("requestAccess") {
+            post {
+              handleRequestAccess(managedGroup, userInfo)
+            }
+          } ~ path("accessInstructions") {
+            put {
+              entity(as[ManagedGroupAccessInstructions]) { accessInstructions =>
+                handleSetAccessInstructions(managedGroup, accessInstructions, userInfo)
+              }
+            } ~ get {
+              handleGetAccessInstructions(managedGroup)
+            }
+          } ~ pathPrefix(Segment) { policyName =>
+            val accessPolicyName = ManagedGroupService.getPolicyName(policyName)
+
             pathEndOrSingleSlash {
-              put {
-                handleAddEmailToPolicy(managedGroup, accessPolicyName, email, userInfo)
-              } ~ delete {
-                handleDeleteEmailFromPolicy(managedGroup, accessPolicyName, email, userInfo)
+              get {
+                handleListEmails(managedGroup, accessPolicyName, userInfo)
+              } ~ put {
+                handleOverwriteEmails(managedGroup, accessPolicyName, userInfo)
+              }
+            } ~ pathPrefix(Segment) { email =>
+              pathEndOrSingleSlash {
+                put {
+                  handleAddEmailToPolicy(managedGroup, accessPolicyName, email, userInfo)
+                } ~ delete {
+                  handleDeleteEmailFromPolicy(managedGroup, accessPolicyName, email, userInfo)
+                }
               }
             }
           }
         }
-      }
-    } ~ (pathPrefix("groups" / "v1") | pathPrefix("groups")) {
-      pathEndOrSingleSlash {
-        get {
-          handleListGroups(userInfo)
+      } ~ (pathPrefix("groups" / "v1") | pathPrefix("groups")) {
+        pathEndOrSingleSlash {
+          get {
+            handleListGroups(userInfo, samRequestContext)
+          }
         }
       }
     }
   }
 
-  private def handleListGroups(userInfo: UserInfo): Route =
-    completeWithTrace(samRequestContext => managedGroupService.listGroups(userInfo.userId, samRequestContext).map(StatusCodes.OK -> _))
+  private def handleListGroups(userInfo: UserInfo, samRequestContext: SamRequestContext) =
+    complete(managedGroupService.listGroups(userInfo.userId, samRequestContext).map(StatusCodes.OK -> _))
 
   private def handleGetGroup(resourceId: ResourceId): Route =
     completeWithTrace(samRequestContext =>
