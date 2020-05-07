@@ -11,11 +11,11 @@ object OpenCensusIOUtils {
                              samRequestContext: SamRequestContext,
                              failureStatus: Throwable => Status = (_: Throwable) => Status.UNKNOWN
                           )(f: SamRequestContext => IO[T]): IO[T] = {
-    if (samRequestContext.parentSpan == null) { // ignore calls from unit tests and calls on boot; an alternative here would be to have a MockOpenCensusIOUtils to unit tests
-      f(samRequestContext)
-    }
-    else {
-      traceIOSpan(name, IO(startSpanWithParent(name, samRequestContext.parentSpan)), samRequestContext, failureStatus)(f)
+    samRequestContext.parentSpan match {
+      case Some(parentSpan) =>
+        traceIOSpan(name, IO(startSpanWithParent(name, parentSpan)), samRequestContext, failureStatus)(f)
+      case None => // ignore calls from unit tests and calls on boot
+        f(samRequestContext)
     }
   }
 
@@ -33,7 +33,7 @@ object OpenCensusIOUtils {
   private def traceIOSpan[T](name: String, spanIO: IO[Span], samRequestContext: SamRequestContext, failureStatus: Throwable => Status) (f: SamRequestContext => IO[T]): IO[T] = {
     for {
       span <- spanIO
-      result <- f(samRequestContext.copy(parentSpan = span)).attempt
+      result <- f(samRequestContext.copy(parentSpan = Option(span))).attempt
       _ <- IO(endSpan(span, Status.OK))
     } yield result.toTry.get
   }
