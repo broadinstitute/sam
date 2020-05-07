@@ -31,7 +31,8 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
               requireAction(
                 FullyQualifiedResourceId(CloudExtensions.resourceTypeName, GoogleExtensions.resourceId),
                 GoogleExtensions.getPetPrivateKeyAction,
-                userInfo.userId) {
+                userInfo.userId,
+                samRequestContext) {
                 complete {
                   import spray.json._
                   googleExtensions.getPetServiceAccountKey(WorkbenchEmail(userEmail), GoogleProject(project), samRequestContext) map {

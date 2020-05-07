@@ -15,10 +15,10 @@ import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 trait SecurityDirectives {
   def policyEvaluatorService: PolicyEvaluatorService
 
-  def requireAction(resource: FullyQualifiedResourceId, action: ResourceAction, userId: WorkbenchUserId, samRequestContext: SamRequestContext = SamRequestContext(null)): Directive0 =
-    requireOneOfAction(resource, Set(action), userId)
+  def requireAction(resource: FullyQualifiedResourceId, action: ResourceAction, userId: WorkbenchUserId, samRequestContext: SamRequestContext): Directive0 =
+    requireOneOfAction(resource, Set(action), userId, samRequestContext)
 
-  def requireOneOfAction(resource: FullyQualifiedResourceId, requestedActions: Set[ResourceAction], userId: WorkbenchUserId, samRequestContext: SamRequestContext = SamRequestContext(null)): Directive0 =
+  def requireOneOfAction(resource: FullyQualifiedResourceId, requestedActions: Set[ResourceAction], userId: WorkbenchUserId, samRequestContext: SamRequestContext): Directive0 =
     Directives.mapInnerRoute { innerRoute =>
       onSuccess(hasPermissionOneOf(resource, requestedActions, userId, samRequestContext)) { hasPermission =>
         if (hasPermission) {
