@@ -32,7 +32,7 @@ trait SamModelDirectives {
     }
 
   def withSamRequestContext: Directive1[SamRequestContext] =
-    traceRequest.map { span => SamRequestContext(span) }
+    traceRequest.map { span => SamRequestContext(Option(span)) }
 
 
 }
