@@ -165,7 +165,6 @@ You need to set some default VM parameters for ScalaTest run configurations. In 
 ```
 Then you can run unit tests within IntelliJ by clicking the green play button on a unit test.
 
-
 #### Cleaning up after tests
 ```
 #Stop your local opendj:
