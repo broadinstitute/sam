@@ -118,7 +118,7 @@ trait ManagedGroupRoutes extends UserInfoDirectives with SecurityDirectives with
       userInfo: UserInfo,
       samRequestContext: SamRequestContext): Route =
     requireAction(managedGroup, SamResourceActions.sharePolicy(accessPolicyName), userInfo.userId) {
-      withSubject(WorkbenchEmail(email)) { subject =>
+      withSubject(WorkbenchEmail(email), samRequestContext) { subject =>
         complete(managedGroupService.addSubjectToPolicy(managedGroup.resourceId, accessPolicyName, subject, samRequestContext).map(_ => StatusCodes.NoContent))
       }
     }
@@ -130,7 +130,7 @@ trait ManagedGroupRoutes extends UserInfoDirectives with SecurityDirectives with
       userInfo: UserInfo,
       samRequestContext: SamRequestContext): Route =
     requireAction(managedGroup, SamResourceActions.sharePolicy(accessPolicyName), userInfo.userId) {
-      withSubject(WorkbenchEmail(email)) { subject =>
+      withSubject(WorkbenchEmail(email), samRequestContext) { subject =>
         complete(managedGroupService.removeSubjectFromPolicy(managedGroup.resourceId, accessPolicyName, subject, samRequestContext).map(_ => StatusCodes.NoContent))
       }
     }

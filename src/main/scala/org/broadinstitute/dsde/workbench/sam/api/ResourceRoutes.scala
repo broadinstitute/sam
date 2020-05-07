@@ -105,7 +105,7 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
                       pathEndOrSingleSlash {
                         putPolicyMembershipOverwrite(resourceType, policyId, userInfo, samRequestContext)
                       } ~ pathPrefix(Segment) { email =>
-                        withSubject(WorkbenchEmail(email)) { subject =>
+                        withSubject(WorkbenchEmail(email), samRequestContext) { subject =>
                           pathEndOrSingleSlash {
                             requireOneOfAction(
                               resource,
