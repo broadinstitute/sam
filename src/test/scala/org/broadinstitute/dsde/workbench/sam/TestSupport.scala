@@ -54,7 +54,7 @@ trait TestSupport{
   implicit val timer = IO.timer(scala.concurrent.ExecutionContext.global)
   implicit val eqWorkbenchException: Eq[WorkbenchException] = (x: WorkbenchException, y: WorkbenchException) => x.getMessage == y.getMessage
 
-  val samRequestContext = SamRequestContext(null)
+  val samRequestContext = SamRequestContext(None)
 
   def dummyResourceType(name: ResourceTypeName) = ResourceType(name, Set.empty, Set(ResourceRole(ResourceRoleName("owner"), Set.empty)), ResourceRoleName("owner"))
 }

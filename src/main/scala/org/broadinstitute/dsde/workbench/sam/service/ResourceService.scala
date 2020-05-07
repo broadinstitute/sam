@@ -47,14 +47,14 @@ class ResourceService(
     *
     * This will fail if SamResourceTypes.resourceTypeAdmin does not exist in resourceTypes
     */
-  def initResourceTypes(samRequestContext: SamRequestContext = SamRequestContext(null)): IO[Iterable[ResourceType]] =
+  def initResourceTypes(samRequestContext: SamRequestContext = SamRequestContext(None)): IO[Iterable[ResourceType]] =
     resourceTypes.get(SamResourceTypes.resourceTypeAdminName) match {
       case None =>
         IO.raiseError(new WorkbenchException(s"Could not initialize resource types because ${SamResourceTypes.resourceTypeAdminName.value} does not exist."))
       case Some(resourceTypeAdmin) =>
         for {
           // make sure resource type admin is added first because the rest depends on it
-          createdAdminType <- createResourceType(resourceTypeAdmin, SamRequestContext(null))
+          createdAdminType <- createResourceType(resourceTypeAdmin, SamRequestContext(None))
 
           // sleep added so shadow dao can catch up, remove when removing opendj
           // https://broadworkbench.atlassian.net/browse/CA-526
@@ -62,7 +62,7 @@ class ResourceService(
 
           result <- resourceTypes.values.filterNot(_.name == SamResourceTypes.resourceTypeAdminName).toList.traverse { rt =>
             for {
-              _ <- createResourceType(rt, SamRequestContext(null))
+              _ <- createResourceType(rt, SamRequestContext(None))
 
               // sleep added so shadow dao can catch up, remove when removing opendj
               // https://broadworkbench.atlassian.net/browse/CA-526
@@ -75,7 +75,7 @@ class ResourceService(
                 Set.empty)
               // note that this skips all validations and just creates a resource with owner policies with no members
               // it will require someone with direct ldap access to bootstrap
-              _ <- persistResource(resourceTypeAdmin, ResourceId(rt.name.value), Set(policy), Set.empty, SamRequestContext(null)).recover {
+              _ <- persistResource(resourceTypeAdmin, ResourceId(rt.name.value), Set(policy), Set.empty, SamRequestContext(None)).recover {
                 case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode.contains(StatusCodes.Conflict) =>
                   // ok if the resource already exists
                   Resource(rt.name, ResourceId(rt.name.value), Set.empty)

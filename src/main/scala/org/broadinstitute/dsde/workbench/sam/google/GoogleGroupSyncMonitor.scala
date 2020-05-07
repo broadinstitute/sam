@@ -131,7 +131,7 @@ class GoogleGroupSyncMonitorActor(
       val groupId: WorkbenchGroupIdentity = parseMessage(message)
 
       groupSynchronizer
-        .synchronizeGroupMembers(groupId, samRequestContext = SamRequestContext(null))
+        .synchronizeGroupMembers(groupId, samRequestContext = SamRequestContext(None))
         .toTry
         .map(sr => sr.fold(t => FailToSynchronize(t, message.ackId), x => ReportMessage(x, message.ackId))) pipeTo self
 
