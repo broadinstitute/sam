@@ -12,6 +12,13 @@ trait DatabaseSupport {
   protected val cs: ContextShift[IO]
   protected val dbRef: DbReference
 
+  /**
+    * Executes postgres query.
+    *
+    * @param dbQueryName name of the database query. Used to identify the name of the tracing span.
+    * @param samRequestContext context of the request. If it contains a parentSpan, then a child span will be
+    *                          created under the parent span.
+    */
   protected def runInTransaction[A](dbQueryName: String, samRequestContext: SamRequestContext)(databaseFunction: DBSession => A): IO[A] = {
     val spanName = "postgres-" + dbQueryName
     traceIOWithContext(spanName, samRequestContext) { _ =>
