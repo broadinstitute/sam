@@ -106,7 +106,7 @@ class SamClient(samBasePath: String) {
 
 Note that Sam does not actually launch workflows create VMs but appears to in this diagram in order to simplify interactions. The key concept is the user of service accounts.
 
-#### Google integration requires: 
+#### Google integration requires
 * a GSuite domain
 * a project with a service account for the sam application
 * service account with access to
@@ -141,33 +141,39 @@ Build jar and docker image:
 ```
 
 ### To run unit tests
-Spin up a local OpenDJ:
+#### Set up your environment
 ```
+#Spin up a local OpenDJ:
 sh docker/run-opendj.sh start
-```
-Spin up a local postgres:
-```
+#Spin up a local postgres:
 sh docker/run-postgres.sh start
-````
-
-
-Make sure your `SBT_OPTS` are set:
-```
+#Make sure your `SBT_OPTS` are set:
 export SBT_OPTS="-Dpostgres.host=localhost -Dpostgres.port=5432 -Ddirectory.url=ldap://localhost:3389 -Ddirectory.password=testtesttest"
 ```
 
-Run tests:
+#### Run tests in sbt
 ```
 sbt test
 ```
-Stop your local opendj:
+
+#### Run tests in intellij
+Set up ScalaTest Template:
+
+You need to set some default VM parameters for ScalaTest run configurations. In IntelliJ, go to `Run` > `Edit Configurations...`, select `ScalaTest` under `🔧Templates`, and add these VM parameters:
 ```
+-Dpostgres.host=localhost -Dpostgres.port=5432 -Ddirectory.url=ldap://localhost:3389 -Ddirectory.password=testtesttest
+```
+Then you can run unit tests within IntelliJ by clicking the green play button on a unit test.
+
+#### Cleaning up after tests
+```
+#Stop your local opendj:
 sh docker/run-opendj.sh stop
-```
-Stop your local postgres:
-```
+#Stop your local postgres:
 sh docker/run-postgres.sh stop
 ```
+
+### [To run integration tests](../automation/README.md)
 
 ### To run Sam locally
 
