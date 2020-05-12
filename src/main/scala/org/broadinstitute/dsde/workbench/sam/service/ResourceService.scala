@@ -54,7 +54,7 @@ class ResourceService(
       case Some(resourceTypeAdmin) =>
         for {
           // make sure resource type admin is added first because the rest depends on it
-          createdAdminType <- createResourceType(resourceTypeAdmin, SamRequestContext(None))
+          createdAdminType <- createResourceType(resourceTypeAdmin, samRequestContext)
 
           // sleep added so shadow dao can catch up, remove when removing opendj
           // https://broadworkbench.atlassian.net/browse/CA-526
@@ -62,7 +62,7 @@ class ResourceService(
 
           result <- resourceTypes.values.filterNot(_.name == SamResourceTypes.resourceTypeAdminName).toList.traverse { rt =>
             for {
-              _ <- createResourceType(rt, SamRequestContext(None))
+              _ <- createResourceType(rt, samRequestContext)
 
               // sleep added so shadow dao can catch up, remove when removing opendj
               // https://broadworkbench.atlassian.net/browse/CA-526
@@ -75,7 +75,7 @@ class ResourceService(
                 Set.empty)
               // note that this skips all validations and just creates a resource with owner policies with no members
               // it will require someone with direct ldap access to bootstrap
-              _ <- persistResource(resourceTypeAdmin, ResourceId(rt.name.value), Set(policy), Set.empty, SamRequestContext(None)).recover {
+              _ <- persistResource(resourceTypeAdmin, ResourceId(rt.name.value), Set(policy), Set.empty, samRequestContext).recover {
                 case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode.contains(StatusCodes.Conflict) =>
                   // ok if the resource already exists
                   Resource(rt.name, ResourceId(rt.name.value), Set.empty)

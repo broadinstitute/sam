@@ -533,7 +533,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
                and ${p.public} = true"""
 
     import SamTypeBinders._
-    runInTransaction("listPublicAccessPolicies", samRequestContext)({ implicit session =>
+    runInTransaction("listPublicAccessPolicies-(returns ResourceIdAndPolicyName)", samRequestContext)({ implicit session =>
       query.map(rs => ResourceIdAndPolicyName(rs.get[ResourceId](r.resultName.name), rs.get[AccessPolicyName](p.resultName.name))).list().apply().toStream
     })
   }
@@ -563,7 +563,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
           and ${p.public} = true"""
 
     import SamTypeBinders._
-    runInTransaction("listPublicAccessPolicies", samRequestContext)({ implicit session =>
+    runInTransaction("listPublicAccessPolicies-(returns AccessPolicyWithoutMembers)", samRequestContext)({ implicit session =>
       val results = listPoliciesQuery.map(rs => (PolicyInfo(rs.get[AccessPolicyName](p.resultName.name), rs.get[ResourceId](r.resultName.name), rs.get[ResourceTypeName](rt.resultName.name), rs.get[WorkbenchEmail](g.resultName.email), rs.boolean(p.resultName.public)),
         (rs.stringOpt(rr.resultName.role).map(ResourceRoleName(_)), rs.stringOpt(ra.resultName.action).map(ResourceAction(_))))).list().apply().groupBy(_._1)
 
