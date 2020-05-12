@@ -13,6 +13,7 @@ import org.broadinstitute.dsde.workbench.sam.model.FullyQualifiedPolicyId
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.util.FutureSupport
 import spray.json._
+import io.opencensus.scala.Tracing
 
 import scala.concurrent.Future
 import scala.concurrent.duration.{FiniteDuration, _}
@@ -127,13 +128,16 @@ class GoogleGroupSyncMonitorActor(
       pubSubDao.pullMessages(pubSubSubscriptionName, 1).map(_.headOption) pipeTo self
 
     case Some(message: PubSubMessage) =>
-      logger.debug(s"received sync message: $message")
-      val groupId: WorkbenchGroupIdentity = parseMessage(message)
+      import Tracing._
+      trace("GoogleGroupSyncMonitor-PubSubMessage") { span =>
+        logger.debug(s"received sync message: $message")
+        val groupId: WorkbenchGroupIdentity = parseMessage(message)
 
-      groupSynchronizer
-        .synchronizeGroupMembers(groupId, samRequestContext = SamRequestContext(None)) // Trace will be implemented in a follow-up PR
-        .toTry
-        .map(sr => sr.fold(t => FailToSynchronize(t, message.ackId), x => ReportMessage(x, message.ackId))) pipeTo self
+        groupSynchronizer
+          .synchronizeGroupMembers(groupId, samRequestContext = SamRequestContext(Option(span))) // Since this is an internal pub/sub call, we have to start a new SamRequestContext.
+          .toTry
+          .map(sr => sr.fold(t => FailToSynchronize(t, message.ackId), x => ReportMessage(x, message.ackId))) pipeTo self
+      }
 
     case None =>
       // there was no message to wait and try again
