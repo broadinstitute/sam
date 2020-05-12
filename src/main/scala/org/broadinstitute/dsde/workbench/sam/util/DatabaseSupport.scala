@@ -21,10 +21,10 @@ trait DatabaseSupport {
     */
   protected def runInTransaction[A](dbQueryName: String, samRequestContext: SamRequestContext)(databaseFunction: DBSession => A): IO[A] = {
     val spanName = "postgres-" + dbQueryName
-    traceIOWithContext(spanName, samRequestContext) { _ =>
-      cs.evalOn(ecForDatabaseIO)(IO {
+    cs.evalOn(ecForDatabaseIO)(traceIOWithContext(spanName, samRequestContext) { _ =>
+      IO {
         dbRef.inLocalTransaction(databaseFunction)
-      })
-    }
+      }
+    })
   }
 }

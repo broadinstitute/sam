@@ -50,6 +50,6 @@ trait LdapSupport {
     *                          created under the parent span.
     */
   protected def executeLdap[A](ioa: IO[A], dbQueryName: String, samRequestContext: SamRequestContext): IO[A] = {
-    traceIOWithContext("ldap-" + dbQueryName, samRequestContext)(_ => cs.evalOn(ecForLdapBlockingIO)(ioa))
+    cs.evalOn(ecForLdapBlockingIO)(traceIOWithContext("ldap-" + dbQueryName, samRequestContext)(_ => ioa))
   }
 }
