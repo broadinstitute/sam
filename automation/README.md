@@ -11,29 +11,36 @@ See [firecloud-automated-testing](https://github.com/broadinstitute/firecloud-au
 
 #### Render configs
 
-##### Against dev fiab Sam
+##### Against a fiab Sam
 ```bash
 ./render-local-env.sh
 ```
 
-##### Against local UI pointing to dev fiab Sam
+##### Against local UI pointing to a fiab Sam
 ```bash
 LOCAL_UI=true ./render-local-env.sh
 ```
 
-##### Against local Sam pointing to the dev live env
-Run `./render-local-env.sh` and then update `samApiUrl` in application.conf to:
+##### Against a local Sam
+Run `./render-local-env.sh` and then update the URIs in `src/test/resources/application.conf` to:
 ```
+  baseUrl = "https://firecloud.dsde-dev.broadinstitute.org/"
+  orchApiUrl = "https://firecloud-orchestration.dsde-dev.broadinstitute.org/"
+  rawlsApiUrl = "https://rawls.dsde-dev.broadinstitute.org/"
   samApiUrl = "https://local.broadinstitute.org:50443/"
-```
+  thurloeApiUrl = "https://thurloe.dsde-dev.broadinstitute.org/"
+  ```
+Then, you may need to run `sbt clean compile test` to pick up the new config changes.
+
 
 ### Run tests
 All test code lives in `automation/src/test/scala`.
 
 #### From IntelliJ
-It is recommended to `Open...` IntelliJ to the `automation` folder directly and import from SBT.
+To run tests from IntelliJ, it is recommended to load the project from the `automation` folder instead of the `sam` root folder.
+To do this, go to `File` -> `Open...` and navigate __into__ the `automation` folder, click `Open` to accept, and then import from SBT.
 
-First, you need to set some default VM parameters for ScalaTest run configurations. In IntelliJ, go to `Run` > `Edit Configurations...`, select `ScalaTest` under `Templates`, and add these VM parameters:
+You need to set some default VM parameters for ScalaTest run configurations. In IntelliJ, go to `Run` > `Edit Configurations...`, select `ScalaTest` under `🔧Templates`, and add these VM parameters:
 
 ```
 -Djsse.enableSNIExtension=false
