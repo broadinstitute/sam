@@ -24,15 +24,15 @@ trait UserRoutes extends UserInfoDirectives with SamModelDirectives {
       (pathPrefix("v1") | pathEndOrSingleSlash) {
         pathEndOrSingleSlash {
           post {
-            requireCreateUser { createUser =>
-              withSamRequestContext { samRequestContext =>
+            withSamRequestContext { samRequestContext =>
+              requireCreateUser { createUser =>
                 complete {
                   userService.createUser(createUser, samRequestContext).map(userStatus => StatusCodes.Created -> userStatus)
                 }
               }
             }
-          } ~ requireUserInfo { user =>
-            withSamRequestContext { samRequestContext =>
+          } ~ withSamRequestContext { samRequestContext =>
+            requireUserInfo { user =>
               get {
                 parameter("userDetailsOnly".?) { userDetailsOnly =>
                   complete {
@@ -53,16 +53,16 @@ trait UserRoutes extends UserInfoDirectives with SamModelDirectives {
         pathPrefix("self") {
           pathEndOrSingleSlash {
             post {
-              requireCreateUser { createUser =>
-                withSamRequestContext { samRequestContext =>
+              withSamRequestContext { samRequestContext =>
+                requireCreateUser { createUser =>
                   complete {
                     userService.createUser(createUser, samRequestContext).map(userStatus => StatusCodes.Created -> userStatus)
                   }
                 }
               }
             }
-          } ~ requireUserInfo { user =>
-            withSamRequestContext { samRequestContext =>
+          } ~ withSamRequestContext { samRequestContext =>
+            requireUserInfo { user =>
               path("info") {
                 get {
                   complete {
@@ -97,8 +97,8 @@ trait UserRoutes extends UserInfoDirectives with SamModelDirectives {
 
   def adminUserRoutes: server.Route =
     pathPrefix("admin") {
-      requireUserInfo { userInfo =>
-        withSamRequestContext { samRequestContext =>
+      withSamRequestContext { samRequestContext =>
+        requireUserInfo { userInfo =>
           asWorkbenchAdmin(userInfo) {
             pathPrefix("user") {
               path("email" / Segment) { email =>
@@ -181,8 +181,8 @@ trait UserRoutes extends UserInfoDirectives with SamModelDirectives {
 
   val apiUserRoutes: server.Route = pathPrefix("users") {
     pathPrefix("v1") {
-      requireUserInfo { userInfo =>
-        withSamRequestContext { samRequestContext =>
+      withSamRequestContext { samRequestContext =>
+        requireUserInfo { userInfo =>
           get {
             path(Segment) { email =>
               pathEnd {

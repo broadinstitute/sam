@@ -63,8 +63,8 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
         }
     } ~
     (pathPrefix("resources" / "v1") | pathPrefix("resource")) {
-      requireUserInfo { userInfo =>
-        withSamRequestContext { samRequestContext =>
+      withSamRequestContext { samRequestContext =>
+        requireUserInfo { userInfo =>
           pathPrefix(Segment) { resourceTypeName =>
             withResourceType(ResourceTypeName(resourceTypeName)) { resourceType =>
               pathEndOrSingleSlash {
