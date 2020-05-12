@@ -128,9 +128,9 @@ class GoogleGroupSyncMonitorActor(
       pubSubDao.pullMessages(pubSubSubscriptionName, 1).map(_.headOption) pipeTo self
 
     case Some(message: PubSubMessage) =>
+      logger.debug(s"received sync message: $message")
       import Tracing._
       trace("GoogleGroupSyncMonitor-PubSubMessage") { span =>
-        logger.debug(s"received sync message: $message")
         val groupId: WorkbenchGroupIdentity = parseMessage(message)
 
         groupSynchronizer
