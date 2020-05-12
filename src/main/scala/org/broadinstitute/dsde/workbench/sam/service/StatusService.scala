@@ -36,7 +36,7 @@ class StatusService(
 
   private def checkOpenDJ(groupToLoad: WorkbenchGroupName): IO[SubsystemStatus] = {
     logger.info("checking opendj connection")
-    directoryDAO.loadGroupEmail(groupToLoad, SamRequestContext(None)).map {
+    directoryDAO.loadGroupEmail(groupToLoad, SamRequestContext(None)).map { // Since Status calls are ~80% of all Sam calls and are easy to track separately, Status calls are not being traced.
       case Some(_) => HealthMonitor.OkStatus
       case None => HealthMonitor.failedStatus(s"could not find group $groupToLoad in opendj")
     }

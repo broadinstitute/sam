@@ -101,7 +101,7 @@ class GoogleExtensions(
 
 
   def onBoot(samApplication: SamApplication)(implicit system: ActorSystem): IO[Unit] = {
-    val samRequestContext = SamRequestContext(None)
+    val samRequestContext = SamRequestContext(None) // `SamRequestContext(None)` is used so that we don't trace 1-off boot/init methods
     val extensionResourceType =
       resourceTypes.getOrElse(CloudExtensions.resourceTypeName, throw new Exception(s"${CloudExtensions.resourceTypeName} resource type not found"))
     val ownerGoogleSubjectId = GoogleSubjectId(googleServicesConfig.serviceAccountClientId)

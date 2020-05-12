@@ -47,7 +47,7 @@ class ResourceService(
     *
     * This will fail if SamResourceTypes.resourceTypeAdmin does not exist in resourceTypes
     */
-  def initResourceTypes(samRequestContext: SamRequestContext = SamRequestContext(None)): IO[Iterable[ResourceType]] =
+  def initResourceTypes(samRequestContext: SamRequestContext = SamRequestContext(None)): IO[Iterable[ResourceType]] = // `SamRequestContext(None)` is used so that we don't trace 1-off boot/init methods
     resourceTypes.get(SamResourceTypes.resourceTypeAdminName) match {
       case None =>
         IO.raiseError(new WorkbenchException(s"Could not initialize resource types because ${SamResourceTypes.resourceTypeAdminName.value} does not exist."))
