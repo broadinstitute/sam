@@ -145,20 +145,24 @@ class GoogleGroupSyncMonitorActor(
       system.scheduler.scheduleOnce(nextTime.asInstanceOf[FiniteDuration], self, StartMonitorPass)
 
     case ReportMessage(report, ackId) =>
-      val errorReports = report.values.flatten.collect {
-        case SyncReportItem(_, _, errorReports) if errorReports.nonEmpty => errorReports
-      }.flatten
+      import Tracing._
+      trace("GoogleGroupSyncMonitor-ReportMessage") { _ =>
+        val errorReports = report.values.flatten.collect {
+          case SyncReportItem(_, _, errorReports) if errorReports.nonEmpty => errorReports
+        }.flatten
 
-      if (errorReports.isEmpty) {
-        // sync done, log it and try again immediately
-        acknowledgeMessage(ackId).map(_ => StartMonitorPass) pipeTo self
+        if (errorReports.isEmpty) {
+          // sync done, log it and try again immediately
+          acknowledgeMessage(ackId).map(_ => StartMonitorPass) pipeTo self
 
-        import DefaultJsonProtocol._
-        import WorkbenchIdentityJsonSupport._
-        import org.broadinstitute.dsde.workbench.sam.google.GoogleModelJsonSupport._
-        logger.info(s"synchronized google group ${report.toJson.compactPrint}")
-      } else {
-        throw new WorkbenchExceptionWithErrorReport(ErrorReport("error(s) syncing google group", errorReports.toSeq))
+          import DefaultJsonProtocol._
+          import WorkbenchIdentityJsonSupport._
+          import org.broadinstitute.dsde.workbench.sam.google.GoogleModelJsonSupport._
+          logger.info(s"synchronized google group ${report.toJson.compactPrint}")
+          Future.successful(None)
+        } else {
+          throw new WorkbenchExceptionWithErrorReport(ErrorReport("error(s) syncing google group", errorReports.toSeq))
+        }
       }
 
     case FailToSynchronize(t, ackId) =>
