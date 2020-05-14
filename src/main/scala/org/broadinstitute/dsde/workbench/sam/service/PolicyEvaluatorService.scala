@@ -39,9 +39,7 @@ class PolicyEvaluatorService(
   }
 
   def hasPermission(resource: FullyQualifiedResourceId, action: ResourceAction, userId: WorkbenchUserId, parentSpan: Span = null): IO[Boolean] = traceIOWithParent("hasPermission", parentSpan)(_ => {
-    traceIOWithParent("checkWithCache", parentSpan)(_ => listUserResourceActions(resource, userId).map {
-      _.contains(action)
-    })
+    listUserResourceActions(resource, userId).map { _.contains(action) }
   })
 
   /** Checks if user have permission by providing user email address. */
