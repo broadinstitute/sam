@@ -27,7 +27,7 @@ import DefaultJsonProtocol._
 import WorkbenchIdentityJsonSupport.identityConcentratorIdFormat
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
-trait StandardUserInfoDirectives extends UserInfoDirectives with LazyLogging {
+trait StandardUserInfoDirectives extends UserInfoDirectives with LazyLogging with SamModelDirectives {
   implicit val executionContext: ExecutionContext
   val identityConcentratorService: Option[IdentityConcentratorService] = None
 
@@ -43,27 +43,32 @@ trait StandardUserInfoDirectives extends UserInfoDirectives with LazyLogging {
     * @return
     */
   private def handleAuthHeaders[T](fromJwt: (JwtUserInfo, OAuth2BearerToken, IdentityConcentratorService, SamRequestContext) => Directive1[T], fromOIDC: (OIDCHeaders, SamRequestContext) => Directive1[T], samRequestContext: SamRequestContext): Directive1[T] =
-    (headerValueByName(authorizationHeader) &
-      provide(identityConcentratorService)) tflatMap {
-      // order of these cases is important: if the authorization header is a valid jwt we must ignore
-      // any OIDC headers otherwise we may be vulnerable to a malicious user specifying a valid JWT
-      // but different user information in the OIDC headers
-      case (JwtAuthorizationHeader(Success(jwtUserInfo), bearerToken), Some(icService)) =>
-        fromJwt(jwtUserInfo, bearerToken, icService, samRequestContext)
+      // this causes 2 errors (on both `failWith` calls below) that look like this:
+      //[error]  found   : akka.http.scaladsl.server.StandardRoute
+      //[error]  required: akka.http.scaladsl.server.Directive[?]
+    withParentSamRequestContext("handleAuthHeaders", samRequestContext) { samRequestContext =>
+      (headerValueByName(authorizationHeader) &
+        provide(identityConcentratorService)) tflatMap {
+        // order of these cases is important: if the authorization header is a valid jwt we must ignore
+        // any OIDC headers otherwise we may be vulnerable to a malicious user specifying a valid JWT
+        // but different user information in the OIDC headers
+        case (JwtAuthorizationHeader(Success(jwtUserInfo), bearerToken), Some(icService)) =>
+          fromJwt(jwtUserInfo, bearerToken, icService, samRequestContext)
 
-      case (JwtAuthorizationHeader(Failure(regrets), _), _) =>
-        failWith(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Unauthorized, "could not parse authorization header, jwt missing required fields", regrets)))
+        case (JwtAuthorizationHeader(Failure(regrets), _), _) =>
+          failWith(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Unauthorized, "could not parse authorization header, jwt missing required fields", regrets)))
 
-      case (JwtAuthorizationHeader(_, _), None) =>
-        logger.error("requireUserInfo with JWT attempted but Identity Concentrator not configured")
-        failWith(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.InternalServerError, "Identity Concentrator not configured")))
+        case (JwtAuthorizationHeader(_, _), None) =>
+          logger.error("requireUserInfo with JWT attempted but Identity Concentrator not configured")
+          failWith(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.InternalServerError, "Identity Concentrator not configured")))
 
-      case _ =>
-        // request coming through Apache proxy with OIDC headers
-        (headerValueByName(accessTokenHeader).as(OAuth2BearerToken) &
-          headerValueByName(googleSubjectIdHeader).as(GoogleSubjectId) &
-          headerValueByName(expiresInHeader) &
-          headerValueByName(emailHeader).as(WorkbenchEmail)).as(OIDCHeaders).flatMap(fromOIDC(_, samRequestContext))
+        case _ =>
+          // request coming through Apache proxy with OIDC headers
+          (headerValueByName(accessTokenHeader).as(OAuth2BearerToken) &
+            headerValueByName(googleSubjectIdHeader).as(GoogleSubjectId) &
+            headerValueByName(expiresInHeader) &
+            headerValueByName(emailHeader).as(WorkbenchEmail)).as(OIDCHeaders).flatMap(fromOIDC(_, samRequestContext))
+      }
     }
 
   private def requireUserInfoFromJwt(jwtUserInfo: JwtUserInfo, bearerToken: OAuth2BearerToken, icService: IdentityConcentratorService, samRequestContext: SamRequestContext): Directive1[UserInfo] =
