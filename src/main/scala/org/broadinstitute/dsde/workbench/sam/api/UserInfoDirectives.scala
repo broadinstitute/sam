@@ -7,6 +7,7 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.service.CloudExtensions
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
+import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 /**
   * Directives to get user information.
@@ -15,9 +16,9 @@ trait UserInfoDirectives {
   val directoryDAO: DirectoryDAO
   val cloudExtensions: CloudExtensions
 
-  def requireUserInfo: Directive1[UserInfo]
+  def requireUserInfo(samRequestContext: SamRequestContext): Directive1[UserInfo]
 
-  def requireCreateUser: Directive1[CreateWorkbenchUser]
+  def requireCreateUser(samRequestContext: SamRequestContext): Directive1[CreateWorkbenchUser]
 
   def asWorkbenchAdmin(userInfo: UserInfo): Directive0 =
     Directives.mapInnerRoute { r =>

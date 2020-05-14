@@ -246,7 +246,7 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
   "requireUserInfo" should "fail if expiresIn is in illegal format" in {
     forAll(genUserInfoHeadersWithInvalidExpiresIn){
       headers: List[RawHeader] =>
-        Get("/").withHeaders(headers) ~> handleExceptions(myExceptionHandler){directives.requireUserInfo(x => complete(x.toString))} ~> check {
+        Get("/").withHeaders(headers) ~> handleExceptions(myExceptionHandler){directives.requireUserInfo(samRequestContext)(x => complete(x.toString))} ~> check {
           val res = responseAs[String]
           status shouldBe StatusCodes.BadRequest
           responseAs[String].contains(s"expiresIn ${headers.find(_.name == expiresInHeader).get.value} can't be converted to Long") shouldBe(true)
@@ -267,7 +267,7 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
     )
     services.directoryDAO.createUser(user, samRequestContext).unsafeRunSync()
     Get("/").withHeaders(headers) ~>
-      handleExceptions(myExceptionHandler){services.requireUserInfo(x => complete(x.copy(tokenExpiresIn = 0).toString))} ~> check {
+      handleExceptions(myExceptionHandler){services.requireUserInfo(samRequestContext)(x => complete(x.copy(tokenExpiresIn = 0).toString))} ~> check {
       status shouldBe StatusCodes.OK
       responseAs[String] shouldEqual UserInfo(accessToken, user.id, user.email, 0).toString
     }
@@ -281,7 +281,7 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
     )
 
     Get("/").withHeaders(headers) ~>
-      handleExceptions(myExceptionHandler){services.requireUserInfo(x => complete(x.copy(tokenExpiresIn = 0).toString))} ~> check {
+      handleExceptions(myExceptionHandler){services.requireUserInfo(samRequestContext)(x => complete(x.copy(tokenExpiresIn = 0).toString))} ~> check {
       assert(rejection.isInstanceOf[MissingHeaderRejection])
     }
   }
@@ -299,7 +299,7 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
     )
     services.directoryDAO.createUser(user, samRequestContext).unsafeRunSync()
     Get("/").withHeaders(headers) ~>
-      handleExceptions(myExceptionHandler){services.requireUserInfo(x => complete(x.copy(tokenExpiresIn = 0).toString))} ~> check {
+      handleExceptions(myExceptionHandler){services.requireUserInfo(samRequestContext)(x => complete(x.copy(tokenExpiresIn = 0).toString))} ~> check {
       status shouldBe StatusCodes.Unauthorized
     }
   }
@@ -321,7 +321,7 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
     services.directoryDAO.createUser(userBad, samRequestContext).unsafeRunSync()
 
     Get("/").withHeaders(headers) ~>
-      handleExceptions(myExceptionHandler){services.requireUserInfo(x => complete(x.userId.value))} ~> check {
+      handleExceptions(myExceptionHandler){services.requireUserInfo(samRequestContext)(x => complete(x.userId.value))} ~> check {
       withClue(responseAs[String]) {
         status shouldBe StatusCodes.OK
       }
@@ -335,7 +335,7 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
     val authHeader = genAuthorizationHeader(user.identityConcentratorId)
     services.directoryDAO.createUser(user, samRequestContext).unsafeRunSync()
     Get("/").withHeaders(authHeader) ~>
-      handleExceptions(myExceptionHandler){services.requireUserInfo(x => complete(x.userId.value))} ~> check {
+      handleExceptions(myExceptionHandler){services.requireUserInfo(samRequestContext)(x => complete(x.userId.value))} ~> check {
       withClue(responseAs[String]) {
         status shouldBe StatusCodes.OK
       }
@@ -344,7 +344,7 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
   }
 
   it should "fail if required headers are missing" in {
-    Get("/") ~> handleExceptions(myExceptionHandler){directives.requireUserInfo(x => complete(x.toString))} ~> check {
+    Get("/") ~> handleExceptions(myExceptionHandler){directives.requireUserInfo(samRequestContext)(x => complete(x.toString))} ~> check {
       rejection shouldBe MissingHeaderRejection(authorizationHeader)
     }
   }
@@ -361,7 +361,7 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
       RawHeader(expiresInHeader, (System.currentTimeMillis() + 1000).toString)
     )
     Get("/").withHeaders(headers) ~>
-      handleExceptions(myExceptionHandler){services.requireCreateUser(x => complete(x.copy(id = WorkbenchUserId("")).toString))} ~> check {
+      handleExceptions(myExceptionHandler){services.requireCreateUser(samRequestContext)(x => complete(x.copy(id = WorkbenchUserId("")).toString))} ~> check {
       status shouldBe StatusCodes.OK
       responseAs[String] shouldEqual CreateWorkbenchUser(WorkbenchUserId(""), user.googleSubjectId.get, user.email, None).toString
     }
@@ -375,7 +375,7 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
     )
 
     Get("/").withHeaders(headers) ~>
-      handleExceptions(myExceptionHandler){services.requireCreateUser(x => complete(x.toString))} ~> check {
+      handleExceptions(myExceptionHandler){services.requireCreateUser(samRequestContext)(x => complete(x.toString))} ~> check {
       assert(rejection.isInstanceOf[MissingHeaderRejection])
     }
   }
@@ -390,7 +390,7 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
       RawHeader(authorizationHeader, accessToken.toString())
     )
     Get("/").withHeaders(headers) ~>
-      handleExceptions(myExceptionHandler){services.requireCreateUser(x => complete(x.toString))} ~> check {
+      handleExceptions(myExceptionHandler){services.requireCreateUser(samRequestContext)(x => complete(x.toString))} ~> check {
       status shouldBe StatusCodes.Unauthorized
     }
   }
@@ -412,7 +412,7 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
     }
 
     Get("/").withHeaders(headers) ~>
-      handleExceptions(myExceptionHandler){services.requireCreateUser(x => complete(x.copy(id = WorkbenchUserId("")).toString))} ~> check {
+      handleExceptions(myExceptionHandler){services.requireCreateUser(samRequestContext)(x => complete(x.copy(id = WorkbenchUserId("")).toString))} ~> check {
       withClue(responseAs[String]) {
         status shouldBe StatusCodes.OK
       }
@@ -430,7 +430,7 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
     }
 
     Get("/").withHeaders(authHeader) ~>
-      handleExceptions(myExceptionHandler){services.requireCreateUser(x => complete(x.identityConcentratorId.toString))} ~> check {
+      handleExceptions(myExceptionHandler){services.requireCreateUser(samRequestContext)(x => complete(x.identityConcentratorId.toString))} ~> check {
       withClue(responseAs[String]) {
         status shouldBe StatusCodes.OK
       }
@@ -439,7 +439,7 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
   }
 
   it should "fail if required headers are missing" in {
-    Get("/") ~> handleExceptions(myExceptionHandler){directives.requireCreateUser(x => complete(x.toString))} ~> check {
+    Get("/") ~> handleExceptions(myExceptionHandler){directives.requireCreateUser(samRequestContext)(x => complete(x.toString))} ~> check {
       rejection shouldBe MissingHeaderRejection(authorizationHeader)
     }
   }

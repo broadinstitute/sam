@@ -25,7 +25,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
   override def extensionRoutes: server.Route =
     (pathPrefix("google" / "v1") | pathPrefix("google")) {
       withSamRequestContext { samRequestContext =>
-        requireUserInfo { userInfo =>
+        requireUserInfo(samRequestContext) { userInfo =>
           path("petServiceAccount" / Segment / Segment) { (project, userEmail) =>
             get {
               requireAction(

@@ -27,7 +27,7 @@ trait ManagedGroupRoutes extends UserInfoDirectives with SecurityDirectives with
   val managedGroupService: ManagedGroupService
 
   def groupRoutes: server.Route = withSamRequestContext { samRequestContext =>
-    requireUserInfo { userInfo =>
+    requireUserInfo(samRequestContext) { userInfo =>
       (pathPrefix("groups" / "v1") | pathPrefix("group")) {
         pathPrefix(Segment) { groupId =>
           val managedGroup = FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, ResourceId(groupId))

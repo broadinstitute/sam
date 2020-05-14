@@ -31,8 +31,8 @@ trait StandardUserInfoDirectives extends UserInfoDirectives with LazyLogging {
   implicit val executionContext: ExecutionContext
   val identityConcentratorService: Option[IdentityConcentratorService] = None
 
-  def requireUserInfo: Directive1[UserInfo] = handleAuthHeaders(requireUserInfoFromJwt, requireUserInfoFromOIDC)
-  def requireCreateUser: Directive1[CreateWorkbenchUser] = handleAuthHeaders(requireCreateUserInfoFromJwt, requireCreateUserInfoFromOIDC)
+  def requireUserInfo(samRequestContext: SamRequestContext): Directive1[UserInfo] = handleAuthHeaders(requireUserInfoFromJwt, requireUserInfoFromOIDC, samRequestContext)
+  def requireCreateUser(samRequestContext: SamRequestContext): Directive1[CreateWorkbenchUser] = handleAuthHeaders(requireCreateUserInfoFromJwt, requireCreateUserInfoFromOIDC, samRequestContext)
 
   /**
     * Utility function that knows how to handle the request based on whether or not JWT is present.
@@ -42,14 +42,14 @@ trait StandardUserInfoDirectives extends UserInfoDirectives with LazyLogging {
     * @tparam T type this request returns
     * @return
     */
-  private def handleAuthHeaders[T](fromJwt: (JwtUserInfo, OAuth2BearerToken, IdentityConcentratorService) => Directive1[T], fromOIDC: OIDCHeaders => Directive1[T]): Directive1[T] =
+  private def handleAuthHeaders[T](fromJwt: (JwtUserInfo, OAuth2BearerToken, IdentityConcentratorService, SamRequestContext) => Directive1[T], fromOIDC: (OIDCHeaders, SamRequestContext) => Directive1[T], samRequestContext: SamRequestContext): Directive1[T] =
     (headerValueByName(authorizationHeader) &
       provide(identityConcentratorService)) tflatMap {
       // order of these cases is important: if the authorization header is a valid jwt we must ignore
       // any OIDC headers otherwise we may be vulnerable to a malicious user specifying a valid JWT
       // but different user information in the OIDC headers
       case (JwtAuthorizationHeader(Success(jwtUserInfo), bearerToken), Some(icService)) =>
-        fromJwt(jwtUserInfo, bearerToken, icService)
+        fromJwt(jwtUserInfo, bearerToken, icService, samRequestContext)
 
       case (JwtAuthorizationHeader(Failure(regrets), _), _) =>
         failWith(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Unauthorized, "could not parse authorization header, jwt missing required fields", regrets)))
@@ -63,25 +63,25 @@ trait StandardUserInfoDirectives extends UserInfoDirectives with LazyLogging {
         (headerValueByName(accessTokenHeader).as(OAuth2BearerToken) &
           headerValueByName(googleSubjectIdHeader).as(GoogleSubjectId) &
           headerValueByName(expiresInHeader) &
-          headerValueByName(emailHeader).as(WorkbenchEmail)).as(OIDCHeaders).flatMap(fromOIDC)
+          headerValueByName(emailHeader).as(WorkbenchEmail)).as(OIDCHeaders).flatMap(fromOIDC(_, samRequestContext))
     }
 
-  private def requireUserInfoFromJwt(jwtUserInfo: JwtUserInfo, bearerToken: OAuth2BearerToken, icService: IdentityConcentratorService): Directive1[UserInfo] =
+  private def requireUserInfoFromJwt(jwtUserInfo: JwtUserInfo, bearerToken: OAuth2BearerToken, icService: IdentityConcentratorService, samRequestContext: SamRequestContext): Directive1[UserInfo] =
     onSuccess {
-      getUserInfoFromJwt(jwtUserInfo, bearerToken, directoryDAO, icService, SamRequestContext(None)).unsafeToFuture() // Plumbing for this tracewill be added in a follow-up PR. Ticket: https://broadworkbench.atlassian.net/browse/CA-849
+      getUserInfoFromJwt(jwtUserInfo, bearerToken, directoryDAO, icService, samRequestContext).unsafeToFuture()
     }
 
-  private def requireUserInfoFromOIDC(oidcHeaders: OIDCHeaders): Directive1[UserInfo] =
+  private def requireUserInfoFromOIDC(oidcHeaders: OIDCHeaders, samRequestContext: SamRequestContext): Directive1[UserInfo] =
     onSuccess {
-      getUserInfoFromOidcHeaders(directoryDAO, oidcHeaders, SamRequestContext(None)).unsafeToFuture() // Plumbing for this tracewill be added in a follow-up PR. Ticket: https://broadworkbench.atlassian.net/browse/CA-849
+      getUserInfoFromOidcHeaders(directoryDAO, oidcHeaders, samRequestContext).unsafeToFuture()
     }
 
-  private def requireCreateUserInfoFromJwt(jwtUserInfo: JwtUserInfo, bearerToken: OAuth2BearerToken, icService: IdentityConcentratorService): Directive1[CreateWorkbenchUser] =
+  private def requireCreateUserInfoFromJwt(jwtUserInfo: JwtUserInfo, bearerToken: OAuth2BearerToken, icService: IdentityConcentratorService, samRequestContext: SamRequestContext): Directive1[CreateWorkbenchUser] =
     onSuccess {
       newCreateWorkbenchUserFromJwt(jwtUserInfo, bearerToken, icService).unsafeToFuture()
     }
 
-  private def requireCreateUserInfoFromOIDC(oidcHeaders: OIDCHeaders): Directive1[CreateWorkbenchUser] =
+  private def requireCreateUserInfoFromOIDC(oidcHeaders: OIDCHeaders, samRequestContext: SamRequestContext): Directive1[CreateWorkbenchUser] =
     provide(CreateWorkbenchUser(genWorkbenchUserId(System.currentTimeMillis()), oidcHeaders.googleSubjectId, oidcHeaders.email, None))
 }
 
