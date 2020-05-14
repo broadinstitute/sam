@@ -36,6 +36,7 @@ trait SamModelDirectives {
     traceRequest.map { span => SamRequestContext(Option(span)) }
 
   // todo: overload? or check for optional name/samrequestcontext?
+  // todo: rename
   def withParentSamRequestContext(name: String, samRequestContext: SamRequestContext): Directive1[SamRequestContext] =
     samRequestContext.parentSpan match {
       case Some (parentSpan) =>
