@@ -10,8 +10,10 @@ import org.broadinstitute.dsde.workbench.google.GooglePubSubDAO.PubSubMessage
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.model.FullyQualifiedPolicyId
+import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.util.FutureSupport
 import spray.json._
+import io.opencensus.scala.Tracing
 
 import scala.concurrent.Future
 import scala.concurrent.duration.{FiniteDuration, _}
@@ -127,12 +129,15 @@ class GoogleGroupSyncMonitorActor(
 
     case Some(message: PubSubMessage) =>
       logger.debug(s"received sync message: $message")
-      val groupId: WorkbenchGroupIdentity = parseMessage(message)
+      import Tracing._
+      trace("GoogleGroupSyncMonitor-PubSubMessage") { span =>
+        val groupId: WorkbenchGroupIdentity = parseMessage(message)
 
-      groupSynchronizer
-        .synchronizeGroupMembers(groupId)
-        .toTry
-        .map(sr => sr.fold(t => FailToSynchronize(t, message.ackId), x => ReportMessage(x, message.ackId))) pipeTo self
+        groupSynchronizer
+          .synchronizeGroupMembers(groupId, samRequestContext = SamRequestContext(Option(span))) // Since this is an internal pub/sub call, we have to start a new SamRequestContext.
+          .toTry
+          .map(sr => sr.fold(t => FailToSynchronize(t, message.ackId), x => ReportMessage(x, message.ackId))) pipeTo self
+      }
 
     case None =>
       // there was no message to wait and try again
@@ -140,20 +145,24 @@ class GoogleGroupSyncMonitorActor(
       system.scheduler.scheduleOnce(nextTime.asInstanceOf[FiniteDuration], self, StartMonitorPass)
 
     case ReportMessage(report, ackId) =>
-      val errorReports = report.values.flatten.collect {
-        case SyncReportItem(_, _, errorReports) if errorReports.nonEmpty => errorReports
-      }.flatten
+      import Tracing._
+      trace("GoogleGroupSyncMonitor-ReportMessage") { _ =>
+        val errorReports = report.values.flatten.collect {
+          case SyncReportItem(_, _, errorReports) if errorReports.nonEmpty => errorReports
+        }.flatten
 
-      if (errorReports.isEmpty) {
-        // sync done, log it and try again immediately
-        acknowledgeMessage(ackId).map(_ => StartMonitorPass) pipeTo self
+        if (errorReports.isEmpty) {
+          // sync done, log it and try again immediately
+          acknowledgeMessage(ackId).map(_ => StartMonitorPass) pipeTo self
 
-        import DefaultJsonProtocol._
-        import WorkbenchIdentityJsonSupport._
-        import org.broadinstitute.dsde.workbench.sam.google.GoogleModelJsonSupport._
-        logger.info(s"synchronized google group ${report.toJson.compactPrint}")
-      } else {
-        throw new WorkbenchExceptionWithErrorReport(ErrorReport("error(s) syncing google group", errorReports.toSeq))
+          import DefaultJsonProtocol._
+          import WorkbenchIdentityJsonSupport._
+          import org.broadinstitute.dsde.workbench.sam.google.GoogleModelJsonSupport._
+          logger.info(s"synchronized google group ${report.toJson.compactPrint}")
+          Future.successful(None)
+        } else {
+          throw new WorkbenchExceptionWithErrorReport(ErrorReport("error(s) syncing google group", errorReports.toSeq))
+        }
       }
 
     case FailToSynchronize(t, ackId) =>

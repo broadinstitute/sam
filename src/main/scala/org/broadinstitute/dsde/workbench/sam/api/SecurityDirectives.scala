@@ -10,23 +10,24 @@ import org.broadinstitute.dsde.workbench.sam.service.PolicyEvaluatorService
 import ImplicitConversions.ioOnSuccessMagnet
 import cats.implicits._
 import cats.effect.IO
+import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 trait SecurityDirectives {
   def policyEvaluatorService: PolicyEvaluatorService
 
-  def requireAction(resource: FullyQualifiedResourceId, action: ResourceAction, userId: WorkbenchUserId): Directive0 =
-    requireOneOfAction(resource, Set(action), userId)
+  def requireAction(resource: FullyQualifiedResourceId, action: ResourceAction, userId: WorkbenchUserId, samRequestContext: SamRequestContext): Directive0 =
+    requireOneOfAction(resource, Set(action), userId, samRequestContext)
 
-  def requireOneOfAction(resource: FullyQualifiedResourceId, requestedActions: Set[ResourceAction], userId: WorkbenchUserId): Directive0 =
+  def requireOneOfAction(resource: FullyQualifiedResourceId, requestedActions: Set[ResourceAction], userId: WorkbenchUserId, samRequestContext: SamRequestContext): Directive0 =
     Directives.mapInnerRoute { innerRoute =>
-      onSuccess(hasPermissionOneOf(resource, requestedActions, userId)) { hasPermission =>
+      onSuccess(hasPermissionOneOf(resource, requestedActions, userId, samRequestContext)) { hasPermission =>
         if (hasPermission) {
           innerRoute
         } else {
 
           // in the case where we don't have the required action, we need to figure out if we should return
           // a Not Found (you have no access) vs a Forbidden (you have access, just not the right kind)
-          onSuccess(policyEvaluatorService.listResourceAccessPoliciesForUser(resource, userId)) { policies =>
+          onSuccess(policyEvaluatorService.listResourceAccessPoliciesForUser(resource, userId, samRequestContext)) { policies =>
 
             if (policies.isEmpty) {
               Directives.failWith(
@@ -44,6 +45,6 @@ trait SecurityDirectives {
       }
     }
 
-  private def hasPermissionOneOf(resource: FullyQualifiedResourceId, actions: Iterable[ResourceAction], userId: WorkbenchUserId): IO[Boolean] =
-    actions.toList.existsM(policyEvaluatorService.hasPermission(resource, _, userId))
+  private def hasPermissionOneOf(resource: FullyQualifiedResourceId, actions: Iterable[ResourceAction], userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Boolean] =
+    actions.toList.existsM(policyEvaluatorService.hasPermission(resource, _, userId, samRequestContext))
 }

@@ -173,7 +173,7 @@ trait UserRoutesSpecHelper extends FlatSpec with Matchers with ScalatestRouteTes
     }
     val (_, _, routes) = createTestUser(cloudExtensions = Some(cloudExtensions), googleDirectoryDAO = Some(googDirectoryDAO), userEmail = adminUserEmail)
     val userId = genWorkbenchUserId(System.currentTimeMillis())
-    val userStatus = runAndWait(routes.userService.createUser(CreateWorkbenchUser(userId, GoogleSubjectId(userId.value), defaultUserEmail, None)))
+    val userStatus = runAndWait(routes.userService.createUser(CreateWorkbenchUser(userId, GoogleSubjectId(userId.value), defaultUserEmail, None), samRequestContext))
     (WorkbenchUser(userStatus.userInfo.userSubjectId, Some(GoogleSubjectId(userStatus.userInfo.userSubjectId.value)), userStatus.userInfo.userEmail, None), routes)
   }
 

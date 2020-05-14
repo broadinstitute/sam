@@ -9,6 +9,7 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.ServiceAccountSubjectId
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicy, BasicWorkbenchGroup}
+import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import scala.collection.concurrent.TrieMap
 import scala.collection.mutable
@@ -33,7 +34,7 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
 
   private val groupAccessInstructions: mutable.Map[WorkbenchGroupName, String] = new TrieMap()
 
-  override def createGroup(group: BasicWorkbenchGroup, accessInstruction: Option[String] = None): IO[BasicWorkbenchGroup] =
+  override def createGroup(group: BasicWorkbenchGroup, accessInstruction: Option[String] = None, samRequestContext: SamRequestContext): IO[BasicWorkbenchGroup] =
     if (groups.keySet.contains(group.id)) {
       IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"group ${group.id} already exists")))
     } else {
@@ -42,16 +43,16 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
       IO.pure(group)
     }
 
-  override def loadGroup(groupName: WorkbenchGroupName): IO[Option[BasicWorkbenchGroup]] = IO {
+  override def loadGroup(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Option[BasicWorkbenchGroup]] = IO {
     groups.get(groupName).map(_.asInstanceOf[BasicWorkbenchGroup])
   }
 
-  override def loadGroups(groupNames: Set[WorkbenchGroupName]): IO[Stream[BasicWorkbenchGroup]] = IO {
+  override def loadGroups(groupNames: Set[WorkbenchGroupName], samRequestContext: SamRequestContext): IO[Stream[BasicWorkbenchGroup]] = IO {
     groups.filterKeys(groupNames.map(_.asInstanceOf[WorkbenchGroupIdentity])).values.map(_.asInstanceOf[BasicWorkbenchGroup]).toStream
   }
 
-  override def deleteGroup(groupName: WorkbenchGroupName): IO[Unit] = {
-    listAncestorGroups(groupName).map { ancestors =>
+  override def deleteGroup(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Unit] = {
+    listAncestorGroups(groupName, samRequestContext).map { ancestors =>
       if (ancestors.nonEmpty)
         throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"group ${groupName.value} cannot be deleted because it is a member of at least 1 other group"))
       else
@@ -59,7 +60,7 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     }
   }
 
-  override def addGroupMember(groupName: WorkbenchGroupIdentity, addMember: WorkbenchSubject): IO[Boolean] = IO {
+  override def addGroupMember(groupName: WorkbenchGroupIdentity, addMember: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean] = IO {
     val group = groups(groupName)
     val updatedGroup = group match {
       case g: BasicWorkbenchGroup => g.copy(members = group.members + addMember)
@@ -70,7 +71,7 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     true
   }
 
-  override def removeGroupMember(groupName: WorkbenchGroupIdentity, removeMember: WorkbenchSubject): IO[Boolean] = IO {
+  override def removeGroupMember(groupName: WorkbenchGroupIdentity, removeMember: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean] = IO {
     val group = groups(groupName)
     val updatedGroup = group match {
       case g: BasicWorkbenchGroup => g.copy(members = group.members - removeMember)
@@ -81,15 +82,15 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     true
   }
 
-  override def isGroupMember(groupId: WorkbenchGroupIdentity, member: WorkbenchSubject): IO[Boolean] = IO {
+  override def isGroupMember(groupId: WorkbenchGroupIdentity, member: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean] = IO {
     groups.getOrElse(groupId, BasicWorkbenchGroup(null, Set.empty, WorkbenchEmail("g1@example.com"))).members.contains(member)
   }
 
-  override def loadSubjectFromEmail(email: WorkbenchEmail): IO[Option[WorkbenchSubject]] = IO {
+  override def loadSubjectFromEmail(email: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Option[WorkbenchSubject]] = IO {
     Option(usersWithEmails.getOrElse(email, groupsWithEmails.getOrElse(email, petsWithEmails.getOrElse(email, null))))
   }
 
-  override def createUser(user: WorkbenchUser): IO[WorkbenchUser] =
+  override def createUser(user: WorkbenchUser, samRequestContext: SamRequestContext): IO[WorkbenchUser] =
     if (users.keySet.contains(user.id)) {
       IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"user ${user.id} already exists")))
     } else {
@@ -100,19 +101,19 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
       IO.pure(user)
     }
 
-  override def loadUser(userId: WorkbenchUserId): IO[Option[WorkbenchUser]] = IO {
+  override def loadUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[WorkbenchUser]] = IO {
     users.get(userId)
   }
 
-  override def loadUsers(userIds: Set[WorkbenchUserId]): IO[Stream[WorkbenchUser]] = IO {
+  override def loadUsers(userIds: Set[WorkbenchUserId], samRequestContext: SamRequestContext): IO[Stream[WorkbenchUser]] = IO {
     users.filterKeys(userIds).values.toStream
   }
 
-  override def deleteUser(userId: WorkbenchUserId): IO[Unit] = IO {
+  override def deleteUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit] = IO {
     users -= userId
   }
 
-  override def listUsersGroups(userId: WorkbenchUserId): IO[Set[WorkbenchGroupIdentity]] = IO {
+  override def listUsersGroups(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[WorkbenchGroupIdentity]] = IO {
     listSubjectsGroups(userId, Set.empty).map(_.id)
   }
 
@@ -129,7 +130,7 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     }
   }
 
-  override def listIntersectionGroupUsers(groupIds: Set[WorkbenchGroupIdentity]): IO[Set[WorkbenchUserId]] = IO {
+  override def listIntersectionGroupUsers(groupIds: Set[WorkbenchGroupIdentity], samRequestContext: SamRequestContext): IO[Set[WorkbenchUserId]] = IO {
     groupIds.flatMap(groupId => listGroupUsers(groupId, Set.empty))
   }
 
@@ -147,27 +148,27 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     }
   }
 
-  override def listAncestorGroups(groupName: WorkbenchGroupIdentity): IO[Set[WorkbenchGroupIdentity]] = IO {
+  override def listAncestorGroups(groupName: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[Set[WorkbenchGroupIdentity]] = IO {
     listSubjectsGroups(groupName, Set.empty).map(_.id)
   }
 
-  override def enableIdentity(subject: WorkbenchSubject): IO[Unit] = IO.pure(enabledUsers += ((subject, ())))
+  override def enableIdentity(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Unit] = IO.pure(enabledUsers += ((subject, ())))
 
-  override def disableIdentity(subject: WorkbenchSubject): IO[Unit] = IO {
+  override def disableIdentity(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Unit] = IO {
     enabledUsers -= subject
   }
 
-  override def isEnabled(subject: WorkbenchSubject): IO[Boolean] = IO {
+  override def isEnabled(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean] = IO {
     enabledUsers.contains(subject)
   }
 
-  override def loadGroupEmail(groupName: WorkbenchGroupName): IO[Option[WorkbenchEmail]] = loadGroup(groupName).map(_.map(_.email))
+  override def loadGroupEmail(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Option[WorkbenchEmail]] = loadGroup(groupName, samRequestContext).map(_.map(_.email))
 
-  override def batchLoadGroupEmail(groupNames: Set[WorkbenchGroupName]): IO[Stream[(WorkbenchGroupName, WorkbenchEmail)]] = groupNames.toStream.parTraverse { name =>
-    loadGroupEmail(name).map { y => (name -> y.get)}
+  override def batchLoadGroupEmail(groupNames: Set[WorkbenchGroupName], samRequestContext: SamRequestContext): IO[Stream[(WorkbenchGroupName, WorkbenchEmail)]] = groupNames.toStream.parTraverse { name =>
+    loadGroupEmail(name, samRequestContext).map { y => (name -> y.get)}
   }
 
-  override def createPetServiceAccount(petServiceAccount: PetServiceAccount): IO[PetServiceAccount] = {
+  override def createPetServiceAccount(petServiceAccount: PetServiceAccount, samRequestContext: SamRequestContext): IO[PetServiceAccount] = {
     if (petServiceAccountsByUser.keySet.contains(petServiceAccount.id)) {
       IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"pet service account ${petServiceAccount.id} already exists")))
     }
@@ -177,26 +178,26 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     IO.pure(petServiceAccount)
   }
 
-  override def loadPetServiceAccount(petServiceAccountUniqueId: PetServiceAccountId): IO[Option[PetServiceAccount]] = IO {
+  override def loadPetServiceAccount(petServiceAccountUniqueId: PetServiceAccountId, samRequestContext: SamRequestContext): IO[Option[PetServiceAccount]] = IO {
     petServiceAccountsByUser.get(petServiceAccountUniqueId)
   }
 
-  override def deletePetServiceAccount(petServiceAccountUniqueId: PetServiceAccountId): IO[Unit] = IO {
+  override def deletePetServiceAccount(petServiceAccountUniqueId: PetServiceAccountId, samRequestContext: SamRequestContext): IO[Unit] = IO {
     petServiceAccountsByUser -= petServiceAccountUniqueId
   }
 
-  override def getAllPetServiceAccountsForUser(userId: WorkbenchUserId): IO[Seq[PetServiceAccount]] = IO {
+  override def getAllPetServiceAccountsForUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Seq[PetServiceAccount]] = IO {
     petServiceAccountsByUser.collect {
       case (PetServiceAccountId(`userId`, _), petSA) => petSA
     }.toSeq
   }
 
-  override def updateSynchronizedDate(groupId: WorkbenchGroupIdentity): IO[Unit] = {
+  override def updateSynchronizedDate(groupId: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[Unit] = {
     groupSynchronizedDates += groupId -> new Date()
     IO.unit
   }
 
-  override def loadSubjectEmail(subject: WorkbenchSubject): IO[Option[WorkbenchEmail]] = IO {
+  override def loadSubjectEmail(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Option[WorkbenchEmail]] = IO {
     subject match {
       case id: WorkbenchUserId => users.get(id).map(_.email)
       case id: WorkbenchGroupIdentity => groups.get(id).map(_.email)
@@ -204,42 +205,42 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     }
   }
 
-  override def loadSubjectEmails(subjects: Set[WorkbenchSubject]): IO[Stream[WorkbenchEmail]] = subjects.toStream.parTraverse { subject =>
-      loadSubjectEmail(subject).map(_.get)
+  override def loadSubjectEmails(subjects: Set[WorkbenchSubject], samRequestContext: SamRequestContext): IO[Stream[WorkbenchEmail]] = subjects.toStream.parTraverse { subject =>
+      loadSubjectEmail(subject, samRequestContext).map(_.get)
     }
 
-  override def getSynchronizedDate(groupId: WorkbenchGroupIdentity): IO[Option[Date]] = {
+  override def getSynchronizedDate(groupId: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[Option[Date]] = {
     IO.pure(groupSynchronizedDates.get(groupId))
   }
 
-  override def getSynchronizedEmail(groupId: WorkbenchGroupIdentity): IO[Option[WorkbenchEmail]] = {
+  override def getSynchronizedEmail(groupId: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[Option[WorkbenchEmail]] = {
     IO.pure(groups.get(WorkbenchGroupName(groupId.toString)).map(_.email))
   }
 
-  override def getUserFromPetServiceAccount(petSAId: ServiceAccountSubjectId): IO[Option[WorkbenchUser]] = {
+  override def getUserFromPetServiceAccount(petSAId: ServiceAccountSubjectId, samRequestContext: SamRequestContext): IO[Option[WorkbenchUser]] = {
     val userIds = petServiceAccountsByUser.toSeq.collect {
       case (PetServiceAccountId(userId, _), petSA) if petSA.serviceAccount.subjectId == petSAId => userId
     }
     userIds match {
       case Seq() => IO.pure(None)
-      case Seq(userId) => loadUser(userId)
+      case Seq(userId) => loadUser(userId, samRequestContext)
       case _ => IO.raiseError(new WorkbenchException(s"id $petSAId refers to too many subjects: $userIds"))
     }
   }
 
-  override def updatePetServiceAccount(petServiceAccount: PetServiceAccount): IO[PetServiceAccount] = IO {
+  override def updatePetServiceAccount(petServiceAccount: PetServiceAccount, samRequestContext: SamRequestContext): IO[PetServiceAccount] = IO {
     petServiceAccountsByUser.update(petServiceAccount.id, petServiceAccount)
     petServiceAccount
   }
 
-  override def getManagedGroupAccessInstructions(groupName: WorkbenchGroupName): IO[Option[String]] = {
+  override def getManagedGroupAccessInstructions(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Option[String]] = {
     if (groups.contains(groupName))
       IO.pure(groupAccessInstructions.get(groupName))
     else
       IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "group not found")))
   }
 
-  override def setManagedGroupAccessInstructions(groupName: WorkbenchGroupName, accessInstructions: String): IO[Unit] = {
+  override def setManagedGroupAccessInstructions(groupName: WorkbenchGroupName, accessInstructions: String, samRequestContext: SamRequestContext): IO[Unit] = {
     groupAccessInstructions += groupName -> accessInstructions
     IO.pure(())
   }
@@ -260,29 +261,27 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     IO.pure(value)
   }
 
-  override def loadSubjectFromGoogleSubjectId(googleSubjectId: GoogleSubjectId): IO[Option[WorkbenchSubject]] = {
+  override def loadSubjectFromGoogleSubjectId(googleSubjectId: GoogleSubjectId, samRequestContext: SamRequestContext): IO[Option[WorkbenchSubject]] = {
     val res = for{
       uid <- usersWithGoogleSubjectIds.get(googleSubjectId)
     } yield uid
    res.traverse(IO.pure)
   }
 
-  override def setGoogleSubjectId(userId: WorkbenchUserId, googleSubjectId: GoogleSubjectId): IO[Unit] = {
+  override def setGoogleSubjectId(userId: WorkbenchUserId, googleSubjectId: GoogleSubjectId, samRequestContext: SamRequestContext): IO[Unit] = {
     users.get(userId).fold[IO[Unit]](IO.pure(new Exception(s"user $userId not found")))(
       u => IO.pure(users + (userId -> u.copy(googleSubjectId = Some(googleSubjectId))))
     )
   }
 
-  override def listUserDirectMemberships(userId: WorkbenchUserId): IO[Stream[WorkbenchGroupIdentity]] = {
+  override def listUserDirectMemberships(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Stream[WorkbenchGroupIdentity]] = {
     IO.pure(groups.filter { case (_, group) => group.members.contains(userId) }.keys.toStream)
   }
 
-  override def loadUserByIdentityConcentratorId(userId: IdentityConcentratorId)
+  override def loadUserByIdentityConcentratorId(userId: IdentityConcentratorId, samRequestContext: SamRequestContext)
       : IO[Option[WorkbenchUser]] = IO.pure(users.values.find(_.identityConcentratorId.contains(userId)))
 
-  override def setUserIdentityConcentratorId(
-      googleSubjectId: GoogleSubjectId,
-      icId: IdentityConcentratorId): IO[Int] = IO {
+  override def setUserIdentityConcentratorId(googleSubjectId: GoogleSubjectId, icId: IdentityConcentratorId, samRequestContext: SamRequestContext): IO[Int] = IO {
     val result = for {
       userId <- usersWithGoogleSubjectIds.get(googleSubjectId)
       user <- users.get(userId.asInstanceOf[WorkbenchUserId])

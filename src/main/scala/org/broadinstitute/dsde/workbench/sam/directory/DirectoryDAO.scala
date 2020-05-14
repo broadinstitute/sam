@@ -6,61 +6,62 @@ import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google._
 import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
+import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 /**
   * Created by dvoet on 5/26/17.
   */
 trait DirectoryDAO extends RegistrationDAO {
-  def createGroup(group: BasicWorkbenchGroup, accessInstructionsOpt: Option[String] = None): IO[BasicWorkbenchGroup]
-  def loadGroup(groupName: WorkbenchGroupName): IO[Option[BasicWorkbenchGroup]]
-  def loadGroups(groupNames: Set[WorkbenchGroupName]): IO[Stream[BasicWorkbenchGroup]]
-  def loadGroupEmail(groupName: WorkbenchGroupName): IO[Option[WorkbenchEmail]]
-  def batchLoadGroupEmail(groupNames: Set[WorkbenchGroupName]): IO[Stream[(WorkbenchGroupName, WorkbenchEmail)]]
-  def deleteGroup(groupName: WorkbenchGroupName): IO[Unit]
+  def createGroup(group: BasicWorkbenchGroup, accessInstructionsOpt: Option[String] = None, samRequestContext: SamRequestContext): IO[BasicWorkbenchGroup]
+  def loadGroup(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Option[BasicWorkbenchGroup]]
+  def loadGroups(groupNames: Set[WorkbenchGroupName], samRequestContext: SamRequestContext): IO[Stream[BasicWorkbenchGroup]]
+  def loadGroupEmail(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Option[WorkbenchEmail]]
+  def batchLoadGroupEmail(groupNames: Set[WorkbenchGroupName], samRequestContext: SamRequestContext): IO[Stream[(WorkbenchGroupName, WorkbenchEmail)]]
+  def deleteGroup(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Unit]
 
   /**
     * @return true if the subject was added, false if it was already there
     */
-  def addGroupMember(groupId: WorkbenchGroupIdentity, addMember: WorkbenchSubject): IO[Boolean]
+  def addGroupMember(groupId: WorkbenchGroupIdentity, addMember: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean]
 
   /**
     * @return true if the subject was removed, false if it was already gone
     */
-  def removeGroupMember(groupId: WorkbenchGroupIdentity, removeMember: WorkbenchSubject): IO[Boolean]
-  def isGroupMember(groupId: WorkbenchGroupIdentity, member: WorkbenchSubject): IO[Boolean]
-  def updateSynchronizedDate(groupId: WorkbenchGroupIdentity): IO[Unit]
-  def getSynchronizedDate(groupId: WorkbenchGroupIdentity): IO[Option[Date]]
-  def getSynchronizedEmail(groupId: WorkbenchGroupIdentity): IO[Option[WorkbenchEmail]]
+  def removeGroupMember(groupId: WorkbenchGroupIdentity, removeMember: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean]
+  def isGroupMember(groupId: WorkbenchGroupIdentity, member: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean]
+  def updateSynchronizedDate(groupId: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[Unit]
+  def getSynchronizedDate(groupId: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[Option[Date]]
+  def getSynchronizedEmail(groupId: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[Option[WorkbenchEmail]]
 
-  def loadSubjectFromEmail(email: WorkbenchEmail): IO[Option[WorkbenchSubject]]
-  def loadSubjectEmail(subject: WorkbenchSubject): IO[Option[WorkbenchEmail]]
-  def loadSubjectEmails(subjects: Set[WorkbenchSubject]): IO[Stream[WorkbenchEmail]]
-  def loadSubjectFromGoogleSubjectId(googleSubjectId: GoogleSubjectId): IO[Option[WorkbenchSubject]]
+  def loadSubjectFromEmail(email: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Option[WorkbenchSubject]]
+  def loadSubjectEmail(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Option[WorkbenchEmail]]
+  def loadSubjectEmails(subjects: Set[WorkbenchSubject], samRequestContext: SamRequestContext): IO[Stream[WorkbenchEmail]]
+  def loadSubjectFromGoogleSubjectId(googleSubjectId: GoogleSubjectId, samRequestContext: SamRequestContext): IO[Option[WorkbenchSubject]]
 
-  def createUser(user: WorkbenchUser): IO[WorkbenchUser]
-  def loadUser(userId: WorkbenchUserId): IO[Option[WorkbenchUser]]
-  def loadUserByIdentityConcentratorId(userId: IdentityConcentratorId): IO[Option[WorkbenchUser]]
-  def loadUsers(userIds: Set[WorkbenchUserId]): IO[Stream[WorkbenchUser]]
-  def deleteUser(userId: WorkbenchUserId): IO[Unit]
-  def setUserIdentityConcentratorId(googleSubjectId: GoogleSubjectId, icId: IdentityConcentratorId): IO[Int]
+  def createUser(user: WorkbenchUser, samRequestContext: SamRequestContext): IO[WorkbenchUser]
+  def loadUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[WorkbenchUser]]
+  def loadUserByIdentityConcentratorId(userId: IdentityConcentratorId, samRequestContext: SamRequestContext): IO[Option[WorkbenchUser]]
+  def loadUsers(userIds: Set[WorkbenchUserId], samRequestContext: SamRequestContext): IO[Stream[WorkbenchUser]]
+  def deleteUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit]
+  def setUserIdentityConcentratorId(googleSubjectId: GoogleSubjectId, icId: IdentityConcentratorId, samRequestContext: SamRequestContext): IO[Int]
 
 
-  def listUsersGroups(userId: WorkbenchUserId): IO[Set[WorkbenchGroupIdentity]]
-  def listUserDirectMemberships(userId: WorkbenchUserId): IO[Stream[WorkbenchGroupIdentity]]
-  def listIntersectionGroupUsers(groupId: Set[WorkbenchGroupIdentity]): IO[Set[WorkbenchUserId]]
-  def listAncestorGroups(groupId: WorkbenchGroupIdentity): IO[Set[WorkbenchGroupIdentity]]
+  def listUsersGroups(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[WorkbenchGroupIdentity]]
+  def listUserDirectMemberships(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Stream[WorkbenchGroupIdentity]]
+  def listIntersectionGroupUsers(groupId: Set[WorkbenchGroupIdentity], samRequestContext: SamRequestContext): IO[Set[WorkbenchUserId]]
+  def listAncestorGroups(groupId: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[Set[WorkbenchGroupIdentity]]
 
-  def enableIdentity(subject: WorkbenchSubject): IO[Unit]
-  def disableIdentity(subject: WorkbenchSubject): IO[Unit]
-  def isEnabled(subject: WorkbenchSubject): IO[Boolean]
+  def enableIdentity(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Unit]
+  def disableIdentity(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Unit]
+  def isEnabled(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean]
 
-  def getUserFromPetServiceAccount(petSA: ServiceAccountSubjectId): IO[Option[WorkbenchUser]]
-  def createPetServiceAccount(petServiceAccount: PetServiceAccount): IO[PetServiceAccount]
-  def loadPetServiceAccount(petServiceAccountId: PetServiceAccountId): IO[Option[PetServiceAccount]]
-  def deletePetServiceAccount(petServiceAccountId: PetServiceAccountId): IO[Unit]
-  def getAllPetServiceAccountsForUser(userId: WorkbenchUserId): IO[Seq[PetServiceAccount]]
-  def updatePetServiceAccount(petServiceAccount: PetServiceAccount): IO[PetServiceAccount]
-  def getManagedGroupAccessInstructions(groupName: WorkbenchGroupName): IO[Option[String]]
-  def setManagedGroupAccessInstructions(groupName: WorkbenchGroupName, accessInstructions: String): IO[Unit]
-  def setGoogleSubjectId(userId: WorkbenchUserId, googleSubjectId: GoogleSubjectId): IO[Unit]
+  def getUserFromPetServiceAccount(petSA: ServiceAccountSubjectId, samRequestContext: SamRequestContext): IO[Option[WorkbenchUser]]
+  def createPetServiceAccount(petServiceAccount: PetServiceAccount, samRequestContext: SamRequestContext): IO[PetServiceAccount]
+  def loadPetServiceAccount(petServiceAccountId: PetServiceAccountId, samRequestContext: SamRequestContext): IO[Option[PetServiceAccount]]
+  def deletePetServiceAccount(petServiceAccountId: PetServiceAccountId, samRequestContext: SamRequestContext): IO[Unit]
+  def getAllPetServiceAccountsForUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Seq[PetServiceAccount]]
+  def updatePetServiceAccount(petServiceAccount: PetServiceAccount, samRequestContext: SamRequestContext): IO[PetServiceAccount]
+  def getManagedGroupAccessInstructions(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Option[String]]
+  def setManagedGroupAccessInstructions(groupName: WorkbenchGroupName, accessInstructions: String, samRequestContext: SamRequestContext): IO[Unit]
+  def setGoogleSubjectId(userId: WorkbenchUserId, googleSubjectId: GoogleSubjectId, samRequestContext: SamRequestContext): IO[Unit]
 }

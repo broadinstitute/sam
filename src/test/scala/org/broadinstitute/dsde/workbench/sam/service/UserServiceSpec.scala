@@ -17,6 +17,7 @@ import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
+import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.ArgumentMatchers._
 import org.mockito.Mockito._
 import org.scalacheck.{Arbitrary, Gen}
@@ -65,13 +66,13 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
 
     googleExtensions = mock[GoogleExtensions]
     when(googleExtensions.allUsersGroupName).thenReturn(NoExtensions.allUsersGroupName)
-    when(googleExtensions.getOrCreateAllUsersGroup(any[DirectoryDAO])(any[ExecutionContext])).thenReturn(NoExtensions.getOrCreateAllUsersGroup(dirDAO))
-    when(googleExtensions.onUserCreate(any[WorkbenchUser])).thenReturn(Future.successful(()))
-    when(googleExtensions.onUserDelete(any[WorkbenchUserId])).thenReturn(Future.successful(()))
+    when(googleExtensions.getOrCreateAllUsersGroup(any[DirectoryDAO], any[SamRequestContext])(any[ExecutionContext])).thenReturn(NoExtensions.getOrCreateAllUsersGroup(dirDAO, samRequestContext))
+    when(googleExtensions.onUserCreate(any[WorkbenchUser], any[SamRequestContext])).thenReturn(Future.successful(()))
+    when(googleExtensions.onUserDelete(any[WorkbenchUserId], any[SamRequestContext])).thenReturn(Future.successful(()))
     when(googleExtensions.getUserStatus(any[WorkbenchUser])).thenReturn(Future.successful(true))
-    when(googleExtensions.onUserDisable(any[WorkbenchUser])).thenReturn(Future.successful(()))
-    when(googleExtensions.onUserEnable(any[WorkbenchUser])).thenReturn(Future.successful(()))
-    when(googleExtensions.onGroupUpdate(any[Seq[WorkbenchGroupIdentity]])).thenReturn(Future.successful(()))
+    when(googleExtensions.onUserDisable(any[WorkbenchUser], any[SamRequestContext])).thenReturn(Future.successful(()))
+    when(googleExtensions.onUserEnable(any[WorkbenchUser], any[SamRequestContext])).thenReturn(Future.successful(()))
+    when(googleExtensions.onGroupUpdate(any[Seq[WorkbenchGroupIdentity]], any[SamRequestContext])).thenReturn(Future.successful(()))
 
     service = new UserService(dirDAO, googleExtensions, registrationDAO)
   }
@@ -87,94 +88,94 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
 
   "UserService" should "create a user" in {
     // create a user
-    val newUser = service.createUser(defaultUser).futureValue
+    val newUser = service.createUser(defaultUser, samRequestContext).futureValue
     newUser shouldBe UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
-    verify(googleExtensions).onUserCreate(WorkbenchUser(defaultUser.id,  Some(defaultUser.googleSubjectId), defaultUser.email, defaultUser.identityConcentratorId))
+    verify(googleExtensions).onUserCreate(WorkbenchUser(defaultUser.id,  Some(defaultUser.googleSubjectId), defaultUser.email, defaultUser.identityConcentratorId), samRequestContext)
 
     // check ldap
-    dirDAO.loadUser(defaultUserId).unsafeRunSync() shouldBe Some(WorkbenchUser(defaultUser.id,  Some(defaultUser.googleSubjectId), defaultUser.email, defaultUser.identityConcentratorId))
-    registrationDAO.loadUser(defaultUserId).unsafeRunSync() shouldBe Some(WorkbenchUser(defaultUser.id,  Some(defaultUser.googleSubjectId), defaultUser.email, defaultUser.identityConcentratorId))
-    dirDAO.isEnabled(defaultUserId).unsafeRunSync() shouldBe true
-    registrationDAO.isEnabled(defaultUserId).unsafeRunSync() shouldBe true
-    dirDAO.loadGroup(service.cloudExtensions.allUsersGroupName).unsafeRunSync() shouldBe
-      Some(BasicWorkbenchGroup(service.cloudExtensions.allUsersGroupName, Set(defaultUserId), service.cloudExtensions.getOrCreateAllUsersGroup(dirDAO).futureValue.email))
+    dirDAO.loadUser(defaultUserId, samRequestContext).unsafeRunSync() shouldBe Some(WorkbenchUser(defaultUser.id,  Some(defaultUser.googleSubjectId), defaultUser.email, defaultUser.identityConcentratorId))
+    registrationDAO.loadUser(defaultUserId, samRequestContext).unsafeRunSync() shouldBe Some(WorkbenchUser(defaultUser.id,  Some(defaultUser.googleSubjectId), defaultUser.email, defaultUser.identityConcentratorId))
+    dirDAO.isEnabled(defaultUserId, samRequestContext).unsafeRunSync() shouldBe true
+    registrationDAO.isEnabled(defaultUserId, samRequestContext).unsafeRunSync() shouldBe true
+    dirDAO.loadGroup(service.cloudExtensions.allUsersGroupName, samRequestContext).unsafeRunSync() shouldBe
+      Some(BasicWorkbenchGroup(service.cloudExtensions.allUsersGroupName, Set(defaultUserId), service.cloudExtensions.getOrCreateAllUsersGroup(dirDAO, samRequestContext).futureValue.email))
   }
 
   it should "get user status" in {
     // user doesn't exist yet
-    service.getUserStatus(defaultUserId).futureValue shouldBe None
+    service.getUserStatus(defaultUserId, samRequestContext = samRequestContext).futureValue shouldBe None
 
     // create a user
-    val newUser = service.createUser(defaultUser).futureValue
+    val newUser = service.createUser(defaultUser, samRequestContext).futureValue
     newUser shouldBe UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
 
     // user should exist now
-    val status = service.getUserStatus(defaultUserId).futureValue
+    val status = service.getUserStatus(defaultUserId, samRequestContext = samRequestContext).futureValue
     status shouldBe Some(UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true)))
 
-    val statusNoEnabled = service.getUserStatus(defaultUserId, true).futureValue
+    val statusNoEnabled = service.getUserStatus(defaultUserId, true, samRequestContext).futureValue
     statusNoEnabled shouldBe Some(UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map.empty))
   }
 
   it should "get user status info" in {
     // user doesn't exist yet
-    service.getUserStatusInfo(defaultUserId).unsafeRunSync() shouldBe None
+    service.getUserStatusInfo(defaultUserId, samRequestContext).unsafeRunSync() shouldBe None
 
     // create a user
-    val newUser = service.createUser(defaultUser).futureValue
+    val newUser = service.createUser(defaultUser, samRequestContext).futureValue
     newUser shouldBe UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
 
     // get user status info (id, email, ldap)
-    val info = service.getUserStatusInfo(defaultUserId).unsafeRunSync()
+    val info = service.getUserStatusInfo(defaultUserId, samRequestContext).unsafeRunSync()
     info shouldBe Some(UserStatusInfo(defaultUserId.value, defaultUserEmail.value, true))
   }
 
   it should "get user status diagnostics" in {
     // user doesn't exist yet
-    service.getUserStatusDiagnostics(defaultUserId).futureValue shouldBe None
+    service.getUserStatusDiagnostics(defaultUserId, samRequestContext).futureValue shouldBe None
 
     // create a user
-    val newUser = service.createUser(defaultUser).futureValue
+    val newUser = service.createUser(defaultUser, samRequestContext).futureValue
     newUser shouldBe UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
 
     // get user status diagnostics (ldap, usersGroups, googleGroups
-    val diagnostics = service.getUserStatusDiagnostics(defaultUserId).futureValue
+    val diagnostics = service.getUserStatusDiagnostics(defaultUserId, samRequestContext).futureValue
     diagnostics shouldBe Some(UserStatusDiagnostics(true, true, true))
   }
 
   it should "enable/disable user" in {
     // user doesn't exist yet
-    service.enableUser(defaultUserId, userInfo).futureValue shouldBe None
-    service.disableUser(defaultUserId, userInfo).futureValue shouldBe None
+    service.enableUser(defaultUserId, userInfo, samRequestContext).futureValue shouldBe None
+    service.disableUser(defaultUserId, userInfo, samRequestContext).futureValue shouldBe None
 
     // create a user
-    val newUser = service.createUser(defaultUser).futureValue
+    val newUser = service.createUser(defaultUser, samRequestContext).futureValue
     newUser shouldBe UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
 
     // it should be enabled
-    dirDAO.isEnabled(defaultUserId).unsafeRunSync() shouldBe true
-    registrationDAO.isEnabled(defaultUserId).unsafeRunSync() shouldBe true
+    dirDAO.isEnabled(defaultUserId, samRequestContext).unsafeRunSync() shouldBe true
+    registrationDAO.isEnabled(defaultUserId, samRequestContext).unsafeRunSync() shouldBe true
 
     // disable the user
-    val response = service.disableUser(defaultUserId, userInfo).futureValue
+    val response = service.disableUser(defaultUserId, userInfo, samRequestContext).futureValue
     response shouldBe Some(UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> false, "allUsersGroup" -> true, "google" -> true)))
 
     // check ldap
-    dirDAO.isEnabled(defaultUserId).unsafeRunSync() shouldBe false
-    registrationDAO.isEnabled(defaultUserId).unsafeRunSync() shouldBe false
+    dirDAO.isEnabled(defaultUserId, samRequestContext).unsafeRunSync() shouldBe false
+    registrationDAO.isEnabled(defaultUserId, samRequestContext).unsafeRunSync() shouldBe false
   }
 
   it should "delete a user" in {
     // create a user
-    val newUser = service.createUser(defaultUser).futureValue
+    val newUser = service.createUser(defaultUser, samRequestContext).futureValue
     newUser shouldBe UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
 
     // delete the user
-    service.deleteUser(defaultUserId, userInfo).futureValue
+    service.deleteUser(defaultUserId, userInfo, samRequestContext).futureValue
 
     // check
-    dirDAO.loadUser(defaultUserId).unsafeRunSync() shouldBe None
-    registrationDAO.loadUser(defaultUserId).unsafeRunSync() shouldBe None
+    dirDAO.loadUser(defaultUserId, samRequestContext).unsafeRunSync() shouldBe None
+    registrationDAO.loadUser(defaultUserId, samRequestContext).unsafeRunSync() shouldBe None
   }
 
   it should "generate unique identifier properly" in {
@@ -195,9 +196,9 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
     */
   "UserService registerUser" should "create new user when there's no existing subject for a given googleSubjectId and email" in{
     val user = genCreateWorkbenchUser.sample.get
-    service.registerUser(user).unsafeRunSync()
-    val res = dirDAO.loadUser(user.id).unsafeRunSync()
-    val registrationRes = registrationDAO.loadUser(user.id).unsafeRunSync()
+    service.registerUser(user, samRequestContext).unsafeRunSync()
+    val res = dirDAO.loadUser(user.id, samRequestContext).unsafeRunSync()
+    val registrationRes = registrationDAO.loadUser(user.id, samRequestContext).unsafeRunSync()
     res shouldBe Some(WorkbenchUser(user.id,  Some(user.googleSubjectId), user.email, user.identityConcentratorId))
     registrationRes shouldEqual res
   }
@@ -208,10 +209,10 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
     */
   it should "update googleSubjectId when there's no existing subject for a given googleSubjectId and but there is one for email" in{
     val user = genCreateWorkbenchUser.sample.get
-    service.inviteUser(InviteUser(user.id, user.email)).unsafeRunSync()
-    service.registerUser(user).unsafeRunSync()
-    val res = dirDAO.loadUser(user.id).unsafeRunSync()
-    val registrationRes = registrationDAO.loadUser(user.id).unsafeRunSync()
+    service.inviteUser(InviteUser(user.id, user.email), samRequestContext).unsafeRunSync()
+    service.registerUser(user, samRequestContext).unsafeRunSync()
+    val res = dirDAO.loadUser(user.id, samRequestContext).unsafeRunSync()
+    val registrationRes = registrationDAO.loadUser(user.id, samRequestContext).unsafeRunSync()
     res shouldBe Some(WorkbenchUser(user.id,  Some(user.googleSubjectId), user.email, user.identityConcentratorId))
     registrationRes shouldEqual res
   }
@@ -223,8 +224,8 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
   it should "return BadRequest when there's no existing subject for a given googleSubjectId and but there is one for email, and the returned subject is not a regular user" in{
     val user = genCreateWorkbenchUser.sample.get.copy(email = genNonPetEmail.sample.get, identityConcentratorId = None)
     val group = genBasicWorkbenchGroup.sample.get.copy(email = user.email, members = Set.empty)
-    dirDAO.createGroup(group).unsafeRunSync()
-    val res = service.registerUser(user).attempt.unsafeRunSync().swap.toOption.get.asInstanceOf[WorkbenchExceptionWithErrorReport]
+    dirDAO.createGroup(group, samRequestContext = samRequestContext).unsafeRunSync()
+    val res = service.registerUser(user, samRequestContext).attempt.unsafeRunSync().swap.toOption.get.asInstanceOf[WorkbenchExceptionWithErrorReport]
     Eq[WorkbenchExceptionWithErrorReport].eqv(res, new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"$user is not a regular user. Please use a different endpoint"))) shouldBe true
   }
 
@@ -234,16 +235,16 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
     */
   it should "return conflict when there's an existing subject for a given googleSubjectId" in{
     val user = genCreateWorkbenchUser.sample.get
-    dirDAO.createUser(WorkbenchUser(user.id,  Some(user.googleSubjectId), user.email, user.identityConcentratorId)).unsafeRunSync()
-    val res = service.registerUser(user).attempt.unsafeRunSync().swap.toOption.get.asInstanceOf[WorkbenchExceptionWithErrorReport]
+    dirDAO.createUser(WorkbenchUser(user.id,  Some(user.googleSubjectId), user.email, user.identityConcentratorId), samRequestContext).unsafeRunSync()
+    val res = service.registerUser(user, samRequestContext).attempt.unsafeRunSync().swap.toOption.get.asInstanceOf[WorkbenchExceptionWithErrorReport]
     Eq[WorkbenchExceptionWithErrorReport].eqv(res, new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"user ${user} already exists"))) shouldBe true
   }
 
   "UserService inviteUser" should "create a new user" in{
     val user = genInviteUser.sample.get
-    service.inviteUser(user).unsafeRunSync()
-    val res = dirDAO.loadUser(user.inviteeId).unsafeRunSync()
-    val registrationRes = registrationDAO.loadUser(user.inviteeId).unsafeRunSync()
+    service.inviteUser(user, samRequestContext).unsafeRunSync()
+    val res = dirDAO.loadUser(user.inviteeId, samRequestContext).unsafeRunSync()
+    val registrationRes = registrationDAO.loadUser(user.inviteeId, samRequestContext).unsafeRunSync()
     res shouldBe Some(WorkbenchUser(user.inviteeId, None, user.inviteeEmail, None))
     registrationRes shouldEqual res
   }
@@ -251,44 +252,44 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
   it should "return conflict when there's an existing subject for a given userId" in{
     val user = genInviteUser.sample.get
     val email = genNonPetEmail.sample.get
-    dirDAO.createUser(WorkbenchUser(user.inviteeId, None, email, None)).unsafeRunSync()
-    val res = service.inviteUser(user).attempt.unsafeRunSync().swap.toOption.get.asInstanceOf[WorkbenchExceptionWithErrorReport]
+    dirDAO.createUser(WorkbenchUser(user.inviteeId, None, email, None), samRequestContext).unsafeRunSync()
+    val res = service.inviteUser(user, samRequestContext).attempt.unsafeRunSync().swap.toOption.get.asInstanceOf[WorkbenchExceptionWithErrorReport]
     Eq[WorkbenchExceptionWithErrorReport].eqv(res, new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"identity with id ${user.inviteeId} already exists"))) shouldBe true
   }
 
   it should "return conflict when there's an existing subject for a given email" in{
     val user = genInviteUser.sample.get
     val userId = genWorkbenchUserId(System.currentTimeMillis())
-    dirDAO.createUser(WorkbenchUser(userId, None, user.inviteeEmail, None)).unsafeRunSync()
-    val res = service.inviteUser(user).attempt.unsafeRunSync().swap.toOption.get.asInstanceOf[WorkbenchExceptionWithErrorReport]
+    dirDAO.createUser(WorkbenchUser(userId, None, user.inviteeEmail, None), samRequestContext).unsafeRunSync()
+    val res = service.inviteUser(user, samRequestContext).attempt.unsafeRunSync().swap.toOption.get.asInstanceOf[WorkbenchExceptionWithErrorReport]
     Eq[WorkbenchExceptionWithErrorReport].eqv(res, new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"email ${user.inviteeEmail} already exists"))) shouldBe true
   }
 
   "invite user and then create user with same email" should "update googleSubjectId for this user" in {
     val user = genCreateWorkbenchUser.sample.get
-    service.inviteUser(InviteUser(user.id, user.email)).unsafeRunSync()
-    val res = dirDAO.loadUser(user.id).unsafeRunSync()
-    val registrationRes = registrationDAO.loadUser(user.id).unsafeRunSync()
+    service.inviteUser(InviteUser(user.id, user.email), samRequestContext).unsafeRunSync()
+    val res = dirDAO.loadUser(user.id, samRequestContext).unsafeRunSync()
+    val registrationRes = registrationDAO.loadUser(user.id, samRequestContext).unsafeRunSync()
     res shouldBe Some(WorkbenchUser(user.id, None, user.email, None))
     registrationRes shouldEqual res
 
-    service.createUser(user).futureValue
-    val updated = dirDAO.loadUser(user.id).unsafeRunSync()
-    val updatedRegistrationRes = registrationDAO.loadUser(user.id).unsafeRunSync()
+    service.createUser(user, samRequestContext).futureValue
+    val updated = dirDAO.loadUser(user.id, samRequestContext).unsafeRunSync()
+    val updatedRegistrationRes = registrationDAO.loadUser(user.id, samRequestContext).unsafeRunSync()
     updated shouldBe Some(WorkbenchUser(user.id,  Some(user.googleSubjectId), user.email, user.identityConcentratorId))
     updatedRegistrationRes shouldEqual updated
   }
 
   "UserService getUserIdInfoFromEmail" should "return the email along with the userSubjectId and googleSubjectId" in {
     // user doesn't exist yet
-    service.getUserStatusDiagnostics(defaultUserId).futureValue shouldBe None
+    service.getUserStatusDiagnostics(defaultUserId, samRequestContext).futureValue shouldBe None
 
     // create a user
-    val newUser = service.createUser(defaultUser).futureValue
+    val newUser = service.createUser(defaultUser, samRequestContext).futureValue
     newUser shouldBe UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
 
     // get user status id info (both subject ids and email)
-    val info = service.getUserIdInfoFromEmail(defaultUserEmail).futureValue
+    val info = service.getUserIdInfoFromEmail(defaultUserEmail, samRequestContext).futureValue
     info shouldBe Right(Some(UserIdInfo(defaultUserId, defaultUserEmail, Some(defaultGoogleSubjectId))))
   }
 

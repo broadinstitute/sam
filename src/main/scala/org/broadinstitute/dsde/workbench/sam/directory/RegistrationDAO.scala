@@ -1,6 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.directory
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model._
+import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 /**
   * This class is here because even though Postgres is the source of record, Apache proxies still query LDAP directly
@@ -9,15 +10,15 @@ import org.broadinstitute.dsde.workbench.model._
   * away from a solution that requires that the Apache proxies query this group, we can remove the RegistrationDAO.
   */
 trait RegistrationDAO {
-  def createUser(user: WorkbenchUser): IO[WorkbenchUser]
-  def loadUser(userId: WorkbenchUserId): IO[Option[WorkbenchUser]]
-  def deleteUser(userId: WorkbenchUserId): IO[Unit]
-  def enableIdentity(subject: WorkbenchSubject): IO[Unit]
-  def disableIdentity(subject: WorkbenchSubject): IO[Unit]
-  def isEnabled(subject: WorkbenchSubject): IO[Boolean]
-  def createPetServiceAccount(petServiceAccount: PetServiceAccount): IO[PetServiceAccount]
-  def loadPetServiceAccount(petServiceAccountId: PetServiceAccountId): IO[Option[PetServiceAccount]]
-  def deletePetServiceAccount(petServiceAccountId: PetServiceAccountId): IO[Unit]
-  def updatePetServiceAccount(petServiceAccount: PetServiceAccount): IO[PetServiceAccount]
-  def setGoogleSubjectId(userId: WorkbenchUserId, googleSubjectId: GoogleSubjectId): IO[Unit]
+  def createUser(user: WorkbenchUser, samRequestContext: SamRequestContext): IO[WorkbenchUser]
+  def loadUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[WorkbenchUser]]
+  def deleteUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit]
+  def enableIdentity(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Unit]
+  def disableIdentity(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Unit]
+  def isEnabled(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean]
+  def createPetServiceAccount(petServiceAccount: PetServiceAccount, samRequestContext: SamRequestContext): IO[PetServiceAccount]
+  def loadPetServiceAccount(petServiceAccountId: PetServiceAccountId, samRequestContext: SamRequestContext): IO[Option[PetServiceAccount]]
+  def deletePetServiceAccount(petServiceAccountId: PetServiceAccountId, samRequestContext: SamRequestContext): IO[Unit]
+  def updatePetServiceAccount(petServiceAccount: PetServiceAccount, samRequestContext: SamRequestContext): IO[PetServiceAccount]
+  def setGoogleSubjectId(userId: WorkbenchUserId, googleSubjectId: GoogleSubjectId, samRequestContext: SamRequestContext): IO[Unit]
 }

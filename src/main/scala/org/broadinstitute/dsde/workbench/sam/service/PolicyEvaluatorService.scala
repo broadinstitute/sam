@@ -4,12 +4,12 @@ import akka.http.scaladsl.model.StatusCodes
 import cats.effect.IO
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
-import io.opencensus.trace.Span
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, LoadResourceAuthDomainResult}
 import org.broadinstitute.dsde.workbench.sam.util.OpenCensusIOUtils._
+import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import scala.concurrent.ExecutionContext
 
@@ -30,7 +30,7 @@ class PolicyEvaluatorService(
           Set.empty,
           Set(SamResourceActions.setPublicPolicy(ManagedGroupService.adminNotifierPolicyName)),
           true
-        ))
+        ), SamRequestContext(None)) // `SamRequestContext(None)` is used so that we don't trace 1-off boot/init methods
       .void
       .recoverWith {
         case duplicateException: WorkbenchExceptionWithErrorReport if duplicateException.errorReport.statusCode.contains(StatusCodes.Conflict) =>
@@ -38,16 +38,16 @@ class PolicyEvaluatorService(
       }
   }
 
-  def hasPermission(resource: FullyQualifiedResourceId, action: ResourceAction, userId: WorkbenchUserId, parentSpan: Span = null): IO[Boolean] = traceIOWithParent("hasPermission", parentSpan)(_ => {
-    listUserResourceActions(resource, userId).map { _.contains(action) }
+  def hasPermission(resource: FullyQualifiedResourceId, action: ResourceAction, userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Boolean] = traceIOWithContext("hasPermission", samRequestContext)(samRequestContext => {
+    listUserResourceActions(resource, userId, samRequestContext).map { _.contains(action) }
   })
 
   /** Checks if user have permission by providing user email address. */
-  def hasPermissionByUserEmail(resource: FullyQualifiedResourceId, action: ResourceAction, userEmail: WorkbenchEmail, parentSpan: Span = null): IO[Boolean] = traceIOWithParent("hasPermission", parentSpan)(_ => {
+  def hasPermissionByUserEmail(resource: FullyQualifiedResourceId, action: ResourceAction, userEmail: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Boolean] = traceIOWithContext("hasPermission", samRequestContext)(samRequestContext => {
     for {
-      subjectOpt <- directoryDAO.loadSubjectFromEmail(userEmail)
+      subjectOpt <- directoryDAO.loadSubjectFromEmail(userEmail, samRequestContext)
       res <- subjectOpt match {
-        case Some(userId: WorkbenchUserId) => hasPermission(resource, action, userId, parentSpan)
+        case Some(userId: WorkbenchUserId) => hasPermission(resource, action, userId, samRequestContext)
         case _ => IO.pure(false)
       }
     } yield res
@@ -60,7 +60,7 @@ class PolicyEvaluatorService(
     * @param userId
     * @return
     */
-  def listUserResourceActions(resource: FullyQualifiedResourceId, userId: WorkbenchUserId): IO[Set[ResourceAction]] = {
+  def listUserResourceActions(resource: FullyQualifiedResourceId, userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[ResourceAction]] = {
     def allActions(policy: AccessPolicyWithoutMembers, resourceType: ResourceType): Set[ResourceAction] = {
       val roleActions = policy.roles.flatMap { role =>
         resourceType.roles.filter(_.roleName == role).flatMap(_.actions)
@@ -73,14 +73,14 @@ class PolicyEvaluatorService(
         resourceTypes.get(resource.resourceTypeName).toRight(new WorkbenchException(s"missing configuration for resourceType ${resource.resourceTypeName}")))
       isConstrainable = rt.isAuthDomainConstrainable
 
-      policiesForResource <- listResourceAccessPoliciesForUser(resource, userId)
+      policiesForResource <- listResourceAccessPoliciesForUser(resource, userId, samRequestContext)
       allPolicyActions = policiesForResource.flatMap(p => allActions(p, rt))
       res <- if (isConstrainable) {
         for {
-          authDomainsResult <- accessPolicyDAO.loadResourceAuthDomain(resource)
+          authDomainsResult <- accessPolicyDAO.loadResourceAuthDomain(resource, samRequestContext)
           policyActions <- authDomainsResult match {
             case LoadResourceAuthDomainResult.Constrained(authDomains) =>
-              listUserManagedGroups(userId).map{
+              listUserManagedGroups(userId, samRequestContext).map{
                 groupsUserIsMemberOf =>
                   val isUserMemberOfAllAuthDomains = authDomains.toList.toSet.subsetOf(groupsUserIsMemberOf)
                   if (isUserMemberOfAllAuthDomains) {
@@ -98,21 +98,21 @@ class PolicyEvaluatorService(
     } yield res
   }
 
-  def listUserAccessPolicies(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId): IO[Set[UserPolicyResponse]] =
+  def listUserAccessPolicies(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[UserPolicyResponse]] =
     for {
       rt <- IO.fromEither(
         resourceTypes
           .get(resourceTypeName)
           .toRight(new WorkbenchException(s"missing configration for resourceType ${resourceTypeName}")))
       isConstrained = rt.isAuthDomainConstrainable
-      ridAndPolicyName <- accessPolicyDAO.listAccessPolicies(resourceTypeName, userId) // List all policies of a given resourceType the user is a member of
+      ridAndPolicyName <- accessPolicyDAO.listAccessPolicies(resourceTypeName, userId, samRequestContext) // List all policies of a given resourceType the user is a member of
       rids = ridAndPolicyName.map(_.resourceId)
 
-      resources <- if (isConstrained) accessPolicyDAO.listResourcesWithAuthdomains(resourceTypeName, rids)
+      resources <- if (isConstrained) accessPolicyDAO.listResourcesWithAuthdomains(resourceTypeName, rids, samRequestContext)
       else IO.pure(Set.empty)
       authDomainMap = resources.map(x => x.resourceId -> x.authDomain).toMap
 
-      userManagedGroups <- if (isConstrained) listUserManagedGroups(userId) else IO.pure(Set.empty[WorkbenchGroupName])
+      userManagedGroups <- if (isConstrained) listUserManagedGroups(userId, samRequestContext) else IO.pure(Set.empty[WorkbenchGroupName])
 
       results = ridAndPolicyName.map { rnp =>
         if (isConstrained) {
@@ -126,29 +126,29 @@ class PolicyEvaluatorService(
           }
         } else UserPolicyResponse(rnp.resourceId, rnp.accessPolicyName, Set.empty, Set.empty, false).some
       }
-      publicPolicies <- accessPolicyDAO.listPublicAccessPolicies(resourceTypeName)
+      publicPolicies <- accessPolicyDAO.listPublicAccessPolicies(resourceTypeName, samRequestContext)
     } yield results.flatten ++ publicPolicies.map(p => UserPolicyResponse(p.resourceId, p.accessPolicyName, Set.empty, Set.empty, public = true))
 
-  def listUserManagedGroupsWithRole(userId: WorkbenchUserId): IO[Set[ManagedGroupAndRole]] =
+  def listUserManagedGroupsWithRole(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[ManagedGroupAndRole]] =
     for {
-      ripns <- accessPolicyDAO.listAccessPolicies(ManagedGroupService.managedGroupTypeName, userId)
+      ripns <- accessPolicyDAO.listAccessPolicies(ManagedGroupService.managedGroupTypeName, userId, samRequestContext)
     } yield {
       ripns
         .filter(ripn => ManagedGroupService.userMembershipPolicyNames.contains(ripn.accessPolicyName))
         .map(p => ManagedGroupAndRole(WorkbenchGroupName(p.resourceId.value), ManagedGroupService.getRoleName(p.accessPolicyName.value)))
     }
 
-  def listUserManagedGroups(userId: WorkbenchUserId): IO[Set[WorkbenchGroupName]] =
+  def listUserManagedGroups(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[WorkbenchGroupName]] =
     for {
-      policies <- listUserManagedGroupsWithRole(userId)
+      policies <- listUserManagedGroupsWithRole(userId, samRequestContext)
     } yield {
       policies.map(_.groupName)
     }
 
-  def listResourceAccessPoliciesForUser(resource: FullyQualifiedResourceId, userId: WorkbenchUserId, parentSpan: Span = null): IO[Set[AccessPolicyWithoutMembers]] =
+  def listResourceAccessPoliciesForUser(resource: FullyQualifiedResourceId, userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[AccessPolicyWithoutMembers]] =
     for {
-      policies <- traceIOWithParent("listAccessPoliciesForUser", parentSpan)(_ => accessPolicyDAO.listAccessPoliciesForUser(resource, userId))
-      publicPolicies <- traceIOWithParent("listPublicAccessPolicies", parentSpan)(_ => accessPolicyDAO.listPublicAccessPolicies(resource))
+      policies <- traceIOWithContext("listAccessPoliciesForUser", samRequestContext)(samRequestContext => accessPolicyDAO.listAccessPoliciesForUser(resource, userId, samRequestContext))
+      publicPolicies <- traceIOWithContext("listPublicAccessPolicies", samRequestContext)(samRequestContext => accessPolicyDAO.listPublicAccessPolicies(resource, samRequestContext))
     } yield policies ++ publicPolicies
 }
 

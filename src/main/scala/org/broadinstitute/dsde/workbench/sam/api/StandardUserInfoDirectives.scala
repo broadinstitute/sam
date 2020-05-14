@@ -25,6 +25,7 @@ import org.broadinstitute.dsde.workbench.sam.identityConcentrator.IdentityConcen
 import scala.util.matching.Regex
 import DefaultJsonProtocol._
 import WorkbenchIdentityJsonSupport.identityConcentratorIdFormat
+import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 trait StandardUserInfoDirectives extends UserInfoDirectives with LazyLogging {
   implicit val executionContext: ExecutionContext
@@ -67,12 +68,12 @@ trait StandardUserInfoDirectives extends UserInfoDirectives with LazyLogging {
 
   private def requireUserInfoFromJwt(jwtUserInfo: JwtUserInfo, bearerToken: OAuth2BearerToken, icService: IdentityConcentratorService): Directive1[UserInfo] =
     onSuccess {
-      getUserInfoFromJwt(jwtUserInfo, bearerToken, directoryDAO, icService).unsafeToFuture()
+      getUserInfoFromJwt(jwtUserInfo, bearerToken, directoryDAO, icService, SamRequestContext(None)).unsafeToFuture() // Plumbing for this tracewill be added in a follow-up PR. Ticket: https://broadworkbench.atlassian.net/browse/CA-849
     }
 
   private def requireUserInfoFromOIDC(oidcHeaders: OIDCHeaders): Directive1[UserInfo] =
     onSuccess {
-      getUserInfoFromOidcHeaders(directoryDAO, oidcHeaders).unsafeToFuture()
+      getUserInfoFromOidcHeaders(directoryDAO, oidcHeaders, SamRequestContext(None)).unsafeToFuture() // Plumbing for this tracewill be added in a follow-up PR. Ticket: https://broadworkbench.atlassian.net/browse/CA-849
     }
 
   private def requireCreateUserInfoFromJwt(jwtUserInfo: JwtUserInfo, bearerToken: OAuth2BearerToken, icService: IdentityConcentratorService): Directive1[CreateWorkbenchUser] =
@@ -97,33 +98,26 @@ object StandardUserInfoDirectives {
   def isServiceAccount(email: WorkbenchEmail): Boolean =
     SAdomain.pattern.matcher(email.value).matches
 
-  def getUserInfoFromOidcHeaders(
-      directoryDAO: DirectoryDAO,
-      oidcHeaders: OIDCHeaders): IO[UserInfo] =
+  def getUserInfoFromOidcHeaders(directoryDAO: DirectoryDAO, oidcHeaders: OIDCHeaders, samRequestContext: SamRequestContext): IO[UserInfo] =
     Try(oidcHeaders.expiresIn.toLong).fold(
       t => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"expiresIn ${oidcHeaders.expiresIn} can't be converted to Long because  of $t"))),
-      expiresInLong => getUserInfo(oidcHeaders.token, oidcHeaders.googleSubjectId, oidcHeaders.email, expiresInLong, directoryDAO)
+      expiresInLong => getUserInfo(oidcHeaders.token, oidcHeaders.googleSubjectId, oidcHeaders.email, expiresInLong, directoryDAO, samRequestContext)
     )
 
-  def getUserInfo(
-      token: OAuth2BearerToken,
-      googleSubjectId: GoogleSubjectId,
-      email: WorkbenchEmail,
-      expiresIn: Long,
-      directoryDAO: DirectoryDAO): IO[UserInfo] =
+  def getUserInfo(token: OAuth2BearerToken, googleSubjectId: GoogleSubjectId, email: WorkbenchEmail, expiresIn: Long, directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext): IO[UserInfo] =
     if (isServiceAccount(email)) {
       // If it's a PET account, we treat it as its owner
-      directoryDAO.getUserFromPetServiceAccount(ServiceAccountSubjectId(googleSubjectId.value)).flatMap {
+      directoryDAO.getUserFromPetServiceAccount(ServiceAccountSubjectId(googleSubjectId.value), samRequestContext).flatMap {
         case Some(pet) => IO.pure(UserInfo(token, pet.id, pet.email, expiresIn.toLong))
-        case None => lookUpByGoogleSubjectId(googleSubjectId, directoryDAO).map(uid => UserInfo(token, uid, email, expiresIn))
+        case None => lookUpByGoogleSubjectId(googleSubjectId, directoryDAO, samRequestContext).map(uid => UserInfo(token, uid, email, expiresIn))
       }
     } else {
-      lookUpByGoogleSubjectId(googleSubjectId, directoryDAO).map(uid => UserInfo(token, uid, email, expiresIn))
+      lookUpByGoogleSubjectId(googleSubjectId, directoryDAO, samRequestContext).map(uid => UserInfo(token, uid, email, expiresIn))
     }
 
-  def getUserInfoFromJwt(jwtUserInfo: JwtUserInfo, bearerToken: OAuth2BearerToken, directoryDAO: DirectoryDAO, identityConcentratorService: IdentityConcentratorService): IO[UserInfo] = {
+  def getUserInfoFromJwt(jwtUserInfo: JwtUserInfo, bearerToken: OAuth2BearerToken, directoryDAO: DirectoryDAO, identityConcentratorService: IdentityConcentratorService, samRequestContext: SamRequestContext): IO[UserInfo] = {
     for {
-      maybeUser <- loadUserMaybeUpdateIdentityConcentratorId(jwtUserInfo, bearerToken, directoryDAO, identityConcentratorService)
+      maybeUser <- loadUserMaybeUpdateIdentityConcentratorId(jwtUserInfo, bearerToken, directoryDAO, identityConcentratorService, samRequestContext)
       user <- maybeUser match {
         case Some(user) => IO.pure(UserInfo(bearerToken, user.id, user.email, jwtUserInfo.exp - Instant.now().getEpochSecond))
         case None =>
@@ -132,22 +126,22 @@ object StandardUserInfoDirectives {
     } yield user
   }
 
-  private def loadUserMaybeUpdateIdentityConcentratorId(jwtUserInfo: JwtUserInfo, bearerToken: OAuth2BearerToken, directoryDAO: DirectoryDAO, identityConcentratorService: IdentityConcentratorService): IO[Option[WorkbenchUser]] = {
+  private def loadUserMaybeUpdateIdentityConcentratorId(jwtUserInfo: JwtUserInfo, bearerToken: OAuth2BearerToken, directoryDAO: DirectoryDAO, identityConcentratorService: IdentityConcentratorService, samRequestContext: SamRequestContext): IO[Option[WorkbenchUser]] = {
     for {
-      maybeUser <- directoryDAO.loadUserByIdentityConcentratorId(jwtUserInfo.sub)
+      maybeUser <- directoryDAO.loadUserByIdentityConcentratorId(jwtUserInfo.sub, samRequestContext)
       maybeUserAgain <- maybeUser match {
-        case None => updateUserIdentityConcentratorId(jwtUserInfo, bearerToken, directoryDAO, identityConcentratorService)
+        case None => updateUserIdentityConcentratorId(jwtUserInfo, bearerToken, directoryDAO, identityConcentratorService, samRequestContext)
         case _ => IO.pure(maybeUser)
       }
     } yield maybeUserAgain
   }
 
-  private def updateUserIdentityConcentratorId(jwtUserInfo: JwtUserInfo, bearerToken: OAuth2BearerToken, directoryDAO: DirectoryDAO, identityConcentratorService: IdentityConcentratorService): IO[Option[WorkbenchUser]] = {
+  private def updateUserIdentityConcentratorId(jwtUserInfo: JwtUserInfo, bearerToken: OAuth2BearerToken, directoryDAO: DirectoryDAO, identityConcentratorService: IdentityConcentratorService, samRequestContext: SamRequestContext): IO[Option[WorkbenchUser]] = {
     for {
       googleIdentities <- identityConcentratorService.getGoogleIdentities(bearerToken)
       (googleSubjectId, _) <- singleGoogleIdentity(jwtUserInfo.sub, googleIdentities)
-      _ <- directoryDAO.setUserIdentityConcentratorId(googleSubjectId, jwtUserInfo.sub)
-      maybeUser <- directoryDAO.loadUserByIdentityConcentratorId(jwtUserInfo.sub)
+      _ <- directoryDAO.setUserIdentityConcentratorId(googleSubjectId, jwtUserInfo.sub, samRequestContext)
+      maybeUser <- directoryDAO.loadUserByIdentityConcentratorId(jwtUserInfo.sub, samRequestContext)
     } yield maybeUser
   }
 
@@ -161,9 +155,9 @@ object StandardUserInfoDirectives {
           ErrorReport(StatusCodes.InternalServerError, s"too many linked google identities for $identityConcentratorId: ${googleIdentities.mkString("'")}")))
     }
 
-  private def lookUpByGoogleSubjectId(googleSubjectId: GoogleSubjectId, directoryDAO: DirectoryDAO): IO[WorkbenchUserId] =
+  private def lookUpByGoogleSubjectId(googleSubjectId: GoogleSubjectId, directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext): IO[WorkbenchUserId] =
     for {
-      subject <- directoryDAO.loadSubjectFromGoogleSubjectId(googleSubjectId)
+      subject <- directoryDAO.loadSubjectFromGoogleSubjectId(googleSubjectId, samRequestContext)
       userInfo <- subject match {
         case Some(uid: WorkbenchUserId) => IO.pure(uid)
         case Some(_) =>

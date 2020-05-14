@@ -13,7 +13,7 @@ import cats.kernel.Eq
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountDisplayName, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.sam.Generator._
-import org.broadinstitute.dsde.workbench.sam.TestSupport.{eqWorkbenchExceptionErrorReport, genIdentityConcentratorId}
+import org.broadinstitute.dsde.workbench.sam.TestSupport.{eqWorkbenchExceptionErrorReport, genIdentityConcentratorId, samRequestContext}
 import org.broadinstitute.dsde.workbench.sam.api.SamRoutes.myExceptionHandler
 import org.broadinstitute.dsde.workbench.sam.api.StandardUserInfoDirectives._
 import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryDAO, MockDirectoryDAO}
@@ -62,8 +62,8 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
       val directoryDAO = new MockDirectoryDAO()
       val googleSubjectId = GoogleSubjectId(genRandom(System.currentTimeMillis()))
       val uid = genWorkbenchUserId(System.currentTimeMillis())
-      directoryDAO.createUser(WorkbenchUser(uid, Some(googleSubjectId), email, None)).unsafeRunSync()
-      val res = getUserInfo(token, googleSubjectId, email, 10L, directoryDAO).unsafeRunSync()
+      directoryDAO.createUser(WorkbenchUser(uid, Some(googleSubjectId), email, None), samRequestContext).unsafeRunSync()
+      val res = getUserInfo(token, googleSubjectId, email, 10L, directoryDAO, samRequestContext).unsafeRunSync()
       res should be (UserInfo(token, uid, email, 10L))
     }
   }
@@ -73,9 +73,9 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
       (serviceSubjectId: ServiceAccountSubjectId, googleSubjectId: GoogleSubjectId, token: OAuth2BearerToken, email: WorkbenchEmail) =>
       val directoryDAO = new MockDirectoryDAO()
       val uid = genWorkbenchUserId(System.currentTimeMillis())
-      directoryDAO.createUser(WorkbenchUser(uid, Some(googleSubjectId), email, None)).unsafeRunSync()
-      directoryDAO.createPetServiceAccount(PetServiceAccount(PetServiceAccountId(uid, GoogleProject("")), ServiceAccount(serviceSubjectId, email, ServiceAccountDisplayName("")))).unsafeRunSync()
-      val res = getUserInfo(token, googleSubjectId, email, 10L, directoryDAO).unsafeRunSync()
+      directoryDAO.createUser(WorkbenchUser(uid, Some(googleSubjectId), email, None), samRequestContext).unsafeRunSync()
+      directoryDAO.createPetServiceAccount(PetServiceAccount(PetServiceAccountId(uid, GoogleProject("")), ServiceAccount(serviceSubjectId, email, ServiceAccountDisplayName(""))), samRequestContext).unsafeRunSync()
+      val res = getUserInfo(token, googleSubjectId, email, 10L, directoryDAO, samRequestContext).unsafeRunSync()
       res should be (UserInfo(token, uid, email, 10L))
     }
   }
@@ -86,8 +86,8 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
       val directoryDAO = new MockDirectoryDAO()
       val gSid = GoogleSubjectId(serviceSubjectId.value)
       val uid = genWorkbenchUserId(System.currentTimeMillis())
-      directoryDAO.createUser(WorkbenchUser(uid, Some(gSid), email, None)).unsafeRunSync()
-      val res = getUserInfo(token, gSid, email, 10L, directoryDAO).unsafeRunSync()
+      directoryDAO.createUser(WorkbenchUser(uid, Some(gSid), email, None), samRequestContext).unsafeRunSync()
+      val res = getUserInfo(token, gSid, email, 10L, directoryDAO, samRequestContext).unsafeRunSync()
       res should be (UserInfo(token, uid, email, 10L))
     }
   }
@@ -97,7 +97,7 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
       (token: OAuth2BearerToken, email: WorkbenchEmail) =>
         val directoryDAO = new MockDirectoryDAO()
         val googleSubjectId = GoogleSubjectId(genRandom(System.currentTimeMillis()))
-        val res = getUserInfo(token, googleSubjectId, email, 10L, directoryDAO).attempt.unsafeRunSync().swap.toOption.get.asInstanceOf[WorkbenchExceptionWithErrorReport]
+        val res = getUserInfo(token, googleSubjectId, email, 10L, directoryDAO, samRequestContext).attempt.unsafeRunSync().swap.toOption.get.asInstanceOf[WorkbenchExceptionWithErrorReport]
         Eq[WorkbenchExceptionWithErrorReport].eqv(res, new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"google subject Id $googleSubjectId not found in sam"))) shouldBe(true)
     }
   }
@@ -107,7 +107,7 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
       (token: OAuth2BearerToken, email: WorkbenchEmail) =>
         val directoryDAO = new MockDirectoryDAO()
         val googleSubjectId = GoogleSubjectId(genRandom(System.currentTimeMillis()))
-        val res = getUserInfo(token, googleSubjectId, email, 10L, directoryDAO).attempt.unsafeRunSync().swap.toOption.get.asInstanceOf[WorkbenchExceptionWithErrorReport]
+        val res = getUserInfo(token, googleSubjectId, email, 10L, directoryDAO, samRequestContext).attempt.unsafeRunSync().swap.toOption.get.asInstanceOf[WorkbenchExceptionWithErrorReport]
         Eq[WorkbenchExceptionWithErrorReport].eqv(res, new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"google subject Id $googleSubjectId not found in sam"))) shouldBe(true)
     }
   }
@@ -118,8 +118,8 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
         val directoryDAO = new MockDirectoryDAO()
         val gSid = GoogleSubjectId(serviceSubjectId.value)
         val uid = genWorkbenchUserId(System.currentTimeMillis())
-        directoryDAO.createPetServiceAccount(PetServiceAccount(PetServiceAccountId(uid, GoogleProject("")), ServiceAccount(serviceSubjectId, email, ServiceAccountDisplayName("")))).unsafeRunSync()
-        val res = getUserInfo(token, gSid, email, 10L, directoryDAO).attempt.unsafeRunSync().swap.toOption.get.asInstanceOf[WorkbenchExceptionWithErrorReport]
+        directoryDAO.createPetServiceAccount(PetServiceAccount(PetServiceAccountId(uid, GoogleProject("")), ServiceAccount(serviceSubjectId, email, ServiceAccountDisplayName(""))), samRequestContext).unsafeRunSync()
+        val res = getUserInfo(token, gSid, email, 10L, directoryDAO, samRequestContext).attempt.unsafeRunSync().swap.toOption.get.asInstanceOf[WorkbenchExceptionWithErrorReport]
 
         Eq[WorkbenchExceptionWithErrorReport].eqv(res, new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"subjectId $gSid is not a WorkbenchUser"))) shouldBe(true)
     }
@@ -131,8 +131,8 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
     val uid = genWorkbenchUserId(System.currentTimeMillis())
     val identityConcentratorId = TestSupport.genIdentityConcentratorId()
     val email = genNonPetEmail.sample.get
-    directoryDAO.createUser(WorkbenchUser(uid, Some(googleSubjectId), email, Option(identityConcentratorId))).unsafeRunSync()
-    val userInfo = getUserInfoFromJwt(validJwtUserInfo(identityConcentratorId), OAuth2BearerToken(""), directoryDAO, mock[IdentityConcentratorService]).unsafeRunSync()
+    directoryDAO.createUser(WorkbenchUser(uid, Some(googleSubjectId), email, Option(identityConcentratorId)), samRequestContext).unsafeRunSync()
+    val userInfo = getUserInfoFromJwt(validJwtUserInfo(identityConcentratorId), OAuth2BearerToken(""), directoryDAO, mock[IdentityConcentratorService], samRequestContext).unsafeRunSync()
     assert(userInfo.tokenExpiresIn <= 0)
     assert(userInfo.tokenExpiresIn > -30)
     userInfo.copy(tokenExpiresIn = 0) shouldEqual UserInfo(OAuth2BearerToken(""), uid, email, 0)
@@ -145,14 +145,14 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
     val identityConcentratorId = TestSupport.genIdentityConcentratorId()
     val email = genNonPetEmail.sample.get
 
-    directoryDAO.createUser(WorkbenchUser(uid, Some(googleSubjectId), email, None)).unsafeRunSync()
+    directoryDAO.createUser(WorkbenchUser(uid, Some(googleSubjectId), email, None), samRequestContext).unsafeRunSync()
 
     val icService = mock[IdentityConcentratorService]
     val bearerToken = OAuth2BearerToken("shhhh, secret")
     when(icService.getGoogleIdentities(bearerToken)).thenReturn(IO.pure(Seq((googleSubjectId, email))))
-    getUserInfoFromJwt(validJwtUserInfo(identityConcentratorId), bearerToken, directoryDAO, icService).unsafeRunSync()
+    getUserInfoFromJwt(validJwtUserInfo(identityConcentratorId), bearerToken, directoryDAO, icService, samRequestContext).unsafeRunSync()
 
-    directoryDAO.loadUser(uid).unsafeRunSync().flatMap(_.identityConcentratorId) shouldBe Some(identityConcentratorId)
+    directoryDAO.loadUser(uid, samRequestContext).unsafeRunSync().flatMap(_.identityConcentratorId) shouldBe Some(identityConcentratorId)
   }
 
   it should "500 when user is linked to more than 1 google account" in {
@@ -166,7 +166,7 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
       (GoogleSubjectId(genRandom(System.currentTimeMillis())), genNonPetEmail.sample.get))))
 
     val expectedError = intercept[WorkbenchExceptionWithErrorReport] {
-      getUserInfoFromJwt(validJwtUserInfo(identityConcentratorId), bearerToken, directoryDAO, icService).unsafeRunSync()
+      getUserInfoFromJwt(validJwtUserInfo(identityConcentratorId), bearerToken, directoryDAO, icService, samRequestContext).unsafeRunSync()
     }
 
     expectedError.errorReport.statusCode shouldBe Some(StatusCodes.InternalServerError)
@@ -179,7 +179,7 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
     val t = intercept[WorkbenchExceptionWithErrorReport] {
       val identityConcentratorService = mock[IdentityConcentratorService]
       when(identityConcentratorService.getGoogleIdentities(any[OAuth2BearerToken])).thenReturn(IO.pure(Seq((GoogleSubjectId(""), WorkbenchEmail("")))))
-      getUserInfoFromJwt(validJwtUserInfo(TestSupport.genIdentityConcentratorId()), OAuth2BearerToken(""), directoryDAO, identityConcentratorService).unsafeRunSync()
+      getUserInfoFromJwt(validJwtUserInfo(TestSupport.genIdentityConcentratorId()), OAuth2BearerToken(""), directoryDAO, identityConcentratorService, samRequestContext).unsafeRunSync()
     }
     withClue(t.errorReport) {
       t.errorReport.statusCode shouldBe Some(StatusCodes.NotFound)
@@ -191,7 +191,7 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
     val t = intercept[WorkbenchExceptionWithErrorReport] {
       val identityConcentratorService = mock[IdentityConcentratorService]
       when(identityConcentratorService.getGoogleIdentities(any[OAuth2BearerToken])).thenReturn(IO.pure(Seq.empty))
-      getUserInfoFromJwt(validJwtUserInfo(TestSupport.genIdentityConcentratorId()), OAuth2BearerToken(""), directoryDAO, identityConcentratorService).unsafeRunSync()
+      getUserInfoFromJwt(validJwtUserInfo(TestSupport.genIdentityConcentratorId()), OAuth2BearerToken(""), directoryDAO, identityConcentratorService, samRequestContext).unsafeRunSync()
     }
     withClue(t.errorReport) {
       t.errorReport.statusCode shouldBe Some(StatusCodes.InternalServerError)
@@ -265,7 +265,7 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
       RawHeader(authorizationHeader, accessToken.toString()),
       RawHeader(expiresInHeader, (System.currentTimeMillis() + 1000).toString)
     )
-    services.directoryDAO.createUser(user).unsafeRunSync()
+    services.directoryDAO.createUser(user, samRequestContext).unsafeRunSync()
     Get("/").withHeaders(headers) ~>
       handleExceptions(myExceptionHandler){services.requireUserInfo(x => complete(x.copy(tokenExpiresIn = 0).toString))} ~> check {
       status shouldBe StatusCodes.OK
@@ -297,7 +297,7 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
       RawHeader(authorizationHeader, accessToken.toString()),
       RawHeader(expiresInHeader, (System.currentTimeMillis() + 1000).toString)
     )
-    services.directoryDAO.createUser(user).unsafeRunSync()
+    services.directoryDAO.createUser(user, samRequestContext).unsafeRunSync()
     Get("/").withHeaders(headers) ~>
       handleExceptions(myExceptionHandler){services.requireUserInfo(x => complete(x.copy(tokenExpiresIn = 0).toString))} ~> check {
       status shouldBe StatusCodes.Unauthorized
@@ -317,8 +317,8 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
       RawHeader(expiresInHeader, (System.currentTimeMillis() + 1000).toString)
     )
 
-    services.directoryDAO.createUser(userGood).unsafeRunSync()
-    services.directoryDAO.createUser(userBad).unsafeRunSync()
+    services.directoryDAO.createUser(userGood, samRequestContext).unsafeRunSync()
+    services.directoryDAO.createUser(userBad, samRequestContext).unsafeRunSync()
 
     Get("/").withHeaders(headers) ~>
       handleExceptions(myExceptionHandler){services.requireUserInfo(x => complete(x.userId.value))} ~> check {
@@ -333,7 +333,7 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
     val user = genWorkbenchUser.sample.get
     val services = directives
     val authHeader = genAuthorizationHeader(user.identityConcentratorId)
-    services.directoryDAO.createUser(user).unsafeRunSync()
+    services.directoryDAO.createUser(user, samRequestContext).unsafeRunSync()
     Get("/").withHeaders(authHeader) ~>
       handleExceptions(myExceptionHandler){services.requireUserInfo(x => complete(x.userId.value))} ~> check {
       withClue(responseAs[String]) {
