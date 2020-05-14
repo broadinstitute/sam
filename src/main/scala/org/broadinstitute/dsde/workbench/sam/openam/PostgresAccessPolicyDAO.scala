@@ -798,8 +798,6 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
               and ${r.name} = ${policyId.resource.resourceId}
               and ${rt.name} = ${policyId.resource.resourceTypeName}""".update().apply()
   }
-
-  override def evictIsMemberOfCache(subject: WorkbenchSubject): IO[Unit] = IO.unit
 }
 
 private final case class PolicyInfo(name: AccessPolicyName, resourceId: ResourceId, resourceTypeName: ResourceTypeName, email: WorkbenchEmail, public: Boolean)
