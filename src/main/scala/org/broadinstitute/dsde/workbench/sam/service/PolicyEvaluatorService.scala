@@ -39,17 +39,7 @@ class PolicyEvaluatorService(
   }
 
   def hasPermission(resource: FullyQualifiedResourceId, action: ResourceAction, userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Boolean] = traceIOWithContext("hasPermission", samRequestContext)(samRequestContext => {
-    def checkPermission(force: Boolean) =
-      listUserResourceActions(resource, userId, force, samRequestContext).map { _.contains(action) }
-
-    // this is optimized for the case where the user has permission since that is the usual case
-    // if the first attempt shows the user does not have permission, force a second attempt
-    for {
-      attempt1 <- traceIOWithContext("checkWithCache", samRequestContext)(_ => checkPermission(force = false))
-      attempt2 <- if (attempt1) IO.pure(attempt1) else traceIOWithContext("checkWithoutCache", samRequestContext)(_ => checkPermission(force = true))
-    } yield {
-      attempt2
-    }
+    listUserResourceActions(resource, userId, samRequestContext).map { _.contains(action) }
   })
 
   /** Checks if user have permission by providing user email address. */
@@ -68,10 +58,9 @@ class PolicyEvaluatorService(
     *
     * @param resource
     * @param userId
-    * @param force true to ignore any caching
     * @return
     */
-  def listUserResourceActions(resource: FullyQualifiedResourceId, userId: WorkbenchUserId, force: Boolean = false, samRequestContext: SamRequestContext): IO[Set[ResourceAction]] = {
+  def listUserResourceActions(resource: FullyQualifiedResourceId, userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[ResourceAction]] = {
     def allActions(policy: AccessPolicyWithoutMembers, resourceType: ResourceType): Set[ResourceAction] = {
       val roleActions = policy.roles.flatMap { role =>
         resourceType.roles.filter(_.roleName == role).flatMap(_.actions)
@@ -80,7 +69,6 @@ class PolicyEvaluatorService(
     }
 
     for {
-      _ <- if (force) accessPolicyDAO.evictIsMemberOfCache(userId) else IO.unit
       rt <- IO.fromEither[ResourceType](
         resourceTypes.get(resource.resourceTypeName).toRight(new WorkbenchException(s"missing configuration for resourceType ${resource.resourceTypeName}")))
       isConstrainable = rt.isAuthDomainConstrainable
