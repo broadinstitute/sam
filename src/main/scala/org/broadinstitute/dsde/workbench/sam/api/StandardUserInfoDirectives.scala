@@ -68,12 +68,12 @@ trait StandardUserInfoDirectives extends UserInfoDirectives with LazyLogging {
 
   private def requireUserInfoFromJwt(jwtUserInfo: JwtUserInfo, bearerToken: OAuth2BearerToken, icService: IdentityConcentratorService): Directive1[UserInfo] =
     onSuccess {
-      getUserInfoFromJwt(jwtUserInfo, bearerToken, directoryDAO, icService, SamRequestContext(None)).unsafeToFuture() // Trace will be implemented in a follow-up PR
+      getUserInfoFromJwt(jwtUserInfo, bearerToken, directoryDAO, icService, SamRequestContext(None)).unsafeToFuture() // Trace will be implemented in a follow-up PR. Ticket: https://broadworkbench.atlassian.net/browse/CA-849
     }
 
   private def requireUserInfoFromOIDC(oidcHeaders: OIDCHeaders): Directive1[UserInfo] =
     onSuccess {
-      getUserInfoFromOidcHeaders(directoryDAO, oidcHeaders, SamRequestContext(None)).unsafeToFuture() // Trace will be implemented in a follow-up PR
+      getUserInfoFromOidcHeaders(directoryDAO, oidcHeaders, SamRequestContext(None)).unsafeToFuture() // Trace will be implemented in a follow-up PR. Ticket: https://broadworkbench.atlassian.net/browse/CA-849
     }
 
   private def requireCreateUserInfoFromJwt(jwtUserInfo: JwtUserInfo, bearerToken: OAuth2BearerToken, icService: IdentityConcentratorService): Directive1[CreateWorkbenchUser] =
