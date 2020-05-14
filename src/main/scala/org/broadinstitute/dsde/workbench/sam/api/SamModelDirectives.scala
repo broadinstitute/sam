@@ -5,6 +5,7 @@ import akka.http.scaladsl.server.Directive1
 import akka.http.scaladsl.server.Directives.{onSuccess, _}
 import akka.http.scaladsl.unmarshalling.FromRequestUnmarshaller
 import io.opencensus.scala.akka.http.TracingDirective.traceRequest
+import io.opencensus.scala.Tracing.{startSpanWithParent}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.service.UserService
@@ -34,5 +35,16 @@ trait SamModelDirectives {
   def withSamRequestContext: Directive1[SamRequestContext] =
     traceRequest.map { span => SamRequestContext(Option(span)) }
 
+  // todo: overload? or check for optional name/samrequestcontext?
+  def withParentSamRequestContext(name: String, samRequestContext: SamRequestContext): Directive1[SamRequestContext] =
+    samRequestContext.parentSpan match {
+      case Some (parentSpan) =>
+        val newSpan = startSpanWithParent (name, parentSpan)
+        val newSamRequestContext = SamRequestContext(Option(newSpan))
+        provide(newSamRequestContext)
+
+      // todo: should we use name in the new span here?
+      case None => traceRequest.map {span => SamRequestContext(Option(span))}
+    }
 
 }
