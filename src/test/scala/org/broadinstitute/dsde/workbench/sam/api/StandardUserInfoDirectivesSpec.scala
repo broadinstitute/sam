@@ -18,7 +18,7 @@ import org.broadinstitute.dsde.workbench.sam.api.SamRoutes.myExceptionHandler
 import org.broadinstitute.dsde.workbench.sam.api.StandardUserInfoDirectives._
 import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryDAO, MockDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.identityConcentrator.IdentityConcentratorService
-import org.broadinstitute.dsde.workbench.sam.service.CloudExtensions
+import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, UserService}
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
 import org.scalatest.FlatSpec
 import pdi.jwt.JwtSprayJson
@@ -35,6 +35,7 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
     override val directoryDAO: DirectoryDAO = new MockDirectoryDAO()
     override val cloudExtensions: CloudExtensions = null
     override val identityConcentratorService: Option[IdentityConcentratorService] = Option(mock[IdentityConcentratorService])
+    override val userService: UserService = null
   }
 
   def genAuthorizationHeader(id: Option[IdentityConcentratorId] = None): RawHeader = {
