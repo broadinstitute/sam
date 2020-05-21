@@ -47,7 +47,7 @@ trait SamModelDirectives {
   def withNewTraceSpan(spanName: String, samRequestContext: SamRequestContext): Directive1[SamRequestContext] =
     samRequestContext.parentSpan match {
       case Some (parentSpan) =>
-        val newSpan = startSpanWithParent (spanName, parentSpan)
+        val newSpan = startSpanWithParent(spanName, parentSpan)
         val newSamRequestContext = samRequestContext.copy(parentSpan = Option(newSpan))
         provide(newSamRequestContext)
 
