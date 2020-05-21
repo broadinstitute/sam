@@ -43,14 +43,14 @@ trait StandardUserInfoDirectives extends UserInfoDirectives with LazyLogging wit
     * @return
     */
   private def handleAuthHeaders[T](fromJwt: (JwtUserInfo, OAuth2BearerToken, IdentityConcentratorService, SamRequestContext) => Directive1[T], fromOIDC: (OIDCHeaders, SamRequestContext) => Directive1[T], samRequestContext: SamRequestContext): Directive1[T] =
-    withParentSamRequestContext("handleAuthHeaders", samRequestContext).flatMap { samRequestContext =>
+    withNewTraceSpan("handleAuthHeaders", samRequestContext).flatMap { samRequestContext =>
       (headerValueByName(authorizationHeader) &
         provide(identityConcentratorService)) tflatMap {
         // order of these cases is important: if the authorization header is a valid jwt we must ignore
         // any OIDC headers otherwise we may be vulnerable to a malicious user specifying a valid JWT
         // but different user information in the OIDC headers
         case (JwtAuthorizationHeader(Success(jwtUserInfo), bearerToken), Some(icService)) =>
-          withParentSamRequestContext("JWT-request", samRequestContext).flatMap { samRequestContext =>
+          withNewTraceSpan("JWT-request", samRequestContext).flatMap { samRequestContext =>
             fromJwt(jwtUserInfo, bearerToken, icService, samRequestContext)
           }
 
@@ -63,7 +63,7 @@ trait StandardUserInfoDirectives extends UserInfoDirectives with LazyLogging wit
 
         case _ =>
           // request coming through Apache proxy with OIDC headers
-          withParentSamRequestContext("OIDC-request", samRequestContext).flatMap { samRequestContext =>
+          withNewTraceSpan("OIDC-request", samRequestContext).flatMap { samRequestContext =>
             (headerValueByName(accessTokenHeader).as(OAuth2BearerToken) &
               headerValueByName(googleSubjectIdHeader).as(GoogleSubjectId) &
               headerValueByName(expiresInHeader) &

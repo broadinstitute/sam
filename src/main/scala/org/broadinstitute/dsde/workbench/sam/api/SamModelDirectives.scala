@@ -32,20 +32,26 @@ trait SamModelDirectives {
       }
     }
 
-  def withSamRequestContext: Directive1[SamRequestContext] =
+  /**
+    * Provides a new SamRequestContext with a root tracing span.
+    */
+  def withSamRequestContext(): Directive1[SamRequestContext] =
     traceRequest.map { span => SamRequestContext(Option(span)) }
 
-  // todo: overload? or check for optional name/samrequestcontext?
-  // todo: rename
-  def withParentSamRequestContext(name: String, samRequestContext: SamRequestContext): Directive1[SamRequestContext] =
+  /**
+    * Provides a new SamRequestContext with a tracing span that is a child of the existing SamRequestContext's `parentSpan`.
+    *
+    * @param spanName name of the new parentSpan in the new SamRequestContext. This span is a child of the existing parentSpan.
+    * @param samRequestContext the existing samRequestContext.
+    */
+  def withNewTraceSpan(spanName: String, samRequestContext: SamRequestContext): Directive1[SamRequestContext] =
     samRequestContext.parentSpan match {
       case Some (parentSpan) =>
-        val newSpan = startSpanWithParent (name, parentSpan)
-        val newSamRequestContext = SamRequestContext(Option(newSpan))
+        val newSpan = startSpanWithParent (spanName, parentSpan)
+        val newSamRequestContext = samRequestContext.copy(parentSpan = Option(newSpan))
         provide(newSamRequestContext)
 
-      // todo: should we use name in the new span here?
-      case None => traceRequest.map {span => SamRequestContext(Option(span))}
+      case None => provide(SamRequestContext(None)) // for contexts without spans, do not start new spans
     }
 
 }
