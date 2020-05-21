@@ -35,7 +35,7 @@ trait SamModelDirectives {
   /**
     * Provides a new SamRequestContext with a root tracing span.
     */
-  def withSamRequestContext(): Directive1[SamRequestContext] =
+  def withSamRequestContext: Directive1[SamRequestContext] =
     traceRequest.map { span => SamRequestContext(Option(span)) }
 
   /**
