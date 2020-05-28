@@ -27,7 +27,7 @@ import DefaultJsonProtocol._
 import WorkbenchIdentityJsonSupport.identityConcentratorIdFormat
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
-trait StandardUserInfoDirectives extends UserInfoDirectives with LazyLogging with SamModelDirectives {
+trait StandardUserInfoDirectives extends UserInfoDirectives with LazyLogging with SamRequestContextDirectives {
   implicit val executionContext: ExecutionContext
   val identityConcentratorService: Option[IdentityConcentratorService] = None
 

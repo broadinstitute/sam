@@ -30,7 +30,7 @@ import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 /**
   * Created by mbemis on 5/22/17.
   */
-trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with SamModelDirectives {
+trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with SamModelDirectives with SamRequestContextDirectives {
   implicit val executionContext: ExecutionContext
   val resourceService: ResourceService
   val liquibaseConfig: LiquibaseConfig
