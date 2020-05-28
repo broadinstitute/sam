@@ -1,22 +1,15 @@
 package org.broadinstitute.dsde.workbench.sam.api
 
-import akka.http.scaladsl.model.{HttpResponse, StatusCodes}
-import akka.http.scaladsl.server.{Directive1, ExceptionHandler}
+import akka.http.scaladsl.model.StatusCodes
+import akka.http.scaladsl.server.Directive1
 import akka.http.scaladsl.server.Directives.{onSuccess, _}
 import akka.http.scaladsl.unmarshalling.FromRequestUnmarshaller
-import io.opencensus.scala.Tracing
 import io.opencensus.scala.akka.http.TracingDirective.traceRequest
-import io.opencensus.scala.Tracing.startSpanWithParent
-import io.opencensus.scala.akka.http.trace.HttpExtractors._
-import io.opencensus.scala.akka.http.utils.ExecuteAfterResponse
-import io.opencensus.scala.http.{HttpAttributes, StatusTranslator}
-import io.opencensus.trace.{Span, Status}
+import io.opencensus.scala.Tracing.{startSpanWithParent}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.service.UserService
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
-
-import scala.util.control.NonFatal
 
 /**
   * Created by gpolumbo on 3/26/2018
@@ -60,55 +53,5 @@ trait SamModelDirectives {
 
       case None => provide(SamRequestContext(None)) // for contexts without spans, do not start new spans
     }
-
-  protected def tracing: Tracing = Tracing
-
-  private def recordSuccess(span: Span) =
-    mapResponse(EndSpanResponse.forServer(tracing, _, span))
-
-  private def recordException(span: Span) =
-    handleExceptions(ExceptionHandler {
-      case NonFatal(ex) =>
-        tracing.endSpan(span, Status.INTERNAL)
-        throw ex
-    })
-
-
-  private object EndSpanResponse {
-
-    def forServer(
-                   tracing: Tracing,
-                   response: HttpResponse,
-                   span: Span
-                 ): HttpResponse =
-      end(tracing, response, span, "response sent")
-
-    def forClient(
-                   tracing: Tracing,
-                   response: HttpResponse,
-                   span: Span
-                 ): HttpResponse =
-      end(tracing, response, span, "response received")
-
-    private def end(
-                     tracing: Tracing,
-                     response: HttpResponse,
-                     span: Span,
-                     responseAnnotation: String
-                   ): HttpResponse = {
-      HttpAttributes.setAttributesForResponse(span, response)
-      span.addAnnotation(responseAnnotation)
-      tracing.setStatus(
-        span,
-        StatusTranslator.translate(response.status.intValue())
-      )
-
-      ExecuteAfterResponse.onComplete(
-        response,
-        onFinish = () => tracing.endSpan(span),
-        onFailure = _ => tracing.endSpan(span)
-      )
-    }
-  }
 
 }
