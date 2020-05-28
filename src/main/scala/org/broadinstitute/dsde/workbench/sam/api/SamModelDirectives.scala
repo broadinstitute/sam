@@ -49,7 +49,7 @@ trait SamModelDirectives {
       case Some (parentSpan) =>
         val newSpan = startSpanWithParent(spanName, parentSpan)
         val newSamRequestContext = samRequestContext.copy(parentSpan = Option(newSpan))
-        provide(newSamRequestContext)
+        recordSuccess(newSpan) & recordException(newSpan) & provide(newSamRequestContext)
 
       case None => provide(SamRequestContext(None)) // for contexts without spans, do not start new spans
     }
