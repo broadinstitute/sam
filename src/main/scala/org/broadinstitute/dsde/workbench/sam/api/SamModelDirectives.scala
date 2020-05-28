@@ -1,11 +1,11 @@
 package org.broadinstitute.dsde.workbench.sam.api
 
 import akka.http.scaladsl.model.StatusCodes
-import akka.http.scaladsl.server.Directive1
-import akka.http.scaladsl.server.Directives.{onSuccess, _}
+import akka.http.scaladsl.server._
+import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.unmarshalling.FromRequestUnmarshaller
-import io.opencensus.scala.akka.http.TracingDirective.traceRequest
-import io.opencensus.scala.Tracing.{startSpanWithParent}
+import io.opencensus.scala.akka.http.TracingDirective._
+import io.opencensus.scala.Tracing._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.service.UserService
@@ -49,7 +49,13 @@ trait SamModelDirectives {
       case Some (parentSpan) =>
         val newSpan = startSpanWithParent(spanName, parentSpan)
         val newSamRequestContext = samRequestContext.copy(parentSpan = Option(newSpan))
-        recordSuccess(newSpan) & recordException(newSpan) & provide(newSamRequestContext)
+
+        val recordSuccess = io.opencensus.scala.akka.http.TracingDirective.getClass.getDeclaredMethod("recordSuccess")
+        recordSuccess.setAccessible(true)
+        val recordException = io.opencensus.scala.akka.http.TracingDirective.getClass.getDeclaredMethod("recordException")
+        recordException.setAccessible(true)
+
+        recordSuccess.invoke(newSpan) & recordException.invoke(newSpan) & provide(newSamRequestContext)
 
       case None => provide(SamRequestContext(None)) // for contexts without spans, do not start new spans
     }
