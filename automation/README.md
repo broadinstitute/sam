@@ -22,7 +22,7 @@ LOCAL_UI=true ./render-local-env.sh
 ```
 
 ##### Against a local Sam
-Run `./render-local-env.sh` and then update the URIs in `src/test/resources/application.conf` to:
+Run `./render-local-env.sh` and then update the URIs in `automation/src/test/resources/application.conf` to:
 ```
   baseUrl = "https://firecloud.dsde-dev.broadinstitute.org/"
   orchApiUrl = "https://firecloud-orchestration.dsde-dev.broadinstitute.org/"
