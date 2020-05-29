@@ -8,7 +8,7 @@ import akka.http.scaladsl.server.Directives._
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.model.google._
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchEmail, WorkbenchExceptionWithErrorReport, WorkbenchUser}
-import org.broadinstitute.dsde.workbench.sam.api.{ExtensionRoutes, SamModelDirectives, SecurityDirectives, UserInfoDirectives, ioMarshaller}
+import org.broadinstitute.dsde.workbench.sam.api.{ExtensionRoutes, SamModelDirectives, SamRequestContextDirectives, SecurityDirectives, UserInfoDirectives, ioMarshaller}
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.CloudExtensions
@@ -17,7 +17,7 @@ import spray.json.JsString
 
 import scala.concurrent.ExecutionContext
 
-trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with SecurityDirectives with SamModelDirectives {
+trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with SecurityDirectives with SamModelDirectives with SamRequestContextDirectives {
   implicit val executionContext: ExecutionContext
   val googleExtensions: GoogleExtensions
   val googleGroupSynchronizer: GoogleGroupSynchronizer
@@ -25,7 +25,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
   override def extensionRoutes: server.Route =
     (pathPrefix("google" / "v1") | pathPrefix("google")) {
       withSamRequestContext { samRequestContext =>
-        requireUserInfo { userInfo =>
+        requireUserInfo(samRequestContext) { userInfo =>
           path("petServiceAccount" / Segment / Segment) { (project, userEmail) =>
             get {
               requireAction(

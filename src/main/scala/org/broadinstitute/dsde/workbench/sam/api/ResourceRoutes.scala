@@ -30,7 +30,7 @@ import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 /**
   * Created by mbemis on 5/22/17.
   */
-trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with SamModelDirectives {
+trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with SamModelDirectives with SamRequestContextDirectives {
   implicit val executionContext: ExecutionContext
   val resourceService: ResourceService
   val liquibaseConfig: LiquibaseConfig
@@ -43,7 +43,7 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
 
   def resourceRoutes: server.Route =
     pathPrefix("initializeResourceTypes") {
-      requireUserInfo { userInfo =>
+      requireUserInfo(SamRequestContext(None)) { userInfo => // `SamRequestContext(None)` is used so that we don't trace 1-off boot/init methods ; these in particular are unpublished APIs
         asWorkbenchAdmin(userInfo) {
           pathEndOrSingleSlash {
             put {
@@ -54,7 +54,7 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
       }
     } ~
     (pathPrefix("config" / "v1" / "resourceTypes") | pathPrefix("resourceTypes")) {
-        requireUserInfo { userInfo =>
+        requireUserInfo(SamRequestContext(None)) { userInfo => // `SamRequestContext(None)` is used so that we don't trace 1-off boot/init methods ; these in particular are unpublished APIs
           pathEndOrSingleSlash {
             get {
               complete(resourceService.getResourceTypes().map(typeMap => StatusCodes.OK -> typeMap.values.toSet))
@@ -64,7 +64,7 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
     } ~
     (pathPrefix("resources" / "v1") | pathPrefix("resource")) {
       withSamRequestContext { samRequestContext =>
-        requireUserInfo { userInfo =>
+        requireUserInfo(samRequestContext) { userInfo =>
           pathPrefix(Segment) { resourceTypeName =>
             withResourceType(ResourceTypeName(resourceTypeName)) { resourceType =>
               pathEndOrSingleSlash {

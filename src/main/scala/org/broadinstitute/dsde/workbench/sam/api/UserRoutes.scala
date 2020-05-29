@@ -15,7 +15,7 @@ import scala.concurrent.ExecutionContext
 /**
   * Created by mbemis on 5/22/17.
   */
-trait UserRoutes extends UserInfoDirectives with SamModelDirectives {
+trait UserRoutes extends UserInfoDirectives with SamRequestContextDirectives {
   implicit val executionContext: ExecutionContext
   val userService: UserService
 
@@ -25,14 +25,14 @@ trait UserRoutes extends UserInfoDirectives with SamModelDirectives {
         pathEndOrSingleSlash {
           post {
             withSamRequestContext { samRequestContext =>
-              requireCreateUser { createUser =>
+              requireCreateUser(samRequestContext) { createUser =>
                 complete {
                   userService.createUser(createUser, samRequestContext).map(userStatus => StatusCodes.Created -> userStatus)
                 }
               }
             }
           } ~ withSamRequestContext { samRequestContext =>
-            requireUserInfo { user =>
+            requireUserInfo(samRequestContext) { user =>
               get {
                 parameter("userDetailsOnly".?) { userDetailsOnly =>
                   complete {
@@ -54,7 +54,7 @@ trait UserRoutes extends UserInfoDirectives with SamModelDirectives {
           pathEndOrSingleSlash {
             post {
               withSamRequestContext { samRequestContext =>
-                requireCreateUser { createUser =>
+                requireCreateUser(samRequestContext) { createUser =>
                   complete {
                     userService.createUser(createUser, samRequestContext).map(userStatus => StatusCodes.Created -> userStatus)
                   }
@@ -62,7 +62,7 @@ trait UserRoutes extends UserInfoDirectives with SamModelDirectives {
               }
             }
           } ~ withSamRequestContext { samRequestContext =>
-            requireUserInfo { user =>
+            requireUserInfo(samRequestContext) { user =>
               path("info") {
                 get {
                   complete {
@@ -98,7 +98,7 @@ trait UserRoutes extends UserInfoDirectives with SamModelDirectives {
   def adminUserRoutes: server.Route =
     pathPrefix("admin") {
       withSamRequestContext { samRequestContext =>
-        requireUserInfo { userInfo =>
+        requireUserInfo(samRequestContext) { userInfo =>
           asWorkbenchAdmin(userInfo) {
             pathPrefix("user") {
               path("email" / Segment) { email =>
@@ -182,7 +182,7 @@ trait UserRoutes extends UserInfoDirectives with SamModelDirectives {
   val apiUserRoutes: server.Route = pathPrefix("users") {
     pathPrefix("v1") {
       withSamRequestContext { samRequestContext =>
-        requireUserInfo { userInfo =>
+        requireUserInfo(samRequestContext) { userInfo =>
           get {
             path(Segment) { email =>
               pathEnd {
