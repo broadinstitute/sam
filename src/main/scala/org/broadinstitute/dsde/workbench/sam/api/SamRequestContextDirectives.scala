@@ -35,7 +35,7 @@ trait SamRequestContextDirectives {
     *                 parentSpan.
     * @param samRequestContext the existing samRequestContext.
     */
-  def withNewTraceSpan(spanName: String, samRequestContext: SamRequestContext): Directive1[SamRequestContext] =
+  def withChildTraceSpan(spanName: String, samRequestContext: SamRequestContext): Directive1[SamRequestContext] =
     samRequestContext.parentSpan match {
       case Some (parentSpan) =>
         val newSpan = startSpanWithParent(spanName, parentSpan)
