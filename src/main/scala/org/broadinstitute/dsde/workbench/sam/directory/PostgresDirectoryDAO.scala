@@ -839,7 +839,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
                 where ${u.id} = ${userId} and ${u.googleSubjectId} is null"""
 
       if (updateGoogleSubjectIdQuery.update().apply() != 1) {
-        throw new WorkbenchException(s"Cannot overwrite an existing googleSubjectId for user ${userId}")
+        throw new WorkbenchException(s"Cannot update googleSubjectId for user ${userId} because user does not exist or the googleSubjectId has already been set for this user")
       }
     })
   }
