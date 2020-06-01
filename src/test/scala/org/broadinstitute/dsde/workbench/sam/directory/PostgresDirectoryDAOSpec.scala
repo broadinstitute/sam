@@ -1012,6 +1012,15 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
 
         dao.loadUser(defaultUser.id, samRequestContext).unsafeRunSync().flatMap(_.googleSubjectId) shouldBe Option(newGoogleSubjectId)
       }
+
+      "throw an exception when trying to overwrite an existing googleSubjectId" in {
+        val newGoogleSubjectId = GoogleSubjectId("newGoogleSubjectId")
+        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
+
+        assertThrows[WorkbenchException] {
+          dao.setGoogleSubjectId(defaultUser.id, newGoogleSubjectId, samRequestContext).unsafeRunSync()
+        }
+      }
     }
 
     "loadSubjectFromEmail" - {
