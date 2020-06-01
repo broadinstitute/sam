@@ -834,7 +834,13 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
   override def setGoogleSubjectId(userId: WorkbenchUserId, googleSubjectId: GoogleSubjectId, samRequestContext: SamRequestContext): IO[Unit] = {
     runInTransaction("setGoogleSubjectId", samRequestContext)({ implicit session =>
       val u = UserTable.column
-      samsql"update ${UserTable.table} set ${u.googleSubjectId} = ${googleSubjectId} where ${u.id} = ${userId}".update().apply()
+      val updateGoogleSubjectIdQuery =
+        samsql"""update ${UserTable.table} set ${u.googleSubjectId} = ${googleSubjectId}
+                where ${u.id} = ${userId} and ${u.googleSubjectId} is null"""
+
+      if (updateGoogleSubjectIdQuery.update().apply() != 1) {
+        throw new WorkbenchException(s"Cannot update googleSubjectId for user ${userId} because user does not exist or the googleSubjectId has already been set for this user")
+      }
     })
   }
 }

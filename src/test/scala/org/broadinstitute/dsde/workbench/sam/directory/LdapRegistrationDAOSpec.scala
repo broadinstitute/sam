@@ -3,7 +3,7 @@ package org.broadinstitute.dsde.workbench.sam.directory
 import java.net.URI
 import java.util.UUID
 
-import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
+import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool, LDAPException}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountDisplayName, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.sam.TestSupport
@@ -127,6 +127,18 @@ class LdapRegistrationDAOSpec extends FlatSpec with Matchers with TestSupport wi
 
     assertResult(false) {
       dao.isEnabled(user.id, samRequestContext).unsafeRunSync()
+    }
+  }
+
+  it should "throw an exception when trying to overwrite an existing googleSubjectId" in {
+    val user = WorkbenchUser(WorkbenchUserId(UUID.randomUUID().toString), Some(GoogleSubjectId("existingGoogleSubjectId")), WorkbenchEmail("foo@bar.com"), None)
+
+    assertResult(user) {
+      dao.createUser(user, samRequestContext).unsafeRunSync()
+    }
+
+    assertThrows[LDAPException] {
+      dao.setGoogleSubjectId(user.id, GoogleSubjectId("newGoogleSubjectId"), samRequestContext).unsafeRunSync()
     }
   }
 }

@@ -231,6 +231,18 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
 
   /**
     * GoogleSubjectId    Email
+    *    different        yes     ---> The user's email has already been registered, but the googleSubjectId for the new user is different from what has already been registered. We should throw an exception to prevent the googleSubjectId from being overwritten
+    */
+  it should "throw an exception when trying to re-register a user with a changed googleSubjectId" in {
+    val user = genCreateWorkbenchUser.sample.get.copy(email = genNonPetEmail.sample.get)
+    service.registerUser(user, samRequestContext).unsafeRunSync()
+    assertThrows[WorkbenchException] {
+      service.registerUser(user.copy(googleSubjectId = GoogleSubjectId("newGoogleSubjectId")), samRequestContext).unsafeRunSync()
+    }
+  }
+
+  /**
+    * GoogleSubjectId    Email
     *      yes            skip    ---> User exists. Do nothing.
     */
   it should "return conflict when there's an existing subject for a given googleSubjectId" in{
