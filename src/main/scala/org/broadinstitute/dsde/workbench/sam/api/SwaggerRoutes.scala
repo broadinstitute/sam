@@ -1,31 +1,23 @@
 package org.broadinstitute.dsde.workbench.sam.api
 
-import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directives._
 import akka.stream.scaladsl.Flow
 import akka.util.ByteString
 import org.broadinstitute.dsde.workbench.sam.config.SwaggerConfig
 
-import scala.language.postfixOps
-
 /**
   * Created by dvoet on 7/18/17.
   */
 trait SwaggerRoutes {
-  private val swaggerUiPath = "META-INF/resources/webjars/swagger-ui/2.2.5"
+  private val swaggerUiPath = "META-INF/resources/webjars/swagger-ui/3.25.0"
 
   val swaggerConfig: SwaggerConfig
 
   val swaggerRoutes: server.Route = {
     path("") {
       get {
-        parameter("url") { urlparam =>
-          extractUri { uri =>
-            redirect(uri.withRawQueryString(""), StatusCodes.MovedPermanently)
-          }
-        } ~
-          serveIndex()
+          serveIndex
       }
     } ~
       path("api-docs.yaml") {
@@ -36,36 +28,42 @@ trait SwaggerRoutes {
       // We have to be explicit about the paths here since we're matching at the root URL and we don't
       // want to catch all paths lest we circumvent Spray's not-found and method-not-allowed error
       // messages.
-      (pathSuffixTest("o2c.html") | pathSuffixTest("swagger-ui.js")
-        | pathPrefixTest("css" /) | pathPrefixTest("fonts" /) | pathPrefixTest("images" /)
-        | pathPrefixTest("lang" /) | pathPrefixTest("lib" /)) {
+      (pathPrefixTest("swagger-ui") | pathPrefixTest("oauth2") | pathSuffixTest("js")
+        | pathSuffixTest("css") | pathPrefixTest("favicon")) {
         get {
           getFromResourceDirectory(swaggerUiPath)
         }
       }
   }
 
-  private def serveIndex(): server.Route = {
+  private val serveIndex: server.Route = {
     val swaggerOptions =
       """
         |        validatorUrl: null,
         |        apisSorter: "alpha",
-        |        operationsSorter: "alpha",
+        |        operationsSorter: "alpha"
       """.stripMargin
 
     mapResponseEntity { entityFromJar =>
       entityFromJar.transformDataBytes(Flow.fromFunction[ByteString, ByteString] { original: ByteString =>
         ByteString(
           original.utf8String
-            .replace("your-client-id", swaggerConfig.googleClientId)
-            .replace("your-realms", swaggerConfig.realm)
-            .replace("your-app-name", swaggerConfig.realm)
-            .replace("scopeSeparator: \",\"", "scopeSeparator: \" \"")
-            .replace("jsonEditor: false,", "jsonEditor: false," + swaggerOptions)
-            .replace("url = \"http://petstore.swagger.io/v2/swagger.json\";", "url = '/api-docs.yaml';"))
+            .replace("""url: "https://petstore.swagger.io/v2/swagger.json"""", "url: '/api-docs.yaml'")
+            .replace("""layout: "StandaloneLayout"""", s"""layout: "StandaloneLayout", $swaggerOptions""")
+            .replace("window.ui = ui", s"""ui.initOAuth({
+                                          |        clientId: "${swaggerConfig.googleClientId}",
+                                          |        clientSecret: "${swaggerConfig.realm}",
+                                          |        realm: "${swaggerConfig.realm}",
+                                          |        appName: "${swaggerConfig.realm}",
+                                          |        scopeSeparator: " ",
+                                          |        additionalQueryStringParams: {}
+                                          |      })
+                                          |      window.ui = ui
+                                          |      """.stripMargin)
+        )
       })
     } {
-      getFromResource(swaggerUiPath + "/index.html")
+      getFromResource(s"$swaggerUiPath/index.html")
     }
   }
 
