@@ -444,7 +444,7 @@ paths:
       requestBody:
         description: The list of emails
         content:
-          '*/*':
+          'application/json':
             schema:
               $ref: '#/components/schemas/ArrayOfEmails'
         required: true
@@ -652,7 +652,7 @@ paths:
       requestBody:
         description: Scopes for the token
         content:
-          '*/*':
+          'application/json':
             schema:
               $ref: '#/components/schemas/ArrayOfScopes'
         required: true
@@ -739,7 +739,7 @@ paths:
       requestBody:
         description: Scopes for the token
         content:
-          '*/*':
+          'application/json':
             schema:
               $ref: '#/components/schemas/ArrayOfScopes'
         required: true
@@ -901,7 +901,7 @@ paths:
       requestBody:
         description: The details of the resource
         content:
-          '*/*':
+          'application/json':
             schema:
               $ref: '#/components/schemas/CreateResourceRequest'
         required: true
@@ -1231,7 +1231,7 @@ paths:
       requestBody:
         description: The details of the policy
         content:
-          '*/*':
+          'application/json':
             schema:
               $ref: '#/components/schemas/AccessPolicyMembership'
         required: true
@@ -1281,7 +1281,7 @@ paths:
       requestBody:
         description: List of member emails to be on the policy
         content:
-          '*/*':
+          'application/json':
             schema:
               $ref: '#/components/schemas/ArrayOfEmails'
         required: true
@@ -1478,7 +1478,7 @@ paths:
       requestBody:
         description: true to make the policy public, false to make it private
         content:
-          '*/*':
+          'application/json':
             schema:
               type: boolean
         required: true
