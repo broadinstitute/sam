@@ -42,17 +42,6 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
     }
 
   def resourceRoutes: server.Route =
-    pathPrefix("initializeResourceTypes") {
-      requireUserInfo(SamRequestContext(None)) { userInfo => // `SamRequestContext(None)` is used so that we don't trace 1-off boot/init methods ; these in particular are unpublished APIs
-        asWorkbenchAdmin(userInfo) {
-          pathEndOrSingleSlash {
-            put {
-              complete(initializePostgresResourceTypes)
-            }
-          }
-        }
-      }
-    } ~
     (pathPrefix("config" / "v1" / "resourceTypes") | pathPrefix("resourceTypes")) {
         requireUserInfo(SamRequestContext(None)) { userInfo => // `SamRequestContext(None)` is used so that we don't trace 1-off boot/init methods ; these in particular are unpublished APIs
           pathEndOrSingleSlash {
@@ -144,22 +133,6 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
         }
       }
     }
-
-  private def initializePostgresResourceTypes = {
-    val dbName = DatabaseNames.Foreground
-    implicit val contextShift = IO.contextShift(ExecutionContext.Implicits.global)
-    val postgresResourceService: cats.effect.Resource[IO, ResourceService] = for {
-      postgresExecutionContext <- ExecutionContexts.fixedThreadPool[IO](DBs.config.getInt(s"db.${dbName.name.name}.poolMaxSize"))
-      dbReference <- DbReference.resource(liquibaseConfig, dbName)
-
-      postgresAccessPolicyDAO = new PostgresAccessPolicyDAO(dbReference, postgresExecutionContext)
-      postgresDirectoryDAO = new PostgresDirectoryDAO(dbReference, postgresExecutionContext)
-    } yield new ResourceService(resourceService.getResourceTypes().unsafeRunSync(), policyEvaluatorService, postgresAccessPolicyDAO, postgresDirectoryDAO, cloudExtensions, resourceService.emailDomain)
-
-    postgresResourceService.use { resourceService =>
-      resourceService.initResourceTypes()
-    }
-  }
 
   def getUserPoliciesForResourceType(resourceType: ResourceType, userInfo: UserInfo, samRequestContext: SamRequestContext): server.Route =
     get {

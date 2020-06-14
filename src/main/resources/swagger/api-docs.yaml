@@ -154,26 +154,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
-  /api/initializeResourceTypes:
-    put:
-      tags:
-        - Admin
-      summary: TEMPORARY FOR MIGRATION - Initializes resource types and attendent
-        roles and actions
-      operationId: initializeResourceTypes
-      responses:
-        204:
-          description: Successfully initialized resource types
-          content: {}
-        403:
-          description: You do not have admin privileges
-          content: {}
-        500:
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorReport'
   /api/config/v1/resourceTypes:
     get:
       tags:
