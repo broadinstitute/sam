@@ -20,10 +20,11 @@ import scala.util.matching.Regex
 /**
   * Created by dvoet on 7/14/17.
   */
-class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExtensions, val registrationDAO: RegistrationDAO)(implicit val executionContext: ExecutionContext, contextShift: ContextShift[IO]) extends LazyLogging {
+class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExtensions, val registrationDAO: RegistrationDAO, blockedEmailDomains: Seq[String])(implicit val executionContext: ExecutionContext, contextShift: ContextShift[IO]) extends LazyLogging {
 
   def createUser(user: CreateWorkbenchUser, samRequestContext: SamRequestContext): Future[UserStatus] = {
     for {
+      _ <- UserService.validateEmailAddress(user.email, blockedEmailDomains).unsafeToFuture()
       allUsersGroup <- cloudExtensions.getOrCreateAllUsersGroup(directoryDAO, samRequestContext)
       createdUser <- registerUser(user, samRequestContext).unsafeToFuture()
       _ <- enableUserInternal(createdUser, samRequestContext)
@@ -35,7 +36,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
 
   def inviteUser(invitee: InviteUser, samRequestContext: SamRequestContext): IO[UserStatusDetails] =
     for {
-      _ <- UserService.validateEmailAddress(invitee.inviteeEmail)
+      _ <- UserService.validateEmailAddress(invitee.inviteeEmail, blockedEmailDomains)
       existingSubject <- directoryDAO.loadSubjectFromEmail(invitee.inviteeEmail, samRequestContext)
       createdUser <- existingSubject match {
         case None => createUserInternal(WorkbenchUser(invitee.inviteeId, None, invitee.inviteeEmail, None), samRequestContext)
@@ -223,8 +224,11 @@ object UserService {
   def genWorkbenchUserId(currentMilli: Long): WorkbenchUserId =
     WorkbenchUserId(genRandom(currentMilli))
 
-  def validateEmailAddress(email: WorkbenchEmail): IO[Unit] = {
+  def validateEmailAddress(email: WorkbenchEmail, blockedEmailDomains: Seq[String]): IO[Unit] = {
     email.value match {
+      case emailString if blockedEmailDomains.exists(domain => {
+        emailString.endsWith("@" + domain) || emailString.endsWith("." + domain)
+      }) => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"email domain not permitted [${email.value}]")))
       case UserService.emailRegex() => IO.unit
       case _ => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"invalid email address [${email.value}]")))
     }

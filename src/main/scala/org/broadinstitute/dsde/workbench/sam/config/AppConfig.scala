@@ -18,15 +18,16 @@ import scala.concurrent.duration.Duration
   * Created by dvoet on 7/18/17.
   */
 final case class AppConfig(
-    emailDomain: String,
-    directoryConfig: DirectoryConfig,
-    schemaLockConfig: SchemaLockConfig,
-    distributedLockConfig: DistributedLockConfig,
-    swaggerConfig: SwaggerConfig,
-    googleConfig: Option[GoogleConfig],
-    resourceTypes: Set[ResourceType],
-    liquibaseConfig: LiquibaseConfig,
-    identityConcentratorConfig: Option[IdentityConcentratorConfig])
+                            emailDomain: String,
+                            directoryConfig: DirectoryConfig,
+                            schemaLockConfig: SchemaLockConfig,
+                            distributedLockConfig: DistributedLockConfig,
+                            swaggerConfig: SwaggerConfig,
+                            googleConfig: Option[GoogleConfig],
+                            resourceTypes: Set[ResourceType],
+                            liquibaseConfig: LiquibaseConfig,
+                            identityConcentratorConfig: Option[IdentityConcentratorConfig],
+                            blockedEmailDomains: Seq[String])
 
 object AppConfig {
   implicit val swaggerReader: ValueReader[SwaggerConfig] = ValueReader.relative { config =>
@@ -179,6 +180,8 @@ object AppConfig {
     val liquibaseConfig = config.as[LiquibaseConfig]("liquibase")
     val identityConcentratorConfig = config.as[Option[IdentityConcentratorConfig]]("identityConcentrator")
 
-    AppConfig(emailDomain, directoryConfig, schemaLockConfig, distributedLockConfig, swaggerConfig, googleConfigOption, resourceTypes, liquibaseConfig, identityConcentratorConfig)
+    val blockedEmailDomains = config.as[Option[Seq[String]]]("blockedEmailDomains").getOrElse(Seq.empty)
+
+    AppConfig(emailDomain, directoryConfig, schemaLockConfig, distributedLockConfig, swaggerConfig, googleConfigOption, resourceTypes, liquibaseConfig, identityConcentratorConfig, blockedEmailDomains)
   }
 }

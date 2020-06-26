@@ -55,6 +55,7 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
 
   var service: UserService = _
   var googleExtensions: GoogleExtensions = _
+  val blockedDomain = "blocked.domain.com"
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()
@@ -74,7 +75,7 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
     when(googleExtensions.onUserEnable(any[WorkbenchUser], any[SamRequestContext])).thenReturn(Future.successful(()))
     when(googleExtensions.onGroupUpdate(any[Seq[WorkbenchGroupIdentity]], any[SamRequestContext])).thenReturn(Future.successful(()))
 
-    service = new UserService(dirDAO, googleExtensions, registrationDAO)
+    service = new UserService(dirDAO, googleExtensions, registrationDAO, Seq(blockedDomain))
   }
 
   protected def clearDatabase(): Unit = {
@@ -99,6 +100,12 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
     registrationDAO.isEnabled(defaultUserId, samRequestContext).unsafeRunSync() shouldBe true
     dirDAO.loadGroup(service.cloudExtensions.allUsersGroupName, samRequestContext).unsafeRunSync() shouldBe
       Some(BasicWorkbenchGroup(service.cloudExtensions.allUsersGroupName, Set(defaultUserId), service.cloudExtensions.getOrCreateAllUsersGroup(dirDAO, samRequestContext).futureValue.email))
+  }
+
+  it should "reject blocked domain" in {
+    intercept[WorkbenchExceptionWithErrorReport] {
+      runAndWait(service.createUser(defaultUser.copy(email = WorkbenchEmail(s"user@$blockedDomain")), samRequestContext))
+    }.errorReport.statusCode shouldBe Some(StatusCodes.BadRequest)
   }
 
   it should "get user status" in {
@@ -261,6 +268,13 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
     registrationRes shouldEqual res
   }
 
+  it should "reject blocked domain" in {
+    val user = genInviteUser.sample.get
+    intercept[WorkbenchExceptionWithErrorReport] {
+      service.inviteUser(user.copy(inviteeEmail = WorkbenchEmail(s"user@$blockedDomain")), samRequestContext).unsafeRunSync()
+    }.errorReport.statusCode shouldBe Some(StatusCodes.BadRequest)
+  }
+
   it should "return conflict when there's an existing subject for a given userId" in{
     val user = genInviteUser.sample.get
     val email = genNonPetEmail.sample.get
@@ -318,7 +332,7 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
     implicit val arbEmail: Arbitrary[WorkbenchEmail] = Arbitrary(genEmail)
 
     forAll { email: WorkbenchEmail =>
-      assert(UserService.validateEmailAddress(email).attempt.unsafeRunSync().isRight)
+      assert(UserService.validateEmailAddress(email, Seq.empty).attempt.unsafeRunSync().isRight)
     }
   }
 
@@ -335,7 +349,7 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
     implicit val arbEmail: Arbitrary[WorkbenchEmail] = Arbitrary(genEmail)
 
     forAll { email: WorkbenchEmail =>
-      assert(UserService.validateEmailAddress(email).attempt.unsafeRunSync().isLeft)
+      assert(UserService.validateEmailAddress(email, Seq.empty).attempt.unsafeRunSync().isLeft)
     }
   }
 
@@ -356,7 +370,7 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
     implicit val arbEmail: Arbitrary[WorkbenchEmail] = Arbitrary(genEmail)
 
     forAll { email: WorkbenchEmail =>
-      assert(UserService.validateEmailAddress(email).attempt.unsafeRunSync().isLeft)
+      assert(UserService.validateEmailAddress(email, Seq.empty).attempt.unsafeRunSync().isLeft)
     }
   }
 
@@ -372,8 +386,13 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
     implicit val arbEmail: Arbitrary[WorkbenchEmail] = Arbitrary(genEmail)
 
     forAll { email: WorkbenchEmail =>
-      assert(UserService.validateEmailAddress(email).attempt.unsafeRunSync().isLeft)
+      assert(UserService.validateEmailAddress(email, Seq.empty).attempt.unsafeRunSync().isLeft)
     }
+  }
+
+  it should "reject blocked email domain" in {
+    assert(UserService.validateEmailAddress(WorkbenchEmail("foo@splat.bar.com"), Seq("bar.com")).attempt.unsafeRunSync().isLeft)
+    assert(UserService.validateEmailAddress(WorkbenchEmail("foo@bar.com"), Seq("bar.com")).attempt.unsafeRunSync().isLeft)
   }
 }
 
