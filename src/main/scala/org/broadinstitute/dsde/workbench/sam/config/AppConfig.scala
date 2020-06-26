@@ -26,7 +26,8 @@ final case class AppConfig(
     googleConfig: Option[GoogleConfig],
     resourceTypes: Set[ResourceType],
     liquibaseConfig: LiquibaseConfig,
-    identityConcentratorConfig: Option[IdentityConcentratorConfig])
+    identityConcentratorConfig: Option[IdentityConcentratorConfig],
+    domainBlacklist: Seq[String])
 
 object AppConfig {
   implicit val swaggerReader: ValueReader[SwaggerConfig] = ValueReader.relative { config =>
@@ -179,6 +180,8 @@ object AppConfig {
     val liquibaseConfig = config.as[LiquibaseConfig]("liquibase")
     val identityConcentratorConfig = config.as[Option[IdentityConcentratorConfig]]("identityConcentrator")
 
-    AppConfig(emailDomain, directoryConfig, schemaLockConfig, distributedLockConfig, swaggerConfig, googleConfigOption, resourceTypes, liquibaseConfig, identityConcentratorConfig)
+    val domainBlacklist = config.as[Seq[String]]("domainBlacklist")
+
+    AppConfig(emailDomain, directoryConfig, schemaLockConfig, distributedLockConfig, swaggerConfig, googleConfigOption, resourceTypes, liquibaseConfig, identityConcentratorConfig, domainBlacklist)
   }
 }

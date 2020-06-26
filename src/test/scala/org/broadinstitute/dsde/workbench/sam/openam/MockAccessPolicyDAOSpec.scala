@@ -64,7 +64,7 @@ class MockAccessPolicyDAOSpec extends FlatSpec with Matchers with TestSupport wi
 
     val policyEvaluatorService = PolicyEvaluatorService(shared.emailDomain, shared.resourceTypes, ldapPolicyDao, ldapDirDao)
     val resourceService = new ResourceService(shared.resourceTypes, policyEvaluatorService, ldapPolicyDao, ldapDirDao, NoExtensions, shared.emailDomain)
-    val userService = new UserService(ldapDirDao, NoExtensions, registrationDAO)
+    val userService = new UserService(ldapDirDao, NoExtensions, registrationDAO, Seq.empty)
     val managedGroupService = new ManagedGroupService(resourceService, policyEvaluatorService, shared.resourceTypes, ldapPolicyDao, ldapDirDao, NoExtensions, shared.emailDomain)
     shared.resourceTypes foreach {case (_, resourceType) => resourceService.createResourceType(resourceType, samRequestContext).unsafeRunSync() }
   }
@@ -78,7 +78,7 @@ class MockAccessPolicyDAOSpec extends FlatSpec with Matchers with TestSupport wi
 
     val policyEvaluatorService = PolicyEvaluatorService(shared.emailDomain, shared.resourceTypes, mockPolicyDAO, mockDirDao)
     val resourceService = new ResourceService(shared.resourceTypes, policyEvaluatorService, mockPolicyDAO, mockDirDao, NoExtensions, shared.emailDomain)
-    val userService = new UserService(mockDirDao, NoExtensions, mockRegDao)
+    val userService = new UserService(mockDirDao, NoExtensions, mockRegDao, Seq.empty)
     val managedGroupService = new ManagedGroupService(resourceService, policyEvaluatorService, shared.resourceTypes, mockPolicyDAO, mockDirDao, NoExtensions, shared.emailDomain)
   }
 

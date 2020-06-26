@@ -307,7 +307,7 @@ object Boot extends IOApp with LazyLogging {
     val resourceTypeMap = config.resourceTypes.map(rt => rt.name -> rt).toMap
     val policyEvaluatorService = PolicyEvaluatorService(config.emailDomain, resourceTypeMap, accessPolicyDAO, directoryDAO)
     val resourceService = new ResourceService(resourceTypeMap, policyEvaluatorService, accessPolicyDAO, directoryDAO, cloudExtensionsInitializer.cloudExtensions, config.emailDomain)
-    val userService = new UserService(directoryDAO, cloudExtensionsInitializer.cloudExtensions, registrationDAO)
+    val userService = new UserService(directoryDAO, cloudExtensionsInitializer.cloudExtensions, registrationDAO, config.domainBlacklist)
     val statusService = new StatusService(directoryDAO, cloudExtensionsInitializer.cloudExtensions, DbReference(DatabaseNames.Foreground), 10 seconds)
     val managedGroupService =
       new ManagedGroupService(resourceService, policyEvaluatorService, resourceTypeMap, accessPolicyDAO, directoryDAO, cloudExtensionsInitializer.cloudExtensions, config.emailDomain)
