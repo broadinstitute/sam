@@ -5,7 +5,7 @@ import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import akka.http.scaladsl.marshalling.ToResponseMarshallable
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server
-import akka.http.scaladsl.server.Directive1
+import akka.http.scaladsl.server.{Directive1, Route}
 import akka.http.scaladsl.server.Directives._
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
@@ -35,6 +35,9 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
       case Some(resourceType) => resourceType
       case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"resource type ${name.value} not found"))
     }
+
+  def withCurrentParentOption(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): Directive1[Option[FullyQualifiedResourceId]] =
+    onSuccess(resourceService.getResourceParent(resource, samRequestContext))
 
   def resourceRoutes: server.Route =
     (pathPrefix("config" / "v1" / "resourceTypes") | pathPrefix("resourceTypes")) {
@@ -121,6 +124,23 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
                   pathEndOrSingleSlash {
                     getAllResourceUsers(resource, userInfo, samRequestContext)
                   }
+                }
+              }
+            }
+          }
+        }
+      }
+    } ~ pathPrefix("resources" / "v2") {
+      withSamRequestContext { samRequestContext =>
+        requireUserInfo(samRequestContext) { userInfo =>
+          pathPrefix(Segment) { resourceTypeName =>
+            withResourceType(ResourceTypeName(resourceTypeName)) { resourceType =>
+              pathPrefix(Segment) { resourceId =>
+                val resource = FullyQualifiedResourceId(resourceType.name, ResourceId(resourceId))
+                path("parent") {
+                  getResourceParent(resource, userInfo, samRequestContext) ~
+                  setResourceParent(resource, userInfo, samRequestContext) ~
+                  deleteResourceParent(resource, userInfo, samRequestContext)
                 }
               }
             }
@@ -296,4 +316,49 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
         })
       }
     }
+
+  def getResourceParent(resource: FullyQualifiedResourceId, userInfo: UserInfo, samRequestContext: SamRequestContext): server.Route =
+    get {
+      requireAction(resource, SamResourceActions.getParent, userInfo.userId, samRequestContext) {
+        complete(resourceService.getResourceParent(resource, samRequestContext).map {
+          case Some(response) => StatusCodes.OK -> response
+          case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "resource parent not found"))
+        })
+      }
+    }
+
+  def setResourceParent(resource: FullyQualifiedResourceId, userInfo: UserInfo, samRequestContext: SamRequestContext): server.Route =
+    put {
+      entity(as[FullyQualifiedResourceId]) { newResourceParent =>
+        withCurrentParentOption(resource, samRequestContext) {
+          case Some(currentResourceParent) =>
+            requireAction(currentResourceParent, SamResourceActions.removeChild, userInfo.userId, samRequestContext) {
+              setResourceParentInternal(resource, newResourceParent, userInfo, samRequestContext)
+            }
+          case None => setResourceParentInternal(resource, newResourceParent, userInfo, samRequestContext)
+        }
+      }
+    }
+
+  private def setResourceParentInternal(resource: FullyQualifiedResourceId, newResourceParent: FullyQualifiedResourceId, userInfo: UserInfo, samRequestContext: SamRequestContext): Route = {
+    requireAction(newResourceParent, SamResourceActions.addChild, userInfo.userId, samRequestContext) {
+      requireAction(resource, SamResourceActions.setParent, userInfo.userId, samRequestContext) {
+        complete(resourceService.setResourceParent(resource, newResourceParent, samRequestContext).map(_ => StatusCodes.NoContent))
+      }
+    }
+  }
+
+  def deleteResourceParent(resource: FullyQualifiedResourceId, userInfo: UserInfo, samRequestContext: SamRequestContext): server.Route =
+    delete {
+      withCurrentParentOption(resource, samRequestContext) {
+        case Some(resourceParent) =>
+          requireAction(resourceParent, SamResourceActions.removeChild, userInfo.userId, samRequestContext) {
+            requireAction(resource, SamResourceActions.setParent, userInfo.userId, samRequestContext) {
+              complete(resourceService.deleteResourceParent(resource, samRequestContext).map(_ => StatusCodes.NoContent))
+            }
+          }
+        case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "resource parent not found"))
+      }
+    }
+
 }

@@ -478,4 +478,16 @@ class ResourceService(
     } yield {
       workbenchUsers.map(user => UserIdInfo(user.id, user.email, user.googleSubjectId))
     }
+
+  def getResourceParent(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Option[FullyQualifiedResourceId]] = {
+    accessPolicyDAO.getResourceParent(resourceId, samRequestContext)
+  }
+
+  // need to determine if this would introduce a cycle OR if the resource has an auth domain
+  def setResourceParent(childResource: FullyQualifiedResourceId, parentResource: FullyQualifiedResourceId,  samRequestContext: SamRequestContext): IO[Unit] = ???
+
+  def deleteResourceParent(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] = {
+    accessPolicyDAO.deleteResourceParent(resourceId, samRequestContext)
+  }
+
 }

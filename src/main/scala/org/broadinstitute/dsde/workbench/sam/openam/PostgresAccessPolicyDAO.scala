@@ -783,6 +783,50 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     })
   }
 
+  override def getResourceParent(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Option[FullyQualifiedResourceId]] = {
+    val r = ResourceTable.syntax("r")
+    val rt = ResourceTypeTable.syntax("rt")
+    val pr = ResourceTable.syntax("pr")
+    val prt = ResourceTypeTable.syntax("prt")
+
+    runInTransaction("getResourceParent", samRequestContext)({ implicit session =>
+      val query = samsql"""select ${pr.result.name}, ${prt.result.name}
+              from ${ResourceTable as r}
+              join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
+              join ${ResourceTable as pr} on ${pr.id} = ${r.resourceParentId}
+              join ${ResourceTypeTable as prt} on ${pr.resourceTypeId} = ${prt.id}
+              where ${r.name} = ${resource.resourceId}
+              and ${rt.name} = ${resource.resourceTypeName}"""
+
+      import SamTypeBinders._
+      query.map(rs =>
+          FullyQualifiedResourceId(
+            rs.get[ResourceTypeName](prt.resultName.name),
+            rs.get[ResourceId](pr.resultName.name)))
+        .single.apply()
+    })
+  }
+
+  override def setResourceParent(childResource: FullyQualifiedResourceId, parentResource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] = ???
+
+  override def deleteResourceParent(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] = {
+    val r = ResourceTable.syntax("r")
+    val resourceTableColumn = ResourceTable.column
+    val rt = ResourceTypeTable.syntax("rt")
+
+    runInTransaction("deleteResourceParent", samRequestContext)({ implicit session =>
+      val query =
+        samsql"""update ${ResourceTable as r}
+          set ${resourceTableColumn.resourceParentId} = null
+          from ${ResourceTypeTable as rt}
+          where ${rt.id} = ${r.resourceTypeId}
+          and ${r.name} = ${resource.resourceId}
+          and ${rt.name} = ${resource.resourceTypeName}"""
+
+      query.update.apply()
+    })
+  }
+
   private def setPolicyIsPublicInternal(policyId: FullyQualifiedPolicyId, isPublic: Boolean)(implicit session: DBSession): Int = {
     val p = PolicyTable.syntax("p")
     val policyTableColumn = PolicyTable.column
