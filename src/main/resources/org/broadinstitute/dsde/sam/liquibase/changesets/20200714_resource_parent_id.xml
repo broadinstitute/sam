@@ -6,7 +6,7 @@
                    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog-ext http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-ext.xsd http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.4.xsd">
 
     <changeSet logicalFilePath="dummy" author="mtalbott" id="add_resource_parent_id">
-        <addColumn tableName="sam_user">
+        <addColumn tableName="sam_resource">
             <column name="resource_parent_id" type="BIGINT">
                 <constraints nullable="true" foreignKeyName="FK_SR_RESOURCE_PARENT" referencedTableName="SAM_RESOURCE" referencedColumnNames="id"/>
             </column>

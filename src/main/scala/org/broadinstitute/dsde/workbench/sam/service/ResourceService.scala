@@ -483,8 +483,26 @@ class ResourceService(
     accessPolicyDAO.getResourceParent(resourceId, samRequestContext)
   }
 
-  // need to determine if this would introduce a cycle OR if the resource has an auth domain
-  def setResourceParent(childResource: FullyQualifiedResourceId, parentResource: FullyQualifiedResourceId,  samRequestContext: SamRequestContext): IO[Unit] = ???
+  // need to determine if this would introduce a cycle
+  def setResourceParent(childResource: FullyQualifiedResourceId, parentResource: FullyQualifiedResourceId,  samRequestContext: SamRequestContext): IO[Unit] = {
+    for {
+      authDomain <- accessPolicyDAO.loadResourceAuthDomain(childResource, samRequestContext)
+      _ <- authDomain match {
+        case LoadResourceAuthDomainResult.NotConstrained =>
+          accessPolicyDAO.setResourceParent(childResource, parentResource, samRequestContext)
+        case LoadResourceAuthDomainResult.Constrained(_) => IO.raiseError(
+          new WorkbenchExceptionWithErrorReport(
+            ErrorReport(StatusCodes.BadRequest, "Cannot set the parent for a constrained resource")
+          )
+        )
+        case LoadResourceAuthDomainResult.ResourceNotFound => IO.raiseError(
+          new WorkbenchExceptionWithErrorReport(
+            ErrorReport(StatusCodes.NotFound, "Resource not found")
+          )
+        )
+      }
+    } yield ()
+  }
 
   def deleteResourceParent(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] = {
     accessPolicyDAO.deleteResourceParent(resourceId, samRequestContext)
