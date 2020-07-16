@@ -807,7 +807,52 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     })
   }
 
-  override def setResourceParent(childResource: FullyQualifiedResourceId, parentResource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] = ???
+  override def setResourceParent(childResource: FullyQualifiedResourceId, parentResource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] = {
+    val ancestorResourceTable = AncestorResourceTable("ancestor_resource")
+    val ar = ancestorResourceTable.syntax("ar")
+    val arColumn = ancestorResourceTable.column
+
+    val r = ResourceTable.syntax("r")
+    val rt = ResourceTypeTable.syntax("rt")
+    val pr = ResourceTable.syntax("pr")
+    val prt = ResourceTypeTable.syntax("prt")
+    val resourceTableColumn = ResourceTable.column
+
+    val query =
+      samsql"""with recursive ${ancestorResourceTable.table}(${arColumn.resourceParentId}, ${arColumn.isAncestor}) as (
+                select ${r.id}, false
+                from ${ResourceTable as r}
+                join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
+                where ${r.name} = ${parentResource.resourceId}
+                and ${rt.name} = ${parentResource.resourceTypeName}
+                union
+                select ${pr.resourceParentId}, true
+                from ${ResourceTable as pr}
+                join ${ancestorResourceTable as ar} on ${arColumn.resourceParentId} = ${pr.id}
+                where ${pr.resourceParentId} is not null
+      ) update ${ResourceTable as r}
+        set ${resourceTableColumn.resourceParentId} =
+            ( select ${pr.id}
+              from ${ResourceTable as pr}
+              join ${ResourceTypeTable as prt} on ${prt.id} = ${pr.resourceTypeId}
+              where ${pr.name} = ${parentResource.resourceId}
+              and ${prt.name} = ${parentResource.resourceTypeName} )
+        from ${ResourceTypeTable as rt}
+        where ${rt.id} = ${r.resourceTypeId}
+        and ${r.name} = ${childResource.resourceId}
+        and ${rt.name} = ${childResource.resourceTypeName}
+        and (${r.id}, true) not in
+            ( select ${arColumn.resourceParentId}, ${arColumn.isAncestor}
+            from ${ancestorResourceTable} )"""
+
+    runInTransaction("setResourceParent", samRequestContext)({ implicit session =>
+      if (query.update.apply() != 1) {
+        throw new WorkbenchExceptionWithErrorReport(
+          ErrorReport(StatusCodes.BadRequest, "Cannot set parent as this would introduce a cyclical resource hierarchy")
+        )
+      }
+    })
+  }
 
   override def deleteResourceParent(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] = {
     val r = ResourceTable.syntax("r")
@@ -845,3 +890,11 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
 }
 
 private final case class PolicyInfo(name: AccessPolicyName, resourceId: ResourceId, resourceTypeName: ResourceTypeName, email: WorkbenchEmail, public: Boolean)
+
+// these 2 case classes represent the logical table used in recursive ancestor resource queries
+// this table does not actually exist but looks like a table in a WITH RECURSIVE query
+final case class AncestorResourceRecord(resourceParentId: ResourcePK, isAncestor: Boolean)
+final case class AncestorResourceTable(override val tableName: String) extends SQLSyntaxSupport[AncestorResourceRecord] {
+  // need to specify column names explicitly because this table does not actually exist in the database
+  override val columnNames: Seq[String] = Seq("resource_parent_id", "is_ancestor")
+}
