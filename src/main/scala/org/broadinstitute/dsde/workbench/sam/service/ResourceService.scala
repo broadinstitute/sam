@@ -483,7 +483,6 @@ class ResourceService(
     accessPolicyDAO.getResourceParent(resourceId, samRequestContext)
   }
 
-  // need to determine if this would introduce a cycle
   def setResourceParent(childResource: FullyQualifiedResourceId, parentResource: FullyQualifiedResourceId,  samRequestContext: SamRequestContext): IO[Unit] = {
     for {
       authDomain <- accessPolicyDAO.loadResourceAuthDomain(childResource, samRequestContext)
