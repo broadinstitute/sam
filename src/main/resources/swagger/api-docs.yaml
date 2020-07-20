@@ -1631,7 +1631,7 @@ paths:
           content:
             application/json:
               schema:
-                type: '#/components/schemas/FullyQualifiedResourceId'
+                $ref: '#/components/schemas/FullyQualifiedResourceId'
         403:
           description: You do not have permission to get the parent for this resource
           content: {}
@@ -2045,6 +2045,7 @@ components:
         resourceId:
           type: string
           description: The id of the resource
+      description: type and id of a resource
     ManagedGroupMembershipEntry:
       required:
         - groupEmail
