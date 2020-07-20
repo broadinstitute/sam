@@ -147,29 +147,9 @@ class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdenti
     )
   }
 
-  // Each resource has a list of
-  val resourceParents = TrieMap[FullyQualifiedResourceId, FullyQualifiedResourceId]()
+  override def getResourceParent(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Option[FullyQualifiedResourceId]] = IO(None)
 
-  override def getResourceParent(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Option[FullyQualifiedResourceId]] = IO.pure(resourceParents.get(resource))
+  override def setResourceParent(childResource: FullyQualifiedResourceId, parentResource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] = IO.unit
 
-  override def setResourceParent(childResource: FullyQualifiedResourceId, parentResource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] = IO {
-    if (createsCycle(childResource, parentResource)) {
-      throw new WorkbenchExceptionWithErrorReport(
-        ErrorReport(StatusCodes.BadRequest, "Cannot set parent as this would introduce a cyclical resource hierarchy")
-      )
-    } else {
-      resourceParents += childResource -> parentResource
-    }
-  }
-
-  private def createsCycle(childResource: FullyQualifiedResourceId, parentResource: FullyQualifiedResourceId): Boolean = {
-    resourceParents.get(parentResource) match {
-      case Some(grandparentResource) => childResource == grandparentResource || createsCycle(childResource, grandparentResource)
-      case None => false
-    }
-  }
-
-  override def deleteResourceParent(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] = IO {
-    resourceParents -= resource
-  }
+  override def deleteResourceParent(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] = IO.unit
 }
