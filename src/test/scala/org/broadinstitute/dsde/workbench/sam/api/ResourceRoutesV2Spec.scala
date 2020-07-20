@@ -24,7 +24,15 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
 
   val defaultUserInfo = UserInfo(OAuth2BearerToken("accessToken"), WorkbenchUserId("user1"), WorkbenchEmail("user1@example.com"), 0)
 
-  private def createSamRoutes(resourceTypes: Map[ResourceTypeName, ResourceType], userInfo: UserInfo = defaultUserInfo) = {
+  val defaultResourceType = ResourceType(
+    ResourceTypeName("rt"),
+    Set.empty,
+    Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.getParent))),
+    ResourceRoleName("owner")
+  )
+
+  private def createSamRoutes(resourceTypes: Map[ResourceTypeName, ResourceType] = Map(defaultResourceType.name -> defaultResourceType),
+                              userInfo: UserInfo = defaultUserInfo): SamRoutes = {
     val accessPolicyDAO = new MockAccessPolicyDAO()
     val directoryDAO = new MockDirectoryDAO()
     val registrationDAO = new MockDirectoryDAO()
@@ -44,6 +52,7 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
     new TestSamRoutes(mockResourceService, policyEvaluatorService, mockUserService, mockStatusService, mockManagedGroupService, userInfo, directoryDAO)
   }
 
+  // mock out a bunch of calls in ResourceService and PolicyEvaluatorService to reduce bloat in tests
   private def setupRoutesTest(samRoutes: SamRoutes,
                               childResource: FullyQualifiedResourceId,
                               currentParentOpt: Option[FullyQualifiedResourceId] = None,
@@ -63,9 +72,14 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
       .thenReturn(IO(true)))
     missingActionsOnChild.map(action => when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(childResource), mockitoEq(action), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
       .thenReturn(IO(false)))
+    when(samRoutes.resourceService.deleteResourceParent(mockitoEq(childResource), any[SamRequestContext]))
+      .thenReturn(IO.unit)
     if (accessToChild) {
       when(samRoutes.policyEvaluatorService.listResourceAccessPoliciesForUser(mockitoEq(childResource), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
         .thenReturn(IO(Set(otherPolicy)))
+    } else {
+      when(samRoutes.policyEvaluatorService.listResourceAccessPoliciesForUser(mockitoEq(childResource), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
+        .thenReturn(IO(Set[AccessPolicyWithoutMembers]()))
     }
 
     currentParentOpt match {
@@ -79,6 +93,9 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
         if (accessToCurrentParent) {
           when(samRoutes.policyEvaluatorService.listResourceAccessPoliciesForUser(mockitoEq(currentParent), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
             .thenReturn(IO(Set(otherPolicy)))
+        } else {
+          when(samRoutes.policyEvaluatorService.listResourceAccessPoliciesForUser(mockitoEq(currentParent), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
+            .thenReturn(IO(Set[AccessPolicyWithoutMembers]()))
         }
       case None =>
         when(samRoutes.resourceService.getResourceParent(mockitoEq(childResource), any[SamRequestContext]))
@@ -86,6 +103,8 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
     }
 
     newParentOpt.map { newParent =>
+      when(samRoutes.resourceService.setResourceParent(mockitoEq(childResource), mockitoEq(newParent), any[SamRequestContext]))
+          .thenReturn(IO.unit)
       actionsOnNewParent.map(action => when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(newParent), mockitoEq(action), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
         .thenReturn(IO(true)))
       missingActionsOnNewParent.map(action => when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(newParent), mockitoEq(action), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
@@ -93,145 +112,94 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
       if (accessToNewParent) {
         when(samRoutes.policyEvaluatorService.listResourceAccessPoliciesForUser(mockitoEq(newParent), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
           .thenReturn(IO(Set(otherPolicy)))
+      } else {
+        when(samRoutes.policyEvaluatorService.listResourceAccessPoliciesForUser(mockitoEq(newParent), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
+          .thenReturn(IO(Set[AccessPolicyWithoutMembers]()))
       }
     }
   }
 
   "GET /api/resources/v2/{resourceTypeName}/{resourceId}/parent" should "200 if user has get_parent on resource and resource has parent" in {
-    val resourceType = ResourceType(
-      ResourceTypeName("rt"),
-      Set.empty,
-      Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.getParent))),
-      ResourceRoleName("owner")
-    )
-    val fullyQualifiedChildResource = FullyQualifiedResourceId(resourceType.name, ResourceId("child"))
-    val fullyQualifiedParentResource = FullyQualifiedResourceId(resourceType.name, ResourceId("parent"))
-    val samRoutes = createSamRoutes(Map(resourceType.name -> resourceType))
+    val fullyQualifiedChildResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("child"))
+    val fullyQualifiedParentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("parent"))
+    val samRoutes = createSamRoutes()
 
-    when(samRoutes.resourceService.getResourceParent(mockitoEq(fullyQualifiedChildResource), any[SamRequestContext]))
-      .thenReturn(IO(Option(fullyQualifiedParentResource)))
-    when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(fullyQualifiedChildResource), mockitoEq(SamResourceActions.getParent), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(true))
+    setupRoutesTest(samRoutes, fullyQualifiedChildResource,
+      currentParentOpt = Option(fullyQualifiedParentResource),
+      actionsOnChild = Set(SamResourceActions.getParent))
 
-    Get(s"/api/resources/v2/${resourceType.name}/${fullyQualifiedChildResource.resourceId.value}/parent") ~> samRoutes.route ~> check {
+    Get(s"/api/resources/v2/${defaultResourceType.name}/${fullyQualifiedChildResource.resourceId.value}/parent") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
       responseAs[FullyQualifiedResourceId] shouldEqual fullyQualifiedParentResource
     }
   }
 
   it should "403 if user is missing get_parent on resource" in {
-    val resourceType = ResourceType(
-      ResourceTypeName("rt"),
-      Set.empty,
-      Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.getParent))),
-      ResourceRoleName("owner")
-    )
-    val fullyQualifiedChildResource = FullyQualifiedResourceId(resourceType.name, ResourceId("child"))
-    val fullyQualifiedParentResource = FullyQualifiedResourceId(resourceType.name, ResourceId("parent"))
-    val samRoutes = createSamRoutes(Map(resourceType.name -> resourceType))
+    val fullyQualifiedChildResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("child"))
+    val fullyQualifiedParentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("parent"))
+    val samRoutes = createSamRoutes()
 
-    when(samRoutes.resourceService.getResourceParent(mockitoEq(fullyQualifiedChildResource), any[SamRequestContext]))
-      .thenReturn(IO(Option(fullyQualifiedParentResource)))
-    when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(fullyQualifiedChildResource), mockitoEq(SamResourceActions.getParent), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(false))
-    when(samRoutes.policyEvaluatorService.listResourceAccessPoliciesForUser(mockitoEq(fullyQualifiedChildResource), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(Set(AccessPolicyWithoutMembers(FullyQualifiedPolicyId(fullyQualifiedChildResource, AccessPolicyName("not_owner")), WorkbenchEmail(""), Set.empty, Set.empty, false))))
+    setupRoutesTest(samRoutes, fullyQualifiedChildResource, currentParentOpt = Option(fullyQualifiedParentResource),
+      missingActionsOnChild = Set(SamResourceActions.getParent))
 
-    Get(s"/api/resources/v2/${resourceType.name}/${fullyQualifiedChildResource.resourceId.value}/parent") ~> samRoutes.route ~> check {
+    Get(s"/api/resources/v2/${defaultResourceType.name}/${fullyQualifiedChildResource.resourceId.value}/parent") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Forbidden
     }
   }
 
   it should "404 if resource has no parent" in {
-    val resourceType = ResourceType(
-      ResourceTypeName("rt"),
-      Set.empty,
-      Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.getParent))),
-      ResourceRoleName("owner")
-    )
-    val fullyQualifiedChildResource = FullyQualifiedResourceId(resourceType.name, ResourceId("child"))
-    val samRoutes = createSamRoutes(Map(resourceType.name -> resourceType))
+    val fullyQualifiedChildResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("child"))
+    val samRoutes = createSamRoutes()
 
-    when(samRoutes.resourceService.getResourceParent(mockitoEq(fullyQualifiedChildResource), any[SamRequestContext]))
-      .thenReturn(IO(None))
-    when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(fullyQualifiedChildResource), mockitoEq(SamResourceActions.getParent), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(true))
+    setupRoutesTest(samRoutes, fullyQualifiedChildResource, None, actionsOnChild = Set(SamResourceActions.getParent))
 
-    Get(s"/api/resources/v2/${resourceType.name}/${fullyQualifiedChildResource.resourceId.value}/parent") ~> samRoutes.route ~> check {
+    Get(s"/api/resources/v2/${defaultResourceType.name}/${fullyQualifiedChildResource.resourceId.value}/parent") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
   }
 
   // this one feels a bit like it's testing the security directives not the route itself but whatever
   it should "404 if user doesn't have access to resource" in {
-    val resourceType = ResourceType(
-      ResourceTypeName("rt"),
-      Set.empty,
-      Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.getParent))),
-      ResourceRoleName("owner")
-    )
-    val fullyQualifiedChildResource = FullyQualifiedResourceId(resourceType.name, ResourceId("child"))
-    val samRoutes = createSamRoutes(Map(resourceType.name -> resourceType))
+    val fullyQualifiedChildResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("child"))
+    val samRoutes = createSamRoutes()
 
-    when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(fullyQualifiedChildResource), mockitoEq(SamResourceActions.getParent), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(false))
-    when(samRoutes.policyEvaluatorService.listResourceAccessPoliciesForUser(mockitoEq(fullyQualifiedChildResource), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(Set[AccessPolicyWithoutMembers]()))
+    setupRoutesTest(samRoutes, fullyQualifiedChildResource,
+      missingActionsOnChild = Set(SamResourceActions.getParent),
+      accessToChild = false)
 
-    Get(s"/api/resources/v2/${resourceType.name}/${fullyQualifiedChildResource.resourceId.value}/parent") ~> samRoutes.route ~> check {
+    Get(s"/api/resources/v2/${defaultResourceType.name}/${fullyQualifiedChildResource.resourceId.value}/parent") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
   }
 
   "PUT /api/resources/v2/{resourceTypeName}/{resourceId}/parent" should "204 on success when there is not a parent already set" in {
-    val resourceType = ResourceType(
-      ResourceTypeName("rt"),
-      Set.empty,
-      Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.getParent))),
-      ResourceRoleName("owner")
-    )
-    val fullyQualifiedChildResource = FullyQualifiedResourceId(resourceType.name, ResourceId("child"))
-    val fullyQualifiedParentResource = FullyQualifiedResourceId(resourceType.name, ResourceId("parent"))
-    val samRoutes = createSamRoutes(Map(resourceType.name -> resourceType))
+    val fullyQualifiedChildResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("child"))
+    val fullyQualifiedParentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("parent"))
+    val samRoutes = createSamRoutes()
 
-    when(samRoutes.resourceService.setResourceParent(mockitoEq(fullyQualifiedChildResource), mockitoEq(fullyQualifiedParentResource), any[SamRequestContext]))
-      .thenReturn(IO.unit)
-    when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(fullyQualifiedChildResource), mockitoEq(SamResourceActions.setParent), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(true))
-    when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(fullyQualifiedParentResource), mockitoEq(SamResourceActions.addChild), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(true))
-    when(samRoutes.resourceService.getResourceParent(mockitoEq(fullyQualifiedChildResource), any[SamRequestContext]))
-      .thenReturn(IO(None))
+    setupRoutesTest(samRoutes, fullyQualifiedChildResource, newParentOpt = Option(fullyQualifiedParentResource),
+      actionsOnChild = Set(SamResourceActions.setParent),
+      actionsOnNewParent = Set(SamResourceActions.addChild))
 
-    Put(s"/api/resources/v2/${resourceType.name}/${fullyQualifiedChildResource.resourceId.value}/parent", fullyQualifiedParentResource) ~> samRoutes.route ~> check {
+    Put(s"/api/resources/v2/${defaultResourceType.name}/${fullyQualifiedChildResource.resourceId.value}/parent", fullyQualifiedParentResource) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NoContent
     }
   }
 
   it should "204 on success when there is a parent already set" in {
-    val resourceType = ResourceType(
-      ResourceTypeName("rt"),
-      Set.empty,
-      Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.getParent))),
-      ResourceRoleName("owner")
-    )
-    val fullyQualifiedChildResource = FullyQualifiedResourceId(resourceType.name, ResourceId("child"))
-    val newParentResource = FullyQualifiedResourceId(resourceType.name, ResourceId("newParent"))
-    val currentParentResource = FullyQualifiedResourceId(resourceType.name, ResourceId("currentParent"))
-    val samRoutes = createSamRoutes(Map(resourceType.name -> resourceType))
+    val fullyQualifiedChildResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("child"))
+    val newParentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("newParent"))
+    val currentParentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("currentParent"))
+    val samRoutes = createSamRoutes()
 
-    when(samRoutes.resourceService.setResourceParent(mockitoEq(fullyQualifiedChildResource), mockitoEq(newParentResource), any[SamRequestContext]))
-      .thenReturn(IO.unit)
-    when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(fullyQualifiedChildResource), mockitoEq(SamResourceActions.setParent), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(true))
-    when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(newParentResource), mockitoEq(SamResourceActions.addChild), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(true))
-    when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(currentParentResource), mockitoEq(SamResourceActions.removeChild), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(true))
-    when(samRoutes.resourceService.getResourceParent(mockitoEq(fullyQualifiedChildResource), any[SamRequestContext]))
-      .thenReturn(IO(Option(currentParentResource)))
+    setupRoutesTest(samRoutes, fullyQualifiedChildResource,
+      currentParentOpt = Option(currentParentResource),
+      newParentOpt = Option(newParentResource),
+      actionsOnChild = Set(SamResourceActions.setParent),
+      actionsOnCurrentParent = Set(SamResourceActions.removeChild),
+      actionsOnNewParent = Set(SamResourceActions.addChild))
 
-    Put(s"/api/resources/v2/${resourceType.name}/${fullyQualifiedChildResource.resourceId.value}/parent", newParentResource) ~> samRoutes.route ~> check {
+    Put(s"/api/resources/v2/${defaultResourceType.name}/${fullyQualifiedChildResource.resourceId.value}/parent", newParentResource) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NoContent
     }
   }
@@ -243,345 +211,201 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
   ignore should "400 if adding parent would introduce a cyclical resource hierarchy" in {}
 
   it should "403 if user is missing set_parent on child resource" in {
-    val resourceType = ResourceType(
-      ResourceTypeName("rt"),
-      Set.empty,
-      Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.getParent))),
-      ResourceRoleName("owner")
-    )
-    val fullyQualifiedChildResource = FullyQualifiedResourceId(resourceType.name, ResourceId("child"))
-    val newParentResource = FullyQualifiedResourceId(resourceType.name, ResourceId("newParent"))
-    val currentParentResource = FullyQualifiedResourceId(resourceType.name, ResourceId("currentParent"))
-    val samRoutes = createSamRoutes(Map(resourceType.name -> resourceType))
+    val fullyQualifiedChildResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("child"))
+    val newParentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("newParent"))
+    val currentParentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("currentParent"))
+    val samRoutes = createSamRoutes()
 
-    when(samRoutes.resourceService.setResourceParent(mockitoEq(fullyQualifiedChildResource), mockitoEq(newParentResource), any[SamRequestContext]))
-      .thenReturn(IO.unit)
-    when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(fullyQualifiedChildResource), mockitoEq(SamResourceActions.setParent), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(false))
-    when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(newParentResource), mockitoEq(SamResourceActions.addChild), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(true))
-    when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(currentParentResource), mockitoEq(SamResourceActions.removeChild), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(true))
-    when(samRoutes.resourceService.getResourceParent(mockitoEq(fullyQualifiedChildResource), any[SamRequestContext]))
-      .thenReturn(IO(Option(currentParentResource)))
-    when(samRoutes.policyEvaluatorService.listResourceAccessPoliciesForUser(mockitoEq(fullyQualifiedChildResource), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(Set(AccessPolicyWithoutMembers(FullyQualifiedPolicyId(fullyQualifiedChildResource, AccessPolicyName("not_owner")), WorkbenchEmail(""), Set.empty, Set.empty, false))))
+    setupRoutesTest(samRoutes, fullyQualifiedChildResource,
+      currentParentOpt = Option(currentParentResource),
+      newParentOpt = Option(newParentResource),
+      missingActionsOnChild = Set(SamResourceActions.setParent),
+      actionsOnCurrentParent = Set(SamResourceActions.removeChild),
+      actionsOnNewParent = Set(SamResourceActions.addChild))
 
-
-    Put(s"/api/resources/v2/${resourceType.name}/${fullyQualifiedChildResource.resourceId.value}/parent", newParentResource) ~> samRoutes.route ~> check {
+    Put(s"/api/resources/v2/${defaultResourceType.name}/${fullyQualifiedChildResource.resourceId.value}/parent", newParentResource) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Forbidden
     }
   }
 
   it should "403 if user is missing add_child on new parent resource" in {
-    val resourceType = ResourceType(
-      ResourceTypeName("rt"),
-      Set.empty,
-      Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.getParent))),
-      ResourceRoleName("owner")
-    )
-    val fullyQualifiedChildResource = FullyQualifiedResourceId(resourceType.name, ResourceId("child"))
-    val newParentResource = FullyQualifiedResourceId(resourceType.name, ResourceId("newParent"))
-    val currentParentResource = FullyQualifiedResourceId(resourceType.name, ResourceId("currentParent"))
-    val samRoutes = createSamRoutes(Map(resourceType.name -> resourceType))
+    val fullyQualifiedChildResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("child"))
+    val newParentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("newParent"))
+    val currentParentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("currentParent"))
+    val samRoutes = createSamRoutes()
 
-    when(samRoutes.resourceService.setResourceParent(mockitoEq(fullyQualifiedChildResource), mockitoEq(newParentResource), any[SamRequestContext]))
-      .thenReturn(IO.unit)
-    when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(fullyQualifiedChildResource), mockitoEq(SamResourceActions.setParent), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(true))
-    when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(newParentResource), mockitoEq(SamResourceActions.addChild), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(false))
-    when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(currentParentResource), mockitoEq(SamResourceActions.removeChild), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(true))
-    when(samRoutes.resourceService.getResourceParent(mockitoEq(fullyQualifiedChildResource), any[SamRequestContext]))
-      .thenReturn(IO(Option(currentParentResource)))
-    when(samRoutes.policyEvaluatorService.listResourceAccessPoliciesForUser(mockitoEq(newParentResource), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(Set(AccessPolicyWithoutMembers(FullyQualifiedPolicyId(fullyQualifiedChildResource, AccessPolicyName("not_owner")), WorkbenchEmail(""), Set.empty, Set.empty, false))))
+    setupRoutesTest(samRoutes, fullyQualifiedChildResource,
+      currentParentOpt = Option(currentParentResource),
+      newParentOpt = Option(newParentResource),
+      actionsOnChild = Set(SamResourceActions.setParent),
+      actionsOnCurrentParent = Set(SamResourceActions.removeChild),
+      missingActionsOnNewParent = Set(SamResourceActions.addChild))
 
-
-    Put(s"/api/resources/v2/${resourceType.name}/${fullyQualifiedChildResource.resourceId.value}/parent", newParentResource) ~> samRoutes.route ~> check {
+    Put(s"/api/resources/v2/${defaultResourceType.name}/${fullyQualifiedChildResource.resourceId.value}/parent", newParentResource) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Forbidden
     }
   }
 
   it should "403 if user is missing remove_child on existing parent resource" in {
-    val resourceType = ResourceType(
-      ResourceTypeName("rt"),
-      Set.empty,
-      Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.getParent))),
-      ResourceRoleName("owner")
-    )
-    val fullyQualifiedChildResource = FullyQualifiedResourceId(resourceType.name, ResourceId("child"))
-    val newParentResource = FullyQualifiedResourceId(resourceType.name, ResourceId("newParent"))
-    val currentParentResource = FullyQualifiedResourceId(resourceType.name, ResourceId("currentParent"))
-    val samRoutes = createSamRoutes(Map(resourceType.name -> resourceType))
+    val fullyQualifiedChildResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("child"))
+    val newParentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("newParent"))
+    val currentParentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("currentParent"))
+    val samRoutes = createSamRoutes()
 
-    when(samRoutes.resourceService.setResourceParent(mockitoEq(fullyQualifiedChildResource), mockitoEq(newParentResource), any[SamRequestContext]))
-      .thenReturn(IO.unit)
-    when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(fullyQualifiedChildResource), mockitoEq(SamResourceActions.setParent), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(true))
-    when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(newParentResource), mockitoEq(SamResourceActions.addChild), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(true))
-    when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(currentParentResource), mockitoEq(SamResourceActions.removeChild), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(false))
-    when(samRoutes.resourceService.getResourceParent(mockitoEq(fullyQualifiedChildResource), any[SamRequestContext]))
-      .thenReturn(IO(Option(currentParentResource)))
-    when(samRoutes.policyEvaluatorService.listResourceAccessPoliciesForUser(mockitoEq(currentParentResource), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(Set(AccessPolicyWithoutMembers(FullyQualifiedPolicyId(fullyQualifiedChildResource, AccessPolicyName("not_owner")), WorkbenchEmail(""), Set.empty, Set.empty, false))))
+    setupRoutesTest(samRoutes, fullyQualifiedChildResource,
+      currentParentOpt = Option(currentParentResource),
+      newParentOpt = Option(newParentResource),
+      actionsOnChild = Set(SamResourceActions.setParent),
+      missingActionsOnCurrentParent = Set(SamResourceActions.removeChild),
+      actionsOnNewParent = Set(SamResourceActions.addChild))
 
-
-    Put(s"/api/resources/v2/${resourceType.name}/${fullyQualifiedChildResource.resourceId.value}/parent", newParentResource) ~> samRoutes.route ~> check {
+    Put(s"/api/resources/v2/${defaultResourceType.name}/${fullyQualifiedChildResource.resourceId.value}/parent", newParentResource) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Forbidden
     }
   }
 
   it should "404 if user doesn't have access to child resource" in {
-    val resourceType = ResourceType(
-      ResourceTypeName("rt"),
-      Set.empty,
-      Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.getParent))),
-      ResourceRoleName("owner")
-    )
-    val fullyQualifiedChildResource = FullyQualifiedResourceId(resourceType.name, ResourceId("child"))
-    val newParentResource = FullyQualifiedResourceId(resourceType.name, ResourceId("newParent"))
-    val currentParentResource = FullyQualifiedResourceId(resourceType.name, ResourceId("currentParent"))
-    val samRoutes = createSamRoutes(Map(resourceType.name -> resourceType))
+    val fullyQualifiedChildResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("child"))
+    val newParentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("newParent"))
+    val currentParentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("currentParent"))
+    val samRoutes = createSamRoutes()
 
-    when(samRoutes.resourceService.setResourceParent(mockitoEq(fullyQualifiedChildResource), mockitoEq(newParentResource), any[SamRequestContext]))
-      .thenReturn(IO.unit)
-    when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(fullyQualifiedChildResource), mockitoEq(SamResourceActions.setParent), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(false))
-    when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(newParentResource), mockitoEq(SamResourceActions.addChild), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(true))
-    when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(currentParentResource), mockitoEq(SamResourceActions.removeChild), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(true))
-    when(samRoutes.resourceService.getResourceParent(mockitoEq(fullyQualifiedChildResource), any[SamRequestContext]))
-      .thenReturn(IO(Option(currentParentResource)))
-    when(samRoutes.policyEvaluatorService.listResourceAccessPoliciesForUser(mockitoEq(fullyQualifiedChildResource), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(Set[AccessPolicyWithoutMembers]()))
+    setupRoutesTest(samRoutes, fullyQualifiedChildResource,
+      currentParentOpt = Option(currentParentResource),
+      newParentOpt = Option(newParentResource),
+      missingActionsOnChild = Set(SamResourceActions.setParent),
+      actionsOnCurrentParent = Set(SamResourceActions.removeChild),
+      actionsOnNewParent = Set(SamResourceActions.addChild),
+      accessToChild = false)
 
-
-    Put(s"/api/resources/v2/${resourceType.name}/${fullyQualifiedChildResource.resourceId.value}/parent", newParentResource) ~> samRoutes.route ~> check {
+    Put(s"/api/resources/v2/${defaultResourceType.name}/${fullyQualifiedChildResource.resourceId.value}/parent", newParentResource) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
   }
 
   it should "404 if user doesn't have access to new parent resource" in {
-    val resourceType = ResourceType(
-      ResourceTypeName("rt"),
-      Set.empty,
-      Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.getParent))),
-      ResourceRoleName("owner")
-    )
-    val fullyQualifiedChildResource = FullyQualifiedResourceId(resourceType.name, ResourceId("child"))
-    val newParentResource = FullyQualifiedResourceId(resourceType.name, ResourceId("newParent"))
-    val currentParentResource = FullyQualifiedResourceId(resourceType.name, ResourceId("currentParent"))
-    val samRoutes = createSamRoutes(Map(resourceType.name -> resourceType))
+    val fullyQualifiedChildResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("child"))
+    val newParentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("newParent"))
+    val currentParentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("currentParent"))
+    val samRoutes = createSamRoutes()
 
-    when(samRoutes.resourceService.setResourceParent(mockitoEq(fullyQualifiedChildResource), mockitoEq(newParentResource), any[SamRequestContext]))
-      .thenReturn(IO.unit)
-    when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(fullyQualifiedChildResource), mockitoEq(SamResourceActions.setParent), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(true))
-    when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(newParentResource), mockitoEq(SamResourceActions.addChild), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(false))
-    when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(currentParentResource), mockitoEq(SamResourceActions.removeChild), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(true))
-    when(samRoutes.resourceService.getResourceParent(mockitoEq(fullyQualifiedChildResource), any[SamRequestContext]))
-      .thenReturn(IO(Option(currentParentResource)))
-    when(samRoutes.policyEvaluatorService.listResourceAccessPoliciesForUser(mockitoEq(newParentResource), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(Set[AccessPolicyWithoutMembers]()))
+    setupRoutesTest(samRoutes, fullyQualifiedChildResource,
+      currentParentOpt = Option(currentParentResource),
+      newParentOpt = Option(newParentResource),
+      actionsOnChild = Set(SamResourceActions.setParent),
+      actionsOnCurrentParent = Set(SamResourceActions.removeChild),
+      missingActionsOnNewParent = Set(SamResourceActions.addChild),
+      accessToNewParent = false)
 
-
-    Put(s"/api/resources/v2/${resourceType.name}/${fullyQualifiedChildResource.resourceId.value}/parent", newParentResource) ~> samRoutes.route ~> check {
+    Put(s"/api/resources/v2/${defaultResourceType.name}/${fullyQualifiedChildResource.resourceId.value}/parent", newParentResource) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
   }
 
   it should "404 if user doesn't have access to existing parent resource" in {
-    val resourceType = ResourceType(
-      ResourceTypeName("rt"),
-      Set.empty,
-      Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.getParent))),
-      ResourceRoleName("owner")
-    )
-    val fullyQualifiedChildResource = FullyQualifiedResourceId(resourceType.name, ResourceId("child"))
-    val newParentResource = FullyQualifiedResourceId(resourceType.name, ResourceId("newParent"))
-    val currentParentResource = FullyQualifiedResourceId(resourceType.name, ResourceId("currentParent"))
-    val samRoutes = createSamRoutes(Map(resourceType.name -> resourceType))
+    val fullyQualifiedChildResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("child"))
+    val newParentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("newParent"))
+    val currentParentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("currentParent"))
+    val samRoutes = createSamRoutes()
 
-    when(samRoutes.resourceService.setResourceParent(mockitoEq(fullyQualifiedChildResource), mockitoEq(newParentResource), any[SamRequestContext]))
-      .thenReturn(IO.unit)
-    when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(fullyQualifiedChildResource), mockitoEq(SamResourceActions.setParent), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(true))
-    when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(newParentResource), mockitoEq(SamResourceActions.addChild), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(true))
-    when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(currentParentResource), mockitoEq(SamResourceActions.removeChild), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(false))
-    when(samRoutes.resourceService.getResourceParent(mockitoEq(fullyQualifiedChildResource), any[SamRequestContext]))
-      .thenReturn(IO(Option(currentParentResource)))
-    when(samRoutes.policyEvaluatorService.listResourceAccessPoliciesForUser(mockitoEq(currentParentResource), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(Set[AccessPolicyWithoutMembers]()))
+    setupRoutesTest(samRoutes, fullyQualifiedChildResource,
+      currentParentOpt = Option(currentParentResource),
+      newParentOpt = Option(newParentResource),
+      actionsOnChild = Set(SamResourceActions.setParent),
+      missingActionsOnCurrentParent = Set(SamResourceActions.removeChild),
+      actionsOnNewParent = Set(SamResourceActions.addChild),
+      accessToCurrentParent = false)
 
-
-    Put(s"/api/resources/v2/${resourceType.name}/${fullyQualifiedChildResource.resourceId.value}/parent", newParentResource) ~> samRoutes.route ~> check {
+    Put(s"/api/resources/v2/${defaultResourceType.name}/${fullyQualifiedChildResource.resourceId.value}/parent", newParentResource) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
   }
 
   "DELETE /api/resources/v2/{resourceTypeName}/{resourceId}/parent" should "204 on success" in {
-    val resourceType = ResourceType(
-      ResourceTypeName("rt"),
-      Set.empty,
-      Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.getParent))),
-      ResourceRoleName("owner")
-    )
-    val fullyQualifiedChildResource = FullyQualifiedResourceId(resourceType.name, ResourceId("child"))
-    val currentParentResource = FullyQualifiedResourceId(resourceType.name, ResourceId("currentParent"))
-    val samRoutes = createSamRoutes(Map(resourceType.name -> resourceType))
+    val fullyQualifiedChildResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("child"))
+    val currentParentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("currentParent"))
+    val samRoutes = createSamRoutes()
 
-    when(samRoutes.resourceService.deleteResourceParent(mockitoEq(fullyQualifiedChildResource), any[SamRequestContext]))
-      .thenReturn(IO.unit)
-    when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(fullyQualifiedChildResource), mockitoEq(SamResourceActions.setParent), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(true))
-    when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(currentParentResource), mockitoEq(SamResourceActions.removeChild), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(true))
-    when(samRoutes.resourceService.getResourceParent(mockitoEq(fullyQualifiedChildResource), any[SamRequestContext]))
-      .thenReturn(IO(Option(currentParentResource)))
+    setupRoutesTest(samRoutes, fullyQualifiedChildResource,
+      currentParentOpt = Option(currentParentResource),
+      actionsOnChild = Set(SamResourceActions.setParent),
+      actionsOnCurrentParent = Set(SamResourceActions.removeChild))
 
-    Delete(s"/api/resources/v2/${resourceType.name}/${fullyQualifiedChildResource.resourceId.value}/parent") ~> samRoutes.route ~> check {
+    Delete(s"/api/resources/v2/${defaultResourceType.name}/${fullyQualifiedChildResource.resourceId.value}/parent") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NoContent
     }
   }
 
   it should "403 if user is missing set_parent on child resource" in {
-    val resourceType = ResourceType(
-      ResourceTypeName("rt"),
-      Set.empty,
-      Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.getParent))),
-      ResourceRoleName("owner")
-    )
-    val fullyQualifiedChildResource = FullyQualifiedResourceId(resourceType.name, ResourceId("child"))
-    val currentParentResource = FullyQualifiedResourceId(resourceType.name, ResourceId("currentParent"))
-    val samRoutes = createSamRoutes(Map(resourceType.name -> resourceType))
+    val fullyQualifiedChildResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("child"))
+    val currentParentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("currentParent"))
+    val samRoutes = createSamRoutes()
 
-    when(samRoutes.resourceService.deleteResourceParent(mockitoEq(fullyQualifiedChildResource), any[SamRequestContext]))
-      .thenReturn(IO.unit)
-    when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(fullyQualifiedChildResource), mockitoEq(SamResourceActions.setParent), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(false))
-    when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(currentParentResource), mockitoEq(SamResourceActions.removeChild), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(true))
-    when(samRoutes.resourceService.getResourceParent(mockitoEq(fullyQualifiedChildResource), any[SamRequestContext]))
-      .thenReturn(IO(Option(currentParentResource)))
-    when(samRoutes.policyEvaluatorService.listResourceAccessPoliciesForUser(mockitoEq(fullyQualifiedChildResource), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(Set(AccessPolicyWithoutMembers(FullyQualifiedPolicyId(fullyQualifiedChildResource, AccessPolicyName("not_owner")), WorkbenchEmail(""), Set.empty, Set.empty, false))))
+    setupRoutesTest(samRoutes, fullyQualifiedChildResource,
+      currentParentOpt = Option(currentParentResource),
+      missingActionsOnChild = Set(SamResourceActions.setParent),
+      actionsOnCurrentParent = Set(SamResourceActions.removeChild))
 
-    Delete(s"/api/resources/v2/${resourceType.name}/${fullyQualifiedChildResource.resourceId.value}/parent") ~> samRoutes.route ~> check {
+    Delete(s"/api/resources/v2/${defaultResourceType.name}/${fullyQualifiedChildResource.resourceId.value}/parent") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Forbidden
     }
   }
 
   it should "403 if user is missing remove_child on parent resource if it exists" in {
-    val resourceType = ResourceType(
-      ResourceTypeName("rt"),
-      Set.empty,
-      Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.getParent))),
-      ResourceRoleName("owner")
-    )
-    val fullyQualifiedChildResource = FullyQualifiedResourceId(resourceType.name, ResourceId("child"))
-    val currentParentResource = FullyQualifiedResourceId(resourceType.name, ResourceId("currentParent"))
-    val samRoutes = createSamRoutes(Map(resourceType.name -> resourceType))
+    val fullyQualifiedChildResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("child"))
+    val currentParentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("currentParent"))
+    val samRoutes = createSamRoutes()
 
-    when(samRoutes.resourceService.deleteResourceParent(mockitoEq(fullyQualifiedChildResource), any[SamRequestContext]))
-      .thenReturn(IO.unit)
-    when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(fullyQualifiedChildResource), mockitoEq(SamResourceActions.setParent), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(true))
-    when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(currentParentResource), mockitoEq(SamResourceActions.removeChild), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(false))
-    when(samRoutes.resourceService.getResourceParent(mockitoEq(fullyQualifiedChildResource), any[SamRequestContext]))
-      .thenReturn(IO(Option(currentParentResource)))
-    when(samRoutes.policyEvaluatorService.listResourceAccessPoliciesForUser(mockitoEq(currentParentResource), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(Set(AccessPolicyWithoutMembers(FullyQualifiedPolicyId(fullyQualifiedChildResource, AccessPolicyName("not_owner")), WorkbenchEmail(""), Set.empty, Set.empty, false))))
+    setupRoutesTest(samRoutes, fullyQualifiedChildResource,
+      currentParentOpt = Option(currentParentResource),
+      actionsOnChild = Set(SamResourceActions.setParent),
+      missingActionsOnCurrentParent = Set(SamResourceActions.removeChild))
 
-    Delete(s"/api/resources/v2/${resourceType.name}/${fullyQualifiedChildResource.resourceId.value}/parent") ~> samRoutes.route ~> check {
+    Delete(s"/api/resources/v2/${defaultResourceType.name}/${fullyQualifiedChildResource.resourceId.value}/parent") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Forbidden
     }
   }
 
   it should "404 if resource has no parent" in {
-    val resourceType = ResourceType(
-      ResourceTypeName("rt"),
-      Set.empty,
-      Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.getParent))),
-      ResourceRoleName("owner")
-    )
-    val fullyQualifiedChildResource = FullyQualifiedResourceId(resourceType.name, ResourceId("child"))
-    val currentParentResource = FullyQualifiedResourceId(resourceType.name, ResourceId("currentParent"))
-    val samRoutes = createSamRoutes(Map(resourceType.name -> resourceType))
+    val fullyQualifiedChildResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("child"))
+    val samRoutes = createSamRoutes()
 
-    when(samRoutes.resourceService.deleteResourceParent(mockitoEq(fullyQualifiedChildResource), any[SamRequestContext]))
-      .thenReturn(IO.unit)
-    when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(fullyQualifiedChildResource), mockitoEq(SamResourceActions.setParent), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(true))
-    when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(currentParentResource), mockitoEq(SamResourceActions.removeChild), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(true))
-    when(samRoutes.resourceService.getResourceParent(mockitoEq(fullyQualifiedChildResource), any[SamRequestContext]))
-      .thenReturn(IO(None))
+    setupRoutesTest(samRoutes, fullyQualifiedChildResource,
+      actionsOnChild = Set(SamResourceActions.setParent))
 
-    Delete(s"/api/resources/v2/${resourceType.name}/${fullyQualifiedChildResource.resourceId.value}/parent") ~> samRoutes.route ~> check {
+    Delete(s"/api/resources/v2/${defaultResourceType.name}/${fullyQualifiedChildResource.resourceId.value}/parent") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
   }
 
   it should "404 if user doesn't have access to child resource" in {
-    val resourceType = ResourceType(
-      ResourceTypeName("rt"),
-      Set.empty,
-      Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.getParent))),
-      ResourceRoleName("owner")
-    )
-    val fullyQualifiedChildResource = FullyQualifiedResourceId(resourceType.name, ResourceId("child"))
-    val currentParentResource = FullyQualifiedResourceId(resourceType.name, ResourceId("currentParent"))
-    val samRoutes = createSamRoutes(Map(resourceType.name -> resourceType))
+    val fullyQualifiedChildResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("child"))
+    val currentParentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("currentParent"))
+    val samRoutes = createSamRoutes()
 
-    when(samRoutes.resourceService.deleteResourceParent(mockitoEq(fullyQualifiedChildResource), any[SamRequestContext]))
-      .thenReturn(IO.unit)
-    when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(fullyQualifiedChildResource), mockitoEq(SamResourceActions.setParent), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(false))
-    when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(currentParentResource), mockitoEq(SamResourceActions.removeChild), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(true))
-    when(samRoutes.resourceService.getResourceParent(mockitoEq(fullyQualifiedChildResource), any[SamRequestContext]))
-      .thenReturn(IO(Option(currentParentResource)))
-    when(samRoutes.policyEvaluatorService.listResourceAccessPoliciesForUser(mockitoEq(fullyQualifiedChildResource), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(Set[AccessPolicyWithoutMembers]()))
+    setupRoutesTest(samRoutes, fullyQualifiedChildResource,
+      currentParentOpt = Option(currentParentResource),
+      missingActionsOnChild = Set(SamResourceActions.setParent),
+      actionsOnCurrentParent = Set(SamResourceActions.removeChild),
+      accessToChild = false)
 
-    Delete(s"/api/resources/v2/${resourceType.name}/${fullyQualifiedChildResource.resourceId.value}/parent") ~> samRoutes.route ~> check {
+    Delete(s"/api/resources/v2/${defaultResourceType.name}/${fullyQualifiedChildResource.resourceId.value}/parent") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
   }
 
   it should "404 if user doesn't have access to existing parent resource" in {
-    val resourceType = ResourceType(
-      ResourceTypeName("rt"),
-      Set.empty,
-      Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.getParent))),
-      ResourceRoleName("owner")
-    )
-    val fullyQualifiedChildResource = FullyQualifiedResourceId(resourceType.name, ResourceId("child"))
-    val currentParentResource = FullyQualifiedResourceId(resourceType.name, ResourceId("currentParent"))
-    val samRoutes = createSamRoutes(Map(resourceType.name -> resourceType))
+    val fullyQualifiedChildResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("child"))
+    val currentParentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("currentParent"))
+    val samRoutes = createSamRoutes()
 
-    when(samRoutes.resourceService.deleteResourceParent(mockitoEq(fullyQualifiedChildResource), any[SamRequestContext]))
-      .thenReturn(IO.unit)
-    when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(fullyQualifiedChildResource), mockitoEq(SamResourceActions.setParent), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(true))
-    when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(currentParentResource), mockitoEq(SamResourceActions.removeChild), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(false))
-    when(samRoutes.resourceService.getResourceParent(mockitoEq(fullyQualifiedChildResource), any[SamRequestContext]))
-      .thenReturn(IO(Option(currentParentResource)))
-    when(samRoutes.policyEvaluatorService.listResourceAccessPoliciesForUser(mockitoEq(currentParentResource), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(Set[AccessPolicyWithoutMembers]()))
+    setupRoutesTest(samRoutes, fullyQualifiedChildResource,
+      currentParentOpt = Option(currentParentResource),
+      actionsOnChild = Set(SamResourceActions.setParent),
+      missingActionsOnCurrentParent = Set(SamResourceActions.removeChild),
+      accessToCurrentParent = false)
 
-    Delete(s"/api/resources/v2/${resourceType.name}/${fullyQualifiedChildResource.resourceId.value}/parent") ~> samRoutes.route ~> check {
+    Delete(s"/api/resources/v2/${defaultResourceType.name}/${fullyQualifiedChildResource.resourceId.value}/parent") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
   }
