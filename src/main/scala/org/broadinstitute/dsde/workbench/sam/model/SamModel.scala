@@ -38,7 +38,7 @@ object SamJsonSupport {
 
   implicit val ResourceIdFormat = ValueObjectFormat(ResourceId.apply)
 
-  implicit val ResourceIdentityFormat = jsonFormat2(FullyQualifiedResourceId.apply)
+  implicit val FullyQualifiedResourceIdFormat = jsonFormat2(FullyQualifiedResourceId.apply)
 
   implicit val AccessPolicyMembershipFormat = jsonFormat3(AccessPolicyMembership.apply)
 
@@ -82,6 +82,7 @@ object SamResourceActions {
   val setParent = ResourceAction("set_parent")
   val addChild = ResourceAction("add_child")
   val removeChild = ResourceAction("remove_child")
+  val listChildren = ResourceAction("list_children")
 
   def sharePolicy(policy: AccessPolicyName) = ResourceAction(s"share_policy::${policy.value}")
   def readPolicy(policy: AccessPolicyName) = ResourceAction(s"read_policy::${policy.value}")

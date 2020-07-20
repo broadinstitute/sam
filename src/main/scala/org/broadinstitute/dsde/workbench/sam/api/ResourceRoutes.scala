@@ -141,6 +141,9 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
                   getResourceParent(resource, userInfo, samRequestContext) ~
                   setResourceParent(resource, userInfo, samRequestContext) ~
                   deleteResourceParent(resource, userInfo, samRequestContext)
+                } ~
+                path("children") {
+                  getResourceChildren(resource, userInfo, samRequestContext)
                 }
               }
             }
@@ -361,4 +364,10 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
       }
     }
 
+  def getResourceChildren(resource: FullyQualifiedResourceId, userInfo: UserInfo, samRequestContext: SamRequestContext): server.Route =
+    get {
+      requireAction(resource, SamResourceActions.listChildren, userInfo.userId, samRequestContext) {
+        complete(resourceService.listResourceChildren(resource, samRequestContext).map(children => StatusCodes.OK -> children))
+      }
+    }
 }

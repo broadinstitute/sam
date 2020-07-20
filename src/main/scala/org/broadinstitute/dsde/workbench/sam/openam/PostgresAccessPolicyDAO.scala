@@ -7,12 +7,12 @@ import cats.data.NonEmptyList
 import cats.effect.{ContextShift, IO}
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
-import org.broadinstitute.dsde.workbench.sam.errorReportSource
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.db.{DbReference, PSQLStateExtensions, SamTypeBinders}
 import org.broadinstitute.dsde.workbench.sam.db.SamParameterBinderFactory._
 import org.broadinstitute.dsde.workbench.sam.db.dao.{PostgresGroupDAO, SubGroupMemberTable}
 import org.broadinstitute.dsde.workbench.sam.db.tables._
+import org.broadinstitute.dsde.workbench.sam.db.{DbReference, PSQLStateExtensions, SamTypeBinders}
+import org.broadinstitute.dsde.workbench.sam.errorReportSource
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.LoadResourceAuthDomainResult.{Constrained, NotConstrained, ResourceNotFound}
 import org.broadinstitute.dsde.workbench.sam.util.{DatabaseSupport, SamRequestContext}
@@ -875,6 +875,31 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     })
   }
 
+  override def listResourceChildren(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Set[FullyQualifiedResourceId]] = {
+    val r = ResourceTable.syntax("r")
+    val rt = ResourceTypeTable.syntax("rt")
+    val cr = ResourceTable.syntax("cr")
+
+    val query =
+      samsql"""
+         select ${cr.result.name}, ${rt.result.name}
+         from ${ResourceTable as r}
+         join ${ResourceTable as cr} on ${cr.resourceParentId} = ${r.id}
+         join ${ResourceTypeTable as rt} on ${rt.id} = ${cr.resourceTypeId}
+         where ${r.name} = ${resource.resourceId}
+         and ${rt.name} = ${resource.resourceTypeName}"""
+
+    runInTransaction("getResourceChildren", samRequestContext)({ implicit session =>
+      import SamTypeBinders._
+
+      query.map(rs =>
+        FullyQualifiedResourceId(
+          rs.get[ResourceTypeName](rt.resultName.name),
+          rs.get[ResourceId](cr.resultName.name)))
+        .list.apply.toSet
+    })
+  }
+
   private def setPolicyIsPublicInternal(policyId: FullyQualifiedPolicyId, isPublic: Boolean)(implicit session: DBSession): Int = {
     val p = PolicyTable.syntax("p")
     val policyTableColumn = PolicyTable.column
@@ -900,4 +925,10 @@ final case class AncestorResourceRecord(resourceParentId: ResourcePK)
 final case class AncestorResourceTable(override val tableName: String) extends SQLSyntaxSupport[AncestorResourceRecord] {
   // need to specify column names explicitly because this table does not actually exist in the database
   override val columnNames: Seq[String] = Seq("resource_parent_id")
+}
+
+final case class ChildResourceRecord(childId: ResourcePK)
+final case class ChildResourceTable(override val tableName: String) extends SQLSyntaxSupport[ChildResourceRecord] {
+  // need to specify column names explicitly because this table does not actually exist in the database
+  override val columnNames: Seq[String] = Seq("child_id")
 }

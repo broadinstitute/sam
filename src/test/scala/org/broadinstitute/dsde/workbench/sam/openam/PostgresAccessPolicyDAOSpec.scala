@@ -931,5 +931,55 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
         testResult.unsafeRunSync()
       }
     }
+
+    "listResourceChildren" - {
+      "can list direct children of a resource" in {
+        val oldestChild = Resource(resourceType.name, ResourceId("old"), Set.empty)
+        val middleChild = Resource(resourceType.name, ResourceId("middle"), Set.empty)
+        val youngestChild = Resource(resourceType.name, ResourceId("young"), Set.empty)
+        val parentResource = Resource(resourceType.name, ResourceId("parent"), Set.empty)
+
+        val testSetup = for {
+          _ <- dao.createResourceType(resourceType, samRequestContext)
+          _ <- dao.createResource(parentResource, samRequestContext)
+          _ <- dao.createResource(oldestChild, samRequestContext)
+          _ <- dao.createResource(middleChild, samRequestContext)
+          _ <- dao.createResource(youngestChild, samRequestContext)
+
+          _ <- dao.setResourceParent(oldestChild.fullyQualifiedId, parentResource.fullyQualifiedId, samRequestContext)
+          _ <- dao.setResourceParent(middleChild.fullyQualifiedId, parentResource.fullyQualifiedId, samRequestContext)
+          _ <- dao.setResourceParent(youngestChild.fullyQualifiedId, parentResource.fullyQualifiedId, samRequestContext)
+        } yield ()
+
+        testSetup.unsafeRunSync()
+
+        val allChildrenIds = Set(oldestChild.fullyQualifiedId, middleChild.fullyQualifiedId, youngestChild.fullyQualifiedId)
+        dao.listResourceChildren(parentResource.fullyQualifiedId, samRequestContext).unsafeRunSync() shouldBe allChildrenIds
+      }
+
+      "does not list indirect children of a resource" in {
+        val childResource = Resource(resourceType.name, ResourceId("child"), Set.empty)
+        val grandchildResource = Resource(resourceType.name, ResourceId("grandchild"), Set.empty)
+        val greatGrandchildResource = Resource(resourceType.name, ResourceId("great-grandchild"), Set.empty)
+        val parentResource = Resource(resourceType.name, ResourceId("parent"), Set.empty)
+
+        val testSetup = for {
+          _ <- dao.createResourceType(resourceType, samRequestContext)
+          _ <- dao.createResource(parentResource, samRequestContext)
+          _ <- dao.createResource(childResource, samRequestContext)
+          _ <- dao.createResource(grandchildResource, samRequestContext)
+          _ <- dao.createResource(greatGrandchildResource, samRequestContext)
+
+          _ <- dao.setResourceParent(childResource.fullyQualifiedId, parentResource.fullyQualifiedId, samRequestContext)
+          _ <- dao.setResourceParent(grandchildResource.fullyQualifiedId, childResource.fullyQualifiedId, samRequestContext)
+          _ <- dao.setResourceParent(greatGrandchildResource.fullyQualifiedId, grandchildResource.fullyQualifiedId, samRequestContext)
+        } yield ()
+
+        testSetup.unsafeRunSync()
+
+        val directChildrenIds = Set(childResource.fullyQualifiedId)
+        dao.listResourceChildren(parentResource.fullyQualifiedId, samRequestContext).unsafeRunSync() shouldBe directChildrenIds
+      }
+    }
   }
 }
