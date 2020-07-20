@@ -811,5 +811,110 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
         dao.loadPolicy(policy.id, samRequestContext).unsafeRunSync() shouldEqual Option(policy)
       }
     }
+
+    "getResourceParent" - {
+      "gets the FullyQualifiedResourceId of the parent resource if it has been set" in {
+        val testResult = for {
+          _ <- dao.createResourceType(resourceType, samRequestContext)
+          childResource = Resource(resourceType.name, ResourceId("child"), Set.empty)
+          parentResource = Resource(resourceType.name, ResourceId("parent"), Set.empty)
+          _ <- dao.createResource(childResource, samRequestContext)
+          _ <- dao.createResource(parentResource, samRequestContext)
+
+          _ <- dao.setResourceParent(childResource.fullyQualifiedId, parentResource.fullyQualifiedId, samRequestContext)
+          resourceParentResult <- dao.getResourceParent(childResource.fullyQualifiedId, samRequestContext)
+        } yield {
+          resourceParentResult shouldBe Option(parentResource.fullyQualifiedId)
+        }
+
+        testResult.unsafeRunSync()
+      }
+
+      "returns None if no parent is set" in {
+        val testResult = for {
+          _ <- dao.createResourceType(resourceType, samRequestContext)
+          childResource = Resource(resourceType.name, ResourceId("child"), Set.empty)
+          _ <- dao.createResource(childResource, samRequestContext)
+
+          resourceParentResult <- dao.getResourceParent(childResource.fullyQualifiedId, samRequestContext)
+        } yield {
+          resourceParentResult shouldBe None
+        }
+
+        testResult.unsafeRunSync()
+      }
+    }
+
+    "setResourceParent" - {
+      "will not create a cyclical resource hierarchy" in {
+        val childResource = Resource(resourceType.name, ResourceId("child"), Set.empty)
+        val parentResource = Resource(resourceType.name, ResourceId("parent"), Set.empty)
+        val grandparentResource = Resource(resourceType.name, ResourceId("gramgram"), Set.empty)
+
+        val testSetup = for {
+          _ <- dao.createResourceType(resourceType, samRequestContext)
+          _ <- dao.createResource(childResource, samRequestContext)
+          _ <- dao.createResource(parentResource, samRequestContext)
+          _ <- dao.createResource(grandparentResource, samRequestContext)
+
+          _ <- dao.setResourceParent(childResource.fullyQualifiedId, parentResource.fullyQualifiedId, samRequestContext)
+          _ <- dao.setResourceParent(parentResource.fullyQualifiedId, grandparentResource.fullyQualifiedId, samRequestContext)
+          parentResourceResult <- dao.getResourceParent(childResource.fullyQualifiedId, samRequestContext)
+          grandparentResourceResult <- dao.getResourceParent(parentResource.fullyQualifiedId, samRequestContext)
+        } yield {
+          parentResourceResult shouldBe Option(parentResource.fullyQualifiedId)
+          grandparentResourceResult shouldBe Option(grandparentResource.fullyQualifiedId)
+        }
+
+        testSetup.unsafeRunSync()
+
+        // try to introduce a simple cycle
+        val simpleCycle = intercept [WorkbenchExceptionWithErrorReport] {
+          dao.setResourceParent(parentResource.fullyQualifiedId, childResource.fullyQualifiedId, samRequestContext).unsafeRunSync()
+        }
+        simpleCycle.errorReport.statusCode shouldBe Option(StatusCodes.BadRequest)
+
+        // try to introduce a cycle by setting the parent for a more distant ancestor
+        val longerCycle = intercept [WorkbenchExceptionWithErrorReport] {
+          dao.setResourceParent(grandparentResource.fullyQualifiedId, childResource.fullyQualifiedId, samRequestContext).unsafeRunSync()
+        }
+        longerCycle.errorReport.statusCode shouldBe Option(StatusCodes.BadRequest)
+      }
+    }
+
+    "deleteResourceParent" - {
+      "can unset the parent of a resource" in {
+        val childResource = Resource(resourceType.name, ResourceId("child"), Set.empty)
+        val parentResource = Resource(resourceType.name, ResourceId("parent"), Set.empty)
+
+        val testSetup = for {
+          _ <- dao.createResourceType(resourceType, samRequestContext)
+          _ <- dao.createResource(childResource, samRequestContext)
+          _ <- dao.createResource(parentResource, samRequestContext)
+          _ <- dao.setResourceParent(childResource.fullyQualifiedId, parentResource.fullyQualifiedId, samRequestContext)
+          parentResourceResult <- dao.getResourceParent(childResource.fullyQualifiedId, samRequestContext)
+        } yield {
+          parentResourceResult shouldBe Option(parentResource.fullyQualifiedId)
+        }
+
+        testSetup.unsafeRunSync()
+
+        dao.deleteResourceParent(childResource.fullyQualifiedId, samRequestContext).unsafeRunSync()
+        dao.getResourceParent(childResource.fullyQualifiedId, samRequestContext).unsafeRunSync() shouldBe None
+      }
+
+      // this shouldn't actually happen but good to be tolerant
+      "tolerates trying to delete a parent on a resource without a parent" in {
+        val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
+
+        val testResult = for {
+          _ <- dao.createResourceType(resourceType, samRequestContext)
+          _ <- dao.createResource(resource, samRequestContext)
+          _ <- dao.deleteResourceParent(resource.fullyQualifiedId, samRequestContext)
+        } yield ()
+
+        testResult.unsafeRunSync()
+      }
+    }
   }
 }

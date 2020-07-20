@@ -884,4 +884,26 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     implicit val patienceConfig = PatienceConfig(5.seconds)
     testResult.unsafeRunSync()
   }
+
+  "setResourceParent" should "throw if the child resource has an auth domain" in {
+    val childAccessPolicies = Map (
+      AccessPolicyName("constrainable") -> constrainablePolicyMembership
+    )
+
+    val testResult = for {
+      _ <- service.createResourceType(constrainableResourceType, samRequestContext)
+      _ <- service.createResourceType(managedGroupResourceType, samRequestContext)
+
+      _ <- managedGroupService.createManagedGroup(ResourceId("authDomain"), dummyUserInfo, samRequestContext = samRequestContext)
+      childResource <- service.createResource(constrainableResourceType, ResourceId("child"), childAccessPolicies, Set(WorkbenchGroupName("authDomain")), dummyUserInfo.userId, samRequestContext)
+      parentResource <- service.createResource(constrainableResourceType, ResourceId("parent"), dummyUserInfo, samRequestContext)
+      _ <- service.setResourceParent(childResource.fullyQualifiedId, parentResource.fullyQualifiedId, samRequestContext)
+    } yield ()
+
+    val exception = intercept[WorkbenchExceptionWithErrorReport] {
+      testResult.unsafeRunSync()
+    }
+
+    exception.errorReport.statusCode shouldBe Option(StatusCodes.BadRequest)
+  }
 }

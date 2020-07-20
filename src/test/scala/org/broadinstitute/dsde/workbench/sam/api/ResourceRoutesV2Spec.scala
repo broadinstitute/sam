@@ -204,12 +204,6 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
     }
   }
 
-  // test in ResourceService?
-  ignore should "400 if child resource has an auth domain" in {}
-
-  // test in PostgresAccessPolicyDAO?
-  ignore should "400 if adding parent would introduce a cyclical resource hierarchy" in {}
-
   it should "403 if user is missing set_parent on child resource" in {
     val fullyQualifiedChildResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("child"))
     val newParentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("newParent"))

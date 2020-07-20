@@ -828,7 +828,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
                 union
                 select ${pr.resourceParentId}, true
                 from ${ResourceTable as pr}
-                join ${ancestorResourceTable as ar} on ${arColumn.resourceParentId} = ${pr.id}
+                join ${ancestorResourceTable as ar} on ${ar.resourceParentId} = ${pr.id}
                 where ${pr.resourceParentId} is not null
       ) update ${ResourceTable as r}
         set ${resourceTableColumn.resourceParentId} =
@@ -842,8 +842,8 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
         and ${r.name} = ${childResource.resourceId}
         and ${rt.name} = ${childResource.resourceTypeName}
         and (${r.id}, true) not in
-            ( select ${arColumn.resourceParentId}, ${arColumn.isAncestor}
-            from ${ancestorResourceTable} )"""
+            ( select ${ar.resourceParentId}, ${ar.isAncestor}
+            from ${ancestorResourceTable as ar} )"""
 
     runInTransaction("setResourceParent", samRequestContext)({ implicit session =>
       if (query.update.apply() != 1) {
