@@ -869,16 +869,31 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
         testSetup.unsafeRunSync()
 
         // try to introduce a simple cycle
-        val simpleCycle = intercept [WorkbenchExceptionWithErrorReport] {
+        val simpleCycle = intercept[WorkbenchExceptionWithErrorReport] {
           dao.setResourceParent(parentResource.fullyQualifiedId, childResource.fullyQualifiedId, samRequestContext).unsafeRunSync()
         }
         simpleCycle.errorReport.statusCode shouldBe Option(StatusCodes.BadRequest)
 
         // try to introduce a cycle by setting the parent for a more distant ancestor
-        val longerCycle = intercept [WorkbenchExceptionWithErrorReport] {
+        val longerCycle = intercept[WorkbenchExceptionWithErrorReport] {
           dao.setResourceParent(grandparentResource.fullyQualifiedId, childResource.fullyQualifiedId, samRequestContext).unsafeRunSync()
         }
         longerCycle.errorReport.statusCode shouldBe Option(StatusCodes.BadRequest)
+      }
+
+      "cannot set a resource as its own parent" in {
+        val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
+        val testResult = for {
+          _ <- dao.createResourceType(resourceType, samRequestContext)
+          _ <- dao.createResource(resource, samRequestContext)
+          _ <- dao.setResourceParent(resource.fullyQualifiedId, resource.fullyQualifiedId, samRequestContext)
+        } yield ()
+
+        val exception = intercept[WorkbenchExceptionWithErrorReport] {
+          testResult.unsafeRunSync()
+        }
+
+        exception.errorReport.statusCode shouldBe Option(StatusCodes.BadRequest)
       }
     }
 

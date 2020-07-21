@@ -819,14 +819,14 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     val resourceTableColumn = ResourceTable.column
 
     val query =
-      samsql"""with recursive ${ancestorResourceTable.table}(${arColumn.resourceParentId}, ${arColumn.isAncestor}) as (
-                select ${r.id}, false
+      samsql"""with recursive ${ancestorResourceTable.table}(${arColumn.resourceParentId}) as (
+                select ${r.id}
                 from ${ResourceTable as r}
                 join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
                 where ${r.name} = ${parentResource.resourceId}
                 and ${rt.name} = ${parentResource.resourceTypeName}
                 union
-                select ${pr.resourceParentId}, true
+                select ${pr.resourceParentId}
                 from ${ResourceTable as pr}
                 join ${ancestorResourceTable as ar} on ${ar.resourceParentId} = ${pr.id}
                 where ${pr.resourceParentId} is not null
@@ -841,9 +841,9 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
         where ${rt.id} = ${r.resourceTypeId}
         and ${r.name} = ${childResource.resourceId}
         and ${rt.name} = ${childResource.resourceTypeName}
-        and (${r.id}, true) not in
-            ( select ${ar.resourceParentId}, ${ar.isAncestor}
-            from ${ancestorResourceTable as ar} )"""
+        and ${r.id} not in
+            ( select ${ar.resourceParentId}
+              from ${ancestorResourceTable as ar} )"""
 
     runInTransaction("setResourceParent", samRequestContext)({ implicit session =>
       if (query.update.apply() != 1) {
@@ -893,8 +893,8 @@ private final case class PolicyInfo(name: AccessPolicyName, resourceId: Resource
 
 // these 2 case classes represent the logical table used in recursive ancestor resource queries
 // this table does not actually exist but looks like a table in a WITH RECURSIVE query
-final case class AncestorResourceRecord(resourceParentId: ResourcePK, isAncestor: Boolean)
+final case class AncestorResourceRecord(resourceParentId: ResourcePK)
 final case class AncestorResourceTable(override val tableName: String) extends SQLSyntaxSupport[AncestorResourceRecord] {
   // need to specify column names explicitly because this table does not actually exist in the database
-  override val columnNames: Seq[String] = Seq("resource_parent_id", "is_ancestor")
+  override val columnNames: Seq[String] = Seq("resource_parent_id")
 }
