@@ -158,7 +158,6 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
     }
   }
 
-  // this one feels a bit like it's testing the security directives not the route itself but whatever
   it should "404 if user doesn't have access to resource" in {
     val fullyQualifiedChildResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("child"))
     val samRoutes = createSamRoutes()
