@@ -807,6 +807,9 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     })
   }
 
+  /** We need to make sure that we aren't introducing any cyclical resource hierarchies, so when we try to set the
+    * parent of a resource, we first lookup all of the ancestors of the potential new parent to make sure that the
+    * new child resource is not already an ancestor of the new parent */
   override def setResourceParent(childResource: FullyQualifiedResourceId, parentResource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] = {
     val ancestorResourceTable = AncestorResourceTable("ancestor_resource")
     val ar = ancestorResourceTable.syntax("ar")

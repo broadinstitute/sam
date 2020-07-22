@@ -483,6 +483,9 @@ class ResourceService(
     accessPolicyDAO.getResourceParent(resourceId, samRequestContext)
   }
 
+  /** In this iteration of hierarchical resources, we do not allow child resources to be in an auth domain because it
+    * would introduce additional complications when keeping Sam policies with their Google Groups. For more details,
+    * see https://docs.google.com/document/d/10qGxsV9BeM6-N_Zk27_JIayE509B8LUQBGiGrqB0taY/edit#heading=h.dxz6xjtnz9la */
   def setResourceParent(childResource: FullyQualifiedResourceId, parentResource: FullyQualifiedResourceId,  samRequestContext: SamRequestContext): IO[Unit] = {
     for {
       authDomain <- accessPolicyDAO.loadResourceAuthDomain(childResource, samRequestContext)
