@@ -8,7 +8,8 @@ import scalikejdbc._
 final case class ResourcePK(value: Long) extends DatabaseKey
 final case class ResourceRecord(id: ResourcePK,
                                 name: ResourceId,
-                                resourceTypeId: ResourceTypePK)
+                                resourceTypeId: ResourceTypePK,
+                                resourceParentId: Option[ResourcePK])
 
 object ResourceTable extends SQLSyntaxSupportWithDefaultSamDB[ResourceRecord] {
   override def tableName: String = "SAM_RESOURCE"
@@ -17,7 +18,8 @@ object ResourceTable extends SQLSyntaxSupportWithDefaultSamDB[ResourceRecord] {
   def apply(e: ResultName[ResourceRecord])(rs: WrappedResultSet): ResourceRecord = ResourceRecord(
     rs.get(e.id),
     rs.get(e.name),
-    rs.get(e.resourceTypeId)
+    rs.get(e.resourceTypeId),
+    rs.longOpt(e.resourceParentId).map(ResourcePK)
   )
 
   def loadResourcePK(resource: FullyQualifiedResourceId): SQLSyntax = {

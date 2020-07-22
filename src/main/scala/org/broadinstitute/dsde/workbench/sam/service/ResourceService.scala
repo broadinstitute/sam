@@ -478,4 +478,36 @@ class ResourceService(
     } yield {
       workbenchUsers.map(user => UserIdInfo(user.id, user.email, user.googleSubjectId))
     }
+
+  def getResourceParent(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Option[FullyQualifiedResourceId]] = {
+    accessPolicyDAO.getResourceParent(resourceId, samRequestContext)
+  }
+
+  /** In this iteration of hierarchical resources, we do not allow child resources to be in an auth domain because it
+    * would introduce additional complications when keeping Sam policies with their Google Groups. For more details,
+    * see https://docs.google.com/document/d/10qGxsV9BeM6-N_Zk27_JIayE509B8LUQBGiGrqB0taY/edit#heading=h.dxz6xjtnz9la */
+  def setResourceParent(childResource: FullyQualifiedResourceId, parentResource: FullyQualifiedResourceId,  samRequestContext: SamRequestContext): IO[Unit] = {
+    for {
+      authDomain <- accessPolicyDAO.loadResourceAuthDomain(childResource, samRequestContext)
+      _ <- authDomain match {
+        case LoadResourceAuthDomainResult.NotConstrained =>
+          accessPolicyDAO.setResourceParent(childResource, parentResource, samRequestContext)
+        case LoadResourceAuthDomainResult.Constrained(_) => IO.raiseError(
+          new WorkbenchExceptionWithErrorReport(
+            ErrorReport(StatusCodes.BadRequest, "Cannot set the parent for a constrained resource")
+          )
+        )
+        case LoadResourceAuthDomainResult.ResourceNotFound => IO.raiseError(
+          new WorkbenchExceptionWithErrorReport(
+            ErrorReport(StatusCodes.NotFound, "Resource not found")
+          )
+        )
+      }
+    } yield ()
+  }
+
+  def deleteResourceParent(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] = {
+    accessPolicyDAO.deleteResourceParent(resourceId, samRequestContext)
+  }
+
 }

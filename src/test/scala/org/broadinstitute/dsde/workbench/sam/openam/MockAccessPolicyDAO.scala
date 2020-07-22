@@ -146,4 +146,10 @@ class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdenti
       }.toStream
     )
   }
+
+  override def getResourceParent(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Option[FullyQualifiedResourceId]] = IO(None)
+
+  override def setResourceParent(childResource: FullyQualifiedResourceId, parentResource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] = IO.unit
+
+  override def deleteResourceParent(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] = IO.unit
 }

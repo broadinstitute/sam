@@ -1606,6 +1606,121 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
+  /api/resources/v2/{resourceTypeName}/{resourceId}/parent:
+    get:
+      tags:
+        - Resources
+      summary: Get the parent of a resource if one exists
+      operationId: getResourceParent
+      parameters:
+        - name: resourceTypeName
+          in: path
+          description: Type of resource to query
+          required: true
+          schema:
+            type: string
+        - name: resourceId
+          in: path
+          description: Id of resource to query
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Id and type of parent resource
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FullyQualifiedResourceId'
+        403:
+          description: You do not have permission to get the parent for this resource
+          content: {}
+        404:
+          description: You do not have access to this resource, it does not exist, or it does not have a parent resource
+          content: {}
+        500:
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+    put:
+      tags:
+        - Resources
+      summary: Set the parent of a resource
+      operationId: setResourceParent
+      parameters:
+        - name: resourceTypeName
+          in: path
+          description: Type of child resource
+          required: true
+          schema:
+            type: string
+        - name: resourceId
+          in: path
+          description: Id of child resource
+          required: true
+          schema:
+            type: string
+      requestBody:
+        description: The details of the new parent resource
+        content:
+          'application/json':
+            schema:
+              $ref: '#/components/schemas/FullyQualifiedResourceId'
+      responses:
+        204:
+          description: Resource parent successfully set
+          content: {}
+        400:
+          description: Child resource has an auth domain or new parent would introduce cyclical resource hierarchy
+          content: {}
+        403:
+          description: You do not have permission to set the parent for the child resource, to remove the child of the current parent, or to add a child to the new parent
+          content: {}
+        404:
+          description: You do not have access to the child, new parent, or current resource, or they do not exist
+          content: {}
+        500:
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+    delete:
+      tags:
+        - Resources
+      summary: Delete the parent of a resource
+      operationId: deleteResourceParent
+      parameters:
+        - name: resourceTypeName
+          in: path
+          description: Type of resource to remove parent from
+          required: true
+          schema:
+            type: string
+        - name: resourceId
+          in: path
+          description: Id of resource to remove parent from
+          required: true
+          schema:
+            type: string
+      responses:
+        204:
+          description: Resource parent successfully removed
+          content: {}
+        403:
+          description: You do not have permission to set the parent for the child resource or to remove the child of the current parent
+          content: {}
+        404:
+          description: You do not have access to this resource, it does not exist, or it does not currently have a parent resource
+          content: {}
+        500:
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
   /api/users/v1/{email}:
     get:
       tags:
@@ -1918,6 +2033,19 @@ components:
           items:
             $ref: '#/components/schemas/StackTraceElement'
       description: ""
+    FullyQualifiedResourceId:
+      required:
+        - resourceTypeName
+        - resourceId
+      type: object
+      properties:
+        resourceTypeName:
+          type: string
+          description: The type of the resource
+        resourceId:
+          type: string
+          description: The id of the resource
+      description: type and id of a resource
     ManagedGroupMembershipEntry:
       required:
         - groupEmail
