@@ -879,13 +879,15 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     val r = ResourceTable.syntax("r")
     val rt = ResourceTypeTable.syntax("rt")
     val cr = ResourceTable.syntax("cr")
+    val crt = ResourceTypeTable.syntax("crt")
 
     val query =
       samsql"""
-         select ${cr.result.name}, ${rt.result.name}
+         select ${cr.result.name}, ${crt.result.name}
          from ${ResourceTable as r}
-         join ${ResourceTable as cr} on ${cr.resourceParentId} = ${r.id}
-         join ${ResourceTypeTable as rt} on ${rt.id} = ${cr.resourceTypeId}
+         join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
+         join ${ResourceTable as cr} on ${r.id} = ${cr.resourceParentId}
+         join ${ResourceTypeTable as crt} on ${cr.resourceTypeId} = ${crt.id}
          where ${r.name} = ${resource.resourceId}
          and ${rt.name} = ${resource.resourceTypeName}"""
 
@@ -894,7 +896,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
 
       query.map(rs =>
         FullyQualifiedResourceId(
-          rs.get[ResourceTypeName](rt.resultName.name),
+          rs.get[ResourceTypeName](crt.resultName.name),
           rs.get[ResourceId](cr.resultName.name)))
         .list.apply.toSet
     })

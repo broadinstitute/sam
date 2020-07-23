@@ -980,6 +980,37 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
         val directChildrenIds = Set(childResource.fullyQualifiedId)
         dao.listResourceChildren(parentResource.fullyQualifiedId, samRequestContext).unsafeRunSync() shouldBe directChildrenIds
       }
+
+      "can list children of different resource types" in {
+        val parentResourceType = resourceType.copy(name = ResourceTypeName("parentRT"))
+        val childResourceType1 = resourceType.copy(name = ResourceTypeName("childRT1"))
+        val childResourceType2 = resourceType.copy(name = ResourceTypeName("childRT2"))
+
+        val parentResource = Resource(parentResourceType.name, ResourceId("parent"), Set.empty)
+        val childResource1 = Resource(childResourceType1.name, ResourceId("child1"), Set.empty)
+        val childResource2 = Resource(childResourceType1.name, ResourceId("child2"), Set.empty)
+        val sameRTAsParent = Resource(parentResourceType.name, ResourceId("still_a_child"), Set.empty)
+        val allChildrenIds = Set(childResource1.fullyQualifiedId, childResource2.fullyQualifiedId, sameRTAsParent.fullyQualifiedId)
+
+        val testSetup = for {
+          _ <- dao.createResourceType(parentResourceType, samRequestContext)
+          _ <- dao.createResourceType(childResourceType1, samRequestContext)
+          _ <- dao.createResourceType(childResourceType2, samRequestContext)
+
+          _ <- dao.createResource(parentResource, samRequestContext)
+          _ <- dao.createResource(childResource1, samRequestContext)
+          _ <- dao.createResource(childResource2, samRequestContext)
+          _ <- dao.createResource(sameRTAsParent, samRequestContext)
+
+          _ <- dao.setResourceParent(childResource1.fullyQualifiedId, parentResource.fullyQualifiedId, samRequestContext)
+          _ <- dao.setResourceParent(childResource2.fullyQualifiedId, parentResource.fullyQualifiedId, samRequestContext)
+          _ <- dao.setResourceParent(sameRTAsParent.fullyQualifiedId, parentResource.fullyQualifiedId, samRequestContext)
+        } yield ()
+
+        testSetup.unsafeRunSync()
+
+        dao.listResourceChildren(parentResource.fullyQualifiedId, samRequestContext).unsafeRunSync() shouldBe allChildrenIds
+      }
     }
   }
 }
