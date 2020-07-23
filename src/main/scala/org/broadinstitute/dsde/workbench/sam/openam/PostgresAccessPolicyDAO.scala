@@ -926,9 +926,3 @@ final case class AncestorResourceTable(override val tableName: String) extends S
   // need to specify column names explicitly because this table does not actually exist in the database
   override val columnNames: Seq[String] = Seq("resource_parent_id")
 }
-
-final case class ChildResourceRecord(childId: ResourcePK)
-final case class ChildResourceTable(override val tableName: String) extends SQLSyntaxSupport[ChildResourceRecord] {
-  // need to specify column names explicitly because this table does not actually exist in the database
-  override val columnNames: Seq[String] = Seq("child_id")
-}
