@@ -988,7 +988,7 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
 
         val parentResource = Resource(parentResourceType.name, ResourceId("parent"), Set.empty)
         val childResource1 = Resource(childResourceType1.name, ResourceId("child1"), Set.empty)
-        val childResource2 = Resource(childResourceType1.name, ResourceId("child2"), Set.empty)
+        val childResource2 = Resource(childResourceType2.name, ResourceId("child2"), Set.empty)
         val sameRTAsParent = Resource(parentResourceType.name, ResourceId("still_a_child"), Set.empty)
         val allChildrenIds = Set(childResource1.fullyQualifiedId, childResource2.fullyQualifiedId, sameRTAsParent.fullyQualifiedId)
 
