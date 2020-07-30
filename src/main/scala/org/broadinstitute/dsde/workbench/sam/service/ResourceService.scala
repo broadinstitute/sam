@@ -510,4 +510,7 @@ class ResourceService(
     accessPolicyDAO.deleteResourceParent(resourceId, samRequestContext)
   }
 
+  def listResourceChildren(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Set[FullyQualifiedResourceId]] = {
+    accessPolicyDAO.listResourceChildren(resourceId, samRequestContext)
+  }
 }

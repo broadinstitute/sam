@@ -18,6 +18,7 @@ import org.mockito.Mockito._
 import org.mockito.ArgumentMatchers.{any, eq => mockitoEq}
 import org.scalatest.mockito.MockitoSugar
 import org.scalatest.{AppendedClues, FlatSpec, Matchers}
+import spray.json.DefaultJsonProtocol._
 
 
 class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with ScalatestRouteTest with AppendedClues with MockitoSugar {
@@ -52,20 +53,20 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
     new TestSamRoutes(mockResourceService, policyEvaluatorService, mockUserService, mockStatusService, mockManagedGroupService, userInfo, directoryDAO)
   }
 
-  // mock out a bunch of calls in ResourceService and PolicyEvaluatorService to reduce bloat in tests
-  private def setupRoutesTest(samRoutes: SamRoutes,
-                              childResource: FullyQualifiedResourceId,
-                              currentParentOpt: Option[FullyQualifiedResourceId] = None,
-                              newParentOpt: Option[FullyQualifiedResourceId] = None,
-                              actionsOnChild: Set[ResourceAction] = Set.empty,
-                              actionsOnCurrentParent: Set[ResourceAction] = Set.empty,
-                              actionsOnNewParent: Set[ResourceAction] = Set.empty,
-                              missingActionsOnChild: Set[ResourceAction] = Set.empty,
-                              missingActionsOnCurrentParent: Set[ResourceAction] = Set.empty,
-                              missingActionsOnNewParent: Set[ResourceAction] = Set.empty,
-                              accessToChild: Boolean = true,
-                              accessToCurrentParent: Boolean = true,
-                              accessToNewParent: Boolean = true): Unit = {
+  // mock out a bunch of calls in ResourceService and PolicyEvaluatorService to reduce bloat in /parent tests
+  private def setupParentRoutes(samRoutes: SamRoutes,
+                                childResource: FullyQualifiedResourceId,
+                                currentParentOpt: Option[FullyQualifiedResourceId] = None,
+                                newParentOpt: Option[FullyQualifiedResourceId] = None,
+                                actionsOnChild: Set[ResourceAction] = Set.empty,
+                                actionsOnCurrentParent: Set[ResourceAction] = Set.empty,
+                                actionsOnNewParent: Set[ResourceAction] = Set.empty,
+                                missingActionsOnChild: Set[ResourceAction] = Set.empty,
+                                missingActionsOnCurrentParent: Set[ResourceAction] = Set.empty,
+                                missingActionsOnNewParent: Set[ResourceAction] = Set.empty,
+                                accessToChild: Boolean = true,
+                                accessToCurrentParent: Boolean = true,
+                                accessToNewParent: Boolean = true): Unit = {
     val otherPolicy = AccessPolicyWithoutMembers(FullyQualifiedPolicyId(childResource, AccessPolicyName("not_owner")), WorkbenchEmail(""), Set.empty, Set.empty, false)
 
     actionsOnChild.map(action => when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(childResource), mockitoEq(action), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
@@ -124,7 +125,7 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
     val fullyQualifiedParentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("parent"))
     val samRoutes = createSamRoutes()
 
-    setupRoutesTest(samRoutes, fullyQualifiedChildResource,
+    setupParentRoutes(samRoutes, fullyQualifiedChildResource,
       currentParentOpt = Option(fullyQualifiedParentResource),
       actionsOnChild = Set(SamResourceActions.getParent))
 
@@ -139,7 +140,7 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
     val fullyQualifiedParentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("parent"))
     val samRoutes = createSamRoutes()
 
-    setupRoutesTest(samRoutes, fullyQualifiedChildResource, currentParentOpt = Option(fullyQualifiedParentResource),
+    setupParentRoutes(samRoutes, fullyQualifiedChildResource, currentParentOpt = Option(fullyQualifiedParentResource),
       missingActionsOnChild = Set(SamResourceActions.getParent))
 
     Get(s"/api/resources/v2/${defaultResourceType.name}/${fullyQualifiedChildResource.resourceId.value}/parent") ~> samRoutes.route ~> check {
@@ -151,7 +152,7 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
     val fullyQualifiedChildResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("child"))
     val samRoutes = createSamRoutes()
 
-    setupRoutesTest(samRoutes, fullyQualifiedChildResource, None, actionsOnChild = Set(SamResourceActions.getParent))
+    setupParentRoutes(samRoutes, fullyQualifiedChildResource, None, actionsOnChild = Set(SamResourceActions.getParent))
 
     Get(s"/api/resources/v2/${defaultResourceType.name}/${fullyQualifiedChildResource.resourceId.value}/parent") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
@@ -162,7 +163,7 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
     val fullyQualifiedChildResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("child"))
     val samRoutes = createSamRoutes()
 
-    setupRoutesTest(samRoutes, fullyQualifiedChildResource,
+    setupParentRoutes(samRoutes, fullyQualifiedChildResource,
       missingActionsOnChild = Set(SamResourceActions.getParent),
       accessToChild = false)
 
@@ -176,7 +177,7 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
     val fullyQualifiedParentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("parent"))
     val samRoutes = createSamRoutes()
 
-    setupRoutesTest(samRoutes, fullyQualifiedChildResource, newParentOpt = Option(fullyQualifiedParentResource),
+    setupParentRoutes(samRoutes, fullyQualifiedChildResource, newParentOpt = Option(fullyQualifiedParentResource),
       actionsOnChild = Set(SamResourceActions.setParent),
       actionsOnNewParent = Set(SamResourceActions.addChild))
 
@@ -191,7 +192,7 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
     val currentParentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("currentParent"))
     val samRoutes = createSamRoutes()
 
-    setupRoutesTest(samRoutes, fullyQualifiedChildResource,
+    setupParentRoutes(samRoutes, fullyQualifiedChildResource,
       currentParentOpt = Option(currentParentResource),
       newParentOpt = Option(newParentResource),
       actionsOnChild = Set(SamResourceActions.setParent),
@@ -209,7 +210,7 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
     val currentParentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("currentParent"))
     val samRoutes = createSamRoutes()
 
-    setupRoutesTest(samRoutes, fullyQualifiedChildResource,
+    setupParentRoutes(samRoutes, fullyQualifiedChildResource,
       currentParentOpt = Option(currentParentResource),
       newParentOpt = Option(newParentResource),
       missingActionsOnChild = Set(SamResourceActions.setParent),
@@ -227,7 +228,7 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
     val currentParentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("currentParent"))
     val samRoutes = createSamRoutes()
 
-    setupRoutesTest(samRoutes, fullyQualifiedChildResource,
+    setupParentRoutes(samRoutes, fullyQualifiedChildResource,
       currentParentOpt = Option(currentParentResource),
       newParentOpt = Option(newParentResource),
       actionsOnChild = Set(SamResourceActions.setParent),
@@ -245,7 +246,7 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
     val currentParentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("currentParent"))
     val samRoutes = createSamRoutes()
 
-    setupRoutesTest(samRoutes, fullyQualifiedChildResource,
+    setupParentRoutes(samRoutes, fullyQualifiedChildResource,
       currentParentOpt = Option(currentParentResource),
       newParentOpt = Option(newParentResource),
       actionsOnChild = Set(SamResourceActions.setParent),
@@ -263,7 +264,7 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
     val currentParentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("currentParent"))
     val samRoutes = createSamRoutes()
 
-    setupRoutesTest(samRoutes, fullyQualifiedChildResource,
+    setupParentRoutes(samRoutes, fullyQualifiedChildResource,
       currentParentOpt = Option(currentParentResource),
       newParentOpt = Option(newParentResource),
       missingActionsOnChild = Set(SamResourceActions.setParent),
@@ -282,7 +283,7 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
     val currentParentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("currentParent"))
     val samRoutes = createSamRoutes()
 
-    setupRoutesTest(samRoutes, fullyQualifiedChildResource,
+    setupParentRoutes(samRoutes, fullyQualifiedChildResource,
       currentParentOpt = Option(currentParentResource),
       newParentOpt = Option(newParentResource),
       actionsOnChild = Set(SamResourceActions.setParent),
@@ -301,7 +302,7 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
     val currentParentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("currentParent"))
     val samRoutes = createSamRoutes()
 
-    setupRoutesTest(samRoutes, fullyQualifiedChildResource,
+    setupParentRoutes(samRoutes, fullyQualifiedChildResource,
       currentParentOpt = Option(currentParentResource),
       newParentOpt = Option(newParentResource),
       actionsOnChild = Set(SamResourceActions.setParent),
@@ -319,7 +320,7 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
     val currentParentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("currentParent"))
     val samRoutes = createSamRoutes()
 
-    setupRoutesTest(samRoutes, fullyQualifiedChildResource,
+    setupParentRoutes(samRoutes, fullyQualifiedChildResource,
       currentParentOpt = Option(currentParentResource),
       actionsOnChild = Set(SamResourceActions.setParent),
       actionsOnCurrentParent = Set(SamResourceActions.removeChild))
@@ -334,7 +335,7 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
     val currentParentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("currentParent"))
     val samRoutes = createSamRoutes()
 
-    setupRoutesTest(samRoutes, fullyQualifiedChildResource,
+    setupParentRoutes(samRoutes, fullyQualifiedChildResource,
       currentParentOpt = Option(currentParentResource),
       missingActionsOnChild = Set(SamResourceActions.setParent),
       actionsOnCurrentParent = Set(SamResourceActions.removeChild))
@@ -349,7 +350,7 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
     val currentParentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("currentParent"))
     val samRoutes = createSamRoutes()
 
-    setupRoutesTest(samRoutes, fullyQualifiedChildResource,
+    setupParentRoutes(samRoutes, fullyQualifiedChildResource,
       currentParentOpt = Option(currentParentResource),
       actionsOnChild = Set(SamResourceActions.setParent),
       missingActionsOnCurrentParent = Set(SamResourceActions.removeChild))
@@ -363,7 +364,7 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
     val fullyQualifiedChildResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("child"))
     val samRoutes = createSamRoutes()
 
-    setupRoutesTest(samRoutes, fullyQualifiedChildResource,
+    setupParentRoutes(samRoutes, fullyQualifiedChildResource,
       actionsOnChild = Set(SamResourceActions.setParent))
 
     Delete(s"/api/resources/v2/${defaultResourceType.name}/${fullyQualifiedChildResource.resourceId.value}/parent") ~> samRoutes.route ~> check {
@@ -376,7 +377,7 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
     val currentParentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("currentParent"))
     val samRoutes = createSamRoutes()
 
-    setupRoutesTest(samRoutes, fullyQualifiedChildResource,
+    setupParentRoutes(samRoutes, fullyQualifiedChildResource,
       currentParentOpt = Option(currentParentResource),
       missingActionsOnChild = Set(SamResourceActions.setParent),
       actionsOnCurrentParent = Set(SamResourceActions.removeChild),
@@ -392,13 +393,60 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
     val currentParentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("currentParent"))
     val samRoutes = createSamRoutes()
 
-    setupRoutesTest(samRoutes, fullyQualifiedChildResource,
+    setupParentRoutes(samRoutes, fullyQualifiedChildResource,
       currentParentOpt = Option(currentParentResource),
       actionsOnChild = Set(SamResourceActions.setParent),
       missingActionsOnCurrentParent = Set(SamResourceActions.removeChild),
       accessToCurrentParent = false)
 
     Delete(s"/api/resources/v2/${defaultResourceType.name}/${fullyQualifiedChildResource.resourceId.value}/parent") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
+    }
+  }
+
+  "GET /api/resources/v2/{resourceTypeName}/{resourceId}/children" should "200 with list of children FullyQualifiedResourceIds on success" in {
+    val child1 = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("child1"))
+    val child2 = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("child2"))
+    val parent = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("parent"))
+
+    val samRoutes = createSamRoutes()
+    when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(parent), mockitoEq(SamResourceActions.listChildren), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
+      .thenReturn(IO(true))
+    when(samRoutes.resourceService.listResourceChildren(mockitoEq(parent), any[SamRequestContext]))
+      .thenReturn(IO(Set(child1, child2)))
+
+
+    Get(s"/api/resources/v2/${defaultResourceType.name}/${parent.resourceId.value}/children") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[Set[FullyQualifiedResourceId]] shouldEqual Set(child1, child2)
+    }
+  }
+
+  it should "403 if user is missing list_children on the parent resource" in {
+    val parent = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("parent"))
+    val otherPolicy = AccessPolicyWithoutMembers(FullyQualifiedPolicyId(parent, AccessPolicyName("not_owner")), WorkbenchEmail(""), Set.empty, Set.empty, false)
+
+    val samRoutes = createSamRoutes()
+    when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(parent), mockitoEq(SamResourceActions.listChildren), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
+      .thenReturn(IO(false))
+    when(samRoutes.policyEvaluatorService.listResourceAccessPoliciesForUser(mockitoEq(parent), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
+      .thenReturn(IO(Set(otherPolicy)))
+
+    Get(s"/api/resources/v2/${defaultResourceType.name}/${parent.resourceId.value}/children") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Forbidden
+    }
+  }
+
+  it should "404 if user doesn't have access to parent resource" in {
+    val parent = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("parent"))
+
+    val samRoutes = createSamRoutes()
+    when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(parent), mockitoEq(SamResourceActions.listChildren), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
+      .thenReturn(IO(false))
+    when(samRoutes.policyEvaluatorService.listResourceAccessPoliciesForUser(mockitoEq(parent), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
+      .thenReturn(IO(Set[AccessPolicyWithoutMembers]()))
+
+    Get(s"/api/resources/v2/${defaultResourceType.name}/${parent.resourceId.value}/children") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
   }
