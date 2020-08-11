@@ -5,7 +5,7 @@ import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import akka.http.scaladsl.testkit.ScalatestRouteTest
 import cats.effect.IO
-import org.broadinstitute.dsde.workbench.model.{ErrorReport, ErrorReportSource, UserInfo, WorkbenchEmail, WorkbenchExceptionWithErrorReport, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.model.{UserInfo, WorkbenchEmail, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.TestSupport.genGoogleSubjectId
 import org.broadinstitute.dsde.workbench.sam.directory.MockDirectoryDAO
@@ -14,8 +14,8 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.MockAccessPolicyDAO
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
-import org.mockito.Mockito._
 import org.mockito.ArgumentMatchers.{any, eq => mockitoEq}
+import org.mockito.Mockito._
 import org.scalatest.mockito.MockitoSugar
 import org.scalatest.{AppendedClues, FlatSpec, Matchers}
 import spray.json.DefaultJsonProtocol._
@@ -468,43 +468,7 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
     }
   }
 
-  it should "400 if the policy is inherited" in {
-    val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("resource"))
-    val policyToDelete = FullyQualifiedPolicyId(resource, AccessPolicyName("policyToDelete"))
-    implicit val errorReportSource = ErrorReportSource("sam-tests")
-
-    val samRoutes = createSamRoutes()
-    when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(resource), mockitoEq(SamResourceActions.deletePolicy(policyToDelete.accessPolicyName)), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(true))
-    when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(resource), mockitoEq(SamResourceActions.alterPolicies), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(true))
-    when(samRoutes.resourceService.deletePolicy(mockitoEq(policyToDelete), any[SamRequestContext]))
-      .thenReturn(IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "cannot delete inherited policies"))))
-
-    Delete(s"/api/resources/v2/${resource.resourceTypeName}/${resource.resourceId}/policies/${policyToDelete.accessPolicyName}") ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.BadRequest
-    }
-  }
-
-  it should "403 if user is missing alter_policies on the resource" in {
-    val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("resource"))
-    val policyToDelete = FullyQualifiedPolicyId(resource, AccessPolicyName("policyToDelete"))
-    val otherPolicy = AccessPolicyWithoutMembers(FullyQualifiedPolicyId(resource, AccessPolicyName("not_owner")), WorkbenchEmail(""), Set.empty, Set.empty, false)
-
-    val samRoutes = createSamRoutes()
-    when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(resource), mockitoEq(SamResourceActions.deletePolicy(policyToDelete.accessPolicyName)), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(true))
-    when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(resource), mockitoEq(SamResourceActions.alterPolicies), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(false))
-    when(samRoutes.policyEvaluatorService.listResourceAccessPoliciesForUser(mockitoEq(resource), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(Set(otherPolicy)))
-
-    Delete(s"/api/resources/v2/${resource.resourceTypeName}/${resource.resourceId}/policies/${policyToDelete.accessPolicyName}") ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.Forbidden
-    }
-  }
-
-  it should "403 if user is missing delete_policy for that policy on the resource" in {
+  it should "403 if user is missing both alter_policies and delete_policy on the resource" in {
     val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("resource"))
     val policyToDelete = FullyQualifiedPolicyId(resource, AccessPolicyName("policyToDelete"))
     val otherPolicy = AccessPolicyWithoutMembers(FullyQualifiedPolicyId(resource, AccessPolicyName("not_owner")), WorkbenchEmail(""), Set.empty, Set.empty, false)
@@ -513,7 +477,7 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
     when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(resource), mockitoEq(SamResourceActions.deletePolicy(policyToDelete.accessPolicyName)), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
       .thenReturn(IO(false))
     when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(resource), mockitoEq(SamResourceActions.alterPolicies), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(true))
+      .thenReturn(IO(false))
     when(samRoutes.policyEvaluatorService.listResourceAccessPoliciesForUser(mockitoEq(resource), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
       .thenReturn(IO(Set(otherPolicy)))
 

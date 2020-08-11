@@ -379,10 +379,8 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
 
   def deletePolicy(policyId: FullyQualifiedPolicyId, userInfo: UserInfo, samRequestContext: SamRequestContext): server.Route =
     delete {
-      requireAction(policyId.resource, SamResourceActions.alterPolicies, userInfo.userId, samRequestContext) {
-        requireAction(policyId.resource, SamResourceActions.deletePolicy(policyId.accessPolicyName), userInfo.userId, samRequestContext) {
-          complete(resourceService.deletePolicy(policyId, samRequestContext).map(_ => StatusCodes.NoContent))
-        }
+      requireOneOfAction(policyId.resource, Set(SamResourceActions.alterPolicies, SamResourceActions.deletePolicy(policyId.accessPolicyName)), userInfo.userId, samRequestContext) {
+        complete(resourceService.deletePolicy(policyId, samRequestContext).map(_ => StatusCodes.NoContent))
       }
     }
 }
