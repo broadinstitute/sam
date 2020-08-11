@@ -214,6 +214,19 @@ class ResourceService(
       _ <- maybeDeleteResource(resource, samRequestContext)
     } yield ()
 
+  def deletePolicy(policyId: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[Unit] = {
+    for {
+      children <- accessPolicyDAO.listResourceChildren(policyId.resource, samRequestContext)
+      _ <- if (children.nonEmpty) {
+        IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "cannot delete inherited policies")))
+      } else IO.unit
+      policyOpt <- accessPolicyDAO.loadPolicy(policyId, samRequestContext)
+      policy = policyOpt.getOrElse(throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "policy not found")))
+      _ <- IO.fromFuture(IO(cloudExtensions.onGroupDelete(policy.email)))
+      _ <- accessPolicyDAO.deletePolicy(policy.id, samRequestContext)
+    } yield ()
+  }
+
   def cloudDeletePolicies(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): Future[Stream[AccessPolicy]] = {
     for {
       policiesToDelete <- accessPolicyDAO.listAccessPolicies(resource, samRequestContext).unsafeToFuture()

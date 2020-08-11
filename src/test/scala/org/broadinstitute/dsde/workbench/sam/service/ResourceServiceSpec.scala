@@ -906,4 +906,35 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
 
     exception.errorReport.statusCode shouldBe Option(StatusCodes.BadRequest)
   }
+
+  "deletePolicy" should "throw if the policy is inherited" in {
+    val testResult = for {
+      _ <- service.createResourceType(defaultResourceType, samRequestContext)
+      childResource <- service.createResource(defaultResourceType, ResourceId("child"), dummyUserInfo, samRequestContext)
+      parentResource <- service.createResource(defaultResourceType, ResourceId("parent"), dummyUserInfo, samRequestContext)
+      _ <- service.setResourceParent(childResource.fullyQualifiedId, parentResource.fullyQualifiedId, samRequestContext)
+
+      _ <- service.deletePolicy(FullyQualifiedPolicyId(parentResource.fullyQualifiedId, AccessPolicyName("owner")), samRequestContext)
+    } yield ()
+
+    val exception = intercept[WorkbenchExceptionWithErrorReport] {
+      testResult.unsafeRunSync()
+    }
+
+    exception.errorReport.statusCode shouldBe Option(StatusCodes.BadRequest)
+  }
+
+  it should "delete the policy" in {
+    val testResult = for {
+      _ <- service.createResourceType(defaultResourceType, samRequestContext)
+      resource <- service.createResource(defaultResourceType, ResourceId("resource"), dummyUserInfo, samRequestContext)
+
+      policyId = FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("owner"))
+
+      _ <- service.deletePolicy(policyId, samRequestContext)
+      loadedPolicy <- policyDAO.loadPolicy(policyId, samRequestContext)
+    } yield loadedPolicy
+
+    testResult.unsafeRunSync() shouldBe None
+  }
 }

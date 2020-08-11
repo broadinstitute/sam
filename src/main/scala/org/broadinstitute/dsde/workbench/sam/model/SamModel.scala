@@ -88,6 +88,7 @@ object SamResourceActions {
   def readPolicy(policy: AccessPolicyName) = ResourceAction(s"read_policy::${policy.value}")
   def setPublicPolicy(policy: AccessPolicyName) = ResourceAction(s"set_public::${policy.value}")
   def testActionAccess(action: ResourceAction) = ResourceAction(s"test_action_access::${action.value}")
+  def deletePolicy(policy: AccessPolicyName) = ResourceAction(s"delete_policy::${policy.value}")
 }
 
 object SamResourceTypes {
