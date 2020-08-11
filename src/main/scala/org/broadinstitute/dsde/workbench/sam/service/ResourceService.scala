@@ -220,10 +220,10 @@ class ResourceService(
       _ <- if (children.nonEmpty) {
         IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "cannot delete inherited policies")))
       } else IO.unit
-      policyOpt <- accessPolicyDAO.loadPolicy(policyId, samRequestContext)
-      policy = policyOpt.getOrElse(throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "policy not found")))
-      _ <- IO.fromFuture(IO(cloudExtensions.onGroupDelete(policy.email)))
-      _ <- accessPolicyDAO.deletePolicy(policy.id, samRequestContext)
+      policyEmailOpt <- directoryDAO.loadSubjectEmail(policyId, samRequestContext)
+      policyEmail = policyEmailOpt.getOrElse(throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "policy not found")))
+      _ <- IO.fromFuture(IO(cloudExtensions.onGroupDelete(policyEmail)))
+      _ <- accessPolicyDAO.deletePolicy(policyId, samRequestContext)
     } yield ()
   }
 
