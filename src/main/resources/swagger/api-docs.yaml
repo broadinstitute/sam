@@ -1262,8 +1262,6 @@ paths:
         204:
           description: Successfully deleted policy
           content: {}
-        400:
-          description: You cannot delete a policy that is inherited
         403:
           description: You do not have permission to perform this action on the resource
           content: {}
