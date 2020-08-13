@@ -1233,6 +1233,47 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
       x-codegen-request-body-name: policyCreate
+  /api/resources/v2/{resourceTypeName}/{resourceId}/policies/{policyName}:
+    delete:
+      tags:
+        - Resources
+      summary: Deletes a policy on a resource
+      operationId: deletePolicy
+      parameters:
+        - name: resourceTypeName
+          in: path
+          description: Type of resource
+          required: true
+          schema:
+            type: string
+        - name: resourceId
+          in: path
+          description: Id of resource
+          required: true
+          schema:
+            type: string
+        - name: policyName
+          in: path
+          description: Name of the policy
+          required: true
+          schema:
+            type: string
+      responses:
+        204:
+          description: Successfully deleted policy
+          content: {}
+        403:
+          description: You do not have permission to perform this action on the resource
+          content: {}
+        404:
+          description: Policy does not exist or you are not a member of any policies on this resource
+          content: {}
+        500:
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
   /api/resources/v1/{resourceTypeName}/{resourceId}/policies/{policyName}/memberEmails:
     put:
       tags:

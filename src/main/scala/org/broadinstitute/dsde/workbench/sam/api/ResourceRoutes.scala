@@ -144,6 +144,12 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
                 } ~
                 path("children") {
                   getResourceChildren(resource, userInfo, samRequestContext)
+                } ~
+                pathPrefix ("policies" / Segment) { policyName =>
+                  val policyId = FullyQualifiedPolicyId(resource, AccessPolicyName(policyName))
+                  pathEndOrSingleSlash {
+                    deletePolicy(policyId, userInfo, samRequestContext)
+                  }
                 }
               }
             }
@@ -368,6 +374,13 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
     get {
       requireAction(resource, SamResourceActions.listChildren, userInfo.userId, samRequestContext) {
         complete(resourceService.listResourceChildren(resource, samRequestContext).map(children => StatusCodes.OK -> children))
+      }
+    }
+
+  def deletePolicy(policyId: FullyQualifiedPolicyId, userInfo: UserInfo, samRequestContext: SamRequestContext): server.Route =
+    delete {
+      requireOneOfAction(policyId.resource, Set(SamResourceActions.alterPolicies, SamResourceActions.deletePolicy(policyId.accessPolicyName)), userInfo.userId, samRequestContext) {
+        complete(resourceService.deletePolicy(policyId, samRequestContext).map(_ => StatusCodes.NoContent))
       }
     }
 }

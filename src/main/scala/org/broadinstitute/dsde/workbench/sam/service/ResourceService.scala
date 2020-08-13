@@ -214,6 +214,17 @@ class ResourceService(
       _ <- maybeDeleteResource(resource, samRequestContext)
     } yield ()
 
+  // TODO: CA-993 Once we can check if a policy applies to any children, we need to update this to throw if we try
+  // to delete any policies that apply to children
+  def deletePolicy(policyId: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[Unit] = {
+    for {
+      policyEmailOpt <- directoryDAO.loadSubjectEmail(policyId, samRequestContext)
+      policyEmail = policyEmailOpt.getOrElse(throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "policy not found")))
+      _ <- IO.fromFuture(IO(cloudExtensions.onGroupDelete(policyEmail)))
+      _ <- accessPolicyDAO.deletePolicy(policyId, samRequestContext)
+    } yield ()
+  }
+
   def cloudDeletePolicies(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): Future[Stream[AccessPolicy]] = {
     for {
       policiesToDelete <- accessPolicyDAO.listAccessPolicies(resource, samRequestContext).unsafeToFuture()
