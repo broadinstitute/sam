@@ -319,6 +319,7 @@ class GoogleExtensions(
           for {
             _ <- assertProjectInTerraOrg(project)
             sa <- IO.fromFuture(IO(googleIamDAO.createServiceAccount(project, petSaName, petSaDisplayName)))
+            _ <- IO.sleep(30 seconds)(IO.timer(executionContext))
             r <- IO.fromFuture(IO(withProxyEmail(user.id) { proxyEmail =>
               googleDirectoryDAO.addMemberToGroup(proxyEmail, sa.email)
             }))
