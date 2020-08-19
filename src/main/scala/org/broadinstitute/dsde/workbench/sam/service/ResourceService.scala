@@ -15,7 +15,6 @@ import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Success
-import scala.concurrent.duration._
 
 /**
   * Created by mbemis on 5/22/17.
@@ -56,17 +55,9 @@ class ResourceService(
           // make sure resource type admin is added first because the rest depends on it
           createdAdminType <- createResourceType(resourceTypeAdmin, samRequestContext)
 
-          // sleep added so shadow dao can catch up, remove when removing opendj
-          // https://broadworkbench.atlassian.net/browse/CA-526
-          _ <- IO.sleep(1 second)(IO.timer(executionContext))
-
           result <- resourceTypes.values.filterNot(_.name == SamResourceTypes.resourceTypeAdminName).toList.traverse { rt =>
             for {
               _ <- createResourceType(rt, samRequestContext)
-
-              // sleep added so shadow dao can catch up, remove when removing opendj
-              // https://broadworkbench.atlassian.net/browse/CA-526
-              _ <- IO.sleep(1 second)(IO.timer(executionContext))
 
               policy = ValidatableAccessPolicy(
                 AccessPolicyName(resourceTypeAdmin.ownerRoleName.value),
