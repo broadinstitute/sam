@@ -319,6 +319,10 @@ class GoogleExtensions(
           for {
             _ <- assertProjectInTerraOrg(project)
             sa <- IO.fromFuture(IO(googleIamDAO.createServiceAccount(project, petSaName, petSaDisplayName)))
+            // Sleep added to avoid Google race condition where the GoogleDirectoryDAO doesn't yet know about the
+            // newly created service account which leads to slow permission propagation.
+            // See https://broadworkbench.atlassian.net/browse/QA-723 for details
+            // TODO: remove sleep when Google fix exists - see https://broadworkbench.atlassian.net/browse/CA-1005
             _ <- IO.sleep(2 seconds)(IO.timer(executionContext))
             r <- IO.fromFuture(IO(withProxyEmail(user.id) { proxyEmail =>
               googleDirectoryDAO.addMemberToGroup(proxyEmail, sa.email)
