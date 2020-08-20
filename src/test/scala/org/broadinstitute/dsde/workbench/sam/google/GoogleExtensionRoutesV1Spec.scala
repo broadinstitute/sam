@@ -3,6 +3,7 @@ package google
 
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import akka.http.scaladsl.model.StatusCodes
+import akka.http.scaladsl.testkit.RouteTestTimeout
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport._
@@ -11,10 +12,14 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.scalatest.concurrent.ScalaFutures
 
+import scala.concurrent.duration._
+
 /**
   * Unit tests of GoogleExtensionRoutes. Can use real Google services. Must mock everything else.
   */
 class GoogleExtensionRoutesV1Spec extends GoogleExtensionRoutesSpecHelper with ScalaFutures{
+  implicit val timeout = RouteTestTimeout(5 seconds) //after using com.google.cloud.storage.contrib.nio.testing.LocalStorageHelper, tests seems to run a bit longer
+
   "GET /api/google/v1/user/petServiceAccount" should "get or create a pet service account for a user" in {
     val (user, _, routes) = createTestUser()
 
