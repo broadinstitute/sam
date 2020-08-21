@@ -85,9 +85,6 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
       registerAsNewUser(WorkbenchEmail(tempUser.email))(tempAuthToken)
       Sam.user.status()(tempAuthToken).get.userInfo.userEmail shouldBe tempUser.email
 
-      removeUser(tempUserInfo.userSubjectId)
-      Sam.user.status()(tempAuthToken) shouldBe None
-
       // OK to re-remove
 
       removeUser(tempUserInfo.userSubjectId)
