@@ -5,7 +5,7 @@ echo $SBT_CMD
 
 set -o pipefail
 
-sbt -Djsse.enableSNIExtension=false -Dheadless=true "${SBT_CMD}"
+sbt -Dheadless=true "${SBT_CMD}"
 TEST_EXIT_CODE=$?
 sbt clean
 
