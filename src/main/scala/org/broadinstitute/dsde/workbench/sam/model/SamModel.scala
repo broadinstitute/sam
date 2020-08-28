@@ -159,7 +159,8 @@ consistent "has a" relationship is tracked by this ticket: https://broadworkbenc
     public: Boolean)
     extends WorkbenchGroup
 
-@Lenses final case class AccessPolicyMembership(memberEmails: Set[WorkbenchEmail], actions: Set[ResourceAction], roles: Set[ResourceRoleName])
+@Lenses final case class AccessPolicyDescendantPermissions(resourceType: ResourceTypeName, actions: Set[ResourceAction], roles: Set[ResourceRoleName])
+@Lenses final case class AccessPolicyMembership(memberEmails: Set[WorkbenchEmail], actions: Set[ResourceAction], roles: Set[ResourceRoleName], descendantPermissions: Set[AccessPolicyDescendantPermissions])
 @Lenses final case class AccessPolicyResponseEntry(policyName: AccessPolicyName, policy: AccessPolicyMembership, email: WorkbenchEmail)
 
 // Access Policy with no membership info to improve efficiency for calls that care about only the roles and actions of a policy, not the membership
