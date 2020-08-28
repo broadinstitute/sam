@@ -40,7 +40,9 @@ object SamJsonSupport {
 
   implicit val FullyQualifiedResourceIdFormat = jsonFormat2(FullyQualifiedResourceId.apply)
 
-  implicit val AccessPolicyMembershipFormat = jsonFormat3(AccessPolicyMembership.apply)
+  implicit val accessPolicyDescendantPermissionsFormat = jsonFormat3(AccessPolicyDescendantPermissions.apply)
+
+  implicit val AccessPolicyMembershipFormat = jsonFormat4(AccessPolicyMembership.apply)
 
   implicit val AccessPolicyResponseEntryFormat = jsonFormat3(AccessPolicyResponseEntry.apply)
 
@@ -156,6 +158,7 @@ consistent "has a" relationship is tracked by this ticket: https://broadworkbenc
     email: WorkbenchEmail,
     roles: Set[ResourceRoleName],
     actions: Set[ResourceAction],
+    descendantPermissions: Set[AccessPolicyDescendantPermissions],
     public: Boolean)
     extends WorkbenchGroup
 

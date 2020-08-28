@@ -33,7 +33,8 @@ class ResourceService(
       policyName: AccessPolicyName,
       emailsToSubjects: Map[WorkbenchEmail, Option[WorkbenchSubject]],
       roles: Set[ResourceRoleName],
-      actions: Set[ResourceAction])
+      actions: Set[ResourceAction],
+      descendantPermissions: Set[AccessPolicyDescendantPermissions])
 
   def getResourceTypes(): IO[Map[ResourceTypeName, ResourceType]] =
     IO.pure(resourceTypes)
@@ -63,6 +64,7 @@ class ResourceService(
                 AccessPolicyName(resourceTypeAdmin.ownerRoleName.value),
                 Map.empty,
                 Set(resourceTypeAdmin.ownerRoleName),
+                Set.empty,
                 Set.empty)
               // note that this skips all validations and just creates a resource with owner policies with no members
               // it will require someone with direct ldap access to bootstrap
@@ -186,11 +188,11 @@ class ResourceService(
       case LoadResourceAuthDomainResult.ResourceNotFound => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Resource ${resource} not found")))
     })
 
-  def createPolicy(policyIdentity: FullyQualifiedPolicyId, members: Set[WorkbenchSubject], roles: Set[ResourceRoleName], actions: Set[ResourceAction], samRequestContext: SamRequestContext): IO[AccessPolicy] =
-    createPolicy(policyIdentity, members, generateGroupEmail(), roles, actions, samRequestContext)
+  def createPolicy(policyIdentity: FullyQualifiedPolicyId, members: Set[WorkbenchSubject], roles: Set[ResourceRoleName], actions: Set[ResourceAction], descendantPermissions: Set[AccessPolicyDescendantPermissions], samRequestContext: SamRequestContext): IO[AccessPolicy] =
+    createPolicy(policyIdentity, members, generateGroupEmail(), roles, actions, descendantPermissions, samRequestContext)
 
-  def createPolicy(policyIdentity: FullyQualifiedPolicyId, members: Set[WorkbenchSubject], email: WorkbenchEmail, roles: Set[ResourceRoleName], actions: Set[ResourceAction], samRequestContext: SamRequestContext): IO[AccessPolicy] =
-    accessPolicyDAO.createPolicy(AccessPolicy(policyIdentity, members, email, roles, actions, public = false), samRequestContext)
+  def createPolicy(policyIdentity: FullyQualifiedPolicyId, members: Set[WorkbenchSubject], email: WorkbenchEmail, roles: Set[ResourceRoleName], actions: Set[ResourceAction], descendantPermissions: Set[AccessPolicyDescendantPermissions], samRequestContext: SamRequestContext): IO[AccessPolicy] =
+    accessPolicyDAO.createPolicy(AccessPolicy(policyIdentity, members, email, roles, actions, descendantPermissions, public = false), samRequestContext) // todo: gotta update this too
 
   // IF Resource ID reuse is allowed (as defined by the Resource Type), then we can delete the resource
   // ELSE Resource ID reuse is not allowed, and we enforce this by deleting all policies associated with the Resource,
@@ -297,10 +299,11 @@ class ResourceService(
   private def createOrUpdatePolicy(policyIdentity: FullyQualifiedPolicyId, policy: ValidatableAccessPolicy, samRequestContext: SamRequestContext): IO[AccessPolicy] = {
     val workbenchSubjects = policy.emailsToSubjects.values.flatten.toSet
     accessPolicyDAO.loadPolicy(policyIdentity, samRequestContext).flatMap {
-      case None => createPolicy(policyIdentity, workbenchSubjects, generateGroupEmail(), policy.roles, policy.actions, samRequestContext)
+      case None => createPolicy(policyIdentity, workbenchSubjects, generateGroupEmail(), policy.roles, policy.actions, policy.descendantPermissions, samRequestContext)
       case Some(accessPolicy) =>
         for {
-          result <- accessPolicyDAO.overwritePolicy(AccessPolicy(policyIdentity, workbenchSubjects, accessPolicy.email, policy.roles, policy.actions, accessPolicy.public), samRequestContext)
+          // todo: update overwrite to actually update descendant permissions
+          result <- accessPolicyDAO.overwritePolicy(AccessPolicy(policyIdentity, workbenchSubjects, accessPolicy.email, policy.roles, policy.actions, policy.descendantPermissions, accessPolicy.public), samRequestContext)
           _ <- IO.fromFuture(IO(fireGroupUpdateNotification(policyIdentity, samRequestContext))).runAsync {
             case Left(regrets) => IO(logger.error(s"failure calling fireGroupUpdateNotification on $policyIdentity", regrets))
             case Right(_) => IO.unit
@@ -332,6 +335,8 @@ class ResourceService(
       validateActions(resourceType, policy) ++
       validateRoles(resourceType, policy) ++
       validateUrlSafe(policy.policyName.value)
+
+    // todo: validate descendant permissions??
 
     if (validationErrors.nonEmpty) {
       Some(ErrorReport("You have specified an invalid policy", validationErrors.toSeq))
@@ -420,7 +425,8 @@ class ResourceService(
       AccessPolicyMembership(
         userEmails.toSet[WorkbenchUser].map(_.email) ++ groupEmails.map(_.email) ++ policyEmails.flatMap(_.map(_.email)),
         policy.actions,
-        policy.roles)
+        policy.roles,
+        policy.descendantPermissions)
   }
 
   def listResourcePolicies(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Stream[AccessPolicyResponseEntry]] =
@@ -445,7 +451,7 @@ class ResourceService(
 
   private def makeCreatablePolicy(accessPolicyName: AccessPolicyName, accessPolicyMembership: AccessPolicyMembership, samRequestContext: SamRequestContext): IO[ValidatableAccessPolicy] =
     mapEmailsToSubjects(accessPolicyMembership.memberEmails, samRequestContext).map { emailsToSubjects =>
-      ValidatableAccessPolicy(accessPolicyName, emailsToSubjects, accessPolicyMembership.roles, accessPolicyMembership.actions)
+      ValidatableAccessPolicy(accessPolicyName, emailsToSubjects, accessPolicyMembership.roles, accessPolicyMembership.actions, accessPolicyMembership.descendantPermissions)
     }
 
   private def generateGroupEmail() = WorkbenchEmail(s"policy-${UUID.randomUUID}@$emailDomain")

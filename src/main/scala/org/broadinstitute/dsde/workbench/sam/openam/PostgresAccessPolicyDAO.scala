@@ -592,6 +592,11 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     val sp = PolicyTable.syntax("sp")
     val sr = ResourceTable.syntax("sr")
     val srt = ResourceTypeTable.syntax("srt")
+    val drt = ResourceTypeTable.syntax("drt")
+    val dpr = PolicyRoleTable.syntax("dpr")
+    val drr = ResourceRoleTable.syntax("drr")
+    val dpa = PolicyActionTable.syntax("dpa")
+    val dra = ResourceActionTable.syntax("dra")
 
     val limitOnePolicyClause: SQLSyntax = limitOnePolicy match {
       case Some(policyName) => samsqls"and ${p.name} = ${policyName}"
@@ -599,7 +604,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     }
 
     val listPoliciesQuery =
-      samsql"""select ${p.result.name}, ${r.result.name}, ${rt.result.name}, ${g.result.email}, ${p.result.public}, ${gm.result.memberUserId}, ${sg.result.name}, ${sp.result.name}, ${sr.result.name}, ${srt.result.name}, ${rr.result.role}, ${ra.result.action}
+      samsql"""select ${p.result.name}, ${r.result.name}, ${rt.result.name}, ${g.result.email}, ${p.result.public}, ${gm.result.memberUserId}, ${sg.result.name}, ${sp.result.name}, ${sr.result.name}, ${srt.result.name}, ${rr.result.role}, ${ra.result.action}, ${drt.result.name}, ${drr.result.role}, ${dra.result.action}
           from ${GroupTable as g}
           join ${PolicyTable as p} on ${g.id} = ${p.groupId}
           join ${ResourceTable as r} on ${p.resourceId} = ${r.id}
@@ -613,6 +618,11 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
           left join ${ResourceRoleTable as rr} on ${pr.resourceRoleId} = ${rr.id}
           left join ${PolicyActionTable as pa} on ${p.id} = ${pa.resourcePolicyId}
           left join ${ResourceActionTable as ra} on ${pa.resourceActionId} = ${ra.id}
+          left join ${ResourceTypeTable as drt} on ${p.descendantResourceTypeId} = ${drt.id}
+          left join ${PolicyRoleTable as dpr} on ${p.id} = ${dpr.resourcePolicyId}
+          left join ${ResourceRoleTable as drr} on ${dpr.resourceRoleId} = ${drr.id}
+          left join ${PolicyActionTable as dpa} on ${p.id} = ${dpa.resourcePolicyId}
+          left join ${ResourceActionTable as dra} on ${dpa.resourceActionId} = ${dra.id}
           where ${r.name} = ${resource.resourceId}
           and ${rt.name} = ${resource.resourceTypeName}
           ${limitOnePolicyClause}"""
@@ -621,10 +631,12 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     runInTransaction("listPolicies", samRequestContext)({ implicit session =>
       val results = listPoliciesQuery.map(rs => (PolicyInfo(rs.get[AccessPolicyName](p.resultName.name), rs.get[ResourceId](r.resultName.name), rs.get[ResourceTypeName](rt.resultName.name), rs.get[WorkbenchEmail](g.resultName.email), rs.boolean(p.resultName.public)),
         (rs.stringOpt(gm.resultName.memberUserId).map(WorkbenchUserId), rs.stringOpt(sg.resultName.name).map(WorkbenchGroupName), rs.stringOpt(sp.resultName.name).map(AccessPolicyName(_)), rs.stringOpt(sr.resultName.name).map(ResourceId(_)), rs.stringOpt(srt.resultName.name).map(ResourceTypeName(_))),
-        (rs.stringOpt(rr.resultName.role).map(ResourceRoleName(_)), rs.stringOpt(ra.resultName.action).map(ResourceAction(_))))).list().apply().groupBy(_._1)
+        (rs.stringOpt(rr.resultName.role).map(ResourceRoleName(_)), rs.stringOpt(ra.resultName.action).map(ResourceAction(_)),
+        (rs.stringOpt(drt.resultName.name).map(ResourceTypeName(_)), rs.stringOpt(drr.resultName.role).map(ResourceRoleName(_)), rs.stringOpt(dra.resultName.action).map(ResourceAction(_))))))
+        .list().apply().groupBy(_._1)
 
       results.map { case (policyInfo, resultsByPolicy) =>
-        val (_, memberResults, roleActionResults) = resultsByPolicy.unzip3
+        val (_, memberResults, permissionsResults) = resultsByPolicy.unzip3
 
         val members: Set[WorkbenchSubject] = memberResults.collect {
           case (Some(userId), None, None, None, None) => userId
@@ -632,9 +644,13 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
           case (None, Some(_), Some(policyName), Some(resourceName), Some(resourceTypeName)) => FullyQualifiedPolicyId(FullyQualifiedResourceId(resourceTypeName, resourceName), policyName)
         }.toSet
 
-        val (roles, actions) = roleActionResults.unzip
+        val (roles, actions, descendantPermissionsResults) = permissionsResults.unzip3
+        val descendantPermissions = descendantPermissionsResults.groupBy(_._1).collect { case (Some(resourceTypeName), descendantPermissionsByResourceType) =>
+          val (_, descendantRoles, descendantActions) = descendantPermissionsByResourceType.unzip3
+          AccessPolicyDescendantPermissions(resourceTypeName, descendantActions.flatten.toSet, descendantRoles.flatten.toSet)
+        }.toSet
 
-        AccessPolicy(FullyQualifiedPolicyId(FullyQualifiedResourceId(policyInfo.resourceTypeName, policyInfo.resourceId), policyInfo.name), members, policyInfo.email, roles.flatten.toSet, actions.flatten.toSet, policyInfo.public)
+        AccessPolicy(FullyQualifiedPolicyId(FullyQualifiedResourceId(policyInfo.resourceTypeName, policyInfo.resourceId), policyInfo.name), members, policyInfo.email, roles.flatten.toSet, actions.flatten.toSet, descendantPermissions, policyInfo.public)
       }.toStream
     })
   }
