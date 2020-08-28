@@ -35,12 +35,13 @@ class ManagedGroupService(
   def createManagedGroup(groupId: ResourceId, userInfo: UserInfo, accessInstructionsOpt: Option[String] = None, samRequestContext: SamRequestContext): IO[Resource] = {
     def adminRole = managedGroupType.ownerRoleName
 
-    val memberPolicy = ManagedGroupService.memberPolicyName -> AccessPolicyMembership(Set.empty, Set.empty, Set(ManagedGroupService.memberRoleName))
-    val adminPolicy = ManagedGroupService.adminPolicyName -> AccessPolicyMembership(Set(userInfo.userEmail), Set.empty, Set(adminRole))
+    val memberPolicy = ManagedGroupService.memberPolicyName -> AccessPolicyMembership(Set.empty, Set.empty, Set(ManagedGroupService.memberRoleName), Set.empty)
+    val adminPolicy = ManagedGroupService.adminPolicyName -> AccessPolicyMembership(Set(userInfo.userEmail), Set.empty, Set(adminRole), Set.empty)
     val adminNotificationPolicy = ManagedGroupService.adminNotifierPolicyName -> AccessPolicyMembership(
       Set.empty,
       Set.empty,
-      Set(ManagedGroupService.adminNotifierRoleName))
+      Set(ManagedGroupService.adminNotifierRoleName),
+      Set.empty)
 
     validateGroupName(groupId.value)
     for {
@@ -56,7 +57,7 @@ class ManagedGroupService(
     val workbenchGroupName = WorkbenchGroupName(resource.resourceId.value)
     val groupMembers: Set[WorkbenchSubject] = componentPolicies.collect {
       // collect only member and admin policies
-      case AccessPolicy(id @ FullyQualifiedPolicyId(_, ManagedGroupService.memberPolicyName | ManagedGroupService.adminPolicyName), _, _, _, _, _) => id
+      case AccessPolicy(id @ FullyQualifiedPolicyId(_, ManagedGroupService.memberPolicyName | ManagedGroupService.adminPolicyName), _, _, _, _, _, _) => id
     }
     directoryDAO.createGroup(BasicWorkbenchGroup(workbenchGroupName, groupMembers, email), accessInstructionsOpt, samRequestContext = samRequestContext)
   }
@@ -133,7 +134,7 @@ class ManagedGroupService(
       FullyQualifiedPolicyId(FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, resourceId), policyName)
     accessPolicyDAO.loadPolicy(resourceAndPolicyName, samRequestContext).flatMap {
       case Some(policy) => {
-        val updatedPolicy = AccessPolicyMembership(emails, policy.actions, policy.roles)
+        val updatedPolicy = AccessPolicyMembership(emails, policy.actions, policy.roles, policy.descendantPermissions)
         resourceService.overwritePolicy(managedGroupType, resourceAndPolicyName.accessPolicyName, resourceAndPolicyName.resource, updatedPolicy, samRequestContext)
       }
       case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Group or policy could not be found: $resourceAndPolicyName"))
