@@ -4,7 +4,8 @@ import scalikejdbc._
 import org.broadinstitute.dsde.workbench.sam.db.SamTypeBinders
 
 final case class PolicyActionRecord(resourcePolicyId: PolicyPK,
-                                    resourceActionId: ResourceActionPK)
+                                    resourceActionId: ResourceActionPK,
+                                    descends: Boolean)
 
 object PolicyActionTable extends SQLSyntaxSupportWithDefaultSamDB[PolicyActionRecord] {
   override def tableName: String = "SAM_POLICY_ACTION"
@@ -12,6 +13,7 @@ object PolicyActionTable extends SQLSyntaxSupportWithDefaultSamDB[PolicyActionRe
   import SamTypeBinders._
   def apply(e: ResultName[PolicyActionRecord])(rs: WrappedResultSet): PolicyActionRecord = PolicyActionRecord(
     rs.get(e.resourcePolicyId),
-    rs.get(e.resourceActionId)
+    rs.get(e.resourceActionId),
+    rs.get(e.descends)
   )
 }
