@@ -715,6 +715,19 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     managedGroupService.loadManagedGroup(ResourceId(otherAuthDomainGroup), samRequestContext).unsafeRunSync() shouldBe Some(WorkbenchEmail(s"$otherAuthDomainGroup@$emailDomain"))
   }
 
+  "deleteResourceV2" should "delete the resource" in {
+    val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("my-resource"))
+
+    service.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
+    runAndWait(service.createResource(defaultResourceType, resource.resourceId, dummyUserInfo, samRequestContext))
+
+    assert(policyDAO.listAccessPolicies(resource, samRequestContext).unsafeRunSync().nonEmpty)
+
+    runAndWait(service.deleteResourceV2(resource, samRequestContext))
+
+    assert(policyDAO.listAccessPolicies(resource, samRequestContext).unsafeRunSync().isEmpty)
+  }
+
   it should "return 400 for a parent resource that has any children" in {
     // create a resource with a child
     val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("my-resource"))
@@ -729,7 +742,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
 
     // try to delete the parent resource and then validate the error
     val exception = intercept[WorkbenchExceptionWithErrorReport] {
-      runAndWait(service.deleteResource(resource, samRequestContext))
+      runAndWait(service.deleteResourceV2(resource, samRequestContext))
     }
 
     exception.errorReport.statusCode shouldEqual Option(StatusCodes.BadRequest)

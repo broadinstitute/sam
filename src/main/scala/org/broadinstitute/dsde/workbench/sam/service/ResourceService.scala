@@ -196,21 +196,32 @@ class ResourceService(
   // ELSE Resource ID reuse is not allowed, and we enforce this by deleting all policies associated with the Resource,
   //      but not the Resource itself, thereby orphaning the Resource so that it cannot be used or accessed anymore and
   //      preventing a new Resource with the same ID from being created
-  // Resources with children cannot be deleted.
   def deleteResource(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): Future[Unit] =
     for {
-      // First check if children exist. If so, then return a 400.
-      _ <- hasChildren(resource, samRequestContext).unsafeToFuture() map {
-        case true => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "Cannot delete a resource with children. Delete the children first then try again."))
-        case false =>
-      }
-
       // remove from cloud extensions first so a failure there does not leave ldap in a bad state
       policiesToDelete <- cloudDeletePolicies(resource, samRequestContext)
 
       _ <- policiesToDelete.toList.parTraverse(p => accessPolicyDAO.deletePolicy(p.id, samRequestContext)).unsafeToFuture()
       _ <- maybeDeleteResource(resource, samRequestContext)
     } yield ()
+
+  // Resources with children cannot be deleted and will throw a 400.
+  def deleteResourceV2(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): Future[Unit] =
+    for {
+      // First check if children exist. If so, then throw a 400.
+      _ <- hasChildren(resource, samRequestContext).unsafeToFuture() map {
+        case true => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "Cannot delete a resource with children. Delete the children first then try again."))
+        case false =>
+      }
+      _ <- deleteResource(resource, samRequestContext)
+    } yield ()
+
+  /** Checks if a resource has any children */
+  def hasChildren(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Boolean] = {
+    for {
+      children <- listResourceChildren(resource, samRequestContext)
+    } yield (children.nonEmpty)
+  }
 
   // TODO: CA-993 Once we can check if a policy applies to any children, we need to update this to throw if we try
   // to delete any policies that apply to children
@@ -221,13 +232,6 @@ class ResourceService(
       _ <- IO.fromFuture(IO(cloudExtensions.onGroupDelete(policyEmail)))
       _ <- accessPolicyDAO.deletePolicy(policyId, samRequestContext)
     } yield ()
-  }
-
-  /** Checks if a resource has any children */
-  def hasChildren(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Boolean] = {
-    for {
-      children <- listResourceChildren(resource, samRequestContext)
-    } yield (children.nonEmpty)
   }
 
   def cloudDeletePolicies(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): Future[Stream[AccessPolicy]] = {
