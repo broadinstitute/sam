@@ -192,7 +192,7 @@ class ResourceService(
     createPolicy(policyIdentity, members, generateGroupEmail(), roles, actions, descendantPermissions, samRequestContext)
 
   def createPolicy(policyIdentity: FullyQualifiedPolicyId, members: Set[WorkbenchSubject], email: WorkbenchEmail, roles: Set[ResourceRoleName], actions: Set[ResourceAction], descendantPermissions: Set[AccessPolicyDescendantPermissions], samRequestContext: SamRequestContext): IO[AccessPolicy] =
-    accessPolicyDAO.createPolicy(AccessPolicy(policyIdentity, members, email, roles, actions, descendantPermissions, public = false), samRequestContext) // todo: gotta update this too
+    accessPolicyDAO.createPolicy(AccessPolicy(policyIdentity, members, email, roles, actions, descendantPermissions, public = false), samRequestContext)
 
   // IF Resource ID reuse is allowed (as defined by the Resource Type), then we can delete the resource
   // ELSE Resource ID reuse is not allowed, and we enforce this by deleting all policies associated with the Resource,
@@ -291,7 +291,6 @@ class ResourceService(
       case None => createPolicy(policyIdentity, workbenchSubjects, generateGroupEmail(), policy.roles, policy.actions, policy.descendantPermissions, samRequestContext)
       case Some(accessPolicy) =>
         for {
-          // todo: update overwrite to actually update descendant permissions
           result <- accessPolicyDAO.overwritePolicy(AccessPolicy(policyIdentity, workbenchSubjects, accessPolicy.email, policy.roles, policy.actions, policy.descendantPermissions, accessPolicy.public), samRequestContext)
           _ <- IO.fromFuture(IO(fireGroupUpdateNotification(policyIdentity, samRequestContext))).runAsync {
             case Left(regrets) => IO(logger.error(s"failure calling fireGroupUpdateNotification on $policyIdentity", regrets))

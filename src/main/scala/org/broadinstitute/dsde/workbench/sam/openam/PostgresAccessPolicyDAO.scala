@@ -36,7 +36,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
 
       overwriteActionPatterns(resourceType.actionPatterns, resourceTypePK)
       overwriteRoles(resourceType.roles, resourceTypePK)
-      insertActions(uniqueActions, resourceTypePK)
+      insertActions(uniqueActions.map((_, resourceTypePK)))
       overwriteRoleActions(resourceType.roles, resourceTypePK)
 
       resourceType
@@ -124,11 +124,11 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     }
   }
 
-  private def insertActions(actions: Set[ResourceAction], resourceTypePK: ResourceTypePK)(implicit session: DBSession): Int = {
+  private def insertActions(actions: Set[(ResourceAction, ResourceTypePK)])(implicit session: DBSession): Int = {
     if (actions.isEmpty) {
-      return 0
+      0
     } else {
-      val uniqueActionValues = actions.map { action =>
+      val uniqueActionValues = actions.collect { case (action, resourceTypePK) =>
         samsqls"(${resourceTypePK}, ${action})"
       }
 
@@ -353,12 +353,68 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
       insertGroupMembers(groupId, policy.members)
 
       insertPolicyRoles(policy.roles, policyId)
+      insertDescendantRoles(policy.descendantPermissions.flatMap(permissions => permissions.roles.map((_, permissions.resourceType))), policyId)
       insertPolicyActions(policy.actions, policyId)
+      insertDescendantActions(policy.descendantPermissions.flatMap(permissions => permissions.actions.map((_, permissions.resourceType))), policyId)
 
       policy
     }).recoverWith {
       case duplicateException: PSQLException if duplicateException.getSQLState == PSQLStateExtensions.UNIQUE_VIOLATION =>
         IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"policy $policy already exists")))
+    }
+  }
+
+  private def insertDescendantRoles(rolesWithResourceType: Set[(ResourceRoleName, ResourceTypeName)], policyId: PolicyPK)(implicit session: DBSession): Int = {
+    val rr = ResourceRoleTable.syntax("rr")
+    val rt = ResourceTypeTable.syntax("rt")
+    val prCol = PolicyRoleTable.column
+    if (rolesWithResourceType.nonEmpty) {
+      val insertedRolesCount = samsql"""insert into ${PolicyRoleTable.table} (${prCol.resourcePolicyId}, ${prCol.resourceRoleId}, ${prCol.descends})
+            select ${policyId}, ${rr.result.id}, true
+            from ${ResourceRoleTable as rr}
+            join ${ResourceTypeTable as rt} on ${rr.resourceTypeId} = ${rt.id}
+            where (${rr.role}, ${rt.name}) in (${rolesWithResourceType})
+            and ${rr.deprecated} = false"""
+        .update().apply()
+      if (insertedRolesCount != rolesWithResourceType.size) {
+        throw new WorkbenchException("Some roles have been deprecated or were not found.")
+      }
+      insertedRolesCount
+    } else {
+      0
+    }
+  }
+
+  private def insertDescendantActions(actionsWithResourceType: Set[(ResourceAction, ResourceTypeName)], policyId: PolicyPK)(implicit session: DBSession): Int = {
+    val ra = ResourceActionTable.syntax("ra")
+    val rt = ResourceTypeTable.syntax("rt")
+    val paCol = PolicyActionTable.column
+    if (actionsWithResourceType.nonEmpty) {
+      val insertQuery = samsqls"""insert into ${PolicyActionTable.table} (${paCol.resourcePolicyId}, ${paCol.resourceActionId})
+            select ${policyId}, ${ra.result.id}, true
+            from ${ResourceActionTable as ra}
+            join ${ResourceTypeTable as rt} on ${ra.resourceTypeId} = ${rt.id}
+            where (${ra.action}, ${rt.name}) in (${actionsWithResourceType})"""
+
+      val inserted = samsql"$insertQuery".update().apply()
+
+      if (inserted != actionsWithResourceType.size) {
+        // in this case some actions that we want to insert did not exist in ResourceActionTable
+        // add them now and rerun the insert ignoring conflicts
+        // this case should happen rarely
+        import SamTypeBinders._
+        val missingActions = samsql"select ${ra.result.action}, ${rt.result.id} from ${ResourceTypeTable as rt} join ${ResourceActionTable as ra} on ${ra.resourceTypeId} = ${rt.id} where (${ra.action}, ${rt.name}) in (${actionsWithResourceType})"
+          .map(rs => (rs.get[ResourceAction](ra.resultName.action), rs.get[ResourceTypePK](rt.resultName.id))).list().apply().toSet
+        insertActions(missingActions)
+
+        val moreInserted = samsql"$insertQuery on conflict do nothing".update().apply()
+
+        inserted + moreInserted
+      } else {
+        inserted
+      }
+    } else {
+      0
     }
   }
 
@@ -387,7 +443,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
         import SamTypeBinders._
         val resourceTypePK = samsql"select ${r.result.resourceTypeId} from ${PolicyTable as p} join ${ResourceTable as r} on ${p.resourceId} = ${r.id} where ${p.id} = ${policyId}"
           .map(rs => rs.get[ResourceTypePK](r.resultName.resourceTypeId)).single().apply().getOrElse(throw new WorkbenchException(s"could not find resource type id for policy id $policyId"))
-        insertActions(actions, resourceTypePK)
+        insertActions(actions.map((_, resourceTypePK)))
 
         val moreInserted = samsql"$insertQuery on conflict do nothing".update().apply()
 
@@ -486,30 +542,32 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
   override def overwritePolicy(newPolicy: AccessPolicy, samRequestContext: SamRequestContext): IO[AccessPolicy] = {
     runInTransaction("overwritePolicy", samRequestContext)({ implicit session =>
       overwritePolicyMembersInternal(newPolicy.id, newPolicy.members)
-      overwritePolicyRolesInternal(newPolicy.id, newPolicy.roles)
-      overwritePolicyActionsInternal(newPolicy.id, newPolicy.actions)
+      overwritePolicyRolesInternal(newPolicy.id, newPolicy.roles, newPolicy.descendantPermissions.flatMap(permissions => permissions.roles.map((_, permissions.resourceType))))
+      overwritePolicyActionsInternal(newPolicy.id, newPolicy.actions, newPolicy.descendantPermissions.flatMap(permissions => permissions.actions.map((_, permissions.resourceType))))
       setPolicyIsPublicInternal(newPolicy.id, newPolicy.public)
 
       newPolicy
     })
   }
 
-  private def overwritePolicyRolesInternal(id: FullyQualifiedPolicyId, roles: Set[ResourceRoleName])(implicit session: DBSession): Int = {
+  private def overwritePolicyRolesInternal(id: FullyQualifiedPolicyId, roles: Set[ResourceRoleName], descendantRoles: Set[(ResourceRoleName, ResourceTypeName)])(implicit session: DBSession): Int = {
     val policyPK = getPolicyPK(id)
 
     val pr = PolicyRoleTable.syntax("pr")
     samsql"delete from ${PolicyRoleTable as pr} where ${pr.resourcePolicyId} = $policyPK".update().apply()
 
     insertPolicyRoles(roles, policyPK)
+    insertDescendantRoles(descendantRoles, policyPK)
   }
 
-  private def overwritePolicyActionsInternal(id: FullyQualifiedPolicyId, actions: Set[ResourceAction])(implicit session: DBSession): Int = {
+  private def overwritePolicyActionsInternal(id: FullyQualifiedPolicyId, actions: Set[ResourceAction], descendantActions: Set[(ResourceAction, ResourceTypeName)])(implicit session: DBSession): Int = {
     val policyPK = getPolicyPK(id)
 
     val pa = PolicyActionTable.syntax("pa")
     samsql"delete from ${PolicyActionTable as pa} where ${pa.resourcePolicyId} = $policyPK".update().apply()
 
     insertPolicyActions(actions, policyPK)
+    insertDescendantActions(descendantActions, policyPK)
   }
 
   private def getPolicyPK(id: FullyQualifiedPolicyId)(implicit session: DBSession): PolicyPK = {
