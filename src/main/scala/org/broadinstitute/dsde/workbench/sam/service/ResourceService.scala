@@ -249,7 +249,19 @@ class ResourceService(
     * @param policyMembership
     * @return
     */
-  def overwritePolicy(resourceType: ResourceType, policyName: AccessPolicyName, resource: FullyQualifiedResourceId, policyMembership: AccessPolicyMembership, samRequestContext: SamRequestContext): IO[AccessPolicy] =
+  def overwritePolicy(resourceType: ResourceType, policyName: AccessPolicyName, resource: FullyQualifiedResourceId, policyMembership: AccessPolicyMembership, samRequestContext: SamRequestContext): IO[AccessPolicy] = {
+    for {
+      policy <- makeCreatablePolicy(policyName, policyMembership, samRequestContext)
+      inheritanceErrors <- validatePolicyNotInherited(FullyQualifiedPolicyId(resource, policyName), samRequestContext)
+      policyErrors <- IO.pure(validatePolicy(resourceType, policy))
+    } yield {
+      (inheritanceErrors ++ policyErrors).toSeq match {
+        case Seq(errorReports) =>
+          throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "You have specified an invalid policy", errorReports))
+        case Seq() => createOrUpdatePolicy(FullyQualifiedPolicyId(resource, policyName), policy, samRequestContext)
+      }
+    }
+
     makeCreatablePolicy(policyName, policyMembership, samRequestContext).flatMap { policy =>
       validatePolicy(resourceType, policy) match {
         case Some(errorReport) =>
@@ -257,6 +269,7 @@ class ResourceService(
         case None => createOrUpdatePolicy(FullyQualifiedPolicyId(resource, policyName), policy, samRequestContext)
       }
     }
+  }
 
   /**
     * Overwrites an existing policy's membership (keyed by resourceType/resourceId/policyName) if it exists
@@ -324,8 +337,6 @@ class ResourceService(
       validateRoles(resourceType, policy) ++
       validateUrlSafe(policy.policyName.value)
 
-    // todo: validate descendant permissions??
-
     if (validationErrors.nonEmpty) {
       Some(ErrorReport("You have specified an invalid policy", validationErrors.toSeq))
     } else None
@@ -374,6 +385,29 @@ class ResourceService(
           actionCauses.toSeq
         ))
     } else None
+  }
+
+  private def validatePolicyNotInherited(policy: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[Option[ErrorReport]] = {
+    for {
+      children <- accessPolicyDAO.listResourceChildren(policy.resource, samRequestContext)
+      policyOpt <- accessPolicyDAO.loadPolicy(policy, samRequestContext)
+    } yield {
+      policyOpt.flatMap { policy =>
+        if (policyInheritedByChildren(policy.descendantPermissions, children)) {
+          Option(ErrorReport(s"Cannot overwrite policy $policy because it applies to existing child resources"))
+        } else {
+          None
+        }
+      }
+    }
+  }
+
+  private def policyInheritedByChildren(descendantPermissions: Set[AccessPolicyDescendantPermissions], children: Set[FullyQualifiedResourceId]): Boolean = {
+    descendantPermissions.exists {
+      case AccessPolicyDescendantPermissions(descendantResourceType, _, _) => children.exists {
+        case FullyQualifiedResourceId(childResourceType, _) => childResourceType == descendantResourceType
+      }
+    }
   }
 
   private def fireGroupUpdateNotification(groupId: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): Future[Unit] =
