@@ -715,40 +715,42 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     managedGroupService.loadManagedGroup(ResourceId(otherAuthDomainGroup), samRequestContext).unsafeRunSync() shouldBe Some(WorkbenchEmail(s"$otherAuthDomainGroup@$emailDomain"))
   }
 
-  "deleteResourceV2" should "delete the resource" in {
-    val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("my-resource"))
-
+  "deleteResourceV2" should "delete a child resource that has a parent" in {
+    val parentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("my-resource-parent"))
+    val childResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("my-resource-child"))
     service.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
-    runAndWait(service.createResource(defaultResourceType, resource.resourceId, dummyUserInfo, samRequestContext))
+    runAndWait(service.createResource(defaultResourceType, parentResource.resourceId, dummyUserInfo, samRequestContext))
+    runAndWait(service.createResource(defaultResourceType, childResource.resourceId, dummyUserInfo, samRequestContext))
+    runAndWait(service.setResourceParent(childResource, parentResource, samRequestContext))
 
-    assert(policyDAO.listAccessPolicies(resource, samRequestContext).unsafeRunSync().nonEmpty)
+    assert(policyDAO.listAccessPolicies(childResource, samRequestContext).unsafeRunSync().nonEmpty)
 
-    runAndWait(service.deleteResourceV2(resource, samRequestContext))
+    runAndWait(service.deleteResourceV2(childResource, samRequestContext))
 
-    assert(policyDAO.listAccessPolicies(resource, samRequestContext).unsafeRunSync().isEmpty)
+    assert(policyDAO.listAccessPolicies(childResource, samRequestContext).unsafeRunSync().isEmpty)
   }
 
   it should "return 400 for a parent resource that has any children" in {
     // create a resource with a child
-    val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("my-resource"))
-    val resourceChild = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("my-resource-child"))
+    val parentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("my-resource-parent"))
+    val childResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("my-resource-child"))
     service.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
-    runAndWait(service.createResource(defaultResourceType, resource.resourceId, dummyUserInfo, samRequestContext))
-    runAndWait(service.createResource(defaultResourceType, resourceChild.resourceId, dummyUserInfo, samRequestContext))
-    runAndWait(service.setResourceParent(resourceChild, resource, samRequestContext))
+    runAndWait(service.createResource(defaultResourceType, parentResource.resourceId, dummyUserInfo, samRequestContext))
+    runAndWait(service.createResource(defaultResourceType, childResource.resourceId, dummyUserInfo, samRequestContext))
+    runAndWait(service.setResourceParent(childResource, parentResource, samRequestContext))
 
-    assert(policyDAO.listAccessPolicies(resource, samRequestContext).unsafeRunSync().nonEmpty)
-    assert(policyDAO.listAccessPolicies(resourceChild, samRequestContext).unsafeRunSync().nonEmpty)
+    assert(policyDAO.listAccessPolicies(parentResource, samRequestContext).unsafeRunSync().nonEmpty)
+    assert(policyDAO.listAccessPolicies(childResource, samRequestContext).unsafeRunSync().nonEmpty)
 
     // try to delete the parent resource and then validate the error
     val exception = intercept[WorkbenchExceptionWithErrorReport] {
-      runAndWait(service.deleteResourceV2(resource, samRequestContext))
+      runAndWait(service.deleteResourceV2(parentResource, samRequestContext))
     }
 
     exception.errorReport.statusCode shouldEqual Option(StatusCodes.BadRequest)
 
     // just to be sure, make sure the parent still exists
-    assert(policyDAO.listAccessPolicies(resource, samRequestContext).unsafeRunSync().nonEmpty)
+    assert(policyDAO.listAccessPolicies(parentResource, samRequestContext).unsafeRunSync().nonEmpty)
   }
 
   "add/remove SubjectToPolicy" should "add/remove subject and tolerate prior (non)existence" in {
