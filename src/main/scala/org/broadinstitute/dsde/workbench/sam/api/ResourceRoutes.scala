@@ -195,6 +195,11 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
       }
     }
 
+  def deleteResourceInternal(resource: FullyQualifiedResourceId, userInfo: UserInfo, samRequestContext: SamRequestContext) =
+    requireAction(resource, SamResourceActions.delete, userInfo.userId, samRequestContext) {
+      complete(resourceService.deleteResource(resource, samRequestContext).map(_ => StatusCodes.NoContent))
+    }
+
   def postDefaultResource(resourceType: ResourceType, resource: FullyQualifiedResourceId, userInfo: UserInfo, samRequestContext: SamRequestContext): server.Route =
     post {
       complete(resourceService.createResource(resourceType, resource.resourceId, userInfo, samRequestContext).map(_ => StatusCodes.NoContent))
