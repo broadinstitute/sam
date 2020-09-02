@@ -970,8 +970,11 @@ paths:
         204:
           description: Successfully deleted resource
           content: {}
+        400:
+          description: Cannot delete a resource with children. Delete the children first then try again.
+          content: {}
         403:
-          description: You do not have permission to perform this action on the resource
+          description: You do not have permission to perform this action on the resource or permissions on the resource's parent
           content: {}
         404:
           description: Resource type does not exist or you are not a member of any
