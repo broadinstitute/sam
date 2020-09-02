@@ -715,7 +715,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     managedGroupService.loadManagedGroup(ResourceId(otherAuthDomainGroup), samRequestContext).unsafeRunSync() shouldBe Some(WorkbenchEmail(s"$otherAuthDomainGroup@$emailDomain"))
   }
 
-  "deleteResourceV2" should "delete a child resource that has a parent" in {
+  it should "delete a child resource that has a parent" in {
     val parentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("my-resource-parent"))
     val childResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("my-resource-child"))
     service.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()

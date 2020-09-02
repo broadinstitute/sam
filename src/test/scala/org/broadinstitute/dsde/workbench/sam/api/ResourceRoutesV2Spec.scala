@@ -509,7 +509,7 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
     }
   }
 
-  "DELETE /api/resources/v2/{resourceTypeName}/{resourceId}" should "204 on a child resource if the user has remove_child on the parent resource" in {
+  "DELETE /api/resources/v1/{resourceTypeName}/{resourceId}" should "204 on a child resource if the user has remove_child on the parent resource" in {
     val fullyQualifiedChildResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("child"))
     val currentParentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("currentParent"))
     val samRoutes = createSamRoutes(Map(defaultResourceType.name -> defaultResourceType))
