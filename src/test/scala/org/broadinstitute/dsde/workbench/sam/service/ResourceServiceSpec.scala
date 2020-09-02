@@ -725,7 +725,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
 
     assert(policyDAO.listAccessPolicies(childResource, samRequestContext).unsafeRunSync().nonEmpty)
 
-    runAndWait(service.deleteResourceV2(childResource, samRequestContext))
+    runAndWait(service.deleteResource(childResource, samRequestContext))
 
     assert(policyDAO.listAccessPolicies(childResource, samRequestContext).unsafeRunSync().isEmpty)
   }
@@ -744,7 +744,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
 
     // try to delete the parent resource and then validate the error
     val exception = intercept[WorkbenchExceptionWithErrorReport] {
-      runAndWait(service.deleteResourceV2(parentResource, samRequestContext))
+      runAndWait(service.deleteResource(parentResource, samRequestContext))
     }
 
     exception.errorReport.statusCode shouldEqual Option(StatusCodes.BadRequest)

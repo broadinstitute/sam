@@ -137,9 +137,7 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
             withResourceType(ResourceTypeName(resourceTypeName)) { resourceType =>
               pathPrefix(Segment) { resourceId =>
                 val resource = FullyQualifiedResourceId(resourceType.name, ResourceId(resourceId))
-                pathEndOrSingleSlash {
-                  deleteResourceV2(resource, userInfo, samRequestContext)
-                } ~ path("parent") {
+                path("parent") {
                   getResourceParent(resource, userInfo, samRequestContext) ~
                   setResourceParent(resource, userInfo, samRequestContext) ~
                   deleteResourceParent(resource, userInfo, samRequestContext)
@@ -187,11 +185,6 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
     }
 
   def deleteResource(resource: FullyQualifiedResourceId, userInfo: UserInfo, samRequestContext: SamRequestContext): server.Route =
-    delete {
-      deleteResourceInternal(resource, userInfo, samRequestContext)
-    }
-
-  def deleteResourceV2(resource: FullyQualifiedResourceId, userInfo: UserInfo, samRequestContext: SamRequestContext): server.Route =
     delete {
       withCurrentParentOption(resource, samRequestContext) {
         case Some(currentResourceParent) =>
