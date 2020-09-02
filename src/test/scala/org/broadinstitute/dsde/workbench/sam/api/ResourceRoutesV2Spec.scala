@@ -540,18 +540,4 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
     }
   }
 
-  it should "happy path without any children/parents" in {
-    val fullyQualifiedResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("child"))
-    val samRoutes = createSamRoutes(Map(defaultResourceType.name -> defaultResourceType))
-
-    setupParentRoutes(samRoutes, fullyQualifiedResource,
-      actionsOnChild = Set(SamResourceActions.setParent, SamResourceActions.delete),
-      actionsOnCurrentParent = Set(SamResourceActions.removeChild))
-
-    //Delete the resource
-    Delete(s"/api/resources/v1/${defaultResourceType.name}/${fullyQualifiedResource.resourceId.value}") ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.NoContent
-    }
-  }
-
 }
