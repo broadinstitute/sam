@@ -20,6 +20,8 @@ import org.scalatest.mockito.MockitoSugar
 import org.scalatest.{AppendedClues, FlatSpec, Matchers}
 import spray.json.DefaultJsonProtocol._
 
+import scala.concurrent.Future
+
 
 class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with ScalatestRouteTest with AppendedClues with MockitoSugar {
 
@@ -117,6 +119,10 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
         when(samRoutes.policyEvaluatorService.listResourceAccessPoliciesForUser(mockitoEq(newParent), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
           .thenReturn(IO(Set[AccessPolicyWithoutMembers]()))
       }
+    }
+
+    if (accessToChild && accessToCurrentParent) {
+      when(samRoutes.resourceService.deleteResource(mockitoEq(childResource), any[SamRequestContext])).thenReturn(Future.unit)
     }
   }
 
@@ -502,4 +508,50 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
       status shouldEqual StatusCodes.NotFound
     }
   }
+
+  "DELETE /api/resources/v2/{resourceTypeName}/{resourceId}" should "204 on a child resource if the user has remove_child on the parent resource" in {
+    val fullyQualifiedChildResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("child"))
+    val currentParentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("currentParent"))
+    val samRoutes = createSamRoutes(Map(defaultResourceType.name -> defaultResourceType))
+
+    setupParentRoutes(samRoutes, fullyQualifiedChildResource,
+      currentParentOpt = Option(currentParentResource),
+      actionsOnChild = Set(SamResourceActions.setParent, SamResourceActions.delete),
+      actionsOnCurrentParent = Set(SamResourceActions.removeChild))
+
+    //Delete the resource
+    Delete(s"/api/resources/v1/${defaultResourceType.name}/${fullyQualifiedChildResource.resourceId.value}") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+    }
+  }
+
+  it should "403 if user is missing remove_child on parent resource if it exists" in {
+    val fullyQualifiedChildResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("child"))
+    val currentParentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("currentParent"))
+    val samRoutes = createSamRoutes(Map(defaultResourceType.name -> defaultResourceType))
+
+    setupParentRoutes(samRoutes, fullyQualifiedChildResource,
+      currentParentOpt = Option(currentParentResource),
+      actionsOnChild = Set(SamResourceActions.setParent, SamResourceActions.delete),
+      missingActionsOnCurrentParent = Set(SamResourceActions.removeChild))
+
+    Delete(s"/api/resources/v1/${defaultResourceType.name}/${fullyQualifiedChildResource.resourceId.value}") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Forbidden
+    }
+  }
+
+  it should "happy path without any children/parents" in {
+    val fullyQualifiedResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("child"))
+    val samRoutes = createSamRoutes(Map(defaultResourceType.name -> defaultResourceType))
+
+    setupParentRoutes(samRoutes, fullyQualifiedResource,
+      actionsOnChild = Set(SamResourceActions.setParent, SamResourceActions.delete),
+      actionsOnCurrentParent = Set(SamResourceActions.removeChild))
+
+    //Delete the resource
+    Delete(s"/api/resources/v1/${defaultResourceType.name}/${fullyQualifiedResource.resourceId.value}") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+    }
+  }
+
 }
