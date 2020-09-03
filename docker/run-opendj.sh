@@ -10,6 +10,10 @@ start()  {
             CONTAINER_NAME=opendj-${BUILD_TAG}
         fi
     fi
+
+    echo "attempting to remove old $CONTAINER_NAME container..."
+        docker rm -f $CONTAINER_NAME || echo "docker rm failed. nothing to rm."
+
     echo "starting up container $CONTAINER_NAME..."
     docker run --name $CONTAINER_NAME -e ROOTPASS="testtesttest" -e BASE_DN=dc=dsde-dev,dc=broadinstitute,dc=org -v ${PWD}/docker/opendjsetup.sh:/opt/opendj/bootstrap/setup.sh -v ${PWD}/docker/example-v1.json:/opt/example-v1.json -d -p $PORT broadinstitute/openam:opendj
     echo "sleeping 40 seconds til opendj is up and happy. This does not check anything."

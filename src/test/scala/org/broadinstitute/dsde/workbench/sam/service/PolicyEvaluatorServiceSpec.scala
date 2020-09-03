@@ -76,7 +76,7 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
     constrainableReaderRoleName
   )
   private val constrainablePolicyMembership =
-    AccessPolicyMembership(Set(dummyUserInfo.userEmail), Set(constrainableViewAction), Set(constrainableReaderRoleName))
+    AccessPolicyMembership(Set(dummyUserInfo.userEmail), Set(constrainableViewAction), Set(constrainableReaderRoleName), Set.empty)
 
   private val managedGroupResourceType = configResourceTypes.getOrElse(
     ResourceTypeName("managed-group"),
@@ -284,7 +284,7 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
       // create resource that dummyUserInfo is a member of for constrainableResourceType
       _ <- constrainableService.createResource(constrainableResourceType, resource.resourceId, Map(viewPolicyName -> constrainablePolicyMembership), resource.authDomain, dummyUserInfo.userId, samRequestContext)
       _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(TestSupport.genGoogleSubjectId()), user.userEmail, Some(TestSupport.genIdentityConcentratorId())), samRequestContext)
-      _ <- constrainableService.createPolicy(policy.id, policy.members + user.userId, policy.roles, policy.actions, samRequestContext)
+      _ <- constrainableService.createPolicy(policy.id, policy.members + user.userId, policy.roles, policy.actions, Set.empty, samRequestContext)
       r <- constrainableService.policyEvaluatorService.listUserAccessPolicies(constrainableResourceType.name, user.userId, samRequestContext)
     } yield {
       val expected = Set(UserPolicyResponse(resource.resourceId, policy.id.accessPolicyName, resource.authDomain, resource.authDomain, false))
@@ -516,10 +516,10 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
       _ <- service.createResource(otherResourceType, resource3.resourceId, dummyUserInfo, samRequestContext)
       _ <- service.createResource(otherResourceType, resource4.resourceId, dummyUserInfo, samRequestContext)
 
-      _ <- service.overwritePolicy(defaultResourceType, AccessPolicyName("in-it"), resource1, AccessPolicyMembership(Set(dummyUserInfo.userEmail), Set(ResourceAction("alter_policies")), Set.empty), samRequestContext)
-      _ <- service.overwritePolicy(defaultResourceType, AccessPolicyName("not-in-it"), resource1, AccessPolicyMembership(Set.empty, Set(ResourceAction("alter_policies")), Set.empty), samRequestContext)
-      _ <- service.overwritePolicy(otherResourceType, AccessPolicyName("in-it"), resource3, AccessPolicyMembership(Set(dummyUserInfo.userEmail), Set(ResourceAction("alter_policies")), Set.empty), samRequestContext)
-      _ <- service.overwritePolicy(otherResourceType, AccessPolicyName("not-in-it"), resource3, AccessPolicyMembership(Set.empty, Set(ResourceAction("alter_policies")), Set.empty), samRequestContext)
+      _ <- service.overwritePolicy(defaultResourceType, AccessPolicyName("in-it"), resource1, AccessPolicyMembership(Set(dummyUserInfo.userEmail), Set(ResourceAction("alter_policies")), Set.empty, Set.empty), samRequestContext)
+      _ <- service.overwritePolicy(defaultResourceType, AccessPolicyName("not-in-it"), resource1, AccessPolicyMembership(Set.empty, Set(ResourceAction("alter_policies")), Set.empty, Set.empty), samRequestContext)
+      _ <- service.overwritePolicy(otherResourceType, AccessPolicyName("in-it"), resource3, AccessPolicyMembership(Set(dummyUserInfo.userEmail), Set(ResourceAction("alter_policies")), Set.empty, Set.empty), samRequestContext)
+      _ <- service.overwritePolicy(otherResourceType, AccessPolicyName("not-in-it"), resource3, AccessPolicyMembership(Set.empty, Set(ResourceAction("alter_policies")), Set.empty, Set.empty), samRequestContext)
       r <- service.policyEvaluatorService.listUserAccessPolicies(defaultResourceType.name, dummyUserInfo.userId, samRequestContext)
     } yield {
       r should contain theSameElementsAs Set(
@@ -589,7 +589,7 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
       // create resource that dummyUserInfo is a member of for constrainableResourceType
       _ <- constrainableService.createResource(constrainableResourceType, resource.resourceId, Map(viewPolicyName -> constrainablePolicyMembership), resource.authDomain, dummyUserInfo.userId, samRequestContext)
       _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(TestSupport.genGoogleSubjectId()), user.userEmail, Some(TestSupport.genIdentityConcentratorId())), samRequestContext)
-      _ <- constrainableService.createPolicy(policy.id, policy.members + user.userId, policy.roles, policy.actions, samRequestContext)
+      _ <- constrainableService.createPolicy(policy.id, policy.members + user.userId, policy.roles, policy.actions, Set.empty, samRequestContext)
       r <- constrainableService.policyEvaluatorService.listUserAccessPolicies(constrainableResourceType.name, user.userId, samRequestContext)
     } yield {
       val expected = Set(UserPolicyResponse(resource.resourceId, policy.id.accessPolicyName, resource.authDomain, resource.authDomain, false))

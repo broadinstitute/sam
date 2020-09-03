@@ -193,7 +193,7 @@ class GoogleExtensionRoutesSpec extends GoogleExtensionRoutesSpecHelper with Sca
   "GET /api/google/petServiceAccount/{project}/{userEmail}" should "200 with a key" in {
     val (defaultUserInfo, samRoutes, expectedJson) = setupPetSATest()
 
-    val members = AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set(GoogleExtensions.getPetPrivateKeyAction), Set.empty)
+    val members = AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set(GoogleExtensions.getPetPrivateKeyAction), Set.empty, Set.empty)
     Put(s"/api/resource/${CloudExtensions.resourceTypeName.value}/${GoogleExtensions.resourceId.value}/policies/foo", members) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
     }
@@ -209,7 +209,7 @@ class GoogleExtensionRoutesSpec extends GoogleExtensionRoutesSpecHelper with Sca
   it should "404 when user does not exist" in {
     val (defaultUserInfo, samRoutes, _) = setupPetSATest()
 
-    val members = AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set(GoogleExtensions.getPetPrivateKeyAction), Set.empty)
+    val members = AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set(GoogleExtensions.getPetPrivateKeyAction), Set.empty, Set.empty)
     Put(s"/api/resource/${CloudExtensions.resourceTypeName.value}/${GoogleExtensions.resourceId.value}/policies/foo", members) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
     }
