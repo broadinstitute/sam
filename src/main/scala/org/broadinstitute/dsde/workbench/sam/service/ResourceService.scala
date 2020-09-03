@@ -199,11 +199,7 @@ class ResourceService(
   // Resources with children cannot be deleted and will throw a 400.
   def deleteResource(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): Future[Unit] =
     for {
-      // First check if children exist. If so, then throw a 400.
-      _ <- hasChildren(resource, samRequestContext).unsafeToFuture() map {
-        case true => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "Cannot delete a resource with children. Delete the children first then try again."))
-        case false =>
-      }
+      _ <- checkNoChildren(resource, samRequestContext).unsafeToFuture()
 
       // remove from cloud extensions first so a failure there does not leave ldap in a bad state
       policiesToDelete <- cloudDeletePolicies(resource, samRequestContext)
@@ -212,11 +208,14 @@ class ResourceService(
       _ <- maybeDeleteResource(resource, samRequestContext)
     } yield ()
 
-  /** Checks if a resource has any children */
-  def hasChildren(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Boolean] = {
-    for {
-      children <- listResourceChildren(resource, samRequestContext)
-    } yield (children.nonEmpty)
+  /** Check if a resource has any children. If so, then throw a 400. */
+  def checkNoChildren(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] = {
+    listResourceChildren(resource, samRequestContext) map { list =>
+      list.nonEmpty match {
+        case true => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "Cannot delete a resource with children. Delete the children first then try again."))
+        case false =>
+      }
+    }
   }
 
   // TODO: CA-993 Once we can check if a policy applies to any children, we need to update this to throw if we try
