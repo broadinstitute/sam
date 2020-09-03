@@ -211,10 +211,7 @@ class ResourceService(
   /** Check if a resource has any children. If so, then throw a 400. */
   def checkNoChildren(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] = {
     listResourceChildren(resource, samRequestContext) map { list =>
-      list.nonEmpty match {
-        case true => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "Cannot delete a resource with children. Delete the children first then try again."))
-        case false =>
-      }
+      if (list.nonEmpty) throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "Cannot delete a resource with children. Delete the children first then try again."))
     }
   }
 
