@@ -197,6 +197,7 @@ class ResourceService(
   //      but not the Resource itself, thereby orphaning the Resource so that it cannot be used or accessed anymore and
   //      preventing a new Resource with the same ID from being created
   // Resources with children cannot be deleted and will throw a 400.
+  @throws(classOf[WorkbenchExceptionWithErrorReport])
   def deleteResource(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): Future[Unit] =
     for {
       _ <- checkNoChildren(resource, samRequestContext).unsafeToFuture()
