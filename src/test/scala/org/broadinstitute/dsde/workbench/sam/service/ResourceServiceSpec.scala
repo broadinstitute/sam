@@ -730,7 +730,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     assert(policyDAO.listAccessPolicies(childResource, samRequestContext).unsafeRunSync().isEmpty)
   }
 
-  it should "return 400 for a parent resource that has any children" in {
+  it should "fail deleting a parent resource that has children" in {
     // create a resource with a child
     val parentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("my-resource-parent"))
     val childResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("my-resource-child"))
@@ -749,7 +749,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
 
     exception.errorReport.statusCode shouldEqual Option(StatusCodes.BadRequest)
 
-    // just to be sure, make sure the parent still exists
+    // make sure the parent still exists
     assert(policyDAO.listAccessPolicies(parentResource, samRequestContext).unsafeRunSync().nonEmpty)
   }
 
