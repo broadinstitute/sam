@@ -322,7 +322,7 @@ class GoogleExtensions(
             _ <- IO.fromFuture(IO(withProxyEmail(user.id) { proxyEmail =>
               // Add group member by uniqueId instead of email to avoid race condition
               // See: https://broadworkbench.atlassian.net/browse/CA-1005
-              googleDirectoryDAO.addMemberToGroup(proxyEmail, sa.subjectId)
+              googleDirectoryDAO.addServiceAccountToGroup(proxyEmail, sa)
             }))
           } yield sa
         // SA already exists in google, use it
