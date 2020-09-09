@@ -145,10 +145,17 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
                 path("children") {
                   getResourceChildren(resource, userInfo, samRequestContext)
                 } ~
-                pathPrefix ("policies" / Segment) { policyName =>
-                  val policyId = FullyQualifiedPolicyId(resource, AccessPolicyName(policyName))
+                pathPrefix ("policies") {
                   pathEndOrSingleSlash {
-                    deletePolicy(policyId, userInfo, samRequestContext)
+                    getResourcePolicies(resource, userInfo, samRequestContext)
+                  } ~ pathPrefix(Segment) { policyName =>
+                    val policyId = FullyQualifiedPolicyId(resource, AccessPolicyName(policyName))
+
+                    pathEndOrSingleSlash {
+                      getPolicy(policyId, userInfo, samRequestContext) ~
+                      putPolicyOverwrite(resourceType, policyId, userInfo, samRequestContext) ~
+                      deletePolicy(policyId, userInfo, samRequestContext)
+                    }
                   }
                 }
               }

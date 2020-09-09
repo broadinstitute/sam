@@ -249,6 +249,7 @@ class ResourceService(
     * @param policyMembership
     * @return
     */
+  @throws(classOf[WorkbenchExceptionWithErrorReport])
   def overwritePolicy(resourceType: ResourceType, policyName: AccessPolicyName, resource: FullyQualifiedResourceId, policyMembership: AccessPolicyMembership, samRequestContext: SamRequestContext): IO[AccessPolicy] = {
     for {
       policy <- makeCreatablePolicy(policyName, policyMembership, samRequestContext)
