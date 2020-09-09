@@ -7,8 +7,8 @@ import akka.http.scaladsl.testkit.ScalatestRouteTest
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport.genGoogleSubjectId
+import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.directory.MockDirectoryDAO
-import org.broadinstitute.dsde.workbench.sam.{TestSupport, errorReportSource}
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.MockAccessPolicyDAO
@@ -24,6 +24,8 @@ import scala.concurrent.Future
 
 
 class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with ScalatestRouteTest with AppendedClues with MockitoSugar {
+
+  implicit val errorReportSource = ErrorReportSource("sam")
 
   val defaultUserInfo = UserInfo(OAuth2BearerToken("accessToken"), WorkbenchUserId("user1"), WorkbenchEmail("user1@example.com"), 0)
 
@@ -55,6 +57,26 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
     new TestSamRoutes(mockResourceService, policyEvaluatorService, mockUserService, mockStatusService, mockManagedGroupService, userInfo, directoryDAO)
   }
 
+  private def mockPermissionsForResource(samRoutes: SamRoutes,
+                                         resource: FullyQualifiedResourceId,
+                                         actionsOnResource: Set[ResourceAction] = Set.empty,
+                                         missingActionsOnResource: Set[ResourceAction] = Set.empty,
+                                         accessToResource: Boolean = true): Unit = {
+    val otherPolicy = AccessPolicyWithoutMembers(FullyQualifiedPolicyId(resource, AccessPolicyName("not_owner")), WorkbenchEmail(""), Set.empty, Set.empty, false)
+    actionsOnResource.map(action => when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(resource), mockitoEq(action), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
+      .thenReturn(IO(true)))
+    missingActionsOnResource.map(action => when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(resource), mockitoEq(action), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
+      .thenReturn(IO(false)))
+
+    if (accessToResource) {
+      when(samRoutes.policyEvaluatorService.listResourceAccessPoliciesForUser(mockitoEq(resource), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
+        .thenReturn(IO(Set(otherPolicy)))
+    } else {
+      when(samRoutes.policyEvaluatorService.listResourceAccessPoliciesForUser(mockitoEq(resource), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
+        .thenReturn(IO(Set[AccessPolicyWithoutMembers]()))
+    }
+  }
+
   // mock out a bunch of calls in ResourceService and PolicyEvaluatorService to reduce bloat in /parent tests
   private def setupParentRoutes(samRoutes: SamRoutes,
                                 childResource: FullyQualifiedResourceId,
@@ -69,37 +91,23 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
                                 accessToChild: Boolean = true,
                                 accessToCurrentParent: Boolean = true,
                                 accessToNewParent: Boolean = true): Unit = {
-    val otherPolicy = AccessPolicyWithoutMembers(FullyQualifiedPolicyId(childResource, AccessPolicyName("not_owner")), WorkbenchEmail(""), Set.empty, Set.empty, false)
+    // mock responses for child resource
+    mockPermissionsForResource(samRoutes, childResource,
+      actionsOnResource = actionsOnChild,
+      missingActionsOnResource = missingActionsOnChild,
+      accessToResource = accessToChild)
 
-    actionsOnChild.map(action => when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(childResource), mockitoEq(action), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(true)))
-    missingActionsOnChild.map(action => when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(childResource), mockitoEq(action), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(false)))
-    if (accessToChild) {
-      when(samRoutes.policyEvaluatorService.listResourceAccessPoliciesForUser(mockitoEq(childResource), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-        .thenReturn(IO(Set(otherPolicy)))
-    } else {
-      when(samRoutes.policyEvaluatorService.listResourceAccessPoliciesForUser(mockitoEq(childResource), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-        .thenReturn(IO(Set[AccessPolicyWithoutMembers]()))
-    }
-
+    // mock responses for current parent resource
     currentParentOpt match {
       case Some(currentParent) =>
         when(samRoutes.resourceService.getResourceParent(mockitoEq(childResource), any[SamRequestContext]))
           .thenReturn(IO(Option(currentParent)))
-        actionsOnCurrentParent.map(action => when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(currentParent), mockitoEq(action), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-          .thenReturn(IO(true)))
-        missingActionsOnCurrentParent.map(action => when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(currentParent), mockitoEq(action), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-          .thenReturn(IO(false)))
-        if (accessToCurrentParent) {
-          when(samRoutes.policyEvaluatorService.listResourceAccessPoliciesForUser(mockitoEq(currentParent), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-            .thenReturn(IO(Set(otherPolicy)))
-        } else {
-          when(samRoutes.policyEvaluatorService.listResourceAccessPoliciesForUser(mockitoEq(currentParent), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-            .thenReturn(IO(Set[AccessPolicyWithoutMembers]()))
-        }
         when(samRoutes.resourceService.deleteResourceParent(mockitoEq(childResource), any[SamRequestContext]))
           .thenReturn(IO.pure(true))
+        mockPermissionsForResource(samRoutes, currentParent,
+          actionsOnResource = actionsOnCurrentParent,
+          missingActionsOnResource = missingActionsOnCurrentParent,
+          accessToResource = accessToCurrentParent)
       case None =>
         when(samRoutes.resourceService.getResourceParent(mockitoEq(childResource), any[SamRequestContext]))
           .thenReturn(IO(None))
@@ -107,20 +115,14 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
           .thenReturn(IO.pure(false))
     }
 
+    // mock responses for new parent resource
     newParentOpt.map { newParent =>
       when(samRoutes.resourceService.setResourceParent(mockitoEq(childResource), mockitoEq(newParent), any[SamRequestContext]))
         .thenReturn(IO.unit)
-      actionsOnNewParent.map(action => when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(newParent), mockitoEq(action), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-        .thenReturn(IO(true)))
-      missingActionsOnNewParent.map(action => when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(newParent), mockitoEq(action), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-        .thenReturn(IO(false)))
-      if (accessToNewParent) {
-        when(samRoutes.policyEvaluatorService.listResourceAccessPoliciesForUser(mockitoEq(newParent), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-          .thenReturn(IO(Set(otherPolicy)))
-      } else {
-        when(samRoutes.policyEvaluatorService.listResourceAccessPoliciesForUser(mockitoEq(newParent), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-          .thenReturn(IO(Set[AccessPolicyWithoutMembers]()))
-      }
+      mockPermissionsForResource(samRoutes, newParent,
+        actionsOnResource = actionsOnNewParent,
+        missingActionsOnResource = missingActionsOnNewParent,
+        accessToResource = accessToNewParent)
     }
 
     if (accessToChild && accessToCurrentParent) {
@@ -435,11 +437,10 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
     val parent = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("parent"))
 
     val samRoutes = createSamRoutes()
-    when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(parent), mockitoEq(SamResourceActions.listChildren), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(true))
+    mockPermissionsForResource(samRoutes, parent, actionsOnResource = Set(SamResourceActions.listChildren))
+
     when(samRoutes.resourceService.listResourceChildren(mockitoEq(parent), any[SamRequestContext]))
       .thenReturn(IO(Set(child1, child2)))
-
 
     Get(s"/api/resources/v2/${defaultResourceType.name}/${parent.resourceId.value}/children") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
@@ -452,10 +453,7 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
     val otherPolicy = AccessPolicyWithoutMembers(FullyQualifiedPolicyId(parent, AccessPolicyName("not_owner")), WorkbenchEmail(""), Set.empty, Set.empty, false)
 
     val samRoutes = createSamRoutes()
-    when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(parent), mockitoEq(SamResourceActions.listChildren), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(false))
-    when(samRoutes.policyEvaluatorService.listResourceAccessPoliciesForUser(mockitoEq(parent), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(Set(otherPolicy)))
+    mockPermissionsForResource(samRoutes, parent, missingActionsOnResource = Set(SamResourceActions.listChildren))
 
     Get(s"/api/resources/v2/${defaultResourceType.name}/${parent.resourceId.value}/children") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Forbidden
@@ -466,10 +464,10 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
     val parent = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("parent"))
 
     val samRoutes = createSamRoutes()
-    when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(parent), mockitoEq(SamResourceActions.listChildren), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(false))
-    when(samRoutes.policyEvaluatorService.listResourceAccessPoliciesForUser(mockitoEq(parent), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(Set[AccessPolicyWithoutMembers]()))
+
+    mockPermissionsForResource(samRoutes, parent,
+      missingActionsOnResource = Set(SamResourceActions.listChildren),
+      accessToResource = false)
 
     Get(s"/api/resources/v2/${defaultResourceType.name}/${parent.resourceId.value}/children") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
@@ -481,10 +479,9 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
     val policyToDelete = FullyQualifiedPolicyId(resource, AccessPolicyName("policyToDelete"))
 
     val samRoutes = createSamRoutes()
-    when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(resource), mockitoEq(SamResourceActions.deletePolicy(policyToDelete.accessPolicyName)), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(true))
-    when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(resource), mockitoEq(SamResourceActions.alterPolicies), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(true))
+
+    mockPermissionsForResource(samRoutes, resource,
+      actionsOnResource = Set(SamResourceActions.alterPolicies, SamResourceActions.deletePolicy(policyToDelete.accessPolicyName)))
     when(samRoutes.resourceService.deletePolicy(mockitoEq(policyToDelete), any[SamRequestContext]))
       .thenReturn(IO.unit)
 
@@ -499,12 +496,9 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
     val otherPolicy = AccessPolicyWithoutMembers(FullyQualifiedPolicyId(resource, AccessPolicyName("not_owner")), WorkbenchEmail(""), Set.empty, Set.empty, false)
 
     val samRoutes = createSamRoutes()
-    when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(resource), mockitoEq(SamResourceActions.deletePolicy(policyToDelete.accessPolicyName)), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(false))
-    when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(resource), mockitoEq(SamResourceActions.alterPolicies), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(false))
-    when(samRoutes.policyEvaluatorService.listResourceAccessPoliciesForUser(mockitoEq(resource), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(Set(otherPolicy)))
+
+    mockPermissionsForResource(samRoutes, resource,
+      missingActionsOnResource = Set(SamResourceActions.alterPolicies, SamResourceActions.deletePolicy(policyToDelete.accessPolicyName)))
 
     Delete(s"/api/resources/v2/${resource.resourceTypeName}/${resource.resourceId}/policies/${policyToDelete.accessPolicyName}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Forbidden
@@ -516,12 +510,10 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
     val policyToDelete = FullyQualifiedPolicyId(resource, AccessPolicyName("policyToDelete"))
 
     val samRoutes = createSamRoutes()
-    when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(resource), mockitoEq(SamResourceActions.deletePolicy(policyToDelete.accessPolicyName)), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(false))
-    when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(resource), mockitoEq(SamResourceActions.alterPolicies), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(false))
-    when(samRoutes.policyEvaluatorService.listResourceAccessPoliciesForUser(mockitoEq(resource), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-      .thenReturn(IO(Set[AccessPolicyWithoutMembers]()))
+
+    mockPermissionsForResource(samRoutes, resource,
+      missingActionsOnResource = Set(SamResourceActions.alterPolicies, SamResourceActions.deletePolicy(policyToDelete.accessPolicyName)),
+      accessToResource = false)
 
     Delete(s"/api/resources/v2/${resource.resourceTypeName}/${resource.resourceId}/policies/${policyToDelete.accessPolicyName}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
@@ -559,6 +551,61 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
     }
   }
 
+  "GET /api/resources/v2/{resourceType}/{resourceId}/policies/{policyName}" should "200 on existing policy of a resource with read_policies" in {
+    val members = AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set.empty, Set.empty, Set.empty)
+    val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("resource"))
+    val policyName = AccessPolicyName("policy")
+
+    val samRoutes = createSamRoutes()
+
+    mockPermissionsForResource(samRoutes, resource,
+      actionsOnResource = Set(SamResourceActions.readPolicies))
+
+    // mock response to load policy
+    when(samRoutes.resourceService.loadResourcePolicy(mockitoEq(FullyQualifiedPolicyId(resource, policyName)), any[SamRequestContext]))
+      .thenReturn(IO(Option(members)))
+
+    Get(s"/api/resources/v2/${resource.resourceTypeName}/${resource.resourceId}/policies/${policyName.value}") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[AccessPolicyMembership] shouldEqual members
+    }
+  }
+
+  it should "200 on existing policy if user can read just that policy" in {
+    val members = AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set.empty, Set.empty, Set.empty)
+    val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("resource"))
+    val policyName = AccessPolicyName("policy")
+
+    val samRoutes = createSamRoutes()
+
+    mockPermissionsForResource(samRoutes, resource,
+      actionsOnResource = Set(SamResourceActions.readPolicy(policyName)),
+      missingActionsOnResource = Set(SamResourceActions.readPolicies))
+
+    // mock response to load policy
+    when(samRoutes.resourceService.loadResourcePolicy(mockitoEq(FullyQualifiedPolicyId(resource, policyName)), any[SamRequestContext]))
+      .thenReturn(IO(Option(members)))
+
+    Get(s"/api/resources/v2/${resource.resourceTypeName}/${resource.resourceId}/policies/${policyName.value}") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[AccessPolicyMembership] shouldEqual members
+    }
+  }
+
+  it should "403 on existing policy of a resource without read policies" in {
+    val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("resource"))
+    val policyName = AccessPolicyName("policy")
+
+    val samRoutes = createSamRoutes()
+
+    mockPermissionsForResource(samRoutes, resource,
+      missingActionsOnResource = Set(SamResourceActions.readPolicies, SamResourceActions.readPolicy(policyName)))
+
+    Get(s"/api/resources/v2/${resource.resourceTypeName}/${resource.resourceId}/policies/${policyName.value}") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Forbidden
+    }
+  }
+
   it should "400 when attempting to delete a resource with children" in {
     val childResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("child"))
     val parentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("parent"))
@@ -579,4 +626,165 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
     }
   }
 
+  it should "404 on non existing policy of a resource" in {
+    val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("resource"))
+    val policyName = AccessPolicyName("policy")
+
+    val samRoutes = createSamRoutes()
+
+    mockPermissionsForResource(samRoutes, resource,
+      missingActionsOnResource = Set(SamResourceActions.readPolicies, SamResourceActions.readPolicy(policyName)),
+      accessToResource = false)
+
+    Get(s"/api/resources/v2/${resource.resourceTypeName}/${resource.resourceId}/policies/${policyName.value}") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
+    }
+  }
+
+  "PUT /api/resources/v1/{resourceType}/{resourceId}/policies/{policyName}" should "201 on a new policy being created for a resource" in {
+    val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("resource"))
+    val policyName = AccessPolicyName("policy")
+    val members = AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set(ResourceAction("can_compute")), Set.empty, Set.empty)
+    val policy = AccessPolicy(FullyQualifiedPolicyId(resource, policyName), Set(defaultUserInfo.userId), WorkbenchEmail("policy@example.com"), members.roles, members.actions, members.descendantPermissions, false)
+
+    val samRoutes = createSamRoutes()
+    mockPermissionsForResource(samRoutes, resource,
+      actionsOnResource = Set(SamResourceActions.alterPolicies))
+
+    when(samRoutes.resourceService.overwritePolicy(any[ResourceType], mockitoEq(policyName), mockitoEq(resource), mockitoEq(members), any[SamRequestContext]))
+      .thenReturn(IO(policy))
+
+    Put(s"/api/resources/v2/${resource.resourceTypeName}/${resource.resourceId}/policies/${policyName}", members) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Created
+    }
+  }
+
+  it should "201 on a policy being updated" in {
+    val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("resource"))
+    val policyName = AccessPolicyName("policy")
+    val members = AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set(ResourceAction("can_compute")), Set.empty, Set.empty)
+    val policy = AccessPolicy(FullyQualifiedPolicyId(resource, policyName), Set(defaultUserInfo.userId), WorkbenchEmail("policy@example.com"), members.roles, members.actions, members.descendantPermissions, false)
+
+    val samRoutes = createSamRoutes()
+    mockPermissionsForResource(samRoutes, resource,
+      actionsOnResource = Set(SamResourceActions.alterPolicies))
+
+    when(samRoutes.resourceService.overwritePolicy(any[ResourceType], mockitoEq(policyName), mockitoEq(resource), mockitoEq(members), any[SamRequestContext]))
+      .thenReturn(IO(policy))
+
+    Put(s"/api/resources/v2/${resource.resourceTypeName}/${resource.resourceId}/policies/${policyName}", members) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Created
+    }
+
+    // update existing policy
+    val members2 = AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set(ResourceAction("can_compute"), ResourceAction("new_action")), Set.empty, Set.empty)
+    val policy2 = AccessPolicy(FullyQualifiedPolicyId(resource, policyName), Set(defaultUserInfo.userId), WorkbenchEmail("policy@example.com"), members2.roles, members2.actions, members2.descendantPermissions, false)
+    when(samRoutes.resourceService.overwritePolicy(any[ResourceType], mockitoEq(policyName), mockitoEq(resource), mockitoEq(members2), any[SamRequestContext]))
+      .thenReturn(IO(policy2))
+
+    Put(s"/api/resources/v2/${resource.resourceTypeName}/${resource.resourceId}/policies/${policyName}", members2) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Created
+    }
+  }
+
+  it should "400 when creating an invalid policy" in {
+    val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("resource"))
+    val policyName = AccessPolicyName("policy")
+    val members = AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set(ResourceAction("can_compute")), Set.empty, Set.empty)
+
+    val samRoutes = createSamRoutes()
+    mockPermissionsForResource(samRoutes, resource,
+      actionsOnResource = Set(SamResourceActions.alterPolicies))
+
+    when(samRoutes.resourceService.overwritePolicy(any[ResourceType], mockitoEq(policyName), mockitoEq(resource), mockitoEq(members), any[SamRequestContext]))
+      .thenReturn(IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "You have specified an invalid policy"))))
+
+    Put(s"/api/resources/v2/${resource.resourceTypeName}/${resource.resourceId}/policies/${policyName}", members) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.BadRequest
+    }
+  }
+
+  it should "403 when creating a policy on a resource when the user doesn't have alter_policies permission (but can see the resource)" in {
+    val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("resource"))
+    val policyName = AccessPolicyName("policy")
+    val members = AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set(ResourceAction("can_compute")), Set.empty, Set.empty)
+
+    val samRoutes = createSamRoutes()
+    mockPermissionsForResource(samRoutes, resource,
+      missingActionsOnResource = Set(SamResourceActions.alterPolicies))
+
+    Put(s"/api/resources/v2/${resource.resourceTypeName}/${resource.resourceId}/policies/${policyName}", members) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Forbidden
+    }
+  }
+
+  it should "404 when creating a policy on a resource that the user doesnt have permission to see" in {
+    val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("resource"))
+    val policyName = AccessPolicyName("policy")
+    val members = AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set(ResourceAction("can_compute")), Set.empty, Set.empty)
+
+    val samRoutes = createSamRoutes()
+    mockPermissionsForResource(samRoutes, resource,
+      missingActionsOnResource = Set(SamResourceActions.alterPolicies),
+      accessToResource = false)
+
+    Put(s"/api/resources/v2/${resource.resourceTypeName}/${resource.resourceId}/policies/${policyName}", members) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
+    }
+  }
+
+  "GET /api/resources/v1/{resourceType}/{resourceId}/policies" should "200 when listing policies for a resource and user has read_policies permission" in {
+    val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("resource"))
+    val policyName = AccessPolicyName("policy")
+    val members = AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set(ResourceAction("can_compute")), Set.empty, Set.empty)
+    val response = AccessPolicyResponseEntry(policyName, members, WorkbenchEmail("policy@example.com"))
+
+    val samRoutes = createSamRoutes()
+    mockPermissionsForResource(samRoutes, resource,
+      actionsOnResource = Set(SamResourceActions.readPolicies))
+
+    when(samRoutes.resourceService.listResourcePolicies(mockitoEq(resource), any[SamRequestContext]))
+      .thenReturn(IO(Stream(response)))
+
+    Get(s"/api/resources/v1/${resource.resourceTypeName}/${resource.resourceId}/policies") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+    }
+  }
+
+  it should "403 when listing policies for a resource and user lacks read_policies permission (but can see the resource)" in {
+    val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("resource"))
+    val policyName = AccessPolicyName("policy")
+    val members = AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set(ResourceAction("can_compute")), Set.empty, Set.empty)
+    val response = AccessPolicyResponseEntry(policyName, members, WorkbenchEmail("policy@example.com"))
+
+    val samRoutes = createSamRoutes()
+    mockPermissionsForResource(samRoutes, resource,
+      missingActionsOnResource = Set(SamResourceActions.readPolicies))
+
+    when(samRoutes.resourceService.listResourcePolicies(mockitoEq(resource), any[SamRequestContext]))
+      .thenReturn(IO(Stream(response)))
+
+    Get(s"/api/resources/v1/${resource.resourceTypeName}/${resource.resourceId}/policies") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Forbidden
+    }
+  }
+
+  it should "404 when listing policies for a resource when user can't see the resource" in {
+    val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("resource"))
+    val policyName = AccessPolicyName("policy")
+    val members = AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set(ResourceAction("can_compute")), Set.empty, Set.empty)
+    val response = AccessPolicyResponseEntry(policyName, members, WorkbenchEmail("policy@example.com"))
+
+    val samRoutes = createSamRoutes()
+    mockPermissionsForResource(samRoutes, resource,
+      missingActionsOnResource = Set(SamResourceActions.readPolicies),
+      accessToResource = false)
+
+    when(samRoutes.resourceService.listResourcePolicies(mockitoEq(resource), any[SamRequestContext]))
+      .thenReturn(IO(Stream(response)))
+
+    Get(s"/api/resources/v1/${resource.resourceTypeName}/${resource.resourceId}/policies") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
+    }
+  }
 }
