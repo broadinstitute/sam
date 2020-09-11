@@ -503,6 +503,8 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
         dao.createPolicy(policy, samRequestContext).unsafeRunSync()
         dao.loadPolicy(policy.id, samRequestContext).unsafeRunSync() shouldEqual Option(policy)
       }
+
+      "creates descendant actions and roles"
     }
 
     "loadPolicy" - {
@@ -809,6 +811,10 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
           dao.overwritePolicy(newPolicy, samRequestContext).unsafeRunSync()
         }
         dao.loadPolicy(policy.id, samRequestContext).unsafeRunSync() shouldEqual Option(policy)
+      }
+
+      "overwrites descendant actions and roles" in {
+
       }
     }
 
