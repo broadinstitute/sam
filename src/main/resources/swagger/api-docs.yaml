@@ -1723,7 +1723,7 @@ paths:
           description: You do not have permission to set the parent for the child resource, to remove the child of the current parent, to add a child to the new parent, or the new parent does not exist
           content: {}
         404:
-          description: You do not have access to this resource, it does not exist
+          description: You do not have access to this resource, or it does not exist
           content: {}
         500:
           description: Internal Server Error
@@ -1754,7 +1754,7 @@ paths:
           description: Resource parent successfully removed
           content: {}
         403:
-          description: You do not have permission to set the parent for the this resource or to remove this resource of its current parent
+          description: You do not have permission to set the parent for this resource or to remove this (child) resource from its current parent
           content: {}
         404:
           description: You do not have access to this resource, it does not exist, or it does not currently have a parent resource
