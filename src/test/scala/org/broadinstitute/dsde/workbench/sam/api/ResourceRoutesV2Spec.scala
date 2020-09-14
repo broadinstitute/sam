@@ -75,8 +75,6 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
       .thenReturn(IO(true)))
     missingActionsOnChild.map(action => when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(childResource), mockitoEq(action), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
       .thenReturn(IO(false)))
-    when(samRoutes.resourceService.deleteResourceParent(mockitoEq(childResource), any[SamRequestContext]))
-      .thenReturn(IO.unit)
     if (accessToChild) {
       when(samRoutes.policyEvaluatorService.listResourceAccessPoliciesForUser(mockitoEq(childResource), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
         .thenReturn(IO(Set(otherPolicy)))
@@ -100,9 +98,13 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
           when(samRoutes.policyEvaluatorService.listResourceAccessPoliciesForUser(mockitoEq(currentParent), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
             .thenReturn(IO(Set[AccessPolicyWithoutMembers]()))
         }
+        when(samRoutes.resourceService.deleteResourceParent(mockitoEq(childResource), any[SamRequestContext]))
+          .thenReturn(IO.pure(true))
       case None =>
         when(samRoutes.resourceService.getResourceParent(mockitoEq(childResource), any[SamRequestContext]))
           .thenReturn(IO(None))
+        when(samRoutes.resourceService.deleteResourceParent(mockitoEq(childResource), any[SamRequestContext]))
+          .thenReturn(IO.pure(false))
     }
 
     newParentOpt.map { newParent =>
@@ -283,7 +285,7 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
     }
   }
 
-  it should "404 if user doesn't have access to new parent resource" in {
+  it should "403 if user doesn't have access to new parent resource" in {
     val fullyQualifiedChildResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("child"))
     val newParentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("newParent"))
     val currentParentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("currentParent"))
@@ -298,11 +300,11 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
       accessToNewParent = false)
 
     Put(s"/api/resources/v2/${defaultResourceType.name}/${fullyQualifiedChildResource.resourceId.value}/parent", newParentResource) ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.NotFound
+      status shouldEqual StatusCodes.Forbidden
     }
   }
 
-  it should "404 if user doesn't have access to existing parent resource" in {
+  it should "403 if user doesn't have access to existing parent resource" in {
     val fullyQualifiedChildResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("child"))
     val newParentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("newParent"))
     val currentParentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("currentParent"))
@@ -317,7 +319,7 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
       accessToCurrentParent = false)
 
     Put(s"/api/resources/v2/${defaultResourceType.name}/${fullyQualifiedChildResource.resourceId.value}/parent", newParentResource) ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.NotFound
+      status shouldEqual StatusCodes.Forbidden
     }
   }
 
@@ -394,7 +396,7 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
     }
   }
 
-  it should "404 if user doesn't have access to existing parent resource" in {
+  it should "403 if user doesn't have access to existing parent resource" in {
     val fullyQualifiedChildResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("child"))
     val currentParentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("currentParent"))
     val samRoutes = createSamRoutes()
@@ -406,7 +408,7 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
       accessToCurrentParent = false)
 
     Delete(s"/api/resources/v2/${defaultResourceType.name}/${fullyQualifiedChildResource.resourceId.value}/parent") ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.NotFound
+      status shouldEqual StatusCodes.Forbidden
     }
   }
 

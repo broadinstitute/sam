@@ -519,7 +519,7 @@ class ResourceService(
     } yield ()
   }
 
-  def deleteResourceParent(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] = {
+  def deleteResourceParent(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Boolean] = {
     accessPolicyDAO.deleteResourceParent(resourceId, samRequestContext)
   }
 

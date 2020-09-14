@@ -36,9 +36,6 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
       case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"resource type ${name.value} not found"))
     }
 
-  def withCurrentParentOption(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): Directive1[Option[FullyQualifiedResourceId]] =
-    onSuccess(resourceService.getResourceParent(resource, samRequestContext))
-
   def resourceRoutes: server.Route =
     (pathPrefix("config" / "v1" / "resourceTypes") | pathPrefix("resourceTypes")) {
         requireUserInfo(SamRequestContext(None)) { userInfo => // `SamRequestContext(None)` is used so that we don't trace 1-off boot/init methods ; these in particular are unpublished APIs
@@ -186,18 +183,11 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
 
   def deleteResource(resource: FullyQualifiedResourceId, userInfo: UserInfo, samRequestContext: SamRequestContext): server.Route =
     delete {
-      withCurrentParentOption(resource, samRequestContext) {
-        case Some(currentResourceParent) =>
-          requireAction(currentResourceParent, SamResourceActions.removeChild, userInfo.userId, samRequestContext) {
-            deleteResourceInternal(resource, userInfo, samRequestContext)
-          }
-        case None => deleteResourceInternal(resource, userInfo, samRequestContext)
+      requireAction(resource, SamResourceActions.delete, userInfo.userId, samRequestContext) {
+        requireParentAction(resource, None, SamResourceActions.removeChild, userInfo.userId, samRequestContext) {
+          complete(resourceService.deleteResource(resource, samRequestContext).map(_ => StatusCodes.NoContent))
+        }
       }
-    }
-
-  def deleteResourceInternal(resource: FullyQualifiedResourceId, userInfo: UserInfo, samRequestContext: SamRequestContext) =
-    requireAction(resource, SamResourceActions.delete, userInfo.userId, samRequestContext) {
-      complete(resourceService.deleteResource(resource, samRequestContext).map(_ => StatusCodes.NoContent))
     }
 
   def postDefaultResource(resourceType: ResourceType, resource: FullyQualifiedResourceId, userInfo: UserInfo, samRequestContext: SamRequestContext): server.Route =
@@ -348,34 +338,28 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
   def setResourceParent(resource: FullyQualifiedResourceId, userInfo: UserInfo, samRequestContext: SamRequestContext): server.Route =
     put {
       entity(as[FullyQualifiedResourceId]) { newResourceParent =>
-        withCurrentParentOption(resource, samRequestContext) {
-          case Some(currentResourceParent) =>
-            requireAction(currentResourceParent, SamResourceActions.removeChild, userInfo.userId, samRequestContext) {
-              setResourceParentInternal(resource, newResourceParent, userInfo, samRequestContext)
+        requireAction(resource, SamResourceActions.setParent, userInfo.userId, samRequestContext) {
+          requireParentAction(resource, None, SamResourceActions.removeChild, userInfo.userId, samRequestContext) {
+            requireParentAction(resource, Option(newResourceParent), SamResourceActions.addChild, userInfo.userId, samRequestContext) {
+              complete(resourceService.setResourceParent(resource, newResourceParent, samRequestContext).map(_ => StatusCodes.NoContent))
             }
-          case None => setResourceParentInternal(resource, newResourceParent, userInfo, samRequestContext)
+          }
         }
       }
     }
 
-  private def setResourceParentInternal(resource: FullyQualifiedResourceId, newResourceParent: FullyQualifiedResourceId, userInfo: UserInfo, samRequestContext: SamRequestContext): server.Route = {
-    requireAction(newResourceParent, SamResourceActions.addChild, userInfo.userId, samRequestContext) {
-      requireAction(resource, SamResourceActions.setParent, userInfo.userId, samRequestContext) {
-        complete(resourceService.setResourceParent(resource, newResourceParent, samRequestContext).map(_ => StatusCodes.NoContent))
-      }
-    }
-  }
-
   def deleteResourceParent(resource: FullyQualifiedResourceId, userInfo: UserInfo, samRequestContext: SamRequestContext): server.Route =
     delete {
-      withCurrentParentOption(resource, samRequestContext) {
-        case Some(resourceParent) =>
-          requireAction(resourceParent, SamResourceActions.removeChild, userInfo.userId, samRequestContext) {
-            requireAction(resource, SamResourceActions.setParent, userInfo.userId, samRequestContext) {
-              complete(resourceService.deleteResourceParent(resource, samRequestContext).map(_ => StatusCodes.NoContent))
+      requireAction(resource, SamResourceActions.setParent, userInfo.userId, samRequestContext) {
+        requireParentAction(resource, None, SamResourceActions.removeChild, userInfo.userId, samRequestContext) {
+          complete(resourceService.deleteResourceParent(resource, samRequestContext).map { parentDeleted =>
+            if (parentDeleted) {
+              StatusCodes.NoContent
+            } else {
+              StatusCodes.NotFound
             }
-          }
-        case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "resource parent not found"))
+          })
+        }
       }
     }
 
