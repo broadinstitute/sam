@@ -42,7 +42,11 @@ trait SecurityDirectives {
         if (hasPermission) {
           innerRoute
         } else {
-          val forbiddenErrorMessage = s"You may not perform any of ${parentActions.mkString("[", ", ", "]").toUpperCase} on parent of ${childResource.resourceTypeName.value}/${childResource.resourceId.value}"
+          val parentResourceString = newParent match {
+            case None => s"parent of ${childResource.resourceTypeName.value}/${childResource.resourceId.value}"
+            case Some(newParentId) => s"${newParentId.resourceTypeName.value}/${newParentId.resourceId.value} or it may not exist"
+          }
+          val forbiddenErrorMessage = s"You may not perform any of ${parentActions.mkString("[", ", ", "]").toUpperCase} on $parentResourceString"
           determineErrorMessage(childResource, userId, forbiddenErrorMessage, samRequestContext)
         }
       }
