@@ -95,7 +95,7 @@ class ResourceRoutesV1Spec extends FlatSpec with Matchers with ScalatestRouteTes
   "GET /api/resource/{resourceType}/{resourceId}/action/{action}/userEmail/{userEmail}" should "200 if caller have read_policies permission" in {
     // Create a user called userWithEmail and has can_compute on the resource.
     val userWithEmail = CreateWorkbenchUser(WorkbenchUserId("user1"),  genGoogleSubjectId(), WorkbenchEmail("user1@foo.com"), None)
-    val members = AccessPolicyMembership(Set(userWithEmail.email), Set(ResourceAction("can_compute")), Set.empty, Set.empty)
+    val members = AccessPolicyMembershipV1(Set(userWithEmail.email), Set(ResourceAction("can_compute")), Set.empty)
     val resourceType = ResourceType(
       ResourceTypeName("rt"),
       Set(SamResourceActionPatterns.readPolicies, ResourceActionPattern("can_compute", "", false)),
@@ -119,7 +119,7 @@ class ResourceRoutesV1Spec extends FlatSpec with Matchers with ScalatestRouteTes
   "GET /api/resource/{resourceType}/{resourceId}/action/{action}/userEmail/{userEmail}" should "200 if caller have testActionAccess::can_compute permission" in {
     // Create a user called userWithEmail and has can_compute on the resource.
     val userWithEmail = CreateWorkbenchUser(WorkbenchUserId("user1"),  genGoogleSubjectId(), WorkbenchEmail("user1@foo.com"), None)
-    val members = AccessPolicyMembership(Set(userWithEmail.email), Set(ResourceAction("can_compute")), Set.empty, Set.empty)
+    val members = AccessPolicyMembershipV1(Set(userWithEmail.email), Set(ResourceAction("can_compute")), Set.empty)
     val resourceType = ResourceType(
       ResourceTypeName("rt"),
       Set(SamResourceActionPatterns.testActionAccess, SamResourceActionPatterns.alterPolicies, ResourceActionPattern("can_compute", "", false)),
@@ -148,7 +148,7 @@ class ResourceRoutesV1Spec extends FlatSpec with Matchers with ScalatestRouteTes
   "GET /api/resource/{resourceType}/{resourceId}/action/{action}/userEmail/{userEmail}" should "return false if user doesn't have permission or doesn't exist" in {
     // Create a user called userWithEmail but doesn't have can_compute on the resource.
     val userWithEmail = CreateWorkbenchUser(WorkbenchUserId("user1"),  genGoogleSubjectId(), WorkbenchEmail("user1@foo.com"), None)
-    val members = AccessPolicyMembership(Set(userWithEmail.email), Set(ResourceAction("read_policies")), Set.empty, Set.empty)
+    val members = AccessPolicyMembershipV1(Set(userWithEmail.email), Set(ResourceAction("read_policies")), Set.empty)
 
     // The owner role has read_policies
     val resourceType = ResourceType(
@@ -181,7 +181,7 @@ class ResourceRoutesV1Spec extends FlatSpec with Matchers with ScalatestRouteTes
   "GET /api/resource/{resourceType}/{resourceId}/action/{action}/userEmail/{userEmail}" should "return 403 if caller doesn't have permission" in {
     // Create a user called userWithEmail and have can_compute on the resource.
     val userWithEmail = CreateWorkbenchUser(WorkbenchUserId("user1"), genGoogleSubjectId(), WorkbenchEmail("user1@foo.com"), None)
-    val members = AccessPolicyMembership(Set(userWithEmail.email), Set(ResourceAction("read_policies")), Set.empty, Set.empty)
+    val members = AccessPolicyMembershipV1(Set(userWithEmail.email), Set(ResourceAction("read_policies")), Set.empty)
 
     // The owner role only have alert_policies
     val resourceType = ResourceType(
@@ -395,7 +395,7 @@ class ResourceRoutesV1Spec extends FlatSpec with Matchers with ScalatestRouteTes
   }
 
   "GET /api/resources/v1/{resourceType}/{resourceId}/policies/{policyName}" should "200 on existing policy of a resource with read_policies" in {
-    val members = AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set.empty, Set.empty, Set.empty)
+    val members = AccessPolicyMembershipV1(Set(defaultUserInfo.userEmail), Set.empty, Set.empty)
     val resourceType = ResourceType(
       ResourceTypeName("rt"),
       Set(SamResourceActionPatterns.alterPolicies, SamResourceActionPatterns.readPolicies),
@@ -409,13 +409,13 @@ class ResourceRoutesV1Spec extends FlatSpec with Matchers with ScalatestRouteTes
 
     Get(s"/api/resources/v1/${resourceType.name}/${resourceId.value}/policies/${policyName.value}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
-      responseAs[AccessPolicyMembership] shouldEqual members
+      responseAs[AccessPolicyMembershipV1] shouldEqual members
     }
   }
 
   private def responsePayloadClue(str: String): String = s" -> Here is the response payload: $str"
 
-  private def createUserResourcePolicy(members: AccessPolicyMembership, resourceType: ResourceType, samRoutes: TestSamRoutes, resourceId: ResourceId, policyName: AccessPolicyName): Unit = {
+  private def createUserResourcePolicy(members: AccessPolicyMembershipV1, resourceType: ResourceType, samRoutes: TestSamRoutes, resourceId: ResourceId, policyName: AccessPolicyName): Unit = {
     val user = CreateWorkbenchUser(samRoutes.userInfo.userId, genGoogleSubjectId(), samRoutes.userInfo.userEmail, None)
     findOrCreateUser(user, samRoutes.userService)
 
@@ -437,7 +437,7 @@ class ResourceRoutesV1Spec extends FlatSpec with Matchers with ScalatestRouteTes
   }
 
   it should "200 on existing policy of a resource with read_policy" in {
-    val members = AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set.empty, Set.empty, Set.empty)
+    val members = AccessPolicyMembershipV1(Set(defaultUserInfo.userEmail), Set.empty, Set.empty)
     val policyName = AccessPolicyName("bar")
     val resourceType = ResourceType(
       ResourceTypeName("rt"),
@@ -451,12 +451,12 @@ class ResourceRoutesV1Spec extends FlatSpec with Matchers with ScalatestRouteTes
 
     Get(s"/api/resources/v1/${resourceType.name}/${resourceId.value}/policies/${policyName.value}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
-      responseAs[AccessPolicyMembership] shouldEqual members
+      responseAs[AccessPolicyMembershipV1] shouldEqual members
     }
   }
 
   it should "404 on non existing policy of a resource" in {
-    val members = AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set.empty, Set.empty, Set.empty)
+    val members = AccessPolicyMembershipV1(Set(defaultUserInfo.userEmail), Set.empty, Set.empty)
     val resourceType = ResourceType(
       ResourceTypeName("rt"),
       Set(SamResourceActionPatterns.alterPolicies, SamResourceActionPatterns.readPolicies),
@@ -474,7 +474,7 @@ class ResourceRoutesV1Spec extends FlatSpec with Matchers with ScalatestRouteTes
   }
 
   it should "403 on existing policy of a resource without read policies" in {
-    val members = AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set.empty, Set.empty, Set.empty)
+    val members = AccessPolicyMembershipV1(Set(defaultUserInfo.userEmail), Set.empty, Set.empty)
     val resourceType = ResourceType(
       ResourceTypeName("rt"),
       Set(SamResourceActionPatterns.alterPolicies),
@@ -501,7 +501,7 @@ class ResourceRoutesV1Spec extends FlatSpec with Matchers with ScalatestRouteTes
 
     runAndWait(samRoutes.userService.createUser(defaultTestUser, samRequestContext))
 
-    val members = AccessPolicyMembership(Set(defaultTestUser.email), Set(ResourceAction("can_compute")), Set.empty, Set.empty)
+    val members = AccessPolicyMembershipV1(Set(defaultTestUser.email), Set(ResourceAction("can_compute")), Set.empty)
 
     Put(s"/api/resources/v1/${resourceType.name}/foo/policies/canCompute", members) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
@@ -819,7 +819,7 @@ class ResourceRoutesV1Spec extends FlatSpec with Matchers with ScalatestRouteTes
 
     val resourceId = ResourceId("foo")
     val policyName = AccessPolicyName("bar")
-    val members = AccessPolicyMembership(Set.empty, Set.empty, Set.empty, Set.empty)
+    val members = AccessPolicyMembershipV1(Set.empty, Set.empty, Set.empty)
     createUserResourcePolicy(members, resourceType, samRoutes, resourceId, policyName)
     samRoutes.resourceService.setPublic(model.FullyQualifiedPolicyId(model.FullyQualifiedResourceId(resourceType.name, resourceId), policyName), true, samRequestContext).unsafeRunSync()
 

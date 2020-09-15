@@ -44,6 +44,8 @@ object SamJsonSupport {
 
   implicit val AccessPolicyMembershipFormat = jsonFormat4(AccessPolicyMembership.apply)
 
+  implicit val AccessPolicyMembershipV1Format = jsonFormat3(AccessPolicyMembershipV1.apply)
+
   implicit val AccessPolicyResponseEntryFormat = jsonFormat3(AccessPolicyResponseEntry.apply)
 
   implicit val UserPolicyResponseFormat = jsonFormat5(UserPolicyResponse.apply)
@@ -163,7 +165,12 @@ consistent "has a" relationship is tracked by this ticket: https://broadworkbenc
     extends WorkbenchGroup
 
 @Lenses final case class AccessPolicyDescendantPermissions(resourceType: ResourceTypeName, actions: Set[ResourceAction], roles: Set[ResourceRoleName])
-@Lenses final case class AccessPolicyMembership(memberEmails: Set[WorkbenchEmail], actions: Set[ResourceAction], roles: Set[ResourceRoleName], descendantPermissions: Set[AccessPolicyDescendantPermissions])
+@Lenses final case class AccessPolicyMembership(memberEmails: Set[WorkbenchEmail], actions: Set[ResourceAction], roles: Set[ResourceRoleName], descendantPermissions: Set[AccessPolicyDescendantPermissions]) {
+  def toV1 = AccessPolicyMembershipV1(memberEmails, actions, roles)
+}
+@Lenses final case class AccessPolicyMembershipV1(memberEmails: Set[WorkbenchEmail], actions: Set[ResourceAction], roles: Set[ResourceRoleName]) {
+  def toV2 = AccessPolicyMembership(memberEmails, actions, roles, Set.empty)
+}
 @Lenses final case class AccessPolicyResponseEntry(policyName: AccessPolicyName, policy: AccessPolicyMembership, email: WorkbenchEmail)
 
 // Access Policy with no membership info to improve efficiency for calls that care about only the roles and actions of a policy, not the membership
