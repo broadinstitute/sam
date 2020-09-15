@@ -60,7 +60,6 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
                                 childResource: FullyQualifiedResourceId,
                                 currentParentOpt: Option[FullyQualifiedResourceId] = None,
                                 newParentOpt: Option[FullyQualifiedResourceId] = None,
-                                parentExists: Boolean = true,
                                 actionsOnChild: Set[ResourceAction] = Set.empty,
                                 actionsOnCurrentParent: Set[ResourceAction] = Set.empty,
                                 actionsOnNewParent: Set[ResourceAction] = Set.empty,
@@ -124,14 +123,6 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
             .thenReturn(IO(Set[AccessPolicyWithoutMembers]()))
         }
       case None =>
-    }
-
-    if (!parentExists) {
-      when(samRoutes.resourceService.getResourceParent(mockitoEq(childResource), any[SamRequestContext]))
-        .thenThrow(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "resource parent not found")))
-//      when(samRoutes.resourceService.setResourceParent(mockitoEq(childResource), any[FullyQualifiedResourceId], any[SamRequestContext]))
-//        .thenThrow(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "resource parent not found")))
-      // todo: probably throws: StatusCodes.BadRequest, "Cannot set parent as this would introduce a cyclical resource hierarchy"
     }
 
     if (accessToChild && accessToCurrentParent) {
@@ -315,6 +306,23 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
     }
   }
 
+  it should "403 if the new parent resource does not exist" in {
+    val fullyQualifiedChildResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("child"))
+    val nonexistentParentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("nonexistentParent"))
+    val samRoutes = createSamRoutes()
+
+    setupParentRoutes(samRoutes, fullyQualifiedChildResource,
+      currentParentOpt = None,
+      newParentOpt = Option(nonexistentParentResource),
+      actionsOnChild = Set(SamResourceActions.setParent),
+      missingActionsOnNewParent = Set(SamResourceActions.addChild)
+    )
+
+    Put(s"/api/resources/v2/${defaultResourceType.name}/${fullyQualifiedChildResource.resourceId.value}/parent", nonexistentParentResource) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Forbidden
+    }
+  }
+
   it should "403 if user doesn't have access to existing parent resource" in {
     val fullyQualifiedChildResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("child"))
     val newParentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("newParent"))
@@ -331,23 +339,6 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
 
     Put(s"/api/resources/v2/${defaultResourceType.name}/${fullyQualifiedChildResource.resourceId.value}/parent", newParentResource) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Forbidden
-    }
-  }
-
-  it should "404 if the parent resource does not exist" in {
-    val fullyQualifiedChildResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("child"))
-    val nonexistentParentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("nonexistentParent"))
-    val samRoutes = createSamRoutes()
-
-    setupParentRoutes(samRoutes, fullyQualifiedChildResource,
-      currentParentOpt = None,
-      newParentOpt = None,
-      parentExists = false,
-      actionsOnChild = Set(SamResourceActions.setParent),
-      )
-
-    Put(s"/api/resources/v2/${defaultResourceType.name}/${fullyQualifiedChildResource.resourceId.value}/parent", nonexistentParentResource) ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.NotFound
     }
   }
 
