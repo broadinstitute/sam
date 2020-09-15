@@ -513,8 +513,6 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     assert(policies.contains(newPolicy))
   }
 
-  it should "throw if the policy is inherited"
-
   "overwritePolicyMembers" should "succeed with a valid request" in {
     val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("my-resource"))
 
