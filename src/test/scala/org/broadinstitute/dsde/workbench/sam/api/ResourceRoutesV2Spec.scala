@@ -60,6 +60,7 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
                                 childResource: FullyQualifiedResourceId,
                                 currentParentOpt: Option[FullyQualifiedResourceId] = None,
                                 newParentOpt: Option[FullyQualifiedResourceId] = None,
+                                parentExists: Boolean = true,
                                 actionsOnChild: Set[ResourceAction] = Set.empty,
                                 actionsOnCurrentParent: Set[ResourceAction] = Set.empty,
                                 actionsOnNewParent: Set[ResourceAction] = Set.empty,
@@ -123,8 +124,14 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
             .thenReturn(IO(Set[AccessPolicyWithoutMembers]()))
         }
       case None =>
-        when(samRoutes.resourceService.getResourceParent(mockitoEq(childResource), any[SamRequestContext]))
-          .thenThrow(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "resource parent not found")))
+    }
+
+    if (!parentExists) {
+      when(samRoutes.resourceService.getResourceParent(mockitoEq(childResource), any[SamRequestContext]))
+        .thenThrow(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "resource parent not found")))
+//      when(samRoutes.resourceService.setResourceParent(mockitoEq(childResource), any[FullyQualifiedResourceId], any[SamRequestContext]))
+//        .thenThrow(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "resource parent not found")))
+      // todo: probably throws: StatusCodes.BadRequest, "Cannot set parent as this would introduce a cyclical resource hierarchy"
     }
 
     if (accessToChild && accessToCurrentParent) {
@@ -335,6 +342,7 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
     setupParentRoutes(samRoutes, fullyQualifiedChildResource,
       currentParentOpt = None,
       newParentOpt = None,
+      parentExists = false,
       actionsOnChild = Set(SamResourceActions.setParent),
       )
 
