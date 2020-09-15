@@ -504,7 +504,26 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
         dao.loadPolicy(policy.id, samRequestContext).unsafeRunSync() shouldEqual Option(policy)
       }
 
-      "creates descendant actions and roles"
+      "creates descendant actions and roles" in {
+        val otherResourceType = resourceType.copy(name = ResourceTypeName("otherResourceType"))
+        val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
+        val sameResourceTypeDescendant = AccessPolicyDescendantPermissions(resource.resourceTypeName, Set(writeAction), Set(ownerRoleName))
+        val otherResourceTypeDescendant = AccessPolicyDescendantPermissions(otherResourceType.name, Set(readAction), Set(actionlessRole.roleName))
+        val descendantPermissions = Set(sameResourceTypeDescendant, otherResourceTypeDescendant)
+        val policy = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("policyName")), Set.empty, WorkbenchEmail("policy@email.com"), Set(readerRole.roleName), Set.empty, descendantPermissions, false)
+
+        val testResult = for {
+          _ <- dao.createResourceType(resourceType, samRequestContext)
+          _ <- dao.createResourceType(otherResourceType, samRequestContext)
+          _ <- dao.createResource(resource, samRequestContext)
+          _ <- dao.createPolicy(policy, samRequestContext)
+          loadedPolicy <- dao.loadPolicy(policy.id, samRequestContext)
+        } yield {
+          loadedPolicy shouldEqual Option(policy)
+        }
+
+        testResult.unsafeRunSync()
+      }
     }
 
     "loadPolicy" - {
@@ -814,7 +833,33 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
       }
 
       "overwrites descendant actions and roles" in {
+        val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
+        val otherResourceType = resourceType.copy(name = ResourceTypeName("otherResourceType"))
+        val secondUser = defaultUser.copy(id = WorkbenchUserId("foo"), googleSubjectId = Some(GoogleSubjectId("blablabla")), email = WorkbenchEmail("bar@baz.com"), identityConcentratorId = Some(IdentityConcentratorId("ooo")))
 
+        val sameResourceTypeDescendant = AccessPolicyDescendantPermissions(resource.resourceTypeName, Set(writeAction), Set(ownerRoleName))
+        val otherResourceTypeDescendant = AccessPolicyDescendantPermissions(otherResourceType.name, Set(readAction), Set(actionlessRole.roleName))
+        val initialDescendantPermissions = Set(sameResourceTypeDescendant, otherResourceTypeDescendant)
+        val updatedDescendantPermissions = Set(sameResourceTypeDescendant.copy(actions = Set(readAction)), otherResourceTypeDescendant.copy(roles = Set(readerRole.roleName)))
+        val policy = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("policyName")), Set(defaultUserId), WorkbenchEmail("policy@email.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), initialDescendantPermissions, false)
+        val newPolicy = policy.copy(members = Set(defaultUserId, secondUser.id), actions = Set(readAction), roles = Set.empty, descendantPermissions = updatedDescendantPermissions, public = true)
+
+        val testResult = for {
+          _ <- dao.createResourceType(resourceType, samRequestContext)
+          _ <- dao.createResourceType(otherResourceType, samRequestContext)
+          _ <- dao.createResource(resource, samRequestContext)
+          _ <- dirDao.createUser(defaultUser, samRequestContext)
+          _ <- dirDao.createUser(secondUser, samRequestContext)
+          _ <- dao.createPolicy(policy, samRequestContext)
+          loadedPolicy <- dao.loadPolicy(policy.id, samRequestContext)
+          _ <- dao.overwritePolicy(newPolicy, samRequestContext)
+          newLoadedPolicy <- dao.loadPolicy(policy.id, samRequestContext)
+        } yield {
+          loadedPolicy shouldEqual Option(policy)
+          newLoadedPolicy shouldEqual Option(newPolicy)
+        }
+
+        testResult.unsafeRunSync()
       }
     }
 
