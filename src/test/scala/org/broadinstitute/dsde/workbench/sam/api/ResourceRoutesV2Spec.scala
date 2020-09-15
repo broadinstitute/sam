@@ -107,20 +107,24 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
           .thenReturn(IO.pure(false))
     }
 
-    newParentOpt.map { newParent =>
-      when(samRoutes.resourceService.setResourceParent(mockitoEq(childResource), mockitoEq(newParent), any[SamRequestContext]))
-          .thenReturn(IO.unit)
-      actionsOnNewParent.map(action => when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(newParent), mockitoEq(action), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-        .thenReturn(IO(true)))
-      missingActionsOnNewParent.map(action => when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(newParent), mockitoEq(action), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-        .thenReturn(IO(false)))
-      if (accessToNewParent) {
-        when(samRoutes.policyEvaluatorService.listResourceAccessPoliciesForUser(mockitoEq(newParent), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-          .thenReturn(IO(Set(otherPolicy)))
-      } else {
-        when(samRoutes.policyEvaluatorService.listResourceAccessPoliciesForUser(mockitoEq(newParent), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-          .thenReturn(IO(Set[AccessPolicyWithoutMembers]()))
-      }
+    newParentOpt match {
+      case Some(newParent) =>
+        when(samRoutes.resourceService.setResourceParent(mockitoEq(childResource), mockitoEq(newParent), any[SamRequestContext]))
+            .thenReturn(IO.unit)
+        actionsOnNewParent.map(action => when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(newParent), mockitoEq(action), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
+          .thenReturn(IO(true)))
+        missingActionsOnNewParent.map(action => when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(newParent), mockitoEq(action), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
+          .thenReturn(IO(false)))
+        if (accessToNewParent) {
+          when(samRoutes.policyEvaluatorService.listResourceAccessPoliciesForUser(mockitoEq(newParent), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
+            .thenReturn(IO(Set(otherPolicy)))
+        } else {
+          when(samRoutes.policyEvaluatorService.listResourceAccessPoliciesForUser(mockitoEq(newParent), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
+            .thenReturn(IO(Set[AccessPolicyWithoutMembers]()))
+        }
+      case None =>
+        when(samRoutes.resourceService.getResourceParent(mockitoEq(childResource), any[SamRequestContext]))
+          .thenThrow(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "resource parent not found")))
     }
 
     if (accessToChild && accessToCurrentParent) {
@@ -320,6 +324,22 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
 
     Put(s"/api/resources/v2/${defaultResourceType.name}/${fullyQualifiedChildResource.resourceId.value}/parent", newParentResource) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Forbidden
+    }
+  }
+
+  it should "404 if the parent resource does not exist" in {
+    val fullyQualifiedChildResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("child"))
+    val nonexistentParentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("nonexistentParent"))
+    val samRoutes = createSamRoutes()
+
+    setupParentRoutes(samRoutes, fullyQualifiedChildResource,
+      currentParentOpt = None,
+      newParentOpt = None,
+      actionsOnChild = Set(SamResourceActions.setParent),
+      )
+
+    Put(s"/api/resources/v2/${defaultResourceType.name}/${fullyQualifiedChildResource.resourceId.value}/parent", nonexistentParentResource) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
     }
   }
 

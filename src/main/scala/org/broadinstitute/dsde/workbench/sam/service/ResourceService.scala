@@ -197,7 +197,7 @@ class ResourceService(
   //      but not the Resource itself, thereby orphaning the Resource so that it cannot be used or accessed anymore and
   //      preventing a new Resource with the same ID from being created
   // Resources with children cannot be deleted and will throw a 400.
-  @throws(classOf[WorkbenchExceptionWithErrorReport])
+  @throws(classOf[WorkbenchExceptionWithErrorReport]) // Necessary to make Mockito happy
   def deleteResource(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): Future[Unit] =
     for {
       _ <- checkNoChildren(resource, samRequestContext).unsafeToFuture()
@@ -492,6 +492,7 @@ class ResourceService(
       workbenchUsers.map(user => UserIdInfo(user.id, user.email, user.googleSubjectId))
     }
 
+  @throws(classOf[WorkbenchExceptionWithErrorReport]) // Necessary to make Mockito happy
   def getResourceParent(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Option[FullyQualifiedResourceId]] = {
     accessPolicyDAO.getResourceParent(resourceId, samRequestContext)
   }
