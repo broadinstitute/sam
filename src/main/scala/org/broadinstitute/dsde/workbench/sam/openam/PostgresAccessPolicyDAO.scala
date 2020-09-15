@@ -128,7 +128,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     if (actions.isEmpty) {
       0
     } else {
-      val uniqueActionValues = actions.collect { case (action, resourceTypePK) =>
+      val uniqueActionValues = actions.map { case (action, resourceTypePK) =>
         samsqls"(${resourceTypePK}, ${action})"
       }
 
@@ -352,10 +352,10 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
 
       insertGroupMembers(groupId, policy.members)
 
-      insertPolicyRoles(policy.roles.map((_, policy.id.resource.resourceTypeName)), policyId, false)
-      insertPolicyRoles(policy.descendantPermissions.flatMap(permissions => permissions.roles.map((_, permissions.resourceType))), policyId, true)
-      insertPolicyActions(policy.actions.map((_, policy.id.resource.resourceTypeName)), policyId, false)
-      insertPolicyActions(policy.descendantPermissions.flatMap(permissions => permissions.actions.map((_, permissions.resourceType))), policyId, true)
+      insertPolicyRoles(FullyQualifiedResourceRoleName.fullyQualify(policy.roles, policy.id.resource.resourceTypeName), policyId, false)
+      insertPolicyRoles(policy.descendantPermissions.flatMap(permissions => FullyQualifiedResourceRoleName.fullyQualify(permissions.roles, permissions.resourceType)), policyId, true)
+      insertPolicyActions(FullyQualifiedResourceAction.fullyQualify(policy.actions, policy.id.resource.resourceTypeName), policyId, false)
+      insertPolicyActions(policy.descendantPermissions.flatMap(permissions => FullyQualifiedResourceAction.fullyQualify(permissions.actions, permissions.resourceType)), policyId, true)
 
       policy
     }).recoverWith {
@@ -364,13 +364,13 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     }
   }
 
-  private def insertPolicyActions(actionsWithResourceType: Set[(ResourceAction, ResourceTypeName)], policyId: PolicyPK, descends: Boolean)(implicit session: DBSession): Int = {
+  private def insertPolicyActions(actions: Set[FullyQualifiedResourceAction], policyId: PolicyPK, descends: Boolean)(implicit session: DBSession): Int = {
     val ra = ResourceActionTable.syntax("ra")
     val rt = ResourceTypeTable.syntax("rt")
     val paCol = PolicyActionTable.column
-    if (actionsWithResourceType.nonEmpty) {
-      val actionsWithResourceTypeSql = actionsWithResourceType.map {
-        case (action, resourceType) => samsqls"(${action}, ${resourceType})"
+    if (actions.nonEmpty) {
+      val actionsWithResourceTypeSql = actions.map {
+        case FullyQualifiedResourceAction(action, resourceType) => samsqls"(${action}, ${resourceType})"
       }
       val insertQuery = samsqls"""insert into ${PolicyActionTable.table} (${paCol.resourcePolicyId}, ${paCol.resourceActionId}, ${paCol.descends})
             select ${policyId}, ${ra.result.id}, ${descends}
@@ -380,17 +380,17 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
 
       val inserted = samsql"$insertQuery".update().apply()
 
-      if (inserted != actionsWithResourceType.size) {
+      if (inserted != actions.size) {
         // in this case some actions that we want to insert did not exist in ResourceActionTable
         // add them now and rerun the insert ignoring conflicts
         // this case should happen rarely
         import SamTypeBinders._
-        val resourceTypeNames = actionsWithResourceType.map(_._2)
+        val resourceTypeNames = actions.map(_.resourceTypeName)
 
         val resourceTypeNameAndPK = samsql"select ${rt.result.name}, ${rt.result.id} from ${ResourceTypeTable as rt} where (${rt.name}) in (${resourceTypeNames})"
           .map(rs => (rs.get[ResourceTypeName](rt.resultName.name), rs.get[ResourceTypePK](rt.resultName.id))).list().apply().toMap
-        val actionsWithResourceTypePK = actionsWithResourceType.map {
-          case (action, resourceTypeName) =>
+        val actionsWithResourceTypePK = actions.map {
+          case FullyQualifiedResourceAction(action, resourceTypeName) =>
             (action, resourceTypeNameAndPK.getOrElse(resourceTypeName,
               throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "Resource type not found"))))
         }
@@ -407,13 +407,13 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     }
   }
 
-  private def insertPolicyRoles(rolesWithResourceType: Set[(ResourceRoleName, ResourceTypeName)], policyId: PolicyPK, descends: Boolean)(implicit session: DBSession): Int = {
+  private def insertPolicyRoles(roles: Set[FullyQualifiedResourceRoleName], policyId: PolicyPK, descends: Boolean)(implicit session: DBSession): Int = {
     val rr = ResourceRoleTable.syntax("rr")
     val rt = ResourceTypeTable.syntax("rt")
     val prCol = PolicyRoleTable.column
-    if (rolesWithResourceType.nonEmpty) {
-      val rolesWithResourceTypeSql = rolesWithResourceType.map {
-        case (role, resourceType) => samsqls"(${role}, ${resourceType})"
+    if (roles.nonEmpty) {
+      val rolesWithResourceTypeSql = roles.map {
+        case FullyQualifiedResourceRoleName(role, resourceType) => samsqls"(${role}, ${resourceType})"
       }
       val insertedRolesCount = samsql"""insert into ${PolicyRoleTable.table} (${prCol.resourcePolicyId}, ${prCol.resourceRoleId}, ${prCol.descends})
             select ${policyId}, ${rr.result.id}, ${descends}
@@ -422,7 +422,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
             where (${rr.role}, ${rt.name}) in (${rolesWithResourceTypeSql})
             and ${rr.deprecated} = false"""
         .update().apply()
-      if (insertedRolesCount != rolesWithResourceType.size) {
+      if (insertedRolesCount != roles.size) {
         throw new WorkbenchException("Some roles have been deprecated or were not found.")
       }
       insertedRolesCount
@@ -491,31 +491,31 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
   override def overwritePolicy(newPolicy: AccessPolicy, samRequestContext: SamRequestContext): IO[AccessPolicy] = {
     runInTransaction("overwritePolicy", samRequestContext)({ implicit session =>
       overwritePolicyMembersInternal(newPolicy.id, newPolicy.members)
-      overwritePolicyRolesInternal(newPolicy.id, newPolicy.roles, newPolicy.descendantPermissions.flatMap(permissions => permissions.roles.map((_, permissions.resourceType))))
-      overwritePolicyActionsInternal(newPolicy.id, newPolicy.actions, newPolicy.descendantPermissions.flatMap(permissions => permissions.actions.map((_, permissions.resourceType))))
+      overwritePolicyRolesInternal(newPolicy.id, newPolicy.roles, newPolicy.descendantPermissions.flatMap(permissions => FullyQualifiedResourceRoleName.fullyQualify(permissions.roles, permissions.resourceType)))
+      overwritePolicyActionsInternal(newPolicy.id, newPolicy.actions, newPolicy.descendantPermissions.flatMap(permissions => FullyQualifiedResourceAction.fullyQualify(permissions.actions, permissions.resourceType)))
       setPolicyIsPublicInternal(newPolicy.id, newPolicy.public)
 
       newPolicy
     })
   }
 
-  private def overwritePolicyRolesInternal(id: FullyQualifiedPolicyId, roles: Set[ResourceRoleName], descendantRoles: Set[(ResourceRoleName, ResourceTypeName)])(implicit session: DBSession): Int = {
+  private def overwritePolicyRolesInternal(id: FullyQualifiedPolicyId, roles: Set[ResourceRoleName], descendantRoles: Set[FullyQualifiedResourceRoleName])(implicit session: DBSession): Int = {
     val policyPK = getPolicyPK(id)
 
     val pr = PolicyRoleTable.syntax("pr")
     samsql"delete from ${PolicyRoleTable as pr} where ${pr.resourcePolicyId} = $policyPK".update().apply()
 
-    insertPolicyRoles(roles.map((_, id.resource.resourceTypeName)), policyPK, false)
+    insertPolicyRoles(FullyQualifiedResourceRoleName.fullyQualify(roles, id.resource.resourceTypeName), policyPK, false)
     insertPolicyRoles(descendantRoles, policyPK, true)
   }
 
-  private def overwritePolicyActionsInternal(id: FullyQualifiedPolicyId, actions: Set[ResourceAction], descendantActions: Set[(ResourceAction, ResourceTypeName)])(implicit session: DBSession): Int = {
+  private def overwritePolicyActionsInternal(id: FullyQualifiedPolicyId, actions: Set[ResourceAction], descendantActions: Set[FullyQualifiedResourceAction])(implicit session: DBSession): Int = {
     val policyPK = getPolicyPK(id)
 
     val pa = PolicyActionTable.syntax("pa")
     samsql"delete from ${PolicyActionTable as pa} where ${pa.resourcePolicyId} = $policyPK".update().apply()
 
-    insertPolicyActions(actions.map((_, id.resource.resourceTypeName)), policyPK, false)
+    insertPolicyActions(FullyQualifiedResourceAction.fullyQualify(actions, id.resource.resourceTypeName), policyPK, false)
     insertPolicyActions(descendantActions, policyPK, true)
   }
 
@@ -592,19 +592,15 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     val gm = GroupMemberTable.syntax("gm")
     val sg = GroupTable.syntax("sg")
     val p = PolicyTable.syntax("p")
+    val sp = PolicyTable.syntax("sp")
+    val sr = ResourceTable.syntax("sr")
+    val srt = ResourceTypeTable.syntax("srt")
     val pr = PolicyRoleTable.syntax("pr")
     val rr = ResourceRoleTable.syntax("rr")
     val pa = PolicyActionTable.syntax("pa")
     val ra = ResourceActionTable.syntax("ra")
-    val sp = PolicyTable.syntax("sp")
-    val sr = ResourceTable.syntax("sr")
-    val srt = ResourceTypeTable.syntax("srt")
-    val dpr = PolicyRoleTable.syntax("dpr")
-    val drr = ResourceRoleTable.syntax("drr")
-    val dpa = PolicyActionTable.syntax("dpa")
-    val dra = ResourceActionTable.syntax("dra")
-    val dprrt = ResourceTypeTable.syntax("dprrt")
-    val dpart = ResourceTypeTable.syntax("dpart")
+    val prrt = ResourceTypeTable.syntax("prrt")
+    val part = ResourceTypeTable.syntax("part")
 
     val limitOnePolicyClause: SQLSyntax = limitOnePolicy match {
       case Some(policyName) => samsqls"and ${p.name} = ${policyName}"
@@ -612,7 +608,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     }
 
     val listPoliciesQuery =
-      samsql"""select ${p.result.name}, ${r.result.name}, ${rt.result.name}, ${g.result.email}, ${p.result.public}, ${gm.result.memberUserId}, ${sg.result.name}, ${sp.result.name}, ${sr.result.name}, ${srt.result.name}, ${rr.result.role}, ${ra.result.action}, ${dprrt.result.name}, ${drr.result.role}, ${dpr.result.descends}, ${dpart.result.name}, ${dra.result.action}, ${dpa.result.descends}
+      samsql"""select ${p.result.name}, ${r.result.name}, ${rt.result.name}, ${g.result.email}, ${p.result.public}, ${gm.result.memberUserId}, ${sg.result.name}, ${sp.result.name}, ${sr.result.name}, ${srt.result.name}, ${prrt.result.name}, ${rr.result.role}, ${pr.result.descends}, ${part.result.name}, ${ra.result.action}, ${pa.result.descends}
           from ${GroupTable as g}
           join ${PolicyTable as p} on ${g.id} = ${p.groupId}
           join ${ResourceTable as r} on ${p.resourceId} = ${r.id}
@@ -624,14 +620,10 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
           left join ${ResourceTypeTable as srt} on ${sr.resourceTypeId} = ${srt.id}
           left join ${PolicyRoleTable as pr} on ${p.id} = ${pr.resourcePolicyId}
           left join ${ResourceRoleTable as rr} on ${pr.resourceRoleId} = ${rr.id}
+          left join ${ResourceTypeTable as prrt} on ${rr.resourceTypeId} = ${prrt.id}
           left join ${PolicyActionTable as pa} on ${p.id} = ${pa.resourcePolicyId}
           left join ${ResourceActionTable as ra} on ${pa.resourceActionId} = ${ra.id}
-          left join ${PolicyRoleTable as dpr} on ${p.id} = ${dpr.resourcePolicyId}
-          left join ${ResourceRoleTable as drr} on ${dpr.resourceRoleId} = ${drr.id}
-          left join ${ResourceTypeTable as dprrt} on ${drr.resourceTypeId} = ${dprrt.id}
-          left join ${PolicyActionTable as dpa} on ${p.id} = ${dpa.resourcePolicyId}
-          left join ${ResourceActionTable as dra} on ${dpa.resourceActionId} = ${dra.id}
-          left join ${ResourceTypeTable as dpart} on ${dra.resourceTypeId} = ${dpart.id}
+          left join ${ResourceTypeTable as part} on ${ra.resourceTypeId} = ${part.id}
           where ${r.name} = ${resource.resourceId}
           and ${rt.name} = ${resource.resourceTypeName}
           ${limitOnePolicyClause}"""
@@ -640,31 +632,45 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     runInTransaction("listPolicies", samRequestContext)({ implicit session =>
       val results = listPoliciesQuery.map(rs => (PolicyInfo(rs.get[AccessPolicyName](p.resultName.name), rs.get[ResourceId](r.resultName.name), rs.get[ResourceTypeName](rt.resultName.name), rs.get[WorkbenchEmail](g.resultName.email), rs.boolean(p.resultName.public)),
         (rs.stringOpt(gm.resultName.memberUserId).map(WorkbenchUserId), rs.stringOpt(sg.resultName.name).map(WorkbenchGroupName), rs.stringOpt(sp.resultName.name).map(AccessPolicyName(_)), rs.stringOpt(sr.resultName.name).map(ResourceId(_)), rs.stringOpt(srt.resultName.name).map(ResourceTypeName(_))),
-        (rs.stringOpt(rr.resultName.role).map(ResourceRoleName(_)), rs.stringOpt(ra.resultName.action).map(ResourceAction(_)),
-        ((rs.stringOpt(dprrt.resultName.name).map(ResourceTypeName(_)), rs.stringOpt(drr.resultName.role).map(ResourceRoleName(_)), rs.booleanOpt(dpr.resultName.descends)),
-          (rs.stringOpt(dpart.resultName.name).map(ResourceTypeName(_)), rs.stringOpt(dra.resultName.action).map(ResourceAction(_)), rs.booleanOpt(dpa.resultName.descends))))))
+        ((rs.stringOpt(prrt.resultName.name).map(ResourceTypeName(_)), rs.stringOpt(rr.resultName.role).map(ResourceRoleName(_)), rs.booleanOpt(pr.resultName.descends)),
+          (rs.stringOpt(part.resultName.name).map(ResourceTypeName(_)), rs.stringOpt(ra.resultName.action).map(ResourceAction(_)), rs.booleanOpt(pa.resultName.descends)))))
         .list().apply().groupBy(_._1)
 
       results.map { case (policyInfo, resultsByPolicy) =>
         val (_, memberResults, permissionsResults) = resultsByPolicy.unzip3
 
-        val members: Set[WorkbenchSubject] = memberResults.collect {
-          case (Some(userId), None, None, None, None) => userId
-          case (None, Some(groupName), None, None, None) => groupName
-          case (None, Some(_), Some(policyName), Some(resourceName), Some(resourceTypeName)) => FullyQualifiedPolicyId(FullyQualifiedResourceId(resourceTypeName, resourceName), policyName)
-        }.toSet
+        val policyMembers = unmarshalPolicyMembers(memberResults)
 
-        val (roles, actions, descendantPermissionsResults) = permissionsResults.unzip3
-        val (descendantRolesResults, descendantActionsResults) = descendantPermissionsResults.unzip
-        val descendantPermissions = descendantRolesResults.filter(_._3.getOrElse(false)).groupBy(_._1).collect { case (Some(resourceTypeName), descendantRolesWithResourceType) =>
-          val (_, descendantRoles, _) = descendantRolesWithResourceType.unzip3
-          val descendantActions = descendantActionsResults.filter(_._3.getOrElse(false)).groupBy(_._1).getOrElse(Option(resourceTypeName), List.empty).collect { case (_, descendantAction, _) => descendantAction }.flatten.toSet
-          AccessPolicyDescendantPermissions(resourceTypeName, descendantActions, descendantRoles.flatten.toSet)
-        }.toSet
+        val (policyRoles, policyActions, policyDescendantPermissions) = unmarshalPolicyPermissions(permissionsResults)
 
-        AccessPolicy(FullyQualifiedPolicyId(FullyQualifiedResourceId(policyInfo.resourceTypeName, policyInfo.resourceId), policyInfo.name), members, policyInfo.email, roles.flatten.toSet, actions.flatten.toSet, descendantPermissions, policyInfo.public)
+        AccessPolicy(FullyQualifiedPolicyId(FullyQualifiedResourceId(policyInfo.resourceTypeName, policyInfo.resourceId), policyInfo.name), policyMembers, policyInfo.email, policyRoles, policyActions, policyDescendantPermissions, policyInfo.public)
       }.toStream
     })
+  }
+
+  private def unmarshalPolicyMembers(memberResults: List[(Option[WorkbenchUserId], Option[WorkbenchGroupName], Option[AccessPolicyName], Option[ResourceId], Option[ResourceTypeName])]): Set[WorkbenchSubject] = {
+    memberResults.collect {
+      case (Some(userId), None, None, None, None) => userId
+      case (None, Some(groupName), None, None, None) => groupName
+      case (None, Some(_), Some(policyName), Some(resourceName), Some(resourceTypeName)) => FullyQualifiedPolicyId(FullyQualifiedResourceId(resourceTypeName, resourceName), policyName)
+    }.toSet
+  }
+
+  private def unmarshalPolicyPermissions(permissionsResults: List[((Option[ResourceTypeName], Option[ResourceRoleName], Option[Boolean]), (Option[ResourceTypeName], Option[ResourceAction], Option[Boolean]))]): (Set[ResourceRoleName], Set[ResourceAction], Set[AccessPolicyDescendantPermissions]) = {
+    val (rolesResults, actionsResults) = permissionsResults.unzip
+    val (descendantRolesResults, topLevelRolesResults) = rolesResults.partition(_._3.getOrElse(false))
+    val (descendantActionsResults, topLevelActionsResults) = actionsResults.partition(_._3.getOrElse(false))
+
+    val roles = topLevelRolesResults.collect { case (_, Some(resourceRoleName), _) => resourceRoleName }.toSet
+    val actions = topLevelActionsResults.collect { case (_, Some(resourceActionName), _) => resourceActionName }.toSet
+
+    val descendantPermissions = descendantRolesResults.groupBy(_._1).collect { case (Some(resourceTypeName), descendantRolesWithResourceType) =>
+      val (_, descendantRoles, _) = descendantRolesWithResourceType.unzip3
+      val descendantActions = descendantActionsResults.groupBy(_._1).getOrElse(Option(resourceTypeName), List.empty).map { case (_, descendantAction, _) => descendantAction }
+      AccessPolicyDescendantPermissions(resourceTypeName, descendantActions.flatten.toSet, descendantRoles.flatten.toSet)
+    }.toSet
+
+    (roles, actions, descendantPermissions)
   }
 
   override def listResourcesWithAuthdomains(resourceTypeName: ResourceTypeName, resourceId: Set[ResourceId], samRequestContext: SamRequestContext): IO[Set[Resource]] = {
@@ -948,6 +954,16 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
 }
 
 private final case class PolicyInfo(name: AccessPolicyName, resourceId: ResourceId, resourceTypeName: ResourceTypeName, email: WorkbenchEmail, public: Boolean)
+
+final case class FullyQualifiedResourceRoleName(roleName: ResourceRoleName, resourceTypeName: ResourceTypeName)
+object FullyQualifiedResourceRoleName {
+  def fullyQualify(roles: Set[ResourceRoleName], resourceTypeName: ResourceTypeName) = roles.map(FullyQualifiedResourceRoleName(_, resourceTypeName))
+}
+
+final case class FullyQualifiedResourceAction(action: ResourceAction, resourceTypeName: ResourceTypeName)
+object FullyQualifiedResourceAction {
+  def fullyQualify(actions: Set[ResourceAction], resourceTypeName: ResourceTypeName) = actions.map(FullyQualifiedResourceAction(_, resourceTypeName))
+}
 
 // these 2 case classes represent the logical table used in recursive ancestor resource queries
 // this table does not actually exist but looks like a table in a WITH RECURSIVE query
