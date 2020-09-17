@@ -970,8 +970,11 @@ paths:
         204:
           description: Successfully deleted resource
           content: {}
+        400:
+          description: Cannot delete a resource with children. Delete the children first then try again.
+          content: {}
         403:
-          description: You do not have permission to perform this action on the resource
+          description: You do not have permission to perform this action on the resource or permissions on the resource's parent
           content: {}
         404:
           description: Resource type does not exist or you are not a member of any
@@ -1717,10 +1720,10 @@ paths:
           description: Child resource has an auth domain or new parent would introduce cyclical resource hierarchy
           content: {}
         403:
-          description: You do not have permission to set the parent for the child resource, to remove the child of the current parent, or to add a child to the new parent
+          description: You do not have permission to set the parent for the child resource, to remove the child of the current parent, to add a child to the new parent, or the new parent does not exist
           content: {}
         404:
-          description: You do not have access to the child, new parent, or current resource, or they do not exist
+          description: You do not have access to this resource, or it does not exist
           content: {}
         500:
           description: Internal Server Error
@@ -1751,7 +1754,7 @@ paths:
           description: Resource parent successfully removed
           content: {}
         403:
-          description: You do not have permission to set the parent for the child resource or to remove the child of the current parent
+          description: You do not have permission to set the parent for this resource or to remove this (child) resource from its current parent
           content: {}
         404:
           description: You do not have access to this resource, it does not exist, or it does not currently have a parent resource

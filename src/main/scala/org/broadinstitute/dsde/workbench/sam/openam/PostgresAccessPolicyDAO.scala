@@ -857,7 +857,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     })
   }
 
-  override def deleteResourceParent(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] = {
+  override def deleteResourceParent(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Boolean] = {
     val r = ResourceTable.syntax("r")
     val resourceTableColumn = ResourceTable.column
     val rt = ResourceTypeTable.syntax("rt")
@@ -871,7 +871,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
           and ${r.name} = ${resource.resourceId}
           and ${rt.name} = ${resource.resourceTypeName}"""
 
-      query.update.apply()
+      query.update.apply() > 0
     })
   }
 

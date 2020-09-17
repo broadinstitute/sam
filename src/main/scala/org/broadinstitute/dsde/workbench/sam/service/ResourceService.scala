@@ -7,11 +7,11 @@ import cats.effect.IO
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.{model, _}
 import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, LoadResourceAuthDomainResult}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
+import org.broadinstitute.dsde.workbench.sam.{model, _}
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Success
@@ -196,14 +196,25 @@ class ResourceService(
   // ELSE Resource ID reuse is not allowed, and we enforce this by deleting all policies associated with the Resource,
   //      but not the Resource itself, thereby orphaning the Resource so that it cannot be used or accessed anymore and
   //      preventing a new Resource with the same ID from being created
+  // Resources with children cannot be deleted and will throw a 400.
+  @throws(classOf[WorkbenchExceptionWithErrorReport]) // Necessary to make Mockito happy
   def deleteResource(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): Future[Unit] =
     for {
+      _ <- checkNoChildren(resource, samRequestContext).unsafeToFuture()
+
       // remove from cloud extensions first so a failure there does not leave ldap in a bad state
       policiesToDelete <- cloudDeletePolicies(resource, samRequestContext)
 
       _ <- policiesToDelete.toList.parTraverse(p => accessPolicyDAO.deletePolicy(p.id, samRequestContext)).unsafeToFuture()
       _ <- maybeDeleteResource(resource, samRequestContext)
     } yield ()
+
+  /** Check if a resource has any children. If so, then throw a 400. */
+  def checkNoChildren(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] = {
+    listResourceChildren(resource, samRequestContext) map { list =>
+      if (list.nonEmpty) throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "Cannot delete a resource with children. Delete the children first then try again."))
+    }
+  }
 
   // TODO: CA-993 Once we can check if a policy applies to any children, we need to update this to throw if we try
   // to delete any policies that apply to children
@@ -481,6 +492,7 @@ class ResourceService(
       workbenchUsers.map(user => UserIdInfo(user.id, user.email, user.googleSubjectId))
     }
 
+  @throws(classOf[WorkbenchExceptionWithErrorReport]) // Necessary to make Mockito happy
   def getResourceParent(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Option[FullyQualifiedResourceId]] = {
     accessPolicyDAO.getResourceParent(resourceId, samRequestContext)
   }
@@ -508,7 +520,7 @@ class ResourceService(
     } yield ()
   }
 
-  def deleteResourceParent(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] = {
+  def deleteResourceParent(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Boolean] = {
     accessPolicyDAO.deleteResourceParent(resourceId, samRequestContext)
   }
 
