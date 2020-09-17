@@ -107,22 +107,20 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
           .thenReturn(IO.pure(false))
     }
 
-    newParentOpt match {
-      case Some(newParent) =>
-        when(samRoutes.resourceService.setResourceParent(mockitoEq(childResource), mockitoEq(newParent), any[SamRequestContext]))
-            .thenReturn(IO.unit)
-        actionsOnNewParent.map(action => when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(newParent), mockitoEq(action), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-          .thenReturn(IO(true)))
-        missingActionsOnNewParent.map(action => when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(newParent), mockitoEq(action), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-          .thenReturn(IO(false)))
-        if (accessToNewParent) {
-          when(samRoutes.policyEvaluatorService.listResourceAccessPoliciesForUser(mockitoEq(newParent), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-            .thenReturn(IO(Set(otherPolicy)))
-        } else {
-          when(samRoutes.policyEvaluatorService.listResourceAccessPoliciesForUser(mockitoEq(newParent), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-            .thenReturn(IO(Set[AccessPolicyWithoutMembers]()))
-        }
-      case None =>
+    newParentOpt.map { newParent =>
+      when(samRoutes.resourceService.setResourceParent(mockitoEq(childResource), mockitoEq(newParent), any[SamRequestContext]))
+        .thenReturn(IO.unit)
+      actionsOnNewParent.map(action => when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(newParent), mockitoEq(action), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
+        .thenReturn(IO(true)))
+      missingActionsOnNewParent.map(action => when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(newParent), mockitoEq(action), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
+        .thenReturn(IO(false)))
+      if (accessToNewParent) {
+        when(samRoutes.policyEvaluatorService.listResourceAccessPoliciesForUser(mockitoEq(newParent), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
+          .thenReturn(IO(Set(otherPolicy)))
+      } else {
+        when(samRoutes.policyEvaluatorService.listResourceAccessPoliciesForUser(mockitoEq(newParent), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
+          .thenReturn(IO(Set[AccessPolicyWithoutMembers]()))
+      }
     }
 
     if (accessToChild && accessToCurrentParent) {
