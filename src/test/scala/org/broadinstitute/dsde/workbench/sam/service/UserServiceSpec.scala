@@ -65,7 +65,7 @@ class UserServiceSpec extends FlatSpec with Matchers with TestSupport with Mocki
   before {
     clearDatabase()
 
-    googleExtensions = mock[GoogleExtensions]
+    googleExtensions = mock[GoogleExtensions](RETURNS_SMART_NULLS)
     when(googleExtensions.allUsersGroupName).thenReturn(NoExtensions.allUsersGroupName)
     when(googleExtensions.getOrCreateAllUsersGroup(any[DirectoryDAO], any[SamRequestContext])(any[ExecutionContext])).thenReturn(NoExtensions.getOrCreateAllUsersGroup(dirDAO, samRequestContext))
     when(googleExtensions.onUserCreate(any[WorkbenchUser], any[SamRequestContext])).thenReturn(Future.successful(()))

@@ -95,11 +95,11 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
         FullyQualifiedResourceId(ResourceTypeName("workspace"), ResourceId("rid")), AccessPolicyName("ap")), Set(inSamSubGroup.id, inBothSubGroup.id, inSamUserId, inBothUserId, addError), groupEmail, Set.empty, Set.empty, public = true)
 
     Seq(testGroup, testPolicy).foreach { target =>
-      val mockAccessPolicyDAO = mock[AccessPolicyDAO]
-      val mockDirectoryDAO = mock[DirectoryDAO]
-      val mockGoogleDirectoryDAO = mock[GoogleDirectoryDAO]
+      val mockAccessPolicyDAO = mock[AccessPolicyDAO](RETURNS_SMART_NULLS)
+      val mockDirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
+      val mockGoogleDirectoryDAO = mock[GoogleDirectoryDAO](RETURNS_SMART_NULLS)
       val mockGooglePubSubDAO = new MockGooglePubSubDAO
-      val ge = new GoogleExtensions(TestSupport.fakeDistributedLock, mockDirectoryDAO, mock[RegistrationDAO], mockAccessPolicyDAO, mockGoogleDirectoryDAO, mockGooglePubSubDAO, null, null,null, null, null, null, googleServicesConfig, petServiceAccountConfig, configResourceTypes)
+      val ge = new GoogleExtensions(TestSupport.fakeDistributedLock, mockDirectoryDAO, mock[RegistrationDAO](RETURNS_SMART_NULLS), mockAccessPolicyDAO, mockGoogleDirectoryDAO, mockGooglePubSubDAO, null, null,null, null, null, null, googleServicesConfig, petServiceAccountConfig, configResourceTypes)
       val synchronizer = new GoogleGroupSynchronizer(mockDirectoryDAO, mockAccessPolicyDAO, mockGoogleDirectoryDAO, ge, configResourceTypes)
 
       target match {
@@ -202,10 +202,10 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val rpn = FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("ap"))
     val testPolicy = AccessPolicy(rpn, Set(policyOnlySamUserId, intersectionSamUserId, authorizedGoogleUserId, policyOnlySamSubGroup.id, intersectionSamSubGroup.id, authorizedGoogleSubGroup.id, addError), WorkbenchEmail("testPolicy@example.com"), Set(constrainableRole.roleName), constrainableRole.actions, public = false)
 
-    val mockAccessPolicyDAO = mock[AccessPolicyDAO]
-    val mockDirectoryDAO = mock[DirectoryDAO]
-    val mockGoogleDirectoryDAO = mock[GoogleDirectoryDAO]
-    val ge = new GoogleExtensions(TestSupport.fakeDistributedLock, mockDirectoryDAO, mock[RegistrationDAO], mockAccessPolicyDAO, mockGoogleDirectoryDAO, null, null, null,null, null, null, null, googleServicesConfig, petServiceAccountConfig, constrainableResourceTypes)
+    val mockAccessPolicyDAO = mock[AccessPolicyDAO](RETURNS_SMART_NULLS)
+    val mockDirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
+    val mockGoogleDirectoryDAO = mock[GoogleDirectoryDAO](RETURNS_SMART_NULLS)
+    val ge = new GoogleExtensions(TestSupport.fakeDistributedLock, mockDirectoryDAO, mock[RegistrationDAO](RETURNS_SMART_NULLS), mockAccessPolicyDAO, mockGoogleDirectoryDAO, null, null, null,null, null, null, null, googleServicesConfig, petServiceAccountConfig, constrainableResourceTypes)
     val synchronizer = new GoogleGroupSynchronizer(mockDirectoryDAO, mockAccessPolicyDAO, mockGoogleDirectoryDAO,ge, constrainableResourceTypes)
 
     when(mockAccessPolicyDAO.loadPolicy(testPolicy.id, samRequestContext)).thenReturn(IO.pure(Option(testPolicy)))
@@ -254,12 +254,12 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val subGroup = BasicWorkbenchGroup(subGroupName, Set.empty, subGroupEmail)
     val topGroup = BasicWorkbenchGroup(groupName, Set.empty, groupEmail)
 
-    val mockAccessPolicyDAO = mock[AccessPolicyDAO]
+    val mockAccessPolicyDAO = mock[AccessPolicyDAO](RETURNS_SMART_NULLS)
     val mockDirectoryDAO = new MockDirectoryDAO
-    val mockGoogleDirectoryDAO = mock[GoogleDirectoryDAO]
+    val mockGoogleDirectoryDAO = mock[GoogleDirectoryDAO](RETURNS_SMART_NULLS)
     val mockGooglePubSubDAO = new MockGooglePubSubDAO
     val mockGoogleIamDAO = new MockGoogleIamDAO
-    val ge = new GoogleExtensions(TestSupport.fakeDistributedLock, mockDirectoryDAO, mock[RegistrationDAO], mockAccessPolicyDAO, mockGoogleDirectoryDAO, mockGooglePubSubDAO, mockGoogleIamDAO, null, null, null, null, null, googleServicesConfig, petServiceAccountConfig, configResourceTypes)
+    val ge = new GoogleExtensions(TestSupport.fakeDistributedLock, mockDirectoryDAO, mock[RegistrationDAO](RETURNS_SMART_NULLS), mockAccessPolicyDAO, mockGoogleDirectoryDAO, mockGooglePubSubDAO, mockGoogleIamDAO, null, null, null, null, null, googleServicesConfig, petServiceAccountConfig, configResourceTypes)
     val synchronizer = new GoogleGroupSynchronizer(mockDirectoryDAO, mockAccessPolicyDAO, mockGoogleDirectoryDAO,ge, configResourceTypes)
 
     when(mockGoogleDirectoryDAO.addMemberToGroup(any[WorkbenchEmail], any[WorkbenchEmail])).thenReturn(Future.successful(()))
@@ -398,9 +398,9 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
   it should "get a group's last synchronized date" in {
     val groupName = WorkbenchGroupName("group1")
 
-    val mockDirectoryDAO = mock[DirectoryDAO]
+    val mockDirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
 
-    val ge = new GoogleExtensions(TestSupport.fakeDistributedLock, mockDirectoryDAO, mock[RegistrationDAO], null, null, null, null, null, null, null, null, null, googleServicesConfig, petServiceAccountConfig, configResourceTypes)
+    val ge = new GoogleExtensions(TestSupport.fakeDistributedLock, mockDirectoryDAO, mock[RegistrationDAO](RETURNS_SMART_NULLS), null, null, null, null, null, null, null, null, null, googleServicesConfig, petServiceAccountConfig, configResourceTypes)
 
     when(mockDirectoryDAO.getSynchronizedDate(groupName, samRequestContext)).thenReturn(IO.pure(None))
     ge.getSynchronizedDate(groupName, samRequestContext).unsafeRunSync() shouldBe None
@@ -576,9 +576,9 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val user = WorkbenchUser(userId, None, userEmail, None)
     val proxyEmail = WorkbenchEmail(s"PROXY_$userId@${googleServicesConfig.appsDomain}")
 
-    val mockDirectoryDAO = mock[DirectoryDAO]
-    val mockGoogleDirectoryDAO = mock[GoogleDirectoryDAO]
-    val googleExtensions = new GoogleExtensions(TestSupport.fakeDistributedLock, mockDirectoryDAO, mock[RegistrationDAO], null, mockGoogleDirectoryDAO, null, null, null, null, null, null, null, googleServicesConfig, null, configResourceTypes)
+    val mockDirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
+    val mockGoogleDirectoryDAO = mock[GoogleDirectoryDAO](RETURNS_SMART_NULLS)
+    val googleExtensions = new GoogleExtensions(TestSupport.fakeDistributedLock, mockDirectoryDAO, mock[RegistrationDAO](RETURNS_SMART_NULLS), null, mockGoogleDirectoryDAO, null, null, null, null, null, null, null, googleServicesConfig, null, configResourceTypes)
 
     val allUsersGroup = BasicWorkbenchGroup(NoExtensions.allUsersGroupName, Set.empty, WorkbenchEmail(s"TEST_ALL_USERS_GROUP@test.firecloud.org"))
     val allUsersGroupMatcher = new ArgumentMatcher[BasicWorkbenchGroup] {
@@ -598,9 +598,9 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
   }
 
   it should "do Googley stuff onGroupDelete" in {
-    val mockDirectoryDAO = mock[DirectoryDAO]
-    val mockGoogleDirectoryDAO = mock[GoogleDirectoryDAO]
-    val googleExtensions = new GoogleExtensions(TestSupport.fakeDistributedLock, mockDirectoryDAO, mock[RegistrationDAO], null, mockGoogleDirectoryDAO, null, null, null, null, null, null, null, googleServicesConfig, null, configResourceTypes)
+    val mockDirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
+    val mockGoogleDirectoryDAO = mock[GoogleDirectoryDAO](RETURNS_SMART_NULLS)
+    val googleExtensions = new GoogleExtensions(TestSupport.fakeDistributedLock, mockDirectoryDAO, mock[RegistrationDAO](RETURNS_SMART_NULLS), null, mockGoogleDirectoryDAO, null, null, null, null, null, null, null, googleServicesConfig, null, configResourceTypes)
 
     val testPolicy = BasicWorkbenchGroup(WorkbenchGroupName("blahblahblah"), Set.empty, WorkbenchEmail(s"blahblahblah@test.firecloud.org"))
 
@@ -612,10 +612,10 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
   }
 
   "onGroupUpdate" should "trigger updates to constrained policies if updating a managed group" in {
-    val mockDirectoryDAO = mock[DirectoryDAO]
-    val mockAccessPolicyDAO = mock[AccessPolicyDAO]
-    val mockGooglePubSubDAO = mock[MockGooglePubSubDAO]
-    val googleExtensions = new GoogleExtensions(TestSupport.fakeDistributedLock, mockDirectoryDAO, mock[RegistrationDAO], mockAccessPolicyDAO, null, mockGooglePubSubDAO, null, null, null, null, null, null, googleServicesConfig, null, configResourceTypes)
+    val mockDirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
+    val mockAccessPolicyDAO = mock[AccessPolicyDAO](RETURNS_SMART_NULLS)
+    val mockGooglePubSubDAO = mock[MockGooglePubSubDAO](RETURNS_SMART_NULLS)
+    val googleExtensions = new GoogleExtensions(TestSupport.fakeDistributedLock, mockDirectoryDAO, mock[RegistrationDAO](RETURNS_SMART_NULLS), mockAccessPolicyDAO, null, mockGooglePubSubDAO, null, null, null, null, null, null, googleServicesConfig, null, configResourceTypes)
 
     val managedGroupId = "managedGroupId"
 
@@ -642,10 +642,10 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
   }
 
   it should "trigger updates to constrained policies when updating a group that is a part of a managed group" in {
-    val mockDirectoryDAO = mock[DirectoryDAO]
-    val mockAccessPolicyDAO = mock[AccessPolicyDAO]
-    val mockGooglePubSubDAO = mock[MockGooglePubSubDAO]
-    val googleExtensions = new GoogleExtensions(TestSupport.fakeDistributedLock, mockDirectoryDAO, mock[RegistrationDAO], mockAccessPolicyDAO, null, mockGooglePubSubDAO, null, null, null, null, null, null, googleServicesConfig, null, configResourceTypes)
+    val mockDirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
+    val mockAccessPolicyDAO = mock[AccessPolicyDAO](RETURNS_SMART_NULLS)
+    val mockGooglePubSubDAO = mock[MockGooglePubSubDAO](RETURNS_SMART_NULLS)
+    val googleExtensions = new GoogleExtensions(TestSupport.fakeDistributedLock, mockDirectoryDAO, mock[RegistrationDAO](RETURNS_SMART_NULLS), mockAccessPolicyDAO, null, mockGooglePubSubDAO, null, null, null, null, null, null, googleServicesConfig, null, configResourceTypes)
 
     val managedGroupId = "managedGroupId"
     val subGroupId = "subGroupId"
@@ -676,10 +676,10 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
   }
 
   it should "break out of the loop" in {
-    val mockDirectoryDAO = mock[DirectoryDAO]
-    val mockAccessPolicyDAO = mock[AccessPolicyDAO]
-    val mockGooglePubSubDAO = mock[MockGooglePubSubDAO]
-    val googleExtensions = new GoogleExtensions(TestSupport.fakeDistributedLock, mockDirectoryDAO, mock[RegistrationDAO], mockAccessPolicyDAO, null, mockGooglePubSubDAO, null, null, null, null, null, null, googleServicesConfig, null, configResourceTypes)
+    val mockDirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
+    val mockAccessPolicyDAO = mock[AccessPolicyDAO](RETURNS_SMART_NULLS)
+    val mockGooglePubSubDAO = mock[MockGooglePubSubDAO](RETURNS_SMART_NULLS)
+    val googleExtensions = new GoogleExtensions(TestSupport.fakeDistributedLock, mockDirectoryDAO, mock[RegistrationDAO](RETURNS_SMART_NULLS), mockAccessPolicyDAO, null, mockGooglePubSubDAO, null, null, null, null, null, null, googleServicesConfig, null, configResourceTypes)
 
     val managedGroupId = "managedGroupId"
     val subGroupId = "subGroupId"

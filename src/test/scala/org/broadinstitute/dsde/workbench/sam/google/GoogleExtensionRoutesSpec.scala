@@ -266,7 +266,7 @@ trait GoogleExtensionRoutesSpecHelper extends FlatSpec with Matchers with Scalat
   }
 
   def createMockGoogleIamDaoForSAKeyTests: (GoogleIamDAO, String) = {
-    val googleIamDAO = mock[GoogleIamDAO]
+    val googleIamDAO = mock[GoogleIamDAO](RETURNS_SMART_NULLS)
     val expectedJson = """{"json":"yes I am"}"""
     when(googleIamDAO.findServiceAccount(any[GoogleProject], any[ServiceAccountName])).thenReturn(Future.successful(None))
     when(googleIamDAO.createServiceAccount(any[GoogleProject], any[ServiceAccountName], any[ServiceAccountDisplayName])).thenReturn(Future.successful(ServiceAccount(ServiceAccountSubjectId("12312341234"), WorkbenchEmail("pet@myproject.iam.gserviceaccount.com"), ServiceAccountDisplayName(""))))

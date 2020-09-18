@@ -14,7 +14,7 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, PostgresAccessPolicyDAO}
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.mockito.ArgumentMatchers
-import org.mockito.Mockito.{verify, when}
+import org.mockito.Mockito._
 import org.scalatest._
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.mockito.MockitoSugar
@@ -112,7 +112,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
   }
 
   it should "sync the new group with Google" in {
-    val mockGoogleExtensions = mock[GoogleExtensions]
+    val mockGoogleExtensions = mock[GoogleExtensions](RETURNS_SMART_NULLS)
     val managedGroupService = new ManagedGroupService(resourceService, null, resourceTypeMap, policyDAO, dirDAO, mockGoogleExtensions, testDomain)
     val groupName = WorkbenchGroupName(resourceId.value)
 
@@ -169,7 +169,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
   // because the resource no longer exists
   "ManagedGroupService delete" should "delete policies associated to that resource in LDAP and in Google" in {
     val groupEmail = WorkbenchEmail(resourceId.value + "@" + testDomain)
-    val mockGoogleExtensions = mock[GoogleExtensions]
+    val mockGoogleExtensions = mock[GoogleExtensions](RETURNS_SMART_NULLS)
     when(mockGoogleExtensions.onGroupDelete(groupEmail)).thenReturn(Future.successful(()))
     when(mockGoogleExtensions.publishGroup(WorkbenchGroupName(resourceId.value))).thenReturn(Future.successful(()))
     val managedGroupService = new ManagedGroupService(resourceService, null, resourceTypeMap, policyDAO, dirDAO, mockGoogleExtensions, testDomain)
@@ -404,7 +404,7 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
   }
 
   "ManagedGroupService requestAccess" should "send notifications" in {
-    val mockCloudExtension = mock[CloudExtensions]
+    val mockCloudExtension = mock[CloudExtensions](RETURNS_SMART_NULLS)
     when(mockCloudExtension.publishGroup(ArgumentMatchers.any[WorkbenchGroupName])).thenReturn(Future.successful(()))
     val testManagedGroupService = new ManagedGroupService(resourceService, policyEvaluatorService, resourceTypeMap, policyDAO, dirDAO, mockCloudExtension, testDomain)
 

@@ -34,7 +34,7 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
     override implicit val executionContext: ExecutionContext = null
     override val directoryDAO: DirectoryDAO = new MockDirectoryDAO()
     override val cloudExtensions: CloudExtensions = null
-    override val identityConcentratorService: Option[IdentityConcentratorService] = Option(mock[IdentityConcentratorService])
+    override val identityConcentratorService: Option[IdentityConcentratorService] = Option(mock[IdentityConcentratorService](RETURNS_SMART_NULLS))
     override val userService: UserService = null
   }
 
@@ -133,7 +133,7 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
     val identityConcentratorId = TestSupport.genIdentityConcentratorId()
     val email = genNonPetEmail.sample.get
     directoryDAO.createUser(WorkbenchUser(uid, Some(googleSubjectId), email, Option(identityConcentratorId)), samRequestContext).unsafeRunSync()
-    val userInfo = getUserInfoFromJwt(validJwtUserInfo(identityConcentratorId), OAuth2BearerToken(""), directoryDAO, mock[IdentityConcentratorService], samRequestContext).unsafeRunSync()
+    val userInfo = getUserInfoFromJwt(validJwtUserInfo(identityConcentratorId), OAuth2BearerToken(""), directoryDAO, mock[IdentityConcentratorService](RETURNS_SMART_NULLS), samRequestContext).unsafeRunSync()
     assert(userInfo.tokenExpiresIn <= 0)
     assert(userInfo.tokenExpiresIn > -30)
     userInfo.copy(tokenExpiresIn = 0) shouldEqual UserInfo(OAuth2BearerToken(""), uid, email, 0)
@@ -148,7 +148,7 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
 
     directoryDAO.createUser(WorkbenchUser(uid, Some(googleSubjectId), email, None), samRequestContext).unsafeRunSync()
 
-    val icService = mock[IdentityConcentratorService]
+    val icService = mock[IdentityConcentratorService](RETURNS_SMART_NULLS)
     val bearerToken = OAuth2BearerToken("shhhh, secret")
     when(icService.getGoogleIdentities(bearerToken)).thenReturn(IO.pure(Seq((googleSubjectId, email))))
     getUserInfoFromJwt(validJwtUserInfo(identityConcentratorId), bearerToken, directoryDAO, icService, samRequestContext).unsafeRunSync()
@@ -159,7 +159,7 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
   it should "500 when user is linked to more than 1 google account" in {
     val directoryDAO = new MockDirectoryDAO()
     val identityConcentratorId = TestSupport.genIdentityConcentratorId()
-    val icService = mock[IdentityConcentratorService]
+    val icService = mock[IdentityConcentratorService](RETURNS_SMART_NULLS)
     val bearerToken = OAuth2BearerToken("shhhh, secret")
 
     when(icService.getGoogleIdentities(bearerToken)).thenReturn(IO.pure(Seq(
@@ -178,7 +178,7 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
   it should "404 for valid jwt but user does not exist in sam db" in {
     val directoryDAO = new MockDirectoryDAO()
     val t = intercept[WorkbenchExceptionWithErrorReport] {
-      val identityConcentratorService = mock[IdentityConcentratorService]
+      val identityConcentratorService = mock[IdentityConcentratorService](RETURNS_SMART_NULLS)
       when(identityConcentratorService.getGoogleIdentities(any[OAuth2BearerToken])).thenReturn(IO.pure(Seq((GoogleSubjectId(""), WorkbenchEmail("")))))
       getUserInfoFromJwt(validJwtUserInfo(TestSupport.genIdentityConcentratorId()), OAuth2BearerToken(""), directoryDAO, identityConcentratorService, samRequestContext).unsafeRunSync()
     }
@@ -190,7 +190,7 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
   it should "500 for valid jwt but no linked accounts in ic" in {
     val directoryDAO = new MockDirectoryDAO()
     val t = intercept[WorkbenchExceptionWithErrorReport] {
-      val identityConcentratorService = mock[IdentityConcentratorService]
+      val identityConcentratorService = mock[IdentityConcentratorService](RETURNS_SMART_NULLS)
       when(identityConcentratorService.getGoogleIdentities(any[OAuth2BearerToken])).thenReturn(IO.pure(Seq.empty))
       getUserInfoFromJwt(validJwtUserInfo(TestSupport.genIdentityConcentratorId()), OAuth2BearerToken(""), directoryDAO, identityConcentratorService, samRequestContext).unsafeRunSync()
     }
@@ -204,7 +204,7 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
     val identityConcentratorId = TestSupport.genIdentityConcentratorId()
     val email = genNonPetEmail.sample.get
 
-    val icService = mock[IdentityConcentratorService]
+    val icService = mock[IdentityConcentratorService](RETURNS_SMART_NULLS)
     val bearerToken = OAuth2BearerToken("shhhh, secret")
     when(icService.getGoogleIdentities(bearerToken)).thenReturn(IO.pure(Seq((googleSubjectId, email))))
     val createUser = newCreateWorkbenchUserFromJwt(validJwtUserInfo(identityConcentratorId), bearerToken, icService).unsafeRunSync()
@@ -217,7 +217,7 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
   it should "500 for 0 google accounts" in {
     val identityConcentratorId = TestSupport.genIdentityConcentratorId()
 
-    val icService = mock[IdentityConcentratorService]
+    val icService = mock[IdentityConcentratorService](RETURNS_SMART_NULLS)
     val bearerToken = OAuth2BearerToken("shhhh, secret")
     when(icService.getGoogleIdentities(bearerToken)).thenReturn(IO.pure(Seq.empty))
     val t = intercept[WorkbenchExceptionWithErrorReport] {
@@ -230,7 +230,7 @@ class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting 
   it should "500 for more than 1 google account" in {
     val identityConcentratorId = TestSupport.genIdentityConcentratorId()
 
-    val icService = mock[IdentityConcentratorService]
+    val icService = mock[IdentityConcentratorService](RETURNS_SMART_NULLS)
     val bearerToken = OAuth2BearerToken("shhhh, secret")
     when(icService.getGoogleIdentities(bearerToken)).thenReturn(IO.pure(Seq(
       (GoogleSubjectId(genRandom(System.currentTimeMillis())), genNonPetEmail.sample.get),

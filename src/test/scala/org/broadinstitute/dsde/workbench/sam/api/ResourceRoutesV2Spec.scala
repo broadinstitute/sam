@@ -41,8 +41,8 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
     val registrationDAO = new MockDirectoryDAO()
     val emailDomain = "example.com"
 
-    val policyEvaluatorService = mock[PolicyEvaluatorService]
-    val mockResourceService = mock[ResourceService]
+    val policyEvaluatorService = mock[PolicyEvaluatorService](RETURNS_SMART_NULLS)
+    val mockResourceService = mock[ResourceService](RETURNS_SMART_NULLS)
     resourceTypes.map { case (resourceTypeName, resourceType) =>
       when(mockResourceService.getResourceType(resourceTypeName)).thenReturn(IO(Option(resourceType)))
     }
