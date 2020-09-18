@@ -73,7 +73,7 @@ class MockAccessPolicyDAOSpec extends FlatSpec with Matchers with TestSupport wi
     val shared = sharedFixtures
     val mockDirDao = new MockDirectoryDAO(shared.groups)
     val mockRegDao = new MockDirectoryDAO()
-    val mockPolicyDAO = new MockAccessPolicyDAO(shared.groups)
+    val mockPolicyDAO = new MockAccessPolicyDAO(shared.resourceTypes, shared.groups)
     val allUsersGroup: WorkbenchGroup = TestSupport.runAndWait(NoExtensions.getOrCreateAllUsersGroup(mockDirDao, samRequestContext))
 
     val policyEvaluatorService = PolicyEvaluatorService(shared.emailDomain, shared.resourceTypes, mockPolicyDAO, mockDirDao)

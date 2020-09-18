@@ -69,8 +69,8 @@ trait SecurityDirectives {
     * a Not Found (you have no access) vs a Forbidden (you have access, just not the right kind)
     */
   private def determineErrorMessage(resource: FullyQualifiedResourceId, userId: WorkbenchUserId, forbiddenErrorMessage: String, samRequestContext: SamRequestContext) = {
-    onSuccess(policyEvaluatorService.listResourceAccessPoliciesForUser(resource, userId, samRequestContext)) { policies =>
-      if (policies.isEmpty) {
+    onSuccess(policyEvaluatorService.listUserResourceActions(resource, userId, samRequestContext)) { actions =>
+      if (actions.isEmpty) {
         Directives.failWith(
           new WorkbenchExceptionWithErrorReport(
             ErrorReport(StatusCodes.NotFound, s"Resource ${resource.resourceTypeName.value}/${resource.resourceId.value} not found")))

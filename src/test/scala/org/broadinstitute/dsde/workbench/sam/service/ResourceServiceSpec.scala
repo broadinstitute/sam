@@ -764,23 +764,18 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     runAndWait(service.createResource(defaultResourceType, resource.resourceId, dummyUserInfo, samRequestContext))
 
     // assert baseline
-    assertResult(Set.empty) {
-      service.policyEvaluatorService.listUserAccessPolicies(defaultResourceType.name, otherUserInfo.userId, samRequestContext).unsafeRunSync()
-    }
+    service.policyEvaluatorService.listUserResources(defaultResourceType.name, otherUserInfo.userId, samRequestContext).unsafeRunSync() shouldBe empty
 
     runAndWait(service.addSubjectToPolicy(FullyQualifiedPolicyId(resource, policyName), otherUserInfo.userId, samRequestContext))
-    assertResult(Set(UserPolicyResponse(resource.resourceId, policyName, Set.empty, Set.empty, false))) {
-      service.policyEvaluatorService.listUserAccessPolicies(defaultResourceType.name, otherUserInfo.userId, samRequestContext).unsafeRunSync()
-    }
+    service.policyEvaluatorService.listUserResources(defaultResourceType.name, otherUserInfo.userId, samRequestContext).unsafeRunSync() should contain theSameElementsAs
+      Set(UserResourcesResponse(resource.resourceId, RolesAndActions.fromRoles(Set(defaultResourceType.ownerRoleName)), RolesAndActions.empty, RolesAndActions.empty, Set.empty, Set.empty))
 
     // add a second time to make sure no exception is thrown
     runAndWait(service.addSubjectToPolicy(FullyQualifiedPolicyId(resource, policyName), otherUserInfo.userId, samRequestContext))
 
 
     runAndWait(service.removeSubjectFromPolicy(FullyQualifiedPolicyId(resource, policyName), otherUserInfo.userId, samRequestContext))
-    assertResult(Set.empty) {
-      service.policyEvaluatorService.listUserAccessPolicies(defaultResourceType.name, otherUserInfo.userId, samRequestContext).unsafeRunSync()
-    }
+    service.policyEvaluatorService.listUserResources(defaultResourceType.name, otherUserInfo.userId, samRequestContext).unsafeRunSync() shouldBe empty
 
     // remove a second time to make sure no exception is thrown
     runAndWait(service.removeSubjectFromPolicy(FullyQualifiedPolicyId(resource, policyName), otherUserInfo.userId, samRequestContext))

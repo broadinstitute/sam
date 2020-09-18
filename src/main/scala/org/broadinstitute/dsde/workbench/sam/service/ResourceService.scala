@@ -67,7 +67,7 @@ class ResourceService(
                 Set.empty,
                 Set.empty)
               // note that this skips all validations and just creates a resource with owner policies with no members
-              // it will require someone with direct ldap access to bootstrap
+              // it will require someone with direct database access to bootstrap
               _ <- persistResource(resourceTypeAdmin, ResourceId(rt.name.value), Set(policy), Set.empty, samRequestContext).recover {
                 case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode.contains(StatusCodes.Conflict) =>
                   // ok if the resource already exists
@@ -245,12 +245,7 @@ class ResourceService(
     }
 
   def listUserResourceRoles(resource: FullyQualifiedResourceId, userInfo: UserInfo, samRequestContext: SamRequestContext): Future[Set[ResourceRoleName]] =
-    policyEvaluatorService
-      .listResourceAccessPoliciesForUser(resource, userInfo.userId, samRequestContext)
-      .map { matchingPolicies =>
-        matchingPolicies.flatMap(_.roles)
-      }
-      .unsafeToFuture()
+    accessPolicyDAO.listUserResourceRoles(resource, userInfo.userId, samRequestContext).unsafeToFuture()
 
   /**
     * Overwrites an existing policy (keyed by resourceType/resourceId/policyName), saves a new one if it doesn't exist yet

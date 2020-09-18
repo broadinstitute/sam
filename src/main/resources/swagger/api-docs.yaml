@@ -1613,7 +1613,7 @@ paths:
     get:
       tags:
         - Resources
-      summary: List resources and policies for this resource for the caller
+      summary: List resources with their roles and action for this resource type accessible to the caller
       operationId: listResourcesAndPoliciesV2
       parameters:
         - name: resourceTypeName
@@ -1630,7 +1630,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/ResourceAndAccessPolicy'
+                  $ref: '#/components/schemas/UserResourcesResponse'
     post:
       tags:
         - Resources
@@ -3055,6 +3055,20 @@ components:
           description: The name of the role that can perform administrative functions
             on a resource of this type
       description: specification of a type of resource
+    RolesAndActions:
+      required:
+        - actions
+        - roles
+      type: object
+      properties:
+        roles:
+          type: array
+          items:
+            type: string
+        actions:
+          type: array
+          items:
+            type: string
     SamVersion:
       type: object
       properties:
@@ -3160,6 +3174,40 @@ components:
           type: string
           description: user email
       description: the user's details
+    UserResourcesResponse:
+      required:
+        - resourceId
+        - direct
+        - inherited
+        - public
+        - authDomainGroups
+        - missingAuthDomainGroups
+      type: object
+      properties:
+        resourceId:
+          type: string
+          description: The id of the resource
+        direct:
+          description: roles and actions assigned (via membership or public) by a policy directly on this resource
+          allOf:
+            - $ref: '#/components/schemas/RolesAndActions'
+        inherited:
+          description: roles and actions assigned (via membership or public) by a policy on an ancestor of this resource
+          allOf:
+            - $ref: '#/components/schemas/RolesAndActions'
+        public:
+          description: roles and actions on public policies of this resource or an ancestor of this resource
+          allOf:
+            - $ref: '#/components/schemas/RolesAndActions'
+        authDomainGroups:
+          type: array
+          items:
+            type: string
+        missingAuthDomainGroups:
+          type: array
+          items:
+            type: string
+      description: specification of a resource with an access policy
     UserStatus:
       required:
         - enabled
