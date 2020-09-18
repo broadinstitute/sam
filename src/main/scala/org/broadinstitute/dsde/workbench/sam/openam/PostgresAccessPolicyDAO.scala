@@ -706,6 +706,9 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     listResourcesWithAuthdomains(resourceId.resourceTypeName, Set(resourceId.resourceId), samRequestContext).map(_.headOption)
   }
 
+  // used to list the the resources/policies a user has access to
+  //  - policies may now come from parent - probably need to disambiguate policy name
+  // also used to list the managed groups but that does not matter for hierarchy
   override def listAccessPolicies(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[ResourceIdAndPolicyName]] = {
     val ancestorGroupsTable = SubGroupMemberTable("ancestor_groups")
     val ag = ancestorGroupsTable.syntax("ag")
@@ -742,6 +745,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     listPolicies(resource, samRequestContext = samRequestContext)
   }
 
+  // only used to determine what actions a user has on the resource, could be rewritten as listUserResourceActions
   override def listAccessPoliciesForUser(resource: FullyQualifiedResourceId, user: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[AccessPolicyWithoutMembers]] = {
     runInTransaction("listAccessPoliciesForUser", samRequestContext)({ implicit session =>
       val ancestorGroupsTable = SubGroupMemberTable("ancestor_groups")
@@ -793,6 +797,69 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
 
         AccessPolicyWithoutMembers(FullyQualifiedPolicyId(FullyQualifiedResourceId(policyInfo.resourceTypeName, policyInfo.resourceId), policyInfo.name), policyInfo.email, roles.flatten.toSet, actions.flatten.toSet, policyInfo.public)
       }.toSet
+    })
+  }
+
+  def listUserResourceActions(resourceId: FullyQualifiedResourceId, user: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[ResourceAction]] = {
+    runInTransaction("listAccessPoliciesForUser", samRequestContext)({ implicit session =>
+      val ancestorGroupsTable = SubGroupMemberTable("ancestor_groups")
+      val ancestorGroup = ancestorGroupsTable.syntax("ancestorGroup")
+      val agColumn = ancestorGroupsTable.column
+
+      val parentGroup = GroupMemberTable.syntax("parent_groups")
+      val resource = ResourceTable.syntax("resource")
+      val resourceType = ResourceTypeTable.syntax("resourceType")
+      val groupMember = GroupMemberTable.syntax("groupMember")
+      val policy = PolicyTable.syntax("policy")
+
+      val policyRole = PolicyRoleTable.syntax("policyRole")
+      val resourceRole = ResourceRoleTable.syntax("resourceRole")
+      val policyActionJoin = PolicyActionTable.syntax("policyActionJoin")
+      val policyAction = ResourceActionTable.syntax("policyAction")
+      val roleActionJoin = RoleActionTable.syntax("roleActionJoin")
+      val roleAction = ResourceActionTable.syntax("roleAction")
+
+      val ancestorResourceTable = AncestorResourceTable("ancestor_resource")
+      val ancestorResource = ancestorResourceTable.syntax("ancestorResource")
+      val arColumn = ancestorResourceTable.column
+      val parentResource = ResourceTable.syntax("parentResource")
+
+      val listUserResourceActionsQuery = samsql"""with recursive
+        ${ancestorGroupsTable.table}(${agColumn.parentGroupId}) as (
+          select ${groupMember.groupId}
+          from ${GroupMemberTable as groupMember}
+          where ${groupMember.memberUserId} = ${user}
+          union
+          select ${parentGroup.groupId}
+          from ${GroupMemberTable as parentGroup}
+          join ${ancestorGroupsTable as ancestorGroup} on ${agColumn.parentGroupId} = ${parentGroup.memberGroupId}),
+
+        ${ancestorResourceTable.table}(${arColumn.resourceId}, ${arColumn.isAncestor}, ${arColumn.baseResourceTypeId}) as (
+          select ${resource.id}, false, ${resourceType.id}
+          from ${ResourceTable as resource}
+          join ${ResourceTypeTable as resourceType} on ${resource.resourceTypeId} = ${resourceType.id}
+          where ${resource.name} = ${resourceId.resourceId}
+          and ${resourceType.name} = ${resourceId.resourceTypeName}
+          union
+          select ${parentResource.resourceParentId}, true, ${ancestorResource.baseResourceTypeId}
+          from ${ResourceTable as parentResource}
+          join ${ancestorResourceTable as ancestorResource} on ${ancestorResource.resourceId} = ${parentResource.id}
+          where ${parentResource.resourceParentId} is not null)
+
+        select ${roleAction.result.action}, ${policyAction.result.action}
+          from ${ancestorResourceTable as ancestorResource}
+          join ${PolicyTable as policy} on ${policy.resourceId} = ${ancestorResource.resourceId}
+          left join ${PolicyRoleTable as policyRole} on ${policy.id} = ${policyRole.resourcePolicyId} and ${ancestorResource.isAncestor} = ${policyRole.descends}
+          left join ${ResourceRoleTable as resourceRole} on ${policyRole.resourceRoleId} = ${resourceRole.id} and ${ancestorResource.baseResourceTypeId} = ${resourceRole.resourceTypeId}
+          left join ${RoleActionTable as roleActionJoin} on ${resourceRole.id} = ${roleActionJoin.resourceRoleId}
+          left join ${ResourceActionTable as roleAction} on ${roleActionJoin.resourceActionId} = ${roleAction.id}
+          left join ${PolicyActionTable as policyActionJoin} on ${policy.id} = ${policyActionJoin.resourcePolicyId} and ${ancestorResource.isAncestor} = ${policyActionJoin.descends}
+          left join ${ResourceActionTable as policyAction} on ${policyActionJoin.resourceActionId} = ${policyAction.id} and ${ancestorResource.baseResourceTypeId} = ${policyAction.resourceTypeId}
+          where ${policy.public} OR ${policy.groupId} in (select ${ancestorGroup.parentGroupId} from ${ancestorGroupsTable as ancestorGroup})"""
+
+      listUserResourceActionsQuery.map { rs =>
+        rs.stringOpt(roleAction.resultName.action).map(ResourceAction(_)) ++ rs.stringOpt(policyAction.resultName.action).map(ResourceAction(_))
+      }.list().apply().flatten.toSet
     })
   }
 
@@ -856,7 +923,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     val resourceTableColumn = ResourceTable.column
 
     val query =
-      samsql"""with recursive ${ancestorResourceTable.table}(${arColumn.resourceParentId}) as (
+      samsql"""with recursive ${ancestorResourceTable.table}(${arColumn.resourceId}) as (
                 select ${r.id}
                 from ${ResourceTable as r}
                 join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
@@ -865,7 +932,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
                 union
                 select ${pr.resourceParentId}
                 from ${ResourceTable as pr}
-                join ${ancestorResourceTable as ar} on ${ar.resourceParentId} = ${pr.id}
+                join ${ancestorResourceTable as ar} on ${ar.resourceId} = ${pr.id}
                 where ${pr.resourceParentId} is not null
       ) update ${ResourceTable as r}
         set ${resourceTableColumn.resourceParentId} =
@@ -879,7 +946,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
         and ${r.name} = ${childResource.resourceId}
         and ${rt.name} = ${childResource.resourceTypeName}
         and ${r.id} not in
-            ( select ${ar.resourceParentId}
+            ( select ${ar.resourceId}
               from ${ancestorResourceTable as ar} )"""
 
     runInTransaction("setResourceParent", samRequestContext)({ implicit session =>
@@ -967,8 +1034,8 @@ object FullyQualifiedResourceAction {
 
 // these 2 case classes represent the logical table used in recursive ancestor resource queries
 // this table does not actually exist but looks like a table in a WITH RECURSIVE query
-final case class AncestorResourceRecord(resourceParentId: ResourcePK)
+final case class AncestorResourceRecord(resourceId: ResourcePK, isAncestor: Boolean, baseResourceTypeId: ResourceTypePK)
 final case class AncestorResourceTable(override val tableName: String) extends SQLSyntaxSupport[AncestorResourceRecord] {
   // need to specify column names explicitly because this table does not actually exist in the database
-  override val columnNames: Seq[String] = Seq("resource_parent_id")
+  override val columnNames: Seq[String] = Seq("resource_id", "is_ancestor", "base_resource_type_id")
 }
