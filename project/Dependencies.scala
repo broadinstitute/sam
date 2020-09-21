@@ -45,7 +45,7 @@ object Dependencies {
 
   val akkaActor: ModuleID =         "com.typesafe.akka"   %%  "akka-actor"           % akkaV
   val akkaSlf4j: ModuleID =         "com.typesafe.akka"   %%  "akka-slf4j"           % akkaV
-  val akkaStream: ModuleID =        "com.typesafe.akka"   %%  "akka-stream"          % akkaV
+  val akkaStream: ModuleID =        "com.typesafe.akka"   %%  "akka-stream"          % akkaV               excludeAll(excludeAkkaProtobufV3)
   val akkaHttp: ModuleID =          "com.typesafe.akka"   %%  "akka-http"            % akkaHttpV           excludeAll(excludeAkkaActor)
   val akkaHttpSprayJson: ModuleID = "com.typesafe.akka"   %%  "akka-http-spray-json" % akkaHttpV
   val akkaTestKit: ModuleID =       "com.typesafe.akka"   %%  "akka-testkit"         % akkaV     % "test"
