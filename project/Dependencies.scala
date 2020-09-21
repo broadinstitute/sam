@@ -1,8 +1,8 @@
 import sbt._
 
 object Dependencies {
-  val akkaV = "2.6.1"
-  val akkaHttpV = "10.1.11"
+  val akkaV = "2.6.8"
+  val akkaHttpV = "10.2.0"
   val jacksonV = "2.9.5"
   val scalaLoggingV = "3.5.0"
   val scalaTestV    = "3.0.5"
@@ -43,6 +43,7 @@ object Dependencies {
 
   val akkaActor: ModuleID =         "com.typesafe.akka"   %%  "akka-actor"           % akkaV
   val akkaSlf4j: ModuleID =         "com.typesafe.akka"   %%  "akka-slf4j"           % akkaV
+  val akkaStream: ModuleID =        "com.typesafe.akka"   %%  "akka-stream"          % akkaV
   val akkaHttp: ModuleID =          "com.typesafe.akka"   %%  "akka-http"            % akkaHttpV           excludeAll(excludeAkkaActor)
   val akkaHttpSprayJson: ModuleID = "com.typesafe.akka"   %%  "akka-http-spray-json" % akkaHttpV
   val akkaTestKit: ModuleID =       "com.typesafe.akka"   %%  "akka-testkit"         % akkaV     % "test"
@@ -122,6 +123,7 @@ object Dependencies {
 
     akkaActor,
     akkaSlf4j,
+    akkaStream,
     akkaHttp,
     akkaHttpSprayJson,
     akkaTestKit,
