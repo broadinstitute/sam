@@ -234,12 +234,7 @@ class ResourceService(
     }
 
   def listUserResourceRoles(resource: FullyQualifiedResourceId, userInfo: UserInfo, samRequestContext: SamRequestContext): Future[Set[ResourceRoleName]] =
-    policyEvaluatorService
-      .listResourceAccessPoliciesForUser(resource, userInfo.userId, samRequestContext)
-      .map { matchingPolicies =>
-        matchingPolicies.flatMap(_.roles)
-      }
-      .unsafeToFuture()
+    accessPolicyDAO.listUserResourceRoles(resource, userInfo.userId, samRequestContext).unsafeToFuture()
 
   /**
     * Overwrites an existing policy (keyed by resourceType/resourceId/policyName), saves a new one if it doesn't exist yet

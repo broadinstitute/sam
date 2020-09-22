@@ -62,20 +62,12 @@ class PolicyEvaluatorService(
     * @return
     */
   def listUserResourceActions(resource: FullyQualifiedResourceId, userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[ResourceAction]] = {
-    def allActions(policy: AccessPolicyWithoutMembers, resourceType: ResourceType): Set[ResourceAction] = {
-      val roleActions = policy.roles.flatMap { role =>
-        resourceType.roles.filter(_.roleName == role).flatMap(_.actions)
-      }
-      policy.actions ++ roleActions
-    }
-
     for {
       rt <- IO.fromEither[ResourceType](
         resourceTypes.get(resource.resourceTypeName).toRight(new WorkbenchException(s"missing configuration for resourceType ${resource.resourceTypeName}")))
       isConstrainable = rt.isAuthDomainConstrainable
 
-      policiesForResource <- listResourceAccessPoliciesForUser(resource, userId, samRequestContext)
-      allPolicyActions = policiesForResource.flatMap(p => allActions(p, rt))
+      allPolicyActions <- accessPolicyDAO.listUserResourceActions(resource, userId, samRequestContext)
       res <- if (isConstrainable) {
         for {
           authDomainsResult <- accessPolicyDAO.loadResourceAuthDomain(resource, samRequestContext)
@@ -99,6 +91,7 @@ class PolicyEvaluatorService(
     } yield res
   }
 
+  @deprecated("listing policies for resource type removed", since = "ResourceRoutes v2")
   def listUserAccessPolicies(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[UserPolicyResponse]] =
     for {
       rt <- IO.fromEither(
@@ -146,6 +139,7 @@ class PolicyEvaluatorService(
       policies.map(_.groupName)
     }
 
+  @deprecated("listing policies for resource type removed", since = "ResourceRoutes v2")
   def listResourceAccessPoliciesForUser(resource: FullyQualifiedResourceId, userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[AccessPolicyWithoutMembers]] =
     for {
       policies <- traceIOWithContext("listAccessPoliciesForUser", samRequestContext)(samRequestContext => accessPolicyDAO.listAccessPoliciesForUser(resource, userId, samRequestContext))

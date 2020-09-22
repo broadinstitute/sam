@@ -27,9 +27,9 @@ trait SecurityDirectives {
 
           // in the case where we don't have the required action, we need to figure out if we should return
           // a Not Found (you have no access) vs a Forbidden (you have access, just not the right kind)
-          onSuccess(policyEvaluatorService.listResourceAccessPoliciesForUser(resource, userId, samRequestContext)) { policies =>
+          onSuccess(policyEvaluatorService.listUserResourceActions(resource, userId, samRequestContext)) { actions =>
 
-            if (policies.isEmpty) {
+            if (actions.isEmpty) {
               Directives.failWith(
                 new WorkbenchExceptionWithErrorReport(
                   ErrorReport(StatusCodes.NotFound, s"Resource ${resource.resourceTypeName.value}/${resource.resourceId.value} not found")))
