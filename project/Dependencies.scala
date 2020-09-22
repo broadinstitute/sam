@@ -1,8 +1,8 @@
 import sbt._
 
 object Dependencies {
-  val akkaV = "2.6.1"
-  val akkaHttpV = "10.1.11"
+  val akkaV = "2.6.8"
+  val akkaHttpV = "10.2.0"
   val jacksonV = "2.9.5"
   val scalaLoggingV = "3.5.0"
   val scalaTestV    = "3.0.5"
@@ -15,7 +15,7 @@ object Dependencies {
 
   val workbenchUtilV   = "0.5-6942040"
   val workbenchModelV  = "0.14-3c0b510"
-  val workbenchGoogleV = "0.21-445035e"
+  val workbenchGoogleV = "0.21-64a7b29"
   val workbenchGoogle2V = "0.6-31cacc4"
   val workbenchNotificationsV = "0.1-f2a0020"
   val workbenchNewRelicV = "0.2-24dabc8"
@@ -23,6 +23,8 @@ object Dependencies {
   val newRelicVersion = "4.11.0"
 
   val excludeAkkaActor =        ExclusionRule(organization = "com.typesafe.akka", name = "akka-actor_2.12")
+  val excludeAkkaProtobufV3 =   ExclusionRule(organization = "com.typesafe.akka", name = "akka-protobuf-v3_2.12")
+  val excludeAkkaStream =       ExclusionRule(organization = "com.typesafe.akka", name = "akka-stream_2.12")
   val excludeWorkbenchUtil =    ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-util_2.12")
   val excludeWorkbenchModel =   ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-model_2.12")
   val excludeWorkbenchMetrics = ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-metrics_2.12")
@@ -43,6 +45,7 @@ object Dependencies {
 
   val akkaActor: ModuleID =         "com.typesafe.akka"   %%  "akka-actor"           % akkaV
   val akkaSlf4j: ModuleID =         "com.typesafe.akka"   %%  "akka-slf4j"           % akkaV
+  val akkaStream: ModuleID =        "com.typesafe.akka"   %%  "akka-stream"          % akkaV               excludeAll(excludeAkkaProtobufV3)
   val akkaHttp: ModuleID =          "com.typesafe.akka"   %%  "akka-http"            % akkaHttpV           excludeAll(excludeAkkaActor)
   val akkaHttpSprayJson: ModuleID = "com.typesafe.akka"   %%  "akka-http-spray-json" % akkaHttpV
   val akkaTestKit: ModuleID =       "com.typesafe.akka"   %%  "akka-testkit"         % akkaV     % "test"
@@ -96,7 +99,7 @@ object Dependencies {
 
   val excludeScalaCllectionCompat =  ExclusionRule(organization = "org.scala-lang.modules", name = "scala-collection-compat_2.12")
   val opencensusScalaCode: ModuleID = "com.github.sebruck" %% "opencensus-scala-core" % "0.7.2" // excludeAll(excludIoGrpc, excludeCatsEffect )
-  val opencensusAkkaHttp: ModuleID = "com.github.sebruck" %% "opencensus-scala-akka-http" % "0.7.2" // excludeAll(excludIoGrpc, excludeCatsEffect)
+  val opencensusAkkaHttp: ModuleID = "com.github.sebruck" %% "opencensus-scala-akka-http" % "0.7.2" excludeAll(excludeAkkaProtobufV3, excludeAkkaStream)// excludeAll(excludIoGrpc, excludeCatsEffect)
   val opencensusStackDriverExporter: ModuleID = "io.opencensus" % "opencensus-exporter-trace-stackdriver" % "0.25.0" // excludeAll(excludIoGrpc, excludeCatsEffect)
   val opencensusLoggingExporter: ModuleID = "io.opencensus" % "opencensus-exporter-trace-logging"     % "0.25.0" // excludeAll(excludIoGrpc, excludeCatsEffect)
 
@@ -122,6 +125,7 @@ object Dependencies {
 
     akkaActor,
     akkaSlf4j,
+    akkaStream,
     akkaHttp,
     akkaHttpSprayJson,
     akkaTestKit,

@@ -80,7 +80,7 @@ object Boot extends IOApp with LazyLogging {
 
         _ <- dependencies.cloudExtensionsInitializer.onBoot(dependencies.samApplication)
 
-        binding <- IO.fromFuture(IO(Http().bindAndHandle(dependencies.samRoutes.route, "0.0.0.0", 8080))).onError {
+        binding <- IO.fromFuture(IO(Http().newServerAt("0.0.0.0", 8080).bind(dependencies.samRoutes.route))).onError {
           case t: Throwable => IO(logger.error("FATAL - failure starting http server", t)) *> IO.raiseError(t)
         }
         _ <- IO.fromFuture(IO(binding.whenTerminated))
