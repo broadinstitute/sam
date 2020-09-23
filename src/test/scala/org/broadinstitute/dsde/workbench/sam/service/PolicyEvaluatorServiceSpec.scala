@@ -18,6 +18,7 @@ import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.scalatest._
 import scala.concurrent.ExecutionContext.Implicits.global
 
+@deprecated("", "")
 class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport {
   val dirURI = new URI(directoryConfig.directoryUrl)
   val connectionPool = new LDAPConnectionPool(

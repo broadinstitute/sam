@@ -24,6 +24,7 @@ import scala.collection.concurrent.TrieMap
 /**
   * Created by dvoet on 6/7/17.
   */
+@deprecated("", "")
 class ResourceRoutesV1Spec extends FlatSpec with Matchers with ScalatestRouteTest with TestSupport with AppendedClues {
 
   val defaultUserInfo = UserInfo(OAuth2BearerToken("accessToken"), WorkbenchUserId("user1"), WorkbenchEmail("user1@example.com"), 0)

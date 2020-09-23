@@ -20,7 +20,7 @@ import org.scalatest.mockito.MockitoSugar
 import org.scalatest.{AppendedClues, FlatSpec, Matchers}
 import spray.json.DefaultJsonProtocol._
 
-
+@deprecated("", "")
 class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with ScalatestRouteTest with AppendedClues with MockitoSugar {
 
   implicit val errorReportSource = ErrorReportSource("sam")

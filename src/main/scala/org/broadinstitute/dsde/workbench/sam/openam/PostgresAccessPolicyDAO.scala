@@ -801,15 +801,11 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
 
   override def listUserResourceActions(resourceId: FullyQualifiedResourceId, user: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[ResourceAction]] = {
     runInTransaction("listAccessPoliciesForUser", samRequestContext)({ implicit session =>
-      val ancestorGroupsTable = SubGroupMemberTable("ancestor_groups")
-      val ancestorGroup = ancestorGroupsTable.syntax("ancestorGroup")
-      val agColumn = ancestorGroupsTable.column
+      val userPoliciesCommonTableExpression = userPoliciesCommonTableExpressions(resourceId, user)
 
-      val parentGroup = GroupMemberTable.syntax("parent_groups")
-      val resource = ResourceTable.syntax("resource")
-      val resourceType = ResourceTypeTable.syntax("resourceType")
-      val groupMember = GroupMemberTable.syntax("groupMember")
-      val policy = PolicyTable.syntax("policy")
+      val userResourcePolicyTable = userPoliciesCommonTableExpression.userResourcePolicyTable
+      val userResourcePolicy = userPoliciesCommonTableExpression.userResourcePolicy
+      val cteQueryFragment = userPoliciesCommonTableExpression.queryFragment
 
       val policyRole = PolicyRoleTable.syntax("policyRole")
       val resourceRole = ResourceRoleTable.syntax("resourceRole")
@@ -818,102 +814,41 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
       val roleActionJoin = RoleActionTable.syntax("roleActionJoin")
       val roleAction = ResourceActionTable.syntax("roleAction")
 
-      val ancestorResourceTable = AncestorResourceTable("ancestor_resource")
-      val ancestorResource = ancestorResourceTable.syntax("ancestorResource")
-      val arColumn = ancestorResourceTable.column
-      val parentResource = ResourceTable.syntax("parentResource")
+      val listUserResourceActionsQuery = samsql"""$cteQueryFragment
+        select ${roleAction.action} as action
+          from ${userResourcePolicyTable as userResourcePolicy}
+          join ${PolicyRoleTable as policyRole} on ${userResourcePolicy.policyId} = ${policyRole.resourcePolicyId} and ${userResourcePolicy.inherited} = ${policyRole.descends}
+          join ${ResourceRoleTable as resourceRole} on ${policyRole.resourceRoleId} = ${resourceRole.id} and ${userResourcePolicy.baseResourceTypeId} = ${resourceRole.resourceTypeId}
+          join ${RoleActionTable as roleActionJoin} on ${resourceRole.id} = ${roleActionJoin.resourceRoleId}
+          join ${ResourceActionTable as roleAction} on ${roleActionJoin.resourceActionId} = ${roleAction.id}
+        union
+        select ${policyAction.action} as action
+          from ${userResourcePolicyTable as userResourcePolicy}
+          join ${PolicyActionTable as policyActionJoin} on ${userResourcePolicy.policyId} = ${policyActionJoin.resourcePolicyId} and ${userResourcePolicy.inherited} = ${policyActionJoin.descends}
+          join ${ResourceActionTable as policyAction} on ${policyActionJoin.resourceActionId} = ${policyAction.id} and ${userResourcePolicy.baseResourceTypeId} = ${policyAction.resourceTypeId}"""
 
-      val listUserResourceActionsQuery = samsql"""with recursive
-        ${ancestorGroupsTable.table}(${agColumn.parentGroupId}) as (
-          select ${groupMember.groupId}
-          from ${GroupMemberTable as groupMember}
-          where ${groupMember.memberUserId} = ${user}
-          union
-          select ${parentGroup.groupId}
-          from ${GroupMemberTable as parentGroup}
-          join ${ancestorGroupsTable as ancestorGroup} on ${agColumn.parentGroupId} = ${parentGroup.memberGroupId}),
-
-        ${ancestorResourceTable.table}(${arColumn.resourceId}, ${arColumn.isAncestor}, ${arColumn.baseResourceTypeId}) as (
-          select ${resource.id}, false, ${resourceType.id}
-          from ${ResourceTable as resource}
-          join ${ResourceTypeTable as resourceType} on ${resource.resourceTypeId} = ${resourceType.id}
-          where ${resource.name} = ${resourceId.resourceId}
-          and ${resourceType.name} = ${resourceId.resourceTypeName}
-          union
-          select ${parentResource.resourceParentId}, true, ${ancestorResource.baseResourceTypeId}
-          from ${ResourceTable as parentResource}
-          join ${ancestorResourceTable as ancestorResource} on ${ancestorResource.resourceId} = ${parentResource.id}
-          where ${parentResource.resourceParentId} is not null)
-
-        select ${roleAction.result.action}, ${policyAction.result.action}
-          from ${ancestorResourceTable as ancestorResource}
-          join ${PolicyTable as policy} on ${policy.resourceId} = ${ancestorResource.resourceId}
-          left join ${PolicyRoleTable as policyRole} on ${policy.id} = ${policyRole.resourcePolicyId} and ${ancestorResource.isAncestor} = ${policyRole.descends}
-          left join ${ResourceRoleTable as resourceRole} on ${policyRole.resourceRoleId} = ${resourceRole.id} and ${ancestorResource.baseResourceTypeId} = ${resourceRole.resourceTypeId}
-          left join ${RoleActionTable as roleActionJoin} on ${resourceRole.id} = ${roleActionJoin.resourceRoleId}
-          left join ${ResourceActionTable as roleAction} on ${roleActionJoin.resourceActionId} = ${roleAction.id}
-          left join ${PolicyActionTable as policyActionJoin} on ${policy.id} = ${policyActionJoin.resourcePolicyId} and ${ancestorResource.isAncestor} = ${policyActionJoin.descends}
-          left join ${ResourceActionTable as policyAction} on ${policyActionJoin.resourceActionId} = ${policyAction.id} and ${ancestorResource.baseResourceTypeId} = ${policyAction.resourceTypeId}
-          where ${policy.public} OR ${policy.groupId} in (select ${ancestorGroup.parentGroupId} from ${ancestorGroupsTable as ancestorGroup})"""
-
-      listUserResourceActionsQuery.map { rs =>
-        rs.stringOpt(roleAction.resultName.action).map(ResourceAction(_)) ++ rs.stringOpt(policyAction.resultName.action).map(ResourceAction(_))
-      }.list().apply().flatten.toSet
+      listUserResourceActionsQuery.map(rs => ResourceAction(rs.string("action"))).list().apply().toSet
     })
   }
 
   override def listUserResourceRoles(resourceId: FullyQualifiedResourceId, user: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[ResourceRoleName]] = {
     runInTransaction("listUserResourceRoles", samRequestContext)({ implicit session =>
-      val ancestorGroupsTable = SubGroupMemberTable("ancestor_groups")
-      val ancestorGroup = ancestorGroupsTable.syntax("ancestorGroup")
-      val agColumn = ancestorGroupsTable.column
+      val userPoliciesCommonTableExpression = userPoliciesCommonTableExpressions(resourceId, user)
 
-      val parentGroup = GroupMemberTable.syntax("parent_groups")
-      val resource = ResourceTable.syntax("resource")
-      val resourceType = ResourceTypeTable.syntax("resourceType")
-      val groupMember = GroupMemberTable.syntax("groupMember")
-      val policy = PolicyTable.syntax("policy")
+      val userResourcePolicyTable = userPoliciesCommonTableExpression.userResourcePolicyTable
+      val userResourcePolicy = userPoliciesCommonTableExpression.userResourcePolicy
+      val cteQueryFragment = userPoliciesCommonTableExpression.queryFragment
 
       val policyRole = PolicyRoleTable.syntax("policyRole")
       val resourceRole = ResourceRoleTable.syntax("resourceRole")
 
-      val ancestorResourceTable = AncestorResourceTable("ancestor_resource")
-      val ancestorResource = ancestorResourceTable.syntax("ancestorResource")
-      val arColumn = ancestorResourceTable.column
-      val parentResource = ResourceTable.syntax("parentResource")
-
-      val listUserResourceRolesQuery = samsql"""with recursive
-        ${ancestorGroupsTable.table}(${agColumn.parentGroupId}) as (
-          select ${groupMember.groupId}
-          from ${GroupMemberTable as groupMember}
-          where ${groupMember.memberUserId} = ${user}
-          union
-          select ${parentGroup.groupId}
-          from ${GroupMemberTable as parentGroup}
-          join ${ancestorGroupsTable as ancestorGroup} on ${agColumn.parentGroupId} = ${parentGroup.memberGroupId}),
-
-        ${ancestorResourceTable.table}(${arColumn.resourceId}, ${arColumn.isAncestor}, ${arColumn.baseResourceTypeId}) as (
-          select ${resource.id}, false, ${resourceType.id}
-          from ${ResourceTable as resource}
-          join ${ResourceTypeTable as resourceType} on ${resource.resourceTypeId} = ${resourceType.id}
-          where ${resource.name} = ${resourceId.resourceId}
-          and ${resourceType.name} = ${resourceId.resourceTypeName}
-          union
-          select ${parentResource.resourceParentId}, true, ${ancestorResource.baseResourceTypeId}
-          from ${ResourceTable as parentResource}
-          join ${ancestorResourceTable as ancestorResource} on ${ancestorResource.resourceId} = ${parentResource.id}
-          where ${parentResource.resourceParentId} is not null)
-
+      val listUserResourceRolesQuery = samsql"""$cteQueryFragment
         select ${resourceRole.result.role}
-          from ${ancestorResourceTable as ancestorResource}
-          join ${PolicyTable as policy} on ${policy.resourceId} = ${ancestorResource.resourceId}
-          left join ${PolicyRoleTable as policyRole} on ${policy.id} = ${policyRole.resourcePolicyId} and ${ancestorResource.isAncestor} = ${policyRole.descends}
-          left join ${ResourceRoleTable as resourceRole} on ${policyRole.resourceRoleId} = ${resourceRole.id} and ${ancestorResource.baseResourceTypeId} = ${resourceRole.resourceTypeId}
-          where ${policy.public} OR ${policy.groupId} in (select ${ancestorGroup.parentGroupId} from ${ancestorGroupsTable as ancestorGroup})"""
+          from ${userResourcePolicyTable as userResourcePolicy}
+          join ${PolicyRoleTable as policyRole} on ${userResourcePolicy.policyId} = ${policyRole.resourcePolicyId} and ${userResourcePolicy.inherited} = ${policyRole.descends}
+          join ${ResourceRoleTable as resourceRole} on ${policyRole.resourceRoleId} = ${resourceRole.id} and ${userResourcePolicy.baseResourceTypeId} = ${resourceRole.resourceTypeId}"""
 
-      listUserResourceRolesQuery.map { rs =>
-        ResourceRoleName(rs.string(resourceRole.resultName.role))
-      }.list().apply().toSet
+      listUserResourceRolesQuery.map(rs => ResourceRoleName(rs.string(resourceRole.resultName.role))).list().apply().toSet
     })
   }
 
@@ -1072,6 +1007,80 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
               and ${r.name} = ${policyId.resource.resourceId}
               and ${rt.name} = ${policyId.resource.resourceTypeName}""".update().apply()
   }
+
+  /**
+    * Return type of userPoliciesCommonTableExpressions
+    * @param userResourcePolicyTable scalikejdbc table object used reference to policy table created in the CTE
+    * @param userResourcePolicy scalikejdbc syntax provider used reference to policy table created in the CTE
+    * @param queryFragment the query fragment to start your query
+    */
+  case class UserPoliciesCommonTableExpression(userResourcePolicyTable: UserResourcePolicyTable, userResourcePolicy: QuerySQLSyntaxProvider[SQLSyntaxSupport[UserResourcePolicyRecord], UserResourcePolicyRecord], queryFragment: SQLSyntax)
+
+  /**
+    * Produces the Common Table Expression query fragment that is the basis for queries of policies on a resource
+    * accessible by a user. This takes into account the group membership hierarchy of the user and the resource
+    * ancestry.
+    *
+    * There are 3 queries involved in the CTE:
+    * 1) unroll the groups the user is a member of
+    * 2) unroll the ancestry of the resource
+    * 3) get all the policies a user is a member of on the resource or any of its ancestor (this also carries along
+    * whether or not the policy is inherited and the id of the type of the resource)
+    * @param resourceId the id of the resource being queried
+    * @param user the id of the user being queried
+    * @return
+    */
+  private def userPoliciesCommonTableExpressions(resourceId: FullyQualifiedResourceId, user: WorkbenchUserId): UserPoliciesCommonTableExpression = {
+    val ancestorGroupsTable = SubGroupMemberTable("ancestor_groups")
+    val ancestorGroup = ancestorGroupsTable.syntax("ancestorGroup")
+    val agColumn = ancestorGroupsTable.column
+
+    val parentGroup = GroupMemberTable.syntax("parent_groups")
+    val resource = ResourceTable.syntax("resource")
+    val resourceType = ResourceTypeTable.syntax("resourceType")
+    val groupMember = GroupMemberTable.syntax("groupMember")
+    val policy = PolicyTable.syntax("policy")
+
+    val ancestorResourceTable = AncestorResourceTable("ancestor_resource")
+    val ancestorResource = ancestorResourceTable.syntax("ancestorResource")
+    val arColumn = ancestorResourceTable.column
+    val parentResource = ResourceTable.syntax("parentResource")
+
+    val userResourcePolicyTable = UserResourcePolicyTable("user_resource_policy")
+    val userResourcePolicy = userResourcePolicyTable.syntax("userResourcePolicy")
+    val urpColumn = userResourcePolicyTable.column
+
+    val queryFragment =
+      samsqls"""with recursive
+        ${ancestorGroupsTable.table}(${agColumn.parentGroupId}) as (
+          select ${groupMember.groupId}
+          from ${GroupMemberTable as groupMember}
+          where ${groupMember.memberUserId} = ${user}
+          union
+          select ${parentGroup.groupId}
+          from ${GroupMemberTable as parentGroup}
+          join ${ancestorGroupsTable as ancestorGroup} on ${agColumn.parentGroupId} = ${parentGroup.memberGroupId}),
+
+        ${ancestorResourceTable.table}(${arColumn.resourceId}, ${arColumn.isAncestor}, ${arColumn.baseResourceTypeId}) as (
+          select ${resource.id}, false, ${resourceType.id}
+          from ${ResourceTable as resource}
+          join ${ResourceTypeTable as resourceType} on ${resource.resourceTypeId} = ${resourceType.id}
+          where ${resource.name} = ${resourceId.resourceId}
+          and ${resourceType.name} = ${resourceId.resourceTypeName}
+          union
+          select ${parentResource.resourceParentId}, true, ${ancestorResource.baseResourceTypeId}
+          from ${ResourceTable as parentResource}
+          join ${ancestorResourceTable as ancestorResource} on ${ancestorResource.resourceId} = ${parentResource.id}
+          where ${parentResource.resourceParentId} is not null),
+
+        ${userResourcePolicyTable.table}(${urpColumn.policyId}, ${urpColumn.inherited}, ${urpColumn.baseResourceTypeId}) as (
+          select ${policy.id}, ${ancestorResource.isAncestor}, ${ancestorResource.baseResourceTypeId}
+          from ${ancestorResourceTable as ancestorResource}
+          join ${PolicyTable as policy} on ${policy.resourceId} = ${ancestorResource.resourceId}
+          where ${policy.public} OR ${policy.groupId} in (select ${ancestorGroup.parentGroupId} from ${ancestorGroupsTable as ancestorGroup}))"""
+
+    UserPoliciesCommonTableExpression(userResourcePolicyTable, userResourcePolicy, queryFragment)
+  }
 }
 
 private final case class PolicyInfo(name: AccessPolicyName, resourceId: ResourceId, resourceTypeName: ResourceTypeName, email: WorkbenchEmail, public: Boolean)
@@ -1092,4 +1101,10 @@ final case class AncestorResourceRecord(resourceId: ResourcePK, isAncestor: Bool
 final case class AncestorResourceTable(override val tableName: String) extends SQLSyntaxSupport[AncestorResourceRecord] {
   // need to specify column names explicitly because this table does not actually exist in the database
   override val columnNames: Seq[String] = Seq("resource_id", "is_ancestor", "base_resource_type_id")
+}
+
+final case class UserResourcePolicyRecord(policyId: PolicyPK, inherited: Boolean, baseResourceTypeId: ResourceTypePK)
+final case class UserResourcePolicyTable(override val tableName: String) extends SQLSyntaxSupport[UserResourcePolicyRecord] {
+  // need to specify column names explicitly because this table does not actually exist in the database
+  override val columnNames: Seq[String] = Seq("policy_id", "inherited", "base_resource_type_id")
 }

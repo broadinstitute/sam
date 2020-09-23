@@ -25,6 +25,7 @@ import scala.concurrent.duration._
 /**
   * Created by dvoet on 6/27/17.
   */
+@deprecated("", "")
 class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with TestSupport with BeforeAndAfter with BeforeAndAfterAll {
   val directoryConfig = TestSupport.directoryConfig
   val schemaLockConfig = TestSupport.schemaLockConfig
