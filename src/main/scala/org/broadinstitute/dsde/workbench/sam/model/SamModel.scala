@@ -133,12 +133,25 @@ object SamResourceTypes {
 
 @Lenses final case class ResourceId(value: String) extends ValueObject
 @Lenses final case class ResourceIdAndPolicyName(resourceId: ResourceId, accessPolicyName: AccessPolicyName)
+@Lenses final case class ResourceIdWithRolesAndActions(resourceId: ResourceId, direct: RolesAndActions, inherited: RolesAndActions, public: RolesAndActions)
+@Lenses final case class RolesAndActions(roles: Set[ResourceRoleName], actions: Set[ResourceAction]) {
+  def ++ (other: RolesAndActions): RolesAndActions = {
+    RolesAndActions(this.roles ++ other.roles, this.actions ++ other.actions)
+  }
+}
 @Lenses final case class UserPolicyResponse(
     resourceId: ResourceId,
     accessPolicyName: AccessPolicyName,
     authDomainGroups: Set[WorkbenchGroupName],
     missingAuthDomainGroups: Set[WorkbenchGroupName],
     public: Boolean)
+@Lenses final case class UserResourcesResponse(
+    resourceId: ResourceId,
+    direct: RolesAndActions,
+    inherited: RolesAndActions,
+    public: RolesAndActions,
+    authDomainGroups: Set[WorkbenchGroupName],
+    missingAuthDomainGroups: Set[WorkbenchGroupName])
 @Lenses final case class FullyQualifiedPolicyId(resource: FullyQualifiedResourceId, accessPolicyName: AccessPolicyName) extends WorkbenchGroupIdentity {
   override def toString: String = s"${accessPolicyName.value}.${resource.resourceId.value}.${resource.resourceTypeName.value}"
 }

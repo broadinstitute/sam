@@ -91,7 +91,7 @@ class PolicyEvaluatorService(
     } yield res
   }
 
-  @deprecated("listing policies for resource type removed", since = "ResourceRoutes v2")
+  @deprecated("listing policies for resource type removed, use listUserResources instead", since = "ResourceRoutes v2")
   def listUserAccessPolicies(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[UserPolicyResponse]] =
     for {
       rt <- IO.fromEither(
@@ -122,6 +122,36 @@ class PolicyEvaluatorService(
       }
       publicPolicies <- accessPolicyDAO.listPublicAccessPolicies(resourceTypeName, samRequestContext)
     } yield results.flatten ++ publicPolicies.map(p => UserPolicyResponse(p.resourceId, p.accessPolicyName, Set.empty, Set.empty, public = true))
+
+  def listUserResources(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Iterable[UserResourcesResponse]] =
+    for {
+      rt <- IO.fromEither(
+        resourceTypes
+          .get(resourceTypeName)
+          .toRight(new WorkbenchException(s"missing configration for resourceType ${resourceTypeName}")))
+      isConstrained = rt.isAuthDomainConstrainable
+      resourcesWithAccess <- accessPolicyDAO.listUserResourcesWithRolesAndActions(resourceTypeName, userId, samRequestContext)
+      rids = resourcesWithAccess.map(_.resourceId).toSet
+
+      resources <- if (isConstrained) accessPolicyDAO.listResourcesWithAuthdomains(resourceTypeName, rids, samRequestContext)
+      else IO.pure(Set.empty)
+      authDomainMap = resources.map(x => x.resourceId -> x.authDomain).toMap
+
+      userManagedGroups <- if (isConstrained) listUserManagedGroups(userId, samRequestContext) else IO.pure(Set.empty[WorkbenchGroupName])
+
+      results = resourcesWithAccess.map { resourceWithAccess =>
+        if (isConstrained) {
+          authDomainMap.get(resourceWithAccess.resourceId) match {
+            case Some(resourceAuthDomains) =>
+              val userNotMemberOf = resourceAuthDomains -- userManagedGroups
+              UserResourcesResponse(resourceWithAccess.resourceId, resourceWithAccess.direct, resourceWithAccess.inherited, resourceWithAccess.public, resourceAuthDomains, userNotMemberOf).some
+            case None =>
+              logger.error(s"Corrupted data. ${resourceWithAccess.resourceId} should have auth domains defined")
+              none[UserResourcesResponse]
+          }
+        } else UserResourcesResponse(resourceWithAccess.resourceId, resourceWithAccess.direct, resourceWithAccess.inherited, resourceWithAccess.public, Set.empty, Set.empty).some
+      }
+    } yield results.flatten
 
   def listUserManagedGroupsWithRole(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[ManagedGroupAndRole]] =
     for {
