@@ -76,7 +76,7 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
     constrainableReaderRoleName
   )
   private val constrainablePolicyMembership =
-    AccessPolicyMembershipV2(Set(dummyUserInfo.userEmail), Set(constrainableViewAction), Set(constrainableReaderRoleName), Set.empty)
+    AccessPolicyMembership(Set(dummyUserInfo.userEmail), Set(constrainableViewAction), Set(constrainableReaderRoleName), None)
 
   private val managedGroupResourceType = configResourceTypes.getOrElse(
     ResourceTypeName("managed-group"),
@@ -516,10 +516,10 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
       _ <- service.createResource(otherResourceType, resource3.resourceId, dummyUserInfo, samRequestContext)
       _ <- service.createResource(otherResourceType, resource4.resourceId, dummyUserInfo, samRequestContext)
 
-      _ <- service.overwritePolicy(defaultResourceType, AccessPolicyName("in-it"), resource1, AccessPolicyMembershipV2(Set(dummyUserInfo.userEmail), Set(ResourceAction("alter_policies")), Set.empty, Set.empty), samRequestContext)
-      _ <- service.overwritePolicy(defaultResourceType, AccessPolicyName("not-in-it"), resource1, AccessPolicyMembershipV2(Set.empty, Set(ResourceAction("alter_policies")), Set.empty, Set.empty), samRequestContext)
-      _ <- service.overwritePolicy(otherResourceType, AccessPolicyName("in-it"), resource3, AccessPolicyMembershipV2(Set(dummyUserInfo.userEmail), Set(ResourceAction("alter_policies")), Set.empty, Set.empty), samRequestContext)
-      _ <- service.overwritePolicy(otherResourceType, AccessPolicyName("not-in-it"), resource3, AccessPolicyMembershipV2(Set.empty, Set(ResourceAction("alter_policies")), Set.empty, Set.empty), samRequestContext)
+      _ <- service.overwritePolicy(defaultResourceType, AccessPolicyName("in-it"), resource1, AccessPolicyMembership(Set(dummyUserInfo.userEmail), Set(ResourceAction("alter_policies")), Set.empty, None), samRequestContext)
+      _ <- service.overwritePolicy(defaultResourceType, AccessPolicyName("not-in-it"), resource1, AccessPolicyMembership(Set.empty, Set(ResourceAction("alter_policies")), Set.empty, None), samRequestContext)
+      _ <- service.overwritePolicy(otherResourceType, AccessPolicyName("in-it"), resource3, AccessPolicyMembership(Set(dummyUserInfo.userEmail), Set(ResourceAction("alter_policies")), Set.empty, None), samRequestContext)
+      _ <- service.overwritePolicy(otherResourceType, AccessPolicyName("not-in-it"), resource3, AccessPolicyMembership(Set.empty, Set(ResourceAction("alter_policies")), Set.empty, None), samRequestContext)
       r <- service.policyEvaluatorService.listUserAccessPolicies(defaultResourceType.name, dummyUserInfo.userId, samRequestContext)
     } yield {
       r should contain theSameElementsAs Set(

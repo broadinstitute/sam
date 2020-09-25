@@ -93,8 +93,8 @@ class ResourceService(
     val ownerRole = resourceType.roles
       .find(_.roleName == resourceType.ownerRoleName)
       .getOrElse(throw new WorkbenchException(s"owner role ${resourceType.ownerRoleName} does not exist in $resourceType"))
-    val defaultPolicies: Map[AccessPolicyName, AccessPolicyMembershipV2] = Map(
-      AccessPolicyName(ownerRole.roleName.value) -> AccessPolicyMembershipV2(Set(userInfo.userEmail), Set.empty, Set(ownerRole.roleName), Set.empty))
+    val defaultPolicies: Map[AccessPolicyName, AccessPolicyMembership] = Map(
+      AccessPolicyName(ownerRole.roleName.value) -> AccessPolicyMembership(Set(userInfo.userEmail), Set.empty, Set(ownerRole.roleName), None))
     createResource(resourceType, resourceId, defaultPolicies, Set.empty, userInfo.userId, samRequestContext)
   }
 
@@ -107,7 +107,7 @@ class ResourceService(
     * @param userId
     * @return Future[Resource]
     */
-  def createResource(resourceType: ResourceType, resourceId: ResourceId, policiesMap: Map[AccessPolicyName, AccessPolicyMembershipV2], authDomain: Set[WorkbenchGroupName], userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Resource] =
+  def createResource(resourceType: ResourceType, resourceId: ResourceId, policiesMap: Map[AccessPolicyName, AccessPolicyMembership], authDomain: Set[WorkbenchGroupName], userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Resource] =
     makeValidatablePolicies(policiesMap, samRequestContext).flatMap { policies =>
       validateCreateResource(resourceType, resourceId, policies, authDomain, userId, samRequestContext).flatMap {
         case Seq() => persistResource(resourceType, resourceId, policies, authDomain, samRequestContext)
@@ -261,7 +261,7 @@ class ResourceService(
     * @return
     */
   @throws(classOf[WorkbenchExceptionWithErrorReport])
-  def overwritePolicy(resourceType: ResourceType, policyName: AccessPolicyName, resource: FullyQualifiedResourceId, policyMembership: AccessPolicyMembershipV2, samRequestContext: SamRequestContext): IO[AccessPolicy] = {
+  def overwritePolicy(resourceType: ResourceType, policyName: AccessPolicyName, resource: FullyQualifiedResourceId, policyMembership: AccessPolicyMembership, samRequestContext: SamRequestContext): IO[AccessPolicy] = {
     makeCreatablePolicy(policyName, policyMembership, samRequestContext).flatMap { policy =>
       validatePolicy(resourceType, policy) match {
         case Some(errorReport) =>
@@ -411,7 +411,7 @@ class ResourceService(
       case Success(_) => fireGroupUpdateNotification(policyIdentity, samRequestContext)
     }
 
-  private[service] def loadAccessPolicyWithEmails(policy: AccessPolicy, samRequestContext: SamRequestContext): IO[AccessPolicyMembershipV2] = {
+  private[service] def loadAccessPolicyWithEmails(policy: AccessPolicy, samRequestContext: SamRequestContext): IO[AccessPolicyMembership] = {
     val users = policy.members.collect { case userId: WorkbenchUserId => userId }
     val groups = policy.members.collect { case groupName: WorkbenchGroupName => groupName }
     val policyMembers = policy.members.collect { case policyId: FullyQualifiedPolicyId => policyId }
@@ -421,11 +421,11 @@ class ResourceService(
       groupEmails <- directoryDAO.loadGroups(groups, samRequestContext)
       policyEmails <- policyMembers.toList.parTraverse((resourceAndPolicyName: FullyQualifiedPolicyId) => accessPolicyDAO.loadPolicy(resourceAndPolicyName, samRequestContext))
     } yield
-      AccessPolicyMembershipV2(
+      AccessPolicyMembership(
         userEmails.toSet[WorkbenchUser].map(_.email) ++ groupEmails.map(_.email) ++ policyEmails.flatMap(_.map(_.email)),
         policy.actions,
         policy.roles,
-        policy.descendantPermissions)
+        Option(policy.descendantPermissions))
   }
 
   def listResourcePolicies(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Stream[AccessPolicyResponseEntry]] =
@@ -437,20 +437,20 @@ class ResourceService(
       }
     }
 
-  def loadResourcePolicy(policyIdentity: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[Option[AccessPolicyMembershipV2]] =
+  def loadResourcePolicy(policyIdentity: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[Option[AccessPolicyMembership]] =
     for {
       policy <- accessPolicyDAO.loadPolicy(policyIdentity, samRequestContext)
       res <- policy.traverse(p => loadAccessPolicyWithEmails(p, samRequestContext))
     } yield res
 
-  private def makeValidatablePolicies(policies: Map[AccessPolicyName, AccessPolicyMembershipV2], samRequestContext: SamRequestContext): IO[Set[ValidatableAccessPolicy]] =
+  private def makeValidatablePolicies(policies: Map[AccessPolicyName, AccessPolicyMembership], samRequestContext: SamRequestContext): IO[Set[ValidatableAccessPolicy]] =
     policies.toList.traverse {
       case (accessPolicyName, accessPolicyMembership) => makeCreatablePolicy(accessPolicyName, accessPolicyMembership, samRequestContext)
     }.map(_.toSet)
 
-  private def makeCreatablePolicy(accessPolicyName: AccessPolicyName, accessPolicyMembership: AccessPolicyMembershipV2, samRequestContext: SamRequestContext): IO[ValidatableAccessPolicy] =
+  private def makeCreatablePolicy(accessPolicyName: AccessPolicyName, accessPolicyMembership: AccessPolicyMembership, samRequestContext: SamRequestContext): IO[ValidatableAccessPolicy] =
     mapEmailsToSubjects(accessPolicyMembership.memberEmails, samRequestContext).map { emailsToSubjects =>
-      ValidatableAccessPolicy(accessPolicyName, emailsToSubjects, accessPolicyMembership.roles, accessPolicyMembership.actions, accessPolicyMembership.descendantPermissions)
+      ValidatableAccessPolicy(accessPolicyName, emailsToSubjects, accessPolicyMembership.roles, accessPolicyMembership.actions, accessPolicyMembership.getDescendantPermissions)
     }
 
   private def generateGroupEmail() = WorkbenchEmail(s"policy-${UUID.randomUUID}@$emailDomain")

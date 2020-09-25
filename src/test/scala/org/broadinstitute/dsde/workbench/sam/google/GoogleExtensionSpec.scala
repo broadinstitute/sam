@@ -891,10 +891,10 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     runAndWait(managedGroupService.createManagedGroup(ResourceId(managedGroupId), inAuthDomainUser, samRequestContext = samRequestContext))
     runAndWait(managedGroupService.addSubjectToPolicy(ResourceId(managedGroupId), ManagedGroupService.memberPolicyName, inBothUser.userId, samRequestContext))
 
-    val accessPolicyMap = Map(AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembershipV2(Set(inPolicyUser.userEmail, inBothUser.userEmail), constrainableRole.actions, Set(constrainableRole.roleName), Set.empty))
+    val accessPolicyMap = Map(AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembership(Set(inPolicyUser.userEmail, inBothUser.userEmail), constrainableRole.actions, Set(constrainableRole.roleName), None))
     val resource = runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId("rid"), accessPolicyMap, Set(WorkbenchGroupName(managedGroupId)), inBothUser.userId, samRequestContext))
 
-    val accessPolicy = runAndWait(constrainableService.overwritePolicy(constrainableResourceType, AccessPolicyName("ap"), resource.fullyQualifiedId, AccessPolicyMembershipV2(Set(inPolicyUser.userEmail, inBothUser.userEmail), Set.empty, Set.empty, Set.empty), samRequestContext))
+    val accessPolicy = runAndWait(constrainableService.overwritePolicy(constrainableResourceType, AccessPolicyName("ap"), resource.fullyQualifiedId, AccessPolicyMembership(Set(inPolicyUser.userEmail, inBothUser.userEmail), Set.empty, Set.empty, None), samRequestContext))
 
     val intersectionGroup = synchronizer.calculateIntersectionGroup(resource.fullyQualifiedId, accessPolicy, samRequestContext).unsafeRunSync()
     intersectionGroup shouldEqual Set(inBothUser.userId)
@@ -930,11 +930,11 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     runAndWait(managedGroupService.addSubjectToPolicy(ResourceId(managedGroupId), ManagedGroupService.memberPolicyName, inAuthDomainSubGroup.id, samRequestContext))
     runAndWait(managedGroupService.addSubjectToPolicy(ResourceId(managedGroupId), ManagedGroupService.memberPolicyName, inBothSubGroup.id, samRequestContext))
 
-    val accessPolicyMap = Map(AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembershipV2(Set(superAdminOwner.userEmail), Set.empty, Set(constrainableRole.roleName), Set.empty))
+    val accessPolicyMap = Map(AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembership(Set(superAdminOwner.userEmail), Set.empty, Set(constrainableRole.roleName), None))
     val resource = runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId("rid"), accessPolicyMap, Set(WorkbenchGroupName(managedGroupId)), superAdminOwner.userId, samRequestContext))
 
     // Access policy that intersection group will be calculated for
-    val accessPolicy = runAndWait(constrainableService.overwritePolicy(constrainableResourceType, AccessPolicyName("ap"), resource.fullyQualifiedId, AccessPolicyMembershipV2(Set(inPolicySubGroup.email, inBothSubGroup.email), Set.empty, Set.empty, Set.empty), samRequestContext))
+    val accessPolicy = runAndWait(constrainableService.overwritePolicy(constrainableResourceType, AccessPolicyName("ap"), resource.fullyQualifiedId, AccessPolicyMembership(Set(inPolicySubGroup.email, inBothSubGroup.email), Set.empty, Set.empty, None), samRequestContext))
 
     val intersectionGroup = synchronizer.calculateIntersectionGroup(resource.fullyQualifiedId, accessPolicy, samRequestContext).unsafeRunSync()
     intersectionGroup shouldEqual Set(inBothSubGroupUser.userId)
@@ -948,10 +948,10 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     dirDAO.createUser(WorkbenchUser(inPolicyUser.userId, Some(TestSupport.genGoogleSubjectId()), inPolicyUser.userEmail, Some(TestSupport.genIdentityConcentratorId())), samRequestContext).unsafeRunSync()
     dirDAO.createUser(WorkbenchUser(inBothUser.userId, Some(TestSupport.genGoogleSubjectId()), inBothUser.userEmail, Some(TestSupport.genIdentityConcentratorId())), samRequestContext).unsafeRunSync()
 
-    val accessPolicyMap = Map(AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembershipV2(Set(inPolicyUser.userEmail, inBothUser.userEmail), constrainableRole.actions, Set(constrainableRole.roleName), Set.empty))
+    val accessPolicyMap = Map(AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembership(Set(inPolicyUser.userEmail, inBothUser.userEmail), constrainableRole.actions, Set(constrainableRole.roleName), None))
     val resource = runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId("rid"), accessPolicyMap, Set.empty, inBothUser.userId, samRequestContext))
 
-    val accessPolicy = runAndWait(constrainableService.overwritePolicy(constrainableResourceType, AccessPolicyName("ap"), resource.fullyQualifiedId, AccessPolicyMembershipV2(Set(inPolicyUser.userEmail, inBothUser.userEmail), Set.empty, Set.empty, Set.empty), samRequestContext))
+    val accessPolicy = runAndWait(constrainableService.overwritePolicy(constrainableResourceType, AccessPolicyName("ap"), resource.fullyQualifiedId, AccessPolicyMembership(Set(inPolicyUser.userEmail, inBothUser.userEmail), Set.empty, Set.empty, None), samRequestContext))
 
     val intersectionGroup = synchronizer.calculateIntersectionGroup(resource.fullyQualifiedId, accessPolicy, samRequestContext).unsafeRunSync()
     intersectionGroup shouldEqual Set(inBothUser.userId, inPolicyUser.userId)
@@ -969,10 +969,10 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val managedGroupId = "fooGroup"
     runAndWait(managedGroupService.createManagedGroup(ResourceId(managedGroupId), inAuthDomainUser, samRequestContext = samRequestContext))
 
-    val accessPolicyMap = Map(AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembershipV2(Set(inPolicyUser.userEmail), constrainableRole.actions, Set(constrainableRole.roleName), Set.empty))
+    val accessPolicyMap = Map(AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembership(Set(inPolicyUser.userEmail), constrainableRole.actions, Set(constrainableRole.roleName), None))
     val resource = runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId("rid"), accessPolicyMap, Set(WorkbenchGroupName(managedGroupId)), inAuthDomainUser.userId, samRequestContext))
 
-    val accessPolicy = runAndWait(constrainableService.overwritePolicy(constrainableResourceType, AccessPolicyName("ap"), resource.fullyQualifiedId, AccessPolicyMembershipV2(Set(inPolicyUser.userEmail), Set.empty, Set.empty, Set.empty), samRequestContext))
+    val accessPolicy = runAndWait(constrainableService.overwritePolicy(constrainableResourceType, AccessPolicyName("ap"), resource.fullyQualifiedId, AccessPolicyMembership(Set(inPolicyUser.userEmail), Set.empty, Set.empty, None), samRequestContext))
 
     val intersectionGroup = synchronizer.calculateIntersectionGroup(resource.fullyQualifiedId, accessPolicy, samRequestContext).unsafeRunSync()
     intersectionGroup shouldEqual Set.empty
@@ -986,11 +986,11 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     dirDAO.createUser(WorkbenchUser(inPolicyUser.userId, Some(TestSupport.genGoogleSubjectId()), inPolicyUser.userEmail, Some(TestSupport.genIdentityConcentratorId())), samRequestContext).unsafeRunSync()
     dirDAO.createUser(WorkbenchUser(inBothUser.userId, Some(TestSupport.genGoogleSubjectId()), inBothUser.userEmail, Some(TestSupport.genIdentityConcentratorId())), samRequestContext).unsafeRunSync()
 
-    val accessPolicyMap = Map(AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembershipV2(Set(inPolicyUser.userEmail), constrainableRole.actions, Set(constrainableRole.roleName), Set.empty),
-      AccessPolicyName("emptyPolicy") -> AccessPolicyMembershipV2(Set.empty, Set.empty, Set.empty, Set.empty))
+    val accessPolicyMap = Map(AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembership(Set(inPolicyUser.userEmail), constrainableRole.actions, Set(constrainableRole.roleName), None),
+      AccessPolicyName("emptyPolicy") -> AccessPolicyMembership(Set.empty, Set.empty, Set.empty, None))
     val resource = runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId("rid"), accessPolicyMap, Set.empty, inBothUser.userId, samRequestContext))
 
-    val accessPolicy = runAndWait(constrainableService.overwritePolicy(constrainableResourceType, AccessPolicyName("ap"), resource.fullyQualifiedId, AccessPolicyMembershipV2(Set.empty, Set.empty, Set.empty, Set.empty), samRequestContext))
+    val accessPolicy = runAndWait(constrainableService.overwritePolicy(constrainableResourceType, AccessPolicyName("ap"), resource.fullyQualifiedId, AccessPolicyMembership(Set.empty, Set.empty, Set.empty, None), samRequestContext))
 
     val intersectionGroup = synchronizer.calculateIntersectionGroup(resource.fullyQualifiedId, accessPolicy, samRequestContext).unsafeRunSync()
     intersectionGroup shouldEqual Set.empty
@@ -1002,10 +1002,10 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val dummyUserInfo = UserInfo(OAuth2BearerToken("token"), WorkbenchUserId("userId"), WorkbenchEmail("userId@example.com"), 0)
     dirDAO.createUser(WorkbenchUser(dummyUserInfo.userId, Some(TestSupport.genGoogleSubjectId()), dummyUserInfo.userEmail, Some(TestSupport.genIdentityConcentratorId())), samRequestContext).unsafeRunSync()
 
-    val accessPolicyMap = Map(AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembershipV2(Set(dummyUserInfo.userEmail), Set.empty, Set(constrainableRole.roleName), Set.empty))
+    val accessPolicyMap = Map(AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembership(Set(dummyUserInfo.userEmail), Set.empty, Set(constrainableRole.roleName), None))
     val resource = runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId("rid"), accessPolicyMap, Set.empty, dummyUserInfo.userId, samRequestContext))
 
-    val accessPolicy = runAndWait(constrainableService.overwritePolicy(constrainableResourceType, AccessPolicyName("ap"), resource.fullyQualifiedId, AccessPolicyMembershipV2(Set.empty, constrainableRole.actions, Set(constrainableRole.roleName), Set.empty), samRequestContext))
+    val accessPolicy = runAndWait(constrainableService.overwritePolicy(constrainableResourceType, AccessPolicyName("ap"), resource.fullyQualifiedId, AccessPolicyMembership(Set.empty, constrainableRole.actions, Set(constrainableRole.roleName), None), samRequestContext))
 
     val constrained = synchronizer.isConstrainable(resource.fullyQualifiedId, accessPolicy)
     constrained shouldEqual true
@@ -1017,10 +1017,10 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val dummyUserInfo = UserInfo(OAuth2BearerToken("token"), WorkbenchUserId("userId"), WorkbenchEmail("userId@example.com"), 0)
     dirDAO.createUser(WorkbenchUser(dummyUserInfo.userId, Some(TestSupport.genGoogleSubjectId()), dummyUserInfo.userEmail, Some(TestSupport.genIdentityConcentratorId())), samRequestContext).unsafeRunSync()
 
-    val accessPolicyMap = Map(AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembershipV2(Set(dummyUserInfo.userEmail), Set.empty, Set(constrainableRole.roleName), Set.empty))
+    val accessPolicyMap = Map(AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembership(Set(dummyUserInfo.userEmail), Set.empty, Set(constrainableRole.roleName), None))
     val resource = runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId("rid"), accessPolicyMap, Set.empty, dummyUserInfo.userId, samRequestContext))
 
-    val accessPolicy = runAndWait(constrainableService.overwritePolicy(constrainableResourceType, AccessPolicyName("ap"), resource.fullyQualifiedId, AccessPolicyMembershipV2(Set.empty, Set.empty, Set(constrainableRole.roleName), Set.empty), samRequestContext))
+    val accessPolicy = runAndWait(constrainableService.overwritePolicy(constrainableResourceType, AccessPolicyName("ap"), resource.fullyQualifiedId, AccessPolicyMembership(Set.empty, Set.empty, Set(constrainableRole.roleName), None), samRequestContext))
 
     val constrained = synchronizer.isConstrainable(resource.fullyQualifiedId, accessPolicy)
     constrained shouldEqual true
@@ -1032,10 +1032,10 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val dummyUserInfo = UserInfo(OAuth2BearerToken("token"), WorkbenchUserId("userId"), WorkbenchEmail("userId@example.com"), 0)
     dirDAO.createUser(WorkbenchUser(dummyUserInfo.userId, Some(TestSupport.genGoogleSubjectId()), dummyUserInfo.userEmail, Some(TestSupport.genIdentityConcentratorId())), samRequestContext).unsafeRunSync()
 
-    val accessPolicyMap = Map(AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembershipV2(Set(dummyUserInfo.userEmail), Set.empty, Set(constrainableRole.roleName), Set.empty))
+    val accessPolicyMap = Map(AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembership(Set(dummyUserInfo.userEmail), Set.empty, Set(constrainableRole.roleName), None))
     val resource = runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId("rid"), accessPolicyMap, Set.empty, dummyUserInfo.userId, samRequestContext))
 
-    val accessPolicy = runAndWait(constrainableService.overwritePolicy(constrainableResourceType, AccessPolicyName("ap"), resource.fullyQualifiedId, AccessPolicyMembershipV2(Set.empty, constrainableRole.actions, Set.empty, Set.empty), samRequestContext))
+    val accessPolicy = runAndWait(constrainableService.overwritePolicy(constrainableResourceType, AccessPolicyName("ap"), resource.fullyQualifiedId, AccessPolicyMembership(Set.empty, constrainableRole.actions, Set.empty, None), samRequestContext))
 
     val constrained = synchronizer.isConstrainable(resource.fullyQualifiedId, accessPolicy)
     constrained shouldEqual true
@@ -1047,10 +1047,10 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
     val dummyUserInfo = UserInfo(OAuth2BearerToken("token"), WorkbenchUserId("userId"), WorkbenchEmail("userId@example.com"), 0)
     dirDAO.createUser(WorkbenchUser(dummyUserInfo.userId, Some(TestSupport.genGoogleSubjectId()), dummyUserInfo.userEmail, Some(TestSupport.genIdentityConcentratorId())), samRequestContext).unsafeRunSync()
 
-    val accessPolicyMap = Map(AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembershipV2(Set(dummyUserInfo.userEmail), Set.empty, Set(constrainableRole.roleName), Set.empty))
+    val accessPolicyMap = Map(AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembership(Set(dummyUserInfo.userEmail), Set.empty, Set(constrainableRole.roleName), None))
     val resource = runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId("rid"), accessPolicyMap, Set.empty, dummyUserInfo.userId, samRequestContext))
 
-    val accessPolicy = runAndWait(constrainableService.overwritePolicy(constrainableResourceType, AccessPolicyName("ap"), resource.fullyQualifiedId, AccessPolicyMembershipV2(Set.empty, Set.empty, Set.empty, Set.empty), samRequestContext))
+    val accessPolicy = runAndWait(constrainableService.overwritePolicy(constrainableResourceType, AccessPolicyName("ap"), resource.fullyQualifiedId, AccessPolicyMembership(Set.empty, Set.empty, Set.empty, None), samRequestContext))
 
     val constrained = synchronizer.isConstrainable(resource.fullyQualifiedId, accessPolicy)
     constrained shouldEqual false
@@ -1082,10 +1082,10 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with Fl
 
     constrainableService.createResourceType(nonConstrainableResourceType, samRequestContext).unsafeRunSync
 
-    val accessPolicyMap = Map(AccessPolicyName(nonConstrainableRole.roleName.value) -> AccessPolicyMembershipV2(Set(dummyUserInfo.userEmail), nonConstrainableRole.actions, Set(nonConstrainableRole.roleName), Set.empty))
+    val accessPolicyMap = Map(AccessPolicyName(nonConstrainableRole.roleName.value) -> AccessPolicyMembership(Set(dummyUserInfo.userEmail), nonConstrainableRole.actions, Set(nonConstrainableRole.roleName), None))
     val resource = runAndWait(constrainableService.createResource(nonConstrainableResourceType, ResourceId("rid"), accessPolicyMap, Set.empty, dummyUserInfo.userId, samRequestContext))
 
-    val accessPolicy = runAndWait(constrainableService.overwritePolicy(nonConstrainableResourceType, AccessPolicyName("ap"), resource.fullyQualifiedId, AccessPolicyMembershipV2(Set.empty, Set.empty, Set.empty, Set.empty), samRequestContext))
+    val accessPolicy = runAndWait(constrainableService.overwritePolicy(nonConstrainableResourceType, AccessPolicyName("ap"), resource.fullyQualifiedId, AccessPolicyMembership(Set.empty, Set.empty, Set.empty, None), samRequestContext))
 
     val constrained = synchronizer.isConstrainable(resource.fullyQualifiedId, accessPolicy)
     constrained shouldEqual false

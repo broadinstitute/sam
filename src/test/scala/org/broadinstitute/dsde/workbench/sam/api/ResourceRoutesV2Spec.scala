@@ -552,7 +552,7 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
   }
 
   "GET /api/resources/v2/{resourceType}/{resourceId}/policies/{policyName}" should "200 on existing policy of a resource with read_policies" in {
-    val members = AccessPolicyMembershipV2(Set(defaultUserInfo.userEmail), Set.empty, Set.empty, Set.empty)
+    val members = AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set.empty, Set.empty, None)
     val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("resource"))
     val policyName = AccessPolicyName("policy")
 
@@ -567,12 +567,12 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
 
     Get(s"/api/resources/v2/${resource.resourceTypeName}/${resource.resourceId}/policies/${policyName.value}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
-      responseAs[AccessPolicyMembershipV2] shouldEqual members
+      responseAs[AccessPolicyMembership] shouldEqual members
     }
   }
 
   it should "200 on existing policy if user can read just that policy" in {
-    val members = AccessPolicyMembershipV2(Set(defaultUserInfo.userEmail), Set.empty, Set.empty, Set.empty)
+    val members = AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set.empty, Set.empty, None)
     val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("resource"))
     val policyName = AccessPolicyName("policy")
 
@@ -588,7 +588,7 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
 
     Get(s"/api/resources/v2/${resource.resourceTypeName}/${resource.resourceId}/policies/${policyName.value}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
-      responseAs[AccessPolicyMembershipV2] shouldEqual members
+      responseAs[AccessPolicyMembership] shouldEqual members
     }
   }
 
@@ -644,8 +644,8 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
   "PUT /api/resources/v1/{resourceType}/{resourceId}/policies/{policyName}" should "201 on a new policy being created for a resource" in {
     val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("resource"))
     val policyName = AccessPolicyName("policy")
-    val members = AccessPolicyMembershipV2(Set(defaultUserInfo.userEmail), Set(ResourceAction("can_compute")), Set.empty, Set.empty)
-    val policy = AccessPolicy(FullyQualifiedPolicyId(resource, policyName), Set(defaultUserInfo.userId), WorkbenchEmail("policy@example.com"), members.roles, members.actions, members.descendantPermissions, false)
+    val members = AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set(ResourceAction("can_compute")), Set.empty, None)
+    val policy = AccessPolicy(FullyQualifiedPolicyId(resource, policyName), Set(defaultUserInfo.userId), WorkbenchEmail("policy@example.com"), members.roles, members.actions, members.getDescendantPermissions, false)
 
     val samRoutes = createSamRoutes()
     mockPermissionsForResource(samRoutes, resource,
@@ -662,8 +662,8 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
   it should "201 on a policy being updated" in {
     val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("resource"))
     val policyName = AccessPolicyName("policy")
-    val members = AccessPolicyMembershipV2(Set(defaultUserInfo.userEmail), Set(ResourceAction("can_compute")), Set.empty, Set.empty)
-    val policy = AccessPolicy(FullyQualifiedPolicyId(resource, policyName), Set(defaultUserInfo.userId), WorkbenchEmail("policy@example.com"), members.roles, members.actions, members.descendantPermissions, false)
+    val members = AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set(ResourceAction("can_compute")), Set.empty, None)
+    val policy = AccessPolicy(FullyQualifiedPolicyId(resource, policyName), Set(defaultUserInfo.userId), WorkbenchEmail("policy@example.com"), members.roles, members.actions, members.getDescendantPermissions, false)
 
     val samRoutes = createSamRoutes()
     mockPermissionsForResource(samRoutes, resource,
@@ -677,8 +677,8 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
     }
 
     // update existing policy
-    val members2 = AccessPolicyMembershipV2(Set(defaultUserInfo.userEmail), Set(ResourceAction("can_compute"), ResourceAction("new_action")), Set.empty, Set.empty)
-    val policy2 = AccessPolicy(FullyQualifiedPolicyId(resource, policyName), Set(defaultUserInfo.userId), WorkbenchEmail("policy@example.com"), members2.roles, members2.actions, members2.descendantPermissions, false)
+    val members2 = AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set(ResourceAction("can_compute"), ResourceAction("new_action")), Set.empty, None)
+    val policy2 = AccessPolicy(FullyQualifiedPolicyId(resource, policyName), Set(defaultUserInfo.userId), WorkbenchEmail("policy@example.com"), members2.roles, members2.actions, members2.getDescendantPermissions, false)
     when(samRoutes.resourceService.overwritePolicy(any[ResourceType], mockitoEq(policyName), mockitoEq(resource), mockitoEq(members2), any[SamRequestContext]))
       .thenReturn(IO(policy2))
 
@@ -690,7 +690,7 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
   it should "400 when creating an invalid policy" in {
     val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("resource"))
     val policyName = AccessPolicyName("policy")
-    val members = AccessPolicyMembershipV2(Set(defaultUserInfo.userEmail), Set(ResourceAction("can_compute")), Set.empty, Set.empty)
+    val members = AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set(ResourceAction("can_compute")), Set.empty, None)
 
     val samRoutes = createSamRoutes()
     mockPermissionsForResource(samRoutes, resource,
@@ -707,7 +707,7 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
   it should "403 when creating a policy on a resource when the user doesn't have alter_policies permission (but can see the resource)" in {
     val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("resource"))
     val policyName = AccessPolicyName("policy")
-    val members = AccessPolicyMembershipV2(Set(defaultUserInfo.userEmail), Set(ResourceAction("can_compute")), Set.empty, Set.empty)
+    val members = AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set(ResourceAction("can_compute")), Set.empty, None)
 
     val samRoutes = createSamRoutes()
     mockPermissionsForResource(samRoutes, resource,
@@ -721,7 +721,7 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
   it should "404 when creating a policy on a resource that the user doesnt have permission to see" in {
     val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("resource"))
     val policyName = AccessPolicyName("policy")
-    val members = AccessPolicyMembershipV2(Set(defaultUserInfo.userEmail), Set(ResourceAction("can_compute")), Set.empty, Set.empty)
+    val members = AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set(ResourceAction("can_compute")), Set.empty, None)
 
     val samRoutes = createSamRoutes()
     mockPermissionsForResource(samRoutes, resource,
@@ -736,7 +736,7 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
   "GET /api/resources/v1/{resourceType}/{resourceId}/policies" should "200 when listing policies for a resource and user has read_policies permission" in {
     val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("resource"))
     val policyName = AccessPolicyName("policy")
-    val members = AccessPolicyMembershipV2(Set(defaultUserInfo.userEmail), Set(ResourceAction("can_compute")), Set.empty, Set.empty)
+    val members = AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set(ResourceAction("can_compute")), Set.empty, None)
     val response = AccessPolicyResponseEntry(policyName, members, WorkbenchEmail("policy@example.com"))
 
     val samRoutes = createSamRoutes()
@@ -754,7 +754,7 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
   it should "403 when listing policies for a resource and user lacks read_policies permission (but can see the resource)" in {
     val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("resource"))
     val policyName = AccessPolicyName("policy")
-    val members = AccessPolicyMembershipV2(Set(defaultUserInfo.userEmail), Set(ResourceAction("can_compute")), Set.empty, Set.empty)
+    val members = AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set(ResourceAction("can_compute")), Set.empty, None)
     val response = AccessPolicyResponseEntry(policyName, members, WorkbenchEmail("policy@example.com"))
 
     val samRoutes = createSamRoutes()
@@ -772,7 +772,7 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
   it should "404 when listing policies for a resource when user can't see the resource" in {
     val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("resource"))
     val policyName = AccessPolicyName("policy")
-    val members = AccessPolicyMembershipV2(Set(defaultUserInfo.userEmail), Set(ResourceAction("can_compute")), Set.empty, Set.empty)
+    val members = AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set(ResourceAction("can_compute")), Set.empty, None)
     val response = AccessPolicyResponseEntry(policyName, members, WorkbenchEmail("policy@example.com"))
 
     val samRoutes = createSamRoutes()

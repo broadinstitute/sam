@@ -42,9 +42,7 @@ object SamJsonSupport {
 
   implicit val accessPolicyDescendantPermissionsFormat = jsonFormat3(AccessPolicyDescendantPermissions.apply)
 
-  implicit val AccessPolicyMembershipV2Format = jsonFormat4(AccessPolicyMembershipV2.apply)
-
-  implicit val AccessPolicyMembershipV1Format = jsonFormat3(AccessPolicyMembershipV1.apply)
+  implicit val AccessPolicyMembershipFormat = jsonFormat4(AccessPolicyMembership.apply)
 
   implicit val AccessPolicyResponseEntryFormat = jsonFormat3(AccessPolicyResponseEntry.apply)
 
@@ -145,7 +143,7 @@ object SamResourceTypes {
 @Lenses case class AccessPolicyName(value: String) extends ValueObject
 @Lenses final case class CreateResourceRequest(
                                                 resourceId: ResourceId,
-                                                policies: Map[AccessPolicyName, AccessPolicyMembershipV2],
+                                                policies: Map[AccessPolicyName, AccessPolicyMembership],
                                                 authDomain: Set[WorkbenchGroupName],
                                                 returnResource: Option[Boolean] = Some(false))
 
@@ -165,20 +163,12 @@ consistent "has a" relationship is tracked by this ticket: https://broadworkbenc
     extends WorkbenchGroup
 
 @Lenses final case class AccessPolicyDescendantPermissions(resourceType: ResourceTypeName, actions: Set[ResourceAction], roles: Set[ResourceRoleName])
-sealed trait AccessPolicyMembership {
-  def toV1: AccessPolicyMembership
-  def toV2: AccessPolicyMembership
-}
-@Lenses final case class AccessPolicyMembershipV1(memberEmails: Set[WorkbenchEmail], actions: Set[ResourceAction], roles: Set[ResourceRoleName]) extends AccessPolicyMembership {
-  override def toV1: AccessPolicyMembershipV1 = this
-  override def toV2: AccessPolicyMembershipV2 =  AccessPolicyMembershipV2(memberEmails, actions, roles, Set.empty)
-}
-@Lenses final case class AccessPolicyMembershipV2(memberEmails: Set[WorkbenchEmail],
-                                                  actions: Set[ResourceAction],
-                                                  roles: Set[ResourceRoleName],
-                                                  descendantPermissions: Set[AccessPolicyDescendantPermissions]) extends AccessPolicyMembership {
-  override def toV1: AccessPolicyMembershipV1 = AccessPolicyMembershipV1(memberEmails, actions, roles)
-  override def toV2: AccessPolicyMembershipV2 = this
+@Lenses final case class AccessPolicyMembership(memberEmails: Set[WorkbenchEmail],
+                                                actions: Set[ResourceAction],
+                                                roles: Set[ResourceRoleName],
+                                                descendantPermissions: Option[Set[AccessPolicyDescendantPermissions]] = None) {
+  def toV1 = this.copy(descendantPermissions = None) // strip out descendantPermissions for backwards compatibility
+  def getDescendantPermissions = descendantPermissions.getOrElse(Set.empty)
 }
 @Lenses final case class AccessPolicyResponseEntry(policyName: AccessPolicyName, policy: AccessPolicyMembership, email: WorkbenchEmail)
 

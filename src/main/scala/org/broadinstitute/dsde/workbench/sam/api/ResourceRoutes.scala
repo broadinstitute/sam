@@ -96,11 +96,8 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
                           case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "policy not found"))
                         })
                       } ~
-                      put {
-                        entity(as[AccessPolicyMembershipV1]) { membershipUpdate =>
-                          putPolicyOverwrite(resourceType, policyId, userInfo, membershipUpdate.toV2, samRequestContext)
-                        }
-                      }
+                      putPolicyOverwrite(resourceType, policyId, userInfo, samRequestContext)
+
                     } ~ pathPrefix("memberEmails") {
                       pathEndOrSingleSlash {
                         putPolicyMembershipOverwrite(resourceType, policyId, userInfo, samRequestContext)
@@ -175,11 +172,7 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
                           case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "policy not found"))
                         })
                       } ~
-                      put {
-                        entity(as[AccessPolicyMembershipV2]) { membershipUpdate =>
-                          putPolicyOverwrite(resourceType, policyId, userInfo, membershipUpdate, samRequestContext)
-                        }
-                      } ~
+                      putPolicyOverwrite(resourceType, policyId, userInfo, samRequestContext) ~
                       deletePolicy(policyId, userInfo, samRequestContext)
                     }
                   }
@@ -287,10 +280,15 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
     }
   }
 
-  def putPolicyOverwrite(resourceType: ResourceType, policyId: FullyQualifiedPolicyId, userInfo: UserInfo, membershipUpdate: AccessPolicyMembershipV2, samRequestContext: SamRequestContext): server.Route =
-    requireAction(policyId.resource, SamResourceActions.alterPolicies, userInfo.userId, samRequestContext) {
-      complete(resourceService.overwritePolicy(resourceType, policyId.accessPolicyName, policyId.resource, membershipUpdate, samRequestContext).map(_ => StatusCodes.Created))
+  def putPolicyOverwrite(resourceType: ResourceType, policyId: FullyQualifiedPolicyId, userInfo: UserInfo, samRequestContext: SamRequestContext): server.Route = {
+    put {
+      entity(as[AccessPolicyMembership]) { membershipUpdate =>
+        requireAction(policyId.resource, SamResourceActions.alterPolicies, userInfo.userId, samRequestContext) {
+          complete(resourceService.overwritePolicy(resourceType, policyId.accessPolicyName, policyId.resource, membershipUpdate, samRequestContext).map(_ => StatusCodes.Created))
+        }
+      }
     }
+  }
 
   def putPolicyMembershipOverwrite(resourceType: ResourceType, policyId: FullyQualifiedPolicyId, userInfo: UserInfo, samRequestContext: SamRequestContext): server.Route =
     put {
