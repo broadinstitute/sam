@@ -165,16 +165,22 @@ consistent "has a" relationship is tracked by this ticket: https://broadworkbenc
     extends WorkbenchGroup
 
 @Lenses final case class AccessPolicyDescendantPermissions(resourceType: ResourceTypeName, actions: Set[ResourceAction], roles: Set[ResourceRoleName])
-@Lenses final case class AccessPolicyMembershipV1(memberEmails: Set[WorkbenchEmail], actions: Set[ResourceAction], roles: Set[ResourceRoleName]) {
-  def toV2 = AccessPolicyMembershipV2(memberEmails, actions, roles, Set.empty)
+sealed trait AccessPolicyMembership {
+  def toV1: AccessPolicyMembership
+  def toV2: AccessPolicyMembership
+}
+@Lenses final case class AccessPolicyMembershipV1(memberEmails: Set[WorkbenchEmail], actions: Set[ResourceAction], roles: Set[ResourceRoleName]) extends AccessPolicyMembership {
+  override def toV1: AccessPolicyMembershipV1 = this
+  override def toV2: AccessPolicyMembershipV2 =  AccessPolicyMembershipV2(memberEmails, actions, roles, Set.empty)
 }
 @Lenses final case class AccessPolicyMembershipV2(memberEmails: Set[WorkbenchEmail],
                                                   actions: Set[ResourceAction],
                                                   roles: Set[ResourceRoleName],
-                                                  descendantPermissions: Set[AccessPolicyDescendantPermissions]) {
-  def toV1 = AccessPolicyMembershipV1(memberEmails, actions, roles)
+                                                  descendantPermissions: Set[AccessPolicyDescendantPermissions]) extends AccessPolicyMembership {
+  override def toV1: AccessPolicyMembershipV1 = AccessPolicyMembershipV1(memberEmails, actions, roles)
+  override def toV2: AccessPolicyMembershipV2 = this
 }
-@Lenses final case class AccessPolicyResponseEntry(policyName: AccessPolicyName, policy: AccessPolicyMembershipV2, email: WorkbenchEmail)
+@Lenses final case class AccessPolicyResponseEntry(policyName: AccessPolicyName, policy: AccessPolicyMembership, email: WorkbenchEmail)
 
 // Access Policy with no membership info to improve efficiency for calls that care about only the roles and actions of a policy, not the membership
 @Lenses final case class AccessPolicyWithoutMembers(id: FullyQualifiedPolicyId, email: WorkbenchEmail, roles: Set[ResourceRoleName], actions: Set[ResourceAction], public: Boolean)

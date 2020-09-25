@@ -78,7 +78,14 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
                   }
                 } ~ pathPrefix("policies") {
                   pathEndOrSingleSlash {
-                    getResourcePolicies(resource, userInfo, samRequestContext)
+                    requireActionsForListPolicies(resource, userInfo, samRequestContext) {
+                      complete(resourceService.listResourcePolicies(resource, samRequestContext).map { responseV2 =>
+                        val responseV1 = responseV2.map { responseEntry =>
+                          responseEntry.copy(policy=responseEntry.policy.toV1)
+                        }
+                        StatusCodes.OK -> responseV1.toSet
+                      })
+                    }
                   } ~ pathPrefix(Segment) { policyName =>
                     val policyId = FullyQualifiedPolicyId(resource, AccessPolicyName(policyName))
 
@@ -153,7 +160,11 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
                 } ~
                 pathPrefix ("policies") {
                   pathEndOrSingleSlash {
-                    getResourcePolicies(resource, userInfo, samRequestContext)
+                    requireActionsForListPolicies(resource, userInfo, samRequestContext) {
+                      complete(resourceService.listResourcePolicies(resource, samRequestContext).map { response =>
+                        StatusCodes.OK -> response.toSet
+                      })
+                    }
                   } ~ pathPrefix(Segment) { policyName =>
                     val policyId = FullyQualifiedPolicyId(resource, AccessPolicyName(policyName))
 
@@ -261,12 +272,10 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
       }
     }
 
-  def getResourcePolicies(resource: FullyQualifiedResourceId, userInfo: UserInfo, samRequestContext: SamRequestContext): server.Route =
+  private def requireActionsForListPolicies(resource: FullyQualifiedResourceId, userInfo: UserInfo, samRequestContext: SamRequestContext)(listResourcePolicies: server.Route): server.Route =
     get {
       requireAction(resource, SamResourceActions.readPolicies, userInfo.userId, samRequestContext) {
-        complete(resourceService.listResourcePolicies(resource, samRequestContext).map { response =>
-          StatusCodes.OK -> response.toSet
-        })
+        listResourcePolicies
       }
     }
 
