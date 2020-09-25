@@ -35,9 +35,9 @@ class ManagedGroupService(
   def createManagedGroup(groupId: ResourceId, userInfo: UserInfo, accessInstructionsOpt: Option[String] = None, samRequestContext: SamRequestContext): IO[Resource] = {
     def adminRole = managedGroupType.ownerRoleName
 
-    val memberPolicy = ManagedGroupService.memberPolicyName -> AccessPolicyMembership(Set.empty, Set.empty, Set(ManagedGroupService.memberRoleName), Set.empty)
-    val adminPolicy = ManagedGroupService.adminPolicyName -> AccessPolicyMembership(Set(userInfo.userEmail), Set.empty, Set(adminRole), Set.empty)
-    val adminNotificationPolicy = ManagedGroupService.adminNotifierPolicyName -> AccessPolicyMembership(
+    val memberPolicy = ManagedGroupService.memberPolicyName -> AccessPolicyMembershipV2(Set.empty, Set.empty, Set(ManagedGroupService.memberRoleName), Set.empty)
+    val adminPolicy = ManagedGroupService.adminPolicyName -> AccessPolicyMembershipV2(Set(userInfo.userEmail), Set.empty, Set(adminRole), Set.empty)
+    val adminNotificationPolicy = ManagedGroupService.adminNotifierPolicyName -> AccessPolicyMembershipV2(
       Set.empty,
       Set.empty,
       Set(ManagedGroupService.adminNotifierRoleName),
@@ -134,7 +134,7 @@ class ManagedGroupService(
       FullyQualifiedPolicyId(FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, resourceId), policyName)
     accessPolicyDAO.loadPolicy(resourceAndPolicyName, samRequestContext).flatMap {
       case Some(policy) => {
-        val updatedPolicy = AccessPolicyMembership(emails, policy.actions, policy.roles, policy.descendantPermissions)
+        val updatedPolicy = AccessPolicyMembershipV2(emails, policy.actions, policy.roles, policy.descendantPermissions)
         resourceService.overwritePolicy(managedGroupType, resourceAndPolicyName.accessPolicyName, resourceAndPolicyName.resource, updatedPolicy, samRequestContext)
       }
       case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Group or policy could not be found: $resourceAndPolicyName"))
