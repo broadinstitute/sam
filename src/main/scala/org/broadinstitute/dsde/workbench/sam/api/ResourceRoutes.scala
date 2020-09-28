@@ -99,18 +99,14 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
                       putPolicyOverwrite(resourceType, policyId, userInfo, samRequestContext)
 
                     } ~ pathPrefix("memberEmails") {
-                      pathEndOrSingleSlash {
-                        putPolicyMembershipOverwrite(resourceType, policyId, userInfo, samRequestContext)
-                      } ~ pathPrefix(Segment) { email =>
-                        withSubject(WorkbenchEmail(email), samRequestContext) { subject =>
-                          pathEndOrSingleSlash {
-                            requireOneOfAction(
-                              resource,
-                              Set(SamResourceActions.alterPolicies, SamResourceActions.sharePolicy(policyId.accessPolicyName)),
-                              userInfo.userId,
-                              samRequestContext) {
+                      requireActionsForSharePolicy(policyId, userInfo, samRequestContext) {
+                        pathEndOrSingleSlash {
+                          putPolicyMembershipOverwrite(resourceType, policyId, userInfo, samRequestContext)
+                        } ~ pathPrefix(Segment) { email =>
+                          withSubject(WorkbenchEmail(email), samRequestContext) { subject =>
+                            pathEndOrSingleSlash {
                               putUserInPolicy(policyId, subject, samRequestContext) ~
-                                deleteUserFromPolicy(policyId, subject, samRequestContext)
+                              deleteUserFromPolicy(policyId, subject, samRequestContext)
                             }
                           }
                         }
@@ -145,15 +141,62 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
         requireUserInfo(samRequestContext) { userInfo =>
           pathPrefix(Segment) { resourceTypeName =>
             withResourceType(ResourceTypeName(resourceTypeName)) { resourceType =>
+              pathEndOrSingleSlash {
+                getUserPoliciesForResourceType(resourceType, userInfo, samRequestContext) ~
+                postResource(resourceType, userInfo, samRequestContext)
+              } ~
               pathPrefix(Segment) { resourceId =>
                 val resource = FullyQualifiedResourceId(resourceType.name, ResourceId(resourceId))
-                path("parent") {
-                  getResourceParent(resource, userInfo, samRequestContext) ~
-                  setResourceParent(resource, userInfo, samRequestContext) ~
-                  deleteResourceParent(resource, userInfo, samRequestContext)
+
+                pathEndOrSingleSlash {
+                  deleteResource(resource, userInfo, samRequestContext) ~
+                  postDefaultResource(resourceType, resource, userInfo, samRequestContext)
                 } ~
-                path("children") {
-                  getResourceChildren(resource, userInfo, samRequestContext)
+                pathPrefix("action") {
+                  pathPrefix(Segment) { action =>
+                    pathEndOrSingleSlash {
+                      getActionPermissionForUser(resource, userInfo, action, samRequestContext)
+                    } ~
+                    pathPrefix("userEmail") {
+                      pathPrefix(Segment) { userEmail =>
+                        pathEndOrSingleSlash {
+                          getActionPermissionForUserEmail(resource, userInfo, ResourceAction(action), WorkbenchEmail(userEmail), samRequestContext)
+                        }
+                      }
+                    }
+                  }
+                } ~
+                pathPrefix("authDomain") {
+                  pathEndOrSingleSlash {
+                    getResourceAuthDomain(resource, userInfo, samRequestContext)
+                  }
+                } ~
+                pathPrefix("roles") {
+                    pathEndOrSingleSlash {
+                      getUserResourceRoles(resource, userInfo, samRequestContext)
+                    }
+                } ~
+                pathPrefix("actions") {
+                  pathEndOrSingleSlash {
+                    listActionsForUser(resource, userInfo, samRequestContext)
+                  }
+                } ~
+                pathPrefix("allUsers") {
+                  pathEndOrSingleSlash {
+                    getAllResourceUsers(resource, userInfo, samRequestContext)
+                  }
+                } ~
+                pathPrefix("parent") {
+                  pathEndOrSingleSlash {
+                    getResourceParent(resource, userInfo, samRequestContext) ~
+                    setResourceParent(resource, userInfo, samRequestContext) ~
+                    deleteResourceParent(resource, userInfo, samRequestContext)
+                  }
+                } ~
+                pathPrefix("children") {
+                  pathEndOrSingleSlash {
+                    getResourceChildren(resource, userInfo, samRequestContext)
+                  }
                 } ~
                 pathPrefix ("policies") {
                   pathEndOrSingleSlash {
@@ -173,7 +216,28 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
                         })
                       } ~
                       putPolicyOverwrite(resourceType, policyId, userInfo, samRequestContext) ~
-                      deletePolicy(policyId, userInfo, samRequestContext)
+                      deletePolicy(policyId, userInfo, samRequestContext) ~
+                      pathPrefix("memberEmails") {
+                        requireActionsForSharePolicy(policyId, userInfo, samRequestContext) {
+                          pathEndOrSingleSlash {
+                            putPolicyMembershipOverwrite(resourceType, policyId, userInfo, samRequestContext)
+                          } ~
+                          pathPrefix(Segment) { email =>
+                            withSubject(WorkbenchEmail(email), samRequestContext) { subject =>
+                              pathEndOrSingleSlash {
+                                putUserInPolicy(policyId, subject, samRequestContext) ~
+                                deleteUserFromPolicy(policyId, subject, samRequestContext)
+                              }
+                            }
+                          }
+                        }
+                      } ~
+                      pathPrefix("public") {
+                        pathEndOrSingleSlash {
+                          getPublicFlag(policyId, userInfo, samRequestContext) ~
+                          putPublicFlag(policyId, userInfo, samRequestContext)
+                        }
+                      }
                     }
                   }
                 }
@@ -290,13 +354,16 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
     }
   }
 
+  private def requireActionsForSharePolicy(policyId: FullyQualifiedPolicyId, userInfo: UserInfo, samRequestContext: SamRequestContext)(sharePolicy: server.Route): server.Route =
+    requireOneOfAction(policyId.resource, Set(SamResourceActions.alterPolicies, SamResourceActions.sharePolicy(policyId.accessPolicyName)), userInfo.userId, samRequestContext) {
+      sharePolicy
+    }
+
   def putPolicyMembershipOverwrite(resourceType: ResourceType, policyId: FullyQualifiedPolicyId, userInfo: UserInfo, samRequestContext: SamRequestContext): server.Route =
     put {
-      requireOneOfAction(policyId.resource, Set(SamResourceActions.alterPolicies, SamResourceActions.sharePolicy(policyId.accessPolicyName)), userInfo.userId, samRequestContext) {
-        entity(as[Set[WorkbenchEmail]]) { membersList =>
-          complete(
-            resourceService.overwritePolicyMembers(resourceType, policyId.accessPolicyName, policyId.resource, membersList, samRequestContext).map(_ => StatusCodes.NoContent))
-        }
+      entity(as[Set[WorkbenchEmail]]) { membersList =>
+        complete(
+          resourceService.overwritePolicyMembers(resourceType, policyId.accessPolicyName, policyId.resource, membersList, samRequestContext).map(_ => StatusCodes.NoContent))
       }
     }
 
