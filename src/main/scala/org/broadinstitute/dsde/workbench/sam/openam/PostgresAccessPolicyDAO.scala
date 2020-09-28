@@ -631,9 +631,9 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     import SamTypeBinders._
     runInTransaction("listPolicies", samRequestContext)({ implicit session =>
       val results = listPoliciesQuery.map(rs => (PolicyInfo(rs.get[AccessPolicyName](p.resultName.name), rs.get[ResourceId](r.resultName.name), rs.get[ResourceTypeName](rt.resultName.name), rs.get[WorkbenchEmail](g.resultName.email), rs.boolean(p.resultName.public)),
-        (rs.stringOpt(gm.resultName.memberUserId).map(WorkbenchUserId), rs.stringOpt(sg.resultName.name).map(WorkbenchGroupName), rs.stringOpt(sp.resultName.name).map(AccessPolicyName(_)), rs.stringOpt(sr.resultName.name).map(ResourceId(_)), rs.stringOpt(srt.resultName.name).map(ResourceTypeName(_))),
-        ((rs.stringOpt(prrt.resultName.name).map(ResourceTypeName(_)), rs.stringOpt(rr.resultName.role).map(ResourceRoleName(_)), rs.booleanOpt(pr.resultName.descends)),
-          (rs.stringOpt(part.resultName.name).map(ResourceTypeName(_)), rs.stringOpt(ra.resultName.action).map(ResourceAction(_)), rs.booleanOpt(pa.resultName.descends)))))
+        MemberResult(rs.stringOpt(gm.resultName.memberUserId).map(WorkbenchUserId), rs.stringOpt(sg.resultName.name).map(WorkbenchGroupName), rs.stringOpt(sp.resultName.name).map(AccessPolicyName(_)), rs.stringOpt(sr.resultName.name).map(ResourceId(_)), rs.stringOpt(srt.resultName.name).map(ResourceTypeName(_))),
+        (RoleResult(rs.stringOpt(prrt.resultName.name).map(ResourceTypeName(_)), rs.stringOpt(rr.resultName.role).map(ResourceRoleName(_)), rs.booleanOpt(pr.resultName.descends)),
+          ActionResult(rs.stringOpt(part.resultName.name).map(ResourceTypeName(_)), rs.stringOpt(ra.resultName.action).map(ResourceAction(_)), rs.booleanOpt(pa.resultName.descends)))))
         .list().apply().groupBy(_._1)
 
       results.map { case (policyInfo, resultsByPolicy) =>
@@ -648,26 +648,28 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     })
   }
 
-  private def unmarshalPolicyMembers(memberResults: List[(Option[WorkbenchUserId], Option[WorkbenchGroupName], Option[AccessPolicyName], Option[ResourceId], Option[ResourceTypeName])]): Set[WorkbenchSubject] = {
+
+
+  private def unmarshalPolicyMembers(memberResults: List[MemberResult]): Set[WorkbenchSubject] = {
     memberResults.collect {
-      case (Some(userId), None, None, None, None) => userId
-      case (None, Some(groupName), None, None, None) => groupName
-      case (None, Some(_), Some(policyName), Some(resourceName), Some(resourceTypeName)) => FullyQualifiedPolicyId(FullyQualifiedResourceId(resourceTypeName, resourceName), policyName)
+      case MemberResult(Some(userId), None, None, None, None) => userId
+      case MemberResult(None, Some(groupName), None, None, None) => groupName
+      case MemberResult(None, Some(_), Some(policyName), Some(resourceName), Some(resourceTypeName)) => FullyQualifiedPolicyId(FullyQualifiedResourceId(resourceTypeName, resourceName), policyName)
     }.toSet
   }
 
-  private def unmarshalPolicyPermissions(permissionsResults: List[((Option[ResourceTypeName], Option[ResourceRoleName], Option[Boolean]), (Option[ResourceTypeName], Option[ResourceAction], Option[Boolean]))]): (Set[ResourceRoleName], Set[ResourceAction], Set[AccessPolicyDescendantPermissions]) = {
-    val (rolesResults, actionsResults) = permissionsResults.unzip
-    val (descendantRolesResults, topLevelRolesResults) = rolesResults.partition(_._3.getOrElse(false))
-    val (descendantActionsResults, topLevelActionsResults) = actionsResults.partition(_._3.getOrElse(false))
+  private def unmarshalPolicyPermissions(permissionsResults: List[(RoleResult, ActionResult)]): (Set[ResourceRoleName], Set[ResourceAction], Set[AccessPolicyDescendantPermissions]) = {
+    val (roleResults, actionResults) = permissionsResults.unzip
+    val (descendantRoleResults, topLevelRoleResults) = roleResults.partition(_.descends.getOrElse(false))
+    val (descendantActionResults, topLevelActionResults) = actionResults.partition(_.descends.getOrElse(false))
 
-    val roles = topLevelRolesResults.collect { case (_, Some(resourceRoleName), _) => resourceRoleName }.toSet
-    val actions = topLevelActionsResults.collect { case (_, Some(resourceActionName), _) => resourceActionName }.toSet
+    val roles = topLevelRoleResults.collect { case RoleResult(_, Some(resourceRoleName), _) => resourceRoleName }.toSet
+    val actions = topLevelActionResults.collect { case ActionResult(_, Some(resourceActionName), _) => resourceActionName }.toSet
 
-    val descendantPermissions = descendantRolesResults.groupBy(_._1).collect { case (Some(resourceTypeName), descendantRolesWithResourceType) =>
-      val (_, descendantRoles, _) = descendantRolesWithResourceType.unzip3
-      val descendantActions = descendantActionsResults.groupBy(_._1).getOrElse(Option(resourceTypeName), List.empty).map { case (_, descendantAction, _) => descendantAction }
-      AccessPolicyDescendantPermissions(resourceTypeName, descendantActions.flatten.toSet, descendantRoles.flatten.toSet)
+    val descendantPermissions = descendantRoleResults.groupBy(_.resourceTypeName).collect { case (Some(descendantResourceTypeName), descendantRolesWithResourceType) =>
+      val descendantRoles = descendantRolesWithResourceType.map { case RoleResult(_, Some(role), _) => role }
+      val descendantActions = descendantActionResults.groupBy(_.resourceTypeName).getOrElse(Option(descendantResourceTypeName), List.empty).map { case ActionResult(_, Some(action), _) => action }
+      AccessPolicyDescendantPermissions(descendantResourceTypeName, descendantActions.toSet, descendantRoles.toSet)
     }.toSet
 
     (roles, actions, descendantPermissions)
@@ -954,6 +956,9 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
 }
 
 private final case class PolicyInfo(name: AccessPolicyName, resourceId: ResourceId, resourceTypeName: ResourceTypeName, email: WorkbenchEmail, public: Boolean)
+private final case class MemberResult(userId: Option[WorkbenchUserId], groupName: Option[WorkbenchGroupName], policyName: Option[AccessPolicyName], resourceId: Option[ResourceId], resourceTypeName: Option[ResourceTypeName])
+private final case class RoleResult(resourceTypeName: Option[ResourceTypeName], role: Option[ResourceRoleName], descends: Option[Boolean])
+private final case class ActionResult(resourceTypeName: Option[ResourceTypeName], action: Option[ResourceAction], descends: Option[Boolean])
 
 final case class FullyQualifiedResourceRoleName(roleName: ResourceRoleName, resourceTypeName: ResourceTypeName)
 object FullyQualifiedResourceRoleName {
