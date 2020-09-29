@@ -78,35 +78,26 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
                   }
                 } ~ pathPrefix("policies") {
                   pathEndOrSingleSlash {
-                    requireActionsForListPolicies(resource, userInfo, samRequestContext) {
-                      complete(resourceService.listResourcePolicies(resource, samRequestContext).map { responseV2 =>
-                        val responseV1 = responseV2.map { responseEntry =>
-                          responseEntry.copy(policy=responseEntry.policy.toV1)
-                        }
-                        StatusCodes.OK -> responseV1.toSet
-                      })
-                    }
+                    getResourcePolicies(resource, userInfo, samRequestContext)
                   } ~ pathPrefix(Segment) { policyName =>
                     val policyId = FullyQualifiedPolicyId(resource, AccessPolicyName(policyName))
 
                     pathEndOrSingleSlash {
-                      requireActionsForGetPolicy(policyId, userInfo, samRequestContext) {
-                        complete(resourceService.loadResourcePolicy(policyId, samRequestContext).map {
-                          case Some(response) => StatusCodes.OK -> response.toV1
-                          case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "policy not found"))
-                        })
-                      } ~
-                      putPolicyOverwrite(resourceType, policyId, userInfo, samRequestContext)
-
+                      getPolicy(policyId, userInfo, samRequestContext) ~
+                        putPolicyOverwrite(resourceType, policyId, userInfo, samRequestContext)
                     } ~ pathPrefix("memberEmails") {
-                      requireActionsForSharePolicy(policyId, userInfo, samRequestContext) {
-                        pathEndOrSingleSlash {
-                          putPolicyMembershipOverwrite(resourceType, policyId, userInfo, samRequestContext)
-                        } ~ pathPrefix(Segment) { email =>
-                          withSubject(WorkbenchEmail(email), samRequestContext) { subject =>
-                            pathEndOrSingleSlash {
+                      pathEndOrSingleSlash {
+                        putPolicyMembershipOverwrite(resourceType, policyId, userInfo, samRequestContext)
+                      } ~ pathPrefix(Segment) { email =>
+                        withSubject(WorkbenchEmail(email), samRequestContext) { subject =>
+                          pathEndOrSingleSlash {
+                            requireOneOfAction(
+                              resource,
+                              Set(SamResourceActions.alterPolicies, SamResourceActions.sharePolicy(policyId.accessPolicyName)),
+                              userInfo.userId,
+                              samRequestContext) {
                               putUserInPolicy(policyId, subject, samRequestContext) ~
-                              deleteUserFromPolicy(policyId, subject, samRequestContext)
+                                deleteUserFromPolicy(policyId, subject, samRequestContext)
                             }
                           }
                         }
@@ -200,21 +191,12 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
                 } ~
                 pathPrefix ("policies") {
                   pathEndOrSingleSlash {
-                    requireActionsForListPolicies(resource, userInfo, samRequestContext) {
-                      complete(resourceService.listResourcePolicies(resource, samRequestContext).map { response =>
-                        StatusCodes.OK -> response.toSet
-                      })
-                    }
+                    getResourcePolicies(resource, userInfo, samRequestContext)
                   } ~ pathPrefix(Segment) { policyName =>
                     val policyId = FullyQualifiedPolicyId(resource, AccessPolicyName(policyName))
 
                     pathEndOrSingleSlash {
-                      requireActionsForGetPolicy(policyId, userInfo, samRequestContext) {
-                        complete(resourceService.loadResourcePolicy(policyId, samRequestContext).map {
-                          case Some(response) => StatusCodes.OK -> response
-                          case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "policy not found"))
-                        })
-                      } ~
+                      getPolicy(policyId, userInfo, samRequestContext) ~
                       putPolicyOverwrite(resourceType, policyId, userInfo, samRequestContext) ~
                       deletePolicy(policyId, userInfo, samRequestContext) ~
                       pathPrefix("memberEmails") {
@@ -329,30 +311,33 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
       }
     }
 
-  private def requireActionsForListPolicies(resource: FullyQualifiedResourceId, userInfo: UserInfo, samRequestContext: SamRequestContext)(listResourcePolicies: server.Route): server.Route =
+  def getResourcePolicies(resource: FullyQualifiedResourceId, userInfo: UserInfo, samRequestContext: SamRequestContext): server.Route =
     get {
       requireAction(resource, SamResourceActions.readPolicies, userInfo.userId, samRequestContext) {
-        listResourcePolicies
+        complete(resourceService.listResourcePolicies(resource, samRequestContext).map { response =>
+          StatusCodes.OK -> response.toSet
+        })
       }
     }
 
-  private def requireActionsForGetPolicy(policyId: FullyQualifiedPolicyId, userInfo: UserInfo, samRequestContext: SamRequestContext)(loadResourcePolicy: server.Route): server.Route = {
+  def getPolicy(policyId: FullyQualifiedPolicyId, userInfo: UserInfo, samRequestContext: SamRequestContext): server.Route =
     get {
       requireOneOfAction(policyId.resource, Set(SamResourceActions.readPolicies, SamResourceActions.readPolicy(policyId.accessPolicyName)), userInfo.userId, samRequestContext) {
-        loadResourcePolicy
+        complete(resourceService.loadResourcePolicy(policyId, samRequestContext).map {
+          case Some(response) => StatusCodes.OK -> response
+          case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "policy not found"))
+        })
       }
     }
-  }
 
-  def putPolicyOverwrite(resourceType: ResourceType, policyId: FullyQualifiedPolicyId, userInfo: UserInfo, samRequestContext: SamRequestContext): server.Route = {
+  def putPolicyOverwrite(resourceType: ResourceType, policyId: FullyQualifiedPolicyId, userInfo: UserInfo, samRequestContext: SamRequestContext): server.Route =
     put {
-      entity(as[AccessPolicyMembership]) { membershipUpdate =>
-        requireAction(policyId.resource, SamResourceActions.alterPolicies, userInfo.userId, samRequestContext) {
+      requireAction(policyId.resource, SamResourceActions.alterPolicies, userInfo.userId, samRequestContext) {
+        entity(as[AccessPolicyMembership]) { membershipUpdate =>
           complete(resourceService.overwritePolicy(resourceType, policyId.accessPolicyName, policyId.resource, membershipUpdate, samRequestContext).map(_ => StatusCodes.Created))
         }
       }
     }
-  }
 
   private def requireActionsForSharePolicy(policyId: FullyQualifiedPolicyId, userInfo: UserInfo, samRequestContext: SamRequestContext)(sharePolicy: server.Route): server.Route =
     requireOneOfAction(policyId.resource, Set(SamResourceActions.alterPolicies, SamResourceActions.sharePolicy(policyId.accessPolicyName)), userInfo.userId, samRequestContext) {
@@ -361,9 +346,11 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
 
   def putPolicyMembershipOverwrite(resourceType: ResourceType, policyId: FullyQualifiedPolicyId, userInfo: UserInfo, samRequestContext: SamRequestContext): server.Route =
     put {
-      entity(as[Set[WorkbenchEmail]]) { membersList =>
-        complete(
-          resourceService.overwritePolicyMembers(resourceType, policyId.accessPolicyName, policyId.resource, membersList, samRequestContext).map(_ => StatusCodes.NoContent))
+      requireOneOfAction(policyId.resource, Set(SamResourceActions.alterPolicies, SamResourceActions.sharePolicy(policyId.accessPolicyName)), userInfo.userId, samRequestContext) {
+        entity(as[Set[WorkbenchEmail]]) { membersList =>
+          complete(
+            resourceService.overwritePolicyMembers(resourceType, policyId.accessPolicyName, policyId.resource, membersList, samRequestContext).map(_ => StatusCodes.NoContent))
+        }
       }
     }
 

@@ -166,9 +166,8 @@ consistent "has a" relationship is tracked by this ticket: https://broadworkbenc
 @Lenses final case class AccessPolicyMembership(memberEmails: Set[WorkbenchEmail],
                                                 actions: Set[ResourceAction],
                                                 roles: Set[ResourceRoleName],
-                                                descendantPermissions: Option[Set[AccessPolicyDescendantPermissions]] = None) {
-  def toV1 = this.copy(descendantPermissions = None) // strip out descendantPermissions for backwards compatibility
-  def getDescendantPermissions = descendantPermissions.getOrElse(Set.empty)
+                                                descendantPermissions: Option[Set[AccessPolicyDescendantPermissions]] = Option(Set.empty)) {
+  def getDescendantPermissions: Set[AccessPolicyDescendantPermissions] = descendantPermissions.getOrElse(Set.empty)
 }
 @Lenses final case class AccessPolicyResponseEntry(policyName: AccessPolicyName, policy: AccessPolicyMembership, email: WorkbenchEmail)
 
