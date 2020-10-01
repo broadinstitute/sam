@@ -604,7 +604,7 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
 
   it should "fail with 404 when the group does not exist" in {
     val groups = TrieMap.empty[WorkbenchGroupIdentity, WorkbenchGroup]
-    val policyDao = new MockAccessPolicyDAO(groups)
+    val policyDao = new MockAccessPolicyDAO(resourceTypes, groups)
     val samRoutes = TestSamRoutes(resourceTypes, policyAccessDAO = Some(policyDao), policies = Some(groups))
 
     policyDao.createResource(Resource(ManagedGroupService.managedGroupTypeName, ResourceId("foo"), Set.empty), samRequestContext).unsafeRunSync()
@@ -714,7 +714,7 @@ class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteT
 object ManagedGroupRoutesSpec{
   def createSamRoutesWithResource(resourceTypeMap: Map[ResourceTypeName, ResourceType], resource: Resource)(implicit system: ActorSystem, materializer: Materializer, ec: ExecutionContext, contextShift: ContextShift[IO]): TestSamRoutes ={
     val groups = TrieMap.empty[WorkbenchGroupIdentity, WorkbenchGroup]
-    val policyDao = new MockAccessPolicyDAO(groups)
+    val policyDao = new MockAccessPolicyDAO(resourceTypeMap, groups)
     val samRoutes = TestSamRoutes(resourceTypeMap, policyAccessDAO = Some(policyDao), policies = Some(groups))
 
     policyDao.createResource(resource, samRequestContext).unsafeRunSync()

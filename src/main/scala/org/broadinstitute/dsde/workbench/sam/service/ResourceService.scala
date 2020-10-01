@@ -67,7 +67,7 @@ class ResourceService(
                 Set.empty,
                 Set.empty)
               // note that this skips all validations and just creates a resource with owner policies with no members
-              // it will require someone with direct ldap access to bootstrap
+              // it will require someone with direct database access to bootstrap
               _ <- persistResource(resourceTypeAdmin, ResourceId(rt.name.value), Set(policy), Set.empty, samRequestContext).recover {
                 case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode.contains(StatusCodes.Conflict) =>
                   // ok if the resource already exists

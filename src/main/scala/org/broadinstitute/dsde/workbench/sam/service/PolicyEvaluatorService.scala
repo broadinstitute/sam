@@ -94,10 +94,7 @@ class PolicyEvaluatorService(
   @deprecated("listing policies for resource type removed, use listUserResources instead", since = "ResourceRoutes v2")
   def listUserAccessPolicies(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[UserPolicyResponse]] =
     for {
-      rt <- IO.fromEither(
-        resourceTypes
-          .get(resourceTypeName)
-          .toRight(new WorkbenchException(s"missing configration for resourceType ${resourceTypeName}")))
+      rt <- getResourceType(resourceTypeName)
       isConstrained = rt.isAuthDomainConstrainable
       ridAndPolicyName <- accessPolicyDAO.listAccessPolicies(resourceTypeName, userId, samRequestContext) // List all policies of a given resourceType the user is a member of
       rids = ridAndPolicyName.map(_.resourceId)
@@ -125,10 +122,7 @@ class PolicyEvaluatorService(
 
   def listUserResources(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Iterable[UserResourcesResponse]] =
     for {
-      rt <- IO.fromEither(
-        resourceTypes
-          .get(resourceTypeName)
-          .toRight(new WorkbenchException(s"missing configration for resourceType ${resourceTypeName}")))
+      rt <- getResourceType(resourceTypeName)
       isConstrained = rt.isAuthDomainConstrainable
       resourcesWithAccess <- accessPolicyDAO.listUserResourcesWithRolesAndActions(resourceTypeName, userId, samRequestContext)
       rids = resourcesWithAccess.map(_.resourceId).toSet
@@ -152,6 +146,13 @@ class PolicyEvaluatorService(
         } else UserResourcesResponse(resourceWithAccess.resourceId, resourceWithAccess.direct, resourceWithAccess.inherited, resourceWithAccess.public, Set.empty, Set.empty).some
       }
     } yield results.flatten
+
+  private def getResourceType(resourceTypeName: ResourceTypeName): IO[ResourceType] = {
+    IO.fromEither(
+      resourceTypes
+        .get(resourceTypeName)
+        .toRight(new WorkbenchException(s"missing configration for resourceType ${resourceTypeName}")))
+  }
 
   def listUserManagedGroupsWithRole(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[ManagedGroupAndRole]] =
     for {

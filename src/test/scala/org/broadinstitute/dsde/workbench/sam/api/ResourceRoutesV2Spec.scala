@@ -20,7 +20,6 @@ import org.scalatest.mockito.MockitoSugar
 import org.scalatest.{AppendedClues, FlatSpec, Matchers}
 import spray.json.DefaultJsonProtocol._
 
-@deprecated("", "")
 class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with ScalatestRouteTest with AppendedClues with MockitoSugar {
 
   implicit val errorReportSource = ErrorReportSource("sam")
@@ -36,7 +35,7 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
 
   private def createSamRoutes(resourceTypes: Map[ResourceTypeName, ResourceType] = Map(defaultResourceType.name -> defaultResourceType),
                               userInfo: UserInfo = defaultUserInfo): SamRoutes = {
-    val accessPolicyDAO = new MockAccessPolicyDAO()
+    val accessPolicyDAO = new MockAccessPolicyDAO(resourceTypes)
     val directoryDAO = new MockDirectoryDAO()
     val registrationDAO = new MockDirectoryDAO()
     val emailDomain = "example.com"
@@ -60,18 +59,17 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
                                          actionsOnResource: Set[ResourceAction] = Set.empty,
                                          missingActionsOnResource: Set[ResourceAction] = Set.empty,
                                          accessToResource: Boolean = true): Unit = {
-    val otherPolicy = AccessPolicyWithoutMembers(FullyQualifiedPolicyId(resource, AccessPolicyName("not_owner")), WorkbenchEmail(""), Set.empty, Set.empty, false)
     actionsOnResource.map(action => when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(resource), mockitoEq(action), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
       .thenReturn(IO(true)))
     missingActionsOnResource.map(action => when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(resource), mockitoEq(action), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
       .thenReturn(IO(false)))
 
     if (accessToResource) {
-      when(samRoutes.policyEvaluatorService.listResourceAccessPoliciesForUser(mockitoEq(resource), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-        .thenReturn(IO(Set(otherPolicy)))
+      when(samRoutes.policyEvaluatorService.listUserResourceActions(mockitoEq(resource), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
+        .thenReturn(IO(actionsOnResource))
     } else {
-      when(samRoutes.policyEvaluatorService.listResourceAccessPoliciesForUser(mockitoEq(resource), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
-        .thenReturn(IO(Set[AccessPolicyWithoutMembers]()))
+      when(samRoutes.policyEvaluatorService.listUserResourceActions(mockitoEq(resource), mockitoEq(defaultUserInfo.userId), any[SamRequestContext]))
+        .thenReturn(IO(Set.empty[ResourceAction]))
     }
   }
 

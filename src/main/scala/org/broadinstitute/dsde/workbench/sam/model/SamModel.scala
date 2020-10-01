@@ -139,6 +139,13 @@ object SamResourceTypes {
     RolesAndActions(this.roles ++ other.roles, this.actions ++ other.actions)
   }
 }
+object RolesAndActions {
+  val empty = RolesAndActions(Set.empty, Set.empty)
+  def fromRoles(roles: Set[ResourceRoleName]) = RolesAndActions(roles, Set.empty)
+  def fromActions(actions: Set[ResourceAction]) = RolesAndActions(Set.empty, actions)
+  def fromPolicy(accessPolicy: AccessPolicy) = RolesAndActions(accessPolicy.roles, accessPolicy.actions)
+  def fromPolicyMembership(accessPolicy: AccessPolicyMembership) = RolesAndActions(accessPolicy.roles, accessPolicy.actions)
+}
 @Lenses final case class UserPolicyResponse(
     resourceId: ResourceId,
     accessPolicyName: AccessPolicyName,

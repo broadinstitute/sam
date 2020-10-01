@@ -66,6 +66,20 @@ trait AccessPolicyDAO {
   def listResourceChildren(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Set[FullyQualifiedResourceId]]
 
   def listUserResourcesWithRolesAndActions(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Iterable[ResourceIdWithRolesAndActions]]
+
+  /**
+    * Utility function that takes a bunch of ResourceIdWithRolesAndActions, probably more than one for a give
+    * resource id, and aggregates all the ones with same resource id together. Used in Mock.
+    * @param fragmentedRolesAndActions
+    * @return
+    */
+  private[openam] def aggregateByResource(fragmentedRolesAndActions: Iterable[ResourceIdWithRolesAndActions]): Iterable[ResourceIdWithRolesAndActions] = {
+    fragmentedRolesAndActions.groupBy(_.resourceId).map { case (resourceId, rowsForResource) =>
+      rowsForResource.reduce { (left, right) =>
+        ResourceIdWithRolesAndActions(resourceId, left.direct ++ right.direct, left.inherited ++ right.inherited, left.public ++ right.public)
+      }
+    }
+  }
 }
 
 

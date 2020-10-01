@@ -67,7 +67,10 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
         .update().apply()
     } else {
       samsql"""delete from ${RoleActionTable as ra}
-                 where (${ra.resourceRoleId}, ${ra.resourceActionId}) not in (${roleActionValues})"""
+                 using ${ResourceRoleTable as rr}
+                 where ${ra.resourceRoleId} = ${rr.id}
+                 and (${ra.resourceRoleId}, ${ra.resourceActionId}) not in (${roleActionValues})
+                 and ${rr.resourceTypeId} = ${resourceTypePK}"""
         .update().apply()
 
       val insertQuery =
@@ -755,7 +758,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
       val policyAction = ResourceActionTable.syntax("policyAction")
 
       val listUserResourcesQuery = samsql"""$cteQueryFragment
-        select ${userResourcePolicy.baseResourceName}, ${resourceRole.role}, ${policyAction.action}, ${userResourcePolicy.public}, ${userResourcePolicy.inherited}
+        select ${userResourcePolicy.result.baseResourceName}, ${resourceRole.result.role}, ${policyAction.result.action}, ${userResourcePolicy.result.public}, ${userResourcePolicy.result.inherited}
           from ${userResourcePolicyTable as userResourcePolicy}
           left join ${PolicyRoleTable as policyRole} on ${userResourcePolicy.policyId} = ${policyRole.resourcePolicyId} and ${userResourcePolicy.inherited} = ${policyRole.descends}
           left join ${ResourceRoleTable as resourceRole} on ${policyRole.resourceRoleId} = ${resourceRole.id} and ${userResourcePolicy.baseResourceTypeId} = ${resourceRole.resourceTypeId}
@@ -769,17 +772,13 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
         val inherited = rs.boolean(userResourcePolicy.resultName.inherited)
         ResourceIdWithRolesAndActions(
           ResourceId(rs.string(userResourcePolicy.resultName.baseResourceName)),
-          if (!public && !inherited) rolesAndActions else empty,
+          if (!(public || inherited)) rolesAndActions else empty,
           if (inherited) rolesAndActions else empty,
           if (public) rolesAndActions else empty
         )
       }.list().apply()
 
-      queryResults.groupBy(_.resourceId).map { case (resourceId, rowsForResource) =>
-        rowsForResource.reduce { (left, right) =>
-          ResourceIdWithRolesAndActions(resourceId, left.direct ++ right.direct, left.inherited ++ right.inherited, left.public ++ right.public)
-        }
-      }
+      aggregateByResource(queryResults)
     })
   }
 
