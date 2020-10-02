@@ -5,7 +5,7 @@ import org.broadinstitute.dsde.workbench.sam.db.SamTypeBinders
 
 final case class PolicyRoleRecord(resourcePolicyId: PolicyPK,
                                   resourceRoleId: ResourceRolePK,
-                                  descends: Boolean)
+                                  descendantsOnly: Boolean)
 
 object PolicyRoleTable extends SQLSyntaxSupportWithDefaultSamDB[PolicyRoleRecord] {
   override def tableName: String = "SAM_POLICY_ROLE"
@@ -14,6 +14,6 @@ object PolicyRoleTable extends SQLSyntaxSupportWithDefaultSamDB[PolicyRoleRecord
   def apply(e: ResultName[PolicyRoleRecord])(rs: WrappedResultSet): PolicyRoleRecord = PolicyRoleRecord(
     rs.get(e.resourcePolicyId),
     rs.get(e.resourceRoleId),
-    rs.get(e.descends)
+    rs.get(e.descendantsOnly)
   )
 }
