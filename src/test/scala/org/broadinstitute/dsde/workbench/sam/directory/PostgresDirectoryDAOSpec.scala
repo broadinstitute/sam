@@ -40,7 +40,7 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
   val resourceTypeName = ResourceTypeName("awesomeType")
   val resourceType = ResourceType(resourceTypeName, actionPatterns, roles, ownerRoleName, false)
   val defaultResource = Resource(resourceType.name, ResourceId("defaultResource"), Set.empty)
-  val defaultPolicy = AccessPolicy(FullyQualifiedPolicyId(defaultResource.fullyQualifiedId, AccessPolicyName("defaultPolicy")), Set.empty, WorkbenchEmail("default@policy.com"), roles.map(_.roleName), Set(writeAction, readAction), false)
+  val defaultPolicy = AccessPolicy(FullyQualifiedPolicyId(defaultResource.fullyQualifiedId, AccessPolicyName("defaultPolicy")), Set.empty, WorkbenchEmail("default@policy.com"), roles.map(_.roleName), Set(writeAction, readAction), Set.empty, false)
 
   override protected def beforeEach(): Unit = {
     TestSupport.truncateAll

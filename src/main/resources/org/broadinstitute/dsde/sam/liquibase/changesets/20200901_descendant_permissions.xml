@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog logicalFilePath="dummy"
+                   xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog-ext http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-ext.xsd http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.4.xsd">
+
+    <changeSet logicalFilePath="dummy" author="mtalbott" id="drop_policy_action_PK">
+        <dropPrimaryKey tableName="sam_policy_action" constraintName="sam_policy_action_pkey"/>
+    </changeSet>
+
+    <changeSet logicalFilePath="dummy" author="mtalbott" id="descendant_policy_actions">
+        <addColumn tableName="sam_policy_action">
+            <column name="descendants_only" type="BOOLEAN" defaultValue="false">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+
+    <changeSet logicalFilePath="dummy" author="mtalbott" id="re-add_policy_action_PK">
+        <addPrimaryKey tableName="sam_policy_action" columnNames="resource_policy_id, resource_action_id, descendants_only" constraintName="sam_policy_action_pkey"/>
+    </changeSet>
+
+    <changeSet logicalFilePath="dummy" author="mtalbott" id="drop_policy_role_PK">
+        <dropPrimaryKey tableName="sam_policy_role" constraintName="sam_policy_role_pkey"/>
+    </changeSet>
+
+    <changeSet logicalFilePath="dummy" author="mtalbott" id="descendant_policy_roles">
+        <addColumn tableName="sam_policy_role">
+            <column name="descendants_only" type="BOOLEAN" defaultValue="false">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+
+    <changeSet logicalFilePath="dummy" author="mtalbott" id="re-add_policy_role_PK">
+        <addPrimaryKey tableName="sam_policy_role" columnNames="resource_policy_id, resource_role_id, descendants_only" constraintName="sam_policy_role_pkey"/>
+    </changeSet>
+</databaseChangeLog>

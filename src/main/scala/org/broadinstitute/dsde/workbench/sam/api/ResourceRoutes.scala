@@ -132,20 +132,95 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
         requireUserInfo(samRequestContext) { userInfo =>
           pathPrefix(Segment) { resourceTypeName =>
             withResourceType(ResourceTypeName(resourceTypeName)) { resourceType =>
+              pathEndOrSingleSlash {
+                getUserPoliciesForResourceType(resourceType, userInfo, samRequestContext) ~
+                postResource(resourceType, userInfo, samRequestContext)
+              } ~
               pathPrefix(Segment) { resourceId =>
                 val resource = FullyQualifiedResourceId(resourceType.name, ResourceId(resourceId))
-                path("parent") {
-                  getResourceParent(resource, userInfo, samRequestContext) ~
-                  setResourceParent(resource, userInfo, samRequestContext) ~
-                  deleteResourceParent(resource, userInfo, samRequestContext)
+
+                pathEndOrSingleSlash {
+                  deleteResource(resource, userInfo, samRequestContext) ~
+                  postDefaultResource(resourceType, resource, userInfo, samRequestContext)
                 } ~
-                path("children") {
-                  getResourceChildren(resource, userInfo, samRequestContext)
+                pathPrefix("action") {
+                  pathPrefix(Segment) { action =>
+                    pathEndOrSingleSlash {
+                      getActionPermissionForUser(resource, userInfo, action, samRequestContext)
+                    } ~
+                    pathPrefix("userEmail") {
+                      pathPrefix(Segment) { userEmail =>
+                        pathEndOrSingleSlash {
+                          getActionPermissionForUserEmail(resource, userInfo, ResourceAction(action), WorkbenchEmail(userEmail), samRequestContext)
+                        }
+                      }
+                    }
+                  }
                 } ~
-                pathPrefix ("policies" / Segment) { policyName =>
-                  val policyId = FullyQualifiedPolicyId(resource, AccessPolicyName(policyName))
+                pathPrefix("authDomain") {
                   pathEndOrSingleSlash {
-                    deletePolicy(policyId, userInfo, samRequestContext)
+                    getResourceAuthDomain(resource, userInfo, samRequestContext)
+                  }
+                } ~
+                pathPrefix("roles") {
+                    pathEndOrSingleSlash {
+                      getUserResourceRoles(resource, userInfo, samRequestContext)
+                    }
+                } ~
+                pathPrefix("actions") {
+                  pathEndOrSingleSlash {
+                    listActionsForUser(resource, userInfo, samRequestContext)
+                  }
+                } ~
+                pathPrefix("allUsers") {
+                  pathEndOrSingleSlash {
+                    getAllResourceUsers(resource, userInfo, samRequestContext)
+                  }
+                } ~
+                pathPrefix("parent") {
+                  pathEndOrSingleSlash {
+                    getResourceParent(resource, userInfo, samRequestContext) ~
+                    setResourceParent(resource, userInfo, samRequestContext) ~
+                    deleteResourceParent(resource, userInfo, samRequestContext)
+                  }
+                } ~
+                pathPrefix("children") {
+                  pathEndOrSingleSlash {
+                    getResourceChildren(resource, userInfo, samRequestContext)
+                  }
+                } ~
+                pathPrefix ("policies") {
+                  pathEndOrSingleSlash {
+                    getResourcePolicies(resource, userInfo, samRequestContext)
+                  } ~ pathPrefix(Segment) { policyName =>
+                    val policyId = FullyQualifiedPolicyId(resource, AccessPolicyName(policyName))
+
+                    pathEndOrSingleSlash {
+                      getPolicy(policyId, userInfo, samRequestContext) ~
+                      putPolicyOverwrite(resourceType, policyId, userInfo, samRequestContext) ~
+                      deletePolicy(policyId, userInfo, samRequestContext) ~
+                      pathPrefix("memberEmails") {
+                        requireActionsForSharePolicy(policyId, userInfo, samRequestContext) {
+                          pathEndOrSingleSlash {
+                            putPolicyMembershipOverwrite(resourceType, policyId, userInfo, samRequestContext)
+                          } ~
+                          pathPrefix(Segment) { email =>
+                            withSubject(WorkbenchEmail(email), samRequestContext) { subject =>
+                              pathEndOrSingleSlash {
+                                putUserInPolicy(policyId, subject, samRequestContext) ~
+                                deleteUserFromPolicy(policyId, subject, samRequestContext)
+                              }
+                            }
+                          }
+                        }
+                      } ~
+                      pathPrefix("public") {
+                        pathEndOrSingleSlash {
+                          getPublicFlag(policyId, userInfo, samRequestContext) ~
+                          putPublicFlag(policyId, userInfo, samRequestContext)
+                        }
+                      }
+                    }
                   }
                 }
               }
@@ -262,6 +337,11 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
           complete(resourceService.overwritePolicy(resourceType, policyId.accessPolicyName, policyId.resource, membershipUpdate, samRequestContext).map(_ => StatusCodes.Created))
         }
       }
+    }
+
+  private def requireActionsForSharePolicy(policyId: FullyQualifiedPolicyId, userInfo: UserInfo, samRequestContext: SamRequestContext)(sharePolicy: server.Route): server.Route =
+    requireOneOfAction(policyId.resource, Set(SamResourceActions.alterPolicies, SamResourceActions.sharePolicy(policyId.accessPolicyName)), userInfo.userId, samRequestContext) {
+      sharePolicy
     }
 
   def putPolicyMembershipOverwrite(resourceType: ResourceType, policyId: FullyQualifiedPolicyId, userInfo: UserInfo, samRequestContext: SamRequestContext): server.Route =

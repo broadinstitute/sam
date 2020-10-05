@@ -40,7 +40,9 @@ object SamJsonSupport {
 
   implicit val FullyQualifiedResourceIdFormat = jsonFormat2(FullyQualifiedResourceId.apply)
 
-  implicit val AccessPolicyMembershipFormat = jsonFormat3(AccessPolicyMembership.apply)
+  implicit val AccessPolicyDescendantPermissionsFormat = jsonFormat3(AccessPolicyDescendantPermissions.apply)
+
+  implicit val AccessPolicyMembershipFormat = jsonFormat4(AccessPolicyMembership.apply)
 
   implicit val AccessPolicyResponseEntryFormat = jsonFormat3(AccessPolicyResponseEntry.apply)
 
@@ -140,10 +142,10 @@ object SamResourceTypes {
 }
 @Lenses case class AccessPolicyName(value: String) extends ValueObject
 @Lenses final case class CreateResourceRequest(
-    resourceId: ResourceId,
-    policies: Map[AccessPolicyName, AccessPolicyMembership],
-    authDomain: Set[WorkbenchGroupName],
-    returnResource: Option[Boolean] = Some(false))
+                                                resourceId: ResourceId,
+                                                policies: Map[AccessPolicyName, AccessPolicyMembership],
+                                                authDomain: Set[WorkbenchGroupName],
+                                                returnResource: Option[Boolean] = Some(false))
 
 /*
 Note that AccessPolicy IS A group because it was easier and more efficient to work with in ldap. In Postgres, it is
@@ -156,10 +158,17 @@ consistent "has a" relationship is tracked by this ticket: https://broadworkbenc
     email: WorkbenchEmail,
     roles: Set[ResourceRoleName],
     actions: Set[ResourceAction],
+    descendantPermissions: Set[AccessPolicyDescendantPermissions],
     public: Boolean)
     extends WorkbenchGroup
 
-@Lenses final case class AccessPolicyMembership(memberEmails: Set[WorkbenchEmail], actions: Set[ResourceAction], roles: Set[ResourceRoleName])
+@Lenses final case class AccessPolicyDescendantPermissions(resourceType: ResourceTypeName, actions: Set[ResourceAction], roles: Set[ResourceRoleName])
+@Lenses final case class AccessPolicyMembership(memberEmails: Set[WorkbenchEmail],
+                                                actions: Set[ResourceAction],
+                                                roles: Set[ResourceRoleName],
+                                                descendantPermissions: Option[Set[AccessPolicyDescendantPermissions]] = Option(Set.empty)) {
+  def getDescendantPermissions: Set[AccessPolicyDescendantPermissions] = descendantPermissions.getOrElse(Set.empty)
+}
 @Lenses final case class AccessPolicyResponseEntry(policyName: AccessPolicyName, policy: AccessPolicyMembership, email: WorkbenchEmail)
 
 // Access Policy with no membership info to improve efficiency for calls that care about only the roles and actions of a policy, not the membership

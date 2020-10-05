@@ -29,6 +29,7 @@ class PolicyEvaluatorService(
           WorkbenchEmail(s"dummy@$emailDomain"),
           Set.empty,
           Set(SamResourceActions.setPublicPolicy(ManagedGroupService.adminNotifierPolicyName)),
+          Set.empty,
           true
         ), SamRequestContext(None)) // `SamRequestContext(None)` is used so that we don't trace 1-off boot/init methods
       .void
