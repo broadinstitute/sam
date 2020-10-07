@@ -711,9 +711,6 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     listResourcesWithAuthdomains(resourceId.resourceTypeName, Set(resourceId.resourceId), samRequestContext).map(_.headOption)
   }
 
-  // used to list the the resources/policies a user has access to
-  //  - policies may now come from parent - probably need to disambiguate policy name
-  // also used to list the managed groups but that does not matter for hierarchy
   override def listAccessPolicies(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[ResourceIdAndPolicyName]] = {
     val ancestorGroupsTable = SubGroupMemberTable("ancestor_groups")
     val ag = ancestorGroupsTable.syntax("ag")
@@ -843,7 +840,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
   }
 
   override def listUserResourceActions(resourceId: FullyQualifiedResourceId, user: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[ResourceAction]] = {
-    runInTransaction("listAccessPoliciesForUser", samRequestContext)({ implicit session =>
+    runInTransaction("listUserResourceActions", samRequestContext)({ implicit session =>
       val userPoliciesCommonTableExpression = userPoliciesOnResourceCommonTableExpressions(resourceId, user)
 
       val userResourcePolicyTable = userPoliciesCommonTableExpression.userResourcePolicyTable

@@ -950,7 +950,7 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
         }
       }
 
-      "lists the actions on a resource that a user is a member of via ancestor" in {
+      "lists the roles on a resource that a user is a member of via ancestor" in {
         val user = WorkbenchUser(WorkbenchUserId("user"), None, WorkbenchEmail("user@user.edu"), None)
 
         val subGroup = BasicWorkbenchGroup(WorkbenchGroupName("subGroup"), Set(user.id), WorkbenchEmail("sub@groups.com"))

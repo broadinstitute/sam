@@ -232,11 +232,11 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
 
   // this object supresses the deprecation warning on listUserAccessPolicies
   // see https://github.com/scala/bug/issues/7934
-  object Deprecated { @deprecated("remove as part of CA-1031", "") class Coral { def listUserAccessPolicies = policyEvaluatorService.listUserAccessPolicies _ }; object Coral extends Coral }
+  object Deprecated { @deprecated("remove as part of CA-1031", "") class Corral { def listUserAccessPolicies = policyEvaluatorService.listUserAccessPolicies _ }; object Corral extends Corral }
 
   def getUserPoliciesForResourceType(resourceType: ResourceType, userInfo: UserInfo, samRequestContext: SamRequestContext): server.Route =
     get {
-      complete(Deprecated.Coral.listUserAccessPolicies(resourceType.name, userInfo.userId, samRequestContext))
+      complete(Deprecated.Corral.listUserAccessPolicies(resourceType.name, userInfo.userId, samRequestContext))
     }
 
   def getUserResourcesOfType(resourceType: ResourceType, userInfo: UserInfo, samRequestContext: SamRequestContext): server.Route =

@@ -34,6 +34,7 @@ class MockAccessPolicyDAOSpec extends FlatSpec with Matchers with TestSupport wi
   }
 
   before {
+    TestSupport.truncateAll
     runAndWait(schemaDao.clearDatabase())
     runAndWait(schemaDao.createOrgUnits())
   }
@@ -99,8 +100,9 @@ class MockAccessPolicyDAOSpec extends FlatSpec with Matchers with TestSupport wi
     runAndWait(mock.managedGroupService.createManagedGroup(ResourceId(groupName), dummyUserInfo, samRequestContext = samRequestContext)).copy(accessPolicies = Set.empty) shouldEqual intendedResource
 
 
-    val expectedGroups = Set(ResourceIdAndPolicyName(ResourceId(groupName), ManagedGroupService.adminPolicyName))
-    real.managedGroupService.listGroups(dummyUserInfo.userId, samRequestContext).unsafeRunSync().map(ripn => ResourceIdAndPolicyName(ripn.groupName, ripn.role)) shouldEqual expectedGroups
-    mock.managedGroupService.listGroups(dummyUserInfo.userId, samRequestContext).unsafeRunSync().map(ripn => ResourceIdAndPolicyName(ripn.groupName, ripn.role)) shouldEqual expectedGroups
+    val dummyEmail = WorkbenchEmail("")
+    val expectedGroups = Set(ManagedGroupMembershipEntry(ResourceId(groupName), ManagedGroupService.adminRoleName, dummyEmail))
+    real.managedGroupService.listGroups(dummyUserInfo.userId, samRequestContext).unsafeRunSync().map(_.copy(groupEmail = dummyEmail)) should contain theSameElementsAs expectedGroups
+    mock.managedGroupService.listGroups(dummyUserInfo.userId, samRequestContext).unsafeRunSync().map(_.copy(groupEmail = dummyEmail)) should contain theSameElementsAs expectedGroups
   }
 }

@@ -8,6 +8,7 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, LoadResourceAuthDomainResult}
+import org.broadinstitute.dsde.workbench.sam.service.ManagedGroupService.MangedGroupRoleName
 import org.broadinstitute.dsde.workbench.sam.util.OpenCensusIOUtils._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
@@ -123,29 +124,36 @@ class PolicyEvaluatorService(
   def listUserResources(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Iterable[UserResourcesResponse]] =
     for {
       rt <- getResourceType(resourceTypeName)
-      isConstrained = rt.isAuthDomainConstrainable
       resourcesWithAccess <- accessPolicyDAO.listUserResourcesWithRolesAndActions(resourceTypeName, userId, samRequestContext)
-      rids = resourcesWithAccess.map(_.resourceId).toSet
+      userResourcesResponses = resourcesWithAccess.map { resourceWithAccess =>
+        UserResourcesResponse(resourceWithAccess.resourceId, resourceWithAccess.direct, resourceWithAccess.inherited, resourceWithAccess.public, Set.empty, Set.empty)
+      }
 
-      resources <- if (isConstrained) accessPolicyDAO.listResourcesWithAuthdomains(resourceTypeName, rids, samRequestContext)
-      else IO.pure(Set.empty)
-      authDomainMap = resources.map(x => x.resourceId -> x.authDomain).toMap
-
-      userManagedGroups <- if (isConstrained) listUserManagedGroups(userId, samRequestContext) else IO.pure(Set.empty[WorkbenchGroupName])
-
-      results = resourcesWithAccess.map { resourceWithAccess =>
-        if (isConstrained) {
-          authDomainMap.get(resourceWithAccess.resourceId) match {
-            case Some(resourceAuthDomains) =>
-              val userNotMemberOf = resourceAuthDomains -- userManagedGroups
-              UserResourcesResponse(resourceWithAccess.resourceId, resourceWithAccess.direct, resourceWithAccess.inherited, resourceWithAccess.public, resourceAuthDomains, userNotMemberOf).some
-            case None =>
-              logger.error(s"Corrupted data. ${resourceWithAccess.resourceId} should have auth domains defined")
-              none[UserResourcesResponse]
-          }
-        } else UserResourcesResponse(resourceWithAccess.resourceId, resourceWithAccess.direct, resourceWithAccess.inherited, resourceWithAccess.public, Set.empty, Set.empty).some
+      results <- if (rt.isAuthDomainConstrainable) {
+        populateAuthDomains(resourceTypeName, userId, userResourcesResponses, samRequestContext)
+      } else {
+        IO.pure(userResourcesResponses.map(_.some))
       }
     } yield results.flatten
+
+  private def populateAuthDomains(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId, userResourcesResponses: Iterable[UserResourcesResponse], samRequestContext: SamRequestContext) = {
+    for {
+      resources <- accessPolicyDAO.listResourcesWithAuthdomains(resourceTypeName, userResourcesResponses.map(_.resourceId).toSet, samRequestContext)
+      userManagedGroups <- listUserManagedGroups(userId, samRequestContext)
+    } yield {
+      val authDomainMap = resources.map(resource => resource.resourceId -> resource.authDomain).toMap
+      userResourcesResponses.map { response =>
+        authDomainMap.get(response.resourceId) match {
+          case Some(resourceAuthDomains) =>
+            val userNotMemberOf = resourceAuthDomains -- userManagedGroups
+            response.copy(authDomainGroups = resourceAuthDomains, missingAuthDomainGroups = userNotMemberOf).some
+          case None =>
+            logger.error(s"Corrupted data. ${response.resourceId} should have auth domains defined")
+            none[UserResourcesResponse]
+        }
+      }
+    }
+  }
 
   private def getResourceType(resourceTypeName: ResourceTypeName): IO[ResourceType] = {
     IO.fromEither(
@@ -154,13 +162,16 @@ class PolicyEvaluatorService(
         .toRight(new WorkbenchException(s"missing configration for resourceType ${resourceTypeName}")))
   }
 
-  def listUserManagedGroupsWithRole(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[ManagedGroupAndRole]] =
-    for {
-      ripns <- accessPolicyDAO.listAccessPolicies(ManagedGroupService.managedGroupTypeName, userId, samRequestContext)
-    } yield {
-      ripns
-        .filter(ripn => ManagedGroupService.userMembershipPolicyNames.contains(ripn.accessPolicyName))
-        .map(p => ManagedGroupAndRole(WorkbenchGroupName(p.resourceId.value), ManagedGroupService.getRoleName(p.accessPolicyName.value)))
+  def listUserManagedGroupsWithRole(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Iterable[ManagedGroupAndRole]] =
+    accessPolicyDAO.listUserResourcesWithRolesAndActions(ManagedGroupService.managedGroupTypeName, userId, samRequestContext) map { accessibleGroupResources =>
+      for {
+        groupResource <- accessibleGroupResources
+        roleName <- groupResource.allRolesAndActions.roles.collect {
+          case MangedGroupRoleName(roleName) if ManagedGroupService.userMembershipRoleNames.contains(roleName) => roleName
+        }
+      } yield {
+        ManagedGroupAndRole(WorkbenchGroupName(groupResource.resourceId.value), roleName)
+      }
     }
 
   def listUserManagedGroups(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[WorkbenchGroupName]] =
@@ -168,7 +179,7 @@ class PolicyEvaluatorService(
       policies <- listUserManagedGroupsWithRole(userId, samRequestContext)
     } yield {
       policies.map(_.groupName)
-    }
+    }.toSet
 
   @deprecated("listing policies for resource type removed", since = "ResourceRoutes v2")
   def listResourceAccessPoliciesForUser(resource: FullyQualifiedResourceId, userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[AccessPolicyWithoutMembers]] =

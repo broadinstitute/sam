@@ -143,7 +143,9 @@ object SamResourceTypes {
   * @param inherited RolesAndActions assigned to the resource via policy on resource's ancestor
   * @param public RolesAndActions assigned to the resource via public policy, could be direct or inherited
   */
-@Lenses final case class ResourceIdWithRolesAndActions(resourceId: ResourceId, direct: RolesAndActions, inherited: RolesAndActions, public: RolesAndActions)
+@Lenses final case class ResourceIdWithRolesAndActions(resourceId: ResourceId, direct: RolesAndActions, inherited: RolesAndActions, public: RolesAndActions) {
+  lazy val allRolesAndActions = direct ++ inherited // not necessary to include public as they should be included in both direct and inherited
+}
 @Lenses final case class RolesAndActions(roles: Set[ResourceRoleName], actions: Set[ResourceAction]) {
   def ++ (other: RolesAndActions): RolesAndActions = {
     RolesAndActions(this.roles ++ other.roles, this.actions ++ other.actions)
@@ -209,7 +211,7 @@ consistent "has a" relationship is tracked by this ticket: https://broadworkbenc
 @Lenses final case class BasicWorkbenchGroup(id: WorkbenchGroupName, members: Set[WorkbenchSubject], email: WorkbenchEmail) extends WorkbenchGroup
 
 @Lenses final case class ManagedGroupAndRole(groupName: WorkbenchGroupName, role: MangedGroupRoleName)
-@Lenses final case class ManagedGroupMembershipEntry(groupName: ResourceId, role: AccessPolicyName, groupEmail: WorkbenchEmail)
+@Lenses final case class ManagedGroupMembershipEntry(groupName: ResourceId, role: ResourceRoleName, groupEmail: WorkbenchEmail)
 @Lenses final case class ManagedGroupAccessInstructions(value: String) extends ValueObject
 
 @Lenses final case class GroupSyncResponse(lastSyncDate: String, email: WorkbenchEmail)

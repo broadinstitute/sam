@@ -42,6 +42,7 @@ trait AccessPolicyDAO {
 
   def listResourceWithAuthdomains(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Option[Resource]]
 
+  @deprecated("listing policies for resource type removed", since = "ResourceRoutes v2")
   def listAccessPolicies(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[ResourceIdAndPolicyName]]
 
   def listAccessPolicies(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Stream[AccessPolicy]]
@@ -69,7 +70,7 @@ trait AccessPolicyDAO {
 
   /**
     * Utility function that takes a bunch of ResourceIdWithRolesAndActions, probably more than one for a give
-    * resource id, and aggregates all the ones with same resource id together. Used in Mock.
+    * resource id, and aggregates all the ones with same resource id together.
     * @param fragmentedRolesAndActions
     * @return
     */

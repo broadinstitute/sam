@@ -103,10 +103,10 @@ class ManagedGroupService(
       _ <- resourceService.deleteResource(managedGroupResourceId, samRequestContext)
     } yield ()
 
-  def listGroups(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[ManagedGroupMembershipEntry]] =
+  def listGroups(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Iterable[ManagedGroupMembershipEntry]] =
     for {
       managedGroupsWithRole <- policyEvaluatorService.listUserManagedGroupsWithRole(userId, samRequestContext)
-      emailLookup <- directoryDAO.batchLoadGroupEmail(managedGroupsWithRole.map(_.groupName), samRequestContext)
+      emailLookup <- directoryDAO.batchLoadGroupEmail(managedGroupsWithRole.map(_.groupName).toSet, samRequestContext)
     } yield {
       val emailLookupMap = emailLookup.toMap
       // This will silently ignore any group where the email could not be loaded. This can happen when a
@@ -115,7 +115,7 @@ class ManagedGroupService(
       managedGroupsWithRole.flatMap { groupAndRole =>
         emailLookupMap
           .get(groupAndRole.groupName)
-          .map(email => ManagedGroupMembershipEntry(ResourceId(groupAndRole.groupName.value), AccessPolicyName(groupAndRole.role.value), email))
+          .map(email => ManagedGroupMembershipEntry(ResourceId(groupAndRole.groupName.value), groupAndRole.role, email))
       }
     }
 
@@ -204,13 +204,31 @@ object ManagedGroupService {
   private val adminValue = "admin"
   private val adminNotifierValue = "admin-notifier"
 
+  type MangedGroupRoleName = ResourceRoleName with AllowedManagedGroupRoleName
+  // In lieu of an Enumeration, this trait is being used to ensure that we can only have these Roles in a Managed Group
+  sealed trait AllowedManagedGroupRoleName
+  val adminRoleName = new ResourceRoleName(adminValue) with AllowedManagedGroupRoleName
+  val memberRoleName = new ResourceRoleName(memberValue) with AllowedManagedGroupRoleName
+  val adminNotifierRoleName = new ResourceRoleName(adminNotifierValue) with AllowedManagedGroupRoleName
+
   type ManagedGroupPolicyName = AccessPolicyName with AllowedManagedGroupPolicyName
   // In lieu of an Enumeration, this trait is being used to ensure that we can only have these policies in a Managed Group
   sealed trait AllowedManagedGroupPolicyName
   val adminPolicyName: ManagedGroupPolicyName = new AccessPolicyName(adminValue) with AllowedManagedGroupPolicyName
   val memberPolicyName: ManagedGroupPolicyName = new AccessPolicyName(memberValue) with AllowedManagedGroupPolicyName
   val adminNotifierPolicyName: ManagedGroupPolicyName = new AccessPolicyName(adminNotifierValue) with AllowedManagedGroupPolicyName
-  val userMembershipPolicyNames: Set[AccessPolicyName] = Set(adminPolicyName, memberPolicyName)
+  val userMembershipRoleNames: Set[ResourceRoleName] = Set(adminRoleName, memberRoleName)
+
+  object MangedGroupRoleName {
+    def unapply(roleName: ResourceRoleName): Option[MangedGroupRoleName] = {
+      roleName.value match {
+        case `memberValue` => Option(ManagedGroupService.memberRoleName)
+        case `adminValue` => Option(ManagedGroupService.adminRoleName)
+        case `adminNotifierValue` => Option(ManagedGroupService.adminNotifierRoleName)
+        case _ => None
+      }
+    }
+  }
 
   def getPolicyName(policyName: String): ManagedGroupPolicyName =
     policyName match {
@@ -221,13 +239,6 @@ object ManagedGroupService {
         throw new WorkbenchExceptionWithErrorReport(
           ErrorReport(StatusCodes.NotFound, "Policy name for managed groups must be one of: [\"admins\", \"members\"]"))
     }
-
-  type MangedGroupRoleName = ResourceRoleName with AllowedManagedGroupRoleName
-  // In lieu of an Enumeration, this trait is being used to ensure that we can only have these Roles in a Managed Group
-  sealed trait AllowedManagedGroupRoleName
-  val adminRoleName = new ResourceRoleName(adminValue) with AllowedManagedGroupRoleName
-  val memberRoleName = new ResourceRoleName(memberValue) with AllowedManagedGroupRoleName
-  val adminNotifierRoleName = new ResourceRoleName(adminNotifierValue) with AllowedManagedGroupRoleName
 
   def getRoleName(roleName: String): MangedGroupRoleName =
     roleName match {
