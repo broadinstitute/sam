@@ -2767,23 +2767,29 @@ components:
       required:
         - policy
         - policyName
+        - email
       type: object
       properties:
         policyName:
           type: string
         policy:
           $ref: '#/components/schemas/AccessPolicyMembership'
+        email:
+          type: string
       description: ""
     AccessPolicyResponseEntryV2:
       required:
         - policy
         - policyName
+        - email
       type: object
       properties:
         policyName:
           type: string
         policy:
           $ref: '#/components/schemas/AccessPolicyMembershipV2'
+        email:
+          type: string
       description: ""
     AccessPolicyMembership:
       required:
