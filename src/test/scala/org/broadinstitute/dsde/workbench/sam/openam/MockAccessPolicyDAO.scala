@@ -13,10 +13,37 @@ import scala.collection.mutable
 /**
   * Created by dvoet on 7/17/17.
   */
-class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdentity, WorkbenchGroup] = new TrieMap()) extends AccessPolicyDAO {
+class MockAccessPolicyDAO(private val resourceTypes: mutable.Map[ResourceTypeName, ResourceType], private val policies: mutable.Map[WorkbenchGroupIdentity, WorkbenchGroup] = new TrieMap()) extends AccessPolicyDAO {
+  def this(resourceTypes: Map[ResourceTypeName, ResourceType], policies: mutable.Map[WorkbenchGroupIdentity, WorkbenchGroup]) {
+    this(new TrieMap[ResourceTypeName, ResourceType]() ++ resourceTypes, policies)
+  }
+
+  def this(resourceTypes: Iterable[ResourceType], policies: mutable.Map[WorkbenchGroupIdentity, WorkbenchGroup]) {
+    this(new TrieMap[ResourceTypeName, ResourceType] ++ resourceTypes.map(rt => rt.name -> rt).toMap, policies)
+  }
+
+  def this(resourceType: ResourceType, policies: mutable.Map[WorkbenchGroupIdentity, WorkbenchGroup]) {
+    this(Map(resourceType.name -> resourceType), policies)
+  }
+
+  def this(resourceTypes: Map[ResourceTypeName, ResourceType]) {
+    this(new TrieMap[ResourceTypeName, ResourceType]() ++ resourceTypes)
+  }
+
+  def this(resourceTypes: Iterable[ResourceType]) {
+    this(new TrieMap[ResourceTypeName, ResourceType] ++ resourceTypes.map(rt => rt.name -> rt).toMap)
+  }
+
+  def this() {
+    this(Map.empty[ResourceTypeName, ResourceType])
+  }
+
   val resources = new TrieMap[FullyQualifiedResourceId, Resource]()
 
-  override def createResourceType(resourceType: ResourceType, samRequestContext: SamRequestContext): IO[ResourceType] = IO.pure(resourceType)
+  override def createResourceType(resourceType: ResourceType, samRequestContext: SamRequestContext): IO[ResourceType] = {
+    resourceTypes += resourceType.name -> resourceType
+    IO.pure(resourceType)
+  }
 
   override def createResource(resource: Resource, samRequestContext: SamRequestContext): IO[Resource] = IO {
     resources += resource.fullyQualifiedId -> resource
@@ -154,4 +181,35 @@ class MockAccessPolicyDAO(private val policies: mutable.Map[WorkbenchGroupIdenti
   override def deleteResourceParent(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Boolean] = ???
 
   override def listResourceChildren(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Set[FullyQualifiedResourceId]] = IO(Set.empty)
+
+  override def listUserResourceActions(resourceId: FullyQualifiedResourceId, user: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[ResourceAction]] = IO {
+    policies.collect {
+      case (FullyQualifiedPolicyId(`resourceId`, _), policy: AccessPolicy) if policy.members.contains(user) || policy.public =>
+        val roleActions = policy.roles.flatMap {role =>
+          resourceTypes(resourceId.resourceTypeName).roles.find(_.roleName == role).map(_.actions).getOrElse(Set.empty)
+        }
+
+        roleActions ++ policy.actions
+    }.flatten.toSet
+  }
+
+  override def listUserResourceRoles(resourceId: FullyQualifiedResourceId, user: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[ResourceRoleName]] = IO {
+    policies.collect {
+      case (FullyQualifiedPolicyId(`resourceId`, _), policy: AccessPolicy) if policy.members.contains(user) || policy.public =>
+        policy.roles
+    }.flatten.toSet
+  }
+
+  override def listUserResourcesWithRolesAndActions(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Iterable[ResourceIdWithRolesAndActions]] = IO {
+    val forEachPolicy = policies.collect {
+      case (fqPolicyId @ FullyQualifiedPolicyId(FullyQualifiedResourceId(`resourceTypeName`, _), _), accessPolicy: AccessPolicy) if accessPolicy.members.contains(userId) || accessPolicy.public =>
+        if (accessPolicy.public) {
+          ResourceIdWithRolesAndActions(fqPolicyId.resource.resourceId, RolesAndActions.empty, RolesAndActions.empty, RolesAndActions.fromPolicy(accessPolicy))
+        } else {
+          ResourceIdWithRolesAndActions(fqPolicyId.resource.resourceId, RolesAndActions.fromPolicy(accessPolicy), RolesAndActions.empty, RolesAndActions.empty)
+        }
+    }
+
+    aggregateByResource(forEachPolicy)
+  }
 }

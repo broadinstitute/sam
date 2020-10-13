@@ -133,7 +133,7 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
           pathPrefix(Segment) { resourceTypeName =>
             withResourceType(ResourceTypeName(resourceTypeName)) { resourceType =>
               pathEndOrSingleSlash {
-                getUserPoliciesForResourceType(resourceType, userInfo, samRequestContext) ~
+                getUserResourcesOfType(resourceType, userInfo, samRequestContext) ~
                 postResource(resourceType, userInfo, samRequestContext)
               } ~
               pathPrefix(Segment) { resourceId =>
@@ -197,28 +197,28 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
 
                     pathEndOrSingleSlash {
                       getPolicy(policyId, userInfo, samRequestContext) ~
-                      putPolicyOverwrite(resourceType, policyId, userInfo, samRequestContext) ~
-                      deletePolicy(policyId, userInfo, samRequestContext) ~
-                      pathPrefix("memberEmails") {
-                        requireActionsForSharePolicy(policyId, userInfo, samRequestContext) {
-                          pathEndOrSingleSlash {
-                            putPolicyMembershipOverwrite(resourceType, policyId, userInfo, samRequestContext)
-                          } ~
-                          pathPrefix(Segment) { email =>
-                            withSubject(WorkbenchEmail(email), samRequestContext) { subject =>
-                              pathEndOrSingleSlash {
-                                putUserInPolicy(policyId, subject, samRequestContext) ~
-                                deleteUserFromPolicy(policyId, subject, samRequestContext)
-                              }
+                        putPolicyOverwrite(resourceType, policyId, userInfo, samRequestContext) ~
+                        deletePolicy(policyId, userInfo, samRequestContext)
+                    } ~
+                    pathPrefix("memberEmails") {
+                      requireActionsForSharePolicy(policyId, userInfo, samRequestContext) {
+                        pathEndOrSingleSlash {
+                          putPolicyMembershipOverwrite(resourceType, policyId, userInfo, samRequestContext)
+                        } ~
+                        pathPrefix(Segment) { email =>
+                          withSubject(WorkbenchEmail(email), samRequestContext) { subject =>
+                            pathEndOrSingleSlash {
+                              putUserInPolicy(policyId, subject, samRequestContext) ~
+                              deleteUserFromPolicy(policyId, subject, samRequestContext)
                             }
                           }
                         }
-                      } ~
-                      pathPrefix("public") {
-                        pathEndOrSingleSlash {
-                          getPublicFlag(policyId, userInfo, samRequestContext) ~
-                          putPublicFlag(policyId, userInfo, samRequestContext)
-                        }
+                      }
+                    } ~
+                    pathPrefix("public") {
+                      pathEndOrSingleSlash {
+                        getPublicFlag(policyId, userInfo, samRequestContext) ~
+                        putPublicFlag(policyId, userInfo, samRequestContext)
                       }
                     }
                   }
@@ -230,9 +230,18 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
       }
     }
 
+  // this object supresses the deprecation warning on listUserAccessPolicies
+  // see https://github.com/scala/bug/issues/7934
+  object Deprecated { @deprecated("remove as part of CA-1031", "") class Corral { def listUserAccessPolicies = policyEvaluatorService.listUserAccessPolicies _ }; object Corral extends Corral }
+
   def getUserPoliciesForResourceType(resourceType: ResourceType, userInfo: UserInfo, samRequestContext: SamRequestContext): server.Route =
     get {
-      complete(policyEvaluatorService.listUserAccessPolicies(resourceType.name, userInfo.userId, samRequestContext))
+      complete(Deprecated.Corral.listUserAccessPolicies(resourceType.name, userInfo.userId, samRequestContext))
+    }
+
+  def getUserResourcesOfType(resourceType: ResourceType, userInfo: UserInfo, samRequestContext: SamRequestContext): server.Route =
+    get {
+      complete(policyEvaluatorService.listUserResources(resourceType.name, userInfo.userId, samRequestContext))
     }
 
   def postResource(resourceType: ResourceType, userInfo: UserInfo, samRequestContext: SamRequestContext): server.Route =

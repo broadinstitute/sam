@@ -46,7 +46,7 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
   }
 
   private def createSamRoutes(resourceTypes: Map[ResourceTypeName, ResourceType], userInfo: UserInfo = defaultUserInfo) = {
-    val accessPolicyDAO = new MockAccessPolicyDAO()
+    val accessPolicyDAO = new MockAccessPolicyDAO(resourceTypes)
     val directoryDAO = new MockDirectoryDAO()
     val registrationDAO = new MockDirectoryDAO()
 
@@ -566,7 +566,7 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
   it should "404 when creating a policy on a resource that the user doesnt have permission to see" in {
     val resourceType = ResourceType(ResourceTypeName("rt"), Set(SamResourceActionPatterns.alterPolicies, ResourceActionPattern("can_compute", "", false)), Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.alterPolicies))), ResourceRoleName("owner"))
     val groups = TrieMap.empty[WorkbenchGroupIdentity, WorkbenchGroup]
-    val policyDao = new MockAccessPolicyDAO(groups)
+    val policyDao = new MockAccessPolicyDAO(resourceTypes, groups)
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
 
     val otherUserSamRoutes = TestSamRoutes(Map(resourceType.name -> resourceType), UserInfo(OAuth2BearerToken("accessToken"), WorkbenchUserId("user2"), WorkbenchEmail("user2@example.com"), 0), policyAccessDAO = Some(policyDao), policies = Some(groups))
@@ -628,7 +628,7 @@ class ResourceRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest 
     val samRoutes = ManagedGroupRoutesSpec.createSamRoutesWithResource(Map(resourceType.name -> resourceType), Resource(resourceType.name, ResourceId("foo"), Set.empty))
 
     val groups = TrieMap.empty[WorkbenchGroupIdentity, WorkbenchGroup]
-    val policyDao = new MockAccessPolicyDAO(groups)
+    val policyDao = new MockAccessPolicyDAO(resourceTypes, groups)
     val otherUserSamRoutes = TestSamRoutes(Map(resourceType.name -> resourceType), UserInfo(OAuth2BearerToken("accessToken"), WorkbenchUserId("user2"), WorkbenchEmail("user2@example.com"), 0), policyAccessDAO = Some(policyDao), policies = Some(groups))
     policyDao.createResource(Resource(resourceType.name, ResourceId("foo"), Set.empty), samRequestContext).unsafeRunSync()
     //Create the resource

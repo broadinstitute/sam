@@ -48,6 +48,10 @@ object SamJsonSupport {
 
   implicit val UserPolicyResponseFormat = jsonFormat5(UserPolicyResponse.apply)
 
+  implicit val RolesAndActionsFormat = jsonFormat2(RolesAndActions.apply)
+
+  implicit val UserResourcesResponseFormat = jsonFormat6(UserResourcesResponse.apply)
+
   implicit val PolicyIdentityFormat = jsonFormat2(FullyQualifiedPolicyId.apply)
 
   implicit val ManagedGroupMembershipEntryFormat = jsonFormat3(ManagedGroupMembershipEntry.apply)
@@ -131,12 +135,42 @@ object SamResourceTypes {
 
 @Lenses final case class ResourceId(value: String) extends ValueObject
 @Lenses final case class ResourceIdAndPolicyName(resourceId: ResourceId, accessPolicyName: AccessPolicyName)
+
+/**
+  * Response from AccessPolicyDAO.listUserResourcesWithRolesAndActions.
+  * @param resourceId id of resource accessible to user
+  * @param direct RolesAndActions assigned to the resource via policy directly on the resource
+  * @param inherited RolesAndActions assigned to the resource via policy on resource's ancestor
+  * @param public RolesAndActions assigned to the resource via public policy, could be direct or inherited
+  */
+@Lenses final case class ResourceIdWithRolesAndActions(resourceId: ResourceId, direct: RolesAndActions, inherited: RolesAndActions, public: RolesAndActions) {
+  lazy val allRolesAndActions = direct ++ inherited // not necessary to include public as they should be included in both direct and inherited
+}
+@Lenses final case class RolesAndActions(roles: Set[ResourceRoleName], actions: Set[ResourceAction]) {
+  def ++ (other: RolesAndActions): RolesAndActions = {
+    RolesAndActions(this.roles ++ other.roles, this.actions ++ other.actions)
+  }
+}
+object RolesAndActions {
+  val empty = RolesAndActions(Set.empty, Set.empty)
+  def fromRoles(roles: Set[ResourceRoleName]) = RolesAndActions(roles, Set.empty)
+  def fromActions(actions: Set[ResourceAction]) = RolesAndActions(Set.empty, actions)
+  def fromPolicy(accessPolicy: AccessPolicy) = RolesAndActions(accessPolicy.roles, accessPolicy.actions)
+  def fromPolicyMembership(accessPolicy: AccessPolicyMembership) = RolesAndActions(accessPolicy.roles, accessPolicy.actions)
+}
 @Lenses final case class UserPolicyResponse(
     resourceId: ResourceId,
     accessPolicyName: AccessPolicyName,
     authDomainGroups: Set[WorkbenchGroupName],
     missingAuthDomainGroups: Set[WorkbenchGroupName],
     public: Boolean)
+@Lenses final case class UserResourcesResponse(
+    resourceId: ResourceId,
+    direct: RolesAndActions,
+    inherited: RolesAndActions,
+    public: RolesAndActions,
+    authDomainGroups: Set[WorkbenchGroupName],
+    missingAuthDomainGroups: Set[WorkbenchGroupName])
 @Lenses final case class FullyQualifiedPolicyId(resource: FullyQualifiedResourceId, accessPolicyName: AccessPolicyName) extends WorkbenchGroupIdentity {
   override def toString: String = s"${accessPolicyName.value}.${resource.resourceId.value}.${resource.resourceTypeName.value}"
 }
@@ -177,7 +211,7 @@ consistent "has a" relationship is tracked by this ticket: https://broadworkbenc
 @Lenses final case class BasicWorkbenchGroup(id: WorkbenchGroupName, members: Set[WorkbenchSubject], email: WorkbenchEmail) extends WorkbenchGroup
 
 @Lenses final case class ManagedGroupAndRole(groupName: WorkbenchGroupName, role: MangedGroupRoleName)
-@Lenses final case class ManagedGroupMembershipEntry(groupName: ResourceId, role: AccessPolicyName, groupEmail: WorkbenchEmail)
+@Lenses final case class ManagedGroupMembershipEntry(groupName: ResourceId, role: ResourceRoleName, groupEmail: WorkbenchEmail)
 @Lenses final case class ManagedGroupAccessInstructions(value: String) extends ValueObject
 
 @Lenses final case class GroupSyncResponse(lastSyncDate: String, email: WorkbenchEmail)

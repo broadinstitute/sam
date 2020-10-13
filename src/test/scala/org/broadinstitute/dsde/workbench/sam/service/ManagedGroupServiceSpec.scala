@@ -349,15 +349,15 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
     user1Resources.foreach(s => makeResource(newResourceType, ResourceId(s), user1))
     user2Resources.foreach(s => makeResource(newResourceType, ResourceId(s), user2))
 
-    val user1ExpectedAdmin = user1Groups.map(s => ManagedGroupMembershipEntry(ResourceId(s), ManagedGroupService.adminPolicyName, WorkbenchEmail(s"$s@example.com")))
-    val user1ExpectedMember = user1Memberships.map(s => ManagedGroupMembershipEntry(ResourceId(s), ManagedGroupService.memberPolicyName, WorkbenchEmail(s"$s@example.com")))
+    val user1ExpectedAdmin = user1Groups.map(s => ManagedGroupMembershipEntry(ResourceId(s), ManagedGroupService.adminRoleName, WorkbenchEmail(s"$s@example.com")))
+    val user1ExpectedMember = user1Memberships.map(s => ManagedGroupMembershipEntry(ResourceId(s), ManagedGroupService.memberRoleName, WorkbenchEmail(s"$s@example.com")))
     val user1ExpectedGroups = user1ExpectedAdmin ++ user1ExpectedMember
-    mgService.listGroups(user1.userId, samRequestContext).unsafeRunSync() shouldEqual user1ExpectedGroups
+    mgService.listGroups(user1.userId, samRequestContext).unsafeRunSync() should contain theSameElementsAs user1ExpectedGroups
 
-    val user2ExpectedAdmin = user2Groups.map(s => ManagedGroupMembershipEntry(ResourceId(s), ManagedGroupService.adminPolicyName, WorkbenchEmail(s"$s@example.com")))
-    val user2ExpectedMember = user2Memberships.map(s => ManagedGroupMembershipEntry(ResourceId(s), ManagedGroupService.memberPolicyName, WorkbenchEmail(s"$s@example.com")))
+    val user2ExpectedAdmin = user2Groups.map(s => ManagedGroupMembershipEntry(ResourceId(s), ManagedGroupService.adminRoleName, WorkbenchEmail(s"$s@example.com")))
+    val user2ExpectedMember = user2Memberships.map(s => ManagedGroupMembershipEntry(ResourceId(s), ManagedGroupService.memberRoleName, WorkbenchEmail(s"$s@example.com")))
     val user2ExpectedGroups = user2ExpectedAdmin ++ user2ExpectedMember
-    mgService.listGroups(user2.userId, samRequestContext).unsafeRunSync() shouldEqual user2ExpectedGroups
+    mgService.listGroups(user2.userId, samRequestContext).unsafeRunSync() should contain theSameElementsAs user2ExpectedGroups
   }
 
   "ManagedGroupService getAccessInstructions" should "return access instructions when a group has them set" in {

@@ -8,6 +8,7 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, LoadResourceAuthDomainResult}
+import org.broadinstitute.dsde.workbench.sam.service.ManagedGroupService.MangedGroupRoleName
 import org.broadinstitute.dsde.workbench.sam.util.OpenCensusIOUtils._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
@@ -62,20 +63,12 @@ class PolicyEvaluatorService(
     * @return
     */
   def listUserResourceActions(resource: FullyQualifiedResourceId, userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[ResourceAction]] = {
-    def allActions(policy: AccessPolicyWithoutMembers, resourceType: ResourceType): Set[ResourceAction] = {
-      val roleActions = policy.roles.flatMap { role =>
-        resourceType.roles.filter(_.roleName == role).flatMap(_.actions)
-      }
-      policy.actions ++ roleActions
-    }
-
     for {
       rt <- IO.fromEither[ResourceType](
         resourceTypes.get(resource.resourceTypeName).toRight(new WorkbenchException(s"missing configuration for resourceType ${resource.resourceTypeName}")))
       isConstrainable = rt.isAuthDomainConstrainable
 
-      policiesForResource <- listResourceAccessPoliciesForUser(resource, userId, samRequestContext)
-      allPolicyActions = policiesForResource.flatMap(p => allActions(p, rt))
+      allPolicyActions <- accessPolicyDAO.listUserResourceActions(resource, userId, samRequestContext)
       res <- if (isConstrainable) {
         for {
           authDomainsResult <- accessPolicyDAO.loadResourceAuthDomain(resource, samRequestContext)
@@ -99,12 +92,10 @@ class PolicyEvaluatorService(
     } yield res
   }
 
+  @deprecated("listing policies for resource type removed, use listUserResources instead", since = "ResourceRoutes v2")
   def listUserAccessPolicies(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[UserPolicyResponse]] =
     for {
-      rt <- IO.fromEither(
-        resourceTypes
-          .get(resourceTypeName)
-          .toRight(new WorkbenchException(s"missing configration for resourceType ${resourceTypeName}")))
+      rt <- getResourceType(resourceTypeName)
       isConstrained = rt.isAuthDomainConstrainable
       ridAndPolicyName <- accessPolicyDAO.listAccessPolicies(resourceTypeName, userId, samRequestContext) // List all policies of a given resourceType the user is a member of
       rids = ridAndPolicyName.map(_.resourceId)
@@ -130,13 +121,57 @@ class PolicyEvaluatorService(
       publicPolicies <- accessPolicyDAO.listPublicAccessPolicies(resourceTypeName, samRequestContext)
     } yield results.flatten ++ publicPolicies.map(p => UserPolicyResponse(p.resourceId, p.accessPolicyName, Set.empty, Set.empty, public = true))
 
-  def listUserManagedGroupsWithRole(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[ManagedGroupAndRole]] =
+  def listUserResources(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Iterable[UserResourcesResponse]] =
     for {
-      ripns <- accessPolicyDAO.listAccessPolicies(ManagedGroupService.managedGroupTypeName, userId, samRequestContext)
+      rt <- getResourceType(resourceTypeName)
+      resourcesWithAccess <- accessPolicyDAO.listUserResourcesWithRolesAndActions(resourceTypeName, userId, samRequestContext)
+      userResourcesResponses = resourcesWithAccess.map { resourceWithAccess =>
+        UserResourcesResponse(resourceWithAccess.resourceId, resourceWithAccess.direct, resourceWithAccess.inherited, resourceWithAccess.public, Set.empty, Set.empty)
+      }
+
+      results <- if (rt.isAuthDomainConstrainable) {
+        populateAuthDomains(resourceTypeName, userId, userResourcesResponses, samRequestContext)
+      } else {
+        IO.pure(userResourcesResponses.map(_.some))
+      }
+    } yield results.flatten
+
+  private def populateAuthDomains(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId, userResourcesResponses: Iterable[UserResourcesResponse], samRequestContext: SamRequestContext) = {
+    for {
+      resources <- accessPolicyDAO.listResourcesWithAuthdomains(resourceTypeName, userResourcesResponses.map(_.resourceId).toSet, samRequestContext)
+      userManagedGroups <- listUserManagedGroups(userId, samRequestContext)
     } yield {
-      ripns
-        .filter(ripn => ManagedGroupService.userMembershipPolicyNames.contains(ripn.accessPolicyName))
-        .map(p => ManagedGroupAndRole(WorkbenchGroupName(p.resourceId.value), ManagedGroupService.getRoleName(p.accessPolicyName.value)))
+      val authDomainMap = resources.map(resource => resource.resourceId -> resource.authDomain).toMap
+      userResourcesResponses.map { response =>
+        authDomainMap.get(response.resourceId) match {
+          case Some(resourceAuthDomains) =>
+            val userNotMemberOf = resourceAuthDomains -- userManagedGroups
+            response.copy(authDomainGroups = resourceAuthDomains, missingAuthDomainGroups = userNotMemberOf).some
+          case None =>
+            logger.error(s"Corrupted data. ${response.resourceId} should have auth domains defined")
+            none[UserResourcesResponse]
+        }
+      }
+    }
+  }
+
+  private def getResourceType(resourceTypeName: ResourceTypeName): IO[ResourceType] = {
+    IO.fromEither(
+      resourceTypes
+        .get(resourceTypeName)
+        .toRight(new WorkbenchException(s"missing configration for resourceType ${resourceTypeName}")))
+  }
+
+  def listUserManagedGroupsWithRole(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Iterable[ManagedGroupAndRole]] =
+    accessPolicyDAO.listUserResourcesWithRolesAndActions(ManagedGroupService.managedGroupTypeName, userId, samRequestContext) map { accessibleGroupResources =>
+      for {
+        groupResource <- accessibleGroupResources
+        roleName <- groupResource.allRolesAndActions.roles.collect {
+          case MangedGroupRoleName(roleName) if ManagedGroupService.userMembershipRoleNames.contains(roleName) => roleName
+        }
+      } yield {
+        ManagedGroupAndRole(WorkbenchGroupName(groupResource.resourceId.value), roleName)
+      }
     }
 
   def listUserManagedGroups(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[WorkbenchGroupName]] =
@@ -144,8 +179,9 @@ class PolicyEvaluatorService(
       policies <- listUserManagedGroupsWithRole(userId, samRequestContext)
     } yield {
       policies.map(_.groupName)
-    }
+    }.toSet
 
+  @deprecated("listing policies for resource type removed", since = "ResourceRoutes v2")
   def listResourceAccessPoliciesForUser(resource: FullyQualifiedResourceId, userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[AccessPolicyWithoutMembers]] =
     for {
       policies <- traceIOWithContext("listAccessPoliciesForUser", samRequestContext)(samRequestContext => accessPolicyDAO.listAccessPoliciesForUser(resource, userId, samRequestContext))
