@@ -40,12 +40,18 @@ class PolicyEvaluatorService(
       }
   }
 
+  def hasPermissionOneOf(resource: FullyQualifiedResourceId, actions: Iterable[ResourceAction], userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Boolean] = traceIOWithContext("hasPermissionOneOf", samRequestContext)(samRequestContext => {
+    listUserResourceActions(resource, userId, samRequestContext).map { userActions =>
+      actions.toSet.intersect(userActions).nonEmpty
+    }
+  })
+
   def hasPermission(resource: FullyQualifiedResourceId, action: ResourceAction, userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Boolean] = traceIOWithContext("hasPermission", samRequestContext)(samRequestContext => {
-    listUserResourceActions(resource, userId, samRequestContext).map { _.contains(action) }
+    hasPermissionOneOf(resource, Set(action), userId, samRequestContext)
   })
 
   /** Checks if user have permission by providing user email address. */
-  def hasPermissionByUserEmail(resource: FullyQualifiedResourceId, action: ResourceAction, userEmail: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Boolean] = traceIOWithContext("hasPermission", samRequestContext)(samRequestContext => {
+  def hasPermissionByUserEmail(resource: FullyQualifiedResourceId, action: ResourceAction, userEmail: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Boolean] = traceIOWithContext("hasPermissionByUserEmail", samRequestContext)(samRequestContext => {
     for {
       subjectOpt <- directoryDAO.loadSubjectFromEmail(userEmail, samRequestContext)
       res <- subjectOpt match {

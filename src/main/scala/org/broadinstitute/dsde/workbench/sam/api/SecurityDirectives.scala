@@ -4,7 +4,6 @@ import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server.Directives.onSuccess
 import akka.http.scaladsl.server.{Directive0, Directives}
 import cats.effect.IO
-import cats.implicits._
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchExceptionWithErrorReport, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.ImplicitConversions.ioOnSuccessMagnet
 import org.broadinstitute.dsde.workbench.sam._
@@ -54,7 +53,7 @@ trait SecurityDirectives {
 
   def requireOneOfAction(resource: FullyQualifiedResourceId, requestedActions: Set[ResourceAction], userId: WorkbenchUserId, samRequestContext: SamRequestContext): Directive0 =
     Directives.mapInnerRoute { innerRoute =>
-      onSuccess(hasPermissionOneOf(resource, requestedActions, userId, samRequestContext)) { hasPermission =>
+      onSuccess(policyEvaluatorService.hasPermissionOneOf(resource, requestedActions, userId, samRequestContext)) { hasPermission =>
         if (hasPermission) {
           innerRoute
         } else {
@@ -84,9 +83,6 @@ trait SecurityDirectives {
     }
   }
 
-  private def hasPermissionOneOf(resource: FullyQualifiedResourceId, actions: Iterable[ResourceAction], userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Boolean] =
-    actions.toList.existsM(policyEvaluatorService.hasPermission(resource, _, userId, samRequestContext))
-
   private def hasParentPermissionOneOf(resource: FullyQualifiedResourceId, newParent: Option[FullyQualifiedResourceId], actions: Iterable[ResourceAction], userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Boolean] = {
     val parentIO = newParent match {
       case Some(_) => IO.pure(newParent)
@@ -94,7 +90,7 @@ trait SecurityDirectives {
     }
 
     parentIO.flatMap {
-      case Some(resourceParent) => hasPermissionOneOf(resourceParent, actions, userId, samRequestContext)
+      case Some(resourceParent) => policyEvaluatorService.hasPermissionOneOf(resourceParent, actions, userId, samRequestContext)
       case None =>
         // there is no parent so permission is granted
         IO.pure(true)
