@@ -81,7 +81,7 @@ class PolicyEvaluatorService(
           authDomainsResult <- accessPolicyDAO.loadResourceAuthDomain(resource, samRequestContext)
           policyActions <- authDomainsResult match {
             case LoadResourceAuthDomainResult.Constrained(authDomains) =>
-              isMemberOfAllAuthDomains(authDomains, userId, samRequestContext).map {
+              isMemberOfAllAuthDomainGroups(authDomains, userId, samRequestContext).map {
                 case true => allPolicyActions
                 case false =>
                   val constrainableActions = rt.actionPatterns.filter(_.authDomainConstrainable)
@@ -95,7 +95,10 @@ class PolicyEvaluatorService(
     } yield res
   }
 
-  private def isMemberOfAllAuthDomains(authDomains: NonEmptyList[WorkbenchGroupName], userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Boolean] = {
+  private def isMemberOfAllAuthDomainGroups(authDomains: NonEmptyList[WorkbenchGroupName], userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Boolean] = {
+    // This checks each auth domain group sequentially. At this time in production there are 9334 resources
+    // with 1 AD group, 302 with 2, 57 with more than 2. Obviously this gets slower with more groups but that should
+    // only be a problem under high load. To fix try switching the traverse below to parTraverse.
     authDomains.toList.traverse { adGroup =>
       val groupId = FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, ResourceId(adGroup.value))
       accessPolicyDAO.listUserResourceRoles(groupId, userId, samRequestContext).map { userRoles =>
