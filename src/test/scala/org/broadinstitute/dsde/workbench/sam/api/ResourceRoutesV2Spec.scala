@@ -960,17 +960,17 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
                                          resource: FullyQualifiedResourceId,
                                          actionsOnResource: Set[ResourceAction]): Unit = {
 
-    val actionAllowed = new ArgumentMatcher[ResourceAction] {
-      override def matches(argument: ResourceAction): Boolean = actionsOnResource.contains(argument)
+    val actionAllowed = new ArgumentMatcher[Iterable[ResourceAction]] {
+      override def matches(argument: Iterable[ResourceAction]): Boolean = actionsOnResource.intersect(argument.toSet).nonEmpty
     }
-    val actionNotAllowed = new ArgumentMatcher[ResourceAction] {
-      override def matches(argument: ResourceAction): Boolean = !actionsOnResource.contains(argument)
+    val actionNotAllowed = new ArgumentMatcher[Iterable[ResourceAction]] {
+      override def matches(argument: Iterable[ResourceAction]): Boolean = actionsOnResource.intersect(argument.toSet).isEmpty
     }
 
-    when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(resource), argThat(actionAllowed), mockitoEq(defaultUserInfo.userId), any[SamRequestContext])).
+    when(samRoutes.policyEvaluatorService.hasPermissionOneOf(mockitoEq(resource), argThat(actionAllowed), mockitoEq(defaultUserInfo.userId), any[SamRequestContext])).
       thenReturn(IO.pure(true))
 
-    when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(resource), argThat(actionNotAllowed), mockitoEq(defaultUserInfo.userId), any[SamRequestContext])).
+    when(samRoutes.policyEvaluatorService.hasPermissionOneOf(mockitoEq(resource), argThat(actionNotAllowed), mockitoEq(defaultUserInfo.userId), any[SamRequestContext])).
       thenReturn(IO.pure(false))
 
     when(samRoutes.policyEvaluatorService.listUserResourceActions(mockitoEq(resource), mockitoEq(defaultUserInfo.userId), any[SamRequestContext])).
