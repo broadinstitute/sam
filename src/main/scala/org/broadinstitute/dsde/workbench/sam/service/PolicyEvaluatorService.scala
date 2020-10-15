@@ -1,6 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.service
 
 import akka.http.scaladsl.model.StatusCodes
+import cats.data.NonEmptyList
 import cats.effect.IO
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
@@ -80,15 +81,11 @@ class PolicyEvaluatorService(
           authDomainsResult <- accessPolicyDAO.loadResourceAuthDomain(resource, samRequestContext)
           policyActions <- authDomainsResult match {
             case LoadResourceAuthDomainResult.Constrained(authDomains) =>
-              listUserManagedGroups(userId, samRequestContext).map{
-                groupsUserIsMemberOf =>
-                  val isUserMemberOfAllAuthDomains = authDomains.toList.toSet.subsetOf(groupsUserIsMemberOf)
-                  if (isUserMemberOfAllAuthDomains) {
-                    allPolicyActions
-                  } else {
-                    val constrainableActions = rt.actionPatterns.filter(_.authDomainConstrainable)
-                    allPolicyActions.filterNot(x => constrainableActions.exists(_.matches(x)))
-                  }
+              isMemberOfAllAuthDomains(authDomains, userId, samRequestContext).map {
+                case true => allPolicyActions
+                case false =>
+                  val constrainableActions = rt.actionPatterns.filter(_.authDomainConstrainable)
+                  allPolicyActions.filterNot(x => constrainableActions.exists(_.matches(x)))
               }
             case LoadResourceAuthDomainResult.NotConstrained | LoadResourceAuthDomainResult.ResourceNotFound =>
               allPolicyActions.pure[IO]
@@ -96,6 +93,15 @@ class PolicyEvaluatorService(
         } yield policyActions
       } else allPolicyActions.pure[IO]
     } yield res
+  }
+
+  private def isMemberOfAllAuthDomains(authDomains: NonEmptyList[WorkbenchGroupName], userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Boolean] = {
+    authDomains.toList.traverse { adGroup =>
+      val groupId = FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, ResourceId(adGroup.value))
+      accessPolicyDAO.listUserResourceRoles(groupId, userId, samRequestContext).map { userRoles =>
+        userRoles.intersect(ManagedGroupService.userMembershipRoleNames).nonEmpty
+      }
+    }.map(_.reduce(_ && _)) // reduce makes sure all individual checks are true
   }
 
   @deprecated("listing policies for resource type removed, use listUserResources instead", since = "ResourceRoutes v2")
