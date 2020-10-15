@@ -1,6 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.service
 
 import akka.http.scaladsl.model.StatusCodes
+import cats.data.NonEmptyList
 import cats.effect.IO
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
@@ -40,12 +41,18 @@ class PolicyEvaluatorService(
       }
   }
 
+  def hasPermissionOneOf(resource: FullyQualifiedResourceId, actions: Iterable[ResourceAction], userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Boolean] = traceIOWithContext("hasPermissionOneOf", samRequestContext)(samRequestContext => {
+    listUserResourceActions(resource, userId, samRequestContext).map { userActions =>
+      actions.toSet.intersect(userActions).nonEmpty
+    }
+  })
+
   def hasPermission(resource: FullyQualifiedResourceId, action: ResourceAction, userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Boolean] = traceIOWithContext("hasPermission", samRequestContext)(samRequestContext => {
-    listUserResourceActions(resource, userId, samRequestContext).map { _.contains(action) }
+    hasPermissionOneOf(resource, Set(action), userId, samRequestContext)
   })
 
   /** Checks if user have permission by providing user email address. */
-  def hasPermissionByUserEmail(resource: FullyQualifiedResourceId, action: ResourceAction, userEmail: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Boolean] = traceIOWithContext("hasPermission", samRequestContext)(samRequestContext => {
+  def hasPermissionByUserEmail(resource: FullyQualifiedResourceId, action: ResourceAction, userEmail: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Boolean] = traceIOWithContext("hasPermissionByUserEmail", samRequestContext)(samRequestContext => {
     for {
       subjectOpt <- directoryDAO.loadSubjectFromEmail(userEmail, samRequestContext)
       res <- subjectOpt match {
@@ -74,15 +81,11 @@ class PolicyEvaluatorService(
           authDomainsResult <- accessPolicyDAO.loadResourceAuthDomain(resource, samRequestContext)
           policyActions <- authDomainsResult match {
             case LoadResourceAuthDomainResult.Constrained(authDomains) =>
-              listUserManagedGroups(userId, samRequestContext).map{
-                groupsUserIsMemberOf =>
-                  val isUserMemberOfAllAuthDomains = authDomains.toList.toSet.subsetOf(groupsUserIsMemberOf)
-                  if (isUserMemberOfAllAuthDomains) {
-                    allPolicyActions
-                  } else {
-                    val constrainableActions = rt.actionPatterns.filter(_.authDomainConstrainable)
-                    allPolicyActions.filterNot(x => constrainableActions.exists(_.matches(x)))
-                  }
+              isMemberOfAllAuthDomainGroups(authDomains, userId, samRequestContext).map {
+                case true => allPolicyActions
+                case false =>
+                  val constrainableActions = rt.actionPatterns.filter(_.authDomainConstrainable)
+                  allPolicyActions.filterNot(x => constrainableActions.exists(_.matches(x)))
               }
             case LoadResourceAuthDomainResult.NotConstrained | LoadResourceAuthDomainResult.ResourceNotFound =>
               allPolicyActions.pure[IO]
@@ -90,6 +93,18 @@ class PolicyEvaluatorService(
         } yield policyActions
       } else allPolicyActions.pure[IO]
     } yield res
+  }
+
+  private def isMemberOfAllAuthDomainGroups(authDomains: NonEmptyList[WorkbenchGroupName], userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Boolean] = {
+    // This checks each auth domain group sequentially. At this time in production there are 9334 resources
+    // with 1 AD group, 302 with 2, 57 with more than 2. Obviously this gets slower with more groups but that should
+    // only be a problem under high load. To fix try switching the traverse below to parTraverse.
+    authDomains.toList.traverse { adGroup =>
+      val groupId = FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, ResourceId(adGroup.value))
+      accessPolicyDAO.listUserResourceRoles(groupId, userId, samRequestContext).map { userRoles =>
+        userRoles.intersect(ManagedGroupService.userMembershipRoleNames).nonEmpty
+      }
+    }.map(_.reduce(_ && _)) // reduce makes sure all individual checks are true
   }
 
   @deprecated("listing policies for resource type removed, use listUserResources instead", since = "ResourceRoutes v2")
