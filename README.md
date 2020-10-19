@@ -3,7 +3,6 @@
 
 ## In a nutshell
 The crux of IAM in Sam is a policy. A policy says **who** can **do what** to a **thing**. More technically the who is called a **subject** and can be a user or a group of users, the do what is called an **action** such as read or update, and the thing is called a **resource** such as a workspace or project. Resources have types which specify what actions are available for its resources, roles (which are collections of actions) and which role is the "owner" role. The "owner" role should have the appropriate actions to administer a resource. When a resource is created a policy with the owner role is automatically created and the creator is added.
-test
 
 ## Terms
 * Subject - an authenticated user or group
@@ -105,7 +104,7 @@ class SamClient(samBasePath: String) {
 ![Data Access](data_access.png)
 
 Note that Sam does not actually launch workflows create VMs but appears to in this diagram in order to simplify interactions. The key concept is the user of service accounts.
-
+private key
 #### Google integration requires
 * a GSuite domain
 * a project with a service account for the sam application
@@ -124,7 +123,6 @@ Ensure git-secrets is run:
 <i>If you use the rsync script to run locally you can skip this step</i>
 ```$xslt
 cp -r hooks/ .git/hooks/
-chmod 755 .git/hooks/apply-git-secrets.sh
 ```
 Run minnie-kenny.sh with -f first time after git-clone 
 ```
