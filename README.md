@@ -118,12 +118,7 @@ Make sure git secrets is installed:
 ```$xslt
 brew install git-secrets
 ```
-Ensure git-secrets is run:
-<i>If you use the rsync script to run locally you can skip this step</i>
-```$xslt
-cp -r hooks/ .git/hooks/
-```
-Run minnie-kenny.sh with -f first time after git-clone 
+Run minnie-kenny.sh with -f first time after git-clone to ensure git-secrets is run
 ```
 ./minnie-kenny.sh -f
 ```
