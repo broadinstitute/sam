@@ -6,12 +6,12 @@ The crux of IAM in Sam is a policy. A policy says **who** can **do what** to a *
 
 
 ## Terms
-* Subject - an authenticated user
+* Subject - an authenticated user or group
 * Resource - something to which access is controlled
 * Action - may be performed on a resource - meant to be as granular as possible
 * Policy - represents the actions a subject may perform on a resource
 * Role - a collection of actions - meant to aggregate actions into a more meaningful, higher level concept
-* Group - a group of subjects or other groups
+* Group - a group of subjects (this can include groups)
 * Resource type - defines a class of resources. Each resource has a type which defines
   * Available actions
   * Available roles and actions for each role
