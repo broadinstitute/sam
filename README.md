@@ -105,7 +105,7 @@ class SamClient(samBasePath: String) {
 
 Note that Sam does not actually launch workflows create VMs but appears to in this diagram in order to simplify interactions. The key concept is the user of service accounts.
 private key
-private key
+private key: abc
 #### Google integration requires
 * a GSuite domain
 * a project with a service account for the sam application
