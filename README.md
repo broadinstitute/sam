@@ -113,6 +113,14 @@ Note that Sam does not actually launch workflows create VMs but appears to in th
   * create service accounts and keys in desired projects (usually easiest to grant this at the org level)
 
 ## Development
+### Required Tooling:
+#### Java:
+Make sure you have Java JDK 8 installed. We do not currently support Java 11. Instructions for our recommended package can be found [here](https://adoptopenjdk.net/)
+#### Scala:
+Mac:
+```$xslt
+brew install scala
+```
 ### To build 
 Make sure git secrets is installed:
 ```$xslt
