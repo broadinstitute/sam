@@ -92,7 +92,7 @@ function make_jar()
     bash ./docker/run-postgres.sh start
     OPENDJ=$(bash ./docker/run-opendj.sh start jenkins | tail -n1)
     echo $OPENDJ
-    
+
     # Get the last commit hash of the model directory and set it as an environment variable
     GIT_MODEL_HASH=$(git log -n 1 --pretty=format:%h)
 
@@ -117,6 +117,7 @@ function make_jar()
 function docker_cmd()
 {
     if [ $DOCKER_CMD = "build" ] || [ $DOCKER_CMD = "push" ]; then
+        docker pull openjdk:8
         GIT_SHA=$(git rev-parse origin/${BRANCH})
         echo GIT_SHA=$GIT_SHA > env.properties
         HASH_TAG=${GIT_SHA:0:12}
