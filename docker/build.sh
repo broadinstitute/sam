@@ -92,7 +92,7 @@ function make_jar()
     bash ./docker/run-postgres.sh start
     OPENDJ=$(bash ./docker/run-opendj.sh start jenkins | tail -n1)
     echo $OPENDJ
-    
+
     # Get the last commit hash of the model directory and set it as an environment variable
     GIT_MODEL_HASH=$(git log -n 1 --pretty=format:%h)
 
@@ -122,7 +122,7 @@ function docker_cmd()
         HASH_TAG=${GIT_SHA:0:12}
 
         echo "building ${DOCKERHUB_REGISTRY}:${HASH_TAG}..."
-        docker build -t $DOCKERHUB_REGISTRY:${HASH_TAG} .
+        docker build -t $DOCKERHUB_REGISTRY:${HASH_TAG} --pull .
 
         echo "scanning docker image..."
         docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$HOME"/Library/Caches:/root/.cache/ aquasec/trivy --exit-code 1 --severity CRITICAL "$DOCKERHUB_REGISTRY":"${HASH_TAG}"
@@ -130,10 +130,7 @@ function docker_cmd()
 
         echo "building ${DOCKERHUB_TESTS_REGISTRY}:${HASH_TAG}..."
         cd automation
-        docker build -f Dockerfile-tests -t $DOCKERHUB_TESTS_REGISTRY:${HASH_TAG} .
-
-        echo "scanning test docker image..."
-        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$HOME"/Library/Caches:/root/.cache/ aquasec/trivy --exit-code 1 --severity CRITICAL "$DOCKERHUB_TESTS_REGISTRY":"${HASH_TAG}"
+        docker build -f Dockerfile-tests -t $DOCKERHUB_TESTS_REGISTRY:${HASH_TAG} --pull .
 
         cd ..
 

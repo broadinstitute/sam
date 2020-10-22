@@ -1,4 +1,4 @@
-FROM openjdk:8
+FROM adoptopenjdk:8-hotspot
 
 # To run, build jar using ./docker/build.sh
 

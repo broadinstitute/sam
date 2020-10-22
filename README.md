@@ -4,14 +4,13 @@
 ## In a nutshell
 The crux of IAM in Sam is a policy. A policy says **who** can **do what** to a **thing**. More technically the who is called a **subject** and can be a user or a group of users, the do what is called an **action** such as read or update, and the thing is called a **resource** such as a workspace or project. Resources have types which specify what actions are available for its resources, roles (which are collections of actions) and which role is the "owner" role. The "owner" role should have the appropriate actions to administer a resource. When a resource is created a policy with the owner role is automatically created and the creator is added.
 
-
 ## Terms
-* Subject - an authenticated user
+* Subject - an authenticated user or group
 * Resource - something to which access is controlled
 * Action - may be performed on a resource - meant to be as granular as possible
 * Policy - represents the actions a subject may perform on a resource
 * Role - a collection of actions - meant to aggregate actions into a more meaningful, higher level concept
-* Group - a group of subjects or other groups
+* Group - a group of subjects (this can include groups)
 * Resource type - defines a class of resources. Each resource has a type which defines
   * Available actions
   * Available roles and actions for each role
@@ -105,7 +104,6 @@ class SamClient(samBasePath: String) {
 ![Data Access](data_access.png)
 
 Note that Sam does not actually launch workflows create VMs but appears to in this diagram in order to simplify interactions. The key concept is the user of service accounts.
-
 #### Google integration requires
 * a GSuite domain
 * a project with a service account for the sam application
@@ -115,18 +113,20 @@ Note that Sam does not actually launch workflows create VMs but appears to in th
   * create service accounts and keys in desired projects (usually easiest to grant this at the org level)
 
 ## Development
+### Required Tooling:
+#### Java:
+Make sure you have Java JDK 8 installed. We do not currently support Java 11. Instructions for our recommended package can be found [here](https://adoptopenjdk.net/)
+#### Scala:
+Mac:
+```$xslt
+brew install scala
+```
 ### To build 
 Make sure git secrets is installed:
 ```$xslt
 brew install git-secrets
 ```
-Ensure git-secrets is run:
-<i>If you use the rsync script to run locally you can skip this step</i>
-```$xslt
-cp -r hooks/ .git/hooks/
-chmod 755 .git/hooks/apply-git-secrets.sh
-```
-Run minnie-kenny.sh with -f first time after git-clone 
+Run minnie-kenny.sh with -f first time after git-clone to ensure git-secrets is run
 ```
 ./minnie-kenny.sh -f
 ```
