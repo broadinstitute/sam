@@ -2831,7 +2831,9 @@ components:
           items:
             type: string
         descendantPermissions:
-          $ref: '#/components/schemas/AccessPolicyDescendantPermissions'
+          type: array
+          items:
+            $ref: '#/components/schemas/AccessPolicyDescendantPermissions'
       description: ""
     AccessPolicyDescendantPermissions:
       required:
