@@ -30,11 +30,11 @@ class ResourceService(
   implicit val cs = IO.contextShift(executionContext) //for running IOs in paralell
 
   private case class ValidatableAccessPolicy(
-      policyName: AccessPolicyName,
-      emailsToSubjects: Map[WorkbenchEmail, Option[WorkbenchSubject]],
-      roles: Set[ResourceRoleName],
-      actions: Set[ResourceAction],
-      descendantPermissions: Set[AccessPolicyDescendantPermissions])
+                                              policyName: AccessPolicyName,
+                                              emailsToSubjects: Map[WorkbenchEmail, Option[WorkbenchSubject]],
+                                              roles: Set[ResourceRoleName],
+                                              actions: Set[ResourceAction],
+                                              descendantPermissions: Set[AccessPolicyDescendantPermissions])
 
   def getResourceTypes(): IO[Map[ResourceTypeName, ResourceType]] =
     IO.pure(resourceTypes)
@@ -68,7 +68,7 @@ class ResourceService(
                 Set.empty)
               // note that this skips all validations and just creates a resource with owner policies with no members
               // it will require someone with direct database access to bootstrap
-              _ <- persistResource(resourceTypeAdmin, ResourceId(rt.name.value), Set(policy), Set.empty, samRequestContext).recover {
+              _ <- persistResource(resourceTypeAdmin, ResourceId(rt.name.value), Set(policy), Set.empty, None, samRequestContext).recover {
                 case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode.contains(StatusCodes.Conflict) =>
                   // ok if the resource already exists
                   Resource(rt.name, ResourceId(rt.name.value), Set.empty)
@@ -84,6 +84,7 @@ class ResourceService(
   /**
     * Create a resource with default policies. The default policies contain 1 policy with the same name as the
     * owner role for the resourceType, has the owner role, membership contains only userInfo
+    *
     * @param resourceType
     * @param resourceId
     * @param userInfo
@@ -95,22 +96,23 @@ class ResourceService(
       .getOrElse(throw new WorkbenchException(s"owner role ${resourceType.ownerRoleName} does not exist in $resourceType"))
     val defaultPolicies: Map[AccessPolicyName, AccessPolicyMembership] = Map(
       AccessPolicyName(ownerRole.roleName.value) -> AccessPolicyMembership(Set(userInfo.userEmail), Set.empty, Set(ownerRole.roleName), None))
-    createResource(resourceType, resourceId, defaultPolicies, Set.empty, userInfo.userId, samRequestContext)
+    createResource(resourceType, resourceId, defaultPolicies, Set.empty, None, userInfo.userId, samRequestContext)
   }
 
   /**
     * Validates the resource first and if any validations fail, an exception is thrown with an error report that
     * describes what failed.  If validations pass, then the Resource should be persisted.
+    *
     * @param resourceType
     * @param resourceId
     * @param policiesMap
     * @param userId
     * @return Future[Resource]
     */
-  def createResource(resourceType: ResourceType, resourceId: ResourceId, policiesMap: Map[AccessPolicyName, AccessPolicyMembership], authDomain: Set[WorkbenchGroupName], userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Resource] =
+  def createResource(resourceType: ResourceType, resourceId: ResourceId, policiesMap: Map[AccessPolicyName, AccessPolicyMembership], authDomain: Set[WorkbenchGroupName], parentOpt: Option[FullyQualifiedResourceId], userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Resource] =
     makeValidatablePolicies(policiesMap, samRequestContext).flatMap { policies =>
-      validateCreateResource(resourceType, resourceId, policies, authDomain, userId, samRequestContext).flatMap {
-        case Seq() => persistResource(resourceType, resourceId, policies, authDomain, samRequestContext)
+      validateCreateResource(resourceType, resourceId, policies, authDomain, userId, parentOpt, samRequestContext).flatMap {
+        case Seq() => persistResource(resourceType, resourceId, policies, authDomain, parentOpt, samRequestContext)
         case errorReports: Seq[ErrorReport] =>
           throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "Cannot create resource", errorReports))
       }
@@ -120,42 +122,50 @@ class ResourceService(
     * This method only persists the resource and then overwrites/creates the policies for that resource.
     * Be very careful if calling this method directly because it will not validate the resource or its policies.
     * If you want to create a Resource, use createResource() which will also perform critical validations
+    *
     * @param resourceType
     * @param resourceId
     * @param policies
     * @param authDomain
     * @return Future[Resource]
     */
-  private def persistResource(resourceType: ResourceType, resourceId: ResourceId, policies: Set[ValidatableAccessPolicy], authDomain: Set[WorkbenchGroupName], samRequestContext: SamRequestContext) =
+  private def persistResource(resourceType: ResourceType, resourceId: ResourceId, policies: Set[ValidatableAccessPolicy], authDomain: Set[WorkbenchGroupName], parentOpt: Option[FullyQualifiedResourceId], samRequestContext: SamRequestContext) =
     for {
-      resource <- accessPolicyDAO.createResource(Resource(resourceType.name, resourceId, authDomain), samRequestContext)
+      resource <- accessPolicyDAO.createResource(Resource(resourceType.name, resourceId, authDomain, parent = parentOpt), samRequestContext)
       policies <- policies.toList.traverse(p => createOrUpdatePolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, p.policyName), p, samRequestContext))
-    } yield resource.copy(accessPolicies=policies.toSet)
+    } yield resource.copy(accessPolicies = policies.toSet)
 
-  private def validateCreateResource(resourceType: ResourceType, resourceId: ResourceId, policies: Set[ValidatableAccessPolicy], authDomain: Set[WorkbenchGroupName], userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Seq[ErrorReport]] =
+  private def validateCreateResource(resourceType: ResourceType, resourceId: ResourceId, policies: Set[ValidatableAccessPolicy], authDomain: Set[WorkbenchGroupName], userId: WorkbenchUserId, parentOpt: Option[FullyQualifiedResourceId], samRequestContext: SamRequestContext): IO[Seq[ErrorReport]] =
     for {
       resourceIdErrors <- IO.pure(validateUrlSafe(resourceId.value))
-      ownerPolicyErrors <- IO.pure(validateOwnerPolicyExists(resourceType, policies))
+      ownerPolicyErrors <- IO.pure(validateOwnerPolicyExists(resourceType, policies, parentOpt))
       policyErrors <- IO.pure(policies.flatMap(policy => validatePolicy(resourceType, policy)))
       authDomainErrors <- validateAuthDomain(resourceType, authDomain, userId, samRequestContext)
     } yield (resourceIdErrors ++ ownerPolicyErrors ++ policyErrors ++ authDomainErrors).toSeq
 
   private val validUrlSafePattern = "[-a-zA-Z0-9._~%]+".r
+
   private def validateUrlSafe(input: String): Option[ErrorReport] = {
-    if(! validUrlSafePattern.pattern.matcher(input).matches) {
+    if (!validUrlSafePattern.pattern.matcher(input).matches) {
       Option(ErrorReport(s"Invalid input: $input. Valid characters are alphanumeric characters, periods, tildes, percents, underscores, and dashes. Try url encoding."))
     } else {
       None
     }
   }
 
-  private def validateOwnerPolicyExists(resourceType: ResourceType, policies: Set[ValidatableAccessPolicy]): Option[ErrorReport] =
-    policies.exists { policy =>
-      policy.roles.contains(resourceType.ownerRoleName) && policy.emailsToSubjects.nonEmpty
-    } match {
-      case true => None
-      case false =>
-        Option(ErrorReport(s"Cannot create resource without at least 1 policy with ${resourceType.ownerRoleName.value} role and non-empty membership"))
+  private def validateOwnerPolicyExists(resourceType: ResourceType, policies: Set[ValidatableAccessPolicy], parentOpt: Option[FullyQualifiedResourceId]): Option[ErrorReport] =
+    parentOpt match {
+      case None =>
+        // make sure there is an owner policy if there is no parent
+        policies.exists { policy =>
+          policy.roles.contains(resourceType.ownerRoleName) && policy.emailsToSubjects.nonEmpty
+        } match {
+          case true => None
+          case false =>
+            Option(ErrorReport(s"Cannot create resource without at least 1 policy with ${resourceType.ownerRoleName.value} role and non-empty membership"))
+        }
+
+      case Some(_) => None // if a parent exists, the parent's owners are effectively owners of this resource
     }
 
   private def validateAuthDomain(resourceType: ResourceType, authDomain: Set[WorkbenchGroupName], userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[ErrorReport]] =

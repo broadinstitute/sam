@@ -246,22 +246,24 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
 
   def postResource(resourceType: ResourceType, userInfo: UserInfo, samRequestContext: SamRequestContext): server.Route =
     post {
-        entity(as[CreateResourceRequest]) { createResourceRequest =>
+      entity(as[CreateResourceRequest]) { createResourceRequest =>
+        requireCreateWithParent(createResourceRequest.parent, resourceType, userInfo.userId, samRequestContext) {
           if (resourceType.reuseIds && resourceType.isAuthDomainConstrainable) {
             throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "this api may not be used for resource types that allow both authorization domains and id reuse"))
           }
 
           def resourceMaker(samRequestContext: SamRequestContext): IO[ToResponseMarshallable] = resourceService
-            .createResource(resourceType, createResourceRequest.resourceId, createResourceRequest.policies, createResourceRequest.authDomain, userInfo.userId, samRequestContext)
+            .createResource(resourceType, createResourceRequest.resourceId, createResourceRequest.policies, createResourceRequest.authDomain, createResourceRequest.parent, userInfo.userId, samRequestContext)
             .map { r =>
               if (createResourceRequest.returnResource.contains(true)) {
                 StatusCodes.Created -> CreateResourceResponse(r.resourceTypeName, r.resourceId, r.authDomain, r.accessPolicies.map(ap => CreateResourcePolicyResponse(ap.id, ap.email)))
-              }  else {
+              } else {
                 StatusCodes.NoContent
               }
             }
 
           complete(resourceMaker(samRequestContext))
+        }
       }
     }
 

@@ -7,7 +7,7 @@ import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchExceptionWithErrorReport, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.ImplicitConversions.ioOnSuccessMagnet
 import org.broadinstitute.dsde.workbench.sam._
-import org.broadinstitute.dsde.workbench.sam.model.{FullyQualifiedResourceId, ResourceAction}
+import org.broadinstitute.dsde.workbench.sam.model.{FullyQualifiedResourceId, ResourceAction, ResourceType, SamResourceActions}
 import org.broadinstitute.dsde.workbench.sam.service.{PolicyEvaluatorService, ResourceService}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
@@ -50,6 +50,33 @@ trait SecurityDirectives {
         }
       }
     }
+
+  def requireCreateWithParent(maybeParent: Option[FullyQualifiedResourceId], resourceType: ResourceType, userId: WorkbenchUserId, samRequestContext: SamRequestContext): Directive0 = {
+    maybeParent match {
+      case None => Directives.pass // no parent specified, proceed
+      case Some(parent) =>
+        // parents are allowed for a resource type if the owner role contains the SamResourceActions.setParent action
+        val parentAllowed = resourceType.roles.find(_.roleName == resourceType.ownerRoleName).exists(_.actions.contains(SamResourceActions.setParent))
+        if (!parentAllowed) {
+          Directives.failWith(
+            new WorkbenchExceptionWithErrorReport(
+              ErrorReport(StatusCodes.BadRequest, s"Parents are not permitted for resource type ${resourceType.name.value}")))
+        } else {
+          Directives.mapInnerRoute { innerRoute =>
+            onSuccess(policyEvaluatorService.hasPermissionOneOf(parent, Set(SamResourceActions.addChild), userId, samRequestContext)) { hasPermission =>
+              if (hasPermission) {
+                innerRoute
+              } else {
+                Directives.failWith(
+                  new WorkbenchExceptionWithErrorReport(
+                    ErrorReport(StatusCodes.Forbidden, s"Parent resource $parent does not exist or you are not permitted to add child resources.")))
+              }
+            }
+          }
+        }
+    }
+  }
+
 
   def requireOneOfAction(resource: FullyQualifiedResourceId, requestedActions: Set[ResourceAction], userId: WorkbenchUserId, samRequestContext: SamRequestContext): Directive0 =
     Directives.mapInnerRoute { innerRoute =>

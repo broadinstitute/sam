@@ -2915,6 +2915,8 @@ components:
           type: boolean
           description: return created resource information with 201 response code
           default: false
+        parent:
+          $ref: '#/components/schemas/FullyQualifiedResourceId'
       description: information to create a resource
     Enabled:
       required:

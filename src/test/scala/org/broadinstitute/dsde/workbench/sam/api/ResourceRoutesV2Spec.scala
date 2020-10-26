@@ -735,7 +735,7 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
 
     val resourceId = ResourceId("foo")
     val policiesMap = Map(AccessPolicyName("ap") -> AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set(SamResourceActions.readAuthDomain, ManagedGroupService.useAction), Set(ResourceRoleName("owner"))))
-    runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, policiesMap, Set(WorkbenchGroupName(authDomain)), defaultUserInfo.userId, samRequestContext))
+    runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, policiesMap, Set(WorkbenchGroupName(authDomain)), None, defaultUserInfo.userId, samRequestContext))
 
     Get(s"/api/resources/v2/${resourceType.name}/${resourceId.value}/authDomain") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
@@ -758,7 +758,7 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
 
     val resourceId = ResourceId("foo")
     val policiesMap = Map(AccessPolicyName("ap") -> AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set(SamResourceActions.readAuthDomain, ManagedGroupService.useAction), Set(ResourceRoleName("owner"))))
-    runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, policiesMap, Set.empty, defaultUserInfo.userId, samRequestContext))
+    runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, policiesMap, Set.empty, None, defaultUserInfo.userId, samRequestContext))
 
     Get(s"/api/resources/v2/${resourceType.name}/${resourceId.value}/authDomain") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
@@ -783,7 +783,7 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
 
     val resourceId = ResourceId("foo")
     val policiesMap = Map(AccessPolicyName("ap") -> AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set(ManagedGroupService.useAction), Set(ResourceRoleName("owner"))))
-    runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, policiesMap, Set(WorkbenchGroupName(authDomain)), defaultUserInfo.userId, samRequestContext))
+    runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, policiesMap, Set(WorkbenchGroupName(authDomain)), None, defaultUserInfo.userId, samRequestContext))
 
     Get(s"/api/resources/v2/${resourceType.name}/${resourceId.value}/authDomain") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Forbidden
@@ -807,7 +807,7 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
 
     val resourceId = ResourceId("foo")
     val policiesMap = Map(AccessPolicyName("ap") -> AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set(SamResourceActions.readAuthDomain, ManagedGroupService.useAction), Set(ResourceRoleName("owner"))))
-    runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, policiesMap, Set(WorkbenchGroupName(authDomain)), defaultUserInfo.userId, samRequestContext))
+    runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, policiesMap, Set(WorkbenchGroupName(authDomain)), None, defaultUserInfo.userId, samRequestContext))
 
     Get(s"/api/resources/v2/fakeResourceTypeName/$resourceId/authDomain") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
@@ -835,7 +835,7 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
 
     val resourceId = ResourceId("foo")
     val policiesMap = Map(AccessPolicyName("ap") -> AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set(SamResourceActions.readAuthDomain, ManagedGroupService.useAction), Set(ResourceRoleName("owner"))))
-    runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, policiesMap, Set(WorkbenchGroupName(authDomain)), defaultUserInfo.userId, samRequestContext))
+    runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, policiesMap, Set(WorkbenchGroupName(authDomain)), None, defaultUserInfo.userId, samRequestContext))
 
     Get(s"/api/resources/v2/${resourceType.name}/${resourceId.value}/authDomain") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
