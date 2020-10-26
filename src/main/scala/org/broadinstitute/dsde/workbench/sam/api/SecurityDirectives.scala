@@ -51,7 +51,7 @@ trait SecurityDirectives {
       }
     }
 
-  def requireCreateWithParent(maybeParent: Option[FullyQualifiedResourceId], resourceType: ResourceType, userId: WorkbenchUserId, samRequestContext: SamRequestContext): Directive0 = {
+  def   requireCreateWithOptionalParent(maybeParent: Option[FullyQualifiedResourceId], resourceType: ResourceType, userId: WorkbenchUserId, samRequestContext: SamRequestContext): Directive0 = {
     maybeParent match {
       case None => Directives.pass // no parent specified, proceed
       case Some(parent) =>

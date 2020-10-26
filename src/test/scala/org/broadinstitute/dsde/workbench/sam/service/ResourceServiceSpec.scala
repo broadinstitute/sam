@@ -343,6 +343,24 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     exception2.errorReport.statusCode shouldEqual Option(StatusCodes.BadRequest)
   }
 
+  it should "create ownerless resource with parent" in {
+    val ownerRoleName = ResourceRoleName("owner")
+    val resourceType = ResourceType(ResourceTypeName(UUID.randomUUID().toString), Set.empty, Set(ResourceRole(ownerRoleName, Set.empty)), ownerRoleName)
+    val parentResourceName = ResourceId("parent")
+    val childResourceName = ResourceId("child")
+
+    val test = for {
+      _ <- service.createResourceType(resourceType, samRequestContext)
+      parent <- service.createResource(resourceType, parentResourceName, dummyUserInfo, samRequestContext)
+      child <- service.createResource(resourceType, childResourceName, Map.empty, Set.empty, Option(parent.fullyQualifiedId), dummyUserInfo.userId, samRequestContext)
+      actualParent <- policyDAO.getResourceParent(child.fullyQualifiedId, samRequestContext)
+    } yield {
+      actualParent shouldBe Option(parent.fullyQualifiedId)
+    }
+
+    test.unsafeRunSync()
+  }
+
   private def assertResourceExists(
       resource: FullyQualifiedResourceId, resourceType: ResourceType, policyDao: AccessPolicyDAO) = {
     val resultingPolicies = policyDao.listAccessPolicies(resource, samRequestContext).unsafeRunSync().map(_.copy(email = WorkbenchEmail("policy-randomuuid@example.com")))

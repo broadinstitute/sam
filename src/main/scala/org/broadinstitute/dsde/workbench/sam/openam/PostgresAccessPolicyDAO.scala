@@ -225,7 +225,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
         // note that when setting the parent we are not checking for circular hierarchies but that should be ok
         // since this is a new resource and should not be a parent of another so no circles can be possible
         samsql"""insert into ${ResourceTable.table} (${resourceTableColumn.name}, ${resourceTableColumn.resourceTypeId}, ${resourceTableColumn.resourceParentId})
-               value (${resource.resourceId}, (${loadResourceTypePK(resource.resourceTypeName)}), $parentPK)"""
+               values (${resource.resourceId}, (${loadResourceTypePK(resource.resourceTypeName)}), $parentPK)"""
     }
 
     Try {
