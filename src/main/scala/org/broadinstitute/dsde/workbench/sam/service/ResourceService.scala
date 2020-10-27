@@ -29,7 +29,7 @@ class ResourceService(
     extends LazyLogging {
   implicit val cs = IO.contextShift(executionContext) //for running IOs in paralell
 
-  private case class ValidatableAccessPolicy(
+  private[service] case class ValidatableAccessPolicy(
                                               policyName: AccessPolicyName,
                                               emailsToSubjects: Map[WorkbenchEmail, Option[WorkbenchSubject]],
                                               roles: Set[ResourceRoleName],
@@ -139,7 +139,7 @@ class ResourceService(
     for {
       resourceIdErrors <- IO.pure(validateUrlSafe(resourceId.value))
       ownerPolicyErrors <- IO.pure(validateOwnerPolicyExists(resourceType, policies, parentOpt))
-      policyErrors <- IO.pure(policies.flatMap(policy => validatePolicy(resourceType, policy)))
+      policyErrors <- policies.toList.traverse(policy => validatePolicy(resourceType, policy)).map(_.flatten)
       authDomainErrors <- validateAuthDomain(resourceType, authDomain, userId, samRequestContext)
     } yield (resourceIdErrors ++ ownerPolicyErrors ++ policyErrors ++ authDomainErrors).toSeq
 
@@ -267,12 +267,16 @@ class ResourceService(
     */
   @throws(classOf[WorkbenchExceptionWithErrorReport])
   def overwritePolicy(resourceType: ResourceType, policyName: AccessPolicyName, resource: FullyQualifiedResourceId, policyMembership: AccessPolicyMembership, samRequestContext: SamRequestContext): IO[AccessPolicy] = {
-    makeCreatablePolicy(policyName, policyMembership, samRequestContext).flatMap { policy =>
-      validatePolicy(resourceType, policy) match {
+    for {
+      policy <- makeCreatablePolicy(policyName, policyMembership, samRequestContext)
+      _ <- validatePolicy(resourceType, policy).map {
         case Some(errorReport) =>
           throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "You have specified an invalid policy", errorReport))
-        case None => createOrUpdatePolicy(FullyQualifiedPolicyId(resource, policyName), policy, samRequestContext)
+        case None =>
       }
+      overwrittenPolicy <- createOrUpdatePolicy(FullyQualifiedPolicyId(resource, policyName), policy, samRequestContext)
+    } yield {
+      overwrittenPolicy
     }
   }
 
@@ -335,16 +339,21 @@ class ResourceService(
     * @param policy
     * @return
     */
-  private def validatePolicy(resourceType: ResourceType, policy: ValidatableAccessPolicy): Option[ErrorReport] = {
-    val validationErrors =
-      validateMemberEmails(policy.emailsToSubjects) ++
-      validateActions(resourceType, policy) ++
-      validateRoles(resourceType, policy) ++
-      validateUrlSafe(policy.policyName.value)
+  private[service] def validatePolicy(resourceType: ResourceType, policy: ValidatableAccessPolicy): IO[Option[ErrorReport]] = {
+    for {
+      descendantPermissionsErrors <- validateDescendantPermissions(policy.descendantPermissions)
+    } yield {
+      val validationErrors =
+        validateMemberEmails(policy.emailsToSubjects) ++
+          validateActions(resourceType, policy.actions) ++
+          validateRoles(resourceType, policy.roles) ++
+          validateUrlSafe(policy.policyName.value) ++
+          descendantPermissionsErrors
 
-    if (validationErrors.nonEmpty) {
-      Some(ErrorReport("You have specified an invalid policy", validationErrors.toSeq))
-    } else None
+      if (validationErrors.nonEmpty) {
+        Some(ErrorReport("You have specified an invalid policy", validationErrors.toSeq))
+      } else None
+    }
   }
 
   /**
@@ -364,8 +373,8 @@ class ResourceService(
     } else None
   }
 
-  private def validateRoles(resourceType: ResourceType, policy: ValidatableAccessPolicy): Option[ErrorReport] = {
-    val invalidRoles = policy.roles -- resourceType.roles.map(_.roleName)
+  private def validateRoles(resourceType: ResourceType, roles: Set[ResourceRoleName]) = {
+    val invalidRoles = roles -- resourceType.roles.map(_.roleName)
     if (invalidRoles.nonEmpty) {
       val roleCauses = invalidRoles.map { resourceRoleName =>
         ErrorReport(s"Invalid role: ${resourceRoleName}")
@@ -378,8 +387,8 @@ class ResourceService(
     } else None
   }
 
-  private def validateActions(resourceType: ResourceType, policy: ValidatableAccessPolicy): Option[ErrorReport] = {
-    val invalidActions = policy.actions.filter(a => !resourceType.actionPatterns.exists(_.matches(a)))
+  private def validateActions(resourceType: ResourceType, actions: Set[ResourceAction]) = {
+    val invalidActions = actions.filter(a => !resourceType.actionPatterns.exists(_.matches(a)))
     if (invalidActions.nonEmpty) {
       val actionCauses = invalidActions.map { resourceAction =>
         ErrorReport(s"Invalid action: ${resourceAction}")
@@ -392,7 +401,24 @@ class ResourceService(
     } else None
   }
 
-  private def fireGroupUpdateNotification(groupId: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): Future[Unit] =
+  private[service] def validateDescendantPermissions(descendantPermissionsSet: Set[AccessPolicyDescendantPermissions]): IO[Seq[ErrorReport]] = {
+    val validationErrors = descendantPermissionsSet.toList.traverse { descendantPermissions =>
+      for {
+        maybeDescendantResourceType <- getResourceType(descendantPermissions.resourceType)
+      } yield {
+        maybeDescendantResourceType match {
+          case None => Seq(ErrorReport(s"Descendant resource type ${descendantPermissions.resourceType.value} does not exist."))
+          case Some(descendantResourceType) =>
+            validateActions(descendantResourceType, descendantPermissions.actions) ++
+            validateRoles(descendantResourceType, descendantPermissions.roles)
+        }
+      }
+    }
+
+    validationErrors.map(_.flatten)
+  }
+
+    private def fireGroupUpdateNotification(groupId: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): Future[Unit] =
     cloudExtensions.onGroupUpdate(Seq(groupId), samRequestContext) recover {
       case t: Throwable =>
         logger.error(s"error calling cloudExtensions.onGroupUpdate for $groupId", t)
