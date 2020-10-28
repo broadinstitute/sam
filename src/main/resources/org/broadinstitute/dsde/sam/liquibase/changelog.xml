@@ -9,5 +9,6 @@
     <include file="changesets/20200424_add_sam_resource_policy_group_id_index.xml" relativeToChangelogFile="true"/>
     <include file="changesets/20200714_resource_parent_id.xml" relativeToChangelogFile="true"/>
     <include file="changesets/20200901_descendant_permissions.xml" relativeToChangelogFile="true"/>
+    <include file="changesets/20201028_nested_roles.xml" relativeToChangelogFile="true"/>
 
 </databaseChangeLog>
