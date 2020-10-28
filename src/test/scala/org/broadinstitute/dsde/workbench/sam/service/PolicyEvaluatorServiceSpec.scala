@@ -513,7 +513,7 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
       _ <- constrainableService.createResourceType(managedGroupResourceType, samRequestContext)  // make sure managed groups in auth domain set are created. dummyUserInfo will be member of the created resourceId
       _ <- resource.authDomain.toList.parTraverse(a => managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo, samRequestContext = samRequestContext))
       // create resource that dummyUserInfo is a member of for constrainableResourceType
-      _ <- constrainableService.createResource(constrainableResourceType, resource.resourceId, Map(viewPolicyName -> constrainablePolicyMembership), resource.authDomain, dummyUserInfo.userId, samRequestContext)
+      _ <- constrainableService.createResource(constrainableResourceType, resource.resourceId, Map(viewPolicyName -> constrainablePolicyMembership), resource.authDomain, None, dummyUserInfo.userId, samRequestContext)
       r <- constrainableService.policyEvaluatorService.listUserResources(constrainableResourceType.name, dummyUserInfo.userId, samRequestContext)
     } yield {
       val expected = Set(UserResourcesResponse(resource.resourceId, RolesAndActions.fromPolicyMembership(constrainablePolicyMembership), RolesAndActions.empty, RolesAndActions.empty, Set.empty, Set.empty))
@@ -532,7 +532,7 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
       _ <- constrainableService.createResourceType(managedGroupResourceType, samRequestContext)  // make sure managed groups in auth domain set are created. dummyUserInfo will be member of the created resourceId
       _ <- resource.authDomain.toList.parTraverse(a => managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo, samRequestContext = samRequestContext))
       // create resource that dummyUserInfo is a member of for constrainableResourceType
-      _ <- constrainableService.createResource(constrainableResourceType, resource.resourceId, Map(viewPolicyName -> constrainablePolicyMembership), resource.authDomain, dummyUserInfo.userId, samRequestContext)
+      _ <- constrainableService.createResource(constrainableResourceType, resource.resourceId, Map(viewPolicyName -> constrainablePolicyMembership), resource.authDomain, None, dummyUserInfo.userId, samRequestContext)
       r <- constrainableService.policyEvaluatorService.listUserResources(constrainableResourceType.name, dummyUserInfo.userId, samRequestContext)
     } yield {
       val expected = Set(UserResourcesResponse(resource.resourceId, RolesAndActions.fromPolicyMembership(constrainablePolicyMembership), RolesAndActions.empty, RolesAndActions.empty, resource.authDomain, Set.empty))
@@ -554,7 +554,7 @@ class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport
       _ <- resource.authDomain.toList.parTraverse(a => managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo, samRequestContext = samRequestContext))
       _ <- savePolicyMembers(policy)
       // create resource that dummyUserInfo is a member of for constrainableResourceType
-      _ <- constrainableService.createResource(constrainableResourceType, resource.resourceId, Map(viewPolicyName -> constrainablePolicyMembership), resource.authDomain, dummyUserInfo.userId, samRequestContext)
+      _ <- constrainableService.createResource(constrainableResourceType, resource.resourceId, Map(viewPolicyName -> constrainablePolicyMembership), resource.authDomain, None, dummyUserInfo.userId, samRequestContext)
       _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(TestSupport.genGoogleSubjectId()), user.userEmail, Some(TestSupport.genIdentityConcentratorId())), samRequestContext)
       _ <- constrainableService.createPolicy(policy.id, policy.members + user.userId, policy.roles, policy.actions, Set.empty, samRequestContext)
       r <- constrainableService.policyEvaluatorService.listUserResources(constrainableResourceType.name, user.userId, samRequestContext)
@@ -610,7 +610,7 @@ class DeprecatedPolicyEvaluatorSpec extends PolicyEvaluatorServiceSpec {
       _ <- constrainableService.createResourceType(managedGroupResourceType, samRequestContext)  // make sure managed groups in auth domain set are created. dummyUserInfo will be member of the created resourceId
       _ <- resource.authDomain.toList.parTraverse(a => managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo, samRequestContext = samRequestContext))
       // create resource that dummyUserInfo is a member of for constrainableResourceType
-      _ <- constrainableService.createResource(constrainableResourceType, resource.resourceId, Map(viewPolicyName -> constrainablePolicyMembership), resource.authDomain, dummyUserInfo.userId, samRequestContext)
+      _ <- constrainableService.createResource(constrainableResourceType, resource.resourceId, Map(viewPolicyName -> constrainablePolicyMembership), resource.authDomain, None, dummyUserInfo.userId, samRequestContext)
       r <- constrainableService.policyEvaluatorService.listUserAccessPolicies(constrainableResourceType.name, dummyUserInfo.userId, samRequestContext)
     } yield {
       val expected = Set(UserPolicyResponse(resource.resourceId, viewPolicyName, Set.empty, Set.empty, false))
@@ -630,7 +630,7 @@ class DeprecatedPolicyEvaluatorSpec extends PolicyEvaluatorServiceSpec {
       _ <- constrainableService.createResourceType(managedGroupResourceType, samRequestContext)  // make sure managed groups in auth domain set are created. dummyUserInfo will be member of the created resourceId
       _ <- resource.authDomain.toList.parTraverse(a => managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo, samRequestContext = samRequestContext))
       // create resource that dummyUserInfo is a member of for constrainableResourceType
-      _ <- constrainableService.createResource(constrainableResourceType, resource.resourceId, Map(viewPolicyName -> constrainablePolicyMembership), resource.authDomain, dummyUserInfo.userId, samRequestContext)
+      _ <- constrainableService.createResource(constrainableResourceType, resource.resourceId, Map(viewPolicyName -> constrainablePolicyMembership), resource.authDomain, None, dummyUserInfo.userId, samRequestContext)
       r <- constrainableService.policyEvaluatorService.listUserAccessPolicies(constrainableResourceType.name, dummyUserInfo.userId, samRequestContext)
     } yield {
       val expected = Set(UserPolicyResponse(resource.resourceId, viewPolicyName, resource.authDomain, Set.empty, false))
@@ -652,7 +652,7 @@ class DeprecatedPolicyEvaluatorSpec extends PolicyEvaluatorServiceSpec {
       _ <- resource.authDomain.toList.parTraverse(a => managedGroupService.createManagedGroup(ResourceId(a.value), dummyUserInfo, samRequestContext = samRequestContext))
       _ <- savePolicyMembers(policy)
       // create resource that dummyUserInfo is a member of for constrainableResourceType
-      _ <- constrainableService.createResource(constrainableResourceType, resource.resourceId, Map(viewPolicyName -> constrainablePolicyMembership), resource.authDomain, dummyUserInfo.userId, samRequestContext)
+      _ <- constrainableService.createResource(constrainableResourceType, resource.resourceId, Map(viewPolicyName -> constrainablePolicyMembership), resource.authDomain, None, dummyUserInfo.userId, samRequestContext)
       _ <- dirDAO.createUser(WorkbenchUser(user.userId, Some(TestSupport.genGoogleSubjectId()), user.userEmail, Some(TestSupport.genIdentityConcentratorId())), samRequestContext)
       _ <- constrainableService.createPolicy(policy.id, policy.members + user.userId, policy.roles, policy.actions, Set.empty, samRequestContext)
       r <- constrainableService.policyEvaluatorService.listUserAccessPolicies(constrainableResourceType.name, user.userId, samRequestContext)

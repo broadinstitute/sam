@@ -187,7 +187,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     val policyMembership = AccessPolicyMembership(Set(dummyUserInfo.userEmail), Set(constrainableViewAction), Set(ownerRoleName), None)
     val policyName = AccessPolicyName("foo")
 
-    val testResource = runAndWait(constrainableService.createResource(constrainableResourceType, resourceName, Map(policyName -> policyMembership), Set(WorkbenchGroupName(managedGroupResource.resourceId.value)), dummyUserInfo.userId, samRequestContext))
+    val testResource = runAndWait(constrainableService.createResource(constrainableResourceType, resourceName, Map(policyName -> policyMembership), Set(WorkbenchGroupName(managedGroupResource.resourceId.value)), None, dummyUserInfo.userId, samRequestContext))
 
     val policyToUpdate = FullyQualifiedPolicyId(testResource.fullyQualifiedId, policyName)
     constrainableService.isPublic(policyToUpdate, samRequestContext).unsafeRunSync() should equal(false)
@@ -288,7 +288,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     val policyMembership = AccessPolicyMembership(Set(dummyUserInfo.userEmail), Set(ResourceAction("view")), Set(ownerRoleName), Option(Set.empty))
     val policyName = AccessPolicyName("foo")
 
-    runAndWait(service.createResource(resourceType, resourceName, Map(policyName -> policyMembership), Set.empty, dummyUserInfo.userId, samRequestContext))
+    runAndWait(service.createResource(resourceType, resourceName, Map(policyName -> policyMembership), Set.empty, None, dummyUserInfo.userId, samRequestContext))
 
     val policies = service.listResourcePolicies(FullyQualifiedResourceId(resourceType.name, resourceName), samRequestContext).unsafeRunSync()
     assertResult(Stream(AccessPolicyResponseEntry(policyName, policyMembership, WorkbenchEmail("")))) {
@@ -331,16 +331,34 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     service.createResourceType(resourceType, samRequestContext).unsafeRunSync()
 
     val exception1 = intercept[WorkbenchExceptionWithErrorReport] {
-      runAndWait(service.createResource(resourceType, resourceName, Map(AccessPolicyName("foo") -> AccessPolicyMembership(Set.empty, Set.empty, Set(ownerRoleName), None)), Set.empty, dummyUserInfo.userId, samRequestContext))
+      runAndWait(service.createResource(resourceType, resourceName, Map(AccessPolicyName("foo") -> AccessPolicyMembership(Set.empty, Set.empty, Set(ownerRoleName), None)), Set.empty, None, dummyUserInfo.userId, samRequestContext))
     }
 
     exception1.errorReport.statusCode shouldEqual Option(StatusCodes.BadRequest)
 
     val exception2 = intercept[WorkbenchExceptionWithErrorReport] {
-      runAndWait(service.createResource(resourceType, resourceName, Map(AccessPolicyName("foo") -> AccessPolicyMembership(Set(dummyUserInfo.userEmail), Set.empty, Set.empty, None)), Set.empty, dummyUserInfo.userId, samRequestContext))
+      runAndWait(service.createResource(resourceType, resourceName, Map(AccessPolicyName("foo") -> AccessPolicyMembership(Set(dummyUserInfo.userEmail), Set.empty, Set.empty, None)), Set.empty, None, dummyUserInfo.userId, samRequestContext))
     }
 
     exception2.errorReport.statusCode shouldEqual Option(StatusCodes.BadRequest)
+  }
+
+  it should "create ownerless resource with parent" in {
+    val ownerRoleName = ResourceRoleName("owner")
+    val resourceType = ResourceType(ResourceTypeName(UUID.randomUUID().toString), Set.empty, Set(ResourceRole(ownerRoleName, Set.empty)), ownerRoleName)
+    val parentResourceName = ResourceId("parent")
+    val childResourceName = ResourceId("child")
+
+    val test = for {
+      _ <- service.createResourceType(resourceType, samRequestContext)
+      parent <- service.createResource(resourceType, parentResourceName, dummyUserInfo, samRequestContext)
+      child <- service.createResource(resourceType, childResourceName, Map.empty, Set.empty, Option(parent.fullyQualifiedId), dummyUserInfo.userId, samRequestContext)
+      actualParent <- policyDAO.getResourceParent(child.fullyQualifiedId, samRequestContext)
+    } yield {
+      actualParent shouldBe Option(parent.fullyQualifiedId)
+    }
+
+    test.unsafeRunSync()
   }
 
   private def assertResourceExists(
@@ -369,7 +387,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
 
     val authDomain = NonEmptyList.of(WorkbenchGroupName(managedGroupName), WorkbenchGroupName(secondMGroupName))
     val viewPolicyName = AccessPolicyName(constrainableReaderRoleName.value)
-    val resource = runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId(UUID.randomUUID().toString), Map(viewPolicyName -> constrainablePolicyMembership), authDomain.toList.toSet, dummyUserInfo.userId, samRequestContext))
+    val resource = runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId(UUID.randomUUID().toString), Map(viewPolicyName -> constrainablePolicyMembership), authDomain.toList.toSet, None, dummyUserInfo.userId, samRequestContext))
     val storedAuthDomain = constrainableService.loadResourceAuthDomain(resource.fullyQualifiedId, samRequestContext).unsafeRunSync()
 
     storedAuthDomain should contain theSameElementsAs authDomain.toList
@@ -387,7 +405,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     val authDomain = Set(WorkbenchGroupName(managedGroupName), nonExistentGroup)
     val viewPolicyName = AccessPolicyName(constrainableReaderRoleName.value)
     intercept[WorkbenchExceptionWithErrorReport] {
-      runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId(UUID.randomUUID().toString), Map(viewPolicyName -> constrainablePolicyMembership), authDomain, dummyUserInfo.userId, samRequestContext))
+      runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId(UUID.randomUUID().toString), Map(viewPolicyName -> constrainablePolicyMembership), authDomain, None, dummyUserInfo.userId, samRequestContext))
     }
   }
 
@@ -407,7 +425,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     val authDomain = Set(WorkbenchGroupName(managedGroupName1), WorkbenchGroupName(managedGroupName2))
     val viewPolicyName = AccessPolicyName(constrainableReaderRoleName.value)
     intercept[WorkbenchExceptionWithErrorReport] {
-      runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId(UUID.randomUUID().toString), Map(viewPolicyName -> constrainablePolicyMembership), authDomain, dummyUserInfo.userId, samRequestContext))
+      runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId(UUID.randomUUID().toString), Map(viewPolicyName -> constrainablePolicyMembership), authDomain, None, dummyUserInfo.userId, samRequestContext))
     }
   }
 
@@ -431,7 +449,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
 
     val authDomain = Set(WorkbenchGroupName(managedGroupName))
     intercept[WorkbenchExceptionWithErrorReport] {
-      runAndWait(service.createResource(defaultResourceType, ResourceId(UUID.randomUUID().toString), Map(policyName -> policyMembership), authDomain, dummyUserInfo.userId, samRequestContext))
+      runAndWait(service.createResource(defaultResourceType, ResourceId(UUID.randomUUID().toString), Map(policyName -> policyMembership), authDomain, None, dummyUserInfo.userId, samRequestContext))
     }
   }
 
@@ -703,8 +721,8 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     constrainableService.createResourceType(managedGroupResourceType, samRequestContext).unsafeRunSync()
     managedGroupService.createManagedGroup(ResourceId(authDomainGroupToDelete), dummyUserInfo, samRequestContext = samRequestContext).unsafeRunSync()
     managedGroupService.createManagedGroup(ResourceId(otherAuthDomainGroup), dummyUserInfo, samRequestContext = samRequestContext).unsafeRunSync()
-    val resourceToDelete = constrainableService.createResource(resourceType, ResourceId(UUID.randomUUID().toString), Map(AccessPolicyName(constrainableReaderRoleName.value) -> constrainablePolicyMembership), Set(WorkbenchGroupName(authDomainGroupToDelete)), dummyUserInfo.userId, samRequestContext).unsafeRunSync()
-    val otherResource = constrainableService.createResource(resourceType, ResourceId(UUID.randomUUID().toString), Map(AccessPolicyName(constrainableReaderRoleName.value) -> constrainablePolicyMembership), Set(WorkbenchGroupName(otherAuthDomainGroup)), dummyUserInfo.userId, samRequestContext).unsafeRunSync()
+    val resourceToDelete = constrainableService.createResource(resourceType, ResourceId(UUID.randomUUID().toString), Map(AccessPolicyName(constrainableReaderRoleName.value) -> constrainablePolicyMembership), Set(WorkbenchGroupName(authDomainGroupToDelete)), None, dummyUserInfo.userId, samRequestContext).unsafeRunSync()
+    val otherResource = constrainableService.createResource(resourceType, ResourceId(UUID.randomUUID().toString), Map(AccessPolicyName(constrainableReaderRoleName.value) -> constrainablePolicyMembership), Set(WorkbenchGroupName(otherAuthDomainGroup)), None, dummyUserInfo.userId, samRequestContext).unsafeRunSync()
 
     runAndWait(constrainableService.deleteResource(resourceToDelete.fullyQualifiedId, samRequestContext))
     runAndWait(managedGroupService.deleteManagedGroup(ResourceId(authDomainGroupToDelete), samRequestContext))
@@ -928,7 +946,7 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
       _ <- service.createResourceType(managedGroupResourceType, samRequestContext)
 
       _ <- managedGroupService.createManagedGroup(ResourceId("authDomain"), dummyUserInfo, samRequestContext = samRequestContext)
-      childResource <- service.createResource(constrainableResourceType, ResourceId("child"), childAccessPolicies, Set(WorkbenchGroupName("authDomain")), dummyUserInfo.userId, samRequestContext)
+      childResource <- service.createResource(constrainableResourceType, ResourceId("child"), childAccessPolicies, Set(WorkbenchGroupName("authDomain")), None, dummyUserInfo.userId, samRequestContext)
       parentResource <- service.createResource(constrainableResourceType, ResourceId("parent"), dummyUserInfo, samRequestContext)
       _ <- service.setResourceParent(childResource.fullyQualifiedId, parentResource.fullyQualifiedId, samRequestContext)
     } yield ()

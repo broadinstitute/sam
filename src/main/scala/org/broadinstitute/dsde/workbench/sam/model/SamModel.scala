@@ -60,7 +60,7 @@ object SamJsonSupport {
 
   implicit val GroupSyncResponseFormat = jsonFormat2(GroupSyncResponse.apply)
 
-  implicit val CreateResourceRequestFormat = jsonFormat4(CreateResourceRequest.apply)
+  implicit val CreateResourceRequestFormat = jsonFormat5(CreateResourceRequest.apply)
 
   implicit val CreateResourcePolicyResponseFormat = jsonFormat2(CreateResourcePolicyResponse.apply)
 
@@ -117,7 +117,7 @@ object SamResourceTypes {
 @Lenses final case class ResourceTypeName(value: String) extends ValueObject
 
 @Lenses final case class FullyQualifiedResourceId(resourceTypeName: ResourceTypeName, resourceId: ResourceId)
-@Lenses final case class Resource(resourceTypeName: ResourceTypeName, resourceId: ResourceId, authDomain: Set[WorkbenchGroupName], accessPolicies: Set[AccessPolicy] = Set.empty) {
+@Lenses final case class Resource(resourceTypeName: ResourceTypeName, resourceId: ResourceId, authDomain: Set[WorkbenchGroupName], accessPolicies: Set[AccessPolicy] = Set.empty, parent: Option[FullyQualifiedResourceId] = None) {
   val fullyQualifiedId = FullyQualifiedResourceId(resourceTypeName, resourceId)
 }
 @Lenses final case class CreateResourceResponse(resourceTypeName: ResourceTypeName, resourceId: ResourceId, authDomain: Set[WorkbenchGroupName], accessPolicies: Set[CreateResourcePolicyResponse])
@@ -179,7 +179,8 @@ object RolesAndActions {
                                                 resourceId: ResourceId,
                                                 policies: Map[AccessPolicyName, AccessPolicyMembership],
                                                 authDomain: Set[WorkbenchGroupName],
-                                                returnResource: Option[Boolean] = Some(false))
+                                                returnResource: Option[Boolean] = Some(false),
+                                                parent: Option[FullyQualifiedResourceId] = None)
 
 /*
 Note that AccessPolicy IS A group because it was easier and more efficient to work with in ldap. In Postgres, it is

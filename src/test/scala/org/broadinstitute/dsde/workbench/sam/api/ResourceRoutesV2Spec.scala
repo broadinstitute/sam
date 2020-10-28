@@ -130,7 +130,7 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
     }
   }
 
-  "POST /api/resources/v2/{resourceType} with createResource = true" should "201 create resource with content" in {
+  "POST /api/resources/v2/{resourceType} with returnResource = true" should "201 create resource with content" in {
     val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceActionPattern("run", "", false)), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("run")))), ResourceRoleName("owner"))
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
 
@@ -150,13 +150,68 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
     }
   }
 
-  "POST /api/resources/v2/{resourceType} with createResource = false" should "204 create resource with content" in {
+  "POST /api/resources/v2/{resourceType} with returnResource = false" should "204 create resource with content" in {
     val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceActionPattern("run", "", false)), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("run")))), ResourceRoleName("owner"))
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
 
     val createResourceRequest = CreateResourceRequest(ResourceId("foo"), Map(AccessPolicyName("goober") -> AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set(ResourceAction("run")), Set(resourceType.ownerRoleName))), Set.empty, Some(false))
     Post(s"/api/resources/v2/${resourceType.name}", createResourceRequest) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NoContent
+    }
+  }
+
+  it should "204 create resource with content with parent" in {
+    val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceActionPattern(SamResourceActions.setParent.value, "", false)), Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.setParent, SamResourceActions.addChild))), ResourceRoleName("owner"))
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
+
+    val createParentResourceRequest = CreateResourceRequest(ResourceId("parent"), Map(AccessPolicyName("goober") -> AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set.empty, Set(resourceType.ownerRoleName))), Set.empty, Some(false))
+    Post(s"/api/resources/v2/${resourceType.name}", createParentResourceRequest) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+    }
+
+    val createResourceRequest = CreateResourceRequest(ResourceId("foo"), Map(AccessPolicyName("goober") -> AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set.empty, Set(resourceType.ownerRoleName))), Set.empty, Some(false), Some(FullyQualifiedResourceId(resourceType.name, createParentResourceRequest.resourceId)))
+    Post(s"/api/resources/v2/${resourceType.name}", createResourceRequest) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+    }
+  }
+
+  it should "400 with parent when parents not allowed" in {
+    val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceActionPattern(SamResourceActions.setParent.value, "", false)), Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.addChild))), ResourceRoleName("owner"))
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
+
+    val createParentResourceRequest = CreateResourceRequest(ResourceId("parent"), Map(AccessPolicyName("goober") -> AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set.empty, Set(resourceType.ownerRoleName))), Set.empty, Some(false))
+    Post(s"/api/resources/v2/${resourceType.name}", createParentResourceRequest) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+    }
+
+    val createResourceRequest = CreateResourceRequest(ResourceId("foo"), Map(AccessPolicyName("goober") -> AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set.empty, Set(resourceType.ownerRoleName))), Set.empty, Some(false), Some(FullyQualifiedResourceId(resourceType.name, createParentResourceRequest.resourceId)))
+    Post(s"/api/resources/v2/${resourceType.name}", createResourceRequest) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.BadRequest
+    }
+  }
+
+  it should "403 with parent when add_child not allowed on parent" in {
+    val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceActionPattern(SamResourceActions.setParent.value, "", false)), Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.setParent))), ResourceRoleName("owner"))
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
+
+    val createParentResourceRequest = CreateResourceRequest(ResourceId("parent"), Map(AccessPolicyName("goober") -> AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set.empty, Set(resourceType.ownerRoleName))), Set.empty, Some(false))
+    Post(s"/api/resources/v2/${resourceType.name}", createParentResourceRequest) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+    }
+
+    val createResourceRequest = CreateResourceRequest(ResourceId("foo"), Map(AccessPolicyName("goober") -> AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set.empty, Set(resourceType.ownerRoleName))), Set.empty, Some(false), Some(FullyQualifiedResourceId(resourceType.name, createParentResourceRequest.resourceId)))
+    Post(s"/api/resources/v2/${resourceType.name}", createResourceRequest) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Forbidden
+    }
+  }
+
+  it should "403 with parent when parent does not exist" in {
+    val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceActionPattern(SamResourceActions.setParent.value, "", false)), Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.setParent))), ResourceRoleName("owner"))
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
+
+    val createResourceRequest = CreateResourceRequest(ResourceId("foo"), Map(AccessPolicyName("goober") -> AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set.empty, Set(resourceType.ownerRoleName))), Set.empty, Some(false), Some(FullyQualifiedResourceId(resourceType.name, ResourceId("parent"))))
+    Post(s"/api/resources/v2/${resourceType.name}", createResourceRequest) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Forbidden
     }
   }
 
@@ -735,7 +790,7 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
 
     val resourceId = ResourceId("foo")
     val policiesMap = Map(AccessPolicyName("ap") -> AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set(SamResourceActions.readAuthDomain, ManagedGroupService.useAction), Set(ResourceRoleName("owner"))))
-    runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, policiesMap, Set(WorkbenchGroupName(authDomain)), defaultUserInfo.userId, samRequestContext))
+    runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, policiesMap, Set(WorkbenchGroupName(authDomain)), None, defaultUserInfo.userId, samRequestContext))
 
     Get(s"/api/resources/v2/${resourceType.name}/${resourceId.value}/authDomain") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
@@ -758,7 +813,7 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
 
     val resourceId = ResourceId("foo")
     val policiesMap = Map(AccessPolicyName("ap") -> AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set(SamResourceActions.readAuthDomain, ManagedGroupService.useAction), Set(ResourceRoleName("owner"))))
-    runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, policiesMap, Set.empty, defaultUserInfo.userId, samRequestContext))
+    runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, policiesMap, Set.empty, None, defaultUserInfo.userId, samRequestContext))
 
     Get(s"/api/resources/v2/${resourceType.name}/${resourceId.value}/authDomain") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
@@ -783,7 +838,7 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
 
     val resourceId = ResourceId("foo")
     val policiesMap = Map(AccessPolicyName("ap") -> AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set(ManagedGroupService.useAction), Set(ResourceRoleName("owner"))))
-    runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, policiesMap, Set(WorkbenchGroupName(authDomain)), defaultUserInfo.userId, samRequestContext))
+    runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, policiesMap, Set(WorkbenchGroupName(authDomain)), None, defaultUserInfo.userId, samRequestContext))
 
     Get(s"/api/resources/v2/${resourceType.name}/${resourceId.value}/authDomain") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Forbidden
@@ -807,7 +862,7 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
 
     val resourceId = ResourceId("foo")
     val policiesMap = Map(AccessPolicyName("ap") -> AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set(SamResourceActions.readAuthDomain, ManagedGroupService.useAction), Set(ResourceRoleName("owner"))))
-    runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, policiesMap, Set(WorkbenchGroupName(authDomain)), defaultUserInfo.userId, samRequestContext))
+    runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, policiesMap, Set(WorkbenchGroupName(authDomain)), None, defaultUserInfo.userId, samRequestContext))
 
     Get(s"/api/resources/v2/fakeResourceTypeName/$resourceId/authDomain") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
@@ -835,7 +890,7 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
 
     val resourceId = ResourceId("foo")
     val policiesMap = Map(AccessPolicyName("ap") -> AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set(SamResourceActions.readAuthDomain, ManagedGroupService.useAction), Set(ResourceRoleName("owner"))))
-    runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, policiesMap, Set(WorkbenchGroupName(authDomain)), defaultUserInfo.userId, samRequestContext))
+    runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, policiesMap, Set(WorkbenchGroupName(authDomain)), None, defaultUserInfo.userId, samRequestContext))
 
     Get(s"/api/resources/v2/${resourceType.name}/${resourceId.value}/authDomain") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK

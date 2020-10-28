@@ -214,9 +214,19 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
 
   private def insertResource(resource: Resource)(implicit session: DBSession): ResourcePK = {
     val resourceTableColumn = ResourceTable.column
-    val insertResourceQuery =
-      samsql"""insert into ${ResourceTable.table} (${resourceTableColumn.name}, ${resourceTableColumn.resourceTypeId})
+    val insertResourceQuery = resource.parent match {
+      case None =>
+        samsql"""insert into ${ResourceTable.table} (${resourceTableColumn.name}, ${resourceTableColumn.resourceTypeId})
                values (${resource.resourceId}, (${loadResourceTypePK(resource.resourceTypeName)}))"""
+      case Some(parentId) =>
+        // loading parent PK first so we can ensure it exists instead of blindly inserting a possible null
+        // this was probably already checked when checking access to parent so if we have gotten this far it is an internal error
+        val parentPK = loadResourcePK(parentId)
+        // note that when setting the parent we are not checking for circular hierarchies but that should be ok
+        // since this is a new resource and should not be a parent of another so no circles can be possible
+        samsql"""insert into ${ResourceTable.table} (${resourceTableColumn.name}, ${resourceTableColumn.resourceTypeId}, ${resourceTableColumn.resourceParentId})
+               values (${resource.resourceId}, (${loadResourceTypePK(resource.resourceTypeName)}), $parentPK)"""
+    }
 
     Try {
       ResourcePK(insertResourceQuery.updateAndReturnGeneratedKey().apply())
@@ -240,6 +250,26 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
   private def loadResourceTypePK(resourceTypeName: ResourceTypeName, resourceTypeTableAlias: String = "rt"): SQLSyntax = {
     val rt = ResourceTypeTable.syntax(resourceTypeTableAlias)
     samsqls"""select ${rt.id} from ${ResourceTypeTable as rt} where ${rt.name} = ${resourceTypeName}"""
+  }
+
+  /**
+    * Queries the database for the PK of the resource and throws an error if it does not exist
+    * @param resourceId
+    * @return
+    */
+  private def loadResourcePK(resourceId: FullyQualifiedResourceId)(implicit session: DBSession): ResourcePK = {
+    val prt = ResourceTypeTable.syntax("prt")
+    val pr = ResourceTable.syntax("pr")
+    val loadResourcePKQuery =
+      samsql"""select ${pr.result.id}
+              | from ${ResourceTable as pr}
+              | join ${ResourceTypeTable as prt} on ${prt.id} = ${pr.resourceTypeId}
+              | where ${pr.name} = ${resourceId.resourceId}
+              | and ${prt.name} = ${resourceId.resourceTypeName}""".stripMargin
+
+    loadResourcePKQuery.map(rs => ResourcePK(rs.long(pr.resultName.id))).single().apply().getOrElse(
+      throw new WorkbenchException(s"resource $resourceId not found")
+    )
   }
 
   override def deleteResource(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] = {
@@ -948,37 +978,33 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     val r = ResourceTable.syntax("r")
     val rt = ResourceTypeTable.syntax("rt")
     val pr = ResourceTable.syntax("pr")
-    val prt = ResourceTypeTable.syntax("prt")
     val resourceTableColumn = ResourceTable.column
 
-    val query =
-      samsql"""with recursive ${ancestorResourceTable.table}(${arColumn.resourceId}) as (
-                select ${r.id}
-                from ${ResourceTable as r}
-                join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
-                where ${r.name} = ${parentResource.resourceId}
-                and ${rt.name} = ${parentResource.resourceTypeName}
-                union
-                select ${pr.resourceParentId}
-                from ${ResourceTable as pr}
-                join ${ancestorResourceTable as ar} on ${ar.resourceId} = ${pr.id}
-                where ${pr.resourceParentId} is not null
-      ) update ${ResourceTable as r}
-        set ${resourceTableColumn.resourceParentId} =
-            ( select ${pr.id}
-              from ${ResourceTable as pr}
-              join ${ResourceTypeTable as prt} on ${prt.id} = ${pr.resourceTypeId}
-              where ${pr.name} = ${parentResource.resourceId}
-              and ${prt.name} = ${parentResource.resourceTypeName} )
-        from ${ResourceTypeTable as rt}
-        where ${rt.id} = ${r.resourceTypeId}
-        and ${r.name} = ${childResource.resourceId}
-        and ${rt.name} = ${childResource.resourceTypeName}
-        and ${r.id} not in
-            ( select ${ar.resourceId}
-              from ${ancestorResourceTable as ar} )"""
-
     runInTransaction("setResourceParent", samRequestContext)({ implicit session =>
+      val parentResourcePK = loadResourcePK(parentResource)
+
+      val query =
+        samsql"""with recursive ${ancestorResourceTable.table}(${arColumn.resourceId}) as (
+                  select ${r.id}
+                  from ${ResourceTable as r}
+                  join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
+                  where ${r.name} = ${parentResource.resourceId}
+                  and ${rt.name} = ${parentResource.resourceTypeName}
+                  union
+                  select ${pr.resourceParentId}
+                  from ${ResourceTable as pr}
+                  join ${ancestorResourceTable as ar} on ${ar.resourceId} = ${pr.id}
+                  where ${pr.resourceParentId} is not null
+        ) update ${ResourceTable as r}
+          set ${resourceTableColumn.resourceParentId} = $parentResourcePK
+          from ${ResourceTypeTable as rt}
+          where ${rt.id} = ${r.resourceTypeId}
+          and ${r.name} = ${childResource.resourceId}
+          and ${rt.name} = ${childResource.resourceTypeName}
+          and ${r.id} not in
+              ( select ${ar.resourceId}
+                from ${ancestorResourceTable as ar} )"""
+
       if (query.update.apply() != 1) {
         throw new WorkbenchExceptionWithErrorReport(
           ErrorReport(StatusCodes.BadRequest, "Cannot set parent as this would introduce a cyclical resource hierarchy")

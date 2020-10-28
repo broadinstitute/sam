@@ -290,6 +290,22 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
 
         exception.getSQLState shouldEqual PSQLStateExtensions.NULL_CONSTRAINT_VIOLATION
       }
+
+      "creates resource with parent" in {
+        val child = Resource(resourceType.name, ResourceId("child"), Set.empty, parent = Option(resource.fullyQualifiedId))
+        dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
+        dao.createResource(resource, samRequestContext).unsafeRunSync() shouldEqual resource
+        dao.createResource(child, samRequestContext).unsafeRunSync() shouldEqual child
+        dao.getResourceParent(child.fullyQualifiedId, samRequestContext).unsafeRunSync() shouldBe Option(resource.fullyQualifiedId)
+      }
+
+      "raises error when parent does not exist" in {
+        val child = Resource(resourceType.name, ResourceId("child"), Set.empty, parent = Option(resource.fullyQualifiedId))
+        dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
+        val exception = intercept[WorkbenchException] {
+          dao.createResource(child, samRequestContext).unsafeRunSync()
+        }
+      }
     }
 
     "loadResourceAuthDomain" - {
@@ -1246,6 +1262,20 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
         }
 
         exception.errorReport.statusCode shouldBe Option(StatusCodes.BadRequest)
+      }
+
+      "errors if parent does not exist" in {
+        val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
+        val doesNotExist = Resource(resourceType.name, ResourceId("doesNotExist"), Set.empty)
+        val testResult = for {
+          _ <- dao.createResourceType(resourceType, samRequestContext)
+          _ <- dao.createResource(resource, samRequestContext)
+          _ <- dao.setResourceParent(resource.fullyQualifiedId, doesNotExist.fullyQualifiedId, samRequestContext)
+        } yield ()
+
+        val exception = intercept[WorkbenchException] {
+          testResult.unsafeRunSync()
+        }
       }
     }
 

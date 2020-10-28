@@ -45,7 +45,7 @@ class ManagedGroupService(
 
     validateGroupName(groupId.value)
     for {
-      managedGroup <- resourceService.createResource(managedGroupType, groupId, Map(adminPolicy, memberPolicy, adminNotificationPolicy), Set.empty, userInfo.userId, samRequestContext)
+      managedGroup <- resourceService.createResource(managedGroupType, groupId, Map(adminPolicy, memberPolicy, adminNotificationPolicy), Set.empty, None, userInfo.userId, samRequestContext)
       policies <- accessPolicyDAO.listAccessPolicies(managedGroup.fullyQualifiedId, samRequestContext)
       workbenchGroup <- createAggregateGroup(managedGroup, policies.toSet, accessInstructionsOpt, samRequestContext)
       _ <- IO.fromFuture(IO(cloudExtensions.publishGroup(workbenchGroup.id)))

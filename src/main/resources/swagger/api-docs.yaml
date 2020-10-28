@@ -1659,8 +1659,14 @@ paths:
           description: Successfully created resource
           content: { }
         400:
-          description: Invalid policies, invalid auth domain, or resource type allows
-            id reuse
+          description: Invalid policies, invalid auth domain, parent specified but not allowed, or resource type allows
+            auth domains and id reuse
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+        403:
+          description: Parent does not exist or user does not have add_child permission on parent
           content:
             application/json:
               schema:
@@ -2917,6 +2923,8 @@ components:
           type: boolean
           description: return created resource information with 201 response code
           default: false
+        parent:
+          $ref: '#/components/schemas/FullyQualifiedResourceId'
       description: information to create a resource
     Enabled:
       required:
