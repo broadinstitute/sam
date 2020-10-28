@@ -33,16 +33,23 @@ Evaluation is the act of determining what a user may access.
 Of these 1 and 2 are the most important from a performance standpoint. Expect 1 to be called for almost every api call in a system. Expect 2 to be called from UI list pages where users generally want a snappy response.
 
 ### Resource and Policy Management
-A policy is specific to a resource and a resource may have multiple policies. Each policy consists of a set of 1 or more subjects and a set of 1 or more actions/roles. All of the subjects may perform all of the actions in the policy. A policy may also be marked as public effectively meaning all users are members. Each policy has a name that is unique within a resource. Access to actions through policies is additive (i.e. the actions available to a user on a resource is an accumulation of all policies the user is a member of for that resource).
+A resource may be part of a hierarchy of resources. A parent may be set on a resource. To do so, users must have the set_parent action on the resource and the add_child action on the would be parent. Ancestor resources in the hierarchy control permissions on all descendants. 
+
+A policy is specific to a resource and a resource may have multiple policies. Each policy consists of 
+* A set of subjects 
+* A set of actions directly applicable to the resource
+* A set of roles directly applicable to the resource
+* A set of descendant permissions - roles and actions applicable to descendant resources
+All of the subjects may perform all of the actions/roles in the policy. A policy may also be marked as public effectively meaning all users are members. Each policy has a name that is unique within a resource. Access to actions through policies is additive (i.e. the actions available to a user on a resource is an accumulation of all policies the user is a member of for that resource).
 
 There must be functions to create, delete and manage policies for resources. There must be access control around deleting resources and managing policies. There must be some built-in actions to do so (delete, read-policies, alter-policies). 
 
-There must be functions to create and delete resources. When a resource is created the caller should be the “owner.” The “owner” role generally will include delete, read-policies and alter-policies actions but need not always (e.g. if a resource may never be deleted then an owner would not have delete permissions). The actions that make up the “owner” role are defined by the resource type.
+There must be functions to create and delete resources. When a resource is created the caller should be the “owner.” The “owner” role generally will include delete action and actions to control sharing but need not always (e.g. if a resource may never be deleted then an owner would not have delete permissions). The actions that make up the “owner” role are defined by the resource type.
 
-Resource types define the set of available actions for all resources of that type. It also defines a set of roles and their associated actions. Roles are useful because it can be cumbersome to deal with granular actions and as a point of extensibility (when new actions are added to resource types, they can be added to roles as well effectively adding the action to all resources with that role). It is not yet necessary to provide apis to create and maintain resource types, this can be achieved through configuration.
+Resource types define the set of available actions for all resources of that type. It also defines a set of roles and their associated actions. Roles are useful because it can be cumbersome to deal with granular actions and as a point of extensibility (when new actions are added to resource types, they can be added to roles as well, effectively adding the action to all resources with that role). It is not yet necessary to provide apis to create and maintain resource types, this can be achieved through configuration.
 
 ### Public Policies
-There are some cases where it is desirable to grant actions or roles to all authenticated users. For example, granting read-only access to public workspaces. In this case a policy can be created that has the appropriate actions or roles and set to public. Public policies show up when listing policies for a user. For this reason it is not always desirable to allow everyone to make public policies. Again, the example is public workspaces. Public workspaces show up for everyone and should be curated.
+There are some cases where it is desirable to grant actions or roles to all authenticated users. For example, granting read-only access to public workspaces. In this case a policy can be created that has the appropriate actions or roles and set to public. Resources with public policies show up when listing resources for a user. For this reason it is not always desirable to allow everyone to make public policies. Again, the example is public workspaces. Public workspaces show up for everyone and should be curated.
 
 To change a policy's public status the caller must be able to share the policy (either via `alter_policies` and `share_policy::{policy_name}` actions) _and_ must have the `set_public` action on the resource `resource_type_admin/{resource type name}`. `resource_type_admin` is an internally created resource type. `{resource type name}` is for the resource containing the policy. Note that every resource type in sam has a resource of the same name of type `resource_type_admin` which is automatically created. When these resources are created they do not have owners, permissions must be granted via direct ldap changes.
 
@@ -57,6 +64,11 @@ Group - Create, delete, read, list, add/remove users and groups. Nested groups a
 * delete - may delete a resource
 * share_policy::{policy name} - may add/remove members to/from specified policy of a resource
 * read_policy::{policy name} - may read specified policy of a resource
+* get_parent - may get a resource's parent
+* set_parent - may set a resource's parent
+* add_child - may add a child to a resource
+* remove_child - may remove a child from a resource
+* list_children - may list all of a resource's children
 
 ### UML Model
 ![Sam Model](model.png)
