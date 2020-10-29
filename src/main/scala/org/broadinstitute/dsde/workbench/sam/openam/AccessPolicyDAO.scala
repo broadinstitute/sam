@@ -10,6 +10,8 @@ import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
   * Created by dvoet on 6/26/17.
   */
 trait AccessPolicyDAO {
+  def initResourceTypes(resourceTypes: Iterable[ResourceType], samRequestContext: SamRequestContext): IO[Unit]
+
   def createResourceType(resourceType: ResourceType, samRequestContext: SamRequestContext): IO[ResourceType]
 
   def createResource(resource: Resource, samRequestContext: SamRequestContext): IO[Resource]

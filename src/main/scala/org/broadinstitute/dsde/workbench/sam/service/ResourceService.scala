@@ -53,29 +53,25 @@ class ResourceService(
         IO.raiseError(new WorkbenchException(s"Could not initialize resource types because ${SamResourceTypes.resourceTypeAdminName.value} does not exist."))
       case Some(resourceTypeAdmin) =>
         for {
-          // make sure resource type admin is added first because the rest depends on it
-          createdAdminType <- createResourceType(resourceTypeAdmin, samRequestContext)
+          _ <- accessPolicyDAO.initResourceTypes(resourceTypes.values, samRequestContext)
 
-          result <- resourceTypes.values.filterNot(_.name == SamResourceTypes.resourceTypeAdminName).toList.traverse { rt =>
-            for {
-              _ <- createResourceType(rt, samRequestContext)
-
-              policy = ValidatableAccessPolicy(
-                AccessPolicyName(resourceTypeAdmin.ownerRoleName.value),
-                Map.empty,
-                Set(resourceTypeAdmin.ownerRoleName),
-                Set.empty,
-                Set.empty)
-              // note that this skips all validations and just creates a resource with owner policies with no members
-              // it will require someone with direct database access to bootstrap
-              _ <- persistResource(resourceTypeAdmin, ResourceId(rt.name.value), Set(policy), Set.empty, None, samRequestContext).recover {
-                case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode.contains(StatusCodes.Conflict) =>
-                  // ok if the resource already exists
-                  Resource(rt.name, ResourceId(rt.name.value), Set.empty)
-              }
-            } yield rt
+          // ensure a resourceTypeAdmin resource exists for each resource type (except resourceTypeAdmin)
+          _ <- resourceTypes.values.filterNot(_.name == SamResourceTypes.resourceTypeAdminName).toList.traverse { rt =>
+            val policy = ValidatableAccessPolicy(
+              AccessPolicyName(resourceTypeAdmin.ownerRoleName.value),
+              Map.empty,
+              Set(resourceTypeAdmin.ownerRoleName),
+              Set.empty,
+              Set.empty)
+            // note that this skips all validations and just creates a resource with owner policies with no members
+            // it will require someone with direct database access to bootstrap
+            persistResource(resourceTypeAdmin, ResourceId(rt.name.value), Set(policy), Set.empty, None, samRequestContext).recover {
+              case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode.contains(StatusCodes.Conflict) =>
+                // ok if the resource already exists
+                Resource(rt.name, ResourceId(rt.name.value), Set.empty)
+            }
           }
-        } yield result :+ resourceTypeAdmin
+        } yield resourceTypes.values
     }
 
   def createResourceType(resourceType: ResourceType, samRequestContext: SamRequestContext): IO[ResourceType] =

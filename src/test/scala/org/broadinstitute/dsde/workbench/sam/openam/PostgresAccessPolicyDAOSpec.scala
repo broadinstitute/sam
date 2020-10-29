@@ -4,9 +4,11 @@ import java.util.UUID
 
 import akka.http.scaladsl.model.StatusCodes
 import cats.effect.IO
+import com.typesafe.config.ConfigFactory
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.TestSupport.samRequestContext
+import org.broadinstitute.dsde.workbench.sam.config.AppConfig
 import org.broadinstitute.dsde.workbench.sam.db.PSQLStateExtensions
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.directory._
@@ -47,6 +49,15 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
     val roles = Set(ownerRole, readerRole, actionlessRole)
     val resourceType = ResourceType(resourceTypeName, actionPatterns, roles, ownerRoleName, false)
     val otherResourceType = ResourceType(otherRsourceTypeName, actionPatterns, roles, ownerRoleName, false)
+
+    "initResourceTypes" - {
+      "succeeds" in {
+        val config = ConfigFactory.load()
+        val appConfig = AppConfig.readConfig(config)
+        dao.initResourceTypes(appConfig.resourceTypes, samRequestContext).unsafeRunSync()
+        dao.initResourceTypes(appConfig.resourceTypes, samRequestContext).unsafeRunSync()
+      }
+    }
 
     "createResourceType" - {
       "succeeds" in {

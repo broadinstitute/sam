@@ -2,7 +2,6 @@ package org.broadinstitute.dsde.workbench.sam.config
 
 import cats.data.NonEmptyList
 import com.google.api.client.json.jackson2.JacksonFactory
-import com.typesafe.config.ConfigException.WrongType
 import com.typesafe.config._
 import net.ceedubs.ficus.Ficus._
 import net.ceedubs.ficus.readers.ValueReader
@@ -64,38 +63,15 @@ object AppConfig {
     override def read(config: Config, path: String): ResourceType = {
       val uqPath = unquoteAndEscape(path)
 
-      // TODO: https://broadinstitute.atlassian.net/browse/GAWB-3589
-      val basicActionPatterns: Set[ResourceActionPattern] = getActionPatterns(config, s"$uqPath.actionPatterns")
-      val actionPatterns: Set[ResourceActionPattern] = getActionPatternObjects(config, s"$uqPath.actionPatternObjects") ++ basicActionPatterns
-
       ResourceType(
         ResourceTypeName(uqPath),
-        actionPatterns,
+        config.as[Map[String, ResourceActionPattern]](s"$uqPath.actionPatterns").values.toSet,
         config.as[Map[String, ResourceRole]](s"$uqPath.roles").values.toSet,
         ResourceRoleName(config.getString(s"$uqPath.ownerRoleName")),
         config.getBoolean(s"$uqPath.reuseIds")
       )
     }
   }
-
-  private def getActionPatternObjects(config: Config, path: String): Set[ResourceActionPattern] =
-    config.as[Map[String, ResourceActionPattern]](path).values.toSet
-
-  // See: https://broadinstitute.atlassian.net/browse/GAWB-3589
-  // actionPatterns used to be defined as an Array[String], but they're transitioning to be Array[Object]
-  // Once firecloud-develop is updated to specify ActionPatterns as Objects, then we can get rid of this code
-  // Attempt to parse actionPatterns:
-  // 1. as Option[Set[String]]
-  // 2. IF that is the WrongType THEN try to parse as Map[String, ResourceActionPattern]]
-  private def getActionPatterns(config: Config, path: String): Set[ResourceActionPattern] =
-    try {
-      config.as[Option[Set[String]]](path) match {
-        case Some(s) => s.map(ResourceActionPattern(_, "", false))
-        case None => Set.empty
-      }
-    } catch {
-      case ex: WrongType => getActionPatternObjects(config, path)
-    }
 
   implicit val cacheConfigReader: ValueReader[CacheConfig] = ValueReader.relative { config =>
     CacheConfig(config.getLong("maxEntries"), config.getDuration("timeToLive"))

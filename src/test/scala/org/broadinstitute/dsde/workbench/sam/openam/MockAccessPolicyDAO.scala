@@ -9,6 +9,7 @@ import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import scala.collection.concurrent.TrieMap
 import scala.collection.mutable
+import cats.implicits._
 
 /**
   * Created by dvoet on 7/17/17.
@@ -39,6 +40,10 @@ class MockAccessPolicyDAO(private val resourceTypes: mutable.Map[ResourceTypeNam
   }
 
   val resources = new TrieMap[FullyQualifiedResourceId, Resource]()
+
+  override def initResourceTypes(resourceTypes: Iterable[ResourceType], samRequestContext: SamRequestContext): IO[Unit] = {
+    resourceTypes.toList.traverse(createResourceType(_, samRequestContext)).void
+  }
 
   override def createResourceType(resourceType: ResourceType, samRequestContext: SamRequestContext): IO[ResourceType] = {
     resourceTypes += resourceType.name -> resourceType

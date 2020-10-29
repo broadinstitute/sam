@@ -25,6 +25,26 @@ import scala.util.{Failure, Try}
 class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
                               protected val ecForDatabaseIO: ExecutionContext)(implicit val cs: ContextShift[IO]) extends AccessPolicyDAO with DatabaseSupport with PostgresGroupDAO with LazyLogging {
 
+  override def initResourceTypes(resourceTypes: Iterable[ResourceType], samRequestContext: SamRequestContext): IO[Unit] = {
+    runInTransaction("initResourceTypes", samRequestContext) { implicit session =>
+      samsql"lock table ${ResourceTypeTable.table} IN EXCLUSIVE MODE".execute().apply()
+
+      upsertResourceTypes(resourceTypes)
+      val resourceTypeNameToPKs = loadResourceTypePKsByName()
+      upsertActionPatterns(resourceTypes, resourceTypeNameToPKs)
+      upsertRoles(resourceTypes, resourceTypeNameToPKs)
+      upsertActions(resourceTypes, resourceTypeNameToPKs)
+      upsertRoleActions(resourceTypes, resourceTypeNameToPKs)
+    }
+  }
+
+  private def loadResourceTypePKsByName()(implicit session: DBSession): Map[ResourceTypeName, ResourceTypePK] = {
+    val rt = ResourceTypeTable.syntax("rt")
+    val query = samsql"""select ${rt.resultAll} from ${ResourceTypeTable as rt}"""
+    val resourceTypeRecords = query.map(ResourceTypeTable(rt.resultName)).list().apply()
+    resourceTypeRecords.map(rec => rec.name -> rec.id).toMap
+  }
+
   // This method obtains an EXCLUSIVE lock on the ResourceType table because if we boot multiple Sam instances at once,
   // they will all try to (re)create ResourceTypes at the same time and could collide. The lock is automatically
   // released at the end of the transaction.
@@ -81,6 +101,35 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     }
   }
 
+  private def upsertRoleActions(resourceTypes: Iterable[ResourceType], resourceTypeNameToPKs: Map[ResourceTypeName, ResourceTypePK])(implicit session: DBSession): Int = {
+    val roleActions = for {
+      rt <- resourceTypes
+      role <- rt.roles
+      action <- role.actions
+    } yield {
+      samsqls"(${resourceTypeNameToPKs(rt.name)}, ${role.roleName}, ${action})"
+    }
+
+    val resourceRole = ResourceRoleTable.syntax("resourceRole")
+    val resourceAction = ResourceActionTable.syntax("resourceAction")
+    val roleAction = RoleActionTable.syntax("roleAction")
+    samsql"""delete from ${RoleActionTable as roleAction}
+                 using ${ResourceRoleTable as resourceRole}, ${ResourceActionTable as resourceAction}
+                 where ${roleAction.resourceRoleId} = ${resourceRole.id}
+                 and  ${roleAction.resourceActionId} = ${resourceAction.id}
+                 and (${resourceRole.resourceTypeId}, ${resourceRole.role}, ${resourceAction.action}) not in (${roleActions})"""
+      .update().apply()
+
+    val insertQuery =
+      samsql"""insert into ${RoleActionTable.table}(${RoleActionTable.column.resourceRoleId}, ${RoleActionTable.column.resourceActionId})
+               select ${resourceRole.id}, ${resourceAction.id} from
+               (values $roleActions) AS insertValues (resource_type_id, role, action)
+               join ${ResourceRoleTable as resourceRole} on insertValues.role = ${resourceRole.role} and insertValues.resource_type_id = ${resourceRole.resourceTypeId}
+               join ${ResourceActionTable as resourceAction} on insertValues.action = ${resourceAction.action} and insertValues.resource_type_id = ${resourceAction.resourceTypeId}
+               on conflict do nothing"""
+    insertQuery.update().apply()
+  }
+
   private def selectActionsForResourceType(resourceTypePK: ResourceTypePK)(implicit session: DBSession): List[ResourceActionRecord] = {
     val rat = ResourceActionTable.syntax("rat")
     val actionsQuery =
@@ -127,6 +176,23 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     }
   }
 
+  private def upsertRoles(resourceTypes: Iterable[ResourceType], resourceTypeNameToPKs: Map[ResourceTypeName, ResourceTypePK])(implicit session: DBSession): Int = {
+    val roleValues = resourceTypes.flatMap(rt => rt.roles.map(role => samsqls"(${resourceTypeNameToPKs(rt.name)}, ${role.roleName})"))
+
+    val resourceRoleColumn = ResourceRoleTable.column
+    samsql"""update ${ResourceRoleTable.table}
+              set ${resourceRoleColumn.deprecated} = true
+              where (${resourceRoleColumn.resourceTypeId}, ${resourceRoleColumn.role}) not in ($roleValues)"""
+      .update().apply()
+
+    val insertRolesQuery =
+      samsql"""insert into ${ResourceRoleTable.table}(${resourceRoleColumn.resourceTypeId}, ${resourceRoleColumn.role})
+               values ${roleValues}
+               on conflict do nothing"""
+
+    insertRolesQuery.update().apply()
+  }
+
   private def insertActions(actions: Set[(ResourceAction, ResourceTypePK)])(implicit session: DBSession): Int = {
     if (actions.isEmpty) {
       0
@@ -142,6 +208,19 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
 
       insertActionQuery.update().apply()
     }
+  }
+
+  private def upsertActions(resourceTypes: Iterable[ResourceType], resourceTypeNameToPKs: Map[ResourceTypeName, ResourceTypePK])(implicit session: DBSession): Int = {
+    val uniqueActionValues = resourceTypes.flatMap(rt => rt.roles.flatMap(_.actions).map { action =>
+      samsqls"(${resourceTypeNameToPKs(rt.name)}, ${action})"
+    })
+
+    val insertActionQuery =
+      samsql"""insert into ${ResourceActionTable.table}(${ResourceActionTable.column.resourceTypeId}, ${ResourceActionTable.column.action})
+                  values ${uniqueActionValues}
+               on conflict do nothing"""
+
+    insertActionQuery.update().apply()
   }
 
   /**
@@ -182,6 +261,39 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     }
   }
 
+  /**
+    * Performs an UPSERT when a record already exists for this exact ActionPattern for all ResourceTypes.  Query will
+    * rerwrite the `description` and `isAuthDomainConstrainable` columns if the ResourceTypeActionPattern already
+    * exists.
+    */
+  private def upsertActionPatterns(resourceTypes: Iterable[ResourceType], resourceTypeNameToPKs: Map[ResourceTypeName, ResourceTypePK])(implicit session: DBSession): Int = {
+    val rap = ResourceActionPatternTable.syntax("rap")
+    val resourceActionPatternTableColumn = ResourceActionPatternTable.column
+
+    val (keepers, upserts) = (for {
+      resourceType <- resourceTypes
+      actionPattern <- resourceType.actionPatterns
+    } yield {
+      val resourceTypePK = resourceTypeNameToPKs(resourceType.name)
+      (samsqls"($resourceTypePK, ${actionPattern.value})",
+      samsqls"(${resourceTypePK}, ${actionPattern.value}, ${actionPattern.description}, ${actionPattern.authDomainConstrainable})")
+    }).unzip
+
+    samsql"""delete from ${ResourceActionPatternTable as rap} where (${rap.resourceTypeId}, ${rap.actionPattern}) not in ($keepers)""".update().apply()
+    val actionPatternQuery =
+      samsql"""insert into ${ResourceActionPatternTable.table}
+                  (${resourceActionPatternTableColumn.resourceTypeId},
+          ${resourceActionPatternTableColumn.actionPattern},
+          ${resourceActionPatternTableColumn.description},
+          ${resourceActionPatternTableColumn.isAuthDomainConstrainable})
+                  values ${upserts}
+               on conflict (${resourceActionPatternTableColumn.resourceTypeId}, ${resourceActionPatternTableColumn.actionPattern})
+                  do update
+                      set ${resourceActionPatternTableColumn.description} = EXCLUDED.${resourceActionPatternTableColumn.description},
+          ${resourceActionPatternTableColumn.isAuthDomainConstrainable} = EXCLUDED.${resourceActionPatternTableColumn.isAuthDomainConstrainable}"""
+    actionPatternQuery.update().apply()
+  }
+
   // This method needs to always return the ResourceTypePK, regardless of whether we just inserted the ResourceType or
   // it already existed.  We do this by using a `RETURNING` statement.  This statement will only return values for rows
   // that were created or updated.  Therefore, `ON CONFLICT` will update the row with the same name value that was there
@@ -196,6 +308,15 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
                returning ${ResourceTypeTable.column.id}"""
 
     ResourceTypePK(insertResourceTypeQuery.updateAndReturnGeneratedKey().apply())
+  }
+
+  private def upsertResourceTypes(resourceTypes: Iterable[ResourceType])(implicit session: DBSession): Int = {
+    val resourceTypeTableColumn = ResourceTypeTable.column
+    val resourceTypeNames = resourceTypes.map(rt => samsqls"""(${rt.name})""")
+    samsql"""insert into ${ResourceTypeTable.table} (${resourceTypeTableColumn.name})
+                values $resourceTypeNames
+             on conflict (${ResourceTypeTable.column.name})
+                do nothing""".update().apply()
   }
 
   // 1. Create Resource
