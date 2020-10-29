@@ -193,11 +193,13 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
 
   private def upsertResourceTypes(resourceTypes: Iterable[ResourceType])(implicit session: DBSession): Int = {
     val resourceTypeTableColumn = ResourceTypeTable.column
-    val resourceTypeNames = resourceTypes.map(rt => samsqls"""(${rt.name})""")
-    samsql"""insert into ${ResourceTypeTable.table} (${resourceTypeTableColumn.name})
-                values $resourceTypeNames
+    val resourceTypeNames = resourceTypes.map(rt => samsqls"""(${rt.name}, ${rt.ownerRoleName}, ${rt.reuseIds})""")
+    samsql"""insert into ${ResourceTypeTable.table} (${resourceTypeTableColumn.name}, ${resourceTypeTableColumn.ownerRoleName}, ${resourceTypeTableColumn.reuseIds})
+               values $resourceTypeNames
              on conflict (${ResourceTypeTable.column.name})
-                do nothing""".update().apply()
+               do update
+                 set ${resourceTypeTableColumn.ownerRoleName} = EXCLUDED.${resourceTypeTableColumn.ownerRoleName},
+                 ${resourceTypeTableColumn.reuseIds} = EXCLUDED.${resourceTypeTableColumn.reuseIds}""".update().apply()
   }
 
   // 1. Create Resource
