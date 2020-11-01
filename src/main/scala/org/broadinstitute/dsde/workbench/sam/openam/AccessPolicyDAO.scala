@@ -10,7 +10,9 @@ import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
   * Created by dvoet on 6/26/17.
   */
 trait AccessPolicyDAO {
-  def initResourceTypes(resourceTypes: Iterable[ResourceType], samRequestContext: SamRequestContext): IO[Unit]
+  def upsertResourceTypes(resourceTypes: Set[ResourceType], samRequestContext: SamRequestContext): IO[Set[ResourceTypeName]]
+
+  def loadResourceTypes(resourceTypeNames: Set[ResourceTypeName], samRequestContext: SamRequestContext): IO[Set[ResourceType]]
 
   def createResourceType(resourceType: ResourceType, samRequestContext: SamRequestContext): IO[ResourceType]
 
@@ -73,6 +75,7 @@ trait AccessPolicyDAO {
   /**
     * Utility function that takes a bunch of ResourceIdWithRolesAndActions, probably more than one for a give
     * resource id, and aggregates all the ones with same resource id together.
+    *
     * @param fragmentedRolesAndActions
     * @return
     */

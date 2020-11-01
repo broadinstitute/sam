@@ -41,8 +41,18 @@ class MockAccessPolicyDAO(private val resourceTypes: mutable.Map[ResourceTypeNam
 
   val resources = new TrieMap[FullyQualifiedResourceId, Resource]()
 
-  override def initResourceTypes(resourceTypes: Iterable[ResourceType], samRequestContext: SamRequestContext): IO[Unit] = {
-    resourceTypes.toList.traverse(createResourceType(_, samRequestContext)).void
+  override def upsertResourceTypes(resourceTypesToInit: Set[ResourceType], samRequestContext: SamRequestContext): IO[Set[ResourceTypeName]] = {
+    for {
+      existingResourceTypes <- loadResourceTypes(resourceTypesToInit.map(_.name), samRequestContext)
+      newResourceTypes = resourceTypesToInit -- existingResourceTypes
+      _ <- resourceTypesToInit.toList.traverse(createResourceType(_, samRequestContext))
+    } yield {
+      newResourceTypes.map(_.name)
+    }
+  }
+
+  override def loadResourceTypes(resourceTypeNames: Set[ResourceTypeName], samRequestContext: SamRequestContext): IO[Set[ResourceType]] = {
+    IO.pure(resourceTypes.filterKeys(resourceTypeNames.contains).values.toSet)
   }
 
   override def createResourceType(resourceType: ResourceType, samRequestContext: SamRequestContext): IO[ResourceType] = {

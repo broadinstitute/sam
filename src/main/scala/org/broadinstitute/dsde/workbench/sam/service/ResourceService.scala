@@ -53,7 +53,7 @@ class ResourceService(
         IO.raiseError(new WorkbenchException(s"Could not initialize resource types because ${SamResourceTypes.resourceTypeAdminName.value} does not exist."))
       case Some(resourceTypeAdmin) =>
         for {
-          _ <- accessPolicyDAO.initResourceTypes(resourceTypes.values, samRequestContext)
+          _ <- accessPolicyDAO.upsertResourceTypes(resourceTypes.values.toSet, samRequestContext)
 
           // ensure a resourceTypeAdmin resource exists for each resource type (except resourceTypeAdmin)
           _ <- resourceTypes.values.filterNot(_.name == SamResourceTypes.resourceTypeAdminName).toList.traverse { rt =>
@@ -68,7 +68,7 @@ class ResourceService(
             persistResource(resourceTypeAdmin, ResourceId(rt.name.value), Set(policy), Set.empty, None, samRequestContext).recover {
               case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode.contains(StatusCodes.Conflict) =>
                 // ok if the resource already exists
-                Resource(rt.name, ResourceId(rt.name.value), Set.empty)
+                Resource(resourceTypeAdmin.name, ResourceId(rt.name.value), Set.empty)
             }
           }
         } yield resourceTypes.values
