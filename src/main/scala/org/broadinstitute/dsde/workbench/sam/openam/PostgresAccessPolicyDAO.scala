@@ -296,7 +296,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
 
   private def upsertResourceTypes(resourceTypes: Iterable[ResourceType])(implicit session: DBSession): Int = {
     val resourceTypeTableColumn = ResourceTypeTable.column
-    val resourceTypeNames = resourceTypes.map(rt => samsqls"""(${rt.name}, ${rt.ownerRoleName}, ${rt.reuseIds})""")
+    val resourceTypeValues = resourceTypes.map(rt => samsqls"""(${rt.name}, ${rt.ownerRoleName}, ${rt.reuseIds})""")
     samsql"""insert into ${ResourceTypeTable.table} (${resourceTypeTableColumn.name}, ${resourceTypeTableColumn.ownerRoleName}, ${resourceTypeTableColumn.reuseIds})
                values $resourceTypeNames
              on conflict (${ResourceTypeTable.column.name})
