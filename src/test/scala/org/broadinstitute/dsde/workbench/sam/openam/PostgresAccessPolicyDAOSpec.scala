@@ -61,7 +61,7 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
       "only updates resource types that have changed" in {
         dao.upsertResourceTypes(Set(resourceType, otherResourceType), samRequestContext).unsafeRunSync() should contain theSameElementsAs(Set(resourceType.name, otherResourceType.name))
         val updatedResourceType = resourceType.copy(reuseIds = !resourceType.reuseIds)
-        dao.upsertResourceTypes(Set(updatedResourceType), samRequestContext).unsafeRunSync() should contain theSameElementsAs(Set(updatedResourceType.name))
+        dao.upsertResourceTypes(Set(updatedResourceType, otherResourceType), samRequestContext).unsafeRunSync() should contain theSameElementsAs(Set(updatedResourceType.name))
         dao.loadResourceTypes(Set(updatedResourceType.name), samRequestContext).unsafeRunSync() should contain theSameElementsAs(Set(updatedResourceType))
       }
     }

@@ -7,7 +7,7 @@
 
     <changeSet logicalFilePath="dummy" author="dvoet" id="resource_type_fields">
         <addColumn tableName="sam_resource_type">
-            <column name="owner_role_name" type="VARCHAR" defaultValue="">
+            <column name="owner_role_name" type="citext" defaultValue="">
                 <constraints nullable="false"/>
             </column>
             <column name="reuse_ids" type="BOOLEAN" defaultValue="false">
