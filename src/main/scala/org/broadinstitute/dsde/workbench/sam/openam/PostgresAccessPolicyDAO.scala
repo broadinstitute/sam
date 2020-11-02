@@ -298,7 +298,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     val resourceTypeTableColumn = ResourceTypeTable.column
     val resourceTypeValues = resourceTypes.map(rt => samsqls"""(${rt.name}, ${rt.ownerRoleName}, ${rt.reuseIds})""")
     samsql"""insert into ${ResourceTypeTable.table} (${resourceTypeTableColumn.name}, ${resourceTypeTableColumn.ownerRoleName}, ${resourceTypeTableColumn.reuseIds})
-               values $resourceTypeNames
+               values $resourceTypeValues
              on conflict (${ResourceTypeTable.column.name})
                do update
                  set ${resourceTypeTableColumn.ownerRoleName} = EXCLUDED.${resourceTypeTableColumn.ownerRoleName},
