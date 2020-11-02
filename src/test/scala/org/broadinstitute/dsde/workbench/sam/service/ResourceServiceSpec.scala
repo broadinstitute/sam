@@ -9,6 +9,7 @@ import cats.data.NonEmptyList
 import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.model._
+import org.broadinstitute.dsde.workbench.sam
 import org.broadinstitute.dsde.workbench.sam.Generator._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig.resourceTypeReader
@@ -970,5 +971,28 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     } yield loadedPolicy
 
     testResult.unsafeRunSync() shouldBe None
+  }
+
+  "validateDescendantPermissions" should "allow good descendant permissions" in {
+    service.validateDescendantPermissions(Set(
+      AccessPolicyDescendantPermissions(defaultResourceType.name, Set.empty, Set(defaultResourceType.ownerRoleName)),
+      AccessPolicyDescendantPermissions(defaultResourceType.name, Set(defaultResourceTypeActions.head), Set.empty),
+    )).unsafeRunSync() shouldBe empty
+  }
+
+  it should "catch non-existent descendant resource type" in {
+    service.validateDescendantPermissions(Set(
+      AccessPolicyDescendantPermissions(defaultResourceType.name, Set.empty, Set(defaultResourceType.ownerRoleName)),
+      AccessPolicyDescendantPermissions(ResourceTypeName("I don't exist"), Set.empty, Set.empty)
+    )).unsafeRunSync() should contain theSameElementsAs Set(ErrorReport(sam.errorReportSource.source,"Descendant resource type I don't exist does not exist.",None,List(),List(),None))
+  }
+
+  it should "catch non-existent role and action" in {
+    service.validateDescendantPermissions(Set(
+      AccessPolicyDescendantPermissions(defaultResourceType.name, Set.empty, Set(defaultResourceType.ownerRoleName)),
+      AccessPolicyDescendantPermissions(defaultResourceType.name, Set.empty, Set(ResourceRoleName("I don't exist"))),
+      AccessPolicyDescendantPermissions(defaultResourceType.name, Set(ResourceAction("I don't exist either")), Set.empty),
+      AccessPolicyDescendantPermissions(defaultResourceType.name, Set(ResourceAction("I don't exist either")), Set(ResourceRoleName("I don't exist"))),
+    )).unsafeRunSync().size shouldBe 4
   }
 }
