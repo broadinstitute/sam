@@ -109,6 +109,21 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     constrainedAction.authDomainConstrainable shouldEqual true
   }
 
+  it should "read included and descendant roles" in {
+    val testResourceTypes = TestSupport.config.as[Map[String, ResourceType]]("testStuff.resourceTypes").values.toSet
+    val testType = testResourceTypes.find(_.name == ResourceTypeName("testType")).getOrElse(fail("Missing test resource type, please check src/test/resources/reference.conf"))
+    val ownerRoleName = ResourceRoleName("owner")
+    val nonOwnerRoleName = ResourceRoleName("nonOwner")
+    val expectedRoles = Set(
+      ResourceRole(ownerRoleName,
+        Set(ResourceAction("read_policies"), ResourceAction("alter_policies")),
+        Set(nonOwnerRoleName),
+        Map(ResourceTypeName("otherType") -> Set(ownerRoleName))),
+      ResourceRole(nonOwnerRoleName, Set.empty))
+
+    testType.roles should contain theSameElementsAs expectedRoles
+  }
+
   "ResourceService" should "create and delete resource" in {
     val resourceName = ResourceId("resource")
     val resource = FullyQualifiedResourceId(defaultResourceType.name, resourceName)
