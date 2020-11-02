@@ -12,7 +12,7 @@ import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.TestSupport.samRequestContext
 import org.broadinstitute.dsde.workbench.sam.config.{LiquibaseConfig, SwaggerConfig}
 import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryDAO, MockDirectoryDAO}
-import org.broadinstitute.dsde.workbench.sam.model.{ResourceType, ResourceTypeName}
+import org.broadinstitute.dsde.workbench.sam.model.{ResourceActionPattern, ResourceRole, ResourceRoleName, ResourceType, ResourceTypeName, SamResourceActions}
 import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, MockAccessPolicyDAO}
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.scalatest.concurrent.ScalaFutures
@@ -34,22 +34,58 @@ object TestSamRoutes {
   val defaultUserInfo = UserInfo(OAuth2BearerToken("accessToken"), WorkbenchUserId("user1"), WorkbenchEmail("user1@example.com"), 0)
   val defaultGoogleSubjectId = GoogleSubjectId("user1")
 
+  object SamResourceActionPatterns {
+    val readPolicies = ResourceActionPattern("read_policies", "", false)
+    val alterPolicies = ResourceActionPattern("alter_policies", "", false)
+    val delete = ResourceActionPattern("delete", "", false)
+
+    val sharePolicy = ResourceActionPattern("share_policy::.+", "", false)
+    val readPolicy = ResourceActionPattern("read_policy::.+", "", false)
+
+    val setPublic = ResourceActionPattern("set_public", "", false)
+    val setPolicyPublic = ResourceActionPattern("set_public::.+", "", false)
+
+    val use = ResourceActionPattern("use", "", true)
+    val readAuthDomain = ResourceActionPattern("read_auth_domain", "", true)
+
+    val testActionAccess = ResourceActionPattern("test_action_access::.+", "", false)
+  }
+
+  val resourceTypeAdmin = ResourceType(
+    ResourceTypeName("resource_type_admin"),
+    Set(
+      SamResourceActionPatterns.alterPolicies,
+      SamResourceActionPatterns.readPolicies,
+      SamResourceActionPatterns.sharePolicy,
+      SamResourceActionPatterns.readPolicy,
+      SamResourceActionPatterns.setPublic,
+      SamResourceActionPatterns.setPolicyPublic
+    ),
+    Set(
+      ResourceRole(
+        ResourceRoleName("owner"),
+        Set(SamResourceActions.alterPolicies, SamResourceActions.readPolicies, SamResourceActions.setPublic))),
+    ResourceRoleName("owner")
+  )
+
   def apply(resourceTypes: Map[ResourceTypeName, ResourceType], userInfo: UserInfo = defaultUserInfo, policyAccessDAO: Option[AccessPolicyDAO] = None, policies: Option[mutable.Map[WorkbenchGroupIdentity, WorkbenchGroup]] = None)(implicit system: ActorSystem, materializer: Materializer, executionContext: ExecutionContext, contextShift: ContextShift[IO]) = {
+    val resourceTypesWithAdmin = resourceTypes + (resourceTypeAdmin.name -> resourceTypeAdmin)
     // need to make sure MockDirectoryDAO and MockAccessPolicyDAO share the same groups
     val groups: mutable.Map[WorkbenchGroupIdentity, WorkbenchGroup] = policies.getOrElse(new TrieMap())
     val directoryDAO = new MockDirectoryDAO(groups)
     val registrationDAO = new MockDirectoryDAO()
     val googleDirectoryDAO = new MockGoogleDirectoryDAO()
-    val policyDAO = policyAccessDAO.getOrElse(new MockAccessPolicyDAO(resourceTypes, groups))
+    val policyDAO = policyAccessDAO.getOrElse(new MockAccessPolicyDAO(Map.empty[ResourceTypeName, ResourceType], groups))
 
     val emailDomain = "example.com"
-    val policyEvaluatorService = PolicyEvaluatorService(emailDomain, resourceTypes, policyDAO, directoryDAO)
-    val mockResourceService = new ResourceService(resourceTypes, policyEvaluatorService, policyDAO, directoryDAO, NoExtensions, emailDomain)
+    val policyEvaluatorService = PolicyEvaluatorService(emailDomain, resourceTypesWithAdmin, policyDAO, directoryDAO)
+    val mockResourceService = new ResourceService(resourceTypesWithAdmin, policyEvaluatorService, policyDAO, directoryDAO, NoExtensions, emailDomain)
     val mockUserService = new UserService(directoryDAO, NoExtensions, registrationDAO, Seq.empty)
-    val mockManagedGroupService = new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, policyDAO, directoryDAO, NoExtensions, emailDomain)
+    val mockManagedGroupService = new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypesWithAdmin, policyDAO, directoryDAO, NoExtensions, emailDomain)
     TestSupport.runAndWait(mockUserService.createUser(CreateWorkbenchUser(userInfo.userId, defaultGoogleSubjectId, userInfo.userEmail, None), samRequestContext))
     val allUsersGroup = TestSupport.runAndWait(NoExtensions.getOrCreateAllUsersGroup(directoryDAO, samRequestContext))
     TestSupport.runAndWait(googleDirectoryDAO.createGroup(allUsersGroup.id.toString, allUsersGroup.email))
+    mockResourceService.initResourceTypes(samRequestContext).unsafeRunSync()
 
     val mockStatusService = new StatusService(directoryDAO, NoExtensions, TestSupport.dbRef)
 

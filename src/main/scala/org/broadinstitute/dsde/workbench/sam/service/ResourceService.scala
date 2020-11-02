@@ -53,10 +53,10 @@ class ResourceService(
         IO.raiseError(new WorkbenchException(s"Could not initialize resource types because ${SamResourceTypes.resourceTypeAdminName.value} does not exist."))
       case Some(resourceTypeAdmin) =>
         for {
-          _ <- accessPolicyDAO.upsertResourceTypes(resourceTypes.values.toSet, samRequestContext)
+          newOrUpdatedResourceTypeNames <- accessPolicyDAO.upsertResourceTypes(resourceTypes.values.toSet, samRequestContext)
 
-          // ensure a resourceTypeAdmin resource exists for each resource type (except resourceTypeAdmin)
-          _ <- resourceTypes.values.filterNot(_.name == SamResourceTypes.resourceTypeAdminName).toList.traverse { rt =>
+          // ensure a resourceTypeAdmin resource exists for each new/update resource type (except resourceTypeAdmin)
+          _ <- newOrUpdatedResourceTypeNames.filterNot(_ == SamResourceTypes.resourceTypeAdminName).toList.traverse { rtName =>
             val policy = ValidatableAccessPolicy(
               AccessPolicyName(resourceTypeAdmin.ownerRoleName.value),
               Map.empty,
@@ -65,10 +65,10 @@ class ResourceService(
               Set.empty)
             // note that this skips all validations and just creates a resource with owner policies with no members
             // it will require someone with direct database access to bootstrap
-            persistResource(resourceTypeAdmin, ResourceId(rt.name.value), Set(policy), Set.empty, None, samRequestContext).recover {
+            persistResource(resourceTypeAdmin, ResourceId(rtName.value), Set(policy), Set.empty, None, samRequestContext).recover {
               case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode.contains(StatusCodes.Conflict) =>
                 // ok if the resource already exists
-                Resource(resourceTypeAdmin.name, ResourceId(rt.name.value), Set.empty)
+                Resource(resourceTypeAdmin.name, ResourceId(rtName.value), Set.empty)
             }
           }
         } yield resourceTypes.values
