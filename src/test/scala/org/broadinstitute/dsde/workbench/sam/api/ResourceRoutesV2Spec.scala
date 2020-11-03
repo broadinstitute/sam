@@ -8,6 +8,7 @@ import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model.ErrorReportJsonSupport._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport.{configResourceTypes, genGoogleSubjectId}
+import org.broadinstitute.dsde.workbench.sam.api.TestSamRoutes.SamResourceActionPatterns
 import org.broadinstitute.dsde.workbench.sam.directory.MockDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model.RootPrimitiveJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
@@ -61,40 +62,6 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
   }
 
   private val managedGroupResourceType = configResourceTypes.getOrElse(ResourceTypeName("managed-group"), throw new Error("Failed to load managed-group resource type from reference.conf"))
-
-  private object SamResourceActionPatterns {
-    val readPolicies = ResourceActionPattern("read_policies", "", false)
-    val alterPolicies = ResourceActionPattern("alter_policies", "", false)
-    val delete = ResourceActionPattern("delete", "", false)
-
-    val sharePolicy = ResourceActionPattern("share_policy::.+", "", false)
-    val readPolicy = ResourceActionPattern("read_policy::.+", "", false)
-
-    val setPublic = ResourceActionPattern("set_public", "", false)
-    val setPolicyPublic = ResourceActionPattern("set_public::.+", "", false)
-
-    val use = ResourceActionPattern("use", "", true)
-    val readAuthDomain = ResourceActionPattern("read_auth_domain", "", true)
-
-    val testActionAccess = ResourceActionPattern("test_action_access::.+", "", false)
-  }
-
-  private val resourceTypeAdmin = ResourceType(
-    ResourceTypeName("resource_type_admin"),
-    Set(
-      SamResourceActionPatterns.alterPolicies,
-      SamResourceActionPatterns.readPolicies,
-      SamResourceActionPatterns.sharePolicy,
-      SamResourceActionPatterns.readPolicy,
-      SamResourceActionPatterns.setPublic,
-      SamResourceActionPatterns.setPolicyPublic
-    ),
-    Set(
-      ResourceRole(
-        ResourceRoleName("owner"),
-        Set(SamResourceActions.alterPolicies, SamResourceActions.readPolicies, SamResourceActions.setPublic))),
-    ResourceRoleName("owner")
-  )
 
   private val defaultTestUser =  CreateWorkbenchUser(WorkbenchUserId("testuser"), genGoogleSubjectId(), WorkbenchEmail("testuser@foo.com"), None)
 
@@ -622,9 +589,7 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
       Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.readPolicies))),
       ResourceRoleName("owner"))
 
-    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType, resourceTypeAdmin.name -> resourceTypeAdmin))
-
-    samRoutes.resourceService.initResourceTypes().unsafeRunSync()
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
 
     val resourceId = ResourceId("foo")
     runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, samRoutes.userInfo, samRequestContext))
@@ -642,9 +607,7 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
       Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.readPolicy(AccessPolicyName("owner"))))),
       ResourceRoleName("owner"))
 
-    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType, resourceTypeAdmin.name -> resourceTypeAdmin))
-
-    samRoutes.resourceService.initResourceTypes().unsafeRunSync()
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
 
     val resourceId = ResourceId("foo")
     runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, samRoutes.userInfo, samRequestContext))
@@ -662,9 +625,7 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
       Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.delete))),
       ResourceRoleName("owner"))
 
-    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType, resourceTypeAdmin.name -> resourceTypeAdmin))
-
-    samRoutes.resourceService.initResourceTypes().unsafeRunSync()
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
 
     val resourceId = ResourceId("foo")
     runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, samRoutes.userInfo, samRequestContext))
@@ -681,11 +642,10 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
       Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.alterPolicies, SamResourceActions.readPolicies))),
       ResourceRoleName("owner"))
 
-    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType, resourceTypeAdmin.name -> resourceTypeAdmin))
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
 
-    samRoutes.resourceService.initResourceTypes().unsafeRunSync()
     runAndWait(samRoutes.resourceService.addSubjectToPolicy(model.FullyQualifiedPolicyId(
-      model.FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(resourceType.name.value)), AccessPolicyName(resourceTypeAdmin.ownerRoleName.value)), samRoutes.userInfo.userId, samRequestContext))
+      model.FullyQualifiedResourceId(TestSamRoutes.resourceTypeAdmin.name, ResourceId(resourceType.name.value)), AccessPolicyName(TestSamRoutes.resourceTypeAdmin.ownerRoleName.value)), samRoutes.userInfo.userId, samRequestContext))
 
     val resourceId = ResourceId("foo")
     runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, samRoutes.userInfo, samRequestContext))
@@ -719,9 +679,8 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
       ResourceRoleName("owner")
     )
 
-    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType, resourceTypeAdmin.name -> resourceTypeAdmin))
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
 
-    samRoutes.resourceService.initResourceTypes().unsafeRunSync()
     runAndWait(samRoutes.resourceService.addSubjectToPolicy(model.FullyQualifiedPolicyId(
       model.FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(resourceType.name.value)), AccessPolicyName(resourceTypeAdmin.ownerRoleName.value)), samRoutes.userInfo.userId, samRequestContext))
 
@@ -740,11 +699,10 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
       Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.readPolicies))),
       ResourceRoleName("owner"))
 
-    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType, resourceTypeAdmin.name -> resourceTypeAdmin))
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
 
-    samRoutes.resourceService.initResourceTypes().unsafeRunSync()
     runAndWait(samRoutes.resourceService.addSubjectToPolicy(model.FullyQualifiedPolicyId(
-      model.FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(resourceType.name.value)), AccessPolicyName(resourceTypeAdmin.ownerRoleName.value)), samRoutes.userInfo.userId, samRequestContext))
+      model.FullyQualifiedResourceId(TestSamRoutes.resourceTypeAdmin.name, ResourceId(resourceType.name.value)), AccessPolicyName(TestSamRoutes.resourceTypeAdmin.ownerRoleName.value)), samRoutes.userInfo.userId, samRequestContext))
 
     val resourceId = ResourceId("foo")
     runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, samRoutes.userInfo, samRequestContext))
@@ -761,9 +719,7 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
       Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.alterPolicies, SamResourceActions.readPolicies))),
       ResourceRoleName("owner"))
 
-    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType, resourceTypeAdmin.name -> resourceTypeAdmin))
-
-    samRoutes.resourceService.initResourceTypes().unsafeRunSync()
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
 
     val resourceId = ResourceId("foo")
     runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, samRoutes.userInfo, samRequestContext))
@@ -783,9 +739,8 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
       Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.readAuthDomain, ManagedGroupService.useAction))),
       ResourceRoleName("owner")
     )
-    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType, resourceTypeAdmin.name -> resourceTypeAdmin, managedGroupResourceType.name -> managedGroupResourceType))
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType, managedGroupResourceType.name -> managedGroupResourceType))
 
-    samRoutes.resourceService.initResourceTypes().unsafeRunSync()
     runAndWait(samRoutes.managedGroupService.createManagedGroup(ResourceId(authDomain), defaultUserInfo, samRequestContext = samRequestContext))
 
     val resourceId = ResourceId("foo")
@@ -807,9 +762,7 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
       Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.readAuthDomain, ManagedGroupService.useAction))),
       ResourceRoleName("owner")
     )
-    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType, resourceTypeAdmin.name -> resourceTypeAdmin, managedGroupResourceType.name -> managedGroupResourceType))
-
-    samRoutes.resourceService.initResourceTypes().unsafeRunSync()
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType, managedGroupResourceType.name -> managedGroupResourceType))
 
     val resourceId = ResourceId("foo")
     val policiesMap = Map(AccessPolicyName("ap") -> AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set(SamResourceActions.readAuthDomain, ManagedGroupService.useAction), Set(ResourceRoleName("owner"))))
@@ -831,9 +784,8 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
       Set(ResourceRole(ResourceRoleName("owner"), Set(ManagedGroupService.useAction))),
       ResourceRoleName("owner")
     )
-    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType, resourceTypeAdmin.name -> resourceTypeAdmin, managedGroupResourceType.name -> managedGroupResourceType))
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType, managedGroupResourceType.name -> managedGroupResourceType))
 
-    samRoutes.resourceService.initResourceTypes().unsafeRunSync()
     runAndWait(samRoutes.managedGroupService.createManagedGroup(ResourceId(authDomain), defaultUserInfo, samRequestContext = samRequestContext))
 
     val resourceId = ResourceId("foo")
@@ -855,9 +807,8 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
       Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.readAuthDomain, ManagedGroupService.useAction))),
       ResourceRoleName("owner")
     )
-    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType, resourceTypeAdmin.name -> resourceTypeAdmin, managedGroupResourceType.name -> managedGroupResourceType))
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType, managedGroupResourceType.name -> managedGroupResourceType))
 
-    samRoutes.resourceService.initResourceTypes().unsafeRunSync()
     runAndWait(samRoutes.managedGroupService.createManagedGroup(ResourceId(authDomain), defaultUserInfo, samRequestContext = samRequestContext))
 
     val resourceId = ResourceId("foo")
@@ -883,9 +834,8 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
       Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.readAuthDomain, ManagedGroupService.useAction))),
       ResourceRoleName("owner")
     )
-    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType, resourceTypeAdmin.name -> resourceTypeAdmin, managedGroupResourceType.name -> managedGroupResourceType))
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType, managedGroupResourceType.name -> managedGroupResourceType))
 
-    samRoutes.resourceService.initResourceTypes().unsafeRunSync()
     runAndWait(samRoutes.managedGroupService.createManagedGroup(ResourceId(authDomain), defaultUserInfo, samRequestContext = samRequestContext))
 
     val resourceId = ResourceId("foo")
@@ -924,9 +874,7 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
       Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.readPolicies))),
       ResourceRoleName("owner")
     )
-    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType, resourceTypeAdmin.name -> resourceTypeAdmin))
-
-    samRoutes.resourceService.initResourceTypes().unsafeRunSync()
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
 
     val resourceId = ResourceId("foo")
     runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, samRoutes.userInfo, samRequestContext))
@@ -947,9 +895,7 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
       Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.readAuthDomain))), // any action except read_policies
       ResourceRoleName("owner")
     )
-    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType, resourceTypeAdmin.name -> resourceTypeAdmin))
-
-    samRoutes.resourceService.initResourceTypes().unsafeRunSync()
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
 
     val resourceId = ResourceId("foo")
     runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, samRoutes.userInfo, samRequestContext))
@@ -966,9 +912,7 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
       Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.readPolicies))),
       ResourceRoleName("owner")
     )
-    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType, resourceTypeAdmin.name -> resourceTypeAdmin))
-
-    samRoutes.resourceService.initResourceTypes().unsafeRunSync()
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
 
     val resourceId = ResourceId("foo")
     runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, samRoutes.userInfo, samRequestContext))
@@ -989,9 +933,7 @@ class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with 
       Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.readPolicies))),
       ResourceRoleName("owner")
     )
-    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType, resourceTypeAdmin.name -> resourceTypeAdmin))
-
-    samRoutes.resourceService.initResourceTypes().unsafeRunSync()
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
 
     val resourceId = ResourceId("foo")
     runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, samRoutes.userInfo, samRequestContext))

@@ -4,9 +4,11 @@ import java.util.UUID
 
 import akka.http.scaladsl.model.StatusCodes
 import cats.effect.IO
+import com.typesafe.config.ConfigFactory
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.TestSupport.samRequestContext
+import org.broadinstitute.dsde.workbench.sam.config.AppConfig
 import org.broadinstitute.dsde.workbench.sam.db.PSQLStateExtensions
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.directory._
@@ -48,25 +50,45 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
     val resourceType = ResourceType(resourceTypeName, actionPatterns, roles, ownerRoleName, false)
     val otherResourceType = ResourceType(otherRsourceTypeName, actionPatterns, roles, ownerRoleName, false)
 
+    "upsertResourceTypes" - {
+      "creates resource types in config and is idempotent" in {
+        val config = ConfigFactory.load()
+        val appConfig = AppConfig.readConfig(config)
+        dao.upsertResourceTypes(appConfig.resourceTypes, samRequestContext).unsafeRunSync() should contain theSameElementsAs(appConfig.resourceTypes.map(_.name))
+        dao.upsertResourceTypes(appConfig.resourceTypes, samRequestContext).unsafeRunSync() shouldBe empty
+      }
+
+      "only updates resource types that have changed" in {
+        dao.upsertResourceTypes(Set(resourceType, otherResourceType), samRequestContext).unsafeRunSync() should contain theSameElementsAs(Set(resourceType.name, otherResourceType.name))
+        val updatedResourceType = resourceType.copy(reuseIds = !resourceType.reuseIds)
+        dao.upsertResourceTypes(Set(updatedResourceType, otherResourceType), samRequestContext).unsafeRunSync() should contain theSameElementsAs(Set(updatedResourceType.name))
+        dao.loadResourceTypes(Set(updatedResourceType.name), samRequestContext).unsafeRunSync() should contain theSameElementsAs(Set(updatedResourceType))
+      }
+    }
+
     "createResourceType" - {
       "succeeds" in {
         dao.createResourceType(resourceType, samRequestContext).unsafeRunSync() shouldEqual resourceType
+        dao.loadResourceTypes(Set(resourceType.name), samRequestContext).unsafeRunSync() shouldEqual Set(resourceType)
       }
 
       "succeeds" - {
         "when there are no action patterns" in {
           val myResourceType = resourceType.copy(actionPatterns = Set.empty)
           dao.createResourceType(myResourceType, samRequestContext).unsafeRunSync() shouldEqual myResourceType
+          dao.loadResourceTypes(Set(myResourceType.name), samRequestContext).unsafeRunSync() shouldEqual Set(myResourceType)
         }
 
         "when there are no roles" in {
           val myResourceType = resourceType.copy(roles = Set.empty)
           dao.createResourceType(myResourceType, samRequestContext).unsafeRunSync() shouldEqual myResourceType
+          dao.loadResourceTypes(Set(myResourceType.name), samRequestContext).unsafeRunSync() shouldEqual Set(myResourceType)
         }
 
         "when there is exactly one Role that has no actions" in {
           val myResourceType = resourceType.copy(roles = Set(actionlessRole))
           dao.createResourceType(myResourceType, samRequestContext).unsafeRunSync() shouldEqual myResourceType
+          dao.loadResourceTypes(Set(myResourceType.name), samRequestContext).unsafeRunSync() shouldEqual Set(myResourceType)
         }
 
         // This test is hard to write at the moment.  We don't have an easy way to guarantee the race condition at exactly the right time.  Nor do
@@ -94,6 +116,7 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
             "is identical" in {
               dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
               dao.createResourceType(resourceType, samRequestContext).unsafeRunSync() shouldEqual resourceType
+              dao.loadResourceTypes(Set(resourceType.name), samRequestContext).unsafeRunSync() shouldEqual Set(resourceType)
             }
 
             "adds new" - {
@@ -103,6 +126,7 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
 
                 dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
                 dao.createResourceType(myResourceType, samRequestContext).unsafeRunSync() shouldEqual myResourceType
+                dao.loadResourceTypes(Set(myResourceType.name), samRequestContext).unsafeRunSync() shouldEqual Set(myResourceType)
               }
 
               "Roles" in {
@@ -111,6 +135,7 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
 
                 dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
                 dao.createResourceType(myResourceType, samRequestContext).unsafeRunSync() shouldEqual myResourceType
+                dao.loadResourceTypes(Set(myResourceType.name), samRequestContext).unsafeRunSync() shouldEqual Set(myResourceType)
               }
 
               "Role Actions" in {
@@ -120,6 +145,7 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
 
                 dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
                 dao.createResourceType(myResourceType, samRequestContext).unsafeRunSync() shouldEqual myResourceType
+                dao.loadResourceTypes(Set(myResourceType.name), samRequestContext).unsafeRunSync() shouldEqual Set(myResourceType)
               }
             }
 
@@ -134,6 +160,7 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
               dao.createResourceType(myResourceType, samRequestContext).unsafeRunSync() shouldEqual myResourceType
 
               dao.createResourceType(myUpdatedResourceType, samRequestContext).unsafeRunSync() shouldEqual myUpdatedResourceType
+              dao.loadResourceTypes(Set(myUpdatedResourceType.name), samRequestContext).unsafeRunSync() shouldEqual Set(myUpdatedResourceType)
             }
 
             "is removing at least one" - {
@@ -141,12 +168,14 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
                 val removeActionPattern = resourceType.copy(actionPatterns = actionPatterns.tail)
                 dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
                 dao.createResourceType(removeActionPattern, samRequestContext).unsafeRunSync() shouldEqual removeActionPattern
+                dao.loadResourceTypes(Set(removeActionPattern.name), samRequestContext).unsafeRunSync() shouldEqual Set(removeActionPattern)
               }
 
               "Role" in {
                 val removeRole = resourceType.copy(roles = roles.tail)
                 dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
                 dao.createResourceType(removeRole, samRequestContext).unsafeRunSync() shouldEqual removeRole
+                dao.loadResourceTypes(Set(removeRole.name), samRequestContext).unsafeRunSync() shouldEqual Set(removeRole)
               }
 
               "of its role's Actions" in {
@@ -155,6 +184,7 @@ class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndA
                 val removeAction = resourceType.copy(roles = newRoles)
                 dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
                 dao.createResourceType(removeAction, samRequestContext).unsafeRunSync() shouldEqual removeAction
+                dao.loadResourceTypes(Set(removeAction.name), samRequestContext).unsafeRunSync() shouldEqual Set(removeAction)
               }
             }
           }

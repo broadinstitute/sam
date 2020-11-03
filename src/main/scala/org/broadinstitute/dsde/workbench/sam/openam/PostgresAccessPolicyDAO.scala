@@ -25,97 +25,186 @@ import scala.util.{Failure, Try}
 class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
                               protected val ecForDatabaseIO: ExecutionContext)(implicit val cs: ContextShift[IO]) extends AccessPolicyDAO with DatabaseSupport with PostgresGroupDAO with LazyLogging {
 
-  // This method obtains an EXCLUSIVE lock on the ResourceType table because if we boot multiple Sam instances at once,
-  // they will all try to (re)create ResourceTypes at the same time and could collide. The lock is automatically
-  // released at the end of the transaction.
-  override def createResourceType(resourceType: ResourceType, samRequestContext: SamRequestContext): IO[ResourceType] = {
-    val uniqueActions = resourceType.roles.flatMap(_.actions)
-    runInTransaction("createResourceType", samRequestContext)({ implicit session =>
-      samsql"lock table ${ResourceTypeTable.table} IN EXCLUSIVE MODE".execute().apply()
-      val resourceTypePK = insertResourceType(resourceType.name)
+  /**
+    * Creates or updates all given resource types.
+    *
+    * This method obtains an EXCLUSIVE lock on the ResourceType table because if we boot multiple Sam instances at once,
+    * they will all try to (re)create ResourceTypes at the same time and could collide. The lock is automatically
+    * released at the end of the transaction.
+    *
+    * @param resourceTypes
+    * @param samRequestContext
+    * @return names of resource types actually created or updated
+    */
+  override def upsertResourceTypes(resourceTypes: Set[ResourceType], samRequestContext: SamRequestContext): IO[Set[ResourceTypeName]] = {
+    if (resourceTypes.nonEmpty) {
+      runInTransaction("upsertResourceTypes", samRequestContext) { implicit session =>
+        samsql"lock table ${ResourceTypeTable.table} IN EXCLUSIVE MODE".execute().apply()
 
-      overwriteActionPatterns(resourceType.actionPatterns, resourceTypePK)
-      overwriteRoles(resourceType.roles, resourceTypePK)
-      insertActions(uniqueActions.map((_, resourceTypePK)))
-      overwriteRoleActions(resourceType.roles, resourceTypePK)
+        val existingResourceTypes = loadResourceTypesInSession(resourceTypes.map(_.name))
 
-      resourceType
-    })
+        val changedResourceTypes = resourceTypes -- existingResourceTypes
+        val changedResourceTypeNames = changedResourceTypes.map(_.name)
+        if (changedResourceTypes.isEmpty) {
+          logger.info("upsertResourceTypes: no changes, not updating")
+        } else {
+          logger.info(s"upsertResourceTypes: updating resource types [$changedResourceTypeNames]")
+          upsertResourceTypes(resourceTypes)
+          val resourceTypeNameToPKs = loadResourceTypePKsByName(resourceTypes)
+          upsertActionPatterns(resourceTypes, resourceTypeNameToPKs)
+          upsertRoles(resourceTypes, resourceTypeNameToPKs)
+          insertActions(resourceTypes, resourceTypeNameToPKs)
+          upsertRoleActions(resourceTypes, resourceTypeNameToPKs)
+          logger.info(s"upsertResourceTypes: completed updates to resource types [$changedResourceTypeNames]")
+        }
+        changedResourceTypeNames
+      }
+    } else {
+      IO.pure(Set.empty[ResourceTypeName])
+    }
   }
 
-  private def overwriteRoleActions(roles: Set[ResourceRole], resourceTypePK: ResourceTypePK)(implicit session: DBSession): Int = {
-    // Load Actions and Roles from DB because we need their DB IDs
-    val resourceTypeActions = selectActionsForResourceType(resourceTypePK)
-    val resourceTypeRoles = selectRolesForResourceType(resourceTypePK)
+  override def loadResourceTypes(resourceTypeNames: Set[ResourceTypeName], samRequestContext: SamRequestContext): IO[Set[ResourceType]] = {
+    runInTransaction("loadResourceTypes", samRequestContext) { implicit session =>
+      loadResourceTypesInSession(resourceTypeNames)
+    }
+  }
 
-    val roleActionValues = roles.flatMap { role =>
-      val maybeRolePK = resourceTypeRoles.find(r => r.role == role.roleName).map(_.id)
-      val actionPKs = resourceTypeActions.filter(rta => role.actions.contains(rta.action)).map(_.id)
+  private def loadResourceTypesInSession(resourceTypeNames: Set[ResourceTypeName])(implicit session: DBSession): Set[ResourceType] = {
+    val (actionPatternRecords, resourceTypeRecords) = queryForResourceTypesAndActionPatterns(resourceTypeNames)
+    if (resourceTypeRecords.nonEmpty) {
+      val roleAndActionRecords = queryForResourceRolesAndActions(resourceTypeRecords)
 
-      val rolePK = maybeRolePK.getOrElse(throw new WorkbenchException(s"Cannot add Role Actions because Role '${role.roleName}' does not exist for ResourceType: ${resourceTypePK}"))
+      val resourceTypeToActionPatterns = unmarshalActionPatterns(actionPatternRecords)
+      val resourceTypeToRoles = unmarshalResourceRoles(roleAndActionRecords)
+      unmarshalResourceTypes(resourceTypeRecords, resourceTypeToActionPatterns, resourceTypeToRoles)
+    } else {
+      Set.empty
+    }
+  }
 
-      actionPKs.map(actionPK => samsqls"(${rolePK}, ${actionPK})")
+  private def queryForResourceRolesAndActions(resourceTypeRecords: Set[ResourceTypeRecord])(implicit session: DBSession) = {
+    val rr = ResourceRoleTable.syntax("rr")
+    val roleAction = RoleActionTable.syntax("roleAction")
+    val ra = ResourceActionTable.syntax("ra")
+    val roleQuery =
+      samsql"""select ${rr.resultAll}, ${ra.resultAll}
+                 from ${ResourceRoleTable as rr}
+                 left join ${RoleActionTable as roleAction} on ${roleAction.resourceRoleId} = ${rr.id}
+                 left join ${ResourceActionTable as ra} on ${roleAction.resourceActionId} = ${ra.id}
+                 where ${rr.resourceTypeId} in (${resourceTypeRecords.map(_.id)})
+                 and ${rr.deprecated} = false"""
+
+    roleQuery.map { rs =>
+      val roleRecord = ResourceRoleTable(rr.resultName)(rs)
+      val actionRecord = rs.anyOpt(ra.resultName.id).map(_ => ResourceActionTable(ra.resultName)(rs))
+      (roleRecord, actionRecord)
+    }.list().apply()
+  }
+
+  private def queryForResourceTypesAndActionPatterns(resourceTypeNames: Iterable[ResourceTypeName])(implicit session: DBSession) = {
+    val rt = ResourceTypeTable.syntax("rt")
+    val rap = ResourceActionPatternTable.syntax("rap")
+    val actionPatternQuery =
+      samsql"""select ${rt.resultAll}, ${rap.resultAll}
+                 from ${ResourceTypeTable as rt}
+                 left join ${ResourceActionPatternTable as rap} on ${rap.resourceTypeId} = ${rt.id}
+                 where ${rt.name} in (${resourceTypeNames})"""
+
+    val (resourceTypeRecordsWithDups, actionPatternRecords) = actionPatternQuery.map { rs =>
+      val resourceTypeRecord = ResourceTypeTable(rt.resultName)(rs)
+      val actionPatternRecord = rs.anyOpt(rap.resultName.id).map(_ => ResourceActionPatternTable(rap.resultName)(rs))
+      (resourceTypeRecord, actionPatternRecord)
+    }.list().apply().unzip
+
+    val resourceTypeRecords = resourceTypeRecordsWithDups.toSet
+    (actionPatternRecords.flatten, resourceTypeRecords)
+  }
+
+  private def unmarshalResourceTypes(resourceTypeRecords: Set[ResourceTypeRecord], resourceTypeToActionPatterns: Map[ResourceTypePK, Set[ResourceActionPattern]], resourceTypeToRoles: Map[ResourceTypePK, Set[ResourceRole]]): Set[ResourceType] = {
+    resourceTypeRecords.map { resourceTypeRecord =>
+      ResourceType(
+        resourceTypeRecord.name,
+        resourceTypeToActionPatterns.getOrElse(resourceTypeRecord.id, Set.empty),
+        resourceTypeToRoles.getOrElse(resourceTypeRecord.id, Set.empty),
+        resourceTypeRecord.ownerRoleName,
+        resourceTypeRecord.reuseIds
+      )
+    }
+  }
+
+  private def unmarshalActionPatterns(actionPatternRecords: List[ResourceActionPatternRecord]): Map[ResourceTypePK, Set[ResourceActionPattern]] = {
+    actionPatternRecords.groupBy(_.resourceTypeId).map { case (resourceTypeId, actionPatternRecords) =>
+      resourceTypeId -> actionPatternRecords.map(rec => ResourceActionPattern(rec.actionPattern.value, rec.description, rec.isAuthDomainConstrainable)).toSet
+    }
+  }
+
+  private def unmarshalResourceRoles(roleAndActionRecords: List[(ResourceRoleRecord, Option[ResourceActionRecord])]): Map[ResourceTypePK, Set[ResourceRole]] = {
+    roleAndActionRecords.groupBy { case (role, _) => role.resourceTypeId }.map { case (resourceTypeId, rolesAndActions) =>
+      val roles = rolesAndActions.groupBy { case (role, _) => role.role }.map { case (roleName, actionsForRole) =>
+        ResourceRole(roleName, actionsForRole.flatMap { case (_, actionRec) => actionRec.map(_.action) }.toSet)
+      }
+      resourceTypeId -> roles.toSet
+    }
+  }
+
+  private def loadResourceTypePKsByName(resourceTypes: Iterable[ResourceType])(implicit session: DBSession): Map[ResourceTypeName, ResourceTypePK] = {
+    val rt = ResourceTypeTable.syntax("rt")
+    val query = samsql"""select ${rt.resultAll} from ${ResourceTypeTable as rt} where ${rt.name} in (${resourceTypes.map(_.name)})"""
+    val resourceTypeRecords = query.map(ResourceTypeTable(rt.resultName)).list().apply()
+    resourceTypeRecords.map(rec => rec.name -> rec.id).toMap
+  }
+
+  override def createResourceType(resourceType: ResourceType, samRequestContext: SamRequestContext): IO[ResourceType] = {
+    upsertResourceTypes(Set(resourceType), samRequestContext).map(_ => resourceType)
+  }
+
+  private def upsertRoleActions(resourceTypes: Iterable[ResourceType], resourceTypeNameToPKs: Map[ResourceTypeName, ResourceTypePK])(implicit session: DBSession): Int = {
+    val roleActions = for {
+      rt <- resourceTypes
+      role <- rt.roles
+      action <- role.actions
+    } yield {
+      samsqls"(${resourceTypeNameToPKs(rt.name)}, ${role.roleName}, ${action})"
     }
 
-    val ra = RoleActionTable.syntax("ra")
-    val rr = ResourceRoleTable.syntax("rr")
-    if (roleActionValues.isEmpty) {
-      samsql"""delete from ${RoleActionTable as ra}
-                 using ${ResourceRoleTable as rr}
-                 where ${ra.resourceRoleId} = ${rr.id}
-                 and ${rr.resourceTypeId} = ${resourceTypePK}"""
-        .update().apply()
-    } else {
-      samsql"""delete from ${RoleActionTable as ra}
-                 using ${ResourceRoleTable as rr}
-                 where ${ra.resourceRoleId} = ${rr.id}
-                 and (${ra.resourceRoleId}, ${ra.resourceActionId}) not in (${roleActionValues})
-                 and ${rr.resourceTypeId} = ${resourceTypePK}"""
-        .update().apply()
+    val resourceRole = ResourceRoleTable.syntax("resourceRole")
+    val resourceAction = ResourceActionTable.syntax("resourceAction")
+    val roleAction = RoleActionTable.syntax("roleAction")
 
+    samsql"""delete from ${RoleActionTable as roleAction}
+               using ${ResourceRoleTable as resourceRole}
+               where ${roleAction.resourceRoleId} = ${resourceRole.id}
+               and ${resourceRole.resourceTypeId} in (${resourceTypeNameToPKs.values})"""
+      .update().apply()
+
+    if (roleActions.nonEmpty) {
       val insertQuery =
         samsql"""insert into ${RoleActionTable.table}(${RoleActionTable.column.resourceRoleId}, ${RoleActionTable.column.resourceActionId})
-                    values ${roleActionValues}
-                    on conflict do nothing"""
+               select ${resourceRole.id}, ${resourceAction.id} from
+               (values $roleActions) AS insertValues (resource_type_id, role, action)
+               join ${ResourceRoleTable as resourceRole} on insertValues.role = ${resourceRole.role} and insertValues.resource_type_id = ${resourceRole.resourceTypeId}
+               join ${ResourceActionTable as resourceAction} on insertValues.action = ${resourceAction.action} and insertValues.resource_type_id = ${resourceAction.resourceTypeId}"""
       insertQuery.update().apply()
+    } else {
+      0
     }
   }
 
-  private def selectActionsForResourceType(resourceTypePK: ResourceTypePK)(implicit session: DBSession): List[ResourceActionRecord] = {
-    val rat = ResourceActionTable.syntax("rat")
-    val actionsQuery =
-      samsql"""select ${rat.result.*}
-               from ${ResourceActionTable as rat}
-               where ${rat.resourceTypeId} = ${resourceTypePK}"""
-
-    actionsQuery.map(ResourceActionTable(rat.resultName)).list().apply()
-  }
-
-  private def selectRolesForResourceType(resourceTypePK: ResourceTypePK)(implicit session: DBSession): List[ResourceRoleRecord] = {
-    val rrt = ResourceRoleTable.syntax("rrt")
-    val actionsQuery =
-      samsql"""select ${rrt.result.*}
-               from ${ResourceRoleTable as rrt}
-               where ${rrt.resourceTypeId} = ${resourceTypePK}
-               and ${rrt.deprecated} = false"""
-
-    actionsQuery.map(ResourceRoleTable(rrt.resultName)).list().apply()
-  }
-
-  private def overwriteRoles(roles: Set[ResourceRole], resourceTypePK: ResourceTypePK)(implicit session: DBSession): Int = {
-    val roleValues = roles.map(role => samsqls"(${resourceTypePK}, ${role.roleName})")
+  private def upsertRoles(resourceTypes: Iterable[ResourceType], resourceTypeNameToPKs: Map[ResourceTypeName, ResourceTypePK])(implicit session: DBSession): Int = {
+    val roleValues = for {
+      rt <- resourceTypes
+      role <- rt.roles
+    } yield {
+      samsqls"(${resourceTypeNameToPKs(rt.name)}, ${role.roleName})"
+    }
 
     val resourceRoleColumn = ResourceRoleTable.column
-    if (roles.isEmpty) {
-      samsql"""update ${ResourceRoleTable.table}
-            set ${resourceRoleColumn.deprecated} = true
-            where ${resourceRoleColumn.resourceTypeId} = ${resourceTypePK}"""
-        .update().apply()
-    } else {
+    if (roleValues.nonEmpty) {
       samsql"""update ${ResourceRoleTable.table}
               set ${resourceRoleColumn.deprecated} = true
-              where ${resourceRoleColumn.resourceTypeId} = ${resourceTypePK}
-              and ${resourceRoleColumn.role} not in (${roles.map(_.roleName)})"""
+              where (${resourceRoleColumn.resourceTypeId}, ${resourceRoleColumn.role}) not in ($roleValues)
+              and ${resourceRoleColumn.resourceTypeId} in (${resourceTypeNameToPKs.values})"""
         .update().apply()
 
       val insertRolesQuery =
@@ -124,6 +213,11 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
                on conflict do nothing"""
 
       insertRolesQuery.update().apply()
+    } else {
+      samsql"""update ${ResourceRoleTable.table}
+              set ${resourceRoleColumn.deprecated} = true
+              where ${resourceRoleColumn.resourceTypeId} in (${resourceTypeNameToPKs.values})"""
+        .update().apply()
     }
   }
 
@@ -144,58 +238,71 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     }
   }
 
+  private def insertActions(resourceTypes: Iterable[ResourceType], resourceTypeNameToPKs: Map[ResourceTypeName, ResourceTypePK])(implicit session: DBSession): Int = {
+    val actionsWithResourceTypePK = for {
+      rt <- resourceTypes
+      role <- rt.roles
+      action <- role.actions
+    } yield {
+      (action, resourceTypeNameToPKs(rt.name))
+    }
+
+    insertActions(actionsWithResourceTypePK.toSet)
+  }
+
   /**
-    * Performs an UPSERT when a record already exists for this exact ActionPattern for this ResourceType.  Query will
+    * Performs an UPSERT when a record already exists for this exact ActionPattern for all ResourceTypes.  Query will
     * rerwrite the `description` and `isAuthDomainConstrainable` columns if the ResourceTypeActionPattern already
     * exists.
     */
-  private def overwriteActionPatterns(actionPatterns: Set[ResourceActionPattern], resourceTypePK: ResourceTypePK)(implicit session: DBSession): Int = {
+  private def upsertActionPatterns(resourceTypes: Iterable[ResourceType], resourceTypeNameToPKs: Map[ResourceTypeName, ResourceTypePK])(implicit session: DBSession): Int = {
     val rap = ResourceActionPatternTable.syntax("rap")
+    val resourceActionPatternTableColumn = ResourceActionPatternTable.column
 
-    if (actionPatterns.isEmpty) {
+    val (keepers, upserts) = (for {
+      resourceType <- resourceTypes
+      actionPattern <- resourceType.actionPatterns
+    } yield {
+      val resourceTypePK = resourceTypeNameToPKs(resourceType.name)
+      (samsqls"($resourceTypePK, ${actionPattern.value})",
+        samsqls"(${resourceTypePK}, ${actionPattern.value}, ${actionPattern.description}, ${actionPattern.authDomainConstrainable})")
+    }).unzip
+
+    if (keepers.nonEmpty) {
       samsql"""delete from ${ResourceActionPatternTable as rap}
-            where ${rap.resourceTypeId} = ${resourceTypePK}"""
-        .update().apply()
+            where (${rap.resourceTypeId}, ${rap.actionPattern}) not in ($keepers)
+            and ${rap.resourceTypeId} in (${resourceTypeNameToPKs.values})""".update().apply()
     } else {
       samsql"""delete from ${ResourceActionPatternTable as rap}
-            where ${rap.resourceTypeId} = ${resourceTypePK}
-            and ${rap.actionPattern} not in (${actionPatterns.map(_.value)})"""
-        .update().apply()
-
-      val resourceActionPatternTableColumn = ResourceActionPatternTable.column
-      val actionPatternValues = actionPatterns map { actionPattern =>
-        samsqls"(${resourceTypePK}, ${actionPattern.value}, ${actionPattern.description}, ${actionPattern.authDomainConstrainable})"
-      }
-
+            where ${rap.resourceTypeId} in (${resourceTypeNameToPKs.values})""".update().apply()
+    }
+    if (upserts.nonEmpty) {
       val actionPatternQuery =
         samsql"""insert into ${ResourceActionPatternTable.table}
                   (${resourceActionPatternTableColumn.resourceTypeId},
           ${resourceActionPatternTableColumn.actionPattern},
           ${resourceActionPatternTableColumn.description},
           ${resourceActionPatternTableColumn.isAuthDomainConstrainable})
-                  values ${actionPatternValues}
+                  values ${upserts}
                on conflict (${resourceActionPatternTableColumn.resourceTypeId}, ${resourceActionPatternTableColumn.actionPattern})
                   do update
                       set ${resourceActionPatternTableColumn.description} = EXCLUDED.${resourceActionPatternTableColumn.description},
           ${resourceActionPatternTableColumn.isAuthDomainConstrainable} = EXCLUDED.${resourceActionPatternTableColumn.isAuthDomainConstrainable}"""
       actionPatternQuery.update().apply()
+    } else {
+      0
     }
   }
 
-  // This method needs to always return the ResourceTypePK, regardless of whether we just inserted the ResourceType or
-  // it already existed.  We do this by using a `RETURNING` statement.  This statement will only return values for rows
-  // that were created or updated.  Therefore, `ON CONFLICT` will update the row with the same name value that was there
-  // before and the previously existing ResourceType id will be returned.
-  private def insertResourceType(resourceTypeName: ResourceTypeName)(implicit session: DBSession): ResourceTypePK = {
+  private def upsertResourceTypes(resourceTypes: Iterable[ResourceType])(implicit session: DBSession): Int = {
     val resourceTypeTableColumn = ResourceTypeTable.column
-    val insertResourceTypeQuery =
-      samsql"""insert into ${ResourceTypeTable.table} (${resourceTypeTableColumn.name})
-                  values (${resourceTypeName.value})
-               on conflict (${ResourceTypeTable.column.name})
-                  do update set ${ResourceTypeTable.column.name}=EXCLUDED.${ResourceTypeTable.column.name}
-               returning ${ResourceTypeTable.column.id}"""
-
-    ResourceTypePK(insertResourceTypeQuery.updateAndReturnGeneratedKey().apply())
+    val resourceTypeValues = resourceTypes.map(rt => samsqls"""(${rt.name}, ${rt.ownerRoleName}, ${rt.reuseIds})""")
+    samsql"""insert into ${ResourceTypeTable.table} (${resourceTypeTableColumn.name}, ${resourceTypeTableColumn.ownerRoleName}, ${resourceTypeTableColumn.reuseIds})
+               values $resourceTypeValues
+             on conflict (${ResourceTypeTable.column.name})
+               do update
+                 set ${resourceTypeTableColumn.ownerRoleName} = EXCLUDED.${resourceTypeTableColumn.ownerRoleName},
+                 ${resourceTypeTableColumn.reuseIds} = EXCLUDED.${resourceTypeTableColumn.reuseIds}""".update().apply()
   }
 
   // 1. Create Resource
