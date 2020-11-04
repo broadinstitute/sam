@@ -55,6 +55,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
           upsertRoles(resourceTypes, resourceTypeNameToPKs)
           insertActions(resourceTypes, resourceTypeNameToPKs)
           upsertRoleActions(resourceTypes, resourceTypeNameToPKs)
+          upsertNestedRoles(resourceTypes, resourceTypeNameToPKs)
           logger.info(s"upsertResourceTypes: completed updates to resource types [$changedResourceTypeNames]")
         }
         changedResourceTypeNames
@@ -87,18 +88,27 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     val rr = ResourceRoleTable.syntax("rr")
     val roleAction = RoleActionTable.syntax("roleAction")
     val ra = ResourceActionTable.syntax("ra")
+    val nestedRole = NestedRoleTable.syntax("nestedRole")
+    val nrr = ResourceRoleTable.syntax("nrr")
+    val nrrt = ResourceTypeTable.syntax("nrrt")
     val roleQuery =
-      samsql"""select ${rr.resultAll}, ${ra.resultAll}
+      samsql"""select ${rr.resultAll}, ${ra.resultAll}, ${nrr.resultAll}, ${nestedRole.result.descendantsOnly}, ${nrrt.result.name}
                  from ${ResourceRoleTable as rr}
                  left join ${RoleActionTable as roleAction} on ${roleAction.resourceRoleId} = ${rr.id}
                  left join ${ResourceActionTable as ra} on ${roleAction.resourceActionId} = ${ra.id}
+                 left join ${NestedRoleTable as nestedRole} on ${nestedRole.baseRoleId} = ${rr.id}
+                 left join ${ResourceRoleTable as nrr} on ${nestedRole.nestedRoleId} = ${nrr.id}
+                 left join ${ResourceTypeTable as nrrt} on ${nrr.resourceTypeId} = ${nrrt.id}
                  where ${rr.resourceTypeId} in (${resourceTypeRecords.map(_.id)})
                  and ${rr.deprecated} = false"""
 
     roleQuery.map { rs =>
       val roleRecord = ResourceRoleTable(rr.resultName)(rs)
       val actionRecord = rs.anyOpt(ra.resultName.id).map(_ => ResourceActionTable(ra.resultName)(rs))
-      (roleRecord, actionRecord)
+      val nestedRoleRecord = rs.anyOpt(nrr.resultName.id).map(_ => ResourceRoleTable(nrr.resultName)(rs))
+      val descendantsOnly = rs.booleanOpt(nestedRole.resultName.descendantsOnly)
+      val nestedRoleResourceType = rs.stringOpt(nrrt.resultName.name).map(ResourceTypeName.apply)
+      (roleRecord, actionRecord, nestedRoleRecord, descendantsOnly, nestedRoleResourceType)
     }.list().apply()
   }
 
@@ -139,10 +149,27 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     }
   }
 
-  private def unmarshalResourceRoles(roleAndActionRecords: List[(ResourceRoleRecord, Option[ResourceActionRecord])]): Map[ResourceTypePK, Set[ResourceRole]] = {
-    roleAndActionRecords.groupBy { case (role, _) => role.resourceTypeId }.map { case (resourceTypeId, rolesAndActions) =>
-      val roles = rolesAndActions.groupBy { case (role, _) => role.role }.map { case (roleName, actionsForRole) =>
-        ResourceRole(roleName, actionsForRole.flatMap { case (_, actionRec) => actionRec.map(_.action) }.toSet)
+  private def unmarshalResourceRoles(roleAndActionRecords: List[(ResourceRoleRecord, Option[ResourceActionRecord], Option[ResourceRoleRecord], Option[Boolean], Option[ResourceTypeName])]): Map[ResourceTypePK, Set[ResourceRole]] = {
+    roleAndActionRecords.groupBy { case (role, _, _, _, _) => role.resourceTypeId }.map { case (resourceTypeId, rolesAndActions) =>
+      val roles = rolesAndActions.groupBy { case (role, _, _, _, _) => role.role }.map { case (roleName, actionsForRole) =>
+        val actions = actionsForRole.flatMap { case (_, actionRec, _, _, _) => actionRec.map(_.action) }.toSet
+
+        val (descendantRoleRecords, includedRoleRecords) = actionsForRole.collect { case (_, _, Some(nestedRoleRecord), Some(descendantsOnly), Some(resourceTypeName)) =>
+          if (descendantsOnly) {
+            (Option(resourceTypeName -> nestedRoleRecord.role), None)
+          } else {
+            (None, Option(nestedRoleRecord.role))
+          }
+        }.unzip
+        val descendantRoles = descendantRoleRecords.toSet.flatten.groupBy(_._1).mapValues(rolesWithResourceTypeNames => rolesWithResourceTypeNames.map(_._2))
+        val includedRoles = includedRoleRecords.toSet.flatten
+//        val descendantRoles = actionsForRole.collect { case (_, _, Some(nestedRoleRecord), Some(true), Some(resourceTypeName)) =>
+//          resourceTypeName -> nestedRoleRecord.role
+//        }.toSet.groupBy(_._1).mapValues(rolesWithResourceTypeNames => rolesWithResourceTypeNames.map(_._2))
+//        val includedRoles = actionsForRole.collect { case (_, _, Some(nestedRoleRecord), Some(false), _) =>
+//          nestedRoleRecord.role
+//        }.toSet
+        ResourceRole(roleName, actions, includedRoles, descendantRoles)
       }
       resourceTypeId -> roles.toSet
     }
@@ -157,6 +184,47 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
 
   override def createResourceType(resourceType: ResourceType, samRequestContext: SamRequestContext): IO[ResourceType] = {
     upsertResourceTypes(Set(resourceType), samRequestContext).map(_ => resourceType)
+  }
+
+  private def upsertNestedRoles(resourceTypes: Iterable[ResourceType], resourceTypeNameToPKs: Map[ResourceTypeName, ResourceTypePK])(implicit session: DBSession): Int = {
+    val includedRoles = for {
+      rt <- resourceTypes
+      baseRole <- rt.roles
+      includedRole <- baseRole.includedRoles
+    } yield {
+      samsqls"(${resourceTypeNameToPKs(rt.name)}, ${baseRole.roleName}, ${resourceTypeNameToPKs(rt.name)}, ${includedRole}, false)"
+    }
+    val descendantRoles = for {
+      rt <- resourceTypes
+      baseRole <- rt.roles
+      (descendantResourceType, descendantRoles) <- baseRole.descendantRoles
+      descendantRole <- descendantRoles
+    } yield {
+      samsqls"(${resourceTypeNameToPKs(rt.name)}, ${baseRole.roleName}, ${resourceTypeNameToPKs(descendantResourceType)}, ${descendantRole}, true)"
+    }
+    val nestedRoles = includedRoles ++ descendantRoles
+
+    val resourceRole = ResourceRoleTable.syntax("resourceRole")
+    val nestedRole = NestedRoleTable.syntax("nestedRole")
+    samsql"""delete from ${NestedRoleTable as nestedRole}
+            using ${ResourceRoleTable as resourceRole}
+            where ${nestedRole.baseRoleId} = ${resourceRole.id}
+            and ${resourceRole.resourceTypeId} in (${resourceTypeNameToPKs.values})"""
+      .update.apply()
+
+    val nestedResourceRole = ResourceRoleTable.syntax("nestedResourceRole")
+    if (nestedRoles.nonEmpty) {
+      val insertQuery =
+        samsql"""
+                insert into ${NestedRoleTable.table}(${NestedRoleTable.column.baseRoleId}, ${NestedRoleTable.column.nestedRoleId}, ${NestedRoleTable.column.descendantsOnly})
+                select ${resourceRole.id}, ${nestedResourceRole.id}, insertValues.descendants_only from
+                (values ${nestedRoles}) as insertValues (base_resource_type_id, base_role_name, nested_resource_type_id, nested_role_name, descendants_only)
+                join ${ResourceRoleTable as resourceRole} on insertValues.base_role_name = ${resourceRole.role} and insertValues.base_resource_type_id = ${resourceRole.resourceTypeId}
+                join ${ResourceRoleTable as nestedResourceRole} on insertValues.nested_role_name = ${nestedResourceRole.role} and insertValues.nested_resource_type_id = ${nestedResourceRole.resourceTypeId}"""
+      insertQuery.update().apply()
+    } else {
+      0
+    }
   }
 
   private def upsertRoleActions(resourceTypes: Iterable[ResourceType], resourceTypeNameToPKs: Map[ResourceTypeName, ResourceTypePK])(implicit session: DBSession): Int = {
