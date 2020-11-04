@@ -11,7 +11,7 @@
                         (name,
                          resource_type_id,
                          resource_parent_id)
-            SELECT CONCAT(sr.name, '--google-project'),
+            SELECT sr.name,
                    (SELECT id
                     FROM   sam_resource_type
                     WHERE  name = 'google-project'),
