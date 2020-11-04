@@ -163,12 +163,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
         }.unzip
         val descendantRoles = descendantRoleRecords.toSet.flatten.groupBy(_._1).mapValues(rolesWithResourceTypeNames => rolesWithResourceTypeNames.map(_._2))
         val includedRoles = includedRoleRecords.toSet.flatten
-//        val descendantRoles = actionsForRole.collect { case (_, _, Some(nestedRoleRecord), Some(true), Some(resourceTypeName)) =>
-//          resourceTypeName -> nestedRoleRecord.role
-//        }.toSet.groupBy(_._1).mapValues(rolesWithResourceTypeNames => rolesWithResourceTypeNames.map(_._2))
-//        val includedRoles = actionsForRole.collect { case (_, _, Some(nestedRoleRecord), Some(false), _) =>
-//          nestedRoleRecord.role
-//        }.toSet
+
         ResourceRole(roleName, actions, includedRoles, descendantRoles)
       }
       resourceTypeId -> roles.toSet
