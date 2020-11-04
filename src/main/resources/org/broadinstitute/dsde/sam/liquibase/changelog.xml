@@ -11,4 +11,5 @@
     <include file="changesets/20200901_descendant_permissions.xml" relativeToChangelogFile="true"/>
     <include file="changesets/20201028_nested_roles.xml" relativeToChangelogFile="true"/>
     <include file="changesets/20201029_resource_type_fields.xml" relativeToChangelogFile="true"/>
+    <include file="changesets/20201103_add_google_project_child_for_each_billing_project.xml" relativeToChangelogFile="true"/>
 </databaseChangeLog>
