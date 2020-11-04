@@ -149,25 +149,30 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     }
   }
 
-  private def unmarshalResourceRoles(roleAndActionRecords: List[(ResourceRoleRecord, Option[ResourceActionRecord], Option[ResourceRoleRecord], Option[Boolean], Option[ResourceTypeName])]): Map[ResourceTypePK, Set[ResourceRole]] = {
-    roleAndActionRecords.groupBy { case (role, _, _, _, _) => role.resourceTypeId }.map { case (resourceTypeId, rolesAndActions) =>
-      val roles = rolesAndActions.groupBy { case (role, _, _, _, _) => role.role }.map { case (roleName, actionsForRole) =>
-        val actions = actionsForRole.flatMap { case (_, actionRec, _, _, _) => actionRec.map(_.action) }.toSet
+  private def unmarshalResourceRoles(rolesActionsAndNestedRolesRecords: List[(ResourceRoleRecord, Option[ResourceActionRecord], Option[ResourceRoleRecord], Option[Boolean], Option[ResourceTypeName])]): Map[ResourceTypePK, Set[ResourceRole]] = {
+    rolesActionsAndNestedRolesRecords.groupBy { case (role, _, _, _, _) => role.resourceTypeId }.map { case (resourceTypeId, rolesActionsAndNestedRolesForResourceType) =>
+      val roles = rolesActionsAndNestedRolesForResourceType.groupBy { case (role, _, _, _, _) => role.role }.map { case (roleName, actionsAndNestedRolesForRole) =>
+        val roleActions = actionsAndNestedRolesForRole.flatMap { case (_, actionRec, _, _, _) => actionRec.map(_.action) }.toSet
+        val (descendantRoles, includedRoles) = unmarshalNestedRoles(actionsAndNestedRolesForRole)
 
-        val (descendantRoleRecords, includedRoleRecords) = actionsForRole.collect { case (_, _, Some(nestedRoleRecord), Some(descendantsOnly), Some(resourceTypeName)) =>
-          if (descendantsOnly) {
-            (Option(resourceTypeName -> nestedRoleRecord.role), None)
-          } else {
-            (None, Option(nestedRoleRecord.role))
-          }
-        }.unzip
-        val descendantRoles = descendantRoleRecords.toSet.flatten.groupBy(_._1).mapValues(rolesWithResourceTypeNames => rolesWithResourceTypeNames.map(_._2))
-        val includedRoles = includedRoleRecords.toSet.flatten
-
-        ResourceRole(roleName, actions, includedRoles, descendantRoles)
+        ResourceRole(roleName, roleActions, includedRoles, descendantRoles)
       }
       resourceTypeId -> roles.toSet
     }
+  }
+
+  private def unmarshalNestedRoles(actionsAndNestedRolesByRole: List[(ResourceRoleRecord, Option[ResourceActionRecord], Option[ResourceRoleRecord], Option[Boolean], Option[ResourceTypeName])]): (Map[ResourceTypeName, Set[ResourceRoleName]], Set[ResourceRoleName]) = {
+    val (maybeDescendantRoles, maybeIncludedRoles) = actionsAndNestedRolesByRole.collect { case (_, _, Some(nestedRoleRecord), Some(descendantsOnly), Some(resourceTypeName)) =>
+      if (descendantsOnly) {
+        (Option(resourceTypeName -> nestedRoleRecord.role), None)
+      } else {
+        (None, Option(nestedRoleRecord.role))
+      }
+    }.unzip
+    val descendantRoles = maybeDescendantRoles.toSet.flatten.groupBy(_._1).mapValues(rolesWithResourceTypeNames => rolesWithResourceTypeNames.map(_._2))
+    val includedRoles = maybeIncludedRoles.toSet.flatten
+
+    (descendantRoles, includedRoles)
   }
 
   private def loadResourceTypePKsByName(resourceTypes: Iterable[ResourceType])(implicit session: DBSession): Map[ResourceTypeName, ResourceTypePK] = {
