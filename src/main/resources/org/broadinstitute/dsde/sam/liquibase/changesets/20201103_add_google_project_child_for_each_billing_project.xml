@@ -19,7 +19,8 @@
             FROM   sam_resource sr
                    JOIN sam_resource_type srt
                      ON sr.resource_type_id = srt.id
-            WHERE  srt.name = 'billing-project';
+            WHERE  srt.name = 'billing-project'
+            on conflict do nothing;
         </sql>
     </changeSet>
 
