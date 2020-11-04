@@ -11,7 +11,7 @@
             with recursive flattened_role(base_role_id, nested_role_id, descendants_only) as (
             select resourceRole.id, resourceRole.id, false from sam_resource_role resourceRole
             union
-            select role.base_role_id, nestedRole.nested_role_id, nestedRole.descendants_only from sam_nested_role nestedRole
+            select flattened_role.base_role_id, nestedRole.nested_role_id, nestedRole.descendants_only from sam_nested_role nestedRole
             join flattened_role on flattened_role.nested_role_id = nestedRole.base_role_id
             ) select * from flattened_role);
         </sql>
