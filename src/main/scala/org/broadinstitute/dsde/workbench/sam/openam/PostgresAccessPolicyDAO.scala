@@ -225,7 +225,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     } else {
       0
     }
-    samsql"""refresh materialized view sam_flattened_role""".update.apply()
+    samsql"""refresh materialized view ${FlattenedRoleMaterializedView.table}""".update.apply()
     result
   }
 
