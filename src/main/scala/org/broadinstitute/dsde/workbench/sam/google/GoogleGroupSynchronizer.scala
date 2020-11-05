@@ -142,7 +142,7 @@ class GoogleGroupSynchronizer(directoryDAO: DirectoryDAO,
             (accessPolicy.actions.exists(actionPattern.matches) ||
               accessPolicy.roles.exists { accessPolicyRole =>
                 resourceType.roles.exists {
-                  case resourceTypeRole @ ResourceRole(`accessPolicyRole`, _) => resourceTypeRole.actions.exists(actionPattern.matches)
+                  case resourceTypeRole @ ResourceRole(`accessPolicyRole`, _, _, _) => resourceTypeRole.actions.exists(actionPattern.matches)
                   case _ => false
                 }
               })

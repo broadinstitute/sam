@@ -43,7 +43,12 @@ object AppConfig {
       val uqPath = unquoteAndEscape(path)
       ResourceRole(
         ResourceRoleName(uqPath),
-        config.as[Set[String]](s"$uqPath.roleActions").map(ResourceAction.apply)
+        config.as[Set[String]](s"$uqPath.roleActions").map(ResourceAction.apply),
+        config.as[Option[Set[String]]](s"$uqPath.includedRoles").getOrElse(Set.empty).map(ResourceRoleName.apply),
+        config.as[Option[Map[String, Set[String]]]](s"$uqPath.descendantRoles").getOrElse(Map.empty)
+          .map { case (resourceTypeName, roleNames) =>
+            (ResourceTypeName(resourceTypeName), roleNames.map(ResourceRoleName.apply))
+          }
       )
     }
   }
