@@ -213,7 +213,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
       .update.apply()
 
     val nestedResourceRole = ResourceRoleTable.syntax("nestedResourceRole")
-    if (nestedRoles.nonEmpty) {
+    val result = if (nestedRoles.nonEmpty) {
       val insertQuery =
         samsql"""
                 insert into ${NestedRoleTable.table}(${NestedRoleTable.column.baseRoleId}, ${NestedRoleTable.column.nestedRoleId}, ${NestedRoleTable.column.descendantsOnly})
@@ -221,12 +221,12 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
                 (values ${nestedRoles}) as insertValues (base_resource_type_id, base_role_name, nested_resource_type_id, nested_role_name, descendants_only)
                 join ${ResourceRoleTable as resourceRole} on insertValues.base_role_name = ${resourceRole.role} and insertValues.base_resource_type_id = ${resourceRole.resourceTypeId}
                 join ${ResourceRoleTable as nestedResourceRole} on insertValues.nested_role_name = ${nestedResourceRole.role} and insertValues.nested_resource_type_id = ${nestedResourceRole.resourceTypeId}"""
-      val result = insertQuery.update().apply()
-      samsql"""refresh materialized view sam_flattened_role""".update.apply()
-      result
+      insertQuery.update().apply()
     } else {
       0
     }
+    samsql"""refresh materialized view sam_flattened_role""".update.apply()
+    result
   }
 
   private def upsertRoleActions(resourceTypes: Iterable[ResourceType], resourceTypeNameToPKs: Map[ResourceTypeName, ResourceTypePK])(implicit session: DBSession): Int = {
