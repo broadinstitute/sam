@@ -147,6 +147,7 @@ object TestSupport extends TestSupport {
         ResourceTable,
         RoleActionTable,
         ResourceActionTable,
+        NestedRoleTable,
         ResourceRoleTable,
         ResourceActionPatternTable,
         ResourceTypeTable,
