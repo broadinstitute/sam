@@ -213,7 +213,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
       .update.apply()
 
     val nestedResourceRole = ResourceRoleTable.syntax("nestedResourceRole")
-    if (nestedRoles.nonEmpty) {
+    val result = if (nestedRoles.nonEmpty) {
       val insertQuery =
         samsql"""
                 insert into ${NestedRoleTable.table}(${NestedRoleTable.column.baseRoleId}, ${NestedRoleTable.column.nestedRoleId}, ${NestedRoleTable.column.descendantsOnly})
@@ -225,6 +225,8 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     } else {
       0
     }
+    samsql"""refresh materialized view ${FlattenedRoleMaterializedView.table}""".update.apply()
+    result
   }
 
   private def upsertRoleActions(resourceTypes: Iterable[ResourceType], resourceTypeNameToPKs: Map[ResourceTypeName, ResourceTypePK])(implicit session: DBSession): Int = {
