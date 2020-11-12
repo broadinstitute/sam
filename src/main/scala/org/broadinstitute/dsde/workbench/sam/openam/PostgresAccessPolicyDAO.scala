@@ -968,7 +968,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
         select ${userResourcePolicy.result.baseResourceName}, ${resourceRole.result.role}, ${policyAction.result.action}, ${userResourcePolicy.result.public}, ${userResourcePolicy.result.inherited}
           from ${userResourcePolicyTable as userResourcePolicy}
           left join ${PolicyRoleTable as policyRole} on ${userResourcePolicy.policyId} = ${policyRole.resourcePolicyId}
-          left join ${FlattenedRoleMaterializedView as flattenedRole} on ${policyRole.resourceRoleId} = ${flattenedRole.baseRoleId} and (${userResourcePolicy.inherited} = ${policyRole.descendantsOnly} or ${policyRole.descendantsOnly} = ${flattenedRole.descendantsOnly})
+          left join ${FlattenedRoleMaterializedView as flattenedRole} on ${policyRole.resourceRoleId} = ${flattenedRole.baseRoleId} and ((${userResourcePolicy.inherited} and (${policyRole.descendantsOnly} or ${flattenedRole.descendantsOnly})) or not (${userResourcePolicy.inherited} or ${policyRole.descendantsOnly} or ${flattenedRole.descendantsOnly}))
           left join ${ResourceRoleTable as resourceRole} on ${flattenedRole.nestedRoleId} = ${resourceRole.id} and ${userResourcePolicy.baseResourceTypeId} = ${resourceRole.resourceTypeId}
           left join ${PolicyActionTable as policyActionJoin} on ${userResourcePolicy.policyId} = ${policyActionJoin.resourcePolicyId} and ${userResourcePolicy.inherited} = ${policyActionJoin.descendantsOnly}
           left join ${ResourceActionTable as policyAction} on ${policyActionJoin.resourceActionId} = ${policyAction.id} and ${userResourcePolicy.baseResourceTypeId} = ${policyAction.resourceTypeId}
@@ -1068,7 +1068,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
         select ${roleAction.action} as action
           from ${userResourcePolicyTable as userResourcePolicy}
           join ${PolicyRoleTable as policyRole} on ${userResourcePolicy.policyId} = ${policyRole.resourcePolicyId}
-          join ${FlattenedRoleMaterializedView as flattenedRole} on ${policyRole.resourceRoleId} = ${flattenedRole.baseRoleId} and (${userResourcePolicy.inherited} = ${policyRole.descendantsOnly} or ${policyRole.descendantsOnly} = ${flattenedRole.descendantsOnly})
+          join ${FlattenedRoleMaterializedView as flattenedRole} on ${policyRole.resourceRoleId} = ${flattenedRole.baseRoleId} and ((${userResourcePolicy.inherited} and (${policyRole.descendantsOnly} or ${flattenedRole.descendantsOnly})) or not (${userResourcePolicy.inherited} or ${policyRole.descendantsOnly} or ${flattenedRole.descendantsOnly}))
           join ${ResourceRoleTable as resourceRole} on ${flattenedRole.nestedRoleId} = ${resourceRole.id} and ${userResourcePolicy.baseResourceTypeId} = ${resourceRole.resourceTypeId}
           join ${RoleActionTable as roleActionJoin} on ${resourceRole.id} = ${roleActionJoin.resourceRoleId}
           join ${ResourceActionTable as roleAction} on ${roleActionJoin.resourceActionId} = ${roleAction.id}
@@ -1097,7 +1097,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
         select ${resourceRole.result.role}
           from ${userResourcePolicyTable as userResourcePolicy}
           join ${PolicyRoleTable as policyRole} on ${userResourcePolicy.policyId} = ${policyRole.resourcePolicyId}
-          join ${FlattenedRoleMaterializedView as flattenedRole} on ${policyRole.resourceRoleId} = ${flattenedRole.baseRoleId} and (${userResourcePolicy.inherited} = ${policyRole.descendantsOnly} or ${policyRole.descendantsOnly} = ${flattenedRole.descendantsOnly})
+          join ${FlattenedRoleMaterializedView as flattenedRole} on ${policyRole.resourceRoleId} = ${flattenedRole.baseRoleId} and ((${userResourcePolicy.inherited} and (${policyRole.descendantsOnly} or ${flattenedRole.descendantsOnly})) or not (${userResourcePolicy.inherited} or ${policyRole.descendantsOnly} or ${flattenedRole.descendantsOnly}))
           join ${ResourceRoleTable as resourceRole} on ${flattenedRole.nestedRoleId} = ${resourceRole.id} and ${userResourcePolicy.baseResourceTypeId} = ${resourceRole.resourceTypeId}"""
 
       listUserResourceRolesQuery.map(rs => ResourceRoleName(rs.string(resourceRole.resultName.role))).list().apply().toSet
