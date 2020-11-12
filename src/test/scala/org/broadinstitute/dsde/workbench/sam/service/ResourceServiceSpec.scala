@@ -766,6 +766,30 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
     assert(policyDAO.listAccessPolicies(parentResource, samRequestContext).unsafeRunSync().nonEmpty)
   }
 
+  "validatePolicy" should "succeed with a correct policy" in {
+    runAndWait(service.validatePolicy(defaultResourceType, service.ValidatableAccessPolicy(AccessPolicyName("a"), Map(dummyUserInfo.userEmail -> Option(dummyUserInfo.userId.asInstanceOf[WorkbenchSubject])), Set(ResourceRoleName("owner")), Set(ResourceAction("alter_policies")), Set()))) shouldBe empty
+  }
+
+  "validatePolicy" should "succeed with an incorrect policy" in {
+    runAndWait(service.validatePolicy(defaultResourceType, service.ValidatableAccessPolicy(AccessPolicyName("a"), Map(dummyUserInfo.userEmail -> Option(dummyUserInfo.userId.asInstanceOf[WorkbenchSubject])), Set(ResourceRoleName("bad_name")), Set(ResourceAction("bad_action")), Set()))) shouldBe defined
+  }
+
+  "validateRoles" should "fail if role is not in listed roles" in {
+    service.validateRoles(defaultResourceType, Set(ResourceRoleName("asdf"))) shouldBe defined
+  }
+
+  "validateRoles" should "succeed with role included in listed roles" in {
+    service.validateRoles(defaultResourceType, Set(ResourceRoleName("owner"))) shouldBe empty
+  }
+
+  "validateActions" should "fail if action is not in listed actions" in {
+    service.validateActions(defaultResourceType, Set(ResourceAction("asdf"))) shouldBe defined
+  }
+
+  "validateActions" should "succeed with action included in listed actions" in {
+    service.validateActions(defaultResourceType, Set(ResourceAction("alter_policies"))) shouldBe empty
+  }
+
   "add/remove SubjectToPolicy" should "add/remove subject and tolerate prior (non)existence" in {
     val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("my-resource"))
     val policyName = AccessPolicyName(defaultResourceType.ownerRoleName.value)
