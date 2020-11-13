@@ -1068,10 +1068,11 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
         select ${roleAction.action} as action
           from ${userResourcePolicyTable as userResourcePolicy}
           join ${PolicyRoleTable as policyRole} on ${userResourcePolicy.policyId} = ${policyRole.resourcePolicyId}
-          join ${FlattenedRoleMaterializedView as flattenedRole} on ${policyRole.resourceRoleId} = ${flattenedRole.baseRoleId} and ((${userResourcePolicy.inherited} and (${policyRole.descendantsOnly} or ${flattenedRole.descendantsOnly})) or not (${userResourcePolicy.inherited} or ${policyRole.descendantsOnly} or ${flattenedRole.descendantsOnly}))
+          join ${FlattenedRoleMaterializedView as flattenedRole} on ${policyRole.resourceRoleId} = ${flattenedRole.baseRoleId}
           join ${ResourceRoleTable as resourceRole} on ${flattenedRole.nestedRoleId} = ${resourceRole.id} and ${userResourcePolicy.baseResourceTypeId} = ${resourceRole.resourceTypeId}
           join ${RoleActionTable as roleActionJoin} on ${resourceRole.id} = ${roleActionJoin.resourceRoleId}
           join ${ResourceActionTable as roleAction} on ${roleActionJoin.resourceActionId} = ${roleAction.id}
+          where (${userResourcePolicy.inherited} and (${policyRole.descendantsOnly} or ${flattenedRole.descendantsOnly})) or not (${userResourcePolicy.inherited} or ${policyRole.descendantsOnly} or ${flattenedRole.descendantsOnly})
         union
         select ${policyAction.action} as action
           from ${userResourcePolicyTable as userResourcePolicy}
@@ -1097,8 +1098,9 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
         select ${resourceRole.result.role}
           from ${userResourcePolicyTable as userResourcePolicy}
           join ${PolicyRoleTable as policyRole} on ${userResourcePolicy.policyId} = ${policyRole.resourcePolicyId}
-          join ${FlattenedRoleMaterializedView as flattenedRole} on ${policyRole.resourceRoleId} = ${flattenedRole.baseRoleId} and ((${userResourcePolicy.inherited} and (${policyRole.descendantsOnly} or ${flattenedRole.descendantsOnly})) or not (${userResourcePolicy.inherited} or ${policyRole.descendantsOnly} or ${flattenedRole.descendantsOnly}))
-          join ${ResourceRoleTable as resourceRole} on ${flattenedRole.nestedRoleId} = ${resourceRole.id} and ${userResourcePolicy.baseResourceTypeId} = ${resourceRole.resourceTypeId}"""
+          join ${FlattenedRoleMaterializedView as flattenedRole} on ${policyRole.resourceRoleId} = ${flattenedRole.baseRoleId}
+          join ${ResourceRoleTable as resourceRole} on ${flattenedRole.nestedRoleId} = ${resourceRole.id} and ${userResourcePolicy.baseResourceTypeId} = ${resourceRole.resourceTypeId}
+          where (${userResourcePolicy.inherited} and (${policyRole.descendantsOnly} or ${flattenedRole.descendantsOnly})) or not (${userResourcePolicy.inherited} or ${policyRole.descendantsOnly} or ${flattenedRole.descendantsOnly})"""
 
       listUserResourceRolesQuery.map(rs => ResourceRoleName(rs.string(resourceRole.resultName.role))).list().apply().toSet
     })
