@@ -96,7 +96,7 @@ class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaF
   }
 
   "Sam" - {
-    "should give pets the same access as their owners" ignore {
+    "should give pets the same access as their owners" in {
       val anyUser: Credentials = UserPool.chooseAnyUser
       val userAuthToken: AuthToken = anyUser.makeAuthToken()
 
