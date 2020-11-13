@@ -12,6 +12,8 @@ final case class FlattenedRoleRecord(baseRoleId: ResourceRolePK,
   * using the same scalike syntax that we use for real tables. */
 object FlattenedRoleMaterializedView extends SQLSyntaxSupportWithDefaultSamDB[FlattenedRoleRecord] {
   override def tableName: String = "SAM_FLATTENED_ROLE"
+  // need to specify column names explicitly because scalike doesn't like materialized views as much as it likes tables
+  override val columnNames: Seq[String] = Seq("base_role_id", "nested_role_id", "descendants_only")
 
   import SamTypeBinders._
   def apply(e: ResultName[FlattenedRoleRecord])(rs: WrappedResultSet): FlattenedRoleRecord = FlattenedRoleRecord(

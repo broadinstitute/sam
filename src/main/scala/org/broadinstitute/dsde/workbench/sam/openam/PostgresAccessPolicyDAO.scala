@@ -960,14 +960,16 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
 
       val policyRole = PolicyRoleTable.syntax("policyRole")
       val resourceRole = ResourceRoleTable.syntax("resourceRole")
+      val flattenedRole = FlattenedRoleMaterializedView.syntax("flattenedRole")
       val policyActionJoin = PolicyActionTable.syntax("policyActionJoin")
       val policyAction = ResourceActionTable.syntax("policyAction")
 
       val listUserResourcesQuery = samsql"""$cteQueryFragment
         select ${userResourcePolicy.result.baseResourceName}, ${resourceRole.result.role}, ${policyAction.result.action}, ${userResourcePolicy.result.public}, ${userResourcePolicy.result.inherited}
           from ${userResourcePolicyTable as userResourcePolicy}
-          left join ${PolicyRoleTable as policyRole} on ${userResourcePolicy.policyId} = ${policyRole.resourcePolicyId} and ${userResourcePolicy.inherited} = ${policyRole.descendantsOnly}
-          left join ${ResourceRoleTable as resourceRole} on ${policyRole.resourceRoleId} = ${resourceRole.id} and ${userResourcePolicy.baseResourceTypeId} = ${resourceRole.resourceTypeId}
+          left join ${PolicyRoleTable as policyRole} on ${userResourcePolicy.policyId} = ${policyRole.resourcePolicyId}
+          left join ${FlattenedRoleMaterializedView as flattenedRole} on ${policyRole.resourceRoleId} = ${flattenedRole.baseRoleId} and ${roleAppliesToResource(userResourcePolicy, policyRole, flattenedRole)}
+          left join ${ResourceRoleTable as resourceRole} on ${flattenedRole.nestedRoleId} = ${resourceRole.id} and ${userResourcePolicy.baseResourceTypeId} = ${resourceRole.resourceTypeId}
           left join ${PolicyActionTable as policyActionJoin} on ${userResourcePolicy.policyId} = ${policyActionJoin.resourcePolicyId} and ${userResourcePolicy.inherited} = ${policyActionJoin.descendantsOnly}
           left join ${ResourceActionTable as policyAction} on ${policyActionJoin.resourceActionId} = ${policyAction.id} and ${userResourcePolicy.baseResourceTypeId} = ${policyAction.resourceTypeId}
           where ${resourceRole.role} is not null or ${policyAction.action} is not null"""
@@ -1046,6 +1048,33 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     })
   }
 
+
+  /**
+    *
+    * Determining whether a role should or should not apply to a resource is a bit more complicated than it initially
+    * appears. This logic is shared across the three queries (listUserResourceActions, listUserResourceRoles,
+    * listUserResourcesWithRolesAndActions) that search a resource's hierarchy for all of the relevant roles and actions
+    * that a user has on said resource. The following truth table shows the desired behavior of this SQL fragment where
+    * result indicates whether a given role does or does not apply to the resource
+    *
+    * userResourcePolicy.inherited  |  policyRole.descendantsOnly  |  flattenedRole.descendantsOnly  |  result
+    *            T                  |             T                |                T                |    T
+    *            T                  |             T                |                F                |    T
+    *            T                  |             F                |                T                |    T
+    *            T                  |             F                |                F                |    F
+    *            F                  |             T                |                T                |    F
+    *            F                  |             T                |                F                |    F
+    *            F                  |             F                |                T                |    F
+    *            F                  |             F                |                F                |    T
+    *
+    */
+  private def roleAppliesToResource(userResourcePolicy: QuerySQLSyntaxProvider[SQLSyntaxSupport[UserResourcePolicyRecord], UserResourcePolicyRecord],
+                                    policyRole: QuerySQLSyntaxProvider[SQLSyntaxSupport[PolicyRoleRecord], PolicyRoleRecord],
+                                    flattenedRole: QuerySQLSyntaxProvider[SQLSyntaxSupport[FlattenedRoleRecord], FlattenedRoleRecord]): SQLSyntax = {
+    samsqls"""((${userResourcePolicy.inherited} and (${policyRole.descendantsOnly} or ${flattenedRole.descendantsOnly}))
+             or not (${userResourcePolicy.inherited} or ${policyRole.descendantsOnly} or ${flattenedRole.descendantsOnly}))"""
+  }
+
   override def listUserResourceActions(resourceId: FullyQualifiedResourceId, user: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[ResourceAction]] = {
     runInTransaction("listUserResourceActions", samRequestContext)({ implicit session =>
       val userPoliciesCommonTableExpression = userPoliciesOnResourceCommonTableExpressions(resourceId, user)
@@ -1056,6 +1085,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
 
       val policyRole = PolicyRoleTable.syntax("policyRole")
       val resourceRole = ResourceRoleTable.syntax("resourceRole")
+      val flattenedRole = FlattenedRoleMaterializedView.syntax("flattenedRole")
       val policyActionJoin = PolicyActionTable.syntax("policyActionJoin")
       val policyAction = ResourceActionTable.syntax("policyAction")
       val roleActionJoin = RoleActionTable.syntax("roleActionJoin")
@@ -1064,10 +1094,12 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
       val listUserResourceActionsQuery = samsql"""$cteQueryFragment
         select ${roleAction.action} as action
           from ${userResourcePolicyTable as userResourcePolicy}
-          join ${PolicyRoleTable as policyRole} on ${userResourcePolicy.policyId} = ${policyRole.resourcePolicyId} and ${userResourcePolicy.inherited} = ${policyRole.descendantsOnly}
-          join ${ResourceRoleTable as resourceRole} on ${policyRole.resourceRoleId} = ${resourceRole.id} and ${userResourcePolicy.baseResourceTypeId} = ${resourceRole.resourceTypeId}
+          join ${PolicyRoleTable as policyRole} on ${userResourcePolicy.policyId} = ${policyRole.resourcePolicyId}
+          join ${FlattenedRoleMaterializedView as flattenedRole} on ${policyRole.resourceRoleId} = ${flattenedRole.baseRoleId}
+          join ${ResourceRoleTable as resourceRole} on ${flattenedRole.nestedRoleId} = ${resourceRole.id} and ${userResourcePolicy.baseResourceTypeId} = ${resourceRole.resourceTypeId}
           join ${RoleActionTable as roleActionJoin} on ${resourceRole.id} = ${roleActionJoin.resourceRoleId}
           join ${ResourceActionTable as roleAction} on ${roleActionJoin.resourceActionId} = ${roleAction.id}
+          where ${roleAppliesToResource(userResourcePolicy, policyRole, flattenedRole)}
         union
         select ${policyAction.action} as action
           from ${userResourcePolicyTable as userResourcePolicy}
@@ -1088,12 +1120,14 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
 
       val policyRole = PolicyRoleTable.syntax("policyRole")
       val resourceRole = ResourceRoleTable.syntax("resourceRole")
-
+      val flattenedRole = FlattenedRoleMaterializedView.syntax("flattenedRole")
       val listUserResourceRolesQuery = samsql"""$cteQueryFragment
         select ${resourceRole.result.role}
           from ${userResourcePolicyTable as userResourcePolicy}
-          join ${PolicyRoleTable as policyRole} on ${userResourcePolicy.policyId} = ${policyRole.resourcePolicyId} and ${userResourcePolicy.inherited} = ${policyRole.descendantsOnly}
-          join ${ResourceRoleTable as resourceRole} on ${policyRole.resourceRoleId} = ${resourceRole.id} and ${userResourcePolicy.baseResourceTypeId} = ${resourceRole.resourceTypeId}"""
+          join ${PolicyRoleTable as policyRole} on ${userResourcePolicy.policyId} = ${policyRole.resourcePolicyId}
+          join ${FlattenedRoleMaterializedView as flattenedRole} on ${policyRole.resourceRoleId} = ${flattenedRole.baseRoleId}
+          join ${ResourceRoleTable as resourceRole} on ${flattenedRole.nestedRoleId} = ${resourceRole.id} and ${userResourcePolicy.baseResourceTypeId} = ${resourceRole.resourceTypeId}
+          where ${roleAppliesToResource(userResourcePolicy, policyRole, flattenedRole)}"""
 
       listUserResourceRolesQuery.map(rs => ResourceRoleName(rs.string(resourceRole.resultName.role))).list().apply().toSet
     })
