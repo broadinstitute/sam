@@ -1366,7 +1366,8 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
           select ${policy.id}, ${ancestorResource.baseResourceTypeId}, ${ancestorResource.baseResourceName}, ${ancestorResource.isAncestor}, ${policy.public}
           from ${ancestorResourceTable as ancestorResource}
           join ${PolicyTable as policy} on ${policy.resourceId} = ${ancestorResource.resourceId}
-          where ${policy.public} OR ${policy.groupId} in (select ${ancestorGroup.parentGroupId} from ${ancestorGroupsTable as ancestorGroup}))"""
+          where ${policy.public} OR ${policy.groupId} in (select ${ancestorGroup.parentGroupId} from ${ancestorGroupsTable as ancestorGroup})
+          order by ${policy.id})"""
 
     UserPoliciesCommonTableExpression(userResourcePolicyTable, userResourcePolicy, queryFragment)
   }
