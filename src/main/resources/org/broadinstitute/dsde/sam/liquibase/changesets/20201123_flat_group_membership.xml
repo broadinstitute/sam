@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog logicalFilePath="dummy"
+                   xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog-ext http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-ext.xsd http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.4.xsd">
+    <changeSet logicalFilePath="dummy" author="thibault" id="flat_group_member_table">
+        <createTable tableName="SAM_GROUP_MEMBER_FLAT">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="group_id" type="BIGINT">
+                <constraints foreignKeyName="FK_SGM_GROUP" referencedTableName="SAM_GROUP" referencedColumnNames="id" nullable="false" deleteCascade="true"/>
+            </column>
+            <column name="member_group_id" type="BIGINT">
+                <constraints foreignKeyName="FK_SGM_MEMBER_GROUP" referencedTableName="SAM_GROUP" referencedColumnNames="id"/>
+            </column>
+            <column name="member_user_id" type="VARCHAR">
+                <constraints foreignKeyName="FK_SGM_MEMBER_USER" referencedTableName="SAM_USER" referencedColumnNames="id"/>
+            </column>
+            <column name="group_membership_path" type="BIGINT ARRAY"/>
+        </createTable>
+    </changeSet>
+</databaseChangeLog>
