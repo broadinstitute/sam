@@ -26,7 +26,7 @@ trait PostgresGroupDAO {
     }
   }
 
-  private def queryForGroupPKs(members: Set[WorkbenchSubject])(implicit session: DBSession): List[GroupPK] = {
+  protected def queryForGroupPKs(members: Set[WorkbenchSubject])(implicit session: DBSession): List[GroupPK] = {
     import SamTypeBinders._
 
     // group PK query
