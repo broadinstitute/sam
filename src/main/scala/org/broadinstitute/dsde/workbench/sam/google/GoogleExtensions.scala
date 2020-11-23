@@ -16,8 +16,8 @@ import com.google.protobuf.{Duration, Timestamp}
 import com.google.rpc.Code
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.dataaccess.NotificationDAO
-import org.broadinstitute.dsde.workbench.google2.util.{DistributedLock, LockPath}
 import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleIamDAO, GoogleKmsService, GoogleProjectDAO, GooglePubSubDAO, GoogleStorageDAO}
+import org.broadinstitute.dsde.workbench.google2.util.{DistributedLock, LockPath}
 import org.broadinstitute.dsde.workbench.google2.{CollectionName, Document}
 import org.broadinstitute.dsde.workbench.model.Notifications.Notification
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport.WorkbenchGroupNameFormat
@@ -26,10 +26,9 @@ import org.broadinstitute.dsde.workbench.model.google._
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.api.CreateWorkbenchUser
 import org.broadinstitute.dsde.workbench.sam.config.{GoogleServicesConfig, PetServiceAccountConfig}
-import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryDAO, RegistrationDAO}
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, RegistrationDAO}
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.openam.AccessPolicyDAO
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
 import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, CloudExtensionsInitializer, ManagedGroupService, SamApplication}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext

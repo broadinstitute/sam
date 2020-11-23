@@ -13,6 +13,10 @@ object SamParameterBinderFactory {
     value => (stmt, idx) => stmt.setString(idx, value.value)
   }
 
+  implicit def databaseArrayPbf[T <: DatabaseArray]: ParameterBinderFactory[T] = ParameterBinderFactory[T] {
+    value => (stmt, idx) => stmt.setArray(idx, value.asSqlArray(stmt.getConnection))
+  }
+
   implicit class SqlInterpolationWithSamBinders(val sc: StringContext) extends AnyVal {
     def samsql[A](params: Any*): SQL[A, NoExtractor] = {
       new SQLInterpolationString(sc).sql(addParameterBinders(params):_*)
@@ -32,6 +36,7 @@ object SamParameterBinderFactory {
       args.map {
         case v: ValueObject => valueObjectPbf(v)
         case pk: DatabaseKey => databaseKeyPbf(pk)
+        case pa: DatabaseArray => databaseArrayPbf(pa)
         case t: Traversable[Any] => addParameterBinders(t.toSeq)
         case opt: Option[Any] => opt.flatMap(value => addParameterBinders(Seq(value)).headOption)
         case a => a

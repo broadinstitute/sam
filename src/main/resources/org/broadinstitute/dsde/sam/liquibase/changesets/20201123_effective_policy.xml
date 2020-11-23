@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog logicalFilePath="dummy"
+                   xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog-ext http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-ext.xsd http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.4.xsd">
+
+    <changeSet logicalFilePath="dummy" author="dvoet" id="effective_policy_table">
+        <createTable tableName="SAM_EFFECTIVE_RESOURCE_POLICY">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="resource_id" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="FK_SERP_RESOURCE" referencedTableName="SAM_RESOURCE" referencedColumnNames="id"/>
+            </column>
+            <column name="source_policy_id" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="FK_SERP_SOURCE_POLICY" referencedTableName="SAM_RESOURCE_POLICY" referencedColumnNames="id" deleteCascade="true"/>
+            </column>
+            <column name="group_id" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="FK_SERP_GROUP" referencedTableName="SAM_GROUP" referencedColumnNames="id"/>
+            </column>
+            <column name="public" type="BOOLEAN">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <changeSet logicalFilePath="dummy" author="dvoet" id="index_erp_resource_id">
+        <createIndex tableName="SAM_EFFECTIVE_RESOURCE_POLICY" indexName="IDX_ERP_RESOURCE_ID">
+            <column name="resource_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet logicalFilePath="dummy" author="dvoet" id="index_erp_public">
+        <createIndex tableName="SAM_EFFECTIVE_RESOURCE_POLICY" indexName="IDX_ERP_PUBLIC">
+            <column name="public"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet logicalFilePath="dummy" author="dvoet" id="index_erp_group_id">
+        <createIndex tableName="SAM_EFFECTIVE_RESOURCE_POLICY" indexName="IDX_ERP_GROUP_ID">
+            <column name="group_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet logicalFilePath="dummy" author="dvoet" id="index_sr_parent_resource_id">
+        <createIndex tableName="SAM_RESOURCE" indexName="IDX_SR_PARENT_RESOURCE_ID">
+            <column name="resource_parent_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet logicalFilePath="dummy" author="dvoet" id="effective_policy_role_table">
+        <createTable tableName="SAM_EFFECTIVE_POLICY_ROLE">
+            <column name="resource_policy_id" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="FK_SEPR_POLICY" referencedTableName="SAM_EFFECTIVE_RESOURCE_POLICY" referencedColumnNames="id" primaryKey="true" deleteCascade="true"/>
+            </column>
+            <column name="resource_role_id" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="FK_SEPR_ROLE" referencedTableName="SAM_RESOURCE_ROLE" referencedColumnNames="id" primaryKey="true"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <changeSet logicalFilePath="dummy" author="dvoet" id="effective_policy_action_table">
+        <createTable tableName="SAM_EFFECTIVE_POLICY_ACTION">
+            <column name="resource_policy_id" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="FK_SEPA_POLICY" referencedTableName="SAM_EFFECTIVE_RESOURCE_POLICY" referencedColumnNames="id" primaryKey="true" deleteCascade="true"/>
+            </column>
+            <column name="resource_action_id" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="FK_SEPA_ACTION" referencedTableName="SAM_RESOURCE_ACTION" referencedColumnNames="id" primaryKey="true"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <changeSet logicalFilePath="dummy" author="dvoet" id="populate_effective_policies" runInTransaction="true">
+        <sql stripComments="true">
+            with recursive
+                ancestor_resource(resource_id, base_resource_id) as (
+                    select resource.id, resource.id
+                    from SAM_RESOURCE resource
+                    join SAM_RESOURCE_TYPE resourceType on resource.resource_type_id = resourceType.id
+                union
+                    select parentResource.resource_parent_id, ancestorResource.base_resource_id
+                    from SAM_RESOURCE parentResource
+                    join ancestor_resource ancestorResource on ancestorResource.resource_id = parentResource.id where parentResource.resource_parent_id is not null
+                )
+
+            insert into SAM_EFFECTIVE_RESOURCE_POLICY(resource_id, source_policy_id, group_id, public)
+            select ar.base_resource_id, policy.id, policy.group_id, policy.public
+            from SAM_RESOURCE_POLICY policy join ancestor_resource ar on policy.resource_id = ar.resource_id
+        </sql>
+        <sql stripComments="true">
+            insert into SAM_EFFECTIVE_POLICY_ROLE(resource_policy_id, resource_role_id)
+            select ep.id, role.id
+            from SAM_EFFECTIVE_RESOURCE_POLICY ep
+            join SAM_POLICY_ROLE pr on ep.source_policy_id = pr.resource_policy_id
+            join SAM_RESOURCE resource on ep.resource_id = resource.id
+            join sam_flattened_role flat_role on pr.resource_role_id = flat_role.base_role_id
+            join SAM_RESOURCE_ROLE role on flat_role.nested_role_id = role.id and resource.resource_type_id = role.resource_type_id
+            join sam_resource_policy sourcePolicy on ep.source_policy_id = sourcePolicy.id
+            where resource.resource_type_id = role.resource_type_id
+            and (((sourcePolicy.resource_id != ep.resource_id) and (pr.descendants_only or flat_role.descendants_only))
+            or not ((sourcePolicy.resource_id != ep.resource_id) or pr.descendants_only or flat_role.descendants_only))
+            on conflict do nothing
+        </sql>
+        <sql stripComments="true">
+            insert into SAM_EFFECTIVE_POLICY_ACTION(resource_policy_id, resource_action_id)
+            select ep.id, action.id
+            from SAM_EFFECTIVE_RESOURCE_POLICY ep
+            join SAM_POLICY_ACTION pa on ep.source_policy_id = pa.resource_policy_id
+            join SAM_RESOURCE resource on ep.resource_id = resource.id
+            join SAM_RESOURCE_ACTION action on pa.resource_action_id = action.id and resource.resource_type_id = action.resource_type_id
+            join sam_resource_policy sourcePolicy on ep.source_policy_id = sourcePolicy.id
+            where pa.descendants_only = (sourcePolicy.resource_id != ep.resource_id)
+            and resource.resource_type_id = action.resource_type_id
+            on conflict do nothing
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

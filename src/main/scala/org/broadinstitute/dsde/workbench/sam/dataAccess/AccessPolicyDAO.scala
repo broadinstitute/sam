@@ -1,4 +1,4 @@
-package org.broadinstitute.dsde.workbench.sam.openam
+package org.broadinstitute.dsde.workbench.sam.dataAccess
 
 import cats.data.NonEmptyList
 import cats.effect.IO
@@ -29,6 +29,8 @@ trait AccessPolicyDAO {
   def createPolicy(policy: AccessPolicy, samRequestContext: SamRequestContext): IO[AccessPolicy]
 
   def deletePolicy(policy: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[Unit]
+
+  def deleteAllResourcePolicies(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit]
 
   def loadPolicy(resourceAndPolicyName: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[Option[AccessPolicy]]
 
@@ -79,7 +81,7 @@ trait AccessPolicyDAO {
     * @param fragmentedRolesAndActions
     * @return
     */
-  private[openam] def aggregateByResource(fragmentedRolesAndActions: Iterable[ResourceIdWithRolesAndActions]): Iterable[ResourceIdWithRolesAndActions] = {
+  protected def aggregateByResource(fragmentedRolesAndActions: Iterable[ResourceIdWithRolesAndActions]): Iterable[ResourceIdWithRolesAndActions] = {
     fragmentedRolesAndActions.groupBy(_.resourceId).map { case (resourceId, rowsForResource) =>
       rowsForResource.reduce { (left, right) =>
         ResourceIdWithRolesAndActions(resourceId, left.direct ++ right.direct, left.inherited ++ right.inherited, left.public ++ right.public)

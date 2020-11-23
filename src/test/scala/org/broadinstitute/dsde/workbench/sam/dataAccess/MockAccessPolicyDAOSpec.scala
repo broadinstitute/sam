@@ -1,4 +1,4 @@
-package org.broadinstitute.dsde.workbench.sam.openam
+package org.broadinstitute.dsde.workbench.sam.dataAccess
 
 import java.net.URI
 
@@ -60,8 +60,8 @@ class MockAccessPolicyDAOSpec extends AnyFlatSpec with Matchers with TestSupport
     val shared = sharedFixtures
     val dirURI = new URI(directoryConfig.directoryUrl)
     val connectionPool = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
-    val ldapPolicyDao = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.blockingEc)
-    val ldapDirDao = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.blockingEc)
+    val ldapPolicyDao = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.dbRef)
+    val ldapDirDao = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.dbRef)
     val registrationDAO = new LdapRegistrationDAO(connectionPool, directoryConfig, TestSupport.blockingEc)
     val allUsersGroup: WorkbenchGroup = TestSupport.runAndWait(NoExtensions.getOrCreateAllUsersGroup(ldapDirDao, samRequestContext))
 

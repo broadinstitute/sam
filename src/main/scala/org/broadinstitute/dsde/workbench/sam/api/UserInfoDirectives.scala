@@ -6,7 +6,7 @@ import akka.http.scaladsl.server.{Directive0, Directive1, Directives}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.service.CloudExtensions
 import org.broadinstitute.dsde.workbench.sam._
-import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
+import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 /**

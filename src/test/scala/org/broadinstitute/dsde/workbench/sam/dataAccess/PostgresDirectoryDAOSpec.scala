@@ -1,6 +1,4 @@
-package org.broadinstitute.dsde.workbench.sam.directory
-
-import java.util.Date
+package org.broadinstitute.dsde.workbench.sam.dataAccess
 
 import akka.http.scaladsl.model.StatusCodes
 import cats.effect.IO
@@ -9,18 +7,18 @@ import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAcc
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.TestSupport.samRequestContext
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.openam.PostgresAccessPolicyDAO
-import org.postgresql.util.PSQLException
 import org.scalatest.BeforeAndAfterEach
-
-import scala.concurrent.duration._
 import org.scalatest.freespec.AnyFreeSpec
 import org.scalatest.matchers.should.Matchers
 
+import java.util.Date
+import scala.concurrent.duration._
+
 class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndAfterEach {
   implicit val cs = IO.contextShift(scala.concurrent.ExecutionContext.global)
-  val dao = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.blockingEc)
-  val policyDAO = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.blockingEc)
+  implicit val timer = IO.timer(scala.concurrent.ExecutionContext.global)
+  val dao = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.dbRef)
+  val policyDAO = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.dbRef)
 
   val defaultGroupName = WorkbenchGroupName("group")
   val defaultGroup = BasicWorkbenchGroup(defaultGroupName, Set.empty, WorkbenchEmail("foo@bar.com"))
@@ -287,7 +285,8 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
         val subGroup = emptyWorkbenchGroup("subGroup")
         dao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync()
 
-        assertThrows[PSQLException] {
+        // TODO: changed this from PSQLException.  This seems OK but let's double check
+        assertThrows[WorkbenchException] {
           dao.addGroupMember(defaultGroup.id, subGroup.id, samRequestContext).unsafeRunSync() shouldBe true
         }
       }
@@ -312,10 +311,12 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
         dao.createGroup(subGroup, samRequestContext = samRequestContext).unsafeRunSync()
 
         dao.addGroupMember(defaultGroup.id, subGroup.id, samRequestContext).unsafeRunSync() shouldBe true
+        val afterAdd = dao.loadGroup(defaultGroup.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"failed to load group ${defaultGroup.id}"))
+        afterAdd.members should contain theSameElementsAs Set(subGroup.id)
         dao.removeGroupMember(defaultGroup.id, subGroup.id, samRequestContext).unsafeRunSync() shouldBe true
 
-        val loadedGroup = dao.loadGroup(defaultGroup.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"failed to load group ${defaultGroup.id}"))
-        loadedGroup.members shouldBe empty
+        val afterRemove = dao.loadGroup(defaultGroup.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"failed to load group ${defaultGroup.id}"))
+        afterRemove.members shouldBe empty
       }
 
       "remove users from groups" in {
@@ -323,10 +324,12 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
         dao.addGroupMember(defaultGroup.id, defaultUser.id, samRequestContext).unsafeRunSync() shouldBe true
+        val afterAdd = dao.loadGroup(defaultGroup.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"failed to load group ${defaultGroup.id}"))
+        afterAdd.members should contain theSameElementsAs Set(defaultUser.id)
         dao.removeGroupMember(defaultGroup.id, defaultUser.id, samRequestContext).unsafeRunSync() shouldBe true
 
-        val loadedGroup = dao.loadGroup(defaultGroup.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"failed to load group ${defaultGroup.id}"))
-        loadedGroup.members shouldBe empty
+        val afterRemove = dao.loadGroup(defaultGroup.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"failed to load group ${defaultGroup.id}"))
+        afterRemove.members shouldBe empty
       }
 
       "remove policies from groups" in {
@@ -336,23 +339,30 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
         policyDAO.createPolicy(defaultPolicy, samRequestContext).unsafeRunSync()
 
         dao.addGroupMember(defaultGroup.id, defaultPolicy.id, samRequestContext).unsafeRunSync() shouldBe true
+        val afterAdd = dao.loadGroup(defaultGroup.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"failed to load group ${defaultGroup.id}"))
+        afterAdd.members should contain theSameElementsAs Set(defaultPolicy.id)
         dao.removeGroupMember(defaultGroup.id, defaultPolicy.id, samRequestContext).unsafeRunSync() shouldBe true
 
-        val loadedGroup = dao.loadGroup(defaultGroup.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"failed to load group ${defaultGroup.id}"))
-        loadedGroup.members shouldBe empty
+        val afterRemove = dao.loadGroup(defaultGroup.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"failed to load group ${defaultGroup.id}"))
+        afterRemove.members shouldBe empty
       }
 
       "remove groups from policies" in {
-        dao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync()
+        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
+        dao.createGroup(defaultGroup.copy(members = Set(defaultUser.id)), samRequestContext = samRequestContext).unsafeRunSync()
         policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         policyDAO.createResource(defaultResource, samRequestContext).unsafeRunSync()
         policyDAO.createPolicy(defaultPolicy, samRequestContext).unsafeRunSync()
 
         dao.addGroupMember(defaultPolicy.id, defaultGroup.id, samRequestContext).unsafeRunSync()
+        val afterAdd = policyDAO.loadPolicy(defaultPolicy.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"s'failed to load policy ${defaultPolicy.id}"))
+        afterAdd.members should contain theSameElementsAs Set(defaultGroup.id)
+        policyDAO.listFlattenedPolicyMembers(defaultPolicy.id, samRequestContext).unsafeRunSync() should contain theSameElementsAs Set(defaultUser)
         dao.removeGroupMember(defaultPolicy.id, defaultGroup.id, samRequestContext).unsafeRunSync()
 
-        val loadedPolicy = policyDAO.loadPolicy(defaultPolicy.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"s'failed to load policy ${defaultPolicy.id}"))
-        loadedPolicy.members shouldBe empty
+        val afterRemove = policyDAO.loadPolicy(defaultPolicy.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"s'failed to load policy ${defaultPolicy.id}"))
+        afterRemove.members shouldBe empty
+        policyDAO.listFlattenedPolicyMembers(defaultPolicy.id, samRequestContext).unsafeRunSync() shouldBe empty
       }
 
       "remove users from policies" in {
@@ -751,8 +761,8 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
 
       "intersect lots of groups with lots of dups and overlaps" in {
-        val groupCount = 80
-        val userCount = 100
+        val groupCount = 40
+        val userCount = 50
 
         // create a user and a group containing that single user
         val allUserGroups = for (i <- 1 to userCount) yield {

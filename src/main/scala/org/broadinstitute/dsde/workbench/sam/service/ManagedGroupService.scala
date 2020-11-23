@@ -5,9 +5,8 @@ import cats.effect.{ContextShift, IO}
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam._
-import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.openam.AccessPolicyDAO
 import org.broadinstitute.dsde.workbench.sam.service.ManagedGroupService.ManagedGroupPolicyName
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 

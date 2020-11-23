@@ -4,21 +4,21 @@ import akka.actor.ActorSystem
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException, WorkbenchGroupName}
 import org.broadinstitute.dsde.workbench.sam.TestSupport
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, MockDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.db.{DatabaseNames, DbReference}
-import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryDAO, MockDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.util.health.Subsystems.{Database, GoogleGroups, OpenDJ}
 import org.broadinstitute.dsde.workbench.util.health.{StatusCheckResponse, SubsystemStatus, Subsystems}
-import org.scalatest.concurrent.Eventually
 import org.scalatest.BeforeAndAfterAll
+import org.scalatest.concurrent.Eventually
+import org.scalatest.freespec.AnyFreeSpec
+import org.scalatest.matchers.should.Matchers
 import scalikejdbc.config.DBs
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 import scala.concurrent.duration._
-import org.scalatest.freespec.AnyFreeSpec
-import org.scalatest.matchers.should.Matchers
 
 class StatusServiceSpec extends AnyFreeSpec with Matchers with BeforeAndAfterAll with TestSupport with Eventually {
   implicit val system = ActorSystem("StatusServiceSpec")
@@ -61,7 +61,7 @@ class StatusServiceSpec extends AnyFreeSpec with Matchers with BeforeAndAfterAll
 
   private def failingDatabase = {
     // background database configured to connect to non existent database
-    val service = new StatusService(directoryDAOWithAllUsersGroup, NoExtensions, DbReference(DatabaseNames.Background), pollInterval = 10 milliseconds)
+    val service = new StatusService(directoryDAOWithAllUsersGroup, NoExtensions, DbReference(DatabaseNames.Background, TestSupport.blockingEc), pollInterval = 10 milliseconds)
     service
   }
 

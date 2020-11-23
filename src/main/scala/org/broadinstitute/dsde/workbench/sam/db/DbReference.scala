@@ -1,22 +1,29 @@
 package org.broadinstitute.dsde.workbench.sam.db
 
-import java.sql.SQLTimeoutException
-
-import cats.effect.{IO, Resource}
+import cats.effect.{ContextShift, IO, Resource}
 import com.google.common.base.Throwables
 import com.typesafe.scalalogging.LazyLogging
+import io.opencensus.trace.AttributeValue
 import liquibase.database.jvm.JdbcConnection
 import liquibase.resource.{ClassLoaderResourceAccessor, ResourceAccessor}
 import liquibase.{Contexts, Liquibase}
 import org.broadinstitute.dsde.workbench.sam.config.LiquibaseConfig
 import org.broadinstitute.dsde.workbench.sam.db.DatabaseNames.DatabaseName
-import scalikejdbc.{ConnectionPool, DBSession, NamedDB}
+import org.broadinstitute.dsde.workbench.sam.util.OpenCensusIOUtils.traceIOWithContext
+import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
+import org.broadinstitute.dsde.workbench.util2.ExecutionContexts
 import scalikejdbc.config.DBs
+import scalikejdbc.{ConnectionPool, DBSession, IsolationLevel, NamedDB}
 import sun.security.provider.certpath.SunCertPathBuilderException
 
+import java.sql.Connection.TRANSACTION_READ_COMMITTED
+import java.sql.SQLTimeoutException
+import scala.jdk.CollectionConverters._
+import scala.concurrent.ExecutionContext
+
 object DbReference extends LazyLogging {
-  private def initWithLiquibase(liquibaseConfig: LiquibaseConfig, changelogParameters: Map[String, AnyRef] = Map.empty): Unit = {
-    val dbConnection = ConnectionPool.borrow(DatabaseNames.Foreground.name)
+  private def initWithLiquibase(liquibaseConfig: LiquibaseConfig, dbName: DatabaseName, changelogParameters: Map[String, AnyRef] = Map.empty): Unit = {
+    val dbConnection = ConnectionPool.borrow(dbName.name)
     try {
       val liquibaseConnection = new JdbcConnection(dbConnection)
       val resourceAccessor: ResourceAccessor = new ClassLoaderResourceAccessor()
@@ -42,38 +49,72 @@ object DbReference extends LazyLogging {
     }
   }
 
-  def init(liquibaseConfig: LiquibaseConfig, dbName: DatabaseName): DbReference = {
+  def init(liquibaseConfig: LiquibaseConfig, dbName: DatabaseName, dbExecutionContext: ExecutionContext): DbReference = {
     DBs.setup(dbName.name)
     DBs.loadGlobalSettings()
     if (liquibaseConfig.initWithLiquibase) {
-      initWithLiquibase(liquibaseConfig)
+      initWithLiquibase(liquibaseConfig, dbName)
     }
 
-    DbReference(dbName)
+    DbReference(dbName, dbExecutionContext)
   }
 
-  def resource(liquibaseConfig: LiquibaseConfig, dbName: DatabaseName): Resource[IO, DbReference] = Resource.make(
-    IO(init(liquibaseConfig, dbName))
-  )(_ => IO(DBs.close(dbName.name)))
+  def resource(liquibaseConfig: LiquibaseConfig, dbName: DatabaseName): Resource[IO, DbReference] = {
+    for {
+      dbExecutionContext <- ExecutionContexts.fixedThreadPool[IO](DBs.config.getInt(s"db.${dbName.name.name}.poolMaxSize"))
+      dbRef <- Resource.make(
+        IO(init(liquibaseConfig, dbName, dbExecutionContext))
+      )(_ => IO(DBs.close(dbName.name)))
+    } yield dbRef
+  }
 }
 
+/**
+  * Sam uses 3 database connection pools. The Read pool is the largest and should be used by read-only
+  * transactions in the direct servicing api calls. This is the most important traffic. The Write pool
+  * is small to keep the concurrency of serializable write transactions down and thus reduce the number
+  * of retries required due to serialization failures. A heavy load of writes should not crowd out reads.
+  * The Background pool handles low priority background process reads and writes.
+  */
 object DatabaseNames {
   sealed trait DatabaseName {
     val name: Symbol
   }
-  case object Foreground extends DatabaseName {
-    val name: Symbol = Symbol("sam_foreground")
+  case object Read extends DatabaseName {
+    val name: Symbol = Symbol("sam_read")
+  }
+  case object Write extends DatabaseName {
+    val name: Symbol = Symbol("sam_write")
   }
   case object Background extends DatabaseName {
     val name: Symbol = Symbol("sam_background")
   }
 }
 
-case class DbReference(dbName: DatabaseName) extends LazyLogging {
-  def inLocalTransaction[A](f: DBSession => A): A = {
-    NamedDB(dbName.name).localTx[A] { implicit session =>
+case class DbReference(dbName: DatabaseName, dbExecutionContext: ExecutionContext) extends LazyLogging {
+  def readOnly[A](f: DBSession => A): A = {
+    val db = NamedDB(dbName.name)
+    // https://github.com/scalikejdbc/scalikejdbc/issues/1143
+    db.conn.setTransactionIsolation(TRANSACTION_READ_COMMITTED)
+    db.readOnly(f)
+  }
+
+  def inLocalTransaction[A](f: DBSession => A): A =
+    inLocalTransactionWithIsolationLevel(IsolationLevel.Default)(f)
+
+  def inLocalTransactionWithIsolationLevel[A](isolationLevel: IsolationLevel)(f: DBSession => A): A = {
+    NamedDB(dbName.name).isolationLevel(isolationLevel).localTx[A] { implicit session =>
       f(session)
     }
   }
+
+  def runDatabaseIO[A](dbQueryName: String, samRequestContext: SamRequestContext, databaseIO: IO[A], cs: ContextShift[IO], spanAttributes: Map[String, AttributeValue] = Map.empty): IO[A] = {
+    val spanName = "postgres-" + dbQueryName
+    cs.evalOn(dbExecutionContext)(traceIOWithContext(spanName, samRequestContext) { samCxt =>
+      samCxt.parentSpan.foreach(_.putAttributes(spanAttributes.asJava))
+      databaseIO
+    })
+  }
+
 }
 

@@ -1,4 +1,4 @@
-package org.broadinstitute.dsde.workbench.sam.openam
+package org.broadinstitute.dsde.workbench.sam.dataAccess
 
 import java.util.UUID
 
@@ -9,23 +9,22 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.TestSupport.samRequestContext
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig
-import org.broadinstitute.dsde.workbench.sam.db.PSQLStateExtensions
+import org.broadinstitute.dsde.workbench.sam.dataAccess.LoadResourceAuthDomainResult.{Constrained, NotConstrained, ResourceNotFound}
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.directory._
-import org.broadinstitute.dsde.workbench.sam.openam.LoadResourceAuthDomainResult.{Constrained, NotConstrained, ResourceNotFound}
 import org.postgresql.util.PSQLException
 import org.scalatest.BeforeAndAfterEach
 
-import scala.concurrent.{Await, Future}
-import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext.Implicits.global
 import org.scalatest.freespec.AnyFreeSpec
 import org.scalatest.matchers.should.Matchers
+import scala.concurrent.duration._
+import scala.concurrent.{Await, Future}
 
 class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeAndAfterEach {
   implicit val cs = IO.contextShift(scala.concurrent.ExecutionContext.global)
-  val dao = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.blockingEc)
-  val dirDao = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.blockingEc)
+  implicit val timer = IO.timer(scala.concurrent.ExecutionContext.global)
+  val dao = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.dbRef)
+  val dirDao = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.dbRef)
 
   override protected def beforeEach(): Unit = {
     TestSupport.truncateAll
@@ -287,11 +286,9 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
       }
 
       "raises an error when the ResourceType does not exist" in {
-        val exception = intercept[PSQLException] {
+        val exception = intercept[Exception] {
           dao.createResource(resource, samRequestContext).unsafeRunSync()
         }
-
-        exception.getSQLState shouldEqual PSQLStateExtensions.NULL_CONSTRAINT_VIOLATION
       }
 
       "can add a resource that has at least 1 Auth Domain" in {
@@ -308,6 +305,49 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
         dao.createResource(resourceWithAuthDomain, samRequestContext).unsafeRunSync() shouldEqual resourceWithAuthDomain
       }
 
+//      "can add a resource that has at least 1 Auth Domain and a bunch of policies" in {
+//        val authDomainGroupName1 = WorkbenchGroupName(UUID.randomUUID().toString)
+//        val authDomainGroup1 = BasicWorkbenchGroup(authDomainGroupName1, Set(), WorkbenchEmail(s"${UUID.randomUUID().toString}@foo.com"))
+//        val authDomainGroupName2 = WorkbenchGroupName(UUID.randomUUID().toString)
+//        val authDomainGroup2 = BasicWorkbenchGroup(authDomainGroupName2, Set(), WorkbenchEmail(s"${UUID.randomUUID().toString}@foo.com"))
+//
+//        dirDao.createGroup(authDomainGroup1, samRequestContext = samRequestContext).unsafeRunSync()
+//        dirDao.createGroup(authDomainGroup2, samRequestContext = samRequestContext).unsafeRunSync()
+//        dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
+//
+//        val count = 100
+//        val memberGroupNames: IndexedSeq[Set[WorkbenchSubject]] = for(x <- 1 to 100) yield {
+//          val memberGroupName = WorkbenchGroupName(UUID.randomUUID().toString)
+//          val memberGroup = BasicWorkbenchGroup(memberGroupName, Set(), WorkbenchEmail(s"${UUID.randomUUID().toString}@foo.com"))
+//          Set[WorkbenchSubject](
+//            dirDao.createGroup(memberGroup, samRequestContext = samRequestContext).unsafeRunSync().id,
+//            dirDao.createUser(WorkbenchUser(WorkbenchUserId(UUID.randomUUID().toString), None, WorkbenchEmail(s"${UUID.randomUUID().toString}@foo.com"), None), samRequestContext).unsafeRunSync().id
+//          )
+//        }
+//        val trials = for (x <- 1 to count) yield {
+//          val id = ResourceId(UUID.randomUUID().toString)
+//          val accessPolicies = for(x <- 1 to 1) yield {
+//            val members: Set[WorkbenchSubject] = if (x == 1) {
+//              memberGroupNames(x)
+//            } else {
+//              Set.empty
+//            }
+//            AccessPolicy(FullyQualifiedPolicyId(FullyQualifiedResourceId(resourceType.name, id), AccessPolicyName(s"$x")), members, WorkbenchEmail(s"${UUID.randomUUID().toString}@foo.com"), Set(ownerRoleName), Set.empty, Set.empty, false)
+//          }
+//
+//          val authDomain = Set(authDomainGroupName1, authDomainGroupName2)
+////          val authDomain = Set.empty[WorkbenchGroupName]
+//          val resourceWithAuthDomain = Resource(resourceType.name, id, authDomain, accessPolicies.toSet)
+//          dao.createResource(resourceWithAuthDomain, samRequestContext).map(_ => true).handleErrorWith {
+//            case t =>
+//              t.printStackTrace()
+//              IO.pure(false)
+//          }
+//        }
+//        val futures = trials.map(_.unsafeToFuture())
+//        Await.result(Future.sequence(futures), Duration.Inf).count(!_) should equal(0)
+//      }
+
       "raises an error when AuthDomain does not exist" in {
         val authDomainGroupName1 = WorkbenchGroupName("authDomain1")
         val authDomainGroup1 = BasicWorkbenchGroup(authDomainGroupName1, Set(), WorkbenchEmail("authDomain1@foo.com"))
@@ -315,12 +355,10 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
 
         dirDao.createGroup(authDomainGroup1, samRequestContext = samRequestContext).unsafeRunSync()
         dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
-        val exception = intercept[PSQLException] {
+        intercept[WorkbenchException] {
           val resourceWithAuthDomain = Resource(resourceType.name, ResourceId("authDomainResource"), Set(authDomainGroupName1, authDomainGroupName2))
           dao.createResource(resourceWithAuthDomain, samRequestContext).unsafeRunSync() shouldEqual resourceWithAuthDomain
         }
-
-        exception.getSQLState shouldEqual PSQLStateExtensions.NULL_CONSTRAINT_VIOLATION
       }
 
       "creates resource with parent" in {
@@ -692,8 +730,13 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
         val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
         val policy = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("policy")), Set(subGroup.id, secondGroup.id, directMember.id), WorkbenchEmail("policy@policy.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), Set.empty, false)
 
-        allMembers.map((user) => dirDao.createUser(user, samRequestContext).unsafeRunSync())
-        Set(subSubGroup, subGroup, secondGroup).map((group) => dirDao.createGroup(group, samRequestContext = samRequestContext).unsafeRunSync())
+        // control user/group to make sure fuction excludes something
+        val inSomeOtherGroup = WorkbenchUser(WorkbenchUserId("notInPolicy"), None, WorkbenchEmail("notInPolicy@members.com"), None)
+        val someOtherGroup = BasicWorkbenchGroup(WorkbenchGroupName("someOtherGroup"), Set(inSomeOtherGroup.id), WorkbenchEmail("someOtherGroup@groups.com"))
+
+        (allMembers + inSomeOtherGroup).map((user) => dirDao.createUser(user, samRequestContext).unsafeRunSync())
+        Set(subSubGroup, subGroup, secondGroup, someOtherGroup).map((group) => dirDao.createGroup(group, samRequestContext = samRequestContext).unsafeRunSync())
+
 
         dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         dao.createResource(resource, samRequestContext).unsafeRunSync()

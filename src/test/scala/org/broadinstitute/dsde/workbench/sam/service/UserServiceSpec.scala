@@ -12,7 +12,8 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.Generator.{arbNonPetEmail => _, _}
 import org.broadinstitute.dsde.workbench.sam.TestSupport.eqWorkbenchExceptionErrorReport
 import org.broadinstitute.dsde.workbench.sam.api.{CreateWorkbenchUser, InviteUser}
-import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryDAO, LdapRegistrationDAO, PostgresDirectoryDAO}
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, PostgresDirectoryDAO}
+import org.broadinstitute.dsde.workbench.sam.directory.LdapRegistrationDAO
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
@@ -51,7 +52,7 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
   lazy val petServiceAccountConfig = TestSupport.appConfig.googleConfig.get.petServiceAccountConfig
   lazy val dirURI = new URI(directoryConfig.directoryUrl)
   lazy val connectionPool = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
-  lazy val dirDAO: DirectoryDAO = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.blockingEc)
+  lazy val dirDAO: DirectoryDAO = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.dbRef)
   lazy val registrationDAO = new LdapRegistrationDAO(connectionPool, directoryConfig, TestSupport.blockingEc)
   lazy val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 

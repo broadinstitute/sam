@@ -5,12 +5,12 @@ import java.security.SecureRandom
 
 import akka.http.scaladsl.model.StatusCodes
 import cats.effect.{ContextShift, IO}
-import javax.naming.NameNotFoundException
 import com.typesafe.scalalogging.LazyLogging
+import javax.naming.NameNotFoundException
 import org.apache.commons.codec.binary.Hex
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.api.{CreateWorkbenchUser, InviteUser}
-import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryDAO, RegistrationDAO}
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, RegistrationDAO}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 

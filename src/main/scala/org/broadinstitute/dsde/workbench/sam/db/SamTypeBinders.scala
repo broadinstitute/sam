@@ -29,6 +29,11 @@ object SamTypeBinders {
     def apply(rs: ResultSet, index: Int): PolicyPK = PolicyPK(rs.getLong(index))
   }
 
+  implicit val effectivePolicyPKTypeBinder: TypeBinder[EffectivePolicyPK] = new TypeBinder[EffectivePolicyPK] {
+    def apply(rs: ResultSet, label: String): EffectivePolicyPK = EffectivePolicyPK(rs.getLong(label))
+    def apply(rs: ResultSet, index: Int): EffectivePolicyPK = EffectivePolicyPK(rs.getLong(index))
+  }
+
   implicit val policyNameTypeBinder: TypeBinder[AccessPolicyName] = new TypeBinder[AccessPolicyName] {
     def apply(rs: ResultSet, label: String): AccessPolicyName = AccessPolicyName(rs.getString(label))
     def apply(rs: ResultSet, index: Int): AccessPolicyName = AccessPolicyName(rs.getString(index))

@@ -8,10 +8,9 @@ import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
-import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryDAO, PostgresDirectoryDAO}
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, PostgresAccessPolicyDAO, PostgresDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, PostgresAccessPolicyDAO}
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.mockito.ArgumentMatchers
 import org.mockito.Mockito._
@@ -37,8 +36,8 @@ class ManagedGroupServiceSpec extends AnyFlatSpec with Matchers with TestSupport
 
   val dirURI = new URI(directoryConfig.directoryUrl)
   val connectionPool = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
-  lazy val dirDAO: DirectoryDAO = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.blockingEc)
-  lazy val policyDAO: AccessPolicyDAO = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.blockingEc)
+  lazy val dirDAO: DirectoryDAO = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.dbRef)
+  lazy val policyDAO: AccessPolicyDAO = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.dbRef)
   val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
   private val resourceId = ResourceId("myNewGroup")
@@ -80,6 +79,9 @@ class ManagedGroupServiceSpec extends AnyFlatSpec with Matchers with TestSupport
     resource.resourceId shouldEqual intendedResource.resourceId
 
     assertPoliciesOnResource(resource.fullyQualifiedId, expectedPolicies = LazyList(ManagedGroupService.adminPolicyName, ManagedGroupService.memberPolicyName, ManagedGroupService.adminNotifierPolicyName))
+
+    dirDAO.listFlattenedGroupMembers(WorkbenchGroupName(groupId), samRequestContext).unsafeRunSync() should contain theSameElementsAs(Set(dummyUserInfo.userId))
+
     resource
   }
 
@@ -105,6 +107,7 @@ class ManagedGroupServiceSpec extends AnyFlatSpec with Matchers with TestSupport
     assertMakeGroup()
     val samGroup: Option[BasicWorkbenchGroup] = dirDAO.loadGroup(WorkbenchGroupName(resourceId.value), samRequestContext).unsafeRunSync()
     samGroup.value.id.value shouldEqual resourceId.value
+
   }
 
   it should "create a workbenchGroup with 2 member WorkbenchSubjects" in {
@@ -227,6 +230,7 @@ class ManagedGroupServiceSpec extends AnyFlatSpec with Matchers with TestSupport
     runAndWait(managedGroupService.overwritePolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName, Set(otherAdmin.email, someGroupEmail), samRequestContext))
 
     managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName, samRequestContext).unsafeRunSync() should contain theSameElementsAs Set(otherAdmin.email, someGroupEmail)
+    dirDAO.listFlattenedGroupMembers(WorkbenchGroupName(managedGroup.resourceId.value), samRequestContext).unsafeRunSync() should contain theSameElementsAs Set(otherAdmin.id)
   }
 
   it should "throw an exception if the group does not exist" in {

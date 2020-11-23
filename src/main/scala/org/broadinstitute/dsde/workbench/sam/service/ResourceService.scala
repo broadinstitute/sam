@@ -7,9 +7,8 @@ import cats.effect.IO
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, LoadResourceAuthDomainResult}
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, LoadResourceAuthDomainResult}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.sam.{model, _}
 
@@ -125,11 +124,21 @@ class ResourceService(
     * @param authDomain
     * @return Future[Resource]
     */
-  private def persistResource(resourceType: ResourceType, resourceId: ResourceId, policies: Set[ValidatableAccessPolicy], authDomain: Set[WorkbenchGroupName], parentOpt: Option[FullyQualifiedResourceId], samRequestContext: SamRequestContext) =
-    for {
-      resource <- accessPolicyDAO.createResource(Resource(resourceType.name, resourceId, authDomain, parent = parentOpt), samRequestContext)
-      policies <- policies.toList.traverse(p => createOrUpdatePolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, p.policyName), p, samRequestContext))
-    } yield resource.copy(accessPolicies = policies.toSet)
+  private def persistResource(resourceType: ResourceType, resourceId: ResourceId, policies: Set[ValidatableAccessPolicy], authDomain: Set[WorkbenchGroupName], parentOpt: Option[FullyQualifiedResourceId], samRequestContext: SamRequestContext) = {
+    val accessPolicies = policies.map(constructAccessPolicy(resourceType, resourceId, _, public = false)) // can't set public at create time
+    accessPolicyDAO.createResource(Resource(resourceType.name, resourceId, authDomain, accessPolicies = accessPolicies, parent = parentOpt), samRequestContext)
+  }
+
+  private def constructAccessPolicy(resourceType: ResourceType, resourceId: ResourceId, validatableAccessPolicy: ValidatableAccessPolicy, public: Boolean) = {
+    AccessPolicy(FullyQualifiedPolicyId(FullyQualifiedResourceId(resourceType.name, resourceId), validatableAccessPolicy.policyName),
+      validatableAccessPolicy.emailsToSubjects.values.flatten.toSet,
+      generateGroupEmail(),
+      validatableAccessPolicy.roles,
+      validatableAccessPolicy.actions,
+      validatableAccessPolicy.descendantPermissions,
+      public
+    )
+  }
 
   private def validateCreateResource(resourceType: ResourceType, resourceId: ResourceId, policies: Set[ValidatableAccessPolicy], authDomain: Set[WorkbenchGroupName], userId: WorkbenchUserId, parentOpt: Option[FullyQualifiedResourceId], samRequestContext: SamRequestContext): IO[Seq[ErrorReport]] =
     for {
@@ -211,10 +220,10 @@ class ResourceService(
       _ <- checkNoChildren(resource, samRequestContext).unsafeToFuture()
 
       // remove from cloud extensions first so a failure there does not leave ldap in a bad state
-      policiesToDelete <- cloudDeletePolicies(resource, samRequestContext)
+      _ <- cloudDeletePolicies(resource, samRequestContext)
 
-      _ <- policiesToDelete.toList.parTraverse(p => accessPolicyDAO.deletePolicy(p.id, samRequestContext)).unsafeToFuture()
-      _ <- maybeDeleteResource(resource, samRequestContext)
+      _ <- accessPolicyDAO.deleteAllResourcePolicies(resource, samRequestContext).unsafeToFuture()
+      _ <- maybeDeleteResource(resource, samRequestContext).unsafeToFuture()
     } yield ()
 
   /** Check if a resource has any children. If so, then throw a 400. */
@@ -244,10 +253,15 @@ class ResourceService(
     } yield policiesToDelete
   }
 
-  private def maybeDeleteResource(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): Future[Unit] =
+  private def maybeDeleteResource(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] =
     resourceTypes.get(resource.resourceTypeName) match {
-      case Some(resourceType) if resourceType.reuseIds => accessPolicyDAO.deleteResource(resource, samRequestContext).unsafeToFuture()
-      case _ => accessPolicyDAO.removeAuthDomainFromResource(resource, samRequestContext).unsafeToFuture()
+      case Some(resourceType) if resourceType.reuseIds => accessPolicyDAO.deleteResource(resource, samRequestContext)
+      case _ =>
+        for {
+          _ <- accessPolicyDAO.removeAuthDomainFromResource(resource, samRequestContext)
+          // orphan the resource so it disappears from the parent
+          _ <- accessPolicyDAO.deleteResourceParent(resource, samRequestContext)
+        } yield ()
     }
 
   def listUserResourceRoles(resource: FullyQualifiedResourceId, userInfo: UserInfo, samRequestContext: SamRequestContext): Future[Set[ResourceRoleName]] =

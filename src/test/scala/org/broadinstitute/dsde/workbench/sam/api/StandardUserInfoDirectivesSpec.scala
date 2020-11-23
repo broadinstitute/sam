@@ -16,7 +16,7 @@ import org.broadinstitute.dsde.workbench.sam.Generator._
 import org.broadinstitute.dsde.workbench.sam.TestSupport.{eqWorkbenchExceptionErrorReport, genIdentityConcentratorId, samRequestContext}
 import org.broadinstitute.dsde.workbench.sam.api.SamRoutes.myExceptionHandler
 import org.broadinstitute.dsde.workbench.sam.api.StandardUserInfoDirectives._
-import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryDAO, MockDirectoryDAO}
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, MockDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.identityConcentrator.IdentityConcentratorService
 import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, UserService}
 import org.broadinstitute.dsde.workbench.sam.service.UserService._

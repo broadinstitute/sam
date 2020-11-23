@@ -10,7 +10,6 @@ import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model.google.ServiceAccountSubjectId
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, _}
 import org.broadinstitute.dsde.workbench.sam.api.StandardUserInfoDirectives._
-import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
 
 import scala.concurrent.ExecutionContext
@@ -25,6 +24,7 @@ import org.broadinstitute.dsde.workbench.sam.identityConcentrator.IdentityConcen
 import scala.util.matching.Regex
 import DefaultJsonProtocol._
 import WorkbenchIdentityJsonSupport.identityConcentratorIdFormat
+import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 trait StandardUserInfoDirectives extends UserInfoDirectives with LazyLogging with SamRequestContextDirectives {

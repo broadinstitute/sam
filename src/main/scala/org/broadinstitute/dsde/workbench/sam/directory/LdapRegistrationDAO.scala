@@ -9,6 +9,7 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{ServiceAccount, ServiceAccountDisplayName, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
+import org.broadinstitute.dsde.workbench.sam.dataAccess.RegistrationDAO
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO.{Attr, ObjectClass}
 import org.broadinstitute.dsde.workbench.sam.util.{LdapSupport, SamRequestContext}
 

@@ -22,12 +22,11 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.api._
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig._
 import org.broadinstitute.dsde.workbench.sam.config._
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, MockAccessPolicyDAO, MockDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.db.{DatabaseNames, DbReference}
 import org.broadinstitute.dsde.workbench.sam.db.tables._
-import org.broadinstitute.dsde.workbench.sam.directory.MockDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.google.{GoogleExtensionRoutes, GoogleExtensions, GoogleGroupSynchronizer, GoogleKeyCache}
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, MockAccessPolicyDAO}
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
@@ -137,7 +136,7 @@ object TestSupport extends TestSupport {
 
   def genSamRoutesWithDefault(implicit system: ActorSystem, materializer: Materializer): SamRoutes = genSamRoutes(genSamDependencies(), UserInfo(OAuth2BearerToken(""), genWorkbenchUserId(System.currentTimeMillis()), defaultUserEmail, 3600))
 
-  lazy val dbRef = DbReference.init(config.as[LiquibaseConfig]("liquibase"), DatabaseNames.Foreground)
+  lazy val dbRef = DbReference.init(config.as[LiquibaseConfig]("liquibase"), DatabaseNames.Read, TestSupport.blockingEc)
 
   def truncateAll: Int = {
     dbRef.inLocalTransaction { implicit session =>
@@ -153,6 +152,7 @@ object TestSupport extends TestSupport {
         ResourceActionPatternTable,
         ResourceTypeTable,
         GroupMemberTable,
+        FlatGroupMemberTable,
         PetServiceAccountTable,
         UserTable,
         AccessInstructionsTable,

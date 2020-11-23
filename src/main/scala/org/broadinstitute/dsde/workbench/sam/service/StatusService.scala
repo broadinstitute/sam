@@ -6,8 +6,8 @@ import akka.util.Timeout
 import cats.effect.IO
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model.WorkbenchGroupName
+import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.db.DbReference
-import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.util.health.HealthMonitor.GetCurrentStatus
 import org.broadinstitute.dsde.workbench.util.health.Subsystems.{Database, OpenDJ, Subsystem}

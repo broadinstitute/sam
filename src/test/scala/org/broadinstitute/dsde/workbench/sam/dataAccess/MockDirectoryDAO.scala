@@ -1,4 +1,4 @@
-package org.broadinstitute.dsde.workbench.sam.directory
+package org.broadinstitute.dsde.workbench.sam.dataAccess
 
 import java.util.Date
 
@@ -276,6 +276,10 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
 
   override def listUserDirectMemberships(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[LazyList[WorkbenchGroupIdentity]] = {
     IO.pure(groups.filter { case (_, group) => group.members.contains(userId) }.keys.to(LazyList))
+  }
+
+  override def listFlattenedGroupMembers(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Set[WorkbenchUserId]] = {
+    IO(listGroupUsers(groupName, Set.empty))
   }
 
   override def loadUserByIdentityConcentratorId(userId: IdentityConcentratorId, samRequestContext: SamRequestContext)
