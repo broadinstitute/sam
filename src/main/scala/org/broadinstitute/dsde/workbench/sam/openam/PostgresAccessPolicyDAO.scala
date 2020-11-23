@@ -590,7 +590,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
 
       val inserted = samsql"$insertQuery".update().apply()
 
-      if (inserted != actions.size) {
+      val fullInsertCount = if (inserted != actions.size) {
         // in this case some actions that we want to insert did not exist in ResourceActionTable
         // add them now and rerun the insert ignoring conflicts
         // this case should happen rarely
@@ -612,10 +612,36 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
       } else {
         inserted
       }
+      insertEffectivePolicyActions(policyId)
+      fullInsertCount
     } else {
       0
     }
   }
+
+  private def insertEffectivePolicyActions(policyId: PolicyPK)(implicit session: DBSession) = {
+    val ancestorResourceTable = AncestorResourceTable("ancestor_resource")
+    val ar = ancestorResourceTable.syntax("ar")
+    val eaCol = EffectivePolicyActionTable.column
+
+    val ep = EffectivePolicyTable.syntax("ep")
+    val pa = PolicyActionTable.syntax("pa")
+    val r = ResourceTable.syntax("r")
+    val ra = ResourceActionTable.syntax("ra")
+
+    samsql"""with recursive ${descendantResourcesCTE(policyId, ancestorResourceTable)}
+
+              insert into ${EffectivePolicyActionTable.table} (${eaCol.resourcePolicyId}, ${eaCol.resourceActionId})
+              select ${ep.id}, ${pa.resourceActionId}
+              from ${ancestorResourceTable as ar}
+              join ${EffectivePolicyTable as ep} on ${ar.resourceId} = ${ep.resourceId} and ${ep.sourcePolicyId} = ${policyId}
+              join ${PolicyActionTable as pa} on ${pa.resourcePolicyId} = ${policyId}
+              join ${ResourceActionTable as ra} on ${pa.resourceActionId} = ${ra.id}
+              join ${ResourceTable as r} on ${ep.resourceId} = ${r.id}
+              where ${pa.descendantsOnly} = (${r.resourceTypeId} != ${ra.resourceTypeId})
+              on conflict do nothing""".update().apply()
+  }
+
 
   private def insertPolicyRoles(roles: Set[FullyQualifiedResourceRole], policyId: PolicyPK, descendantsOnly: Boolean)(implicit session: DBSession): Int = {
     val rr = ResourceRoleTable.syntax("rr")
@@ -635,16 +661,76 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
       if (insertedRolesCount != roles.size) {
         throw new WorkbenchException("Some roles have been deprecated or were not found.")
       }
+      insertEffectivePolicyRoles(policyId)
       insertedRolesCount
     } else {
       0
     }
   }
 
+  private def insertEffectivePolicyRoles(policyId: PolicyPK)(implicit session: DBSession) = {
+    val ancestorResourceTable = AncestorResourceTable("ancestor_resource")
+    val ar = ancestorResourceTable.syntax("ar")
+    val erCol = EffectivePolicyRoleTable.column
+
+    val ep = EffectivePolicyTable.syntax("ep")
+    val pr = PolicyRoleTable.syntax("pr")
+    val r = ResourceTable.syntax("r")
+    val fr = FlattenedRoleMaterializedView.syntax("fr")
+    val rr = ResourceRoleTable.syntax("rr")
+
+    samsql"""with recursive ${descendantResourcesCTE(policyId, ancestorResourceTable)}
+
+              insert into ${EffectivePolicyRoleTable.table} (${erCol.resourcePolicyId}, ${erCol.resourceRoleId})
+              select ${ep.id}, ${pr.resourceRoleId}
+              from ${ancestorResourceTable as ar}
+              join ${EffectivePolicyTable as ep} on ${ar.resourceId} = ${ep.resourceId} and ${ep.sourcePolicyId} = ${policyId}
+              join ${PolicyRoleTable as pr} on ${pr.resourcePolicyId} = ${policyId}
+              join ${FlattenedRoleMaterializedView as fr} on ${pr.resourceRoleId} = ${fr.baseRoleId}
+              join ${ResourceRoleTable as rr} on ${fr.nestedRoleId} = ${rr.id}
+              join ${ResourceTable as r} on ${ep.resourceId} = ${r.id}
+              where ${pr.descendantsOnly} = (${r.resourceTypeId} != ${rr.resourceTypeId})
+              or ${fr.descendantsOnly} = (${r.resourceTypeId} != ${rr.resourceTypeId})
+              on conflict do nothing""".update().apply()
+  }
+
   private def insertPolicy(policy: AccessPolicy, groupId: GroupPK)(implicit session: DBSession): PolicyPK = {
     val pCol = PolicyTable.column
-    PolicyPK(samsql"""insert into ${PolicyTable.table} (${pCol.resourceId}, ${pCol.groupId}, ${pCol.public}, ${pCol.name})
+    val policyPK = PolicyPK(samsql"""insert into ${PolicyTable.table} (${pCol.resourceId}, ${pCol.groupId}, ${pCol.public}, ${pCol.name})
               values ((${ResourceTable.loadResourcePK(policy.id.resource)}), ${groupId}, ${policy.public}, ${policy.id.accessPolicyName})""".updateAndReturnGeneratedKey().apply())
+
+    insertEffectivePolicies(policy, groupId, policyPK)
+
+    policyPK
+  }
+
+  private def insertEffectivePolicies(policy: AccessPolicy, groupId: GroupPK, policyPK: PolicyPK)(implicit session: DBSession) = {
+    val epCol = EffectivePolicyTable.column
+    val ancestorResourceTable = AncestorResourceTable("ancestor_resource")
+    val ar = ancestorResourceTable.syntax("ar")
+
+    samsql"""with recursive ${descendantResourcesCTE(policyPK, ancestorResourceTable)}
+              insert into ${EffectivePolicyTable.table} (${epCol.resourceId}, ${epCol.sourcePolicyId}, ${epCol.groupId}, ${epCol.public})
+              select ${ar.resourceId}, ${policyPK}, ${groupId}, ${policy.public}
+              from ${ancestorResourceTable as ar}
+              """.update().apply()
+  }
+
+  private def descendantResourcesCTE(policyPK: PolicyPK, ancestorResourceTable: AncestorResourceTable) = {
+    val ar = ancestorResourceTable.syntax("ar")
+    val arColumn = ancestorResourceTable.column
+
+    val child = ResourceTable.syntax("child")
+    val p = PolicyTable.syntax("p")
+
+    samsqls"""${ancestorResourceTable.table}(${arColumn.resourceId}) as (
+            select ${p.resourceId}
+            from ${PolicyTable as p}
+            where ${p.id} = ${policyPK}
+            union
+            select ${child.id}
+            from ${ResourceTable as child}
+            join ${ancestorResourceTable as ar} on ${ar.resourceId} = ${child.resourceParentId})"""
   }
 
   private def insertPolicyGroup(policy: AccessPolicy)(implicit session: DBSession): GroupPK = {
@@ -700,36 +786,47 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
 
   override def overwritePolicy(newPolicy: AccessPolicy, samRequestContext: SamRequestContext): IO[AccessPolicy] = {
     runInTransaction("overwritePolicy", samRequestContext)({ implicit session =>
+      val policyPK = loadPolicyPK(newPolicy.id)
       overwritePolicyMembersInternal(newPolicy.id, newPolicy.members)
-      overwritePolicyRolesInternal(newPolicy.id, newPolicy.roles, newPolicy.descendantPermissions.flatMap(permissions => FullyQualifiedResourceRole.fullyQualify(permissions.roles, permissions.resourceType)))
-      overwritePolicyActionsInternal(newPolicy.id, newPolicy.actions, newPolicy.descendantPermissions.flatMap(permissions => FullyQualifiedResourceAction.fullyQualify(permissions.actions, permissions.resourceType)))
-      setPolicyIsPublicInternal(newPolicy.id, newPolicy.public)
+      overwritePolicyRolesInternal(policyPK, FullyQualifiedResourceRole.fullyQualify(newPolicy.roles, newPolicy.id.resource.resourceTypeName), newPolicy.descendantPermissions.flatMap(permissions => FullyQualifiedResourceRole.fullyQualify(permissions.roles, permissions.resourceType)))
+      overwritePolicyActionsInternal(policyPK, FullyQualifiedResourceAction.fullyQualify(newPolicy.actions, newPolicy.id.resource.resourceTypeName), newPolicy.descendantPermissions.flatMap(permissions => FullyQualifiedResourceAction.fullyQualify(permissions.actions, permissions.resourceType)))
+      setPolicyIsPublicInternal(policyPK, newPolicy.public)
 
       newPolicy
     })
   }
 
-  private def overwritePolicyRolesInternal(id: FullyQualifiedPolicyId, roles: Set[ResourceRoleName], descendantRoles: Set[FullyQualifiedResourceRole])(implicit session: DBSession): Int = {
-    val policyPK = getPolicyPK(id)
-
+  private def overwritePolicyRolesInternal(policyPK: PolicyPK, roles: Set[FullyQualifiedResourceRole], descendantRoles: Set[FullyQualifiedResourceRole])(implicit session: DBSession): Int = {
     val pr = PolicyRoleTable.syntax("pr")
     samsql"delete from ${PolicyRoleTable as pr} where ${pr.resourcePolicyId} = $policyPK".update().apply()
 
-    insertPolicyRoles(FullyQualifiedResourceRole.fullyQualify(roles, id.resource.resourceTypeName), policyPK, false)
+    val ep = EffectivePolicyTable.syntax("ep")
+    val epr = EffectivePolicyRoleTable.syntax(("epr"))
+    samsql"""delete from ${EffectivePolicyRoleTable as epr}
+              using ${EffectivePolicyTable as ep}
+              where ${ep.sourcePolicyId} = $policyPK
+              and ${epr.resourcePolicyId} = ${ep.id}""".update().apply()
+
+    insertPolicyRoles(roles, policyPK, false)
     insertPolicyRoles(descendantRoles, policyPK, true)
   }
 
-  private def overwritePolicyActionsInternal(id: FullyQualifiedPolicyId, actions: Set[ResourceAction], descendantActions: Set[FullyQualifiedResourceAction])(implicit session: DBSession): Int = {
-    val policyPK = getPolicyPK(id)
-
+  private def overwritePolicyActionsInternal(policyPK: PolicyPK, actions: Set[FullyQualifiedResourceAction], descendantActions: Set[FullyQualifiedResourceAction])(implicit session: DBSession): Int = {
     val pa = PolicyActionTable.syntax("pa")
     samsql"delete from ${PolicyActionTable as pa} where ${pa.resourcePolicyId} = $policyPK".update().apply()
 
-    insertPolicyActions(FullyQualifiedResourceAction.fullyQualify(actions, id.resource.resourceTypeName), policyPK, false)
+    val ep = EffectivePolicyTable.syntax("ep")
+    val epa = EffectivePolicyActionTable.syntax(("epa"))
+    samsql"""delete from ${EffectivePolicyActionTable as epa}
+              using ${EffectivePolicyTable as ep}
+              where ${ep.sourcePolicyId} = $policyPK
+              and ${epa.resourcePolicyId} = ${ep.id}""".update().apply()
+
+    insertPolicyActions(actions, policyPK, false)
     insertPolicyActions(descendantActions, policyPK, true)
   }
 
-  private def getPolicyPK(id: FullyQualifiedPolicyId)(implicit session: DBSession): PolicyPK = {
+  private def loadPolicyPK(id: FullyQualifiedPolicyId)(implicit session: DBSession): PolicyPK = {
     val p = PolicyTable.syntax("p")
     samsql"select ${p.id} from ${PolicyTable as p} where ${p.name} = ${id.accessPolicyName} and ${p.resourceId} = (${ResourceTable.loadResourcePK(id.resource)})".map(rs => PolicyPK(rs.long(1))).single().apply().getOrElse {
       throw new WorkbenchException(s"policy record not found for $id")
@@ -1150,7 +1247,8 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
 
   override def setPolicyIsPublic(policyId: FullyQualifiedPolicyId, isPublic: Boolean, samRequestContext: SamRequestContext): IO[Unit] = {
     runInTransaction("setPolicyIsPublic", samRequestContext)({ implicit session =>
-      setPolicyIsPublicInternal(policyId, isPublic)
+      val policyPK = loadPolicyPK(policyId)
+      setPolicyIsPublicInternal(policyPK, isPublic)
     })
   }
 
@@ -1193,6 +1291,9 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
 
     runInTransaction("setResourceParent", samRequestContext)({ implicit session =>
       val parentResourcePK = loadResourcePK(parentResource)
+      val childResourcePK = loadResourcePK(childResource)
+
+      deleteInheritedEffectivePolicies(childResourcePK)
 
       val query =
         samsql"""with recursive ${ancestorResourceTable.table}(${arColumn.resourceId}) as (
@@ -1221,25 +1322,150 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
           ErrorReport(StatusCodes.BadRequest, "Cannot set parent as this would introduce a cyclical resource hierarchy")
         )
       }
+
+      populateInheritedEffectivePolicies(childResourcePK)
     })
   }
 
   override def deleteResourceParent(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Boolean] = {
     val r = ResourceTable.syntax("r")
     val resourceTableColumn = ResourceTable.column
-    val rt = ResourceTypeTable.syntax("rt")
 
     runInTransaction("deleteResourceParent", samRequestContext)({ implicit session =>
+      val resourcePK = loadResourcePK(resource)
+      deleteInheritedEffectivePolicies(resourcePK)
       val query =
         samsql"""update ${ResourceTable as r}
           set ${resourceTableColumn.resourceParentId} = null
-          from ${ResourceTypeTable as rt}
-          where ${rt.id} = ${r.resourceTypeId}
-          and ${r.name} = ${resource.resourceId}
-          and ${rt.name} = ${resource.resourceTypeName}"""
+          where ${r.id} = ${resourcePK}"""
 
       query.update.apply() > 0
     })
+  }
+
+  private def deleteInheritedEffectivePolicies(childResourcePK: ResourcePK)(implicit session: DBSession) = {
+    val resource = ResourceTable.syntax("resource")
+
+    val ancestorResourceTable = AncestorResourceTable("ancestor_resource")
+    val ancestorResource = ancestorResourceTable.syntax("ancestorResource")
+    val arColumn = ancestorResourceTable.column
+    val parentResource = ResourceTable.syntax("parentResource")
+
+    val descendantResourceTable = AncestorResourceTable("descendant_resource")
+    val descendantResource = descendantResourceTable.syntax("descendantResource")
+    val drColumn = descendantResourceTable.column
+
+    val ep = EffectivePolicyTable.syntax("ep")
+    val p = PolicyTable.syntax("p")
+
+    val ancestorsAndDescendants =
+      ancestorsAndDescendantsCTEs(childResourcePK, resource, ancestorResourceTable, ancestorResource, arColumn, parentResource, descendantResourceTable, descendantResource, drColumn)
+
+    samsql"""with recursive
+        ${ancestorsAndDescendants}
+
+        delete from ${EffectivePolicyTable as ep}
+        using ${ancestorResourceTable as ancestorResource}, ${descendantResourceTable as descendantResource}, ${PolicyTable as p}
+        where ${ep.resourceId} = ${descendantResource.resourceId}
+        and ${p.resourceId} = ${ancestorResource.resourceId}
+        and ${p.id} = ${ep.sourcePolicyId}""".update().apply()
+  }
+
+  private def populateInheritedEffectivePolicies(childResourcePK: ResourcePK)(implicit session: DBSession) = {
+    val resource = ResourceTable.syntax("resource")
+
+    val ancestorResourceTable = AncestorResourceTable("ancestor_resource")
+    val ancestorResource = ancestorResourceTable.syntax("ancestorResource")
+    val arColumn = ancestorResourceTable.column
+    val parentResource = ResourceTable.syntax("parentResource")
+
+    val descendantResourceTable = AncestorResourceTable("descendant_resource")
+    val descendantResource = descendantResourceTable.syntax("descendantResource")
+    val drColumn = descendantResourceTable.column
+
+    val ep = EffectivePolicyTable.syntax("ep")
+    val p = PolicyTable.syntax("p")
+    val epCol = EffectivePolicyTable.column
+
+    val ancestorsAndDescendants =
+      ancestorsAndDescendantsCTEs(childResourcePK, resource, ancestorResourceTable, ancestorResource, arColumn, parentResource, descendantResourceTable, descendantResource, drColumn)
+
+    // insert effective policies
+    samsql"""with recursive
+        ${ancestorsAndDescendants}
+
+        insert into ${EffectivePolicyTable.table} (${epCol.resourceId}, ${epCol.sourcePolicyId}, ${epCol.groupId}, ${epCol.public})
+        select ${descendantResource.resourceId}, ${ancestorResource.resourceId}, ${p.groupId}, ${p.public}
+        from ${descendantResourceTable as descendantResource},
+        ${ancestorResourceTable as ancestorResource}
+        join ${PolicyTable as p} on ${ancestorResource.resourceId} = ${p.resourceId}""".update().apply()
+
+
+    val eaCol = EffectivePolicyActionTable.column
+
+    val pa = PolicyActionTable.syntax("pa")
+    val r = ResourceTable.syntax("r")
+    val ra = ResourceActionTable.syntax("ra")
+
+    // insert effective policy actions
+    samsql"""with recursive
+             ${ancestorsAndDescendants}
+
+              insert into ${EffectivePolicyActionTable.table} (${eaCol.resourcePolicyId}, ${eaCol.resourceActionId})
+              select ${ep.id}, ${pa.resourceActionId}
+              from ${descendantResourceTable as descendantResource},
+              ${ancestorResourceTable as ancestorResource}
+              join ${EffectivePolicyTable as ep} on ${ancestorResource.resourceId} = ${ep.resourceId}
+              join ${PolicyActionTable as pa} on ${pa.resourcePolicyId} = ${ep.sourcePolicyId}
+              join ${ResourceActionTable as ra} on ${pa.resourceActionId} = ${ra.id}
+              join ${ResourceTable as r} on ${ep.resourceId} = ${r.id}
+              where ${pa.descendantsOnly} = (${r.resourceTypeId} != ${ra.resourceTypeId})
+              and ${ep.resourceId} = ${descendantResource.resourceId}
+              on conflict do nothing""".update().apply()
+
+    val erCol = EffectivePolicyRoleTable.column
+
+    val pr = PolicyRoleTable.syntax("pr")
+    val fr = FlattenedRoleMaterializedView.syntax("fr")
+    val rr = ResourceRoleTable.syntax("rr")
+
+    // insert effective policy roles
+    samsql"""with recursive
+             ${ancestorsAndDescendants}
+
+              insert into ${EffectivePolicyRoleTable.table} (${erCol.resourcePolicyId}, ${erCol.resourceRoleId})
+              select ${ep.id}, ${pr.resourceRoleId}
+              from ${descendantResourceTable as descendantResource},
+              ${ancestorResourceTable as ancestorResource}
+              join ${EffectivePolicyTable as ep} on ${ancestorResource.resourceId} = ${ep.resourceId}
+              join ${PolicyRoleTable as pr} on ${pr.resourcePolicyId} = ${ep.sourcePolicyId}
+              join ${FlattenedRoleMaterializedView as fr} on ${pr.resourceRoleId} = ${fr.baseRoleId}
+              join ${ResourceRoleTable as rr} on ${fr.nestedRoleId} = ${rr.id}
+              join ${ResourceTable as r} on ${ep.resourceId} = ${r.id}
+              where (${pr.descendantsOnly} = (${r.resourceTypeId} != ${rr.resourceTypeId})
+              or ${fr.descendantsOnly} = (${r.resourceTypeId} != ${rr.resourceTypeId}))
+              and ${ep.resourceId} = ${descendantResource.resourceId}
+              on conflict do nothing""".update().apply()
+  }
+
+  private def ancestorsAndDescendantsCTEs(childResourcePK: ResourcePK, resource: scalikejdbc.QuerySQLSyntaxProvider[scalikejdbc.SQLSyntaxSupport[ResourceRecord], ResourceRecord], ancestorResourceTable: AncestorResourceTable, ancestorResource: scalikejdbc.QuerySQLSyntaxProvider[scalikejdbc.SQLSyntaxSupport[AncestorResourceRecord], AncestorResourceRecord], arColumn: scalikejdbc.ColumnName[AncestorResourceRecord], parentResource: scalikejdbc.QuerySQLSyntaxProvider[scalikejdbc.SQLSyntaxSupport[ResourceRecord], ResourceRecord], descendantResourceTable: AncestorResourceTable, descendantResource: scalikejdbc.QuerySQLSyntaxProvider[scalikejdbc.SQLSyntaxSupport[AncestorResourceRecord], AncestorResourceRecord], drColumn: scalikejdbc.ColumnName[AncestorResourceRecord]) = {
+    samsqls"""
+        ${ancestorResourceTable.table}(${arColumn.resourceId}) as (
+          select ${resource.resourceParentId}
+          from ${ResourceTable as resource}
+          where ${resource.id} = ${childResourcePK} and ${resource.resourceParentId} is not null
+          union
+          select ${parentResource.resourceParentId}
+          from ${ResourceTable as parentResource}
+          join ${ancestorResourceTable as ancestorResource} on ${ancestorResource.resourceId} = ${parentResource.id}
+          where ${parentResource.resourceParentId} is not null),
+
+        ${descendantResourceTable.table}(${drColumn.resourceId}) as (
+            select ${childResourcePK}
+            union
+            select ${resource.id}
+            from ${ResourceTable as resource}
+            join ${descendantResourceTable as descendantResource} on ${descendantResource.resourceId} = ${resource.resourceParentId})"""
   }
 
   override def listResourceChildren(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Set[FullyQualifiedResourceId]] = {
@@ -1269,20 +1495,19 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     })
   }
 
-  private def setPolicyIsPublicInternal(policyId: FullyQualifiedPolicyId, isPublic: Boolean)(implicit session: DBSession): Int = {
+  private def setPolicyIsPublicInternal(policyPK: PolicyPK, isPublic: Boolean)(implicit session: DBSession): Int = {
     val p = PolicyTable.syntax("p")
     val policyTableColumn = PolicyTable.column
-    val r = ResourceTable.syntax("r")
-    val rt = ResourceTypeTable.syntax("rt")
 
     samsql"""update ${PolicyTable as p}
               set ${policyTableColumn.public} = ${isPublic}
-              from ${ResourceTable as r}
-              join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
-              where ${p.resourceId} = ${r.id}
-              and ${p.name} = ${policyId.accessPolicyName}
-              and ${r.name} = ${policyId.resource.resourceId}
-              and ${rt.name} = ${policyId.resource.resourceTypeName}""".update().apply()
+              where ${p.id} = ${policyPK}""".update().apply()
+
+    val ep = EffectivePolicyTable.syntax("ep")
+    val effectivePolicyTableColumn = EffectivePolicyTable.column
+    samsql"""update ${EffectivePolicyTable as ep}
+              set ${effectivePolicyTableColumn.public} = ${isPublic}
+              where ${ep.sourcePolicyId} = ${policyPK}""".update().apply()
   }
 
   /**
