@@ -17,7 +17,7 @@ import scala.concurrent.duration._
 
 class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfterEach {
   implicit val cs = IO.contextShift(scala.concurrent.ExecutionContext.global)
-  val dao = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.blockingEc)
+  val dao = new FlatPostgresDirectoryDAO(TestSupport.dbRef, TestSupport.blockingEc)
   val policyDAO = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.blockingEc)
 
   val defaultGroupName = WorkbenchGroupName("group")
