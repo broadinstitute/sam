@@ -20,18 +20,17 @@ class FlatPostgresDirectoryDAO (override val dbRef: DbReference, override val ec
 
   override def isGroupMember(groupId: WorkbenchGroupIdentity, member: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean] = {
     val f = FlatGroupMemberTable.syntax("f")
-
-    val memberClause: SQLSyntax = member match {
-      case subGroupId: WorkbenchGroupIdentity => samsqls"${f.memberGroupId} = (${workbenchGroupIdentityToGroupPK(subGroupId)})"
-      case WorkbenchUserId(userId) => samsqls"${f.memberUserId} = $userId"
-      case _ => throw new WorkbenchException(s"illegal member $member")
-    }
-
     runInTransaction("isGroupMember", samRequestContext)({ implicit session =>
       val query = samsql"""SELECT count(*) FROM ${FlatGroupMemberTable as f}
-                WHERE $memberClause AND ${f.groupId} = ${workbenchGroupIdentityToGroupPK(groupId)}"""
+                WHERE ${memberClause(member)} AND ${f.groupId} = ${workbenchGroupIdentityToGroupPK(groupId)}"""
       query.map(rs => rs.int(1)).single().apply().getOrElse(0) > 0
     })
+  }
+
+  override def addGroupMember(groupId: WorkbenchGroupIdentity, addMember: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean] = {
+    runInTransaction("addGroupMember", samRequestContext)({ implicit session =>
+      insertGroupMembers(queryForGroupPKs(Set(groupId)).head, Set(addMember))
+    }).map(count => count > 0)
   }
 
   override def insertGroupMembers(groupId: GroupPK, members: Set[WorkbenchSubject])(implicit session: DBSession): Int = {
@@ -84,6 +83,28 @@ class FlatPostgresDirectoryDAO (override val dbRef: DbReference, override val ec
       val gm = FlatGroupMemberTable.column
       samsql"""insert into ${FlatGroupMemberTable.table} (${gm.groupId}, ${gm.memberUserId}, ${gm.memberGroupId}, ${gm.groupMembershipPath})
         values ${directMemberUsers ++ directMemberGroups ++ transitiveMembers}""".update().apply()
+    }
+  }
+
+  override def removeGroupMember(groupId: WorkbenchGroupIdentity, removeMember: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean] = {
+    val f = FlatGroupMemberTable.syntax("f")
+
+    // remove all records where `groupId` is the direct parent of `removeMember`
+    // = the final element of the membership path, retrieved by `path[array_upper(path, 1)]`
+    val groupClause = samsqls"${f.groupMembershipPath}[array_upper(f.groupMembershipPath, 1)] = ${workbenchGroupIdentityToGroupPK(groupId)}"
+
+    runInTransaction("removeGroupMember", samRequestContext)({ implicit session =>
+      val query = samsql"DELETE FROM ${FlatGroupMemberTable as f} WHERE ${memberClause(removeMember)} AND ${groupClause}"
+      query.update().apply()
+    }).map(count => count > 0)
+  }
+
+  private def memberClause(member: WorkbenchSubject): SQLSyntax = {
+    val f = FlatGroupMemberTable.syntax("f")
+    member match {
+      case subGroupId: WorkbenchGroupIdentity => samsqls"${f.memberGroupId} = (${workbenchGroupIdentityToGroupPK(subGroupId)})"
+      case WorkbenchUserId(userId) => samsqls"${f.memberUserId} = $userId"
+      case _ => throw new WorkbenchException(s"illegal member $member")
     }
   }
 
