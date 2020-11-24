@@ -74,12 +74,9 @@ class FlatPostgresDirectoryDAO (override val dbRef: DbReference, override val ec
           samsqls"(${ancestor}, ${None}, ${groupPK}, ${ancestorsPlusGroup})"
         }
 
-        val descendants = descendantMemberships.map { case (descendant, descendantPath) =>
-          val fullPath = ancestorsPlusGroup.append(descendantPath)
-          descendant match {
-            case Left(userId) => samsqls"(${ancestor}, ${userId}, ${None}, ${fullPath})"
-            case Right(groupPk) => samsqls"(${ancestor}, ${None}, ${groupPk}, ${fullPath})"
-          }
+        val descendants = descendantMemberships.collect {
+          case (Left(userId), descendantPath) => samsqls"(${ancestor}, ${userId}, ${None}, ${ancestorsPlusGroup.append(descendantPath)})"
+          case (Right(groupPk), descendantPath) => samsqls"(${ancestor}, ${None}, ${groupPk}, ${ancestorsPlusGroup.append(descendantPath)})"
         }
 
         ancestorUsers ++ ancestorGroups ++ descendants
@@ -126,6 +123,13 @@ class FlatPostgresDirectoryDAO (override val dbRef: DbReference, override val ec
     })
   }
 
+  // list the users who are members of all the groups
+  override def listIntersectionGroupUsers(groupIds: Set[WorkbenchGroupIdentity], samRequestContext: SamRequestContext): IO[Set[WorkbenchUserId]] = {
+    runInTransaction("listIntersectionGroupUsers", samRequestContext)({ implicit session =>
+      listMembersByGroupIdentity(groupIds).collect { case FlatGroupMemberRecord(_, _, Some(userId), _, _) => userId }.toSet
+    })
+  }
+  
   private def memberClause(member: WorkbenchSubject): SQLSyntax = {
     val f = FlatGroupMemberTable.syntax("f")
     member match {
@@ -154,7 +158,7 @@ class FlatPostgresDirectoryDAO (override val dbRef: DbReference, override val ec
     listMyGroupRecords(groupId).map { record => (record.groupId, record.groupMembershipPath) }
 
   // get all of the direct or transitive members of all `groups`
-  private def listMembers(groups: TraversableOnce[GroupPK])(implicit session: DBSession) = {
+  private def listMembersByPKs(groups: Traversable[GroupPK])(implicit session: DBSession) = {
     val gm = FlatGroupMemberTable.column
     val f = FlatGroupMemberTable.syntax("f")
 
@@ -163,15 +167,23 @@ class FlatPostgresDirectoryDAO (override val dbRef: DbReference, override val ec
                       where ${gm.groupId} IN (${groups})""".map(convertToFlatGroupMemberTable(f)).list.apply()
   }
 
+  // get all of the direct or transitive members of all `groups`
+  private def listMembersByGroupIdentity(groups: Traversable[WorkbenchGroupIdentity])(implicit session: DBSession) = {
+    val gm = FlatGroupMemberTable.column
+    val f = FlatGroupMemberTable.syntax("f")
+
+    samsql"""select ${gm.groupId}, ${gm.memberUserId}, ${gm.memberGroupId}, ${gm.groupMembershipPath}
+                      from ${FlatGroupMemberTable as f}
+                      where ${gm.groupId} IN (${groups map workbenchGroupIdentityToGroupPK})""".map(convertToFlatGroupMemberTable(f)).list.apply()
+  }
+
   // fetch all records where DB.group_id IN groupMembers
-  private def descendentPaths(groups: TraversableOnce[GroupPK])(implicit session: DBSession): List[(Either[WorkbenchUserId, GroupPK], FlatGroupMembershipPath)] = {
-    listMembers(groups).map { record =>
-      val descendant = (record.memberUserId, record.memberGroupId) match {
-        case (Some(userId), None) => Left(userId)
-        case (None, Some(groupId)) => Right(groupId)
-        case _ => throw new WorkbenchException(s"DB error: ${FlatGroupMemberTable.tableName} record ${record.id} does not contain exactly 1 of: userId, groupId")
-      }
-      (descendant, record.groupMembershipPath)
+  private def descendentPaths(groups: Traversable[GroupPK])(implicit session: DBSession): List[(Either[WorkbenchUserId, GroupPK], FlatGroupMembershipPath)] = {
+    listMembersByPKs(groups).collect {
+      case FlatGroupMemberRecord(_, _, Some(memberUserId), _, groupMembershipPath) => (Left(memberUserId), groupMembershipPath)
+      case FlatGroupMemberRecord(_, _, _, Some(memberGroupId), groupMembershipPath) => (Right(memberGroupId), groupMembershipPath)
+      case FlatGroupMemberRecord(id, _, _, _, _) =>
+        throw new WorkbenchException(s"DB error: ${FlatGroupMemberTable.tableName} record ${id} does not contain exactly 1 of: userId, groupId")
     }
   }
 }
