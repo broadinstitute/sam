@@ -385,6 +385,10 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
         insertAuthDomainsForResource(resourcePK, resource.authDomain)
       }
 
+      if (resource.parent.isDefined) {
+        populateInheritedEffectivePolicies(resourcePK)
+      }
+
       resource
     })
   }
@@ -629,16 +633,21 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     val r = ResourceTable.syntax("r")
     val ra = ResourceActionTable.syntax("ra")
 
+    val policy = PolicyTable.syntax("policy")
+
     samsql"""with recursive ${descendantResourcesCTE(policyId, ancestorResourceTable)}
 
               insert into ${EffectivePolicyActionTable.table} (${eaCol.resourcePolicyId}, ${eaCol.resourceActionId})
-              select ${ep.id}, ${pa.resourceActionId}
+              select ${ep.id}, ${ra.id}
               from ${ancestorResourceTable as ar}
               join ${EffectivePolicyTable as ep} on ${ar.resourceId} = ${ep.resourceId} and ${ep.sourcePolicyId} = ${policyId}
               join ${PolicyActionTable as pa} on ${pa.resourcePolicyId} = ${policyId}
               join ${ResourceActionTable as ra} on ${pa.resourceActionId} = ${ra.id}
-              join ${ResourceTable as r} on ${ep.resourceId} = ${r.id}
-              where ${pa.descendantsOnly} = (${r.resourceTypeId} != ${ra.resourceTypeId})
+              join ${ResourceTable as r} on ${ep.resourceId} = ${r.id},
+              ${PolicyTable as policy}
+              where ${policy.id} = ${policyId}
+              and ${pa.descendantsOnly} = (${policy.resourceId} != ${ep.resourceId})
+              and ${r.resourceTypeId} = ${ra.resourceTypeId}
               on conflict do nothing""".update().apply()
   }
 
@@ -679,18 +688,22 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     val fr = FlattenedRoleMaterializedView.syntax("fr")
     val rr = ResourceRoleTable.syntax("rr")
 
+    val policy = PolicyTable.syntax("policy")
+
     samsql"""with recursive ${descendantResourcesCTE(policyId, ancestorResourceTable)}
 
               insert into ${EffectivePolicyRoleTable.table} (${erCol.resourcePolicyId}, ${erCol.resourceRoleId})
-              select ${ep.id}, ${pr.resourceRoleId}
+              select ${ep.id}, ${rr.id}
               from ${ancestorResourceTable as ar}
               join ${EffectivePolicyTable as ep} on ${ar.resourceId} = ${ep.resourceId} and ${ep.sourcePolicyId} = ${policyId}
               join ${PolicyRoleTable as pr} on ${pr.resourcePolicyId} = ${policyId}
               join ${FlattenedRoleMaterializedView as fr} on ${pr.resourceRoleId} = ${fr.baseRoleId}
               join ${ResourceRoleTable as rr} on ${fr.nestedRoleId} = ${rr.id}
-              join ${ResourceTable as r} on ${ep.resourceId} = ${r.id}
-              where ${pr.descendantsOnly} = (${r.resourceTypeId} != ${rr.resourceTypeId})
-              or ${fr.descendantsOnly} = (${r.resourceTypeId} != ${rr.resourceTypeId})
+              join ${ResourceTable as r} on ${ep.resourceId} = ${r.id},
+              ${PolicyTable as policy}
+              where ${policy.id} = ${policyId}
+              and ${r.resourceTypeId} = ${rr.resourceTypeId}
+              and (((${policy.resourceId} != ${ep.resourceId}) and (${pr.descendantsOnly} or ${fr.descendantsOnly})) or not ((${policy.resourceId} != ${ep.resourceId}) or ${pr.descendantsOnly} or ${fr.descendantsOnly}))
               on conflict do nothing""".update().apply()
   }
 
@@ -710,10 +723,10 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     val ar = ancestorResourceTable.syntax("ar")
 
     samsql"""with recursive ${descendantResourcesCTE(policyPK, ancestorResourceTable)}
-              insert into ${EffectivePolicyTable.table} (${epCol.resourceId}, ${epCol.sourcePolicyId}, ${epCol.groupId}, ${epCol.public})
-              select ${ar.resourceId}, ${policyPK}, ${groupId}, ${policy.public}
-              from ${ancestorResourceTable as ar}
-              """.update().apply()
+            insert into ${EffectivePolicyTable.table} (${epCol.resourceId}, ${epCol.sourcePolicyId}, ${epCol.groupId}, ${epCol.public})
+            select ${ar.resourceId}, ${policyPK}, ${groupId}, ${policy.public}
+            from ${ancestorResourceTable as ar}
+            """.update().apply()
   }
 
   private def descendantResourcesCTE(policyPK: PolicyPK, ancestorResourceTable: AncestorResourceTable) = {
@@ -1055,20 +1068,18 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
       val userResourcePolicy = userPoliciesCommonTableExpression.userResourcePolicy
       val cteQueryFragment = userPoliciesCommonTableExpression.queryFragment
 
-      val policyRole = PolicyRoleTable.syntax("policyRole")
+      val policyRole = EffectivePolicyRoleTable.syntax("policyRole")
       val resourceRole = ResourceRoleTable.syntax("resourceRole")
-      val flattenedRole = FlattenedRoleMaterializedView.syntax("flattenedRole")
-      val policyActionJoin = PolicyActionTable.syntax("policyActionJoin")
+      val policyActionJoin = EffectivePolicyActionTable.syntax("policyActionJoin")
       val policyAction = ResourceActionTable.syntax("policyAction")
 
       val listUserResourcesQuery = samsql"""$cteQueryFragment
         select ${userResourcePolicy.result.baseResourceName}, ${resourceRole.result.role}, ${policyAction.result.action}, ${userResourcePolicy.result.public}, ${userResourcePolicy.result.inherited}
           from ${userResourcePolicyTable as userResourcePolicy}
-          left join ${PolicyRoleTable as policyRole} on ${userResourcePolicy.policyId} = ${policyRole.resourcePolicyId}
-          left join ${FlattenedRoleMaterializedView as flattenedRole} on ${policyRole.resourceRoleId} = ${flattenedRole.baseRoleId} and ${roleAppliesToResource(userResourcePolicy, policyRole, flattenedRole)}
-          left join ${ResourceRoleTable as resourceRole} on ${flattenedRole.nestedRoleId} = ${resourceRole.id} and ${userResourcePolicy.baseResourceTypeId} = ${resourceRole.resourceTypeId}
-          left join ${PolicyActionTable as policyActionJoin} on ${userResourcePolicy.policyId} = ${policyActionJoin.resourcePolicyId} and ${userResourcePolicy.inherited} = ${policyActionJoin.descendantsOnly}
-          left join ${ResourceActionTable as policyAction} on ${policyActionJoin.resourceActionId} = ${policyAction.id} and ${userResourcePolicy.baseResourceTypeId} = ${policyAction.resourceTypeId}
+          left join ${EffectivePolicyRoleTable as policyRole} on ${userResourcePolicy.policyId} = ${policyRole.resourcePolicyId}
+          left join ${ResourceRoleTable as resourceRole} on ${policyRole.resourceRoleId} = ${resourceRole.id}
+          left join ${EffectivePolicyActionTable as policyActionJoin} on ${userResourcePolicy.policyId} = ${policyActionJoin.resourcePolicyId}
+          left join ${ResourceActionTable as policyAction} on ${policyActionJoin.resourceActionId} = ${policyAction.id}
           where ${resourceRole.role} is not null or ${policyAction.action} is not null"""
 
       val queryResults = listUserResourcesQuery.map { rs =>
@@ -1180,10 +1191,9 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
       val userResourcePolicy = userPoliciesCommonTableExpression.userResourcePolicy
       val cteQueryFragment = userPoliciesCommonTableExpression.queryFragment
 
-      val policyRole = PolicyRoleTable.syntax("policyRole")
+      val policyRole = EffectivePolicyRoleTable.syntax("policyRole")
       val resourceRole = ResourceRoleTable.syntax("resourceRole")
-      val flattenedRole = FlattenedRoleMaterializedView.syntax("flattenedRole")
-      val policyActionJoin = PolicyActionTable.syntax("policyActionJoin")
+      val policyActionJoin = EffectivePolicyActionTable.syntax("policyActionJoin")
       val policyAction = ResourceActionTable.syntax("policyAction")
       val roleActionJoin = RoleActionTable.syntax("roleActionJoin")
       val roleAction = ResourceActionTable.syntax("roleAction")
@@ -1191,17 +1201,15 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
       val listUserResourceActionsQuery = samsql"""$cteQueryFragment
         select ${roleAction.action} as action
           from ${userResourcePolicyTable as userResourcePolicy}
-          join ${PolicyRoleTable as policyRole} on ${userResourcePolicy.policyId} = ${policyRole.resourcePolicyId}
-          join ${FlattenedRoleMaterializedView as flattenedRole} on ${policyRole.resourceRoleId} = ${flattenedRole.baseRoleId}
-          join ${ResourceRoleTable as resourceRole} on ${flattenedRole.nestedRoleId} = ${resourceRole.id} and ${userResourcePolicy.baseResourceTypeId} = ${resourceRole.resourceTypeId}
+          join ${EffectivePolicyRoleTable as policyRole} on ${userResourcePolicy.policyId} = ${policyRole.resourcePolicyId}
+          join ${ResourceRoleTable as resourceRole} on ${policyRole.resourceRoleId} = ${resourceRole.id}
           join ${RoleActionTable as roleActionJoin} on ${resourceRole.id} = ${roleActionJoin.resourceRoleId}
           join ${ResourceActionTable as roleAction} on ${roleActionJoin.resourceActionId} = ${roleAction.id}
-          where ${roleAppliesToResource(userResourcePolicy, policyRole, flattenedRole)}
         union
         select ${policyAction.action} as action
           from ${userResourcePolicyTable as userResourcePolicy}
-          join ${PolicyActionTable as policyActionJoin} on ${userResourcePolicy.policyId} = ${policyActionJoin.resourcePolicyId} and ${userResourcePolicy.inherited} = ${policyActionJoin.descendantsOnly}
-          join ${ResourceActionTable as policyAction} on ${policyActionJoin.resourceActionId} = ${policyAction.id} and ${userResourcePolicy.baseResourceTypeId} = ${policyAction.resourceTypeId}"""
+          join ${EffectivePolicyActionTable as policyActionJoin} on ${userResourcePolicy.policyId} = ${policyActionJoin.resourcePolicyId}
+          join ${ResourceActionTable as policyAction} on ${policyActionJoin.resourceActionId} = ${policyAction.id}"""
 
       listUserResourceActionsQuery.map(rs => ResourceAction(rs.string("action"))).list().apply().toSet
     })
@@ -1215,16 +1223,13 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
       val userResourcePolicy = userPoliciesCommonTableExpression.userResourcePolicy
       val cteQueryFragment = userPoliciesCommonTableExpression.queryFragment
 
-      val policyRole = PolicyRoleTable.syntax("policyRole")
+      val policyRole = EffectivePolicyRoleTable.syntax("policyRole")
       val resourceRole = ResourceRoleTable.syntax("resourceRole")
-      val flattenedRole = FlattenedRoleMaterializedView.syntax("flattenedRole")
       val listUserResourceRolesQuery = samsql"""$cteQueryFragment
         select ${resourceRole.result.role}
           from ${userResourcePolicyTable as userResourcePolicy}
-          join ${PolicyRoleTable as policyRole} on ${userResourcePolicy.policyId} = ${policyRole.resourcePolicyId}
-          join ${FlattenedRoleMaterializedView as flattenedRole} on ${policyRole.resourceRoleId} = ${flattenedRole.baseRoleId}
-          join ${ResourceRoleTable as resourceRole} on ${flattenedRole.nestedRoleId} = ${resourceRole.id} and ${userResourcePolicy.baseResourceTypeId} = ${resourceRole.resourceTypeId}
-          where ${roleAppliesToResource(userResourcePolicy, policyRole, flattenedRole)}"""
+          join ${EffectivePolicyRoleTable as policyRole} on ${userResourcePolicy.policyId} = ${policyRole.resourcePolicyId}
+          join ${ResourceRoleTable as resourceRole} on ${policyRole.resourceRoleId} = ${resourceRole.id}"""
 
       listUserResourceRolesQuery.map(rs => ResourceRoleName(rs.string(resourceRole.resultName.role))).list().apply().toSet
     })
@@ -1407,21 +1412,40 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     val r = ResourceTable.syntax("r")
     val ra = ResourceActionTable.syntax("ra")
 
+    val sourcePolicy = PolicyTable.syntax("source_policy")
+
     // insert effective policy actions
     samsql"""with recursive
              ${ancestorsAndDescendants}
 
               insert into ${EffectivePolicyActionTable.table} (${eaCol.resourcePolicyId}, ${eaCol.resourceActionId})
-              select ${ep.id}, ${pa.resourceActionId}
-              from ${descendantResourceTable as descendantResource},
-              ${ancestorResourceTable as ancestorResource}
-              join ${EffectivePolicyTable as ep} on ${ancestorResource.resourceId} = ${ep.resourceId}
+              select ${ep.id}, ${ra.id}
+              from ${descendantResourceTable as descendantResource}
+              join ${EffectivePolicyTable as ep} on ${descendantResource.resourceId} = ${ep.resourceId}
               join ${PolicyActionTable as pa} on ${pa.resourcePolicyId} = ${ep.sourcePolicyId}
               join ${ResourceActionTable as ra} on ${pa.resourceActionId} = ${ra.id}
               join ${ResourceTable as r} on ${ep.resourceId} = ${r.id}
-              where ${pa.descendantsOnly} = (${r.resourceTypeId} != ${ra.resourceTypeId})
-              and ${ep.resourceId} = ${descendantResource.resourceId}
+              join ${PolicyTable as sourcePolicy} on ${sourcePolicy.id} = ${ep.sourcePolicyId}
+              where ${pa.descendantsOnly} = (${sourcePolicy.resourceId} != ${ep.resourceId})
+              and ${r.resourceTypeId} = ${ra.resourceTypeId}
               on conflict do nothing""".update().apply()
+
+//    samsql"""with recursive
+//             ${ancestorsAndDescendants}
+//
+//              insert into ${EffectivePolicyActionTable.table} (${eaCol.resourcePolicyId}, ${eaCol.resourceActionId})
+//              select ${ep.id}, ${ra.resourceActionId}
+//              from ${descendantResourceTable as descendantResource},
+//              ${ancestorResourceTable as ancestorResource}
+//              join ${EffectivePolicyTable as ep} on ${ancestorResource.resourceId} = ${ep.resourceId}
+//              join ${PolicyActionTable as pa} on ${pa.resourcePolicyId} = ${ep.sourcePolicyId}
+//              join ${ResourceActionTable as ra} on ${pa.resourceActionId} = ${ra.id}
+//              join ${ResourceTable as r} on ${ep.resourceId} = ${r.id},
+//              join ${PolicyTable as sourcePolicy} on ${sourcePolicy.id} = ${ep.sourcePolicyId}
+//              where ${pa.descendantsOnly} = (${sourcePolicy.resourceId} != ${ep.resourceId})
+//              and ${r.resourceTypeId} = ${ra.resourceTypeId}
+//              and ${ep.resourceId} = ${descendantResource.resourceId}
+//              on conflict do nothing""".update().apply()
 
     val erCol = EffectivePolicyRoleTable.column
 
@@ -1434,17 +1458,16 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
              ${ancestorsAndDescendants}
 
               insert into ${EffectivePolicyRoleTable.table} (${erCol.resourcePolicyId}, ${erCol.resourceRoleId})
-              select ${ep.id}, ${pr.resourceRoleId}
-              from ${descendantResourceTable as descendantResource},
-              ${ancestorResourceTable as ancestorResource}
-              join ${EffectivePolicyTable as ep} on ${ancestorResource.resourceId} = ${ep.resourceId}
+              select ${ep.id}, ${rr.id}
+              from ${descendantResourceTable as descendantResource}
+              join ${EffectivePolicyTable as ep} on ${descendantResource.resourceId} = ${ep.resourceId}
               join ${PolicyRoleTable as pr} on ${pr.resourcePolicyId} = ${ep.sourcePolicyId}
               join ${FlattenedRoleMaterializedView as fr} on ${pr.resourceRoleId} = ${fr.baseRoleId}
               join ${ResourceRoleTable as rr} on ${fr.nestedRoleId} = ${rr.id}
               join ${ResourceTable as r} on ${ep.resourceId} = ${r.id}
-              where (${pr.descendantsOnly} = (${r.resourceTypeId} != ${rr.resourceTypeId})
-              or ${fr.descendantsOnly} = (${r.resourceTypeId} != ${rr.resourceTypeId}))
-              and ${ep.resourceId} = ${descendantResource.resourceId}
+              join ${PolicyTable as sourcePolicy} on ${sourcePolicy.id} = ${ep.sourcePolicyId}
+              where ${r.resourceTypeId} = ${rr.resourceTypeId}
+              and (((${sourcePolicy.resourceId} != ${ep.resourceId}) and (${pr.descendantsOnly} or ${fr.descendantsOnly})) or not ((${sourcePolicy.resourceId} != ${ep.resourceId}) or ${pr.descendantsOnly} or ${fr.descendantsOnly}))
               on conflict do nothing""".update().apply()
   }
 
@@ -1553,14 +1576,11 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     val groupMember = GroupMemberTable.syntax("groupMember")
     val policy = PolicyTable.syntax("policy")
 
-    val ancestorResourceTable = AncestorResourceTable("ancestor_resource")
-    val ancestorResource = ancestorResourceTable.syntax("ancestorResource")
-    val arColumn = ancestorResourceTable.column
-    val parentResource = ResourceTable.syntax("parentResource")
-
     val userResourcePolicyTable = UserResourcePolicyTable("user_resource_policy")
     val userResourcePolicy = userResourcePolicyTable.syntax("userResourcePolicy")
     val urpColumn = userResourcePolicyTable.column
+
+    val effPol = EffectivePolicyTable.syntax("effPol")
 
     val resourceIdFragment = resourceId.map(id => samsqls"and ${resource.name} = ${id}").getOrElse(samsqls"")
 
@@ -1575,23 +1595,15 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
           from ${GroupMemberTable as parentGroup}
           join ${ancestorGroupsTable as ancestorGroup} on ${agColumn.parentGroupId} = ${parentGroup.memberGroupId}),
 
-        ${ancestorResourceTable.table}(${arColumn.resourceId}, ${arColumn.isAncestor}, ${arColumn.baseResourceTypeId}, ${arColumn.baseResourceName}) as (
-          select ${resource.id}, false, ${resourceType.id}, ${resource.name}
+        ${userResourcePolicyTable.table}(${urpColumn.policyId}, ${urpColumn.baseResourceTypeId}, ${urpColumn.baseResourceName}, ${urpColumn.inherited}, ${urpColumn.public}) as (
+          select ${effPol.id}, ${resourceType.id}, ${resource.name}, ${policy.resourceId} != ${resource.id}, ${effPol.public}
           from ${ResourceTable as resource}
           join ${ResourceTypeTable as resourceType} on ${resource.resourceTypeId} = ${resourceType.id}
+          join ${EffectivePolicyTable as effPol} on ${resource.id} = ${effPol.resourceId}
+          join ${PolicyTable as policy} on ${effPol.sourcePolicyId} = ${policy.id}
           where ${resourceType.name} = ${resourceTypeName}
           ${resourceIdFragment}
-          union
-          select ${parentResource.resourceParentId}, true, ${ancestorResource.baseResourceTypeId}, ${ancestorResource.baseResourceName}
-          from ${ResourceTable as parentResource}
-          join ${ancestorResourceTable as ancestorResource} on ${ancestorResource.resourceId} = ${parentResource.id}
-          where ${parentResource.resourceParentId} is not null),
-
-        ${userResourcePolicyTable.table}(${urpColumn.policyId}, ${urpColumn.baseResourceTypeId}, ${urpColumn.baseResourceName}, ${urpColumn.inherited}, ${urpColumn.public}) as (
-          select ${policy.id}, ${ancestorResource.baseResourceTypeId}, ${ancestorResource.baseResourceName}, ${ancestorResource.isAncestor}, ${policy.public}
-          from ${ancestorResourceTable as ancestorResource}
-          join ${PolicyTable as policy} on ${policy.resourceId} = ${ancestorResource.resourceId}
-          where ${policy.public} OR ${policy.groupId} in (select ${ancestorGroup.parentGroupId} from ${ancestorGroupsTable as ancestorGroup}))"""
+          and (${effPol.public} OR ${effPol.groupId} in (select ${ancestorGroup.parentGroupId} from ${ancestorGroupsTable as ancestorGroup})))"""
 
     UserPoliciesCommonTableExpression(userResourcePolicyTable, userResourcePolicy, queryFragment)
   }
@@ -1625,7 +1637,7 @@ final case class AncestorResourceTable(override val tableName: String) extends S
 // these 2 case classes represent the logical table used in policy queries that take into account user group
 // membership and policies inherited from ancestor resources
 // this table does not actually exist but looks like a table in a WITH query
-final case class UserResourcePolicyRecord(policyId: PolicyPK, baseResourceTypeId: ResourceTypePK, baseResourceName: ResourceId, inherited: Boolean, public: Boolean)
+final case class UserResourcePolicyRecord(policyId: EffectivePolicyPK, baseResourceTypeId: ResourceTypePK, baseResourceName: ResourceId, inherited: Boolean, public: Boolean)
 final case class UserResourcePolicyTable(override val tableName: String) extends SQLSyntaxSupport[UserResourcePolicyRecord] {
   // need to specify column names explicitly because this table does not actually exist in the database
   override val columnNames: Seq[String] = Seq("policy_id", "inherited", "base_resource_type_id", "public", "base_resource_name")
