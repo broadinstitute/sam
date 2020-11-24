@@ -1,11 +1,11 @@
 package org.broadinstitute.dsde.workbench.sam.directory
 
 import cats.effect.{ContextShift, IO}
-import org.broadinstitute.dsde.workbench.model.{WorkbenchSubject, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.model.{WorkbenchException, WorkbenchSubject, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.db.SamParameterBinderFactory.SqlInterpolationWithSamBinders
 import org.broadinstitute.dsde.workbench.sam.db._
-import org.broadinstitute.dsde.workbench.sam.db.tables.{FlatGroupMemberTable, FlatGroupMembershipPath, GroupPK}
-import scalikejdbc.{DBSession, SQLSyntax}
+import org.broadinstitute.dsde.workbench.sam.db.tables.{FlatGroupMemberRecord, FlatGroupMemberTable, FlatGroupMembershipPath, GroupPK}
+import scalikejdbc._
 
 import scala.concurrent.ExecutionContext
 
@@ -36,12 +36,12 @@ class FlatPostgresDirectoryDAO (override val dbRef: DbReference, override val ec
       }
 
       // groups which have groupId as a direct or transitive subgroup
-      val ancestorMemberships: List[(GroupPK, FlatGroupMembershipPath)] = ???  // fetch all records where DB.member_id = this.groupId
+      val ancestorMemberships = ancestorPaths(groupId)
 
       // groups and users which have `groupMembers` as ancestors
-      val descendantMemberships: List[(Either[WorkbenchUserId, GroupPK], FlatGroupMembershipPath)] = ???  // fetch all records where DB.group_id IN groupMembers
+      val descendantMemberships = descendentPaths(groupMembers)
 
-      val transitiveMembers: List[SQLSyntax] = ancestorMemberships flatMap { ancestorMembership =>
+      val transitiveMembers = ancestorMemberships flatMap { ancestorMembership =>
         val (ancestor, ancestorPath) = ancestorMembership
         val ancestorsPlusGroup = ancestorPath.append(groupId)
 
@@ -53,7 +53,7 @@ class FlatPostgresDirectoryDAO (override val dbRef: DbReference, override val ec
           samsqls"(${ancestor}, ${None}, ${groupPK}, '{${ancestorsPlusGroup}}')"
         }
 
-        val descendants: List[SQLSyntax] = descendantMemberships.map { case (descendant, descendantPath) =>
+        val descendants = descendantMemberships.map { case (descendant, descendantPath) =>
           val fullPath = ancestorsPlusGroup.append(descendantPath)
           descendant match {
             case Left(userId) => samsqls"(${ancestor}, ${userId}, ${None}, '{${fullPath}}')"
@@ -67,6 +67,46 @@ class FlatPostgresDirectoryDAO (override val dbRef: DbReference, override val ec
       val gm = FlatGroupMemberTable.column
       samsql"""insert into ${FlatGroupMemberTable.table} (${gm.groupId}, ${gm.memberUserId}, ${gm.memberGroupId}, ${gm.groupMembershipPath})
         values ${directMemberUsers ++ directMemberGroups ++ transitiveMembers}""".update().apply()
+    }
+  }
+
+  // there is probably some implicit magic which avoids this but I don't know it
+  private def convertToFlatGroupMemberTable(f: QuerySQLSyntaxProvider[SQLSyntaxSupport[FlatGroupMemberRecord], FlatGroupMemberRecord])
+                                           (rs: WrappedResultSet): FlatGroupMemberRecord = FlatGroupMemberTable.apply(f)(rs)
+
+  // get all of the groups that group `member` is a member of - directly or transitively
+  private def listMyGroupRecords(member: GroupPK)(implicit session: DBSession) = {
+    val gm = FlatGroupMemberTable.column
+    val f = FlatGroupMemberTable.syntax("f")
+
+    samsql"""select ${gm.groupId}, ${gm.memberUserId}, ${gm.memberGroupId}, ${gm.groupMembershipPath}
+                      from ${FlatGroupMemberTable as f}
+                      where ${gm.memberGroupId} = ${member}""".map(convertToFlatGroupMemberTable(f)).list.apply()
+  }
+
+  // fetch all records where DB.member_id = this.groupId
+  private def ancestorPaths(groupId: GroupPK)(implicit session: DBSession): List[(GroupPK, FlatGroupMembershipPath)] =
+    listMyGroupRecords(groupId).map { record => (record.groupId, record.groupMembershipPath) }
+
+  // get all of the direct or transitive members of all `groups`
+  private def listMembers(groups: TraversableOnce[GroupPK])(implicit session: DBSession) = {
+    val gm = FlatGroupMemberTable.column
+    val f = FlatGroupMemberTable.syntax("f")
+
+    samsql"""select ${gm.groupId}, ${gm.memberUserId}, ${gm.memberGroupId}, ${gm.groupMembershipPath}
+                      from ${FlatGroupMemberTable as f}
+                      where ${gm.groupId} IN ${groups}""".map(convertToFlatGroupMemberTable(f)).list.apply()
+  }
+
+  // fetch all records where DB.group_id IN groupMembers
+  private def descendentPaths(groups: TraversableOnce[GroupPK])(implicit session: DBSession): List[(Either[WorkbenchUserId, GroupPK], FlatGroupMembershipPath)] = {
+    listMembers(groups).map { record =>
+      val descendant = (record.memberUserId, record.memberGroupId) match {
+        case (Some(userId), None) => Left(userId)
+        case (None, Some(groupId)) => Right(groupId)
+        case _ => throw new WorkbenchException(s"DB error: ${FlatGroupMemberTable.tableName} record ${record.id} does not contain exactly 1 of: userId, groupId")
+      }
+      (descendant, record.groupMembershipPath)
     }
   }
 }
