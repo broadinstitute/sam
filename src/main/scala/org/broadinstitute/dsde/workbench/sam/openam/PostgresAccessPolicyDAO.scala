@@ -1353,21 +1353,16 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
 
     val ancestorResourceTable = AncestorResourceTable("ancestor_resource")
     val ancestorResource = ancestorResourceTable.syntax("ancestorResource")
-    val arColumn = ancestorResourceTable.column
-    val parentResource = ResourceTable.syntax("parentResource")
 
     val descendantResourceTable = AncestorResourceTable("descendant_resource")
     val descendantResource = descendantResourceTable.syntax("descendantResource")
-    val drColumn = descendantResourceTable.column
 
     val ep = EffectivePolicyTable.syntax("ep")
     val p = PolicyTable.syntax("p")
 
-    val ancestorsAndDescendants =
-      ancestorsAndDescendantsCTEs(childResourcePK, resource, ancestorResourceTable, ancestorResource, arColumn, parentResource, descendantResourceTable, descendantResource, drColumn)
-
     samsql"""with recursive
-        ${ancestorsAndDescendants}
+        ${ancestorsRecursiveQuery(childResourcePK, ancestorResourceTable)},
+        ${descendantsRecursiveQuery(childResourcePK, descendantResourceTable)}
 
         delete from ${EffectivePolicyTable as ep}
         using ${ancestorResourceTable as ancestorResource}, ${descendantResourceTable as descendantResource}, ${PolicyTable as p}
@@ -1376,86 +1371,26 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
         and ${p.id} = ${ep.sourcePolicyId}""".update().apply()
   }
 
-  private def populateInheritedEffectivePolicies(childResourcePK: ResourcePK)(implicit session: DBSession) = {
-    val resource = ResourceTable.syntax("resource")
+  private def populateInheritedEffectivePolicies(childResourcePK: ResourcePK)(implicit session: DBSession): Int = {
+    insertEffectivePoliciesForChildAndDescendants(childResourcePK) +
+    insertEffectivePolicyActionsForChildAndDescendants(childResourcePK) +
+    insertEffectivePolicyRolesForChildAndDescendants(childResourcePK)
+  }
 
-    val ancestorResourceTable = AncestorResourceTable("ancestor_resource")
-    val ancestorResource = ancestorResourceTable.syntax("ancestorResource")
-    val arColumn = ancestorResourceTable.column
-    val parentResource = ResourceTable.syntax("parentResource")
-
+  private def insertEffectivePolicyRolesForChildAndDescendants(childResourcePK: ResourcePK)(implicit session: DBSession): Int = {
     val descendantResourceTable = AncestorResourceTable("descendant_resource")
     val descendantResource = descendantResourceTable.syntax("descendantResource")
-    val drColumn = descendantResourceTable.column
-
-    val ep = EffectivePolicyTable.syntax("ep")
-    val p = PolicyTable.syntax("p")
-    val epCol = EffectivePolicyTable.column
-
-    val ancestorsAndDescendants =
-      ancestorsAndDescendantsCTEs(childResourcePK, resource, ancestorResourceTable, ancestorResource, arColumn, parentResource, descendantResourceTable, descendantResource, drColumn)
-
-    // insert effective policies
-    samsql"""with recursive
-        ${ancestorsAndDescendants}
-
-        insert into ${EffectivePolicyTable.table} (${epCol.resourceId}, ${epCol.sourcePolicyId}, ${epCol.groupId}, ${epCol.public})
-        select ${descendantResource.resourceId}, ${p.id}, ${p.groupId}, ${p.public}
-        from ${descendantResourceTable as descendantResource},
-        ${ancestorResourceTable as ancestorResource}
-        join ${PolicyTable as p} on ${ancestorResource.resourceId} = ${p.resourceId}""".update().apply()
-
-
-    val eaCol = EffectivePolicyActionTable.column
-
-    val pa = PolicyActionTable.syntax("pa")
-    val r = ResourceTable.syntax("r")
-    val ra = ResourceActionTable.syntax("ra")
-
-    val sourcePolicy = PolicyTable.syntax("source_policy")
-
-    // insert effective policy actions
-    samsql"""with recursive
-             ${ancestorsAndDescendants}
-
-              insert into ${EffectivePolicyActionTable.table} (${eaCol.resourcePolicyId}, ${eaCol.resourceActionId})
-              select ${ep.id}, ${ra.id}
-              from ${descendantResourceTable as descendantResource}
-              join ${EffectivePolicyTable as ep} on ${descendantResource.resourceId} = ${ep.resourceId}
-              join ${PolicyActionTable as pa} on ${pa.resourcePolicyId} = ${ep.sourcePolicyId}
-              join ${ResourceActionTable as ra} on ${pa.resourceActionId} = ${ra.id}
-              join ${ResourceTable as r} on ${ep.resourceId} = ${r.id}
-              join ${PolicyTable as sourcePolicy} on ${sourcePolicy.id} = ${ep.sourcePolicyId}
-              where ${pa.descendantsOnly} = (${sourcePolicy.resourceId} != ${ep.resourceId})
-              and ${r.resourceTypeId} = ${ra.resourceTypeId}
-              on conflict do nothing""".update().apply()
-
-//    samsql"""with recursive
-//             ${ancestorsAndDescendants}
-//
-//              insert into ${EffectivePolicyActionTable.table} (${eaCol.resourcePolicyId}, ${eaCol.resourceActionId})
-//              select ${ep.id}, ${ra.resourceActionId}
-//              from ${descendantResourceTable as descendantResource},
-//              ${ancestorResourceTable as ancestorResource}
-//              join ${EffectivePolicyTable as ep} on ${ancestorResource.resourceId} = ${ep.resourceId}
-//              join ${PolicyActionTable as pa} on ${pa.resourcePolicyId} = ${ep.sourcePolicyId}
-//              join ${ResourceActionTable as ra} on ${pa.resourceActionId} = ${ra.id}
-//              join ${ResourceTable as r} on ${ep.resourceId} = ${r.id},
-//              join ${PolicyTable as sourcePolicy} on ${sourcePolicy.id} = ${ep.sourcePolicyId}
-//              where ${pa.descendantsOnly} = (${sourcePolicy.resourceId} != ${ep.resourceId})
-//              and ${r.resourceTypeId} = ${ra.resourceTypeId}
-//              and ${ep.resourceId} = ${descendantResource.resourceId}
-//              on conflict do nothing""".update().apply()
 
     val erCol = EffectivePolicyRoleTable.column
-
     val pr = PolicyRoleTable.syntax("pr")
     val fr = FlattenedRoleMaterializedView.syntax("fr")
     val rr = ResourceRoleTable.syntax("rr")
+    val ep = EffectivePolicyTable.syntax("ep")
+    val sourcePolicy = PolicyTable.syntax("source_policy")
+    val r = ResourceTable.syntax("r")
 
-    // insert effective policy roles
     samsql"""with recursive
-             ${ancestorsAndDescendants}
+              ${descendantsRecursiveQuery(childResourcePK, descendantResourceTable)}
 
               insert into ${EffectivePolicyRoleTable.table} (${erCol.resourcePolicyId}, ${erCol.resourceRoleId})
               select ${ep.id}, ${rr.id}
@@ -1471,7 +1406,60 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
               on conflict do nothing""".update().apply()
   }
 
-  private def ancestorsAndDescendantsCTEs(childResourcePK: ResourcePK, resource: scalikejdbc.QuerySQLSyntaxProvider[scalikejdbc.SQLSyntaxSupport[ResourceRecord], ResourceRecord], ancestorResourceTable: AncestorResourceTable, ancestorResource: scalikejdbc.QuerySQLSyntaxProvider[scalikejdbc.SQLSyntaxSupport[AncestorResourceRecord], AncestorResourceRecord], arColumn: scalikejdbc.ColumnName[AncestorResourceRecord], parentResource: scalikejdbc.QuerySQLSyntaxProvider[scalikejdbc.SQLSyntaxSupport[ResourceRecord], ResourceRecord], descendantResourceTable: AncestorResourceTable, descendantResource: scalikejdbc.QuerySQLSyntaxProvider[scalikejdbc.SQLSyntaxSupport[AncestorResourceRecord], AncestorResourceRecord], drColumn: scalikejdbc.ColumnName[AncestorResourceRecord]) = {
+  private def insertEffectivePolicyActionsForChildAndDescendants(childResourcePK: ResourcePK)(implicit session: DBSession): Int = {
+    val descendantResourceTable = AncestorResourceTable("descendant_resource")
+    val descendantResource = descendantResourceTable.syntax("descendantResource")
+
+    val eaCol = EffectivePolicyActionTable.column
+    val pa = PolicyActionTable.syntax("pa")
+    val r = ResourceTable.syntax("r")
+    val ra = ResourceActionTable.syntax("ra")
+    val ep = EffectivePolicyTable.syntax("ep")
+    val sourcePolicy = PolicyTable.syntax("source_policy")
+
+    samsql"""with recursive
+              ${descendantsRecursiveQuery(childResourcePK, descendantResourceTable)}
+
+              insert into ${EffectivePolicyActionTable.table} (${eaCol.resourcePolicyId}, ${eaCol.resourceActionId})
+              select ${ep.id}, ${ra.id}
+              from ${descendantResourceTable as descendantResource}
+              join ${EffectivePolicyTable as ep} on ${descendantResource.resourceId} = ${ep.resourceId}
+              join ${PolicyActionTable as pa} on ${pa.resourcePolicyId} = ${ep.sourcePolicyId}
+              join ${ResourceActionTable as ra} on ${pa.resourceActionId} = ${ra.id}
+              join ${ResourceTable as r} on ${ep.resourceId} = ${r.id}
+              join ${PolicyTable as sourcePolicy} on ${sourcePolicy.id} = ${ep.sourcePolicyId}
+              where ${pa.descendantsOnly} = (${sourcePolicy.resourceId} != ${ep.resourceId})
+              and ${r.resourceTypeId} = ${ra.resourceTypeId}
+              on conflict do nothing""".update().apply()
+  }
+
+  private def insertEffectivePoliciesForChildAndDescendants(childResourcePK: ResourcePK)(implicit session: DBSession): Int = {
+    val ancestorResourceTable = AncestorResourceTable("ancestor_resource")
+    val ancestorResource = ancestorResourceTable.syntax("ancestorResource")
+
+    val descendantResourceTable = AncestorResourceTable("descendant_resource")
+    val descendantResource = descendantResourceTable.syntax("descendantResource")
+
+    val ep = EffectivePolicyTable.syntax("ep")
+    val p = PolicyTable.syntax("p")
+    val epCol = EffectivePolicyTable.column
+
+    samsql"""with recursive
+        ${ancestorsRecursiveQuery(childResourcePK, ancestorResourceTable)},
+        ${descendantsRecursiveQuery(childResourcePK, descendantResourceTable)}
+
+        insert into ${EffectivePolicyTable.table} (${epCol.resourceId}, ${epCol.sourcePolicyId}, ${epCol.groupId}, ${epCol.public})
+        select ${descendantResource.resourceId}, ${p.id}, ${p.groupId}, ${p.public}
+        from ${descendantResourceTable as descendantResource},
+        ${ancestorResourceTable as ancestorResource}
+        join ${PolicyTable as p} on ${ancestorResource.resourceId} = ${p.resourceId}""".update().apply()
+  }
+
+  private def ancestorsRecursiveQuery(childResourcePK: ResourcePK, ancestorResourceTable: AncestorResourceTable) = {
+    val resource = ResourceTable.syntax("resource")
+    val parentResource = ResourceTable.syntax("parentResource")
+    val arColumn = ancestorResourceTable.column
+    val ancestorResource = ancestorResourceTable.syntax("ancestorResource")
     samsqls"""
         ${ancestorResourceTable.table}(${arColumn.resourceId}) as (
           select ${resource.resourceParentId}
@@ -1481,8 +1469,14 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
           select ${parentResource.resourceParentId}
           from ${ResourceTable as parentResource}
           join ${ancestorResourceTable as ancestorResource} on ${ancestorResource.resourceId} = ${parentResource.id}
-          where ${parentResource.resourceParentId} is not null),
+          where ${parentResource.resourceParentId} is not null)"""
+  }
 
+  private def descendantsRecursiveQuery(childResourcePK: ResourcePK, descendantResourceTable: AncestorResourceTable) = {
+    val resource = ResourceTable.syntax("resource")
+    val drColumn = descendantResourceTable.column
+    val descendantResource = descendantResourceTable.syntax("descendantResource")
+    samsqls"""
         ${descendantResourceTable.table}(${drColumn.resourceId}) as (
             select ${childResourcePK}
             union
