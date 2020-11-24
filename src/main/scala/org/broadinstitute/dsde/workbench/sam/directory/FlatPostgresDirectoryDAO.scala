@@ -1,14 +1,18 @@
 package org.broadinstitute.dsde.workbench.sam.directory
 
+import akka.http.scaladsl.model.StatusCodes
 import cats.effect.{ContextShift, IO}
-import org.broadinstitute.dsde.workbench.model.{WorkbenchException, WorkbenchGroupIdentity, WorkbenchSubject, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.sam.errorReportSource
+import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchException, WorkbenchExceptionWithErrorReport, WorkbenchGroupIdentity, WorkbenchGroupName, WorkbenchSubject, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.db.SamParameterBinderFactory.SqlInterpolationWithSamBinders
 import org.broadinstitute.dsde.workbench.sam.db._
-import org.broadinstitute.dsde.workbench.sam.db.tables.{FlatGroupMemberRecord, FlatGroupMemberTable, FlatGroupMembershipPath, GroupPK}
+import org.broadinstitute.dsde.workbench.sam.db.tables.{FlatGroupMemberRecord, FlatGroupMemberTable, FlatGroupMembershipPath, GroupPK, GroupTable}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
+import org.postgresql.util.PSQLException
 import scalikejdbc._
 
 import scala.concurrent.ExecutionContext
+import scala.util.{Failure, Try}
 
 /**
   * Replace the "classic" hierarchical/recursive model with a flattened DB structure optimized for quick reads.
@@ -97,6 +101,28 @@ class FlatPostgresDirectoryDAO (override val dbRef: DbReference, override val ec
       val query = samsql"DELETE FROM ${FlatGroupMemberTable as f} WHERE ${memberClause(removeMember)} AND ${groupClause}"
       query.update().apply()
     }).map(count => count > 0)
+  }
+
+  override def deleteGroup(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Unit] = {
+    runInTransaction("deleteGroup", samRequestContext)({ implicit session =>
+      val f = FlatGroupMemberTable.syntax("f")
+      val g = GroupTable.syntax("g")
+      Try {
+        // TODO: attempt to setup foreign key delete cascade for the FlatGroupMemberTable membership array?
+
+        samsql"""delete from ${FlatGroupMemberTable as f}
+               where ANY(${f.groupMembershipPath}) = ${GroupTable.groupPKQueryForGroup(groupName)}""".update().apply()
+
+        // foreign keys in accessInstructions and groupMember tables are set to cascade delete
+        // note: this will not remove this group from any parent groups and will throw a
+        // foreign key constraint violation error if group is still a member of any parent groups
+        samsql"delete from ${GroupTable as g} where ${g.name} = ${groupName}".update().apply()
+      }.recoverWith {
+        case fkViolation: PSQLException if fkViolation.getSQLState == PSQLStateExtensions.FOREIGN_KEY_VIOLATION =>
+          Failure(new WorkbenchExceptionWithErrorReport(
+            ErrorReport(StatusCodes.Conflict, s"group ${groupName.value} cannot be deleted because it is a member of at least 1 other group")))
+      }.get
+    })
   }
 
   private def memberClause(member: WorkbenchSubject): SQLSyntax = {
