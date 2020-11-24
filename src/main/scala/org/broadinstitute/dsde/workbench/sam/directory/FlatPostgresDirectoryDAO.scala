@@ -45,14 +45,15 @@ class FlatPostgresDirectoryDAO (override val dbRef: DbReference, override val ec
       val groupMembers = queryForGroupPKs(members);
 
       // direct (non-transitive) membership in groupId
-      val directMembershipPath = List(groupId)
+      val directMembershipPath = FlatGroupMembershipPath(List(groupId));
 
-      val directMemberUsers: List[SQLSyntax] = userMembers.map { userId =>
-        samsqls"(${groupId}, ${userId}, ${None}, '{${directMembershipPath}}')"
+      val directMemberUsers: List[SQLSyntax] = userMembers.map { userId => {
+        samsqls"(${groupId}, ${userId}, ${None}, ${directMembershipPath})"
+      }
       }.toList
 
       val directMemberGroups: List[SQLSyntax] = groupMembers.map { groupPK =>
-        samsqls"(${groupId}, ${None}, ${groupPK}, '{${directMembershipPath}}')"
+        samsqls"(${groupId}, ${None}, ${groupPK}, ${directMembershipPath})"
       }
 
       // groups which have groupId as a direct or transitive subgroup
@@ -66,18 +67,18 @@ class FlatPostgresDirectoryDAO (override val dbRef: DbReference, override val ec
         val ancestorsPlusGroup = ancestorPath.append(groupId)
 
         val ancestorUsers = userMembers.map { userId =>
-          samsqls"(${ancestor}, ${userId}, ${None}, '{${ancestorsPlusGroup}}')"
+          samsqls"(${ancestor}, ${userId}, ${None}, ${ancestorsPlusGroup})"
         }.toList
 
         val ancestorGroups = groupMembers.map { groupPK =>
-          samsqls"(${ancestor}, ${None}, ${groupPK}, '{${ancestorsPlusGroup}}')"
+          samsqls"(${ancestor}, ${None}, ${groupPK}, ${ancestorsPlusGroup})"
         }
 
         val descendants = descendantMemberships.map { case (descendant, descendantPath) =>
           val fullPath = ancestorsPlusGroup.append(descendantPath)
           descendant match {
-            case Left(userId) => samsqls"(${ancestor}, ${userId}, ${None}, '{${fullPath}}')"
-            case Right(groupPk) => samsqls"(${ancestor}, ${None}, ${groupPk}, '{${fullPath}}')"
+            case Left(userId) => samsqls"(${ancestor}, ${userId}, ${None}, ${fullPath})"
+            case Right(groupPk) => samsqls"(${ancestor}, ${None}, ${groupPk}, ${fullPath})"
           }
         }
 
@@ -159,7 +160,7 @@ class FlatPostgresDirectoryDAO (override val dbRef: DbReference, override val ec
 
     samsql"""select ${gm.groupId}, ${gm.memberUserId}, ${gm.memberGroupId}, ${gm.groupMembershipPath}
                       from ${FlatGroupMemberTable as f}
-                      where ${gm.groupId} IN ${groups}""".map(convertToFlatGroupMemberTable(f)).list.apply()
+                      where ${gm.groupId} IN (${groups})""".map(convertToFlatGroupMemberTable(f)).list.apply()
   }
 
   // fetch all records where DB.group_id IN groupMembers

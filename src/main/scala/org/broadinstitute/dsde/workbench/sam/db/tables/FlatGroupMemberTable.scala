@@ -3,15 +3,18 @@ package org.broadinstitute.dsde.workbench.sam.db.tables
 import java.sql.ResultSet
 
 import org.broadinstitute.dsde.workbench.model.WorkbenchUserId
-import org.broadinstitute.dsde.workbench.sam.db.{DatabaseKey, SamTypeBinders}
+import org.broadinstitute.dsde.workbench.sam.db.{DatabaseArray, DatabaseKey, SamTypeBinders}
 import scalikejdbc._
 
 final case class FlatGroupMemberPK(value: Long) extends DatabaseKey
 
 // note: this is the variant which does not include member in path
-final case class FlatGroupMembershipPath(value: List[GroupPK]) {
-  def append(memberToAdd: GroupPK): FlatGroupMembershipPath = FlatGroupMembershipPath(this.value :+ memberToAdd)
-  def append(that: FlatGroupMembershipPath): FlatGroupMembershipPath = FlatGroupMembershipPath(this.value ++ that.value)
+final case class FlatGroupMembershipPath(path: List[GroupPK]) extends DatabaseArray {
+  override val baseTypeName: String = "BIGINT"
+  override def asJavaArray: Array[Object] = path.toArray.map(_.value.asInstanceOf[Object])
+
+  def append(memberToAdd: GroupPK): FlatGroupMembershipPath = FlatGroupMembershipPath(this.path :+ memberToAdd)
+  def append(that: FlatGroupMembershipPath): FlatGroupMembershipPath = FlatGroupMembershipPath(this.path ++ that.path)
 }
 
 final case class FlatGroupMemberRecord(id: FlatGroupMemberPK,
@@ -27,8 +30,8 @@ object TempTypeBinders {
   }
 
   implicit val flatGroupMembershipPathPKTypeBinder: TypeBinder[FlatGroupMembershipPath] = new TypeBinder[FlatGroupMembershipPath] {
-    def apply(rs: ResultSet, label: String): FlatGroupMembershipPath = FlatGroupMembershipPath(rs.getArray(label).getArray.asInstanceOf[Array[Long]].map(GroupPK).toList)
-    def apply(rs: ResultSet, index: Int): FlatGroupMembershipPath = FlatGroupMembershipPath(rs.getArray(index).getArray.asInstanceOf[Array[Long]].map(GroupPK).toList)
+    def apply(rs: ResultSet, label: String): FlatGroupMembershipPath = FlatGroupMembershipPath(rs.getArray(label).getArray.asInstanceOf[Array[Long]].toList.map(GroupPK))
+    def apply(rs: ResultSet, index: Int): FlatGroupMembershipPath = FlatGroupMembershipPath(rs.getArray(index).getArray.asInstanceOf[Array[Long]].toList.map(GroupPK))
   }
 }
 
