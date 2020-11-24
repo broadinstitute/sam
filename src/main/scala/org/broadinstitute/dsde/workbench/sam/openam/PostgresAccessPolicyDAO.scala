@@ -1395,7 +1395,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
         ${ancestorsAndDescendants}
 
         insert into ${EffectivePolicyTable.table} (${epCol.resourceId}, ${epCol.sourcePolicyId}, ${epCol.groupId}, ${epCol.public})
-        select ${descendantResource.resourceId}, ${ancestorResource.resourceId}, ${p.groupId}, ${p.public}
+        select ${descendantResource.resourceId}, ${p.id}, ${p.groupId}, ${p.public}
         from ${descendantResourceTable as descendantResource},
         ${ancestorResourceTable as ancestorResource}
         join ${PolicyTable as p} on ${ancestorResource.resourceId} = ${p.resourceId}""".update().apply()
