@@ -1,10 +1,11 @@
 package org.broadinstitute.dsde.workbench.sam.directory
 
 import cats.effect.{ContextShift, IO}
-import org.broadinstitute.dsde.workbench.model.{WorkbenchException, WorkbenchSubject, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.model.{WorkbenchException, WorkbenchGroupIdentity, WorkbenchSubject, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.db.SamParameterBinderFactory.SqlInterpolationWithSamBinders
 import org.broadinstitute.dsde.workbench.sam.db._
 import org.broadinstitute.dsde.workbench.sam.db.tables.{FlatGroupMemberRecord, FlatGroupMemberTable, FlatGroupMembershipPath, GroupPK}
+import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import scalikejdbc._
 
 import scala.concurrent.ExecutionContext
@@ -16,6 +17,22 @@ import scala.concurrent.ExecutionContext
   */
 class FlatPostgresDirectoryDAO (override val dbRef: DbReference, override val ecForDatabaseIO: ExecutionContext)
                                (implicit override val cs: ContextShift[IO]) extends PostgresDirectoryDAO(dbRef, ecForDatabaseIO) {
+
+  override def isGroupMember(groupId: WorkbenchGroupIdentity, member: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean] = {
+    val f = FlatGroupMemberTable.syntax("f")
+
+    val memberClause: SQLSyntax = member match {
+      case subGroupId: WorkbenchGroupIdentity => samsqls"${f.memberGroupId} = (${workbenchGroupIdentityToGroupPK(subGroupId)})"
+      case WorkbenchUserId(userId) => samsqls"${f.memberUserId} = $userId"
+      case _ => throw new WorkbenchException(s"illegal member $member")
+    }
+
+    runInTransaction("isGroupMember", samRequestContext)({ implicit session =>
+      val query = samsql"""SELECT count(*) FROM ${FlatGroupMemberTable as f}
+                WHERE $memberClause AND ${f.groupId} = ${workbenchGroupIdentityToGroupPK(groupId)}"""
+      query.map(rs => rs.int(1)).single().apply().getOrElse(0) > 0
+    })
+  }
 
   override def insertGroupMembers(groupId: GroupPK, members: Set[WorkbenchSubject])(implicit session: DBSession): Int = {
     if (members.isEmpty) {
