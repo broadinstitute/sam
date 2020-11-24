@@ -127,11 +127,11 @@ class FlatPostgresDirectoryDAO (override val dbRef: DbReference, override val ec
   // list the users who are members of all the groups in `groupIds`
   override def listIntersectionGroupUsers(groupIds: Set[WorkbenchGroupIdentity], samRequestContext: SamRequestContext): IO[Set[WorkbenchUserId]] = {
     runInTransaction("listIntersectionGroupUsers", samRequestContext)({ implicit session =>
+      val membershipMap: Map[GroupPK, Set[WorkbenchUserId]] = listMembersByGroupIdentity(groupIds).collect {
+        case FlatGroupMemberRecord(_, groupId, Some(memberUserId), _, _) => (groupId, memberUserId)
+      }.groupBy(_._1).mapValues { _.map{ case (_, memberUserId) => memberUserId}.toSet }
 
-
-  //  wait this is incorrect
-
-      listMembersByGroupIdentity(groupIds).collect { case FlatGroupMemberRecord(_, _, Some(userId), _, _) => userId }.toSet
+      membershipMap.values.reduce((a, b) => a intersect b)
     })
   }
 
