@@ -524,7 +524,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     * @param rt SQLSyntaxProvider for ResourceTypeTable
     * @return Either a WorkbenchGroupName or a FullyQualifiedPolicyId if policy information is available
     */
-  private def resultSetToGroupIdentity(rs: WrappedResultSet,
+  protected def resultSetToGroupIdentity(rs: WrappedResultSet,
                                        g: QuerySQLSyntaxProvider[SQLSyntaxSupport[GroupRecord], GroupRecord],
                                        p: QuerySQLSyntaxProvider[SQLSyntaxSupport[PolicyRecord], PolicyRecord],
                                        r: QuerySQLSyntaxProvider[SQLSyntaxSupport[ResourceRecord], ResourceRecord],
