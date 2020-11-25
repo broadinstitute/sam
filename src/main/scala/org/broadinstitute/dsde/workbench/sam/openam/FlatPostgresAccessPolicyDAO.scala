@@ -3,8 +3,8 @@ package org.broadinstitute.dsde.workbench.sam.openam
 import cats.effect.{ContextShift, IO}
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchGroupName, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.db.{DbReference, SamTypeBinders}
-import org.broadinstitute.dsde.workbench.sam.db.tables.{EffectivePolicyTable, FlatGroupMemberTable, GroupRecord, GroupTable, PolicyActionTable, PolicyRoleTable, PolicyTable, ResourceActionTable, ResourceRoleTable, ResourceTable, ResourceTypeTable}
-import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicy, AccessPolicyName, FullyQualifiedPolicyId, FullyQualifiedResourceId, ResourceAction, ResourceId, ResourceIdAndPolicyName, ResourceRoleName, ResourceTypeName}
+import org.broadinstitute.dsde.workbench.sam.db.tables.{EffectivePolicyTable, FlatGroupMemberTable, GroupRecord, GroupTable, PolicyActionTable, PolicyRecord, PolicyRoleTable, PolicyTable, ResourceActionTable, ResourceRoleTable, ResourceTable, ResourceTypeTable}
+import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicy, AccessPolicyName, AccessPolicyWithoutMembers, FullyQualifiedPolicyId, FullyQualifiedResourceId, ResourceAction, ResourceId, ResourceIdAndPolicyName, ResourceRoleName, ResourceTypeName}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import scalikejdbc.SQLSyntax
 import scalikejdbc._
@@ -45,6 +45,48 @@ class FlatPostgresAccessPolicyDAO (override val dbRef: DbReference, override val
          where ${rt.name} = ${resourceTypeName}""".map(rs => ResourceIdAndPolicyName(rs.get[ResourceId](r.resultName.name), rs.get[AccessPolicyName](p.resultName.name))).list().apply().toSet
     })
   }
+
+  override def listAccessPoliciesForUser(resource: FullyQualifiedResourceId, user: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[AccessPolicyWithoutMembers]] = {
+    runInTransaction("listAccessPoliciesForUser", samRequestContext)({ implicit session =>
+      val r = ResourceTable.syntax("r")
+      val rt = ResourceTypeTable.syntax("rt")
+      val f = FlatGroupMemberTable.syntax("f")
+      val g = GroupTable.syntax("g")
+      val p: scalikejdbc.QuerySQLSyntaxProvider[scalikejdbc.SQLSyntaxSupport[PolicyRecord], PolicyRecord] = PolicyTable.syntax("p")
+
+      val pr = PolicyRoleTable.syntax("pr")
+      val rr = ResourceRoleTable.syntax("rr")
+      val pa = PolicyActionTable.syntax("pa")
+      val ra = ResourceActionTable.syntax("ra")
+
+      val listPoliciesQuery =
+        samsql"""select ${p.result.name}, ${r.result.name}, ${rt.result.name}, ${g.result.email}, ${p.result.public}, ${rr.result.role}, ${ra.result.action}
+          from ${GroupTable as g}
+          join ${FlatGroupMemberTable as f} on ${f.groupId} = ${g.id}
+          join ${PolicyTable as p} on ${g.id} = ${p.groupId}
+          join ${ResourceTable as r} on ${p.resourceId} = ${r.id}
+          join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
+          left join ${PolicyRoleTable as pr} on ${p.id} = ${pr.resourcePolicyId}
+          left join ${ResourceRoleTable as rr} on ${pr.resourceRoleId} = ${rr.id}
+          left join ${PolicyActionTable as pa} on ${p.id} = ${pa.resourcePolicyId}
+          left join ${ResourceActionTable as ra} on ${pa.resourceActionId} = ${ra.id}
+          where ${r.name} = ${resource.resourceId}
+          and ${rt.name} = ${resource.resourceTypeName}"""
+
+      import SamTypeBinders._
+      val results = listPoliciesQuery.map(rs => (PolicyInfo(rs.get[AccessPolicyName](p.resultName.name), rs.get[ResourceId](r.resultName.name), rs.get[ResourceTypeName](rt.resultName.name), rs.get[WorkbenchEmail](g.resultName.email), rs.boolean(p.resultName.public)),
+        (rs.stringOpt(rr.resultName.role).map(ResourceRoleName(_)), rs.stringOpt(ra.resultName.action).map(ResourceAction(_))))).list().apply().groupBy(_._1)
+
+      results.map { case (policyInfo, resultsByPolicy) =>
+        val (_, roleActionResults) = resultsByPolicy.unzip
+
+        val (roles, actions) = roleActionResults.unzip
+
+        AccessPolicyWithoutMembers(FullyQualifiedPolicyId(FullyQualifiedResourceId(policyInfo.resourceTypeName, policyInfo.resourceId), policyInfo.name), policyInfo.email, roles.flatten.toSet, actions.flatten.toSet, policyInfo.public)
+      }.toSet
+    })
+  }
+
 
   override def userPoliciesCommonTableExpressions(resourceTypeName: ResourceTypeName, resourceId: Option[ResourceId], user: WorkbenchUserId): UserPoliciesCommonTableExpression = {
     val resource = ResourceTable.syntax("resource")
