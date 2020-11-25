@@ -13,7 +13,7 @@ import org.broadinstitute.dsde.workbench.sam.util.{DatabaseSupport, SamRequestCo
 import scalikejdbc._
 import SamParameterBinderFactory._
 import akka.http.scaladsl.model.StatusCodes
-import org.broadinstitute.dsde.workbench.sam.db.dao.{PostgresGroupDAO, SubGroupMemberTable}
+import org.broadinstitute.dsde.workbench.sam.db.dao.{PostgresGroupDAO}
 import org.postgresql.util.PSQLException
 import org.broadinstitute.dsde.workbench.sam._
 
@@ -57,96 +57,98 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     insertAccessInstructionsQuery.update().apply()
   }
 
-  override def loadGroup(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Option[BasicWorkbenchGroup]] = {
-    for {
-      results <- runInTransaction("loadGroup", samRequestContext)({ implicit session =>
-        val g = GroupTable.syntax("g")
-        val sg = GroupTable.syntax("sg")
-        val gm = GroupMemberTable.syntax("gm")
-        val p = PolicyTable.syntax("p")
-        val r = ResourceTable.syntax("r")
-        val rt = ResourceTypeTable.syntax("rt")
+  override def loadGroup(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Option[BasicWorkbenchGroup]] = ???
+//  {
+//    for {
+//      results <- runInTransaction("loadGroup", samRequestContext)({ implicit session =>
+//        val g = GroupTable.syntax("g")
+//        val sg = GroupTable.syntax("sg")
+//        val gm = GroupMemberTable.syntax("gm")
+//        val p = PolicyTable.syntax("p")
+//        val r = ResourceTable.syntax("r")
+//        val rt = ResourceTypeTable.syntax("rt")
+//
+//        import SamTypeBinders._
+//
+//        samsql"""select ${g.result.email}, ${gm.result.memberUserId}, ${sg.result.name}, ${p.result.name}, ${r.result.name}, ${rt.result.name}
+//                  from ${GroupTable as g}
+//                  left join ${GroupMemberTable as gm} on ${g.id} = ${gm.groupId}
+//                  left join ${GroupTable as sg} on ${gm.memberGroupId} = ${sg.id}
+//                  left join ${PolicyTable as p} on ${p.groupId} = ${sg.id}
+//                  left join ${ResourceTable as r} on ${p.resourceId} = ${r.id}
+//                  left join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
+//                  where ${g.name} = ${groupName}"""
+//          .map { rs =>
+//            (rs.get[WorkbenchEmail](g.resultName.email),
+//              rs.stringOpt(gm.resultName.memberUserId).map(WorkbenchUserId),
+//              rs.stringOpt(sg.resultName.name).map(WorkbenchGroupName),
+//              rs.stringOpt(p.resultName.name).map(AccessPolicyName(_)),
+//              rs.stringOpt(r.resultName.name).map(ResourceId(_)),
+//              rs.stringOpt(rt.resultName.name).map(ResourceTypeName(_)))
+//          }.list().apply()
+//      })
+//    } yield {
+//      if (results.isEmpty) {
+//        None
+//      } else {
+//        val email = results.head._1
+//        val members: Set[WorkbenchSubject] = results.collect {
+//          case (_, Some(userId), None, None, None, None) => userId
+//          case (_, None, Some(subGroupName), None, None, None) => subGroupName
+//          case (_, None, Some(_), Some(policyName), Some(resourceName), Some(resourceTypeName)) => FullyQualifiedPolicyId(FullyQualifiedResourceId(resourceTypeName, resourceName), policyName)
+//        }.toSet
+//
+//        Option(BasicWorkbenchGroup(groupName, members, email))
+//      }
+//    }
+//  }
 
-        import SamTypeBinders._
-
-        samsql"""select ${g.result.email}, ${gm.result.memberUserId}, ${sg.result.name}, ${p.result.name}, ${r.result.name}, ${rt.result.name}
-                  from ${GroupTable as g}
-                  left join ${GroupMemberTable as gm} on ${g.id} = ${gm.groupId}
-                  left join ${GroupTable as sg} on ${gm.memberGroupId} = ${sg.id}
-                  left join ${PolicyTable as p} on ${p.groupId} = ${sg.id}
-                  left join ${ResourceTable as r} on ${p.resourceId} = ${r.id}
-                  left join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
-                  where ${g.name} = ${groupName}"""
-          .map { rs =>
-            (rs.get[WorkbenchEmail](g.resultName.email),
-              rs.stringOpt(gm.resultName.memberUserId).map(WorkbenchUserId),
-              rs.stringOpt(sg.resultName.name).map(WorkbenchGroupName),
-              rs.stringOpt(p.resultName.name).map(AccessPolicyName(_)),
-              rs.stringOpt(r.resultName.name).map(ResourceId(_)),
-              rs.stringOpt(rt.resultName.name).map(ResourceTypeName(_)))
-          }.list().apply()
-      })
-    } yield {
-      if (results.isEmpty) {
-        None
-      } else {
-        val email = results.head._1
-        val members: Set[WorkbenchSubject] = results.collect {
-          case (_, Some(userId), None, None, None, None) => userId
-          case (_, None, Some(subGroupName), None, None, None) => subGroupName
-          case (_, None, Some(_), Some(policyName), Some(resourceName), Some(resourceTypeName)) => FullyQualifiedPolicyId(FullyQualifiedResourceId(resourceTypeName, resourceName), policyName)
-        }.toSet
-
-        Option(BasicWorkbenchGroup(groupName, members, email))
-      }
-    }
-  }
-
-  override def loadGroups(groupNames: Set[WorkbenchGroupName], samRequestContext: SamRequestContext): IO[Stream[BasicWorkbenchGroup]] = {
-    if (groupNames.isEmpty) {
-      IO.pure(Stream.empty)
-    } else {
-      for {
-        results <- runInTransaction("loadGroups", samRequestContext)({ implicit session =>
-          val g = GroupTable.syntax("g")
-          val sg = GroupTable.syntax("sg")
-          val gm = GroupMemberTable.syntax("gm")
-          val p = PolicyTable.syntax("p")
-          val r = ResourceTable.syntax("r")
-          val rt = ResourceTypeTable.syntax("rt")
-
-          import SamTypeBinders._
-          samsql"""select ${g.result.name}, ${g.result.email}, ${gm.result.memberUserId}, ${sg.result.name}, ${p.result.name}, ${r.result.name}, ${rt.result.name}
-                    from ${GroupTable as g}
-                    left join ${GroupMemberTable as gm} on ${g.id} = ${gm.groupId}
-                    left join ${GroupTable as sg} on ${gm.memberGroupId} = ${sg.id}
-                    left join ${PolicyTable as p} on ${p.groupId} = ${sg.id}
-                    left join ${ResourceTable as r} on ${p.resourceId} = ${r.id}
-                    left join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
-                    where ${g.name} in (${groupNames})"""
-            .map { rs =>
-              (rs.get[WorkbenchGroupName](g.resultName.name),
-                rs.get[WorkbenchEmail](g.resultName.email),
-                rs.stringOpt(gm.resultName.memberUserId).map(WorkbenchUserId),
-                rs.stringOpt(sg.resultName.name).map(WorkbenchGroupName),
-                rs.stringOpt(p.resultName.name).map(AccessPolicyName(_)),
-                rs.stringOpt(r.resultName.name).map(ResourceId(_)),
-                rs.stringOpt(rt.resultName.name).map(ResourceTypeName(_)))
-            }.list().apply()
-        })
-      } yield {
-        results.groupBy(result => (result._1, result._2)).map { case ((groupName, email), results) =>
-          val members: Set[WorkbenchSubject] = results.collect {
-              case (_, _, Some(userId), None, None, None, None) => userId
-              case (_, _, None, Some(subGroupName), None, None, None) => subGroupName
-              case (_, _, None, Some(_), Some(policyName), Some(resourceName), Some(resourceTypeName)) => FullyQualifiedPolicyId(FullyQualifiedResourceId(resourceTypeName, resourceName), policyName)
-          }.toSet
-
-          BasicWorkbenchGroup(groupName, members, email)
-        }
-      }.toStream
-    }
-  }
+  override def loadGroups(groupNames: Set[WorkbenchGroupName], samRequestContext: SamRequestContext): IO[Stream[BasicWorkbenchGroup]] = ???
+//  {
+//    if (groupNames.isEmpty) {
+//      IO.pure(Stream.empty)
+//    } else {
+//      for {
+//        results <- runInTransaction("loadGroups", samRequestContext)({ implicit session =>
+//          val g = GroupTable.syntax("g")
+//          val sg = GroupTable.syntax("sg")
+//          val gm = GroupMemberTable.syntax("gm")
+//          val p = PolicyTable.syntax("p")
+//          val r = ResourceTable.syntax("r")
+//          val rt = ResourceTypeTable.syntax("rt")
+//
+//          import SamTypeBinders._
+//          samsql"""select ${g.result.name}, ${g.result.email}, ${gm.result.memberUserId}, ${sg.result.name}, ${p.result.name}, ${r.result.name}, ${rt.result.name}
+//                    from ${GroupTable as g}
+//                    left join ${GroupMemberTable as gm} on ${g.id} = ${gm.groupId}
+//                    left join ${GroupTable as sg} on ${gm.memberGroupId} = ${sg.id}
+//                    left join ${PolicyTable as p} on ${p.groupId} = ${sg.id}
+//                    left join ${ResourceTable as r} on ${p.resourceId} = ${r.id}
+//                    left join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
+//                    where ${g.name} in (${groupNames})"""
+//            .map { rs =>
+//              (rs.get[WorkbenchGroupName](g.resultName.name),
+//                rs.get[WorkbenchEmail](g.resultName.email),
+//                rs.stringOpt(gm.resultName.memberUserId).map(WorkbenchUserId),
+//                rs.stringOpt(sg.resultName.name).map(WorkbenchGroupName),
+//                rs.stringOpt(p.resultName.name).map(AccessPolicyName(_)),
+//                rs.stringOpt(r.resultName.name).map(ResourceId(_)),
+//                rs.stringOpt(rt.resultName.name).map(ResourceTypeName(_)))
+//            }.list().apply()
+//        })
+//      } yield {
+//        results.groupBy(result => (result._1, result._2)).map { case ((groupName, email), results) =>
+//          val members: Set[WorkbenchSubject] = results.collect {
+//              case (_, _, Some(userId), None, None, None, None) => userId
+//              case (_, _, None, Some(subGroupName), None, None, None) => subGroupName
+//              case (_, _, None, Some(_), Some(policyName), Some(resourceName), Some(resourceTypeName)) => FullyQualifiedPolicyId(FullyQualifiedResourceId(resourceTypeName, resourceName), policyName)
+//          }.toSet
+//
+//          BasicWorkbenchGroup(groupName, members, email)
+//        }
+//      }.toStream
+//    }
+//  }
 
   override def loadGroupEmail(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Option[WorkbenchEmail]] = {
     batchLoadGroupEmail(Set(groupName), samRequestContext).map(_.toMap.get(groupName))
@@ -167,54 +169,56 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     }
   }
 
-  override def deleteGroup(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Unit] = {
-    runInTransaction("deleteGroup", samRequestContext)({ implicit session =>
-      val g = GroupTable.syntax("g")
-
-      Try {
-        // foreign keys in accessInstructions and groupMember tables are set to cascade delete
-        // note: this will not remove this group from any parent groups and will throw a
-        // foreign key constraint violation error if group is still a member of any parent groups
-        samsql"delete from ${GroupTable as g} where ${g.name} = ${groupName}".update().apply()
-      }.recoverWith {
-        case fkViolation: PSQLException if fkViolation.getSQLState == PSQLStateExtensions.FOREIGN_KEY_VIOLATION =>
-          Failure(new WorkbenchExceptionWithErrorReport(
-            ErrorReport(StatusCodes.Conflict, s"group ${groupName.value} cannot be deleted because it is a member of at least 1 other group")))
-      }.get
-    })
-  }
+  override def deleteGroup(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Unit] = ???
+//  {
+//    runInTransaction("deleteGroup", samRequestContext)({ implicit session =>
+//      val g = GroupTable.syntax("g")
+//
+//      Try {
+//        // foreign keys in accessInstructions and groupMember tables are set to cascade delete
+//        // note: this will not remove this group from any parent groups and will throw a
+//        // foreign key constraint violation error if group is still a member of any parent groups
+//        samsql"delete from ${GroupTable as g} where ${g.name} = ${groupName}".update().apply()
+//      }.recoverWith {
+//        case fkViolation: PSQLException if fkViolation.getSQLState == PSQLStateExtensions.FOREIGN_KEY_VIOLATION =>
+//          Failure(new WorkbenchExceptionWithErrorReport(
+//            ErrorReport(StatusCodes.Conflict, s"group ${groupName.value} cannot be deleted because it is a member of at least 1 other group")))
+//      }.get
+//    })
+//  }
 
   /**
     * @return true if the subject was added, false if it was already there
     */
-  override def addGroupMember(groupId: WorkbenchGroupIdentity, addMember: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean] = {
-    runInTransaction("addGroupMember", samRequestContext)({ implicit session =>
-      val groupPKQuery = workbenchGroupIdentityToGroupPK(groupId)
-      val groupMemberColumn = GroupMemberTable.column
-
-      val addMemberQuery = addMember match {
-        case memberUser: WorkbenchUserId =>
-          samsql"insert into ${GroupMemberTable.table} (${groupMemberColumn.groupId}, ${groupMemberColumn.memberUserId}) values (($groupPKQuery), ${memberUser})"
-        case memberGroup: WorkbenchGroupIdentity =>
-          val memberGroupPKQuery = workbenchGroupIdentityToGroupPK(memberGroup)
-          samsql"insert into ${GroupMemberTable.table} (${groupMemberColumn.groupId}, ${groupMemberColumn.memberGroupId}) values ((${groupPKQuery}), (${memberGroupPKQuery}))"
-        case pet: PetServiceAccountId => throw new WorkbenchException(s"pet service accounts cannot be added to groups $pet")
-      }
-
-      val numberAdded = Try {
-        addMemberQuery.update().apply()
-      }.recover {
-        case duplicateException: PSQLException if duplicateException.getSQLState == PSQLStateExtensions.UNIQUE_VIOLATION => 0
-      }
-
-      if (numberAdded.get > 0) {
-        updateGroupUpdatedDate(groupId)
-        true
-      } else {
-        false
-      }
-    })
-  }
+  override def addGroupMember(groupId: WorkbenchGroupIdentity, addMember: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean] = ???
+//  {
+//    runInTransaction("addGroupMember", samRequestContext)({ implicit session =>
+//      val groupPKQuery = workbenchGroupIdentityToGroupPK(groupId)
+//      val groupMemberColumn = GroupMemberTable.column
+//
+//      val addMemberQuery = addMember match {
+//        case memberUser: WorkbenchUserId =>
+//          samsql"insert into ${GroupMemberTable.table} (${groupMemberColumn.groupId}, ${groupMemberColumn.memberUserId}) values (($groupPKQuery), ${memberUser})"
+//        case memberGroup: WorkbenchGroupIdentity =>
+//          val memberGroupPKQuery = workbenchGroupIdentityToGroupPK(memberGroup)
+//          samsql"insert into ${GroupMemberTable.table} (${groupMemberColumn.groupId}, ${groupMemberColumn.memberGroupId}) values ((${groupPKQuery}), (${memberGroupPKQuery}))"
+//        case pet: PetServiceAccountId => throw new WorkbenchException(s"pet service accounts cannot be added to groups $pet")
+//      }
+//
+//      val numberAdded = Try {
+//        addMemberQuery.update().apply()
+//      }.recover {
+//        case duplicateException: PSQLException if duplicateException.getSQLState == PSQLStateExtensions.UNIQUE_VIOLATION => 0
+//      }
+//
+//      if (numberAdded.get > 0) {
+//        updateGroupUpdatedDate(groupId)
+//        true
+//      } else {
+//        false
+//      }
+//    })
+//  }
 
   private def updateGroupUpdatedDate(groupId: WorkbenchGroupIdentity)(implicit session: DBSession): Int = {
     val g = GroupTable.column
@@ -224,49 +228,51 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
   /**
     * @return true if the subject was removed, false if it was already gone
     */
-  override def removeGroupMember(groupId: WorkbenchGroupIdentity, removeMember: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean] = {
-    runInTransaction("removeGroupMember", samRequestContext)({ implicit session =>
-      val groupPKQuery = workbenchGroupIdentityToGroupPK(groupId)
-      val groupMemberColumn = GroupMemberTable.column
+  override def removeGroupMember(groupId: WorkbenchGroupIdentity, removeMember: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean] = ???
+//  {
+//    runInTransaction("removeGroupMember", samRequestContext)({ implicit session =>
+//      val groupPKQuery = workbenchGroupIdentityToGroupPK(groupId)
+//      val groupMemberColumn = GroupMemberTable.column
+//
+//      val removeMemberQuery = removeMember match {
+//        case memberUser: WorkbenchUserId =>
+//          samsql"delete from ${GroupMemberTable.table} where ${groupMemberColumn.groupId} = (${groupPKQuery}) and ${groupMemberColumn.memberUserId} = ${memberUser}"
+//        case memberGroup: WorkbenchGroupIdentity =>
+//          val memberGroupPKQuery = workbenchGroupIdentityToGroupPK(memberGroup)
+//          samsql"delete from ${GroupMemberTable.table} where ${groupMemberColumn.groupId} = (${groupPKQuery}) and ${groupMemberColumn.memberGroupId} = (${memberGroupPKQuery})"
+//        case _ => throw new WorkbenchException(s"unexpected WorkbenchSubject $removeMember")
+//      }
+//      val removed = removeMemberQuery.update().apply() > 0
+//
+//      if (removed) {
+//        updateGroupUpdatedDate(groupId)
+//      }
+//
+//      removed
+//    })
+//  }
 
-      val removeMemberQuery = removeMember match {
-        case memberUser: WorkbenchUserId =>
-          samsql"delete from ${GroupMemberTable.table} where ${groupMemberColumn.groupId} = (${groupPKQuery}) and ${groupMemberColumn.memberUserId} = ${memberUser}"
-        case memberGroup: WorkbenchGroupIdentity =>
-          val memberGroupPKQuery = workbenchGroupIdentityToGroupPK(memberGroup)
-          samsql"delete from ${GroupMemberTable.table} where ${groupMemberColumn.groupId} = (${groupPKQuery}) and ${groupMemberColumn.memberGroupId} = (${memberGroupPKQuery})"
-        case _ => throw new WorkbenchException(s"unexpected WorkbenchSubject $removeMember")
-      }
-      val removed = removeMemberQuery.update().apply() > 0
-
-      if (removed) {
-        updateGroupUpdatedDate(groupId)
-      }
-
-      removed
-    })
-  }
-
-  override def isGroupMember(groupId: WorkbenchGroupIdentity, member: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean] = {
-    val subGroupMemberTable = SubGroupMemberTable("sub_group")
-    val sg = subGroupMemberTable.syntax("sg")
-
-    val memberClause: SQLSyntax = member match {
-      case subGroupId: WorkbenchGroupIdentity => samsqls"${sg.memberGroupId} = (${workbenchGroupIdentityToGroupPK(subGroupId)})"
-      case WorkbenchUserId(userId) => samsqls"${sg.memberUserId} = $userId"
-      case _ => throw new WorkbenchException(s"illegal member $member")
-    }
-
-    runInTransaction("isGroupMember", samRequestContext)({ implicit session =>
-      // https://www.postgresql.org/docs/9.6/queries-with.html
-      // in the recursive query below, UNION, as opposed to UNION ALL, should break out of cycles because it removes duplicates
-      val query = samsql"""WITH RECURSIVE ${recursiveMembersQuery(groupId, subGroupMemberTable)}
-        SELECT count(*)
-        FROM ${subGroupMemberTable as sg} WHERE $memberClause"""
-
-      query.map(rs => rs.int(1)).single().apply().getOrElse(0) > 0
-    })
-  }
+  override def isGroupMember(groupId: WorkbenchGroupIdentity, member: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean] = ???
+//  {
+//    val subGroupMemberTable = SubGroupMemberTable("sub_group")
+//    val sg = subGroupMemberTable.syntax("sg")
+//
+//    val memberClause: SQLSyntax = member match {
+//      case subGroupId: WorkbenchGroupIdentity => samsqls"${sg.memberGroupId} = (${workbenchGroupIdentityToGroupPK(subGroupId)})"
+//      case WorkbenchUserId(userId) => samsqls"${sg.memberUserId} = $userId"
+//      case _ => throw new WorkbenchException(s"illegal member $member")
+//    }
+//
+//    runInTransaction("isGroupMember", samRequestContext)({ implicit session =>
+//      // https://www.postgresql.org/docs/9.6/queries-with.html
+//      // in the recursive query below, UNION, as opposed to UNION ALL, should break out of cycles because it removes duplicates
+//      val query = samsql"""WITH RECURSIVE ${recursiveMembersQuery(groupId, subGroupMemberTable)}
+//        SELECT count(*)
+//        FROM ${subGroupMemberTable as sg} WHERE $memberClause"""
+//
+//      query.map(rs => rs.int(1)).single().apply().getOrElse(0) > 0
+//    })
+//  }
 
   override def updateSynchronizedDate(groupId: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[Unit] = {
     runInTransaction("updateSynchronizedDate", samRequestContext)({ implicit session =>
@@ -511,9 +517,10 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     })
   }
 
-  override def listUsersGroups(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[WorkbenchGroupIdentity]] = {
-    listMemberOfGroups(userId, samRequestContext)
-  }
+  override def listUsersGroups(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[WorkbenchGroupIdentity]] = ???
+//  {
+//    listMemberOfGroups(userId, samRequestContext)
+//  }
 
   /** Extracts a WorkbenchGroupIdentity from a SQL query
     *
@@ -540,24 +547,25 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     }
   }
 
-  override def listUserDirectMemberships(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Stream[WorkbenchGroupIdentity]] = {
-    runInTransaction("listUserDirectMemberships", samRequestContext)({ implicit session =>
-      val gm = GroupMemberTable.syntax("gm")
-      val g = GroupTable.syntax("g")
-      val p = PolicyTable.syntax("p")
-      val r = ResourceTable.syntax("r")
-      val rt = ResourceTypeTable.syntax("rt")
-
-      samsql"""select ${g.result.name}, ${p.result.name}, ${r.result.name}, ${rt.result.name}
-              from ${GroupTable as g}
-              join ${GroupMemberTable as gm} on ${gm.groupId} = ${g.id}
-              left join ${PolicyTable as p} on ${p.groupId} = ${g.id}
-              left join ${ResourceTable as r} on ${p.resourceId} = ${r.id}
-              left join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
-              where ${gm.memberUserId} = ${userId}"""
-        .map(resultSetToGroupIdentity(_, g, p, r, rt)).list().apply().toStream
-    })
-  }
+  override def listUserDirectMemberships(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Stream[WorkbenchGroupIdentity]] = ???
+//  {
+//    runInTransaction("listUserDirectMemberships", samRequestContext)({ implicit session =>
+//      val gm = GroupMemberTable.syntax("gm")
+//      val g = GroupTable.syntax("g")
+//      val p = PolicyTable.syntax("p")
+//      val r = ResourceTable.syntax("r")
+//      val rt = ResourceTypeTable.syntax("rt")
+//
+//      samsql"""select ${g.result.name}, ${p.result.name}, ${r.result.name}, ${rt.result.name}
+//              from ${GroupTable as g}
+//              join ${GroupMemberTable as gm} on ${gm.groupId} = ${g.id}
+//              left join ${PolicyTable as p} on ${p.groupId} = ${g.id}
+//              left join ${ResourceTable as r} on ${p.resourceId} = ${r.id}
+//              left join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
+//              where ${gm.memberUserId} = ${userId}"""
+//        .map(resultSetToGroupIdentity(_, g, p, r, rt)).list().apply().toStream
+//    })
+//  }
 
   /**
     * This query attempts to list the User records that are members of ALL the groups given in the groupIds parameter.
@@ -579,76 +587,78 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     * @param groupIds
     * @return Set of WorkbenchUserIds that are members of each group specified by groupIds
     */
-  override def listIntersectionGroupUsers(groupIds: Set[WorkbenchGroupIdentity], samRequestContext: SamRequestContext): IO[Set[WorkbenchUserId]] = {
-    // the implementation of this is a little fancy and is able to do the entire intersection in a single request
-    // the general structure of the query is:
-    // WITH RECURSIVE [subGroupsQuery for each group] [SELECT user_id FROM subGroupsQuery_1 INTERSECT SELECT user_id FROM subGroupsQuery_2 INTERSECT ...]
-    case class QueryAndTable(recursiveMembersQuery: SQLSyntax, table: SubGroupMemberTable)
+  override def listIntersectionGroupUsers(groupIds: Set[WorkbenchGroupIdentity], samRequestContext: SamRequestContext): IO[Set[WorkbenchUserId]] = ???
+//  {
+//    // the implementation of this is a little fancy and is able to do the entire intersection in a single request
+//    // the general structure of the query is:
+//    // WITH RECURSIVE [subGroupsQuery for each group] [SELECT user_id FROM subGroupsQuery_1 INTERSECT SELECT user_id FROM subGroupsQuery_2 INTERSECT ...]
+//    case class QueryAndTable(recursiveMembersQuery: SQLSyntax, table: SubGroupMemberTable)
+//
+//    // the toSeq below is important to fix a predictable order
+//    val recursiveMembersQueries = groupIds.toSeq.zipWithIndex.map { case (groupId, index) =>
+//      // need each subgroup table to be named uniquely
+//      // this is careful not to use a user defined string (e.g. the group's name) to avoid sql injection attacks
+//      val subGroupTable = SubGroupMemberTable("sub_group_" + index)
+//
+//      QueryAndTable(recursiveMembersQuery(groupId, subGroupTable), subGroupTable)
+//    }
+//
+//    val allRecursiveMembersQueries = SQLSyntax.join(recursiveMembersQueries.map(_.recursiveMembersQuery), sqls",", false)
+//
+//    val intersectionQuery = recursiveMembersQueries.map { queryAndTable =>
+//      val sg = queryAndTable.table.syntax
+//      samsqls"select ${sg.memberUserId} from ${queryAndTable.table as sg} where ${sg.memberUserId} is not null"
+//    }.reduce((left, right) => samsqls"$left INTERSECT $right")
+//
+//    runInTransaction("listIntersectionGroupUsers", samRequestContext)({ implicit session =>
+//      samsql"""with recursive $allRecursiveMembersQueries $intersectionQuery""".map(rs => WorkbenchUserId(rs.string(1))).list().apply().toSet
+//    })
+//  }
 
-    // the toSeq below is important to fix a predictable order
-    val recursiveMembersQueries = groupIds.toSeq.zipWithIndex.map { case (groupId, index) =>
-      // need each subgroup table to be named uniquely
-      // this is careful not to use a user defined string (e.g. the group's name) to avoid sql injection attacks
-      val subGroupTable = SubGroupMemberTable("sub_group_" + index)
+//  private def listMemberOfGroups(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Set[WorkbenchGroupIdentity]]  = {
+//    val gm = GroupMemberTable.syntax("gm")
+//    val g = GroupTable.syntax("g")
+//    val p = PolicyTable.syntax("p")
+//
+//    val topQueryWhere = subject match {
+//      case userId: WorkbenchUserId => samsqls"where ${gm.memberUserId} = ${userId}"
+//      case workbenchGroupIdentity: WorkbenchGroupIdentity => samsqls"where ${gm.memberGroupId} = (${workbenchGroupIdentityToGroupPK(workbenchGroupIdentity)})"
+//      case _ => throw new WorkbenchException(s"Unexpected WorkbenchSubject. Expected WorkbenchUserId or WorkbenchGroupIdentity but got ${subject}")
+//    }
+//
+//    runInTransaction("listMemberOfGroups", samRequestContext)({ implicit session =>
+//      val ancestorGroupsTable = SubGroupMemberTable("ancestor_groups")
+//      val ag = ancestorGroupsTable.syntax("ag")
+//      val agColumn = ancestorGroupsTable.column
+//
+//      val pg = GroupMemberTable.syntax("parent_groups")
+//      val r = ResourceTable.syntax("r")
+//      val rt = ResourceTypeTable.syntax("rt")
+//
+//      val listGroupsQuery =
+//        samsql"""WITH RECURSIVE ${ancestorGroupsTable.table}(${agColumn.parentGroupId}, ${agColumn.memberGroupId}) AS (
+//                    select ${gm.groupId}, ${gm.memberGroupId}
+//                    from ${GroupMemberTable as gm}
+//                    ${topQueryWhere}
+//                    union
+//                    select ${pg.groupId}, ${pg.memberGroupId}
+//                    from ${GroupMemberTable as pg}
+//                    join ${ancestorGroupsTable as ag} ON ${agColumn.parentGroupId} = ${pg.memberGroupId}
+//          ) select distinct(${g.name}) as ${g.resultName.name}, ${p.result.name}, ${r.result.name}, ${rt.result.name}
+//            from ${GroupTable as g}
+//            join ${ancestorGroupsTable as ag} on ${ag.parentGroupId} = ${g.id}
+//            left join ${PolicyTable as p} on ${p.groupId} = ${g.id}
+//            left join ${ResourceTable as r} on ${p.resourceId} = ${r.id}
+//            left join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}"""
+//
+//      listGroupsQuery.map(resultSetToGroupIdentity(_, g, p, r, rt)).list().apply().toSet
+//    })
+//  }
 
-      QueryAndTable(recursiveMembersQuery(groupId, subGroupTable), subGroupTable)
-    }
-
-    val allRecursiveMembersQueries = SQLSyntax.join(recursiveMembersQueries.map(_.recursiveMembersQuery), sqls",", false)
-
-    val intersectionQuery = recursiveMembersQueries.map { queryAndTable =>
-      val sg = queryAndTable.table.syntax
-      samsqls"select ${sg.memberUserId} from ${queryAndTable.table as sg} where ${sg.memberUserId} is not null"
-    }.reduce((left, right) => samsqls"$left INTERSECT $right")
-
-    runInTransaction("listIntersectionGroupUsers", samRequestContext)({ implicit session =>
-      samsql"""with recursive $allRecursiveMembersQueries $intersectionQuery""".map(rs => WorkbenchUserId(rs.string(1))).list().apply().toSet
-    })
-  }
-
-  private def listMemberOfGroups(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Set[WorkbenchGroupIdentity]]  = {
-    val gm = GroupMemberTable.syntax("gm")
-    val g = GroupTable.syntax("g")
-    val p = PolicyTable.syntax("p")
-
-    val topQueryWhere = subject match {
-      case userId: WorkbenchUserId => samsqls"where ${gm.memberUserId} = ${userId}"
-      case workbenchGroupIdentity: WorkbenchGroupIdentity => samsqls"where ${gm.memberGroupId} = (${workbenchGroupIdentityToGroupPK(workbenchGroupIdentity)})"
-      case _ => throw new WorkbenchException(s"Unexpected WorkbenchSubject. Expected WorkbenchUserId or WorkbenchGroupIdentity but got ${subject}")
-    }
-
-    runInTransaction("listMemberOfGroups", samRequestContext)({ implicit session =>
-      val ancestorGroupsTable = SubGroupMemberTable("ancestor_groups")
-      val ag = ancestorGroupsTable.syntax("ag")
-      val agColumn = ancestorGroupsTable.column
-
-      val pg = GroupMemberTable.syntax("parent_groups")
-      val r = ResourceTable.syntax("r")
-      val rt = ResourceTypeTable.syntax("rt")
-
-      val listGroupsQuery =
-        samsql"""WITH RECURSIVE ${ancestorGroupsTable.table}(${agColumn.parentGroupId}, ${agColumn.memberGroupId}) AS (
-                    select ${gm.groupId}, ${gm.memberGroupId}
-                    from ${GroupMemberTable as gm}
-                    ${topQueryWhere}
-                    union
-                    select ${pg.groupId}, ${pg.memberGroupId}
-                    from ${GroupMemberTable as pg}
-                    join ${ancestorGroupsTable as ag} ON ${agColumn.parentGroupId} = ${pg.memberGroupId}
-          ) select distinct(${g.name}) as ${g.resultName.name}, ${p.result.name}, ${r.result.name}, ${rt.result.name}
-            from ${GroupTable as g}
-            join ${ancestorGroupsTable as ag} on ${ag.parentGroupId} = ${g.id}
-            left join ${PolicyTable as p} on ${p.groupId} = ${g.id}
-            left join ${ResourceTable as r} on ${p.resourceId} = ${r.id}
-            left join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}"""
-
-      listGroupsQuery.map(resultSetToGroupIdentity(_, g, p, r, rt)).list().apply().toSet
-    })
-  }
-
-  override def listAncestorGroups(groupId: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[Set[WorkbenchGroupIdentity]] = {
-    listMemberOfGroups(groupId, samRequestContext)
-  }
+  override def listAncestorGroups(groupId: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[Set[WorkbenchGroupIdentity]] = ???
+//  {
+//    listMemberOfGroups(groupId, samRequestContext)
+//  }
 
   override def enableIdentity(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Unit] = {
     subject match {

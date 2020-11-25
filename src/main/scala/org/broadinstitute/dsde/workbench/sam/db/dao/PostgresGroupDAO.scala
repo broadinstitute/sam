@@ -8,23 +8,24 @@ import org.broadinstitute.dsde.workbench.sam.db.SamParameterBinderFactory.SqlInt
 import org.broadinstitute.dsde.workbench.sam.model.FullyQualifiedPolicyId
 
 trait PostgresGroupDAO {
-  def insertGroupMembers(groupId: GroupPK, members: Set[WorkbenchSubject])(implicit session: DBSession): Int = {
-    if (members.isEmpty) {
-      0
-    } else {
-      val memberUsers: List[SQLSyntax] = members.collect {
-        case userId: WorkbenchUserId => samsqls"(${groupId}, ${userId}, ${None})"
-      }.toList
-
-      val memberGroups: List[SQLSyntax] = queryForGroupPKs(members).map { groupPK =>
-        samsqls"(${groupId}, ${None}, ${groupPK})"
-      }
-
-      val gm = GroupMemberTable.column
-      samsql"insert into ${GroupMemberTable.table} (${gm.groupId}, ${gm.memberUserId}, ${gm.memberGroupId}) values ${memberUsers ++ memberGroups}"
-        .update().apply()
-    }
-  }
+  def insertGroupMembers(groupId: GroupPK, members: Set[WorkbenchSubject])(implicit session: DBSession): Int = ???
+//  {
+//    if (members.isEmpty) {
+//      0
+//    } else {
+//      val memberUsers: List[SQLSyntax] = members.collect {
+//        case userId: WorkbenchUserId => samsqls"(${groupId}, ${userId}, ${None})"
+//      }.toList
+//
+//      val memberGroups: List[SQLSyntax] = queryForGroupPKs(members).map { groupPK =>
+//        samsqls"(${groupId}, ${None}, ${groupPK})"
+//      }
+//
+//      val gm = GroupMemberTable.column
+//      samsql"insert into ${GroupMemberTable.table} (${gm.groupId}, ${gm.memberUserId}, ${gm.memberGroupId}) values ${memberUsers ++ memberGroups}"
+//        .update().apply()
+//    }
+//  }
 
   protected def queryForGroupPKs(members: Set[WorkbenchSubject])(implicit session: DBSession): List[GroupPK] = {
     import SamTypeBinders._
