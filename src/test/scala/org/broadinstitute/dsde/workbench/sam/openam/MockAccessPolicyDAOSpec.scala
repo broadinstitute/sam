@@ -58,8 +58,8 @@ class MockAccessPolicyDAOSpec extends FlatSpec with Matchers with TestSupport wi
     val shared = sharedFixtures
     val dirURI = new URI(directoryConfig.directoryUrl)
     val connectionPool = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
-    val ldapPolicyDao = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.blockingEc)
-    val ldapDirDao = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.blockingEc)
+    val ldapPolicyDao = new FlatPostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.blockingEc)
+    val ldapDirDao = new FlatPostgresDirectoryDAO(TestSupport.dbRef, TestSupport.blockingEc)
     val registrationDAO = new LdapRegistrationDAO(connectionPool, directoryConfig, TestSupport.blockingEc)
     val allUsersGroup: WorkbenchGroup = TestSupport.runAndWait(NoExtensions.getOrCreateAllUsersGroup(ldapDirDao, samRequestContext))
 

@@ -13,9 +13,9 @@ import org.broadinstitute.dsde.workbench.sam
 import org.broadinstitute.dsde.workbench.sam.Generator._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig.resourceTypeReader
-import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryDAO, PostgresDirectoryDAO}
+import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryDAO, FlatPostgresDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, PostgresAccessPolicyDAO}
+import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, FlatPostgresAccessPolicyDAO}
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FlatSpec, Matchers}
@@ -35,8 +35,8 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
 
   val dirURI = new URI(directoryConfig.directoryUrl)
   val connectionPool = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
-  lazy val dirDAO: DirectoryDAO = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.blockingEc)
-  lazy val policyDAO: AccessPolicyDAO = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.blockingEc)
+  lazy val dirDAO: DirectoryDAO = new FlatPostgresDirectoryDAO(TestSupport.dbRef, TestSupport.blockingEc)
+  lazy val policyDAO: AccessPolicyDAO = new FlatPostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.blockingEc)
   val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
   private val dummyUserInfo = UserInfo(OAuth2BearerToken("token"), WorkbenchUserId("userid"), WorkbenchEmail("user@company.com"), 0)

@@ -8,10 +8,10 @@ import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
-import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryDAO, PostgresDirectoryDAO}
+import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryDAO, FlatPostgresDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, PostgresAccessPolicyDAO}
+import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, FlatPostgresAccessPolicyDAO}
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.mockito.ArgumentMatchers
 import org.mockito.Mockito._
@@ -35,8 +35,8 @@ class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport wi
 
   val dirURI = new URI(directoryConfig.directoryUrl)
   val connectionPool = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
-  lazy val dirDAO: DirectoryDAO = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.blockingEc)
-  lazy val policyDAO: AccessPolicyDAO = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.blockingEc)
+  lazy val dirDAO: DirectoryDAO = new FlatPostgresDirectoryDAO(TestSupport.dbRef, TestSupport.blockingEc)
+  lazy val policyDAO: AccessPolicyDAO = new FlatPostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.blockingEc)
   val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
   private val resourceId = ResourceId("myNewGroup")
