@@ -9,7 +9,7 @@ import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.db.SamParameterBinderFactory._
-import org.broadinstitute.dsde.workbench.sam.db.dao.PostgresGroupDAO
+import org.broadinstitute.dsde.workbench.sam.db.dao.FlatPostgresGroupDAO
 import org.broadinstitute.dsde.workbench.sam.db.tables._
 import org.broadinstitute.dsde.workbench.sam.db.{DbReference, PSQLStateExtensions, SamTypeBinders}
 import org.broadinstitute.dsde.workbench.sam.errorReportSource
@@ -23,7 +23,7 @@ import scala.concurrent.ExecutionContext
 import scala.util.{Failure, Try}
 
 class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
-                              protected val ecForDatabaseIO: ExecutionContext)(implicit val cs: ContextShift[IO]) extends AccessPolicyDAO with DatabaseSupport with PostgresGroupDAO with LazyLogging {
+                              protected val ecForDatabaseIO: ExecutionContext)(implicit val cs: ContextShift[IO]) extends AccessPolicyDAO with DatabaseSupport with FlatPostgresGroupDAO with LazyLogging {
 
   /**
     * Creates or updates all given resource types.

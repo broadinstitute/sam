@@ -13,7 +13,7 @@ import org.broadinstitute.dsde.workbench.sam.util.{DatabaseSupport, SamRequestCo
 import scalikejdbc._
 import SamParameterBinderFactory._
 import akka.http.scaladsl.model.StatusCodes
-import org.broadinstitute.dsde.workbench.sam.db.dao.{PostgresGroupDAO}
+import org.broadinstitute.dsde.workbench.sam.db.dao.FlatPostgresGroupDAO
 import org.postgresql.util.PSQLException
 import org.broadinstitute.dsde.workbench.sam._
 
@@ -21,7 +21,7 @@ import scala.concurrent.ExecutionContext
 import scala.util.{Failure, Try}
 
 class PostgresDirectoryDAO(protected val dbRef: DbReference,
-                           protected val ecForDatabaseIO: ExecutionContext)(implicit val cs: ContextShift[IO]) extends DirectoryDAO with DatabaseSupport with PostgresGroupDAO {
+                           protected val ecForDatabaseIO: ExecutionContext)(implicit val cs: ContextShift[IO]) extends DirectoryDAO with DatabaseSupport with FlatPostgresGroupDAO {
 
   override def createGroup(group: BasicWorkbenchGroup, accessInstructionsOpt: Option[String], samRequestContext: SamRequestContext): IO[BasicWorkbenchGroup] = {
     runInTransaction("createGroup", samRequestContext)({ implicit session =>
