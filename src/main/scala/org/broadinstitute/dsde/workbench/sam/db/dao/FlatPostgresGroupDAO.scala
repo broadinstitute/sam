@@ -70,10 +70,14 @@ trait FlatPostgresGroupDAO extends PostgresGroupDAO {
 
   // get all of the direct or transitive members of all `groups`
   private def listMembersByPKs(groups: Traversable[GroupPK])(implicit session: DBSession) = {
-    val gm = FlatGroupMemberTable.column
-    val f = FlatGroupMemberTable.syntax("f")
-    val query = samsql"select * from ${FlatGroupMemberTable as f} where ${gm.groupId} IN (${groups})"
-    query.map(convertToFlatGroupMemberTable(f)).list.apply()
+    if (groups.isEmpty)
+      List.empty
+    else {
+      val gm = FlatGroupMemberTable.column
+      val f = FlatGroupMemberTable.syntax("f")
+      val query = samsql"select * from ${FlatGroupMemberTable as f} where ${gm.groupId} IN (${groups})"
+      query.map(convertToFlatGroupMemberTable(f)).list.apply()
+    }
   }
 
   // there is probably some implicit magic which avoids this but I don't know it
