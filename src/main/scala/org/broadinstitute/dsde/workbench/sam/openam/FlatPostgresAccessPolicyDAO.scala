@@ -1,9 +1,9 @@
 package org.broadinstitute.dsde.workbench.sam.openam
 
 import cats.effect.{ContextShift, IO}
-import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchGroupName, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException, WorkbenchGroupName, WorkbenchSubject, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.db.{DbReference, SamTypeBinders}
-import org.broadinstitute.dsde.workbench.sam.db.tables.{EffectivePolicyTable, FlatGroupMemberTable, GroupRecord, GroupTable, PolicyActionTable, PolicyRecord, PolicyRoleTable, PolicyTable, ResourceActionTable, ResourceRoleTable, ResourceTable, ResourceTypeTable}
+import org.broadinstitute.dsde.workbench.sam.db.tables.{EffectivePolicyTable, FlatGroupMemberTable, GroupPK, GroupRecord, GroupTable, PolicyActionTable, PolicyRecord, PolicyRoleTable, PolicyTable, ResourceActionTable, ResourceRoleTable, ResourceTable, ResourceTypeTable}
 import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicy, AccessPolicyName, AccessPolicyWithoutMembers, FullyQualifiedPolicyId, FullyQualifiedResourceId, ResourceAction, ResourceId, ResourceIdAndPolicyName, ResourceRoleName, ResourceTypeName}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import scalikejdbc.SQLSyntax
@@ -87,7 +87,6 @@ class FlatPostgresAccessPolicyDAO (override val dbRef: DbReference, override val
     })
   }
 
-
   override def userPoliciesCommonTableExpressions(resourceTypeName: ResourceTypeName, resourceId: Option[ResourceId], user: WorkbenchUserId): UserPoliciesCommonTableExpression = {
     val resource = ResourceTable.syntax("resource")
     val resourceType = ResourceTypeTable.syntax("resourceType")
@@ -115,6 +114,20 @@ class FlatPostgresAccessPolicyDAO (override val dbRef: DbReference, override val
           (select ${flatGroupMember.groupId} from ${FlatGroupMemberTable as flatGroupMember} where ${flatGroupMember.memberUserId} = ${user})))"""
 
     UserPoliciesCommonTableExpression(userResourcePolicyTable, userResourcePolicy, queryFragment)
+  }
+
+  //Steps: Delete every member from the underlying group and then add all of the new members. Do this in a *single*
+  //transaction so if any bit fails, all of it fails and we don't end up in some incorrect intermediate state.
+  override def overwritePolicyMembersInternal(id: FullyQualifiedPolicyId, memberList: Set[WorkbenchSubject])(implicit session: DBSession): Int = {
+    val f = FlatGroupMemberTable.syntax("f")
+
+    val groupId = samsql"${workbenchGroupIdentityToGroupPK(id)}".map(rs => rs.long(1)).single().apply().getOrElse {
+      throw new WorkbenchException(s"Group for policy [$id] not found")
+    }
+
+    samsql"delete from ${FlatGroupMemberTable as f} where ${directMembershipClause(groupId)}".update().apply()
+
+    insertGroupMembers(GroupPK(groupId.toLong), memberList)
   }
 
   // Copied from PostgresAccessPolicyDAO.listPolicies
@@ -196,6 +209,8 @@ class FlatPostgresAccessPolicyDAO (override val dbRef: DbReference, override val
     })
   }
 
+  // NOTE: these 2 are quasi-duplicated in FlatPostgresDirectoryDAO
+
   // selection clause for direct membership:
   // choose when the final `groupMembershipPath` array element is equal to groupId
   private def directMembershipClause(g: QuerySQLSyntaxProvider[SQLSyntaxSupport[GroupRecord], GroupRecord]): SQLSyntax = {
@@ -203,4 +218,10 @@ class FlatPostgresAccessPolicyDAO (override val dbRef: DbReference, override val
     samsqls"${f.groupMembershipPath}[array_upper(${f.groupMembershipPath}, 1)] = ${g.id}"
   }
 
+  // selection clause for direct membership:
+  // choose when the final `groupMembershipPath` array element is equal to groupId
+  private def directMembershipClause(groupId: Long): SQLSyntax = {
+    val f = FlatGroupMemberTable.syntax("f")
+    samsqls"${f.groupMembershipPath}[array_upper(${f.groupMembershipPath}, 1)] = ${groupId}"
+  }
 }

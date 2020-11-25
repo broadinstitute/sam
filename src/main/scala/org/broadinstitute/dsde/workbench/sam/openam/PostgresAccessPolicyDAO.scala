@@ -785,7 +785,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
 
   //Steps: Delete every member from the underlying group and then add all of the new members. Do this in a *single*
   //transaction so if any bit fails, all of it fails and we don't end up in some incorrect intermediate state.
-  private def overwritePolicyMembersInternal(id: FullyQualifiedPolicyId, memberList: Set[WorkbenchSubject])(implicit session: DBSession): Int = {
+  protected def overwritePolicyMembersInternal(id: FullyQualifiedPolicyId, memberList: Set[WorkbenchSubject])(implicit session: DBSession): Int = {
     val gm = GroupMemberTable.syntax("gm")
 
     val groupId = samsql"${workbenchGroupIdentityToGroupPK(id)}".map(rs => rs.long(1)).single().apply().getOrElse {
