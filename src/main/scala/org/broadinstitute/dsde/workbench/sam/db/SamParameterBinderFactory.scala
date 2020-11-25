@@ -14,7 +14,7 @@ object SamParameterBinderFactory {
   }
 
   implicit def databaseArrayPbf[T <: DatabaseArray]: ParameterBinderFactory[T] = ParameterBinderFactory[T] {
-    value => (stmt, idx) => stmt.setArray(idx, value.asSqlArray)
+    value => (stmt, idx) => stmt.setArray(idx, value.asSqlArray(stmt.getConnection))
   }
 
   implicit class SqlInterpolationWithSamBinders(val sc: StringContext) extends AnyVal {
