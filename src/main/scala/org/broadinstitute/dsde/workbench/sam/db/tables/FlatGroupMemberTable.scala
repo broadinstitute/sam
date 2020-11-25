@@ -30,8 +30,12 @@ object TempTypeBinders {
   }
 
   implicit val flatGroupMembershipPathPKTypeBinder: TypeBinder[FlatGroupMembershipPath] = new TypeBinder[FlatGroupMembershipPath] {
-    def apply(rs: ResultSet, label: String): FlatGroupMembershipPath = FlatGroupMembershipPath(rs.getArray(label).getArray.asInstanceOf[Array[Long]].toList.map(GroupPK))
-    def apply(rs: ResultSet, index: Int): FlatGroupMembershipPath = FlatGroupMembershipPath(rs.getArray(index).getArray.asInstanceOf[Array[Long]].toList.map(GroupPK))
+    def apply(rs: ResultSet, label: String): FlatGroupMembershipPath = {
+      FlatGroupMembershipPath(rs.getArray(label).getArray.asInstanceOf[Array[java.lang.Long]].map(_.longValue()).toList.map(GroupPK))
+    }
+    def apply(rs: ResultSet, index: Int): FlatGroupMembershipPath = {
+      FlatGroupMembershipPath(rs.getArray(index).getArray.asInstanceOf[Array[java.lang.Long]].map(_.longValue()).toList.map(GroupPK))
+    }
   }
 }
 

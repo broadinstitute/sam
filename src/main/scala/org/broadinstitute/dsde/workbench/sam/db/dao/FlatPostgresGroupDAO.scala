@@ -73,9 +73,8 @@ trait FlatPostgresGroupDAO extends PostgresGroupDAO {
     if (groups.isEmpty)
       List.empty
     else {
-      val gm = FlatGroupMemberTable.column
       val f = FlatGroupMemberTable.syntax("f")
-      val query = samsql"select * from ${FlatGroupMemberTable as f} where ${gm.groupId} IN (${groups})"
+      val query = samsql"select ${f.resultAll} from ${FlatGroupMemberTable as f} where ${f.groupId} IN (${groups})"
       query.map(convertToFlatGroupMemberTable(f)).list.apply()
     }
   }
