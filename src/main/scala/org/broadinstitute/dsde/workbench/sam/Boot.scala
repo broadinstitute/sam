@@ -210,7 +210,7 @@ object Boot extends IOApp with LazyLogging {
   }
 
   private def createDirectoryDAO(dbReference: DbReference, postgresExecutionContext: ExecutionContext) = {
-    new PostgresDirectoryDAO(dbReference, postgresExecutionContext)
+    new FlatPostgresDirectoryDAO(dbReference, postgresExecutionContext)
   }
 
   private def createRegistrationDAO(appConfig: AppConfig,
@@ -220,7 +220,7 @@ object Boot extends IOApp with LazyLogging {
   }
 
   private def createAccessPolicyDAO(dbReference: DbReference, postgresExecutionContext: ExecutionContext) = {
-    new PostgresAccessPolicyDAO(dbReference, postgresExecutionContext)
+    new FlatPostgresAccessPolicyDAO(dbReference, postgresExecutionContext)
   }
 
   private[sam] def createGoogleCloudExt(
