@@ -2,12 +2,12 @@ package org.broadinstitute.dsde.workbench.sam.directory
 
 import akka.http.scaladsl.model.StatusCodes
 import cats.effect.{ContextShift, IO}
-import org.broadinstitute.dsde.workbench.sam.errorReportSource
-import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchEmail, WorkbenchException, WorkbenchExceptionWithErrorReport, WorkbenchGroupIdentity, WorkbenchGroupName, WorkbenchSubject, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.db.SamParameterBinderFactory.SqlInterpolationWithSamBinders
 import org.broadinstitute.dsde.workbench.sam.db._
-import org.broadinstitute.dsde.workbench.sam.db.tables.{FlatGroupMemberRecord, FlatGroupMemberTable, GroupPK, GroupRecord, GroupTable, PolicyTable, ResourceTable, ResourceTypeTable}
-import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicyName, BasicWorkbenchGroup, FullyQualifiedPolicyId, FullyQualifiedResourceId, ResourceId, ResourceTypeName}
+import org.broadinstitute.dsde.workbench.sam.db.tables._
+import org.broadinstitute.dsde.workbench.sam.errorReportSource
+import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.postgresql.util.PSQLException
 import scalikejdbc._
@@ -76,14 +76,11 @@ class FlatPostgresDirectoryDAO (override val dbRef: DbReference, override val ec
   // list the users who are members of all the groups in `groupIds`
   override def listIntersectionGroupUsers(groupIds: Set[WorkbenchGroupIdentity], samRequestContext: SamRequestContext): IO[Set[WorkbenchUserId]] = {
     runInTransaction("listIntersectionGroupUsers", samRequestContext)({ implicit session =>
-      val membershipMap: Map[GroupPK, Set[WorkbenchUserId]] = groupIds.flatMap { groupId =>
-        listMembersByGroupIdentity(groupId).collect {
-          case FlatGroupMemberRecord(_, groupId, Some(memberUserId), _, _) => (groupId, memberUserId)
-        }
-      }.groupBy(_._1).mapValues { _.map{ case (_, memberUserId) => memberUserId}.toSet }
-
-      if (membershipMap.isEmpty) Set.empty
-      else membershipMap.values.reduce((a, b) => a intersect b)
+      val f = FlatGroupMemberTable.syntax("f")
+      val groupMemberQueries = groupIds.map { groupId =>
+        samsqls"select ${f.result.memberUserId} from ${FlatGroupMemberTable as f} where ${f.memberUserId} is not null and ${f.groupId} = (${workbenchGroupIdentityToGroupPK(groupId)})"
+      }
+      samsql"""${groupMemberQueries.reduce((left, right) => samsqls"$left intersect $right")}""".map(rs => WorkbenchUserId(rs.string(1))).list().apply().toSet
     })
   }
 
@@ -257,18 +254,4 @@ class FlatPostgresDirectoryDAO (override val dbRef: DbReference, override val ec
       listGroupsQuery.map(resultSetToGroupIdentity(_, g, p, r, rt)).list().apply().toSet
     })
   }
-
-  // get all of the direct or transitive members of all `groups`
-
-  private def listMembersByGroupIdentity(group: WorkbenchGroupIdentity)(implicit session: DBSession) = {
-    val gm = FlatGroupMemberTable.column
-    val f = FlatGroupMemberTable.syntax("f")
-    val query = samsql"select ${f.resultAll} from ${FlatGroupMemberTable as f} where ${gm.groupId} IN (${workbenchGroupIdentityToGroupPK(group)})"
-    query.map(convertToFlatGroupMemberTable(f)).list.apply()
-  }
-
-  // there is probably some implicit magic which avoids this but I don't know it
-  private def convertToFlatGroupMemberTable(f: QuerySQLSyntaxProvider[SQLSyntaxSupport[FlatGroupMemberRecord], FlatGroupMemberRecord])
-                                           (rs: WrappedResultSet): FlatGroupMemberRecord = FlatGroupMemberTable.apply(f)(rs)
-
 }

@@ -1,7 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.db.dao
 
 import org.broadinstitute.dsde.workbench.model.{WorkbenchSubject, WorkbenchUserId}
-import org.broadinstitute.dsde.workbench.sam.db.tables.{FlatGroupMemberRecord, FlatGroupMemberTable, FlatGroupMembershipPath, GroupPK}
+import org.broadinstitute.dsde.workbench.sam.db.tables.{FlatGroupMemberPK, FlatGroupMemberRecord, FlatGroupMemberTable, FlatGroupMembershipPath, GroupPK}
 import scalikejdbc.{DBSession, SQLSyntax, WrappedResultSet}
 import org.broadinstitute.dsde.workbench.sam.db.SamParameterBinderFactory.SqlInterpolationWithSamBinders
 import scalikejdbc._
@@ -33,7 +33,7 @@ trait FlatPostgresGroupDAO extends PostgresGroupDAO {
       // groups and users which have `groupMembers` as ancestors
       val descendantMemberships = listMembersByPKs(groupMembers)
 
-      val transitiveMembers = ancestorMemberships flatMap { case FlatGroupMemberRecord(_, ancestor, _, _, ancestorPath) =>
+      val transitiveMembers = (ancestorMemberships :+ FlatGroupMemberRecord(FlatGroupMemberPK(0), groupId, None, None, FlatGroupMembershipPath(List.empty))) flatMap { case FlatGroupMemberRecord(_, ancestor, _, _, ancestorPath) =>
         val ancestorsPlusGroup = ancestorPath.append(groupId)
 
         val ancestorUsers = userMembers.map { userId =>
@@ -71,9 +71,8 @@ trait FlatPostgresGroupDAO extends PostgresGroupDAO {
 
   // get all of the groups that group `member` is a member of - directly or transitively
   private def listMyGroupRecords(member: GroupPK)(implicit session: DBSession) = {
-    val gm = FlatGroupMemberTable.column
     val f = FlatGroupMemberTable.syntax("f")
-    val query = samsql"select ${f.resultAll} from ${FlatGroupMemberTable as f} where ${gm.memberGroupId} = ${member}"
+    val query = samsql"select ${f.resultAll} from ${FlatGroupMemberTable as f} where ${f.memberGroupId} = ${member}"
     query.map(convertToFlatGroupMemberTable(f)).list.apply()
   }
 

@@ -749,7 +749,7 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
       }
 
       // TODO perf investigation
-      "intersect lots of groups with lots of dups and overlaps" in {
+      "intersect lots of groups with lots of dups and overlaps" ignore {
         // succeeds, slowly
         val groupCount = 50
         val userCount = 70
