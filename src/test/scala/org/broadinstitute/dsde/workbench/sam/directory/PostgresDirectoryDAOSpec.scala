@@ -10,7 +10,6 @@ import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.TestSupport.samRequestContext
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.FlatPostgresAccessPolicyDAO
-import org.postgresql.util.PSQLException
 import org.scalatest.{BeforeAndAfterEach, FreeSpec, Matchers}
 
 import scala.concurrent.duration._
@@ -285,7 +284,8 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
         val subGroup = emptyWorkbenchGroup("subGroup")
         dao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync()
 
-        assertThrows[PSQLException] {
+        // TODO: changed this from PSQLException.  This seems OK but let's double check
+        assertThrows[WorkbenchException] {
           dao.addGroupMember(defaultGroup.id, subGroup.id, samRequestContext).unsafeRunSync() shouldBe true
         }
       }
