@@ -25,6 +25,12 @@
         </createTable>
     </changeSet>
 
+    <changeSet logicalFilePath="dummy" author="dvoet" id="index_erp_resource_id">
+        <createIndex tableName="SAM_EFFECTIVE_RESOURCE_POLICY" indexName="IDX_ERP_RESOURCE_ID">
+            <column name="resource_id"/>
+        </createIndex>
+    </changeSet>
+
     <changeSet logicalFilePath="dummy" author="dvoet" id="effective_policy_role_table">
         <createTable tableName="SAM_EFFECTIVE_POLICY_ROLE">
             <column name="resource_policy_id" type="BIGINT">
