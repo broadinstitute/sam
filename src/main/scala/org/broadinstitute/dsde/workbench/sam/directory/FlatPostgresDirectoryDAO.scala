@@ -243,7 +243,7 @@ class FlatPostgresDirectoryDAO (override val dbRef: DbReference, override val ec
       val rt = ResourceTypeTable.syntax("rt")
 
       val listGroupsQuery =
-        samsql"""select * from ${FlatGroupMemberTable as f}
+        samsql"""select ${f.resultAll} from ${FlatGroupMemberTable as f}
             join ${GroupTable as g} on ${f.groupId} = ${g.id}
             left join ${PolicyTable as p} on ${p.groupId} = ${g.id}
             left join ${ResourceTable as r} on ${p.resourceId} = ${r.id}
@@ -257,7 +257,7 @@ class FlatPostgresDirectoryDAO (override val dbRef: DbReference, override val ec
   private def listMembersByGroupIdentity(groups: Traversable[WorkbenchGroupIdentity])(implicit session: DBSession) = {
     val gm = FlatGroupMemberTable.column
     val f = FlatGroupMemberTable.syntax("f")
-    val query = samsql"select * from ${FlatGroupMemberTable as f} where ${gm.groupId} IN (${groups map workbenchGroupIdentityToGroupPK})"
+    val query = samsql"select ${f.resultAll} from ${FlatGroupMemberTable as f} where ${gm.groupId} IN (${groups map workbenchGroupIdentityToGroupPK})"
     query.map(convertToFlatGroupMemberTable(f)).list.apply()
   }
 

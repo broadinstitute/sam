@@ -64,7 +64,7 @@ trait FlatPostgresGroupDAO extends PostgresGroupDAO {
   private def listMyGroupRecords(member: GroupPK)(implicit session: DBSession) = {
     val gm = FlatGroupMemberTable.column
     val f = FlatGroupMemberTable.syntax("f")
-    val query = samsql"select * from ${FlatGroupMemberTable as f} where ${gm.memberGroupId} = ${member}"
+    val query = samsql"select ${f.resultAll} from ${FlatGroupMemberTable as f} where ${gm.memberGroupId} = ${member}"
     query.map(convertToFlatGroupMemberTable(f)).list.apply()
   }
 
