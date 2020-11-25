@@ -1,9 +1,9 @@
 package org.broadinstitute.dsde.workbench.sam.openam
 
 import cats.effect.{ContextShift, IO}
-import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException, WorkbenchGroupName, WorkbenchSubject, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException, WorkbenchGroupName, WorkbenchSubject, WorkbenchUser, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.db.{DbReference, SamTypeBinders}
-import org.broadinstitute.dsde.workbench.sam.db.tables.{EffectivePolicyTable, FlatGroupMemberTable, GroupPK, GroupRecord, GroupTable, PolicyActionTable, PolicyRecord, PolicyRoleTable, PolicyTable, ResourceActionTable, ResourceRoleTable, ResourceTable, ResourceTypeTable}
+import org.broadinstitute.dsde.workbench.sam.db.tables.{EffectivePolicyTable, FlatGroupMemberTable, GroupPK, GroupRecord, GroupTable, PolicyActionTable, PolicyRecord, PolicyRoleTable, PolicyTable, ResourceActionTable, ResourceRoleTable, ResourceTable, ResourceTypeTable, UserTable}
 import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicy, AccessPolicyName, AccessPolicyWithoutMembers, FullyQualifiedPolicyId, FullyQualifiedResourceId, ResourceAction, ResourceId, ResourceIdAndPolicyName, ResourceRoleName, ResourceTypeName}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import scalikejdbc.SQLSyntax
@@ -128,6 +128,19 @@ class FlatPostgresAccessPolicyDAO (override val dbRef: DbReference, override val
     samsql"delete from ${FlatGroupMemberTable as f} where ${directMembershipClause(groupId)}".update().apply()
 
     insertGroupMembers(GroupPK(groupId.toLong), memberList)
+  }
+
+  override def listFlattenedPolicyMembers(policyId: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[Set[WorkbenchUser]] = {
+    val f = FlatGroupMemberTable.syntax("f")
+    val u = UserTable.syntax("u")
+
+    runInTransaction("listFlattenedPolicyMembers", samRequestContext)({ implicit session =>
+      val query = samsql"""select ${u.resultAll}
+        from ${FlatGroupMemberTable as f}
+        join ${UserTable as u} on ${u.id} = ${f.memberUserId}"""
+
+      query.map(UserTable(u)).list().apply().toSet.map(UserTable.unmarshalUserRecord)
+    })
   }
 
   // Copied from PostgresAccessPolicyDAO.listPolicies
