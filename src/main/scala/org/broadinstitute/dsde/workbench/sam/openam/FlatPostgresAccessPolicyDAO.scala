@@ -102,7 +102,7 @@ class FlatPostgresAccessPolicyDAO (override val dbRef: DbReference, override val
     val resourceIdFragment = resourceId.map(id => samsqls"and ${resource.name} = ${id}").getOrElse(samsqls"")
 
     val queryFragment =
-      samsqls"""${userResourcePolicyTable.table}(${urpColumn.policyId}, ${urpColumn.baseResourceTypeId}, ${urpColumn.baseResourceName}, ${urpColumn.inherited}, ${urpColumn.public}) as (
+      samsqls"""with ${userResourcePolicyTable.table}(${urpColumn.policyId}, ${urpColumn.baseResourceTypeId}, ${urpColumn.baseResourceName}, ${urpColumn.inherited}, ${urpColumn.public}) as (
           select ${effPol.id}, ${resourceType.id}, ${resource.name}, ${policy.resourceId} != ${resource.id}, ${effPol.public}
           from ${ResourceTable as resource}
           join ${ResourceTypeTable as resourceType} on ${resource.resourceTypeId} = ${resourceType.id}
