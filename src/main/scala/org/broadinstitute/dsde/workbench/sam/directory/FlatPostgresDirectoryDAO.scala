@@ -232,7 +232,7 @@ class FlatPostgresDirectoryDAO (override val dbRef: DbReference, override val ec
     val g = GroupTable.syntax("g")
     val p = PolicyTable.syntax("p")
 
-    val topQueryWhere = subject match {
+    val where = subject match {
       case userId: WorkbenchUserId => samsqls"where ${f.memberUserId} = ${userId}"
       case workbenchGroupIdentity: WorkbenchGroupIdentity => samsqls"where ${f.memberGroupId} = (${workbenchGroupIdentityToGroupPK(workbenchGroupIdentity)})"
       case _ => throw new WorkbenchException(s"Unexpected WorkbenchSubject. Expected WorkbenchUserId or WorkbenchGroupIdentity but got ${subject}")
@@ -243,11 +243,13 @@ class FlatPostgresDirectoryDAO (override val dbRef: DbReference, override val ec
       val rt = ResourceTypeTable.syntax("rt")
 
       val listGroupsQuery =
-        samsql"""select ${f.resultAll} from ${FlatGroupMemberTable as f}
+        samsql"""select ${g.result.name}, ${p.result.name}, ${r.result.name}, ${rt.result.name}
+                 from ${FlatGroupMemberTable as f}
             join ${GroupTable as g} on ${f.groupId} = ${g.id}
             left join ${PolicyTable as p} on ${p.groupId} = ${g.id}
             left join ${ResourceTable as r} on ${p.resourceId} = ${r.id}
-            left join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}"""
+            left join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
+            ${where}"""
 
       listGroupsQuery.map(resultSetToGroupIdentity(_, g, p, r, rt)).list().apply().toSet
     })
