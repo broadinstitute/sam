@@ -154,6 +154,14 @@ class FlatPostgresDirectoryDAO (override val dbRef: DbReference, override val ec
     })
   }
 
+  override def listUsersGroups(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[WorkbenchGroupIdentity]] = {
+    listMemberOfGroups(userId, samRequestContext)
+  }
+
+  override def listAncestorGroups(groupId: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[Set[WorkbenchGroupIdentity]] = {
+    listMemberOfGroups(groupId, samRequestContext)
+  }
+
   private def memberClause(member: WorkbenchSubject): SQLSyntax = {
     val f = FlatGroupMemberTable.syntax("f")
     member match {
@@ -173,6 +181,33 @@ class FlatPostgresDirectoryDAO (override val dbRef: DbReference, override val ec
   // there is probably some implicit magic which avoids this but I don't know it
   private def convertToFlatGroupMemberTable(f: QuerySQLSyntaxProvider[SQLSyntaxSupport[FlatGroupMemberRecord], FlatGroupMemberRecord])
                                            (rs: WrappedResultSet): FlatGroupMemberRecord = FlatGroupMemberTable.apply(f)(rs)
+
+  // adaptation of PostgresDirectoryDAO.listMemberOfGroups
+  private def listMemberOfGroups(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Set[WorkbenchGroupIdentity]]  = {
+    val f = FlatGroupMemberTable.syntax("f")
+    val g = GroupTable.syntax("g")
+    val p = PolicyTable.syntax("p")
+
+    val topQueryWhere = subject match {
+      case userId: WorkbenchUserId => samsqls"where ${f.memberUserId} = ${userId}"
+      case workbenchGroupIdentity: WorkbenchGroupIdentity => samsqls"where ${f.memberGroupId} = (${workbenchGroupIdentityToGroupPK(workbenchGroupIdentity)})"
+      case _ => throw new WorkbenchException(s"Unexpected WorkbenchSubject. Expected WorkbenchUserId or WorkbenchGroupIdentity but got ${subject}")
+    }
+
+    runInTransaction("listMemberOfGroups", samRequestContext)({ implicit session =>
+      val r = ResourceTable.syntax("r")
+      val rt = ResourceTypeTable.syntax("rt")
+
+      val listGroupsQuery =
+        samsql"""select * from ${FlatGroupMemberTable as f}
+            join ${GroupTable as g} on ${f.groupId} = ${g.id}
+            left join ${PolicyTable as p} on ${p.groupId} = ${g.id}
+            left join ${ResourceTable as r} on ${p.resourceId} = ${r.id}
+            left join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}"""
+
+      listGroupsQuery.map(resultSetToGroupIdentity(_, g, p, r, rt)).list().apply().toSet
+    })
+  }
 
   // get all of the groups that group `member` is a member of - directly or transitively
   private def listMyGroupRecords(member: GroupPK)(implicit session: DBSession) = {
