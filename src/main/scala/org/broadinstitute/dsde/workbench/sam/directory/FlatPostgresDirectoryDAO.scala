@@ -28,7 +28,7 @@ class FlatPostgresDirectoryDAO (override val dbRef: DbReference, override val ec
     runInTransaction("isGroupMember", samRequestContext)({ implicit session =>
       val query =
         samsql"""SELECT count(*) FROM ${FlatGroupMemberTable as f}
-                WHERE ${memberClause(member)} AND ${f.groupId} = ${workbenchGroupIdentityToGroupPK(groupId)}"""
+                WHERE ${memberClause(member)} AND ${f.groupId} = (${workbenchGroupIdentityToGroupPK(groupId)})"""
       query.map(rs => rs.int(1)).single().apply().getOrElse(0) > 0
     })
   }
@@ -223,7 +223,7 @@ class FlatPostgresDirectoryDAO (override val dbRef: DbReference, override val ec
   // choose when the final `groupMembershipPath` array element is equal to groupId
   private def directMembershipClause(groupId: WorkbenchGroupIdentity): SQLSyntax = {
     val f = FlatGroupMemberTable.syntax("f")
-    samsqls"${f.groupMembershipPath}[array_upper(${f.groupMembershipPath}, 1)] = ${workbenchGroupIdentityToGroupPK(groupId)}"
+    samsqls"${f.groupMembershipPath}[array_upper(${f.groupMembershipPath}, 1)] = (${workbenchGroupIdentityToGroupPK(groupId)})"
   }
 
   // adaptation of PostgresDirectoryDAO.listMemberOfGroups
