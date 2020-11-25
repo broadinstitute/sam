@@ -16,15 +16,15 @@ trait FlatPostgresGroupDAO extends PostgresGroupDAO {
       val groupMembers = queryForGroupPKs(members);
 
       // direct (non-transitive) membership in groupId
-      val directMembershipPath = FlatGroupMembershipPath(List(groupId));
+      val groupOnlyPath = FlatGroupMembershipPath(List(groupId));
 
       val directMemberUsers: List[SQLSyntax] = userMembers.map { userId => {
-        samsqls"(${groupId}, ${userId}, ${None}, ${directMembershipPath})"
+        samsqls"(${groupId}, ${userId}, ${None}, ${groupOnlyPath})"
       }
       }.toList
 
       val directMemberGroups: List[SQLSyntax] = groupMembers.map { groupPK =>
-        samsqls"(${groupId}, ${None}, ${groupPK}, ${directMembershipPath})"
+        samsqls"(${groupId}, ${None}, ${groupPK}, ${groupOnlyPath})"
       }
 
       // groups which have groupId as a direct or transitive subgroup
@@ -44,19 +44,28 @@ trait FlatPostgresGroupDAO extends PostgresGroupDAO {
           samsqls"(${ancestor}, ${None}, ${groupPK}, ${ancestorsPlusGroup})"
         }
 
-        val descendants = descendantMemberships.collect {
+        val descendantsWithAncestors = descendantMemberships.collect {
           case FlatGroupMemberRecord(_, _, Some(memberUserId), _, groupMembershipPath) =>
             samsqls"(${ancestor}, ${memberUserId}, ${None}, ${ancestorsPlusGroup.append(groupMembershipPath)})"
           case FlatGroupMemberRecord(_, _, _, Some(memberGroupId), groupMembershipPath) =>
             samsqls"(${ancestor}, ${None}, ${memberGroupId}, ${ancestorsPlusGroup.append(groupMembershipPath)})"
         }
 
-        ancestorUsers ++ ancestorGroups ++ descendants
+        ancestorUsers ++ ancestorGroups ++ descendantsWithAncestors
       }
+
+      // descendants of this group where this group is the root
+      val descendantsWithoutAncestors = descendantMemberships.collect {
+        case FlatGroupMemberRecord(_, _, Some(memberUserId), _, groupMembershipPath) =>
+          samsqls"(${groupId}, ${memberUserId}, ${None}, ${groupOnlyPath.append(groupMembershipPath)})"
+        case FlatGroupMemberRecord(_, _, _, Some(memberGroupId), groupMembershipPath) =>
+          samsqls"(${groupId}, ${None}, ${memberGroupId}, ${groupOnlyPath.append(groupMembershipPath)})"
+      }
+
 
       val gm = FlatGroupMemberTable.column
       samsql"""insert into ${FlatGroupMemberTable.table} (${gm.groupId}, ${gm.memberUserId}, ${gm.memberGroupId}, ${gm.groupMembershipPath})
-        values ${directMemberUsers ++ directMemberGroups ++ transitiveMembers}""".update().apply()
+        values ${directMemberUsers ++ directMemberGroups ++ transitiveMembers ++ descendantsWithoutAncestors}""".update().apply()
     }
   }
 
