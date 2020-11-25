@@ -703,7 +703,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
               ${PolicyTable as policy}
               where ${policy.id} = ${policyId}
               and ${r.resourceTypeId} = ${rr.resourceTypeId}
-              and (((${policy.resourceId} != ${ep.resourceId}) and (${pr.descendantsOnly} or ${fr.descendantsOnly})) or not ((${policy.resourceId} != ${ep.resourceId}) or ${pr.descendantsOnly} or ${fr.descendantsOnly}))
+              and ${roleAppliesToResource(pr, fr, ep, policy)}
               on conflict do nothing""".update().apply()
   }
 
@@ -1160,12 +1160,12 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
   /**
     *
     * Determining whether a role should or should not apply to a resource is a bit more complicated than it initially
-    * appears. This logic is shared across the three queries (listUserResourceActions, listUserResourceRoles,
-    * listUserResourcesWithRolesAndActions) that search a resource's hierarchy for all of the relevant roles and actions
+    * appears. This logic is shared across queries that search a resource's hierarchy for all of the relevant roles and actions
     * that a user has on said resource. The following truth table shows the desired behavior of this SQL fragment where
-    * result indicates whether a given role does or does not apply to the resource
+    * result indicates whether a given role does or does not apply to the resource.
+    * inherited is determined by sourcePolicy.resourceId != effectivePolicy.resourceId
     *
-    * userResourcePolicy.inherited  |  policyRole.descendantsOnly  |  flattenedRole.descendantsOnly  |  result
+    *         inherited             |  policyRole.descendantsOnly  |  flattenedRole.descendantsOnly  |  result
     *            T                  |             T                |                T                |    T
     *            T                  |             T                |                F                |    T
     *            T                  |             F                |                T                |    T
@@ -1176,11 +1176,12 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     *            F                  |             F                |                F                |    T
     *
     */
-  private def roleAppliesToResource(userResourcePolicy: QuerySQLSyntaxProvider[SQLSyntaxSupport[UserResourcePolicyRecord], UserResourcePolicyRecord],
-                                    policyRole: QuerySQLSyntaxProvider[SQLSyntaxSupport[PolicyRoleRecord], PolicyRoleRecord],
-                                    flattenedRole: QuerySQLSyntaxProvider[SQLSyntaxSupport[FlattenedRoleRecord], FlattenedRoleRecord]): SQLSyntax = {
-    samsqls"""((${userResourcePolicy.inherited} and (${policyRole.descendantsOnly} or ${flattenedRole.descendantsOnly}))
-             or not (${userResourcePolicy.inherited} or ${policyRole.descendantsOnly} or ${flattenedRole.descendantsOnly}))"""
+  private def roleAppliesToResource(policyRole: QuerySQLSyntaxProvider[SQLSyntaxSupport[PolicyRoleRecord], PolicyRoleRecord],
+                                    flattenedRole: QuerySQLSyntaxProvider[SQLSyntaxSupport[FlattenedRoleRecord], FlattenedRoleRecord],
+                                    effectivePolicy: QuerySQLSyntaxProvider[SQLSyntaxSupport[EffectivePolicyRecord], EffectivePolicyRecord],
+                                    sourcePolicy: QuerySQLSyntaxProvider[SQLSyntaxSupport[PolicyRecord], PolicyRecord]) = {
+    samsqls"""(((${sourcePolicy.resourceId} != ${effectivePolicy.resourceId}) and (${policyRole.descendantsOnly} or ${flattenedRole.descendantsOnly}))
+             or not ((${sourcePolicy.resourceId} != ${effectivePolicy.resourceId}) or ${policyRole.descendantsOnly} or ${flattenedRole.descendantsOnly}))"""
   }
 
   override def listUserResourceActions(resourceId: FullyQualifiedResourceId, user: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[ResourceAction]] = {
@@ -1402,7 +1403,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
               join ${ResourceTable as r} on ${ep.resourceId} = ${r.id}
               join ${PolicyTable as sourcePolicy} on ${sourcePolicy.id} = ${ep.sourcePolicyId}
               where ${r.resourceTypeId} = ${rr.resourceTypeId}
-              and (((${sourcePolicy.resourceId} != ${ep.resourceId}) and (${pr.descendantsOnly} or ${fr.descendantsOnly})) or not ((${sourcePolicy.resourceId} != ${ep.resourceId}) or ${pr.descendantsOnly} or ${fr.descendantsOnly}))
+              and ${roleAppliesToResource(pr, fr, ep, sourcePolicy)}
               on conflict do nothing""".update().apply()
   }
 
