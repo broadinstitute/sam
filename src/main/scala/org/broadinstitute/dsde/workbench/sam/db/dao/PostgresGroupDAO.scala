@@ -92,40 +92,40 @@ trait PostgresGroupDAO {
               and ${p.name} = ${policyId.accessPolicyName}"""
   }
 
-  /**
-    * Produces a SQLSyntax to traverse a nested group structure and find all members.
-    * Can only be used within a WITH RECURSIVE clause. This is recursive in the SQL sense, it does not call itself.
-    *
-    * @param groupId the group id to traverse from
-    * @param subGroupMemberTable table that will be defined in the WITH clause, must have a unique name within the WITH clause
-    * @param groupMemberTableAlias
-    * @return
-    */
-  def recursiveMembersQuery(groupId: WorkbenchGroupIdentity, subGroupMemberTable: SubGroupMemberTable, groupMemberTableAlias: String = "gm"): SQLSyntax = {
-    val sg = subGroupMemberTable.syntax("sg")
-    val gm = GroupMemberTable.syntax(groupMemberTableAlias)
-    val sgColumns = subGroupMemberTable.column
-    samsqls"""${subGroupMemberTable.table}(${sgColumns.memberGroupId}, ${sgColumns.memberUserId}) AS (
-          ${directMembersQuery(groupId, groupMemberTableAlias)}
-          UNION
-          SELECT ${gm.memberGroupId}, ${gm.memberUserId}
-          FROM ${subGroupMemberTable as sg}, ${GroupMemberTable as gm}
-          WHERE ${gm.groupId} = ${sg.memberGroupId}
-        )"""
-  }
+//  /**
+//    * Produces a SQLSyntax to traverse a nested group structure and find all members.
+//    * Can only be used within a WITH RECURSIVE clause. This is recursive in the SQL sense, it does not call itself.
+//    *
+//    * @param groupId the group id to traverse from
+//    * @param subGroupMemberTable table that will be defined in the WITH clause, must have a unique name within the WITH clause
+//    * @param groupMemberTableAlias
+//    * @return
+//    */
+//  def recursiveMembersQuery(groupId: WorkbenchGroupIdentity, subGroupMemberTable: SubGroupMemberTable, groupMemberTableAlias: String = "gm"): SQLSyntax = {
+//    val sg = subGroupMemberTable.syntax("sg")
+//    val gm = GroupMemberTable.syntax(groupMemberTableAlias)
+//    val sgColumns = subGroupMemberTable.column
+//    samsqls"""${subGroupMemberTable.table}(${sgColumns.memberGroupId}, ${sgColumns.memberUserId}) AS (
+//          ${directMembersQuery(groupId, groupMemberTableAlias)}
+//          UNION
+//          SELECT ${gm.memberGroupId}, ${gm.memberUserId}
+//          FROM ${subGroupMemberTable as sg}, ${GroupMemberTable as gm}
+//          WHERE ${gm.groupId} = ${sg.memberGroupId}
+//        )"""
+//  }
 
-  private def directMembersQuery(groupId: WorkbenchGroupIdentity, groupMemberTableAlias: String = "gm"): SQLSyntax = {
-    val gm = GroupMemberTable.syntax(groupMemberTableAlias)
-    samsqls"""select ${gm.memberGroupId}, ${gm.memberUserId}
-               from ${GroupMemberTable as gm}
-               where ${gm.groupId} = (${workbenchGroupIdentityToGroupPK(groupId)})"""
-  }
+//  private def directMembersQuery(groupId: WorkbenchGroupIdentity, groupMemberTableAlias: String = "gm"): SQLSyntax = {
+//    val gm = GroupMemberTable.syntax(groupMemberTableAlias)
+//    samsqls"""select ${gm.memberGroupId}, ${gm.memberUserId}
+//               from ${GroupMemberTable as gm}
+//               where ${gm.groupId} = (${workbenchGroupIdentityToGroupPK(groupId)})"""
+//  }
 }
 
 // these 2 case classes represent the logical table used in nested group queries
 // this table does not actually exist but looks like a table in a WITH RECURSIVE query
-final case class SubGroupMemberRecord(parentGroupId: GroupPK, memberUserId: Option[WorkbenchUserId], memberGroupId: Option[GroupPK])
-final case class SubGroupMemberTable(override val tableName: String) extends SQLSyntaxSupport[SubGroupMemberRecord] {
-  // need to specify column names explicitly because this table does not actually exist in the database
-  override val columnNames: Seq[String] = Seq("parent_group_id", "member_user_id", "member_group_id")
-}
+//final case class SubGroupMemberRecord(parentGroupId: GroupPK, memberUserId: Option[WorkbenchUserId], memberGroupId: Option[GroupPK])
+//final case class SubGroupMemberTable(override val tableName: String) extends SQLSyntaxSupport[SubGroupMemberRecord] {
+//  // need to specify column names explicitly because this table does not actually exist in the database
+//  override val columnNames: Seq[String] = Seq("parent_group_id", "member_user_id", "member_group_id")
+//}

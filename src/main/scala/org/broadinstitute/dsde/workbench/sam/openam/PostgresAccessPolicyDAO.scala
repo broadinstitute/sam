@@ -9,7 +9,7 @@ import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.db.SamParameterBinderFactory._
-import org.broadinstitute.dsde.workbench.sam.db.dao.{PostgresGroupDAO, SubGroupMemberTable}
+import org.broadinstitute.dsde.workbench.sam.db.dao.PostgresGroupDAO
 import org.broadinstitute.dsde.workbench.sam.db.tables._
 import org.broadinstitute.dsde.workbench.sam.db.{DbReference, PSQLStateExtensions, SamTypeBinders}
 import org.broadinstitute.dsde.workbench.sam.errorReportSource
@@ -773,9 +773,10 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     })
   }
 
-  override def loadPolicy(resourceAndPolicyName: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[Option[AccessPolicy]] = {
-    listPolicies(resourceAndPolicyName.resource, limitOnePolicy = Option(resourceAndPolicyName.accessPolicyName), samRequestContext).map(_.headOption)
-  }
+  override def loadPolicy(resourceAndPolicyName: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[Option[AccessPolicy]] = ???
+//  {
+//    listPolicies(resourceAndPolicyName.resource, limitOnePolicy = Option(resourceAndPolicyName.accessPolicyName), samRequestContext).map(_.headOption)
+//  }
 
   override def overwritePolicyMembers(id: FullyQualifiedPolicyId, memberList: Set[WorkbenchSubject], samRequestContext: SamRequestContext): IO[Unit] = {
     runInTransaction("overwritePolicyMembers", samRequestContext)({ implicit session =>
@@ -785,17 +786,18 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
 
   //Steps: Delete every member from the underlying group and then add all of the new members. Do this in a *single*
   //transaction so if any bit fails, all of it fails and we don't end up in some incorrect intermediate state.
-  protected def overwritePolicyMembersInternal(id: FullyQualifiedPolicyId, memberList: Set[WorkbenchSubject])(implicit session: DBSession): Int = {
-    val gm = GroupMemberTable.syntax("gm")
-
-    val groupId = samsql"${workbenchGroupIdentityToGroupPK(id)}".map(rs => rs.long(1)).single().apply().getOrElse {
-      throw new WorkbenchException(s"Group for policy [$id] not found")
-    }
-
-    samsql"delete from ${GroupMemberTable as gm} where ${gm.groupId} = ${groupId}".update().apply()
-
-    insertGroupMembers(GroupPK(groupId.toLong), memberList)
-  }
+  protected def overwritePolicyMembersInternal(id: FullyQualifiedPolicyId, memberList: Set[WorkbenchSubject])(implicit session: DBSession): Int = ???
+//  {
+//    val gm = GroupMemberTable.syntax("gm")
+//
+//    val groupId = samsql"${workbenchGroupIdentityToGroupPK(id)}".map(rs => rs.long(1)).single().apply().getOrElse {
+//      throw new WorkbenchException(s"Group for policy [$id] not found")
+//    }
+//
+//    samsql"delete from ${GroupMemberTable as gm} where ${gm.groupId} = ${groupId}".update().apply()
+//
+//    insertGroupMembers(GroupPK(groupId.toLong), memberList)
+//  }
 
   override def overwritePolicy(newPolicy: AccessPolicy, samRequestContext: SamRequestContext): IO[AccessPolicy] = {
     runInTransaction("overwritePolicy", samRequestContext)({ implicit session =>
@@ -905,68 +907,68 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
   }
 
   // Abstracts logic to load and unmarshal one or more policies, use to get full AccessPolicy objects from Postgres
-  private def listPolicies(resource: FullyQualifiedResourceId, limitOnePolicy: Option[AccessPolicyName] = None, samRequestContext: SamRequestContext): IO[Stream[AccessPolicy]] = {
-    val g = GroupTable.syntax("g")
-    val r = ResourceTable.syntax("r")
-    val rt = ResourceTypeTable.syntax("rt")
-    val gm = GroupMemberTable.syntax("gm")
-    val sg = GroupTable.syntax("sg")
-    val p = PolicyTable.syntax("p")
-    val sp = PolicyTable.syntax("sp")
-    val sr = ResourceTable.syntax("sr")
-    val srt = ResourceTypeTable.syntax("srt")
-    val pr = PolicyRoleTable.syntax("pr")
-    val rr = ResourceRoleTable.syntax("rr")
-    val pa = PolicyActionTable.syntax("pa")
-    val ra = ResourceActionTable.syntax("ra")
-    val prrt = ResourceTypeTable.syntax("prrt")
-    val part = ResourceTypeTable.syntax("part")
-
-    val limitOnePolicyClause: SQLSyntax = limitOnePolicy match {
-      case Some(policyName) => samsqls"and ${p.name} = ${policyName}"
-      case None => samsqls""
-    }
-
-    val listPoliciesQuery =
-      samsql"""select ${p.result.name}, ${r.result.name}, ${rt.result.name}, ${g.result.email}, ${p.result.public}, ${gm.result.memberUserId}, ${sg.result.name}, ${sp.result.name}, ${sr.result.name}, ${srt.result.name}, ${prrt.result.name}, ${rr.result.role}, ${pr.result.descendantsOnly}, ${part.result.name}, ${ra.result.action}, ${pa.result.descendantsOnly}
-          from ${GroupTable as g}
-          join ${PolicyTable as p} on ${g.id} = ${p.groupId}
-          join ${ResourceTable as r} on ${p.resourceId} = ${r.id}
-          join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
-          left join ${GroupMemberTable as gm} on ${g.id} = ${gm.groupId}
-          left join ${GroupTable as sg} on ${gm.memberGroupId} = ${sg.id}
-          left join ${PolicyTable as sp} on ${sg.id} = ${sp.groupId}
-          left join ${ResourceTable as sr} on ${sp.resourceId} = ${sr.id}
-          left join ${ResourceTypeTable as srt} on ${sr.resourceTypeId} = ${srt.id}
-          left join ${PolicyRoleTable as pr} on ${p.id} = ${pr.resourcePolicyId}
-          left join ${ResourceRoleTable as rr} on ${pr.resourceRoleId} = ${rr.id}
-          left join ${ResourceTypeTable as prrt} on ${rr.resourceTypeId} = ${prrt.id}
-          left join ${PolicyActionTable as pa} on ${p.id} = ${pa.resourcePolicyId}
-          left join ${ResourceActionTable as ra} on ${pa.resourceActionId} = ${ra.id}
-          left join ${ResourceTypeTable as part} on ${ra.resourceTypeId} = ${part.id}
-          where ${r.name} = ${resource.resourceId}
-          and ${rt.name} = ${resource.resourceTypeName}
-          ${limitOnePolicyClause}"""
-
-    import SamTypeBinders._
-    runInTransaction("listPolicies", samRequestContext)({ implicit session =>
-      val results = listPoliciesQuery.map(rs => (PolicyInfo(rs.get[AccessPolicyName](p.resultName.name), rs.get[ResourceId](r.resultName.name), rs.get[ResourceTypeName](rt.resultName.name), rs.get[WorkbenchEmail](g.resultName.email), rs.boolean(p.resultName.public)),
-        MemberResult(rs.stringOpt(gm.resultName.memberUserId).map(WorkbenchUserId), rs.stringOpt(sg.resultName.name).map(WorkbenchGroupName), rs.stringOpt(sp.resultName.name).map(AccessPolicyName(_)), rs.stringOpt(sr.resultName.name).map(ResourceId(_)), rs.stringOpt(srt.resultName.name).map(ResourceTypeName(_))),
-        (RoleResult(rs.stringOpt(prrt.resultName.name).map(ResourceTypeName(_)), rs.stringOpt(rr.resultName.role).map(ResourceRoleName(_)), rs.booleanOpt(pr.resultName.descendantsOnly)),
-          ActionResult(rs.stringOpt(part.resultName.name).map(ResourceTypeName(_)), rs.stringOpt(ra.resultName.action).map(ResourceAction(_)), rs.booleanOpt(pa.resultName.descendantsOnly)))))
-        .list().apply().groupBy(_._1)
-
-      results.map { case (policyInfo, resultsByPolicy) =>
-        val (_, memberResults, permissionsResults) = resultsByPolicy.unzip3
-
-        val policyMembers = unmarshalPolicyMembers(memberResults)
-
-        val (policyRoles, policyActions, policyDescendantPermissions) = unmarshalPolicyPermissions(permissionsResults)
-
-        AccessPolicy(FullyQualifiedPolicyId(FullyQualifiedResourceId(policyInfo.resourceTypeName, policyInfo.resourceId), policyInfo.name), policyMembers, policyInfo.email, policyRoles, policyActions, policyDescendantPermissions, policyInfo.public)
-      }.toStream
-    })
-  }
+//  private def listPolicies(resource: FullyQualifiedResourceId, limitOnePolicy: Option[AccessPolicyName] = None, samRequestContext: SamRequestContext): IO[Stream[AccessPolicy]] = {
+//    val g = GroupTable.syntax("g")
+//    val r = ResourceTable.syntax("r")
+//    val rt = ResourceTypeTable.syntax("rt")
+//    val gm = GroupMemberTable.syntax("gm")
+//    val sg = GroupTable.syntax("sg")
+//    val p = PolicyTable.syntax("p")
+//    val sp = PolicyTable.syntax("sp")
+//    val sr = ResourceTable.syntax("sr")
+//    val srt = ResourceTypeTable.syntax("srt")
+//    val pr = PolicyRoleTable.syntax("pr")
+//    val rr = ResourceRoleTable.syntax("rr")
+//    val pa = PolicyActionTable.syntax("pa")
+//    val ra = ResourceActionTable.syntax("ra")
+//    val prrt = ResourceTypeTable.syntax("prrt")
+//    val part = ResourceTypeTable.syntax("part")
+//
+//    val limitOnePolicyClause: SQLSyntax = limitOnePolicy match {
+//      case Some(policyName) => samsqls"and ${p.name} = ${policyName}"
+//      case None => samsqls""
+//    }
+//
+//    val listPoliciesQuery =
+//      samsql"""select ${p.result.name}, ${r.result.name}, ${rt.result.name}, ${g.result.email}, ${p.result.public}, ${gm.result.memberUserId}, ${sg.result.name}, ${sp.result.name}, ${sr.result.name}, ${srt.result.name}, ${prrt.result.name}, ${rr.result.role}, ${pr.result.descendantsOnly}, ${part.result.name}, ${ra.result.action}, ${pa.result.descendantsOnly}
+//          from ${GroupTable as g}
+//          join ${PolicyTable as p} on ${g.id} = ${p.groupId}
+//          join ${ResourceTable as r} on ${p.resourceId} = ${r.id}
+//          join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
+//          left join ${GroupMemberTable as gm} on ${g.id} = ${gm.groupId}
+//          left join ${GroupTable as sg} on ${gm.memberGroupId} = ${sg.id}
+//          left join ${PolicyTable as sp} on ${sg.id} = ${sp.groupId}
+//          left join ${ResourceTable as sr} on ${sp.resourceId} = ${sr.id}
+//          left join ${ResourceTypeTable as srt} on ${sr.resourceTypeId} = ${srt.id}
+//          left join ${PolicyRoleTable as pr} on ${p.id} = ${pr.resourcePolicyId}
+//          left join ${ResourceRoleTable as rr} on ${pr.resourceRoleId} = ${rr.id}
+//          left join ${ResourceTypeTable as prrt} on ${rr.resourceTypeId} = ${prrt.id}
+//          left join ${PolicyActionTable as pa} on ${p.id} = ${pa.resourcePolicyId}
+//          left join ${ResourceActionTable as ra} on ${pa.resourceActionId} = ${ra.id}
+//          left join ${ResourceTypeTable as part} on ${ra.resourceTypeId} = ${part.id}
+//          where ${r.name} = ${resource.resourceId}
+//          and ${rt.name} = ${resource.resourceTypeName}
+//          ${limitOnePolicyClause}"""
+//
+//    import SamTypeBinders._
+//    runInTransaction("listPolicies", samRequestContext)({ implicit session =>
+//      val results = listPoliciesQuery.map(rs => (PolicyInfo(rs.get[AccessPolicyName](p.resultName.name), rs.get[ResourceId](r.resultName.name), rs.get[ResourceTypeName](rt.resultName.name), rs.get[WorkbenchEmail](g.resultName.email), rs.boolean(p.resultName.public)),
+//        MemberResult(rs.stringOpt(gm.resultName.memberUserId).map(WorkbenchUserId), rs.stringOpt(sg.resultName.name).map(WorkbenchGroupName), rs.stringOpt(sp.resultName.name).map(AccessPolicyName(_)), rs.stringOpt(sr.resultName.name).map(ResourceId(_)), rs.stringOpt(srt.resultName.name).map(ResourceTypeName(_))),
+//        (RoleResult(rs.stringOpt(prrt.resultName.name).map(ResourceTypeName(_)), rs.stringOpt(rr.resultName.role).map(ResourceRoleName(_)), rs.booleanOpt(pr.resultName.descendantsOnly)),
+//          ActionResult(rs.stringOpt(part.resultName.name).map(ResourceTypeName(_)), rs.stringOpt(ra.resultName.action).map(ResourceAction(_)), rs.booleanOpt(pa.resultName.descendantsOnly)))))
+//        .list().apply().groupBy(_._1)
+//
+//      results.map { case (policyInfo, resultsByPolicy) =>
+//        val (_, memberResults, permissionsResults) = resultsByPolicy.unzip3
+//
+//        val policyMembers = unmarshalPolicyMembers(memberResults)
+//
+//        val (policyRoles, policyActions, policyDescendantPermissions) = unmarshalPolicyPermissions(permissionsResults)
+//
+//        AccessPolicy(FullyQualifiedPolicyId(FullyQualifiedResourceId(policyInfo.resourceTypeName, policyInfo.resourceId), policyInfo.name), policyMembers, policyInfo.email, policyRoles, policyActions, policyDescendantPermissions, policyInfo.public)
+//      }.toStream
+//    })
+//  }
 
   protected def unmarshalPolicyMembers(memberResults: List[MemberResult]): Set[WorkbenchSubject] = {
     memberResults.collect {
@@ -1026,37 +1028,38 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     listResourcesWithAuthdomains(resourceId.resourceTypeName, Set(resourceId.resourceId), samRequestContext).map(_.headOption)
   }
 
-  override def listAccessPolicies(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[ResourceIdAndPolicyName]] = {
-    val ancestorGroupsTable = SubGroupMemberTable("ancestor_groups")
-    val ag = ancestorGroupsTable.syntax("ag")
-    val agColumn = ancestorGroupsTable.column
-
-    val pg = GroupMemberTable.syntax("parent_groups")
-    val r = ResourceTable.syntax("r")
-    val rt = ResourceTypeTable.syntax("rt")
-    val gm = GroupMemberTable.syntax("gm")
-    val g = GroupTable.syntax("g")
-    val p = PolicyTable.syntax("p")
-
-    runInTransaction("listAccessPolicies", samRequestContext)({ implicit session =>
-      import SamTypeBinders._
-
-      samsql"""with recursive ${ancestorGroupsTable.table}(${agColumn.parentGroupId}) as (
-                  select ${gm.groupId}
-                  from ${GroupMemberTable as gm}
-                  where ${gm.memberUserId} = ${userId}
-                  union
-                  select ${pg.groupId}
-                  from ${GroupMemberTable as pg}
-                  join ${ancestorGroupsTable as ag} on ${agColumn.parentGroupId} = ${pg.memberGroupId}
-        ) select ${r.result.name}, ${p.result.name}
-         from ${PolicyTable as p}
-         join ${ancestorGroupsTable as ag} on ${ag.parentGroupId} = ${p.groupId}
-         join ${ResourceTable as r} on ${r.id} = ${p.resourceId}
-         join ${ResourceTypeTable as rt} on ${rt.id} = ${r.resourceTypeId}
-         where ${rt.name} = ${resourceTypeName}""".map(rs => ResourceIdAndPolicyName(rs.get[ResourceId](r.resultName.name), rs.get[AccessPolicyName](p.resultName.name))).list().apply().toSet
-    })
-  }
+  override def listAccessPolicies(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[ResourceIdAndPolicyName]] = ???
+//  {
+//    val ancestorGroupsTable = SubGroupMemberTable("ancestor_groups")
+//    val ag = ancestorGroupsTable.syntax("ag")
+//    val agColumn = ancestorGroupsTable.column
+//
+//    val pg = GroupMemberTable.syntax("parent_groups")
+//    val r = ResourceTable.syntax("r")
+//    val rt = ResourceTypeTable.syntax("rt")
+//    val gm = GroupMemberTable.syntax("gm")
+//    val g = GroupTable.syntax("g")
+//    val p = PolicyTable.syntax("p")
+//
+//    runInTransaction("listAccessPolicies", samRequestContext)({ implicit session =>
+//      import SamTypeBinders._
+//
+//      samsql"""with recursive ${ancestorGroupsTable.table}(${agColumn.parentGroupId}) as (
+//                  select ${gm.groupId}
+//                  from ${GroupMemberTable as gm}
+//                  where ${gm.memberUserId} = ${userId}
+//                  union
+//                  select ${pg.groupId}
+//                  from ${GroupMemberTable as pg}
+//                  join ${ancestorGroupsTable as ag} on ${agColumn.parentGroupId} = ${pg.memberGroupId}
+//        ) select ${r.result.name}, ${p.result.name}
+//         from ${PolicyTable as p}
+//         join ${ancestorGroupsTable as ag} on ${ag.parentGroupId} = ${p.groupId}
+//         join ${ResourceTable as r} on ${r.id} = ${p.resourceId}
+//         join ${ResourceTypeTable as rt} on ${rt.id} = ${r.resourceTypeId}
+//         where ${rt.name} = ${resourceTypeName}""".map(rs => ResourceIdAndPolicyName(rs.get[ResourceId](r.resultName.name), rs.get[AccessPolicyName](p.resultName.name))).list().apply().toSet
+//    })
+//  }
 
   override def listUserResourcesWithRolesAndActions(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Iterable[ResourceIdWithRolesAndActions]] = {
     runInTransaction("listUserResourcesWithRolesAndActions", samRequestContext)({ implicit session =>
@@ -1096,63 +1099,65 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     })
   }
 
-  override def listAccessPolicies(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Stream[AccessPolicy]] = {
-    listPolicies(resource, samRequestContext = samRequestContext)
-  }
+  override def listAccessPolicies(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Stream[AccessPolicy]] = ???
+//  {
+//    listPolicies(resource, samRequestContext = samRequestContext)
+//  }
 
-  override def listAccessPoliciesForUser(resource: FullyQualifiedResourceId, user: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[AccessPolicyWithoutMembers]] = {
-    runInTransaction("listAccessPoliciesForUser", samRequestContext)({ implicit session =>
-      val ancestorGroupsTable = SubGroupMemberTable("ancestor_groups")
-      val ag = ancestorGroupsTable.syntax("ag")
-      val agColumn = ancestorGroupsTable.column
-
-      val pg = GroupMemberTable.syntax("parent_groups")
-      val r = ResourceTable.syntax("r")
-      val rt = ResourceTypeTable.syntax("rt")
-      val gm = GroupMemberTable.syntax("gm")
-      val g = GroupTable.syntax("g")
-      val p: scalikejdbc.QuerySQLSyntaxProvider[scalikejdbc.SQLSyntaxSupport[PolicyRecord], PolicyRecord] = PolicyTable.syntax("p")
-
-      val pr = PolicyRoleTable.syntax("pr")
-      val rr = ResourceRoleTable.syntax("rr")
-      val pa = PolicyActionTable.syntax("pa")
-      val ra = ResourceActionTable.syntax("ra")
-
-      val listPoliciesQuery =
-        samsql"""with recursive ${ancestorGroupsTable.table}(${agColumn.parentGroupId}) as (
-                  select ${gm.groupId}
-                  from ${GroupMemberTable as gm}
-                  where ${gm.memberUserId} = ${user}
-                  union
-                  select ${pg.groupId}
-                  from ${GroupMemberTable as pg}
-                  join ${ancestorGroupsTable as ag} on ${agColumn.parentGroupId} = ${pg.memberGroupId}
-        ) select ${p.result.name}, ${r.result.name}, ${rt.result.name}, ${g.result.email}, ${p.result.public}, ${rr.result.role}, ${ra.result.action}
-          from ${GroupTable as g}
-          join ${ancestorGroupsTable as ag} on ${ag.parentGroupId} = ${g.id}
-          join ${PolicyTable as p} on ${g.id} = ${p.groupId}
-          join ${ResourceTable as r} on ${p.resourceId} = ${r.id}
-          join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
-          left join ${PolicyRoleTable as pr} on ${p.id} = ${pr.resourcePolicyId}
-          left join ${ResourceRoleTable as rr} on ${pr.resourceRoleId} = ${rr.id}
-          left join ${PolicyActionTable as pa} on ${p.id} = ${pa.resourcePolicyId}
-          left join ${ResourceActionTable as ra} on ${pa.resourceActionId} = ${ra.id}
-          where ${r.name} = ${resource.resourceId}
-          and ${rt.name} = ${resource.resourceTypeName}"""
-
-      import SamTypeBinders._
-      val results = listPoliciesQuery.map(rs => (PolicyInfo(rs.get[AccessPolicyName](p.resultName.name), rs.get[ResourceId](r.resultName.name), rs.get[ResourceTypeName](rt.resultName.name), rs.get[WorkbenchEmail](g.resultName.email), rs.boolean(p.resultName.public)),
-        (rs.stringOpt(rr.resultName.role).map(ResourceRoleName(_)), rs.stringOpt(ra.resultName.action).map(ResourceAction(_))))).list().apply().groupBy(_._1)
-
-      results.map { case (policyInfo, resultsByPolicy) =>
-        val (_, roleActionResults) = resultsByPolicy.unzip
-
-        val (roles, actions) = roleActionResults.unzip
-
-        AccessPolicyWithoutMembers(FullyQualifiedPolicyId(FullyQualifiedResourceId(policyInfo.resourceTypeName, policyInfo.resourceId), policyInfo.name), policyInfo.email, roles.flatten.toSet, actions.flatten.toSet, policyInfo.public)
-      }.toSet
-    })
-  }
+  override def listAccessPoliciesForUser(resource: FullyQualifiedResourceId, user: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[AccessPolicyWithoutMembers]] = ???
+//  {
+//    runInTransaction("listAccessPoliciesForUser", samRequestContext)({ implicit session =>
+//      val ancestorGroupsTable = SubGroupMemberTable("ancestor_groups")
+//      val ag = ancestorGroupsTable.syntax("ag")
+//      val agColumn = ancestorGroupsTable.column
+//
+//      val pg = GroupMemberTable.syntax("parent_groups")
+//      val r = ResourceTable.syntax("r")
+//      val rt = ResourceTypeTable.syntax("rt")
+//      val gm = GroupMemberTable.syntax("gm")
+//      val g = GroupTable.syntax("g")
+//      val p: scalikejdbc.QuerySQLSyntaxProvider[scalikejdbc.SQLSyntaxSupport[PolicyRecord], PolicyRecord] = PolicyTable.syntax("p")
+//
+//      val pr = PolicyRoleTable.syntax("pr")
+//      val rr = ResourceRoleTable.syntax("rr")
+//      val pa = PolicyActionTable.syntax("pa")
+//      val ra = ResourceActionTable.syntax("ra")
+//
+//      val listPoliciesQuery =
+//        samsql"""with recursive ${ancestorGroupsTable.table}(${agColumn.parentGroupId}) as (
+//                  select ${gm.groupId}
+//                  from ${GroupMemberTable as gm}
+//                  where ${gm.memberUserId} = ${user}
+//                  union
+//                  select ${pg.groupId}
+//                  from ${GroupMemberTable as pg}
+//                  join ${ancestorGroupsTable as ag} on ${agColumn.parentGroupId} = ${pg.memberGroupId}
+//        ) select ${p.result.name}, ${r.result.name}, ${rt.result.name}, ${g.result.email}, ${p.result.public}, ${rr.result.role}, ${ra.result.action}
+//          from ${GroupTable as g}
+//          join ${ancestorGroupsTable as ag} on ${ag.parentGroupId} = ${g.id}
+//          join ${PolicyTable as p} on ${g.id} = ${p.groupId}
+//          join ${ResourceTable as r} on ${p.resourceId} = ${r.id}
+//          join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
+//          left join ${PolicyRoleTable as pr} on ${p.id} = ${pr.resourcePolicyId}
+//          left join ${ResourceRoleTable as rr} on ${pr.resourceRoleId} = ${rr.id}
+//          left join ${PolicyActionTable as pa} on ${p.id} = ${pa.resourcePolicyId}
+//          left join ${ResourceActionTable as ra} on ${pa.resourceActionId} = ${ra.id}
+//          where ${r.name} = ${resource.resourceId}
+//          and ${rt.name} = ${resource.resourceTypeName}"""
+//
+//      import SamTypeBinders._
+//      val results = listPoliciesQuery.map(rs => (PolicyInfo(rs.get[AccessPolicyName](p.resultName.name), rs.get[ResourceId](r.resultName.name), rs.get[ResourceTypeName](rt.resultName.name), rs.get[WorkbenchEmail](g.resultName.email), rs.boolean(p.resultName.public)),
+//        (rs.stringOpt(rr.resultName.role).map(ResourceRoleName(_)), rs.stringOpt(ra.resultName.action).map(ResourceAction(_))))).list().apply().groupBy(_._1)
+//
+//      results.map { case (policyInfo, resultsByPolicy) =>
+//        val (_, roleActionResults) = resultsByPolicy.unzip
+//
+//        val (roles, actions) = roleActionResults.unzip
+//
+//        AccessPolicyWithoutMembers(FullyQualifiedPolicyId(FullyQualifiedResourceId(policyInfo.resourceTypeName, policyInfo.resourceId), policyInfo.name), policyInfo.email, roles.flatten.toSet, actions.flatten.toSet, policyInfo.public)
+//      }.toSet
+//    })
+//  }
 
 
   /**
@@ -1234,20 +1239,21 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     })
   }
 
-  override def listFlattenedPolicyMembers(policyId: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[Set[WorkbenchUser]] = {
-    val subGroupMemberTable = SubGroupMemberTable("sub_group")
-    val sg = subGroupMemberTable.syntax("sg")
-    val u = UserTable.syntax("u")
-
-    runInTransaction("listFlattenedPolicyMembers", samRequestContext)({ implicit session =>
-      val query = samsql"""with recursive ${recursiveMembersQuery(policyId, subGroupMemberTable)}
-        select ${u.resultAll}
-        from ${subGroupMemberTable as sg}
-        join ${UserTable as u} on ${u.id} = ${sg.memberUserId}"""
-
-      query.map(UserTable(u)).list().apply().toSet.map(UserTable.unmarshalUserRecord)
-    })
-  }
+  override def listFlattenedPolicyMembers(policyId: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[Set[WorkbenchUser]] = ???
+//  {
+//    val subGroupMemberTable = SubGroupMemberTable("sub_group")
+//    val sg = subGroupMemberTable.syntax("sg")
+//    val u = UserTable.syntax("u")
+//
+//    runInTransaction("listFlattenedPolicyMembers", samRequestContext)({ implicit session =>
+//      val query = samsql"""with recursive ${recursiveMembersQuery(policyId, subGroupMemberTable)}
+//        select ${u.resultAll}
+//        from ${subGroupMemberTable as sg}
+//        join ${UserTable as u} on ${u.id} = ${sg.memberUserId}"""
+//
+//      query.map(UserTable(u)).list().apply().toSet.map(UserTable.unmarshalUserRecord)
+//    })
+//  }
 
   override def setPolicyIsPublic(policyId: FullyQualifiedPolicyId, isPublic: Boolean, samRequestContext: SamRequestContext): IO[Unit] = {
     runInTransaction("setPolicyIsPublic", samRequestContext)({ implicit session =>
@@ -1558,48 +1564,49 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     * @param user the id of the user being queried
     * @return
     */
-  protected def userPoliciesCommonTableExpressions(resourceTypeName: ResourceTypeName, resourceId: Option[ResourceId], user: WorkbenchUserId): UserPoliciesCommonTableExpression = {
-    val ancestorGroupsTable = SubGroupMemberTable("ancestor_groups")
-    val ancestorGroup = ancestorGroupsTable.syntax("ancestorGroup")
-    val agColumn = ancestorGroupsTable.column
-
-    val parentGroup = GroupMemberTable.syntax("parent_groups")
-    val resource = ResourceTable.syntax("resource")
-    val resourceType = ResourceTypeTable.syntax("resourceType")
-    val groupMember = GroupMemberTable.syntax("groupMember")
-    val policy = PolicyTable.syntax("policy")
-
-    val userResourcePolicyTable = UserResourcePolicyTable("user_resource_policy")
-    val userResourcePolicy = userResourcePolicyTable.syntax("userResourcePolicy")
-    val urpColumn = userResourcePolicyTable.column
-
-    val effPol = EffectivePolicyTable.syntax("effPol")
-
-    val resourceIdFragment = resourceId.map(id => samsqls"and ${resource.name} = ${id}").getOrElse(samsqls"")
-
-    val queryFragment =
-      samsqls"""with recursive
-        ${ancestorGroupsTable.table}(${agColumn.parentGroupId}) as (
-          select ${groupMember.groupId}
-          from ${GroupMemberTable as groupMember}
-          where ${groupMember.memberUserId} = ${user}
-          union
-          select ${parentGroup.groupId}
-          from ${GroupMemberTable as parentGroup}
-          join ${ancestorGroupsTable as ancestorGroup} on ${agColumn.parentGroupId} = ${parentGroup.memberGroupId}),
-
-        ${userResourcePolicyTable.table}(${urpColumn.policyId}, ${urpColumn.baseResourceTypeId}, ${urpColumn.baseResourceName}, ${urpColumn.inherited}, ${urpColumn.public}) as (
-          select ${effPol.id}, ${resourceType.id}, ${resource.name}, ${policy.resourceId} != ${resource.id}, ${effPol.public}
-          from ${ResourceTable as resource}
-          join ${ResourceTypeTable as resourceType} on ${resource.resourceTypeId} = ${resourceType.id}
-          join ${EffectivePolicyTable as effPol} on ${resource.id} = ${effPol.resourceId}
-          join ${PolicyTable as policy} on ${effPol.sourcePolicyId} = ${policy.id}
-          where ${resourceType.name} = ${resourceTypeName}
-          ${resourceIdFragment}
-          and (${effPol.public} OR ${effPol.groupId} in (select ${ancestorGroup.parentGroupId} from ${ancestorGroupsTable as ancestorGroup})))"""
-
-    UserPoliciesCommonTableExpression(userResourcePolicyTable, userResourcePolicy, queryFragment)
-  }
+  protected def userPoliciesCommonTableExpressions(resourceTypeName: ResourceTypeName, resourceId: Option[ResourceId], user: WorkbenchUserId): UserPoliciesCommonTableExpression = ???
+//  {
+//    val ancestorGroupsTable = SubGroupMemberTable("ancestor_groups")
+//    val ancestorGroup = ancestorGroupsTable.syntax("ancestorGroup")
+//    val agColumn = ancestorGroupsTable.column
+//
+//    val parentGroup = GroupMemberTable.syntax("parent_groups")
+//    val resource = ResourceTable.syntax("resource")
+//    val resourceType = ResourceTypeTable.syntax("resourceType")
+//    val groupMember = GroupMemberTable.syntax("groupMember")
+//    val policy = PolicyTable.syntax("policy")
+//
+//    val userResourcePolicyTable = UserResourcePolicyTable("user_resource_policy")
+//    val userResourcePolicy = userResourcePolicyTable.syntax("userResourcePolicy")
+//    val urpColumn = userResourcePolicyTable.column
+//
+//    val effPol = EffectivePolicyTable.syntax("effPol")
+//
+//    val resourceIdFragment = resourceId.map(id => samsqls"and ${resource.name} = ${id}").getOrElse(samsqls"")
+//
+//    val queryFragment =
+//      samsqls"""with recursive
+//        ${ancestorGroupsTable.table}(${agColumn.parentGroupId}) as (
+//          select ${groupMember.groupId}
+//          from ${GroupMemberTable as groupMember}
+//          where ${groupMember.memberUserId} = ${user}
+//          union
+//          select ${parentGroup.groupId}
+//          from ${GroupMemberTable as parentGroup}
+//          join ${ancestorGroupsTable as ancestorGroup} on ${agColumn.parentGroupId} = ${parentGroup.memberGroupId}),
+//
+//        ${userResourcePolicyTable.table}(${urpColumn.policyId}, ${urpColumn.baseResourceTypeId}, ${urpColumn.baseResourceName}, ${urpColumn.inherited}, ${urpColumn.public}) as (
+//          select ${effPol.id}, ${resourceType.id}, ${resource.name}, ${policy.resourceId} != ${resource.id}, ${effPol.public}
+//          from ${ResourceTable as resource}
+//          join ${ResourceTypeTable as resourceType} on ${resource.resourceTypeId} = ${resourceType.id}
+//          join ${EffectivePolicyTable as effPol} on ${resource.id} = ${effPol.resourceId}
+//          join ${PolicyTable as policy} on ${effPol.sourcePolicyId} = ${policy.id}
+//          where ${resourceType.name} = ${resourceTypeName}
+//          ${resourceIdFragment}
+//          and (${effPol.public} OR ${effPol.groupId} in (select ${ancestorGroup.parentGroupId} from ${ancestorGroupsTable as ancestorGroup})))"""
+//
+//    UserPoliciesCommonTableExpression(userResourcePolicyTable, userResourcePolicy, queryFragment)
+//  }
 }
 
 private final case class PolicyInfo(name: AccessPolicyName, resourceId: ResourceId, resourceTypeName: ResourceTypeName, email: WorkbenchEmail, public: Boolean)
