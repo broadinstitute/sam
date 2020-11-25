@@ -14,7 +14,14 @@ trait DatabaseArray {
   // TODO is there a better way to get a DB connection?
   private def getDbConnection: Connection = ConnectionPool.borrow(DatabaseNames.Foreground.name)
 
-  def asSqlArray: sql.Array = getDbConnection.createArrayOf(baseTypeName, asJavaArray)
+  def asSqlArray: sql.Array = {
+    val conn = getDbConnection;
+    try {
+      conn.createArrayOf(baseTypeName, asJavaArray)
+    } finally {
+      conn.close()
+    }
+  }
 
   override def toString: String = asJavaArray.mkString("Array(", ", ", ")")
 }
