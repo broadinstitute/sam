@@ -3,7 +3,7 @@ package org.broadinstitute.dsde.workbench.sam.db.dao
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.db.SamTypeBinders
 import org.broadinstitute.dsde.workbench.sam.db.tables._
-import scalikejdbc.{DBSession, SQLSyntax, SQLSyntaxSupport}
+import scalikejdbc.{DBSession, SQLSyntax}
 import org.broadinstitute.dsde.workbench.sam.db.SamParameterBinderFactory.SqlInterpolationWithSamBinders
 import org.broadinstitute.dsde.workbench.sam.model.FullyQualifiedPolicyId
 
