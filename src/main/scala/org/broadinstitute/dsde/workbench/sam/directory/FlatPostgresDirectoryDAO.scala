@@ -59,7 +59,7 @@ class FlatPostgresDirectoryDAO (override val dbRef: DbReference, override val ec
         // TODO: attempt to setup foreign key delete cascade for the FlatGroupMemberTable membership array?
 
         samsql"""delete from ${FlatGroupMemberTable as f}
-               where ANY(${f.groupMembershipPath}) = ${GroupTable.groupPKQueryForGroup(groupName)}""".update().apply()
+                where (${GroupTable.groupPKQueryForGroup(groupName)}) = ANY(${f.groupMembershipPath}::int[])""".update().apply()
 
         // foreign keys in accessInstructions and groupMember tables are set to cascade delete
         // note: this will not remove this group from any parent groups and will throw a
