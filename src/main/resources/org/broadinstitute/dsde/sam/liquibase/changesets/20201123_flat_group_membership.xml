@@ -21,4 +21,29 @@
             <column name="group_membership_path" type="BIGINT ARRAY"/>
         </createTable>
     </changeSet>
+    <changeSet logicalFilePath="dummy" author="dvoet" id="index_gmf_member_user_id">
+        <createIndex tableName="SAM_GROUP_MEMBER_FLAT" indexName="IDX_GMF_MEMBER_USER_ID">
+            <column name="member_user_id"/>
+        </createIndex>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="dvoet" id="index_gmf_group_id">
+        <createIndex tableName="SAM_GROUP_MEMBER_FLAT" indexName="IDX_GMF_GROUP_ID">
+            <column name="group_id"/>
+        </createIndex>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="dvoet" id="populate_flat_group_member_table">
+        <sql stripComments="true">
+            with recursive
+              unrolled_groups(group_id, member_group_id, member_user_id, group_membership_path) as (
+                select gm.group_id, gm.member_group_id, gm.member_user_id, array[gm.group_id]
+                from sam_group_member gm
+              union
+                select ug.group_id, gm.member_group_id, gm.member_user_id, array_append(ug.group_membership_path, gm.group_id)
+                from unrolled_groups ug
+                join sam_group_member gm on ug.member_group_id = gm.group_id
+            )
+            insert into sam_group_member_flat(group_id, member_group_id, member_user_id, group_membership_path)
+            select ug.group_id, ug.member_group_id, ug.member_user_id, ug.group_membership_path from unrolled_groups ug
+        </sql>
+    </changeSet>
 </databaseChangeLog>
