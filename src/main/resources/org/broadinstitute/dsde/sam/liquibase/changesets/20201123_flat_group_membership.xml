@@ -13,10 +13,10 @@
                 <constraints foreignKeyName="FK_SGM_GROUP" referencedTableName="SAM_GROUP" referencedColumnNames="id" nullable="false" deleteCascade="true"/>
             </column>
             <column name="member_group_id" type="BIGINT">
-                <constraints foreignKeyName="FK_SGM_MEMBER_GROUP" referencedTableName="SAM_GROUP" referencedColumnNames="id"/>
+                <constraints foreignKeyName="FK_SGM_MEMBER_GROUP" referencedTableName="SAM_GROUP" referencedColumnNames="id" deleteCascade="true"/>
             </column>
             <column name="member_user_id" type="VARCHAR">
-                <constraints foreignKeyName="FK_SGM_MEMBER_USER" referencedTableName="SAM_USER" referencedColumnNames="id"/>
+                <constraints foreignKeyName="FK_SGM_MEMBER_USER" referencedTableName="SAM_USER" referencedColumnNames="id" deleteCascade="true"/>
             </column>
             <column name="group_membership_path" type="BIGINT ARRAY"/>
         </createTable>
