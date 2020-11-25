@@ -4,7 +4,7 @@ import cats.effect.{ContextShift, IO}
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchGroupName, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.db.{DbReference, SamTypeBinders}
 import org.broadinstitute.dsde.workbench.sam.db.tables.{EffectivePolicyTable, FlatGroupMemberTable, GroupRecord, GroupTable, PolicyActionTable, PolicyRoleTable, PolicyTable, ResourceActionTable, ResourceRoleTable, ResourceTable, ResourceTypeTable}
-import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicy, AccessPolicyName, FullyQualifiedPolicyId, FullyQualifiedResourceId, ResourceAction, ResourceId, ResourceRoleName, ResourceTypeName}
+import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicy, AccessPolicyName, FullyQualifiedPolicyId, FullyQualifiedResourceId, ResourceAction, ResourceId, ResourceIdAndPolicyName, ResourceRoleName, ResourceTypeName}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import scalikejdbc.SQLSyntax
 import scalikejdbc._
@@ -26,6 +26,24 @@ class FlatPostgresAccessPolicyDAO (override val dbRef: DbReference, override val
 
   override def listAccessPolicies(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Stream[AccessPolicy]] = {
     listPolicies(resource, samRequestContext = samRequestContext)
+  }
+
+  override def listAccessPolicies(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[ResourceIdAndPolicyName]] = {
+    val r = ResourceTable.syntax("r")
+    val rt = ResourceTypeTable.syntax("rt")
+    val f = FlatGroupMemberTable.syntax("f")
+    val p = PolicyTable.syntax("p")
+
+    runInTransaction("listAccessPolicies", samRequestContext)({ implicit session =>
+      import SamTypeBinders._
+
+      samsql"""select ${r.result.name}, ${p.result.name}
+         from ${PolicyTable as p}
+         join ${FlatGroupMemberTable as f} on ${f.groupId} = ${p.groupId}
+         join ${ResourceTable as r} on ${r.id} = ${p.resourceId}
+         join ${ResourceTypeTable as rt} on ${rt.id} = ${r.resourceTypeId}
+         where ${rt.name} = ${resourceTypeName}""".map(rs => ResourceIdAndPolicyName(rs.get[ResourceId](r.resultName.name), rs.get[AccessPolicyName](p.resultName.name))).list().apply().toSet
+    })
   }
 
   override def userPoliciesCommonTableExpressions(resourceTypeName: ResourceTypeName, resourceId: Option[ResourceId], user: WorkbenchUserId): UserPoliciesCommonTableExpression = {
@@ -56,9 +74,6 @@ class FlatPostgresAccessPolicyDAO (override val dbRef: DbReference, override val
 
     UserPoliciesCommonTableExpression(userResourcePolicyTable, userResourcePolicy, queryFragment)
   }
-
-
-
 
   // Copied from PostgresAccessPolicyDAO.listPolicies
   // Assumption: we only want *direct membership* here, based on the original query
