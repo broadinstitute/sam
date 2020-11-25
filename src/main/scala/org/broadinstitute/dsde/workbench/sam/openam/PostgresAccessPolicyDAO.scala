@@ -968,9 +968,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     })
   }
 
-
-
-  private def unmarshalPolicyMembers(memberResults: List[MemberResult]): Set[WorkbenchSubject] = {
+  protected def unmarshalPolicyMembers(memberResults: List[MemberResult]): Set[WorkbenchSubject] = {
     memberResults.collect {
       case MemberResult(Some(userId), None, None, None, None) => userId
       case MemberResult(None, Some(groupName), None, None, None) => groupName
@@ -978,7 +976,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     }.toSet
   }
 
-  private def unmarshalPolicyPermissions(permissionsResults: List[(RoleResult, ActionResult)]): (Set[ResourceRoleName], Set[ResourceAction], Set[AccessPolicyDescendantPermissions]) = {
+  protected def unmarshalPolicyPermissions(permissionsResults: List[(RoleResult, ActionResult)]): (Set[ResourceRoleName], Set[ResourceAction], Set[AccessPolicyDescendantPermissions]) = {
     val (roleResults, actionResults) = permissionsResults.unzip
     val (descendantRoleResults, topLevelRoleResults) = roleResults.partition(_.descendantsOnly.getOrElse(false))
     val (descendantActionResults, topLevelActionResults) = actionResults.partition(_.descendantsOnly.getOrElse(false))

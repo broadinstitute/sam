@@ -266,7 +266,7 @@ class FlatPostgresDirectoryDAO (override val dbRef: DbReference, override val ec
 
   // selection clause for direct membership:
   // choose when the final `groupMembershipPath` array element is equal to groupId
-  def directMembershipClause(g: QuerySQLSyntaxProvider[SQLSyntaxSupport[GroupRecord], GroupRecord]): SQLSyntax = {
+  private def directMembershipClause(g: QuerySQLSyntaxProvider[SQLSyntaxSupport[GroupRecord], GroupRecord]): SQLSyntax = {
     val f = FlatGroupMemberTable.syntax("f")
     samsqls"${f.groupMembershipPath}[array_upper(${f.groupMembershipPath}, 1)] = ${g.id}"
   }
