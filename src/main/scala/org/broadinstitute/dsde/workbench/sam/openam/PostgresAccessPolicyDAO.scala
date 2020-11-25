@@ -1558,7 +1558,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     * @param user the id of the user being queried
     * @return
     */
-  private def userPoliciesCommonTableExpressions(resourceTypeName: ResourceTypeName, resourceId: Option[ResourceId], user: WorkbenchUserId): UserPoliciesCommonTableExpression = {
+  protected def userPoliciesCommonTableExpressions(resourceTypeName: ResourceTypeName, resourceId: Option[ResourceId], user: WorkbenchUserId): UserPoliciesCommonTableExpression = {
     val ancestorGroupsTable = SubGroupMemberTable("ancestor_groups")
     val ancestorGroup = ancestorGroupsTable.syntax("ancestorGroup")
     val agColumn = ancestorGroupsTable.column

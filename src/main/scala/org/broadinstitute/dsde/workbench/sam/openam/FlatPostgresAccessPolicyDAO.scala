@@ -3,7 +3,7 @@ package org.broadinstitute.dsde.workbench.sam.openam
 import cats.effect.{ContextShift, IO}
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchGroupName, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.db.{DbReference, SamTypeBinders}
-import org.broadinstitute.dsde.workbench.sam.db.tables.{FlatGroupMemberTable, GroupRecord, GroupTable, PolicyActionTable, PolicyRoleTable, PolicyTable, ResourceActionTable, ResourceRoleTable, ResourceTable, ResourceTypeTable}
+import org.broadinstitute.dsde.workbench.sam.db.tables.{EffectivePolicyTable, FlatGroupMemberTable, GroupRecord, GroupTable, PolicyActionTable, PolicyRoleTable, PolicyTable, ResourceActionTable, ResourceRoleTable, ResourceTable, ResourceTypeTable}
 import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicy, AccessPolicyName, FullyQualifiedPolicyId, FullyQualifiedResourceId, ResourceAction, ResourceId, ResourceRoleName, ResourceTypeName}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import scalikejdbc.SQLSyntax
@@ -27,6 +27,38 @@ class FlatPostgresAccessPolicyDAO (override val dbRef: DbReference, override val
   override def listAccessPolicies(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Stream[AccessPolicy]] = {
     listPolicies(resource, samRequestContext = samRequestContext)
   }
+
+  override def userPoliciesCommonTableExpressions(resourceTypeName: ResourceTypeName, resourceId: Option[ResourceId], user: WorkbenchUserId): UserPoliciesCommonTableExpression = {
+    val resource = ResourceTable.syntax("resource")
+    val resourceType = ResourceTypeTable.syntax("resourceType")
+    val flatGroupMember = FlatGroupMemberTable.syntax("flatGroupMember")
+    val policy = PolicyTable.syntax("policy")
+
+    val userResourcePolicyTable = UserResourcePolicyTable("user_resource_policy")
+    val userResourcePolicy = userResourcePolicyTable.syntax("userResourcePolicy")
+    val urpColumn = userResourcePolicyTable.column
+
+    val effPol = EffectivePolicyTable.syntax("effPol")
+
+    val resourceIdFragment = resourceId.map(id => samsqls"and ${resource.name} = ${id}").getOrElse(samsqls"")
+
+    val queryFragment =
+      samsqls"""${userResourcePolicyTable.table}(${urpColumn.policyId}, ${urpColumn.baseResourceTypeId}, ${urpColumn.baseResourceName}, ${urpColumn.inherited}, ${urpColumn.public}) as (
+          select ${effPol.id}, ${resourceType.id}, ${resource.name}, ${policy.resourceId} != ${resource.id}, ${effPol.public}
+          from ${ResourceTable as resource}
+          join ${ResourceTypeTable as resourceType} on ${resource.resourceTypeId} = ${resourceType.id}
+          join ${EffectivePolicyTable as effPol} on ${resource.id} = ${effPol.resourceId}
+          join ${PolicyTable as policy} on ${effPol.sourcePolicyId} = ${policy.id}
+          where ${resourceType.name} = ${resourceTypeName}
+          ${resourceIdFragment}
+          and (${effPol.public} OR ${effPol.groupId} in
+          (select ${flatGroupMember.groupId} from ${FlatGroupMemberTable as flatGroupMember} where ${flatGroupMember.memberUserId} = ${user})))"""
+
+    UserPoliciesCommonTableExpression(userResourcePolicyTable, userResourcePolicy, queryFragment)
+  }
+
+
+
 
   // Copied from PostgresAccessPolicyDAO.listPolicies
   // Assumption: we only want *direct membership* here, based on the original query
