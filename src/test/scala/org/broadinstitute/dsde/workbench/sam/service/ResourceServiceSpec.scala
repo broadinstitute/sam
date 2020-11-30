@@ -767,15 +767,24 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
   }
 
   "validatePolicy" should "succeed with a correct policy" in {
-    runAndWait(service.validatePolicy(defaultResourceType, service.ValidatableAccessPolicy(AccessPolicyName("a"), Map(dummyUserInfo.userEmail -> Option(dummyUserInfo.userId.asInstanceOf[WorkbenchSubject])), Set(ResourceRoleName("owner")), Set(ResourceAction("alter_policies")), Set()))) shouldBe empty
+    val emailToMaybeSubject = Map(dummyUserInfo.userEmail -> Option(dummyUserInfo.userId.asInstanceOf[WorkbenchSubject]))
+    val policy = service.ValidatableAccessPolicy(AccessPolicyName("a"), emailToMaybeSubject, Set(ResourceRoleName("owner")), Set(ResourceAction("alter_policies")), Set())
+    runAndWait(service.validatePolicy(defaultResourceType, policy)) shouldBe empty
   }
 
-  "validatePolicy" should "succeed with an incorrect policy" in {
-    runAndWait(service.validatePolicy(defaultResourceType, service.ValidatableAccessPolicy(AccessPolicyName("a"), Map(dummyUserInfo.userEmail -> Option(dummyUserInfo.userId.asInstanceOf[WorkbenchSubject])), Set(ResourceRoleName("bad_name")), Set(ResourceAction("bad_action")), Set()))) shouldBe defined
+  "validatePolicy" should "fail with an incorrect policy" in {
+    val emailToMaybeSubject = Map(dummyUserInfo.userEmail -> Option(dummyUserInfo.userId.asInstanceOf[WorkbenchSubject]))
+    val policy = service.ValidatableAccessPolicy(AccessPolicyName("a"), emailToMaybeSubject, Set(ResourceRoleName("bad_name")), Set(ResourceAction("bad_action")), Set())
+    val maybeErrorReport = runAndWait(service.validatePolicy(defaultResourceType, policy))
+    maybeErrorReport shouldBe defined
+    maybeErrorReport.map(errorReport => errorReport.message should include("invalid policy"))
   }
 
   "validateRoles" should "fail if role is not in listed roles" in {
-    service.validateRoles(defaultResourceType, Set(ResourceRoleName("asdf"))) shouldBe defined
+    val maybeErrorReport =
+      service.validateRoles(defaultResourceType, Set(ResourceRoleName("asdf")))
+    maybeErrorReport shouldBe defined
+    maybeErrorReport.map(errorReport => errorReport.message should include("invalid role"))
   }
 
   "validateRoles" should "succeed with role included in listed roles" in {
@@ -783,7 +792,10 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
   }
 
   "validateActions" should "fail if action is not in listed actions" in {
-    service.validateActions(defaultResourceType, Set(ResourceAction("asdf"))) shouldBe defined
+    val maybeErrorReport =
+      service.validateActions(defaultResourceType, Set(ResourceAction("asdf")))
+    maybeErrorReport shouldBe defined
+    maybeErrorReport.map(errorReport => errorReport.message should include("invalid action"))
   }
 
   "validateActions" should "succeed with action included in listed actions" in {
