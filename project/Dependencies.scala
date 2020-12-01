@@ -13,11 +13,12 @@ object Dependencies {
   val http4sVersion = "0.21.0-M5"
   val circeVersion = "0.12.2"
 
-  val workbenchUtilV   = "0.5-6942040"
-  val workbenchModelV  = "0.14-3c0b510"
-  val workbenchGoogleV = "0.21-64a7b29"
-  val workbenchGoogle2V = "0.6-31cacc4"
-  val workbenchNotificationsV = "0.1-f2a0020"
+  val workbenchUtilV   = "0.6-1e1f697"
+  val workbenchUtil2V   = "0.1-1e1f697"
+  val workbenchModelV  = "0.14-1e1f697"
+  val workbenchGoogleV = "0.21-1e1f697"
+  val workbenchGoogle2V = "0.17-1e1f697"
+  val workbenchNotificationsV = "0.3-1e1f697"
   val workbenchNewRelicV = "0.2-24dabc8"
   val monocleVersion = "1.5.1-cats"
   val newRelicVersion = "4.11.0"
@@ -77,6 +78,7 @@ object Dependencies {
   // All of workbench-libs pull in Akka; exclude it since we provide our own Akka dependency.
   // workbench-google pulls in workbench-{util, model, metrics}; exclude them so we can control the library versions individually.
   val workbenchUtil: ModuleID =      "org.broadinstitute.dsde.workbench" %% "workbench-util"   % workbenchUtilV excludeAll(excludeWorkbenchModel)
+  val workbenchUtil2: ModuleID =      "org.broadinstitute.dsde.workbench" %% "workbench-util2"   % workbenchUtil2V excludeAll(excludeWorkbenchModel)
   val workbenchModel: ModuleID =     "org.broadinstitute.dsde.workbench" %% "workbench-model"  % workbenchModelV
   val workbenchGoogle: ModuleID =    "org.broadinstitute.dsde.workbench" %% "workbench-google" % workbenchGoogleV excludeAll(excludeWorkbenchModel, excludeWorkbenchUtil)
   // the name of the auto-value package changed from auto-value to auto-value-annotations so old libraries are not evicted

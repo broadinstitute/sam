@@ -17,6 +17,7 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GcsObjectName, GoogleProject, ServiceAccountKey, ServiceAccountKeyId}
 import org.broadinstitute.dsde.workbench.sam.config.{GoogleServicesConfig, PetServiceAccountConfig}
 import org.broadinstitute.dsde.workbench.sam.service.KeyCache
+import fs2.Stream
 
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
@@ -130,12 +131,10 @@ class GoogleKeyCache(
           throw new WorkbenchException("You have reached the 10 key limit on service accounts. Please remove one to create another.")
       }
       decodedKey <- IO.fromEither(key.privateKeyData.decode.toRight(new WorkbenchException("Failed to decode retrieved key")))
-      _ <- googleStorageAlg.createBlob(
+      _ <- (Stream.emits(decodedKey.getBytes(utf8Charset)).covary[IO] through googleStorageAlg.streamUploadBlob(
         googleServicesConfig.googleKeyCacheConfig.bucketName,
-        keyNameFull(pet.id.project, pet.serviceAccount.email, key.id),
-        decodedKey.getBytes(utf8Charset),
-        "text/plain"
-      ).compile.drain
+        keyNameFull(pet.id.project, pet.serviceAccount.email, key.id)
+      )).compile.drain
     } yield decodedKey
 
   private def isKeyActive(mostRecentKey: GcsObjectName, serviceAccountKeys: List[ServiceAccountKey]): Boolean = {
