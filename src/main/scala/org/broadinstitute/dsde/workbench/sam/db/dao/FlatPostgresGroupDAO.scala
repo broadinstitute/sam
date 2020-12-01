@@ -1,10 +1,9 @@
 package org.broadinstitute.dsde.workbench.sam.db.dao
 
 import org.broadinstitute.dsde.workbench.model.{WorkbenchSubject, WorkbenchUserId}
-import org.broadinstitute.dsde.workbench.sam.db.tables.{FlatGroupMemberPK, FlatGroupMemberRecord, FlatGroupMemberTable, FlatGroupMembershipPath, GroupPK}
-import scalikejdbc.{DBSession, SQLSyntax, WrappedResultSet}
 import org.broadinstitute.dsde.workbench.sam.db.SamParameterBinderFactory.SqlInterpolationWithSamBinders
-import scalikejdbc._
+import org.broadinstitute.dsde.workbench.sam.db.tables.{FlatGroupMemberRecord, FlatGroupMemberTable, FlatGroupMembershipPath, GroupPK}
+import scalikejdbc.{DBSession, SQLSyntax, WrappedResultSet, _}
 
 trait FlatPostgresGroupDAO extends PostgresGroupDAO {
 
@@ -33,7 +32,7 @@ trait FlatPostgresGroupDAO extends PostgresGroupDAO {
       // groups and users which have `groupMembers` as ancestors
       val descendantMemberships = listMembersByPKs(groupMembers)
 
-      val transitiveMembers = (ancestorMemberships :+ FlatGroupMemberRecord(FlatGroupMemberPK(0), groupId, None, None, FlatGroupMembershipPath(List.empty))) flatMap { case FlatGroupMemberRecord(_, ancestor, _, _, ancestorPath) =>
+      val transitiveMembers = ancestorMemberships flatMap { case FlatGroupMemberRecord(_, ancestor, _, _, ancestorPath) =>
         val ancestorsPlusGroup = ancestorPath.append(groupId)
 
         val ancestorUsers = userMembers.map { userId =>

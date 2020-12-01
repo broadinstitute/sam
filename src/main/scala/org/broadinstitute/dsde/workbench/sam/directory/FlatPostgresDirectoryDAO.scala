@@ -92,7 +92,7 @@ class FlatPostgresDirectoryDAO (override val dbRef: DbReference, override val ec
       val r = ResourceTable.syntax("r")
       val rt = ResourceTypeTable.syntax("rt")
 
-      samsql"""select ${g.result.name}, ${p.result.name}, ${r.result.name}, ${rt.result.name}
+      samsql"""select distinct ${g.result.name}, ${p.result.name}, ${r.result.name}, ${rt.result.name}
               from ${GroupTable as g}
               join ${FlatGroupMemberTable as f} on ${f.groupId} = ${g.id}
               left join ${PolicyTable as p} on ${p.groupId} = ${g.id}
