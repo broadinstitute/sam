@@ -33,7 +33,8 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam._
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.broadinstitute.dsde.workbench.sam.service._
-import org.broadinstitute.dsde.workbench.util.{DelegatePool, ExecutionContexts}
+import org.broadinstitute.dsde.workbench.util.DelegatePool
+import org.broadinstitute.dsde.workbench.util2.ExecutionContexts
 import org.http4s.client.blaze.BlazeClientBuilder
 import scalikejdbc.config.DBs
 

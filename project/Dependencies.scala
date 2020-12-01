@@ -13,11 +13,12 @@ object Dependencies {
   val http4sVersion = "0.21.0-M5"
   val circeVersion = "0.12.2"
 
-  val workbenchUtilV   = "0.5-6942040"
-  val workbenchModelV  = "0.14-3c0b510"
-  val workbenchGoogleV = "0.21-64a7b29"
-  val workbenchGoogle2V = "0.6-31cacc4"
-  val workbenchNotificationsV = "0.1-f2a0020"
+  val workbenchUtilV   = "0.6-1e1f697"
+  val workbenchUtil2V   = "0.1-1e1f697"
+  val workbenchModelV  = "0.14-1e1f697"
+  val workbenchGoogleV = "0.21-1e1f697"
+  val workbenchGoogle2V = "0.17-1e1f697"
+  val workbenchNotificationsV = "0.3-1e1f697"
   val workbenchNewRelicV = "0.2-24dabc8"
   val monocleVersion = "1.5.1-cats"
   val newRelicVersion = "4.11.0"
@@ -61,7 +62,7 @@ object Dependencies {
   val circeParser: ModuleID = "io.circe" %% "circe-parser" % circeVersion
 
   val excludIoGrpc =  ExclusionRule(organization = "io.grpc", name = "grpc-core")
-  val ioGrpc: ModuleID = "io.grpc" % "grpc-core" % "1.24.1"
+  val ioGrpc: ModuleID = "io.grpc" % "grpc-core" % "1.33.1"
 
   val googleOAuth2: ModuleID = "com.google.auth" % "google-auth-library-oauth2-http" % "0.18.0" excludeAll(excludIoGrpc)
   val googleStorage: ModuleID = "com.google.apis" % "google-api-services-storage" % "v1-rev20181013-1.27.0" excludeAll(excludIoGrpc) //force this version
@@ -77,6 +78,7 @@ object Dependencies {
   // All of workbench-libs pull in Akka; exclude it since we provide our own Akka dependency.
   // workbench-google pulls in workbench-{util, model, metrics}; exclude them so we can control the library versions individually.
   val workbenchUtil: ModuleID =      "org.broadinstitute.dsde.workbench" %% "workbench-util"   % workbenchUtilV excludeAll(excludeWorkbenchModel)
+  val workbenchUtil2: ModuleID =      "org.broadinstitute.dsde.workbench" %% "workbench-util2"   % workbenchUtil2V excludeAll(excludeWorkbenchModel)
   val workbenchModel: ModuleID =     "org.broadinstitute.dsde.workbench" %% "workbench-model"  % workbenchModelV
   val workbenchGoogle: ModuleID =    "org.broadinstitute.dsde.workbench" %% "workbench-google" % workbenchGoogleV excludeAll(excludeWorkbenchModel, excludeWorkbenchUtil)
   // the name of the auto-value package changed from auto-value to auto-value-annotations so old libraries are not evicted
@@ -88,7 +90,7 @@ object Dependencies {
   val workbenchGoogleTests: ModuleID =    "org.broadinstitute.dsde.workbench" %% "workbench-google" % workbenchGoogleV % "test" classifier "tests" excludeAll(excludeWorkbenchUtil, excludeWorkbenchModel)
   val workbenchGoogle2Tests: ModuleID =    "org.broadinstitute.dsde.workbench" %% "workbench-google2" % workbenchGoogle2V % "test" classifier "tests" excludeAll(excludeWorkbenchUtil, excludeWorkbenchModel)
   val workbenchNewRelic: ModuleID =    "org.broadinstitute.dsde.workbench" %% "workbench-newrelic" % workbenchNewRelicV excludeAll(excludeWorkbenchUtil, excludeWorkbenchModel)
-  val googleStorageLocal: ModuleID = "com.google.cloud" % "google-cloud-nio" % "0.71.0-alpha" % "test" //needed for mocking google cloud storage
+  val googleStorageLocal: ModuleID = "com.google.cloud" % "google-cloud-nio" % "0.122.1" % "test" //needed for mocking google cloud storage
 
   val liquibaseCore: ModuleID = "org.liquibase" % "liquibase-core" % "3.6.3"
 
