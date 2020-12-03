@@ -18,9 +18,9 @@ object SamJsonSupport {
 
   implicit val ResourceRoleNameFormat = ValueObjectFormat(ResourceRoleName.apply)
 
-  implicit val ResourceRoleFormat = jsonFormat2(ResourceRole.apply)
-
   implicit val ResourceTypeNameFormat = ValueObjectFormat(ResourceTypeName.apply)
+
+  implicit val ResourceRoleFormat = jsonFormat4(ResourceRole.apply)
 
   implicit val ResourceTypeFormat = jsonFormat5(ResourceType.apply)
 
@@ -112,7 +112,10 @@ object SamResourceTypes {
 }
 @Lenses final case class ResourceAction(value: String) extends ValueObject
 @Lenses case class ResourceRoleName(value: String) extends ValueObject
-@Lenses final case class ResourceRole(roleName: ResourceRoleName, actions: Set[ResourceAction])
+@Lenses final case class ResourceRole(roleName: ResourceRoleName,
+                                      actions: Set[ResourceAction],
+                                      includedRoles: Set[ResourceRoleName] = Set.empty,
+                                      descendantRoles: Map[ResourceTypeName, Set[ResourceRoleName]] = Map.empty)
 
 @Lenses final case class ResourceTypeName(value: String) extends ValueObject
 
