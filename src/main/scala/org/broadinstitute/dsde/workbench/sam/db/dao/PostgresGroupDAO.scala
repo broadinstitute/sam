@@ -1,31 +1,181 @@
 package org.broadinstitute.dsde.workbench.sam.db.dao
 
+import java.time.Instant
+
+import akka.http.scaladsl.model.StatusCodes
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.db.SamTypeBinders
-import org.broadinstitute.dsde.workbench.sam.db.tables._
-import scalikejdbc.{DBSession, SQLSyntax}
 import org.broadinstitute.dsde.workbench.sam.db.SamParameterBinderFactory.SqlInterpolationWithSamBinders
+import org.broadinstitute.dsde.workbench.sam.db.tables._
+import org.broadinstitute.dsde.workbench.sam.db.{PSQLStateExtensions, SamTypeBinders}
+import org.broadinstitute.dsde.workbench.sam.errorReportSource
 import org.broadinstitute.dsde.workbench.sam.model.FullyQualifiedPolicyId
+import org.postgresql.util.PSQLException
+import scalikejdbc.{DBSession, SQLSyntax}
+
+import scala.util.{Failure, Try}
 
 trait PostgresGroupDAO {
-  def insertGroupMembers(groupId: GroupPK, members: Set[WorkbenchSubject])(implicit session: DBSession): Int = ???
-//  {
-//    if (members.isEmpty) {
-//      0
-//    } else {
-//      val memberUsers: List[SQLSyntax] = members.collect {
-//        case userId: WorkbenchUserId => samsqls"(${groupId}, ${userId}, ${None})"
-//      }.toList
-//
-//      val memberGroups: List[SQLSyntax] = queryForGroupPKs(members).map { groupPK =>
-//        samsqls"(${groupId}, ${None}, ${groupPK})"
-//      }
-//
-//      val gm = GroupMemberTable.column
-//      samsql"insert into ${GroupMemberTable.table} (${gm.groupId}, ${gm.memberUserId}, ${gm.memberGroupId}) values ${memberUsers ++ memberGroups}"
-//        .update().apply()
-//    }
-//  }
+  def insertGroupMembers(groupId: GroupPK, members: Set[WorkbenchSubject])(implicit session: DBSession): Int =
+  {
+    if (members.isEmpty) {
+      0
+    } else {
+      val memberGroupPKs = queryForGroupPKs(members)
+      val memberUserIds = members.collect {
+        case userId: WorkbenchUserId => userId
+      }.toList
+
+      val insertCount = Try {
+        insertGroupMembersIntoHierarchical(groupId, memberGroupPKs, memberUserIds)
+      }.recover {
+        case duplicateException: PSQLException if duplicateException.getSQLState == PSQLStateExtensions.UNIQUE_VIOLATION => 0
+      }.get
+
+      if (insertCount > 0) {
+        // if nothing was inserted no need to change the flat structure, it would insert dup records
+        insertGroupMembersIntoFlat(groupId, memberGroupPKs, memberUserIds)
+      }
+      insertCount
+    }
+  }
+
+  private def insertGroupMembersIntoHierarchical(groupId: GroupPK, memberGroupPKs: List[GroupPK], memberUserIds: List[WorkbenchUserId])(implicit session: DBSession) = {
+    val memberUserValues: List[SQLSyntax] = memberUserIds.map {
+      case userId: WorkbenchUserId => samsqls"(${groupId}, ${userId}, ${None})"
+    }
+
+    val memberGroupValues: List[SQLSyntax] = memberGroupPKs.map { groupPK =>
+      samsqls"(${groupId}, ${None}, ${groupPK})"
+    }
+
+    val gm = GroupMemberTable.column
+    samsql"insert into ${GroupMemberTable.table} (${gm.groupId}, ${gm.memberUserId}, ${gm.memberGroupId}) values ${memberUserValues ++ memberGroupValues}"
+      .update().apply()
+  }
+
+  private def insertGroupMembersIntoFlat(groupId: GroupPK, memberGroupPKs: List[GroupPK], memberUserIds: List[WorkbenchUserId])(implicit session: DBSession): Unit = {
+    val fgmColumn = FlatGroupMemberTable.column
+    val fgm = FlatGroupMemberTable.syntax("fgm")
+
+    val directUserValues = memberUserIds.map(uid => samsqls"($uid, cast(null as BIGINT))")
+    val directGroupValues = memberGroupPKs.map(gpk => samsqls"(cast(null as varchar), $gpk)")
+
+    // insert direct memberships
+    samsql"""insert into ${FlatGroupMemberTable.table} (${fgmColumn.groupId}, ${fgmColumn.memberUserId}, ${fgmColumn.memberGroupId}, ${fgmColumn.groupMembershipPath})
+               select ${groupId}, insertValues.member_user_id, insertValues.member_group_id, array[$groupId]
+               from (values ${directUserValues ++ directGroupValues}) AS insertValues (member_user_id, member_group_id)""".update().apply()
+
+    // insert memberships where groupId is a subgroup
+    samsql"""insert into ${FlatGroupMemberTable.table} (${fgmColumn.groupId}, ${fgmColumn.memberUserId}, ${fgmColumn.memberGroupId}, ${fgmColumn.groupMembershipPath})
+             select ${fgm.groupId}, insertValues.member_user_id, insertValues.member_group_id, array_append(${fgm.groupMembershipPath}, $groupId)
+             from (values ${directUserValues ++ directGroupValues}) AS insertValues (member_user_id, member_group_id),
+             ${FlatGroupMemberTable as fgm}
+             where ${fgm.memberGroupId} = $groupId""".update().apply()
+
+    if (memberGroupPKs.nonEmpty) {
+      // insert subgroup memberships
+      // connect heads and tails where
+      // heads have member_group_id in memberGroupPKs - all the paths ending with a member of memberGroupPKs
+      // and
+      // tails have group_id in memberGroupPKs - all the paths starting with a member of memberGroupPKs
+      // the final path is head.groupMembershipPath ++ tail.groupMembershipPath
+      // with member ids from the tail and group_id from the head
+      val tail = FlatGroupMemberTable.syntax("tail")
+      val head = FlatGroupMemberTable.syntax("head")
+      samsql"""insert into ${FlatGroupMemberTable.table} (${fgmColumn.groupId}, ${fgmColumn.memberUserId}, ${fgmColumn.memberGroupId}, ${fgmColumn.groupMembershipPath})
+             select ${head.groupId}, ${tail.memberUserId}, ${tail.memberGroupId}, array_cat(${head.groupMembershipPath}, ${tail.groupMembershipPath})
+             from ${FlatGroupMemberTable as tail}
+             join ${FlatGroupMemberTable as head} on ${head.memberGroupId} = ${tail.groupId}
+             where ${tail.groupId} in ($memberGroupPKs)
+             and ${head.groupMembershipPath}[array_upper(${head.groupMembershipPath}, 1)] = ${groupId}""".update().apply()
+    }
+  }
+
+  def deleteAllGroupMembers(groupPK: GroupPK)(implicit session: DBSession): Int = {
+    val gm = GroupMemberTable.syntax("gm")
+    samsql"delete from ${GroupMemberTable as gm} where ${gm.groupId} = ${groupPK}".update().apply()
+
+    val f = FlatGroupMemberTable.syntax("f")
+    samsql"delete from ${FlatGroupMemberTable as f} where ${directMembershipClause(groupPK)}".update().apply()
+  }
+
+  def removeGroupMember(groupId: WorkbenchGroupIdentity, removeMember: WorkbenchSubject)(implicit session: DBSession): Boolean = {
+    val groupPKQuery = workbenchGroupIdentityToGroupPK(groupId)
+    val groupMemberColumn = GroupMemberTable.column
+
+    val removeMemberQuery = removeMember match {
+      case memberUser: WorkbenchUserId =>
+        samsql"delete from ${GroupMemberTable.table} where ${groupMemberColumn.groupId} = (${groupPKQuery}) and ${groupMemberColumn.memberUserId} = ${memberUser}"
+      case memberGroup: WorkbenchGroupIdentity =>
+        val memberGroupPKQuery = workbenchGroupIdentityToGroupPK(memberGroup)
+        samsql"delete from ${GroupMemberTable.table} where ${groupMemberColumn.groupId} = (${groupPKQuery}) and ${groupMemberColumn.memberGroupId} = (${memberGroupPKQuery})"
+      case _ => throw new WorkbenchException(s"unexpected WorkbenchSubject $removeMember")
+    }
+    val removed = removeMemberQuery.update().apply() > 0
+
+    val f = FlatGroupMemberTable.syntax("f")
+    val query =
+      samsql"""DELETE FROM ${FlatGroupMemberTable as f}
+                     WHERE ${memberClause(removeMember)} AND ${directMembershipClause(groupId)}"""
+    query.update().apply()
+
+    removed
+  }
+
+  def isGroupMember(groupId: WorkbenchGroupIdentity, member: WorkbenchSubject)(implicit session: DBSession): Boolean = {
+    val f = FlatGroupMemberTable.syntax("f")
+    val query =
+      samsql"""SELECT count(*) FROM ${FlatGroupMemberTable as f}
+              WHERE ${memberClause(member)} AND ${f.groupId} = (${workbenchGroupIdentityToGroupPK(groupId)})"""
+    query.map(rs => rs.int(1)).single().apply().getOrElse(0) > 0
+  }
+
+  def updateGroupUpdatedDate(groupId: WorkbenchGroupIdentity)(implicit session: DBSession): Int = {
+    val g = GroupTable.column
+    samsql"update ${GroupTable.table} set ${g.updatedDate} = ${Instant.now()} where ${g.id} = (${workbenchGroupIdentityToGroupPK(groupId)})".update().apply()
+  }
+
+  def deleteGroup(groupName: WorkbenchGroupName)(implicit session: DBSession): Int = {
+    val g = GroupTable.syntax("g")
+
+    Try {
+      // foreign keys in accessInstructions and groupMember tables are set to cascade delete
+      // note: this will not remove this group from any parent groups and will throw a
+      // foreign key constraint violation error if group is still a member of any parent groups
+      samsql"delete from ${GroupTable as g} where ${g.name} = ${groupName}".update().apply()
+    }.recoverWith {
+      case fkViolation: PSQLException if fkViolation.getSQLState == PSQLStateExtensions.FOREIGN_KEY_VIOLATION =>
+        Failure(new WorkbenchExceptionWithErrorReport(
+          ErrorReport(StatusCodes.Conflict, s"group ${groupName.value} cannot be deleted because it is a member of at least 1 other group")))
+    }.get
+
+    val f = FlatGroupMemberTable.syntax("f")
+    samsql"""delete from ${FlatGroupMemberTable as f}
+                where (${GroupTable.groupPKQueryForGroup(groupName)}) = ANY(${f.groupMembershipPath}::int[])""".update().apply()
+  }
+
+  private def memberClause(member: WorkbenchSubject): SQLSyntax = {
+    val f = FlatGroupMemberTable.syntax("f")
+    member match {
+      case subGroupId: WorkbenchGroupIdentity => samsqls"${f.memberGroupId} = (${workbenchGroupIdentityToGroupPK(subGroupId)})"
+      case WorkbenchUserId(userId) => samsqls"${f.memberUserId} = $userId"
+      case _ => throw new WorkbenchException(s"illegal member $member")
+    }
+  }
+
+  // selection clause for direct membership:
+  // choose when the final `groupMembershipPath` array element is equal to groupId
+  private def directMembershipClause(groupPK: GroupPK): SQLSyntax = {
+    val f = FlatGroupMemberTable.syntax("f")
+    samsqls"${f.groupMembershipPath}[array_upper(${f.groupMembershipPath}, 1)] = ${groupPK}"
+  }
+
+  // selection clause for direct membership:
+  // choose when the final `groupMembershipPath` array element is equal to groupId
+  private def directMembershipClause(groupId: WorkbenchGroupIdentity): SQLSyntax = {
+    val f = FlatGroupMemberTable.syntax("f")
+    samsqls"${f.groupMembershipPath}[array_upper(${f.groupMembershipPath}, 1)] = (${workbenchGroupIdentityToGroupPK(groupId)})"
+  }
 
   protected def queryForGroupPKs(members: Set[WorkbenchSubject])(implicit session: DBSession): List[GroupPK] = {
     import SamTypeBinders._
@@ -91,41 +241,4 @@ trait PostgresGroupDAO {
               and ${r.name} = ${policyId.resource.resourceId}
               and ${p.name} = ${policyId.accessPolicyName}"""
   }
-
-//  /**
-//    * Produces a SQLSyntax to traverse a nested group structure and find all members.
-//    * Can only be used within a WITH RECURSIVE clause. This is recursive in the SQL sense, it does not call itself.
-//    *
-//    * @param groupId the group id to traverse from
-//    * @param subGroupMemberTable table that will be defined in the WITH clause, must have a unique name within the WITH clause
-//    * @param groupMemberTableAlias
-//    * @return
-//    */
-//  def recursiveMembersQuery(groupId: WorkbenchGroupIdentity, subGroupMemberTable: SubGroupMemberTable, groupMemberTableAlias: String = "gm"): SQLSyntax = {
-//    val sg = subGroupMemberTable.syntax("sg")
-//    val gm = GroupMemberTable.syntax(groupMemberTableAlias)
-//    val sgColumns = subGroupMemberTable.column
-//    samsqls"""${subGroupMemberTable.table}(${sgColumns.memberGroupId}, ${sgColumns.memberUserId}) AS (
-//          ${directMembersQuery(groupId, groupMemberTableAlias)}
-//          UNION
-//          SELECT ${gm.memberGroupId}, ${gm.memberUserId}
-//          FROM ${subGroupMemberTable as sg}, ${GroupMemberTable as gm}
-//          WHERE ${gm.groupId} = ${sg.memberGroupId}
-//        )"""
-//  }
-
-//  private def directMembersQuery(groupId: WorkbenchGroupIdentity, groupMemberTableAlias: String = "gm"): SQLSyntax = {
-//    val gm = GroupMemberTable.syntax(groupMemberTableAlias)
-//    samsqls"""select ${gm.memberGroupId}, ${gm.memberUserId}
-//               from ${GroupMemberTable as gm}
-//               where ${gm.groupId} = (${workbenchGroupIdentityToGroupPK(groupId)})"""
-//  }
 }
-
-// these 2 case classes represent the logical table used in nested group queries
-// this table does not actually exist but looks like a table in a WITH RECURSIVE query
-//final case class SubGroupMemberRecord(parentGroupId: GroupPK, memberUserId: Option[WorkbenchUserId], memberGroupId: Option[GroupPK])
-//final case class SubGroupMemberTable(override val tableName: String) extends SQLSyntaxSupport[SubGroupMemberRecord] {
-//  // need to specify column names explicitly because this table does not actually exist in the database
-//  override val columnNames: Seq[String] = Seq("parent_group_id", "member_user_id", "member_group_id")
-//}

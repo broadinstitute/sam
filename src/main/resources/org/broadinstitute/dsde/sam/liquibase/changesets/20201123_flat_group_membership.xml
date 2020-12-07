@@ -26,6 +26,16 @@
             <column name="member_user_id"/>
         </createIndex>
     </changeSet>
+    <changeSet logicalFilePath="dummy" author="dvoet" id="index_gmf_member_group_id">
+        <createIndex tableName="SAM_GROUP_MEMBER_FLAT" indexName="IDX_GMF_MEMBER_GROUP_ID">
+            <column name="member_group_id"/>
+        </createIndex>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="dvoet" id="index_gmf_group_membership_path">
+        <sql>
+            CREATE INDEX IDX_GMF_MEMBERSHIP_PATH ON SAM_GROUP_MEMBER_FLAT USING GIN (group_membership_path)
+        </sql>
+    </changeSet>
     <changeSet logicalFilePath="dummy" author="dvoet" id="index_gmf_group_id">
         <createIndex tableName="SAM_GROUP_MEMBER_FLAT" indexName="IDX_GMF_GROUP_ID">
             <column name="group_id"/>

@@ -18,8 +18,8 @@ import javax.net.SocketFactory
 import javax.net.ssl.SSLContext
 import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
 import org.broadinstitute.dsde.workbench.google.GoogleCredentialModes.{Json, Pem}
-import org.broadinstitute.dsde.workbench.google2.util.DistributedLock
 import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleKmsInterpreter, GoogleKmsService, HttpGoogleDirectoryDAO, HttpGoogleIamDAO, HttpGoogleProjectDAO, HttpGooglePubSubDAO, HttpGoogleStorageDAO}
+import org.broadinstitute.dsde.workbench.google2.util.DistributedLock
 import org.broadinstitute.dsde.workbench.google2.{GoogleFirestoreInterpreter, GoogleStorageInterpreter, GoogleStorageService}
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException}
 import org.broadinstitute.dsde.workbench.sam.api.{SamRoutes, StandardUserInfoDirectives}
@@ -210,7 +210,7 @@ object Boot extends IOApp with LazyLogging {
   }
 
   private def createDirectoryDAO(dbReference: DbReference, postgresExecutionContext: ExecutionContext) = {
-    new FlatPostgresDirectoryDAO(dbReference, postgresExecutionContext)
+    new PostgresDirectoryDAO(dbReference, postgresExecutionContext)
   }
 
   private def createRegistrationDAO(appConfig: AppConfig,
@@ -220,7 +220,7 @@ object Boot extends IOApp with LazyLogging {
   }
 
   private def createAccessPolicyDAO(dbReference: DbReference, postgresExecutionContext: ExecutionContext) = {
-    new FlatPostgresAccessPolicyDAO(dbReference, postgresExecutionContext)
+    new PostgresAccessPolicyDAO(dbReference, postgresExecutionContext)
   }
 
   private[sam] def createGoogleCloudExt(

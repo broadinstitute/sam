@@ -22,8 +22,8 @@ import scala.concurrent.ExecutionContext.Implicits.global
 
 class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndAfterEach {
   implicit val cs = IO.contextShift(scala.concurrent.ExecutionContext.global)
-  val dao = new FlatPostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.blockingEc)
-  val dirDao = new FlatPostgresDirectoryDAO(TestSupport.dbRef, TestSupport.blockingEc)
+  val dao = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.blockingEc)
+  val dirDao = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.blockingEc)
 
   override protected def beforeEach(): Unit = {
     TestSupport.truncateAll

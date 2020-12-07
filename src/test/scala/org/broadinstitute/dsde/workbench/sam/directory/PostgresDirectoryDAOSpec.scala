@@ -9,15 +9,15 @@ import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAcc
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.TestSupport.samRequestContext
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.openam.FlatPostgresAccessPolicyDAO
+import org.broadinstitute.dsde.workbench.sam.openam.PostgresAccessPolicyDAO
 import org.scalatest.{BeforeAndAfterEach, FreeSpec, Matchers}
 
 import scala.concurrent.duration._
 
 class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfterEach {
   implicit val cs = IO.contextShift(scala.concurrent.ExecutionContext.global)
-  val dao = new FlatPostgresDirectoryDAO(TestSupport.dbRef, TestSupport.blockingEc)
-  val policyDAO = new FlatPostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.blockingEc)
+  val dao = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.blockingEc)
+  val policyDAO = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.blockingEc)
 
   val defaultGroupName = WorkbenchGroupName("group")
   val defaultGroup = BasicWorkbenchGroup(defaultGroupName, Set.empty, WorkbenchEmail("foo@bar.com"))
@@ -748,15 +748,9 @@ class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfte
         }
       }
 
-      // TODO perf investigation
-      "intersect lots of groups with lots of dups and overlaps" ignore {
-        // succeeds, slowly
-        val groupCount = 50
-        val userCount = 70
-
-        // fails
-//        val groupCount = 80
-//        val userCount = 100
+      "intersect lots of groups with lots of dups and overlaps" in {
+        val groupCount = 40
+        val userCount = 50
 
         // create a user and a group containing that single user
         val allUserGroups = for (i <- 1 to userCount) yield {
