@@ -369,7 +369,7 @@ class ResourceService(
     } else None
   }
 
-  private def validateRoles(resourceType: ResourceType, roles: Set[ResourceRoleName]) = {
+  private[service] def validateRoles(resourceType: ResourceType, roles: Set[ResourceRoleName]) = {
     val invalidRoles = roles -- resourceType.roles.map(_.roleName)
     if (invalidRoles.nonEmpty) {
       val roleCauses = invalidRoles.map { resourceRoleName =>
@@ -383,7 +383,7 @@ class ResourceService(
     } else None
   }
 
-  private def validateActions(resourceType: ResourceType, actions: Set[ResourceAction]) = {
+  private[service] def validateActions(resourceType: ResourceType, actions: Set[ResourceAction]) = {
     val invalidActions = actions.filter(a => !resourceType.actionPatterns.exists(_.matches(a)))
     if (invalidActions.nonEmpty) {
       val actionCauses = invalidActions.map { resourceAction =>

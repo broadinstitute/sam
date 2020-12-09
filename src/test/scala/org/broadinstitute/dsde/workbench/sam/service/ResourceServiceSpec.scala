@@ -17,6 +17,7 @@ import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryDAO, PostgresDi
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, PostgresAccessPolicyDAO}
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
+import org.scalatest.OptionValues.convertOptionToValuable
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FlatSpec, Matchers}
 
@@ -764,6 +765,40 @@ class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with 
 
     // make sure the parent still exists
     assert(policyDAO.listAccessPolicies(parentResource, samRequestContext).unsafeRunSync().nonEmpty)
+  }
+
+  "validatePolicy" should "succeed with a correct policy" in {
+    val emailToMaybeSubject = Map(dummyUserInfo.userEmail -> Option(dummyUserInfo.userId.asInstanceOf[WorkbenchSubject]))
+    val policy = service.ValidatableAccessPolicy(AccessPolicyName("a"), emailToMaybeSubject, Set(ResourceRoleName("owner")), Set(ResourceAction("alter_policies")), Set())
+    runAndWait(service.validatePolicy(defaultResourceType, policy)) shouldBe empty
+  }
+
+  "validatePolicy" should "fail with an incorrect policy" in {
+    val emailToMaybeSubject = Map(dummyUserInfo.userEmail -> Option(dummyUserInfo.userId.asInstanceOf[WorkbenchSubject]))
+    val policy = service.ValidatableAccessPolicy(AccessPolicyName("a"), emailToMaybeSubject, Set(ResourceRoleName("bad_name")), Set(ResourceAction("bad_action")), Set())
+    val maybeErrorReport = runAndWait(service.validatePolicy(defaultResourceType, policy))
+    maybeErrorReport.value.message should include("invalid policy")
+  }
+
+  "validateRoles" should "fail if role is not in listed roles" in {
+    val maybeErrorReport =
+      service.validateRoles(defaultResourceType, Set(ResourceRoleName("asdf")))
+    maybeErrorReport.value.message should include("invalid role")
+  }
+
+  "validateRoles" should "succeed with role included in listed roles" in {
+    service.validateRoles(defaultResourceType, Set(ResourceRoleName("owner"))) shouldBe empty
+  }
+
+  "validateActions" should "fail if action is not in listed actions" in {
+    val maybeErrorReport =
+      service.validateActions(defaultResourceType, Set(ResourceAction("asdf")))
+    maybeErrorReport shouldBe defined
+    maybeErrorReport.value.message should include("invalid action")
+  }
+
+  "validateActions" should "succeed with action included in listed actions" in {
+    service.validateActions(defaultResourceType, Set(ResourceAction("alter_policies"))) shouldBe empty
   }
 
   "add/remove SubjectToPolicy" should "add/remove subject and tolerate prior (non)existence" in {

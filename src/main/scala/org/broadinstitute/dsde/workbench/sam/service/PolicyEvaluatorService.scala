@@ -195,13 +195,6 @@ class PolicyEvaluatorService(
     } yield {
       policies.map(_.groupName)
     }.toSet
-
-  @deprecated("listing policies for resource type removed", since = "ResourceRoutes v2")
-  def listResourceAccessPoliciesForUser(resource: FullyQualifiedResourceId, userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[AccessPolicyWithoutMembers]] =
-    for {
-      policies <- traceIOWithContext("listAccessPoliciesForUser", samRequestContext)(samRequestContext => accessPolicyDAO.listAccessPoliciesForUser(resource, userId, samRequestContext))
-      publicPolicies <- traceIOWithContext("listPublicAccessPolicies", samRequestContext)(samRequestContext => accessPolicyDAO.listPublicAccessPolicies(resource, samRequestContext))
-    } yield policies ++ publicPolicies
 }
 
 object PolicyEvaluatorService {
