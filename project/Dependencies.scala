@@ -12,13 +12,12 @@ object Dependencies {
   val http4sVersion = "0.21.0-M5"
   val circeVersion = "0.12.2"
 
-  val workbenchUtilV   = "0.6-4631ebf"
-  val workbenchUtil2V   = "0.1-4631ebf"
-  val workbenchModelV  = "0.14-4631ebf"
-  val workbenchGoogleV = "0.21-4631ebf"
-  val workbenchGoogle2V = "0.18-4631ebf"
-  val workbenchNotificationsV = "0.3-1e1f697"
-  val workbenchNewRelicV = "0.2-24dabc8"
+  val workbenchUtilV   = "0.6-74c9fc2"
+  val workbenchUtil2V   = "0.1-74c9fc2"
+  val workbenchModelV  = "0.14-74c9fc2"
+  val workbenchGoogleV = "0.21-74c9fc2"
+  val workbenchGoogle2V = "0.18-74c9fc2"
+  val workbenchNotificationsV = "0.3-74c9fc2"
   val monocleVersion = "1.5.1-cats"
 
   val excludeAkkaActor =        ExclusionRule(organization = "com.typesafe.akka", name = "akka-actor_2.12")
@@ -58,7 +57,7 @@ object Dependencies {
   val circeParser: ModuleID = "io.circe" %% "circe-parser" % circeVersion
 
   val excludIoGrpc =  ExclusionRule(organization = "io.grpc", name = "grpc-core")
-  val ioGrpc: ModuleID = "io.grpc" % "grpc-core" % "1.33.1"
+  val ioGrpc: ModuleID = "io.grpc" % "grpc-core" % "1.34.0"
 
   val googleOAuth2: ModuleID = "com.google.auth" % "google-auth-library-oauth2-http" % "0.18.0" excludeAll(excludIoGrpc)
   val googleStorage: ModuleID = "com.google.apis" % "google-api-services-storage" % "v1-rev20181013-1.27.0" excludeAll(excludIoGrpc) //force this version
@@ -86,8 +85,7 @@ object Dependencies {
   val workbenchNotifications: ModuleID =  "org.broadinstitute.dsde.workbench" %% "workbench-notifications" % workbenchNotificationsV excludeAll(excludeWorkbenchGoogle, excludeWorkbenchModel)
   val workbenchGoogleTests: ModuleID =    "org.broadinstitute.dsde.workbench" %% "workbench-google" % workbenchGoogleV % "test" classifier "tests" excludeAll(excludeWorkbenchUtil, excludeWorkbenchModel)
   val workbenchGoogle2Tests: ModuleID =    "org.broadinstitute.dsde.workbench" %% "workbench-google2" % workbenchGoogle2V % "test" classifier "tests" excludeAll(excludeWorkbenchUtil, excludeWorkbenchModel)
-  val workbenchNewRelic: ModuleID =    "org.broadinstitute.dsde.workbench" %% "workbench-newrelic" % workbenchNewRelicV excludeAll(excludeWorkbenchUtil, excludeWorkbenchModel)
-  val googleStorageLocal: ModuleID = "com.google.cloud" % "google-cloud-nio" % "0.122.1" % "test" //needed for mocking google cloud storage
+  val googleStorageLocal: ModuleID = "com.google.cloud" % "google-cloud-nio" % "0.122.3" % "test" //needed for mocking google cloud storage
 
   val liquibaseCore: ModuleID = "org.liquibase" % "liquibase-core" % "4.2.2"
 
@@ -149,7 +147,6 @@ object Dependencies {
     workbenchGoogleTests,
     workbenchGoogle2Tests,
     googleStorageLocal,
-    workbenchNewRelic,
 
     unboundid,
     commonsCodec,

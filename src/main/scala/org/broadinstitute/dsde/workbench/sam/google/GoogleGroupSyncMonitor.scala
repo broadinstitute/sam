@@ -132,7 +132,6 @@ class GoogleGroupSyncMonitorActor(
       import Tracing._
       trace("GoogleGroupSyncMonitor-PubSubMessage") { span =>
         val groupId: WorkbenchGroupIdentity = parseMessage(message)
-
         groupSynchronizer
           .synchronizeGroupMembers(groupId, samRequestContext = SamRequestContext(Option(span))) // Since this is an internal pub/sub call, we have to start a new SamRequestContext.
           .toTry

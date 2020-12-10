@@ -61,10 +61,15 @@ class GoogleGroupSyncMonitorSpec(_system: ActorSystem) extends TestKit(_system) 
     import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport.WorkbenchGroupNameFormat
     mockGooglePubSubDAO.publishMessages(topicName, Seq(groupToSyncId.toJson.compactPrint, policyToSyncId.toJson.compactPrint))
 
-    eventually {
+    // `eventually` now requires an implicit `Retrying` instance. When the statement inside returns future, it'll
+
+    // try to use `Retrying[Future[T]]`, which gets weird when we're using mockito together with it.
+    // Hence adding ascribing [Unit] explicitly here so that `eventually` will use `Retrying[Unit]`
+    eventually[Unit] {
       assertResult(2) { mockGooglePubSubDAO.acks.size() }
       verify(mockGoogleExtensions, atLeastOnce).synchronizeGroupMembers(mockitoEq(groupToSyncId), any[Set[WorkbenchGroupIdentity]], any[SamRequestContext])
       verify(mockGoogleExtensions, atLeastOnce).synchronizeGroupMembers(mockitoEq(policyToSyncId), any[Set[WorkbenchGroupIdentity]], any[SamRequestContext])
+      ()
     }
   }
 
