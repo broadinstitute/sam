@@ -7,11 +7,13 @@ import org.scalatest.{Ignore => _, _}
 import scala.concurrent.Await
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.Duration
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 /**
   * Created by mbemis on 3/12/18.
   */
-class JndiSchemaDAOSpec extends FlatSpec with Matchers with TestSupport with BeforeAndAfter with BeforeAndAfterAll {
+class JndiSchemaDAOSpec extends AnyFlatSpec with Matchers with TestSupport with BeforeAndAfter with BeforeAndAfterAll {
   val directoryConfig = TestSupport.appConfig.directoryConfig
   val schemaLockConfig = TestSupport.appConfig.schemaLockConfig
   val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)

@@ -14,18 +14,20 @@ import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.MockAccessPolicyDAO
 import org.broadinstitute.dsde.workbench.sam.service._
-import org.scalatest.{AppendedClues, FlatSpec, Matchers}
+import org.scalatest.AppendedClues
 import spray.json.DefaultJsonProtocol._
 import spray.json.{JsBoolean, JsValue}
 import org.broadinstitute.dsde.workbench.sam.model.RootPrimitiveJsonSupport._
 
 import scala.collection.concurrent.TrieMap
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 /**
   * Created by dvoet on 6/7/17.
   */
 @deprecated("this allows testing of deprecated functions, remove as part of CA-1031", "")
-class ResourceRoutesV1Spec extends FlatSpec with Matchers with ScalatestRouteTest with TestSupport with AppendedClues {
+class ResourceRoutesV1Spec extends AnyFlatSpec with Matchers with ScalatestRouteTest with TestSupport with AppendedClues {
 
   val defaultUserInfo = UserInfo(OAuth2BearerToken("accessToken"), WorkbenchUserId("user1"), WorkbenchEmail("user1@example.com"), 0)
 

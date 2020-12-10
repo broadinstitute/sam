@@ -11,11 +11,13 @@ import org.broadinstitute.dsde.workbench.sam.TestSupport.samRequestContext
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.PostgresAccessPolicyDAO
 import org.postgresql.util.PSQLException
-import org.scalatest.{BeforeAndAfterEach, FreeSpec, Matchers}
+import org.scalatest.BeforeAndAfterEach
 
 import scala.concurrent.duration._
+import org.scalatest.freespec.AnyFreeSpec
+import org.scalatest.matchers.should.Matchers
 
-class PostgresDirectoryDAOSpec extends FreeSpec with Matchers with BeforeAndAfterEach {
+class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndAfterEach {
   implicit val cs = IO.contextShift(scala.concurrent.ExecutionContext.global)
   val dao = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.blockingEc)
   val policyDAO = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.blockingEc)

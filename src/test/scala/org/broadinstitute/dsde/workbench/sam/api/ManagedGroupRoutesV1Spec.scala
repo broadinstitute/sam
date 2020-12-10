@@ -13,15 +13,17 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.ManagedGroupService
 import org.broadinstitute.dsde.workbench.sam.service.UserService.genRandom
 import org.scalatest.concurrent.ScalaFutures
-import org.scalatest.{BeforeAndAfter, FlatSpec, Matchers}
+import org.scalatest.BeforeAndAfter
 import spray.json.DefaultJsonProtocol._
 
 import scala.language.reflectiveCalls
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 /**
   * Created by gpolumbo on 2/26/2017.
   */
-class ManagedGroupRoutesV1Spec extends FlatSpec with ScalaFutures with Matchers with ScalatestRouteTest with TestSupport with BeforeAndAfter {
+class ManagedGroupRoutesV1Spec extends AnyFlatSpec with ScalaFutures with Matchers with ScalatestRouteTest with TestSupport with BeforeAndAfter {
 
   private val accessPolicyNames = Set(ManagedGroupService.adminPolicyName, ManagedGroupService.memberPolicyName, ManagedGroupService.adminNotifierPolicyName)
   private val policyActions: Set[ResourceAction] = accessPolicyNames.flatMap(policyName => Set(SamResourceActions.sharePolicy(policyName), SamResourceActions.readPolicy(policyName)))

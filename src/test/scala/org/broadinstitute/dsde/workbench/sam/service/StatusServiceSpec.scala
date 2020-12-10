@@ -11,15 +11,17 @@ import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.util.health.Subsystems.{Database, GoogleGroups, OpenDJ}
 import org.broadinstitute.dsde.workbench.util.health.{StatusCheckResponse, SubsystemStatus, Subsystems}
 import org.scalatest.concurrent.Eventually
-import org.scalatest.{BeforeAndAfterAll, FreeSpec, Matchers}
+import org.scalatest.BeforeAndAfterAll
 import scalikejdbc.config.DBs
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.language.postfixOps
+import org.scalatest.freespec.AnyFreeSpec
+import org.scalatest.matchers.should.Matchers
 
-class StatusServiceSpec extends FreeSpec with Matchers with BeforeAndAfterAll with TestSupport with Eventually {
+class StatusServiceSpec extends AnyFreeSpec with Matchers with BeforeAndAfterAll with TestSupport with Eventually {
   implicit val system = ActorSystem("StatusServiceSpec")
   val allUsersEmail = WorkbenchEmail("allusers@example.com")
   val dbReference = TestSupport.dbRef

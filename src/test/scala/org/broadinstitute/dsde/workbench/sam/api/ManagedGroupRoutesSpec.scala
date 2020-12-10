@@ -17,17 +17,19 @@ import org.broadinstitute.dsde.workbench.sam.openam.MockAccessPolicyDAO
 import org.broadinstitute.dsde.workbench.sam.service.ManagedGroupService
 import org.broadinstitute.dsde.workbench.sam.service.UserService.genRandom
 import org.broadinstitute.dsde.workbench.sam.TestSupport.samRequestContext
-import org.scalatest.{BeforeAndAfter, FlatSpec, Matchers}
+import org.scalatest.BeforeAndAfter
 import spray.json.DefaultJsonProtocol._
 
 import scala.collection.concurrent.TrieMap
 import scala.concurrent.ExecutionContext
 import scala.language.reflectiveCalls
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 /**
   * Created by gpolumbo on 2/26/2017.
   */
-class ManagedGroupRoutesSpec extends FlatSpec with Matchers with ScalatestRouteTest with TestSupport with BeforeAndAfter {
+class ManagedGroupRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTest with TestSupport with BeforeAndAfter {
 
   private val accessPolicyNames = Set(ManagedGroupService.adminPolicyName, ManagedGroupService.memberPolicyName, ManagedGroupService.adminNotifierPolicyName)
   private val policyActions: Set[ResourceAction] = accessPolicyNames.flatMap(policyName => Set(SamResourceActions.sharePolicy(policyName), SamResourceActions.readPolicy(policyName)))

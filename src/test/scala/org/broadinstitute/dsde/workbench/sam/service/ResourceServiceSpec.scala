@@ -19,15 +19,17 @@ import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, PostgresAc
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.scalatest.OptionValues.convertOptionToValuable
 import org.scalatest.concurrent.ScalaFutures
-import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FlatSpec, Matchers}
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 /**
   * Created by dvoet on 6/27/17.
   */
-class ResourceServiceSpec extends FlatSpec with Matchers with ScalaFutures with TestSupport with BeforeAndAfter with BeforeAndAfterAll {
+class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures with TestSupport with BeforeAndAfter with BeforeAndAfterAll {
   val directoryConfig = TestSupport.directoryConfig
   val schemaLockConfig = TestSupport.schemaLockConfig
   //Note: we intentionally use the Managed Group resource type loaded from reference.conf for the tests here.

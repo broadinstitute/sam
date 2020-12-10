@@ -13,12 +13,13 @@ import org.broadinstitute.dsde.workbench.util.health.StatusJsonSupport._
 import org.broadinstitute.dsde.workbench.util.health.Subsystems.{Database, OpenDJ}
 import org.broadinstitute.dsde.workbench.util.health.{HealthMonitor, StatusCheckResponse}
 import org.scalatest.concurrent.Eventually._
-import org.scalatest.{FlatSpec, Matchers}
 
 import scala.concurrent.duration._
 import scala.language.postfixOps
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
-class StatusRouteSpec extends FlatSpec with Matchers with ScalatestRouteTest with TestSupport {
+class StatusRouteSpec extends AnyFlatSpec with Matchers with ScalatestRouteTest with TestSupport {
 
   "GET /version" should "give 200 for ok" in {
     val samRoutes = TestSamRoutes(Map.empty)

@@ -20,16 +20,16 @@ import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryDAO, MockDirect
 import org.broadinstitute.dsde.workbench.sam.identityConcentrator.IdentityConcentratorService
 import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, UserService}
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
-import org.scalatest.FlatSpec
 import pdi.jwt.JwtSprayJson
 import org.mockito.ArgumentMatchers._
 import org.mockito.Mockito._
-import org.scalatest.mockito.MockitoSugar
+import org.scalatestplus.mockito.MockitoSugar
 import org.scalatest.concurrent.ScalaFutures
 
 import scala.concurrent.ExecutionContext
+import org.scalatest.flatspec.AnyFlatSpec
 
-class StandardUserInfoDirectivesSpec extends FlatSpec with PropertyBasedTesting with ScalatestRouteTest with ScalaFutures with MockitoSugar {
+class StandardUserInfoDirectivesSpec extends AnyFlatSpec with PropertyBasedTesting with ScalatestRouteTest with ScalaFutures with MockitoSugar {
   def directives: StandardUserInfoDirectives = new StandardUserInfoDirectives {
     override implicit val executionContext: ExecutionContext = null
     override val directoryDAO: DirectoryDAO = new MockDirectoryDAO()

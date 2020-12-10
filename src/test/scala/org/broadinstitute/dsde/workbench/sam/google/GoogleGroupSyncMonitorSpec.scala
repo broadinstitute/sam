@@ -8,8 +8,8 @@ import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchEmail, Wor
 import org.broadinstitute.dsde.workbench.sam.{TestSupport, _}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
-import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
-import org.scalatest.mockito.MockitoSugar
+import org.scalatest.BeforeAndAfterAll
+import org.scalatestplus.mockito.MockitoSugar
 import org.mockito.ArgumentMatchers.{ eq => mockitoEq }
 
 import org.mockito.Mockito._
@@ -21,8 +21,10 @@ import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.language.postfixOps
 import spray.json._
+import org.scalatest.flatspec.AnyFlatSpecLike
+import org.scalatest.matchers.should.Matchers
 
-class GoogleGroupSyncMonitorSpec(_system: ActorSystem) extends TestKit(_system) with FlatSpecLike with Matchers with TestSupport with MockitoSugar with BeforeAndAfterAll with Eventually {
+class GoogleGroupSyncMonitorSpec(_system: ActorSystem) extends TestKit(_system) with AnyFlatSpecLike with Matchers with TestSupport with MockitoSugar with BeforeAndAfterAll with Eventually {
   def this() = this(ActorSystem("GoogleGroupSyncMonitorSpec"))
 
   override def beforeAll(): Unit = {

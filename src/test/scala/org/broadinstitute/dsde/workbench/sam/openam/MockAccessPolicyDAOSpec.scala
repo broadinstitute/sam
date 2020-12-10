@@ -12,17 +12,19 @@ import org.broadinstitute.dsde.workbench.sam.directory._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.broadinstitute.dsde.workbench.sam.service._
-import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FlatSpec, Matchers}
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
 
 import scala.collection.concurrent.TrieMap
 import scala.collection.mutable
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.language.reflectiveCalls
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 /**
   * Created by dvoet on 6/26/17.
   */
-class MockAccessPolicyDAOSpec extends FlatSpec with Matchers with TestSupport with BeforeAndAfter with BeforeAndAfterAll {
+class MockAccessPolicyDAOSpec extends AnyFlatSpec with Matchers with TestSupport with BeforeAndAfter with BeforeAndAfterAll {
   val directoryConfig: DirectoryConfig = TestSupport.appConfig.directoryConfig
   val schemaLockConfig = TestSupport.appConfig.schemaLockConfig
   val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
