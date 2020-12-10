@@ -17,13 +17,14 @@ import org.broadinstitute.dsde.workbench.service.{Orchestration, Sam, Thurloe, _
 import org.broadinstitute.dsde.workbench.test.SamConfig
 import org.scalatest.concurrent.{Eventually, ScalaFutures}
 import org.scalatest.time.{Seconds, Span}
-import org.scalatest.{FreeSpec, Matchers}
 import org.broadinstitute.dsde.workbench.service.util.Tags
 
 import scala.concurrent.Await
 import scala.concurrent.duration.{Duration, _}
+import org.scalatest.freespec.AnyFreeSpec
+import org.scalatest.matchers.should.Matchers
 
-class SamApiSpec extends FreeSpec with BillingFixtures with Matchers with ScalaFutures with CleanUp with Eventually with TestKitBase {
+class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with ScalaFutures with CleanUp with Eventually with TestKitBase {
   implicit override val patienceConfig: PatienceConfig = PatienceConfig(timeout = scaled(Span(5, Seconds)))
   implicit lazy val system = ActorSystem()
 
