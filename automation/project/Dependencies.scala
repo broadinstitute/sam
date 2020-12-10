@@ -42,9 +42,9 @@ object Dependencies {
     "com.typesafe.akka"   %%  "akka-http"           % akkaHttpV,
     "com.typesafe.akka"   %%  "akka-testkit"        % akkaV     % "test",
     "com.typesafe.akka"   %%  "akka-slf4j"          % akkaV,
-    "org.scalatest"       %%  "scalatest"     % "3.1.0"   % Test,
-    "org.scalatestplus" %% "scalacheck-1-14" % "3.1.0.0" % Test,
-    "com.typesafe.scala-logging" %% "scala-logging" % "3.5.0",
+    "org.scalatest"       %%  "scalatest"     % "3.2.3"   % Test,
+    "org.scalatestplus" %% "scalacheck-1-15" % "3.2.3.0" % Test,
+    "com.typesafe.scala-logging" %% "scala-logging" % "3.9.2",
 
     workbenchServiceTest,
     workbenchModel,
