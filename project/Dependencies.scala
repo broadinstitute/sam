@@ -57,7 +57,7 @@ object Dependencies {
   val circeParser: ModuleID = "io.circe" %% "circe-parser" % circeVersion
 
   val excludIoGrpc =  ExclusionRule(organization = "io.grpc", name = "grpc-core")
-  val ioGrpc: ModuleID = "io.grpc" % "grpc-core" % "1.34.0"
+  val ioGrpc: ModuleID = "io.grpc" % "grpc-core" % "1.33.1"
 
   val googleOAuth2: ModuleID = "com.google.auth" % "google-auth-library-oauth2-http" % "0.18.0" excludeAll(excludIoGrpc)
   val googleStorage: ModuleID = "com.google.apis" % "google-api-services-storage" % "v1-rev20181013-1.27.0" excludeAll(excludIoGrpc) //force this version
