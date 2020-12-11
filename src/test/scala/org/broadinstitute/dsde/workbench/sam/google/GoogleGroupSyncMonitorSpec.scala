@@ -8,8 +8,8 @@ import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchEmail, Wor
 import org.broadinstitute.dsde.workbench.sam.{TestSupport, _}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
-import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
-import org.scalatest.mockito.MockitoSugar
+import org.scalatest.BeforeAndAfterAll
+import org.scalatestplus.mockito.MockitoSugar
 import org.mockito.ArgumentMatchers.{ eq => mockitoEq }
 
 import org.mockito.Mockito._
@@ -21,8 +21,10 @@ import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.language.postfixOps
 import spray.json._
+import org.scalatest.flatspec.AnyFlatSpecLike
+import org.scalatest.matchers.should.Matchers
 
-class GoogleGroupSyncMonitorSpec(_system: ActorSystem) extends TestKit(_system) with FlatSpecLike with Matchers with TestSupport with MockitoSugar with BeforeAndAfterAll with Eventually {
+class GoogleGroupSyncMonitorSpec(_system: ActorSystem) extends TestKit(_system) with AnyFlatSpecLike with Matchers with TestSupport with MockitoSugar with BeforeAndAfterAll with Eventually {
   def this() = this(ActorSystem("GoogleGroupSyncMonitorSpec"))
 
   override def beforeAll(): Unit = {
@@ -59,10 +61,15 @@ class GoogleGroupSyncMonitorSpec(_system: ActorSystem) extends TestKit(_system) 
     import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport.WorkbenchGroupNameFormat
     mockGooglePubSubDAO.publishMessages(topicName, Seq(groupToSyncId.toJson.compactPrint, policyToSyncId.toJson.compactPrint))
 
-    eventually {
+    // `eventually` now requires an implicit `Retrying` instance. When the statement inside returns future, it'll
+
+    // try to use `Retrying[Future[T]]`, which gets weird when we're using mockito together with it.
+    // Hence adding ascribing [Unit] explicitly here so that `eventually` will use `Retrying[Unit]`
+    eventually[Unit] {
       assertResult(2) { mockGooglePubSubDAO.acks.size() }
       verify(mockGoogleExtensions, atLeastOnce).synchronizeGroupMembers(mockitoEq(groupToSyncId), any[Set[WorkbenchGroupIdentity]], any[SamRequestContext])
       verify(mockGoogleExtensions, atLeastOnce).synchronizeGroupMembers(mockitoEq(policyToSyncId), any[Set[WorkbenchGroupIdentity]], any[SamRequestContext])
+      ()
     }
   }
 

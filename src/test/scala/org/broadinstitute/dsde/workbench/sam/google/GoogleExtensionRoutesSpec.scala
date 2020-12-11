@@ -20,11 +20,12 @@ import org.broadinstitute.dsde.workbench.sam.service._
 import org.mockito.ArgumentMatchers._
 import org.mockito.Mockito._
 import org.scalatest.concurrent.ScalaFutures
-import org.scalatest.mockito.MockitoSugar
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatestplus.mockito.MockitoSugar
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 /**
   * Unit tests of GoogleExtensionRoutes. Can use real Google services. Must mock everything else.
@@ -230,7 +231,7 @@ class GoogleExtensionRoutesSpec extends GoogleExtensionRoutesSpecHelper with Sca
   }
 }
 
-trait GoogleExtensionRoutesSpecHelper extends FlatSpec with Matchers with ScalatestRouteTest with TestSupport with MockitoSugar{
+trait GoogleExtensionRoutesSpecHelper extends AnyFlatSpec with Matchers with ScalatestRouteTest with TestSupport with MockitoSugar{
   val defaultUserId = genWorkbenchUserId(System.currentTimeMillis())
   val defaultUserEmail = genNonPetEmail.sample.get
   val defaultUserProxyEmail = WorkbenchEmail(s"PROXY_$defaultUserId@${googleServicesConfig.appsDomain}")

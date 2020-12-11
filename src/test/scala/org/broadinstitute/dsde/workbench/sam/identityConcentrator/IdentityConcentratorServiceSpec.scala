@@ -5,11 +5,12 @@ import java.nio.charset.StandardCharsets
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model.{GoogleSubjectId, WorkbenchEmail}
-import org.scalatest.{FlatSpec, Matchers}
 import IdentityConcentratorModel._
 import pdi.jwt.JwtCirce
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
-class IdentityConcentratorServiceSpec extends FlatSpec with Matchers {
+class IdentityConcentratorServiceSpec extends AnyFlatSpec with Matchers {
   class TestICApi(userInfo: UserInfo) extends IdentityConcentratorApi {
     override def getUserInfo(accessToken: OAuth2BearerToken): IO[UserInfo] = {
       IO.pure(userInfo)

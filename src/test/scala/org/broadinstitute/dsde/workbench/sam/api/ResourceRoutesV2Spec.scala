@@ -20,14 +20,16 @@ import org.broadinstitute.dsde.workbench.sam.{TestSupport, model}
 import org.mockito.ArgumentMatcher
 import org.mockito.ArgumentMatchers.{any, argThat, eq => mockitoEq}
 import org.mockito.Mockito._
-import org.scalatest.mockito.MockitoSugar
-import org.scalatest.{AppendedClues, FlatSpec, Matchers}
+import org.scalatestplus.mockito.MockitoSugar
+import org.scalatest.AppendedClues
 import spray.json.DefaultJsonProtocol._
 import spray.json.{JsBoolean, JsValue}
 
 import scala.concurrent.Future
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
-class ResourceRoutesV2Spec extends FlatSpec with Matchers with TestSupport with ScalatestRouteTest with AppendedClues with MockitoSugar {
+class ResourceRoutesV2Spec extends AnyFlatSpec with Matchers with TestSupport with ScalatestRouteTest with AppendedClues with MockitoSugar {
 
   implicit val errorReportSource = ErrorReportSource("sam")
 

@@ -31,9 +31,9 @@ import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, MockAccess
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
-import org.scalatest.Matchers
 import org.scalatest.concurrent.PatienceConfiguration.Timeout
-import org.scalatest.prop.{Configuration, PropertyChecks}
+import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
+import org.scalatest.prop.Configuration
 import org.scalatest.time.{Seconds, Span}
 import scalikejdbc.withSQL
 import scalikejdbc.QueryDSL.delete
@@ -41,6 +41,7 @@ import scalikejdbc.QueryDSL.delete
 import scala.concurrent.duration.Duration
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.{Await, Awaitable, ExecutionContext}
+import org.scalatest.matchers.should.Matchers
 
 /**
   * Created by dvoet on 6/27/17.
@@ -59,7 +60,7 @@ trait TestSupport{
   def dummyResourceType(name: ResourceTypeName) = ResourceType(name, Set.empty, Set(ResourceRole(ResourceRoleName("owner"), Set.empty)), ResourceRoleName("owner"))
 }
 
-trait PropertyBasedTesting extends PropertyChecks with Configuration with Matchers {
+trait PropertyBasedTesting extends ScalaCheckPropertyChecks with Configuration with Matchers {
   implicit override val generatorDrivenConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(minSuccessful = 3)
 }
 

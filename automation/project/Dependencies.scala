@@ -1,26 +1,22 @@
 import sbt._
 
 object Dependencies {
-  val scalaV = "2.12"
+  val scalaV = "2.13"
 
-  val jacksonV = "2.8.4"
-  val akkaV = "2.6.1"
-  val akkaHttpV = "10.1.11"
+  val jacksonV = "2.12.0"
+  val akkaV = "2.6.10"
+  val akkaHttpV = "10.2.2"
 
-  val workbenchModelV  = "0.13-7e86fba"
+  val workbenchGoogleV = "0.21-74c9fc2"
+  val workbenchGoogle2V = "0.18-74c9fc2"
+  val workbenchServiceTestV = "0.18-74c9fc2"
 
-  val workbenchGoogleV = "0.18-8328aae"
-  val workbenchGoogle2V = "0.1-8328aae"
-  val workbenchServiceTestV = "0.16-20dceaa"
-
-  val workbenchModel: ModuleID = "org.broadinstitute.dsde.workbench" %% "workbench-model" % workbenchModelV
   val excludeWorkbenchModel = ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-model_" + scalaV)
 
   val workbenchGoogle: ModuleID = "org.broadinstitute.dsde.workbench" %% "workbench-google" % workbenchGoogleV excludeAll excludeWorkbenchModel
   val workbenchGoogle2: ModuleID = "org.broadinstitute.dsde.workbench" %% "workbench-google2" % workbenchGoogle2V excludeAll excludeWorkbenchModel
-  val excludeWorkbenchGoogle = ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-google_" + scalaV)
 
-  val workbenchServiceTest: ModuleID = "org.broadinstitute.dsde.workbench" %% "workbench-service-test" % workbenchServiceTestV % "test" classifier "tests" excludeAll (excludeWorkbenchGoogle, excludeWorkbenchModel)
+  val workbenchServiceTest: ModuleID = "org.broadinstitute.dsde.workbench" %% "workbench-service-test" % workbenchServiceTestV % "test" classifier "tests"
 
   val rootDependencies = Seq(
     // proactively pull in latest versions of Jackson libs, instead of relying on the versions
@@ -42,17 +38,15 @@ object Dependencies {
     "com.typesafe.akka"   %%  "akka-http"           % akkaHttpV,
     "com.typesafe.akka"   %%  "akka-testkit"        % akkaV     % "test",
     "com.typesafe.akka"   %%  "akka-slf4j"          % akkaV,
-    "org.scalatest"       %%  "scalatest"     % "3.0.5"   % "test",
-    "org.scalacheck"      %%  "scalacheck"    % "1.14.0" % "test",
-    "com.typesafe.scala-logging" %% "scala-logging" % "3.5.0",
+    "org.scalatest"       %%  "scalatest"     % "3.2.3"   % Test,
+    "org.scalatestplus" %% "scalacheck-1-15" % "3.2.3.0" % Test,
+    "com.typesafe.scala-logging" %% "scala-logging" % "3.9.2",
 
     workbenchServiceTest,
-    workbenchModel,
     workbenchGoogle,
     workbenchGoogle2,
 
-
-    // required by workbenchGoogle
-    "com.typesafe.akka" %% "akka-http-spray-json" % "10.1.11" % "provided"
+  // required by workbenchGoogle
+    "com.typesafe.akka" %% "akka-http-spray-json" % akkaHttpV % "provided"
   )
 }

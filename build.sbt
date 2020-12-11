@@ -20,7 +20,5 @@ sys.env.getOrElse("JAVA_OPTS", "").split(" ").toSeq.map { opt =>
   javaOptions in reStart += opt
 }
 
-addCompilerPlugin("com.olegpy" %% "better-monadic-for" % "0.2.4")
-addCompilerPlugin("org.scalamacros" %% "paradise" % "2.1.0" cross CrossVersion.full)
-
-bloopAggregateSourceDependencies in Global := true
+addCompilerPlugin("com.olegpy" %% "better-monadic-for" % "0.3.1")
+addCompilerPlugin("org.scalamacros" %% "paradise" % "2.1.1" cross CrossVersion.full)

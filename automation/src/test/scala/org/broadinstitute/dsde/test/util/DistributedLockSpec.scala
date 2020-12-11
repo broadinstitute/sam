@@ -4,16 +4,17 @@ import java.util.concurrent.TimeUnit
 
 import cats.effect.IO
 import cats.kernel.Eq
-import cats.implicits._
+import cats.syntax.all._
 import org.broadinstitute.dsde.workbench.google2.GoogleFirestoreInterpreter
 import org.broadinstitute.dsde.workbench.google2.util.{DistributedLock, DistributedLockConfig, FailToObtainLock}
 import org.broadinstitute.dsde.workbench.model.WorkbenchException
-import org.scalatest.{AsyncFlatSpec, Matchers}
 import org.broadinstitute.dsde.workbench.test.Generators.genLockPath
 import org.broadinstitute.dsde.workbench.test.SamConfig.GCS
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.concurrent.duration._
+import org.scalatest.flatspec.AsyncFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 class DistributedLockSpec extends AsyncFlatSpec with Matchers {
   implicit val cs = IO.contextShift(scala.concurrent.ExecutionContext.global)

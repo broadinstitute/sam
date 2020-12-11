@@ -4,6 +4,7 @@ configure.rb
 /config/
 
 # build specific
+.bsp
 env.properties
 .sbtopts
 .cache/

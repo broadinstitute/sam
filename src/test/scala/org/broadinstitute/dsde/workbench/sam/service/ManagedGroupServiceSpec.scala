@@ -17,15 +17,17 @@ import org.mockito.ArgumentMatchers
 import org.mockito.Mockito._
 import org.scalatest._
 import org.scalatest.concurrent.ScalaFutures
-import org.scalatest.mockito.MockitoSugar
+import org.scalatestplus.mockito.MockitoSugar
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 /**
   * Created by gpolumbo on 2/21/2018
   */
-class ManagedGroupServiceSpec extends FlatSpec with Matchers with TestSupport with MockitoSugar
+class ManagedGroupServiceSpec extends AnyFlatSpec with Matchers with TestSupport with MockitoSugar
   with BeforeAndAfter with BeforeAndAfterAll with ScalaFutures with OptionValues {
   val directoryConfig = TestSupport.appConfig.directoryConfig
   val schemaLockConfig = TestSupport.appConfig.schemaLockConfig

@@ -14,13 +14,15 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.directory._
 import org.broadinstitute.dsde.workbench.sam.openam.LoadResourceAuthDomainResult.{Constrained, NotConstrained, ResourceNotFound}
 import org.postgresql.util.PSQLException
-import org.scalatest.{BeforeAndAfterEach, FreeSpec, Matchers}
+import org.scalatest.BeforeAndAfterEach
 
 import scala.concurrent.{Await, Future}
 import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext.Implicits.global
+import org.scalatest.freespec.AnyFreeSpec
+import org.scalatest.matchers.should.Matchers
 
-class PostgresAccessPolicyDAOSpec extends FreeSpec with Matchers with BeforeAndAfterEach {
+class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeAndAfterEach {
   implicit val cs = IO.contextShift(scala.concurrent.ExecutionContext.global)
   val dao = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.blockingEc)
   val dirDao = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.blockingEc)

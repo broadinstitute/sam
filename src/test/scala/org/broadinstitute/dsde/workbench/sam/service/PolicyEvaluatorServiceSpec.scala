@@ -17,8 +17,10 @@ import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, PostgresAc
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.scalatest._
 import scala.concurrent.ExecutionContext.Implicits.global
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
-class PolicyEvaluatorServiceSpec extends FlatSpec with Matchers with TestSupport with BeforeAndAfterEach {
+class PolicyEvaluatorServiceSpec extends AnyFlatSpec with Matchers with TestSupport with BeforeAndAfterEach {
   val dirURI = new URI(directoryConfig.directoryUrl)
   val connectionPool = new LDAPConnectionPool(
     new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password),
