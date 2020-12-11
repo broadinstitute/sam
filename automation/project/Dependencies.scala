@@ -46,8 +46,9 @@ object Dependencies {
     workbenchGoogle,
     workbenchGoogle2,
 
-
-    // required by workbenchGoogle
+  // force grpc version
+    "io.grpc" % "grpc-core" % "1.31.1",
+  // required by workbenchGoogle
     "com.typesafe.akka" %% "akka-http-spray-json" % "10.1.11" % "provided"
   )
 }
