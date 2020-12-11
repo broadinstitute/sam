@@ -1,4 +1,4 @@
-FROM bigtruedata/sbt
+FROM hseeberger/scala-sbt:graalvm-ce-20.3.0-java8_1.4.4_2.13.4
 
 COPY src /app/src
 COPY test.sh /app
