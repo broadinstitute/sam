@@ -62,10 +62,10 @@ object DatabaseNames {
     val name: Symbol
   }
   case object Foreground extends DatabaseName {
-    val name: Symbol = 'sam_foreground
+    val name: Symbol = Symbol("sam_foreground")
   }
   case object Background extends DatabaseName {
-    val name: Symbol = 'sam_background
+    val name: Symbol = Symbol("sam_background")
   }
 }
 

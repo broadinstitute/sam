@@ -10,7 +10,7 @@ import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO._
 import org.broadinstitute.dsde.workbench.sam.schema.SchemaStatus._
 import org.broadinstitute.dsde.workbench.sam.util.{BaseDirContext, JndiSupport}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success, Try}
 

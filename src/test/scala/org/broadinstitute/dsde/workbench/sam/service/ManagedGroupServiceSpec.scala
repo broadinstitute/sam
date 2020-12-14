@@ -62,7 +62,7 @@ class ManagedGroupServiceSpec extends AnyFlatSpec with Matchers with TestSupport
 
   def makeResourceType(resourceType: ResourceType): ResourceType = resourceService.createResourceType(resourceType, samRequestContext).unsafeRunSync()
 
-  def assertPoliciesOnResource(resource: FullyQualifiedResourceId, policyDAO: AccessPolicyDAO = policyDAO, expectedPolicies: Stream[AccessPolicyName] = Stream(ManagedGroupService.adminPolicyName, ManagedGroupService.memberPolicyName)) = {
+  def assertPoliciesOnResource(resource: FullyQualifiedResourceId, policyDAO: AccessPolicyDAO = policyDAO, expectedPolicies: LazyList[AccessPolicyName] = LazyList(ManagedGroupService.adminPolicyName, ManagedGroupService.memberPolicyName)) = {
     val policies = policyDAO.listAccessPolicies(resource, samRequestContext).unsafeRunSync()
     policies.map(_.id.accessPolicyName.value) should contain theSameElementsAs expectedPolicies.map(_.value)
     expectedPolicies.foreach { policyName =>
@@ -79,7 +79,7 @@ class ManagedGroupServiceSpec extends AnyFlatSpec with Matchers with TestSupport
     resource.resourceTypeName shouldEqual intendedResource.resourceTypeName
     resource.resourceId shouldEqual intendedResource.resourceId
 
-    assertPoliciesOnResource(resource.fullyQualifiedId, expectedPolicies = Stream(ManagedGroupService.adminPolicyName, ManagedGroupService.memberPolicyName, ManagedGroupService.adminNotifierPolicyName))
+    assertPoliciesOnResource(resource.fullyQualifiedId, expectedPolicies = LazyList(ManagedGroupService.adminPolicyName, ManagedGroupService.memberPolicyName, ManagedGroupService.adminNotifierPolicyName))
     resource
   }
 
@@ -179,7 +179,7 @@ class ManagedGroupServiceSpec extends AnyFlatSpec with Matchers with TestSupport
     assertMakeGroup(managedGroupService = managedGroupService)
     runAndWait(managedGroupService.deleteManagedGroup(resourceId, samRequestContext))
     verify(mockGoogleExtensions).onGroupDelete(groupEmail)
-    policyDAO.listAccessPolicies(expectedResource, samRequestContext).unsafeRunSync() shouldEqual Stream.empty
+    policyDAO.listAccessPolicies(expectedResource, samRequestContext).unsafeRunSync() shouldEqual LazyList.empty
     policyDAO.loadPolicy(adminPolicy, samRequestContext).unsafeRunSync() shouldEqual None
     policyDAO.loadPolicy(memberPolicy, samRequestContext).unsafeRunSync() shouldEqual None
   }
@@ -205,7 +205,7 @@ class ManagedGroupServiceSpec extends AnyFlatSpec with Matchers with TestSupport
   "ManagedGroupService listPolicyMemberEmails" should "return a list of email addresses for the groups admin policy" in {
     val managedGroup = assertMakeGroup()
     managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName, samRequestContext).unsafeRunSync() should contain theSameElementsAs Set(dummyUserInfo.userEmail)
-    managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.memberPolicyName, samRequestContext).unsafeRunSync() shouldEqual Stream.empty
+    managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.memberPolicyName, samRequestContext).unsafeRunSync() shouldEqual LazyList.empty
   }
 
   it should "throw an exception if the group does not exist" in {

@@ -14,7 +14,6 @@ import spray.json._
 
 import scala.concurrent.Future
 import scala.concurrent.duration.{FiniteDuration, _}
-import scala.language.postfixOps
 
 /**
   * Created by mbemis on 1/19/18.

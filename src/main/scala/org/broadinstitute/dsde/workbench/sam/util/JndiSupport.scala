@@ -74,7 +74,7 @@ trait JndiSupport {
       * @return results
       */
     def extractResultsAndClose: Seq[T] = {
-      import scala.collection.JavaConverters._
+      import scala.jdk.CollectionConverters._
       try {
         Seq(results.asScala.toSeq: _*)
       } finally {

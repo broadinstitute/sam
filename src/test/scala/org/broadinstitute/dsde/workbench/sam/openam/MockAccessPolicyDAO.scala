@@ -15,27 +15,27 @@ import cats.implicits._
   * Created by dvoet on 7/17/17.
   */
 class MockAccessPolicyDAO(private val resourceTypes: mutable.Map[ResourceTypeName, ResourceType], private val policies: mutable.Map[WorkbenchGroupIdentity, WorkbenchGroup] = new TrieMap()) extends AccessPolicyDAO {
-  def this(resourceTypes: Map[ResourceTypeName, ResourceType], policies: mutable.Map[WorkbenchGroupIdentity, WorkbenchGroup]) {
+  def this(resourceTypes: Map[ResourceTypeName, ResourceType], policies: mutable.Map[WorkbenchGroupIdentity, WorkbenchGroup]) = {
     this(new TrieMap[ResourceTypeName, ResourceType]() ++ resourceTypes, policies)
   }
 
-  def this(resourceTypes: Iterable[ResourceType], policies: mutable.Map[WorkbenchGroupIdentity, WorkbenchGroup]) {
+  def this(resourceTypes: Iterable[ResourceType], policies: mutable.Map[WorkbenchGroupIdentity, WorkbenchGroup]) = {
     this(new TrieMap[ResourceTypeName, ResourceType] ++ resourceTypes.map(rt => rt.name -> rt).toMap, policies)
   }
 
-  def this(resourceType: ResourceType, policies: mutable.Map[WorkbenchGroupIdentity, WorkbenchGroup]) {
+  def this(resourceType: ResourceType, policies: mutable.Map[WorkbenchGroupIdentity, WorkbenchGroup]) = {
     this(Map(resourceType.name -> resourceType), policies)
   }
 
-  def this(resourceTypes: Map[ResourceTypeName, ResourceType]) {
+  def this(resourceTypes: Map[ResourceTypeName, ResourceType]) = {
     this(new TrieMap[ResourceTypeName, ResourceType]() ++ resourceTypes)
   }
 
-  def this(resourceTypes: Iterable[ResourceType]) {
+  def this(resourceTypes: Iterable[ResourceType]) = {
     this(new TrieMap[ResourceTypeName, ResourceType] ++ resourceTypes.map(rt => rt.name -> rt).toMap)
   }
 
-  def this() {
+  def this() = {
     this(Map.empty[ResourceTypeName, ResourceType])
   }
 
@@ -52,7 +52,7 @@ class MockAccessPolicyDAO(private val resourceTypes: mutable.Map[ResourceTypeNam
   }
 
   override def loadResourceTypes(resourceTypeNames: Set[ResourceTypeName], samRequestContext: SamRequestContext): IO[Set[ResourceType]] = {
-    IO.pure(resourceTypes.filterKeys(resourceTypeNames.contains).values.toSet)
+    IO.pure(resourceTypes.view.filterKeys(resourceTypeNames.contains).values.toSet)
   }
 
   override def createResourceType(resourceType: ResourceType, samRequestContext: SamRequestContext): IO[ResourceType] = {
@@ -73,10 +73,10 @@ class MockAccessPolicyDAO(private val resourceTypes: mutable.Map[ResourceTypeNam
   override def deleteResource(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] = IO {
     val toRemove = policies.collect {
       case (riapn @ FullyQualifiedPolicyId(`resource`, _), policy: AccessPolicy) => riapn
-    }.toSet
+    }.toSet[WorkbenchGroupIdentity]
 
     resources -= resource
-    policies -- toRemove
+    policies.view.filterKeys(k => !toRemove.contains(k))
   }
 
   override def loadResourceAuthDomain(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[LoadResourceAuthDomainResult] =
@@ -129,10 +129,10 @@ class MockAccessPolicyDAO(private val resourceTypes: mutable.Map[ResourceTypeNam
     }
   }
 
-  override def listAccessPolicies(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Stream[AccessPolicy]] = IO {
+  override def listAccessPolicies(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[LazyList[AccessPolicy]] = IO {
     policies.collect {
       case (FullyQualifiedPolicyId(`resource`, _), policy: AccessPolicy) => policy
-    }.toStream
+    }.to(LazyList)
   }
 
   override def listAccessPoliciesForUser(resource: FullyQualifiedResourceId, user: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[AccessPolicyWithoutMembers]] = IO {
@@ -156,11 +156,11 @@ class MockAccessPolicyDAO(private val resourceTypes: mutable.Map[ResourceTypeNam
     }
   }
 
-  override def listPublicAccessPolicies(resourceTypeName: ResourceTypeName, samRequestContext: SamRequestContext): IO[Stream[ResourceIdAndPolicyName]] = {
+  override def listPublicAccessPolicies(resourceTypeName: ResourceTypeName, samRequestContext: SamRequestContext): IO[LazyList[ResourceIdAndPolicyName]] = {
     IO.pure(
       policies.collect {
         case (_, policy: AccessPolicy) if policy.public => ResourceIdAndPolicyName(policy.id.resource.resourceId, policy.id.accessPolicyName)
-      }.toStream
+      }.to(LazyList)
     )
   }
 
@@ -180,12 +180,12 @@ class MockAccessPolicyDAO(private val resourceTypes: mutable.Map[ResourceTypeNam
 
   override def listResourceWithAuthdomains(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Option[Resource]] = IO.pure(None)
 
-  override def listPublicAccessPolicies(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Stream[AccessPolicyWithoutMembers]] = {
+  override def listPublicAccessPolicies(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[LazyList[AccessPolicyWithoutMembers]] = {
     IO.pure(
       policies.collect {
         case (_, policy: AccessPolicy) if policy.public =>
           AccessPolicyWithoutMembers(policy.id, policy.email, policy.roles, policy.actions, policy.public)
-      }.toStream
+      }.to(LazyList)
     )
   }
 

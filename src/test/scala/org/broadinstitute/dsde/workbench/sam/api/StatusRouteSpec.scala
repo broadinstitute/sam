@@ -15,7 +15,6 @@ import org.broadinstitute.dsde.workbench.util.health.{HealthMonitor, StatusCheck
 import org.scalatest.concurrent.Eventually._
 
 import scala.concurrent.duration._
-import scala.language.postfixOps
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 

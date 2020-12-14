@@ -15,7 +15,6 @@ import org.broadinstitute.dsde.workbench.util.health.{HealthMonitor, StatusCheck
 
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
-import scala.language.postfixOps
 
 class StatusService(
     val directoryDAO: DirectoryDAO,

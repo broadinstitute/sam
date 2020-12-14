@@ -99,7 +99,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
         for {
           googleStatus <- cloudExtensions.getUserStatus(user)
           allUsersGroup <- cloudExtensions.getOrCreateAllUsersGroup(directoryDAO, samRequestContext)
-          allUsersStatus <- directoryDAO.isGroupMember(allUsersGroup.id, user.id, samRequestContext).unsafeToFuture() recover { case e: NameNotFoundException => false }
+          allUsersStatus <- directoryDAO.isGroupMember(allUsersGroup.id, user.id, samRequestContext).unsafeToFuture() recover { case _: NameNotFoundException => false }
           ldapStatus <- registrationDAO.isEnabled(user.id, samRequestContext).unsafeToFuture()
         } yield {
           Option(UserStatus(UserStatusDetails(user.id, user.email), Map("ldap" -> ldapStatus, "allUsersGroup" -> allUsersStatus, "google" -> googleStatus)))
@@ -107,6 +107,8 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
 
       case Some(user) if userDetailsOnly => Future.successful(Option(UserStatus(UserStatusDetails(user.id, user.email), Map.empty)))
 
+      case Some(_) =>
+        Future.successful(None) //TODO: non exhaustive matching bug. What should happen in this case?
       case None => Future.successful(None)
     }
 
@@ -217,7 +219,7 @@ object UserService {
     random.nextBytes(bytes)
     val r = new String(Hex.encodeHex(bytes))
     // since googleSubjectId starts with 1, we are replacing 1 with 2 to avoid conflicts with existing uid
-    val front = if (currentMillisString(0) == '1') currentMillisString.replaceFirst("1", "2") else currentMilli
+    val front = if (currentMillisString(0) == '1') currentMillisString.replaceFirst("1", "2") else currentMilli.toString
     front + r
   }
 
