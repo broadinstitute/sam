@@ -2,7 +2,6 @@ package org.broadinstitute.dsde.workbench.sam
 
 import java.io.File
 import java.net.URI
-
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import cats.data.NonEmptyList
@@ -12,17 +11,20 @@ import cats.implicits._
 import com.typesafe.config.ConfigFactory
 import com.typesafe.scalalogging.LazyLogging
 import com.unboundid.ldap.sdk._
+import fs2.concurrent.InspectableQueue
 import io.chrisdavenport.log4cats.StructuredLogger
 import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
+
 import javax.net.SocketFactory
 import javax.net.ssl.SSLContext
 import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
 import org.broadinstitute.dsde.workbench.google.GoogleCredentialModes.{Json, Pem}
 import org.broadinstitute.dsde.workbench.google2.util.DistributedLock
 import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleKmsInterpreter, GoogleKmsService, HttpGoogleDirectoryDAO, HttpGoogleIamDAO, HttpGoogleProjectDAO, HttpGooglePubSubDAO, HttpGoogleStorageDAO}
-import org.broadinstitute.dsde.workbench.google2.{GoogleFirestoreInterpreter, GoogleStorageInterpreter, GoogleStorageService}
+import org.broadinstitute.dsde.workbench.google2.{Event, GoogleFirestoreInterpreter, GoogleStorageInterpreter, GoogleStorageService, GoogleSubscriber, SubscriberConfig}
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException}
 import org.broadinstitute.dsde.workbench.sam.api.{SamRoutes, StandardUserInfoDirectives}
+import org.broadinstitute.dsde.workbench.sam.backgroundProcess.{CryptominingSubscriber, CryptominingUserMessage}
 import org.broadinstitute.dsde.workbench.sam.config.{AppConfig, GoogleConfig, IdentityConcentratorConfig}
 import org.broadinstitute.dsde.workbench.sam.db.DatabaseNames.DatabaseName
 import org.broadinstitute.dsde.workbench.sam.db.{DatabaseNames, DbReference}
@@ -37,6 +39,7 @@ import org.broadinstitute.dsde.workbench.util.DelegatePool
 import org.broadinstitute.dsde.workbench.util2.ExecutionContexts
 import org.http4s.client.blaze.BlazeClientBuilder
 import scalikejdbc.config.DBs
+import CryptominingSubscriber.cryptominingUserMessageDecoder
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -61,9 +64,9 @@ object Boot extends IOApp with LazyLogging {
 
     val schemaDAO = new JndiSchemaDAO(appConfig.directoryConfig, appConfig.schemaLockConfig)
 
-    val appDependencies = createAppDependencies(appConfig)
+    implicit val loggerIO: StructuredLogger[IO] = Slf4jLogger.getLogger[IO]
 
-    appDependencies.use { dependencies => // this is where the resource is used
+    createAppDependencies(appConfig).use { dependencies => // this is where the resource is used
       for {
         _ <- IO.fromFuture(IO(schemaDAO.init())).onError {
           case e: WorkbenchException =>
@@ -81,11 +84,11 @@ object Boot extends IOApp with LazyLogging {
 
         _ <- dependencies.cloudExtensionsInitializer.onBoot(dependencies.samApplication)
 
-        binding <- IO.fromFuture(IO(Http().newServerAt("0.0.0.0", 8080).bind(dependencies.samRoutes.route))).onError {
+        httpServer = IO.fromFuture(IO(Http().newServerAt("0.0.0.0", 8080).bind(dependencies.samRoutes.route))).onError {
           case t: Throwable => IO(logger.error("FATAL - failure starting http server", t)) *> IO.raiseError(t)
-        }
-        _ <- IO.fromFuture(IO(binding.whenTerminated))
-        _ <- IO(system.terminate())
+        }.void
+        allStreams = fs2.Stream.eval(httpServer) :: dependencies.cryptominingSubscriberProcess
+        _ <- fs2.Stream.emits(allStreams).covary[IO].parJoin(allStreams.length).compile.drain
       } yield ()
     }
   }
@@ -112,7 +115,7 @@ object Boot extends IOApp with LazyLogging {
   }
 
   private[sam] def createAppDependencies(
-      appConfig: AppConfig)(implicit actorSystem: ActorSystem): cats.effect.Resource[IO, AppDependencies] =
+      appConfig: AppConfig)(implicit actorSystem: ActorSystem, logger: StructuredLogger[IO]): cats.effect.Resource[IO, AppDependencies] =
     for {
       (foregroundDirectoryDAO, foregroundAccessPolicyDAO, _, registrationDAO) <- createDAOs(appConfig, DatabaseNames.Foreground, appConfig.directoryConfig.connectionPoolSize, "foreground")
 
@@ -133,7 +136,23 @@ object Boot extends IOApp with LazyLogging {
         backgroundAccessPolicyDAO,
         backgroundLdapExecutionContext,
         blockingEc)
-    } yield createAppDepenciesWithSamRoutes(appConfig, cloudExtensionsInitializer, foregroundAccessPolicyDAO, foregroundDirectoryDAO, registrationDAO, identityConcentrator)
+
+      userService = new UserService(foregroundDirectoryDAO, cloudExtensionsInitializer.cloudExtensions, registrationDAO, appConfig.blockedEmailDomains)
+
+      cryptominingSubscriberProcess <- appConfig.googleConfig match {
+        case Some(value) => initCryptominingSubscriber(value.googleServicesConfig.cryptominingSubscriber, userService)
+        case None => effect.Resource.liftF[IO, List[fs2.Stream[IO, Unit]]](IO(List.empty))
+      }
+    } yield createAppDepenciesWithSamRoutes(appConfig, cloudExtensionsInitializer, userService, cryptominingSubscriberProcess, foregroundAccessPolicyDAO, foregroundDirectoryDAO, identityConcentrator)
+
+  private def initCryptominingSubscriber(cryptominingSubscriberConfig: SubscriberConfig, userService: UserService)
+                                        (implicit logger: StructuredLogger[IO]): effect.Resource[IO, List[fs2.Stream[IO, Unit]]] = for {
+    subscriberQueue <- cats.effect.Resource.liftF(InspectableQueue.bounded[IO, Event[CryptominingUserMessage]](200))
+    cryptominingSubscriber <- GoogleSubscriber.resource[IO, CryptominingUserMessage](cryptominingSubscriberConfig, subscriberQueue)
+  } yield {
+    val subscriber = new CryptominingSubscriber(cryptominingSubscriber, userService)
+    List(subscriber.process, fs2.Stream.eval(cryptominingSubscriber.start))
+  }
 
   private def cloudExtensionsInitializerResource(
       appConfig: AppConfig,
@@ -143,7 +162,7 @@ object Boot extends IOApp with LazyLogging {
       backgroundDirectoryDAO: DirectoryDAO,
       backgroundAccessPolicyDAO: AccessPolicyDAO,
       backgroundLdapExecutionContext: ExecutionContext,
-      blockingEc: ExecutionContext)(implicit actorSystem: ActorSystem): effect.Resource[IO, CloudExtensionsInitializer] =
+      blockingEc: ExecutionContext)(implicit actorSystem: ActorSystem, logger: StructuredLogger[IO]): effect.Resource[IO, CloudExtensionsInitializer] =
     appConfig.googleConfig match {
       case Some(config) =>
         for {
@@ -155,8 +174,6 @@ object Boot extends IOApp with LazyLogging {
             None)
           googleKmsClient <- GoogleKmsInterpreter.client[IO](config.googleServicesConfig.serviceAccountCredentialJson.defaultServiceAccountJsonPath.asString)
         } yield {
-          implicit val loggerIO: StructuredLogger[IO] = Slf4jLogger.getLogger[IO]
-
           val ioFireStore = GoogleFirestoreInterpreter[IO](googleFire)
           // googleServicesConfig.resourceNamePrefix is an environment specific variable passed in https://github.com/broadinstitute/firecloud-develop/blob/fade9286ff0aec8449121ed201ebc44c8a4d57dd/run-context/fiab/configs/sam/docker-compose.yaml.ctmpl#L24
           // Use resourceNamePrefix to avoid collision between different fiab environments (we share same firestore for fiabs)
@@ -177,7 +194,7 @@ object Boot extends IOApp with LazyLogging {
           val googleGroupSynchronizer =
             new GoogleGroupSynchronizer(backgroundDirectoryDAO, backgroundAccessPolicyDAO, cloudExtension.googleDirectoryDAO, cloudExtension, resourceTypeMap)(
               backgroundLdapExecutionContext)
-          new GoogleExtensionsInitializer(cloudExtension, googleGroupSynchronizer)
+          GoogleExtensionsInitializer(cloudExtension, googleGroupSynchronizer)
         }
       case None => cats.effect.Resource.pure[IO, CloudExtensionsInitializer](NoExtensionsInitializer)
     }
@@ -301,14 +318,14 @@ object Boot extends IOApp with LazyLogging {
   private[sam] def createAppDepenciesWithSamRoutes(
       config: AppConfig,
       cloudExtensionsInitializer: CloudExtensionsInitializer,
+      userService: UserService,
+      cryptominingSubscriberProcess: List[fs2.Stream[IO, Unit]],
       accessPolicyDAO: AccessPolicyDAO,
       directoryDAO: DirectoryDAO,
-      registrationDAO: RegistrationDAO,
       identityConcentrator: Option[IdentityConcentratorService])(implicit actorSystem: ActorSystem): AppDependencies = {
     val resourceTypeMap = config.resourceTypes.map(rt => rt.name -> rt).toMap
     val policyEvaluatorService = PolicyEvaluatorService(config.emailDomain, resourceTypeMap, accessPolicyDAO, directoryDAO)
     val resourceService = new ResourceService(resourceTypeMap, policyEvaluatorService, accessPolicyDAO, directoryDAO, cloudExtensionsInitializer.cloudExtensions, config.emailDomain)
-    val userService = new UserService(directoryDAO, cloudExtensionsInitializer.cloudExtensions, registrationDAO, config.blockedEmailDomains)
     val statusService = new StatusService(directoryDAO, cloudExtensionsInitializer.cloudExtensions, DbReference(DatabaseNames.Foreground), 10 seconds)
     val managedGroupService =
       new ManagedGroupService(resourceService, policyEvaluatorService, resourceTypeMap, accessPolicyDAO, directoryDAO, cloudExtensionsInitializer.cloudExtensions, config.emailDomain)
@@ -323,13 +340,13 @@ object Boot extends IOApp with LazyLogging {
           val googleGroupSynchronizer = synchronizer
           override val identityConcentratorService = identityConcentrator
         }
-        AppDependencies(routes, samApplication, cloudExtensionsInitializer, directoryDAO, accessPolicyDAO, policyEvaluatorService)
+        AppDependencies(routes, samApplication, cloudExtensionsInitializer, directoryDAO, accessPolicyDAO, policyEvaluatorService, cryptominingSubscriberProcess)
       case _ =>
         val routes = new SamRoutes(resourceService, userService, statusService, managedGroupService, config.swaggerConfig, directoryDAO, policyEvaluatorService, config.liquibaseConfig)
         with StandardUserInfoDirectives with NoExtensionRoutes {
           override val identityConcentratorService = identityConcentrator
         }
-        AppDependencies(routes, samApplication, NoExtensionsInitializer, directoryDAO, accessPolicyDAO, policyEvaluatorService)
+        AppDependencies(routes, samApplication, NoExtensionsInitializer, directoryDAO, accessPolicyDAO, policyEvaluatorService, List.empty)
     }
   }
 }
@@ -340,4 +357,5 @@ final case class AppDependencies(
     cloudExtensionsInitializer: CloudExtensionsInitializer,
     directoryDAO: DirectoryDAO,
     accessPolicyDAO: AccessPolicyDAO,
-    policyEvaluatorService: PolicyEvaluatorService)
+    policyEvaluatorService: PolicyEvaluatorService,
+    cryptominingSubscriberProcess: List[fs2.Stream[IO, Unit]])

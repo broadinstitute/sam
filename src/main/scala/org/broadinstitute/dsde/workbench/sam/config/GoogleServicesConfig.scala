@@ -6,8 +6,10 @@ import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.model.google.{GcsBucketName, GoogleProject}
 import net.ceedubs.ficus.Ficus._
 import AppConfig.nonEmptyListReader
+import com.google.pubsub.v1.{ProjectSubscriptionName, TopicName}
 import com.typesafe.config.ConfigRenderOptions
 import org.broadinstitute.dsde.workbench.google.{KeyId, KeyRingId, Location}
+import org.broadinstitute.dsde.workbench.google2.SubscriberConfig
 
 import scala.concurrent.duration.FiniteDuration
 
@@ -36,7 +38,8 @@ final case class GoogleServicesConfig(
     resourceNamePrefix: Option[String],
     adminSdkServiceAccounts: Option[NonEmptyList[ServiceAccountConfig]],
     googleKms: GoogleKmsConfig,
-    terraGoogleOrgNumber: String
+    terraGoogleOrgNumber: String,
+    cryptominingSubscriber: SubscriberConfig
 )
 
 object GoogleServicesConfig {
@@ -68,6 +71,24 @@ object GoogleServicesConfig {
     ServiceAccountConfig(config.root().render(ConfigRenderOptions.concise))
   }
 
+  implicit val topicNameConfigReader: ValueReader[TopicName] = ValueReader.relative { config =>
+    TopicName.parse(config.getString("topic-name"))
+  }
+  implicit val projectSubscriptionNameConfigReader: ValueReader[ProjectSubscriptionName] = ValueReader.relative { config =>
+    ProjectSubscriptionName.parse(config.getString("subscription-name"))
+  }
+
+  implicit val subscriberConfigReader: ValueReader[SubscriberConfig] = ValueReader.relative { config =>
+    SubscriberConfig(
+      config.getString("pathToCredentialJson"),
+      config.as[TopicName]("topic-name"),
+      config.getAs[ProjectSubscriptionName]("subscription-name"),
+      config.as[FiniteDuration]("ack-dead-line"),
+      None,
+      None,
+      None
+    )
+  }
   implicit val googleServicesConfigReader: ValueReader[GoogleServicesConfig] = ValueReader.relative { config =>
     val jsonCredentials = ServiceAccountCredentialJson(
       FirestoreServiceAccountJsonPath(config.getString("pathToFirestoreCredentialJson")),
@@ -96,7 +117,8 @@ object GoogleServicesConfig {
       config.as[Option[String]]("resourceNamePrefix"),
       config.as[Option[NonEmptyList[ServiceAccountConfig]]]("adminSdkServiceAccounts"),
       config.as[GoogleKmsConfig]("kms"),
-      config.getString("terraGoogleOrgNumber")
+      config.getString("terraGoogleOrgNumber"),
+      config.as[SubscriberConfig]("cryptomining-subscriber")
     )
   }
 }
