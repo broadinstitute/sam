@@ -95,7 +95,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
 
   def getUserStatus(userId: WorkbenchUserId, userDetailsOnly: Boolean = false, samRequestContext: SamRequestContext): Future[Option[UserStatus]] =
     directoryDAO.loadUser(userId, samRequestContext).unsafeToFuture().flatMap {
-      case Some(user) if !userDetailsOnly =>
+      case Some(user) =>
         if(userDetailsOnly)
           Future.successful(Option(UserStatus(UserStatusDetails(user.id, user.email), Map.empty)))
         else
