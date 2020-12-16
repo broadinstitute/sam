@@ -96,19 +96,17 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
   def getUserStatus(userId: WorkbenchUserId, userDetailsOnly: Boolean = false, samRequestContext: SamRequestContext): Future[Option[UserStatus]] =
     directoryDAO.loadUser(userId, samRequestContext).unsafeToFuture().flatMap {
       case Some(user) if !userDetailsOnly =>
-        for {
-          googleStatus <- cloudExtensions.getUserStatus(user)
-          allUsersGroup <- cloudExtensions.getOrCreateAllUsersGroup(directoryDAO, samRequestContext)
-          allUsersStatus <- directoryDAO.isGroupMember(allUsersGroup.id, user.id, samRequestContext).unsafeToFuture() recover { case _: NameNotFoundException => false }
-          ldapStatus <- registrationDAO.isEnabled(user.id, samRequestContext).unsafeToFuture()
-        } yield {
-          Option(UserStatus(UserStatusDetails(user.id, user.email), Map("ldap" -> ldapStatus, "allUsersGroup" -> allUsersStatus, "google" -> googleStatus)))
-        }
-
-      case Some(user) if userDetailsOnly => Future.successful(Option(UserStatus(UserStatusDetails(user.id, user.email), Map.empty)))
-
-      case Some(_) =>
-        Future.successful(None) //TODO: non exhaustive matching bug. What should happen in this case?
+        if(userDetailsOnly)
+          Future.successful(Option(UserStatus(UserStatusDetails(user.id, user.email), Map.empty)))
+        else
+          for {
+            googleStatus <- cloudExtensions.getUserStatus(user)
+            allUsersGroup <- cloudExtensions.getOrCreateAllUsersGroup(directoryDAO, samRequestContext)
+            allUsersStatus <- directoryDAO.isGroupMember(allUsersGroup.id, user.id, samRequestContext).unsafeToFuture() recover { case _: NameNotFoundException => false }
+            ldapStatus <- registrationDAO.isEnabled(user.id, samRequestContext).unsafeToFuture()
+          } yield {
+            Option(UserStatus(UserStatusDetails(user.id, user.email), Map("ldap" -> ldapStatus, "allUsersGroup" -> allUsersStatus, "google" -> googleStatus)))
+          }
       case None => Future.successful(None)
     }
 

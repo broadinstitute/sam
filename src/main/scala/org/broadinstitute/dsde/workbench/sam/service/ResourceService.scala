@@ -511,7 +511,7 @@ class ResourceService(
           IO.raiseError(
             new WorkbenchExceptionWithErrorReport(
               ErrorReport(StatusCodes.BadRequest, "Cannot make auth domain protected resources public. Share directly with auth domain groups instead.")))
-          else IO.unit //TODO: non exhaustive matching bug. What should happen in this case?
+          else IO.unit
         case LoadResourceAuthDomainResult.NotConstrained =>
           accessPolicyDAO.setPolicyIsPublic(policyId, public, samRequestContext) *> IO.fromFuture(IO(fireGroupUpdateNotification(policyId, samRequestContext)))
       }
