@@ -9,7 +9,6 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, LoadResourceAuthDomainResult}
-import org.broadinstitute.dsde.workbench.sam.service.ManagedGroupService.MangedGroupRoleName
 import org.broadinstitute.dsde.workbench.sam.util.OpenCensusIOUtils._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
@@ -177,16 +176,13 @@ class PolicyEvaluatorService(
         .toRight(new WorkbenchException(s"missing configration for resourceType ${resourceTypeName}")))
   }
 
-  def listUserManagedGroupsWithRole(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Iterable[ManagedGroupAndRole]] =
-    accessPolicyDAO.listUserResourcesWithRolesAndActions(ManagedGroupService.managedGroupTypeName, userId, samRequestContext) map { accessibleGroupResources =>
-      for {
-        groupResource <- accessibleGroupResources
-        roleName <- groupResource.allRolesAndActions.roles.collect {
-          case MangedGroupRoleName(roleName) if ManagedGroupService.userMembershipRoleNames.contains(roleName) => roleName
-        }
-      } yield {
-        ManagedGroupAndRole(WorkbenchGroupName(groupResource.resourceId.value), roleName)
-      }
+  def listUserManagedGroupsWithRole(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[ManagedGroupAndRole]] =
+    for {
+      ripns <- accessPolicyDAO.listAccessPolicies(ManagedGroupService.managedGroupTypeName, userId, samRequestContext)
+    } yield {
+      ripns
+        .filter(ripn => ManagedGroupService.userMembershipRoleNames.contains(ManagedGroupService.getRoleName(ripn.accessPolicyName.value)))
+        .map(p => ManagedGroupAndRole(WorkbenchGroupName(p.resourceId.value), ManagedGroupService.getRoleName(p.accessPolicyName.value)))
     }
 
   def listUserManagedGroups(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[WorkbenchGroupName]] =
