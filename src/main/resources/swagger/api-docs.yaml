@@ -2888,9 +2888,9 @@ components:
           type: string
           description: id of the resource to create
         policies:
-          type: array
-          description: map of initial policies to create
-          items:
+          type: object
+          description: map of initial policies to create, key is policy name
+          additionalProperties:
             $ref: '#/components/schemas/AccessPolicyMembership'
         authDomain:
           type: array
@@ -2911,9 +2911,9 @@ components:
           type: string
           description: id of the resource to create
         policies:
-          type: array
-          description: map of initial policies to create
-          items:
+          type: object
+          description: map of initial policies to create, key is policy name
+          additionalProperties:
             $ref: '#/components/schemas/AccessPolicyMembershipV2'
         authDomain:
           type: array
