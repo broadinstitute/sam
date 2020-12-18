@@ -235,7 +235,7 @@ class ResourceService(
     } yield ()
   }
 
-  def cloudDeletePolicies(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): Future[Stream[AccessPolicy]] = {
+  def cloudDeletePolicies(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): Future[LazyList[AccessPolicy]] = {
     for {
       policiesToDelete <- accessPolicyDAO.listAccessPolicies(resource, samRequestContext).unsafeToFuture()
       _ <- Future.traverse(policiesToDelete) { policy =>
@@ -455,7 +455,7 @@ class ResourceService(
         Option(policy.descendantPermissions))
   }
 
-  def listResourcePolicies(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Stream[AccessPolicyResponseEntry]] =
+  def listResourcePolicies(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[LazyList[AccessPolicyResponseEntry]] =
     accessPolicyDAO.listAccessPolicies(resource, samRequestContext).flatMap { policies =>
       policies.parTraverse { policy =>
         loadAccessPolicyWithEmails(policy, samRequestContext).map { membership =>
@@ -503,13 +503,15 @@ class ResourceService(
         case LoadResourceAuthDomainResult.ResourceNotFound => IO.raiseError(
           new WorkbenchExceptionWithErrorReport(
             ErrorReport(StatusCodes.BadRequest, s"ResourceId ${policyId.resource} not found.")))
-        case LoadResourceAuthDomainResult.Constrained(_) if public =>
+        case LoadResourceAuthDomainResult.Constrained(_) =>
           // resources with auth domains logically can't have public policies but also technically allowing them poses a problem
           // because the logic for public resources is different. However, sharing with the auth domain should have the
           // exact same effect as making a policy public: anyone in the auth domain can access.
+          if (public)
           IO.raiseError(
             new WorkbenchExceptionWithErrorReport(
               ErrorReport(StatusCodes.BadRequest, "Cannot make auth domain protected resources public. Share directly with auth domain groups instead.")))
+          else IO.unit
         case LoadResourceAuthDomainResult.NotConstrained =>
           accessPolicyDAO.setPolicyIsPublic(policyId, public, samRequestContext) *> IO.fromFuture(IO(fireGroupUpdateNotification(policyId, samRequestContext)))
       }

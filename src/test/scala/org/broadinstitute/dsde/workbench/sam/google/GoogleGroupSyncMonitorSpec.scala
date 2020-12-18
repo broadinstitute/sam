@@ -19,7 +19,6 @@ import org.scalatest.concurrent.Eventually
 import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext.Implicits.global
-import scala.language.postfixOps
 import spray.json._
 import org.scalatest.flatspec.AnyFlatSpecLike
 import org.scalatest.matchers.should.Matchers

@@ -1619,7 +1619,7 @@ class ResourceRoutesV2Spec extends AnyFlatSpec with Matchers with TestSupport wi
       actionsOnResource = Set(SamResourceActions.readPolicies))
 
     when(samRoutes.resourceService.listResourcePolicies(mockitoEq(resource), any[SamRequestContext]))
-      .thenReturn(IO(Stream(response)))
+      .thenReturn(IO(LazyList(response)))
 
     Get(s"/api/resources/v2/${resource.resourceTypeName}/${resource.resourceId}/policies") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
@@ -1637,7 +1637,7 @@ class ResourceRoutesV2Spec extends AnyFlatSpec with Matchers with TestSupport wi
       actionsOnResource = Set(SamResourceActions.delete))
 
     when(samRoutes.resourceService.listResourcePolicies(mockitoEq(resource), any[SamRequestContext]))
-      .thenReturn(IO(Stream(response)))
+      .thenReturn(IO(LazyList(response)))
 
     Get(s"/api/resources/v2/${resource.resourceTypeName}/${resource.resourceId}/policies") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Forbidden
@@ -1655,7 +1655,7 @@ class ResourceRoutesV2Spec extends AnyFlatSpec with Matchers with TestSupport wi
       actionsOnResource = Set.empty)
 
     when(samRoutes.resourceService.listResourcePolicies(mockitoEq(resource), any[SamRequestContext]))
-      .thenReturn(IO(Stream(response)))
+      .thenReturn(IO(LazyList(response)))
 
     Get(s"/api/resources/v2/${resource.resourceTypeName}/${resource.resourceId}/policies") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound

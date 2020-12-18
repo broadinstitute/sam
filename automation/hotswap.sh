@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Updates the Leo jar of a FIAB to reflect current local code.
+# Updates the Sam jar of a FIAB to reflect current local code.
 # Run using "./automation/hotswap.sh <your FIAB name>" at the root of the sam repo clone
 
 set -eu

@@ -101,7 +101,7 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
     val role = resourceType.roles.find(_.roleName == resourceType.ownerRoleName).get
     val initialMembers = if(role.roleName.equals(resourceType.ownerRoleName)) Set(dummyUserInfo.userId.asInstanceOf[WorkbenchSubject]) else Set[WorkbenchSubject]()
     val group = BasicWorkbenchGroup(WorkbenchGroupName(role.roleName.value), initialMembers, toEmail(resource.resourceTypeName.value, resource.resourceId.value, role.roleName.value))
-    Stream(AccessPolicy(
+    LazyList(AccessPolicy(
       FullyQualifiedPolicyId(resource, AccessPolicyName(role.roleName.value)), group.members, group.email, Set(role.roleName), Set.empty, Set.empty, public = false))
   }
 
@@ -142,7 +142,7 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
     //cleanup
     runAndWait(service.deleteResource(resource, samRequestContext))
 
-    assertResult(Stream.empty) {
+    assertResult(LazyList.empty) {
       policyDAO.listAccessPolicies(resource, samRequestContext).unsafeRunSync()
     }
   }
@@ -289,7 +289,7 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
     runAndWait(service.createResource(resourceType, resourceName, Map(policyName -> policyMembership), Set.empty, None, dummyUserInfo.userId, samRequestContext))
 
     val policies = service.listResourcePolicies(FullyQualifiedResourceId(resourceType.name, resourceName), samRequestContext).unsafeRunSync()
-    assertResult(Stream(AccessPolicyResponseEntry(policyName, policyMembership, WorkbenchEmail("")))) {
+    assertResult(LazyList(AccessPolicyResponseEntry(policyName, policyMembership, WorkbenchEmail("")))) {
       policies.map(_.copy(email = WorkbenchEmail("")))
     }
   }
@@ -843,7 +843,7 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
     init should contain theSameElementsAs(Set(adminResType, defaultResourceType))
 
     // assert a resource was not created for SamResourceTypes.resourceTypeAdmin
-    policyDAO.listAccessPolicies(FullyQualifiedResourceId(SamResourceTypes.resourceTypeAdminName, ResourceId(SamResourceTypes.resourceTypeAdminName.value)), samRequestContext).unsafeRunSync() should equal(Stream.empty)
+    policyDAO.listAccessPolicies(FullyQualifiedResourceId(SamResourceTypes.resourceTypeAdminName, ResourceId(SamResourceTypes.resourceTypeAdminName.value)), samRequestContext).unsafeRunSync() should equal(LazyList.empty)
 
     // assert a resource was created for defaultResourceType
     val resourceAndPolicyName = FullyQualifiedPolicyId(

@@ -17,7 +17,6 @@ import io.opencensus.scala.Tracing
 
 import scala.concurrent.Future
 import scala.concurrent.duration.{FiniteDuration, _}
-import scala.language.postfixOps
 import scala.util.Try
 
 /**
@@ -156,7 +155,7 @@ class GoogleGroupSyncMonitorActor(
 
           import DefaultJsonProtocol._
           import WorkbenchIdentityJsonSupport._
-          import org.broadinstitute.dsde.workbench.sam.google.GoogleModelJsonSupport._
+          import org.broadinstitute.dsde.workbench.sam.google.SamGoogleModelJsonSupport._
           logger.info(s"synchronized google group ${report.toJson.compactPrint}")
           Future.successful(None)
         } else {

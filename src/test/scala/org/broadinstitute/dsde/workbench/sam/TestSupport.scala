@@ -160,7 +160,7 @@ object TestSupport extends TestSupport {
 
       tables.map(table => withSQL{
         delete.from(table)
-      }.update.apply).sum
+      }.update().apply()).sum
     }
   }
 }

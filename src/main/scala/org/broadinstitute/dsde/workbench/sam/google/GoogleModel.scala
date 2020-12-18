@@ -3,7 +3,7 @@ package org.broadinstitute.dsde.workbench.sam.google
 import org.broadinstitute.dsde.workbench.model.ErrorReport
 import spray.json.DefaultJsonProtocol
 
-object GoogleModelJsonSupport {
+object SamGoogleModelJsonSupport {
   import DefaultJsonProtocol._
   import org.broadinstitute.dsde.workbench.model.ErrorReportJsonSupport._
 

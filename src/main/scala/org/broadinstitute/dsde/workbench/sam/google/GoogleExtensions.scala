@@ -37,7 +37,7 @@ import org.broadinstitute.dsde.workbench.util.health.{HealthMonitor, SubsystemSt
 import org.broadinstitute.dsde.workbench.util.{FutureSupport, Retry}
 import spray.json._
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 

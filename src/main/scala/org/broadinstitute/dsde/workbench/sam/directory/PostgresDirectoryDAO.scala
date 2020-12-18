@@ -102,9 +102,9 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     }
   }
 
-  override def loadGroups(groupNames: Set[WorkbenchGroupName], samRequestContext: SamRequestContext): IO[Stream[BasicWorkbenchGroup]] = {
+  override def loadGroups(groupNames: Set[WorkbenchGroupName], samRequestContext: SamRequestContext): IO[LazyList[BasicWorkbenchGroup]] = {
     if (groupNames.isEmpty) {
-      IO.pure(Stream.empty)
+      IO.pure(LazyList.empty)
     } else {
       for {
         results <- runInTransaction("loadGroups", samRequestContext)({ implicit session =>
@@ -144,7 +144,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
 
           BasicWorkbenchGroup(groupName, members, email)
         }
-      }.toStream
+      }.to(LazyList)
     }
   }
 
@@ -152,9 +152,9 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     batchLoadGroupEmail(Set(groupName), samRequestContext).map(_.toMap.get(groupName))
   }
 
-  override def batchLoadGroupEmail(groupNames: Set[WorkbenchGroupName], samRequestContext: SamRequestContext): IO[Stream[(WorkbenchGroupName, WorkbenchEmail)]] = {
+  override def batchLoadGroupEmail(groupNames: Set[WorkbenchGroupName], samRequestContext: SamRequestContext): IO[LazyList[(WorkbenchGroupName, WorkbenchEmail)]] = {
     if (groupNames.isEmpty) {
-      IO.pure(Stream.empty)
+      IO.pure(LazyList.empty)
     } else {
       runInTransaction("batchLoadGroupEmail", samRequestContext)({ implicit session =>
         val g = GroupTable.column
@@ -162,7 +162,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
         import SamTypeBinders._
         samsql"select ${g.name}, ${g.email} from ${GroupTable.table} where ${g.name} in (${groupNames})"
             .map(rs => (rs.get[WorkbenchGroupName](g.name), rs.get[WorkbenchEmail](g.email)))
-            .list().apply().toStream
+            .list().apply().to(LazyList)
       })
     }
   }
@@ -407,7 +407,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
   // NOTE: This implementation is a copy/paste of the implementation from LdapDirectoryDAO.  The question was raised
   // whether this should also handle Pets and Policies.  At this time, we don't know if it should, but for backwards
   // compatibility with LdapDirectoryDAO, we're going to use the same implementation for now.
-  override def loadSubjectEmails(subjects: Set[WorkbenchSubject], samRequestContext: SamRequestContext): IO[Stream[WorkbenchEmail]] = {
+  override def loadSubjectEmails(subjects: Set[WorkbenchSubject], samRequestContext: SamRequestContext): IO[LazyList[WorkbenchEmail]] = {
     val userSubjects = subjects collect { case userId: WorkbenchUserId => userId }
     val groupSubjects = subjects collect { case groupName: WorkbenchGroupName => groupName }
 
@@ -455,7 +455,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
       val insertUserQuery = samsql"insert into ${UserTable.table} (${userColumn.id}, ${userColumn.email}, ${userColumn.googleSubjectId}, ${userColumn.enabled}, ${userColumn.identityConcentratorId}) values (${user.id}, ${user.email}, ${user.googleSubjectId}, false, ${user.identityConcentratorId})"
 
       Try {
-        insertUserQuery.update.apply
+        insertUserQuery.update().apply()
       }.recoverWith {
         case duplicateException: PSQLException if duplicateException.getSQLState == PSQLStateExtensions.UNIQUE_VIOLATION =>
           Failure(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"identity with id ${user.id} already exists")))
@@ -491,16 +491,16 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     })
   }
 
-  override def loadUsers(userIds: Set[WorkbenchUserId], samRequestContext: SamRequestContext): IO[Stream[WorkbenchUser]] = {
+  override def loadUsers(userIds: Set[WorkbenchUserId], samRequestContext: SamRequestContext): IO[LazyList[WorkbenchUser]] = {
     if(userIds.nonEmpty) {
       runInTransaction("loadUsers", samRequestContext)({ implicit session =>
         val userTable = UserTable.syntax
 
         val loadUsersQuery = samsql"select ${userTable.resultAll} from ${UserTable as userTable} where ${userTable.id} in (${userIds})"
         loadUsersQuery.map(UserTable(userTable))
-          .list().apply().map(UserTable.unmarshalUserRecord).toStream
+          .list().apply().map(UserTable.unmarshalUserRecord).to(LazyList)
       })
-    } else IO.pure(Stream.empty)
+    } else IO.pure(LazyList.empty)
   }
 
   // Not worrying about cascading deletion of user's pet SAs because LDAP doesn't delete user's pet SAs automatically
@@ -540,7 +540,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
     }
   }
 
-  override def listUserDirectMemberships(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Stream[WorkbenchGroupIdentity]] = {
+  override def listUserDirectMemberships(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[LazyList[WorkbenchGroupIdentity]] = {
     runInTransaction("listUserDirectMemberships", samRequestContext)({ implicit session =>
       val gm = GroupMemberTable.syntax("gm")
       val g = GroupTable.syntax("g")
@@ -555,7 +555,7 @@ class PostgresDirectoryDAO(protected val dbRef: DbReference,
               left join ${ResourceTable as r} on ${p.resourceId} = ${r.id}
               left join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
               where ${gm.memberUserId} = ${userId}"""
-        .map(resultSetToGroupIdentity(_, g, p, r, rt)).list().apply().toStream
+        .map(resultSetToGroupIdentity(_, g, p, r, rt)).list().apply().to(LazyList)
     })
   }
 

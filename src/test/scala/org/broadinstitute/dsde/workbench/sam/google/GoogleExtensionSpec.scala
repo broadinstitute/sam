@@ -39,7 +39,6 @@ import org.scalatest.{BeforeAndAfterAll, PrivateMethodTester}
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 import scala.concurrent.duration._
-import scala.language.postfixOps
 import scala.util.{Success, Try}
 import org.scalatest.flatspec.AnyFlatSpecLike
 import org.scalatest.matchers.should.Matchers
@@ -302,7 +301,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
       case _ => fail(s"could not load pet LDAP entry from ${petServiceAccount.serviceAccount.email.value}")
     }.unsafeRunSync()
 
-    ldapPetOpt shouldBe 'defined
+    ldapPetOpt shouldBe Symbol("defined")
     val Some(ldapPet) = ldapPetOpt
     // MockGoogleIamDAO generates the subject ID as a random Long
     Try(ldapPet.serviceAccount.subjectId.value.toLong) shouldBe a[Success[_]]
@@ -636,7 +635,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
 
     // mock responses for onManagedGroupUpdate
     when(mockAccessPolicyDAO.listResourcesConstrainedByGroup(WorkbenchGroupName(managedGroupId), samRequestContext)).thenReturn(IO.pure(Set(resource)))
-    when(mockAccessPolicyDAO.listAccessPolicies(resource.fullyQualifiedId, samRequestContext)).thenReturn(IO.pure(Stream(ownerPolicy, readerPolicy)))
+    when(mockAccessPolicyDAO.listAccessPolicies(resource.fullyQualifiedId, samRequestContext)).thenReturn(IO.pure(LazyList(ownerPolicy, readerPolicy)))
 
     runAndWait(googleExtensions.onGroupUpdate(Seq(managedGroupRPN), samRequestContext))
 
@@ -670,7 +669,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
 
     // mock responses for onManagedGroupUpdate
     when(mockAccessPolicyDAO.listResourcesConstrainedByGroup(WorkbenchGroupName(managedGroupId), samRequestContext)).thenReturn(IO.pure(Set(resource)))
-    when(mockAccessPolicyDAO.listAccessPolicies(resource.fullyQualifiedId, samRequestContext)).thenReturn(IO.pure(Stream(ownerPolicy, readerPolicy)))
+    when(mockAccessPolicyDAO.listAccessPolicies(resource.fullyQualifiedId, samRequestContext)).thenReturn(IO.pure(LazyList(ownerPolicy, readerPolicy)))
 
     runAndWait(googleExtensions.onGroupUpdate(Seq(WorkbenchGroupName(subGroupId)), samRequestContext))
 
@@ -705,7 +704,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
 
     // mock responses for onManagedGroupUpdate
     when(mockAccessPolicyDAO.listResourcesConstrainedByGroup(WorkbenchGroupName(managedGroupId), samRequestContext)).thenReturn(IO.pure(Set(resource)))
-    when(mockAccessPolicyDAO.listAccessPolicies(resource.fullyQualifiedId, samRequestContext)).thenReturn(IO.pure(Stream(ownerPolicy, readerPolicy)))
+    when(mockAccessPolicyDAO.listAccessPolicies(resource.fullyQualifiedId, samRequestContext)).thenReturn(IO.pure(LazyList(ownerPolicy, readerPolicy)))
 
     runAndWait(googleExtensions.onGroupUpdate(Seq(WorkbenchGroupName(subGroupId)), samRequestContext))
 
@@ -872,8 +871,8 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
     val constrainableService = new ResourceService(constrainableResourceTypes, constrainablePolicyEvaluatorService, policyDAO, dirDAO, NoExtensions, emailDomain)
     val managedGroupService = new ManagedGroupService(constrainableService, constrainablePolicyEvaluatorService, constrainableResourceTypes, policyDAO, dirDAO, NoExtensions, emailDomain)
 
-    constrainableService.createResourceType(constrainableResourceType, samRequestContext).unsafeRunSync
-    constrainableService.createResourceType(managedGroupResourceType, samRequestContext).unsafeRunSync
+    constrainableService.createResourceType(constrainableResourceType, samRequestContext).unsafeRunSync()
+    constrainableService.createResourceType(managedGroupResourceType, samRequestContext).unsafeRunSync()
 
     val googleGroupSynchronizer = new GoogleGroupSynchronizer(dirDAO, policyDAO, null, googleExtensions, constrainableResourceTypes)
     (dirDAO, registrationDAO, googleExtensions, constrainableService, managedGroupService, constrainableResourceType, constrainableRole, googleGroupSynchronizer)
@@ -1082,7 +1081,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
     val ge = new GoogleExtensions(TestSupport.fakeDistributedLock, dirDAO, regDAO, null, null, null, null, null, null, null, null, null, googleServicesConfig, petServiceAccountConfig, nonConstrainableResourceTypes)
     val synchronizer = new GoogleGroupSynchronizer(dirDAO, null, null, null, nonConstrainableResourceTypes)
 
-    constrainableService.createResourceType(nonConstrainableResourceType, samRequestContext).unsafeRunSync
+    constrainableService.createResourceType(nonConstrainableResourceType, samRequestContext).unsafeRunSync()
 
     val accessPolicyMap = Map(AccessPolicyName(nonConstrainableRole.roleName.value) -> AccessPolicyMembership(Set(dummyUserInfo.userEmail), nonConstrainableRole.actions, Set(nonConstrainableRole.roleName), None))
     val resource = runAndWait(constrainableService.createResource(nonConstrainableResourceType, ResourceId("rid"), accessPolicyMap, Set.empty, None, dummyUserInfo.userId, samRequestContext))

@@ -21,4 +21,3 @@ sys.env.getOrElse("JAVA_OPTS", "").split(" ").toSeq.map { opt =>
 }
 
 addCompilerPlugin("com.olegpy" %% "better-monadic-for" % "0.3.1")
-addCompilerPlugin("org.scalamacros" %% "paradise" % "2.1.1" cross CrossVersion.full)

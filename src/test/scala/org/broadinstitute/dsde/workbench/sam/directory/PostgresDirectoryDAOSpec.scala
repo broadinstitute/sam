@@ -728,7 +728,7 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       // DV: I have tried this up to 100 groups to intersect locally with no functional issue, performance seems linear
       "intersect groups" in {
         for (groupCount <- 1 to 3) {
-          beforeEach
+          beforeEach()
           val inAllGroups = WorkbenchUser(WorkbenchUserId("allgroups"), None, WorkbenchEmail("allgroups"), None)
           dao.createUser(inAllGroups, samRequestContext).unsafeRunSync()
 

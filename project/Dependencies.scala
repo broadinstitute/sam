@@ -9,8 +9,7 @@ object Dependencies {
   val scalaCheckV    = "1.14.0"
   val scalikejdbcVersion    = "3.4.1"
   val postgresDriverVersion = "42.2.8"
-  val http4sVersion = "0.21.0-M5"
-  val circeVersion = "0.12.2"
+  val http4sVersion = "0.21.13"
 
   val workbenchUtilV   = "0.6-74c9fc2"
   val workbenchUtil2V   = "0.1-74c9fc2"
@@ -18,7 +17,7 @@ object Dependencies {
   val workbenchGoogleV = "0.21-74c9fc2"
   val workbenchGoogle2V = "0.18-74c9fc2"
   val workbenchNotificationsV = "0.3-74c9fc2"
-  val monocleVersion = "1.5.1-cats"
+  val monocleVersion = "2.0.3"
 
   val excludeAkkaActor =        ExclusionRule(organization = "com.typesafe.akka", name = "akka-actor_2.12")
   val excludeAkkaProtobufV3 =   ExclusionRule(organization = "com.typesafe.akka", name = "akka-protobuf-v3_2.12")
@@ -38,7 +37,7 @@ object Dependencies {
   val ravenLogback: ModuleID =   "com.getsentry.raven"        %  "raven-logback"   % "7.8.6"
   val scalaLogging: ModuleID =   "com.typesafe.scala-logging" %% "scala-logging"   % scalaLoggingV
   val swaggerUi: ModuleID =      "org.webjars"                %  "swagger-ui"      % "3.25.0"
-  val ficus: ModuleID =          "com.iheart"                 %% "ficus"           % "1.4.0"
+  val ficus: ModuleID =          "com.iheart"                 %% "ficus"           % "1.5.0"
 
   val akkaActor: ModuleID =         "com.typesafe.akka"   %%  "akka-actor"           % akkaV
   val akkaSlf4j: ModuleID =         "com.typesafe.akka"   %%  "akka-slf4j"           % akkaV
@@ -52,9 +51,6 @@ object Dependencies {
   val http4s: ModuleID = "org.http4s" %% "http4s-dsl" % http4sVersion
   val http4sClient: ModuleID = "org.http4s" %% "http4s-blaze-client" % http4sVersion
   val http4sCirce: ModuleID = "org.http4s" %% "http4s-circe" % http4sVersion
-  val circe: ModuleID = "io.circe" %% "circe-core" % circeVersion
-  val circeGeneric: ModuleID = "io.circe" %% "circe-generic" % circeVersion
-  val circeParser: ModuleID = "io.circe" %% "circe-parser" % circeVersion
 
   val excludIoGrpc =  ExclusionRule(organization = "io.grpc", name = "grpc-core")
   val ioGrpc: ModuleID = "io.grpc" % "grpc-core" % "1.34.0"
@@ -162,9 +158,6 @@ object Dependencies {
 
     http4s,
     http4sClient,
-    http4sCirce,
-    circe,
-    circeGeneric,
-    circeParser
+    http4sCirce
   ) ++ openCensusDependencies
 }

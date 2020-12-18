@@ -169,7 +169,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
         (None, Option(nestedRoleRecord.role))
       }
     }.unzip
-    val descendantRoles = maybeDescendantRoles.toSet.flatten.groupBy(_._1).mapValues(rolesWithResourceTypeNames => rolesWithResourceTypeNames.map(_._2))
+    val descendantRoles = maybeDescendantRoles.toSet.flatten.groupBy(_._1).view.mapValues(rolesWithResourceTypeNames => rolesWithResourceTypeNames.map(_._2)).toMap
     val includedRoles = maybeIncludedRoles.toSet.flatten
 
     (descendantRoles, includedRoles)
@@ -210,7 +210,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
             using ${ResourceRoleTable as resourceRole}
             where ${nestedRole.baseRoleId} = ${resourceRole.id}
             and ${resourceRole.resourceTypeId} in (${resourceTypeNameToPKs.values})"""
-      .update.apply()
+      .update().apply()
 
     val nestedResourceRole = ResourceRoleTable.syntax("nestedResourceRole")
     val result = if (nestedRoles.nonEmpty) {
@@ -225,7 +225,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     } else {
       0
     }
-    samsql"""refresh materialized view ${FlattenedRoleMaterializedView.table}""".update.apply()
+    samsql"""refresh materialized view ${FlattenedRoleMaterializedView.table}""".update().apply()
     result
   }
 
@@ -736,7 +736,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     }
   }
 
-  override def listPublicAccessPolicies(resourceTypeName: ResourceTypeName, samRequestContext: SamRequestContext): IO[Stream[ResourceIdAndPolicyName]] = {
+  override def listPublicAccessPolicies(resourceTypeName: ResourceTypeName, samRequestContext: SamRequestContext): IO[LazyList[ResourceIdAndPolicyName]] = {
     val rt = ResourceTypeTable.syntax("rt")
     val r = ResourceTable.syntax("r")
     val p = PolicyTable.syntax("p")
@@ -751,11 +751,11 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
 
     import SamTypeBinders._
     runInTransaction("listPublicAccessPolicies-(returns ResourceIdAndPolicyName)", samRequestContext)({ implicit session =>
-      query.map(rs => ResourceIdAndPolicyName(rs.get[ResourceId](r.resultName.name), rs.get[AccessPolicyName](p.resultName.name))).list().apply().toStream
+      query.map(rs => ResourceIdAndPolicyName(rs.get[ResourceId](r.resultName.name), rs.get[AccessPolicyName](p.resultName.name))).list().apply().to(LazyList)
     })
   }
 
-  override def listPublicAccessPolicies(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Stream[AccessPolicyWithoutMembers]] = {
+  override def listPublicAccessPolicies(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[LazyList[AccessPolicyWithoutMembers]] = {
     val g = GroupTable.syntax("g")
     val r = ResourceTable.syntax("r")
     val rt = ResourceTypeTable.syntax("rt")
@@ -790,12 +790,12 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
         val (roles, actions) = roleActionResults.unzip
 
         AccessPolicyWithoutMembers(FullyQualifiedPolicyId(FullyQualifiedResourceId(policyInfo.resourceTypeName, policyInfo.resourceId), policyInfo.name), policyInfo.email, roles.flatten.toSet, actions.flatten.toSet, policyInfo.public)
-      }.toStream
+      }.to(LazyList)
     })
   }
 
   // Abstracts logic to load and unmarshal one or more policies, use to get full AccessPolicy objects from Postgres
-  private def listPolicies(resource: FullyQualifiedResourceId, limitOnePolicy: Option[AccessPolicyName] = None, samRequestContext: SamRequestContext): IO[Stream[AccessPolicy]] = {
+  private def listPolicies(resource: FullyQualifiedResourceId, limitOnePolicy: Option[AccessPolicyName] = None, samRequestContext: SamRequestContext): IO[LazyList[AccessPolicy]] = {
     val g = GroupTable.syntax("g")
     val r = ResourceTable.syntax("r")
     val rt = ResourceTypeTable.syntax("rt")
@@ -854,7 +854,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
         val (policyRoles, policyActions, policyDescendantPermissions) = unmarshalPolicyPermissions(permissionsResults)
 
         AccessPolicy(FullyQualifiedPolicyId(FullyQualifiedResourceId(policyInfo.resourceTypeName, policyInfo.resourceId), policyInfo.name), policyMembers, policyInfo.email, policyRoles, policyActions, policyDescendantPermissions, policyInfo.public)
-      }.toStream
+      }.to(LazyList)
     })
   }
 
@@ -990,7 +990,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
     })
   }
 
-  override def listAccessPolicies(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Stream[AccessPolicy]] = {
+  override def listAccessPolicies(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[LazyList[AccessPolicy]] = {
     listPolicies(resource, samRequestContext = samRequestContext)
   }
 
@@ -1174,7 +1174,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
         FullyQualifiedResourceId(
           rs.get[ResourceTypeName](prt.resultName.name),
           rs.get[ResourceId](pr.resultName.name)))
-        .single.apply()
+        .single().apply()
     })
   }
 
@@ -1216,7 +1216,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
               ( select ${ar.resourceId}
                 from ${ancestorResourceTable as ar} )"""
 
-      if (query.update.apply() != 1) {
+      if (query.update().apply() != 1) {
         throw new WorkbenchExceptionWithErrorReport(
           ErrorReport(StatusCodes.BadRequest, "Cannot set parent as this would introduce a cyclical resource hierarchy")
         )
@@ -1238,7 +1238,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
           and ${r.name} = ${resource.resourceId}
           and ${rt.name} = ${resource.resourceTypeName}"""
 
-      query.update.apply() > 0
+      query.update().apply() > 0
     })
   }
 
@@ -1265,7 +1265,7 @@ class PostgresAccessPolicyDAO(protected val dbRef: DbReference,
         FullyQualifiedResourceId(
           rs.get[ResourceTypeName](crt.resultName.name),
           rs.get[ResourceId](cr.resultName.name)))
-        .list.apply.toSet
+        .list().apply().toSet
     })
   }
 

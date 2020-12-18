@@ -47,8 +47,8 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     groups.get(groupName).map(_.asInstanceOf[BasicWorkbenchGroup])
   }
 
-  override def loadGroups(groupNames: Set[WorkbenchGroupName], samRequestContext: SamRequestContext): IO[Stream[BasicWorkbenchGroup]] = IO {
-    groups.filterKeys(groupNames.map(_.asInstanceOf[WorkbenchGroupIdentity])).values.map(_.asInstanceOf[BasicWorkbenchGroup]).toStream
+  override def loadGroups(groupNames: Set[WorkbenchGroupName], samRequestContext: SamRequestContext): IO[LazyList[BasicWorkbenchGroup]] = IO {
+    groups.view.filterKeys(groupNames.map(_.asInstanceOf[WorkbenchGroupIdentity])).values.map(_.asInstanceOf[BasicWorkbenchGroup]).to(LazyList)
   }
 
   override def deleteGroup(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Unit] = {
@@ -105,8 +105,8 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     users.get(userId)
   }
 
-  override def loadUsers(userIds: Set[WorkbenchUserId], samRequestContext: SamRequestContext): IO[Stream[WorkbenchUser]] = IO {
-    users.filterKeys(userIds).values.toStream
+  override def loadUsers(userIds: Set[WorkbenchUserId], samRequestContext: SamRequestContext): IO[LazyList[WorkbenchUser]] = IO {
+    users.view.filterKeys(userIds).values.to(LazyList)
   }
 
   override def deleteUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit] = IO {
@@ -164,7 +164,7 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
 
   override def loadGroupEmail(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Option[WorkbenchEmail]] = loadGroup(groupName, samRequestContext).map(_.map(_.email))
 
-  override def batchLoadGroupEmail(groupNames: Set[WorkbenchGroupName], samRequestContext: SamRequestContext): IO[Stream[(WorkbenchGroupName, WorkbenchEmail)]] = groupNames.toStream.parTraverse { name =>
+  override def batchLoadGroupEmail(groupNames: Set[WorkbenchGroupName], samRequestContext: SamRequestContext): IO[LazyList[(WorkbenchGroupName, WorkbenchEmail)]] = groupNames.to(LazyList).parTraverse { name =>
     loadGroupEmail(name, samRequestContext).map { y => (name -> y.get)}
   }
 
@@ -205,7 +205,7 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     }
   }
 
-  override def loadSubjectEmails(subjects: Set[WorkbenchSubject], samRequestContext: SamRequestContext): IO[Stream[WorkbenchEmail]] = subjects.toStream.parTraverse { subject =>
+  override def loadSubjectEmails(subjects: Set[WorkbenchSubject], samRequestContext: SamRequestContext): IO[LazyList[WorkbenchEmail]] = subjects.to(LazyList).parTraverse { subject =>
       loadSubjectEmail(subject, samRequestContext).map(_.get)
     }
 
@@ -270,12 +270,12 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
 
   override def setGoogleSubjectId(userId: WorkbenchUserId, googleSubjectId: GoogleSubjectId, samRequestContext: SamRequestContext): IO[Unit] = {
     users.get(userId).fold[IO[Unit]](IO.pure(new Exception(s"user $userId not found")))(
-      u => IO.pure(users + (userId -> u.copy(googleSubjectId = Some(googleSubjectId))))
+      u => IO.pure(users.concat(List((userId, u.copy(googleSubjectId = Some(googleSubjectId))))))
     )
   }
 
-  override def listUserDirectMemberships(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Stream[WorkbenchGroupIdentity]] = {
-    IO.pure(groups.filter { case (_, group) => group.members.contains(userId) }.keys.toStream)
+  override def listUserDirectMemberships(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[LazyList[WorkbenchGroupIdentity]] = {
+    IO.pure(groups.filter { case (_, group) => group.members.contains(userId) }.keys.to(LazyList))
   }
 
   override def loadUserByIdentityConcentratorId(userId: IdentityConcentratorId, samRequestContext: SamRequestContext)
