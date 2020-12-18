@@ -85,3 +85,8 @@ newrelic-agent-4.6.0.jar
 automation/report.xml
 automation/test-reports/
 automation/src/test/resources/
+
+# OpenAPI codegen
+codegen_java/*
+!codegen_java/project
+!codegen_java/build.sbt
