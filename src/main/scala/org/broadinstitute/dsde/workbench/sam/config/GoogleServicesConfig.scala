@@ -71,11 +71,9 @@ object GoogleServicesConfig {
     ServiceAccountConfig(config.root().render(ConfigRenderOptions.concise))
   }
 
-  implicit val topicNameConfigReader: ValueReader[TopicName] = ValueReader.relative { config =>
-    TopicName.parse(config.getString("topic-name"))
-  }
-  implicit val projectSubscriptionNameConfigReader: ValueReader[ProjectSubscriptionName] = ValueReader.relative { config =>
-    ProjectSubscriptionName.parse(config.getString("subscription-name"))
+  implicit val topicNameConfigReader: ValueReader[TopicName] = stringValueReader.map(s => TopicName.parse(s))
+  implicit val projectSubscriptionNameConfigReader: ValueReader[ProjectSubscriptionName] = stringValueReader.map { s =>
+    ProjectSubscriptionName.parse(s)
   }
 
   implicit val subscriberConfigReader: ValueReader[SubscriberConfig] = ValueReader.relative { config =>
