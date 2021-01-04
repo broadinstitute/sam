@@ -455,7 +455,7 @@ class ResourceService(
         Option(policy.descendantPermissions))
   }
 
-  def listResourcePolicies(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Stream[AccessPolicyResponseEntry]] =
+  def listResourcePolicies(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[LazyList[AccessPolicyResponseEntry]] =
     accessPolicyDAO.listAccessPolicies(resource, samRequestContext).flatMap { policies =>
       policies.parTraverse { policy =>
         loadAccessPolicyWithEmails(policy, samRequestContext).map { membership =>
