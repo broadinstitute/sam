@@ -507,9 +507,11 @@ class ResourceService(
           // resources with auth domains logically can't have public policies but also technically allowing them poses a problem
           // because the logic for public resources is different. However, sharing with the auth domain should have the
           // exact same effect as making a policy public: anyone in the auth domain can access.
+          if (public)
           IO.raiseError(
             new WorkbenchExceptionWithErrorReport(
               ErrorReport(StatusCodes.BadRequest, "Cannot make auth domain protected resources public. Share directly with auth domain groups instead.")))
+          else IO.unit
         case LoadResourceAuthDomainResult.NotConstrained =>
           accessPolicyDAO.setPolicyIsPublic(policyId, public, samRequestContext) *> IO.fromFuture(IO(fireGroupUpdateNotification(policyId, samRequestContext)))
       }
