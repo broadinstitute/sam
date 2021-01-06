@@ -16,7 +16,7 @@ class CryptominingSubscriber(subscriber: GoogleSubscriber[IO, CryptominingUserMe
                              userService: UserService
                             )(implicit logger: StructuredLogger[IO], cs: ContextShift[IO]) {
   val process: Stream[IO, Unit] = subscriber.messages
-    .parEvalMapUnordered(2)(messageHandler) // concurrency is low since we don't need high performance in disabling cryptomining users.
+    .evalMap(messageHandler)
     .handleErrorWith(error => Stream.eval(logger.error(error)("Failed to initialize message processor")))
 
   private def messageHandler(event: Event[CryptominingUserMessage]): IO[Unit] = {
