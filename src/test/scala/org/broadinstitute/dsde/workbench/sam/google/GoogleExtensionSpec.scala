@@ -2,7 +2,6 @@ package org.broadinstitute.dsde.workbench.sam.google
 
 import java.net.URI
 import java.util.{Date, GregorianCalendar, UUID}
-
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
@@ -19,6 +18,7 @@ import org.broadinstitute.dsde.workbench.google.GoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.google2.GcsBlobName
 import org.broadinstitute.dsde.workbench.google.mock._
 import org.broadinstitute.dsde.workbench.google2.mock.FakeGoogleStorageInterpreter
+import org.broadinstitute.dsde.workbench.model.Notifications.NotificationFormat
 import org.broadinstitute.dsde.workbench.model.google.GoogleProject
 import org.broadinstitute.dsde.workbench.model.{WorkbenchExceptionWithErrorReport, _}
 import org.broadinstitute.dsde.workbench.sam.api.CreateWorkbenchUser
@@ -1139,6 +1139,24 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
     }
 
     report.errorReport.statusCode shouldEqual Some(StatusCodes.BadRequest)
+  }
+
+  "fireAndForgetNotifications" should "not fail" in {
+    val mockGooglePubSubDAO = new MockGooglePubSubDAO
+    val notificationDAO = new PubSubNotificationDAO(mockGooglePubSubDAO, "foo")
+    val googleExtensions = new GoogleExtensions(TestSupport.fakeDistributedLock, null, newRegistrationDAO(), null, null, mockGooglePubSubDAO, null, null, null, null, notificationDAO, null, googleServicesConfig, petServiceAccountConfig, configResourceTypes)
+
+    val messages = Set(
+      Notifications.GroupAccessRequestNotification(
+        WorkbenchUserId("foo"),
+        WorkbenchGroupName("name").value,
+        Set(WorkbenchUserId("bar")),
+        WorkbenchUserId("baz")
+      ))
+
+    googleExtensions.fireAndForgetNotifications(messages)
+
+    mockGooglePubSubDAO.messageLog should contain theSameElementsAs messages.map(NotificationFormat.write)
   }
 
   protected def clearDatabase(): Unit = {
