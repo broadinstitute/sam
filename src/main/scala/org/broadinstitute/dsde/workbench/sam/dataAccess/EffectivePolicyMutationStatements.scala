@@ -19,15 +19,13 @@ import scalikejdbc.{DBSession, _}
   * concurrent modifications are made affecting the same resource structure.
   */
 trait EffectivePolicyMutationStatements {
-  val resourceTypePKsByName: scala.collection.concurrent.Map[ResourceTypeName, ResourceTypePK]
-
   /**
     * Delete all effective policies on the specified resource.
     * @param resource
     * @param session
     * @return
     */
-  protected def deleteEffectivePolicies(resource: FullyQualifiedResourceId)(implicit session: DBSession): Int = {
+  protected def deleteEffectivePolicies(resource: FullyQualifiedResourceId, resourceTypePKsByName: collection.Map[ResourceTypeName, ResourceTypePK])(implicit session: DBSession): Int = {
     val r = ResourceTable.syntax("r")
     val ep = EffectivePolicyTable.syntax("ep")
 

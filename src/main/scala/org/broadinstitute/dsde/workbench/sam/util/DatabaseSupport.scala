@@ -59,21 +59,6 @@ trait DatabaseSupport {
   }
 
   /**
-    * Disables seq scans for this transaction. https://www.postgresql.org/docs/9.6/runtime-config-query.html.
-    * This is important in serializable transactions because a seq scan means the transaction will read all the
-    * data in a table and thus contend with any other transaction that also reads any of those rows. This creates
-    * artificial dependencies between transactions that lead to serialization failures. Small tables are especially
-    * vulnerable because the postgres optimizer will choose a seq scan over an index scan even when an index exists.
-    * Index scans are desired because this allows the transaction to read only the rows of interest.
-    *
-    * @param session
-    * @return
-    */
-  protected def seqScanOff(implicit session: DBSession): Int = {
-    sql"set local enable_seqscan=off".update().apply()
-  }
-
-  /**
     * Attempts to run a serializable transaction, retrying any serialization failures with a total number
     * of maxTries, doubling the sleep duration between each try.
     */

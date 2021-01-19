@@ -305,49 +305,6 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
         dao.createResource(resourceWithAuthDomain, samRequestContext).unsafeRunSync() shouldEqual resourceWithAuthDomain
       }
 
-//      "can add a resource that has at least 1 Auth Domain and a bunch of policies" in {
-//        val authDomainGroupName1 = WorkbenchGroupName(UUID.randomUUID().toString)
-//        val authDomainGroup1 = BasicWorkbenchGroup(authDomainGroupName1, Set(), WorkbenchEmail(s"${UUID.randomUUID().toString}@foo.com"))
-//        val authDomainGroupName2 = WorkbenchGroupName(UUID.randomUUID().toString)
-//        val authDomainGroup2 = BasicWorkbenchGroup(authDomainGroupName2, Set(), WorkbenchEmail(s"${UUID.randomUUID().toString}@foo.com"))
-//
-//        dirDao.createGroup(authDomainGroup1, samRequestContext = samRequestContext).unsafeRunSync()
-//        dirDao.createGroup(authDomainGroup2, samRequestContext = samRequestContext).unsafeRunSync()
-//        dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
-//
-//        val count = 100
-//        val memberGroupNames: IndexedSeq[Set[WorkbenchSubject]] = for(x <- 1 to 100) yield {
-//          val memberGroupName = WorkbenchGroupName(UUID.randomUUID().toString)
-//          val memberGroup = BasicWorkbenchGroup(memberGroupName, Set(), WorkbenchEmail(s"${UUID.randomUUID().toString}@foo.com"))
-//          Set[WorkbenchSubject](
-//            dirDao.createGroup(memberGroup, samRequestContext = samRequestContext).unsafeRunSync().id,
-//            dirDao.createUser(WorkbenchUser(WorkbenchUserId(UUID.randomUUID().toString), None, WorkbenchEmail(s"${UUID.randomUUID().toString}@foo.com"), None), samRequestContext).unsafeRunSync().id
-//          )
-//        }
-//        val trials = for (x <- 1 to count) yield {
-//          val id = ResourceId(UUID.randomUUID().toString)
-//          val accessPolicies = for(x <- 1 to 1) yield {
-//            val members: Set[WorkbenchSubject] = if (x == 1) {
-//              memberGroupNames(x)
-//            } else {
-//              Set.empty
-//            }
-//            AccessPolicy(FullyQualifiedPolicyId(FullyQualifiedResourceId(resourceType.name, id), AccessPolicyName(s"$x")), members, WorkbenchEmail(s"${UUID.randomUUID().toString}@foo.com"), Set(ownerRoleName), Set.empty, Set.empty, false)
-//          }
-//
-//          val authDomain = Set(authDomainGroupName1, authDomainGroupName2)
-////          val authDomain = Set.empty[WorkbenchGroupName]
-//          val resourceWithAuthDomain = Resource(resourceType.name, id, authDomain, accessPolicies.toSet)
-//          dao.createResource(resourceWithAuthDomain, samRequestContext).map(_ => true).handleErrorWith {
-//            case t =>
-//              t.printStackTrace()
-//              IO.pure(false)
-//          }
-//        }
-//        val futures = trials.map(_.unsafeToFuture())
-//        Await.result(Future.sequence(futures), Duration.Inf).count(!_) should equal(0)
-//      }
-
       "raises an error when AuthDomain does not exist" in {
         val authDomainGroupName1 = WorkbenchGroupName("authDomain1")
         val authDomainGroup1 = BasicWorkbenchGroup(authDomainGroupName1, Set(), WorkbenchEmail("authDomain1@foo.com"))

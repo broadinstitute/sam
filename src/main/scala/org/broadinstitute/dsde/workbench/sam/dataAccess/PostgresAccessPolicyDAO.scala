@@ -24,7 +24,15 @@ import scala.util.{Failure, Try}
 
 class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected val readDbRef: DbReference)(implicit val cs: ContextShift[IO], timer: Timer[IO]) extends AccessPolicyDAO with DatabaseSupport with PostgresGroupDAO with EffectivePolicyMutationStatements with LazyLogging {
 
-  val resourceTypePKsByName: scala.collection.concurrent.Map[ResourceTypeName, ResourceTypePK] = new TrieMap()
+  /**
+    * Cache of resource type name to pk mapping. It is important that this is used in serializable transactions
+    * because reading the resource type name within a serializable transaction will lead to concurrency issues.
+    * At best, all serializable transactions on the same resource type will collide and at worst,
+    * ALL serializable transactions will collide (since the resource type table is small and will probably have
+    * a seq scan instead of an index scan, meaning all serializable transactions would read all rows of the
+    * resource type table and thus always collide with each other).
+    */
+  private val resourceTypePKsByName: scala.collection.concurrent.Map[ResourceTypeName, ResourceTypePK] = new TrieMap()
 
   /**
     * Creates or updates all given resource types.
@@ -498,7 +506,7 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
 
   override def deleteResource(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] = {
     serializableWriteTransaction("deleteResource", samRequestContext)({ implicit session =>
-      deleteEffectivePolicies(resource)
+      deleteEffectivePolicies(resource, resourceTypePKsByName)
 
       val r = ResourceTable.syntax("r")
       samsql"""delete from ${ResourceTable as r}

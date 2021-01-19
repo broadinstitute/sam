@@ -123,4 +123,18 @@ object SamTypeBinders {
     def apply(rs: ResultSet, label: String): ServiceAccountSubjectId = ServiceAccountSubjectId(rs.getString(label))
     def apply(rs: ResultSet, index: Int): ServiceAccountSubjectId = ServiceAccountSubjectId(rs.getString(index))
   }
+
+  implicit val flatGroupMemberPKTypeBinder: TypeBinder[FlatGroupMemberPK] = new TypeBinder[FlatGroupMemberPK] {
+    def apply(rs: ResultSet, label: String): FlatGroupMemberPK = FlatGroupMemberPK(rs.getLong(label))
+    def apply(rs: ResultSet, index: Int): FlatGroupMemberPK = FlatGroupMemberPK(rs.getLong(index))
+  }
+
+  implicit val flatGroupMembershipPathPKTypeBinder: TypeBinder[FlatGroupMembershipPath] = new TypeBinder[FlatGroupMembershipPath] {
+    def apply(rs: ResultSet, label: String): FlatGroupMembershipPath = {
+      FlatGroupMembershipPath(rs.getArray(label).getArray.asInstanceOf[Array[java.lang.Long]].map(_.longValue()).toList.map(GroupPK))
+    }
+    def apply(rs: ResultSet, index: Int): FlatGroupMembershipPath = {
+      FlatGroupMembershipPath(rs.getArray(index).getArray.asInstanceOf[Array[java.lang.Long]].map(_.longValue()).toList.map(GroupPK))
+    }
+  }
 }
