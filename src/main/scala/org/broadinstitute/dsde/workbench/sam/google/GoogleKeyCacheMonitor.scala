@@ -168,7 +168,15 @@ class GoogleKeyCacheMonitorActor(
         None
     } flatMap {
       case None => Future.successful(()) // service account does not exist or no access
-      case Some(_) => googleIamDAO.removeServiceAccountKey(project, serviceAccountEmail, keyId)
+      case Some(_) =>
+        googleIamDAO.listServiceAccountKeys(project, serviceAccountEmail).flatMap { keys =>
+          if (keys.map(_.id).contains(keyId)) {
+            googleIamDAO.removeServiceAccountKey(project, serviceAccountEmail, keyId)
+          } else {
+            // key does not exist (anymore)
+            Future.successful(())
+          }
+        }
     }
 
   private def acknowledgeMessage(ackId: String) =
