@@ -1357,18 +1357,16 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
         parentResult should contain theSameElementsAs Set(descendantRole.roleName)
       }
 
-      "list correct roles in grandparent, parent, child relationship" in {
+      "list included role when included in inherited role" in {
         // create grand parent, parent, child structure where grand parent role includes
         // a parent role and parent role include a child role then assign user grandparent role
         // and verify user has correct role at each level
         val user = WorkbenchUser(WorkbenchUserId("user"), None, WorkbenchEmail("user@user.edu"), None)
         val noAccessUser = WorkbenchUser(WorkbenchUserId("no access"), None, WorkbenchEmail("no access@user.edu"), None)
 
-        val childRole = ResourceRoleName("child_role")
-        val childRT = ResourceType(ResourceTypeName("childRT"), Set.empty, Set(ResourceRole(childRole, Set.empty)), childRole)
-
         val parentRole = ResourceRoleName("parent_role")
-        val parentRT = ResourceType(ResourceTypeName("parentRT"), Set.empty, Set(ResourceRole(parentRole, Set.empty, descendantRoles = Map(childRT.name -> Set(childRole)))), parentRole)
+        val parentIncludedRole = ResourceRoleName("parent_included_role")
+        val parentRT = ResourceType(ResourceTypeName("parentRT"), Set.empty, Set(ResourceRole(parentRole, Set.empty, includedRoles = Set(parentIncludedRole)), ResourceRole(parentIncludedRole, Set.empty)), parentRole)
 
         val grantParentRole = ResourceRoleName("grand_parent_role")
         val grandParentRT = ResourceType(ResourceTypeName("grandparentRT"), Set.empty, Set(ResourceRole(grantParentRole, Set.empty, descendantRoles = Map(parentRT.name -> Set(parentRole)))), grantParentRole)
@@ -1379,32 +1377,25 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
         val parentId = FullyQualifiedResourceId(parentRT.name, ResourceId("parent"))
         val parent = Resource(parentId.resourceTypeName, parentId.resourceId, Set.empty, parent = Option(grandParent.fullyQualifiedId))
 
-        val childId = FullyQualifiedResourceId(childRT.name, ResourceId("child"))
-        val child = Resource(childId.resourceTypeName, childId.resourceId, Set.empty, parent = Option(parent.fullyQualifiedId))
-
         val test = for {
           _ <- dirDao.createUser(user, samRequestContext)
           _ <- dirDao.createUser(noAccessUser, samRequestContext)
-          _ <- dao.upsertResourceTypes(Set(grandParentRT, parentRT, childRT), samRequestContext)
+          _ <- dao.upsertResourceTypes(Set(grandParentRT, parentRT), samRequestContext)
           _ <- dao.createResource(grandParent, samRequestContext)
           _ <- dao.createResource(parent, samRequestContext)
-          _ <- dao.createResource(child, samRequestContext)
+          _ <- dao.createPolicy(grandParent.accessPolicies.head, samRequestContext)
 
           grandParentRoles <- dao.listUserResourceRoles(grandParentId, user.id, samRequestContext)
           parentRoles <- dao.listUserResourceRoles(parentId, user.id, samRequestContext)
-          childRoles <- dao.listUserResourceRoles(childId, user.id, samRequestContext)
 
           noAccessGrandParentRoles <- dao.listUserResourceRoles(grandParentId, noAccessUser.id, samRequestContext)
           noAccessParentRoles <- dao.listUserResourceRoles(parentId, noAccessUser.id, samRequestContext)
-          noAccessChildRoles <- dao.listUserResourceRoles(childId, noAccessUser.id, samRequestContext)
         } yield {
           grandParentRoles should contain theSameElementsAs Set(grantParentRole)
-          parentRoles should contain theSameElementsAs Set(parentRole)
-          childRoles should contain theSameElementsAs Set(childRole)
+          parentRoles should contain theSameElementsAs Set(parentRole, parentIncludedRole)
 
           noAccessGrandParentRoles shouldBe empty
           noAccessParentRoles shouldBe empty
-          noAccessChildRoles shouldBe empty
         }
 
         test.unsafeRunSync()
