@@ -14,7 +14,7 @@
             with recursive flattened_role(base_role_id, nested_role_id, descendants_only) as (
             select resourceRole.id, resourceRole.id, false from sam_resource_role resourceRole
             union
-            -- once a role in the inheritance chain is descendants_only then all lower roles in the chain are descendants_only too
+            -- Roles can have "descendant roles" (granted from `descendantRoles`). These roles only apply to the children/descendants of the original resource and not the original resource itself, so descendant roles are marked `descendants_only`. If the descendant role is nested and includes any other roles (`includedRoles`) then logically those roles should also only apply to descendants. Therefore as we unnest/flatten the hierarchy of descendant roles, any additional (included) roles are marked as `descendants_only` as well.
             select flattened_role.base_role_id, nestedRole.nested_role_id, nestedRole.descendants_only or flattened_role.descendants_only from sam_nested_role nestedRole
             join flattened_role on flattened_role.nested_role_id = nestedRole.base_role_id
             ) select * from flattened_role);
