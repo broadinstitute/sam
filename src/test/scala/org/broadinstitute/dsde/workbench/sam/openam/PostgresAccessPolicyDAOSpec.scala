@@ -1356,6 +1356,49 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
         childResult should contain theSameElementsAs Set(ownerRole.roleName)
         parentResult should contain theSameElementsAs Set(descendantRole.roleName)
       }
+
+      "list included role when it is included in inherited role" in {
+        // parent_role on parent has child_role on child, child_role includes child_included_role
+        // verify that user has child_included_role on child when granted parent_role on parent
+        val user = WorkbenchUser(WorkbenchUserId("user"), None, WorkbenchEmail("user@user.edu"), None)
+        val noAccessUser = WorkbenchUser(WorkbenchUserId("no access"), None, WorkbenchEmail("no access@user.edu"), None)
+
+        val childRole = ResourceRoleName("child_role")
+        val childIncludedRole = ResourceRoleName("child_included_role")
+        val childRT = ResourceType(ResourceTypeName("childRT"), Set.empty, Set(ResourceRole(childRole, Set.empty, includedRoles = Set(childIncludedRole)), ResourceRole(childIncludedRole, Set.empty)), childRole)
+
+        val parentRole = ResourceRoleName("parent_role")
+        val parentRT = ResourceType(ResourceTypeName("parentRT"), Set.empty, Set(ResourceRole(parentRole, Set.empty, descendantRoles = Map(childRT.name -> Set(childRole)))), parentRole)
+
+        val parentId = FullyQualifiedResourceId(parentRT.name, ResourceId("parent"))
+        val parent = Resource(parentId.resourceTypeName, parentId.resourceId, Set.empty, Set(AccessPolicy(FullyQualifiedPolicyId(parentId, AccessPolicyName("policyname")), Set(user.id), WorkbenchEmail("foo@foo.com"), Set(parentRole), Set.empty, Set.empty, false)))
+
+        val childId = FullyQualifiedResourceId(childRT.name, ResourceId("child"))
+        val child = Resource(childId.resourceTypeName, childId.resourceId, Set.empty, parent = Option(parent.fullyQualifiedId))
+
+        val test = for {
+          _ <- dirDao.createUser(user, samRequestContext)
+          _ <- dirDao.createUser(noAccessUser, samRequestContext)
+          _ <- dao.upsertResourceTypes(Set(parentRT, childRT), samRequestContext)
+          _ <- dao.createResource(parent, samRequestContext)
+          _ <- dao.createResource(child, samRequestContext)
+          _ <- dao.createPolicy(parent.accessPolicies.head, samRequestContext)
+
+          parentRoles <- dao.listUserResourceRoles(parentId, user.id, samRequestContext)
+          childRoles <- dao.listUserResourceRoles(childId, user.id, samRequestContext)
+
+          noAccessParentRoles <- dao.listUserResourceRoles(parentId, noAccessUser.id, samRequestContext)
+          noAccessChildRoles <- dao.listUserResourceRoles(childId, noAccessUser.id, samRequestContext)
+        } yield {
+          parentRoles should contain theSameElementsAs Set(parentRole)
+          childRoles should contain theSameElementsAs Set(childRole, childIncludedRole)
+
+          noAccessParentRoles shouldBe empty
+          noAccessChildRoles shouldBe empty
+        }
+
+        test.unsafeRunSync()
+      }
     }
 
     "setPolicyIsPublic" - {

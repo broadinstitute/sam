@@ -5,13 +5,17 @@
                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
                    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog-ext http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-ext.xsd http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.4.xsd">
 
-    <changeSet logicalFilePath="dummy" author="mtalbott" id="flattened_role_materialized_view">
+    <changeSet logicalFilePath="dummy" author="mtalbott" id="flattened_role_materialized_view" runOnChange="true">
+        <sql>
+            DROP MATERIALIZED VIEW IF EXISTS sam_flattened_role
+        </sql>
         <sql stripComments="true">
             create materialized view sam_flattened_role as (
             with recursive flattened_role(base_role_id, nested_role_id, descendants_only) as (
             select resourceRole.id, resourceRole.id, false from sam_resource_role resourceRole
             union
-            select flattened_role.base_role_id, nestedRole.nested_role_id, nestedRole.descendants_only from sam_nested_role nestedRole
+            -- Roles can have "descendant roles" (granted from `descendantRoles`). These roles only apply to the children/descendants of the original resource and not the original resource itself, so descendant roles are marked `descendants_only`. If the descendant role is nested and includes any other roles (`includedRoles`) then logically those roles should also only apply to descendants. Therefore as we unnest/flatten the hierarchy of descendant roles, any additional (included) roles are marked as `descendants_only` as well.
+            select flattened_role.base_role_id, nestedRole.nested_role_id, nestedRole.descendants_only or flattened_role.descendants_only from sam_nested_role nestedRole
             join flattened_role on flattened_role.nested_role_id = nestedRole.base_role_id
             ) select * from flattened_role);
         </sql>
