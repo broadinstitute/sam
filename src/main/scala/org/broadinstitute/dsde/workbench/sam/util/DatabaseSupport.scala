@@ -39,7 +39,7 @@ trait DatabaseSupport {
     * Serializable transactions are used primarily by updates to the hierarchical group and resource/policy models
     * to avoid race conditions where there are concurrent changes to those structures.
     *
-    * Example: group A contains group B contains group C, add user U to C at the same time as removing A from B.
+    * Example: group A contains group B contains group C, add user U to C at the same time as removing B from A.
     * This is not something a typical database locking strategy can account for as they are seemingly unrelated
     * changes. However sam tries to flatten this group structure which requires a stable view of all of these records.
     *

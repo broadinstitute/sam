@@ -1,7 +1,5 @@
 package org.broadinstitute.dsde.workbench.sam.dataAccess
 
-import java.time.Instant
-
 import akka.http.scaladsl.model.StatusCodes
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.db.PSQLStateExtensions
@@ -14,12 +12,13 @@ import org.postgresql.util.PSQLException
 import scalikejdbc.DBSession
 import scalikejdbc.interpolation.SQLSyntax
 
+import java.time.Instant
 import scala.util.{Failure, Try}
 
 /**
   * The sam group model is implemented using 2 tables GroupTable and GroupMemberTable. GroupTable stores
   * the name, email address and other top level information of the group. GroupMemberTable stores
-  * member groups and emails. Note that this is a recursive structure; groups can contain groups and
+  * member groups and users. Note that this is a recursive structure; groups can contain groups and
   * groups may be members of more than one group. Querying this structure is expensive because it requires
   * recursive queries. The FlatGroupMemberTable is used to shift that burden from read time to write time.
   * FlatGroupMemberTable stores all the members of a group, direct and inherited. This makes membership queries
@@ -32,6 +31,7 @@ import scala.util.{Failure, Try}
   *   the id of the member user or group
   *   the path to the member: an array of group ids indicating the path from group_id to member id
   *     starts with group_id, exclusive of the member id
+  *   last_group_membership_element, the last group is in the path above, is tracked separately so it can be indexed
   *
   * Example database records:
   *   group(7795) contains user(userid)
@@ -47,13 +47,13 @@ import scala.util.{Failure, Try}
   *  15639 |     7801 |            7799 |
   *
   * testdb=# select * from sam_group_member_flat;
-  *    id   | group_id | member_group_id | member_user_id | group_membership_path
-  * --------+----------+-----------------+----------------+-----------------------
-  *  345985 |     7795 |                 | userid         | {7795}
-  *  345986 |     7798 |                 | userid         | {7798}
-  *  345987 |     7801 |            7798 |                | {7801}
-  *  345988 |     7801 |            7799 |                | {7801}
-  *  345989 |     7801 |                 | userid         | {7801,7798}
+  *    id   | group_id | member_group_id | member_user_id | group_membership_path | last_group_membership_element
+  * --------+----------+-----------------+----------------+-----------------------+------------------------------
+  *  345985 |     7795 |                 | userid         | {7795}                | 7795
+  *  345986 |     7798 |                 | userid         | {7798}                | 7798
+  *  345987 |     7801 |            7798 |                | {7801}                | 7801
+  *  345988 |     7801 |            7799 |                | {7801}                | 7801
+  *  345989 |     7801 |                 | userid         | {7801,7798}           | 7798
   *
   * It is crucial that all group updates are in serializable transactions to avoid race conditions when
   * concurrent modifications are made affecting the same group structure.
@@ -77,11 +77,7 @@ trait PostgresGroupDAO {
     if (memberGroupPKs.isEmpty && memberUserIds.isEmpty) {
       0
     } else {
-      val insertCount = Try {
-        insertGroupMembersIntoHierarchical(groupId, memberGroupPKs, memberUserIds)
-      }.recover {
-        case duplicateException: PSQLException if duplicateException.getSQLState == PSQLStateExtensions.UNIQUE_VIOLATION => 0
-      }.get
+      val insertCount = insertGroupMembersIntoHierarchical(groupId, memberGroupPKs, memberUserIds)
 
       if (insertCount > 0) {
         // if nothing was inserted no need to change the flat structure, it would insert dup records
@@ -101,7 +97,9 @@ trait PostgresGroupDAO {
     }
 
     val gm = GroupMemberTable.column
-    samsql"insert into ${GroupMemberTable.table} (${gm.groupId}, ${gm.memberUserId}, ${gm.memberGroupId}) values ${memberUserValues ++ memberGroupValues}"
+    samsql"""insert into ${GroupMemberTable.table} (${gm.groupId}, ${gm.memberUserId}, ${gm.memberGroupId})
+            values ${memberUserValues ++ memberGroupValues}
+            on conflict do nothing"""
       .update().apply()
   }
 
@@ -110,11 +108,50 @@ trait PostgresGroupDAO {
     *   1) insert direct membership - group_id is given group, member_group_id/member_user_id is give member, path contains only given group
     *   2) insert indirect memberships - insert a record for every record where member_group_id is the given group, group_id is the same, member_group_id/member_user_id is the member, path is the same with given group appended
     *
-    * Inserting a subgroup into a group requires an additional insert to connect the subgroup's lower hierarchy:
-    * insert a record for every record where
-    *   - member_group_id is the given group id (all containers of given group), call these the head
-    *   - group_id is the given group id (all members of given group), call these the tail
-    * new record group_id is the head group_id, member id is the tail member id, path is the head path + tail path
+    * Inserting a subgroup into a group requires a third insert to connect the subgroup's lower hierarchy:
+    * for all records
+    *   from GroupMemberFlatTable where group_id is the subgroup id (all paths from the subgroup to a member), call these the tail records
+    *   join GroupMemberFlatTable where member_group_id is the subgroup id and the last element of the path is the parent group (all paths to the subgroup by way of the parent), call these the head records
+    * insert a new record joining these pairs of paths, head to tail:
+    *   group_id is the head group_id (first element of the path)
+    *   member id is the tail member id
+    *   path is the head path + tail path
+    *
+    * Example: Insert group T into group H.
+    * H starts empty but is already a member of groups A and B.
+    * T already has member groups X and Y which are empty.
+    * The flat group model starts containing:
+    * Group | Member Group | Path
+    * ------|--------------|------
+    *   A   |      H       | {A}
+    *   B   |      H       | {B}
+    *   T   |      X       | {T}
+    *   T   |      Y       | {T}
+    *
+    * step 1 inserts direct membership of T in H
+    * Group | Member Group | Path
+    * ------|--------------|------
+    *   H   |      T       | {H}
+    *
+    * step 2 inserts indirect memberships T in A and B
+    * Group | Member Group | Path
+    * ------|--------------|------
+    *   A   |      T       | {A,H}
+    *   B   |      T       | {B,H}
+    *
+    * step 3 inserts T's lower group hierarchy so that X and Y are members of H, A and B.
+    * The tail records are all of the records above where Group is T:
+    *   ((T, X, {T}), (T, Y, {T})
+    * The head records are all of the records above where Member Group is T and the last path element is H:
+    *   ((H, T, {H}), (A, T, {A,H}), (B, T, {B,H}))
+    * Group | Member Group | Path
+    * ------|--------------|------
+    *   H   |      X       | {H,T}
+    *   H   |      Y       | {H,T}
+    *   A   |      X       | {A,H,T}
+    *   A   |      Y       | {A,H,T}
+    *   B   |      X       | {B,H,T}
+    *   B   |      Y       | {B,H,T}
     *
     *
     * @param groupId group being added to
@@ -123,32 +160,32 @@ trait PostgresGroupDAO {
     * @param session
     */
   private def insertGroupMembersIntoFlat(groupId: GroupPK, memberGroupPKs: List[GroupPK], memberUserIds: List[WorkbenchUserId])(implicit session: DBSession): Unit = {
-    val fgmColumn = FlatGroupMemberTable.column
-    val fgm = FlatGroupMemberTable.syntax("fgm")
+    val fgmColumn = GroupMemberFlatTable.column
+    val fgm = GroupMemberFlatTable.syntax("fgm")
 
     val directUserValues = memberUserIds.map(uid => samsqls"($uid, cast(null as BIGINT))")
     val directGroupValues = memberGroupPKs.map(gpk => samsqls"(cast(null as varchar), $gpk)")
 
     // insert direct memberships
-    samsql"""insert into ${FlatGroupMemberTable.table} (${fgmColumn.groupId}, ${fgmColumn.memberUserId}, ${fgmColumn.memberGroupId}, ${fgmColumn.groupMembershipPath}, ${fgmColumn.lastGroupMembershipElement})
+    samsql"""insert into ${GroupMemberFlatTable.table} (${fgmColumn.groupId}, ${fgmColumn.memberUserId}, ${fgmColumn.memberGroupId}, ${fgmColumn.groupMembershipPath}, ${fgmColumn.lastGroupMembershipElement})
                select ${groupId}, insertValues.member_user_id, insertValues.member_group_id, array[$groupId], $groupId
                from (values ${directUserValues ++ directGroupValues}) AS insertValues (member_user_id, member_group_id)""".update().apply()
 
     // insert memberships where groupId is a subgroup
-    samsql"""insert into ${FlatGroupMemberTable.table} (${fgmColumn.groupId}, ${fgmColumn.memberUserId}, ${fgmColumn.memberGroupId}, ${fgmColumn.groupMembershipPath}, ${fgmColumn.lastGroupMembershipElement})
+    samsql"""insert into ${GroupMemberFlatTable.table} (${fgmColumn.groupId}, ${fgmColumn.memberUserId}, ${fgmColumn.memberGroupId}, ${fgmColumn.groupMembershipPath}, ${fgmColumn.lastGroupMembershipElement})
              select ${fgm.groupId}, insertValues.member_user_id, insertValues.member_group_id, array_append(${fgm.groupMembershipPath}, $groupId), $groupId
              from (values ${directUserValues ++ directGroupValues}) AS insertValues (member_user_id, member_group_id),
-             ${FlatGroupMemberTable as fgm}
+             ${GroupMemberFlatTable as fgm}
              where ${fgm.memberGroupId} = $groupId""".update().apply()
 
     if (memberGroupPKs.nonEmpty) {
       // insert subgroup memberships
-      val tail = FlatGroupMemberTable.syntax("tail")
-      val head = FlatGroupMemberTable.syntax("head")
-      samsql"""insert into ${FlatGroupMemberTable.table} (${fgmColumn.groupId}, ${fgmColumn.memberUserId}, ${fgmColumn.memberGroupId}, ${fgmColumn.groupMembershipPath}, ${fgmColumn.lastGroupMembershipElement})
+      val tail = GroupMemberFlatTable.syntax("tail")
+      val head = GroupMemberFlatTable.syntax("head")
+      samsql"""insert into ${GroupMemberFlatTable.table} (${fgmColumn.groupId}, ${fgmColumn.memberUserId}, ${fgmColumn.memberGroupId}, ${fgmColumn.groupMembershipPath}, ${fgmColumn.lastGroupMembershipElement})
              select ${head.groupId}, ${tail.memberUserId}, ${tail.memberGroupId}, array_cat(${head.groupMembershipPath}, ${tail.groupMembershipPath}), ${tail.groupMembershipPath}[array_upper(${tail.groupMembershipPath}, 1)]
-             from ${FlatGroupMemberTable as tail}
-             join ${FlatGroupMemberTable as head} on ${head.memberGroupId} = ${tail.groupId}
+             from ${GroupMemberFlatTable as tail}
+             join ${GroupMemberFlatTable as head} on ${head.memberGroupId} = ${tail.groupId}
              where ${tail.groupId} in ($memberGroupPKs)
              and ${head.lastGroupMembershipElement} = ${groupId}""".update().apply()
     }
@@ -166,9 +203,9 @@ trait PostgresGroupDAO {
 
   private def removeAllMembersFromFlatGroup(groupPK: GroupPK)(implicit session: DBSession) = {
     // removing all members means all rows where groupPK has members (groupId = groupPK) or descendants (groupPK in groupMembershipPath)
-    val f = FlatGroupMemberTable.syntax("f")
-    samsql"delete from ${FlatGroupMemberTable as f} where ${f.groupId} = ${groupPK}".update().apply()
-    samsql"delete from ${FlatGroupMemberTable as f} where array_position(${f.groupMembershipPath}, ${groupPK}) is not null".update().apply()
+    val f = GroupMemberFlatTable.syntax("f")
+    samsql"delete from ${GroupMemberFlatTable as f} where ${f.groupId} = ${groupPK}".update().apply()
+    samsql"delete from ${GroupMemberFlatTable as f} where array_position(${f.groupMembershipPath}, ${groupPK}) is not null".update().apply()
   }
 
   def removeGroupMember(groupId: WorkbenchGroupIdentity, removeMember: WorkbenchSubject)(implicit session: DBSession): Boolean = {
@@ -193,14 +230,14 @@ trait PostgresGroupDAO {
   }
 
   private def removeMemberGroupFromFlatGroup(groupId: WorkbenchGroupIdentity, memberGroup: WorkbenchGroupIdentity)(implicit session: DBSession) = {
-    val f = FlatGroupMemberTable.syntax("f")
+    val f = GroupMemberFlatTable.syntax("f")
     // remove rows where memberGroup directly in groupId
-    samsql"""delete from ${FlatGroupMemberTable as f}
+    samsql"""delete from ${GroupMemberFlatTable as f}
                 where ${f.memberGroupId} = (${workbenchGroupIdentityToGroupPK(memberGroup)})
-                and ${f.groupMembershipPath}[array_upper(${f.groupMembershipPath}, 1)] = (${workbenchGroupIdentityToGroupPK(groupId)})""".update().apply()
+                and ${f.lastGroupMembershipElement} = (${workbenchGroupIdentityToGroupPK(groupId)})""".update().apply()
 
     // remove rows where groupId is directly followed by memberGroup in membership path, these are indirect memberships
-    samsql"""delete from ${FlatGroupMemberTable as f}
+    samsql"""delete from ${GroupMemberFlatTable as f}
                 where array_position(${f.groupMembershipPath}, (${workbenchGroupIdentityToGroupPK(groupId)})) + 1 =
                 array_position(${f.groupMembershipPath}, (${workbenchGroupIdentityToGroupPK(memberGroup)}))""".update().apply()
   }
@@ -213,16 +250,16 @@ trait PostgresGroupDAO {
   }
 
   private def removeMemberUserFromFlatGroup(groupId: WorkbenchGroupIdentity, memberUser: WorkbenchUserId)(implicit session: DBSession) = {
-    val f = FlatGroupMemberTable.syntax("f")
-    samsql"""delete from ${FlatGroupMemberTable as f}
+    val f = GroupMemberFlatTable.syntax("f")
+    samsql"""delete from ${GroupMemberFlatTable as f}
                 where ${f.memberUserId} = $memberUser
-                and ${f.groupMembershipPath}[array_upper(${f.groupMembershipPath}, 1)] = (${workbenchGroupIdentityToGroupPK(groupId)})""".update().apply()
+                and ${f.lastGroupMembershipElement} = (${workbenchGroupIdentityToGroupPK(groupId)})""".update().apply()
   }
 
   def isGroupMember(groupId: WorkbenchGroupIdentity, member: WorkbenchSubject)(implicit session: DBSession): Boolean = {
-    val f = FlatGroupMemberTable.syntax("f")
+    val f = GroupMemberFlatTable.syntax("f")
     val query =
-      samsql"""SELECT count(*) FROM ${FlatGroupMemberTable as f}
+      samsql"""SELECT count(*) FROM ${GroupMemberFlatTable as f}
               WHERE ${memberClause(member, f)} AND ${f.groupId} = (${workbenchGroupIdentityToGroupPK(groupId)})"""
     query.map(rs => rs.int(1)).single().apply().getOrElse(0) > 0
   }
@@ -250,7 +287,7 @@ trait PostgresGroupDAO {
     maybeGroupPK.size // this should be 0 or 1
   }
 
-  private def memberClause(member: WorkbenchSubject, f: scalikejdbc.QuerySQLSyntaxProvider[scalikejdbc.SQLSyntaxSupport[FlatGroupMemberRecord], FlatGroupMemberRecord]): SQLSyntax = {
+  private def memberClause(member: WorkbenchSubject, f: scalikejdbc.QuerySQLSyntaxProvider[scalikejdbc.SQLSyntaxSupport[GroupMemberFlatRecord], GroupMemberFlatRecord]): SQLSyntax = {
     member match {
       case subGroupId: WorkbenchGroupIdentity => samsqls"${f.memberGroupId} = (${workbenchGroupIdentityToGroupPK(subGroupId)})"
       case WorkbenchUserId(userId) => samsqls"${f.memberUserId} = $userId"
@@ -301,9 +338,14 @@ trait PostgresGroupDAO {
 
   def workbenchGroupIdentityToGroupPK(groupId: WorkbenchGroupIdentity): SQLSyntax = {
     groupId match {
-      case group: WorkbenchGroupName => GroupTable.groupPKQueryForGroup(group)
+      case group: WorkbenchGroupName => groupPKQueryForGroup(group)
       case policy: FullyQualifiedPolicyId => groupPKQueryForPolicy(policy)
     }
+  }
+
+  private def groupPKQueryForGroup(groupName: WorkbenchGroupName, groupTableAlias: String = "gpk"): SQLSyntax = {
+    val gpk = GroupTable.syntax(groupTableAlias)
+    samsqls"select ${gpk.id} from ${GroupTable as gpk} where ${gpk.name} = $groupName"
   }
 
   private def groupPKQueryForPolicy(policyId: FullyQualifiedPolicyId,

@@ -3,7 +3,7 @@ package org.broadinstitute.dsde.workbench.sam.db.tables
 import scalikejdbc._
 import org.broadinstitute.dsde.workbench.sam.db.SamTypeBinders
 
-final case class EffectivePolicyActionRecord(resourcePolicyId: EffectivePolicyPK,
+final case class EffectivePolicyActionRecord(effectiveResourcePolicyId: EffectiveResourcePolicyPK,
                                              resourceActionId: ResourceActionPK)
 
 object EffectivePolicyActionTable extends SQLSyntaxSupportWithDefaultSamDB[EffectivePolicyActionRecord] {
@@ -11,7 +11,7 @@ object EffectivePolicyActionTable extends SQLSyntaxSupportWithDefaultSamDB[Effec
 
   import SamTypeBinders._
   def apply(e: ResultName[EffectivePolicyActionRecord])(rs: WrappedResultSet): EffectivePolicyActionRecord = EffectivePolicyActionRecord(
-    rs.get(e.resourcePolicyId),
+    rs.get(e.effectiveResourcePolicyId),
     rs.get(e.resourceActionId)
   )
 }

@@ -152,7 +152,7 @@ object TestSupport extends TestSupport {
         ResourceActionPatternTable,
         ResourceTypeTable,
         GroupMemberTable,
-        FlatGroupMemberTable,
+        GroupMemberFlatTable,
         PetServiceAccountTable,
         UserTable,
         AccessInstructionsTable,

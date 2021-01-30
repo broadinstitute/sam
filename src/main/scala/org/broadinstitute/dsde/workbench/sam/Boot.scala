@@ -27,7 +27,6 @@ import org.broadinstitute.dsde.workbench.sam.config.{AppConfig, GoogleConfig, Id
 import org.broadinstitute.dsde.workbench.sam.dataAccess._
 import org.broadinstitute.dsde.workbench.sam.db.DatabaseNames.DatabaseName
 import org.broadinstitute.dsde.workbench.sam.db.{DatabaseNames, DbReference}
-import org.broadinstitute.dsde.workbench.sam.directory._
 import org.broadinstitute.dsde.workbench.sam.google._
 import org.broadinstitute.dsde.workbench.sam.identityConcentrator.{IdentityConcentratorService, StandardIdentityConcentratorApi}
 import org.broadinstitute.dsde.workbench.sam.model._

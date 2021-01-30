@@ -219,7 +219,7 @@ class ResourceService(
     for {
       _ <- checkNoChildren(resource, samRequestContext).unsafeToFuture()
 
-      // remove from cloud extensions first so a failure there does not leave ldap in a bad state
+      // remove from cloud first so a failure there does not leave sam in a bad state
       _ <- cloudDeletePolicies(resource, samRequestContext)
 
       _ <- accessPolicyDAO.deleteAllResourcePolicies(resource, samRequestContext).unsafeToFuture()

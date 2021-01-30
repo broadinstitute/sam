@@ -512,9 +512,9 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
     */
   override def listIntersectionGroupUsers(groupIds: Set[WorkbenchGroupIdentity], samRequestContext: SamRequestContext): IO[Set[WorkbenchUserId]] = {
     readOnlyTransaction("listIntersectionGroupUsers", samRequestContext)({ implicit session =>
-      val f = FlatGroupMemberTable.syntax("f")
+      val f = GroupMemberFlatTable.syntax("f")
       val groupMemberQueries = groupIds.map { groupId =>
-        samsqls"select ${f.result.memberUserId} from ${FlatGroupMemberTable as f} where ${f.memberUserId} is not null and ${f.groupId} = (${workbenchGroupIdentityToGroupPK(groupId)})"
+        samsqls"select ${f.result.memberUserId} from ${GroupMemberFlatTable as f} where ${f.memberUserId} is not null and ${f.groupId} = (${workbenchGroupIdentityToGroupPK(groupId)})"
       }
       samsql"""${groupMemberQueries.reduce((left, right) => samsqls"$left intersect $right")}""".map(rs => WorkbenchUserId(rs.string(1))).list().apply().toSet
     })
@@ -522,7 +522,7 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
 
 
   private def listMemberOfGroups(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Set[WorkbenchGroupIdentity]]  = {
-    val f = FlatGroupMemberTable.syntax("f")
+    val f = GroupMemberFlatTable.syntax("f")
     val g = GroupTable.syntax("g")
     val p = PolicyTable.syntax("p")
 
@@ -538,7 +538,7 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
 
       val listGroupsQuery =
         samsql"""select ${g.result.name}, ${p.result.name}, ${r.result.name}, ${rt.result.name}
-                 from ${FlatGroupMemberTable as f}
+                 from ${GroupMemberFlatTable as f}
             join ${GroupTable as g} on ${f.groupId} = ${g.id}
             left join ${PolicyTable as p} on ${p.groupId} = ${g.id}
             left join ${ResourceTable as r} on ${p.resourceId} = ${r.id}
@@ -554,12 +554,12 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
   }
 
   override def listFlattenedGroupMembers(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Set[WorkbenchUserId]] = {
-    val f = FlatGroupMemberTable.syntax("f")
+    val f = GroupMemberFlatTable.syntax("f")
     val g = GroupTable.syntax("g")
 
     readOnlyTransaction("listFlattenedGroupMembers", samRequestContext)({ implicit session =>
       val query = samsql"""select distinct ${f.result.memberUserId}
-        from ${FlatGroupMemberTable as f}
+        from ${GroupMemberFlatTable as f}
         join ${GroupTable as g} on ${g.id} = ${f.groupId}
         where ${g.name} = ${groupName}
         and ${f.memberUserId} is not null"""

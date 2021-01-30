@@ -1,14 +1,13 @@
-package org.broadinstitute.dsde.workbench.sam.directory
+package org.broadinstitute.dsde.workbench.sam.dataAccess
 
-import java.text.SimpleDateFormat
-import java.util.Date
-
-import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.GoogleProject
+import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO.Attr
 
+import java.text.SimpleDateFormat
+import java.util.Date
 import scala.util.matching.Regex
 
 /**
@@ -64,7 +63,7 @@ trait DirectorySubjectNameSupport {
   private val petMatcher = dnMatcher(Seq(Attr.project, Attr.uid), peopleOu)
   private val policyMatcher = dnMatcher(Seq(Attr.policy, Attr.resourceId, Attr.resourceType), resourcesOu)
 
-  protected def dnToSubject(dn: String): WorkbenchSubject = {
+  protected def dnToSubject(dn: String): WorkbenchSubject =
     dn match {
       case groupMatcher(cn) => WorkbenchGroupName(cn)
       case personMatcher(uid) => WorkbenchUserId(uid)
@@ -73,7 +72,6 @@ trait DirectorySubjectNameSupport {
         FullyQualifiedPolicyId(FullyQualifiedResourceId(ResourceTypeName(resourceTypeName), ResourceId(resourceId)), AccessPolicyName(policyName))
       case _ => throw new WorkbenchException(s"unexpected dn [$dn]")
     }
-  }
 
   protected def dnToGroupIdentity(dn: String): WorkbenchGroupIdentity =
     dnToSubject(dn) match {

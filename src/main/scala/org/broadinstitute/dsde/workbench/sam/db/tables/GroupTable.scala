@@ -1,11 +1,10 @@
 package org.broadinstitute.dsde.workbench.sam.db.tables
 
-import java.time.Instant
-
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchGroupName}
 import org.broadinstitute.dsde.workbench.sam.db.{DatabaseKey, SamTypeBinders}
-import org.broadinstitute.dsde.workbench.sam.db.SamParameterBinderFactory.SqlInterpolationWithSamBinders
 import scalikejdbc._
+
+import java.time.Instant
 
 final case class GroupPK(value: Long) extends DatabaseKey
 final case class GroupRecord(id: GroupPK,
@@ -30,9 +29,4 @@ object GroupTable extends SQLSyntaxSupportWithDefaultSamDB[GroupRecord] {
 
   def opt(m: SyntaxProvider[GroupRecord])(rs: WrappedResultSet): Option[GroupRecord] =
     rs.longOpt(m.resultName.id).map(_ => GroupTable(m)(rs))
-
-  def groupPKQueryForGroup(groupName: WorkbenchGroupName, groupTableAlias: String = "gpk"): SQLSyntax = {
-    val gpk = GroupTable.syntax(groupTableAlias)
-    samsqls"select ${gpk.id} from ${GroupTable as gpk} where ${gpk.name} = $groupName"
-  }
 }

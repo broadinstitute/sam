@@ -708,7 +708,7 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
     val policyPK = PolicyPK(samsql"""insert into ${PolicyTable.table} (${pCol.resourceId}, ${pCol.groupId}, ${pCol.public}, ${pCol.name})
               values (${resourcePKFragment}, ${groupPK}, ${policy.public}, ${policy.id.accessPolicyName})""".updateAndReturnGeneratedKey().apply())
 
-    insertEffectivePolicies(policy, groupPK, policyPK)
+    insertEffectivePolicies(policy, policyPK)
 
     policyPK
   }
@@ -997,13 +997,13 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
   override def listAccessPolicies(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[ResourceIdAndPolicyName]] = {
     val r = ResourceTable.syntax("r")
     val rt = ResourceTypeTable.syntax("rt")
-    val f = FlatGroupMemberTable.syntax("f")
+    val f = GroupMemberFlatTable.syntax("f")
     val p = PolicyTable.syntax("p")
 
     readOnlyTransaction("listAccessPolicies", samRequestContext)({ implicit session =>
       samsql"""select ${r.result.name}, ${p.result.name}
          from ${PolicyTable as p}
-         join ${FlatGroupMemberTable as f} on ${f.groupId} = ${p.groupId}
+         join ${GroupMemberFlatTable as f} on ${f.groupId} = ${p.groupId}
          join ${ResourceTable as r} on ${r.id} = ${p.resourceId}
          join ${ResourceTypeTable as rt} on ${rt.id} = ${r.resourceTypeId}
          where ${rt.name} = ${resourceTypeName}
@@ -1020,14 +1020,14 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
         val policyAction = ResourceActionTable.syntax("policyAction")
 
         override val selectColumns: scalikejdbc.SQLSyntax = {
-          samsqls"""${resource.result.name}, ${resourceRole.result.role}, ${policyAction.result.action}, ${effPol.result.public}, ${policy.resourceId} != ${resource.id} as inherited"""
+          samsqls"""${resource.result.name}, ${resourceRole.result.role}, ${policyAction.result.action}, ${policy.result.public}, ${policy.resourceId} != ${resource.id} as inherited"""
         }
 
         override val additionalJoins: scalikejdbc.SQLSyntax = {
           samsqls"""
-          left join ${EffectivePolicyRoleTable as policyRole} on ${effPol.id} = ${policyRole.resourcePolicyId}
+          left join ${EffectivePolicyRoleTable as policyRole} on ${effPol.id} = ${policyRole.effectiveResourcePolicyId}
           left join ${ResourceRoleTable as resourceRole} on ${policyRole.resourceRoleId} = ${resourceRole.id}
-          left join ${EffectivePolicyActionTable as policyActionJoin} on ${effPol.id} = ${policyActionJoin.resourcePolicyId}
+          left join ${EffectivePolicyActionTable as policyActionJoin} on ${effPol.id} = ${policyActionJoin.effectiveResourcePolicyId}
           left join ${ResourceActionTable as policyAction} on ${policyActionJoin.resourceActionId} = ${policyAction.id}
           """
         }
@@ -1040,7 +1040,7 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
       val listUserResourcesQuery = new ListUserResourcesQuery()
       val queryResults = listUserResourcesQuery.query.map { rs =>
         val rolesAndActions = RolesAndActions(rs.stringOpt(listUserResourcesQuery.resourceRole.resultName.role).toSet.map(ResourceRoleName(_)), rs.stringOpt(listUserResourcesQuery.policyAction.resultName.action).toSet.map(ResourceAction(_)))
-        val public = rs.boolean(listUserResourcesQuery.effPol.resultName.public)
+        val public = rs.boolean(listUserResourcesQuery.policy.resultName.public)
         val inherited = rs.boolean("inherited")
         ResourceIdWithRolesAndActions(
           ResourceId(rs.string(listUserResourcesQuery.resource.resultName.name)),
@@ -1062,7 +1062,7 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
     readOnlyTransaction("listAccessPoliciesForUser", samRequestContext)({ implicit session =>
       val r = ResourceTable.syntax("r")
       val rt = ResourceTypeTable.syntax("rt")
-      val f = FlatGroupMemberTable.syntax("f")
+      val f = GroupMemberFlatTable.syntax("f")
       val g = GroupTable.syntax("g")
       val p: scalikejdbc.QuerySQLSyntaxProvider[scalikejdbc.SQLSyntaxSupport[PolicyRecord], PolicyRecord] = PolicyTable.syntax("p")
 
@@ -1074,7 +1074,7 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
       val listPoliciesQuery =
         samsql"""select ${p.result.name}, ${r.result.name}, ${rt.result.name}, ${g.result.email}, ${p.result.public}, ${rr.result.role}, ${ra.result.action}
           from ${GroupTable as g}
-          join ${FlatGroupMemberTable as f} on ${f.groupId} = ${g.id}
+          join ${GroupMemberFlatTable as f} on ${f.groupId} = ${g.id}
           join ${PolicyTable as p} on ${g.id} = ${p.groupId}
           join ${ResourceTable as r} on ${p.resourceId} = ${r.id}
           join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
@@ -1110,7 +1110,7 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
 
         override val additionalJoins: scalikejdbc.SQLSyntax =
           samsqls"""
-          join ${EffectivePolicyRoleTable as policyRole} on ${effPol.id} = ${policyRole.resourcePolicyId}
+          join ${EffectivePolicyRoleTable as policyRole} on ${effPol.id} = ${policyRole.effectiveResourcePolicyId}
           join ${ResourceRoleTable as resourceRole} on ${policyRole.resourceRoleId} = ${resourceRole.id}
           join ${RoleActionTable as roleActionJoin} on ${resourceRole.id} = ${roleActionJoin.resourceRoleId}
           join ${ResourceActionTable as roleAction} on ${roleActionJoin.resourceActionId} = ${roleAction.id}
@@ -1127,7 +1127,7 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
 
         override val additionalJoins: scalikejdbc.SQLSyntax =
           samsqls"""
-          join ${EffectivePolicyActionTable as policyActionJoin} on ${effPol.id} = ${policyActionJoin.resourcePolicyId}
+          join ${EffectivePolicyActionTable as policyActionJoin} on ${effPol.id} = ${policyActionJoin.effectiveResourcePolicyId}
           join ${ResourceActionTable as policyAction} on ${policyActionJoin.resourceActionId} = ${policyAction.id}
           """
 
@@ -1150,7 +1150,7 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
 
         override val additionalJoins: scalikejdbc.SQLSyntax =
           samsqls"""
-          join ${EffectivePolicyRoleTable as policyRole} on ${effPol.id} = ${policyRole.resourcePolicyId}
+          join ${EffectivePolicyRoleTable as policyRole} on ${effPol.id} = ${policyRole.effectiveResourcePolicyId}
           join ${ResourceRoleTable as resourceRole} on ${policyRole.resourceRoleId} = ${resourceRole.id}
           """
 
@@ -1162,14 +1162,14 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
   }
 
   override def listFlattenedPolicyMembers(policyId: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[Set[WorkbenchUser]] = {
-    val f = FlatGroupMemberTable.syntax("f")
+    val f = GroupMemberFlatTable.syntax("f")
     val u = UserTable.syntax("u")
     val p = PolicyTable.syntax("p")
     val r = ResourceTable.syntax("r")
 
     readOnlyTransaction("listFlattenedPolicyMembers", samRequestContext)({ implicit session =>
       val query = samsql"""select distinct ${u.resultAll}
-        from ${FlatGroupMemberTable as f}
+        from ${GroupMemberFlatTable as f}
         join ${UserTable as u} on ${u.id} = ${f.memberUserId}
         join ${PolicyTable as p} on ${p.groupId} = ${f.groupId}
         join ${ResourceTable as r} on ${p.resourceId} = ${r.id}
@@ -1310,16 +1310,14 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
     samsql"""update ${PolicyTable as p}
               set ${policyTableColumn.public} = ${isPublic}
               where ${p.id} = ${policyPK}""".update().apply()
-
-    setEffectivePoliciesPublic(policyPK, isPublic)
   }
 
   /**
     * This class encapsulates the common parts of queries for user resources such as list all roles on an action
     * or list all resources of a type with actions and roles.
     *
-    * This is a class instead of a function because it lots of inputs and lots of outputs and describing that
-    * in terms of paremters and return values is messy. This seemed the cleanest approach.
+    * This is a class instead of a function because it has lots of inputs and lots of outputs and describing that
+    * in terms of parameters and return values is messy. This seemed the cleanest approach.
     *
     * @param resourceTypeName type name to query for
     * @param resourceId resource id if applicable
@@ -1328,10 +1326,10 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
   abstract class UserResourcesQuery(resourceTypeName: ResourceTypeName, resourceId: Option[ResourceId], user: WorkbenchUserId) {
     val resource = ResourceTable.syntax("resource")
     val resourceType = ResourceTypeTable.syntax("resourceType")
-    val flatGroupMember = FlatGroupMemberTable.syntax("flatGroupMember")
+    val flatGroupMember = GroupMemberFlatTable.syntax("flatGroupMember")
     val policy = PolicyTable.syntax("policy")
 
-    val effPol = EffectivePolicyTable.syntax("effPol")
+    val effPol = EffectiveResourcePolicyTable.syntax("effPol")
 
     val resourceIdFragment = resourceId.map(id => samsqls"and ${resource.name} = ${id}").getOrElse(samsqls"")
 
@@ -1342,9 +1340,9 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
           select $selectColumns
           from ${ResourceTable as resource}
           join ${ResourceTypeTable as resourceType} on ${resource.resourceTypeId} = ${resourceType.id}
-          join ${EffectivePolicyTable as effPol} on ${resource.id} = ${effPol.resourceId}
-          join ${FlatGroupMemberTable as flatGroupMember} on ${flatGroupMember.groupId} = ${effPol.groupId}
+          join ${EffectiveResourcePolicyTable as effPol} on ${resource.id} = ${effPol.resourceId}
           join ${PolicyTable as policy} on ${effPol.sourcePolicyId} = ${policy.id}
+          join ${GroupMemberFlatTable as flatGroupMember} on ${flatGroupMember.groupId} = ${policy.groupId}
           $additionalJoins
           where ${resourceType.name} = ${resourceTypeName}
           ${resourceIdFragment}
@@ -1354,12 +1352,12 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
           select $selectColumns
           from ${ResourceTable as resource}
           join ${ResourceTypeTable as resourceType} on ${resource.resourceTypeId} = ${resourceType.id}
-          join ${EffectivePolicyTable as effPol} on ${resource.id} = ${effPol.resourceId}
+          join ${EffectiveResourcePolicyTable as effPol} on ${resource.id} = ${effPol.resourceId}
           join ${PolicyTable as policy} on ${effPol.sourcePolicyId} = ${policy.id}
           $additionalJoins
           where ${resourceType.name} = ${resourceTypeName}
           ${resourceIdFragment}
-          and ${effPol.public}
+          and ${policy.public}
           $renderedAdditionalConditions
           """
     }

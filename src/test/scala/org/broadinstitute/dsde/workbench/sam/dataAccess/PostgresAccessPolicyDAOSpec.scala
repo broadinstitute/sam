@@ -1382,7 +1382,6 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
           _ <- dao.upsertResourceTypes(Set(parentRT, childRT), samRequestContext)
           _ <- dao.createResource(parent, samRequestContext)
           _ <- dao.createResource(child, samRequestContext)
-          _ <- dao.createPolicy(parent.accessPolicies.head, samRequestContext)
 
           parentRoles <- dao.listUserResourceRoles(parentId, user.id, samRequestContext)
           childRoles <- dao.listUserResourceRoles(childId, user.id, samRequestContext)

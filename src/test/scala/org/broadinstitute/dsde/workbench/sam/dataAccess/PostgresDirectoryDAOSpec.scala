@@ -285,7 +285,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
         val subGroup = emptyWorkbenchGroup("subGroup")
         dao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync()
 
-        // TODO: changed this from PSQLException.  This seems OK but let's double check
         assertThrows[WorkbenchException] {
           dao.addGroupMember(defaultGroup.id, subGroup.id, samRequestContext).unsafeRunSync() shouldBe true
         }
