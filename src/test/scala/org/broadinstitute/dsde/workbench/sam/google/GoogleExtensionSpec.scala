@@ -43,6 +43,8 @@ import scala.util.{Success, Try}
 import org.scalatest.flatspec.AnyFlatSpecLike
 import org.scalatest.matchers.should.Matchers
 
+import java.util.concurrent.ConcurrentLinkedQueue
+
 class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with AnyFlatSpecLike with Matchers with TestSupport with MockitoSugar with ScalaFutures with BeforeAndAfterAll with PrivateMethodTester {
   def this() = this(ActorSystem("GoogleGroupSyncMonitorSpec"))
 
@@ -1143,20 +1145,23 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
 
   "fireAndForgetNotifications" should "not fail" in {
     val mockGooglePubSubDAO = new MockGooglePubSubDAO
-    val notificationDAO = new PubSubNotificationDAO(mockGooglePubSubDAO, "foo")
+    val topicName = "neat_topic"
+    val notificationDAO = new PubSubNotificationDAO(mockGooglePubSubDAO, topicName)
     val googleExtensions = new GoogleExtensions(TestSupport.fakeDistributedLock, null, newRegistrationDAO(), null, null, mockGooglePubSubDAO, null, null, null, null, notificationDAO, null, googleServicesConfig, petServiceAccountConfig, configResourceTypes)
 
     val messages = Set(
       Notifications.GroupAccessRequestNotification(
-        WorkbenchUserId("foo"),
-        WorkbenchGroupName("name").value,
-        Set(WorkbenchUserId("bar")),
-        WorkbenchUserId("baz")
+        WorkbenchUserId("Bob"),
+        WorkbenchGroupName("bobs_buds").value,
+        Set(WorkbenchUserId("reply_to_address")),
+        WorkbenchUserId("requesters_id")
       ))
 
     googleExtensions.fireAndForgetNotifications(messages)
 
-    mockGooglePubSubDAO.messageLog should contain theSameElementsAs messages.map(NotificationFormat.write)
+    val messageLog: ConcurrentLinkedQueue[String] = mockGooglePubSubDAO.messageLog
+    val formattedMessages: Set[String] = messages.map(m => topicName + "|" + NotificationFormat.write(m).toString())
+    messageLog should contain theSameElementsAs formattedMessages
   }
 
   protected def clearDatabase(): Unit = {
