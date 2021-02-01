@@ -2,7 +2,6 @@ package org.broadinstitute.dsde.workbench.sam.google
 
 import java.net.URI
 import java.util.{Date, GregorianCalendar, UUID}
-
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
@@ -19,6 +18,7 @@ import org.broadinstitute.dsde.workbench.google.GoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.google2.GcsBlobName
 import org.broadinstitute.dsde.workbench.google.mock._
 import org.broadinstitute.dsde.workbench.google2.mock.FakeGoogleStorageInterpreter
+import org.broadinstitute.dsde.workbench.model.Notifications.NotificationFormat
 import org.broadinstitute.dsde.workbench.model.google.GoogleProject
 import org.broadinstitute.dsde.workbench.model.{WorkbenchExceptionWithErrorReport, _}
 import org.broadinstitute.dsde.workbench.sam.api.CreateWorkbenchUser
@@ -42,6 +42,8 @@ import scala.concurrent.duration._
 import scala.util.{Success, Try}
 import org.scalatest.flatspec.AnyFlatSpecLike
 import org.scalatest.matchers.should.Matchers
+
+import java.util.concurrent.ConcurrentLinkedQueue
 
 class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with AnyFlatSpecLike with Matchers with TestSupport with MockitoSugar with ScalaFutures with BeforeAndAfterAll with PrivateMethodTester {
   def this() = this(ActorSystem("GoogleGroupSyncMonitorSpec"))
@@ -1139,6 +1141,27 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
     }
 
     report.errorReport.statusCode shouldEqual Some(StatusCodes.BadRequest)
+  }
+
+  "fireAndForgetNotifications" should "not fail" in {
+    val mockGooglePubSubDAO = new MockGooglePubSubDAO
+    val topicName = "neat_topic"
+    val notificationDAO = new PubSubNotificationDAO(mockGooglePubSubDAO, topicName)
+    val googleExtensions = new GoogleExtensions(TestSupport.fakeDistributedLock, null, newRegistrationDAO(), null, null, mockGooglePubSubDAO, null, null, null, null, notificationDAO, null, googleServicesConfig, petServiceAccountConfig, configResourceTypes)
+
+    val messages = Set(
+      Notifications.GroupAccessRequestNotification(
+        WorkbenchUserId("Bob"),
+        WorkbenchGroupName("bobs_buds").value,
+        Set(WorkbenchUserId("reply_to_address")),
+        WorkbenchUserId("requesters_id")
+      ))
+
+    googleExtensions.fireAndForgetNotifications(messages)
+
+    val messageLog: ConcurrentLinkedQueue[String] = mockGooglePubSubDAO.messageLog
+    val formattedMessages: Set[String] = messages.map(m => topicName + "|" + NotificationFormat.write(m).toString())
+    messageLog should contain theSameElementsAs formattedMessages
   }
 
   protected def clearDatabase(): Unit = {
