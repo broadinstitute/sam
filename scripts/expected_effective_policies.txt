@@ -1,0 +1,22 @@
+   resource_name    | source_resource_name |     source_policy_name     |       role        | role_resource_type  
+--------------------+----------------------+----------------------------+-------------------+---------------------
+ billingProject     | billingProject       | owner                      | owner             | billing-project
+ billingProject     | billingProject       | workspace-creator          | workspace-creator | billing-project
+ googleProject      | billingProject       | owner                      | notebook-user     | google-project
+ googleProject      | billingProject       | owner                      | owner             | google-project
+ k8sApp             | billingProject       | owner                      | manager           | kubernetes-app
+ k8sApp             | k8sApp               | creator                    | creator           | kubernetes-app
+ workflowcollection | workflowcollection   | workflow-collection-owner  | owner             | workflow-collection
+ workflowcollection | workflowcollection   | workflow-collection-reader | reader            | workflow-collection
+ workflowcollection | workflowcollection   | workflow-collection-writer | writer            | workflow-collection
+ workspace1         | workspace1           | can-catalog                | can-catalog       | workspace
+ workspace1         | workspace1           | can-compute                | can-compute       | workspace
+ workspace1         | workspace1           | owner                      | owner             | workspace
+ workspace1         | workspace1           | project-owner              | owner             | workspace
+ workspace1         | workspace1           | project-owner              | project-owner     | workspace
+ workspace1         | workspace1           | reader                     | reader            | workspace
+ workspace1         | workspace1           | share-reader               | share-reader      | workspace
+ workspace1         | workspace1           | share-writer               | share-writer      | workspace
+ workspace1         | workspace1           | writer                     | writer            | workspace
+(18 rows)
+
