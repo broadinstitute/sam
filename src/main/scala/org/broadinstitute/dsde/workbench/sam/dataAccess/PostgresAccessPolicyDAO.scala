@@ -81,8 +81,9 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
       samsql"""select ${rt.result.name}, ${rt.result.id} from ${ResourceTypeTable as rt}""".map(rs =>
         rs.get[ResourceTypeName](rt.resultName.name) -> rs.get[ResourceTypePK](rt.resultName.id)).list().apply().toMap
     }.map { results =>
-      results.foreach(kv => resourceTypePKsByName.put(kv._1, kv._2))
-      resourceTypePKsByName.filterInPlace((k, v) => results.exists(loaded => (k, v) == loaded))
+      resourceTypePKsByName
+        .addAll(results)
+        .filterInPlace((k, v) => results.exists(loaded => (k, v) == loaded))
     }
   }
 

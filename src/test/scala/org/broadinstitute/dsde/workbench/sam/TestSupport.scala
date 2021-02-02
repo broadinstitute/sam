@@ -136,6 +136,13 @@ object TestSupport extends TestSupport {
 
   def genSamRoutesWithDefault(implicit system: ActorSystem, materializer: Materializer): SamRoutes = genSamRoutes(genSamDependencies(), UserInfo(OAuth2BearerToken(""), genWorkbenchUserId(System.currentTimeMillis()), defaultUserEmail, 3600))
 
+  /*
+  In unit tests there really is not a difference between read and write pools.
+  Ideally I would not even have it. But I also want to have DatabaseNames enum and DbReference.init to use it.
+  So the situation is a little messy and I favor having more mess on the test side than the production side
+  (i.e. I don't want to add a new database name just for tests).
+  So, just use the DatabaseNames.Read connection pool for tests.
+   */
   lazy val dbRef = DbReference.init(config.as[LiquibaseConfig]("liquibase"), DatabaseNames.Read, TestSupport.blockingEc)
 
   def truncateAll: Int = {
