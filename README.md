@@ -73,6 +73,7 @@ Group - Create, delete, read, list, add/remove users and groups. Nested groups a
 ### UML Model
 ![Sam Model](model.png)
 
+[UML Key](https://www.visual-paradigm.com/guide/uml-unified-modeling-language/uml-class-diagram-tutorial/#uml-class-diagram-relationship) for reference.
 Note that in this model Group is a Subject. This allows it to be used interchangeably with Users within policies.
 
 ### API
