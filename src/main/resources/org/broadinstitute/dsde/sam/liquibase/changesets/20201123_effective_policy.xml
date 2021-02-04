@@ -82,9 +82,9 @@
             from SAM_EFFECTIVE_RESOURCE_POLICY ep
             join SAM_POLICY_ROLE pr on ep.source_policy_id = pr.resource_policy_id
             join SAM_RESOURCE resource on ep.resource_id = resource.id
-            join sam_flattened_role flat_role on pr.resource_role_id = flat_role.base_role_id
+            join SAM_FLATTENED_ROLE flat_role on pr.resource_role_id = flat_role.base_role_id
             join SAM_RESOURCE_ROLE role on flat_role.nested_role_id = role.id and resource.resource_type_id = role.resource_type_id
-            join sam_resource_policy sourcePolicy on ep.source_policy_id = sourcePolicy.id
+            join SAM_RESOURCE_POLICY sourcePolicy on ep.source_policy_id = sourcePolicy.id
             where (((sourcePolicy.resource_id != ep.resource_id) and (pr.descendants_only or flat_role.descendants_only))
             or not ((sourcePolicy.resource_id != ep.resource_id) or pr.descendants_only or flat_role.descendants_only))
             on conflict do nothing
@@ -96,7 +96,7 @@
             join SAM_POLICY_ACTION pa on ep.source_policy_id = pa.resource_policy_id
             join SAM_RESOURCE resource on ep.resource_id = resource.id
             join SAM_RESOURCE_ACTION action on pa.resource_action_id = action.id and resource.resource_type_id = action.resource_type_id
-            join sam_resource_policy sourcePolicy on ep.source_policy_id = sourcePolicy.id
+            join SAM_RESOURCE_POLICY sourcePolicy on ep.source_policy_id = sourcePolicy.id
             where pa.descendants_only = (sourcePolicy.resource_id != ep.resource_id)
             and resource.resource_type_id = action.resource_type_id
             on conflict do nothing
