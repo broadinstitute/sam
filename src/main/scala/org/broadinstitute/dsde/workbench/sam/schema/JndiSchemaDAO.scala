@@ -1,11 +1,12 @@
 package org.broadinstitute.dsde.workbench.sam.schema
 
 import com.typesafe.scalalogging.LazyLogging
+
 import javax.naming.directory._
 import javax.naming.{NameAlreadyBoundException, NameNotFoundException}
 import org.broadinstitute.dsde.workbench.model.WorkbenchException
 import org.broadinstitute.dsde.workbench.sam.config.{DirectoryConfig, SchemaLockConfig}
-import org.broadinstitute.dsde.workbench.sam.directory.DirectorySubjectNameSupport
+import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectorySubjectNameSupport
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO._
 import org.broadinstitute.dsde.workbench.sam.schema.SchemaStatus._
 import org.broadinstitute.dsde.workbench.sam.util.{BaseDirContext, JndiSupport}

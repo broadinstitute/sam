@@ -13,9 +13,8 @@ import org.broadinstitute.dsde.workbench.sam
 import org.broadinstitute.dsde.workbench.sam.Generator._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig.resourceTypeReader
-import org.broadinstitute.dsde.workbench.sam.directory.{DirectoryDAO, PostgresDirectoryDAO}
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, PostgresAccessPolicyDAO, PostgresDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, PostgresAccessPolicyDAO}
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.scalatest.OptionValues.convertOptionToValuable
 import org.scalatest.concurrent.ScalaFutures
@@ -38,8 +37,8 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
 
   val dirURI = new URI(directoryConfig.directoryUrl)
   val connectionPool = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
-  lazy val dirDAO: DirectoryDAO = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.blockingEc)
-  lazy val policyDAO: AccessPolicyDAO = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.blockingEc)
+  lazy val dirDAO: DirectoryDAO = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.dbRef)
+  lazy val policyDAO: AccessPolicyDAO = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.dbRef)
   val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
   private val dummyUserInfo = UserInfo(OAuth2BearerToken("token"), WorkbenchUserId("userid"), WorkbenchEmail("user@company.com"), 0)
@@ -731,18 +730,31 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
     managedGroupService.loadManagedGroup(ResourceId(otherAuthDomainGroup), samRequestContext).unsafeRunSync() shouldBe Some(WorkbenchEmail(s"$otherAuthDomainGroup@$emailDomain"))
   }
 
-  it should "delete a child resource that has a parent" in {
-    val parentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("my-resource-parent"))
-    val childResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("my-resource-child"))
-    service.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
-    runAndWait(service.createResource(defaultResourceType, parentResource.resourceId, dummyUserInfo, samRequestContext))
-    runAndWait(service.createResource(defaultResourceType, childResource.resourceId, dummyUserInfo, samRequestContext))
+  it should "delete a child resource that has a parent - reuse ids is false" in {
+    assert(!defaultResourceType.reuseIds)
+    testDeleteResource(defaultResourceType)
+  }
+
+  it should "delete a child resource that has a parent - reuse ids is true" in {
+    assert(managedGroupResourceType.reuseIds)
+    testDeleteResource(managedGroupResourceType)
+  }
+
+  private def testDeleteResource(resourceType: ResourceType) = {
+    val parentResource = FullyQualifiedResourceId(resourceType.name, ResourceId("my-resource-parent"))
+    val childResource = FullyQualifiedResourceId(resourceType.name, ResourceId("my-resource-child"))
+    service.createResourceType(resourceType, samRequestContext).unsafeRunSync()
+    runAndWait(service.createResource(resourceType, parentResource.resourceId, dummyUserInfo, samRequestContext))
+    runAndWait(service.createResource(resourceType, childResource.resourceId, dummyUserInfo, samRequestContext))
     runAndWait(service.setResourceParent(childResource, parentResource, samRequestContext))
 
-    assert(policyDAO.listAccessPolicies(childResource, samRequestContext).unsafeRunSync().nonEmpty)
+    runAndWait(service.createPolicy(FullyQualifiedPolicyId(parentResource, AccessPolicyName("reader")), Set.empty, Set.empty, Set.empty, Set(AccessPolicyDescendantPermissions(resourceType.name, defaultResourceTypeActions, Set.empty)), samRequestContext))
+
+    assert(policyDAO.listResourceChildren(parentResource, samRequestContext).unsafeRunSync().nonEmpty)
 
     runAndWait(service.deleteResource(childResource, samRequestContext))
 
+    assert(policyDAO.listResourceChildren(parentResource, samRequestContext).unsafeRunSync().isEmpty)
     assert(policyDAO.listAccessPolicies(childResource, samRequestContext).unsafeRunSync().isEmpty)
   }
 

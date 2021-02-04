@@ -76,6 +76,17 @@ Group - Create, delete, read, list, add/remove users and groups. Nested groups a
 [UML Key](https://www.visual-paradigm.com/guide/uml-unified-modeling-language/uml-class-diagram-tutorial/#uml-class-diagram-relationship) for reference.
 Note that in this model Group is a Subject. This allows it to be used interchangeably with Users within policies.
 
+### ERD
+![Sam ERD](sam_erd.png)
+
+The Sam schema has 3 main sections: users and groups in yellow, resources and policies in green, resource type
+configuration in purple. Both groups and resources have a hierarchical model (groups can contain groups
+and resources can have parents). To solve read-query performance issues these hierarchies are also stored in
+a flattened representation: 
+[sam_group_member_flat](src/main/scala/org/broadinstitute/dsde/workbench/sam/dataAccess/PostgresGroupDAO.scala) 
+and 
+[sam_effective_*](src/main/scala/org/broadinstitute/dsde/workbench/sam/dataAccess/EffectivePolicyMutationStatements.scala) tables.
+
 ### API
 [Sam APIs](http://petstore.swagger.io/?url=https://raw.githubusercontent.com/broadinstitute/sam/develop/src/main/resources/swagger/api-docs.yaml)
 

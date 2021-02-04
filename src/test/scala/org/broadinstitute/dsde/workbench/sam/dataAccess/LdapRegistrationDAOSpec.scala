@@ -1,7 +1,4 @@
-package org.broadinstitute.dsde.workbench.sam.directory
-
-import java.net.URI
-import java.util.UUID
+package org.broadinstitute.dsde.workbench.sam.dataAccess
 
 import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool, LDAPException}
 import org.broadinstitute.dsde.workbench.model._
@@ -10,11 +7,13 @@ import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.TestSupport._
 import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
-import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
-
-import scala.concurrent.ExecutionContext.Implicits.global
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
+
+import java.net.URI
+import java.util.UUID
+import scala.concurrent.ExecutionContext.Implicits.global
 
 /**
   * Created by dvoet on 5/30/17.

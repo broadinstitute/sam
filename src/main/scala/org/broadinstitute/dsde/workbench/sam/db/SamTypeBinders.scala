@@ -29,6 +29,11 @@ object SamTypeBinders {
     def apply(rs: ResultSet, index: Int): PolicyPK = PolicyPK(rs.getLong(index))
   }
 
+  implicit val effectivePolicyPKTypeBinder: TypeBinder[EffectiveResourcePolicyPK] = new TypeBinder[EffectiveResourcePolicyPK] {
+    def apply(rs: ResultSet, label: String): EffectiveResourcePolicyPK = EffectiveResourcePolicyPK(rs.getLong(label))
+    def apply(rs: ResultSet, index: Int): EffectiveResourcePolicyPK = EffectiveResourcePolicyPK(rs.getLong(index))
+  }
+
   implicit val policyNameTypeBinder: TypeBinder[AccessPolicyName] = new TypeBinder[AccessPolicyName] {
     def apply(rs: ResultSet, label: String): AccessPolicyName = AccessPolicyName(rs.getString(label))
     def apply(rs: ResultSet, index: Int): AccessPolicyName = AccessPolicyName(rs.getString(index))
@@ -117,5 +122,19 @@ object SamTypeBinders {
   implicit val serviceAccountSubjectIdTypeBinder: TypeBinder[ServiceAccountSubjectId] = new TypeBinder[ServiceAccountSubjectId] {
     def apply(rs: ResultSet, label: String): ServiceAccountSubjectId = ServiceAccountSubjectId(rs.getString(label))
     def apply(rs: ResultSet, index: Int): ServiceAccountSubjectId = ServiceAccountSubjectId(rs.getString(index))
+  }
+
+  implicit val flatGroupMemberPKTypeBinder: TypeBinder[GroupMemberFlatPK] = new TypeBinder[GroupMemberFlatPK] {
+    def apply(rs: ResultSet, label: String): GroupMemberFlatPK = GroupMemberFlatPK(rs.getLong(label))
+    def apply(rs: ResultSet, index: Int): GroupMemberFlatPK = GroupMemberFlatPK(rs.getLong(index))
+  }
+
+  implicit val flatGroupMembershipPathPKTypeBinder: TypeBinder[GroupMembershipPath] = new TypeBinder[GroupMembershipPath] {
+    def apply(rs: ResultSet, label: String): GroupMembershipPath = {
+      GroupMembershipPath(rs.getArray(label).getArray.asInstanceOf[Array[java.lang.Long]].map(_.longValue()).toList.map(GroupPK))
+    }
+    def apply(rs: ResultSet, index: Int): GroupMembershipPath = {
+      GroupMembershipPath(rs.getArray(index).getArray.asInstanceOf[Array[java.lang.Long]].map(_.longValue()).toList.map(GroupPK))
+    }
   }
 }

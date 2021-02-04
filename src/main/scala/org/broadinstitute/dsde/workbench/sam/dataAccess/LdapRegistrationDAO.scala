@@ -1,4 +1,4 @@
-package org.broadinstitute.dsde.workbench.sam.directory
+package org.broadinstitute.dsde.workbench.sam.dataAccess
 
 import akka.http.scaladsl.model.StatusCodes
 import cats.effect.{ContextShift, IO, Timer}
@@ -12,9 +12,9 @@ import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO.{Attr, ObjectClass}
 import org.broadinstitute.dsde.workbench.sam.util.{LdapSupport, SamRequestContext}
 
-import scala.jdk.CollectionConverters._
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
+import scala.jdk.CollectionConverters._
 
 // use ExecutionContexts.blockingThreadPool for blockingEc
 class LdapRegistrationDAO(

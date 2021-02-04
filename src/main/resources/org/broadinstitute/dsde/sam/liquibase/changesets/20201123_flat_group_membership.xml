@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog logicalFilePath="dummy"
+                   xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog-ext http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-ext.xsd http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.4.xsd">
+    <changeSet logicalFilePath="dummy" author="thibault" id="flat_group_member_table">
+        <createTable tableName="SAM_GROUP_MEMBER_FLAT">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="group_id" type="BIGINT">
+                <constraints foreignKeyName="FK_SGM_GROUP" referencedTableName="SAM_GROUP" referencedColumnNames="id" nullable="false" deleteCascade="true"/>
+            </column>
+            <column name="member_group_id" type="BIGINT">
+                <constraints foreignKeyName="FK_SGM_MEMBER_GROUP" referencedTableName="SAM_GROUP" referencedColumnNames="id"/>
+            </column>
+            <column name="member_user_id" type="VARCHAR">
+                <constraints foreignKeyName="FK_SGM_MEMBER_USER" referencedTableName="SAM_USER" referencedColumnNames="id" deleteCascade="true"/>
+            </column>
+            <column name="group_membership_path" type="BIGINT ARRAY"/>
+            <column name="last_group_membership_element" type="BIGINT">
+                <constraints foreignKeyName="FK_SGM_LAST_GROUP_MEMBERSHIP_ELEMENT" referencedTableName="SAM_GROUP" referencedColumnNames="id" deleteCascade="true"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="dvoet" id="index_gmf_member_user_id">
+        <createIndex tableName="SAM_GROUP_MEMBER_FLAT" indexName="IDX_GMF_MEMBER_USER_ID">
+            <column name="member_user_id"/>
+        </createIndex>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="dvoet" id="index_gmf_member_group_id">
+        <createIndex tableName="SAM_GROUP_MEMBER_FLAT" indexName="IDX_GMF_MEMBER_GROUP_ID">
+            <column name="member_group_id"/>
+        </createIndex>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="dvoet" id="index_gmf_group_membership_path">
+        <sql>
+            CREATE INDEX IDX_GMF_MEMBERSHIP_PATH ON SAM_GROUP_MEMBER_FLAT USING GIN (group_membership_path)
+        </sql>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="dvoet" id="index_gmf_group_id">
+        <createIndex tableName="SAM_GROUP_MEMBER_FLAT" indexName="IDX_GMF_GROUP_ID">
+            <column name="group_id"/>
+        </createIndex>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="dvoet" id="index_gmf_last_group_membership_element">
+        <createIndex tableName="SAM_GROUP_MEMBER_FLAT" indexName="IDX_GMF_last_group_membership_element">
+            <column name="last_group_membership_element"/>
+        </createIndex>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="dvoet" id="populate_flat_group_member_table">
+        <sql stripComments="true">
+            with recursive
+              unrolled_groups(group_id, member_group_id, member_user_id, group_membership_path, last_group_membership_element) as (
+                select gm.group_id, gm.member_group_id, gm.member_user_id, array[gm.group_id], gm.group_id
+                from sam_group_member gm
+              union
+                select ug.group_id, gm.member_group_id, gm.member_user_id, array_append(ug.group_membership_path, gm.group_id), gm.group_id
+                from unrolled_groups ug
+                join sam_group_member gm on ug.member_group_id = gm.group_id
+            )
+            insert into sam_group_member_flat(group_id, member_group_id, member_user_id, group_membership_path, last_group_membership_element)
+            select ug.group_id, ug.member_group_id, ug.member_user_id, ug.group_membership_path, ug.last_group_membership_element from unrolled_groups ug
+        </sql>
+    </changeSet>
+</databaseChangeLog>

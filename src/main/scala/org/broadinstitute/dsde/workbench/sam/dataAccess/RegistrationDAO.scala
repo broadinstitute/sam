@@ -1,4 +1,5 @@
-package org.broadinstitute.dsde.workbench.sam.directory
+package org.broadinstitute.dsde.workbench.sam.dataAccess
+
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext

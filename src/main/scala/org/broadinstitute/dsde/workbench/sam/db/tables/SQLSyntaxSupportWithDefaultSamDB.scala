@@ -5,5 +5,5 @@ import scalikejdbc._
 
 trait SQLSyntaxSupportWithDefaultSamDB[A] extends SQLSyntaxSupport[A] {
   // I think this connection pool is used only to pull table metadata from the database (which is cached).
-  override def connectionPoolName: Any = DatabaseNames.Foreground.name
+  override def connectionPoolName: Any = DatabaseNames.Read.name
 }

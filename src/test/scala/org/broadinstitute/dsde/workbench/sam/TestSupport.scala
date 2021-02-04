@@ -22,12 +22,11 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.api._
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig._
 import org.broadinstitute.dsde.workbench.sam.config._
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, MockAccessPolicyDAO, MockDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.db.{DatabaseNames, DbReference}
 import org.broadinstitute.dsde.workbench.sam.db.tables._
-import org.broadinstitute.dsde.workbench.sam.directory.MockDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.google.{GoogleExtensionRoutes, GoogleExtensions, GoogleGroupSynchronizer, GoogleKeyCache}
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.openam.{AccessPolicyDAO, MockAccessPolicyDAO}
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
@@ -137,7 +136,14 @@ object TestSupport extends TestSupport {
 
   def genSamRoutesWithDefault(implicit system: ActorSystem, materializer: Materializer): SamRoutes = genSamRoutes(genSamDependencies(), UserInfo(OAuth2BearerToken(""), genWorkbenchUserId(System.currentTimeMillis()), defaultUserEmail, 3600))
 
-  lazy val dbRef = DbReference.init(config.as[LiquibaseConfig]("liquibase"), DatabaseNames.Foreground)
+  /*
+  In unit tests there really is not a difference between read and write pools.
+  Ideally I would not even have it. But I also want to have DatabaseNames enum and DbReference.init to use it.
+  So the situation is a little messy and I favor having more mess on the test side than the production side
+  (i.e. I don't want to add a new database name just for tests).
+  So, just use the DatabaseNames.Read connection pool for tests.
+   */
+  lazy val dbRef = DbReference.init(config.as[LiquibaseConfig]("liquibase"), DatabaseNames.Read, TestSupport.blockingEc)
 
   def truncateAll: Int = {
     dbRef.inLocalTransaction { implicit session =>
@@ -153,6 +159,7 @@ object TestSupport extends TestSupport {
         ResourceActionPatternTable,
         ResourceTypeTable,
         GroupMemberTable,
+        GroupMemberFlatTable,
         PetServiceAccountTable,
         UserTable,
         AccessInstructionsTable,

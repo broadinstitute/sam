@@ -17,7 +17,7 @@ import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchExceptionW
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.api.SamRoutes._
 import org.broadinstitute.dsde.workbench.sam.config.{LiquibaseConfig, SwaggerConfig}
-import org.broadinstitute.dsde.workbench.sam.directory.DirectoryDAO
+import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.service._
 
 import scala.concurrent.{ExecutionContext, Future}

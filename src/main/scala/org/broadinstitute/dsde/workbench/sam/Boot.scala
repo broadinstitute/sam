@@ -18,25 +18,23 @@ import javax.net.SocketFactory
 import javax.net.ssl.SSLContext
 import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
 import org.broadinstitute.dsde.workbench.google.GoogleCredentialModes.{Json, Pem}
-import org.broadinstitute.dsde.workbench.google2.util.DistributedLock
 import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleKmsInterpreter, GoogleKmsService, HttpGoogleDirectoryDAO, HttpGoogleIamDAO, HttpGoogleProjectDAO, HttpGooglePubSubDAO, HttpGoogleStorageDAO}
+import org.broadinstitute.dsde.workbench.google2.util.DistributedLock
 import org.broadinstitute.dsde.workbench.google2.{GoogleFirestoreInterpreter, GoogleStorageInterpreter, GoogleStorageService}
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException}
 import org.broadinstitute.dsde.workbench.sam.api.{SamRoutes, StandardUserInfoDirectives}
 import org.broadinstitute.dsde.workbench.sam.config.{AppConfig, GoogleConfig, IdentityConcentratorConfig}
+import org.broadinstitute.dsde.workbench.sam.dataAccess._
 import org.broadinstitute.dsde.workbench.sam.db.DatabaseNames.DatabaseName
 import org.broadinstitute.dsde.workbench.sam.db.{DatabaseNames, DbReference}
-import org.broadinstitute.dsde.workbench.sam.directory._
 import org.broadinstitute.dsde.workbench.sam.google._
 import org.broadinstitute.dsde.workbench.sam.identityConcentrator.{IdentityConcentratorService, StandardIdentityConcentratorApi}
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.openam._
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.util.DelegatePool
 import org.broadinstitute.dsde.workbench.util2.ExecutionContexts
 import org.http4s.client.blaze.BlazeClientBuilder
-import scalikejdbc.config.DBs
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -114,11 +112,11 @@ object Boot extends IOApp with LazyLogging {
   private[sam] def createAppDependencies(
       appConfig: AppConfig)(implicit actorSystem: ActorSystem): cats.effect.Resource[IO, AppDependencies] =
     for {
-      (foregroundDirectoryDAO, foregroundAccessPolicyDAO, _, registrationDAO) <- createDAOs(appConfig, DatabaseNames.Foreground, appConfig.directoryConfig.connectionPoolSize, "foreground")
+      (foregroundDirectoryDAO, foregroundAccessPolicyDAO, _, registrationDAO) <- createDAOs(appConfig, DatabaseNames.Write, DatabaseNames.Read, appConfig.directoryConfig.connectionPoolSize, "foreground")
 
       // This special set of objects are for operations that happen in the background, i.e. not in the immediate service
       // of an api call (foreground). They are meant to partition resources so that background processes can't crowd our api calls.
-      (backgroundDirectoryDAO, backgroundAccessPolicyDAO, backgroundLdapExecutionContext, _) <- createDAOs(appConfig, DatabaseNames.Background, appConfig.directoryConfig.backgroundConnectionPoolSize, "background")
+      (backgroundDirectoryDAO, backgroundAccessPolicyDAO, backgroundLdapExecutionContext, _) <- createDAOs(appConfig, DatabaseNames.Background, DatabaseNames.Background, appConfig.directoryConfig.backgroundConnectionPoolSize, "background")
 
       blockingEc <- ExecutionContexts.fixedThreadPool[IO](24)
 
@@ -195,33 +193,26 @@ object Boot extends IOApp with LazyLogging {
     }
 
   private def createDAOs(appConfig: AppConfig,
-                         dbName: DatabaseName,
+                         writeDbName: DatabaseName,
+                         readDbName: DatabaseName,
                          ldapConnectionPoolSize: Int,
                          ldapConnectionPoolName: String): cats.effect.Resource[IO, (DirectoryDAO, AccessPolicyDAO, ExecutionContext, RegistrationDAO)] = {
     for {
-      dbReference <- DbReference.resource(appConfig.liquibaseConfig, dbName)
+      writeDbRef <- DbReference.resource(appConfig.liquibaseConfig, writeDbName)
+      readDbRef <- DbReference.resource(appConfig.liquibaseConfig, readDbName)
       ldapConnectionPool <- createLdapConnectionPool(appConfig.directoryConfig.directoryUrl, appConfig.directoryConfig.user, appConfig.directoryConfig.password, ldapConnectionPoolSize, ldapConnectionPoolName)
       ldapExecutionContext <- ExecutionContexts.fixedThreadPool[IO](appConfig.directoryConfig.connectionPoolSize)
-      postgresExecutionContext <- ExecutionContexts.fixedThreadPool[IO](DBs.config.getInt(s"db.${dbName.name.name}.poolMaxSize"))
 
-      directoryDAO = createDirectoryDAO(dbReference, postgresExecutionContext)
-      accessPolicyDAO = createAccessPolicyDAO(dbReference, postgresExecutionContext)
+      directoryDAO = new PostgresDirectoryDAO(writeDbRef, readDbRef)
+      accessPolicyDAO = new PostgresAccessPolicyDAO(writeDbRef, readDbRef)
       registrationDAO = createRegistrationDAO(appConfig, ldapExecutionContext, ldapConnectionPool)
     } yield (directoryDAO, accessPolicyDAO, ldapExecutionContext, registrationDAO)
-  }
-
-  private def createDirectoryDAO(dbReference: DbReference, postgresExecutionContext: ExecutionContext) = {
-    new PostgresDirectoryDAO(dbReference, postgresExecutionContext)
   }
 
   private def createRegistrationDAO(appConfig: AppConfig,
                                     ldapExecutionContext: ExecutionContext,
                                     ldapConnectionPool: LDAPConnectionPool): RegistrationDAO = {
     new LdapRegistrationDAO(ldapConnectionPool, appConfig.directoryConfig, ldapExecutionContext)
-  }
-
-  private def createAccessPolicyDAO(dbReference: DbReference, postgresExecutionContext: ExecutionContext) = {
-    new PostgresAccessPolicyDAO(dbReference, postgresExecutionContext)
   }
 
   private[sam] def createGoogleCloudExt(
@@ -309,7 +300,7 @@ object Boot extends IOApp with LazyLogging {
     val policyEvaluatorService = PolicyEvaluatorService(config.emailDomain, resourceTypeMap, accessPolicyDAO, directoryDAO)
     val resourceService = new ResourceService(resourceTypeMap, policyEvaluatorService, accessPolicyDAO, directoryDAO, cloudExtensionsInitializer.cloudExtensions, config.emailDomain)
     val userService = new UserService(directoryDAO, cloudExtensionsInitializer.cloudExtensions, registrationDAO, config.blockedEmailDomains)
-    val statusService = new StatusService(directoryDAO, cloudExtensionsInitializer.cloudExtensions, DbReference(DatabaseNames.Foreground), 10 seconds)
+    val statusService = new StatusService(directoryDAO, cloudExtensionsInitializer.cloudExtensions, DbReference(DatabaseNames.Read, implicitly), 10 seconds)
     val managedGroupService =
       new ManagedGroupService(resourceService, policyEvaluatorService, resourceTypeMap, accessPolicyDAO, directoryDAO, cloudExtensionsInitializer.cloudExtensions, config.emailDomain)
     val samApplication = SamApplication(userService, resourceService, statusService)

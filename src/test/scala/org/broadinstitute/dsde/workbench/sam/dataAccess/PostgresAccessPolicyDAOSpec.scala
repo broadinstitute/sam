@@ -1,4 +1,4 @@
-package org.broadinstitute.dsde.workbench.sam.openam
+package org.broadinstitute.dsde.workbench.sam.dataAccess
 
 import java.util.UUID
 
@@ -9,23 +9,22 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.TestSupport.samRequestContext
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig
-import org.broadinstitute.dsde.workbench.sam.db.PSQLStateExtensions
+import org.broadinstitute.dsde.workbench.sam.dataAccess.LoadResourceAuthDomainResult.{Constrained, NotConstrained, ResourceNotFound}
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.directory._
-import org.broadinstitute.dsde.workbench.sam.openam.LoadResourceAuthDomainResult.{Constrained, NotConstrained, ResourceNotFound}
 import org.postgresql.util.PSQLException
 import org.scalatest.BeforeAndAfterEach
 
-import scala.concurrent.{Await, Future}
-import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext.Implicits.global
 import org.scalatest.freespec.AnyFreeSpec
 import org.scalatest.matchers.should.Matchers
+import scala.concurrent.duration._
+import scala.concurrent.{Await, Future}
 
 class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeAndAfterEach {
   implicit val cs = IO.contextShift(scala.concurrent.ExecutionContext.global)
-  val dao = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.blockingEc)
-  val dirDao = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.blockingEc)
+  implicit val timer = IO.timer(scala.concurrent.ExecutionContext.global)
+  val dao = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.dbRef)
+  val dirDao = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.dbRef)
 
   override protected def beforeEach(): Unit = {
     TestSupport.truncateAll
@@ -287,11 +286,9 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
       }
 
       "raises an error when the ResourceType does not exist" in {
-        val exception = intercept[PSQLException] {
+        val exception = intercept[Exception] {
           dao.createResource(resource, samRequestContext).unsafeRunSync()
         }
-
-        exception.getSQLState shouldEqual PSQLStateExtensions.NULL_CONSTRAINT_VIOLATION
       }
 
       "can add a resource that has at least 1 Auth Domain" in {
@@ -315,12 +312,10 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
 
         dirDao.createGroup(authDomainGroup1, samRequestContext = samRequestContext).unsafeRunSync()
         dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
-        val exception = intercept[PSQLException] {
+        intercept[WorkbenchException] {
           val resourceWithAuthDomain = Resource(resourceType.name, ResourceId("authDomainResource"), Set(authDomainGroupName1, authDomainGroupName2))
           dao.createResource(resourceWithAuthDomain, samRequestContext).unsafeRunSync() shouldEqual resourceWithAuthDomain
         }
-
-        exception.getSQLState shouldEqual PSQLStateExtensions.NULL_CONSTRAINT_VIOLATION
       }
 
       "creates resource with parent" in {
@@ -692,8 +687,13 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
         val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
         val policy = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("policy")), Set(subGroup.id, secondGroup.id, directMember.id), WorkbenchEmail("policy@policy.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), Set.empty, false)
 
-        allMembers.map((user) => dirDao.createUser(user, samRequestContext).unsafeRunSync())
-        Set(subSubGroup, subGroup, secondGroup).map((group) => dirDao.createGroup(group, samRequestContext = samRequestContext).unsafeRunSync())
+        // control user/group to make sure fuction excludes something
+        val inSomeOtherGroup = WorkbenchUser(WorkbenchUserId("notInPolicy"), None, WorkbenchEmail("notInPolicy@members.com"), None)
+        val someOtherGroup = BasicWorkbenchGroup(WorkbenchGroupName("someOtherGroup"), Set(inSomeOtherGroup.id), WorkbenchEmail("someOtherGroup@groups.com"))
+
+        (allMembers + inSomeOtherGroup).map((user) => dirDao.createUser(user, samRequestContext).unsafeRunSync())
+        Set(subSubGroup, subGroup, secondGroup, someOtherGroup).map((group) => dirDao.createGroup(group, samRequestContext = samRequestContext).unsafeRunSync())
+
 
         dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         dao.createResource(resource, samRequestContext).unsafeRunSync()
@@ -1382,7 +1382,6 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
           _ <- dao.upsertResourceTypes(Set(parentRT, childRT), samRequestContext)
           _ <- dao.createResource(parent, samRequestContext)
           _ <- dao.createResource(child, samRequestContext)
-          _ <- dao.createPolicy(parent.accessPolicies.head, samRequestContext)
 
           parentRoles <- dao.listUserResourceRoles(parentId, user.id, samRequestContext)
           childRoles <- dao.listUserResourceRoles(childId, user.id, samRequestContext)
@@ -1393,6 +1392,59 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
           parentRoles should contain theSameElementsAs Set(parentRole)
           childRoles should contain theSameElementsAs Set(childRole, childIncludedRole)
 
+          noAccessParentRoles shouldBe empty
+          noAccessChildRoles shouldBe empty
+        }
+
+        test.unsafeRunSync()
+      }
+
+      "list correct roles in grandparent, parent, child relationship" in {
+        // create grand parent, parent, child structure where grand parent role includes
+        // a parent role and parent role include a child role then assign user grandparent role
+        // and verify user has correct role at each level
+        val user = WorkbenchUser(WorkbenchUserId("user"), None, WorkbenchEmail("user@user.edu"), None)
+        val noAccessUser = WorkbenchUser(WorkbenchUserId("no access"), None, WorkbenchEmail("no access@user.edu"), None)
+
+        val childRole = ResourceRoleName("child_role")
+        val childRT = ResourceType(ResourceTypeName("childRT"), Set.empty, Set(ResourceRole(childRole, Set.empty)), childRole)
+
+        val parentRole = ResourceRoleName("parent_role")
+        val parentRT = ResourceType(ResourceTypeName("parentRT"), Set.empty, Set(ResourceRole(parentRole, Set.empty, descendantRoles = Map(childRT.name -> Set(childRole)))), parentRole)
+
+        val grantParentRole = ResourceRoleName("grand_parent_role")
+        val grandParentRT = ResourceType(ResourceTypeName("grandparentRT"), Set.empty, Set(ResourceRole(grantParentRole, Set.empty, descendantRoles = Map(parentRT.name -> Set(parentRole)))), grantParentRole)
+
+        val grandParentId = FullyQualifiedResourceId(grandParentRT.name, ResourceId("grandparent"))
+        val grandParent = Resource(grandParentId.resourceTypeName, grandParentId.resourceId, Set.empty, Set(AccessPolicy(FullyQualifiedPolicyId(grandParentId, AccessPolicyName("policyname")), Set(user.id), WorkbenchEmail("foo@foo.com"), Set(grantParentRole), Set.empty, Set.empty, false)))
+
+        val parentId = FullyQualifiedResourceId(parentRT.name, ResourceId("parent"))
+        val parent = Resource(parentId.resourceTypeName, parentId.resourceId, Set.empty, parent = Option(grandParent.fullyQualifiedId))
+
+        val childId = FullyQualifiedResourceId(childRT.name, ResourceId("child"))
+        val child = Resource(childId.resourceTypeName, childId.resourceId, Set.empty, parent = Option(parent.fullyQualifiedId))
+
+        val test = for {
+          _ <- dirDao.createUser(user, samRequestContext)
+          _ <- dirDao.createUser(noAccessUser, samRequestContext)
+          _ <- dao.upsertResourceTypes(Set(grandParentRT, parentRT, childRT), samRequestContext)
+          _ <- dao.createResource(grandParent, samRequestContext)
+          _ <- dao.createResource(parent, samRequestContext)
+          _ <- dao.createResource(child, samRequestContext)
+
+          grandParentRoles <- dao.listUserResourceRoles(grandParentId, user.id, samRequestContext)
+          parentRoles <- dao.listUserResourceRoles(parentId, user.id, samRequestContext)
+          childRoles <- dao.listUserResourceRoles(childId, user.id, samRequestContext)
+
+          noAccessGrandParentRoles <- dao.listUserResourceRoles(grandParentId, noAccessUser.id, samRequestContext)
+          noAccessParentRoles <- dao.listUserResourceRoles(parentId, noAccessUser.id, samRequestContext)
+          noAccessChildRoles <- dao.listUserResourceRoles(childId, noAccessUser.id, samRequestContext)
+        } yield {
+          grandParentRoles should contain theSameElementsAs Set(grantParentRole)
+          parentRoles should contain theSameElementsAs Set(parentRole)
+          childRoles should contain theSameElementsAs Set(childRole)
+
+          noAccessGrandParentRoles shouldBe empty
           noAccessParentRoles shouldBe empty
           noAccessChildRoles shouldBe empty
         }
