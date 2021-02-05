@@ -73,10 +73,29 @@ trait PostgresGroupDAO {
     }.toList
   }
 
+  def verifyNoCycles(groupId: GroupPK, memberGroupPKs: List[GroupPK])(implicit session: DBSession): Unit = {
+    if (memberGroupPKs.nonEmpty) {
+      val gmf = GroupMemberFlatTable.syntax("gmf")
+      val g = GroupTable.syntax("g")
+      val groupsCausingCycle =
+        samsql"""select ${g.result.email}
+                 from ${GroupMemberFlatTable as gmf}
+                 join ${GroupTable as g} on ${gmf.groupId} = ${g.id}
+                 where ${gmf.groupId} in ($memberGroupPKs)
+                 and ${gmf.memberGroupId} = $groupId""".map(_.get[WorkbenchEmail](g.resultName.email)).list().apply()
+
+      if (groupsCausingCycle.nonEmpty) {
+        throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"Could not add member group(s) ${groupsCausingCycle.mkString("[", ",", "]")} because it would cause a cycle"))
+      }
+    }
+  }
+
   protected def insertGroupMemberPKs(groupId: GroupPK, memberGroupPKs: List[GroupPK], memberUserIds: List[WorkbenchUserId])(implicit session: DBSession): Int = {
     if (memberGroupPKs.isEmpty && memberUserIds.isEmpty) {
       0
     } else {
+      verifyNoCycles(groupId, memberGroupPKs)
+
       val insertCount = insertGroupMembersIntoHierarchical(groupId, memberGroupPKs, memberUserIds)
 
       if (insertCount > 0) {
