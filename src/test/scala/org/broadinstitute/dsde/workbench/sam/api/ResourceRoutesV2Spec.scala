@@ -1413,21 +1413,6 @@ class ResourceRoutesV2Spec extends AnyFlatSpec with Matchers with TestSupport wi
     }
   }
 
-  it should "403 if user is missing remove_child on parent resource if it exists" in {
-    val childResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("child"))
-    val currentParentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("currentParent"))
-    val samRoutes = createSamRoutes(Map(defaultResourceType.name -> defaultResourceType))
-
-    setupParentRoutes(samRoutes, childResource,
-      currentParentOpt = Option(currentParentResource),
-      actionsOnChild = Set(SamResourceActions.setParent, SamResourceActions.delete),
-      actionsOnCurrentParent = Set(SamResourceActions.readPolicies))
-
-    Delete(s"/api/resources/v2/${defaultResourceType.name}/${childResource.resourceId.value}") ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.Forbidden
-    }
-  }
-
   "GET /api/resources/v2/{resourceType}/{resourceId}/policies/{policyName}" should "200 on existing policy of a resource with read_policies" in {
     val members = AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set.empty, Set.empty, None)
     val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("resource"))
