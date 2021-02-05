@@ -289,6 +289,24 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
           dao.addGroupMember(defaultGroup.id, subGroup.id, samRequestContext).unsafeRunSync() shouldBe true
         }
       }
+
+      "prevents group cycles" in {
+        val subGroup = emptyWorkbenchGroup("subGroup")
+        val badGroup = emptyWorkbenchGroup("badGroup")
+        dao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync()
+        dao.createGroup(subGroup, samRequestContext = samRequestContext).unsafeRunSync()
+        dao.createGroup(badGroup, samRequestContext = samRequestContext).unsafeRunSync()
+
+        dao.addGroupMember(defaultGroup.id, subGroup.id, samRequestContext).unsafeRunSync() shouldBe true
+        dao.addGroupMember(subGroup.id, badGroup.id, samRequestContext).unsafeRunSync() shouldBe true
+
+        val exception = intercept[WorkbenchExceptionWithErrorReport] {
+          dao.addGroupMember(badGroup.id, defaultGroup.id, samRequestContext).unsafeRunSync()
+        }
+
+        exception.errorReport.statusCode shouldBe Some(StatusCodes.BadRequest)
+        exception.errorReport.message should include (defaultGroup.email.value)
+      }
     }
 
     "batchLoadGroupEmail" - {
