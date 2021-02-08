@@ -150,7 +150,7 @@ trait UserRoutes extends UserInfoDirectives with SamRequestContextDirectives {
                       pathEndOrSingleSlash {
                         put {
                           complete {
-                            userService.disableUser(WorkbenchUserId(userId), userInfo, samRequestContext).map { statusOption =>
+                            userService.disableUser(WorkbenchUserId(userId), samRequestContext).map { statusOption =>
                               statusOption
                                 .map { status =>
                                   StatusCodes.OK -> Option(status)

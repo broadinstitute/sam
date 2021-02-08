@@ -595,6 +595,17 @@ case class GoogleExtensionsInitializer(cloudExtensions: GoogleExtensions, google
         cloudExtensions.googleServicesConfig.groupSyncWorkerCount,
         googleGroupSynchronizer
       ))
+    system.actorOf(
+      DisableUsersMonitorSupervisor.props(
+        cloudExtensions.googleServicesConfig.groupSyncPollInterval,
+        cloudExtensions.googleServicesConfig.groupSyncPollJitter,
+        cloudExtensions.googlePubSubDAO,
+        cloudExtensions.googleServicesConfig.groupSyncTopic,
+        cloudExtensions.googleServicesConfig.groupSyncSubscription,
+        cloudExtensions.googleServicesConfig.groupSyncWorkerCount,
+        samApplication.userService
+      )
+    )
 
     cloudExtensions.onBoot(samApplication)
   }
