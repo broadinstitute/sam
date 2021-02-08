@@ -411,6 +411,43 @@ class ResourceRoutesV2Spec extends AnyFlatSpec with Matchers with TestSupport wi
     }
   }
 
+  it should "204 deleting a child resource" in {
+    val childResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("child"))
+    val currentParentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("currentParent"))
+    val samRoutes = createSamRoutes(Map(defaultResourceType.name -> defaultResourceType))
+
+    setupParentRoutes(samRoutes, childResource,
+      currentParentOpt = Option(currentParentResource),
+      actionsOnChild = Set(SamResourceActions.setParent, SamResourceActions.delete))
+
+    //Delete the resource
+    Delete(s"/api/resources/v2/${defaultResourceType.name}/${childResource.resourceId.value}") ~> samRoutes.route ~> check {
+      withClue(responseAs[String]) {
+        status shouldEqual StatusCodes.NoContent
+      }
+    }
+  }
+
+  it should "400 when attempting to delete a resource with children" in {
+    val childResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("child"))
+    val parentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("parent"))
+    val samRoutes = createSamRoutes(Map(defaultResourceType.name -> defaultResourceType))
+
+    setupParentRoutes(samRoutes, childResource,
+      currentParentOpt = Option(parentResource),
+      actionsOnChild = Set(SamResourceActions.setParent, SamResourceActions.delete),
+      actionsOnCurrentParent = Set(SamResourceActions.removeChild))
+
+    //Throw 400 exception when delete is called
+    when(samRoutes.resourceService.deleteResource(mockitoEq(childResource), any[SamRequestContext]))
+      .thenThrow(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "Cannot delete a resource with children. Delete the children first then try again.")))
+
+    //Delete the resource
+    Delete(s"/api/resources/v2/${defaultResourceType.name}/${childResource.resourceId.value}") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.BadRequest
+    }
+  }
+
   "GET /api/resources/v2/{resourceType}" should "200" in {
     val resourceType = ResourceType(ResourceTypeName("rt"), Set(SamResourceActionPatterns.readPolicies, ResourceActionPattern("can_compute", "", false)), Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.readPolicies))), ResourceRoleName("owner"))
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
@@ -1009,7 +1046,7 @@ class ResourceRoutesV2Spec extends AnyFlatSpec with Matchers with TestSupport wi
       mockPermissionsForResource(samRoutes, newParent, actionsOnResource = actionsOnNewParent)
     }
 
-    if (actionsOnChild.contains(SamResourceActions.delete) && actionsOnCurrentParent.contains(SamResourceActions.removeChild)) {
+    if (actionsOnChild.contains(SamResourceActions.delete)) {
       when(samRoutes.resourceService.deleteResource(mockitoEq(childResource), any[SamRequestContext])).thenReturn(Future.unit)
     }
   }
@@ -1395,39 +1432,6 @@ class ResourceRoutesV2Spec extends AnyFlatSpec with Matchers with TestSupport wi
     }
   }
 
-  "DELETE /api/resources/v2/{resourceTypeName}/{resourceId}" should "204 on a child resource if the user has remove_child on the parent resource" in {
-    val childResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("child"))
-    val currentParentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("currentParent"))
-    val samRoutes = createSamRoutes(Map(defaultResourceType.name -> defaultResourceType))
-
-    setupParentRoutes(samRoutes, childResource,
-      currentParentOpt = Option(currentParentResource),
-      actionsOnChild = Set(SamResourceActions.setParent, SamResourceActions.delete),
-      actionsOnCurrentParent = Set(SamResourceActions.removeChild))
-
-    //Delete the resource
-    Delete(s"/api/resources/v2/${defaultResourceType.name}/${childResource.resourceId.value}") ~> samRoutes.route ~> check {
-      withClue(responseAs[String]) {
-        status shouldEqual StatusCodes.NoContent
-      }
-    }
-  }
-
-  it should "403 if user is missing remove_child on parent resource if it exists" in {
-    val childResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("child"))
-    val currentParentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("currentParent"))
-    val samRoutes = createSamRoutes(Map(defaultResourceType.name -> defaultResourceType))
-
-    setupParentRoutes(samRoutes, childResource,
-      currentParentOpt = Option(currentParentResource),
-      actionsOnChild = Set(SamResourceActions.setParent, SamResourceActions.delete),
-      actionsOnCurrentParent = Set(SamResourceActions.readPolicies))
-
-    Delete(s"/api/resources/v2/${defaultResourceType.name}/${childResource.resourceId.value}") ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.Forbidden
-    }
-  }
-
   "GET /api/resources/v2/{resourceType}/{resourceId}/policies/{policyName}" should "200 on existing policy of a resource with read_policies" in {
     val members = AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set.empty, Set.empty, None)
     val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("resource"))
@@ -1479,26 +1483,6 @@ class ResourceRoutesV2Spec extends AnyFlatSpec with Matchers with TestSupport wi
 
     Get(s"/api/resources/v2/${resource.resourceTypeName}/${resource.resourceId}/policies/${policyName.value}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Forbidden
-    }
-  }
-
-  it should "400 when attempting to delete a resource with children" in {
-    val childResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("child"))
-    val parentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("parent"))
-    val samRoutes = createSamRoutes(Map(defaultResourceType.name -> defaultResourceType))
-
-    setupParentRoutes(samRoutes, childResource,
-      currentParentOpt = Option(parentResource),
-      actionsOnChild = Set(SamResourceActions.setParent, SamResourceActions.delete),
-      actionsOnCurrentParent = Set(SamResourceActions.removeChild))
-
-    //Throw 400 exception when delete is called
-    when(samRoutes.resourceService.deleteResource(mockitoEq(childResource), any[SamRequestContext]))
-      .thenThrow(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "Cannot delete a resource with children. Delete the children first then try again.")))
-
-    //Delete the resource
-    Delete(s"/api/resources/v2/${defaultResourceType.name}/${childResource.resourceId.value}") ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.BadRequest
     }
   }
 
