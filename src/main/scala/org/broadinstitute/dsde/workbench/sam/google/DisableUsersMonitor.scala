@@ -8,12 +8,12 @@ import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.google.GooglePubSubDAO
 import org.broadinstitute.dsde.workbench.google.GooglePubSubDAO.PubSubMessage
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.util.FutureSupport
 import spray.json._
 import io.opencensus.scala.Tracing
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport.WorkbenchUserIdFormat
+import org.broadinstitute.dsde.workbench.sam.model.UserStatus
 import org.broadinstitute.dsde.workbench.sam.service.UserService
 
 import scala.concurrent.Future
@@ -53,13 +53,13 @@ class DisableUsersMonitorSupervisor(
 
   self ! Init
 
-  override def receive = {
+  override def receive: Receive = {
     case Init => init pipeTo self
-    case Start => for (i <- 1 to workerCount) startOne()
+    case Start => for (_ <- 1 to workerCount) startOne()
     case Status.Failure(t) => logger.error("error initializing disable users monitor", t)
   }
 
-  def init =
+  def init: Future[DisableUsersMonitorSupervisor.Start.type] =
     for {
       _ <- pubSubDao.createSubscription(pubSubTopicName, pubSubSubscriptionName)
     } yield Start
@@ -69,7 +69,7 @@ class DisableUsersMonitorSupervisor(
     actorOf(DisableUsersMonitor.props(pollInterval, pollIntervalJitter, pubSubDao, pubSubSubscriptionName, userService))
   }
 
-  override val supervisorStrategy =
+  override val supervisorStrategy: OneForOneStrategy =
     OneForOneStrategy() {
       case e =>
         logger.error("unexpected error in disable users monitor", e)
@@ -84,8 +84,9 @@ object DisableUsersMonitor {
   case object StartMonitorPass
 
   sealed abstract class DisableUserResult(ackId: String)
-  final case class ReportMessage(value: Map[WorkbenchEmail, Seq[SyncReportItem]], ackId: String) extends DisableUserResult(ackId = ackId)
-  final case class FailToSynchronize(t: Throwable, ackId: String) extends DisableUserResult(ackId = ackId)
+  final case class DisableUserResponse(userId: WorkbenchUserId, value: Option[UserStatus])
+  final case class ReportMessage(value: DisableUserResponse, ackId: String) extends DisableUserResult(ackId = ackId)
+  final case class FailToDisable(t: Throwable, ackId: String) extends DisableUserResult(ackId = ackId)
 
   def props(
              pollInterval: FiniteDuration,
@@ -104,7 +105,7 @@ class DisableUsersMonitorActor(
   pubSubSubscriptionName: String,
   userService: UserService
 ) extends Actor with LazyLogging with FutureSupport {
-  import GoogleGroupSyncMonitor._
+  import DisableUsersMonitor._
   import context._
 
   self ! StartMonitorPass
@@ -113,77 +114,79 @@ class DisableUsersMonitorActor(
   setReceiveTimeout(max((pollInterval + pollIntervalJitter) * 10, 1 second))
 
   private def max(durations: FiniteDuration*): FiniteDuration = {
-    implicit val finiteDurationIsOrdered = scala.concurrent.duration.FiniteDuration.FiniteDurationIsOrdered
+    implicit val finiteDurationIsOrdered: FiniteDuration.FiniteDurationIsOrdered.type = scala.concurrent.duration.FiniteDuration.FiniteDurationIsOrdered
     durations.max
   }
 
-  override def receive = {
+  override def receive: Receive = {
     case StartMonitorPass =>
       // start the process by pulling a message and sending it back to self
       pubSubDao.pullMessages(pubSubSubscriptionName, 1).map(_.headOption) pipeTo self
 
     case Some(message: PubSubMessage) =>
-      logger.debug(s"received disable user message: $message")
-      import Tracing._
-      trace("DisableUsersMonitor-PubSubMessage") { span =>
-        userService
-          .disableUser(message.contents.parseJson.convertTo[WorkbenchUserId], samRequestContext = SamRequestContext(Option(span)))
-      }
+      attemptToDisableUser(message) pipeTo self
 
     case None =>
       // there was no message to wait and try again
       val nextTime = org.broadinstitute.dsde.workbench.util.addJitter(pollInterval, pollIntervalJitter)
       system.scheduler.scheduleOnce(nextTime.asInstanceOf[FiniteDuration], self, StartMonitorPass)
 
-    case ReportMessage(report, ackId) =>
-      import Tracing._
-      trace("DisableUsersMonitor-ReportMessage") { _ =>
-        val errorReports = report.values.flatten.collect {
-          case SyncReportItem(_, _, errorReports) if errorReports.nonEmpty => errorReports
-        }.flatten
+    case ReportMessage(disableUserResponse, ackId) =>
+      handleDisableUserResponse(disableUserResponse, ackId) pipeTo self
 
-        if (errorReports.isEmpty) {
-          // sync done, log it and try again immediately
-          acknowledgeMessage(ackId).map(_ => StartMonitorPass) pipeTo self
-
-          import DefaultJsonProtocol._
-          import WorkbenchIdentityJsonSupport._
-          import org.broadinstitute.dsde.workbench.sam.google.SamGoogleModelJsonSupport._
-          logger.info(s"disabled user ${report.toJson.compactPrint}")
-          Future.successful(None)
-        } else {
-          throw new WorkbenchExceptionWithErrorReport(ErrorReport("error(s) disabling user", errorReports.toSeq))
-        }
-      }
-
-    case FailToSynchronize(t, ackId) =>
+    case FailToDisable(t, ackId) =>
       t match {
         case userNotFound: WorkbenchExceptionWithErrorReport if userNotFound.errorReport.statusCode.contains(StatusCodes.NotFound) =>
-          // this can happen if a user is deleted before the sync message is handled
+          // this can happen if a user is deleted before the disable message is handled
           // acknowledge it so we don't have to handle it again
           acknowledgeMessage(ackId).map(_ => StartMonitorPass) pipeTo self
-          logger.info(s"user to synchronize not found: ${userNotFound.errorReport}")
+          logger.info(s"user to disable not found: ${userNotFound.errorReport}")
 
         case regrets: Throwable => throw regrets
       }
 
     case Status.Failure(t) => throw t
-    // Do we want this?
+
     case ReceiveTimeout =>
       throw new WorkbenchException("DisableUsersMonitorActor has received no messages for too long")
 
     case x => logger.info(s"unhandled $x")
   }
 
+  private def handleDisableUserResponse(disableUserResponse: DisableUserResponse, ackId: String) = {
+    import Tracing._
+    trace("DisableUsersMonitor-ReportMessage") { _ =>
+      disableUserResponse.value match {
+        case Some(_) =>
+          // If we have gotten to this point, the disableUser method has run, so we can assume the user is disabled
+          logger.info(s"disabled user: ${disableUserResponse.userId} ")
+        case None =>
+          logger.info(s"user to disable not found: ${disableUserResponse.userId}")
+      }
+      acknowledgeMessage(ackId).map(_ => StartMonitorPass)
+    }
+  }
+
+  private def attemptToDisableUser(message: PubSubMessage) = {
+    logger.debug(s"received disable user message: $message")
+    import Tracing._
+    val userId = message.contents.parseJson.convertTo[WorkbenchUserId]
+    trace("DisableUsersMonitor-PubSubMessage") { span =>
+      userService
+        .disableUser(userId, samRequestContext = SamRequestContext(Option(span)))
+        .toTry
+        .map(dr => dr.fold(t => FailToDisable(t, message.ackId), maybeUserStatus => ReportMessage(DisableUserResponse(userId, maybeUserStatus), message.ackId)))
+    }
+  }
+
   private def acknowledgeMessage(ackId: String): Future[Unit] =
     pubSubDao.acknowledgeMessagesById(pubSubSubscriptionName, Seq(ackId))
 
-  override def postStop(): Unit = logger.info(s"GoogleGroupSyncMonitorActor $self terminated")
+  override def postStop(): Unit = logger.info(s"DisableUsersMonitorActor $self terminated")
 
-  override val supervisorStrategy =
+  override val supervisorStrategy: OneForOneStrategy =
     OneForOneStrategy() {
-      case e => {
+      case _ =>
         Escalate
-      }
     }
 }
