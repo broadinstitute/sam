@@ -28,8 +28,8 @@ class UserRoutesV1Spec extends UserRoutesSpecHelper{
     Post("/register/user/v1/") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
       val res = responseAs[UserStatus]
-      res.userInfo.userSubjectId.value.length shouldBe 21
-      res.userInfo.userEmail shouldBe defaultUserEmail
+      res.userStatusDetails.userSubjectId.value.length shouldBe 21
+      res.userStatusDetails.userEmail shouldBe defaultUserEmail
       res.enabled shouldBe Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true)
     }
 

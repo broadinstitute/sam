@@ -257,10 +257,10 @@ trait GoogleExtensionRoutesSpecHelper extends AnyFlatSpec with Matchers with Sca
     val user = Post("/register/user/v1/") ~> createRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
       val res = responseAs[UserStatus]
-      res.userInfo.userEmail shouldBe em
+      res.userStatusDetails.userEmail shouldBe em
       res.enabled shouldBe Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true)
 
-      WorkbenchUser(res.userInfo.userSubjectId, Some(GoogleSubjectId(googleSubjectId)), res.userInfo.userEmail, identityConcentratorIdOpt)
+      WorkbenchUser(res.userStatusDetails.userSubjectId, Some(GoogleSubjectId(googleSubjectId)), res.userStatusDetails.userEmail, identityConcentratorIdOpt)
     }
 
     (user, samDependencies, createRoutes)

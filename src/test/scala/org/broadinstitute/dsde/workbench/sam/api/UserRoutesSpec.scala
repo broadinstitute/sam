@@ -28,8 +28,8 @@ class UserRoutesSpec extends UserRoutesSpecHelper {
     Post("/register/user") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
       val res = responseAs[UserStatus]
-      res.userInfo.userSubjectId.value.length shouldBe 21
-      res.userInfo.userEmail shouldBe defaultUserEmail
+      res.userStatusDetails.userSubjectId.value.length shouldBe 21
+      res.userStatusDetails.userEmail shouldBe defaultUserEmail
       res.enabled shouldBe Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true)
     }
 
@@ -175,7 +175,7 @@ trait UserRoutesSpecHelper extends AnyFlatSpec with Matchers with ScalatestRoute
     val (_, _, routes) = createTestUser(cloudExtensions = Some(cloudExtensions), googleDirectoryDAO = Some(googDirectoryDAO), userEmail = adminUserEmail)
     val userId = genWorkbenchUserId(System.currentTimeMillis())
     val userStatus = runAndWait(routes.userService.createUser(CreateWorkbenchUser(userId, GoogleSubjectId(userId.value), defaultUserEmail, None), samRequestContext))
-    (WorkbenchUser(userStatus.userInfo.userSubjectId, Some(GoogleSubjectId(userStatus.userInfo.userSubjectId.value)), userStatus.userInfo.userEmail, None), routes)
+    (WorkbenchUser(userStatus.userStatusDetails.userSubjectId, Some(GoogleSubjectId(userStatus.userStatusDetails.userSubjectId.value)), userStatus.userStatusDetails.userEmail, None), routes)
   }
 
   def createTestUser(googSubjectId: Option[GoogleSubjectId] = None, cloudExtensions: Option[CloudExtensions] = None, googleDirectoryDAO: Option[GoogleDirectoryDAO] = None, identityConcentratorId: Option[IdentityConcentratorId] = None, userEmail: WorkbenchEmail = defaultUserEmail): (WorkbenchUser, SamDependencies, SamRoutes) = {
@@ -188,10 +188,10 @@ trait UserRoutesSpecHelper extends AnyFlatSpec with Matchers with ScalatestRoute
     val user = Post("/register/user/v1/") ~> routes.route ~> check {
       status shouldEqual StatusCodes.Created
       val res = responseAs[UserStatus]
-      res.userInfo.userEmail shouldBe userEmail
+      res.userStatusDetails.userEmail shouldBe userEmail
       res.enabled shouldBe Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true)
 
-      WorkbenchUser(res.userInfo.userSubjectId, Some(GoogleSubjectId(res.userInfo.userSubjectId.value)), res.userInfo.userEmail, identityConcentratorId)
+      WorkbenchUser(res.userStatusDetails.userSubjectId, Some(GoogleSubjectId(res.userStatusDetails.userSubjectId.value)), res.userStatusDetails.userEmail, identityConcentratorId)
     }
     (user, samDependencies, routes)
   }
