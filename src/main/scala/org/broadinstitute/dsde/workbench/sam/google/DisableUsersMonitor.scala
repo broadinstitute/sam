@@ -10,9 +10,7 @@ import org.broadinstitute.dsde.workbench.google.GooglePubSubDAO.PubSubMessage
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.util.FutureSupport
-import spray.json._
 import io.opencensus.scala.Tracing
-import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport.WorkbenchUserIdFormat
 import org.broadinstitute.dsde.workbench.sam.model.UserStatus
 import org.broadinstitute.dsde.workbench.sam.service.UserService
 
@@ -154,8 +152,7 @@ class DisableUsersMonitorActor(
   }
 
   private def handleDisableUserResponse(disableUserResponse: DisableUserResponse, ackId: String) = {
-    import Tracing._
-    trace("DisableUsersMonitor-ReportMessage") { _ =>
+    Tracing.trace("DisableUsersMonitor-ReportMessage") { _ =>
       disableUserResponse.value match {
         case Some(_) =>
           // If we have gotten to this point, the disableUser method has run, so we can assume the user is disabled
@@ -169,9 +166,8 @@ class DisableUsersMonitorActor(
 
   private def attemptToDisableUser(message: PubSubMessage) = {
     logger.debug(s"received disable user message: $message")
-    import Tracing._
-    val userId = message.contents.parseJson.convertTo[WorkbenchUserId]
-    trace("DisableUsersMonitor-PubSubMessage") { span =>
+    val userId = WorkbenchUserId(message.contents)
+    Tracing.trace("DisableUsersMonitor-PubSubMessage") { span =>
       userService
         .disableUser(userId, samRequestContext = SamRequestContext(Option(span)))
         .toTry
