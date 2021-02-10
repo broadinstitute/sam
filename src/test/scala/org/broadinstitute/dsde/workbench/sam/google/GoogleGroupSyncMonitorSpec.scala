@@ -18,7 +18,6 @@ import org.scalatest.concurrent.Eventually
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
-import scala.concurrent.ExecutionContext.Implicits.global
 import spray.json._
 import org.scalatest.flatspec.AnyFlatSpecLike
 import org.scalatest.matchers.should.Matchers
@@ -53,7 +52,7 @@ class GoogleGroupSyncMonitorSpec(_system: ActorSystem) extends TestKit(_system) 
     system.actorOf(GoogleGroupSyncMonitorSupervisor.props(10 milliseconds, 0 seconds, mockGooglePubSubDAO, topicName, subscriptionName, 1, mockGoogleExtensions))
 
     eventually {
-      assert(runAndWait(mockGooglePubSubDAO.getTopic(topicName)).isDefined)
+      assert(mockGooglePubSubDAO.subscriptionsByName.contains(subscriptionName))
     }
 
     import SamJsonSupport.PolicyIdentityFormat
@@ -86,7 +85,7 @@ class GoogleGroupSyncMonitorSpec(_system: ActorSystem) extends TestKit(_system) 
     system.actorOf(GoogleGroupSyncMonitorSupervisor.props(10 milliseconds, 0 seconds, mockGooglePubSubDAO, topicName, subscriptionName, 1, mockGoogleExtensions))
 
     eventually {
-      assert(runAndWait(mockGooglePubSubDAO.getTopic(topicName)).isDefined)
+      assert(mockGooglePubSubDAO.subscriptionsByName.contains(subscriptionName))
     }
 
     import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport.WorkbenchGroupNameFormat
