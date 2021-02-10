@@ -2,7 +2,6 @@ package org.broadinstitute.dsde.workbench.sam.google
 
 import akka.actor.SupervisorStrategy.{Escalate, Stop}
 import akka.actor._
-import akka.http.scaladsl.model.StatusCodes
 import akka.pattern._
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.google.GooglePubSubDAO
@@ -81,10 +80,10 @@ class DisableUsersMonitorSupervisor(
 object DisableUsersMonitor {
   case object StartMonitorPass
 
-  sealed abstract class DisableUserResult(ackId: String)
+  sealed abstract class DisableUserResult()
   final case class DisableUserResponse(userId: WorkbenchUserId, value: Option[UserStatus])
-  final case class ReportMessage(value: DisableUserResponse, ackId: String) extends DisableUserResult(ackId = ackId)
-  final case class FailToDisable(t: Throwable, ackId: String) extends DisableUserResult(ackId = ackId)
+  final case class ReportMessage(value: DisableUserResponse, ackId: String) extends DisableUserResult()
+  final case class FailToDisable(t: Throwable, ackId: String) extends DisableUserResult()
 
   def props(
              pollInterval: FiniteDuration,
@@ -132,23 +131,14 @@ class DisableUsersMonitorActor(
     case ReportMessage(disableUserResponse, ackId) =>
       handleDisableUserResponse(disableUserResponse, ackId) pipeTo self
 
-    case FailToDisable(t, ackId) =>
-      t match {
-        case userNotFound: WorkbenchExceptionWithErrorReport if userNotFound.errorReport.statusCode.contains(StatusCodes.NotFound) =>
-          // this can happen if a user is deleted before the disable message is handled
-          // acknowledge it so we don't have to handle it again
-          acknowledgeMessage(ackId).map(_ => StartMonitorPass) pipeTo self
-          logger.info(s"user to disable not found: ${userNotFound.errorReport}")
-
-        case regrets: Throwable => throw regrets
-      }
+    case FailToDisable(t, ackId) => throw t
 
     case Status.Failure(t) => throw t
 
     case ReceiveTimeout =>
       throw new WorkbenchException("DisableUsersMonitorActor has received no messages for too long")
 
-    case x => logger.info(s"unhandled $x")
+    case x => logger.info(s"Received unhandleable message in DisableUsersMonitor", x)
   }
 
   private def handleDisableUserResponse(disableUserResponse: DisableUserResponse, ackId: String) = {
