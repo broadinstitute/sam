@@ -18,37 +18,19 @@ import org.scalatest.flatspec.AnyFlatSpecLike
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.mockito.MockitoSugar
 
-import scala.concurrent.Future
-import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.{Await, Future}
 import scala.concurrent.duration._
 
 class DisableUsersMonitorSpec(_system: ActorSystem) extends TestKit(_system) with AnyFlatSpecLike with Matchers with PropertyBasedTesting
   with TestSupport with MockitoSugar with BeforeAndAfter with BeforeAndAfterAll with Eventually {
-  override implicit val patienceConfig: PatienceConfig = PatienceConfig(timeout = 1 second)
   implicit override val generatorDrivenConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(minSuccessful = 100)
-
   def this() = this(ActorSystem("DisableUsersMonitorSpec"))
 
-  val blockedDomain = "blocked.domain.com"
   val topicName = "testtopic"
   val subscriptionName = "testsub"
 
-  var googleExtensions: GoogleExtensions = _
-  var userService: UserService = mock[UserService](RETURNS_SMART_NULLS)
-  var mockGooglePubSubDAO: MockGooglePubSubDAO = _
-
-  val userId: WorkbenchUserId = WorkbenchUserId("1")
-  val userEmail: WorkbenchEmail = WorkbenchEmail("blah@blah.com")
-
   override def beforeAll(): Unit = {
     super.beforeAll()
-    googleExtensions = mock[GoogleExtensions](RETURNS_SMART_NULLS)
-    mockGooglePubSubDAO = new MockGooglePubSubDAO
-    mockGooglePubSubDAO.createTopic(topicName)
-
-    eventually {
-      assert(runAndWait(mockGooglePubSubDAO.getTopic(topicName)).isDefined)
-    }
   }
 
   override def afterAll(): Unit = {
@@ -57,7 +39,20 @@ class DisableUsersMonitorSpec(_system: ActorSystem) extends TestKit(_system) wit
   }
 
   it should "handle disable users message" in {
+    implicit val patienceConfig: PatienceConfig = PatienceConfig(timeout = 1 second)
+
+    val userService: UserService = mock[UserService](RETURNS_SMART_NULLS)
+    val mockGooglePubSubDAO: MockGooglePubSubDAO = new MockGooglePubSubDAO
+
+    val userId: WorkbenchUserId = WorkbenchUserId("1")
+    val userEmail: WorkbenchEmail = WorkbenchEmail("blah@blah.com")
+
+    mockGooglePubSubDAO.createTopic(topicName)
+
     system.actorOf(DisableUsersMonitorSupervisor.props(10 milliseconds, 0 seconds, mockGooglePubSubDAO, topicName, subscriptionName, 1, userService))
+    eventually {
+      assert(mockGooglePubSubDAO.subscriptionsByName.contains(subscriptionName))
+    }
     when(userService.disableUser(mockitoEq(userId), any[SamRequestContext]))
       .thenReturn(Future.successful(
         Some(UserStatus(
@@ -66,7 +61,7 @@ class DisableUsersMonitorSpec(_system: ActorSystem) extends TestKit(_system) wit
         ))
       ))
 
-    mockGooglePubSubDAO.publishMessages(topicName, Seq(userId.value))
+    Await.result(mockGooglePubSubDAO.publishMessages(topicName, Seq(userId.value)), Duration.Inf)
 
     // `eventually` now requires an implicit `Retrying` instance. When the statement inside returns future, it'll
 
@@ -80,7 +75,19 @@ class DisableUsersMonitorSpec(_system: ActorSystem) extends TestKit(_system) wit
   }
 
   it should "handle missing user" in {
+    implicit val patienceConfig: PatienceConfig = PatienceConfig(timeout = 1 second)
+
+    val userService: UserService = mock[UserService](RETURNS_SMART_NULLS)
+    val mockGooglePubSubDAO: MockGooglePubSubDAO = new MockGooglePubSubDAO
+
+    val userId: WorkbenchUserId = WorkbenchUserId("1")
+
+    mockGooglePubSubDAO.createTopic(topicName)
+
     system.actorOf(DisableUsersMonitorSupervisor.props(10 milliseconds, 0 seconds, mockGooglePubSubDAO, topicName, subscriptionName, 1, userService))
+    eventually {
+      assert(mockGooglePubSubDAO.subscriptionsByName.contains(subscriptionName))
+    }
     when(userService.disableUser(mockitoEq(userId), any[SamRequestContext])).thenReturn(Future.failed(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "not found"))))
 
     mockGooglePubSubDAO.publishMessages(topicName, Seq(userId.value))
