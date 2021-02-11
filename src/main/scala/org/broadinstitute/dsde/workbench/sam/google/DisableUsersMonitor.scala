@@ -80,10 +80,9 @@ class DisableUsersMonitorSupervisor(
 object DisableUsersMonitor {
   case object StartMonitorPass
 
-  sealed abstract class DisableUserResult()
   final case class DisableUserResponse(userId: WorkbenchUserId, value: Option[UserStatus])
-  final case class ReportMessage(value: DisableUserResponse, ackId: String) extends DisableUserResult()
-  final case class FailToDisable(t: Throwable, ackId: String) extends DisableUserResult()
+  final case class ReportMessage(value: DisableUserResponse, ackId: String)
+  final case class FailToDisable(t: Throwable, ackId: String)
 
   def props(
              pollInterval: FiniteDuration,
