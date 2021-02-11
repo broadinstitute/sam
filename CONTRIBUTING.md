@@ -39,7 +39,3 @@ If you're making breaking changes to the API, do the following:
 1. Check in with Comms to explain the change and the impact on users.
 2. Write an email to users explaining the change and send it least a few days BEFORE the release goes out. You'll need to explain the change and what users need to do to update their code. Get Comms signoff on the wording.
 3. Get someone Suitable to send the email to api-users@firecloud.org.
-
-## FISMA documentation changes
-
-If you're making changes to authentication, authorization, encryption, or audit trails, you should check in with Bernick or Jyotin to see if our security documentation should be updated.
