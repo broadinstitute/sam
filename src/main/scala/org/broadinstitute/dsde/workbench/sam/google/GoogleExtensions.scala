@@ -158,7 +158,7 @@ class GoogleExtensions(
   // The handler for the subscription will ultimately call GoogleExtensions.synchronizeGroupMembers, which will
   // do all the heavy lifting of creating the Google Group and adding members.
   override def publishGroup(id: WorkbenchGroupName): Future[Unit] =
-    googlePubSubDAO.publishMessages(googleServicesConfig.groupSyncTopic, Seq(id.toJson.compactPrint))
+    googlePubSubDAO.publishMessages(googleServicesConfig.googlePubSubConfig.groupSyncMonitorConfig.topic, Seq(id.toJson.compactPrint))
 
 
   /*
@@ -204,7 +204,7 @@ class GoogleExtensions(
       }
 
       // publish all the messages
-      _ <- IO.fromFuture(IO(publishMessages(messages.flatten)))
+      _ <- IO.fromFuture(IO(publishGroupSyncMessages(messages.flatten)))
 
     } yield ()
   }.unsafeToFuture()
@@ -227,8 +227,8 @@ class GoogleExtensions(
     } yield constrainedResourceAccessPolicies.flatten.map(accessPolicy => accessPolicy.id.toJson.compactPrint)
   }
 
-  private def publishMessages(messages: Seq[String]): Future[Unit] = {
-    googlePubSubDAO.publishMessages(googleServicesConfig.groupSyncTopic, messages)
+  private def publishGroupSyncMessages(messages: Seq[String]): Future[Unit] = {
+    googlePubSubDAO.publishMessages(googleServicesConfig.googlePubSubConfig.groupSyncMonitorConfig.topic, messages)
   }
 
 
@@ -557,11 +557,11 @@ class GoogleExtensions(
       }
     }
 
-    def checkPubsub: Future[SubsystemStatus] = {
+    def checkGroupSyncPubsub: Future[SubsystemStatus] = {
       logger.debug("Checking Google PubSub...")
-      googlePubSubDAO.getTopic(googleServicesConfig.groupSyncTopic).map {
+      googlePubSubDAO.getTopic(googleServicesConfig.googlePubSubConfig.groupSyncMonitorConfig.topic).map {
         case Some(_) => OkStatus
-        case None => failedStatus(s"Could not find topic: ${googleServicesConfig.groupSyncTopic}")
+        case None => failedStatus(s"Could not find topic: ${googleServicesConfig.googlePubSubConfig.groupSyncMonitorConfig.topic}")
       }
     }
 
@@ -575,7 +575,7 @@ class GoogleExtensions(
 
     Map(
       Subsystems.GoogleGroups -> checkGroups,
-      Subsystems.GooglePubSub -> checkPubsub,
+      Subsystems.GooglePubSub -> checkGroupSyncPubsub,
       Subsystems.GoogleIam -> checkIam
     )
   }
@@ -587,22 +587,22 @@ case class GoogleExtensionsInitializer(cloudExtensions: GoogleExtensions, google
   override def onBoot(samApplication: SamApplication)(implicit system: ActorSystem): IO[Unit] = {
     system.actorOf(
       GoogleGroupSyncMonitorSupervisor.props(
-        cloudExtensions.googleServicesConfig.groupSyncPollInterval,
-        cloudExtensions.googleServicesConfig.groupSyncPollJitter,
+        cloudExtensions.googleServicesConfig.googlePubSubConfig.groupSyncMonitorConfig.pollInterval,
+        cloudExtensions.googleServicesConfig.googlePubSubConfig.groupSyncMonitorConfig.pollJitter,
         cloudExtensions.googlePubSubDAO,
-        cloudExtensions.googleServicesConfig.groupSyncTopic,
-        cloudExtensions.googleServicesConfig.groupSyncSubscription,
-        cloudExtensions.googleServicesConfig.groupSyncWorkerCount,
+        cloudExtensions.googleServicesConfig.googlePubSubConfig.groupSyncMonitorConfig.topic,
+        cloudExtensions.googleServicesConfig.googlePubSubConfig.groupSyncMonitorConfig.subscription,
+        cloudExtensions.googleServicesConfig.googlePubSubConfig.groupSyncMonitorConfig.workerCount,
         googleGroupSynchronizer
       ))
     system.actorOf(
       DisableUsersMonitorSupervisor.props(
-        cloudExtensions.googleServicesConfig.disableUsersPollInterval,
-        cloudExtensions.googleServicesConfig.disableUsersPollJitter,
+        cloudExtensions.googleServicesConfig.googlePubSubConfig.disableUsersMonitorConfig.pollInterval,
+        cloudExtensions.googleServicesConfig.googlePubSubConfig.disableUsersMonitorConfig.pollJitter,
         cloudExtensions.googlePubSubDAO,
-        cloudExtensions.googleServicesConfig.disableUsersTopic,
-        cloudExtensions.googleServicesConfig.disableUsersSubscription,
-        cloudExtensions.googleServicesConfig.disableUsersWorkerCount,
+        cloudExtensions.googleServicesConfig.googlePubSubConfig.disableUsersMonitorConfig.topic,
+        cloudExtensions.googleServicesConfig.googlePubSubConfig.disableUsersMonitorConfig.subscription,
+        cloudExtensions.googleServicesConfig.googlePubSubConfig.disableUsersMonitorConfig.workerCount,
         samApplication.userService
       )
     )

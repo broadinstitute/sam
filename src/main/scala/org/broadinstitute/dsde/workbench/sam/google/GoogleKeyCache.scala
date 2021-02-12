@@ -41,14 +41,14 @@ class GoogleKeyCache(
   override def onBoot()(implicit system: ActorSystem): IO[Unit] = {
     system.actorOf(
       GoogleKeyCacheMonitorSupervisor.props(
-        googleServicesConfig.googleKeyCacheConfig.monitorPollInterval,
-        googleServicesConfig.googleKeyCacheConfig.monitorPollJitter,
+        googleServicesConfig.googlePubSubConfig.googleKeyCacheMonitorConfig.pollInterval,
+        googleServicesConfig.googlePubSubConfig.googleKeyCacheMonitorConfig.pollJitter,
         googlePubSubDAO,
         googleIamDAO,
-        googleServicesConfig.googleKeyCacheConfig.monitorTopic,
-        googleServicesConfig.googleKeyCacheConfig.monitorSubscription,
+        googleServicesConfig.googlePubSubConfig.googleKeyCacheMonitorConfig.topic,
+        googleServicesConfig.googlePubSubConfig.googleKeyCacheMonitorConfig.subscription,
         googleServicesConfig.projectServiceAccount,
-        googleServicesConfig.googleKeyCacheConfig.monitorWorkerCount,
+        googleServicesConfig.googlePubSubConfig.googleKeyCacheMonitorConfig.workerCount,
         this
       ))
 

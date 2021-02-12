@@ -16,10 +16,4 @@ import scala.concurrent.duration.FiniteDuration
 case class GoogleKeyCacheConfig(
     bucketName: GcsBucketName,
     activeKeyMaxAge: Int,
-    retiredKeyMaxAge: Int,
-    monitorPubSubProject: String,
-    monitorPollInterval: FiniteDuration,
-    monitorPollJitter: FiniteDuration,
-    monitorTopic: String,
-    monitorSubscription: String,
-    monitorWorkerCount: Int)
+    retiredKeyMaxAge: Int)

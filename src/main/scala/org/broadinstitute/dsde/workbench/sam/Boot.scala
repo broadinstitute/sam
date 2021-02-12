@@ -247,7 +247,7 @@ object Boot extends IOApp with LazyLogging {
       config.googleServicesConfig.appName,
       Pem(WorkbenchEmail(config.googleServicesConfig.serviceAccountClientId), new File(config.googleServicesConfig.pemFile)),
       "google",
-      config.googleServicesConfig.groupSyncPubSubProject
+      config.googleServicesConfig.googlePubSubConfig.pubSubProject
     )
     val googleStorageDAO = new HttpGoogleStorageDAO(
       config.googleServicesConfig.appName,
