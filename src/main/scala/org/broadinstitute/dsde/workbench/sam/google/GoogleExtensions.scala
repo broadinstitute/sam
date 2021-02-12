@@ -597,12 +597,12 @@ case class GoogleExtensionsInitializer(cloudExtensions: GoogleExtensions, google
       ))
     system.actorOf(
       DisableUsersMonitorSupervisor.props(
-        cloudExtensions.googleServicesConfig.groupSyncPollInterval,
-        cloudExtensions.googleServicesConfig.groupSyncPollJitter,
+        cloudExtensions.googleServicesConfig.disableUsersPollInterval,
+        cloudExtensions.googleServicesConfig.disableUsersPollJitter,
         cloudExtensions.googlePubSubDAO,
-        cloudExtensions.googleServicesConfig.groupSyncTopic,
-        cloudExtensions.googleServicesConfig.groupSyncSubscription,
-        cloudExtensions.googleServicesConfig.groupSyncWorkerCount,
+        cloudExtensions.googleServicesConfig.disableUsersTopic,
+        cloudExtensions.googleServicesConfig.disableUsersSubscription,
+        cloudExtensions.googleServicesConfig.disableUsersWorkerCount,
         samApplication.userService
       )
     )
