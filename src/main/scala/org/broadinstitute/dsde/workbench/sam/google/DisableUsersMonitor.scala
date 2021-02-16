@@ -27,13 +27,13 @@ object DisableUsersMonitorSupervisor {
   def props(
              pollInterval: FiniteDuration,
              pollIntervalJitter: FiniteDuration,
-             pubSubDao: GooglePubSubDAO,
+             disableUsersPubSubDao: GooglePubSubDAO,
              pubSubTopicName: String,
              pubSubSubscriptionName: String,
              workerCount: Int,
              userService: UserService
            ): Props =
-    Props(new DisableUsersMonitorSupervisor(pollInterval, pollIntervalJitter, pubSubDao, pubSubTopicName, pubSubSubscriptionName, workerCount, userService))
+    Props(new DisableUsersMonitorSupervisor(pollInterval, pollIntervalJitter, disableUsersPubSubDao, pubSubTopicName, pubSubSubscriptionName, workerCount, userService))
 }
 
 class DisableUsersMonitorSupervisor(

@@ -26,13 +26,13 @@ import scala.concurrent.{ExecutionContext, Future}
   * Created by mbemis on 1/10/18.
   */
 class GoogleKeyCache(
-    val distributedLock: DistributedLock[IO],
-    val googleIamDAO: GoogleIamDAO,
-    val googleStorageDAO: GoogleStorageDAO, //this is only used for GoogleKeyCacheMonitorSupervisor to trigger pubsub notification.
-    val googleStorageAlg: GoogleStorageService[IO],
-    val googlePubSubDAO: GooglePubSubDAO,
-    val googleServicesConfig: GoogleServicesConfig,
-    val petServiceAccountConfig: PetServiceAccountConfig)(implicit val executionContext: ExecutionContext, cs: ContextShift[IO])
+                      val distributedLock: DistributedLock[IO],
+                      val googleIamDAO: GoogleIamDAO,
+                      val googleStorageDAO: GoogleStorageDAO, //this is only used for GoogleKeyCacheMonitorSupervisor to trigger pubsub notification.
+                      val googleStorageAlg: GoogleStorageService[IO],
+                      val googleKeyCachePubSubDao: GooglePubSubDAO,
+                      val googleServicesConfig: GoogleServicesConfig,
+                      val petServiceAccountConfig: PetServiceAccountConfig)(implicit val executionContext: ExecutionContext, cs: ContextShift[IO])
     extends KeyCache
     with LazyLogging {
   val keyPathPattern = """([^\/]+)\/([^\/]+)\/([^\/]+)""".r
@@ -43,7 +43,7 @@ class GoogleKeyCache(
       GoogleKeyCacheMonitorSupervisor.props(
         googleServicesConfig.googleKeyCacheConfig.monitorPollInterval,
         googleServicesConfig.googleKeyCacheConfig.monitorPollJitter,
-        googlePubSubDAO,
+        googleKeyCachePubSubDao,
         googleIamDAO,
         googleServicesConfig.googleKeyCacheConfig.monitorTopic,
         googleServicesConfig.googleKeyCacheConfig.monitorSubscription,

@@ -243,11 +243,23 @@ object Boot extends IOApp with LazyLogging {
       Pem(WorkbenchEmail(config.googleServicesConfig.serviceAccountClientId), new File(config.googleServicesConfig.pemFile)),
       "google"
     )
-    val googlePubSubDAO = new HttpGooglePubSubDAO(
+    val googleGroupSyncPubSubDAO = new HttpGooglePubSubDAO(
       config.googleServicesConfig.appName,
       Pem(WorkbenchEmail(config.googleServicesConfig.serviceAccountClientId), new File(config.googleServicesConfig.pemFile)),
       "google",
       config.googleServicesConfig.groupSyncPubSubProject
+    )
+    val googleDisableUsersPubSubDAO = new HttpGooglePubSubDAO(
+      config.googleServicesConfig.appName,
+      Pem(WorkbenchEmail(config.googleServicesConfig.serviceAccountClientId), new File(config.googleServicesConfig.pemFile)),
+      "google",
+      config.googleServicesConfig.disableUsersPubSubProject
+    )
+    val googleKeyCachePubSubDAO = new HttpGooglePubSubDAO(
+      config.googleServicesConfig.appName,
+      Pem(WorkbenchEmail(config.googleServicesConfig.serviceAccountClientId), new File(config.googleServicesConfig.pemFile)),
+      "google",
+      config.googleServicesConfig.googleKeyCacheConfig.monitorPubSubProject
     )
     val googleStorageDAO = new HttpGoogleStorageDAO(
       config.googleServicesConfig.appName,
@@ -265,10 +277,11 @@ object Boot extends IOApp with LazyLogging {
         googleIamDAO,
         googleStorageDAO,
         googleStorageNew,
-        googlePubSubDAO,
+        googleKeyCachePubSubDAO,
         config.googleServicesConfig,
         config.petServiceAccountConfig)
-    val notificationDAO = new PubSubNotificationDAO(googlePubSubDAO, config.googleServicesConfig.notificationTopic)
+    // Which pubSubProject/Dao should this be using?
+    val notificationDAO = new PubSubNotificationDAO(googleGroupSyncPubSubDAO, config.googleServicesConfig.notificationTopic)
 
     new GoogleExtensions(
       distributedLock,
@@ -276,7 +289,8 @@ object Boot extends IOApp with LazyLogging {
       registrationDAO,
       accessPolicyDAO,
       googleDirectoryDAO,
-      googlePubSubDAO,
+      googleGroupSyncPubSubDAO,
+      googleDisableUsersPubSubDAO,
       googleIamDAO,
       googleStorageDAO,
       googleProjectDAO,
