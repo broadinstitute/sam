@@ -546,6 +546,7 @@ class GoogleExtensions(
     import HealthMonitor._
 
     def checkGroups: Future[SubsystemStatus] = {
+      logger.debug("Test?")
       logger.debug("Checking Google Groups...")
       for {
         groupOption <- googleDirectoryDAO.getGoogleGroup(allUsersGroupEmail)
