@@ -51,6 +51,7 @@ class GoogleExtensions(
     val registrationDAO: RegistrationDAO,
     val accessPolicyDAO: AccessPolicyDAO,
     val googleDirectoryDAO: GoogleDirectoryDAO,
+    val notificationPubSubDAO: GooglePubSubDAO,
     val googleGroupSyncPubSubDAO: GooglePubSubDAO,
     val googleDisableUsersPubSubDAO: GooglePubSubDAO,
     val googleIamDAO: GoogleIamDAO,
@@ -559,10 +560,28 @@ class GoogleExtensions(
     }
 
     def checkPubsub: Future[SubsystemStatus] = {
-      logger.debug("Checking Google Group Sync PubSub...")
-      googleGroupSyncPubSubDAO.getTopic(googleServicesConfig.groupSyncTopic).map {
-        case Some(_) => OkStatus
-        case None => failedStatus(s"Could not find topic: ${googleServicesConfig.groupSyncTopic}")
+      logger.debug("Checking PubSub topics...")
+      case class TopicToDaoPair (
+        topic: String,
+        dao: GooglePubSubDAO
+      )
+
+      val pubSubDaoToCheck = List(TopicToDaoPair(googleServicesConfig.groupSyncTopic, googleGroupSyncPubSubDAO),
+        TopicToDaoPair(googleServicesConfig.notificationTopic, notificationPubSubDAO),
+        TopicToDaoPair(googleServicesConfig.disableUsersTopic, googleDisableUsersPubSubDAO),
+        TopicToDaoPair(googleServicesConfig.googleKeyCacheConfig.monitorTopic, googleKeyCache.googleKeyCachePubSubDao))
+      for {
+        listOfUnfoundTopics <- Future.traverse(pubSubDaoToCheck) { pair => {
+          pair.dao.getTopic(pair.topic).map {
+            case Some(_) => None
+            case None => Some(pair.topic)
+          }
+        }}
+        flattenedListOfUnfoundTopics = listOfUnfoundTopics.flatten
+      } yield if (flattenedListOfUnfoundTopics.isEmpty) {
+        OkStatus
+      } else {
+        failedStatus(s"Could not find topic(s): ${flattenedListOfUnfoundTopics.toString}")
       }
     }
 
