@@ -91,18 +91,23 @@ object TestSupport extends TestSupport {
     val registrationDAO = new MockDirectoryDAO()
     val googleIamDAO = googIamDAO.getOrElse(new MockGoogleIamDAO())
     val policyDAO = policyAccessDAO.getOrElse(new MockAccessPolicyDAO(resourceTypes))
-    val pubSubDAO = new MockGooglePubSubDAO()
+    val notificationPubSubDAO = new MockGooglePubSubDAO()
+    val googleGroupSyncPubSubDAO = new MockGooglePubSubDAO()
+    val googleDisableUsersPubSubDAO = new MockGooglePubSubDAO()
+    val googleKeyCachePubSubDAO = new MockGooglePubSubDAO()
     val googleStorageDAO = new MockGoogleStorageDAO()
     val googleProjectDAO = new MockGoogleProjectDAO()
-    val notificationDAO = new PubSubNotificationDAO(pubSubDAO, "foo")
-    val cloudKeyCache = new GoogleKeyCache(fakeDistributedLock, googleIamDAO, googleStorageDAO, FakeGoogleStorageInterpreter, pubSubDAO, googleServicesConfig, petServiceAccountConfig)
+    val notificationDAO = new PubSubNotificationDAO(notificationPubSubDAO, "foo")
+    val cloudKeyCache = new GoogleKeyCache(fakeDistributedLock, googleIamDAO, googleStorageDAO, FakeGoogleStorageInterpreter, googleKeyCachePubSubDAO, googleServicesConfig, petServiceAccountConfig)
     val googleExt = cloudExtensions.getOrElse(new GoogleExtensions(
       fakeDistributedLock,
       directoryDAO,
       registrationDAO,
       policyDAO,
       googleDirectoryDAO,
-      pubSubDAO,
+      notificationPubSubDAO,
+      googleGroupSyncPubSubDAO,
+      googleDisableUsersPubSubDAO,
       googleIamDAO,
       googleStorageDAO,
       googleProjectDAO,
@@ -123,13 +128,19 @@ object TestSupport extends TestSupport {
     with MockUserInfoDirectives
     with GoogleExtensionRoutes {
       override val cloudExtensions: CloudExtensions = samDependencies.cloudExtensions
-      override val googleExtensions: GoogleExtensions = if(samDependencies.cloudExtensions.isInstanceOf[GoogleExtensions]) samDependencies.cloudExtensions.asInstanceOf[GoogleExtensions] else null
+      override val googleExtensions: GoogleExtensions = samDependencies.cloudExtensions match {
+        case extensions: GoogleExtensions => extensions
+        case _ => null
+      }
       override val googleGroupSynchronizer: GoogleGroupSynchronizer = {
         if(samDependencies.cloudExtensions.isInstanceOf[GoogleExtensions]) {
           new GoogleGroupSynchronizer(googleExtensions.directoryDAO, googleExtensions.accessPolicyDAO, googleExtensions.googleDirectoryDAO, googleExtensions, googleExtensions.resourceTypes)(executionContext)
         } else null
       }
-      val googleKeyCache = if(samDependencies.cloudExtensions.isInstanceOf[GoogleExtensions])samDependencies.cloudExtensions.asInstanceOf[GoogleExtensions].googleKeyCache else null
+      val googleKeyCache = samDependencies.cloudExtensions match {
+        case extensions: GoogleExtensions => extensions.googleKeyCache
+        case _ => null
+      }
       override val userInfo: UserInfo = uInfo
       override val createWorkbenchUser: Option[CreateWorkbenchUser] = Option(CreateWorkbenchUser(uInfo.userId, GoogleSubjectId(uInfo.userId.value), uInfo.userEmail, Option(IdentityConcentratorId(uInfo.userId.value))))
   }

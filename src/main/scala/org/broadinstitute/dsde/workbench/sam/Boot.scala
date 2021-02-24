@@ -224,6 +224,7 @@ object Boot extends IOApp with LazyLogging {
       distributedLock: DistributedLock[IO],
       googleStorageNew: GoogleStorageService[IO],
       googleKms: GoogleKmsService[IO])(implicit actorSystem: ActorSystem): GoogleExtensions = {
+    val workspaceMetricBaseName = "google"
     val googleDirDaos = (config.googleServicesConfig.adminSdkServiceAccounts match {
       case None =>
         NonEmptyList.one(
@@ -234,30 +235,48 @@ object Boot extends IOApp with LazyLogging {
           ))
       case Some(accounts) => accounts.map(account => Json(account.json, Option(config.googleServicesConfig.subEmail)))
     }).map { credentials =>
-      new HttpGoogleDirectoryDAO(config.googleServicesConfig.appName, credentials, "google")
+      new HttpGoogleDirectoryDAO(config.googleServicesConfig.appName, credentials, workspaceMetricBaseName)
     }
 
     val googleDirectoryDAO = DelegatePool[GoogleDirectoryDAO](googleDirDaos)
     val googleIamDAO = new HttpGoogleIamDAO(
       config.googleServicesConfig.appName,
       Pem(WorkbenchEmail(config.googleServicesConfig.serviceAccountClientId), new File(config.googleServicesConfig.pemFile)),
-      "google"
+      workspaceMetricBaseName
     )
-    val googlePubSubDAO = new HttpGooglePubSubDAO(
+    val notificationPubSubDAO = new HttpGooglePubSubDAO(
       config.googleServicesConfig.appName,
       Pem(WorkbenchEmail(config.googleServicesConfig.serviceAccountClientId), new File(config.googleServicesConfig.pemFile)),
-      "google",
-      config.googleServicesConfig.groupSyncPubSubProject
+      workspaceMetricBaseName,
+      config.googleServicesConfig.notificationPubSubProject
+    )
+    val googleGroupSyncPubSubDAO = new HttpGooglePubSubDAO(
+      config.googleServicesConfig.appName,
+      Pem(WorkbenchEmail(config.googleServicesConfig.serviceAccountClientId), new File(config.googleServicesConfig.pemFile)),
+      workspaceMetricBaseName,
+      config.googleServicesConfig.groupSyncPubSubConfig.project
+    )
+    val googleDisableUsersPubSubDAO = new HttpGooglePubSubDAO(
+      config.googleServicesConfig.appName,
+      Pem(WorkbenchEmail(config.googleServicesConfig.serviceAccountClientId), new File(config.googleServicesConfig.pemFile)),
+      workspaceMetricBaseName,
+      config.googleServicesConfig.disableUsersPubSubConfig.project
+    )
+    val googleKeyCachePubSubDAO = new HttpGooglePubSubDAO(
+      config.googleServicesConfig.appName,
+      Pem(WorkbenchEmail(config.googleServicesConfig.serviceAccountClientId), new File(config.googleServicesConfig.pemFile)),
+      workspaceMetricBaseName,
+      config.googleServicesConfig.googleKeyCacheConfig.monitorPubSubConfig.project
     )
     val googleStorageDAO = new HttpGoogleStorageDAO(
       config.googleServicesConfig.appName,
       Pem(WorkbenchEmail(config.googleServicesConfig.serviceAccountClientId), new File(config.googleServicesConfig.pemFile)),
-      "google"
+      workspaceMetricBaseName
     )
     val googleProjectDAO = new HttpGoogleProjectDAO(
       config.googleServicesConfig.appName,
       Pem(WorkbenchEmail(config.googleServicesConfig.serviceAccountClientId), new File(config.googleServicesConfig.pemFile)),
-      "google"
+      workspaceMetricBaseName
     )
     val googleKeyCache =
       new GoogleKeyCache(
@@ -265,10 +284,10 @@ object Boot extends IOApp with LazyLogging {
         googleIamDAO,
         googleStorageDAO,
         googleStorageNew,
-        googlePubSubDAO,
+        googleKeyCachePubSubDAO,
         config.googleServicesConfig,
         config.petServiceAccountConfig)
-    val notificationDAO = new PubSubNotificationDAO(googlePubSubDAO, config.googleServicesConfig.notificationTopic)
+    val notificationDAO = new PubSubNotificationDAO(notificationPubSubDAO, config.googleServicesConfig.notificationTopic)
 
     new GoogleExtensions(
       distributedLock,
@@ -276,7 +295,9 @@ object Boot extends IOApp with LazyLogging {
       registrationDAO,
       accessPolicyDAO,
       googleDirectoryDAO,
-      googlePubSubDAO,
+      notificationPubSubDAO,
+      googleGroupSyncPubSubDAO,
+      googleDisableUsersPubSubDAO,
       googleIamDAO,
       googleStorageDAO,
       googleProjectDAO,

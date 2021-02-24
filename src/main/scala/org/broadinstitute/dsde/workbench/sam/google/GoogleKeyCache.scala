@@ -26,13 +26,13 @@ import scala.concurrent.{ExecutionContext, Future}
   * Created by mbemis on 1/10/18.
   */
 class GoogleKeyCache(
-    val distributedLock: DistributedLock[IO],
-    val googleIamDAO: GoogleIamDAO,
-    val googleStorageDAO: GoogleStorageDAO, //this is only used for GoogleKeyCacheMonitorSupervisor to trigger pubsub notification.
-    val googleStorageAlg: GoogleStorageService[IO],
-    val googlePubSubDAO: GooglePubSubDAO,
-    val googleServicesConfig: GoogleServicesConfig,
-    val petServiceAccountConfig: PetServiceAccountConfig)(implicit val executionContext: ExecutionContext, cs: ContextShift[IO])
+                      val distributedLock: DistributedLock[IO],
+                      val googleIamDAO: GoogleIamDAO,
+                      val googleStorageDAO: GoogleStorageDAO, //this is only used for GoogleKeyCacheMonitorSupervisor to trigger pubsub notification.
+                      val googleStorageAlg: GoogleStorageService[IO],
+                      val googleKeyCachePubSubDao: GooglePubSubDAO,
+                      val googleServicesConfig: GoogleServicesConfig,
+                      val petServiceAccountConfig: PetServiceAccountConfig)(implicit val executionContext: ExecutionContext, cs: ContextShift[IO])
     extends KeyCache
     with LazyLogging {
   val keyPathPattern = """([^\/]+)\/([^\/]+)\/([^\/]+)""".r
@@ -41,14 +41,14 @@ class GoogleKeyCache(
   override def onBoot()(implicit system: ActorSystem): IO[Unit] = {
     system.actorOf(
       GoogleKeyCacheMonitorSupervisor.props(
-        googleServicesConfig.googleKeyCacheConfig.monitorPollInterval,
-        googleServicesConfig.googleKeyCacheConfig.monitorPollJitter,
-        googlePubSubDAO,
+        googleServicesConfig.googleKeyCacheConfig.monitorPubSubConfig.pollInterval,
+        googleServicesConfig.googleKeyCacheConfig.monitorPubSubConfig.pollJitter,
+        googleKeyCachePubSubDao,
         googleIamDAO,
-        googleServicesConfig.googleKeyCacheConfig.monitorTopic,
-        googleServicesConfig.googleKeyCacheConfig.monitorSubscription,
+        googleServicesConfig.googleKeyCacheConfig.monitorPubSubConfig.topic,
+        googleServicesConfig.googleKeyCacheConfig.monitorPubSubConfig.subscription,
         googleServicesConfig.projectServiceAccount,
-        googleServicesConfig.googleKeyCacheConfig.monitorWorkerCount,
+        googleServicesConfig.googleKeyCacheConfig.monitorPubSubConfig.workerCount,
         this
       ))
 
