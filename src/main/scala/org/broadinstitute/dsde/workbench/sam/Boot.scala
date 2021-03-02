@@ -244,7 +244,7 @@ object Boot extends IOApp with LazyLogging {
       Pem(WorkbenchEmail(config.googleServicesConfig.serviceAccountClientId), new File(config.googleServicesConfig.pemFile)),
       workspaceMetricBaseName
     )
-    val notificationPubSubDAO = new HttpGooglePubSubDAO(
+    val googleNotificationPubSubDAO = new HttpGooglePubSubDAO(
       config.googleServicesConfig.appName,
       Pem(WorkbenchEmail(config.googleServicesConfig.serviceAccountClientId), new File(config.googleServicesConfig.pemFile)),
       workspaceMetricBaseName,
@@ -287,7 +287,7 @@ object Boot extends IOApp with LazyLogging {
         googleKeyCachePubSubDAO,
         config.googleServicesConfig,
         config.petServiceAccountConfig)
-    val notificationDAO = new PubSubNotificationDAO(notificationPubSubDAO, config.googleServicesConfig.notificationTopic)
+    val notificationDAO = new PubSubNotificationDAO(googleNotificationPubSubDAO, config.googleServicesConfig.notificationTopic)
 
     new GoogleExtensions(
       distributedLock,
@@ -295,7 +295,7 @@ object Boot extends IOApp with LazyLogging {
       registrationDAO,
       accessPolicyDAO,
       googleDirectoryDAO,
-      notificationPubSubDAO,
+      googleNotificationPubSubDAO,
       googleGroupSyncPubSubDAO,
       googleDisableUsersPubSubDAO,
       googleIamDAO,
