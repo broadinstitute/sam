@@ -33,7 +33,8 @@ object Dependencies {
   val jacksonDatabind: ModuleID =    "com.fasterxml.jackson.core" % "jackson-databind"    % jacksonV
   val jacksonCore: ModuleID =        "com.fasterxml.jackson.core" % "jackson-core"        % jacksonV
 
-  val logbackClassic: ModuleID = "ch.qos.logback"             %  "logback-classic" % "1.2.2"
+  val logstashLogback: ModuleID = "net.logstash.logback"      % "logstash-logback-encoder" % "6.6"
+  val logbackClassic: ModuleID = "ch.qos.logback"             %  "logback-classic" % "1.2.3"
   val ravenLogback: ModuleID =   "com.getsentry.raven"        %  "raven-logback"   % "7.8.6"
   val scalaLogging: ModuleID =   "com.typesafe.scala-logging" %% "scala-logging"   % scalaLoggingV
   val swaggerUi: ModuleID =      "org.webjars"                %  "swagger-ui"      % "3.25.0"
@@ -111,6 +112,7 @@ object Dependencies {
     // specified as transitive dependencies, due to OWASP DependencyCheck warnings for earlier versions.
     ioGrpc,
     logbackClassic,
+    logstashLogback,
     ravenLogback,
     scalaLogging,
     swaggerUi,

@@ -5,18 +5,21 @@ import akka.actor._
 import akka.http.scaladsl.model.StatusCodes
 import akka.pattern._
 import com.typesafe.scalalogging.LazyLogging
+import io.opencensus.scala.Tracing
+import net.logstash.logback.argument.StructuredArguments
 import org.broadinstitute.dsde.workbench.google.GooglePubSubDAO
 import org.broadinstitute.dsde.workbench.google.GooglePubSubDAO.PubSubMessage
+import org.broadinstitute.dsde.workbench.model.ErrorReport.loggableString
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.model.FullyQualifiedPolicyId
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.util.FutureSupport
 import spray.json._
-import io.opencensus.scala.Tracing
 
 import scala.concurrent.Future
 import scala.concurrent.duration.{FiniteDuration, _}
+import scala.jdk.CollectionConverters._
 import scala.util.Try
 
 /**
@@ -153,10 +156,16 @@ class GoogleGroupSyncMonitorActor(
           // sync done, log it and try again immediately
           acknowledgeMessage(ackId).map(_ => StartMonitorPass) pipeTo self
 
-          import DefaultJsonProtocol._
-          import WorkbenchIdentityJsonSupport._
-          import org.broadinstitute.dsde.workbench.sam.google.SamGoogleModelJsonSupport._
-          logger.info(s"synchronized google group ${report.toJson.compactPrint}")
+          val reportForLogMessage = for {
+            (email, reportItems) <- report
+            syncItem <- reportItems
+          } yield {
+            val errorEntry = syncItem.errorReport.map("errorReport" -> loggableString(_)).toMap
+            syncItem.
+            (Map("email" -> email.value, "member" -> syncItem.email, "operation" -> syncItem.operation) ++ errorEntry).asJava
+          }
+
+          logger.info("synchronized google group", StructuredArguments.keyValue("syncDetail", reportForLogMessage.toList.asJava))
           Future.successful(None)
         } else {
           throw new WorkbenchExceptionWithErrorReport(ErrorReport("error(s) syncing google group", errorReports.toSeq))
