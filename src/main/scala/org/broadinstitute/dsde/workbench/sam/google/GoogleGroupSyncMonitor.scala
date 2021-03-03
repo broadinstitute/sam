@@ -9,7 +9,6 @@ import io.opencensus.scala.Tracing
 import net.logstash.logback.argument.StructuredArguments
 import org.broadinstitute.dsde.workbench.google.GooglePubSubDAO
 import org.broadinstitute.dsde.workbench.google.GooglePubSubDAO.PubSubMessage
-import org.broadinstitute.dsde.workbench.model.ErrorReport.loggableString
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.model.FullyQualifiedPolicyId
@@ -19,7 +18,6 @@ import spray.json._
 
 import scala.concurrent.Future
 import scala.concurrent.duration.{FiniteDuration, _}
-import scala.jdk.CollectionConverters._
 import scala.util.Try
 
 /**
@@ -156,16 +154,11 @@ class GoogleGroupSyncMonitorActor(
           // sync done, log it and try again immediately
           acknowledgeMessage(ackId).map(_ => StartMonitorPass) pipeTo self
 
-          val reportForLogMessage = for {
-            (email, reportItems) <- report
-            syncItem <- reportItems
-          } yield {
-            val errorEntry = syncItem.errorReport.map("errorReport" -> loggableString(_)).toMap
-            syncItem.
-            (Map("email" -> email.value, "member" -> syncItem.email, "operation" -> syncItem.operation) ++ errorEntry).asJava
-          }
+          import DefaultJsonProtocol._
+          import WorkbenchIdentityJsonSupport._
+          import org.broadinstitute.dsde.workbench.sam.google.SamGoogleModelJsonSupport._
+          logger.info(s"synchronized google group", StructuredArguments.raw("syncDetail", report.toJson.compactPrint))
 
-          logger.info("synchronized google group", StructuredArguments.keyValue("syncDetail", reportForLogMessage.toList.asJava))
           Future.successful(None)
         } else {
           throw new WorkbenchExceptionWithErrorReport(ErrorReport("error(s) syncing google group", errorReports.toSeq))
