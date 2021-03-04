@@ -321,7 +321,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
     petSaResponse2 shouldBe petServiceAccount
 
     // delete the pet service account
-    googleExtensions.deleteUserPetServiceAccount(newUser.userStatusDetails.userSubjectId, googleProject, samRequestContext).unsafeRunSync() shouldBe true
+    googleExtensions.deleteUserPetServiceAccount(newUser.userInfo.userSubjectId, googleProject, samRequestContext).unsafeRunSync() shouldBe true
 
     // the user should still exist in LDAP
     dirDAO.loadUser(defaultUserId, samRequestContext).unsafeRunSync() shouldBe Some(defaultUser)
