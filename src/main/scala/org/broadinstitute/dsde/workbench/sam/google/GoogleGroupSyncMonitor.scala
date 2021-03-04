@@ -5,6 +5,8 @@ import akka.actor._
 import akka.http.scaladsl.model.StatusCodes
 import akka.pattern._
 import com.typesafe.scalalogging.LazyLogging
+import io.opencensus.scala.Tracing
+import net.logstash.logback.argument.StructuredArguments
 import org.broadinstitute.dsde.workbench.google.GooglePubSubDAO
 import org.broadinstitute.dsde.workbench.google.GooglePubSubDAO.PubSubMessage
 import org.broadinstitute.dsde.workbench.model._
@@ -13,7 +15,6 @@ import org.broadinstitute.dsde.workbench.sam.model.FullyQualifiedPolicyId
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.util.FutureSupport
 import spray.json._
-import io.opencensus.scala.Tracing
 
 import scala.concurrent.Future
 import scala.concurrent.duration.{FiniteDuration, _}
@@ -156,7 +157,8 @@ class GoogleGroupSyncMonitorActor(
           import DefaultJsonProtocol._
           import WorkbenchIdentityJsonSupport._
           import org.broadinstitute.dsde.workbench.sam.google.SamGoogleModelJsonSupport._
-          logger.info(s"synchronized google group ${report.toJson.compactPrint}")
+          logger.info(s"synchronized google group", StructuredArguments.raw("syncDetail", report.toJson.compactPrint))
+
           Future.successful(None)
         } else {
           throw new WorkbenchExceptionWithErrorReport(ErrorReport("error(s) syncing google group", errorReports.toSeq))
