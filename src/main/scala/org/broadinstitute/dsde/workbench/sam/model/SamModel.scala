@@ -103,7 +103,7 @@ object SamResourceTypes {
 
 @Lenses final case class UserStatusDetails(userSubjectId: WorkbenchUserId, userEmail: WorkbenchEmail) //for backwards compatibility to old API
 @Lenses final case class UserIdInfo(userSubjectId: WorkbenchUserId, userEmail: WorkbenchEmail, googleSubjectId: Option[GoogleSubjectId])
-@Lenses final case class UserStatus(userStatusDetails: UserStatusDetails, enabled: Map[String, Boolean])
+@Lenses final case class UserStatus(userInfo: UserStatusDetails, enabled: Map[String, Boolean])
 @Lenses final case class UserStatusInfo(userSubjectId: String, userEmail: String, enabled: Boolean)
 @Lenses final case class UserStatusDiagnostics(enabled: Boolean, inAllUsersGroup: Boolean, inGoogleProxyGroup: Boolean)
 
