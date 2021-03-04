@@ -25,12 +25,9 @@ final case class GoogleServicesConfig(
     serviceAccountClientProject: GoogleProject,
     subEmail: WorkbenchEmail,
     projectServiceAccount: WorkbenchEmail,
-    groupSyncPubSubProject: String,
-    groupSyncPollInterval: FiniteDuration,
-    groupSyncPollJitter: FiniteDuration,
-    groupSyncTopic: String,
-    groupSyncSubscription: String,
-    groupSyncWorkerCount: Int,
+    groupSyncPubSubConfig: GooglePubSubConfig,
+    disableUsersPubSubConfig: GooglePubSubConfig,
+    notificationPubSubProject: String,
     notificationTopic: String,
     googleKeyCacheConfig: GoogleKeyCacheConfig,
     resourceNamePrefix: Option[String],
@@ -40,17 +37,22 @@ final case class GoogleServicesConfig(
 )
 
 object GoogleServicesConfig {
+  implicit val googlePubSubConfigReader: ValueReader[GooglePubSubConfig] = ValueReader.relative { config =>
+    GooglePubSubConfig(
+      config.getString("pubSubProject"),
+      org.broadinstitute.dsde.workbench.util.toScalaDuration(config.getDuration("pollInterval")),
+      org.broadinstitute.dsde.workbench.util.toScalaDuration(config.getDuration("pollJitter")),
+      config.getString("pubSubTopic"),
+      config.getString("pubSubSubscription"),
+      config.getInt("workerCount")
+    )
+  }
   implicit val googleKeyCacheConfigReader: ValueReader[GoogleKeyCacheConfig] = ValueReader.relative { config =>
     GoogleKeyCacheConfig(
       GcsBucketName(config.getString("bucketName")),
       config.getInt("activeKeyMaxAge"),
       config.getInt("retiredKeyMaxAge"),
-      config.getString("monitor.pubSubProject"),
-      org.broadinstitute.dsde.workbench.util.toScalaDuration(config.getDuration("monitor.pollInterval")),
-      org.broadinstitute.dsde.workbench.util.toScalaDuration(config.getDuration("monitor.pollJitter")),
-      config.getString("monitor.pubSubTopic"),
-      config.getString("monitor.pubSubSubscription"),
-      config.getInt("monitor.workerCount")
+      config.as[GooglePubSubConfig]("monitor")
     )
   }
 
@@ -85,12 +87,9 @@ object GoogleServicesConfig {
       GoogleProject(config.getString("serviceAccountClientProject")),
       WorkbenchEmail(config.getString("subEmail")),
       WorkbenchEmail(config.getString("projectServiceAccount")),
-      config.getString("groupSync.pubSubProject"),
-      org.broadinstitute.dsde.workbench.util.toScalaDuration(config.getDuration("groupSync.pollInterval")),
-      org.broadinstitute.dsde.workbench.util.toScalaDuration(config.getDuration("groupSync.pollJitter")),
-      config.getString("groupSync.pubSubTopic"),
-      config.getString("groupSync.pubSubSubscription"),
-      config.getInt("groupSync.workerCount"),
+      config.as[GooglePubSubConfig]("groupSync"),
+      config.as[GooglePubSubConfig]("disableUsers"),
+      config.getString("notifications.project"),
       config.getString("notifications.topicName"),
       config.as[GoogleKeyCacheConfig]("googleKeyCache"),
       config.as[Option[String]]("resourceNamePrefix"),

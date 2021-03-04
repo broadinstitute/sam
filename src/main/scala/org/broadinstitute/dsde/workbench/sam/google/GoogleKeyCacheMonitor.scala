@@ -24,20 +24,20 @@ object GoogleKeyCacheMonitorSupervisor {
   case object Start extends GoogleKeyCacheMonitorSupervisorMessage
 
   def props(
-      pollInterval: FiniteDuration,
-      pollIntervalJitter: FiniteDuration,
-      pubSubDao: GooglePubSubDAO,
-      googleIamDAO: GoogleIamDAO,
-      pubSubTopicName: String,
-      pubSubSubscriptionName: String,
-      projectServiceAccount: WorkbenchEmail,
-      workerCount: Int,
-      googleKeyCache: GoogleKeyCache): Props =
+             pollInterval: FiniteDuration,
+             pollIntervalJitter: FiniteDuration,
+             googleKeyCachePubSubDao: GooglePubSubDAO,
+             googleIamDAO: GoogleIamDAO,
+             pubSubTopicName: String,
+             pubSubSubscriptionName: String,
+             projectServiceAccount: WorkbenchEmail,
+             workerCount: Int,
+             googleKeyCache: GoogleKeyCache): Props =
     Props(
       new GoogleKeyCacheMonitorSupervisor(
         pollInterval,
         pollIntervalJitter,
-        pubSubDao,
+        googleKeyCachePubSubDao,
         googleIamDAO,
         pubSubTopicName,
         pubSubSubscriptionName,

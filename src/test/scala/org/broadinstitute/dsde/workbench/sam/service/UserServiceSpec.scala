@@ -154,7 +154,7 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
   it should "enable/disable user" in {
     // user doesn't exist yet
     service.enableUser(defaultUserId, userInfo, samRequestContext).futureValue shouldBe None
-    service.disableUser(defaultUserId, userInfo, samRequestContext).futureValue shouldBe None
+    service.disableUser(defaultUserId, samRequestContext).futureValue shouldBe None
 
     // create a user
     val newUser = service.createUser(defaultUser, samRequestContext).futureValue
@@ -165,7 +165,7 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     registrationDAO.isEnabled(defaultUserId, samRequestContext).unsafeRunSync() shouldBe true
 
     // disable the user
-    val response = service.disableUser(defaultUserId, userInfo, samRequestContext).futureValue
+    val response = service.disableUser(defaultUserId, samRequestContext).futureValue
     response shouldBe Some(UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> false, "allUsersGroup" -> true, "google" -> true)))
 
     // check ldap
