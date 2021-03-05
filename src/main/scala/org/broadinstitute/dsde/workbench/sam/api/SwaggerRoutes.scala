@@ -21,8 +21,14 @@ trait SwaggerRoutes {
       }
     } ~
       path("api-docs.yaml") {
-        get {
-          getFromResource("swagger/api-docs.yaml")
+        mapResponseEntity { apiDocs =>
+          apiDocs.transformDataBytes(Flow.fromFunction[ByteString, ByteString] { original: ByteString =>
+            ByteString(original.utf8String.replace("CLIENT_ID", swaggerConfig.googleClientId))
+          })
+        } {
+          get {
+            getFromResource("swagger/api-docs.yaml")
+          }
         }
       } ~
       // We have to be explicit about the paths here since we're matching at the root URL and we don't
