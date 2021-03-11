@@ -1,4 +1,4 @@
-FROM adoptopenjdk:8-hotspot
+FROM adoptopenjdk:11-hotspot
 
 # To run, build jar using ./docker/build.sh
 
@@ -9,6 +9,5 @@ ENV GIT_MODEL_HASH $GIT_MODEL_HASH
 
 RUN mkdir /sam
 COPY ./sam*.jar /sam
-
 # Add Sam as a service (it will start when the container starts)
 CMD java $JAVA_OPTS -jar $(find /sam -name 'sam*.jar')

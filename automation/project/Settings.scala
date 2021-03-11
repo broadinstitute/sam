@@ -14,7 +14,7 @@ object Settings {
   //coreDefaultSettings + defaultConfigs = the now deprecated defaultSettings
   val commonBuildSettings = Defaults.coreDefaultSettings ++ Defaults.defaultConfigs ++ Seq(
     javaOptions += "-Xmx2G",
-    javacOptions ++= Seq("-source", "1.8", "-target", "1.8")
+    javacOptions ++= Seq("--release", "11")
   )
 
   val commonCompilerSettings = Seq(
@@ -23,7 +23,7 @@ object Settings {
     "-feature",
     "-encoding", "utf8",
     "-language:postfixOps",
-    "-target:jvm-1.8"
+    "-target:jvm-1.11"
   )
 
   // test parameters explanation:
@@ -40,7 +40,7 @@ object Settings {
   val commonSettings =
     commonBuildSettings ++ testSettings ++ List(
     organization  := "org.broadinstitute.dsde.firecloud",
-    scalaVersion  := "2.13.4",
+    scalaVersion  := "2.13.5",
     resolvers ++= commonResolvers,
     scalacOptions ++= commonCompilerSettings
   )
