@@ -2,7 +2,6 @@ package org.broadinstitute.dsde.workbench.sam
 
 import java.io.File
 import java.net.URI
-
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import cats.data.NonEmptyList
@@ -14,6 +13,7 @@ import com.typesafe.scalalogging.LazyLogging
 import com.unboundid.ldap.sdk._
 import io.chrisdavenport.log4cats.StructuredLogger
 import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
+
 import javax.net.SocketFactory
 import javax.net.ssl.SSLContext
 import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
@@ -29,6 +29,7 @@ import org.broadinstitute.dsde.workbench.sam.db.DatabaseNames.DatabaseName
 import org.broadinstitute.dsde.workbench.sam.db.{DatabaseNames, DbReference}
 import org.broadinstitute.dsde.workbench.sam.google._
 import org.broadinstitute.dsde.workbench.sam.identityConcentrator.{IdentityConcentratorService, StandardIdentityConcentratorApi}
+import org.broadinstitute.dsde.workbench.sam.microsoft.AzureActiveDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.broadinstitute.dsde.workbench.sam.service._
@@ -173,7 +174,7 @@ object Boot extends IOApp with LazyLogging {
             newGoogleStorage,
             googleKmsInterpreter)
           val googleGroupSynchronizer =
-            new GoogleGroupSynchronizer(backgroundDirectoryDAO, backgroundAccessPolicyDAO, cloudExtension.googleDirectoryDAO, cloudExtension, resourceTypeMap)(
+            new GoogleGroupSynchronizer(backgroundDirectoryDAO, backgroundAccessPolicyDAO, cloudExtension.googleDirectoryDAO, cloudExtension, resourceTypeMap, appConfig.azureConfig.map(new AzureActiveDirectoryDAO(_)))(
               backgroundLdapExecutionContext)
           new GoogleExtensionsInitializer(cloudExtension, googleGroupSynchronizer)
         }

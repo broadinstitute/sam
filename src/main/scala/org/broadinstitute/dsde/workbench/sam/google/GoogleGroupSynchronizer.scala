@@ -7,6 +7,7 @@ import org.broadinstitute.dsde.workbench.google.GoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, LoadResourceAuthDomainResult}
+import org.broadinstitute.dsde.workbench.sam.microsoft.{AzureActiveDirectoryDAO, AzureGroupId}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.util.FutureSupport
@@ -37,7 +38,8 @@ class GoogleGroupSynchronizer(directoryDAO: DirectoryDAO,
                               accessPolicyDAO: AccessPolicyDAO,
                               googleDirectoryDAO: GoogleDirectoryDAO,
                               googleExtensions: GoogleExtensions,
-                              resourceTypes: Map[ResourceTypeName, ResourceType])(implicit executionContext: ExecutionContext)
+                              resourceTypes: Map[ResourceTypeName, ResourceType],
+                              maybeAzureActiveDirectoryDAO: Option[AzureActiveDirectoryDAO] = None)(implicit executionContext: ExecutionContext)
   extends LazyLogging with FutureSupport {
   def synchronizeGroupMembers(groupId: WorkbenchGroupIdentity, visitedGroups: Set[WorkbenchGroupIdentity] = Set.empty[WorkbenchGroupIdentity], samRequestContext: SamRequestContext): Future[Map[WorkbenchEmail, Seq[SyncReportItem]]] = {
     def toSyncReportItem(operation: String, email: String, result: Try[Unit]) =
@@ -96,6 +98,14 @@ class GoogleGroupSynchronizer(directoryDAO: DirectoryDAO,
             googleDirectoryDAO.createGroup(groupId.toString, group.email, Option(googleDirectoryDAO.lockedDownGroupSettings)) map (_ => Set.empty[String])
           case Some(members) => Future.successful(members.map(_.toLowerCase).toSet)
         }
+        azureMemberEmails <- maybeAzureActiveDirectoryDAO match {
+          case Some(azureActiveDirectoryDAO) => (azureActiveDirectoryDAO.listGroupMembers (group.email) flatMap {
+            case None =>
+              azureActiveDirectoryDAO.createGroup (groupId.toString, group.email) map (_ => Set.empty[String] )
+            case Some (members) => IO.pure (members.map (_.toLowerCase).toSet)
+          }).unsafeToFuture()
+          case None => Future.successful(Set.empty[String])
+        }
         samMemberEmails <- Future
           .traverse(members) {
             case group: WorkbenchGroupIdentity => directoryDAO.loadSubjectEmail(group, samRequestContext).unsafeToFuture()
@@ -107,9 +117,22 @@ class GoogleGroupSynchronizer(directoryDAO: DirectoryDAO,
             case petSA: PetServiceAccountId => directoryDAO.loadSubjectEmail(petSA, samRequestContext).unsafeToFuture()
           }
           .map(_.collect { case Some(email) => email.value.toLowerCase })
+        samMemberEmailsForAzure <- Future
+          .traverse(members) {
+            case group: WorkbenchGroupIdentity => directoryDAO.loadSubjectEmail(group, samRequestContext).unsafeToFuture()
+
+              // different that google since we don't have proxy groups (yet?)
+            case userSubjectId: WorkbenchUserId => directoryDAO.loadSubjectEmail(userSubjectId, samRequestContext).unsafeToFuture()
+
+            // not sure why this next case would happen but if a petSA is in a group just use its email
+            case petSA: PetServiceAccountId => directoryDAO.loadSubjectEmail(petSA, samRequestContext).unsafeToFuture()
+          }
+          .map(_.collect { case Some(email) => email.value.toLowerCase })
 
         toAdd = samMemberEmails -- googleMemberEmails
         toRemove = googleMemberEmails -- samMemberEmails
+        toAddAzure = samMemberEmailsForAzure -- azureMemberEmails
+        toRemoveAzure = azureMemberEmails -- samMemberEmailsForAzure
 
         addTrials <- Future.traverse(toAdd) { addEmail =>
           googleDirectoryDAO.addMemberToGroup(group.email, WorkbenchEmail(addEmail)).toTry.map(toSyncReportItem("added", addEmail, _))
@@ -117,10 +140,32 @@ class GoogleGroupSynchronizer(directoryDAO: DirectoryDAO,
         removeTrials <- Future.traverse(toRemove) { removeEmail =>
           googleDirectoryDAO.removeMemberFromGroup(group.email, WorkbenchEmail(removeEmail)).toTry.map(toSyncReportItem("removed", removeEmail, _))
         }
+        addTrialsAzure <- maybeAzureActiveDirectoryDAO match {
+          case Some(azureActiveDirectoryDAO) =>
+            Future.traverse(toAddAzure) { addEmail =>
+              azureActiveDirectoryDAO.addMemberToGroup(group.email, WorkbenchEmail(addEmail)).unsafeToFuture().toTry.map(toSyncReportItem("added", addEmail, _))
+            }
+          case None => Future.successful(Set.empty[SyncReportItem])
+        }
+        removeTrialsAzure <- maybeAzureActiveDirectoryDAO match {
+          case Some(azureActiveDirectoryDAO) =>
+            Future.traverse(toRemoveAzure) { removeEmail =>
+              azureActiveDirectoryDAO.removeMemberFromGroup(group.email, WorkbenchEmail(removeEmail)).unsafeToFuture().toTry.map(toSyncReportItem("removed", removeEmail, _))
+            }
+          case None => Future.successful(Set.empty[SyncReportItem])
+        }
 
         _ <- directoryDAO.updateSynchronizedDate(groupId, samRequestContext).unsafeToFuture()
+        maybeAzureGroupId <- maybeAzureActiveDirectoryDAO match {
+          case Some(azureActiveDirectoryDAO) => azureActiveDirectoryDAO.maybeGetGroupId(group.email).unsafeToFuture()
+          case None => Future.successful(Option.empty[AzureGroupId])
+        }
+
       } yield {
-        Map(group.email -> Seq(addTrials, removeTrials).flatten) ++ subGroupSyncs.flatten
+        val azureEntry = maybeAzureGroupId.map { azureGroupId =>
+          WorkbenchEmail(azureGroupId.value)-> Seq(addTrialsAzure, removeTrialsAzure).flatten
+        }.toMap
+        Map(group.email -> Seq(addTrials, removeTrials).flatten) ++ azureEntry ++ subGroupSyncs.flatten
       }
     }
   }

@@ -26,7 +26,9 @@ final case class AppConfig(
                             resourceTypes: Set[ResourceType],
                             liquibaseConfig: LiquibaseConfig,
                             identityConcentratorConfig: Option[IdentityConcentratorConfig],
-                            blockedEmailDomains: Seq[String])
+                            blockedEmailDomains: Seq[String],
+                            azureConfig: Option[AzureConfig] = None
+                          )
 
 object AppConfig {
   implicit val swaggerReader: ValueReader[SwaggerConfig] = ValueReader.relative { config =>
@@ -144,6 +146,14 @@ object AppConfig {
     LiquibaseConfig(config.getString("changelog"), config.getBoolean("initWithLiquibase"))
   }
 
+  implicit val azureConfigReader: ValueReader[AzureConfig] = ValueReader.relative { config =>
+    AzureConfig(
+      tenant = config.getString("tenant"),
+      clientId = config.getString("clientId"),
+      clientSecret = config.getString("clientSecret")
+    )
+  }
+
   def readConfig(config: Config): AppConfig = {
     val directoryConfig = config.as[DirectoryConfig]("directory")
     val googleConfigOption = for {
@@ -163,6 +173,8 @@ object AppConfig {
 
     val blockedEmailDomains = config.as[Option[Seq[String]]]("blockedEmailDomains").getOrElse(Seq.empty)
 
-    AppConfig(emailDomain, directoryConfig, schemaLockConfig, distributedLockConfig, swaggerConfig, googleConfigOption, resourceTypes, liquibaseConfig, identityConcentratorConfig, blockedEmailDomains)
+    val azureConfig = config.as[Option[AzureConfig]]("azure")
+
+    AppConfig(emailDomain, directoryConfig, schemaLockConfig, distributedLockConfig, swaggerConfig, googleConfigOption, resourceTypes, liquibaseConfig, identityConcentratorConfig, blockedEmailDomains, azureConfig)
   }
 }

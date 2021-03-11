@@ -13,6 +13,9 @@ servers:
 security:
   - googleoauth:
       - "CLIENT_ID/.default"
+      - email
+      - openid
+      - profile
 paths:
   /api/admin/user/{userId}:
     get:
@@ -3288,3 +3291,6 @@ components:
           authorizationUrl: https://login.microsoftonline.com/common/oauth2/v2.0/authorize
           scopes:
             "6aabd5dd-ca46-443e-aa17-2e383ea91af6/.default": default
+            email: email authorization
+            openid: openid authorization
+            profile: profile authorization
