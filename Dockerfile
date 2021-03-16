@@ -1,4 +1,4 @@
-FROM adoptopenjdk:11-hotspot
+FROM us.gcr.io/broad-dsp-gcr-public/base/jre:11-debian
 
 # To run, build jar using ./docker/build.sh
 
