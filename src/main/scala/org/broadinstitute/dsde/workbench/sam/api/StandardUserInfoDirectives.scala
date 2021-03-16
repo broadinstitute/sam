@@ -122,14 +122,14 @@ object StandardUserInfoDirectives {
       user <- maybeUser match {
         case Some(user) => IO.pure(UserInfo(bearerToken, user.id, user.email, jwtUserInfo.exp - Instant.now().getEpochSecond))
         case None =>
-          IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Identity Concentrator Id ${jwtUserInfo.sub} not found in sam")))
+          IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Identity Concentrator Id ${jwtUserInfo.oid} not found in sam")))
       }
     } yield user
   }
 
   private def loadUserMaybeUpdateIdentityConcentratorId(jwtUserInfo: JwtUserInfo, bearerToken: OAuth2BearerToken, directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext): IO[Option[WorkbenchUser]] = {
     for {
-      maybeUser <- directoryDAO.loadUserByIdentityConcentratorId(jwtUserInfo.sub, samRequestContext)
+      maybeUser <- directoryDAO.loadUserByIdentityConcentratorId(jwtUserInfo.oid, samRequestContext)
 //      maybeUserAgain <- maybeUser match {
 //        case None => updateUserIdentityConcentratorId(jwtUserInfo, bearerToken, directoryDAO, identityConcentratorService, samRequestContext)
 //        case _ => IO.pure(maybeUser)
@@ -140,9 +140,9 @@ object StandardUserInfoDirectives {
   private def updateUserIdentityConcentratorId(jwtUserInfo: JwtUserInfo, bearerToken: OAuth2BearerToken, directoryDAO: DirectoryDAO, identityConcentratorService: IdentityConcentratorService, samRequestContext: SamRequestContext): IO[Option[WorkbenchUser]] = {
     for {
       googleIdentities <- identityConcentratorService.getGoogleIdentities(bearerToken)
-      (googleSubjectId, _) <- singleGoogleIdentity(jwtUserInfo.sub, googleIdentities)
-      _ <- directoryDAO.setUserIdentityConcentratorId(googleSubjectId, jwtUserInfo.sub, samRequestContext)
-      maybeUser <- directoryDAO.loadUserByIdentityConcentratorId(jwtUserInfo.sub, samRequestContext)
+      (googleSubjectId, _) <- singleGoogleIdentity(jwtUserInfo.oid, googleIdentities)
+      _ <- directoryDAO.setUserIdentityConcentratorId(googleSubjectId, jwtUserInfo.oid, samRequestContext)
+      maybeUser <- directoryDAO.loadUserByIdentityConcentratorId(jwtUserInfo.oid, samRequestContext)
     } yield maybeUser
   }
 
@@ -169,12 +169,12 @@ object StandardUserInfoDirectives {
     } yield userInfo
 
   def newCreateWorkbenchUserFromJwt(jwtUserInfo: JwtUserInfo, bearerToken: OAuth2BearerToken): IO[CreateWorkbenchUser] =
-    IO.pure(CreateWorkbenchUser(genWorkbenchUserId(System.currentTimeMillis()), GoogleSubjectId(genRandom(System.currentTimeMillis())), jwtUserInfo.unique_name, Option(jwtUserInfo.sub)))
+    IO.pure(CreateWorkbenchUser(genWorkbenchUserId(System.currentTimeMillis()), GoogleSubjectId(genRandom(System.currentTimeMillis())), jwtUserInfo.unique_name, Option(jwtUserInfo.oid)))
 }
 
 final case class CreateWorkbenchUser(id: WorkbenchUserId, googleSubjectId: GoogleSubjectId, email: WorkbenchEmail, identityConcentratorId: Option[IdentityConcentratorId])
 
-final case class JwtUserInfo(sub: IdentityConcentratorId, exp: Long, unique_name: WorkbenchEmail)
+final case class JwtUserInfo(oid: IdentityConcentratorId, exp: Long, unique_name: WorkbenchEmail)
 
 final case class OIDCHeaders(token: OAuth2BearerToken, googleSubjectId: GoogleSubjectId, expiresIn: String, email: WorkbenchEmail)
 
