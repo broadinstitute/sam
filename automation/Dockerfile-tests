@@ -1,4 +1,4 @@
-FROM hseeberger/scala-sbt:graalvm-ce-20.3.0-java8_1.4.4_2.13.4
+FROM broadinstitute/scala-baseimage:jdk11-2.13.5-1.4.7
 
 COPY src /app/src
 COPY test.sh /app
