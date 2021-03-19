@@ -1,9 +1,9 @@
 jdk:
-- oraclejdk11
+- oraclejdk8
 dist: trusty
 language: scala
 scala:
-- 2.13.5
+- 2.13.4
 sudo: required
 services:
 - docker

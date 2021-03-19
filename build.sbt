@@ -7,7 +7,6 @@ lazy val root = project
   .withTestSettings
 
 Revolver.settings
-Global / excludeLintKeys += debugSettings // To avoid lint warning
 
 Revolver.enableDebugging(port = 5050, suspend = false)
 

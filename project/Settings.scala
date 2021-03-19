@@ -18,14 +18,14 @@ object Settings {
   //coreDefaultSettings + defaultConfigs = the now deprecated defaultSettings
   lazy val commonBuildSettings = Defaults.coreDefaultSettings ++ Defaults.defaultConfigs ++ Seq(
     javaOptions += "-Xmx2G",
-    javacOptions ++= Seq("--release", "11"),
+    javacOptions ++= Seq("-source", "1.8", "-target", "1.8"),
     scalacOptions in (Compile, console) --= Seq("-Ywarn-unused:imports", "-Xfatal-warnings"),
     scalacOptions in Test -= "-Ywarn-dead-code" // due to https://github.com/mockito/mockito-scala#notes
   )
 
   // recommended scalac options by https://tpolecat.github.io/2017/04/25/scalac-flags.html
   lazy val commonCompilerSettings = Seq(
-    "-target:jvm-1.11",
+    "-target:jvm-1.8",
     "-deprecation", // Emit warning and location for usages of deprecated APIs.
     "-encoding",
     "utf-8", // Specify character encoding used by source files.
@@ -64,7 +64,7 @@ object Settings {
   lazy val commonSettings =
     commonBuildSettings ++ commonAssemblySettings ++ commonTestSettings ++ List(
     organization  := "org.broadinstitute.dsde.workbench",
-    scalaVersion  := "2.13.5",
+    scalaVersion  := "2.13.4",
     resolvers ++= commonResolvers,
     scalacOptions ++= commonCompilerSettings
   )

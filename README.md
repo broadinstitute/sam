@@ -139,7 +139,7 @@ Note that Sam does not actually launch workflows create VMs but appears to in th
 ## Development
 ### Required Tooling:
 #### Java:
-Make sure you have Java JDK 11 installed. Instructions for our recommended package can be found [here](https://adoptopenjdk.net/)
+Make sure you have Java JDK 8 installed. We do not currently support Java 11. Instructions for our recommended package can be found [here](https://adoptopenjdk.net/)
 #### Scala:
 Mac:
 ```$xslt
