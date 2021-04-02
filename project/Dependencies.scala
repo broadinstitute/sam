@@ -101,6 +101,9 @@ object Dependencies {
   val microsoftGraph: ModuleID = "com.microsoft.graph" % "microsoft-graph" % "2.9.0"
   val microsoftGraphAuth: ModuleID = "com.microsoft.graph" % "microsoft-graph-auth" % "0.3.0"
 
+  val azureIdentity: ModuleID = "com.azure" % "azure-identity" % "1.2.0"
+  val azureResourceManager: ModuleID = "com.azure.resourcemanager" % "azure-resourcemanager" % "2.1.0"
+
   val openCensusDependencies = Seq(
     opencensusScalaCode,
     opencensusAkkaHttp,
@@ -167,6 +170,8 @@ object Dependencies {
     http4sCirce,
 
     microsoftGraph,
-    microsoftGraphAuth
+    microsoftGraphAuth,
+    azureIdentity,
+    azureResourceManager
   ) ++ openCensusDependencies
 }

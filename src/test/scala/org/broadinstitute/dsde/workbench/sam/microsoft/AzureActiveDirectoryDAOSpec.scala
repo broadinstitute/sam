@@ -1,10 +1,18 @@
 package org.broadinstitute.dsde.workbench.sam.microsoft
 
 import akka.http.scaladsl.model.StatusCodes
+import com.azure.core.management.AzureEnvironment
+import com.azure.core.management.profile.AzureProfile
+import com.azure.identity.ClientSecretCredentialBuilder
+import com.azure.resourcemanager.AzureResourceManager
+import com.azure.resourcemanager.resources.models.DeploymentMode
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException, WorkbenchExceptionWithErrorReport}
 import org.broadinstitute.dsde.workbench.sam.config.AzureConfig
 import org.scalatest.freespec.AnyFreeSpec
 import org.scalatest.matchers.should.Matchers
+
+import java.util.UUID
+import scala.io.Source
 
 class AzureActiveDirectoryDAOSpec extends AnyFreeSpec with Matchers {
   val azureActiveDirectoryDAO = new AzureActiveDirectoryDAO(AzureConfig(
@@ -14,6 +22,48 @@ class AzureActiveDirectoryDAOSpec extends AnyFreeSpec with Matchers {
 
   val existsTwiceEmail = WorkbenchEmail("foo@bar.com")
   val existingGroupEmail = WorkbenchEmail("testgroup")
+
+  "xxx" in {
+    val tenantId = "42998b82-3ac1-40b6-8a71-5c4f31201c17"
+    val clientId = "6aabd5dd-ca46-443e-aa17-2e383ea91af6"
+    val clientSecret = ???
+    val creds = new ClientSecretCredentialBuilder().clientSecret(clientSecret).clientId(clientId).tenantId(tenantId).build()
+
+    val subscriptionID = "a2e2365d-c161-47a4-8df3-5076a409b38f"
+    val rm = AzureResourceManager.authenticate(creds, new AzureProfile(AzureEnvironment.AZURE)).withSubscription(subscriptionID)
+
+    val templateJson = Source.fromFile("/Users/dvoet/projects/az-managed-app/template.json").mkString.replaceAll("\n", "")
+    val deployment = rm.deployments().define(UUID.randomUUID().toString)
+      .withExistingResourceGroup("terra")
+      .withTemplate(templateJson)
+      .withParameters(s"""{
+                        |        "storageAccountNamePrefix": {
+                        |            "value": "pot"
+                        |        },
+                        |        "storageAccountType": {
+                        |            "value": "Standard_LRS"
+                        |        },
+                        |        "location": {
+                        |            "value": "eastus"
+                        |        },
+                        |        "applicationResourceName": {
+                        |            "value": "dvoet20"
+                        |        },
+                        |        "managedResourceGroupId": {
+                        |            "value": "/subscriptions/$subscriptionID/resourceGroups/dvoet20-mrg"
+                        |        },
+                        |        "managedIdentity": {
+                        |            "value": {}
+                        |        }
+                        |    }""".stripMargin)
+      .withMode(DeploymentMode.INCREMENTAL)
+      .create()
+
+//    val x = rm.accessManagement().roleAssignments().manager().roleServiceClient().getRoleAssignments.listForScope("/subscriptions/a2e2365d-c161-47a4-8df3-5076a409b38f", "atScope()", Context.NONE).asScala
+//    x.foreach { r=>
+//      println(s"${r.principalId()}, ${r.roleDefinitionId()}")
+//    }
+  }
 
   "AzureActiveDirectoryDAO" ignore {
     "createGroup and deleteGroup" - {
