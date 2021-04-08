@@ -156,4 +156,15 @@ class LdapRegistrationDAO(
 
   override def setGoogleSubjectId(userId: WorkbenchUserId, googleSubjectId: GoogleSubjectId, samRequestContext: SamRequestContext): IO[Unit] =
     executeLdap(IO(ldapConnectionPool.modify(userDn(userId), new Modification(ModificationType.ADD, Attr.googleSubjectId, googleSubjectId.value))), "setGoogleSubjectId", samRequestContext)
+
+  override def checkStatus(samRequestContext: SamRequestContext): IO[Boolean] =
+    for {
+      entry <- executeLdap(IO(ldapConnectionPool.getEntry(directoryConfig.enabledUsersGroupDn, Attr.member)), "isEnabled", samRequestContext)
+    } yield {
+      val result = for {
+        e <- Option(entry)
+        members = entry.getAttributeValues(Attr.member)
+      } yield members.nonEmpty
+      result.getOrElse(false)
+    }
 }

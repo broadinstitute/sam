@@ -6,7 +6,7 @@ import akka.util.Timeout
 import cats.effect.IO
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model.WorkbenchGroupName
-import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, RegistrationDAO}
 import org.broadinstitute.dsde.workbench.sam.db.DbReference
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.util.health.HealthMonitor.GetCurrentStatus
@@ -18,6 +18,7 @@ import scala.concurrent.{ExecutionContext, Future}
 
 class StatusService(
     val directoryDAO: DirectoryDAO,
+    val registrationDAO: RegistrationDAO,
     val cloudExtensions: CloudExtensions,
     val dbReference: DbReference,
     initialDelay: FiniteDuration = Duration.Zero,
@@ -35,9 +36,9 @@ class StatusService(
 
   private def checkOpenDJ(groupToLoad: WorkbenchGroupName): IO[SubsystemStatus] = {
     logger.info("checking opendj connection")
-    directoryDAO.loadGroupEmail(groupToLoad, SamRequestContext(None)).map { // Since Status calls are ~80% of all Sam calls and are easy to track separately, Status calls are not being traced.
-      case Some(_) => HealthMonitor.OkStatus
-      case None => HealthMonitor.failedStatus(s"could not find group $groupToLoad in opendj")
+    registrationDAO.checkStatus(SamRequestContext(None)).map { // Since Status calls are ~80% of all Sam calls and are easy to track separately, Status calls are not being traced.
+      case true => HealthMonitor.OkStatus
+      case false => HealthMonitor.failedStatus(s"Enabled users group returning zero members or failing to return in OpenDJ")
     }
   }
 
