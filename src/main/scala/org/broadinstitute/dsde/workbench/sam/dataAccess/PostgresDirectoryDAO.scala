@@ -17,6 +17,7 @@ import org.broadinstitute.dsde.workbench.sam.util.{DatabaseSupport, SamRequestCo
 import org.postgresql.util.PSQLException
 import scalikejdbc._
 
+import scala.concurrent.duration.DurationInt
 import scala.util.{Failure, Try}
 
 class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val readDbRef: DbReference)(implicit val cs: ContextShift[IO], timer: Timer[IO]) extends DirectoryDAO with DatabaseSupport with PostgresGroupDAO {
@@ -760,5 +761,15 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
         throw new WorkbenchException(s"Cannot update googleSubjectId for user ${userId} because user does not exist or the googleSubjectId has already been set for this user")
       }
     })
+  }
+
+  override def checkStatus(samRequestContext: SamRequestContext): IO[Boolean] = IO {
+    writeDbRef.inLocalTransaction { session =>
+      if (session.connection.isValid((2 seconds).toSeconds.intValue())) {
+        true
+      } else {
+        false
+      }
+    }
   }
 }

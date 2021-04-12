@@ -5,7 +5,6 @@ import akka.pattern.ask
 import akka.util.Timeout
 import cats.effect.IO
 import com.typesafe.scalalogging.LazyLogging
-import org.broadinstitute.dsde.workbench.model.WorkbenchGroupName
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, RegistrationDAO}
 import org.broadinstitute.dsde.workbench.sam.db.DbReference
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
@@ -32,9 +31,9 @@ class StatusService(
   def getStatus(): Future[StatusCheckResponse] = (healthMonitor ? GetCurrentStatus).asInstanceOf[Future[StatusCheckResponse]]
 
   private def checkStatus(): Map[Subsystem, Future[SubsystemStatus]] =
-    cloudExtensions.checkStatus + (OpenDJ -> checkOpenDJ(cloudExtensions.allUsersGroupName).unsafeToFuture()) + (Database -> checkDatabase().unsafeToFuture())
+    cloudExtensions.checkStatus + (OpenDJ -> checkOpenDJ().unsafeToFuture()) + (Database -> checkDatabase().unsafeToFuture())
 
-  private def checkOpenDJ(groupToLoad: WorkbenchGroupName): IO[SubsystemStatus] = {
+  private def checkOpenDJ(): IO[SubsystemStatus] = {
     logger.info("checking opendj connection")
     registrationDAO.checkStatus(SamRequestContext(None)).map { // Since Status calls are ~80% of all Sam calls and are easy to track separately, Status calls are not being traced.
       case true => HealthMonitor.OkStatus
@@ -42,14 +41,11 @@ class StatusService(
     }
   }
 
-  private def checkDatabase(): IO[SubsystemStatus] = IO {
+  private def checkDatabase(): IO[SubsystemStatus] = {
     logger.info("checking database connection")
-    dbReference.inLocalTransaction { session =>
-      if (session.connection.isValid((2 seconds).toSeconds.intValue())) {
-        HealthMonitor.OkStatus
-      } else {
-        HealthMonitor.failedStatus("database connection invalid or timed out checking")
-      }
+    directoryDAO.checkStatus(SamRequestContext(None)).map {
+      case true => HealthMonitor.OkStatus
+      case false => HealthMonitor.failedStatus("database connection invalid or timed out checking")
     }
   }
 }

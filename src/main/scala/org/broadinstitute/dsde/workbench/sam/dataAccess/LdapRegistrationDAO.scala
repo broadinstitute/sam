@@ -10,6 +10,7 @@ import org.broadinstitute.dsde.workbench.model.google.{ServiceAccount, ServiceAc
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO.{Attr, ObjectClass}
+import org.broadinstitute.dsde.workbench.sam.service.NoExtensionsInitializer.cloudExtensions
 import org.broadinstitute.dsde.workbench.sam.util.{LdapSupport, SamRequestContext}
 
 import scala.concurrent.ExecutionContext
@@ -159,7 +160,7 @@ class LdapRegistrationDAO(
 
   override def checkStatus(samRequestContext: SamRequestContext): IO[Boolean] =
     for {
-      entry <- executeLdap(IO(ldapConnectionPool.getEntry(directoryConfig.enabledUsersGroupDn, Attr.member)), "isEnabled", samRequestContext)
+      entry <- executeLdap(IO(ldapConnectionPool.getEntry(directoryConfig.enabledUsersGroupDn, Attr.member)), cloudExtensions.allUsersGroupName.toString(), samRequestContext)
     } yield {
       val result = for {
         e <- Option(entry)
