@@ -106,7 +106,7 @@ object Boot extends IOApp with LazyLogging {
         connectionPool.setMaxWaitTimeMillis(30000)
         connectionPool.setConnectionPoolName(name)
         connectionPool
-      })(ldapConnection => IO(ldapConnection.close()))
+      })(ldapConnectionPool => IO(ldapConnectionPool.close()))
   }
 
   private[sam] def createAppDependencies(

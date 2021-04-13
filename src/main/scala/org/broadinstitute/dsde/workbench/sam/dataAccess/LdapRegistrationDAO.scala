@@ -10,12 +10,12 @@ import org.broadinstitute.dsde.workbench.model.google.{ServiceAccount, ServiceAc
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO.{Attr, ObjectClass}
-import org.broadinstitute.dsde.workbench.sam.service.NoExtensionsInitializer.cloudExtensions
 import org.broadinstitute.dsde.workbench.sam.util.{LdapSupport, SamRequestContext}
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 import scala.jdk.CollectionConverters._
+import scala.util.{Failure, Success, Try}
 
 // use ExecutionContexts.blockingThreadPool for blockingEc
 class LdapRegistrationDAO(
@@ -158,14 +158,16 @@ class LdapRegistrationDAO(
   override def setGoogleSubjectId(userId: WorkbenchUserId, googleSubjectId: GoogleSubjectId, samRequestContext: SamRequestContext): IO[Unit] =
     executeLdap(IO(ldapConnectionPool.modify(userDn(userId), new Modification(ModificationType.ADD, Attr.googleSubjectId, googleSubjectId.value))), "setGoogleSubjectId", samRequestContext)
 
-  override def checkStatus(samRequestContext: SamRequestContext): IO[Boolean] =
-    for {
-      entry <- executeLdap(IO(ldapConnectionPool.getEntry(directoryConfig.enabledUsersGroupDn, Attr.member)), cloudExtensions.allUsersGroupName.toString(), samRequestContext)
-    } yield {
-      val result = for {
-        e <- Option(entry)
-        members = entry.getAttributeValues(Attr.member)
-      } yield members.nonEmpty
-      result.getOrElse(false)
+  override def checkStatus(samRequestContext: SamRequestContext): Boolean = {
+    val ldapIsHealthy = Try {
+      ldapConnectionPool.getHealthCheck
+      val connection = ldapConnectionPool.getConnection
+      ldapConnectionPool.getHealthCheck.ensureNewConnectionValid(connection)
+      ldapConnectionPool.releaseConnection(connection)
+    } match {
+      case Success(_) => true
+      case Failure(_) => false
     }
+    ldapIsHealthy
+  }
 }

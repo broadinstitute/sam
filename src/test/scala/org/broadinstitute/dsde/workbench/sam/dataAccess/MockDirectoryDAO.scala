@@ -296,7 +296,5 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     result.getOrElse(0)
   }
 
-  override def checkStatus(samRequestContext: SamRequestContext): IO[Boolean] = IO {
-    false
-  }
+  override def checkStatus(samRequestContext: SamRequestContext): Boolean = false
 }

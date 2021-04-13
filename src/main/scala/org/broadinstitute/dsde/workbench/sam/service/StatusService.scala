@@ -33,19 +33,21 @@ class StatusService(
   private def checkStatus(): Map[Subsystem, Future[SubsystemStatus]] =
     cloudExtensions.checkStatus + (OpenDJ -> checkOpenDJ().unsafeToFuture()) + (Database -> checkDatabase().unsafeToFuture())
 
-  private def checkOpenDJ(): IO[SubsystemStatus] = {
+  private def checkOpenDJ(): IO[SubsystemStatus] = IO {
+    // Since Status calls are ~80% of all Sam calls and are easy to track separately, Status calls are not being traced.
     logger.info("checking opendj connection")
-    registrationDAO.checkStatus(SamRequestContext(None)).map { // Since Status calls are ~80% of all Sam calls and are easy to track separately, Status calls are not being traced.
-      case true => HealthMonitor.OkStatus
-      case false => HealthMonitor.failedStatus(s"Enabled users group returning zero members or failing to return in OpenDJ")
-    }
+    if (registrationDAO.checkStatus(SamRequestContext(None)))
+      HealthMonitor.OkStatus
+    else
+      HealthMonitor.failedStatus(s"LDAP database connection invalid or timed out checking")
   }
 
-  private def checkDatabase(): IO[SubsystemStatus] = {
+  private def checkDatabase(): IO[SubsystemStatus] = IO {
     logger.info("checking database connection")
-    directoryDAO.checkStatus(SamRequestContext(None)).map {
-      case true => HealthMonitor.OkStatus
-      case false => HealthMonitor.failedStatus("database connection invalid or timed out checking")
-    }
+    if (directoryDAO.checkStatus(SamRequestContext(None)))
+      HealthMonitor.OkStatus
+    else
+      HealthMonitor.failedStatus("database connection invalid or timed out checking")
+
   }
 }
