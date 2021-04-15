@@ -9,6 +9,7 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{ServiceAccount, ServiceAccountDisplayName, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
+import org.broadinstitute.dsde.workbench.sam.dataAccess.ConnectionType.ConnectionType
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO.{Attr, ObjectClass}
 import org.broadinstitute.dsde.workbench.sam.util.{LdapSupport, SamRequestContext}
 
@@ -40,6 +41,8 @@ class LdapRegistrationDAO(
       }
     }
   }
+
+  override def getConnectionTarget(): ConnectionType = ConnectionType.LDAP
 
   override def createUser(user: WorkbenchUser, samRequestContext: SamRequestContext): IO[WorkbenchUser] = {
     val attrs = List(

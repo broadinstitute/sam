@@ -8,6 +8,7 @@ import cats.implicits._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.ServiceAccountSubjectId
 import org.broadinstitute.dsde.workbench.sam._
+import org.broadinstitute.dsde.workbench.sam.dataAccess.ConnectionType.ConnectionType
 import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicy, BasicWorkbenchGroup}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
@@ -33,6 +34,8 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
   private val petsWithEmails: mutable.Map[WorkbenchEmail, PetServiceAccountId] = new TrieMap()
 
   private val groupAccessInstructions: mutable.Map[WorkbenchGroupName, String] = new TrieMap()
+
+  override def getConnectionTarget(): ConnectionType = ConnectionType.Postgres
 
   override def createGroup(group: BasicWorkbenchGroup, accessInstruction: Option[String] = None, samRequestContext: SamRequestContext): IO[BasicWorkbenchGroup] =
     if (groups.keySet.contains(group.id)) {

@@ -22,7 +22,7 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.api._
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig._
 import org.broadinstitute.dsde.workbench.sam.config._
-import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, MockAccessPolicyDAO, MockDirectoryDAO}
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, MockAccessPolicyDAO, MockDirectoryDAO, MockRegistrationDAO}
 import org.broadinstitute.dsde.workbench.sam.db.{DatabaseNames, DbReference}
 import org.broadinstitute.dsde.workbench.sam.db.tables._
 import org.broadinstitute.dsde.workbench.sam.google.{GoogleExtensionRoutes, GoogleExtensions, GoogleGroupSynchronizer, GoogleKeyCache}
@@ -88,7 +88,7 @@ object TestSupport extends TestSupport {
   def genSamDependencies(resourceTypes: Map[ResourceTypeName, ResourceType] = Map.empty, googIamDAO: Option[GoogleIamDAO] = None, googleServicesConfig: GoogleServicesConfig = googleServicesConfig, cloudExtensions: Option[CloudExtensions] = None, googleDirectoryDAO: Option[GoogleDirectoryDAO] = None, policyAccessDAO: Option[AccessPolicyDAO] = None)(implicit system: ActorSystem) = {
     val googleDirectoryDAO = new MockGoogleDirectoryDAO()
     val directoryDAO = new MockDirectoryDAO()
-    val registrationDAO = new MockDirectoryDAO()
+    val registrationDAO = new MockRegistrationDAO()
     val googleIamDAO = googIamDAO.getOrElse(new MockGoogleIamDAO())
     val policyDAO = policyAccessDAO.getOrElse(new MockAccessPolicyDAO(resourceTypes))
     val notificationPubSubDAO = new MockGooglePubSubDAO()

@@ -73,15 +73,15 @@ class MockAccessPolicyDAOSpec extends AnyFlatSpec with Matchers with TestSupport
 
   def mockServicesFixture = new {
     val shared = sharedFixtures
-    val mockDirDao = new MockDirectoryDAO(shared.groups)
-    val mockRegDao = new MockDirectoryDAO()
+    val mockDirectoryDAO = new MockDirectoryDAO(shared.groups)
+    val mockRegistrationDAO = new MockDirectoryDAO()
     val mockPolicyDAO = new MockAccessPolicyDAO(shared.resourceTypes, shared.groups)
-    val allUsersGroup: WorkbenchGroup = TestSupport.runAndWait(NoExtensions.getOrCreateAllUsersGroup(mockDirDao, samRequestContext))
+    val allUsersGroup: WorkbenchGroup = TestSupport.runAndWait(NoExtensions.getOrCreateAllUsersGroup(mockDirectoryDAO, samRequestContext))
 
-    val policyEvaluatorService = PolicyEvaluatorService(shared.emailDomain, shared.resourceTypes, mockPolicyDAO, mockDirDao)
-    val resourceService = new ResourceService(shared.resourceTypes, policyEvaluatorService, mockPolicyDAO, mockDirDao, NoExtensions, shared.emailDomain)
-    val userService = new UserService(mockDirDao, NoExtensions, mockRegDao, Seq.empty)
-    val managedGroupService = new ManagedGroupService(resourceService, policyEvaluatorService, shared.resourceTypes, mockPolicyDAO, mockDirDao, NoExtensions, shared.emailDomain)
+    val policyEvaluatorService = PolicyEvaluatorService(shared.emailDomain, shared.resourceTypes, mockPolicyDAO, mockDirectoryDAO)
+    val resourceService = new ResourceService(shared.resourceTypes, policyEvaluatorService, mockPolicyDAO, mockDirectoryDAO, NoExtensions, shared.emailDomain)
+    val userService = new UserService(mockDirectoryDAO, NoExtensions, mockRegistrationDAO, Seq.empty)
+    val managedGroupService = new ManagedGroupService(resourceService, policyEvaluatorService, shared.resourceTypes, mockPolicyDAO, mockDirectoryDAO, NoExtensions, shared.emailDomain)
   }
 
   "RealAccessPolicyDao and MockAccessPolicyDao" should "return the same results for the same methods" in {

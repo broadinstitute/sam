@@ -3,6 +3,7 @@ import akka.http.scaladsl.model.StatusCodes
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.google.errorReportSource
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, GoogleSubjectId, PetServiceAccount, PetServiceAccountId, WorkbenchEmail, WorkbenchExceptionWithErrorReport, WorkbenchSubject, WorkbenchUser, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.sam.dataAccess.ConnectionType.ConnectionType
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import scala.collection.concurrent.TrieMap
@@ -18,6 +19,7 @@ class MockRegistrationDAO extends RegistrationDAO {
   private val petServiceAccountsByUser: mutable.Map[PetServiceAccountId, PetServiceAccount] = new TrieMap()
   private val petsWithEmails: mutable.Map[WorkbenchEmail, PetServiceAccountId] = new TrieMap()
 
+  override def getConnectionTarget(): ConnectionType = ConnectionType.LDAP
 
   override def createUser(user: WorkbenchUser, samRequestContext: SamRequestContext): IO[WorkbenchUser] =
     if (users.keySet.contains(user.id)) {

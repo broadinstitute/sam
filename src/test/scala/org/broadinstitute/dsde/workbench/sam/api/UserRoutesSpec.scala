@@ -9,7 +9,7 @@ import org.broadinstitute.dsde.workbench.google.GoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.google.mock.MockGoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport.{genSamDependencies, genSamRoutes}
-import org.broadinstitute.dsde.workbench.sam.dataAccess.MockDirectoryDAO
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{MockDirectoryDAO, MockRegistrationDAO}
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.UserService.genWorkbenchUserId
@@ -199,7 +199,7 @@ trait UserRoutesSpecHelper extends AnyFlatSpec with Matchers with ScalatestRoute
   def withAdminRoutes[T](testCode: (TestSamRoutes, TestSamRoutes) => T): T = {
     val googleDirectoryDAO = new MockGoogleDirectoryDAO()
     val directoryDAO = new MockDirectoryDAO()
-    val registrationDAO = new MockDirectoryDAO()
+    val registrationDAO = new MockRegistrationDAO()
 
     val adminGroupEmail = runAndWait(setupAdminsGroup(googleDirectoryDAO))
 
@@ -214,7 +214,7 @@ trait UserRoutesSpecHelper extends AnyFlatSpec with Matchers with ScalatestRoute
 
   def withDefaultRoutes[T](testCode: TestSamRoutes => T): T = {
     val directoryDAO = new MockDirectoryDAO()
-    val registrationDAO = new MockDirectoryDAO()
+    val registrationDAO = new MockRegistrationDAO()
 
     val samRoutes = new TestSamRoutes(null, null, new UserService(directoryDAO, NoExtensions, registrationDAO, Seq.empty), new StatusService(directoryDAO, registrationDAO, NoExtensions, TestSupport.dbRef), null, UserInfo(OAuth2BearerToken(""), defaultUserId, defaultUserEmail, 0), directoryDAO,
       createWorkbenchUser = Option(CreateWorkbenchUser(UserService.genWorkbenchUserId(System.currentTimeMillis()), TestSupport.genGoogleSubjectId(), defaultUserEmail, None)))

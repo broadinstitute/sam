@@ -5,7 +5,7 @@ import akka.pattern.ask
 import akka.util.Timeout
 import cats.effect.IO
 import com.typesafe.scalalogging.LazyLogging
-import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, RegistrationDAO}
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{ConnectionType, DirectoryDAO, RegistrationDAO}
 import org.broadinstitute.dsde.workbench.sam.db.DbReference
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.util.health.HealthMonitor.GetCurrentStatus
@@ -36,18 +36,25 @@ class StatusService(
   private def checkOpenDJ(): IO[SubsystemStatus] = IO {
     // Since Status calls are ~80% of all Sam calls and are easy to track separately, Status calls are not being traced.
     logger.info("checking opendj connection")
-    if (registrationDAO.checkStatus(SamRequestContext(None)))
-      HealthMonitor.OkStatus
-    else
-      HealthMonitor.failedStatus(s"LDAP database connection invalid or timed out checking")
+    if (registrationDAO.getConnectionTarget() != ConnectionType.LDAP) {
+      HealthMonitor.failedStatus("Connection of RegistrationDAO is not to OpenDJ")
+    } else {
+      if (registrationDAO.checkStatus(SamRequestContext(None)))
+        HealthMonitor.OkStatus
+      else
+        HealthMonitor.failedStatus(s"LDAP database connection invalid or timed out checking")
+    }
   }
 
   private def checkDatabase(): IO[SubsystemStatus] = IO {
     logger.info("checking database connection")
-    if (directoryDAO.checkStatus(SamRequestContext(None)))
-      HealthMonitor.OkStatus
-    else
-      HealthMonitor.failedStatus("database connection invalid or timed out checking")
-
+    if (directoryDAO.getConnectionTarget() != ConnectionType.Postgres) {
+      HealthMonitor.failedStatus("Connection of RegistrationDAO is not to Postgres")
+    } else {
+      if (directoryDAO.checkStatus(SamRequestContext(None)))
+        HealthMonitor.OkStatus
+      else
+        HealthMonitor.failedStatus("database connection invalid or timed out checking")
+    }
   }
 }

@@ -14,7 +14,7 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.TestSupport.samRequestContext
 import org.broadinstitute.dsde.workbench.sam.config.{DirectoryConfig, LiquibaseConfig, SwaggerConfig}
-import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, MockAccessPolicyDAO, MockDirectoryDAO}
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, MockAccessPolicyDAO, MockDirectoryDAO, MockRegistrationDAO}
 import org.broadinstitute.dsde.workbench.sam.model.{ResourceActionPattern, ResourceRole, ResourceRoleName, ResourceType, ResourceTypeName, SamResourceActions}
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
@@ -92,7 +92,7 @@ object TestSamRoutes {
         }
       }
     }
-    val registrationDAO = new MockDirectoryDAO() {
+    val registrationDAO = new MockRegistrationDAO() {
       override def checkStatus(samRequestContext: SamRequestContext): Boolean = {
         val ldapIsHealthy = Try {
           ldapConnectionPool.getHealthCheck

@@ -6,7 +6,7 @@ import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import akka.http.scaladsl.testkit.ScalatestRouteTest
 import org.broadinstitute.dsde.workbench.model.{UserInfo, WorkbenchEmail, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.TestSupport
-import org.broadinstitute.dsde.workbench.sam.dataAccess.{MockAccessPolicyDAO, MockDirectoryDAO}
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{MockAccessPolicyDAO, MockDirectoryDAO, MockRegistrationDAO}
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.util.health.StatusJsonSupport._
 import org.broadinstitute.dsde.workbench.util.health.Subsystems.{Database, OpenDJ}
@@ -43,7 +43,7 @@ class StatusRouteSpec extends AnyFlatSpec with Matchers with ScalatestRouteTest 
 
   it should "give 500 for not ok" in {
     val directoryDAO = new MockDirectoryDAO()
-    val registrationDAO = new MockDirectoryDAO()
+    val registrationDAO = new MockRegistrationDAO()
     val policyDAO = new MockAccessPolicyDAO()
 
     val emailDomain = "example.com"

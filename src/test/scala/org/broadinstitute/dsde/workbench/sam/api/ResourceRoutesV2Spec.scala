@@ -9,7 +9,7 @@ import org.broadinstitute.dsde.workbench.model.ErrorReportJsonSupport._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport.{configResourceTypes, genGoogleSubjectId}
 import org.broadinstitute.dsde.workbench.sam.api.TestSamRoutes.SamResourceActionPatterns
-import org.broadinstitute.dsde.workbench.sam.dataAccess.{MockAccessPolicyDAO, MockDirectoryDAO}
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{MockAccessPolicyDAO, MockDirectoryDAO, MockRegistrationDAO}
 import org.broadinstitute.dsde.workbench.sam.model.RootPrimitiveJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
@@ -45,7 +45,7 @@ class ResourceRoutesV2Spec extends AnyFlatSpec with Matchers with TestSupport wi
                               userInfo: UserInfo = defaultUserInfo): SamRoutes = {
     val accessPolicyDAO = new MockAccessPolicyDAO(resourceTypes)
     val directoryDAO = new MockDirectoryDAO()
-    val registrationDAO = new MockDirectoryDAO()
+    val registrationDAO = new MockRegistrationDAO()
     val emailDomain = "example.com"
 
     val policyEvaluatorService = mock[PolicyEvaluatorService](RETURNS_SMART_NULLS)
