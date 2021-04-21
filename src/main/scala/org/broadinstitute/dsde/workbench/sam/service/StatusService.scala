@@ -54,7 +54,7 @@ class StatusService(
       if (directoryDAO.checkStatus(SamRequestContext(None)))
         HealthMonitor.OkStatus
       else
-        HealthMonitor.failedStatus("database connection invalid or timed out checking")
+        HealthMonitor.failedStatus("Postgres database connection invalid or timed out checking")
     }
   }
 }
