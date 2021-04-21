@@ -41,11 +41,10 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+          -v ${{ github.workspace }}/docker/opendjsetup.sh:/opt/opendj/bootstrap/setup.sh
+          -v ${{ github.workspace }}/docker/example-v1.json:/opt/example-v1.json
         ports:
           - 3389:389
-        volumes:
-          - ${{ github.workspace }}/docker/opendjsetup.sh:/opt/opendj/bootstrap/setup.sh
-          - ${{ github.workspace }}/docker/example-v1.json:/opt/example-v1.json
 
     steps:
       - uses: actions/checkout@v2
