@@ -8,10 +8,48 @@ on:
 
 jobs:
   test:
+
     runs-on: ubuntu-latest
+
+    env:
+      SBT_OPTS: >-
+        -J-Xmx3g
+        -Denv.type=test
+        -Ddirectory.url=ldap://localhost:3389 -Ddirectory.password=testtesttest
+        -Dpostgres.host=localhost -Dpostgres.port=15432
+
+    services:
+      postgres:
+        image: postgres:9.6
+        env:
+          POSTGRES_PASSWORD: sam-test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      openDJ:
+        image: broadinstitute/openam:opendj
+        env:
+          ROOTPASS: testtesttest
+          BASE_DN: dc=dsde-dev,dc=broadinstitute,dc=org
+        options: >-
+          --health-cmd status
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 3389:389
+        volumes:
+          - ${{ github.workspace }}/docker/opendjsetup.sh:/opt/opendj/bootstrap/setup.sh
+          - ${{ github.workspace }}/docker/example-v1.json:/opt/example-v1.json
 
     steps:
       - uses: actions/checkout@v2
+
       # coursier cache action caches both coursier and sbt caches
       - name: coursier-cache-action
         uses: coursier/cache-action@v5
@@ -20,38 +58,29 @@ jobs:
         uses: actions/setup-java@v1
         with:
           java-version: 11
+
       - name: Git secrets setup
         run: |
           git clone https://github.com/awslabs/git-secrets.git ~/git-secrets
           cd ~/git-secrets
           git checkout ad82d68ee924906a0401dfd48de5057731a9bc84
           sudo make install
-      - name: Setup OpenDJ
-        run: sh docker/run-opendj.sh start
-      - name: Setup Postgres
-        run: sh docker/run-postgres.sh start 15432
+
       - name: Secrets check
         run: |
           ./minnie-kenny.sh --force
           git secrets --scan-history
-      - name: Setup env variables
-        run: export SBT_OPTS="-J-Xmx3g -Denv.type=test -Ddirectory.url=ldap://localhost:3389 -Ddirectory.password=testtesttest -Dpostgres.host=localhost -Dpostgres.port=15432"
+
       - name: Integration tests
         id: tests
         run: sbt clean "testOnly -- -n org.broadinstitute.tags.SchemaInit"
-      - name: Restart openDJ
-        run: |
-          docker restart opendj
-          sleep 40
+
       - name: Generate coverage report
         id: coverageReport
         run: sbt coverage "testOnly -- -l org.broadinstitute.tags.SchemaInit" coverageReport
+
       - name: Generate java client
         id: javaClient
         run: |
           bash scripts/gen_java_client.sh
           bash scripts/publish-client.sh
-      - name: Stop DBs
-        run: |
-          sh docker/run-opendj.sh stop
-          sh docker/run-postgres.sh stop
