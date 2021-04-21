@@ -23,6 +23,8 @@ script:
 - export SBT_OPTS="-J-Xmx3g -Denv.type=test -Ddirectory.url=ldap://localhost:3389
   -Ddirectory.password=testtesttest -Dpostgres.host=localhost -Dpostgres.port=15432"
 - sbt clean "testOnly -- -n org.broadinstitute.tags.SchemaInit"
+- echo FINDTHIS
+- sbt --version
 - docker restart opendj
 - sleep 40
 - sbt coverage "testOnly -- -l org.broadinstitute.tags.SchemaInit" coverageReport
