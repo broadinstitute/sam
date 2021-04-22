@@ -16,7 +16,7 @@ jobs:
         -Xmx3g
         -Denv.type=test
         -Ddirectory.url=ldap://localhost:3389 -Ddirectory.password=testtesttest
-        -Dpostgres.host=localhost -Dpostgres.port=5432
+        -Dpostgres.host=localhost -Dpostgres.port=15432
 
     services:
       postgres:
@@ -29,7 +29,7 @@ jobs:
           --health-timeout 5s
           --health-retries 5
         ports:
-          - 5432:5432
+          - 15432:5432
 
 #      openDJ:
 #        image: broadinstitute/openam:opendj
