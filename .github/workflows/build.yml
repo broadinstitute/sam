@@ -13,7 +13,7 @@ jobs:
 
     env:
       SBT_OPTS: >-
-        -J-Xmx3g
+        -Xmx3g
         -Denv.type=test
         -Ddirectory.url=ldap://localhost:3389 -Ddirectory.password=testtesttest
         -Dpostgres.host=localhost -Dpostgres.port=15432
@@ -86,7 +86,7 @@ jobs:
         id: javaClient
         run: |
           bash scripts/gen_java_client.sh
-          export SBT_OPTS="-J-Xmx3g"
+          export SBT_OPTS="-Xmx3g"
           bash scripts/publish-client.sh
 
       - name: Shut down opendj
