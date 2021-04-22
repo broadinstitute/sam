@@ -75,14 +75,14 @@ jobs:
         run: |
           ./minnie-kenny.sh --force
           git secrets --scan-history
+#
+#      - name: Integration tests
+#        id: tests
+#        run: sbt clean "testOnly -- -n org.broadinstitute.tags.SchemaInit"
 
-      - name: Integration tests
-        id: tests
-        run: sbt clean "testOnly -- -n org.broadinstitute.tags.SchemaInit"
-
-      - name: Generate coverage report
-        id: coverageReport
-        run: sbt coverage "testOnly -- -l org.broadinstitute.tags.SchemaInit" coverageReport
+#      - name: Generate coverage report
+#        id: coverageReport
+#        run: sbt coverage "testOnly -- -l org.broadinstitute.tags.SchemaInit" coverageReport
 
       - name: Generate java client
         id: javaClient
@@ -91,7 +91,7 @@ jobs:
           bash scripts/gen_java_client.sh
           echo GoodbyeWorld
           export SBT_OPTS="-Xmx3g"
-          bash scripts/publish-client.sh
+          sbt "+ publish" -Dproject.isSnapshot=false
 
       - name: Shut down opendj
         run: |
