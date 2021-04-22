@@ -87,7 +87,9 @@ jobs:
       - name: Generate java client
         id: javaClient
         run: |
+          echo HelloWorld
           bash scripts/gen_java_client.sh
+          echo GoodbyeWorld
           export SBT_OPTS="-Xmx3g"
           bash scripts/publish-client.sh
 
