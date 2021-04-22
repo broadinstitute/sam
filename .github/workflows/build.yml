@@ -16,20 +16,20 @@ jobs:
         -Xmx3g
         -Denv.type=test
         -Ddirectory.url=ldap://localhost:3389 -Ddirectory.password=testtesttest
-        -Dpostgres.host=localhost -Dpostgres.port=15432
+        -Dpostgres.host=localhost -Dpostgres.port=5432
 
     services:
       postgres:
         image: postgres:9.6
         env:
-          POSTGRES_PASSWORD: sam-test
+          POSTGRES_PASSWORD: testtesttest
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
         ports:
-          - 15432:5432
+          - 5432:5432
 
 #      openDJ:
 #        image: broadinstitute/openam:opendj
