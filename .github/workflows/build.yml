@@ -16,7 +16,7 @@ jobs:
         -Xmx3g
         -Denv.type=test
         -Ddirectory.url=ldap://localhost:3389 -Ddirectory.password=testtesttest
-        -Dpostgres.host=localhost -Dpostgres.port=15432
+        -Dpostgres.host=localhost -Dpostgres.port=5432
 
     services:
       postgres:
