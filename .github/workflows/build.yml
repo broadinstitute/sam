@@ -22,7 +22,9 @@ jobs:
       postgres:
         image: postgres:9.6
         env:
-          POSTGRES_PASSWORD: testtesttest
+          POSTGRES_USER: sam-test
+          POSTGRES_PASSWORD: sam-test
+          POSTGRES_DB: testdb
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
