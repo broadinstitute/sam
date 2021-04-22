@@ -91,7 +91,9 @@ jobs:
           bash scripts/gen_java_client.sh
           echo GoodbyeWorld
           export SBT_OPTS="-Xmx3g"
+          cd codegen_java
           sbt "+ publish" -Dproject.isSnapshot=false
+          cd ..
 
       - name: Shut down opendj
         run: |
