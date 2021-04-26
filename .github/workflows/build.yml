@@ -17,6 +17,8 @@ jobs:
         -Denv.type=test
         -Ddirectory.url=ldap://localhost:3389 -Ddirectory.password=testtesttest
         -Dpostgres.host=localhost -Dpostgres.port=5432
+      ARTIFACTORY_USERNAME: ${{secrets.ARTIFACTORY_USERNAME}}
+      ARTIFACTORY_PASSWORD: ${{secrets.ARTIFACTORY_PASSWORD}}
 
     services:
       postgres:
