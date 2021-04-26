@@ -768,11 +768,7 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
 
   override def checkStatus(samRequestContext: SamRequestContext): Boolean = {
     writeDbRef.inLocalTransaction { session =>
-      if (session.connection.isValid((2 seconds).toSeconds.intValue())) {
-        true
-      } else {
-        false
-      }
+      session.connection.isValid((2 seconds).toSeconds.intValue())
     }
   }
 }

@@ -16,12 +16,15 @@ import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 
 class StatusService(
-    val directoryDAO: DirectoryDAO,
-    val registrationDAO: RegistrationDAO,
-    val cloudExtensions: CloudExtensions,
-    val dbReference: DbReference,
-    initialDelay: FiniteDuration = Duration.Zero,
-    pollInterval: FiniteDuration = 1 minute)(implicit system: ActorSystem, executionContext: ExecutionContext)
+                     val directoryDAO: DirectoryDAO,
+                     // We expect this to be of type LdapRegistrationDAO, because
+                     // the status service specifically cares about checking LDAP's
+                     // status here, not a generic RegistrationDAO
+                     val ldapRegistrationDAO: RegistrationDAO,
+                     val cloudExtensions: CloudExtensions,
+                     val dbReference: DbReference,
+                     initialDelay: FiniteDuration = Duration.Zero,
+                     pollInterval: FiniteDuration = 1 minute)(implicit system: ActorSystem, executionContext: ExecutionContext)
     extends LazyLogging {
   implicit val askTimeout = Timeout(5 seconds)
 
@@ -36,10 +39,10 @@ class StatusService(
   private def checkOpenDJ(): IO[SubsystemStatus] = IO {
     // Since Status calls are ~80% of all Sam calls and are easy to track separately, Status calls are not being traced.
     logger.info("checking opendj connection")
-    if (registrationDAO.getConnectionTarget() != ConnectionType.LDAP) {
+    if (ldapRegistrationDAO.getConnectionTarget() != ConnectionType.LDAP) {
       HealthMonitor.failedStatus("Connection of RegistrationDAO is not to OpenDJ")
     } else {
-      if (registrationDAO.checkStatus(SamRequestContext(None)))
+      if (ldapRegistrationDAO.checkStatus(SamRequestContext(None)))
         HealthMonitor.OkStatus
       else
         HealthMonitor.failedStatus(s"LDAP database connection invalid or timed out checking")
