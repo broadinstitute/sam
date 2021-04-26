@@ -9,7 +9,7 @@ on:
 jobs:
   test:
 
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
 
     env:
       SBT_OPTS: >-
@@ -86,13 +86,32 @@ jobs:
 #        id: coverageReport
 #        run: sbt coverage "testOnly -- -l org.broadinstitute.tags.SchemaInit" coverageReport
 
-      - name: Generate java client
-        id: javaClient
-        run: |
-          bash scripts/gen_java_client.sh
-          export SBT_OPTS="-Xmx3g"
-          bash scripts/publish-client.sh
+
 
       - name: Shut down opendj
         run: |
           sh docker/run-opendj.sh stop
+
+#  generateAndPublishClient:
+#    runs-on: ubuntu-20.04
+#    needs: test
+#
+#    env:
+#      ARTIFACTORY_USERNAME: ${{secrets.ARTIFACTORY_USERNAME}}
+#      ARTIFACTORY_PASSWORD: ${{secrets.ARTIFACTORY_PASSWORD}}
+#      SBT_OPTS: -Xmx3g
+#
+#    steps:
+#      - name: Generate java client
+#        id: generateJavaClient
+#        run: bash scripts/gen_java_client.sh
+#
+#      - name: Publish java client as snapshot for PRs
+#        id: publishJavaClientSnapshot
+#        if: ${{github.event_name == 'push' || github.event_name == 'pull_request.opened'}}
+#        run: sbt "+ publish" -Dproject.isSnapshot=true
+#
+#      - name: Publish java client for merge
+#        id: publishJavaClient
+#        if: ${{github.event_name != 'pull_request'
+#        run: sbt "+ publish" -Dproject.isSnapshot=false
