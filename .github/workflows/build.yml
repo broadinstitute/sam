@@ -85,6 +85,12 @@ jobs:
       SBT_OPTS: -Xmx3g
 
     steps:
+      - uses: actions/checkout@v2
+
+      # coursier cache action caches both coursier and sbt caches
+      - name: coursier-cache-action
+        uses: coursier/cache-action@v5
+
       - name: Extract branch name
         shell: bash
         run: echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"
