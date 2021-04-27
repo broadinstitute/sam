@@ -100,15 +100,15 @@ jobs:
         id: generateJavaClient
         run: bash scripts/gen_java_client.sh
 
-      - name: Check branch output
-        run: echo ${{steps.extractBranch.outputs.branch}}
+      - name: Move to codegen_java directory
+        run: cd codegen_java
 
-      - name: Publish java client as snapshot for PRs
+      - name: Publish java client for merge
         id: publishJavaClientSnapshot
         if: ${{steps.extractBranch.outputs.branch == 'develop'}}
         run: sbt "+ publish" -Dproject.isSnapshot=false
 
-      - name: Publish java client for merge
+      - name: Publish java client as snapshot for PRs
         id: publishJavaClient
         if: ${{steps.extractBranch.outputs.branch != 'develop'}}
         run: sbt "+ publish" -Dproject.isSnapshot=true
