@@ -75,24 +75,31 @@ jobs:
         run: |
           sh docker/run-opendj.sh stop
 
+  generateAndPublishClient:
+    runs-on: ubuntu-20.04
+    needs: test
+
+    env:
+      ARTIFACTORY_USERNAME: ${{secrets.ARTIFACTORY_USERNAME}}
+      ARTIFACTORY_PASSWORD: ${{secrets.ARTIFACTORY_PASSWORD}}
+      SBT_OPTS: -Xmx3g
+
+    steps:
       - name: Extract branch name
         shell: bash
         run: echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"
-        id: extract_branch
+        id: extractBranch
 
       - name: Generate java client
         id: generateJavaClient
         run: bash scripts/gen_java_client.sh
 
-      - name: Update sbt opts
-        run: export SBT_OPTS="-J-Xmx3g"
-
       - name: Publish java client as snapshot for PRs
         id: publishJavaClientSnapshot
-        if: ${{steps.extract_branch.outputs.branch == "develop"}}
+        if: ${{steps.extractBranch.outputs.branch == 'develop'}}
         run: sbt "+ publish" -Dproject.isSnapshot=false
 
       - name: Publish java client for merge
         id: publishJavaClient
-        if: ${{steps.extract_branch.outputs.branch == "develop"}}
+        if: ${{steps.extractBranch.outputs.branch == 'develop'}}
         run: sbt "+ publish" -Dproject.isSnapshot=true
