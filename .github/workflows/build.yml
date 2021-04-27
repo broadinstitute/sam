@@ -110,5 +110,5 @@ jobs:
 
       - name: Publish java client for merge
         id: publishJavaClient
-        if: ${{steps.extractBranch.outputs.branch == 'develop'}}
+        if: ${{steps.extractBranch.outputs.branch != 'develop'}}
         run: sbt "+ publish" -Dproject.isSnapshot=true
