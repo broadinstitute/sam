@@ -101,15 +101,13 @@ jobs:
         run: bash scripts/gen_java_client.sh
 
       - name: Publish java client for merge
+        working-directory: codegen_java
         id: publishJavaClientSnapshot
         if: ${{steps.extractBranch.outputs.branch == 'develop'}}
-        run: |
-          run: cd codegen_java
-          sbt "+ publish" -Dproject.isSnapshot=false
+        run: sbt "+ publish" -Dproject.isSnapshot=false
 
       - name: Publish java client as snapshot for PRs
+        working-directory: codegen_java
         id: publishJavaClient
         if: ${{steps.extractBranch.outputs.branch != 'develop'}}
-        run: |
-          run: cd codegen_java
-          sbt "+ publish" -Dproject.isSnapshot=true
+        run: sbt "+ publish" -Dproject.isSnapshot=true
