@@ -14,13 +14,11 @@ import org.broadinstitute.dsde.workbench.sam.config.{LiquibaseConfig, SwaggerCon
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, MockAccessPolicyDAO, MockDirectoryDAO, MockRegistrationDAO}
 import org.broadinstitute.dsde.workbench.sam.model.{ResourceActionPattern, ResourceRole, ResourceRoleName, ResourceType, ResourceTypeName, SamResourceActions}
 import org.broadinstitute.dsde.workbench.sam.service._
-import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.scalatest.concurrent.ScalaFutures
 
 import scala.collection.concurrent.TrieMap
 import scala.collection.mutable
 import scala.concurrent.ExecutionContext
-import scala.concurrent.duration.DurationInt
 
 /**
   * Created by dvoet on 7/14/17.
@@ -74,17 +72,7 @@ object TestSamRoutes {
     val resourceTypesWithAdmin = resourceTypes + (resourceTypeAdmin.name -> resourceTypeAdmin)
     // need to make sure MockDirectoryDAO and MockAccessPolicyDAO share the same groups
     val groups: mutable.Map[WorkbenchGroupIdentity, WorkbenchGroup] = policies.getOrElse(new TrieMap())
-    val directoryDAO = new MockDirectoryDAO(groups) {
-      override def checkStatus(samRequestContext: SamRequestContext): Boolean = {
-        dbRef.inLocalTransaction { session =>
-          if (session.connection.isValid((2 seconds).toSeconds.intValue())) {
-            true
-          } else {
-            false
-          }
-        }
-      }
-    }
+    val directoryDAO = new MockDirectoryDAO(groups)
     val registrationDAO = new MockRegistrationDAO()
     val googleDirectoryDAO = new MockGoogleDirectoryDAO()
     val policyDAO = policyAccessDAO.getOrElse(new MockAccessPolicyDAO(Map.empty[ResourceTypeName, ResourceType], groups))

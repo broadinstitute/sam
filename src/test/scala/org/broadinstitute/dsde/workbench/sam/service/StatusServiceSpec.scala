@@ -37,22 +37,6 @@ class StatusServiceSpec extends AnyFreeSpec with Matchers with BeforeAndAfterAll
     system.terminate()
   }
 
-  // We need to mock this because Postgres does some automatic setup and gets unhappy with multiple instances of its DAO existing at once.
-  private def mockDirectoryDAOWithPostgresStatusCheck(dbReferenceOverride: DbReference = dbReference) = {
-    val mockDirectoryDAO = new MockDirectoryDAO {
-      override def checkStatus(samRequestContext: SamRequestContext): Boolean = {
-        dbReferenceOverride.inLocalTransaction { session =>
-          if (session.connection.isValid((2 seconds).toSeconds.intValue())) {
-            true
-          } else {
-            false
-          }
-        }
-      }
-    }
-    mockDirectoryDAO
-  }
-
   private def createLdapDaoWithConnectionPool(connectionPoolOverride: LDAPConnectionPool = connectionPool) = {
     new LdapRegistrationDAO(connectionPoolOverride, directoryConfig, TestSupport.blockingEc)
   }
@@ -63,8 +47,10 @@ class StatusServiceSpec extends AnyFreeSpec with Matchers with BeforeAndAfterAll
     }, dbReference, pollInterval = 10 milliseconds)
   }
 
-  private def directoryDAOWithAllUsersGroup(dbReferenceOverride: DbReference = dbReference) = {
-    val directoryDAO = mockDirectoryDAOWithPostgresStatusCheck(dbReferenceOverride)
+  private def directoryDAOWithAllUsersGroup(response: Boolean = true) = {
+    val directoryDAO = new MockDirectoryDAO {
+      override def checkStatus(samRequestContext: SamRequestContext): Boolean = response
+    }
     directoryDAO.createGroup(BasicWorkbenchGroup(NoExtensions.allUsersGroupName, Set.empty, allUsersEmail), samRequestContext = samRequestContext).unsafeRunSync()
     directoryDAO
   }
@@ -72,7 +58,7 @@ class StatusServiceSpec extends AnyFreeSpec with Matchers with BeforeAndAfterAll
   private def noOpenDJGroups = {
     val connectionPoolOverride = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
     connectionPoolOverride.close()
-    newStatusService(mockDirectoryDAOWithPostgresStatusCheck(), createLdapDaoWithConnectionPool(connectionPoolOverride))
+    newStatusService(new MockDirectoryDAO, createLdapDaoWithConnectionPool(connectionPoolOverride))
   }
 
   private def ok = newStatusService(directoryDAOWithAllUsersGroup(), createLdapDaoWithConnectionPool(connectionPool))
@@ -87,7 +73,7 @@ class StatusServiceSpec extends AnyFreeSpec with Matchers with BeforeAndAfterAll
   private def failingDatabase = {
     // background database configured to connect to non existent database
     val dbReferenceOverride = DbReference(DatabaseNames.Background, TestSupport.blockingEc)
-    val service = new StatusService(directoryDAOWithAllUsersGroup(dbReferenceOverride), createLdapDaoWithConnectionPool(), NoExtensions, dbReferenceOverride, pollInterval = 10 milliseconds)
+    val service = new StatusService(directoryDAOWithAllUsersGroup(false), createLdapDaoWithConnectionPool(), NoExtensions, dbReferenceOverride, pollInterval = 10 milliseconds)
     service
   }
 
@@ -96,7 +82,7 @@ class StatusServiceSpec extends AnyFreeSpec with Matchers with BeforeAndAfterAll
       ("ok", ok, StatusCheckResponse(true, Map(OpenDJ -> SubsystemStatus(true, None), GoogleGroups -> SubsystemStatus(true, None), Database -> SubsystemStatus(true, None)))),
       ("noOpenDJGroups", noOpenDJGroups, StatusCheckResponse(false, Map(OpenDJ -> SubsystemStatus(false, Option(List(s"LDAP database connection invalid or timed out checking"))), GoogleGroups -> SubsystemStatus(true, None), Database -> SubsystemStatus(true, None)))),
       ("failingExtension", failingExtension, StatusCheckResponse(false, Map(OpenDJ -> SubsystemStatus(true, None), GoogleGroups -> SubsystemStatus(false, Option(List(s"bad google"))), Database -> SubsystemStatus(true, None)))),
-      ("failingDatabase", failingDatabase, StatusCheckResponse(false, Map(OpenDJ -> SubsystemStatus(true, None), Database -> SubsystemStatus(false, Option(List("The connection attempt failed."))))))
+      ("failingDatabase", failingDatabase, StatusCheckResponse(false, Map(OpenDJ -> SubsystemStatus(true, None), Database -> SubsystemStatus(false, Option(List("Postgres database connection invalid or timed out checking"))))))
     )
   }
 
