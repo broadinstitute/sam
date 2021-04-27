@@ -97,9 +97,9 @@ jobs:
       - name: Publish java client as snapshot for PRs
         id: publishJavaClientSnapshot
         if: ${{steps.extract_branch.outputs.branch == "develop"}}
-        run: sbt "+ publish" -Dproject.isSnapshot=true
+        run: sbt "+ publish" -Dproject.isSnapshot=false
 
       - name: Publish java client for merge
         id: publishJavaClient
         if: ${{steps.extract_branch.outputs.branch == "develop"}}
-        run: sbt "+ publish" -Dproject.isSnapshot=false
+        run: sbt "+ publish" -Dproject.isSnapshot=true
