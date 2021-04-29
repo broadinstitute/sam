@@ -63,11 +63,11 @@ jobs:
           ./minnie-kenny.sh --force
           git secrets --scan-history
 
-      - name: Integration tests
+      - name: Run JndiSchemaInit tests
         id: tests
         run: sbt clean "testOnly -- -n org.broadinstitute.tags.SchemaInit"
 
-      - name: Generate coverage report
+      - name: Run unit tests and generate coverage report
         id: coverageReport
         run: sbt coverage "testOnly -- -l org.broadinstitute.tags.SchemaInit" coverageReport
 
@@ -102,12 +102,12 @@ jobs:
 
       - name: Publish java client for merge
         working-directory: codegen_java
-        id: publishJavaClientSnapshot
+        id: publishJavaClient
         if: ${{steps.extractBranch.outputs.branch == 'develop'}}
         run: sbt "+ publish" -Dproject.isSnapshot=false
 
       - name: Publish java client as snapshot for PRs
         working-directory: codegen_java
-        id: publishJavaClient
+        id: publishJavaClientSnapshot
         if: ${{steps.extractBranch.outputs.branch != 'develop'}}
         run: sbt "+ publish" -Dproject.isSnapshot=true
