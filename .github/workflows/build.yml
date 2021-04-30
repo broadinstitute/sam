@@ -100,7 +100,7 @@ jobs:
         id: generateJavaClient
         run: bash scripts/gen_java_client.sh
 
-      - name: Publish java client for merge
+      - name: Publish java client for merge to develop branch
         working-directory: codegen_java
         id: publishJavaClient
         if: ${{steps.extractBranch.outputs.branch == 'develop'}}
