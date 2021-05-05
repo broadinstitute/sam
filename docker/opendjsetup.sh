@@ -3,7 +3,6 @@
 #
 # Copyright (c) 2016-2017 ForgeRock AS. Use of this source code is subject to the
 # Common Development and Distribution License (CDDL) that can be found in the LICENSE file
-
 echo "Setting up default OpenDJ instance."
 
 INIT_OPTION="--addBaseEntry"
@@ -19,7 +18,6 @@ fi
   ${INIT_OPTION}
 
 # If any optional LDIF files are present, load them.
-
 if [ -d /opt/opendj/bootstrap/ldif ]; then
    echo "Found optional schema files in bootstrap/ldif. Will load them"
   for file in /opt/opendj/bootstrap/ldif/*;  do
@@ -29,7 +27,7 @@ if [ -d /opt/opendj/bootstrap/ldif ]; then
   done
 fi
 
-cp -rfp /opt/example-v1.json /opt/opendj/data/config/rest2ldap/endpoints/api/example-v1.json
+cp -rfp /opt/example-v1.json /opt/opendj/config/rest2ldap/endpoints/api/example-v1.json
 
 /opt/opendj/bin/dsconfig \
  set-http-endpoint-prop \
