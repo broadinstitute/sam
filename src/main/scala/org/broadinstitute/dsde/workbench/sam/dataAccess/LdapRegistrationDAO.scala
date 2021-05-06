@@ -9,12 +9,14 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{ServiceAccount, ServiceAccountDisplayName, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
+import org.broadinstitute.dsde.workbench.sam.dataAccess.ConnectionType.ConnectionType
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO.{Attr, ObjectClass}
 import org.broadinstitute.dsde.workbench.sam.util.{LdapSupport, SamRequestContext}
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 import scala.jdk.CollectionConverters._
+import scala.util.{Failure, Success, Try}
 
 // use ExecutionContexts.blockingThreadPool for blockingEc
 class LdapRegistrationDAO(
@@ -39,6 +41,8 @@ class LdapRegistrationDAO(
       }
     }
   }
+
+  override def getConnectionType(): ConnectionType = ConnectionType.LDAP
 
   override def createUser(user: WorkbenchUser, samRequestContext: SamRequestContext): IO[WorkbenchUser] = {
     val attrs = List(
@@ -156,4 +160,17 @@ class LdapRegistrationDAO(
 
   override def setGoogleSubjectId(userId: WorkbenchUserId, googleSubjectId: GoogleSubjectId, samRequestContext: SamRequestContext): IO[Unit] =
     executeLdap(IO(ldapConnectionPool.modify(userDn(userId), new Modification(ModificationType.ADD, Attr.googleSubjectId, googleSubjectId.value))), "setGoogleSubjectId", samRequestContext)
+
+  override def checkStatus(samRequestContext: SamRequestContext): Boolean = {
+    val ldapIsHealthy = Try {
+      ldapConnectionPool.getHealthCheck
+      val connection = ldapConnectionPool.getConnection
+      ldapConnectionPool.getHealthCheck.ensureNewConnectionValid(connection)
+      ldapConnectionPool.releaseConnection(connection)
+    } match {
+      case Success(_) => true
+      case Failure(_) => false
+    }
+    ldapIsHealthy
+  }
 }

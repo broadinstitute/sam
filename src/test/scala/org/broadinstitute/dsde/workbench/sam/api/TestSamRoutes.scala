@@ -11,7 +11,7 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.TestSupport.samRequestContext
 import org.broadinstitute.dsde.workbench.sam.config.{LiquibaseConfig, SwaggerConfig}
-import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, MockAccessPolicyDAO, MockDirectoryDAO}
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, MockAccessPolicyDAO, MockDirectoryDAO, MockRegistrationDAO}
 import org.broadinstitute.dsde.workbench.sam.model.{ResourceActionPattern, ResourceRole, ResourceRoleName, ResourceType, ResourceTypeName, SamResourceActions}
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.scalatest.concurrent.ScalaFutures
@@ -68,11 +68,12 @@ object TestSamRoutes {
   )
 
   def apply(resourceTypes: Map[ResourceTypeName, ResourceType], userInfo: UserInfo = defaultUserInfo, policyAccessDAO: Option[AccessPolicyDAO] = None, policies: Option[mutable.Map[WorkbenchGroupIdentity, WorkbenchGroup]] = None)(implicit system: ActorSystem, materializer: Materializer, executionContext: ExecutionContext, contextShift: ContextShift[IO]) = {
+    val dbRef = TestSupport.dbRef
     val resourceTypesWithAdmin = resourceTypes + (resourceTypeAdmin.name -> resourceTypeAdmin)
     // need to make sure MockDirectoryDAO and MockAccessPolicyDAO share the same groups
     val groups: mutable.Map[WorkbenchGroupIdentity, WorkbenchGroup] = policies.getOrElse(new TrieMap())
     val directoryDAO = new MockDirectoryDAO(groups)
-    val registrationDAO = new MockDirectoryDAO()
+    val registrationDAO = new MockRegistrationDAO()
     val googleDirectoryDAO = new MockGoogleDirectoryDAO()
     val policyDAO = policyAccessDAO.getOrElse(new MockAccessPolicyDAO(Map.empty[ResourceTypeName, ResourceType], groups))
 
@@ -86,7 +87,7 @@ object TestSamRoutes {
     TestSupport.runAndWait(googleDirectoryDAO.createGroup(allUsersGroup.id.toString, allUsersGroup.email))
     mockResourceService.initResourceTypes(samRequestContext).unsafeRunSync()
 
-    val mockStatusService = new StatusService(directoryDAO, NoExtensions, TestSupport.dbRef)
+    val mockStatusService = new StatusService(directoryDAO, registrationDAO, NoExtensions, dbRef)
 
     new TestSamRoutes(mockResourceService, policyEvaluatorService, mockUserService, mockStatusService, mockManagedGroupService, userInfo, directoryDAO)
   }

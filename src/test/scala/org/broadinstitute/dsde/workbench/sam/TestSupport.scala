@@ -22,7 +22,7 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.api._
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig._
 import org.broadinstitute.dsde.workbench.sam.config._
-import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, MockAccessPolicyDAO, MockDirectoryDAO}
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, MockAccessPolicyDAO, MockDirectoryDAO, MockRegistrationDAO}
 import org.broadinstitute.dsde.workbench.sam.db.{DatabaseNames, DbReference}
 import org.broadinstitute.dsde.workbench.sam.db.tables._
 import org.broadinstitute.dsde.workbench.sam.google.{GoogleExtensionRoutes, GoogleExtensions, GoogleGroupSynchronizer, GoogleKeyCache}
@@ -88,7 +88,7 @@ object TestSupport extends TestSupport {
   def genSamDependencies(resourceTypes: Map[ResourceTypeName, ResourceType] = Map.empty, googIamDAO: Option[GoogleIamDAO] = None, googleServicesConfig: GoogleServicesConfig = googleServicesConfig, cloudExtensions: Option[CloudExtensions] = None, googleDirectoryDAO: Option[GoogleDirectoryDAO] = None, policyAccessDAO: Option[AccessPolicyDAO] = None)(implicit system: ActorSystem) = {
     val googleDirectoryDAO = new MockGoogleDirectoryDAO()
     val directoryDAO = new MockDirectoryDAO()
-    val registrationDAO = new MockDirectoryDAO()
+    val registrationDAO = new MockRegistrationDAO()
     val googleIamDAO = googIamDAO.getOrElse(new MockGoogleIamDAO())
     val policyDAO = policyAccessDAO.getOrElse(new MockAccessPolicyDAO(resourceTypes))
     val notificationPubSubDAO = new MockGooglePubSubDAO()
@@ -121,7 +121,7 @@ object TestSupport extends TestSupport {
     val mockResourceService = new ResourceService(resourceTypes, policyEvaluatorService, policyDAO, directoryDAO, googleExt, "example.com")
     val mockManagedGroupService = new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, policyDAO, directoryDAO, googleExt, "example.com")
 
-    SamDependencies(mockResourceService, policyEvaluatorService, new UserService(directoryDAO, googleExt, registrationDAO, Seq.empty), new StatusService(directoryDAO, googleExt, dbRef), mockManagedGroupService, directoryDAO, policyDAO, googleExt)
+    SamDependencies(mockResourceService, policyEvaluatorService, new UserService(directoryDAO, googleExt, registrationDAO, Seq.empty), new StatusService(directoryDAO, registrationDAO, googleExt, dbRef), mockManagedGroupService, directoryDAO, policyDAO, googleExt)
   }
 
   def genSamRoutes(samDependencies: SamDependencies, uInfo: UserInfo)(implicit system: ActorSystem, materializer: Materializer): SamRoutes = new SamRoutes(samDependencies.resourceService, samDependencies.userService, samDependencies.statusService, samDependencies.managedGroupService, null, samDependencies.directoryDAO, samDependencies.policyEvaluatorService, LiquibaseConfig("", false))

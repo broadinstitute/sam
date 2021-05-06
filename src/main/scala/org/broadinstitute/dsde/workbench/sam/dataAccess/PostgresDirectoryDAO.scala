@@ -8,6 +8,7 @@ import cats.effect.{ContextShift, IO, Timer}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.sam._
+import org.broadinstitute.dsde.workbench.sam.dataAccess.ConnectionType.ConnectionType
 import org.broadinstitute.dsde.workbench.sam.db.SamParameterBinderFactory._
 import org.broadinstitute.dsde.workbench.sam.db.SamTypeBinders._
 import org.broadinstitute.dsde.workbench.sam.db._
@@ -17,9 +18,12 @@ import org.broadinstitute.dsde.workbench.sam.util.{DatabaseSupport, SamRequestCo
 import org.postgresql.util.PSQLException
 import scalikejdbc._
 
+import scala.concurrent.duration.DurationInt
 import scala.util.{Failure, Try}
 
 class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val readDbRef: DbReference)(implicit val cs: ContextShift[IO], timer: Timer[IO]) extends DirectoryDAO with DatabaseSupport with PostgresGroupDAO {
+
+  override def getConnectionType(): ConnectionType = ConnectionType.Postgres
 
   override def createGroup(group: BasicWorkbenchGroup, accessInstructionsOpt: Option[String], samRequestContext: SamRequestContext): IO[BasicWorkbenchGroup] = {
     serializableWriteTransaction("createGroup", samRequestContext)({ implicit session =>
@@ -760,5 +764,11 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
         throw new WorkbenchException(s"Cannot update googleSubjectId for user ${userId} because user does not exist or the googleSubjectId has already been set for this user")
       }
     })
+  }
+
+  override def checkStatus(samRequestContext: SamRequestContext): Boolean = {
+    writeDbRef.inLocalTransaction { session =>
+      session.connection.isValid((2 seconds).toSeconds.intValue())
+    }
   }
 }

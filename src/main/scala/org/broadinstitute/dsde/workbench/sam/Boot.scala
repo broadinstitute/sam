@@ -106,7 +106,7 @@ object Boot extends IOApp with LazyLogging {
         connectionPool.setMaxWaitTimeMillis(30000)
         connectionPool.setConnectionPoolName(name)
         connectionPool
-      })(ldapConnection => IO(ldapConnection.close()))
+      })(ldapConnectionPool => IO(ldapConnectionPool.close()))
   }
 
   private[sam] def createAppDependencies(
@@ -321,7 +321,7 @@ object Boot extends IOApp with LazyLogging {
     val policyEvaluatorService = PolicyEvaluatorService(config.emailDomain, resourceTypeMap, accessPolicyDAO, directoryDAO)
     val resourceService = new ResourceService(resourceTypeMap, policyEvaluatorService, accessPolicyDAO, directoryDAO, cloudExtensionsInitializer.cloudExtensions, config.emailDomain)
     val userService = new UserService(directoryDAO, cloudExtensionsInitializer.cloudExtensions, registrationDAO, config.blockedEmailDomains)
-    val statusService = new StatusService(directoryDAO, cloudExtensionsInitializer.cloudExtensions, DbReference(DatabaseNames.Read, implicitly), 10 seconds)
+    val statusService = new StatusService(directoryDAO, registrationDAO, cloudExtensionsInitializer.cloudExtensions, DbReference(DatabaseNames.Read, implicitly), 10 seconds)
     val managedGroupService =
       new ManagedGroupService(resourceService, policyEvaluatorService, resourceTypeMap, accessPolicyDAO, directoryDAO, cloudExtensionsInitializer.cloudExtensions, config.emailDomain)
     val samApplication = SamApplication(userService, resourceService, statusService)
