@@ -42,7 +42,7 @@ class LdapRegistrationDAO(
     }
   }
 
-  override def getConnectionTarget(): ConnectionType = ConnectionType.LDAP
+  override def getConnectionType(): ConnectionType = ConnectionType.LDAP
 
   override def createUser(user: WorkbenchUser, samRequestContext: SamRequestContext): IO[WorkbenchUser] = {
     val attrs = List(

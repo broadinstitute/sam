@@ -39,7 +39,7 @@ class StatusService(
   private def checkOpenDJ(): IO[SubsystemStatus] = IO {
     // Since Status calls are ~80% of all Sam calls and are easy to track separately, Status calls are not being traced.
     logger.info("checking opendj connection")
-    if (ldapRegistrationDAO.getConnectionTarget() != ConnectionType.LDAP) {
+    if (ldapRegistrationDAO.getConnectionType() != ConnectionType.LDAP) {
       HealthMonitor.failedStatus("Connection of RegistrationDAO is not to OpenDJ")
     } else {
       if (ldapRegistrationDAO.checkStatus(SamRequestContext(None)))
@@ -51,7 +51,7 @@ class StatusService(
 
   private def checkDatabase(): IO[SubsystemStatus] = IO {
     logger.info("checking database connection")
-    if (directoryDAO.getConnectionTarget() != ConnectionType.Postgres) {
+    if (directoryDAO.getConnectionType() != ConnectionType.Postgres) {
       HealthMonitor.failedStatus("Connection of RegistrationDAO is not to Postgres")
     } else {
       if (directoryDAO.checkStatus(SamRequestContext(None)))

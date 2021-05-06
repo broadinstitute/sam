@@ -19,7 +19,7 @@ class MockRegistrationDAO extends RegistrationDAO {
   private val petServiceAccountsByUser: mutable.Map[PetServiceAccountId, PetServiceAccount] = new TrieMap()
   private val petsWithEmails: mutable.Map[WorkbenchEmail, PetServiceAccountId] = new TrieMap()
 
-  override def getConnectionTarget(): ConnectionType = ConnectionType.LDAP
+  override def getConnectionType(): ConnectionType = ConnectionType.LDAP
 
   override def createUser(user: WorkbenchUser, samRequestContext: SamRequestContext): IO[WorkbenchUser] =
     if (users.keySet.contains(user.id)) {

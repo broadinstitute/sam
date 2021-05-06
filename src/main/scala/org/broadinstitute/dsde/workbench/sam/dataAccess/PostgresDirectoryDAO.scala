@@ -23,7 +23,7 @@ import scala.util.{Failure, Try}
 
 class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val readDbRef: DbReference)(implicit val cs: ContextShift[IO], timer: Timer[IO]) extends DirectoryDAO with DatabaseSupport with PostgresGroupDAO {
 
-  override def getConnectionTarget(): ConnectionType = ConnectionType.Postgres
+  override def getConnectionType(): ConnectionType = ConnectionType.Postgres
 
   override def createGroup(group: BasicWorkbenchGroup, accessInstructionsOpt: Option[String], samRequestContext: SamRequestContext): IO[BasicWorkbenchGroup] = {
     serializableWriteTransaction("createGroup", samRequestContext)({ implicit session =>

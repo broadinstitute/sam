@@ -35,7 +35,7 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
 
   private val groupAccessInstructions: mutable.Map[WorkbenchGroupName, String] = new TrieMap()
 
-  override def getConnectionTarget(): ConnectionType = ConnectionType.Postgres
+  override def getConnectionType(): ConnectionType = ConnectionType.Postgres
 
   override def createGroup(group: BasicWorkbenchGroup, accessInstruction: Option[String] = None, samRequestContext: SamRequestContext): IO[BasicWorkbenchGroup] =
     if (groups.keySet.contains(group.id)) {

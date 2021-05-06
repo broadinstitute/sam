@@ -12,7 +12,7 @@ import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
   * away from a solution that requires that the Apache proxies query this group, we can remove the RegistrationDAO.
   */
 trait RegistrationDAO {
-  def getConnectionTarget(): ConnectionType
+  def getConnectionType(): ConnectionType
   def createUser(user: WorkbenchUser, samRequestContext: SamRequestContext): IO[WorkbenchUser]
   def loadUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[WorkbenchUser]]
   def deleteUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit]
