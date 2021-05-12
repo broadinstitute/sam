@@ -28,7 +28,7 @@ if [ -d /opt/opendj/bootstrap/ldif ]; then
   done
 fi
 
-cp -rfp /opt/example-v1.json /opt/opendj/config/rest2ldap/endpoints/api/example-v1.json
+cp -rfp /opt/example-v1.json /opt/opendj/data/config/rest2ldap/endpoints/api/example-v1.json
 
 /opt/opendj/bin/dsconfig \
  set-http-endpoint-prop \
