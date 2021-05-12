@@ -12,6 +12,7 @@ if [ -n "${NUMBER_SAMPLE_USERS+set}" ]; then
 fi
 
 /opt/opendj/setup directory-server --ldapPort 389 \
+  --instancePath ${INSTANCE_ROOT} \
   --adminConnectorPort 4444 \
   --baseDN $BASE_DN -h opendj.dsde-dev.broadinstitute.org --rootUserPassword "${ROOTPASS}" \
   --acceptLicense \
