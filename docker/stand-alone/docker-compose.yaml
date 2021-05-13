@@ -23,7 +23,7 @@ services:
       - sam-app:app
       - sam-opendj:opendj
   sam-opendj:
-    image: broadinstitute/openam:opendj5
+    image: broadinstitute/openam:opendj_3
     ports:
       - "390:390"
     volumes:

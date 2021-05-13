@@ -3,7 +3,6 @@
 #
 # Copyright (c) 2016-2017 ForgeRock AS. Use of this source code is subject to the
 # Common Development and Distribution License (CDDL) that can be found in the LICENSE file
-
 echo "Setting up default OpenDJ instance."
 
 INIT_OPTION="--addBaseEntry"
@@ -13,13 +12,13 @@ if [ -n "${NUMBER_SAMPLE_USERS+set}" ]; then
 fi
 
 /opt/opendj/setup directory-server --ldapPort 389 \
+  --instancePath ${INSTANCE_ROOT} \
   --adminConnectorPort 4444 \
   --baseDN $BASE_DN -h opendj.dsde-dev.broadinstitute.org --rootUserPassword "${ROOTPASS}" \
   --acceptLicense \
   ${INIT_OPTION}
 
 # If any optional LDIF files are present, load them.
-
 if [ -d /opt/opendj/bootstrap/ldif ]; then
    echo "Found optional schema files in bootstrap/ldif. Will load them"
   for file in /opt/opendj/bootstrap/ldif/*;  do
