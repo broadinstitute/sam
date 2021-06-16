@@ -15,6 +15,10 @@ security:
       - openid
       - email
       - profile
+  - googleoidc:
+      - openid
+      - email
+      - profile
 paths:
   /api/admin/user/{userId}:
     get:
@@ -3292,3 +3296,7 @@ components:
             openid: open id authorization
             email: email authorization
             profile: profile authorization
+    googleoidc:
+      type: openIdConnect
+      openIdConnectUrl: https://accounts.google.com/.well-known/openid-configuration
+      x-tokenName: id_token
