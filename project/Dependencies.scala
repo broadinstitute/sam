@@ -68,6 +68,8 @@ object Dependencies {
 
   val unboundid: ModuleID = "com.unboundid" % "unboundid-ldapsdk" % "4.0.12"
 
+  val bouncyCastleProvider: ModuleID = "org.bouncycastle" % "bcprov-jdk15on" % "1.68"
+
   // All of workbench-libs pull in Akka; exclude it since we provide our own Akka dependency.
   // workbench-google pulls in workbench-{util, model, metrics}; exclude them so we can control the library versions individually.
   val workbenchUtil: ModuleID =      "org.broadinstitute.dsde.workbench" %% "workbench-util"   % workbenchUtilV excludeAll(excludeWorkbenchModel)
@@ -146,6 +148,8 @@ object Dependencies {
     workbenchGoogle2Tests,
     googleStorageLocal,
 
+    bouncyCastleProvider,
+    
     unboundid,
     commonsCodec,
 
