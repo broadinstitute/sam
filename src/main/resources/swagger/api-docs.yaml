@@ -19,6 +19,11 @@ security:
       - openid
       - email
       - profile
+  - azureb2coidc:
+      - openid
+      - email
+      - profile
+
 paths:
   /api/admin/user/{userId}:
     get:
@@ -3299,4 +3304,8 @@ components:
     googleoidc:
       type: openIdConnect
       openIdConnectUrl: https://accounts.google.com/.well-known/openid-configuration
+      x-tokenName: id_token
+    azureb2coidc:
+      type: openIdConnect
+      openIdConnectUrl: https://terrab2ctest.b2clogin.com/terrab2ctest.onmicrosoft.com/B2C_1A_SIGNUP_SIGNIN/v2.0/.well-known/openid-configuration
       x-tokenName: id_token
