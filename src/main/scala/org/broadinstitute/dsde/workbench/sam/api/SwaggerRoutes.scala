@@ -25,6 +25,11 @@ trait SwaggerRoutes {
           getFromResource("swagger/api-docs.yaml")
         }
       } ~
+      path("swagger-ui-bundle.js") {
+        get {
+          serveSwaggerUiBundle
+        }
+       } ~
       // We have to be explicit about the paths here since we're matching at the root URL and we don't
       // want to catch all paths lest we circumvent Spray's not-found and method-not-allowed error
       // messages.
@@ -66,5 +71,16 @@ trait SwaggerRoutes {
       getFromResource(s"$swaggerUiPath/index.html")
     }
   }
-
+    private val serveSwaggerUiBundle: server.Route = {
+    mapResponseEntity { entityFromJar =>
+      entityFromJar.transformDataBytes(Flow.fromFunction[ByteString, ByteString] { original: ByteString =>
+        ByteString(
+          original.utf8String
+            .replace("response_type=token", "response_type=code id_token token")
+        )
+      })
+    } {
+      getFromResource(s"$swaggerUiPath/swagger-ui-bundle.js")
+    }
+  }
 }
