@@ -3296,6 +3296,7 @@ components:
             openid: open id authorization
             email: email authorization
             profile: profile authorization
+      x-tokenName: id_token
     googleoidc:
       type: openIdConnect
       openIdConnectUrl: https://accounts.google.com/.well-known/openid-configuration
