@@ -226,6 +226,7 @@ sh config/docker-rsync-local-sam.sh
 # Start up local Sam with local opendj and postgres
 LOCAL_OPENDJ=true LOCAL_POSTGRES=true sh config/docker-rsync-local-sam.sh
 ```
+NOTE: OpenDJ has some heavy memory requirements.  If you see the OpenDJ container silently dying when running this command, try opening your Docker Desktop preferenes and increasing the Memory resources, 4GB seems to be sufficient, but more may be needed as well as increasing the Swap space maybe.
 
 #### Verify that local Sam is running
 [Status endpoint:
