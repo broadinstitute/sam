@@ -2,6 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.dataAccess
 
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model._
+import org.broadinstitute.dsde.workbench.sam.dataAccess.ConnectionType.ConnectionType
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 /**
@@ -11,6 +12,7 @@ import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
   * away from a solution that requires that the Apache proxies query this group, we can remove the RegistrationDAO.
   */
 trait RegistrationDAO {
+  def getConnectionType(): ConnectionType
   def createUser(user: WorkbenchUser, samRequestContext: SamRequestContext): IO[WorkbenchUser]
   def loadUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[WorkbenchUser]]
   def deleteUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit]
@@ -22,4 +24,5 @@ trait RegistrationDAO {
   def deletePetServiceAccount(petServiceAccountId: PetServiceAccountId, samRequestContext: SamRequestContext): IO[Unit]
   def updatePetServiceAccount(petServiceAccount: PetServiceAccount, samRequestContext: SamRequestContext): IO[PetServiceAccount]
   def setGoogleSubjectId(userId: WorkbenchUserId, googleSubjectId: GoogleSubjectId, samRequestContext: SamRequestContext): IO[Unit]
+  def checkStatus(samRequestContext: SamRequestContext): Boolean
 }

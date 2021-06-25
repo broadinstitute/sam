@@ -5,8 +5,7 @@ import akka.pattern.ask
 import akka.util.Timeout
 import cats.effect.IO
 import com.typesafe.scalalogging.LazyLogging
-import org.broadinstitute.dsde.workbench.model.WorkbenchGroupName
-import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{ConnectionType, DirectoryDAO, RegistrationDAO}
 import org.broadinstitute.dsde.workbench.sam.db.DbReference
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.util.health.HealthMonitor.GetCurrentStatus
@@ -17,11 +16,15 @@ import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 
 class StatusService(
-    val directoryDAO: DirectoryDAO,
-    val cloudExtensions: CloudExtensions,
-    val dbReference: DbReference,
-    initialDelay: FiniteDuration = Duration.Zero,
-    pollInterval: FiniteDuration = 1 minute)(implicit system: ActorSystem, executionContext: ExecutionContext)
+                     val directoryDAO: DirectoryDAO,
+                     // We expect this to be of type LdapRegistrationDAO, because
+                     // the status service specifically cares about checking LDAP's
+                     // status here, not a generic RegistrationDAO
+                     val ldapRegistrationDAO: RegistrationDAO,
+                     val cloudExtensions: CloudExtensions,
+                     val dbReference: DbReference,
+                     initialDelay: FiniteDuration = Duration.Zero,
+                     pollInterval: FiniteDuration = 1 minute)(implicit system: ActorSystem, executionContext: ExecutionContext)
     extends LazyLogging {
   implicit val askTimeout = Timeout(5 seconds)
 
@@ -31,24 +34,30 @@ class StatusService(
   def getStatus(): Future[StatusCheckResponse] = (healthMonitor ? GetCurrentStatus).asInstanceOf[Future[StatusCheckResponse]]
 
   private def checkStatus(): Map[Subsystem, Future[SubsystemStatus]] =
-    cloudExtensions.checkStatus + (OpenDJ -> checkOpenDJ(cloudExtensions.allUsersGroupName).unsafeToFuture()) + (Database -> checkDatabase().unsafeToFuture())
+    cloudExtensions.checkStatus + (OpenDJ -> checkOpenDJ().unsafeToFuture()) + (Database -> checkDatabase().unsafeToFuture())
 
-  private def checkOpenDJ(groupToLoad: WorkbenchGroupName): IO[SubsystemStatus] = {
+  private def checkOpenDJ(): IO[SubsystemStatus] = IO {
+    // Since Status calls are ~80% of all Sam calls and are easy to track separately, Status calls are not being traced.
     logger.info("checking opendj connection")
-    directoryDAO.loadGroupEmail(groupToLoad, SamRequestContext(None)).map { // Since Status calls are ~80% of all Sam calls and are easy to track separately, Status calls are not being traced.
-      case Some(_) => HealthMonitor.OkStatus
-      case None => HealthMonitor.failedStatus(s"could not find group $groupToLoad in opendj")
+    if (ldapRegistrationDAO.getConnectionType() != ConnectionType.LDAP) {
+      HealthMonitor.failedStatus("Connection of RegistrationDAO is not to OpenDJ")
+    } else {
+      if (ldapRegistrationDAO.checkStatus(SamRequestContext(None)))
+        HealthMonitor.OkStatus
+      else
+        HealthMonitor.failedStatus(s"LDAP database connection invalid or timed out checking")
     }
   }
 
   private def checkDatabase(): IO[SubsystemStatus] = IO {
     logger.info("checking database connection")
-    dbReference.inLocalTransaction { session =>
-      if (session.connection.isValid((2 seconds).toSeconds.intValue())) {
+    if (directoryDAO.getConnectionType() != ConnectionType.Postgres) {
+      HealthMonitor.failedStatus("Connection of RegistrationDAO is not to Postgres")
+    } else {
+      if (directoryDAO.checkStatus(SamRequestContext(None)))
         HealthMonitor.OkStatus
-      } else {
-        HealthMonitor.failedStatus("database connection invalid or timed out checking")
-      }
+      else
+        HealthMonitor.failedStatus("Postgres database connection invalid or timed out checking")
     }
   }
 }

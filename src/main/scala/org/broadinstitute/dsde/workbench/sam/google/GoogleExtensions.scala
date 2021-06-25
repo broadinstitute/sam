@@ -51,7 +51,9 @@ class GoogleExtensions(
     val registrationDAO: RegistrationDAO,
     val accessPolicyDAO: AccessPolicyDAO,
     val googleDirectoryDAO: GoogleDirectoryDAO,
-    val googlePubSubDAO: GooglePubSubDAO,
+    val notificationPubSubDAO: GooglePubSubDAO,
+    val googleGroupSyncPubSubDAO: GooglePubSubDAO,
+    val googleDisableUsersPubSubDAO: GooglePubSubDAO,
     val googleIamDAO: GoogleIamDAO,
     val googleStorageDAO: GoogleStorageDAO,
     val googleProjectDAO: GoogleProjectDAO,
@@ -158,7 +160,7 @@ class GoogleExtensions(
   // The handler for the subscription will ultimately call GoogleExtensions.synchronizeGroupMembers, which will
   // do all the heavy lifting of creating the Google Group and adding members.
   override def publishGroup(id: WorkbenchGroupName): Future[Unit] =
-    googlePubSubDAO.publishMessages(googleServicesConfig.groupSyncTopic, Seq(id.toJson.compactPrint))
+    googleGroupSyncPubSubDAO.publishMessages(googleServicesConfig.groupSyncPubSubConfig.topic, Seq(id.toJson.compactPrint))
 
 
   /*
@@ -228,7 +230,7 @@ class GoogleExtensions(
   }
 
   private def publishMessages(messages: Seq[String]): Future[Unit] = {
-    googlePubSubDAO.publishMessages(googleServicesConfig.groupSyncTopic, messages)
+    googleGroupSyncPubSubDAO.publishMessages(googleServicesConfig.groupSyncPubSubConfig.topic, messages)
   }
 
 
@@ -558,10 +560,28 @@ class GoogleExtensions(
     }
 
     def checkPubsub: Future[SubsystemStatus] = {
-      logger.debug("Checking Google PubSub...")
-      googlePubSubDAO.getTopic(googleServicesConfig.groupSyncTopic).map {
-        case Some(_) => OkStatus
-        case None => failedStatus(s"Could not find topic: ${googleServicesConfig.groupSyncTopic}")
+      logger.debug("Checking PubSub topics...")
+      case class TopicToDaoPair (
+        topic: String,
+        dao: GooglePubSubDAO
+      )
+
+      val pubSubDaoToCheck = List(TopicToDaoPair(googleServicesConfig.groupSyncPubSubConfig.topic, googleGroupSyncPubSubDAO),
+        TopicToDaoPair(googleServicesConfig.notificationTopic, notificationPubSubDAO),
+        TopicToDaoPair(googleServicesConfig.disableUsersPubSubConfig.topic, googleDisableUsersPubSubDAO),
+        TopicToDaoPair(googleServicesConfig.googleKeyCacheConfig.monitorPubSubConfig.topic, googleKeyCache.googleKeyCachePubSubDao))
+      for {
+        listOfUnfoundTopics <- Future.traverse(pubSubDaoToCheck) { pair => {
+          pair.dao.getTopic(pair.topic).map {
+            case Some(_) => None
+            case None => Some(pair.topic)
+          }
+        }}
+        flattenedListOfUnfoundTopics = listOfUnfoundTopics.flatten
+      } yield if (flattenedListOfUnfoundTopics.isEmpty) {
+        OkStatus
+      } else {
+        failedStatus(s"Could not find topic(s): ${flattenedListOfUnfoundTopics.toString}")
       }
     }
 
@@ -587,14 +607,25 @@ case class GoogleExtensionsInitializer(cloudExtensions: GoogleExtensions, google
   override def onBoot(samApplication: SamApplication)(implicit system: ActorSystem): IO[Unit] = {
     system.actorOf(
       GoogleGroupSyncMonitorSupervisor.props(
-        cloudExtensions.googleServicesConfig.groupSyncPollInterval,
-        cloudExtensions.googleServicesConfig.groupSyncPollJitter,
-        cloudExtensions.googlePubSubDAO,
-        cloudExtensions.googleServicesConfig.groupSyncTopic,
-        cloudExtensions.googleServicesConfig.groupSyncSubscription,
-        cloudExtensions.googleServicesConfig.groupSyncWorkerCount,
+        cloudExtensions.googleServicesConfig.groupSyncPubSubConfig.pollInterval,
+        cloudExtensions.googleServicesConfig.groupSyncPubSubConfig.pollJitter,
+        cloudExtensions.googleGroupSyncPubSubDAO,
+        cloudExtensions.googleServicesConfig.groupSyncPubSubConfig.topic,
+        cloudExtensions.googleServicesConfig.groupSyncPubSubConfig.subscription,
+        cloudExtensions.googleServicesConfig.groupSyncPubSubConfig.workerCount,
         googleGroupSynchronizer
       ))
+    system.actorOf(
+      DisableUsersMonitorSupervisor.props(
+        cloudExtensions.googleServicesConfig.disableUsersPubSubConfig.pollInterval,
+        cloudExtensions.googleServicesConfig.disableUsersPubSubConfig.pollJitter,
+        cloudExtensions.googleDisableUsersPubSubDAO,
+        cloudExtensions.googleServicesConfig.disableUsersPubSubConfig.topic,
+        cloudExtensions.googleServicesConfig.disableUsersPubSubConfig.subscription,
+        cloudExtensions.googleServicesConfig.disableUsersPubSubConfig.workerCount,
+        samApplication.userService
+      )
+    )
 
     cloudExtensions.onBoot(samApplication)
   }

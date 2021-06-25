@@ -176,7 +176,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
     } yield ()
   }
 
-  def disableUser(userId: WorkbenchUserId, userInfo: UserInfo, samRequestContext: SamRequestContext): Future[Option[UserStatus]] =
+  def disableUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): Future[Option[UserStatus]] =
     directoryDAO.loadUser(userId, samRequestContext).unsafeToFuture().flatMap {
       case Some(user) =>
         for {

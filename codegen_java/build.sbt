@@ -6,7 +6,7 @@ lazy val root = (project in file(".")).
     Seq(organization := "org.broadinstitute.dsde.workbench",
     name := "sam-client",
     version := createVersion("0.1"),
-    scalaVersion := "2.12.8",
+    scalaVersion := "2.13.5",
     scalacOptions ++= Seq("-feature"),
     javacOptions in compile ++= Seq("-Xlint:deprecation"),
     publishArtifact in (Compile, packageDoc) := false,
@@ -21,6 +21,7 @@ lazy val root = (project in file(".")).
       "org.threeten" % "threetenbp" % "1.3.5" % "compile",
       "io.gsonfire" % "gson-fire" % "1.8.0" % "compile",
       "junit" % "junit" % "4.12" % "test",
-      "com.novocode" % "junit-interface" % "0.10" % "test"
+      "com.novocode" % "junit-interface" % "0.10" % "test",
+      "javax.annotation" % "javax.annotation-api" % "1.3.2"
     )) ++ publishSettings:_*
   )

@@ -29,15 +29,15 @@ object GoogleGroupSyncMonitorSupervisor {
   case object Start extends GoogleGroupSyncMonitorSupervisorMessage
 
   def props(
-      pollInterval: FiniteDuration,
-      pollIntervalJitter: FiniteDuration,
-      pubSubDao: GooglePubSubDAO,
-      pubSubTopicName: String,
-      pubSubSubscriptionName: String,
-      workerCount: Int,
-      groupSynchronizer: GoogleGroupSynchronizer): Props =
+             pollInterval: FiniteDuration,
+             pollIntervalJitter: FiniteDuration,
+             groupSyncPubSubDao: GooglePubSubDAO,
+             pubSubTopicName: String,
+             pubSubSubscriptionName: String,
+             workerCount: Int,
+             groupSynchronizer: GoogleGroupSynchronizer): Props =
     Props(
-      new GoogleGroupSyncMonitorSupervisor(pollInterval, pollIntervalJitter, pubSubDao, pubSubTopicName, pubSubSubscriptionName, workerCount, groupSynchronizer))
+      new GoogleGroupSyncMonitorSupervisor(pollInterval, pollIntervalJitter, groupSyncPubSubDao, pubSubTopicName, pubSubSubscriptionName, workerCount, groupSynchronizer))
 }
 
 class GoogleGroupSyncMonitorSupervisor(

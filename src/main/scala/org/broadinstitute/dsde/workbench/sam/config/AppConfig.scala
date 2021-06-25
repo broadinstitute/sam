@@ -1,7 +1,6 @@
 package org.broadinstitute.dsde.workbench.sam.config
 
 import cats.data.NonEmptyList
-import com.google.api.client.json.jackson2.JacksonFactory
 import com.typesafe.config._
 import net.ceedubs.ficus.Ficus._
 import net.ceedubs.ficus.readers.ValueReader
@@ -9,6 +8,7 @@ import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.model.google._
 import org.broadinstitute.dsde.workbench.sam.model._
 import GoogleServicesConfig.googleServicesConfigReader
+import com.google.api.client.json.gson.GsonFactory
 import org.broadinstitute.dsde.workbench.google2.util.DistributedLockConfig
 
 import scala.concurrent.duration.Duration
@@ -98,7 +98,7 @@ object AppConfig {
     )
   }
 
-  val jsonFactory = JacksonFactory.getDefaultInstance
+  val jsonFactory = GsonFactory.getDefaultInstance
 
   implicit def nonEmptyListReader[A](implicit valueReader: ValueReader[List[A]]): ValueReader[Option[NonEmptyList[A]]] =
     new ValueReader[Option[NonEmptyList[A]]] {
