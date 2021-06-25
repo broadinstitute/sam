@@ -15,7 +15,7 @@ object Dependencies {
   val workbenchUtil2V   = "0.1-74c9fc2"
   val workbenchModelV  = "0.14-74c9fc2"
   val workbenchGoogleV = "0.21-51d7fff"
-  val workbenchGoogle2V = "0.18-74c9fc2"
+  val workbenchGoogle2V = "0.21-9d25534"
   val workbenchNotificationsV = "0.3-d74ff96"
   val monocleVersion = "2.0.3"
 
