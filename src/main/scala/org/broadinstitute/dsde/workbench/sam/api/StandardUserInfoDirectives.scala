@@ -16,14 +16,14 @@ import scala.concurrent.ExecutionContext
 import scala.util.{Failure, Success, Try}
 import pdi.jwt.{JwtOptions, JwtSprayJson}
 import spray.json._
-import java.time.Instant
 
+import java.time.Instant
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.sam.identityConcentrator.IdentityConcentratorService
 
 import scala.util.matching.Regex
 import DefaultJsonProtocol._
-import WorkbenchIdentityJsonSupport.identityConcentratorIdFormat
+import WorkbenchIdentityJsonSupport.{WorkbenchEmailFormat, identityConcentratorIdFormat}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
@@ -42,24 +42,19 @@ trait StandardUserInfoDirectives extends UserInfoDirectives with LazyLogging wit
     * @tparam T type this request returns
     * @return
     */
-  private def handleAuthHeaders[T](fromJwt: (JwtUserInfo, OAuth2BearerToken, IdentityConcentratorService, SamRequestContext) => Directive1[T], fromOIDC: (OIDCHeaders, SamRequestContext) => Directive1[T], samRequestContext: SamRequestContext): Directive1[T] =
+  private def handleAuthHeaders[T](fromJwt: (JwtUserInfo, OAuth2BearerToken, SamRequestContext) => Directive1[T], fromOIDC: (OIDCHeaders, SamRequestContext) => Directive1[T], samRequestContext: SamRequestContext): Directive1[T] =
     withChildTraceSpan("handleAuthHeaders", samRequestContext).flatMap { samRequestContext =>
-      (headerValueByName(authorizationHeader) &
-        provide(identityConcentratorService)) tflatMap {
+      headerValueByName(authorizationHeader) flatMap {
         // order of these cases is important: if the authorization header is a valid jwt we must ignore
         // any OIDC headers otherwise we may be vulnerable to a malicious user specifying a valid JWT
         // but different user information in the OIDC headers
-        case (JwtAuthorizationHeader(Success(jwtUserInfo), bearerToken), Some(icService)) =>
+        case JwtAuthorizationHeader(Success(jwtUserInfo), bearerToken) =>
           withChildTraceSpan("JWT-request", samRequestContext).flatMap { samRequestContext =>
-            fromJwt(jwtUserInfo, bearerToken, icService, samRequestContext)
+            fromJwt(jwtUserInfo, bearerToken, samRequestContext)
           }
 
-        case (JwtAuthorizationHeader(Failure(regrets), _), _) =>
+        case JwtAuthorizationHeader(Failure(regrets), _) =>
           failWith(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Unauthorized, "could not parse authorization header, jwt missing required fields", regrets)))
-
-        case (JwtAuthorizationHeader(_, _), None) =>
-          logger.error("requireUserInfo with JWT attempted but Identity Concentrator not configured")
-          failWith(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.InternalServerError, "Identity Concentrator not configured")))
 
         case _ =>
           // request coming through Apache proxy with OIDC headers
@@ -72,9 +67,9 @@ trait StandardUserInfoDirectives extends UserInfoDirectives with LazyLogging wit
       }
     }
 
-  private def requireUserInfoFromJwt(jwtUserInfo: JwtUserInfo, bearerToken: OAuth2BearerToken, icService: IdentityConcentratorService, samRequestContext: SamRequestContext): Directive1[UserInfo] =
+  private def requireUserInfoFromJwt(jwtUserInfo: JwtUserInfo, bearerToken: OAuth2BearerToken, samRequestContext: SamRequestContext): Directive1[UserInfo] =
     onSuccess {
-      getUserInfoFromJwt(jwtUserInfo, bearerToken, directoryDAO, icService, samRequestContext).unsafeToFuture()
+      getUserInfoFromJwt(jwtUserInfo, bearerToken, directoryDAO, samRequestContext).unsafeToFuture()
     }
 
   private def requireUserInfoFromOIDC(oidcHeaders: OIDCHeaders, samRequestContext: SamRequestContext): Directive1[UserInfo] =
@@ -82,9 +77,9 @@ trait StandardUserInfoDirectives extends UserInfoDirectives with LazyLogging wit
       getUserInfoFromOidcHeaders(directoryDAO, oidcHeaders, samRequestContext).unsafeToFuture()
     }
 
-  private def requireCreateUserInfoFromJwt(jwtUserInfo: JwtUserInfo, bearerToken: OAuth2BearerToken, icService: IdentityConcentratorService, samRequestContext: SamRequestContext): Directive1[CreateWorkbenchUser] =
+  private def requireCreateUserInfoFromJwt(jwtUserInfo: JwtUserInfo, bearerToken: OAuth2BearerToken, samRequestContext: SamRequestContext): Directive1[CreateWorkbenchUser] =
     onSuccess {
-      newCreateWorkbenchUserFromJwt(jwtUserInfo, bearerToken, icService).unsafeToFuture()
+      newCreateWorkbenchUserFromJwt(jwtUserInfo, bearerToken).unsafeToFuture()
     }
 
   private def requireCreateUserInfoFromOIDC(oidcHeaders: OIDCHeaders, samRequestContext: SamRequestContext): Directive1[CreateWorkbenchUser] =
@@ -99,7 +94,7 @@ object StandardUserInfoDirectives {
   val googleSubjectIdHeader = "OIDC_CLAIM_user_id"
   val authorizationHeader = "Authorization"
 
-  implicit val jwtPayloadFormat: JsonFormat[JwtUserInfo] = jsonFormat2(JwtUserInfo)
+  implicit val jwtPayloadFormat: JsonFormat[JwtUserInfo] = jsonFormat3(JwtUserInfo)
 
   def isServiceAccount(email: WorkbenchEmail): Boolean =
     SAdomain.pattern.matcher(email.value).matches
@@ -121,9 +116,9 @@ object StandardUserInfoDirectives {
       lookUpByGoogleSubjectId(googleSubjectId, directoryDAO, samRequestContext).map(uid => UserInfo(token, uid, email, expiresIn))
     }
 
-  def getUserInfoFromJwt(jwtUserInfo: JwtUserInfo, bearerToken: OAuth2BearerToken, directoryDAO: DirectoryDAO, identityConcentratorService: IdentityConcentratorService, samRequestContext: SamRequestContext): IO[UserInfo] = {
+  def getUserInfoFromJwt(jwtUserInfo: JwtUserInfo, bearerToken: OAuth2BearerToken, directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext): IO[UserInfo] = {
     for {
-      maybeUser <- loadUserMaybeUpdateIdentityConcentratorId(jwtUserInfo, bearerToken, directoryDAO, identityConcentratorService, samRequestContext)
+      maybeUser <- loadUserMaybeUpdateIdentityConcentratorId(jwtUserInfo, bearerToken, directoryDAO, samRequestContext)
       user <- maybeUser match {
         case Some(user) => IO.pure(UserInfo(bearerToken, user.id, user.email, jwtUserInfo.exp - Instant.now().getEpochSecond))
         case None =>
@@ -132,14 +127,14 @@ object StandardUserInfoDirectives {
     } yield user
   }
 
-  private def loadUserMaybeUpdateIdentityConcentratorId(jwtUserInfo: JwtUserInfo, bearerToken: OAuth2BearerToken, directoryDAO: DirectoryDAO, identityConcentratorService: IdentityConcentratorService, samRequestContext: SamRequestContext): IO[Option[WorkbenchUser]] = {
+  private def loadUserMaybeUpdateIdentityConcentratorId(jwtUserInfo: JwtUserInfo, bearerToken: OAuth2BearerToken, directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext): IO[Option[WorkbenchUser]] = {
     for {
       maybeUser <- directoryDAO.loadUserByIdentityConcentratorId(jwtUserInfo.sub, samRequestContext)
-      maybeUserAgain <- maybeUser match {
-        case None => updateUserIdentityConcentratorId(jwtUserInfo, bearerToken, directoryDAO, identityConcentratorService, samRequestContext)
-        case _ => IO.pure(maybeUser)
-      }
-    } yield maybeUserAgain
+//      maybeUserAgain <- maybeUser match {
+//        case None => updateUserIdentityConcentratorId(jwtUserInfo, bearerToken, directoryDAO, identityConcentratorService, samRequestContext)
+//        case _ => IO.pure(maybeUser)
+//      }
+    } yield maybeUser
   }
 
   private def updateUserIdentityConcentratorId(jwtUserInfo: JwtUserInfo, bearerToken: OAuth2BearerToken, directoryDAO: DirectoryDAO, identityConcentratorService: IdentityConcentratorService, samRequestContext: SamRequestContext): IO[Option[WorkbenchUser]] = {
@@ -173,16 +168,13 @@ object StandardUserInfoDirectives {
       }
     } yield userInfo
 
-  def newCreateWorkbenchUserFromJwt(jwtUserInfo: JwtUserInfo, bearerToken: OAuth2BearerToken, icService: IdentityConcentratorService): IO[CreateWorkbenchUser] =
-    for {
-      googleIdentities <- icService.getGoogleIdentities(bearerToken)
-      (googleSubjectId, email) <- singleGoogleIdentity(jwtUserInfo.sub, googleIdentities)
-    } yield CreateWorkbenchUser(genWorkbenchUserId(System.currentTimeMillis()), googleSubjectId, email, Option(jwtUserInfo.sub))
+  def newCreateWorkbenchUserFromJwt(jwtUserInfo: JwtUserInfo, bearerToken: OAuth2BearerToken): IO[CreateWorkbenchUser] =
+    IO.pure(CreateWorkbenchUser(genWorkbenchUserId(System.currentTimeMillis()), GoogleSubjectId(genRandom(System.currentTimeMillis())), jwtUserInfo.email, Option(jwtUserInfo.sub)))
 }
 
 final case class CreateWorkbenchUser(id: WorkbenchUserId, googleSubjectId: GoogleSubjectId, email: WorkbenchEmail, identityConcentratorId: Option[IdentityConcentratorId])
 
-final case class JwtUserInfo(sub: IdentityConcentratorId, exp: Long)
+final case class JwtUserInfo(sub: IdentityConcentratorId, exp: Long, email: WorkbenchEmail)
 
 final case class OIDCHeaders(token: OAuth2BearerToken, googleSubjectId: GoogleSubjectId, expiresIn: String, email: WorkbenchEmail)
 

@@ -133,7 +133,7 @@ class StandardUserInfoDirectivesSpec extends AnyFlatSpec with PropertyBasedTesti
     val identityConcentratorId = TestSupport.genIdentityConcentratorId()
     val email = genNonPetEmail.sample.get
     directoryDAO.createUser(WorkbenchUser(uid, Some(googleSubjectId), email, Option(identityConcentratorId)), samRequestContext).unsafeRunSync()
-    val userInfo = getUserInfoFromJwt(validJwtUserInfo(identityConcentratorId), OAuth2BearerToken(""), directoryDAO, mock[IdentityConcentratorService](RETURNS_SMART_NULLS), samRequestContext).unsafeRunSync()
+    val userInfo = getUserInfoFromJwt(validJwtUserInfo(identityConcentratorId), OAuth2BearerToken(""), directoryDAO, samRequestContext).unsafeRunSync()
     assert(userInfo.tokenExpiresIn <= 0)
     assert(userInfo.tokenExpiresIn > -30)
     userInfo.copy(tokenExpiresIn = 0) shouldEqual UserInfo(OAuth2BearerToken(""), uid, email, 0)
@@ -151,7 +151,7 @@ class StandardUserInfoDirectivesSpec extends AnyFlatSpec with PropertyBasedTesti
     val icService = mock[IdentityConcentratorService](RETURNS_SMART_NULLS)
     val bearerToken = OAuth2BearerToken("shhhh, secret")
     when(icService.getGoogleIdentities(bearerToken)).thenReturn(IO.pure(Seq((googleSubjectId, email))))
-    getUserInfoFromJwt(validJwtUserInfo(identityConcentratorId), bearerToken, directoryDAO, icService, samRequestContext).unsafeRunSync()
+    getUserInfoFromJwt(validJwtUserInfo(identityConcentratorId), bearerToken, directoryDAO, samRequestContext).unsafeRunSync()
 
     directoryDAO.loadUser(uid, samRequestContext).unsafeRunSync().flatMap(_.identityConcentratorId) shouldBe Some(identityConcentratorId)
   }
@@ -167,7 +167,7 @@ class StandardUserInfoDirectivesSpec extends AnyFlatSpec with PropertyBasedTesti
       (GoogleSubjectId(genRandom(System.currentTimeMillis())), genNonPetEmail.sample.get))))
 
     val expectedError = intercept[WorkbenchExceptionWithErrorReport] {
-      getUserInfoFromJwt(validJwtUserInfo(identityConcentratorId), bearerToken, directoryDAO, icService, samRequestContext).unsafeRunSync()
+      getUserInfoFromJwt(validJwtUserInfo(identityConcentratorId), bearerToken, directoryDAO, samRequestContext).unsafeRunSync()
     }
 
     expectedError.errorReport.statusCode shouldBe Some(StatusCodes.InternalServerError)
@@ -180,7 +180,7 @@ class StandardUserInfoDirectivesSpec extends AnyFlatSpec with PropertyBasedTesti
     val t = intercept[WorkbenchExceptionWithErrorReport] {
       val identityConcentratorService = mock[IdentityConcentratorService](RETURNS_SMART_NULLS)
       when(identityConcentratorService.getGoogleIdentities(any[OAuth2BearerToken])).thenReturn(IO.pure(Seq((GoogleSubjectId(""), WorkbenchEmail("")))))
-      getUserInfoFromJwt(validJwtUserInfo(TestSupport.genIdentityConcentratorId()), OAuth2BearerToken(""), directoryDAO, identityConcentratorService, samRequestContext).unsafeRunSync()
+      getUserInfoFromJwt(validJwtUserInfo(TestSupport.genIdentityConcentratorId()), OAuth2BearerToken(""), directoryDAO, samRequestContext).unsafeRunSync()
     }
     withClue(t.errorReport) {
       t.errorReport.statusCode shouldBe Some(StatusCodes.NotFound)
@@ -192,7 +192,7 @@ class StandardUserInfoDirectivesSpec extends AnyFlatSpec with PropertyBasedTesti
     val t = intercept[WorkbenchExceptionWithErrorReport] {
       val identityConcentratorService = mock[IdentityConcentratorService](RETURNS_SMART_NULLS)
       when(identityConcentratorService.getGoogleIdentities(any[OAuth2BearerToken])).thenReturn(IO.pure(Seq.empty))
-      getUserInfoFromJwt(validJwtUserInfo(TestSupport.genIdentityConcentratorId()), OAuth2BearerToken(""), directoryDAO, identityConcentratorService, samRequestContext).unsafeRunSync()
+      getUserInfoFromJwt(validJwtUserInfo(TestSupport.genIdentityConcentratorId()), OAuth2BearerToken(""), directoryDAO, samRequestContext).unsafeRunSync()
     }
     withClue(t.errorReport) {
       t.errorReport.statusCode shouldBe Some(StatusCodes.InternalServerError)
@@ -207,7 +207,7 @@ class StandardUserInfoDirectivesSpec extends AnyFlatSpec with PropertyBasedTesti
     val icService = mock[IdentityConcentratorService](RETURNS_SMART_NULLS)
     val bearerToken = OAuth2BearerToken("shhhh, secret")
     when(icService.getGoogleIdentities(bearerToken)).thenReturn(IO.pure(Seq((googleSubjectId, email))))
-    val createUser = newCreateWorkbenchUserFromJwt(validJwtUserInfo(identityConcentratorId), bearerToken, icService).unsafeRunSync()
+    val createUser = newCreateWorkbenchUserFromJwt(validJwtUserInfo(identityConcentratorId), bearerToken).unsafeRunSync()
 
     createUser.identityConcentratorId shouldBe Some(identityConcentratorId)
     createUser.googleSubjectId shouldBe googleSubjectId
@@ -221,7 +221,7 @@ class StandardUserInfoDirectivesSpec extends AnyFlatSpec with PropertyBasedTesti
     val bearerToken = OAuth2BearerToken("shhhh, secret")
     when(icService.getGoogleIdentities(bearerToken)).thenReturn(IO.pure(Seq.empty))
     val t = intercept[WorkbenchExceptionWithErrorReport] {
-      newCreateWorkbenchUserFromJwt(validJwtUserInfo(identityConcentratorId), bearerToken, icService).unsafeRunSync()
+      newCreateWorkbenchUserFromJwt(validJwtUserInfo(identityConcentratorId), bearerToken).unsafeRunSync()
     }
 
     t.errorReport.statusCode shouldBe Some(StatusCodes.InternalServerError)
@@ -237,7 +237,7 @@ class StandardUserInfoDirectivesSpec extends AnyFlatSpec with PropertyBasedTesti
       (GoogleSubjectId(genRandom(System.currentTimeMillis())), genNonPetEmail.sample.get))))
 
     val t = intercept[WorkbenchExceptionWithErrorReport] {
-      newCreateWorkbenchUserFromJwt(validJwtUserInfo(identityConcentratorId), bearerToken, icService).unsafeRunSync()
+      newCreateWorkbenchUserFromJwt(validJwtUserInfo(identityConcentratorId), bearerToken).unsafeRunSync()
     }
 
     t.errorReport.statusCode shouldBe Some(StatusCodes.InternalServerError)
