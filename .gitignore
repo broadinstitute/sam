@@ -24,7 +24,7 @@ docker/stand-alone/ca-bundle.crt
 sam-assembly-*-SNAPSHOT.jar
 
 #VS Code
-*.vscode/*
+.vscode*
 
 # Scala-IDE specific
 .scala_dependencies
