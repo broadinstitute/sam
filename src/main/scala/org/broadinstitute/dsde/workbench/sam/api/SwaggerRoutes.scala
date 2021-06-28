@@ -25,7 +25,7 @@ trait SwaggerRoutes {
           getFromResource("swagger/api-docs.yaml")
         }
       } ~
-      path("swagger-ui-bundle.js") {
+       path("swagger-ui-bundle.js") {
         get {
           serveSwaggerUiBundle
         }
@@ -71,7 +71,7 @@ trait SwaggerRoutes {
       getFromResource(s"$swaggerUiPath/index.html")
     }
   }
-    private val serveSwaggerUiBundle: server.Route = {
+  private val serveSwaggerUiBundle: server.Route = {
     mapResponseEntity { entityFromJar =>
       entityFromJar.transformDataBytes(Flow.fromFunction[ByteString, ByteString] { original: ByteString =>
         ByteString(

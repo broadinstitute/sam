@@ -7,7 +7,7 @@
 
 <changeSet logicalFilePath="dummy" author="dvoet" id="identity_concentrator_id">
         <addColumn tableName="sam_user">
-            <column name="identity_concentrator_id" type="VARCHAR(30)">
+            <column name="identity_concentrator_id" type="VARCHAR(100)">
                 <constraints unique="true"/>
             </column>
         </addColumn>
