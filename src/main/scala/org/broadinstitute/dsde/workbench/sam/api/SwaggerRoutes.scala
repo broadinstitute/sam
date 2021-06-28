@@ -76,7 +76,7 @@ trait SwaggerRoutes {
       entityFromJar.transformDataBytes(Flow.fromFunction[ByteString, ByteString] { original: ByteString =>
         ByteString(
           original.utf8String
-            .replace("response_type=token", "response_type=code id_token token")
+            .replace("response_type=token", "response_type=id_token token")
         )
       })
     } {
