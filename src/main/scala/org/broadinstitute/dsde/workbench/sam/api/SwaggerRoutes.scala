@@ -71,18 +71,16 @@ trait SwaggerRoutes {
       getFromResource(s"$swaggerUiPath/index.html")
     }
   }
-
   private val serveSwaggerUiBundle: server.Route = {
     mapResponseEntity { entityFromJar =>
       entityFromJar.transformDataBytes(Flow.fromFunction[ByteString, ByteString] { original: ByteString =>
         ByteString(
           original.utf8String
-            .replace("response_type=token", "response_type=id_token")
+            .replace("response_type=token", "response_type=id_token token")
         )
       })
     } {
       getFromResource(s"$swaggerUiPath/swagger-ui-bundle.js")
     }
   }
-
 }

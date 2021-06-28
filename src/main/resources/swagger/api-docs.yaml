@@ -19,6 +19,14 @@ security:
       - openid
       - email
       - profile
+  - azureb2coidc:
+      - openid
+      - email
+      - profile
+  - azureb2coauth:
+      - openid
+      - email
+      - profile
 paths:
   /api/admin/user/{userId}:
     get:
@@ -3301,3 +3309,19 @@ components:
       type: openIdConnect
       openIdConnectUrl: https://accounts.google.com/.well-known/openid-configuration
       x-tokenName: id_token
+    azureb2coidc:
+      type: openIdConnect
+      openIdConnectUrl: https://terrab2ctest.b2clogin.com/terrab2ctest.onmicrosoft.com/B2C_1A_SIGNUP_SIGNIN/v2.0/.well-known/openid-configuration
+      x-tokenName: id_token
+    azureb2coauth:
+      type: oauth2
+      flows:
+        implicit:
+          x-tokenName: id_token
+          authorizationUrl: https://terrab2ctest.b2clogin.com/terrab2ctest.onmicrosoft.com/B2C_1A_SIGNUP_SIGNIN/oauth2/v2.0/authorize
+          tokenUrl: https://terrab2ctest.b2clogin.com/terrab2ctest.onmicrosoft.com/b2c_1a_signup_signin/oauth2/v2.0/token
+          scopes:
+            openid: open id authorization
+            email: email authorization
+            profile: profile authorization
+            https://terrab2ctest.onmicrosoft.com/terrab2ctestapi/demo.read: read sample api
