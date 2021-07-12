@@ -28,4 +28,12 @@ trait UserInfoDirectives {
       }
     }
 
+  def asSamSuperAdmin(userInfo: UserInfo): Directive0 =
+    Directives.mapInnerRoute { r =>
+      onSuccess(cloudExtensions.isSamSuperAdmin(userInfo.userEmail)) { isAdmin =>
+        if (!isAdmin) Directives.failWith(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden, "You must be a super admin.")))
+        else r
+      }
+    }
+
 }

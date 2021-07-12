@@ -36,6 +36,41 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
       case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"resource type ${name.value} not found"))
     }
 
+  def adminResourceRotues: server.Route =
+    pathPrefix("resourceTypeAdmin" / "v1") {
+      pathPrefix("resourceTypes") {
+        withSamRequestContext { samRequestContext =>
+          requireUserInfo(samRequestContext) { userInfo =>
+            asSamSuperAdmin(userInfo) {
+              pathPrefix(Segment) { resourceTypeNameToAdminister =>
+                withResourceType(SamResourceTypes.resourceTypeAdminName) { resourceType =>
+                  pathPrefix("policies") {
+                    // TODO: CA-1248 GET api/resourceTypeAdmin/v1/resourceTypes/{resourceType}/policies
+//                    pathEndOrSingleSlash{
+//
+//                    }
+                    pathPrefix(Segment) { policyName =>
+                      val policyId = FullyQualifiedPolicyId(FullyQualifiedResourceId(SamResourceTypes.resourceTypeAdminName, ResourceId(resourceTypeNameToAdminister)), AccessPolicyName(policyName))
+                      pathEndOrSingleSlash {
+                        put {
+                          entity(as[AccessPolicyMembership]) { membershipUpdate =>
+                            complete(resourceService.overwritePolicy(resourceType, policyId.accessPolicyName, policyId.resource, membershipUpdate, samRequestContext).map(_ => StatusCodes.Created))
+                          }
+                        } ~
+                        delete {
+                          complete(resourceService.deletePolicy(policyId, samRequestContext).map(_ => StatusCodes.NoContent))
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
   def resourceRoutes: server.Route =
     (pathPrefix("config" / "v1" / "resourceTypes") | pathPrefix("resourceTypes")) {
         requireUserInfo(SamRequestContext(None)) { userInfo => // `SamRequestContext(None)` is used so that we don't trace 1-off boot/init methods ; these in particular are unpublished APIs
