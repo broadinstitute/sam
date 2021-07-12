@@ -291,6 +291,34 @@ class ResourceService(
   }
 
   /**
+    * Overwrites an existing admin policy, saves a new one if it doesn't exist yet.  */
+  def overwriteAdminPolicy(resourceType: ResourceType, policyName: AccessPolicyName, resource: FullyQualifiedResourceId, policyMembership: AccessPolicyMembership, samRequestContext: SamRequestContext): IO[AccessPolicy] = {
+    for {
+      _ <- validateAdminPolicyMembership(policyMembership).map {
+        case Some(errorReport) =>
+          throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "You have specified an invalid policy", errorReport))
+        case None =>
+      }
+      overwrittenPolicy <- overwritePolicy(resourceType, policyName, resource, policyMembership, samRequestContext)
+    } yield {
+      overwrittenPolicy
+    }
+  }
+
+ /** Performs additional verification that members are only users in the correct email domain */
+  def validateAdminPolicyMembership(membership: AccessPolicyMembership): IO[Option[ErrorReport]] = IO {
+    val invalidEmails = membership.memberEmails.filterNot { email =>
+      email.value.endsWith(cloudExtensions.emailDomain)
+    }
+    if (invalidEmails.nonEmpty) {
+      val emailCauses = invalidEmails.map { workbenchEmail =>
+        ErrorReport(s"Invalid admin member email: ${workbenchEmail}")
+      }
+      Some(ErrorReport(s"You have specified at least one invalid admin member email", emailCauses.toSeq))
+    } else None
+  }
+
+  /**
     * Overwrites an existing policy's membership (keyed by resourceType/resourceId/policyName) if it exists
     * @param policyId
     * @param membersList

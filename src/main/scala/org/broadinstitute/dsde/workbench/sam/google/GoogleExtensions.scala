@@ -99,6 +99,10 @@ class GoogleExtensions(
       case t => throw new WorkbenchException("Unable to query for admin status.", t)
     }
 
+  override def isSamSuperAdmin(memberEmail: WorkbenchEmail): Future[Boolean] =
+    googleDirectoryDAO.isGroupMember(WorkbenchEmail(s"sam-super-admins@${googleServicesConfig.appsDomain}"), memberEmail) recoverWith {
+      case t => throw new WorkbenchException("Unable to query for admin status.", t)
+    }
 
   def onBoot(samApplication: SamApplication)(implicit system: ActorSystem): IO[Unit] = {
     val samRequestContext = SamRequestContext(None) // `SamRequestContext(None)` is used so that we don't trace 1-off boot/init methods
