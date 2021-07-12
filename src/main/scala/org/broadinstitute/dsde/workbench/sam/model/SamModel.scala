@@ -99,6 +99,8 @@ object SamResourceActions {
 
 object SamResourceTypes {
   val resourceTypeAdminName = ResourceTypeName("resource_type_admin")
+  val resourceTypeAdminRoleName = ResourceRoleName("resource_type_admin")
+  val resourceTypeAdminPolicyName = AccessPolicyName("resource_type_admin")
 }
 
 @Lenses final case class UserStatusDetails(userSubjectId: WorkbenchUserId, userEmail: WorkbenchEmail) //for backwards compatibility to old API

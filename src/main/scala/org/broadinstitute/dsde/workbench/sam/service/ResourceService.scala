@@ -56,15 +56,23 @@ class ResourceService(
 
           // ensure a resourceTypeAdmin resource exists for each new/update resource type (except resourceTypeAdmin)
           _ <- newOrUpdatedResourceTypeNames.filterNot(_ == SamResourceTypes.resourceTypeAdminName).toList.traverse { rtName =>
+            // Empty owner policy. It would require someone with direct database access to bootstrap.
+            // Bootstrapping not recommended to administrate resource_type_admin policy - use API instead
             val policy = ValidatableAccessPolicy(
               AccessPolicyName(resourceTypeAdmin.ownerRoleName.value),
               Map.empty,
               Set(resourceTypeAdmin.ownerRoleName),
               Set.empty,
               Set.empty)
-            // note that this skips all validations and just creates a resource with owner policies with no members
-            // it will require someone with direct database access to bootstrap
-            persistResource(resourceTypeAdmin, ResourceId(rtName.value), Set(policy), Set.empty, None, samRequestContext).recover {
+            // Empty resource_type_admin policy. Modified via API accessible only to sam-super-admin Google group
+            val resourceTypeAdminPolicy = ValidatableAccessPolicy(
+              SamResourceTypes.resourceTypeAdminPolicyName,
+              Map.empty,
+              Set(SamResourceTypes.resourceTypeAdminRoleName),
+              Set.empty,
+              Set.empty)
+            // note that this skips all validations
+            persistResource(resourceTypeAdmin, ResourceId(rtName.value), Set(policy, resourceTypeAdminPolicy), Set.empty, None, samRequestContext).recover {
               case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode.contains(StatusCodes.Conflict) =>
                 // ok if the resource already exists
                 Resource(resourceTypeAdmin.name, ResourceId(rtName.value), Set.empty)
