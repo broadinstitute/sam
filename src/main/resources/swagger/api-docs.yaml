@@ -220,7 +220,7 @@ paths:
           required: true
           schema:
             type: string
-        - name: email
+        - name: userEmail
           in: path
           description: Email of user to be added
           required: true
@@ -270,7 +270,7 @@ paths:
           required: true
           schema:
             type: string
-        - name: email
+        - name: userEmail
           in: path
           description: Email of user to be removed
           required: true
