@@ -97,9 +97,9 @@ trait AdminResourceRoutes extends UserInfoDirectives with SecurityDirectives wit
     }
 
   private def requireActionsForAdminPutUserInPolicy(policyId: FullyQualifiedPolicyId, userInfo: UserInfo, samRequestContext: SamRequestContext)(addUserToPolicy: server.Route): server.Route =
-    requireOneOfAction(
+    requireAction(
       FullyQualifiedResourceId(SamResourceTypes.resourceTypeAdminName, ResourceId(policyId.resource.resourceTypeName.value)),
-      Set(SamResourceActions.adminAddMember),
+      SamResourceActions.adminAddMember,
       userInfo.userId,
       samRequestContext
     ) {
@@ -107,9 +107,9 @@ trait AdminResourceRoutes extends UserInfoDirectives with SecurityDirectives wit
     }
 
   private def requireActionsForAdminRemoveUserFromPolicy(policyId: FullyQualifiedPolicyId, userInfo: UserInfo, samRequestContext: SamRequestContext)(removeUserFromPolicy: server.Route): server.Route =
-    requireOneOfAction(
+    requireAction(
       FullyQualifiedResourceId(SamResourceTypes.resourceTypeAdminName, ResourceId(policyId.resource.resourceTypeName.value)),
-      Set(SamResourceActions.adminRemoveMember),
+      SamResourceActions.adminRemoveMember,
       userInfo.userId,
       samRequestContext
     ) {
@@ -117,12 +117,8 @@ trait AdminResourceRoutes extends UserInfoDirectives with SecurityDirectives wit
     }
 
   def adminPutUserInPolicy(policyId: FullyQualifiedPolicyId, subject: WorkbenchSubject, samRequestContext: SamRequestContext): server.Route =
-    put {
-      complete(resourceService.addSubjectToPolicy(policyId, subject, samRequestContext).map(_ => StatusCodes.NoContent))
-    }
+    complete(resourceService.addSubjectToPolicy(policyId, subject, samRequestContext).map(_ => StatusCodes.NoContent))
 
   def adminRemoveUserFromPolicy(policyId: FullyQualifiedPolicyId, subject: WorkbenchSubject, samRequestContext: SamRequestContext): server.Route =
-    delete {
-      complete(resourceService.removeSubjectFromPolicy(policyId, subject, samRequestContext).map(_ => StatusCodes.NoContent))
-    }
+    complete(resourceService.removeSubjectFromPolicy(policyId, subject, samRequestContext).map(_ => StatusCodes.NoContent))
 }
