@@ -36,67 +36,6 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
       case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"resource type ${name.value} not found"))
     }
 
-  def adminResourceRotues: server.Route =
-    pathPrefix("resourceTypeAdmin" / "v1") {
-      withSamRequestContext { samRequestContext =>
-        requireUserInfo(samRequestContext) { userInfo =>
-          withResourceType(SamResourceTypes.resourceTypeAdminName) { resourceTypeAdmin =>
-            pathPrefix("resourceTypes") {
-              asSamSuperAdmin(userInfo) {
-                pathPrefix(Segment) { resourceTypeNameToAdminister =>
-                  pathPrefix("policies") {
-                    pathEndOrSingleSlash {
-                      get {
-                        complete(StatusCodes.OK) // TODO: CA-1248
-                      }
-                    } ~
-                    pathPrefix(Segment) { policyName =>
-                      val policyId = FullyQualifiedPolicyId(FullyQualifiedResourceId(SamResourceTypes.resourceTypeAdminName, ResourceId(resourceTypeNameToAdminister)), AccessPolicyName(policyName))
-                      pathEndOrSingleSlash {
-                        put {
-                          entity(as[AccessPolicyMembership]) { membershipUpdate =>
-                            complete(resourceService.overwritePolicy(resourceTypeAdmin, policyId.accessPolicyName, policyId.resource, membershipUpdate, samRequestContext).map(_ => StatusCodes.Created))
-                          }
-                        } ~
-                        delete {
-                          complete(resourceService.deletePolicy(policyId, samRequestContext).map(_ => StatusCodes.NoContent))
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-            pathPrefix("resources") {
-              pathPrefix(Segment) { resourceTypeNameToAdminister =>
-                withResourceType(ResourceTypeName(resourceTypeNameToAdminister)) { resourceTypeToAdminister =>
-                  pathPrefix(Segment) { resourceId =>
-                    pathPrefix("policies") {
-                      pathEndOrSingleSlash {
-                        get {
-                          complete(StatusCodes.OK) // TODO: CA-1244
-                        }
-                      } ~
-                      pathPrefix(Segment) { policyName =>
-                        pathPrefix("memberEmails" / Segment) { userEmail =>
-                          put {
-                            complete(StatusCodes.OK) // TODO: CA-1245
-                          } ~
-                          delete {
-                            complete(StatusCodes.OK) // TODO: CA-1246
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-
   def resourceRoutes: server.Route =
     (pathPrefix("config" / "v1" / "resourceTypes") | pathPrefix("resourceTypes")) {
         requireUserInfo(SamRequestContext(None)) { userInfo => // `SamRequestContext(None)` is used so that we don't trace 1-off boot/init methods ; these in particular are unpublished APIs

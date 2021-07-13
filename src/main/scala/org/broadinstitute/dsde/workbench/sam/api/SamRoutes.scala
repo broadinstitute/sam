@@ -43,14 +43,15 @@ abstract class SamRoutes(
     with SwaggerRoutes
     with StatusRoutes
     with ExtensionRoutes
-    with ManagedGroupRoutes {
+    with ManagedGroupRoutes
+    with AdminResourceRoutes {
 
   def route: server.Route = (logRequestResult & handleExceptions(myExceptionHandler)) {
     swaggerRoutes ~
       statusRoutes ~
       withExecutionContext(ExecutionContext.global) {
         pathPrefix("register") { userRoutes } ~
-        pathPrefix("api") { resourceRoutes ~ adminUserRoutes ~ extensionRoutes ~ groupRoutes ~ apiUserRoutes }
+        pathPrefix("api") { resourceRoutes ~ adminUserRoutes ~ adminResourceRoutes ~ extensionRoutes ~ groupRoutes ~ apiUserRoutes }
       }
   }
 

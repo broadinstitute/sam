@@ -35,5 +35,4 @@ trait UserInfoDirectives {
         else r
       }
     }
-
 }
