@@ -38,27 +38,53 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
 
   def adminResourceRotues: server.Route =
     pathPrefix("resourceTypeAdmin" / "v1") {
-      pathPrefix("resourceTypes") {
-        withSamRequestContext { samRequestContext =>
-          requireUserInfo(samRequestContext) { userInfo =>
-            asSamSuperAdmin(userInfo) {
-              pathPrefix(Segment) { resourceTypeNameToAdminister =>
-                withResourceType(SamResourceTypes.resourceTypeAdminName) { resourceType =>
+      withSamRequestContext { samRequestContext =>
+        requireUserInfo(samRequestContext) { userInfo =>
+          withResourceType(SamResourceTypes.resourceTypeAdminName) { resourceTypeAdmin =>
+            pathPrefix("resourceTypes") {
+              asSamSuperAdmin(userInfo) {
+                pathPrefix(Segment) { resourceTypeNameToAdminister =>
                   pathPrefix("policies") {
-                    // TODO: CA-1248 GET api/resourceTypeAdmin/v1/resourceTypes/{resourceType}/policies
-//                    pathEndOrSingleSlash{
-//
-//                    }
+                    pathEndOrSingleSlash {
+                      get {
+                        complete(StatusCodes.OK) // TODO: CA-1248
+                      }
+                    } ~
                     pathPrefix(Segment) { policyName =>
                       val policyId = FullyQualifiedPolicyId(FullyQualifiedResourceId(SamResourceTypes.resourceTypeAdminName, ResourceId(resourceTypeNameToAdminister)), AccessPolicyName(policyName))
                       pathEndOrSingleSlash {
                         put {
                           entity(as[AccessPolicyMembership]) { membershipUpdate =>
-                            complete(resourceService.overwritePolicy(resourceType, policyId.accessPolicyName, policyId.resource, membershipUpdate, samRequestContext).map(_ => StatusCodes.Created))
+                            complete(resourceService.overwritePolicy(resourceTypeAdmin, policyId.accessPolicyName, policyId.resource, membershipUpdate, samRequestContext).map(_ => StatusCodes.Created))
                           }
                         } ~
                         delete {
                           complete(resourceService.deletePolicy(policyId, samRequestContext).map(_ => StatusCodes.NoContent))
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+            pathPrefix("resources") {
+              pathPrefix(Segment) { resourceTypeNameToAdminister =>
+                withResourceType(ResourceTypeName(resourceTypeNameToAdminister)) { resourceTypeToAdminister =>
+                  pathPrefix(Segment) { resourceId =>
+                    pathPrefix("policies") {
+                      pathEndOrSingleSlash {
+                        get {
+                          complete(StatusCodes.OK) // TODO: CA-1244
+                        }
+                      } ~
+                      pathPrefix(Segment) { policyName =>
+                        pathPrefix("memberEmails" / Segment) { userEmail =>
+                          put {
+                            complete(StatusCodes.OK) // TODO: CA-1245
+                          } ~
+                          delete {
+                            complete(StatusCodes.OK) // TODO: CA-1246
+                          }
                         }
                       }
                     }
