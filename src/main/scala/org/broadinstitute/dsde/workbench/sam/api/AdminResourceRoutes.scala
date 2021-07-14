@@ -47,7 +47,7 @@ trait AdminResourceRoutes extends UserInfoDirectives with SecurityDirectives wit
                   }
                 }
               }
-            }
+            } ~
             pathPrefix("resources") {
               pathPrefix(Segment) { resourceTypeNameToAdminister =>
                 withResourceType(ResourceTypeName(resourceTypeNameToAdminister)) { resourceTypeToAdminister =>
