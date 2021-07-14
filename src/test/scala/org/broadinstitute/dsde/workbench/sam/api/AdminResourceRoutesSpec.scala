@@ -1,22 +1,25 @@
 package org.broadinstitute.dsde.workbench.sam.api
 
+import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
-import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import akka.http.scaladsl.testkit.ScalatestRouteTest
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model.{ErrorReportSource, UserInfo, WorkbenchEmail, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.TestSupport.genGoogleSubjectId
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{MockAccessPolicyDAO, MockDirectoryDAO, MockRegistrationDAO}
-import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
+import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
+import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
+import org.mockito.ArgumentMatchers.{any, eq => mockitoEq}
 import org.mockito.Mockito.{RETURNS_SMART_NULLS, when}
 import org.scalatest.AppendedClues
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.mockito.MockitoSugar
+import spray.json.DefaultJsonProtocol._
 
 import scala.concurrent.Future
 
@@ -65,7 +68,28 @@ class AdminResourceRoutesSpec extends AnyFlatSpec with Matchers with TestSupport
     new TestSamRoutes(mockResourceService, policyEvaluatorService, mockUserService, mockStatusService, mockManagedGroupService, userInfo, directoryDAO, cloudExtensions)
   }
 
-  "GET /api/resourceTypeAdmin/v1/resourceTypes/{resourceType}/policies" should "403 if user isn't a Sam super admin" in {
+  "PUT /api/resourceTypeAdmin/v1/resourceTypes/{resourceType}/policies/{policyName}" should "201 when successful" in {
+    val samRoutes = createSamRoutes(isSamSuperAdmin = true)
+    val accessPolicyMembership = AccessPolicyMembership(Set(WorkbenchEmail("testUser@example.com")), Set.empty, Set.empty, None)
+    val adminPolicyName = AccessPolicyName("admin")
+    val resource = FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(defaultResourceType.name.value))
+    val accessPolicyResponseEntry = AccessPolicyResponseEntry(adminPolicyName, accessPolicyMembership, WorkbenchEmail("policy_email@example.com"))
+    when(samRoutes.resourceService.overwritePolicy(mockitoEq(resourceTypeAdmin), mockitoEq(adminPolicyName), mockitoEq(resource), mockitoEq(accessPolicyMembership), any[SamRequestContext])).thenReturn(IO(null))
+    when(samRoutes.resourceService.listResourcePolicies(mockitoEq(resource), any[SamRequestContext])).thenReturn(IO(LazyList(accessPolicyResponseEntry)))
+
+    Put(s"/api/resourceTypeAdmin/v1/resourceTypes/${defaultResourceType.name}/policies/${adminPolicyName.value}", accessPolicyMembership) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Created
+    }
+
+    Get(s"/api/resourceTypeAdmin/v1/resourceTypes/${defaultResourceType.name}/policies") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      val response = responseAs[Set[AccessPolicyResponseEntry]]
+      response.map(_.policyName).contains(adminPolicyName) shouldBe true
+      response.map(_.policy).contains(accessPolicyMembership) shouldBe true
+    }
+  }
+
+  it should "403 if user isn't a Sam super admin" in {
     val samRoutes = createSamRoutes(isSamSuperAdmin = false)
     val accessPolicyMembership = AccessPolicyMembership(Set(WorkbenchEmail("testUser@example.com")), Set.empty, Set.empty, None)
 
