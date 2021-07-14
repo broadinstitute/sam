@@ -9,6 +9,7 @@ import org.broadinstitute.dsde.workbench.sam.config.LiquibaseConfig
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.ResourceService
+import spray.json.DefaultJsonProtocol._
 
 import scala.concurrent.ExecutionContext
 
@@ -25,14 +26,17 @@ trait AdminResourceRoutes extends UserInfoDirectives with SecurityDirectives wit
             pathPrefix("resourceTypes") {
               asSamSuperAdmin(userInfo) {
                 pathPrefix(Segment) { resourceTypeNameToAdminister =>
+                  val resource = FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(resourceTypeNameToAdminister))
                   pathPrefix("policies") {
                     pathEndOrSingleSlash {
                       get {
-                        complete(StatusCodes.OK) // TODO: CA-1248
+                        complete(resourceService.listResourcePolicies(resource, samRequestContext).map { response =>
+                          StatusCodes.OK -> response.toSet
+                        })
                       }
                     } ~
                       pathPrefix(Segment) { policyName =>
-                        val policyId = FullyQualifiedPolicyId(FullyQualifiedResourceId(SamResourceTypes.resourceTypeAdminName, ResourceId(resourceTypeNameToAdminister)), AccessPolicyName(policyName))
+                        val policyId = FullyQualifiedPolicyId(resource, AccessPolicyName(policyName))
                         pathEndOrSingleSlash {
                           put {
                             entity(as[AccessPolicyMembership]) { membershipUpdate =>
