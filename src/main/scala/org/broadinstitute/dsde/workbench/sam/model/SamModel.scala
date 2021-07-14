@@ -76,6 +76,7 @@ object RootPrimitiveJsonSupport {
 }
 
 object SamResourceActions {
+  val adminReadPolicies = ResourceAction("admin_read_policies")
   val readPolicies = ResourceAction("read_policies")
   val alterPolicies = ResourceAction("alter_policies")
   val delete = ResourceAction("delete")

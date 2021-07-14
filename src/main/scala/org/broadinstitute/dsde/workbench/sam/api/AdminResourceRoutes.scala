@@ -2,13 +2,16 @@ package org.broadinstitute.dsde.workbench.sam
 package api
 
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
+import akka.http.scaladsl.marshalling.ToResponseMarshallable
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directives._
+import org.broadinstitute.dsde.workbench.model.UserInfo
 import org.broadinstitute.dsde.workbench.sam.config.LiquibaseConfig
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.ResourceService
+import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import scala.concurrent.ExecutionContext
 
@@ -54,9 +57,8 @@ trait AdminResourceRoutes extends UserInfoDirectives with SecurityDirectives wit
                   pathPrefix(Segment) { resourceId =>
                     pathPrefix("policies") {
                       pathEndOrSingleSlash {
-                        get {
-                          complete(StatusCodes.OK) // TODO: CA-1244
-                        }
+                        val resource = FullyQualifiedResourceId(ResourceTypeName(resourceTypeNameToAdminister), ResourceId(resourceId))
+                        getAdminResourcePolicies(resource, userInfo, samRequestContext)
                       } ~
                         pathPrefix(Segment) { policyName =>
                           pathPrefix("memberEmails" / Segment) { userEmail =>
@@ -75,6 +77,15 @@ trait AdminResourceRoutes extends UserInfoDirectives with SecurityDirectives wit
             }
           }
         }
+      }
+    }
+
+  def getAdminResourcePolicies(resource: FullyQualifiedResourceId, userInfo: UserInfo, samRequestContext: SamRequestContext): server.Route =
+    get {
+      requireAction(resource, SamResourceActions.adminReadPolicies, userInfo.userId, samRequestContext) {
+        complete(resourceService.listResourcePolicies(resource, samRequestContext).map { response =>
+          StatusCodes.OK -> response.toSet
+        })
       }
     }
 
