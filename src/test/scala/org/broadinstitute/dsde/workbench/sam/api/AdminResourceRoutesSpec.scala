@@ -78,7 +78,7 @@ class AdminResourceRoutesSpec extends AnyFlatSpec with Matchers with TestSupport
     new TestSamRoutes(mockResourceService, policyEvaluatorService, mockUserService, mockStatusService, mockManagedGroupService, userInfo, directoryDAO, cloudExtensions)
   }
 
-  it should "200 if a user is a Sam super admin and has admin_read_policies" in {
+  "GET /api/resourceTypeAdmin/v1/resources/{resourceType}/{resourceId}/policies/" should "200 when successful" in {
     val samRoutes = createSamRoutes(isSamSuperAdmin = true)
     val resourceId = ResourceId("foo")
     val resourceType = ResourceType(
@@ -93,6 +93,16 @@ class AdminResourceRoutesSpec extends AnyFlatSpec with Matchers with TestSupport
 
     Get(s"/api/resourceTypeAdmin/v1/resources/${resourceType.name}/${resourceId}/policies") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
+    }
+  }
+
+  it should "404 when a user has no permissions" in {
+    val samRoutes = createSamRoutes(isSamSuperAdmin = true)
+    when(samRoutes.policyEvaluatorService.hasPermissionOneOf(any[FullyQualifiedResourceId], any[Iterable[ResourceAction]], any[WorkbenchUserId], any[SamRequestContext])).thenReturn(IO(false))
+    when(samRoutes.policyEvaluatorService.listUserResourceActions(any[FullyQualifiedResourceId], any[WorkbenchUserId], any[SamRequestContext])).thenReturn(IO(Set[ResourceAction]()))
+
+    Get("/api/resourceTypeAdmin/v1/resources/rt/foo/policies") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
     }
   }
 

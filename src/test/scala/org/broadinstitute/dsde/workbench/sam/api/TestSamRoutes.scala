@@ -34,7 +34,6 @@ object TestSamRoutes {
   val defaultGoogleSubjectId = GoogleSubjectId("user1")
 
   object SamResourceActionPatterns {
-    val adminReadPolicies = ResourceActionPattern("admin_read_policies", "", false)
     val readPolicies = ResourceActionPattern("read_policies", "", false)
     val alterPolicies = ResourceActionPattern("alter_policies", "", false)
     val delete = ResourceActionPattern("delete", "", false)
