@@ -31,7 +31,7 @@ class AdminResourceRoutesSpec extends ResourceRoutesSpec {
       status shouldEqual StatusCodes.OK
     }
 
-    Get(s"/api/resourceTypeAdmin/v1/resources/invalid/invalid/policies") ~> samRoutes.route ~> check {
+    Get("/api/resourceTypeAdmin/v1/resources/invalid/invalid/policies") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
   }
