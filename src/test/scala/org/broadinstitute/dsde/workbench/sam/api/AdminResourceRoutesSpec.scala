@@ -91,10 +91,23 @@ class AdminResourceRoutesSpec extends AnyFlatSpec with Matchers with TestSupport
 
   it should "403 if user isn't a Sam super admin" in {
     val samRoutes = createSamRoutes(isSamSuperAdmin = false)
+    val adminPolicyName = AccessPolicyName("admin")
     val accessPolicyMembership = AccessPolicyMembership(Set(WorkbenchEmail("testUser@example.com")), Set.empty, Set.empty, None)
 
-    Put(s"/api/resourceTypeAdmin/v1/resourceTypes/${defaultResourceType.name}/policies/admin", accessPolicyMembership) ~> samRoutes.route ~> check {
+    Put(s"/api/resourceTypeAdmin/v1/resourceTypes/${defaultResourceType.name}/policies/${adminPolicyName.value}", accessPolicyMembership) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Forbidden
+    }
+  }
+
+  it should "404 if given invalid resource type" in {
+    val samRoutes = createSamRoutes(isSamSuperAdmin = true)
+    val adminPolicyName = AccessPolicyName("admin")
+    val fakeResourceTypeName = ResourceTypeName("does_not_exist")
+    val accessPolicyMembership = AccessPolicyMembership(Set(WorkbenchEmail("testUser@example.com")), Set.empty, Set.empty, None)
+    when(samRoutes.resourceService.getResourceType(fakeResourceTypeName)).thenReturn(IO(None))
+
+    Put(s"/api/resourceTypeAdmin/v1/resourceTypes/${fakeResourceTypeName.value}/policies/${adminPolicyName.value}", accessPolicyMembership) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
     }
   }
 
