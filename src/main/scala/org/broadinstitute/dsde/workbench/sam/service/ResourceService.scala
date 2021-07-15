@@ -235,6 +235,7 @@ class ResourceService(
 
   // TODO: CA-993 Once we can check if a policy applies to any children, we need to update this to throw if we try
   // to delete any policies that apply to children
+  @throws(classOf[WorkbenchExceptionWithErrorReport])
   def deletePolicy(policyId: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[Unit] = {
     for {
       policyEmailOpt <- directoryDAO.loadSubjectEmail(policyId, samRequestContext)
