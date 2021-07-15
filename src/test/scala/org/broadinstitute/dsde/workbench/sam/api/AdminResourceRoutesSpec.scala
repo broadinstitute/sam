@@ -28,7 +28,6 @@ class AdminResourceRoutesSpec extends ResourceRoutesSpec {
     createUserResourcePolicy(members, resourceType, samRoutes, resourceId, policyName)
 
     Get(s"/api/resourceTypeAdmin/v1/resources/${resourceType.name}/${resourceId}/policies") ~> samRoutes.route ~> check {
-      System.out.println("GET Status OK Test")
       status shouldEqual StatusCodes.OK
     }
   }
