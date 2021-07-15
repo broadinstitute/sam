@@ -599,6 +599,44 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
     runAndWait(resourceService.overwritePolicy(defaultResourceType, policyId.accessPolicyName, policyId.resource, AccessPolicyMembership(Set.empty, Set.empty, Set.empty), samRequestContext))
 
     verify(mockCloudExtensions, Mockito.after(500).never).onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])
+
+  "overwriteAdminPolicy" should "succeed with a valid request" in {
+    val resourceTypeAdmin = defaultResourceType.copy(name = ResourceTypeName("resource_type_admin"))
+    val resource = FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId("my-resource"))
+    val newAdminUserId = WorkbenchUserId("i am an admin")
+    val newAdminUserEmail = WorkbenchEmail("test_user@test.firecloud.org")
+
+    service.createResourceType(resourceTypeAdmin, samRequestContext).unsafeRunSync()
+    runAndWait(service.createResource(resourceTypeAdmin, resource.resourceId, dummyUserInfo, samRequestContext))
+    dirDAO.createUser(WorkbenchUser(newAdminUserId, None, newAdminUserEmail, None), samRequestContext).unsafeRunSync()
+
+    val group = BasicWorkbenchGroup(WorkbenchGroupName("foo"), Set(newAdminUserId), toEmail(resource.resourceTypeName.value, resource.resourceId.value, "foo"))
+    val newPolicy = AccessPolicy(
+      FullyQualifiedPolicyId(resource, AccessPolicyName("foo")), group.members, group.email, Set.empty, Set(ResourceAction("non_owner_action")), Set.empty, public = false)
+
+    runAndWait(service.overwriteAdminPolicy(resourceTypeAdmin, newPolicy.id.accessPolicyName, newPolicy.id.resource, AccessPolicyMembership(Set(newAdminUserEmail), Set(ResourceAction("non_owner_action")), Set.empty, None), samRequestContext))
+
+    val policies = policyDAO.listAccessPolicies(resource, samRequestContext).unsafeRunSync().map(_.copy(email=WorkbenchEmail("policy-randomuuid@example.com")))
+
+    assert(policies.contains(newPolicy))
+  }
+
+  it should "fail if any members are not test.firecloud.org accounts" in {
+    val resourceTypeAdmin = defaultResourceType.copy(name = ResourceTypeName("resource_type_admin"))
+    val resource = FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId("my-resource"))
+
+    service.createResourceType(resourceTypeAdmin, samRequestContext).unsafeRunSync()
+    runAndWait(service.createResource(resourceTypeAdmin, resource.resourceId, dummyUserInfo, samRequestContext))
+
+    val group = BasicWorkbenchGroup(WorkbenchGroupName("foo"), Set(), toEmail(resource.resourceTypeName.value, resource.resourceId.value, "foo"))
+    val newPolicy = AccessPolicy(
+      FullyQualifiedPolicyId(resource, AccessPolicyName("foo")), group.members, group.email, Set.empty, Set(ResourceAction("non_owner_action")), Set.empty, public = false)
+
+    val exception = intercept[WorkbenchExceptionWithErrorReport] {
+      runAndWait(service.overwriteAdminPolicy(resourceTypeAdmin, newPolicy.id.accessPolicyName, newPolicy.id.resource, AccessPolicyMembership(Set(WorkbenchEmail("not_an_admin@gmail.com")), Set(ResourceAction("non_owner_action")), Set.empty, None), samRequestContext))
+    }
+
+    assert(exception.getMessage.contains("invalid admin member email"))
   }
 
   "overwritePolicyMembers" should "succeed with a valid request" in {

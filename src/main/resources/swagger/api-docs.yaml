@@ -360,6 +360,9 @@ paths:
         201:
           description: Policy successfully created/updated
           content: { }
+        400:
+          description: Policy is invalid
+          content: { }
         403:
           description: You are not a Sam super admin
           content: { }

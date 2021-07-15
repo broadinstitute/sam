@@ -43,7 +43,7 @@ trait AdminResourceRoutes extends UserInfoDirectives with SecurityDirectives wit
                           pathEndOrSingleSlash {
                             put {
                               entity(as[AccessPolicyMembership]) { membershipUpdate =>
-                                complete(resourceService.overwritePolicy(resourceTypeAdmin, policyId.accessPolicyName, policyId.resource, membershipUpdate, samRequestContext).map(_ => StatusCodes.Created))
+                                complete(resourceService.overwriteAdminPolicy(resourceTypeAdmin, policyId.accessPolicyName, policyId.resource, membershipUpdate, samRequestContext).map(_ => StatusCodes.Created))
                               }
                             } ~
                               delete {
