@@ -39,6 +39,10 @@ object TestSamRoutes {
     val alterPolicies = ResourceActionPattern("alter_policies", "", false)
     val delete = ResourceActionPattern("delete", "", false)
 
+    val adminReadPolicies = ResourceActionPattern("admin_read_policies", "", false)
+    val adminAddMember = ResourceActionPattern("admin_add_member", "", false)
+    val adminRemoveMember = ResourceActionPattern("admin_remove_member", "", false)
+
     val sharePolicy = ResourceActionPattern("share_policy::.+", "", false)
     val readPolicy = ResourceActionPattern("read_policy::.+", "", false)
 
