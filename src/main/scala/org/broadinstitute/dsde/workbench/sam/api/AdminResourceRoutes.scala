@@ -28,29 +28,34 @@ trait AdminResourceRoutes extends UserInfoDirectives with SecurityDirectives wit
             pathPrefix("resourceTypes") {
               asSamSuperAdmin(userInfo) {
                 pathPrefix(Segment) { resourceTypeNameToAdminister =>
-                  pathPrefix("policies") {
-                    pathEndOrSingleSlash {
-                      get {
-                        complete(StatusCodes.OK) // TODO: CA-1248
-                      }
-                    } ~
-                      pathPrefix(Segment) { policyName =>
-                        val policyId = FullyQualifiedPolicyId(FullyQualifiedResourceId(SamResourceTypes.resourceTypeAdminName, ResourceId(resourceTypeNameToAdminister)), AccessPolicyName(policyName))
-                        pathEndOrSingleSlash {
-                          put {
-                            entity(as[AccessPolicyMembership]) { membershipUpdate =>
-                              complete(resourceService.overwritePolicy(resourceTypeAdmin, policyId.accessPolicyName, policyId.resource, membershipUpdate, samRequestContext).map(_ => StatusCodes.Created))
-                            }
-                          } ~
-                            delete {
-                              complete(resourceService.deletePolicy(policyId, samRequestContext).map(_ => StatusCodes.NoContent))
-                            }
+                  withResourceType(ResourceTypeName(resourceTypeNameToAdminister)) { resourceTypeToAdminister =>
+                    val resource = FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(resourceTypeToAdminister.name.value))
+                    pathPrefix("policies") {
+                      pathEndOrSingleSlash {
+                        get {
+                          complete(resourceService.listResourcePolicies(resource, samRequestContext).map { response =>
+                            StatusCodes.OK -> response.toSet
+                          })
                         }
-                      }
+                      } ~
+                        pathPrefix(Segment) { policyName =>
+                          val policyId = FullyQualifiedPolicyId(resource, AccessPolicyName(policyName))
+                          pathEndOrSingleSlash {
+                            put {
+                              entity(as[AccessPolicyMembership]) { membershipUpdate =>
+                                complete(resourceService.overwritePolicy(resourceTypeAdmin, policyId.accessPolicyName, policyId.resource, membershipUpdate, samRequestContext).map(_ => StatusCodes.Created))
+                              }
+                            } ~
+                              delete {
+                                complete(resourceService.deletePolicy(policyId, samRequestContext).map(_ => StatusCodes.NoContent))
+                              }
+                          }
+                        }
+                    }
                   }
                 }
               }
-            }
+            } ~
             pathPrefix("resources") {
               pathPrefix(Segment) { resourceTypeNameToAdminister =>
                 withResourceType(ResourceTypeName(resourceTypeNameToAdminister)) { resourceTypeToAdminister =>
