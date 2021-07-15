@@ -340,7 +340,7 @@ class ResourceRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTe
 
   private def responsePayloadClue(str: String): String = s" -> Here is the response payload: $str"
 
-  private def createUserResourcePolicy(members: AccessPolicyMembership, resourceType: ResourceType, samRoutes: TestSamRoutes, resourceId: ResourceId, policyName: AccessPolicyName): Unit = {
+  protected def createUserResourcePolicy(members: AccessPolicyMembership, resourceType: ResourceType, samRoutes: TestSamRoutes, resourceId: ResourceId, policyName: AccessPolicyName): Unit = {
     val user = CreateWorkbenchUser(samRoutes.userInfo.userId, defaultGoogleSubjectId, samRoutes.userInfo.userEmail, None)
     findOrCreateUser(user, samRoutes.userService)
 
