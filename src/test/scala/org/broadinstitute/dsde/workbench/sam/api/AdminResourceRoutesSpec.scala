@@ -106,6 +106,23 @@ class AdminResourceRoutesSpec extends AnyFlatSpec with Matchers with TestSupport
     }
   }
 
+  it should "404 with an invalid resource type" in {
+    val samRoutes = createSamRoutes(isSamSuperAdmin = true)
+    val resourceId = ResourceId("foo")
+    val resourceType = ResourceType(
+      ResourceTypeName("rt"),
+      Set(SamResourceActionPatterns.adminReadPolicies, ResourceActionPattern(SamResourceActions.adminReadPolicies.value, "", false)),
+      Set(ResourceRole(ResourceRoleName(SamResourceTypes.resourceTypeAdminName.value), Set(SamResourceActions.alterPolicies, SamResourceActions.adminReadPolicies))),
+      ResourceRoleName(SamResourceTypes.resourceTypeAdminName.value))
+
+    when(samRoutes.policyEvaluatorService.hasPermissionOneOf(any[FullyQualifiedResourceId], any[Iterable[ResourceAction]], any[WorkbenchUserId], any[SamRequestContext])).thenReturn(IO(true))
+    when(samRoutes.resourceService.getResourceType(resourceType.name)).thenReturn(IO(None))
+
+    Get(s"/api/resourceTypeAdmin/v1/resources/${resourceType.name}/${resourceId}/policies") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
+    }
+  }
+
   "GET /api/resourceTypeAdmin/v1/resourceTypes/{resourceType}/policies/" should "200 when successful" in {
     val samRoutes = createSamRoutes(isSamSuperAdmin = true)
 
