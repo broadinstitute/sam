@@ -77,16 +77,16 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
     val inBothSubGroup = BasicWorkbenchGroup(WorkbenchGroupName("inBothSubGroup"), Set.empty, WorkbenchEmail("inBothSubGroup@example.com"))
 
     val inSamUserId = WorkbenchUserId("inSamUser")
-    val inSamUserProxyEmail = s"PROXY_inSamUser@${googleServicesConfig.appsDomain}"
+    val inSamUserProxyEmail = s"PROXY_inSamUser@${googleServicesConfig.appsSubdomain}"
 
     val inGoogleUserId = WorkbenchUserId("inGoogleUser")
-    val inGoogleUserProxyEmail = s"PROXY_inGoogleUser@${googleServicesConfig.appsDomain}"
+    val inGoogleUserProxyEmail = s"PROXY_inGoogleUser@${googleServicesConfig.appsSubdomain}"
 
     val inBothUserId = WorkbenchUserId("inBothUser")
-    val inBothUserProxyEmail = s"PROXY_inBothUser@${googleServicesConfig.appsDomain}"
+    val inBothUserProxyEmail = s"PROXY_inBothUser@${googleServicesConfig.appsSubdomain}"
 
     val addError = WorkbenchUserId("addError")
-    val addErrorProxyEmail = s"PROXY_addError@${googleServicesConfig.appsDomain}"
+    val addErrorProxyEmail = s"PROXY_addError@${googleServicesConfig.appsSubdomain}"
 
     val removeError = "removeError@foo.bar"
 
@@ -156,30 +156,30 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
   it should "sync the intersection group if the policy is constrainable" in {
     // In both the policy and the auth domain, will be added to Google Group
     val intersectionSamUserId = WorkbenchUserId("intersectionSamUser")
-    val intersectionSamUserProxyEmail = s"PROXY_intersectionSamUser@${googleServicesConfig.appsDomain}"
+    val intersectionSamUserProxyEmail = s"PROXY_intersectionSamUser@${googleServicesConfig.appsSubdomain}"
 
     // In only the policy, not the auth domain, will not be synced
     val policyOnlySamUserId = WorkbenchUserId("policyOnlySamUser")
 
     // Currently synced with Google, but in neither the policy nor the auth domain, so will be removed from Google Group
-    val unauthorizedGoogleUserProxyEmail = s"PROXY_unauthorizedGoogleUser@${googleServicesConfig.appsDomain}"
+    val unauthorizedGoogleUserProxyEmail = s"PROXY_unauthorizedGoogleUser@${googleServicesConfig.appsSubdomain}"
 
     // Currently synced with Google and in policy and auth domain, will remain in Google Group
     val authorizedGoogleUserId = WorkbenchUserId("authorizedGoogleUser")
-    val authorizedGoogleUserProxyEmail = s"PROXY_authorizedGoogleUser@${googleServicesConfig.appsDomain}"
+    val authorizedGoogleUserProxyEmail = s"PROXY_authorizedGoogleUser@${googleServicesConfig.appsSubdomain}"
 
     val addError = WorkbenchUserId("addError")
-    val addErrorProxyEmail = s"PROXY_addError@${googleServicesConfig.appsDomain}"
+    val addErrorProxyEmail = s"PROXY_addError@${googleServicesConfig.appsSubdomain}"
 
     val removeError = "removeError@foo.bar"
 
     val subPolicyOnlySamGroupUserId = WorkbenchUserId("policySamSubUser")
 
     val subIntersectionSamGroupUserId = WorkbenchUserId("intersectionSamSubUser")
-    val subIntersectionSamGroupUserProxyEmail = s"PROXY_intersectionSamSubUser@${googleServicesConfig.appsDomain}"
+    val subIntersectionSamGroupUserProxyEmail = s"PROXY_intersectionSamSubUser@${googleServicesConfig.appsSubdomain}"
 
     val subAuthorizedGoogleGroupUserId = WorkbenchUserId("authorizedGoogleSubUser")
-    val subAuthorizedGoogleGroupUserProxyEmail = s"PROXY_authorizedGoogleSubUser@${googleServicesConfig.appsDomain}"
+    val subAuthorizedGoogleGroupUserProxyEmail = s"PROXY_authorizedGoogleSubUser@${googleServicesConfig.appsSubdomain}"
 
     val policyOnlySamSubGroup = BasicWorkbenchGroup(WorkbenchGroupName("inSamSubGroup"), Set(subPolicyOnlySamGroupUserId), WorkbenchEmail("inSamSubGroup@example.com"))
     val intersectionSamSubGroup = BasicWorkbenchGroup(WorkbenchGroupName("inGoogleSubGroup"), Set(subIntersectionSamGroupUserId), WorkbenchEmail("inGoogleSubGroup@example.com"))
@@ -349,7 +349,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
 
     val defaultUserId = WorkbenchUserId("newuser123")
     val defaultUserEmail = WorkbenchEmail("newuser@new.com")
-    val defaultUserProxyEmail = WorkbenchEmail(s"PROXY_newuser123@${googleServicesConfig.appsDomain}")
+    val defaultUserProxyEmail = WorkbenchEmail(s"PROXY_newuser123@${googleServicesConfig.appsSubdomain}")
 
     val defaultUser = WorkbenchUser(defaultUserId, Option(GoogleSubjectId(defaultUserId.value)), defaultUserEmail, None)
     (dirDAO, regDAO, mockGoogleIamDAO, mockGoogleDirectoryDAO, googleExtensions, service, defaultUserId, defaultUserEmail, defaultUserProxyEmail, defaultUser)
@@ -561,7 +561,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
     val subjectId = "0123456789"
     val username = "foo"
 
-    val config = googleServicesConfig.copy(appsDomain = appsDomain)
+    val config = googleServicesConfig.copy(appsSubdomain = appsDomain)
     val googleExtensions = new GoogleExtensions(TestSupport.fakeDistributedLock, null, null, null, null, null, null, null, null, null, null, null, null, null, config, null, configResourceTypes)
 
     val user = WorkbenchUser(WorkbenchUserId(subjectId), None, WorkbenchEmail(s"$username@test.org"), None)
@@ -571,7 +571,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
   }
 
   it should "truncate username if proxy group email would otherwise be too long" in {
-    val config = googleServicesConfig.copy(appsDomain = "test.cloudfire.org")
+    val config = googleServicesConfig.copy(appsSubdomain = "test.cloudfire.org")
     val googleExtensions = new GoogleExtensions(TestSupport.fakeDistributedLock, null, null, null, null, null, null, null, null, null, null, null, null, null, config, null, configResourceTypes)
 
     val user = WorkbenchUser(WorkbenchUserId("0123456789"), None, WorkbenchEmail("foo-bar-baz-qux-quux-corge-grault-garply@test.org"), None)
@@ -584,7 +584,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
     val userId = WorkbenchUserId(UUID.randomUUID().toString)
     val userEmail = WorkbenchEmail("foo@test.org")
     val user = WorkbenchUser(userId, None, userEmail, None)
-    val proxyEmail = WorkbenchEmail(s"PROXY_$userId@${googleServicesConfig.appsDomain}")
+    val proxyEmail = WorkbenchEmail(s"PROXY_$userId@${googleServicesConfig.appsSubdomain}")
 
     val mockDirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
     val mockGoogleDirectoryDAO = mock[GoogleDirectoryDAO](RETURNS_SMART_NULLS)

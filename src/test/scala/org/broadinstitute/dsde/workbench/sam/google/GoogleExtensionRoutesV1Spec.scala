@@ -43,7 +43,7 @@ class GoogleExtensionRoutesV1Spec extends GoogleExtensionRoutesSpecHelper with S
     Get(s"/api/google/v1/user/proxyGroup/$defaultUserEmail") ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK
       val response = responseAs[WorkbenchEmail]
-      response shouldBe WorkbenchEmail(s"PROXY_${user.id}@${googleServicesConfig.appsDomain}")
+      response shouldBe WorkbenchEmail(s"PROXY_${user.id}@${googleServicesConfig.appsSubdomain}")
     }
   }
 
@@ -60,7 +60,7 @@ class GoogleExtensionRoutesV1Spec extends GoogleExtensionRoutesSpecHelper with S
     Get(s"/api/google/v1/user/proxyGroup/$petEmail") ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK
       val response = responseAs[WorkbenchEmail]
-      response shouldBe WorkbenchEmail(s"PROXY_${user.id.value}@${googleServicesConfig.appsDomain}")
+      response shouldBe WorkbenchEmail(s"PROXY_${user.id.value}@${googleServicesConfig.appsSubdomain}")
     }
   }
 
@@ -95,7 +95,7 @@ class GoogleExtensionRoutesV1Spec extends GoogleExtensionRoutesSpecHelper with S
     import SamGoogleModelJsonSupport._
     Post(s"/api/google/v1/resource/${resourceType.name}/foo/${resourceType.ownerRoleName.value}/sync") ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK
-      val proxyEmail = WorkbenchEmail(s"PROXY_${user.id}@${googleServicesConfig.appsDomain}")
+      val proxyEmail = WorkbenchEmail(s"PROXY_${user.id}@${googleServicesConfig.appsSubdomain}")
       assertResult(Map(createdPolicy.email -> Seq(SyncReportItem("added", proxyEmail.value.toLowerCase, None)))) {
         responseAs[Map[WorkbenchEmail, Seq[SyncReportItem]]]
       }

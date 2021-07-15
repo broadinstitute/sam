@@ -15,25 +15,26 @@ import scala.concurrent.duration.FiniteDuration
   * Created by mbemis on 8/17/17.
   */
 final case class GoogleServicesConfig(
-    appName: String,
-    appsDomain: String,
-    environment: String,
-    pemFile: String,
-    serviceAccountCredentialJson: ServiceAccountCredentialJson,
-    serviceAccountClientId: String,
-    serviceAccountClientEmail: WorkbenchEmail,
-    serviceAccountClientProject: GoogleProject,
-    subEmail: WorkbenchEmail,
-    projectServiceAccount: WorkbenchEmail,
-    groupSyncPubSubConfig: GooglePubSubConfig,
-    disableUsersPubSubConfig: GooglePubSubConfig,
-    notificationPubSubProject: String,
-    notificationTopic: String,
-    googleKeyCacheConfig: GoogleKeyCacheConfig,
-    resourceNamePrefix: Option[String],
-    adminSdkServiceAccounts: Option[NonEmptyList[ServiceAccountConfig]],
-    googleKms: GoogleKmsConfig,
-    terraGoogleOrgNumber: String
+                                       appName: String,
+                                       appsDomain: String,
+                                       appsSubdomain: String,
+                                       environment: String,
+                                       pemFile: String,
+                                       serviceAccountCredentialJson: ServiceAccountCredentialJson,
+                                       serviceAccountClientId: String,
+                                       serviceAccountClientEmail: WorkbenchEmail,
+                                       serviceAccountClientProject: GoogleProject,
+                                       subEmail: WorkbenchEmail,
+                                       projectServiceAccount: WorkbenchEmail,
+                                       groupSyncPubSubConfig: GooglePubSubConfig,
+                                       disableUsersPubSubConfig: GooglePubSubConfig,
+                                       notificationPubSubProject: String,
+                                       notificationTopic: String,
+                                       googleKeyCacheConfig: GoogleKeyCacheConfig,
+                                       resourceNamePrefix: Option[String],
+                                       adminSdkServiceAccounts: Option[NonEmptyList[ServiceAccountConfig]],
+                                       googleKms: GoogleKmsConfig,
+                                       terraGoogleOrgNumber: String
 )
 
 object GoogleServicesConfig {
@@ -79,6 +80,7 @@ object GoogleServicesConfig {
     GoogleServicesConfig(
       config.getString("appName"),
       config.getString("appsDomain"),
+      config.getString("appsSubdomain"),
       config.getString("environment"),
       config.getString("pathToPem"),
       jsonCredentials,

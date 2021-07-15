@@ -282,7 +282,7 @@ class GoogleExtensionRoutesSpec extends GoogleExtensionRoutesSpecHelper with Sca
 trait GoogleExtensionRoutesSpecHelper extends AnyFlatSpec with Matchers with ScalatestRouteTest with TestSupport with MockitoSugar{
   val defaultUserId = genWorkbenchUserId(System.currentTimeMillis())
   val defaultUserEmail = genNonPetEmail.sample.get
-  val defaultUserProxyEmail = WorkbenchEmail(s"PROXY_$defaultUserId@${googleServicesConfig.appsDomain}")
+  val defaultUserProxyEmail = WorkbenchEmail(s"PROXY_$defaultUserId@${googleServicesConfig.appsSubdomain}")
 
   val configResourceTypes = TestSupport.configResourceTypes
 

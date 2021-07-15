@@ -309,7 +309,7 @@ class ResourceService(
  /** Performs additional verification that members are only users in the correct email domain */
   def validateAdminPolicyMembership(membership: AccessPolicyMembership): IO[Option[ErrorReport]] = IO {
     val invalidEmails = membership.memberEmails.filterNot { email =>
-      email.value.endsWith("firecloud.org") //todo: cloudExtensions.emailDomain isn't quite right because dev.test.firecloud.org won't match our test.firecloud.org accounts, but neither is this. may need a new config value
+      email.value.endsWith(s"@${cloudExtensions.adminEmailDomain}")
     }
     if (invalidEmails.nonEmpty) {
       val emailCauses = invalidEmails.map { workbenchEmail =>

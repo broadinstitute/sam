@@ -57,6 +57,8 @@ trait CloudExtensions {
 
   def emailDomain: String
 
+  def adminEmailDomain: String
+
   def getOrCreateAllUsersGroup(directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext)(implicit executionContext: ExecutionContext): Future[WorkbenchGroup]
 }
 
@@ -97,6 +99,8 @@ trait NoExtensions extends CloudExtensions {
   override def allSubSystems: Set[Subsystem] = Set.empty
 
   override val emailDomain = "example.com"
+
+  override val adminEmailDomain = "test.firecloud.org"
 
   override def getOrCreateAllUsersGroup(directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext)(implicit executionContext: ExecutionContext): Future[WorkbenchGroup] = {
     val allUsersGroup = BasicWorkbenchGroup(allUsersGroupName, Set.empty, WorkbenchEmail(s"GROUP_${allUsersGroupName.value}@$emailDomain"))

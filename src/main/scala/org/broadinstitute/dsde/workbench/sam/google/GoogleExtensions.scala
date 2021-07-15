@@ -70,9 +70,12 @@ class GoogleExtensions(
   private val maxGroupEmailLength = 64
 
   private[google] def toProxyFromUser(userId: WorkbenchUserId): WorkbenchEmail =
-    WorkbenchEmail(s"${googleServicesConfig.resourceNamePrefix.getOrElse("")}PROXY_${userId.value}@${googleServicesConfig.appsDomain}")
+    WorkbenchEmail(s"${googleServicesConfig.resourceNamePrefix.getOrElse("")}PROXY_${userId.value}@${googleServicesConfig.appsSubdomain}")
 
-  override val emailDomain = googleServicesConfig.appsDomain
+  override val emailDomain = googleServicesConfig.appsSubdomain
+
+  override val adminEmailDomain = googleServicesConfig.appsDomain
+
   private[google] val allUsersGroupEmail = WorkbenchEmail(
     s"${googleServicesConfig.resourceNamePrefix.getOrElse("")}GROUP_${allUsersGroupName.value}@$emailDomain")
 
@@ -95,12 +98,12 @@ class GoogleExtensions(
   }
 
   override def isWorkbenchAdmin(memberEmail: WorkbenchEmail): Future[Boolean] =
-    googleDirectoryDAO.isGroupMember(WorkbenchEmail(s"fc-admins@${googleServicesConfig.appsDomain}"), memberEmail) recoverWith {
+    googleDirectoryDAO.isGroupMember(WorkbenchEmail(s"fc-admins@${googleServicesConfig.appsSubdomain}"), memberEmail) recoverWith {
       case t => throw new WorkbenchException("Unable to query for admin status.", t)
     }
 
   override def isSamSuperAdmin(memberEmail: WorkbenchEmail): Future[Boolean] =
-    googleDirectoryDAO.isGroupMember(WorkbenchEmail(s"sam-super-admins@${googleServicesConfig.appsDomain}"), memberEmail) recoverWith {
+    googleDirectoryDAO.isGroupMember(WorkbenchEmail(s"sam-super-admins@${googleServicesConfig.appsSubdomain}"), memberEmail) recoverWith {
       case t => throw new WorkbenchException("Unable to query for admin status.", t)
     }
 
