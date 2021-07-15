@@ -5,7 +5,7 @@ import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import akka.http.scaladsl.testkit.ScalatestRouteTest
 import cats.effect.IO
-import org.broadinstitute.dsde.workbench.model.{ErrorReportSource, UserInfo, WorkbenchEmail, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.model.{ErrorReport, ErrorReportSource, UserInfo, WorkbenchEmail, WorkbenchExceptionWithErrorReport, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.TestSupport.genGoogleSubjectId
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{MockAccessPolicyDAO, MockDirectoryDAO, MockRegistrationDAO}
@@ -126,22 +126,57 @@ class AdminResourceRoutesSpec extends AnyFlatSpec with Matchers with TestSupport
 
   it should "403 if user isn't a Sam super admin" in {
     val samRoutes = createSamRoutes(isSamSuperAdmin = false)
-    val adminPolicyName = AccessPolicyName("admin")
-    val accessPolicyMembership = AccessPolicyMembership(Set(WorkbenchEmail("testUser@example.com")), Set.empty, Set.empty, None)
 
-    Put(s"/api/resourceTypeAdmin/v1/resourceTypes/${defaultResourceType.name}/policies/${adminPolicyName.value}", accessPolicyMembership) ~> samRoutes.route ~> check {
+    Put(s"/api/resourceTypeAdmin/v1/resourceTypes/${defaultResourceType.name}/policies/${defaultAdminPolicyName.value}", defaultAccessPolicyMembership) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Forbidden
     }
   }
 
   it should "404 if given nonexistent resource type" in {
     val samRoutes = createSamRoutes(isSamSuperAdmin = true)
-    val adminPolicyName = AccessPolicyName("admin")
     val fakeResourceTypeName = ResourceTypeName("does_not_exist")
-    val accessPolicyMembership = AccessPolicyMembership(Set(WorkbenchEmail("testUser@example.com")), Set.empty, Set.empty, None)
     when(samRoutes.resourceService.getResourceType(fakeResourceTypeName)).thenReturn(IO(None))
 
-    Put(s"/api/resourceTypeAdmin/v1/resourceTypes/${fakeResourceTypeName.value}/policies/${adminPolicyName.value}", accessPolicyMembership) ~> samRoutes.route ~> check {
+    Put(s"/api/resourceTypeAdmin/v1/resourceTypes/${fakeResourceTypeName.value}/policies/${defaultAdminPolicyName.value}", defaultAccessPolicyMembership) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
+    }
+  }
+
+  "DELETE /api/resourceTypeAdmin/v1/resourceTypes/{resourceType}/policies/{policyName}" should "204 when successful" in {
+    val samRoutes = createSamRoutes(isSamSuperAdmin = true)
+
+    when(samRoutes.resourceService.deletePolicy(mockitoEq(FullyQualifiedPolicyId(defaultResourceId, defaultAdminPolicyName)), any[SamRequestContext])).thenReturn(IO.unit)
+
+    Delete(s"/api/resourceTypeAdmin/v1/resourceTypes/${defaultResourceType.name}/policies/${defaultAdminPolicyName.value}") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+    }
+  }
+
+  it should "403 if user isn't a Sam super admin" in {
+    val samRoutes = createSamRoutes(isSamSuperAdmin = false)
+
+    Delete(s"/api/resourceTypeAdmin/v1/resourceTypes/${defaultResourceType.name}/policies/${defaultAdminPolicyName.value}") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Forbidden
+    }
+  }
+
+  it should "404 if given nonexistent resource type" in {
+    val samRoutes = createSamRoutes(isSamSuperAdmin = true)
+    val fakeResourceTypeName = ResourceTypeName("does_not_exist")
+    when(samRoutes.resourceService.getResourceType(fakeResourceTypeName)).thenReturn(IO(None))
+
+    Delete(s"/api/resourceTypeAdmin/v1/resourceTypes/${fakeResourceTypeName.value}/policies/${defaultAdminPolicyName.value}") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
+    }
+  }
+
+  it should "404 if policy does not exist" in {
+    val samRoutes = createSamRoutes(isSamSuperAdmin = true)
+    val fakePolicyName = AccessPolicyName("does_not_exist")
+    when(samRoutes.resourceService.deletePolicy(mockitoEq(FullyQualifiedPolicyId(defaultResourceId, fakePolicyName)), any[SamRequestContext]))
+      .thenThrow(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "policy not found")))
+
+    Delete(s"/api/resourceTypeAdmin/v1/resourceTypes/${defaultResourceType.name}/policies/${fakePolicyName.value}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
   }
