@@ -5,11 +5,13 @@ import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directives._
+import org.broadinstitute.dsde.workbench.model.{UserInfo, WorkbenchEmail, WorkbenchSubject}
 import org.broadinstitute.dsde.workbench.sam.config.LiquibaseConfig
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.ResourceService
 import spray.json.DefaultJsonProtocol._
+import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import scala.concurrent.ExecutionContext
 
@@ -58,6 +60,8 @@ trait AdminResourceRoutes extends UserInfoDirectives with SecurityDirectives wit
               pathPrefix(Segment) { resourceTypeNameToAdminister =>
                 withResourceType(ResourceTypeName(resourceTypeNameToAdminister)) { resourceTypeToAdminister =>
                   pathPrefix(Segment) { resourceId =>
+                    val resource = FullyQualifiedResourceId(resourceTypeToAdminister.name, ResourceId(resourceId))
+
                     pathPrefix("policies") {
                       pathEndOrSingleSlash {
                         get {
@@ -65,13 +69,21 @@ trait AdminResourceRoutes extends UserInfoDirectives with SecurityDirectives wit
                         }
                       } ~
                         pathPrefix(Segment) { policyName =>
+                          val policyId = FullyQualifiedPolicyId(resource, AccessPolicyName(policyName))
+
                           pathPrefix("memberEmails" / Segment) { userEmail =>
-                            put {
-                              complete(StatusCodes.OK) // TODO: CA-1245
-                            } ~
-                              delete {
-                                complete(StatusCodes.OK) // TODO: CA-1246
-                              }
+                            withSubject(WorkbenchEmail(userEmail), samRequestContext) { subject =>
+                              put {
+                                requireActionsForAdminPutUserInPolicy(policyId, userInfo, samRequestContext) {
+                                  adminPutUserInPolicy(policyId, subject, samRequestContext)
+                                }
+                              } ~
+                                delete {
+                                  requireActionsForAdminRemoveUserFromPolicy(policyId, userInfo, samRequestContext) {
+                                    adminRemoveUserFromPolicy(policyId, subject, samRequestContext)
+                                  }
+                                }
+                            }
                           }
                         }
                     }
@@ -84,4 +96,29 @@ trait AdminResourceRoutes extends UserInfoDirectives with SecurityDirectives wit
       }
     }
 
+  private def requireActionsForAdminPutUserInPolicy(policyId: FullyQualifiedPolicyId, userInfo: UserInfo, samRequestContext: SamRequestContext)(addUserToPolicy: server.Route): server.Route =
+    requireAction(
+      FullyQualifiedResourceId(SamResourceTypes.resourceTypeAdminName, ResourceId(policyId.resource.resourceTypeName.value)),
+      SamResourceActions.adminAddMember,
+      userInfo.userId,
+      samRequestContext
+    ) {
+      addUserToPolicy
+    }
+
+  private def requireActionsForAdminRemoveUserFromPolicy(policyId: FullyQualifiedPolicyId, userInfo: UserInfo, samRequestContext: SamRequestContext)(removeUserFromPolicy: server.Route): server.Route =
+    requireAction(
+      FullyQualifiedResourceId(SamResourceTypes.resourceTypeAdminName, ResourceId(policyId.resource.resourceTypeName.value)),
+      SamResourceActions.adminRemoveMember,
+      userInfo.userId,
+      samRequestContext
+    ) {
+      removeUserFromPolicy
+    }
+
+  def adminPutUserInPolicy(policyId: FullyQualifiedPolicyId, subject: WorkbenchSubject, samRequestContext: SamRequestContext): server.Route =
+    complete(resourceService.addSubjectToPolicy(policyId, subject, samRequestContext).map(_ => StatusCodes.NoContent))
+
+  def adminRemoveUserFromPolicy(policyId: FullyQualifiedPolicyId, subject: WorkbenchSubject, samRequestContext: SamRequestContext): server.Route =
+    complete(resourceService.removeSubjectFromPolicy(policyId, subject, samRequestContext).map(_ => StatusCodes.NoContent))
 }
