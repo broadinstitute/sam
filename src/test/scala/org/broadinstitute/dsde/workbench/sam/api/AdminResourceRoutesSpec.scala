@@ -8,6 +8,7 @@ import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, ErrorReportSource, UserInfo, WorkbenchEmail, WorkbenchExceptionWithErrorReport, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.TestSupport.genGoogleSubjectId
+import org.broadinstitute.dsde.workbench.sam.api.TestSamRoutes.SamResourceActionPatterns
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{MockAccessPolicyDAO, MockDirectoryDAO, MockRegistrationDAO}
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
@@ -73,6 +74,23 @@ class AdminResourceRoutesSpec extends AnyFlatSpec with Matchers with TestSupport
     new TestSamRoutes(mockResourceService, policyEvaluatorService, mockUserService, mockStatusService, mockManagedGroupService, userInfo, directoryDAO, cloudExtensions)
   }
 
+  it should "200 if a user is a Sam super admin and has admin_read_policies" in {
+    val samRoutes = createSamRoutes(isSamSuperAdmin = true)
+    val resourceId = ResourceId("foo")
+    val resourceType = ResourceType(
+      ResourceTypeName("rt"),
+      Set(SamResourceActionPatterns.adminReadPolicies, ResourceActionPattern(SamResourceActions.adminReadPolicies.value, "", false)),
+      Set(ResourceRole(ResourceRoleName(SamResourceTypes.resourceTypeAdminName.value), Set(SamResourceActions.alterPolicies, SamResourceActions.adminReadPolicies))),
+      ResourceRoleName(SamResourceTypes.resourceTypeAdminName.value))
+
+    when(samRoutes.policyEvaluatorService.hasPermissionOneOf(any[FullyQualifiedResourceId], any[Iterable[ResourceAction]], any[WorkbenchUserId], any[SamRequestContext])).thenReturn(IO(true))
+    when(samRoutes.resourceService.getResourceType(resourceType.name)).thenReturn(IO(Some(resourceType)))
+    when(samRoutes.resourceService.listResourcePolicies(any[FullyQualifiedResourceId], any[SamRequestContext])).thenReturn(IO(LazyList[AccessPolicyResponseEntry]()))
+
+    Get(s"/api/resourceTypeAdmin/v1/resources/${resourceType.name}/${resourceId}/policies") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+    }
+  }
 
   "GET /api/resourceTypeAdmin/v1/resourceTypes/{resourceType}/policies/" should "200 when successful" in {
     val samRoutes = createSamRoutes(isSamSuperAdmin = true)
