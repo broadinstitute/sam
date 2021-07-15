@@ -43,6 +43,11 @@ class AdminResourceRoutesSpec extends AnyFlatSpec with Matchers with TestSupport
     ResourceRoleName("owner")
   )
 
+  val defaultAccessPolicyMembership = AccessPolicyMembership(Set(WorkbenchEmail("testUser@example.com")), Set.empty, Set.empty, None)
+  val defaultAdminPolicyName = AccessPolicyName("admin")
+  val defaultResourceId = FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(defaultResourceType.name.value))
+  val defaultAccessPolicyResponseEntry = AccessPolicyResponseEntry(defaultAdminPolicyName, defaultAccessPolicyMembership, WorkbenchEmail("policy_email@example.com"))
+
   private def createSamRoutes(resourceTypes: Map[ResourceTypeName, ResourceType] = Map(defaultResourceType.name -> defaultResourceType, resourceTypeAdmin.name -> resourceTypeAdmin),
                               isSamSuperAdmin: Boolean,
                               userInfo: UserInfo = defaultUserInfo): SamRoutes = {
@@ -68,24 +73,54 @@ class AdminResourceRoutesSpec extends AnyFlatSpec with Matchers with TestSupport
     new TestSamRoutes(mockResourceService, policyEvaluatorService, mockUserService, mockStatusService, mockManagedGroupService, userInfo, directoryDAO, cloudExtensions)
   }
 
+
+  "GET /api/resourceTypeAdmin/v1/resourceTypes/{resourceType}/policies/" should "200 when successful" in {
+    val samRoutes = createSamRoutes(isSamSuperAdmin = true)
+
+    when(samRoutes.resourceService.listResourcePolicies(mockitoEq(defaultResourceId), any[SamRequestContext])).thenReturn(IO(LazyList(defaultAccessPolicyResponseEntry)))
+
+    Get(s"/api/resourceTypeAdmin/v1/resourceTypes/${defaultResourceType.name}/policies") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      val response = responseAs[Set[AccessPolicyResponseEntry]]
+      response.map(_.policyName).contains(defaultAdminPolicyName) shouldBe true
+      response.map(_.policy).contains(defaultAccessPolicyMembership) shouldBe true
+    }
+  }
+
+  it should "403 if user isn't a Sam super admin" in {
+    val samRoutes = createSamRoutes(isSamSuperAdmin = false)
+
+    Get(s"/api/resourceTypeAdmin/v1/resourceTypes/${defaultResourceType.name}/policies") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Forbidden
+    }
+  }
+
+  it should "404 if given nonexistent resource type" in {
+    val samRoutes = createSamRoutes(isSamSuperAdmin = true)
+    val fakeResourceTypeName = ResourceTypeName("does_not_exist")
+
+    when(samRoutes.resourceService.getResourceType(fakeResourceTypeName)).thenReturn(IO(None))
+
+    Get(s"/api/resourceTypeAdmin/v1/resourceTypes/${fakeResourceTypeName.value}/policies") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
+    }
+  }
+
   "PUT /api/resourceTypeAdmin/v1/resourceTypes/{resourceType}/policies/{policyName}" should "201 when successful" in {
     val samRoutes = createSamRoutes(isSamSuperAdmin = true)
-    val accessPolicyMembership = AccessPolicyMembership(Set(WorkbenchEmail("testUser@example.com")), Set.empty, Set.empty, None)
-    val adminPolicyName = AccessPolicyName("admin")
-    val resource = FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(defaultResourceType.name.value))
-    val accessPolicyResponseEntry = AccessPolicyResponseEntry(adminPolicyName, accessPolicyMembership, WorkbenchEmail("policy_email@example.com"))
-    when(samRoutes.resourceService.overwritePolicy(mockitoEq(resourceTypeAdmin), mockitoEq(adminPolicyName), mockitoEq(resource), mockitoEq(accessPolicyMembership), any[SamRequestContext])).thenReturn(IO(null))
-    when(samRoutes.resourceService.listResourcePolicies(mockitoEq(resource), any[SamRequestContext])).thenReturn(IO(LazyList(accessPolicyResponseEntry)))
 
-    Put(s"/api/resourceTypeAdmin/v1/resourceTypes/${defaultResourceType.name}/policies/${adminPolicyName.value}", accessPolicyMembership) ~> samRoutes.route ~> check {
+    when(samRoutes.resourceService.overwritePolicy(mockitoEq(resourceTypeAdmin), mockitoEq(defaultAdminPolicyName), mockitoEq(defaultResourceId), mockitoEq(defaultAccessPolicyMembership), any[SamRequestContext])).thenReturn(IO(null))
+    when(samRoutes.resourceService.listResourcePolicies(mockitoEq(defaultResourceId), any[SamRequestContext])).thenReturn(IO(LazyList(defaultAccessPolicyResponseEntry)))
+
+    Put(s"/api/resourceTypeAdmin/v1/resourceTypes/${defaultResourceType.name}/policies/${defaultAdminPolicyName.value}", defaultAccessPolicyMembership) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
     }
 
     Get(s"/api/resourceTypeAdmin/v1/resourceTypes/${defaultResourceType.name}/policies") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
       val response = responseAs[Set[AccessPolicyResponseEntry]]
-      response.map(_.policyName).contains(adminPolicyName) shouldBe true
-      response.map(_.policy).contains(accessPolicyMembership) shouldBe true
+      response.map(_.policyName).contains(defaultAdminPolicyName) shouldBe true
+      response.map(_.policy).contains(defaultAccessPolicyMembership) shouldBe true
     }
   }
 
@@ -99,7 +134,7 @@ class AdminResourceRoutesSpec extends AnyFlatSpec with Matchers with TestSupport
     }
   }
 
-  it should "404 if given invalid resource type" in {
+  it should "404 if given nonexistent resource type" in {
     val samRoutes = createSamRoutes(isSamSuperAdmin = true)
     val adminPolicyName = AccessPolicyName("admin")
     val fakeResourceTypeName = ResourceTypeName("does_not_exist")
