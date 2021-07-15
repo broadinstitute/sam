@@ -5,8 +5,8 @@ import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import akka.http.scaladsl.testkit.ScalatestRouteTest
 import cats.effect.IO
-import org.broadinstitute.dsde.workbench.model.{ErrorReport, ErrorReportSource, UserInfo, WorkbenchEmail, WorkbenchExceptionWithErrorReport, WorkbenchUserId}
-import org.broadinstitute.dsde.workbench.sam.TestSupport
+import org.broadinstitute.dsde.workbench.model.{ErrorReport, ErrorReportSource, UserInfo, WorkbenchEmail, WorkbenchExceptionWithErrorReport, WorkbenchSubject, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.sam.{TestSupport, model}
 import org.broadinstitute.dsde.workbench.sam.TestSupport.genGoogleSubjectId
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{MockAccessPolicyDAO, MockDirectoryDAO, MockRegistrationDAO}
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
@@ -28,6 +28,10 @@ class AdminResourceRoutesSpec extends AnyFlatSpec with Matchers with TestSupport
   implicit val errorReportSource = ErrorReportSource("sam")
 
   val defaultUserInfo = UserInfo(OAuth2BearerToken("accessToken"), WorkbenchUserId("user1"), WorkbenchEmail("user1@example.com"), 0)
+
+  private val defaultTestUser =  CreateWorkbenchUser(WorkbenchUserId("testuser"), genGoogleSubjectId(), WorkbenchEmail("testuser@foo.com"), None)
+
+  private val defaultTestUserTwo =  CreateWorkbenchUser(WorkbenchUserId("testuser2"), genGoogleSubjectId(), WorkbenchEmail("testuser2@foo.com"), None)
 
   val defaultResourceType = ResourceType(
     ResourceTypeName("rt"),
@@ -178,6 +182,155 @@ class AdminResourceRoutesSpec extends AnyFlatSpec with Matchers with TestSupport
 
     Delete(s"/api/resourceTypeAdmin/v1/resourceTypes/${defaultResourceType.name}/policies/${fakePolicyName.value}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
+    }
+  }
+
+
+  "PUT /api/resourceTypeAdmin/v1/resources/{resourceType}/{resourceId}/policies/{policyName}/memberEmails/{userEmail}" should "allow resource admins to add themselves to a resource" in {
+    val resourceType = ResourceType(
+      ResourceTypeName("rt"),
+      Set(),
+      Set(ResourceRole(ResourceRoleName("owner"), Set())),
+      ResourceRoleName("owner"))
+
+    val resourceTypeAdmin = ResourceType(
+      ResourceTypeName("resource_type_admin"),
+      Set(),
+      Set(
+        ResourceRole(ResourceRoleName("owner"), Set()),
+        ResourceRole(
+          ResourceRoleName("resource_type_admin"),
+          Set(SamResourceActions.adminRemoveMember, SamResourceActions.adminAddMember, SamResourceActions.adminReadPolicies)
+        )
+      ),
+      ResourceRoleName("owner")
+    )
+
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
+
+    runAndWait(samRoutes.resourceService.createPolicy(model.FullyQualifiedPolicyId(model.FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(resourceType.name.value)), AccessPolicyName("resource_type_admin")), Set(samRoutes.userInfo.userId), Set(ResourceRoleName("resource_type_admin")), Set(SamResourceActions.adminAddMember), Set(), samRequestContext))
+
+    val resourceId = ResourceId("foo")
+
+    runAndWait(samRoutes.userService.createUser(defaultTestUser, samRequestContext))
+
+    runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, UserInfo(OAuth2BearerToken("accessToken"), defaultTestUser.id, defaultTestUser.email, 0), samRequestContext))
+
+    Put(s"/api/resourceTypeAdmin/v1/resources/${resourceType.name}/${resourceId.value}/policies/${resourceType.ownerRoleName.value}/memberEmails/${samRoutes.userInfo.userEmail.value}") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+    }
+  }
+
+  it should "allow resource admins to add other users to a resource" in {
+    val resourceType = ResourceType(
+      ResourceTypeName("rt"),
+      Set(),
+      Set(ResourceRole(ResourceRoleName("owner"), Set())),
+      ResourceRoleName("owner"))
+
+    val resourceTypeAdmin = ResourceType(
+      ResourceTypeName("resource_type_admin"),
+      Set(),
+      Set(
+        ResourceRole(ResourceRoleName("owner"), Set()),
+        ResourceRole(
+          ResourceRoleName("resource_type_admin"),
+          Set(SamResourceActions.adminRemoveMember, SamResourceActions.adminAddMember, SamResourceActions.adminReadPolicies)
+        )
+      ),
+      ResourceRoleName("owner")
+    )
+
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
+
+    runAndWait(samRoutes.resourceService.createPolicy(model.FullyQualifiedPolicyId(model.FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(resourceType.name.value)), AccessPolicyName("resource_type_admin")), Set(samRoutes.userInfo.userId), Set(ResourceRoleName("resource_type_admin")), Set(SamResourceActions.adminAddMember), Set(), samRequestContext))
+
+    val resourceId = ResourceId("foo")
+
+    runAndWait(samRoutes.userService.createUser(defaultTestUser, samRequestContext))
+
+    runAndWait(samRoutes.userService.createUser(defaultTestUserTwo, samRequestContext))
+
+    runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, UserInfo(OAuth2BearerToken("accessToken"), defaultTestUser.id, defaultTestUser.email, 0), samRequestContext))
+
+    Put(s"/api/resourceTypeAdmin/v1/resources/${resourceType.name}/${resourceId.value}/policies/${resourceType.ownerRoleName.value}/memberEmails/${defaultTestUserTwo.email.value}") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+    }
+  }
+
+  "DELETE /api/resourceTypeAdmin/v1/resources/{resourceType}/{resourceId}/policies/{policyName}/memberEmails/{userEmail}" should "allow resource admins to remove themselves from a resource" in {
+    val resourceType = ResourceType(
+      ResourceTypeName("rt"),
+      Set(),
+      Set(ResourceRole(ResourceRoleName("owner"), Set())),
+      ResourceRoleName("owner"))
+
+    val resourceTypeAdmin = ResourceType(
+      ResourceTypeName("resource_type_admin"),
+      Set(),
+      Set(
+        ResourceRole(ResourceRoleName("owner"), Set()),
+        ResourceRole(
+          ResourceRoleName("resource_type_admin"),
+          Set(SamResourceActions.adminRemoveMember, SamResourceActions.adminAddMember, SamResourceActions.adminReadPolicies)
+        )
+      ),
+      ResourceRoleName("owner")
+    )
+
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
+
+    runAndWait(samRoutes.resourceService.createPolicy(model.FullyQualifiedPolicyId(model.FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(resourceType.name.value)), AccessPolicyName("resource_type_admin")), Set(samRoutes.userInfo.userId), Set(ResourceRoleName("resource_type_admin")), Set(SamResourceActions.adminRemoveMember), Set(), samRequestContext))
+
+    val resourceId = ResourceId("foo")
+
+    runAndWait(samRoutes.userService.createUser(defaultTestUser, samRequestContext))
+
+    runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, UserInfo(OAuth2BearerToken("accessToken"), defaultTestUser.id, defaultTestUser.email, 0), samRequestContext))
+
+    runAndWait(samRoutes.resourceService.addSubjectToPolicy(model.FullyQualifiedPolicyId(model.FullyQualifiedResourceId(resourceType.name, resourceId), AccessPolicyName("owner")), samRoutes.userInfo.userId.asInstanceOf[WorkbenchSubject], samRequestContext))
+
+    Delete(s"/api/resourceTypeAdmin/v1/resources/${resourceType.name}/${resourceId.value}/policies/${resourceType.ownerRoleName.value}/memberEmails/${samRoutes.userInfo.userEmail.value}") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+    }
+  }
+
+  it should "allow resource admins to remove other users from a resource" in {
+    val resourceType = ResourceType(
+      ResourceTypeName("rt"),
+      Set(),
+      Set(ResourceRole(ResourceRoleName("owner"), Set())),
+      ResourceRoleName("owner"))
+
+    val resourceTypeAdmin = ResourceType(
+      ResourceTypeName("resource_type_admin"),
+      Set(),
+      Set(
+        ResourceRole(ResourceRoleName("owner"), Set()),
+        ResourceRole(
+          ResourceRoleName("resource_type_admin"),
+          Set(SamResourceActions.adminRemoveMember, SamResourceActions.adminAddMember, SamResourceActions.adminReadPolicies)
+        )
+      ),
+      ResourceRoleName("owner")
+    )
+
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
+
+    runAndWait(samRoutes.resourceService.createPolicy(model.FullyQualifiedPolicyId(model.FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(resourceType.name.value)), AccessPolicyName("resource_type_admin")), Set(samRoutes.userInfo.userId), Set(ResourceRoleName("resource_type_admin")), Set(SamResourceActions.adminRemoveMember), Set(), samRequestContext))
+
+    val resourceId = ResourceId("foo")
+
+    runAndWait(samRoutes.userService.createUser(defaultTestUser, samRequestContext))
+
+    runAndWait(samRoutes.userService.createUser(defaultTestUserTwo, samRequestContext))
+
+    runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, UserInfo(OAuth2BearerToken("accessToken"), defaultTestUser.id, defaultTestUser.email, 0), samRequestContext))
+
+    runAndWait(samRoutes.resourceService.addSubjectToPolicy(model.FullyQualifiedPolicyId(model.FullyQualifiedResourceId(resourceType.name, resourceId), AccessPolicyName("owner")), defaultTestUserTwo.id.asInstanceOf[WorkbenchSubject], samRequestContext))
+
+    Delete(s"/api/resourceTypeAdmin/v1/resources/${resourceType.name}/${resourceId.value}/policies/${resourceType.ownerRoleName.value}/memberEmails/${samRoutes.userInfo.userEmail.value}") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
     }
   }
 

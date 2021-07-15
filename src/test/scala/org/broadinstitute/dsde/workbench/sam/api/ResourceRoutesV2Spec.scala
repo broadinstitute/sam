@@ -750,41 +750,6 @@ class ResourceRoutesV2Spec extends AnyFlatSpec with Matchers with TestSupport wi
     }
   }
 
-  it should "allow resource admins to add themselves to a resource" in {
-    val resourceType = ResourceType(
-      ResourceTypeName("rt"),
-      Set(),
-      Set(ResourceRole(ResourceRoleName("owner"), Set())),
-      ResourceRoleName("owner"))
-
-    val resourceTypeAdmin = ResourceType(
-      ResourceTypeName("resource_type_admin"),
-      Set(),
-      Set(
-        ResourceRole(ResourceRoleName("owner"), Set()),
-        ResourceRole(
-          ResourceRoleName("resource_type_admin"),
-          Set(SamResourceActions.adminRemoveMember, SamResourceActions.adminAddMember, SamResourceActions.adminReadPolicies)
-        )
-      ),
-      ResourceRoleName("owner")
-    )
-
-    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
-
-    runAndWait(samRoutes.resourceService.createPolicy(model.FullyQualifiedPolicyId(model.FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(resourceType.name.value)), AccessPolicyName("resource_type_admin")), Set(samRoutes.userInfo.userId), Set(ResourceRoleName("resource_type_admin")), Set(SamResourceActions.adminAddMember), Set(), samRequestContext))
-
-    val resourceId = ResourceId("foo")
-
-    runAndWait(samRoutes.userService.createUser(defaultTestUser, samRequestContext))
-
-    runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, UserInfo(OAuth2BearerToken("accessToken"), defaultTestUser.id, defaultTestUser.email, 0), samRequestContext))
-
-    Put(s"/api/resourceTypeAdmin/v1/resources/${resourceType.name}/${resourceId.value}/policies/${resourceType.ownerRoleName.value}/memberEmails/${samRoutes.userInfo.userEmail.value}") ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.NoContent withClue responsePayloadClue(responseAs[String])
-    }
-  }
-
   it should "404 if user does not have set public access" in {
     val resourceType = ResourceType(
       ResourceTypeName("rt"),
