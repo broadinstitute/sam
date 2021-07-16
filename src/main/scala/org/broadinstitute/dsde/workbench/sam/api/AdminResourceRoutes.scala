@@ -97,7 +97,7 @@ trait AdminResourceRoutes extends UserInfoDirectives with SecurityDirectives wit
 
   private def getAdminResourcePolicies(resource: FullyQualifiedResourceId, userInfo: UserInfo, samRequestContext: SamRequestContext): server.Route =
     get {
-      requireAction(resource, SamResourceActions.adminReadPolicies, userInfo.userId, samRequestContext) {
+      requireAction(FullyQualifiedResourceId(SamResourceTypes.resourceTypeAdminName, ResourceId(policyId.resource.resourceTypeName.value)), SamResourceActions.adminReadPolicies, userInfo.userId, samRequestContext) {
         complete(resourceService.listResourcePolicies(resource, samRequestContext).map { response =>
           StatusCodes.OK -> response.toSet
         })
