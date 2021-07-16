@@ -64,9 +64,8 @@ trait AdminResourceRoutes extends UserInfoDirectives with SecurityDirectives wit
 
                     pathPrefix("policies") {
                       pathEndOrSingleSlash {
-                        get {
-                          complete(StatusCodes.OK) // TODO: CA-1244
-                        }
+                        val resource = FullyQualifiedResourceId(ResourceTypeName(resourceTypeNameToAdminister), ResourceId(resourceId))
+                        getAdminResourcePolicies(resource, userInfo, samRequestContext)
                       } ~
                         pathPrefix(Segment) { policyName =>
                           val policyId = FullyQualifiedPolicyId(resource, AccessPolicyName(policyName))
@@ -93,6 +92,15 @@ trait AdminResourceRoutes extends UserInfoDirectives with SecurityDirectives wit
             }
           }
         }
+      }
+    }
+
+  private def getAdminResourcePolicies(resource: FullyQualifiedResourceId, userInfo: UserInfo, samRequestContext: SamRequestContext): server.Route =
+    get {
+      requireAction(FullyQualifiedResourceId(SamResourceTypes.resourceTypeAdminName, ResourceId(resource.resourceTypeName.value)), SamResourceActions.adminReadPolicies, userInfo.userId, samRequestContext) {
+        complete(resourceService.listResourcePolicies(resource, samRequestContext).map { response =>
+          StatusCodes.OK -> response.toSet
+        })
       }
     }
 
