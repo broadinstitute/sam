@@ -128,25 +128,19 @@ class ManagedGroupService(
     }
   }
 
-  def overwritePolicyMemberEmails(resourceId: ResourceId, policyName: ManagedGroupPolicyName, emails: Set[WorkbenchEmail], samRequestContext: SamRequestContext): IO[AccessPolicy] = {
+  def overwritePolicyMemberEmails(resourceId: ResourceId, policyName: ManagedGroupPolicyName, emails: Set[WorkbenchEmail], samRequestContext: SamRequestContext): IO[Unit] = {
     val resourceAndPolicyName =
       FullyQualifiedPolicyId(FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, resourceId), policyName)
-    accessPolicyDAO.loadPolicy(resourceAndPolicyName, samRequestContext).flatMap {
-      case Some(policy) => {
-        val updatedPolicy = AccessPolicyMembership(emails, policy.actions, policy.roles, Option(policy.descendantPermissions))
-        resourceService.overwritePolicy(managedGroupType, resourceAndPolicyName.accessPolicyName, resourceAndPolicyName.resource, updatedPolicy, samRequestContext)
-      }
-      case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Group or policy could not be found: $resourceAndPolicyName"))
-    }
+    resourceService.overwritePolicyMembers(resourceAndPolicyName, emails, samRequestContext)
   }
 
-  def addSubjectToPolicy(resourceId: ResourceId, policyName: ManagedGroupPolicyName, subject: WorkbenchSubject, samRequestContext: SamRequestContext): Future[Unit] = {
+  def addSubjectToPolicy(resourceId: ResourceId, policyName: ManagedGroupPolicyName, subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean] = {
     val resourceAndPolicyName =
       FullyQualifiedPolicyId(FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, resourceId), policyName)
     resourceService.addSubjectToPolicy(resourceAndPolicyName, subject, samRequestContext)
   }
 
-  def removeSubjectFromPolicy(resourceId: ResourceId, policyName: ManagedGroupPolicyName, subject: WorkbenchSubject, samRequestContext: SamRequestContext): Future[Unit] = {
+  def removeSubjectFromPolicy(resourceId: ResourceId, policyName: ManagedGroupPolicyName, subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean] = {
     val resourceAndPolicyName =
       FullyQualifiedPolicyId(FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, resourceId), policyName)
     resourceService.removeSubjectFromPolicy(resourceAndPolicyName, subject, samRequestContext)

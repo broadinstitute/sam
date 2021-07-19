@@ -1,19 +1,17 @@
 package org.broadinstitute.dsde.workbench.sam.service
 
-import java.util.UUID
-
 import akka.http.scaladsl.model.StatusCodes
 import cats.effect.IO
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model._
+import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, LoadResourceAuthDomainResult}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
-import org.broadinstitute.dsde.workbench.sam.{model, _}
 
+import java.util.UUID
 import scala.concurrent.{ExecutionContext, Future}
-import scala.util.Success
 
 /**
   * Created by mbemis on 5/22/17.
@@ -23,7 +21,7 @@ class ResourceService(
     private[service] val policyEvaluatorService: PolicyEvaluatorService,
     private val accessPolicyDAO: AccessPolicyDAO,
     private val directoryDAO: DirectoryDAO,
-    private val cloudExtensions: CloudExtensions,
+    private[service] val cloudExtensions: CloudExtensions,
     val emailDomain: String)(implicit val executionContext: ExecutionContext)
     extends LazyLogging {
   implicit val cs = IO.contextShift(executionContext) //for running IOs in paralell
@@ -292,18 +290,25 @@ class ResourceService(
 
   /**
     * Overwrites an existing policy's membership (keyed by resourceType/resourceId/policyName) if it exists
-    * @param resourceType
-    * @param policyName
-    * @param resource
+    * @param policyId
     * @param membersList
     * @return
     */
-  def overwritePolicyMembers(resourceType: ResourceType, policyName: AccessPolicyName, resource: FullyQualifiedResourceId, membersList: Set[WorkbenchEmail], samRequestContext: SamRequestContext): IO[Unit] =
+  def overwritePolicyMembers(policyId: FullyQualifiedPolicyId, membersList: Set[WorkbenchEmail], samRequestContext: SamRequestContext): IO[Unit] =
     mapEmailsToSubjects(membersList, samRequestContext).flatMap { emailsToSubjects =>
       validateMemberEmails(emailsToSubjects) match {
-        case Some(error) => IO.raiseError(new WorkbenchExceptionWithErrorReport(error))
+        case Some(error) => IO.raiseError(new WorkbenchExceptionWithErrorReport(error.copy(statusCode = Option(StatusCodes.BadRequest))))
         case None =>
-          accessPolicyDAO.overwritePolicyMembers(model.FullyQualifiedPolicyId(resource, policyName), emailsToSubjects.values.flatten.toSet, samRequestContext)
+          val newMembers = emailsToSubjects.values.flatten.toSet
+          accessPolicyDAO.loadPolicy(policyId, samRequestContext).flatMap {
+            case None => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"policy $policyId does not exist")))
+            case Some(existingPolicy) if existingPolicy.members == newMembers => IO.unit
+            case _ => for {
+              _ <- accessPolicyDAO.overwritePolicyMembers(policyId, newMembers, samRequestContext)
+              _ <- fireGroupUpdateNotification(policyId, samRequestContext)
+            } yield ()
+          }
+
       }
     }
 
@@ -321,15 +326,18 @@ class ResourceService(
     val workbenchSubjects = policy.emailsToSubjects.values.flatten.toSet
     accessPolicyDAO.loadPolicy(policyIdentity, samRequestContext).flatMap {
       case None => createPolicy(policyIdentity, workbenchSubjects, generateGroupEmail(), policy.roles, policy.actions, policy.descendantPermissions, samRequestContext)
-      case Some(accessPolicy) =>
-        for {
-          result <- accessPolicyDAO.overwritePolicy(AccessPolicy(policyIdentity, workbenchSubjects, accessPolicy.email, policy.roles, policy.actions, policy.descendantPermissions, accessPolicy.public), samRequestContext)
-          _ <- IO.fromFuture(IO(fireGroupUpdateNotification(policyIdentity, samRequestContext))).runAsync {
-            case Left(regrets) => IO(logger.error(s"failure calling fireGroupUpdateNotification on $policyIdentity", regrets))
-            case Right(_) => IO.unit
-          }.toIO
-        } yield {
-          result
+      case Some(existingAccessPolicy) =>
+        val newAccessPolicy = AccessPolicy(policyIdentity, workbenchSubjects, existingAccessPolicy.email, policy.roles, policy.actions, policy.descendantPermissions, existingAccessPolicy.public)
+        if (newAccessPolicy == existingAccessPolicy) {
+          // short cut if access policy is unchanged
+          IO.pure(newAccessPolicy)
+        } else {
+          for {
+            result <- accessPolicyDAO.overwritePolicy(newAccessPolicy, samRequestContext)
+            _ <- fireGroupUpdateNotification(policyIdentity, samRequestContext)
+          } yield {
+            result
+          }
         }
     }
   }
@@ -428,29 +436,34 @@ class ResourceService(
     validationErrors.map(_.flatten)
   }
 
-    private def fireGroupUpdateNotification(groupId: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): Future[Unit] =
-    cloudExtensions.onGroupUpdate(Seq(groupId), samRequestContext) recover {
-      case t: Throwable =>
-        logger.error(s"error calling cloudExtensions.onGroupUpdate for $groupId", t)
-        throw t
-    }
+  private def fireGroupUpdateNotification(groupId: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[Unit] =
+    IO.fromFuture(IO(cloudExtensions.onGroupUpdate(Seq(groupId), samRequestContext))).runAsync {
+      case Left(regrets) => IO(logger.error(s"error calling cloudExtensions.onGroupUpdate for $groupId", regrets))
+      case Right(_) => IO.unit
+    }.toIO
 
-  def addSubjectToPolicy(policyIdentity: FullyQualifiedPolicyId, subject: WorkbenchSubject, samRequestContext: SamRequestContext): Future[Unit] = {
+  def addSubjectToPolicy(policyIdentity: FullyQualifiedPolicyId, subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean] = {
     subject match {
       case subject: FullyQualifiedPolicyId if policyIdentity.resource.resourceTypeName.equals(ManagedGroupService.managedGroupTypeName) =>
-        Future.failed(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"Access policies cannot be added to managed groups.")))
-      case _ =>    {
-        directoryDAO.addGroupMember(policyIdentity, subject, samRequestContext).unsafeToFuture().map(_ => ()) andThen {
-          case Success(_) => fireGroupUpdateNotification(policyIdentity, samRequestContext)
-        }
-      }
+        IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"Access policies cannot be added to managed groups.")))
+      case _ =>
+        directoryDAO.addGroupMember(policyIdentity, subject, samRequestContext)
+          .flatMap(fireGroupUpdateNotificationIfGroupChanged(policyIdentity, samRequestContext))
     }
   }
 
-  def removeSubjectFromPolicy(policyIdentity: FullyQualifiedPolicyId, subject: WorkbenchSubject, samRequestContext: SamRequestContext): Future[Unit] =
-    directoryDAO.removeGroupMember(policyIdentity, subject, samRequestContext).void.unsafeToFuture() andThen {
-      case Success(_) => fireGroupUpdateNotification(policyIdentity, samRequestContext)
+  def removeSubjectFromPolicy(policyIdentity: FullyQualifiedPolicyId, subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean] =
+    directoryDAO.removeGroupMember(policyIdentity, subject, samRequestContext)
+      .flatMap(fireGroupUpdateNotificationIfGroupChanged(policyIdentity, samRequestContext))
+
+  private def fireGroupUpdateNotificationIfGroupChanged(policyIdentity: FullyQualifiedPolicyId, samRequestContext: SamRequestContext)(groupChanged: Boolean) = {
+    val maybeFireNotification = if (groupChanged) {
+      fireGroupUpdateNotification(policyIdentity, samRequestContext)
+    } else {
+      IO.unit
     }
+    maybeFireNotification.map(_ => groupChanged)
+  }
 
   private[service] def loadAccessPolicyWithEmails(policy: AccessPolicy, samRequestContext: SamRequestContext): IO[AccessPolicyMembership] = {
     val users = policy.members.collect { case userId: WorkbenchUserId => userId }
@@ -527,7 +540,7 @@ class ResourceService(
               ErrorReport(StatusCodes.BadRequest, "Cannot make auth domain protected resources public. Share directly with auth domain groups instead.")))
           else IO.unit
         case LoadResourceAuthDomainResult.NotConstrained =>
-          accessPolicyDAO.setPolicyIsPublic(policyId, public, samRequestContext) *> IO.fromFuture(IO(fireGroupUpdateNotification(policyId, samRequestContext)))
+          accessPolicyDAO.setPolicyIsPublic(policyId, public, samRequestContext) *> fireGroupUpdateNotification(policyId, samRequestContext)
       }
     } yield ()
 

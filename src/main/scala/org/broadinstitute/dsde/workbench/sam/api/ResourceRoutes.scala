@@ -87,7 +87,7 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
                         putPolicyOverwrite(resourceType, policyId, userInfo, samRequestContext)
                     } ~ pathPrefix("memberEmails") {
                       pathEndOrSingleSlash {
-                        putPolicyMembershipOverwrite(resourceType, policyId, userInfo, samRequestContext)
+                        putPolicyMembershipOverwrite(policyId, userInfo, samRequestContext)
                       } ~ pathPrefix(Segment) { email =>
                         withSubject(WorkbenchEmail(email), samRequestContext) { subject =>
                           pathEndOrSingleSlash {
@@ -203,7 +203,7 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
                     pathPrefix("memberEmails") {
                       requireActionsForSharePolicy(policyId, userInfo, samRequestContext) {
                         pathEndOrSingleSlash {
-                          putPolicyMembershipOverwrite(resourceType, policyId, userInfo, samRequestContext)
+                          putPolicyMembershipOverwrite(policyId, userInfo, samRequestContext)
                         } ~
                         pathPrefix(Segment) { email =>
                           withSubject(WorkbenchEmail(email), samRequestContext) { subject =>
@@ -356,12 +356,12 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
       sharePolicy
     }
 
-  def putPolicyMembershipOverwrite(resourceType: ResourceType, policyId: FullyQualifiedPolicyId, userInfo: UserInfo, samRequestContext: SamRequestContext): server.Route =
+  def putPolicyMembershipOverwrite(policyId: FullyQualifiedPolicyId, userInfo: UserInfo, samRequestContext: SamRequestContext): server.Route =
     put {
       requireOneOfAction(policyId.resource, Set(SamResourceActions.alterPolicies, SamResourceActions.sharePolicy(policyId.accessPolicyName)), userInfo.userId, samRequestContext) {
         entity(as[Set[WorkbenchEmail]]) { membersList =>
           complete(
-            resourceService.overwritePolicyMembers(resourceType, policyId.accessPolicyName, policyId.resource, membersList, samRequestContext).map(_ => StatusCodes.NoContent))
+            resourceService.overwritePolicyMembers(policyId, membersList, samRequestContext).map(_ => StatusCodes.NoContent))
         }
       }
     }
