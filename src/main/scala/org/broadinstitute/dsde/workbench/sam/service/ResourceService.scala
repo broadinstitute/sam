@@ -21,7 +21,7 @@ class ResourceService(
     private[service] val policyEvaluatorService: PolicyEvaluatorService,
     private val accessPolicyDAO: AccessPolicyDAO,
     private val directoryDAO: DirectoryDAO,
-    private[service] val cloudExtensions: CloudExtensions,
+    private val cloudExtensions: CloudExtensions,
     val emailDomain: String)(implicit val executionContext: ExecutionContext)
     extends LazyLogging {
   implicit val cs = IO.contextShift(executionContext) //for running IOs in paralell

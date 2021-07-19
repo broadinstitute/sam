@@ -262,10 +262,8 @@ class ManagedGroupRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRou
     val members = Set(newGuyEmail)
 
     Put(s"/api/group/$groupId/member", members) ~> samRoutes.route ~> check {
-      withClue(responseAs[String]) {
-        status shouldEqual StatusCodes.BadRequest
-        responseAs[String] should include(newGuyEmail.toString())
-      }
+      status shouldEqual StatusCodes.BadRequest
+      responseAs[String] should include (newGuyEmail.toString())
     }
   }
 
