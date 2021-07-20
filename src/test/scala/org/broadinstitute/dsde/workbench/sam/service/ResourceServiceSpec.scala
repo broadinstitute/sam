@@ -2,10 +2,10 @@ package org.broadinstitute.dsde.workbench.sam.service
 
 import java.net.URI
 import java.util.UUID
-
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import cats.data.NonEmptyList
+import cats.effect.IO
 import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.model._
@@ -16,6 +16,8 @@ import org.broadinstitute.dsde.workbench.sam.config.AppConfig.resourceTypeReader
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, PostgresAccessPolicyDAO, PostgresDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
+import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
+import org.mockito.{ArgumentMatchers, Mockito}
 import org.scalatest.OptionValues.convertOptionToValuable
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
@@ -24,11 +26,16 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import org.mockito.ArgumentMatchers._
+import org.mockito.Mockito._
+import org.scalatestplus.mockito.MockitoSugar
+
+import scala.concurrent.Future
 
 /**
   * Created by dvoet on 6/27/17.
   */
-class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures with TestSupport with BeforeAndAfter with BeforeAndAfterAll {
+class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures with TestSupport with BeforeAndAfter with BeforeAndAfterAll with MockitoSugar {
   val directoryConfig = TestSupport.directoryConfig
   val schemaLockConfig = TestSupport.schemaLockConfig
   //Note: we intentionally use the Managed Group resource type loaded from reference.conf for the tests here.
@@ -528,6 +535,61 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
     assert(policies.contains(newPolicy))
   }
 
+  it should "call CloudExtensions.onGroupUpdate when members change" in {
+    val mockCloudExtensions: CloudExtensions = mock[CloudExtensions](RETURNS_SMART_NULLS)
+    val mockDirectoryDAO: DirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
+    val mockAccessPolicyDAO = mock[AccessPolicyDAO](RETURNS_SMART_NULLS)
+    val resourceService = new ResourceService(Map.empty,
+      mock[PolicyEvaluatorService](RETURNS_SMART_NULLS),
+      mockAccessPolicyDAO,
+      mockDirectoryDAO,
+      mockCloudExtensions,
+      "")
+
+    val policyId = FullyQualifiedPolicyId(FullyQualifiedResourceId(defaultResourceType.name, ResourceId("testR")), AccessPolicyName("testA"))
+    val member = WorkbenchUserId("testU")
+    val accessPolicy = AccessPolicy(policyId, Set.empty, WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false)
+
+    // setup existing policy with a member
+    when(mockAccessPolicyDAO.loadPolicy(ArgumentMatchers.eq(policyId), any[SamRequestContext])).thenReturn(IO.pure(Option(AccessPolicy.members.set(Set(member))(accessPolicy))))
+
+    // function calls that should pass but what they return does not matter
+    when(mockAccessPolicyDAO.overwritePolicy(ArgumentMatchers.eq(accessPolicy), any[SamRequestContext])).thenReturn(IO.pure(accessPolicy))
+    when(mockCloudExtensions.onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])).thenReturn(Future.successful(()))
+
+    // overwrite policy with no members
+    runAndWait(resourceService.overwritePolicy(defaultResourceType, policyId.accessPolicyName, policyId.resource, AccessPolicyMembership(Set.empty, Set.empty, Set.empty), samRequestContext))
+
+    verify(mockCloudExtensions, Mockito.timeout(500)).onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])
+  }
+
+  it should "not call CloudExtensions.onGroupUpdate when members don't change" in {
+    val mockCloudExtensions: CloudExtensions = mock[CloudExtensions](RETURNS_SMART_NULLS)
+    val mockDirectoryDAO: DirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
+    val mockAccessPolicyDAO = mock[AccessPolicyDAO](RETURNS_SMART_NULLS)
+    val resourceService = new ResourceService(Map.empty,
+      mock[PolicyEvaluatorService](RETURNS_SMART_NULLS),
+      mockAccessPolicyDAO,
+      mockDirectoryDAO,
+      mockCloudExtensions,
+      "")
+
+    val policyId = FullyQualifiedPolicyId(FullyQualifiedResourceId(defaultResourceType.name, ResourceId("testR")), AccessPolicyName("testA"))
+    val accessPolicy = AccessPolicy(policyId, Set.empty, WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false)
+
+    // setup existing policy with no members
+    when(mockAccessPolicyDAO.loadPolicy(ArgumentMatchers.eq(policyId), any[SamRequestContext])).thenReturn(IO.pure(Option(accessPolicy)))
+
+    // function calls that should pass but what they return does not matter
+    when(mockAccessPolicyDAO.overwritePolicy(ArgumentMatchers.eq(accessPolicy), any[SamRequestContext])).thenReturn(IO.pure(accessPolicy))
+    when(mockCloudExtensions.onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])).thenReturn(Future.successful(()))
+
+    // overwrite policy with no members
+    runAndWait(resourceService.overwritePolicy(defaultResourceType, policyId.accessPolicyName, policyId.resource, AccessPolicyMembership(Set.empty, Set.empty, Set.empty), samRequestContext))
+
+    verify(mockCloudExtensions, Mockito.after(500).never).onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])
+  }
+
   "overwritePolicyMembers" should "succeed with a valid request" in {
     val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("my-resource"))
 
@@ -540,11 +602,64 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
 
     runAndWait(service.overwritePolicy(defaultResourceType, newPolicy.id.accessPolicyName, newPolicy.id.resource, AccessPolicyMembership(Set.empty, Set(ResourceAction("non_owner_action")), Set.empty, None), samRequestContext))
 
-    runAndWait(service.overwritePolicyMembers(defaultResourceType, newPolicy.id.accessPolicyName, newPolicy.id.resource, Set.empty, samRequestContext))
+    runAndWait(service.overwritePolicyMembers(newPolicy.id, Set.empty, samRequestContext))
 
     val policies = policyDAO.listAccessPolicies(resource, samRequestContext).unsafeRunSync().map(_.copy(email=WorkbenchEmail("policy-randomuuid@example.com")))
 
     assert(policies.contains(newPolicy))
+  }
+
+  it should "call CloudExtensions.onGroupUpdate when members change" in {
+    val mockCloudExtensions: CloudExtensions = mock[CloudExtensions](RETURNS_SMART_NULLS)
+    val mockDirectoryDAO: DirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
+    val mockAccessPolicyDAO = mock[AccessPolicyDAO](RETURNS_SMART_NULLS)
+    val resourceService = new ResourceService(Map.empty,
+      mock[PolicyEvaluatorService](RETURNS_SMART_NULLS),
+      mockAccessPolicyDAO,
+      mockDirectoryDAO,
+      mockCloudExtensions,
+      "")
+
+    val policyId = FullyQualifiedPolicyId(FullyQualifiedResourceId(defaultResourceType.name, ResourceId("testR")), AccessPolicyName("testA"))
+    val member = WorkbenchUserId("testU")
+
+    // setup existing policy with a member
+    when(mockAccessPolicyDAO.loadPolicy(ArgumentMatchers.eq(policyId), any[SamRequestContext])).thenReturn(IO.pure(Option(AccessPolicy(policyId, Set(member), WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false))))
+
+    // function calls that should pass but what they return does not matter
+    when(mockAccessPolicyDAO.overwritePolicyMembers(ArgumentMatchers.eq(policyId), ArgumentMatchers.eq(Set.empty), any[SamRequestContext])).thenReturn(IO.unit)
+    when(mockCloudExtensions.onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])).thenReturn(Future.successful(()))
+
+    // overwrite policy members with empty set
+    runAndWait(resourceService.overwritePolicyMembers(policyId, Set.empty, samRequestContext))
+
+    verify(mockCloudExtensions, Mockito.timeout(500)).onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])
+  }
+
+  it should "not call CloudExtensions.onGroupUpdate when members don't change" in {
+    val mockCloudExtensions: CloudExtensions = mock[CloudExtensions](RETURNS_SMART_NULLS)
+    val mockDirectoryDAO: DirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
+    val mockAccessPolicyDAO = mock[AccessPolicyDAO](RETURNS_SMART_NULLS)
+    val resourceService = new ResourceService(Map.empty,
+      mock[PolicyEvaluatorService](RETURNS_SMART_NULLS),
+      mockAccessPolicyDAO,
+      mockDirectoryDAO,
+      mockCloudExtensions,
+      "")
+
+    val policyId = FullyQualifiedPolicyId(FullyQualifiedResourceId(defaultResourceType.name, ResourceId("testR")), AccessPolicyName("testA"))
+
+    // setup existing policy with no members
+    when(mockAccessPolicyDAO.loadPolicy(ArgumentMatchers.eq(policyId), any[SamRequestContext])).thenReturn(IO.pure(Option(AccessPolicy(policyId, Set.empty, WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false))))
+
+    // function calls that should pass but what they return does not matter
+    when(mockAccessPolicyDAO.overwritePolicyMembers(ArgumentMatchers.eq(policyId), ArgumentMatchers.eq(Set.empty), any[SamRequestContext])).thenReturn(IO.unit)
+    when(mockCloudExtensions.onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])).thenReturn(Future.successful(()))
+
+    // overwrite policy members with empty set
+    runAndWait(resourceService.overwritePolicyMembers(policyId, Set.empty, samRequestContext))
+
+    verify(mockCloudExtensions, Mockito.after(500).never).onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])
   }
 
   it should "succeed with a regex action" in {
@@ -841,6 +956,90 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
 
     // remove a second time to make sure no exception is thrown
     runAndWait(service.removeSubjectFromPolicy(FullyQualifiedPolicyId(resource, policyName), otherUserInfo.userId, samRequestContext))
+  }
+
+  "addSubjectToPolicy" should "call CloudExtensions.onGroupUpdate when member added" in {
+    val mockCloudExtensions: CloudExtensions = mock[CloudExtensions](RETURNS_SMART_NULLS)
+    val mockDirectoryDAO: DirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
+    val resourceService = new ResourceService(Map.empty,
+      mock[PolicyEvaluatorService](RETURNS_SMART_NULLS),
+      mock[AccessPolicyDAO](RETURNS_SMART_NULLS),
+      mockDirectoryDAO,
+      mockCloudExtensions,
+      "")
+
+    val policyId = FullyQualifiedPolicyId(FullyQualifiedResourceId(defaultResourceType.name, ResourceId("testR")), AccessPolicyName("testA"))
+    val member = WorkbenchUserId("testU")
+
+    // return value true at the end indicates group changed
+    when(mockDirectoryDAO.addGroupMember(ArgumentMatchers.eq(policyId), ArgumentMatchers.eq(member), any[SamRequestContext])).thenReturn(IO.pure(true))
+    when(mockCloudExtensions.onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])).thenReturn(Future.successful(()))
+    runAndWait(resourceService.addSubjectToPolicy(policyId, member, samRequestContext))
+
+    verify(mockCloudExtensions, Mockito.timeout(500)).onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])
+  }
+
+  it should "not call CloudExtensions.onGroupUpdate when member added but is already there" in {
+    val mockCloudExtensions: CloudExtensions = mock[CloudExtensions](RETURNS_SMART_NULLS)
+    val mockDirectoryDAO: DirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
+    val resourceService = new ResourceService(Map.empty,
+      mock[PolicyEvaluatorService](RETURNS_SMART_NULLS),
+      mock[AccessPolicyDAO](RETURNS_SMART_NULLS),
+      mockDirectoryDAO,
+      mockCloudExtensions,
+      "")
+
+    val policyId = FullyQualifiedPolicyId(FullyQualifiedResourceId(defaultResourceType.name, ResourceId("testR")), AccessPolicyName("testA"))
+    val member = WorkbenchUserId("testU")
+
+    // return value false at the end indicates group did not change
+    when(mockDirectoryDAO.addGroupMember(ArgumentMatchers.eq(policyId), ArgumentMatchers.eq(member), any[SamRequestContext])).thenReturn(IO.pure(false))
+    when(mockCloudExtensions.onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])).thenReturn(Future.successful(()))
+    runAndWait(resourceService.addSubjectToPolicy(policyId, member, samRequestContext))
+
+    verify(mockCloudExtensions, Mockito.after(500).never).onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])
+  }
+
+  "removeSubjectFromPolicy" should "call CloudExtensions.onGroupUpdate when member removed" in {
+    val mockCloudExtensions: CloudExtensions = mock[CloudExtensions](RETURNS_SMART_NULLS)
+    val mockDirectoryDAO: DirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
+    val resourceService = new ResourceService(Map.empty,
+      mock[PolicyEvaluatorService](RETURNS_SMART_NULLS),
+      mock[AccessPolicyDAO](RETURNS_SMART_NULLS),
+      mockDirectoryDAO,
+      mockCloudExtensions,
+      "")
+
+    val policyId = FullyQualifiedPolicyId(FullyQualifiedResourceId(defaultResourceType.name, ResourceId("testR")), AccessPolicyName("testA"))
+    val member = WorkbenchUserId("testU")
+
+    // return value true at the end indicates group changed
+    when(mockDirectoryDAO.removeGroupMember(ArgumentMatchers.eq(policyId), ArgumentMatchers.eq(member), any[SamRequestContext])).thenReturn(IO.pure(true))
+    when(mockCloudExtensions.onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])).thenReturn(Future.successful(()))
+    runAndWait(resourceService.removeSubjectFromPolicy(policyId, member, samRequestContext))
+
+    verify(mockCloudExtensions, Mockito.timeout(1000)).onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])
+  }
+
+  it should "not call CloudExtensions.onGroupUpdate when member removed but wasn't there to start with" in {
+    val mockCloudExtensions: CloudExtensions = mock[CloudExtensions](RETURNS_SMART_NULLS)
+    val mockDirectoryDAO: DirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
+    val resourceService = new ResourceService(Map.empty,
+      mock[PolicyEvaluatorService](RETURNS_SMART_NULLS),
+      mock[AccessPolicyDAO](RETURNS_SMART_NULLS),
+      mockDirectoryDAO,
+      mockCloudExtensions,
+      "")
+
+    val policyId = FullyQualifiedPolicyId(FullyQualifiedResourceId(defaultResourceType.name, ResourceId("testR")), AccessPolicyName("testA"))
+    val member = WorkbenchUserId("testU")
+
+    // return value false at the end indicates group did not change
+    when(mockDirectoryDAO.removeGroupMember(ArgumentMatchers.eq(policyId), ArgumentMatchers.eq(member), any[SamRequestContext])).thenReturn(IO.pure(false))
+    when(mockCloudExtensions.onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])).thenReturn(Future.successful(()))
+    runAndWait(resourceService.removeSubjectFromPolicy(policyId, member, samRequestContext))
+
+    verify(mockCloudExtensions, Mockito.after(500).never).onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])
   }
 
   "initResourceTypes" should "do the happy path" in {

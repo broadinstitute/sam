@@ -2,11 +2,10 @@ package org.broadinstitute.dsde.workbench.sam.google
 
 import java.io.ByteArrayInputStream
 import java.util.Date
-
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
-import cats.effect.{ContextShift, IO}
+import cats.effect.{Clock, ContextShift, IO}
 import cats.implicits._
 import com.google.api.client.googleapis.json.GoogleJsonResponseException
 import com.google.api.client.http.HttpResponseException
@@ -15,6 +14,7 @@ import com.google.auth.oauth2.ServiceAccountCredentials
 import com.google.protobuf.{Duration, Timestamp}
 import com.google.rpc.Code
 import com.typesafe.scalalogging.LazyLogging
+import net.logstash.logback.argument.StructuredArguments
 import org.broadinstitute.dsde.workbench.dataaccess.NotificationDAO
 import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleIamDAO, GoogleKmsService, GoogleProjectDAO, GooglePubSubDAO, GoogleStorageDAO}
 import org.broadinstitute.dsde.workbench.google2.util.{DistributedLock, LockPath}
@@ -62,7 +62,7 @@ class GoogleExtensions(
     val googleKms: GoogleKmsService[IO],
     val googleServicesConfig: GoogleServicesConfig,
     val petServiceAccountConfig: PetServiceAccountConfig,
-    val resourceTypes: Map[ResourceTypeName, ResourceType])(implicit val system: ActorSystem, executionContext: ExecutionContext, cs: ContextShift[IO])
+    val resourceTypes: Map[ResourceTypeName, ResourceType])(implicit val system: ActorSystem, executionContext: ExecutionContext, cs: ContextShift[IO], clock: Clock[IO])
     extends LazyLogging
     with FutureSupport
     with CloudExtensions
@@ -186,6 +186,7 @@ class GoogleExtensions(
    */
   override def onGroupUpdate(groupIdentities: Seq[WorkbenchGroupIdentity], samRequestContext: SamRequestContext): Future[Unit] = {
     for {
+      start <- clock.instantNow
       // only sync groups that have been synchronized in the past
       previouslySyncedIds <- groupIdentities.toList.traverseFilter { id =>
         directoryDAO.getSynchronizedDate(id, samRequestContext).map(dateOption => dateOption.map(_ => id))
@@ -208,7 +209,12 @@ class GoogleExtensions(
       // publish all the messages
       _ <- IO.fromFuture(IO(publishMessages(messages.flatten)))
 
-    } yield ()
+      end <- clock.instantNow
+
+    } yield {
+      val duration = end.toEpochMilli - start.toEpochMilli
+      logger.info(s"GoogleExtensions.onGroupUpdate timing (ms)", StructuredArguments.entries(Map("duration" -> duration, "group-ids" -> groupIdentities.map(_.toString).asJava).asJava))
+    }
   }.unsafeToFuture()
 
   private def makeConstrainedResourceAccessPolicyMessages(groupIdentity: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[List[String]] = {
