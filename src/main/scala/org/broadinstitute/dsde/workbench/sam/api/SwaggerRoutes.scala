@@ -61,6 +61,7 @@ trait SwaggerRoutes {
                                           |        realm: "${swaggerConfig.realm}",
                                           |        appName: "${swaggerConfig.realm}",
                                           |        scopeSeparator: " ",
+                                          |        usePkceWithAuthorizationCodeGrant: true,
                                           |        additionalQueryStringParams: {}
                                           |      })
                                           |      window.ui = ui
