@@ -3313,6 +3313,7 @@ components:
             profile: profile authorization
     azureb2coauthcode:
       type: oauth2
+      x-tokenName: id_token
       flows:
         authorizationCode:
           authorizationUrl: https://terrab2ctest.b2clogin.com/terrab2ctest.onmicrosoft.com/B2C_1A_SIGNUP_SIGNIN/oauth2/v2.0/authorize
