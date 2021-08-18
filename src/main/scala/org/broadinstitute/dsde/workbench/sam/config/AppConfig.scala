@@ -140,6 +140,13 @@ object AppConfig {
     )
   }
 
+  implicit val termsOfServiceConfigReader: ValueReader[TermsOfServiceConfig] = ValueReader.relative { config =>
+    TermsOfServiceConfig(
+      config.getBoolean("enabled"),
+      config.getInt("version")
+    )
+  }
+
   implicit val liquibaseConfigReader: ValueReader[LiquibaseConfig] = ValueReader.relative { config =>
     LiquibaseConfig(config.getString("changelog"), config.getBoolean("initWithLiquibase"))
   }
