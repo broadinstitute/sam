@@ -32,6 +32,7 @@ object AppConfig {
   implicit val swaggerReader: ValueReader[SwaggerConfig] = ValueReader.relative { config =>
     SwaggerConfig(
       config.getString("googleClientId"),
+      config.getString("azureClientId"),
       config.getString("realm")
     )
   }
