@@ -22,12 +22,12 @@ final case class AppConfig(
                             schemaLockConfig: SchemaLockConfig,
                             distributedLockConfig: DistributedLockConfig,
                             swaggerConfig: SwaggerConfig,
+                            termsOfServiceConfig: TermsOfServiceConfig,
                             googleConfig: Option[GoogleConfig],
                             resourceTypes: Set[ResourceType],
                             liquibaseConfig: LiquibaseConfig,
                             identityConcentratorConfig: Option[IdentityConcentratorConfig],
-                            blockedEmailDomains: Seq[String],
-                            termsOfServiceConfig: TermsOfServiceConfig)
+                            blockedEmailDomains: Seq[String])
 
 object AppConfig {
   implicit val swaggerReader: ValueReader[SwaggerConfig] = ValueReader.relative { config =>
@@ -144,7 +144,8 @@ object AppConfig {
   implicit val termsOfServiceConfigReader: ValueReader[TermsOfServiceConfig] = ValueReader.relative { config =>
     TermsOfServiceConfig(
       config.getBoolean("enabled"),
-      config.getInt("version")
+      config.getInt("version"),
+      config.getString("url")
     )
   }
 

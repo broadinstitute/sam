@@ -2,7 +2,6 @@ package org.broadinstitute.dsde.workbench.sam
 package api
 
 import java.time.Instant
-
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.headers.{OAuth2BearerToken, RawHeader}
 import akka.http.scaladsl.server.Directives.{complete, handleExceptions}
@@ -16,6 +15,7 @@ import org.broadinstitute.dsde.workbench.sam.Generator._
 import org.broadinstitute.dsde.workbench.sam.TestSupport.{eqWorkbenchExceptionErrorReport, genIdentityConcentratorId, samRequestContext}
 import org.broadinstitute.dsde.workbench.sam.api.SamRoutes.myExceptionHandler
 import org.broadinstitute.dsde.workbench.sam.api.StandardUserInfoDirectives._
+import org.broadinstitute.dsde.workbench.sam.config.TermsOfServiceConfig
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, MockDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.identityConcentrator.IdentityConcentratorService
 import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, UserService}
@@ -34,6 +34,7 @@ class StandardUserInfoDirectivesSpec extends AnyFlatSpec with PropertyBasedTesti
     override implicit val executionContext: ExecutionContext = null
     override val directoryDAO: DirectoryDAO = new MockDirectoryDAO()
     override val cloudExtensions: CloudExtensions = null
+    override val termsOfServiceConfig: TermsOfServiceConfig = null
     override val identityConcentratorService: Option[IdentityConcentratorService] = Option(mock[IdentityConcentratorService](RETURNS_SMART_NULLS))
     override val userService: UserService = null
   }
