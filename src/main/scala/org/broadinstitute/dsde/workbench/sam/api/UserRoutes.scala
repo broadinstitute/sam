@@ -216,10 +216,6 @@ trait UserRoutes extends UserInfoDirectives with SamRequestContextDirectives {
       }
     }
   }
-
-  def isTermsOfServiceAccepted(tosUrl: Option[String]) = {
-    tosUrl.get
-  }
 }
 
 final case class InviteUser(inviteeId: WorkbenchUserId, inviteeEmail: WorkbenchEmail)
