@@ -10,10 +10,7 @@ import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 class TosService (val directoryDao: DirectoryDAO) extends LazyLogging {
 
   def createNewGroupIfNeeded(currentVersion:Int, isEnabled:Boolean): IO[Any] = {
-    if(!isEnabled){
-      IO.unit
-    }
-    else if (groupExists(currentVersion)) {
+    if(!isEnabled || groupExists(currentVersion)){
       IO.unit
     } else {
       logger.info("creating new ToS group")
