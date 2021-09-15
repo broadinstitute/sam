@@ -290,7 +290,7 @@ trait GoogleExtensionRoutesSpecHelper extends AnyFlatSpec with Matchers with Sca
     )
 
     val userInfo = UserInfo(genOAuth2BearerToken.sample.get, user.id, email, 0)
-    samDeps.cloudExtensions.asInstanceOf[GoogleExtensions].onBoot(SamApplication(samDeps.userService, samDeps.resourceService, samDeps.statusService)).unsafeRunSync()
+    samDeps.cloudExtensions.asInstanceOf[GoogleExtensions].onBoot(SamApplication(samDeps.userService, samDeps.resourceService, samDeps.statusService, new TosService(samDeps.directoryDAO))).unsafeRunSync()
     (userInfo.copy(userId = user.id), routes, expectedJson)
   }
 }
