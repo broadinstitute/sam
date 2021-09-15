@@ -5,16 +5,16 @@ import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, PostgresDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
-import org.scalatest.BeforeAndAfterAll
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
 import org.scalatest.flatspec.AnyFlatSpec
 
 import java.net.URI
 import scala.concurrent.ExecutionContext.Implicits.global
 
-class TosServiceSpec extends AnyFlatSpec with TestSupport with BeforeAndAfterAll {
+class TosServiceSpec extends AnyFlatSpec with TestSupport with BeforeAndAfterAll with BeforeAndAfter {
 
-  lazy val directoryConfig = TestSupport.appConfig.directoryConfig
-  lazy val schemaLockConfig = TestSupport.appConfig.schemaLockConfig
+  private lazy val directoryConfig = TestSupport.appConfig.directoryConfig
+  private lazy val schemaLockConfig = TestSupport.appConfig.schemaLockConfig
   val dirURI = new URI(directoryConfig.directoryUrl)
   val connectionPool = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
   lazy val dirDAO: DirectoryDAO = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.dbRef)
@@ -25,6 +25,10 @@ class TosServiceSpec extends AnyFlatSpec with TestSupport with BeforeAndAfterAll
   override protected def beforeAll(): Unit = {
     super.beforeAll()
     runAndWait(schemaDao.init())
+    TestSupport.truncateAll
+  }
+
+  before {
     TestSupport.truncateAll
   }
 
@@ -40,7 +44,7 @@ class TosServiceSpec extends AnyFlatSpec with TestSupport with BeforeAndAfterAll
     assert(service.createNewGroupIfNeeded(0, isEnabled = true) == IO.unit, "createNewGroupIfNeeded(0) should no-op the second time")
   }
 
-  it should "do nothing is ToS check is not enabled" in {
+  it should "do nothing if ToS check is not enabled" in {
     assert(service.createNewGroupIfNeeded(0, isEnabled = false) == IO.unit)
   }
 
