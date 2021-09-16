@@ -7,15 +7,18 @@ import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
-class TosService (val directoryDao: DirectoryDAO) extends LazyLogging {
+class TosService (val directoryDao: DirectoryDAO, val appsDomain: String) extends LazyLogging {
 
-  def createNewGroupIfNeeded(currentVersion:Int, isEnabled:Boolean): IO[Any] = {
-    if(!isEnabled || groupExists(currentVersion)){
-      IO.unit
-    } else {
-      logger.info("creating new ToS group")
-      directoryDao.createGroup(BasicWorkbenchGroup(WorkbenchGroupName(getGroupName(currentVersion)),
-        Set.empty, WorkbenchEmail("foo@bar.com")), samRequestContext = SamRequestContext(None))
+  def createNewGroupIfNeeded(currentVersion:Int, isEnabled:Boolean): IO[Option[BasicWorkbenchGroup]] = {
+    if(!isEnabled){
+      IO.none
+    }
+    getTosGroup(currentVersion).flatMap {
+      case Some(_) => IO.none
+      case None =>
+        logger.info("creating new ToS group")
+        directoryDao.createGroup(BasicWorkbenchGroup(WorkbenchGroupName(getGroupName(currentVersion)),
+          Set.empty, WorkbenchEmail(s"${getGroupName(currentVersion)}_GROUP@${appsDomain}")), samRequestContext = SamRequestContext(None)).map(Option(_))
     }
   }
 
@@ -23,9 +26,8 @@ class TosService (val directoryDao: DirectoryDAO) extends LazyLogging {
     s"tos_accepted_${currentVersion}"
   }
 
-  def groupExists(currentVersion:Int): Boolean = {
-    val maybeGroup = directoryDao.loadGroup(WorkbenchGroupName(getGroupName(currentVersion)), SamRequestContext(None)).unsafeRunSync()
-    maybeGroup.isDefined
+  def getTosGroup(currentVersion: Int): IO[Option[BasicWorkbenchGroup]] = {
+    directoryDao.loadGroup(WorkbenchGroupName(getGroupName(currentVersion)), SamRequestContext(None))
   }
 
 }

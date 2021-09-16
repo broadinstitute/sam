@@ -20,7 +20,7 @@ class TosServiceSpec extends AnyFlatSpec with TestSupport with BeforeAndAfterAll
   lazy val dirDAO: DirectoryDAO = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.dbRef)
   lazy val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
-  private val service = new TosService(dirDAO)
+  private val service = new TosService(dirDAO, "example.com")
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()
@@ -38,14 +38,14 @@ class TosServiceSpec extends AnyFlatSpec with TestSupport with BeforeAndAfterAll
   }
 
   it should "create the group once" in {
-    assert(!service.groupExists(0), "ToS Group should not exist at the start")
+    assert(service.getTosGroup(0).unsafeRunSync().isEmpty, "ToS Group should not exist at the start")
     service.createNewGroupIfNeeded(0, isEnabled = true).unsafeRunSync()
-    assert(service.groupExists(0), "ToS Group should exist after above call")
-    assert(service.createNewGroupIfNeeded(0, isEnabled = true) == IO.unit, "createNewGroupIfNeeded(0) should no-op the second time")
+    assert(service.getTosGroup(0).unsafeRunSync().isDefined, "ToS Group should exist after above call")
+    assert(service.createNewGroupIfNeeded(0, isEnabled = true) == IO.none, "createNewGroupIfNeeded(0) should no-op the second time")
   }
 
   it should "do nothing if ToS check is not enabled" in {
-    assert(service.createNewGroupIfNeeded(0, isEnabled = false) == IO.unit)
+    assert(service.createNewGroupIfNeeded(0, isEnabled = false) == IO.none)
   }
 
 }
