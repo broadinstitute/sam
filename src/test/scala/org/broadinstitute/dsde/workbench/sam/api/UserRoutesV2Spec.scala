@@ -38,6 +38,32 @@ class UserRoutesV2Spec extends UserRoutesSpecHelper {
     }
   }
 
+  it should "create a user if ToS is enabled and the user specifies the ToS parameter correctly" in withTosEnabledRoutes { samRoutes =>
+    Post("/register/user/v2/self?tos=app.terra.bio/#terms-of-service") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Created
+      val res = responseAs[UserStatus]
+      res.userInfo.userSubjectId.value.length shouldBe 21
+      res.userInfo.userEmail shouldBe defaultUserEmail
+      res.enabled shouldBe Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true)
+    }
+
+    Post("/register/user/v2/self?tos=app.terra.bio/#terms-of-service") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Conflict
+    }
+  }
+
+  it should "forbid the registration if ToS is enabled and the user doesn't specify a ToS parameter" in withTosEnabledRoutes { samRoutes =>
+    Post("/register/user/v2/self") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Forbidden
+    }
+  }
+
+  it should "forbid the registration if ToS is enabled and the user doesn't specify the correct ToS url" in withTosEnabledRoutes { samRoutes =>
+    Post("/register/user/v2/self?tos=onemillionpats.com") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Forbidden
+    }
+  }
+
   "GET /register/user/v2/self/info" should "get the status of an enabled user" in withDefaultRoutes { samRoutes =>
     val googleSubjectId = GoogleSubjectId(genRandom(System.currentTimeMillis()))
     Get("/register/user/v2/self/info") ~> samRoutes.route ~> check {
