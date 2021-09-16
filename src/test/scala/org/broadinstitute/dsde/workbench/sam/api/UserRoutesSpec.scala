@@ -38,6 +38,32 @@ class UserRoutesSpec extends UserRoutesSpecHelper {
     }
   }
 
+  it should "create a user if ToS is enabled and the user specifies the ToS parameter correctly" in withTosEnabledRoutes { samRoutes =>
+    Post("/register/user?tos=app.terra.bio/#terms-of-service") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Created
+      val res = responseAs[UserStatus]
+      res.userInfo.userSubjectId.value.length shouldBe 21
+      res.userInfo.userEmail shouldBe defaultUserEmail
+      res.enabled shouldBe Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true)
+    }
+
+    Post("/register/user?tos=app.terra.bio/#terms-of-service") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Conflict
+    }
+  }
+
+  it should "forbid the registration if ToS is enabled and the user doesn't specify a ToS parameter" in withTosEnabledRoutes { samRoutes =>
+    Post("/register/user") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Forbidden
+    }
+  }
+
+  it should "forbid the registration if ToS is enabled and the user doesn't specify the correct ToS url" in withTosEnabledRoutes { samRoutes =>
+    Post("/register/user?tos=onemillionpats.com") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Forbidden
+    }
+  }
+
   "GET /register/user" should "get the status of an enabled user" in {
     val (user, _, routes) = createTestUser()
 
@@ -217,6 +243,16 @@ trait UserRoutesSpecHelper extends AnyFlatSpec with Matchers with ScalatestRoute
     val registrationDAO = new MockRegistrationDAO()
 
     val samRoutes = new TestSamRoutes(null, null, new UserService(directoryDAO, NoExtensions, registrationDAO, Seq.empty), new StatusService(directoryDAO, registrationDAO, NoExtensions, TestSupport.dbRef), null, UserInfo(OAuth2BearerToken(""), defaultUserId, defaultUserEmail, 0), directoryDAO,
+      createWorkbenchUser = Option(CreateWorkbenchUser(UserService.genWorkbenchUserId(System.currentTimeMillis()), TestSupport.genGoogleSubjectId(), defaultUserEmail, None)))
+
+    testCode(samRoutes)
+  }
+
+  def withTosEnabledRoutes[T](testCode: TestSamTosEnabledRoutes => T): T = {
+    val directoryDAO = new MockDirectoryDAO()
+    val registrationDAO = new MockRegistrationDAO()
+
+    val samRoutes = new TestSamTosEnabledRoutes(null, null, new UserService(directoryDAO, NoExtensions, registrationDAO, Seq.empty), new StatusService(directoryDAO, registrationDAO, NoExtensions, TestSupport.dbRef), null, UserInfo(OAuth2BearerToken(""), defaultUserId, defaultUserEmail, 0), directoryDAO,
       createWorkbenchUser = Option(CreateWorkbenchUser(UserService.genWorkbenchUserId(System.currentTimeMillis()), TestSupport.genGoogleSubjectId(), defaultUserEmail, None)))
 
     testCode(samRoutes)
