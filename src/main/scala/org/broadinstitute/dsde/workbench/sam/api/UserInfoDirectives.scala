@@ -35,6 +35,9 @@ trait UserInfoDirectives {
 
     Directives.mapInnerRoute { r =>
       parameter("tos".?) { termsOfServiceUrlOpt =>
+        println("LOOKHERE-start")
+        println(termsOfServiceUrlOpt)
+        println("LOOKHERE-end")
         if(!termsOfServiceConfig.enabled) r //ToS-enforcement is not enabled, so let the request through
         else {
           termsOfServiceUrlOpt match {
