@@ -39,9 +39,9 @@ class TosServiceSpec extends AnyFlatSpec with TestSupport with BeforeAndAfterAll
 
   it should "create the group once" in {
     assert(service.getTosGroup(0).unsafeRunSync().isEmpty, "ToS Group should not exist at the start")
-    service.createNewGroupIfNeeded(0, isEnabled = true).unsafeRunSync()
+    assert(service.createNewGroupIfNeeded(0, isEnabled = true).unsafeRunSync().isDefined, "createGroupIfNeeded(0) should create the group initially")
     assert(service.getTosGroup(0).unsafeRunSync().isDefined, "ToS Group should exist after above call")
-    assert(service.createNewGroupIfNeeded(0, isEnabled = true) == IO.none, "createNewGroupIfNeeded(0) should no-op the second time")
+    assert(service.createNewGroupIfNeeded(0, isEnabled = true).unsafeRunSync().isEmpty, "createNewGroupIfNeeded(0) should no-op the second time")
   }
 
   it should "do nothing if ToS check is not enabled" in {

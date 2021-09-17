@@ -13,17 +13,14 @@ class TosService (val directoryDao: DirectoryDAO, val appsDomain: String) extend
     if(isEnabled) {
       getTosGroup(currentVersion).flatMap {
         case Some(_) =>
-          logger.info("Returning already created group")
           IO.none
         case None =>
           logger.info("creating new ToS group")
           directoryDao.createGroup(BasicWorkbenchGroup(WorkbenchGroupName(getGroupName(currentVersion)),
             Set.empty, WorkbenchEmail(s"${getGroupName(currentVersion)}_GROUP@${appsDomain}")), samRequestContext = SamRequestContext(None)).map(Option(_))
       }
-    } else {
-      logger.info("Else being hit")
+    } else
       IO.none
-    }
   }
 
   def getGroupName(currentVersion:Int): String = {
