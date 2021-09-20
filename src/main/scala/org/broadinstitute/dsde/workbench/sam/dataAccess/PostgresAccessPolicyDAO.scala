@@ -771,7 +771,7 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
               }.list().apply().toMap
             val problematicGroupMemberships: List[String] = samsql"""select ${g.result.name} from ${GroupTable as g}
                     join ${GroupMemberTable as gm} on ${g.id} = ${gm.groupId}
-                    where ${gm.memberGroupId} in ${problematicGroupIdsToNames.keys.toList}"""
+                    where ${gm.memberGroupId} in (${problematicGroupIdsToNames.keys})"""
               .map(_.toString).list().apply()
             Failure(new WorkbenchExceptionWithErrorReport(
               ErrorReport(StatusCodes.Conflict, s"Foreign Key Violation -- Cannot delete group(s) ${problematicGroupIdsToNames.values.toList} because they are a member of group(s): ${problematicGroupMemberships}")))
