@@ -17,7 +17,7 @@ class TosService (val directoryDao: DirectoryDAO, val appsDomain: String) extend
         case None =>
           logger.info("creating new ToS group")
           directoryDao.createGroup(BasicWorkbenchGroup(WorkbenchGroupName(getGroupName(currentVersion)),
-            Set.empty, WorkbenchEmail(s"${getGroupName(currentVersion)}_GROUP@${appsDomain}")), samRequestContext = SamRequestContext(None)).map(Option(_))
+            Set.empty, WorkbenchEmail(s"GROUP_${getGroupName(currentVersion)}@${appsDomain}")), samRequestContext = SamRequestContext(None)).map(Option(_))
       }
     } else
       IO.none
