@@ -744,6 +744,7 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
   override def deleteAllResourcePolicies(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] = {
     val p = PolicyTable.syntax("p")
     val g = GroupTable.syntax("g")
+    val gm = GroupMemberTable.syntax("gm")
 
     serializableWriteTransaction("deletePolicy", samRequestContext)({ implicit session =>
       // first get all the group PKs associated to all the resource policies
@@ -757,8 +758,24 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
       samsql"""delete $fromAndWhereFragment""".update().apply()
 
       if (groupPKsToDelete.nonEmpty) {
-        samsql"""delete from ${GroupTable as g}
+        Try {
+          samsql"""delete from ${GroupTable as g}
                  where ${g.id} in ($groupPKsToDelete)""".update().apply()
+        }.recoverWith {
+          case fkViolation: PSQLException if fkViolation.getSQLState == PSQLStateExtensions.FOREIGN_KEY_VIOLATION =>
+            val problematicGroupIdsToNames: Map[GroupPK, String] = samsql"""select ${g.result.id}, ${g.result.name} from ${GroupTable as g}
+                    join ${GroupMemberTable as gm} on ${g.id} = ${gm.groupId}
+                    where ${gm.memberGroupId} in ($groupPKsToDelete)"""
+              .map { rs =>
+                rs.get[GroupPK](g.resultName.id) -> rs.get[String](g.resultName.name)
+              }.list().apply().toMap
+            val problematicGroupMemberships: List[String] = samsql"""select ${g.result.name} from ${GroupTable as g}
+                    join ${GroupMemberTable as gm} on ${g.id} = ${gm.groupId}
+                    where ${gm.memberGroupId} in ${problematicGroupIdsToNames.keys.toList}"""
+              .map(_.toString).list().apply()
+            Failure(new WorkbenchExceptionWithErrorReport(
+              ErrorReport(StatusCodes.Conflict, s"Foreign Key Violation -- Cannot delete group(s) ${problematicGroupIdsToNames.values.toList} because they are a member of group(s): ${problematicGroupMemberships}")))
+        }
       }
     })
   }
