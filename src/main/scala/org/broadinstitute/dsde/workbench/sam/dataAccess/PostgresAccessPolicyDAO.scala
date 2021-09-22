@@ -778,12 +778,20 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
   }
 
   private def handleForeignKeyViolation(samRequestContext: SamRequestContext, groupPKsToDelete: List[GroupPK]) = {
+    for {
+      problematicGroups <- getGroupsCausingForeignKeyViolation(samRequestContext, groupPKsToDelete)
+      _ <- IO.raiseError[Unit](new WorkbenchExceptionWithErrorReport( // throws a 500 since that's the current behavior
+        ErrorReport(StatusCodes.InternalServerError, s"Foreign Key Violation while deleting groups: ${problematicGroups}")))
+    } yield ()
+  }
+
+  private def getGroupsCausingForeignKeyViolation(samRequestContext: SamRequestContext, groupPKsToDelete: List[GroupPK]) = {
     val g = GroupTable.syntax("g")
     val pg = GroupTable.syntax("pg") // problematic group
     val gm = GroupMemberTable.syntax("gm")
-    for {
-      problematicGroupIdsToNamesAndMembership <- readOnlyTransaction("deletePolicyErrorFindProblematicGroups", samRequestContext) { implicit session =>
-          samsql"""select ${g.result.id}, ${g.result.name}, ${pg.result.name}
+
+    readOnlyTransaction("getGroupsCausingForeignKeyViolation", samRequestContext) { implicit session =>
+      samsql"""select ${g.result.id}, ${g.result.name}, ${pg.result.name}
                      from ${GroupTable as g}
                      join ${GroupMemberTable as gm} on ${g.id} = ${gm.memberGroupId}
                      join ${GroupTable as pg} on ${gm.groupId} = ${pg.id}
@@ -791,15 +799,12 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
                          (select distinct ${gm.result.memberGroupId}
                           from ${GroupMemberTable as gm}
                           where ${gm.memberGroupId} in ($groupPKsToDelete))"""
-            .map(rs =>
-              Map("groupId" -> rs.get[GroupPK](g.resultName.id).value.toString,
-                "groupName" -> rs.get[String](g.resultName.name),
-                "still used in group:" -> rs.get[String](pg.resultName.name)))
-            .list().apply()
-      }
-      _ <- IO.raiseError[Unit](new WorkbenchExceptionWithErrorReport( // throws a 500 since that's the current behavior
-        ErrorReport(StatusCodes.InternalServerError, s"Foreign Key Violation while deleting groups: ${problematicGroupIdsToNamesAndMembership}")))
-    } yield ()
+        .map(rs =>
+          Map("groupId" -> rs.get[GroupPK](g.resultName.id).value.toString,
+            "groupName" -> rs.get[String](g.resultName.name),
+            "still used in group:" -> rs.get[String](pg.resultName.name)))
+        .list().apply()
+    }
   }
 
   override def loadPolicy(resourceAndPolicyName: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[Option[AccessPolicy]] = {
