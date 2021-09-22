@@ -744,8 +744,6 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
   override def deleteAllResourcePolicies(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] = {
     val p = PolicyTable.syntax("p")
     val g = GroupTable.syntax("g")
-    val pg = GroupTable.syntax("pg") // problematic groups
-    val gm = GroupMemberTable.syntax("gm")
 
     val fromAndWhereFragment = samsqls"""from ${PolicyTable as p} where ${p.resourceId} = (${loadResourcePKSubQuery(resourceId)})"""
 
