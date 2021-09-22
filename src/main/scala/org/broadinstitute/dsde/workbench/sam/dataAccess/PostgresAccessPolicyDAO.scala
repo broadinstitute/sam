@@ -783,21 +783,19 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
     val gm = GroupMemberTable.syntax("gm")
     for {
       problematicGroupIdsToNamesAndMembership <- readOnlyTransaction("deletePolicyErrorFindProblematicGroups", samRequestContext) { implicit session =>
-        val problematicGroupIdsToNames: List[Map[String, String]] =
           samsql"""select ${g.result.id}, ${g.result.name}, ${pg.result.name}
                      from ${GroupTable as g}
-                     join ${GroupMemberTable as gm} on ${g.id} = ${gm.groupId}
-                     join ${GroupTable as pg} on ${gm.memberGroupId} = ${pg.id}
+                     join ${GroupMemberTable as gm} on ${g.id} = ${gm.memberGroupId}
+                     join ${GroupTable as pg} on ${gm.groupId} = ${pg.id}
                      where ${g.id} in
                          (select distinct ${gm.result.memberGroupId}
                           from ${GroupMemberTable as gm}
                           where ${gm.memberGroupId} in ($groupPKsToDelete))"""
             .map(rs =>
-              List("groupId" -> rs.get[GroupPK](g.resultName.id).value.toString,
+              Map("groupId" -> rs.get[GroupPK](g.resultName.id).value.toString,
                 "groupName" -> rs.get[String](g.resultName.name),
-                "still used in:" -> rs.get[String](pg.resultName.name)))
-            .list().apply().map(_.toMap)
-        problematicGroupIdsToNames
+                "still used in group:" -> rs.get[String](pg.resultName.name)))
+            .list().apply()
       }
       _ <- IO.raiseError[Unit](new WorkbenchExceptionWithErrorReport( // throws a 500 since that's the current behavior
         ErrorReport(StatusCodes.InternalServerError, s"Foreign Key Violation while deleting groups: ${problematicGroupIdsToNamesAndMembership}")))
