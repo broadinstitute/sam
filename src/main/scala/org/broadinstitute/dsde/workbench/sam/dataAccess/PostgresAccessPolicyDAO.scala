@@ -764,32 +764,43 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
                  where ${g.id} in ($groupPKsToDelete)""".update().apply()
         }
       }).attempt
-      _ <- writeResult match {
-        case Left(fkViolation: PSQLException) if fkViolation.getSQLState == PSQLStateExtensions.FOREIGN_KEY_VIOLATION =>
-          for {
-            problematicGroupIdsToNamesAndMembership <- readOnlyTransaction("deletePolicyErrorFindProblematicGroups", samRequestContext) { implicit session =>
-            val problematicGroupIdsToNames: List[Map[String, String]] =
-              samsql"""select ${g.result.id}, ${g.result.name}, ${pg.result.name}
+      _ <- handleResult(samRequestContext, writeResult, groupPKsToDelete)
+    } yield ()
+  }
+
+  private def handleResult(samRequestContext: SamRequestContext, writeResult: Either[Throwable, AnyVal], groupPKsToDelete: List[GroupPK]) = {
+    writeResult match {
+      case Left(fkViolation: PSQLException) if fkViolation.getSQLState == PSQLStateExtensions.FOREIGN_KEY_VIOLATION =>
+        handleForeignKeyViolation(samRequestContext, groupPKsToDelete)
+      case Left(e) => IO.raiseError(e)
+      case Right(_) => IO.unit
+    }
+  }
+
+  private def handleForeignKeyViolation(samRequestContext: SamRequestContext, groupPKsToDelete: List[GroupPK]) = {
+    val g = GroupTable.syntax("g")
+    val pg = GroupTable.syntax("pg") // problematic group
+    val gm = GroupMemberTable.syntax("gm")
+    for {
+      problematicGroupIdsToNamesAndMembership <- readOnlyTransaction("deletePolicyErrorFindProblematicGroups", samRequestContext) { implicit session =>
+        val problematicGroupIdsToNames: List[Map[String, String]] =
+          samsql"""select ${g.result.id}, ${g.result.name}, ${pg.result.name}
                      from ${GroupTable as g}
                      join ${GroupMemberTable as gm} on ${g.id} = ${gm.groupId}
-                     join ${GroupTable as pg} on ${gm.memberGroupId} = ${pg.groupId}
+                     join ${GroupTable as pg} on ${gm.memberGroupId} = ${pg.id}
                      where ${g.id} in
                          (select distinct ${gm.result.memberGroupId}
                           from ${GroupMemberTable as gm}
                           where ${gm.memberGroupId} in ($groupPKsToDelete))"""
-                .map(rs =>
-                  List("groupId" -> rs.get[GroupPK](g.resultName.id).value.toString,
-                    "groupName" -> rs.get[String](g.resultName.name),
-                    "still used in:" -> rs.get[String](pg.resultName.name)))
-                    .list().apply().map(_.toMap)
-              problematicGroupIdsToNames
-          }
-          _ <- IO.raiseError[Unit](new WorkbenchExceptionWithErrorReport( // throws a 500 since that's the current behavior
-            ErrorReport(StatusCodes.InternalServerError, s"Foreign Key Violation while deleting groups: ${problematicGroupIdsToNamesAndMembership}")))
-        } yield ()
-        case Left(e) => IO.raiseError(e)
-        case Right(_) => IO.unit
+            .map(rs =>
+              List("groupId" -> rs.get[GroupPK](g.resultName.id).value.toString,
+                "groupName" -> rs.get[String](g.resultName.name),
+                "still used in:" -> rs.get[String](pg.resultName.name)))
+            .list().apply().map(_.toMap)
+        problematicGroupIdsToNames
       }
+      _ <- IO.raiseError[Unit](new WorkbenchExceptionWithErrorReport( // throws a 500 since that's the current behavior
+        ErrorReport(StatusCodes.InternalServerError, s"Foreign Key Violation while deleting groups: ${problematicGroupIdsToNamesAndMembership}")))
     } yield ()
   }
 
