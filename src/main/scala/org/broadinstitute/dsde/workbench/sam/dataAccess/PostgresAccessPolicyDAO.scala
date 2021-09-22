@@ -744,6 +744,7 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
   override def deleteAllResourcePolicies(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] = {
     val p = PolicyTable.syntax("p")
     val g = GroupTable.syntax("g")
+    val pg = GroupTable.syntax("pg") // problematic groups
     val gm = GroupMemberTable.syntax("gm")
 
     val fromAndWhereFragment = samsqls"""from ${PolicyTable as p} where ${p.resourceId} = (${loadResourcePKSubQuery(resourceId)})"""
@@ -766,26 +767,25 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
       _ <- writeResult match {
         case Left(fkViolation: PSQLException) if fkViolation.getSQLState == PSQLStateExtensions.FOREIGN_KEY_VIOLATION =>
           for {
-            (problematicGroupIdsToNames, problematicGroupMemberships) <- readOnlyTransaction("deletePolicyErrorFindProblematicGroups", samRequestContext) { implicit session =>
-            val problematicGroupIdsToNames: Map[GroupPK, String] =
-              samsql"""select ${g.result.id}, ${g.result.name}
+            problematicGroupIdsToNamesAndMembership <- readOnlyTransaction("deletePolicyErrorFindProblematicGroups", samRequestContext) { implicit session =>
+            val problematicGroupIdsToNames: List[Map[String, String]] =
+              samsql"""select ${g.result.id}, ${g.result.name}, ${pg.result.name}
                      from ${GroupTable as g}
+                     join ${GroupMemberTable as gm} on ${g.id} = ${gm.groupId}
+                     join ${GroupTable as pg} on ${gm.memberGroupId} = ${pg.groupId}
                      where ${g.id} in
                          (select distinct ${gm.result.memberGroupId}
                           from ${GroupMemberTable as gm}
-                          where ${gm.memberGroupId} in ($groupPKsToDelete))
-                  """
-                .map(rs => rs.get[GroupPK](g.resultName.id) -> rs.get[String](g.resultName.name)).list().apply().toMap
-            val problematicGroupMemberships: List[String] =
-              samsql"""select ${g.result.name}
-                     from ${GroupTable as g}
-                     join ${GroupMemberTable as gm} on ${g.id} = ${gm.groupId}
-                     where ${gm.memberGroupId} in (${problematicGroupIdsToNames.keys})"""
-                .map(rs => rs.get[String](g.resultName.name)).list().apply()
-            (problematicGroupIdsToNames, problematicGroupMemberships)
+                          where ${gm.memberGroupId} in ($groupPKsToDelete))"""
+                .map(rs =>
+                  List("groupId" -> rs.get[GroupPK](g.resultName.id).value.toString,
+                    "groupName" -> rs.get[String](g.resultName.name),
+                    "still used in:" -> rs.get[String](pg.resultName.name)))
+                    .list().apply().map(_.toMap)
+              problematicGroupIdsToNames
           }
           _ <- IO.raiseError[Unit](new WorkbenchExceptionWithErrorReport( // throws a 500 since that's the current behavior
-            ErrorReport(StatusCodes.InternalServerError, s"Foreign Key Violation -- Cannot delete group(s) ${problematicGroupIdsToNames.values.toList} because they are a member of group(s): ${problematicGroupMemberships}")))
+            ErrorReport(StatusCodes.InternalServerError, s"Foreign Key Violation while deleting groups: ${problematicGroupIdsToNamesAndMembership}")))
         } yield ()
         case Left(e) => IO.raiseError(e)
         case Right(_) => IO.unit
