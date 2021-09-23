@@ -102,7 +102,8 @@ class ResourceService(
     * @param userId
     * @return Future[Resource]
     */
-  def createResource(resourceType: ResourceType, resourceId: ResourceId, policiesMap: Map[AccessPolicyName, AccessPolicyMembership], authDomain: Set[WorkbenchGroupName], parentOpt: Option[FullyQualifiedResourceId], userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Resource] =
+  def createResource(resourceType: ResourceType, resourceId: ResourceId, policiesMap: Map[AccessPolicyName, AccessPolicyMembership], authDomain: Set[WorkbenchGroupName], parentOpt: Option[FullyQualifiedResourceId], userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Resource] = {
+    logger.info(s"Creating new `${resourceType.name}` with resourceId: `${resourceId}`")
     makeValidatablePolicies(policiesMap, samRequestContext).flatMap { policies =>
       validateCreateResource(resourceType, resourceId, policies, authDomain, userId, parentOpt, samRequestContext).flatMap {
         case Seq() => persistResource(resourceType, resourceId, policies, authDomain, parentOpt, samRequestContext)
@@ -110,6 +111,7 @@ class ResourceService(
           throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "Cannot create resource", errorReports))
       }
     }
+  }
 
   /**
     * This method only persists the resource and then overwrites/creates the policies for that resource.
