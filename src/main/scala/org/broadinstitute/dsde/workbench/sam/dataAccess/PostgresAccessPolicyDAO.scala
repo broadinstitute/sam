@@ -780,7 +780,7 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
     for {
       problematicGroups <- getGroupsCausingForeignKeyViolation(samRequestContext, groupPKsToDeleteQuery)
       _ <- IO.raiseError[Unit](new WorkbenchExceptionWithErrorReport( // throws a 500 since that's the current behavior
-        ErrorReport(StatusCodes.InternalServerError, s"Foreign Key Violation while deleting groups: ${problematicGroups}")))
+        ErrorReport(StatusCodes.InternalServerError, s"Foreign Key Violation(s) while deleting group(s): ${problematicGroups}")))
     } yield ()
   }
 
@@ -792,18 +792,19 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
     readOnlyTransaction("getGroupsCausingForeignKeyViolation", samRequestContext) { implicit session =>
       val groupPKsToDelete = groupPKsToDeleteQuery.list().apply()
       val problematicGroupsQuery =
-        samsql"""select ${g.result.id}, ${g.result.name}, ${pg.result.name}
+        samsql"""select ${g.result.id}, ${g.result.name}, array_agg(${pg.name}) as ${pg.resultName.name}
                      from ${GroupTable as g}
                      join ${GroupMemberTable as gm} on ${g.id} = ${gm.memberGroupId}
                      join ${GroupTable as pg} on ${gm.groupId} = ${pg.id}
                      where ${g.id} in
                          (select distinct ${gm.result.memberGroupId}
                           from ${GroupMemberTable as gm}
-                          where ${gm.memberGroupId} in ($groupPKsToDelete))"""
+                          where ${gm.memberGroupId} in ($groupPKsToDelete))
+                     group by ${g.id}, ${g.name}"""
       problematicGroupsQuery.map(rs =>
           Map("groupId" -> rs.get[GroupPK](g.resultName.id).value.toString,
             "groupName" -> rs.get[String](g.resultName.name),
-            "still used in group:" -> rs.get[String](pg.resultName.name)))
+            "still used in group(s):" -> rs.get[String](pg.resultName.name)))
         .list().apply()
     }
   }
