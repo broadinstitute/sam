@@ -534,7 +534,8 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
 
     val ge = new GoogleExtensions(TestSupport.fakeDistributedLock, mockDirectoryDAO, mockRegistrationDAO, mockAccessPolicyDAO, mockGoogleDirectoryDAO, mockGoogleNotificationPubSubDAO, mockGoogleGroupSyncPubSubDAO, mockGoogleDisableUsersPubSubDAO, mockGoogleIamDAO, mockGoogleStorageDAO, null, googleKeyCache, notificationDAO, FakeGoogleKmsInterpreter, googleServicesConfig, petServiceAccountConfig, configResourceTypes)
 
-    val app = SamApplication(new UserService(mockDirectoryDAO, ge, mockRegistrationDAO, Seq.empty), new ResourceService(configResourceTypes, null, mockAccessPolicyDAO, mockDirectoryDAO, ge, "example.com"), null)
+    val app = SamApplication(new UserService(mockDirectoryDAO, ge, mockRegistrationDAO, Seq.empty), new ResourceService(configResourceTypes, null, mockAccessPolicyDAO, mockDirectoryDAO, ge, "example.com"), null,
+      new TosService(mockDirectoryDAO, "example.com"))
     val resourceAndPolicyName = FullyQualifiedPolicyId(FullyQualifiedResourceId(CloudExtensions.resourceTypeName, GoogleExtensions.resourceId), AccessPolicyName("owner"))
 
     mockDirectoryDAO.loadUser(WorkbenchUserId(googleServicesConfig.serviceAccountClientId), samRequestContext).unsafeRunSync() shouldBe None
