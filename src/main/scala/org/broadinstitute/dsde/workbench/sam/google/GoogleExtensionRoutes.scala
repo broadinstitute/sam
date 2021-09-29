@@ -72,56 +72,58 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                   }
                 } ~
                 pathPrefix(Segment) { project =>
-                  pathPrefix("key") {
-                    get {
-                      complete {
-                        import spray.json._
-                        // parse json to ensure it is json and tells akka http the right content-type
-                        googleExtensions
-                          .getPetServiceAccountKey(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None), GoogleProject(project), samRequestContext)
-                          .map { key =>
-                            StatusCodes.OK -> key.parseJson
-                          }
-                      }
-                    } ~
-                      path(Segment) { keyId =>
-                        delete {
-                          complete {
-                            googleExtensions
-                              .removePetServiceAccountKey(userInfo.userId, GoogleProject(project), ServiceAccountKeyId(keyId), samRequestContext)
-                              .map(_ => StatusCodes.NoContent)
-                          }
-                        }
-                      }
-                  } ~
-                    pathPrefix("token") {
-                      post {
-                        entity(as[Set[String]]) { scopes =>
-                          complete {
-                            googleExtensions
-                              .getPetServiceAccountToken(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None), GoogleProject(project), scopes, samRequestContext)
-                              .map { token =>
-                                StatusCodes.OK -> JsString(token)
-                              }
-                          }
-                        }
-                      }
-                    } ~
-                    pathEnd {
+                  requireAction(FullyQualifiedResourceId(ResourceTypeName("google-project"), ResourceId(project)), SamResourceActions.createPetServiceAccount, userInfo.userId, samRequestContext) {
+                    pathPrefix("key") {
                       get {
                         complete {
-                          googleExtensions.createUserPetServiceAccount(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None), GoogleProject(project), samRequestContext).map {
-                            petSA =>
-                              StatusCodes.OK -> petSA.serviceAccount.email
+                          import spray.json._
+                          // parse json to ensure it is json and tells akka http the right content-type
+                          googleExtensions
+                            .getPetServiceAccountKey(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None), GoogleProject(project), samRequestContext)
+                            .map { key =>
+                              StatusCodes.OK -> key.parseJson
+                            }
+                        }
+                      } ~
+                        path(Segment) { keyId =>
+                          delete {
+                            complete {
+                              googleExtensions
+                                .removePetServiceAccountKey(userInfo.userId, GoogleProject(project), ServiceAccountKeyId(keyId), samRequestContext)
+                                .map(_ => StatusCodes.NoContent)
+                            }
+                          }
+                        }
+                    } ~
+                      pathPrefix("token") {
+                        post {
+                          entity(as[Set[String]]) { scopes =>
+                            complete {
+                              googleExtensions
+                                .getPetServiceAccountToken(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None), GoogleProject(project), scopes, samRequestContext)
+                                .map { token =>
+                                  StatusCodes.OK -> JsString(token)
+                                }
+                            }
                           }
                         }
                       } ~
-                        delete { // NOTE: This endpoint is not visible in Swagger
+                      pathEnd {
+                        get {
                           complete {
-                            googleExtensions.deleteUserPetServiceAccount(userInfo.userId, GoogleProject(project), samRequestContext).map(_ => StatusCodes.NoContent)
+                            googleExtensions.createUserPetServiceAccount(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None), GoogleProject(project), samRequestContext).map {
+                              petSA =>
+                                StatusCodes.OK -> petSA.serviceAccount.email
+                            }
                           }
-                        }
-                    }
+                        } ~
+                          delete { // NOTE: This endpoint is not visible in Swagger
+                            complete {
+                              googleExtensions.deleteUserPetServiceAccount(userInfo.userId, GoogleProject(project), samRequestContext).map(_ => StatusCodes.NoContent)
+                            }
+                          }
+                      }
+                  }
                 }
             } ~
             pathPrefix("user") {
