@@ -72,7 +72,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                   }
                 } ~
                 pathPrefix(Segment) { project =>
-                  requireAction(FullyQualifiedResourceId(ResourceTypeName("google-project"), ResourceId(project)), SamResourceActions.createPetServiceAccount, userInfo.userId, samRequestContext) {
+                  requireAction(FullyQualifiedResourceId(SamResourceTypes.googleProject, ResourceId(project)), SamResourceActions.createPetServiceAccount, userInfo.userId, samRequestContext) {
                     pathPrefix("key") {
                       get {
                         complete {
