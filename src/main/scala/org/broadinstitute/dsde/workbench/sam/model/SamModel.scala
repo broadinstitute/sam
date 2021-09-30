@@ -89,7 +89,7 @@ object SamResourceActions {
   val addChild = ResourceAction("add_child")
   val removeChild = ResourceAction("remove_child")
   val listChildren = ResourceAction("list_children")
-  val createPetServiceAccount = ResourceAction("create_pet_service_account")
+  val use_pet_service_account = ResourceAction("use_pet_service_account")
 
   def sharePolicy(policy: AccessPolicyName) = ResourceAction(s"share_policy::${policy.value}")
   def readPolicy(policy: AccessPolicyName) = ResourceAction(s"read_policy::${policy.value}")

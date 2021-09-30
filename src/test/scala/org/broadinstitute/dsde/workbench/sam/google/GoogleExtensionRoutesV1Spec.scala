@@ -29,7 +29,7 @@ class GoogleExtensionRoutesV1Spec extends GoogleExtensionRoutesSpecHelper with S
     val projectName = "myproject"
 
     val policyEvaluatorService = mock[PolicyEvaluatorService](RETURNS_SMART_NULLS)
-    when(policyEvaluatorService.hasPermissionOneOf(mockitoEq(FullyQualifiedResourceId(SamResourceTypes.googleProject, ResourceId(projectName))), mockitoEq(Set(SamResourceActions.createPetServiceAccount)), any[WorkbenchUserId], any[SamRequestContext]))
+    when(policyEvaluatorService.hasPermissionOneOf(mockitoEq(FullyQualifiedResourceId(SamResourceTypes.googleProject, ResourceId(projectName))), mockitoEq(Set(SamResourceActions.use_pet_service_account)), any[WorkbenchUserId], any[SamRequestContext]))
       .thenReturn(IO(true))
 
     val (user, _, routes) = createTestUser(policyEvaluatorServiceOpt = Option(policyEvaluatorService))
@@ -62,7 +62,7 @@ class GoogleExtensionRoutesV1Spec extends GoogleExtensionRoutesSpecHelper with S
     val projectName = "myproject"
 
     val policyEvaluatorService = mock[PolicyEvaluatorService](RETURNS_SMART_NULLS)
-    when(policyEvaluatorService.hasPermissionOneOf(mockitoEq(FullyQualifiedResourceId(SamResourceTypes.googleProject, ResourceId(projectName))), mockitoEq(Set(SamResourceActions.createPetServiceAccount)), any[WorkbenchUserId], any[SamRequestContext]))
+    when(policyEvaluatorService.hasPermissionOneOf(mockitoEq(FullyQualifiedResourceId(SamResourceTypes.googleProject, ResourceId(projectName))), mockitoEq(Set(SamResourceActions.use_pet_service_account)), any[WorkbenchUserId], any[SamRequestContext]))
       .thenReturn(IO(true))
 
     val (user, _, routes) = createTestUser(policyEvaluatorServiceOpt = Option(policyEvaluatorService))
@@ -155,7 +155,7 @@ class GoogleExtensionRoutesV1Spec extends GoogleExtensionRoutesSpecHelper with S
     val projectName = "myproject"
 
     val policyEvaluatorService = mock[PolicyEvaluatorService](RETURNS_SMART_NULLS)
-    when(policyEvaluatorService.hasPermissionOneOf(mockitoEq(FullyQualifiedResourceId(SamResourceTypes.googleProject, ResourceId(projectName))), mockitoEq(Set(SamResourceActions.createPetServiceAccount)), any[WorkbenchUserId], any[SamRequestContext]))
+    when(policyEvaluatorService.hasPermissionOneOf(mockitoEq(FullyQualifiedResourceId(SamResourceTypes.googleProject, ResourceId(projectName))), mockitoEq(Set(SamResourceActions.use_pet_service_account)), any[WorkbenchUserId], any[SamRequestContext]))
       .thenReturn(IO(true))
 
     val (user, _, routes) = createTestUser(resourceTypes, Some(googleIamDAO), policyEvaluatorServiceOpt = Option(policyEvaluatorService))
@@ -182,7 +182,7 @@ class GoogleExtensionRoutesV1Spec extends GoogleExtensionRoutesSpecHelper with S
     val projectName = "myproject"
 
     val policyEvaluatorService = mock[PolicyEvaluatorService](RETURNS_SMART_NULLS)
-    when(policyEvaluatorService.hasPermissionOneOf(mockitoEq(FullyQualifiedResourceId(SamResourceTypes.googleProject, ResourceId(projectName))), mockitoEq(Set(SamResourceActions.createPetServiceAccount)), any[WorkbenchUserId], any[SamRequestContext]))
+    when(policyEvaluatorService.hasPermissionOneOf(mockitoEq(FullyQualifiedResourceId(SamResourceTypes.googleProject, ResourceId(projectName))), mockitoEq(Set(SamResourceActions.use_pet_service_account)), any[WorkbenchUserId], any[SamRequestContext]))
       .thenReturn(IO(true))
 
     val (user, _, routes) = createTestUser(resourceTypes, Some(googleIamDAO), policyEvaluatorServiceOpt = Option(policyEvaluatorService))
