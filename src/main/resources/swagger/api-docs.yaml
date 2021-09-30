@@ -601,6 +601,18 @@ paths:
             application/json:
               schema:
                 type: string
+        403:
+          description: caller does not have the create_pet_service_account action on this Google project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+        404:
+          description: caller does not have access to this Google project or it does not exist
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
         500:
           description: Internal Server Error
           content:
@@ -667,6 +679,18 @@ paths:
         200:
           description: json format key for a pet service account, see https://cloud.google.com/iam/docs/creating-managing-service-account-keys
           content: {}
+        403:
+          description: caller does not have the create_pet_service_account action on this Google project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+        404:
+          description: caller does not have access to this Google project or it does not exist
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
         500:
           description: Internal Server Error
           content:
@@ -730,6 +754,18 @@ paths:
             application/json:
               schema:
                 type: string
+        403:
+          description: caller does not have the create_pet_service_account action on this Google project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+        404:
+          description: caller does not have access to this Google project or it does not exist
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
         500:
           description: Internal Server Error
           content:
