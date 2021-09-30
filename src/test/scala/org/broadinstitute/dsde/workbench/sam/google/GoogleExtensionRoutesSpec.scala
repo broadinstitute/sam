@@ -59,6 +59,40 @@ class GoogleExtensionRoutesSpec extends GoogleExtensionRoutesSpecHelper with Sca
     }
   }
 
+  it should "403 when the user doesn't have the right permission on the google-project resource" in {
+    val projectName = "myproject"
+
+    val policyEvaluatorService = mock[PolicyEvaluatorService](RETURNS_SMART_NULLS)
+    when(policyEvaluatorService.hasPermissionOneOf(mockitoEq(FullyQualifiedResourceId(SamResourceTypes.googleProject, ResourceId(projectName))), mockitoEq(Set(SamResourceActions.use_pet_service_account)), any[WorkbenchUserId], any[SamRequestContext]))
+      .thenReturn(IO(false))
+    when(policyEvaluatorService.listUserResourceActions(mockitoEq(FullyQualifiedResourceId(SamResourceTypes.googleProject, ResourceId(projectName))), any[WorkbenchUserId], any[SamRequestContext]))
+      .thenReturn(IO(Set(SamResourceActions.readPolicies)))
+
+    val (_, _, routes) = createTestUser(policyEvaluatorServiceOpt = Option(policyEvaluatorService))
+
+    // try to create a pet service account
+    Get(s"/api/google/user/petServiceAccount/$projectName") ~> routes.route ~> check {
+      status shouldEqual StatusCodes.Forbidden
+    }
+  }
+
+  it should "404 when the user doesn't have any permission on the google-project resource" in {
+    val projectName = "myproject"
+
+    val policyEvaluatorService = mock[PolicyEvaluatorService](RETURNS_SMART_NULLS)
+    when(policyEvaluatorService.hasPermissionOneOf(mockitoEq(FullyQualifiedResourceId(SamResourceTypes.googleProject, ResourceId(projectName))), mockitoEq(Set(SamResourceActions.use_pet_service_account)), any[WorkbenchUserId], any[SamRequestContext]))
+      .thenReturn(IO(false))
+    when(policyEvaluatorService.listUserResourceActions(mockitoEq(FullyQualifiedResourceId(SamResourceTypes.googleProject, ResourceId(projectName))), any[WorkbenchUserId], any[SamRequestContext]))
+      .thenReturn(IO(Set.empty))
+
+    val (_, _, routes) = createTestUser(policyEvaluatorServiceOpt = Option(policyEvaluatorService))
+
+    // try to create a pet service account
+    Get(s"/api/google/user/petServiceAccount/$projectName") ~> routes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
+    }
+  }
+
   "GET /api/google/user/proxyGroup/{email}" should "return a user's proxy group" in {
     val (user, _, routes) = createTestUser()
 
@@ -181,6 +215,44 @@ class GoogleExtensionRoutesSpec extends GoogleExtensionRoutesSpecHelper with Sca
       status shouldEqual StatusCodes.OK
       val response = responseAs[String]
       response shouldEqual(expectedJson)
+    }
+  }
+
+  it should "403 when the user doesn't have the right permission on the google-project resource" in {
+    val resourceTypes = Map(resourceType.name -> resourceType)
+    val (googleIamDAO, _) = createMockGoogleIamDaoForSAKeyTests
+    val projectName = "myproject"
+
+    val policyEvaluatorService = mock[PolicyEvaluatorService](RETURNS_SMART_NULLS)
+    when(policyEvaluatorService.hasPermissionOneOf(mockitoEq(FullyQualifiedResourceId(SamResourceTypes.googleProject, ResourceId(projectName))), mockitoEq(Set(SamResourceActions.use_pet_service_account)), any[WorkbenchUserId], any[SamRequestContext]))
+      .thenReturn(IO(false))
+    when(policyEvaluatorService.listUserResourceActions(mockitoEq(FullyQualifiedResourceId(SamResourceTypes.googleProject, ResourceId(projectName))), any[WorkbenchUserId], any[SamRequestContext]))
+      .thenReturn(IO(Set(SamResourceActions.readPolicies)))
+
+    val (_, _, routes) = createTestUser(resourceTypes, Some(googleIamDAO), policyEvaluatorServiceOpt = Option(policyEvaluatorService))
+
+    // try to create a pet service account key
+    Get(s"/api/google/user/petServiceAccount/$projectName/key") ~> routes.route ~> check {
+      status shouldEqual StatusCodes.Forbidden
+    }
+  }
+
+  it should "404 when the user doesn't have any permission on the google-project resource" in {
+    val resourceTypes = Map(resourceType.name -> resourceType)
+    val (googleIamDAO, _) = createMockGoogleIamDaoForSAKeyTests
+    val projectName = "myproject"
+
+    val policyEvaluatorService = mock[PolicyEvaluatorService](RETURNS_SMART_NULLS)
+    when(policyEvaluatorService.hasPermissionOneOf(mockitoEq(FullyQualifiedResourceId(SamResourceTypes.googleProject, ResourceId(projectName))), mockitoEq(Set(SamResourceActions.use_pet_service_account)), any[WorkbenchUserId], any[SamRequestContext]))
+      .thenReturn(IO(false))
+    when(policyEvaluatorService.listUserResourceActions(mockitoEq(FullyQualifiedResourceId(SamResourceTypes.googleProject, ResourceId(projectName))), any[WorkbenchUserId], any[SamRequestContext]))
+      .thenReturn(IO(Set.empty))
+
+    val (_, _, routes) = createTestUser(resourceTypes, Some(googleIamDAO), policyEvaluatorServiceOpt = Option(policyEvaluatorService))
+
+    // try to create a pet service account key
+    Get(s"/api/google/user/petServiceAccount/$projectName/key") ~> routes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
     }
   }
 

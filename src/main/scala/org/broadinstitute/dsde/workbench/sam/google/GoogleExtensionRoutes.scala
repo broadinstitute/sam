@@ -72,17 +72,19 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                   }
                 } ~
                 pathPrefix(Segment) { project =>
-                  requireAction(FullyQualifiedResourceId(SamResourceTypes.googleProject, ResourceId(project)), SamResourceActions.use_pet_service_account, userInfo.userId, samRequestContext) {
+                  val googleProjectResourceId = FullyQualifiedResourceId(SamResourceTypes.googleProject, ResourceId(project))
                     pathPrefix("key") {
                       get {
-                        complete {
-                          import spray.json._
-                          // parse json to ensure it is json and tells akka http the right content-type
-                          googleExtensions
-                            .getPetServiceAccountKey(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None), GoogleProject(project), samRequestContext)
-                            .map { key =>
-                              StatusCodes.OK -> key.parseJson
-                            }
+                        requireAction(googleProjectResourceId, SamResourceActions.use_pet_service_account, userInfo.userId, samRequestContext) {
+                          complete {
+                            import spray.json._
+                            // parse json to ensure it is json and tells akka http the right content-type
+                            googleExtensions
+                              .getPetServiceAccountKey(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None), GoogleProject(project), samRequestContext)
+                              .map { key =>
+                                StatusCodes.OK -> key.parseJson
+                              }
+                          }
                         }
                       } ~
                         path(Segment) { keyId =>
@@ -97,23 +99,27 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                     } ~
                       pathPrefix("token") {
                         post {
-                          entity(as[Set[String]]) { scopes =>
-                            complete {
-                              googleExtensions
-                                .getPetServiceAccountToken(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None), GoogleProject(project), scopes, samRequestContext)
-                                .map { token =>
-                                  StatusCodes.OK -> JsString(token)
-                                }
+                          requireAction(googleProjectResourceId, SamResourceActions.use_pet_service_account, userInfo.userId, samRequestContext) {
+                            entity(as[Set[String]]) { scopes =>
+                              complete {
+                                googleExtensions
+                                  .getPetServiceAccountToken(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None), GoogleProject(project), scopes, samRequestContext)
+                                  .map { token =>
+                                    StatusCodes.OK -> JsString(token)
+                                  }
+                              }
                             }
                           }
                         }
                       } ~
                       pathEnd {
                         get {
-                          complete {
-                            googleExtensions.createUserPetServiceAccount(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None), GoogleProject(project), samRequestContext).map {
-                              petSA =>
-                                StatusCodes.OK -> petSA.serviceAccount.email
+                          requireAction(googleProjectResourceId, SamResourceActions.use_pet_service_account, userInfo.userId, samRequestContext) {
+                            complete {
+                              googleExtensions.createUserPetServiceAccount(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None), GoogleProject(project), samRequestContext).map {
+                                petSA =>
+                                  StatusCodes.OK -> petSA.serviceAccount.email
+                              }
                             }
                           }
                         } ~
@@ -123,7 +129,6 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                             }
                           }
                       }
-                  }
                 }
             } ~
             pathPrefix("user") {
