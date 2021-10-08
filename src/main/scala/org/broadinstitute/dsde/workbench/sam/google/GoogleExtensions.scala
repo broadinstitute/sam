@@ -122,7 +122,7 @@ class GoogleExtensions(
         IO(
           samApplication.userService.createUser(CreateWorkbenchUser(
             serviceAccountUserInfo.userId,
-            GoogleSubjectId(googleServicesConfig.serviceAccountClientId),
+            Option(GoogleSubjectId(googleServicesConfig.serviceAccountClientId)),
             serviceAccountUserInfo.userEmail,
             None), samRequestContext) recover {
             case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode == Option(StatusCodes.Conflict) =>

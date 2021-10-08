@@ -23,7 +23,7 @@ object Generator {
     accessToken <- genOAuth2BearerToken
   } yield List(
     RawHeader(emailHeader, email.value),
-    RawHeader(googleSubjectIdHeader, genRandom(System.currentTimeMillis())),
+    RawHeader(userIdHeader, genRandom(System.currentTimeMillis())),
     RawHeader(accessTokenHeader, accessToken.value),
     RawHeader(authorizationHeader, accessToken.toString())
   )
@@ -46,14 +46,14 @@ object Generator {
   val genCreateWorkbenchUser = for{
     email <- genNonPetEmail
     userId = genWorkbenchUserId(System.currentTimeMillis())
-  }yield CreateWorkbenchUser(userId, GoogleSubjectId(userId.value), email, None)
+  }yield CreateWorkbenchUser(userId, Option(GoogleSubjectId(userId.value)), email, None)
 
   val genWorkbenchUser = for{
     email <- genNonPetEmail
     userId = genWorkbenchUserId(System.currentTimeMillis())
     googleSubjectId <- Gen.const(Option(GoogleSubjectId(userId.value)))
-    identityConcentratorId <- Gen.const(Option(IdentityConcentratorId(userId.value)))
-  } yield WorkbenchUser(userId, googleSubjectId, email, identityConcentratorId)
+    azureB2CId <- Gen.const(Option(AzureB2CId(userId.value)))
+  } yield WorkbenchUser(userId, googleSubjectId, email, azureB2CId)
 
   val genInviteUser = for{
     email <- genNonPetEmail

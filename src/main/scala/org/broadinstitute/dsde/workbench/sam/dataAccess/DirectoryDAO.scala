@@ -40,10 +40,10 @@ trait DirectoryDAO extends RegistrationDAO {
 
   def createUser(user: WorkbenchUser, samRequestContext: SamRequestContext): IO[WorkbenchUser]
   def loadUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[WorkbenchUser]]
-  def loadUserByIdentityConcentratorId(userId: IdentityConcentratorId, samRequestContext: SamRequestContext): IO[Option[WorkbenchUser]]
+  def loadUserByAzureB2CId(userId: AzureB2CId, samRequestContext: SamRequestContext): IO[Option[WorkbenchUser]]
   def loadUsers(userIds: Set[WorkbenchUserId], samRequestContext: SamRequestContext): IO[LazyList[WorkbenchUser]]
   def deleteUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit]
-  def setUserIdentityConcentratorId(googleSubjectId: GoogleSubjectId, icId: IdentityConcentratorId, samRequestContext: SamRequestContext): IO[Int]
+  def setUserAzureB2CId(userId: WorkbenchUserId, b2CId: AzureB2CId, samRequestContext: SamRequestContext): IO[Int]
 
 
   def listUsersGroups(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[WorkbenchGroupIdentity]]

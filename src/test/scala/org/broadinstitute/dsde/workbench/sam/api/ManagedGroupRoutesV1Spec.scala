@@ -11,7 +11,6 @@ import org.broadinstitute.dsde.workbench.sam.api.ManagedGroupRoutesSpec._
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.ManagedGroupService
-import org.broadinstitute.dsde.workbench.sam.service.UserService.genRandom
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.BeforeAndAfter
 import spray.json.DefaultJsonProtocol._
@@ -37,7 +36,7 @@ class ManagedGroupRoutesV1Spec extends AnyFlatSpec with ScalaFutures with Matche
   private val resourceTypes = Map(managedGroupResourceType.name -> managedGroupResourceType)
   private val groupId = "foo"
   private val defaultNewUser = UserInfo(OAuth2BearerToken("newToken"), WorkbenchUserId("NewGuy"), WorkbenchEmail("newGuy@organization.org"), 0)
-  private val defaultGoogleSubjectId = GoogleSubjectId("NewGuy")
+  private val defaultGoogleSubjectId = Option(GoogleSubjectId("NewGuy"))
 
   def assertGroupDoesNotExist(samRoutes: SamRoutes, groupId: String = groupId): Unit = {
     Get(s"/api/groups/v1/$groupId") ~> samRoutes.route ~> check {
@@ -65,7 +64,7 @@ class ManagedGroupRoutesV1Spec extends AnyFlatSpec with ScalaFutures with Matche
 
   // Makes an anonymous object for a user acting on the same data as the user specified in samRoutes
   def makeOtherUser(samRoutes: SamRoutes, userInfo: UserInfo = defaultNewUser) = new {
-    runAndWait(samRoutes.userService.createUser(CreateWorkbenchUser(userInfo.userId, GoogleSubjectId(genRandom(System.currentTimeMillis())), userInfo.userEmail, None), samRequestContext))
+    runAndWait(samRoutes.userService.createUser(CreateWorkbenchUser(userInfo.userId, defaultGoogleSubjectId, userInfo.userEmail, None), samRequestContext))
     val email = userInfo.userEmail
     val routes = new TestSamRoutes(samRoutes.resourceService, samRoutes.policyEvaluatorService, samRoutes.userService, samRoutes.statusService, samRoutes.managedGroupService, userInfo, samRoutes.directoryDAO)
   }
@@ -101,7 +100,7 @@ class ManagedGroupRoutesV1Spec extends AnyFlatSpec with ScalaFutures with Matche
     assertCreateGroup(samRoutes = samRoutes)
     assertGetGroup(samRoutes = samRoutes)
 
-    samRoutes.userService.createUser(CreateWorkbenchUser(newGuy.userId, GoogleSubjectId(newGuy.userId.value), newGuy.userEmail, None), samRequestContext).futureValue
+    samRoutes.userService.createUser(CreateWorkbenchUser(newGuy.userId, defaultGoogleSubjectId, newGuy.userEmail, None), samRequestContext).futureValue
 
     setGroupMembers(samRoutes, Set(newGuyEmail), expectedStatus = StatusCodes.Created)
 

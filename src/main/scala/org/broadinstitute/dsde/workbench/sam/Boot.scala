@@ -2,7 +2,6 @@ package org.broadinstitute.dsde.workbench.sam
 
 import java.io.File
 import java.net.URI
-
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import cats.data.NonEmptyList
@@ -14,6 +13,7 @@ import com.typesafe.scalalogging.LazyLogging
 import com.unboundid.ldap.sdk._
 import org.typelevel.log4cats.StructuredLogger
 import org.typelevel.log4cats.slf4j.Slf4jLogger
+
 import javax.net.SocketFactory
 import javax.net.ssl.SSLContext
 import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
@@ -23,12 +23,11 @@ import org.broadinstitute.dsde.workbench.google2.util.DistributedLock
 import org.broadinstitute.dsde.workbench.google2.{GoogleFirestoreInterpreter, GoogleStorageInterpreter, GoogleStorageService}
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException}
 import org.broadinstitute.dsde.workbench.sam.api.{SamRoutes, StandardUserInfoDirectives}
-import org.broadinstitute.dsde.workbench.sam.config.{AppConfig, GoogleConfig, IdentityConcentratorConfig}
+import org.broadinstitute.dsde.workbench.sam.config.{AppConfig, GoogleConfig, GoogleOpaqueTokenResolverConfig}
 import org.broadinstitute.dsde.workbench.sam.dataAccess._
 import org.broadinstitute.dsde.workbench.sam.db.DatabaseNames.DatabaseName
 import org.broadinstitute.dsde.workbench.sam.db.{DatabaseNames, DbReference}
 import org.broadinstitute.dsde.workbench.sam.google._
-import org.broadinstitute.dsde.workbench.sam.identityConcentrator.{IdentityConcentratorService, StandardIdentityConcentratorApi}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.broadinstitute.dsde.workbench.sam.service._
@@ -124,7 +123,7 @@ object Boot extends IOApp with LazyLogging {
 
       blockingEc <- ExecutionContexts.fixedThreadPool[IO](24)
 
-      identityConcentrator <- identityConcentratorResource(appConfig)
+      identityConcentrator <- googleOpaqueTokenResolverResource(appConfig)
 
       cloudExtensionsInitializer <- cloudExtensionsInitializerResource(
         appConfig,
@@ -184,16 +183,16 @@ object Boot extends IOApp with LazyLogging {
       case None => cats.effect.Resource.pure[IO, CloudExtensionsInitializer](NoExtensionsInitializer)
     }
 
-  private def identityConcentratorResource(appConfig: AppConfig): effect.Resource[IO, Option[IdentityConcentratorService]] =
-    appConfig.identityConcentratorConfig match {
-      case Some(IdentityConcentratorConfig(baseUrl, threadPoolSize)) =>
+  private def googleOpaqueTokenResolverResource(appConfig: AppConfig): effect.Resource[IO, Option[GoogleOpaqueTokenResolver]] =
+    appConfig.googleOpaqueTokenResolverConfig match {
+      case Some(GoogleOpaqueTokenResolverConfig(samBaseUrl, threadPoolSize)) =>
         for {
-          identityConcentratorEc <- ExecutionContexts.fixedThreadPool[IO](threadPoolSize)
-          httpClient <- BlazeClientBuilder.apply[IO](identityConcentratorEc).resource
+          googleOpaqueTokenResolverEc <- ExecutionContexts.fixedThreadPool[IO](threadPoolSize)
+          httpClient <- BlazeClientBuilder.apply[IO](googleOpaqueTokenResolverEc).resource
         } yield {
-          Option(new IdentityConcentratorService(new StandardIdentityConcentratorApi(baseUrl, httpClient)))
+          Option(new StandardGoogleOpaqueTokenResolver(samBaseUrl, httpClient))
         }
-      case _ => cats.effect.Resource.pure[IO, Option[IdentityConcentratorService]](None)
+      case _ => cats.effect.Resource.pure[IO, Option[GoogleOpaqueTokenResolver]](None)
     }
 
   private def createDAOs(appConfig: AppConfig,
@@ -320,7 +319,7 @@ object Boot extends IOApp with LazyLogging {
       accessPolicyDAO: AccessPolicyDAO,
       directoryDAO: DirectoryDAO,
       registrationDAO: RegistrationDAO,
-      identityConcentrator: Option[IdentityConcentratorService])(implicit actorSystem: ActorSystem): AppDependencies = {
+      googleOpaqueTokenResolver: Option[GoogleOpaqueTokenResolver])(implicit actorSystem: ActorSystem): AppDependencies = {
     val resourceTypeMap = config.resourceTypes.map(rt => rt.name -> rt).toMap
     val policyEvaluatorService = PolicyEvaluatorService(config.emailDomain, resourceTypeMap, accessPolicyDAO, directoryDAO)
     val resourceService = new ResourceService(resourceTypeMap, policyEvaluatorService, accessPolicyDAO, directoryDAO, cloudExtensionsInitializer.cloudExtensions, config.emailDomain)
@@ -338,13 +337,13 @@ object Boot extends IOApp with LazyLogging {
           val googleExtensions = googleExt
           val cloudExtensions = googleExt
           val googleGroupSynchronizer = synchronizer
-          override val identityConcentratorService = identityConcentrator
+          override val maybeGoogleOpaqueTokenResolver = googleOpaqueTokenResolver
         }
         AppDependencies(routes, samApplication, cloudExtensionsInitializer, directoryDAO, accessPolicyDAO, policyEvaluatorService)
       case _ =>
         val routes = new SamRoutes(resourceService, userService, statusService, managedGroupService, config.swaggerConfig, directoryDAO, policyEvaluatorService, config.liquibaseConfig)
         with StandardUserInfoDirectives with NoExtensionRoutes {
-          override val identityConcentratorService = identityConcentrator
+          override val maybeGoogleOpaqueTokenResolver = googleOpaqueTokenResolver
         }
         AppDependencies(routes, samApplication, NoExtensionsInitializer, directoryDAO, accessPolicyDAO, policyEvaluatorService)
     }

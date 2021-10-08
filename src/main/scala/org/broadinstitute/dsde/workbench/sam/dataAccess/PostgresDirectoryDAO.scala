@@ -388,7 +388,7 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
     writeTransaction("createUser", samRequestContext)({ implicit session =>
       val userColumn = UserTable.column
 
-      val insertUserQuery = samsql"insert into ${UserTable.table} (${userColumn.id}, ${userColumn.email}, ${userColumn.googleSubjectId}, ${userColumn.enabled}, ${userColumn.identityConcentratorId}) values (${user.id}, ${user.email}, ${user.googleSubjectId}, false, ${user.identityConcentratorId})"
+      val insertUserQuery = samsql"insert into ${UserTable.table} (${userColumn.id}, ${userColumn.email}, ${userColumn.googleSubjectId}, ${userColumn.enabled}, ${userColumn.azureB2CId}) values (${user.id}, ${user.email}, ${user.googleSubjectId}, false, ${user.azureB2CId})"
 
       Try {
         insertUserQuery.update().apply()
@@ -410,20 +410,20 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
     })
   }
 
-  override def loadUserByIdentityConcentratorId(userId: IdentityConcentratorId, samRequestContext: SamRequestContext): IO[Option[WorkbenchUser]] = {
-    readOnlyTransaction("loadUserByIdentityConcentratorId", samRequestContext)({ implicit session =>
+  override def loadUserByAzureB2CId(userId: AzureB2CId, samRequestContext: SamRequestContext): IO[Option[WorkbenchUser]] = {
+    readOnlyTransaction("loadUserByAzureB2CId", samRequestContext)({ implicit session =>
       val userTable = UserTable.syntax
 
-      val loadUserQuery = samsql"select ${userTable.resultAll} from ${UserTable as userTable} where ${userTable.identityConcentratorId} = ${userId}"
+      val loadUserQuery = samsql"select ${userTable.resultAll} from ${UserTable as userTable} where ${userTable.azureB2CId} = ${userId}"
       loadUserQuery.map(UserTable(userTable))
         .single().apply().map(UserTable.unmarshalUserRecord)
     })
   }
 
-  override def setUserIdentityConcentratorId(googleSubjectId: GoogleSubjectId, icId: IdentityConcentratorId, samRequestContext: SamRequestContext): IO[Int] = {
+  override def setUserAzureB2CId(userId: WorkbenchUserId, b2cId: AzureB2CId, samRequestContext: SamRequestContext): IO[Int] = {
     writeTransaction("setUserIdentityConcentratorId", samRequestContext)({ implicit session =>
       val u = UserTable.column
-      samsql"update ${UserTable.table} set ${u.identityConcentratorId} = $icId where ${u.googleSubjectId} = $googleSubjectId".update().apply()
+      samsql"update ${UserTable.table} set ${u.azureB2CId} = $b2cId where ${u.id} = $userId".update().apply()
     })
   }
 

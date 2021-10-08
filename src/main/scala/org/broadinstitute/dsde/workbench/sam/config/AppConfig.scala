@@ -25,7 +25,7 @@ final case class AppConfig(
                             googleConfig: Option[GoogleConfig],
                             resourceTypes: Set[ResourceType],
                             liquibaseConfig: LiquibaseConfig,
-                            identityConcentratorConfig: Option[IdentityConcentratorConfig],
+                            googleOpaqueTokenResolverConfig: Option[GoogleOpaqueTokenResolverConfig],
                             blockedEmailDomains: Seq[String],
                             termsOfServiceConfig: TermsOfServiceConfig)
 
@@ -134,9 +134,9 @@ object AppConfig {
     )
   }
 
-  implicit val identityConcentratorConfigReader: ValueReader[IdentityConcentratorConfig] = ValueReader.relative { config =>
-    IdentityConcentratorConfig(
-      config.getString("baseUrl"),
+  implicit val googleOpaqueTokenResolverConfigReader: ValueReader[GoogleOpaqueTokenResolverConfig] = ValueReader.relative { config =>
+    GoogleOpaqueTokenResolverConfig(
+      config.getString("samBaseUrl"),
       config.getInt("threadPoolSize")
     )
   }
@@ -167,12 +167,12 @@ object AppConfig {
     val emailDomain = config.as[Option[String]]("emailDomain").getOrElse(config.getString("googleServices.appsDomain"))
     val resourceTypes = config.as[Map[String, ResourceType]]("resourceTypes").values.toSet
     val liquibaseConfig = config.as[LiquibaseConfig]("liquibase")
-    val identityConcentratorConfig = config.as[Option[IdentityConcentratorConfig]]("identityConcentrator")
+    val googleOpaqueTokenResolverConfig = config.as[Option[GoogleOpaqueTokenResolverConfig]]("googleOpaqueTokenResolver")
 
     val blockedEmailDomains = config.as[Option[Seq[String]]]("blockedEmailDomains").getOrElse(Seq.empty)
 
     val termsOfServiceConfig = config.as[TermsOfServiceConfig]("termsOfService")
 
-    AppConfig(emailDomain, directoryConfig, schemaLockConfig, distributedLockConfig, swaggerConfig, googleConfigOption, resourceTypes, liquibaseConfig, identityConcentratorConfig, blockedEmailDomains, termsOfServiceConfig)
+    AppConfig(emailDomain, directoryConfig, schemaLockConfig, distributedLockConfig, swaggerConfig, googleConfigOption, resourceTypes, liquibaseConfig, googleOpaqueTokenResolverConfig, blockedEmailDomains, termsOfServiceConfig)
   }
 }

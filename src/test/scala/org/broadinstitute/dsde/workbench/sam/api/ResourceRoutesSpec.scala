@@ -27,7 +27,7 @@ import org.scalatest.matchers.should.Matchers
 class ResourceRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTest with TestSupport with AppendedClues {
 
   val defaultUserInfo = UserInfo(OAuth2BearerToken("accessToken"), WorkbenchUserId("user1"), WorkbenchEmail("user1@example.com"), 0)
-  def defaultGoogleSubjectId = GoogleSubjectId(genRandom(System.currentTimeMillis()))
+  def defaultGoogleSubjectId = Option(GoogleSubjectId(genRandom(System.currentTimeMillis())))
 
   private val config = TestSupport.config
   private val resourceTypes = TestSupport.appConfig.resourceTypes

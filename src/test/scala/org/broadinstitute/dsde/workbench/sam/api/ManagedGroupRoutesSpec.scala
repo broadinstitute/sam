@@ -43,7 +43,7 @@ class ManagedGroupRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRou
   private val resourceTypes = Map(managedGroupResourceType.name -> managedGroupResourceType)
   private val groupId = "foo"
   private val defaultNewUser = UserInfo(OAuth2BearerToken("newToken"), WorkbenchUserId("NewGuy"), WorkbenchEmail("newGuy@organization.org"), 0)
-  private def defaultGoogleSubjectId: GoogleSubjectId = GoogleSubjectId(genRandom(System.currentTimeMillis()))
+  private def defaultGoogleSubjectId = Option(GoogleSubjectId(genRandom(System.currentTimeMillis())))
 
   def assertGroupDoesNotExist(samRoutes: TestSamRoutes, groupId: String = groupId): Unit = {
     Get(s"/api/group/$groupId") ~> samRoutes.route ~> check {

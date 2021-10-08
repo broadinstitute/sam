@@ -31,7 +31,7 @@ class TestSamRoutes(resourceService: ResourceService, policyEvaluatorService: Po
 
 object TestSamRoutes {
   val defaultUserInfo = UserInfo(OAuth2BearerToken("accessToken"), WorkbenchUserId("user1"), WorkbenchEmail("user1@example.com"), 0)
-  val defaultGoogleSubjectId = GoogleSubjectId("user1")
+  val defaultGoogleSubjectId = Option(GoogleSubjectId("user1"))
 
   object SamResourceActionPatterns {
     val readPolicies = ResourceActionPattern("read_policies", "", false)
