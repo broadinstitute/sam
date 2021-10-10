@@ -5,6 +5,7 @@ import cats.effect.{ContextShift, IO}
 import com.typesafe.scalalogging.LazyLogging
 import io.circe.Decoder
 import io.circe.generic.semiauto.deriveDecoder
+import org.broadinstitute.dsde.workbench.model.WorkbenchException
 import org.broadinstitute.dsde.workbench.sam.model.UserStatusInfo
 import org.http4s.Method._
 import org.http4s._
@@ -39,7 +40,13 @@ class StandardGoogleOpaqueTokenResolver(samBaseUrl: String, httpClient: Client[I
         Authorization(Credentials.Token(AuthScheme.Bearer, accessToken.token)),
         Accept(MediaType.application.json)
       )
-      response <- httpClient.expectOption[UserStatusInfo](request)
-    } yield response
+      maybeUserStatusInfo <- httpClient.run(request).use { response: Response[IO] =>
+        response.status match {
+          case Status.Ok => response.as[UserStatusInfo].map(Option.apply)
+          case Status.NotFound | Status.Unauthorized => IO.pure(None)
+          case _ => IO.raiseError(new WorkbenchException(s"${response.status} error calling ${request.uri}, body: ${response.bodyText.compile.string.unsafeRunSync()}"))
+        }
+      }
+    } yield maybeUserStatusInfo
   }
 }

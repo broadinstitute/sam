@@ -6,7 +6,6 @@ import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAcc
 import org.broadinstitute.dsde.workbench.sam.api.StandardUserInfoDirectives._
 import org.broadinstitute.dsde.workbench.sam.api.{CreateWorkbenchUser, InviteUser}
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.service.UserService
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
 import org.scalacheck._
 import SamResourceActions._
@@ -14,7 +13,9 @@ import SamResourceActions._
 object Generator {
   val genNonPetEmail: Gen[WorkbenchEmail] = Gen.alphaStr.map(x => WorkbenchEmail(s"t$x@gmail.com"))
   val genPetEmail: Gen[WorkbenchEmail] = Gen.alphaStr.map(x => WorkbenchEmail(s"t$x@test.iam.gserviceaccount.com"))
-  val genGoogleSubjectId: Gen[GoogleSubjectId] = Gen.const(GoogleSubjectId(UserService.genRandom(System.currentTimeMillis())))
+  val genGoogleSubjectId: Gen[GoogleSubjectId] = Gen.stringOfN(20, Gen.numChar).map(id => GoogleSubjectId("1" + id))
+  val genAzureB2CId: Gen[AzureB2CId] = Gen.uuid.map(uuid => AzureB2CId(uuid.toString))
+  val genExternalId: Gen[Either[GoogleSubjectId, AzureB2CId]] = Gen.either(genGoogleSubjectId, genAzureB2CId)
   val genServiceAccountSubjectId: Gen[ServiceAccountSubjectId] = genGoogleSubjectId.map(x => ServiceAccountSubjectId(x.value))
   val genOAuth2BearerToken: Gen[OAuth2BearerToken] = Gen.alphaStr.map(x => OAuth2BearerToken("s"+x))
 
@@ -112,4 +113,6 @@ object Generator {
   implicit val arbCreateWorkbenchUser: Arbitrary[CreateWorkbenchUser] = Arbitrary(genCreateWorkbenchUser)
   implicit val arbPolicy: Arbitrary[AccessPolicy] = Arbitrary(genPolicy)
   implicit val arbResource: Arbitrary[Resource] = Arbitrary(genResource)
+  implicit val arbGoogleSubjectId: Arbitrary[GoogleSubjectId] = Arbitrary(genGoogleSubjectId)
+  implicit val arbAzureB2CId: Arbitrary[AzureB2CId] = Arbitrary(genAzureB2CId)
 }

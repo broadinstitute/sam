@@ -290,8 +290,7 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
 
   override def setUserAzureB2CId(userId: WorkbenchUserId, b2CId: AzureB2CId, samRequestContext: SamRequestContext): IO[Int] = IO {
     val result = for {
-      userId <- usersWithGoogleSubjectIds.get(googleSubjectId)
-      user <- users.get(userId.asInstanceOf[WorkbenchUserId])
+      user <- users.get(userId)
     } yield {
       users += user.id -> user.copy(azureB2CId = Option(b2CId))
       1

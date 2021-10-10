@@ -92,7 +92,7 @@ class ManagedGroupServiceSpec extends AnyFlatSpec with Matchers with TestSupport
 
   before {
     clearDatabase()
-    dirDAO.createUser(WorkbenchUser(dummyUserInfo.userId, Some(TestSupport.genGoogleSubjectId()), dummyUserInfo.userEmail, Some(TestSupport.genAzureB2CId())), samRequestContext).unsafeRunSync()
+    dirDAO.createUser(WorkbenchUser(dummyUserInfo.userId, TestSupport.genGoogleSubjectId(), dummyUserInfo.userEmail, Some(TestSupport.genAzureB2CId())), samRequestContext).unsafeRunSync()
   }
 
   protected def clearDatabase(): Unit = TestSupport.truncateAll

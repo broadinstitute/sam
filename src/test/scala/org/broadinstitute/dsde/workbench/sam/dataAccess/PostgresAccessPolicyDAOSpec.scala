@@ -489,7 +489,7 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
     val defaultGroupName = WorkbenchGroupName("group")
     val defaultGroup = BasicWorkbenchGroup(defaultGroupName, Set.empty, WorkbenchEmail("foo@bar.com"))
     val defaultUserId = WorkbenchUserId("testUser")
-    val defaultUser = WorkbenchUser(defaultUserId, Option(GoogleSubjectId("testGoogleSubject")), WorkbenchEmail("user@foo.com"), Option(IdentityConcentratorId("testICId")))
+    val defaultUser = WorkbenchUser(defaultUserId, Option(GoogleSubjectId("testGoogleSubject")), WorkbenchEmail("user@foo.com"), Option(AzureB2CId("testICId")))
     "createPolicy" - {
       "creates a policy" in {
         dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
@@ -675,7 +675,7 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
     "listFlattenedPolicyMembers" - {
       "lists all members of a policy" in {
         val directMember = WorkbenchUser(WorkbenchUserId("direct"), None, WorkbenchEmail("direct@member.biz"), None)
-        val subGroupMember = WorkbenchUser(WorkbenchUserId("indirect"), Option(GoogleSubjectId("googley")), WorkbenchEmail("subGroup@member.edu.biz"), Option(IdentityConcentratorId("icy")))
+        val subGroupMember = WorkbenchUser(WorkbenchUserId("indirect"), Option(GoogleSubjectId("googley")), WorkbenchEmail("subGroup@member.edu.biz"), Option(AzureB2CId("icy")))
         val subSubGroupMember = WorkbenchUser(WorkbenchUserId("veryIndirect"), None, WorkbenchEmail("very@indirect.net"), None)
         val inTwoGroupsMember = WorkbenchUser(WorkbenchUserId("multipleGroups"), None, WorkbenchEmail("member@members.com"), None)
         val allMembers = Set(directMember, subGroupMember, subSubGroupMember, inTwoGroupsMember)
@@ -1509,7 +1509,7 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
         dao.createResource(resource, samRequestContext).unsafeRunSync()
 
 
-        val secondUser = defaultUser.copy(id = WorkbenchUserId("foo"), googleSubjectId = Some(GoogleSubjectId("blablabla")), email = WorkbenchEmail("bar@baz.com"), identityConcentratorId = Some(IdentityConcentratorId("ooo")))
+        val secondUser = defaultUser.copy(id = WorkbenchUserId("foo"), googleSubjectId = Some(GoogleSubjectId("blablabla")), email = WorkbenchEmail("bar@baz.com"), azureB2CId = Some(AzureB2CId("ooo")))
         dirDao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         dirDao.createUser(secondUser, samRequestContext).unsafeRunSync()
 
@@ -1529,7 +1529,7 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
         val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
         dao.createResource(resource, samRequestContext).unsafeRunSync()
 
-        val secondUser = defaultUser.copy(id = WorkbenchUserId("foo"), googleSubjectId = Some(GoogleSubjectId("blablabla")), email = WorkbenchEmail("bar@baz.com"), identityConcentratorId = Some(IdentityConcentratorId("ooo")))
+        val secondUser = defaultUser.copy(id = WorkbenchUserId("foo"), googleSubjectId = Some(GoogleSubjectId("blablabla")), email = WorkbenchEmail("bar@baz.com"), azureB2CId = Some(AzureB2CId("ooo")))
 
         dirDao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         dirDao.createUser(secondUser, samRequestContext).unsafeRunSync()
@@ -1552,7 +1552,7 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
         val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
         dao.createResource(resource, samRequestContext).unsafeRunSync()
 
-        val secondUser = defaultUser.copy(id = WorkbenchUserId("foo"), googleSubjectId = Some(GoogleSubjectId("blablabla")), email = WorkbenchEmail("bar@baz.com"), identityConcentratorId = Some(IdentityConcentratorId("ooo")))
+        val secondUser = defaultUser.copy(id = WorkbenchUserId("foo"), googleSubjectId = Some(GoogleSubjectId("blablabla")), email = WorkbenchEmail("bar@baz.com"), azureB2CId = Some(AzureB2CId("ooo")))
 
         dirDao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         dirDao.createUser(secondUser, samRequestContext).unsafeRunSync()
@@ -1572,7 +1572,7 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
         val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
         dao.createResource(resource, samRequestContext).unsafeRunSync()
 
-        val secondUser = defaultUser.copy(id = WorkbenchUserId("foo"), googleSubjectId = Some(GoogleSubjectId("blablabla")), email = WorkbenchEmail("bar@baz.com"), identityConcentratorId = Some(IdentityConcentratorId("ooo")))
+        val secondUser = defaultUser.copy(id = WorkbenchUserId("foo"), googleSubjectId = Some(GoogleSubjectId("blablabla")), email = WorkbenchEmail("bar@baz.com"), azureB2CId = Some(AzureB2CId("ooo")))
 
         dirDao.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
@@ -1591,7 +1591,7 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
       "overwrites descendant actions and roles" in {
         val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
         val otherResourceType = resourceType.copy(name = ResourceTypeName("otherResourceType"))
-        val secondUser = defaultUser.copy(id = WorkbenchUserId("foo"), googleSubjectId = Some(GoogleSubjectId("blablabla")), email = WorkbenchEmail("bar@baz.com"), identityConcentratorId = Some(IdentityConcentratorId("ooo")))
+        val secondUser = defaultUser.copy(id = WorkbenchUserId("foo"), googleSubjectId = Some(GoogleSubjectId("blablabla")), email = WorkbenchEmail("bar@baz.com"), azureB2CId = Some(AzureB2CId("ooo")))
 
         val sameResourceTypeDescendant = AccessPolicyDescendantPermissions(resource.resourceTypeName, Set(writeAction), Set(ownerRoleName))
         val otherResourceTypeDescendant = AccessPolicyDescendantPermissions(otherResourceType.name, Set(readAction), Set(actionlessRole.roleName))

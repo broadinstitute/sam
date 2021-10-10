@@ -178,7 +178,7 @@ trait UserRoutesSpecHelper extends AnyFlatSpec with Matchers with ScalatestRoute
     (WorkbenchUser(userStatus.userInfo.userSubjectId, Some(GoogleSubjectId(userStatus.userInfo.userSubjectId.value)), userStatus.userInfo.userEmail, None), routes)
   }
 
-  def createTestUser(googSubjectId: Option[GoogleSubjectId] = None, cloudExtensions: Option[CloudExtensions] = None, googleDirectoryDAO: Option[GoogleDirectoryDAO] = None, identityConcentratorId: Option[IdentityConcentratorId] = None, userEmail: WorkbenchEmail = defaultUserEmail): (WorkbenchUser, SamDependencies, SamRoutes) = {
+  def createTestUser(googSubjectId: Option[GoogleSubjectId] = None, cloudExtensions: Option[CloudExtensions] = None, googleDirectoryDAO: Option[GoogleDirectoryDAO] = None, azureB2CId: Option[AzureB2CId] = None, userEmail: WorkbenchEmail = defaultUserEmail): (WorkbenchUser, SamDependencies, SamRoutes) = {
     val userInfo = UserInfo(OAuth2BearerToken(""), genWorkbenchUserId(System.currentTimeMillis()), userEmail, 3600)
 
     val samDependencies = genSamDependencies(cloudExtensions = cloudExtensions, googleDirectoryDAO = googleDirectoryDAO)
@@ -191,7 +191,7 @@ trait UserRoutesSpecHelper extends AnyFlatSpec with Matchers with ScalatestRoute
       res.userInfo.userEmail shouldBe userEmail
       res.enabled shouldBe Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true)
 
-      WorkbenchUser(res.userInfo.userSubjectId, Some(GoogleSubjectId(res.userInfo.userSubjectId.value)), res.userInfo.userEmail, identityConcentratorId)
+      WorkbenchUser(res.userInfo.userSubjectId, Some(GoogleSubjectId(res.userInfo.userSubjectId.value)), res.userInfo.userEmail, azureB2CId)
     }
     (user, samDependencies, routes)
   }

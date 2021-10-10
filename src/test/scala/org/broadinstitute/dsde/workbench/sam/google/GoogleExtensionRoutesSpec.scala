@@ -243,7 +243,7 @@ trait GoogleExtensionRoutesSpecHelper extends AnyFlatSpec with Matchers with Sca
                              googleServicesConfig: GoogleServicesConfig = TestSupport.googleServicesConfig,
                              googSubjectId: Option[GoogleSubjectId] = None,
                              email: Option[WorkbenchEmail] = None,
-                             identityConcentratorIdOpt: Option[IdentityConcentratorId] = None,
+                             azureB2CIdOpt: Option[AzureB2CId] = None,
                     ): (WorkbenchUser, SamDependencies, SamRoutes) = {
     val em = email.getOrElse(defaultUserEmail)
     val googleSubjectId = googSubjectId.map(_.value).getOrElse(genRandom(System.currentTimeMillis()))
@@ -260,7 +260,7 @@ trait GoogleExtensionRoutesSpecHelper extends AnyFlatSpec with Matchers with Sca
       res.userInfo.userEmail shouldBe em
       res.enabled shouldBe Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true)
 
-      WorkbenchUser(res.userInfo.userSubjectId, Some(GoogleSubjectId(googleSubjectId)), res.userInfo.userEmail, identityConcentratorIdOpt)
+      WorkbenchUser(res.userInfo.userSubjectId, Some(GoogleSubjectId(googleSubjectId)), res.userInfo.userEmail, azureB2CIdOpt)
     }
 
     (user, samDependencies, createRoutes)

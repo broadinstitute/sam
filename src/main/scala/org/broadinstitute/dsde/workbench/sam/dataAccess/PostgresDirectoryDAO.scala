@@ -421,7 +421,7 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
   }
 
   override def setUserAzureB2CId(userId: WorkbenchUserId, b2cId: AzureB2CId, samRequestContext: SamRequestContext): IO[Int] = {
-    writeTransaction("setUserIdentityConcentratorId", samRequestContext)({ implicit session =>
+    writeTransaction("setUserAzureB2CId", samRequestContext)({ implicit session =>
       val u = UserTable.column
       samsql"update ${UserTable.table} set ${u.azureB2CId} = $b2cId where ${u.id} = $userId".update().apply()
     })
