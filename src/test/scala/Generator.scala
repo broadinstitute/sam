@@ -22,11 +22,11 @@ object Generator {
   val genHeadersWithoutExpiresIn: Gen[List[RawHeader]] = for{
     email <- genNonPetEmail
     accessToken <- genOAuth2BearerToken
+    externalId <- genExternalId
   } yield List(
     RawHeader(emailHeader, email.value),
-    RawHeader(userIdHeader, genRandom(System.currentTimeMillis())),
-    RawHeader(accessTokenHeader, accessToken.value),
-    RawHeader(authorizationHeader, accessToken.toString())
+    RawHeader(userIdHeader, externalId.fold(_.value, _.value)),
+    RawHeader(accessTokenHeader, accessToken.value)
   )
 
   val genUserInfoHeadersWithInvalidExpiresIn: Gen[List[RawHeader]] = for{
@@ -46,14 +46,15 @@ object Generator {
 
   val genCreateWorkbenchUser = for{
     email <- genNonPetEmail
+    googleSubjectId <- genGoogleSubjectId
     userId = genWorkbenchUserId(System.currentTimeMillis())
-  }yield CreateWorkbenchUser(userId, Option(GoogleSubjectId(userId.value)), email, None)
+  }yield CreateWorkbenchUser(userId, googleSubjectId, email, None)
 
   val genWorkbenchUser = for{
     email <- genNonPetEmail
     userId = genWorkbenchUserId(System.currentTimeMillis())
-    googleSubjectId <- Gen.const(Option(GoogleSubjectId(userId.value)))
-    azureB2CId <- Gen.const(Option(AzureB2CId(userId.value)))
+    googleSubjectId <- Gen.option(genGoogleSubjectId)
+    azureB2CId <- Gen.option(genAzureB2CId)
   } yield WorkbenchUser(userId, googleSubjectId, email, azureB2CId)
 
   val genInviteUser = for{

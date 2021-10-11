@@ -16,4 +16,5 @@
     <include file="changesets/20201103_add_google_project_child_for_each_billing_project.xml" relativeToChangelogFile="true"/>
     <include file="changesets/20201123_effective_policy.xml" relativeToChangelogFile="true"/>
     <include file="changesets/20201123_flat_group_membership.xml" relativeToChangelogFile="true"/>
+    <include file="changesets/20211010_azure_b2c_id.xml" relativeToChangelogFile="true"/>
 </databaseChangeLog>

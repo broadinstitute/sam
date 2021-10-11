@@ -388,7 +388,7 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
     writeTransaction("createUser", samRequestContext)({ implicit session =>
       val userColumn = UserTable.column
 
-      val insertUserQuery = samsql"insert into ${UserTable.table} (${userColumn.id}, ${userColumn.email}, ${userColumn.googleSubjectId}, ${userColumn.enabled}, ${userColumn.azureB2CId}) values (${user.id}, ${user.email}, ${user.googleSubjectId}, false, ${user.azureB2CId})"
+      val insertUserQuery = samsql"insert into ${UserTable.table} (${userColumn.id}, ${userColumn.email}, ${userColumn.googleSubjectId}, ${userColumn.enabled}, ${userColumn.azureB2cId}) values (${user.id}, ${user.email}, ${user.googleSubjectId}, false, ${user.azureB2CId})"
 
       Try {
         insertUserQuery.update().apply()
@@ -414,7 +414,7 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
     readOnlyTransaction("loadUserByAzureB2CId", samRequestContext)({ implicit session =>
       val userTable = UserTable.syntax
 
-      val loadUserQuery = samsql"select ${userTable.resultAll} from ${UserTable as userTable} where ${userTable.azureB2CId} = ${userId}"
+      val loadUserQuery = samsql"select ${userTable.resultAll} from ${UserTable as userTable} where ${userTable.azureB2cId} = ${userId}"
       loadUserQuery.map(UserTable(userTable))
         .single().apply().map(UserTable.unmarshalUserRecord)
     })
@@ -423,7 +423,7 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
   override def setUserAzureB2CId(userId: WorkbenchUserId, b2cId: AzureB2CId, samRequestContext: SamRequestContext): IO[Int] = {
     writeTransaction("setUserAzureB2CId", samRequestContext)({ implicit session =>
       val u = UserTable.column
-      samsql"update ${UserTable.table} set ${u.azureB2CId} = $b2cId where ${u.id} = $userId".update().apply()
+      samsql"update ${UserTable.table} set ${u.azureB2cId} = $b2cId where ${u.id} = $userId".update().apply()
     })
   }
 

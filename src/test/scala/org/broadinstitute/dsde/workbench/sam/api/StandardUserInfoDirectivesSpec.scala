@@ -78,7 +78,7 @@ class StandardUserInfoDirectivesSpec extends AnyFlatSpec with PropertyBasedTesti
         val directoryDAO = new MockDirectoryDAO()
         val oidcHeaders = OIDCHeaders(token, externalId, 10L, email, None)
         val res = getUserInfo(directoryDAO, None, oidcHeaders, samRequestContext).attempt.unsafeRunSync().swap.toOption.get.asInstanceOf[WorkbenchExceptionWithErrorReport]
-        Eq[WorkbenchExceptionWithErrorReport].eqv(res, new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"google subject Id $externalId not found in sam"))) shouldBe(true)
+        res.errorReport.statusCode shouldBe Option(StatusCodes.NotFound)
     }
   }
 
@@ -88,7 +88,7 @@ class StandardUserInfoDirectivesSpec extends AnyFlatSpec with PropertyBasedTesti
         val directoryDAO = new MockDirectoryDAO()
         val oidcHeaders = OIDCHeaders(token, Left(googleSubjectId), 10L, email, None)
         val res = getUserInfo(directoryDAO, None, oidcHeaders, samRequestContext).attempt.unsafeRunSync().swap.toOption.get.asInstanceOf[WorkbenchExceptionWithErrorReport]
-        Eq[WorkbenchExceptionWithErrorReport].eqv(res, new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"google subject Id $googleSubjectId not found in sam"))) shouldBe(true)
+        res.errorReport.statusCode shouldBe Option(StatusCodes.NotFound)
     }
   }
 
@@ -104,9 +104,9 @@ class StandardUserInfoDirectivesSpec extends AnyFlatSpec with PropertyBasedTesti
 
         Eq[WorkbenchExceptionWithErrorReport].eqv(res, new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"subjectId $gSid is not a WorkbenchUser"))) shouldBe(true)
     }
-
-    it should "update existing user with azureB2CId" in pending
   }
+
+  it should "update existing user with azureB2CId" in pending
 
   "requireUserInfo" should "fail if expiresIn is in illegal format" in {
     forAll(genUserInfoHeadersWithInvalidExpiresIn) {
@@ -119,46 +119,41 @@ class StandardUserInfoDirectivesSpec extends AnyFlatSpec with PropertyBasedTesti
     }
   }
 
-  it should "accept request with oidc headers" in {
-    val user = genWorkbenchUser.sample.get
+  it should "accept request with oidc headers" in forAll(genExternalId, genNonPetEmail, genOAuth2BearerToken, minSuccessful(20)) { (externalId, email, accessToken) =>
     val services = directives
-    val accessToken = OAuth2BearerToken("not jwt")
+    val expiresIn = System.currentTimeMillis() + 1000
     val headers = List(
-      RawHeader(emailHeader, user.email.value),
-      RawHeader(userIdHeader, user.googleSubjectId.get.value),
+      RawHeader(emailHeader, email.value),
+      RawHeader(userIdHeader, externalId.fold(_.value, _.value)),
       RawHeader(accessTokenHeader, accessToken.token),
-      RawHeader(authorizationHeader, accessToken.toString()),
-      RawHeader(expiresInHeader, (System.currentTimeMillis() + 1000).toString)
+      RawHeader(expiresInHeader, expiresIn.toString)
     )
-    services.directoryDAO.createUser(user, samRequestContext).unsafeRunSync()
+    val user = services.directoryDAO.createUser(WorkbenchUser(genWorkbenchUserId(System.currentTimeMillis()), externalId.left.toOption, email = email, azureB2CId = externalId.toOption), samRequestContext).unsafeRunSync()
     Get("/").withHeaders(headers) ~>
-      handleExceptions(myExceptionHandler){services.requireUserInfo(samRequestContext)(x => complete(x.copy(tokenExpiresIn = 0).toString))} ~> check {
+      handleExceptions(myExceptionHandler){services.requireUserInfo(samRequestContext)(x => complete(x.toString))} ~> check {
       status shouldBe StatusCodes.OK
-      responseAs[String] shouldEqual UserInfo(accessToken, user.id, user.email, 0).toString
+      responseAs[String] shouldEqual UserInfo(accessToken, user.id, user.email, expiresIn).toString
     }
   }
 
   it should "fail if required headers are missing" in {
     Get("/") ~> handleExceptions(myExceptionHandler){directives.requireUserInfo(samRequestContext)(x => complete(x.toString))} ~> check {
-      rejection shouldBe MissingHeaderRejection(authorizationHeader)
+      rejection shouldBe MissingHeaderRejection(accessTokenHeader)
     }
   }
 
-  "requireCreateUser" should "accept request with oidc headers" in {
-    val user = genWorkbenchUser.sample.get
+  "requireCreateUser" should "accept request with oidc headers" in forAll(genExternalId, genNonPetEmail, genOAuth2BearerToken, minSuccessful(20)) { (externalId, email, accessToken) =>
     val services = directives
-    val accessToken = OAuth2BearerToken("not jwt")
     val headers = List(
-      RawHeader(emailHeader, user.email.value),
-      RawHeader(userIdHeader, user.googleSubjectId.get.value),
+      RawHeader(emailHeader, email.value),
+      RawHeader(userIdHeader, externalId.fold(_.value, _.value)),
       RawHeader(accessTokenHeader, accessToken.token),
-      RawHeader(authorizationHeader, accessToken.toString()),
       RawHeader(expiresInHeader, (System.currentTimeMillis() + 1000).toString)
     )
     Get("/").withHeaders(headers) ~>
       handleExceptions(myExceptionHandler){services.requireCreateUser(samRequestContext)(x => complete(x.copy(id = WorkbenchUserId("")).toString))} ~> check {
       status shouldBe StatusCodes.OK
-      responseAs[String] shouldEqual CreateWorkbenchUser(WorkbenchUserId(""), user.googleSubjectId, user.email, None).toString
+      responseAs[String] shouldEqual CreateWorkbenchUser(WorkbenchUserId(""), externalId.left.toOption, email, externalId.toOption).toString
     }
   }
 
@@ -166,7 +161,7 @@ class StandardUserInfoDirectivesSpec extends AnyFlatSpec with PropertyBasedTesti
 
   it should "fail if required headers are missing" in {
     Get("/") ~> handleExceptions(myExceptionHandler){directives.requireCreateUser(samRequestContext)(x => complete(x.toString))} ~> check {
-      rejection shouldBe MissingHeaderRejection(authorizationHeader)
+      rejection shouldBe MissingHeaderRejection(accessTokenHeader)
     }
   }
 }

@@ -11,7 +11,6 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{MockAccessPolicyDAO, MockDirectoryDAO, MockRegistrationDAO}
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.service.UserService.genRandom
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.scalatest.AppendedClues
 import spray.json.DefaultJsonProtocol._
@@ -27,7 +26,7 @@ import org.scalatest.matchers.should.Matchers
 class ResourceRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTest with TestSupport with AppendedClues {
 
   val defaultUserInfo = UserInfo(OAuth2BearerToken("accessToken"), WorkbenchUserId("user1"), WorkbenchEmail("user1@example.com"), 0)
-  def defaultGoogleSubjectId = Option(GoogleSubjectId(genRandom(System.currentTimeMillis())))
+  def defaultGoogleSubjectId = Generator.genGoogleSubjectId.sample
 
   private val config = TestSupport.config
   private val resourceTypes = TestSupport.appConfig.resourceTypes
@@ -74,7 +73,7 @@ class ResourceRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTe
 
   "GET /api/resource/{resourceType}/{resourceId}/action/{action}/userEmail/{userEmail}" should "200 if caller have read_policies permission" in {
     // Create a user called userWithEmail and has can_compute on the resource.
-    val userWithEmail = CreateWorkbenchUser(WorkbenchUserId("user1"), defaultGoogleSubjectId, WorkbenchEmail("user1@foo.com"), None)
+    val userWithEmail = Generator.genCreateWorkbenchUser.sample.get
     val members = AccessPolicyMembership(Set(userWithEmail.email), Set(ResourceAction("can_compute")), Set.empty)
     val resourceType = ResourceType(
       ResourceTypeName("rt"),
@@ -98,7 +97,7 @@ class ResourceRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTe
 
   "GET /api/resource/{resourceType}/{resourceId}/action/{action}/userEmail/{userEmail}" should "200 if caller have testActionAccess::can_compute permission" in {
     // Create a user called userWithEmail and has can_compute on the resource.
-    val userWithEmail = CreateWorkbenchUser(WorkbenchUserId("user1"), defaultGoogleSubjectId, WorkbenchEmail("user1@foo.com"), None)
+    val userWithEmail = Generator.genCreateWorkbenchUser.sample.get
     val members = AccessPolicyMembership(Set(userWithEmail.email), Set(ResourceAction("can_compute")), Set.empty)
     val resourceType = ResourceType(
       ResourceTypeName("rt"),
@@ -127,7 +126,7 @@ class ResourceRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTe
 
   "GET /api/resource/{resourceType}/{resourceId}/action/{action}/userEmail/{userEmail}" should "return false if user doesn't have permission or doesn't exist" in {
     // Create a user called userWithEmail but doesn't have can_compute on the resource.
-    val userWithEmail = CreateWorkbenchUser(WorkbenchUserId("user1"), defaultGoogleSubjectId, WorkbenchEmail("user1@foo.com"), None)
+    val userWithEmail = Generator.genCreateWorkbenchUser.sample.get
     val members = AccessPolicyMembership(Set(userWithEmail.email), Set(ResourceAction("read_policies")), Set.empty)
 
     // The owner role has read_policies
@@ -160,7 +159,7 @@ class ResourceRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTe
 
   "GET /api/resource/{resourceType}/{resourceId}/action/{action}/userEmail/{userEmail}" should "return 403 if caller doesn't have permission" in {
     // Create a user called userWithEmail and have can_compute on the resource.
-    val userWithEmail = CreateWorkbenchUser(WorkbenchUserId("user1"), defaultGoogleSubjectId, WorkbenchEmail("user1@foo.com"), None)
+    val userWithEmail = Generator.genCreateWorkbenchUser.sample.get
     val members = AccessPolicyMembership(Set(userWithEmail.email), Set(ResourceAction("read_policies")), Set.empty)
 
     // The owner role only have alert_policies

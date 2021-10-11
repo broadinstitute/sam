@@ -82,7 +82,7 @@ trait StandardUserInfoDirectives extends UserInfoDirectives with LazyLogging wit
   }
 
   private def externalIdFromHeaders: Directive1[Either[GoogleSubjectId, AzureB2CId]] = headerValueByName(userIdHeader).map { idString =>
-    Try(idString.toLong).fold(
+    Try(BigInt(idString)).fold(
       _ => Right(AzureB2CId(idString)),    // could not parse id as a Long, treat id as b2c id which are uuids
       _ => Left(GoogleSubjectId(idString)) // id is a number which is what google subject ids look like
     )
@@ -96,7 +96,6 @@ object StandardUserInfoDirectives {
   val emailHeader = "OIDC_CLAIM_email"
   val userIdHeader = "OIDC_CLAIM_user_id"
   val idpAccessTokenHeader = "OAUTH2_CLAIM_idp_access_token"
-  val authorizationHeader = "Authorization"
 
   def getUserInfo(directoryDAO: DirectoryDAO, maybeGoogleOpaqueTokenResolver: Option[GoogleOpaqueTokenResolver], oidcHeaders: OIDCHeaders, samRequestContext: SamRequestContext): IO[UserInfo] = {
     oidcHeaders match {
