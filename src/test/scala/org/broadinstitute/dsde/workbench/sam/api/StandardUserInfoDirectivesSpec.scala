@@ -6,6 +6,7 @@ import akka.http.scaladsl.model.headers.{OAuth2BearerToken, RawHeader}
 import akka.http.scaladsl.server.Directives.{complete, handleExceptions}
 import akka.http.scaladsl.server.MissingHeaderRejection
 import akka.http.scaladsl.testkit.ScalatestRouteTest
+import cats.effect.IO
 import cats.kernel.Eq
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountDisplayName, ServiceAccountSubjectId}
@@ -15,6 +16,7 @@ import org.broadinstitute.dsde.workbench.sam.api.SamRoutes.myExceptionHandler
 import org.broadinstitute.dsde.workbench.sam.api.StandardUserInfoDirectives._
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, MockDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.google.GoogleOpaqueTokenResolver
+import org.broadinstitute.dsde.workbench.sam.model.UserStatusInfo
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
 import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, UserService}
 import org.mockito.Mockito._
@@ -34,7 +36,7 @@ class StandardUserInfoDirectivesSpec extends AnyFlatSpec with PropertyBasedTesti
   }
 
   "getUserInfo" should "be able to get a UserInfo object for regular user" in {
-    forAll {
+    forAll(minSuccessful(20)) {
       (token: OAuth2BearerToken, email: WorkbenchEmail, externalId: Either[GoogleSubjectId, AzureB2CId]) =>
         val directoryDAO = new MockDirectoryDAO()
         val uid = genWorkbenchUserId(System.currentTimeMillis())
@@ -106,7 +108,38 @@ class StandardUserInfoDirectivesSpec extends AnyFlatSpec with PropertyBasedTesti
     }
   }
 
-  it should "update existing user with azureB2CId" in pending
+  it should "fail if azureB2CId does not exist and idp token is not for current user" in {
+    forAll(genGoogleSubjectId, genAzureB2CId, genOAuth2BearerToken, genPetEmail) {
+      (googleSubjectId: GoogleSubjectId, azureB2CId: AzureB2CId, token: OAuth2BearerToken, email: WorkbenchEmail) =>
+        val directoryDAO = new MockDirectoryDAO()
+        val googleOpaqueTokenResolver: GoogleOpaqueTokenResolver = mock[GoogleOpaqueTokenResolver](RETURNS_SMART_NULLS)
+        val idpToken = OAuth2BearerToken("opaque_token")
+        val uid = genWorkbenchUserId(System.currentTimeMillis())
+        when(googleOpaqueTokenResolver.getUserStatusInfo(idpToken)).thenReturn(IO.pure(None))
+        val oidcHeaders = OIDCHeaders(token, Right(azureB2CId), 10L, email, Option(idpToken))
+        val workbenchUser = WorkbenchUser(uid, Option(googleSubjectId), email, None)
+        directoryDAO.createUser(workbenchUser, samRequestContext).unsafeRunSync()
+        val res = getUserInfo(directoryDAO, Option(googleOpaqueTokenResolver), oidcHeaders, samRequestContext).attempt.unsafeRunSync().swap.toOption.get.asInstanceOf[WorkbenchExceptionWithErrorReport]
+        res.errorReport.statusCode shouldBe Option(StatusCodes.NotFound)
+    }
+  }
+
+  it should "update existing user with azureB2CId" in {
+    forAll(genGoogleSubjectId, genAzureB2CId, genOAuth2BearerToken, genPetEmail) {
+      (googleSubjectId: GoogleSubjectId, azureB2CId: AzureB2CId, token: OAuth2BearerToken, email: WorkbenchEmail) =>
+        val directoryDAO = new MockDirectoryDAO()
+        val googleOpaqueTokenResolver: GoogleOpaqueTokenResolver = mock[GoogleOpaqueTokenResolver](RETURNS_SMART_NULLS)
+        val idpToken = OAuth2BearerToken("opaque_token")
+        val uid = genWorkbenchUserId(System.currentTimeMillis())
+        when(googleOpaqueTokenResolver.getUserStatusInfo(idpToken)).thenReturn(IO.pure(Option(UserStatusInfo(uid.value, email.value, true))))
+        val oidcHeaders = OIDCHeaders(token, Right(azureB2CId), 10L, email, Option(idpToken))
+        val workbenchUser = WorkbenchUser(uid, Option(googleSubjectId), email, None)
+        directoryDAO.createUser(workbenchUser, samRequestContext).unsafeRunSync()
+        val res = getUserInfo(directoryDAO, Option(googleOpaqueTokenResolver), oidcHeaders, samRequestContext).unsafeRunSync()
+        res should be (UserInfo(token, uid, email, 10L))
+        directoryDAO.loadUser(uid, samRequestContext).unsafeRunSync() shouldBe Option(workbenchUser.copy(azureB2CId = Option(azureB2CId)))
+    }
+  }
 
   "requireUserInfo" should "fail if expiresIn is in illegal format" in {
     forAll(genUserInfoHeadersWithInvalidExpiresIn) {
@@ -122,12 +155,7 @@ class StandardUserInfoDirectivesSpec extends AnyFlatSpec with PropertyBasedTesti
   it should "accept request with oidc headers" in forAll(genExternalId, genNonPetEmail, genOAuth2BearerToken, minSuccessful(20)) { (externalId, email, accessToken) =>
     val services = directives
     val expiresIn = System.currentTimeMillis() + 1000
-    val headers = List(
-      RawHeader(emailHeader, email.value),
-      RawHeader(userIdHeader, externalId.fold(_.value, _.value)),
-      RawHeader(accessTokenHeader, accessToken.token),
-      RawHeader(expiresInHeader, expiresIn.toString)
-    )
+    val headers = createRequiredHeaders(externalId, email, accessToken, expiresInString = expiresIn.toString)
     val user = services.directoryDAO.createUser(WorkbenchUser(genWorkbenchUserId(System.currentTimeMillis()), externalId.left.toOption, email = email, azureB2CId = externalId.toOption), samRequestContext).unsafeRunSync()
     Get("/").withHeaders(headers) ~>
       handleExceptions(myExceptionHandler){services.requireUserInfo(samRequestContext)(x => complete(x.toString))} ~> check {
@@ -144,12 +172,7 @@ class StandardUserInfoDirectivesSpec extends AnyFlatSpec with PropertyBasedTesti
 
   "requireCreateUser" should "accept request with oidc headers" in forAll(genExternalId, genNonPetEmail, genOAuth2BearerToken, minSuccessful(20)) { (externalId, email, accessToken) =>
     val services = directives
-    val headers = List(
-      RawHeader(emailHeader, email.value),
-      RawHeader(userIdHeader, externalId.fold(_.value, _.value)),
-      RawHeader(accessTokenHeader, accessToken.token),
-      RawHeader(expiresInHeader, (System.currentTimeMillis() + 1000).toString)
-    )
+    val headers = createRequiredHeaders(externalId, email, accessToken)
     Get("/").withHeaders(headers) ~>
       handleExceptions(myExceptionHandler){services.requireCreateUser(samRequestContext)(x => complete(x.copy(id = WorkbenchUserId("")).toString))} ~> check {
       status shouldBe StatusCodes.OK
@@ -157,11 +180,45 @@ class StandardUserInfoDirectivesSpec extends AnyFlatSpec with PropertyBasedTesti
     }
   }
 
-  it should "fail if idp access token is for an existing user" in pending
+  it should "fail if idp access token matches existing user" in forAll(genAzureB2CId, genNonPetEmail, genOAuth2BearerToken) { (azureB2CId, email, accessToken) =>
+    val services = directives
+    val idpToken = "opaque_token"
+    val headers = createRequiredHeaders(Right(azureB2CId), email, accessToken, Option(idpToken))
+    services.maybeGoogleOpaqueTokenResolver.foreach { r =>
+      when(r.getUserStatusInfo(OAuth2BearerToken(idpToken))).thenReturn(IO.pure(Option(UserStatusInfo(genWorkbenchUserId(System.currentTimeMillis()).value, email.value, true))))
+    }
+    Get("/").withHeaders(headers) ~>
+      handleExceptions(myExceptionHandler){services.requireCreateUser(samRequestContext)(x => complete(x.copy(id = WorkbenchUserId("")).toString))} ~> check {
+      status shouldBe StatusCodes.Conflict
+    }
+  }
+
+  it should "pass if idp access token does not match an existing user" in forAll(genAzureB2CId, genNonPetEmail, genOAuth2BearerToken) { (azureB2CId, email, accessToken) =>
+    val services = directives
+    val idpToken = "opaque_token"
+    val headers = createRequiredHeaders(Right(azureB2CId), email, accessToken, Option(idpToken))
+    services.maybeGoogleOpaqueTokenResolver.foreach { r =>
+      when(r.getUserStatusInfo(OAuth2BearerToken(idpToken))).thenReturn(IO.pure(None))
+    }
+    Get("/").withHeaders(headers) ~>
+      handleExceptions(myExceptionHandler){services.requireCreateUser(samRequestContext)(x => complete(x.copy(id = WorkbenchUserId("")).toString))} ~> check {
+      status shouldBe StatusCodes.OK
+    }
+  }
 
   it should "fail if required headers are missing" in {
     Get("/") ~> handleExceptions(myExceptionHandler){directives.requireCreateUser(samRequestContext)(x => complete(x.toString))} ~> check {
       rejection shouldBe MissingHeaderRejection(accessTokenHeader)
     }
   }
+
+  private def createRequiredHeaders(externalId: Either[GoogleSubjectId, AzureB2CId], email: WorkbenchEmail, accessToken: OAuth2BearerToken, idpToken: Option[String] = None, expiresInString: String = (System.currentTimeMillis() + 1000).toString): List[RawHeader] = {
+    List(
+      RawHeader(emailHeader, email.value),
+      RawHeader(userIdHeader, externalId.fold(_.value, _.value)),
+      RawHeader(accessTokenHeader, accessToken.token),
+      RawHeader(expiresInHeader, expiresInString)
+    ) ++ idpToken.map(RawHeader(idpAccessTokenHeader, _))
+  }
+
 }
