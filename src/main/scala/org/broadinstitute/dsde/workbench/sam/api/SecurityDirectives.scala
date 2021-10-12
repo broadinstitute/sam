@@ -8,7 +8,7 @@ import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchExceptionWithErrorReport, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.ImplicitConversions.ioOnSuccessMagnet
 import org.broadinstitute.dsde.workbench.sam._
-import org.broadinstitute.dsde.workbench.sam.model.{FullyQualifiedResourceId, ResourceAction, ResourceType, ResourceTypeName, SamResourceActions}
+import org.broadinstitute.dsde.workbench.sam.model.{FullyQualifiedResourceId, ResourceAction, ResourceType, ResourceTypeName, SamResourceActions, SamResourceTypes}
 import org.broadinstitute.dsde.workbench.sam.service.{PolicyEvaluatorService, ResourceService}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
@@ -97,7 +97,7 @@ trait SecurityDirectives {
 
   def requireOneOfActionIfWorkspace(resource: FullyQualifiedResourceId, requestedActions: Set[ResourceAction], userId: WorkbenchUserId, samRequestContext: SamRequestContext): Directive0 = Directives.mapInnerRoute { innerRoute =>
     onSuccess(resourceService.getResourceParent(resource, samRequestContext)) {
-      case Some(parent) => if (parent.resourceTypeName == ResourceTypeName("Workspace")) {
+      case Some(parent) => if (parent.resourceTypeName == SamResourceTypes.workspaceName) {
         checkPermissionAndReturnRoute(innerRoute, resource, requestedActions, userId, samRequestContext)
       } else {
         innerRoute
