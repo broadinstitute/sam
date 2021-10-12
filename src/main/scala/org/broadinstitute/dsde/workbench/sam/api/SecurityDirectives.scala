@@ -8,7 +8,7 @@ import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchExceptionWithErrorReport, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.ImplicitConversions.ioOnSuccessMagnet
 import org.broadinstitute.dsde.workbench.sam._
-import org.broadinstitute.dsde.workbench.sam.model.{FullyQualifiedResourceId, ResourceAction, ResourceType, ResourceTypeName, SamResourceActions, SamResourceTypes}
+import org.broadinstitute.dsde.workbench.sam.model.{FullyQualifiedResourceId, ResourceAction, ResourceType, SamResourceActions, SamResourceTypes}
 import org.broadinstitute.dsde.workbench.sam.service.{PolicyEvaluatorService, ResourceService}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
