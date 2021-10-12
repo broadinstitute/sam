@@ -95,14 +95,20 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                       }
                   } ~
                     pathPrefix("token") {
-                      post {
-                        entity(as[Set[String]]) { scopes =>
-                          complete {
-                            googleExtensions
-                              .getPetServiceAccountToken(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None), GoogleProject(project), scopes, samRequestContext)
-                              .map { token =>
-                                StatusCodes.OK -> JsString(token)
-                              }
+                      requireOneOfAction(
+                        FullyQualifiedResourceId(ResourceTypeName("google-project"), ResourceId("GOOGLE PROJECT")),
+                        Set(SamResourceActions.createPet),
+                        userInfo.userId,
+                        samRequestContext) {
+                        post {
+                          entity(as[Set[String]]) { scopes =>
+                            complete {
+                              googleExtensions
+                                .getPetServiceAccountToken(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None), GoogleProject(project), scopes, samRequestContext)
+                                .map { token =>
+                                  StatusCodes.OK -> JsString(token)
+                                }
+                            }
                           }
                         }
                       }
