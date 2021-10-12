@@ -27,8 +27,7 @@ object Dependencies {
   val excludeWorkbenchMetrics = ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-metrics_2.12")
   val excludeWorkbenchGoogle =  ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-google_2.12")
 
-  val jwtSpray: ModuleID = "com.pauldijou" %% "jwt-spray-json" % "4.1.0"
-  val jwtCirce: ModuleID = "com.pauldijou" %% "jwt-circe" % "4.1.0"
+  val circeGeneric: ModuleID = "io.circe" %% "circe-generic" % "0.14.1"
   val jacksonAnnotations: ModuleID = "com.fasterxml.jackson.core" % "jackson-annotations" % jacksonV
   val jacksonDatabind: ModuleID =    "com.fasterxml.jackson.core" % "jackson-databind"    % jacksonV
   val jacksonCore: ModuleID =        "com.fasterxml.jackson.core" % "jackson-core"        % jacksonV
@@ -155,8 +154,7 @@ object Dependencies {
     scalikeCoreConfig,
     scalikeCoreTest,
     postgres,
-    jwtSpray,
-    jwtCirce,
+    circeGeneric,
 
     http4s,
     http4sClient,
