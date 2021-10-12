@@ -96,7 +96,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                   } ~
                     pathPrefix("token") {
                       requireOneOfAction(
-                        FullyQualifiedResourceId(ResourceTypeName("google-project"), ResourceId("GOOGLE PROJECT")),
+                        FullyQualifiedResourceId(ResourceTypeName("google-project"), ResourceId(project)),
                         Set(SamResourceActions.createPet),
                         userInfo.userId,
                         samRequestContext) {
