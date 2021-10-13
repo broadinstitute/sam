@@ -95,7 +95,7 @@ trait SecurityDirectives {
       checkPermissionAndReturnRoute(innerRoute, resource, requestedActions, userId, samRequestContext)
     }
 
-  def requireOneOfActionIfWorkspace(resource: FullyQualifiedResourceId, requestedActions: Set[ResourceAction], userId: WorkbenchUserId, samRequestContext: SamRequestContext): Directive0 = Directives.mapInnerRoute { innerRoute =>
+  def requireOneOfActionIfParentIsWorkspace(resource: FullyQualifiedResourceId, requestedActions: Set[ResourceAction], userId: WorkbenchUserId, samRequestContext: SamRequestContext): Directive0 = Directives.mapInnerRoute { innerRoute =>
     onSuccess(resourceService.getResourceParent(resource, samRequestContext)) {
       case Some(parent) => if (parent.resourceTypeName == SamResourceTypes.workspaceName) {
         checkPermissionAndReturnRoute(innerRoute, resource, requestedActions, userId, samRequestContext)
