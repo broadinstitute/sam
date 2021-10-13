@@ -36,7 +36,7 @@ object Dependencies {
   val logbackClassic: ModuleID = "ch.qos.logback"             %  "logback-classic" % "1.2.3"
   val ravenLogback: ModuleID =   "com.getsentry.raven"        %  "raven-logback"   % "7.8.6"
   val scalaLogging: ModuleID =   "com.typesafe.scala-logging" %% "scala-logging"   % scalaLoggingV
-  val swaggerUi: ModuleID =      "org.webjars"                %  "swagger-ui"      % "3.25.0"
+  val swaggerUi: ModuleID =      "org.webjars"                %  "swagger-ui"      % "3.52.3"
   val ficus: ModuleID =          "com.iheart"                 %% "ficus"           % "1.5.0"
 
   val akkaActor: ModuleID =         "com.typesafe.akka"   %%  "akka-actor"           % akkaV

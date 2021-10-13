@@ -10,7 +10,7 @@
     </changeSet>
     <changeSet logicalFilePath="dummy" author="dvoet" id="add_azure_b2c_id">
         <addColumn tableName="sam_user">
-            <column name="azure_b2c_id" type="VARCHAR(30)">
+            <column name="azure_b2c_id" type="VARCHAR(40)">
                 <constraints unique="true"/>
             </column>
         </addColumn>

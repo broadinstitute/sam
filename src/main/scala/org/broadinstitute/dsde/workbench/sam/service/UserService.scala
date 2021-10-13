@@ -59,7 +59,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
     for {
       existingSubject <- user match {
         case CreateWorkbenchUser(_, Some(googleSubjectId), _, _) => directoryDAO.loadSubjectFromGoogleSubjectId(googleSubjectId, samRequestContext)
-        case CreateWorkbenchUser(_, _, _, Some(azureB2CId)) => directoryDAO.loadUserByAzureB2CId(azureB2CId, samRequestContext).as(asInstanceOf[Option[WorkbenchSubject]])
+        case CreateWorkbenchUser(_, _, _, Some(azureB2CId)) => directoryDAO.loadUserByAzureB2CId(azureB2CId, samRequestContext).map(_.map(_.id))
         case _ => IO.raiseError(new WorkbenchException("cannot create user when neither google subject id nor azure b2c id exists"))
       }
       user <- existingSubject match {
