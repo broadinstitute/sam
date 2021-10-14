@@ -73,11 +73,14 @@ trait StandardUserInfoDirectives extends UserInfoDirectives with LazyLogging wit
 
   private def expiresInFromHeader: Directive1[Long] = {
     // gets expiresInHeader as a string and converts it to Long raising an exception if it can't
-    headerValueByName(expiresInHeader).flatMap { expiresInString =>
-      Try(expiresInString.toLong).fold(
-        t => failWith(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"expiresIn $expiresInString can't be converted to Long", t))).toDirective,
-        expiresInLong => provide(expiresInLong)
-      )
+    optionalHeaderValueByName(expiresInHeader).flatMap {
+      case Some(expiresInString) =>
+        Try(expiresInString.toLong).fold(
+          t => failWith(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"expiresIn $expiresInString can't be converted to Long", t))).toDirective,
+          expiresInLong => provide(expiresInLong)
+        )
+
+      case None => provide(0)
     }
   }
 
@@ -90,7 +93,7 @@ trait StandardUserInfoDirectives extends UserInfoDirectives with LazyLogging wit
 }
 
 object StandardUserInfoDirectives {
-  val SAdomain: Regex = "\\S+@\\S+\\.iam\\.gserviceaccount\\.com".r
+  val SAdomain: Regex = "(\\S+@\\S+\\.iam\\.gserviceaccount\\.com)".r
   val accessTokenHeader = "OIDC_access_token"
   val expiresInHeader = "OIDC_CLAIM_expires_in"
   val emailHeader = "OIDC_CLAIM_email"
