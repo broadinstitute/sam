@@ -93,7 +93,7 @@ trait StandardUserInfoDirectives extends UserInfoDirectives with LazyLogging wit
 }
 
 object StandardUserInfoDirectives {
-  val SAdomain: Regex = "(\\S+@\\S+\\.iam\\.gserviceaccount\\.com)".r
+  val SAdomain: Regex = "(\\S+@\\S+\\.iam\\.gserviceaccount\\.com$)".r
   val accessTokenHeader = "OIDC_access_token"
   val expiresInHeader = "OIDC_CLAIM_expires_in"
   val emailHeader = "OIDC_CLAIM_email"

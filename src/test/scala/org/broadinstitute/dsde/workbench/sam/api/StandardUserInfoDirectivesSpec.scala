@@ -53,9 +53,9 @@ class StandardUserInfoDirectivesSpec extends AnyFlatSpec with PropertyBasedTesti
       (serviceSubjectId: ServiceAccountSubjectId, googleSubjectId: GoogleSubjectId, token: OAuth2BearerToken, email: WorkbenchEmail) =>
       val directoryDAO = new MockDirectoryDAO()
       val uid = genWorkbenchUserId(System.currentTimeMillis())
-      val oidcHeaders = OIDCHeaders(token, Left(googleSubjectId), 10L, email, None)
       directoryDAO.createUser(WorkbenchUser(uid, Option(googleSubjectId), email, None), samRequestContext).unsafeRunSync()
       directoryDAO.createPetServiceAccount(PetServiceAccount(PetServiceAccountId(uid, GoogleProject("")), ServiceAccount(serviceSubjectId, email, ServiceAccountDisplayName(""))), samRequestContext).unsafeRunSync()
+      val oidcHeaders = OIDCHeaders(token, Left(GoogleSubjectId(serviceSubjectId.value)), 10L, email, None)
       val res = getUserInfo(directoryDAO, None, oidcHeaders, samRequestContext).unsafeRunSync()
       res should be (UserInfo(token, uid, email, 10L))
     }
