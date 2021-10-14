@@ -78,7 +78,7 @@ trait SecurityDirectives {
     }
   }
 
-  def checkPermissionAndReturnRoute(route: server.Route, resource: FullyQualifiedResourceId, requestedActions: Set[ResourceAction], userId: WorkbenchUserId, samRequestContext: SamRequestContext): server.Route = {
+  def failUnlessUserHasPermission(route: server.Route, resource: FullyQualifiedResourceId, requestedActions: Set[ResourceAction], userId: WorkbenchUserId, samRequestContext: SamRequestContext): server.Route = {
     onSuccess(policyEvaluatorService.hasPermissionOneOf(resource, requestedActions, userId, samRequestContext)) { hasPermission =>
       if (hasPermission) {
         route
@@ -92,13 +92,13 @@ trait SecurityDirectives {
 
   def requireOneOfAction(resource: FullyQualifiedResourceId, requestedActions: Set[ResourceAction], userId: WorkbenchUserId, samRequestContext: SamRequestContext): Directive0 =
     Directives.mapInnerRoute { innerRoute =>
-      checkPermissionAndReturnRoute(innerRoute, resource, requestedActions, userId, samRequestContext)
+      failUnlessUserHasPermission(innerRoute, resource, requestedActions, userId, samRequestContext)
     }
 
   def requireOneOfActionIfParentIsWorkspace(resource: FullyQualifiedResourceId, requestedActions: Set[ResourceAction], userId: WorkbenchUserId, samRequestContext: SamRequestContext): Directive0 = Directives.mapInnerRoute { innerRoute =>
     onSuccess(resourceService.getResourceParent(resource, samRequestContext)) {
       case Some(parent) => if (parent.resourceTypeName == SamResourceTypes.workspaceName) {
-        checkPermissionAndReturnRoute(innerRoute, resource, requestedActions, userId, samRequestContext)
+        failUnlessUserHasPermission(innerRoute, resource, requestedActions, userId, samRequestContext)
       } else {
         innerRoute
       }
