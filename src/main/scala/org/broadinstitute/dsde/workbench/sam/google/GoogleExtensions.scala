@@ -24,7 +24,7 @@ import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport.Work
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google._
 import org.broadinstitute.dsde.workbench.sam._
-import org.broadinstitute.dsde.workbench.sam.api.CreateWorkbenchUser
+import org.broadinstitute.dsde.workbench.sam.api.{CreateWorkbenchUser, InviteUser}
 import org.broadinstitute.dsde.workbench.sam.config.{GoogleServicesConfig, PetServiceAccountConfig}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, RegistrationDAO}
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
@@ -118,6 +118,13 @@ class GoogleExtensions(
               ErrorReport(StatusCodes.Conflict, s"subjectId in configuration ${googleServicesConfig.serviceAccountClientId} is not a valid user")))
         case None => IO.pure(UserInfo(OAuth2BearerToken(""), genWorkbenchUserId(System.currentTimeMillis()), googleServicesConfig.serviceAccountClientEmail, 0))
       }
+
+      _ <- samApplication.userService.inviteUser(InviteUser(
+            serviceAccountUserInfo.userId,
+            serviceAccountUserInfo.userEmail), samRequestContext) handleErrorWith {
+        case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode == Option(StatusCodes.Conflict) => IO.unit
+      }
+
       _ <- IO.fromFuture(
         IO(
           samApplication.userService.createUser(CreateWorkbenchUser(

@@ -63,6 +63,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
         case None =>
           for {
             subjectFromEmail <- directoryDAO.loadSubjectFromEmail(user.email, samRequestContext)
+            isWorkbenchAdmin <- IO.fromFuture(IO(cloudExtensions.isWorkbenchAdmin(user.email)))
             updated <- subjectFromEmail match {
               case Some(uid: WorkbenchUserId) =>
                 for {
@@ -77,7 +78,11 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
                 IO.raiseError[WorkbenchUser](
                   new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"$user is not a regular user. Please use a different endpoint")))
               case None =>
-                createUserInternal(WorkbenchUser(WorkbenchUserId(user.googleSubjectId.value), Some(user.googleSubjectId), user.email, user.identityConcentratorId), samRequestContext) //For completely new users, we still use googleSubjectId as their userId
+                //Only allow registering users who are admins, or who have already been invited
+                if(isWorkbenchAdmin)
+                  createUserInternal(WorkbenchUser(WorkbenchUserId(user.googleSubjectId.value), Some(user.googleSubjectId), user.email, user.identityConcentratorId), samRequestContext) //For completely new users, we still use googleSubjectId as their userId
+                else
+                  IO.raiseError[WorkbenchUser](new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"$user has not been invited. Please request an invite from an admin")))
 
             }
           } yield updated
