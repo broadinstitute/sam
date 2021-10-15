@@ -423,7 +423,13 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
   override def setUserAzureB2CId(userId: WorkbenchUserId, b2cId: AzureB2CId, samRequestContext: SamRequestContext): IO[Int] = {
     writeTransaction("setUserAzureB2CId", samRequestContext)({ implicit session =>
       val u = UserTable.column
-      samsql"update ${UserTable.table} set ${u.azureB2cId} = $b2cId where ${u.id} = $userId".update().apply()
+      val results = samsql"update ${UserTable.table} set ${u.azureB2cId} = $b2cId where ${u.id} = $userId and ${u.azureB2cId} is null".update().apply()
+
+      if (results != 1) {
+        throw new WorkbenchException(s"Cannot update azureB2cId for user ${userId} because user does not exist or the azureB2cId has already been set for this user")
+      } else {
+        results
+      }
     })
   }
 

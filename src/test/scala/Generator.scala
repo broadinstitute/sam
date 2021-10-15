@@ -44,11 +44,17 @@ object Generator {
     expires <- Gen.calendar.map(_.getTimeInMillis)
   } yield UserInfo(token, genWorkbenchUserId(System.currentTimeMillis()), email, expires)
 
-  val genCreateWorkbenchUser = for{
+  val genCreateWorkbenchUserGoogle = for{
     email <- genNonPetEmail
     googleSubjectId <- genGoogleSubjectId
     userId = genWorkbenchUserId(System.currentTimeMillis())
-  }yield CreateWorkbenchUser(userId, googleSubjectId, email, None)
+  }yield CreateWorkbenchUser(userId, Option(googleSubjectId), email, None)
+
+  val genCreateWorkbenchUserAzure = for {
+    email <- genNonPetEmail
+    azureB2CId <- genAzureB2CId
+    userId = genWorkbenchUserId(System.currentTimeMillis())
+  } yield CreateWorkbenchUser(userId, None, email, Option(azureB2CId))
 
   val genWorkbenchUser = for{
     email <- genNonPetEmail
@@ -111,7 +117,7 @@ object Generator {
 
   implicit val arbNonPetEmail: Arbitrary[WorkbenchEmail] = Arbitrary(genNonPetEmail)
   implicit val arbOAuth2BearerToken: Arbitrary[OAuth2BearerToken] = Arbitrary(genOAuth2BearerToken)
-  implicit val arbCreateWorkbenchUser: Arbitrary[CreateWorkbenchUser] = Arbitrary(genCreateWorkbenchUser)
+  implicit val arbCreateWorkbenchUser: Arbitrary[CreateWorkbenchUser] = Arbitrary(genCreateWorkbenchUserGoogle)
   implicit val arbPolicy: Arbitrary[AccessPolicy] = Arbitrary(genPolicy)
   implicit val arbResource: Arbitrary[Resource] = Arbitrary(genResource)
   implicit val arbGoogleSubjectId: Arbitrary[GoogleSubjectId] = Arbitrary(genGoogleSubjectId)

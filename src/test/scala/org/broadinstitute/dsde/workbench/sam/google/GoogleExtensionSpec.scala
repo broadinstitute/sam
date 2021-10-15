@@ -746,7 +746,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
     implicit val patienceConfig = PatienceConfig(1 second)
     val (googleExtensions, service) = setupGoogleKeyCacheTests
 
-    val createDefaultUser = Generator.genCreateWorkbenchUser.sample.get
+    val createDefaultUser = Generator.genCreateWorkbenchUserGoogle.sample.get
     val defaultUser = WorkbenchUser(createDefaultUser.id,  createDefaultUser.googleSubjectId, createDefaultUser.email, createDefaultUser.azureB2CId)
 
     // create a user
@@ -802,7 +802,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
     implicit val patienceConfig = PatienceConfig(1 second)
     val (googleExtensions, service) = setupGoogleKeyCacheTests
 
-    val createDefaultUser = Generator.genCreateWorkbenchUser.sample.get
+    val createDefaultUser = Generator.genCreateWorkbenchUserGoogle.sample.get
     val defaultUser = WorkbenchUser(createDefaultUser.id,  createDefaultUser.googleSubjectId, createDefaultUser.email, createDefaultUser.azureB2CId)
 
     // create a user

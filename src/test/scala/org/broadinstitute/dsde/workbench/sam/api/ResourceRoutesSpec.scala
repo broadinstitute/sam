@@ -73,7 +73,7 @@ class ResourceRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTe
 
   "GET /api/resource/{resourceType}/{resourceId}/action/{action}/userEmail/{userEmail}" should "200 if caller have read_policies permission" in {
     // Create a user called userWithEmail and has can_compute on the resource.
-    val userWithEmail = Generator.genCreateWorkbenchUser.sample.get
+    val userWithEmail = Generator.genCreateWorkbenchUserGoogle.sample.get
     val members = AccessPolicyMembership(Set(userWithEmail.email), Set(ResourceAction("can_compute")), Set.empty)
     val resourceType = ResourceType(
       ResourceTypeName("rt"),
@@ -97,7 +97,7 @@ class ResourceRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTe
 
   "GET /api/resource/{resourceType}/{resourceId}/action/{action}/userEmail/{userEmail}" should "200 if caller have testActionAccess::can_compute permission" in {
     // Create a user called userWithEmail and has can_compute on the resource.
-    val userWithEmail = Generator.genCreateWorkbenchUser.sample.get
+    val userWithEmail = Generator.genCreateWorkbenchUserGoogle.sample.get
     val members = AccessPolicyMembership(Set(userWithEmail.email), Set(ResourceAction("can_compute")), Set.empty)
     val resourceType = ResourceType(
       ResourceTypeName("rt"),
@@ -126,7 +126,7 @@ class ResourceRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTe
 
   "GET /api/resource/{resourceType}/{resourceId}/action/{action}/userEmail/{userEmail}" should "return false if user doesn't have permission or doesn't exist" in {
     // Create a user called userWithEmail but doesn't have can_compute on the resource.
-    val userWithEmail = Generator.genCreateWorkbenchUser.sample.get
+    val userWithEmail = Generator.genCreateWorkbenchUserGoogle.sample.get
     val members = AccessPolicyMembership(Set(userWithEmail.email), Set(ResourceAction("read_policies")), Set.empty)
 
     // The owner role has read_policies
@@ -159,7 +159,7 @@ class ResourceRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTe
 
   "GET /api/resource/{resourceType}/{resourceId}/action/{action}/userEmail/{userEmail}" should "return 403 if caller doesn't have permission" in {
     // Create a user called userWithEmail and have can_compute on the resource.
-    val userWithEmail = Generator.genCreateWorkbenchUser.sample.get
+    val userWithEmail = Generator.genCreateWorkbenchUserGoogle.sample.get
     val members = AccessPolicyMembership(Set(userWithEmail.email), Set(ResourceAction("read_policies")), Set.empty)
 
     // The owner role only have alert_policies
