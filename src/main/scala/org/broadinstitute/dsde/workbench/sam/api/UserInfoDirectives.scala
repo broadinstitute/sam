@@ -35,13 +35,10 @@ trait UserInfoDirectives {
 
     Directives.mapInnerRoute { r =>
       parameter("tos".?) { termsOfServiceUrlOpt =>
-        if(!termsOfServiceConfig.enabled) r //ToS-enforcement is not enabled, so let the request through
-        else {
-          termsOfServiceUrlOpt match {
-            case Some(url) => if(url.equals(termsOfServiceConfig.url)) r else failDirective
-            case None => failDirective //User didn't supply any acknowledgement of ToS, fail directive
-          }
-        }
+        if (!termsOfServiceConfig.enabled || termsOfServiceUrlOpt.contains(termsOfServiceConfig.url))
+          r
+        else
+          failDirective
       }
     }
   }
