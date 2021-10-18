@@ -2754,6 +2754,25 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SystemStatus'
+  /tos/text:
+    get:
+      tags:
+        - TermsOfService
+      summary: Get the text of Terra's latest Terms of Service
+      operationId: getTosText
+      responses:
+        200:
+          description: Text of Terra's latest Terms of Service
+          content:
+            text/plain:
+              schema:
+                type: string
+        500:
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
   /version:
     get:
       tags:
