@@ -73,21 +73,15 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                 } ~
                 pathPrefix(Segment) { project =>
                   pathPrefix("key") {
-                    requireOneOfActionIfParentIsWorkspace(
-                      FullyQualifiedResourceId(SamResourceTypes.googleProjectName, ResourceId(project)),
-                      Set(SamResourceActions.createPet),
-                      userInfo.userId,
-                      samRequestContext) {
-                      get {
-                        complete {
-                          import spray.json._
-                          // parse json to ensure it is json and tells akka http the right content-type
-                          googleExtensions
-                            .getPetServiceAccountKey(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None), GoogleProject(project), samRequestContext)
-                            .map { key =>
-                              StatusCodes.OK -> key.parseJson
-                            }
-                        }
+                    get {
+                      complete {
+                        import spray.json._
+                        // parse json to ensure it is json and tells akka http the right content-type
+                        googleExtensions
+                          .getPetServiceAccountKey(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None), GoogleProject(project), samRequestContext)
+                          .map { key =>
+                            StatusCodes.OK -> key.parseJson
+                          }
                       }
                     } ~
                       path(Segment) { keyId =>
@@ -101,36 +95,24 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                       }
                   } ~
                     pathPrefix("token") {
-                      requireOneOfActionIfParentIsWorkspace(
-                        FullyQualifiedResourceId(SamResourceTypes.googleProjectName, ResourceId(project)),
-                        Set(SamResourceActions.createPet),
-                        userInfo.userId,
-                        samRequestContext) {
-                        post {
-                          entity(as[Set[String]]) { scopes =>
-                            complete {
-                              googleExtensions
-                                .getPetServiceAccountToken(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None), GoogleProject(project), scopes, samRequestContext)
-                                .map { token =>
-                                  StatusCodes.OK -> JsString(token)
-                                }
-                            }
+                      post {
+                        entity(as[Set[String]]) { scopes =>
+                          complete {
+                            googleExtensions
+                              .getPetServiceAccountToken(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None), GoogleProject(project), scopes, samRequestContext)
+                              .map { token =>
+                                StatusCodes.OK -> JsString(token)
+                              }
                           }
                         }
                       }
                     } ~
                     pathEnd {
-                      requireOneOfActionIfParentIsWorkspace(
-                        FullyQualifiedResourceId(SamResourceTypes.googleProjectName, ResourceId(project)),
-                        Set(SamResourceActions.createPet),
-                        userInfo.userId,
-                        samRequestContext) {
-                        get {
-                          complete {
-                            googleExtensions.createUserPetServiceAccount(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None), GoogleProject(project), samRequestContext).map {
-                              petSA =>
-                                StatusCodes.OK -> petSA.serviceAccount.email
-                            }
+                      get {
+                        complete {
+                          googleExtensions.createUserPetServiceAccount(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None), GoogleProject(project), samRequestContext).map {
+                            petSA =>
+                              StatusCodes.OK -> petSA.serviceAccount.email
                           }
                         }
                       } ~
