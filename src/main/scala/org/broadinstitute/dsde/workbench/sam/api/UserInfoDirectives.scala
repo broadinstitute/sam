@@ -8,7 +8,7 @@ import org.broadinstitute.dsde.workbench.sam.service.CloudExtensions
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.config.TermsOfServiceConfig
 import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
-import org.broadinstitute.dsde.workbench.sam.model.TermsOfServiceAcceptance
+//import org.broadinstitute.dsde.workbench.sam.model.TermsOfServiceAcceptance
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 /**
@@ -30,16 +30,16 @@ trait UserInfoDirectives {
         else r
       }
     }
-
-  def withTermsOfServiceAcceptance(tos: TermsOfServiceAcceptance): Directive0 = {
-    val failDirective = Directives.failWith(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden, s"You must accept the Terms of Service in order to register. See ${termsOfServiceConfig.url}")))
-
-    Directives.mapInnerRoute { r =>
-      if (!termsOfServiceConfig.enabled || tos.url.equalsIgnoreCase(termsOfServiceConfig.url))
-        r
-      else
-        failDirective
-    }
-  }
+//
+//  def withTermsOfServiceAcceptance(tos: TermsOfServiceAcceptance): Directive0 = {
+//    val failDirective = Directives.failWith(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden, s"You must accept the Terms of Service in order to register. See ${termsOfServiceConfig.url}")))
+//
+//    Directives.mapInnerRoute { r =>
+//      if (!termsOfServiceConfig.enabled || tos.url.equalsIgnoreCase(termsOfServiceConfig.url))
+//        r
+//      else
+//        failDirective
+//    }
+//  }
 
 }
