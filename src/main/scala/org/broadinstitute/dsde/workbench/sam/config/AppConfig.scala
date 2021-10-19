@@ -27,7 +27,8 @@ final case class AppConfig(
                             resourceTypes: Set[ResourceType],
                             liquibaseConfig: LiquibaseConfig,
                             identityConcentratorConfig: Option[IdentityConcentratorConfig],
-                            blockedEmailDomains: Seq[String])
+                            blockedEmailDomains: Seq[String],
+                            termsOfServiceConfig: TermsOfServiceConfig)
 
 object AppConfig {
   implicit val swaggerReader: ValueReader[SwaggerConfig] = ValueReader.relative { config =>
@@ -173,6 +174,6 @@ object AppConfig {
 
     val blockedEmailDomains = config.as[Option[Seq[String]]]("blockedEmailDomains").getOrElse(Seq.empty)
 
-    AppConfig(emailDomain, directoryConfig, schemaLockConfig, distributedLockConfig, swaggerConfig, termsOfServiceConfig, googleConfigOption, resourceTypes, liquibaseConfig, identityConcentratorConfig, blockedEmailDomains)
+    AppConfig(emailDomain, directoryConfig, schemaLockConfig, distributedLockConfig, swaggerConfig, googleConfigOption, resourceTypes, liquibaseConfig, identityConcentratorConfig, blockedEmailDomains, termsOfServiceConfig)
   }
 }

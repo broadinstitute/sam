@@ -745,22 +745,68 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
     val p = PolicyTable.syntax("p")
     val g = GroupTable.syntax("g")
 
-    serializableWriteTransaction("deletePolicy", samRequestContext)({ implicit session =>
-      // first get all the group PKs associated to all the resource policies
-      // then delete all the resource policies
-      // then delete all the groups from the first query
+    val fromAndWhereFragment = samsqls"""from ${PolicyTable as p} where ${p.resourceId} = (${loadResourcePKSubQuery(resourceId)})"""
+    val groupPKsToDeleteQuery: SQL[GroupPK, HasExtractor] = samsql"""select ${p.result.groupId} $fromAndWhereFragment""".map(_.get[GroupPK](p.resultName.groupId))
 
-      val fromAndWhereFragment = samsqls"""from ${PolicyTable as p} where ${p.resourceId} = (${loadResourcePKSubQuery(resourceId)})"""
+    for {
+      writeResult <- serializableWriteTransaction("deletePolicy", samRequestContext)({ implicit session =>
+        // first get all the group PKs associated to all the resource policies
+        // then delete all the resource policies
+        // then delete all the groups from the first query
 
-      val groupPKsToDelete = samsql"""select ${p.result.groupId} $fromAndWhereFragment""".map(_.get[GroupPK](p.resultName.groupId)).list().apply()
+        val groupPKsToDelete = groupPKsToDeleteQuery.list().apply()
 
-      samsql"""delete $fromAndWhereFragment""".update().apply()
+        samsql"""delete $fromAndWhereFragment""".update().apply()
 
-      if (groupPKsToDelete.nonEmpty) {
-        samsql"""delete from ${GroupTable as g}
+        if (groupPKsToDelete.nonEmpty) {
+          samsql"""delete from ${GroupTable as g}
                  where ${g.id} in ($groupPKsToDelete)""".update().apply()
-      }
-    })
+        }
+      }).attempt
+      _ <- handleResult(samRequestContext, writeResult, groupPKsToDeleteQuery)
+    } yield ()
+  }
+
+  private def handleResult(samRequestContext: SamRequestContext, writeResult: Either[Throwable, AnyVal], groupPKsToDeleteQuery: SQL[GroupPK, HasExtractor]): IO[Unit] = {
+    writeResult match {
+      case Left(fkViolation: PSQLException) if fkViolation.getSQLState == PSQLStateExtensions.FOREIGN_KEY_VIOLATION =>
+        handleForeignKeyViolation(samRequestContext, groupPKsToDeleteQuery)
+      case Left(e) => IO.raiseError(e)
+      case Right(_) => IO.unit
+    }
+  }
+
+  private def handleForeignKeyViolation(samRequestContext: SamRequestContext, groupPKsToDeleteQuery: SQL[GroupPK, HasExtractor]): IO[Unit] = {
+    for {
+      problematicGroups <- getGroupsCausingForeignKeyViolation(samRequestContext, groupPKsToDeleteQuery)
+      _ <- IO.raiseError[Unit](new WorkbenchExceptionWithErrorReport( // throws a 500 since that's the current behavior
+        ErrorReport(StatusCodes.InternalServerError, s"Foreign Key Violation(s) while deleting group(s): ${problematicGroups}")))
+    } yield ()
+  }
+
+  private def getGroupsCausingForeignKeyViolation(samRequestContext: SamRequestContext, groupPKsToDeleteQuery: SQL[GroupPK, HasExtractor]): IO[List[Map[String, String]]] = {
+    val g = GroupTable.syntax("g")
+    val pg = GroupTable.syntax("pg") // problematic group
+    val gm = GroupMemberTable.syntax("gm")
+
+    readOnlyTransaction("getGroupsCausingForeignKeyViolation", samRequestContext) { implicit session =>
+      val groupPKsToDelete = groupPKsToDeleteQuery.list().apply()
+      val problematicGroupsQuery =
+        samsql"""select ${g.result.id}, ${g.result.name}, array_agg(${pg.name}) as ${pg.resultName.name}
+                     from ${GroupTable as g}
+                     join ${GroupMemberTable as gm} on ${g.id} = ${gm.memberGroupId}
+                     join ${GroupTable as pg} on ${gm.groupId} = ${pg.id}
+                     where ${g.id} in
+                         (select distinct ${gm.result.memberGroupId}
+                          from ${GroupMemberTable as gm}
+                          where ${gm.memberGroupId} in ($groupPKsToDelete))
+                     group by ${g.id}, ${g.name}"""
+      problematicGroupsQuery.map(rs =>
+          Map("groupId" -> rs.get[GroupPK](g.resultName.id).value.toString,
+            "groupName" -> rs.get[String](g.resultName.name),
+            "still used in group(s):" -> rs.get[String](pg.resultName.name)))
+        .list().apply()
+    }
   }
 
   override def loadPolicy(resourceAndPolicyName: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[Option[AccessPolicy]] = {
