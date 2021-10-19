@@ -136,7 +136,7 @@ object AppConfig {
 
   implicit val googleOpaqueTokenResolverConfigReader: ValueReader[GoogleOpaqueTokenResolverConfig] = ValueReader.relative { config =>
     GoogleOpaqueTokenResolverConfig(
-      config.getString("samBaseUrl"),
+      config.getString("googleTokenInfoUrl"),
       config.getInt("threadPoolSize")
     )
   }

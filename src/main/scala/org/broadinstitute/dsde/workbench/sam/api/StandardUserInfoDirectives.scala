@@ -31,7 +31,7 @@ trait StandardUserInfoDirectives extends UserInfoDirectives with LazyLogging wit
   }
 
   def requireCreateUser(samRequestContext: SamRequestContext): Directive1[CreateWorkbenchUser] =
-    requireOidcHeaders.flatMap(verifyAzureUserIsNotAlreadyGoogleUser).map { oidcHeaders =>
+    requireOidcHeaders.flatMap(verifyAzureUserIsNotAlreadyGoogleUser(_, samRequestContext)).map { oidcHeaders =>
       val googleSubjectId = oidcHeaders.externalId.left.toOption
       val azureB2CId = oidcHeaders.externalId.toOption // .right is missing (compared to .left above) since Either is Right biased
       CreateWorkbenchUser(
@@ -48,10 +48,10 @@ trait StandardUserInfoDirectives extends UserInfoDirectives with LazyLogging wit
     * @param oidcHeaders
     * @return
     */
-  private def verifyAzureUserIsNotAlreadyGoogleUser(oidcHeaders: OIDCHeaders): Directive1[OIDCHeaders] = {
+  private def verifyAzureUserIsNotAlreadyGoogleUser(oidcHeaders: OIDCHeaders, samRequestContext: SamRequestContext): Directive1[OIDCHeaders] = {
     (oidcHeaders.externalId, oidcHeaders.idpAccessToken, maybeGoogleOpaqueTokenResolver) match {
       case (Right(azureB2CId), Some(accessToken), Some(googleOpaqueTokenResolver)) => onSuccess {
-        googleOpaqueTokenResolver.getUserStatusInfo(accessToken).flatMap {
+        googleOpaqueTokenResolver.getWorkbenchUser(accessToken, samRequestContext).flatMap {
           case None => IO.pure(oidcHeaders)
           case Some(_) => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"user $azureB2CId already exists")))
         }.unsafeToFuture()
@@ -98,7 +98,7 @@ object StandardUserInfoDirectives {
   val expiresInHeader = "OIDC_CLAIM_expires_in"
   val emailHeader = "OIDC_CLAIM_email"
   val userIdHeader = "OIDC_CLAIM_user_id"
-  val idpAccessTokenHeader = "OAUTH2_CLAIM_idp_access_token"
+  val idpAccessTokenHeader = "OAUTH2_CLAIM_third_party_access_token"
 
   def getUserInfo(directoryDAO: DirectoryDAO, maybeGoogleOpaqueTokenResolver: Option[GoogleOpaqueTokenResolver], oidcHeaders: OIDCHeaders, samRequestContext: SamRequestContext): IO[UserInfo] = {
     oidcHeaders match {
@@ -130,10 +130,10 @@ object StandardUserInfoDirectives {
   private def updateUserAzureB2CId(azureB2CId: AzureB2CId, maybeIdpToken: Option[OAuth2BearerToken], directoryDAO: DirectoryDAO, maybeGoogleOpaqueTokenResolver: Option[GoogleOpaqueTokenResolver], samRequestContext: SamRequestContext) = {
     (maybeIdpToken, maybeGoogleOpaqueTokenResolver) match {
       case (Some(opaqueToken), Some(googleOpaqueTokenResolver)) => for {
-        maybeExistingIdentity <- googleOpaqueTokenResolver.getUserStatusInfo(opaqueToken)
-        _ <- maybeExistingIdentity match {
+        maybeExistingUser <- googleOpaqueTokenResolver.getWorkbenchUser(opaqueToken, samRequestContext)
+        _ <- maybeExistingUser match {
           case None => IO.unit
-          case Some(existingIdentity) => directoryDAO.setUserAzureB2CId(WorkbenchUserId(existingIdentity.userSubjectId), azureB2CId, samRequestContext)
+          case Some(existingUser) => directoryDAO.setUserAzureB2CId(existingUser.id, azureB2CId, samRequestContext)
         }
         maybeUser <- directoryDAO.loadUserByAzureB2CId(azureB2CId, samRequestContext)
       } yield {

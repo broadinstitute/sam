@@ -16,7 +16,6 @@ import org.broadinstitute.dsde.workbench.sam.api.SamRoutes.myExceptionHandler
 import org.broadinstitute.dsde.workbench.sam.api.StandardUserInfoDirectives._
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, MockDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.google.GoogleOpaqueTokenResolver
-import org.broadinstitute.dsde.workbench.sam.model.UserStatusInfo
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
 import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, UserService}
 import org.mockito.Mockito._
@@ -115,7 +114,7 @@ class StandardUserInfoDirectivesSpec extends AnyFlatSpec with PropertyBasedTesti
         val googleOpaqueTokenResolver: GoogleOpaqueTokenResolver = mock[GoogleOpaqueTokenResolver](RETURNS_SMART_NULLS)
         val idpToken = OAuth2BearerToken("opaque_token")
         val uid = genWorkbenchUserId(System.currentTimeMillis())
-        when(googleOpaqueTokenResolver.getUserStatusInfo(idpToken)).thenReturn(IO.pure(None))
+        when(googleOpaqueTokenResolver.getWorkbenchUser(idpToken, samRequestContext)).thenReturn(IO.pure(None))
         val oidcHeaders = OIDCHeaders(token, Right(azureB2CId), 10L, email, Option(idpToken))
         val workbenchUser = WorkbenchUser(uid, Option(googleSubjectId), email, None)
         directoryDAO.createUser(workbenchUser, samRequestContext).unsafeRunSync()
@@ -131,7 +130,7 @@ class StandardUserInfoDirectivesSpec extends AnyFlatSpec with PropertyBasedTesti
         val googleOpaqueTokenResolver: GoogleOpaqueTokenResolver = mock[GoogleOpaqueTokenResolver](RETURNS_SMART_NULLS)
         val idpToken = OAuth2BearerToken("opaque_token")
         val uid = genWorkbenchUserId(System.currentTimeMillis())
-        when(googleOpaqueTokenResolver.getUserStatusInfo(idpToken)).thenReturn(IO.pure(Option(UserStatusInfo(uid.value, email.value, true))))
+        when(googleOpaqueTokenResolver.getWorkbenchUser(idpToken, samRequestContext)).thenReturn(IO.pure(Option(WorkbenchUser(uid, Option(googleSubjectId), email, None))))
         val oidcHeaders = OIDCHeaders(token, Right(azureB2CId), 10L, email, Option(idpToken))
         val workbenchUser = WorkbenchUser(uid, Option(googleSubjectId), email, None)
         directoryDAO.createUser(workbenchUser, samRequestContext).unsafeRunSync()
@@ -180,12 +179,12 @@ class StandardUserInfoDirectivesSpec extends AnyFlatSpec with PropertyBasedTesti
     }
   }
 
-  it should "fail if idp access token matches existing user" in forAll(genAzureB2CId, genNonPetEmail, genOAuth2BearerToken) { (azureB2CId, email, accessToken) =>
+  it should "fail if idp access token matches existing user" in forAll(genAzureB2CId, genNonPetEmail, genOAuth2BearerToken, genGoogleSubjectId) { (azureB2CId, email, accessToken, googleSubjectId) =>
     val services = directives
     val idpToken = "opaque_token"
     val headers = createRequiredHeaders(Right(azureB2CId), email, accessToken, Option(idpToken))
     services.maybeGoogleOpaqueTokenResolver.foreach { r =>
-      when(r.getUserStatusInfo(OAuth2BearerToken(idpToken))).thenReturn(IO.pure(Option(UserStatusInfo(genWorkbenchUserId(System.currentTimeMillis()).value, email.value, true))))
+      when(r.getWorkbenchUser(OAuth2BearerToken(idpToken), samRequestContext)).thenReturn(IO.pure(Option(WorkbenchUser(genWorkbenchUserId(System.currentTimeMillis()), Option(googleSubjectId), email, None))))
     }
     Get("/").withHeaders(headers) ~>
       handleExceptions(myExceptionHandler){services.requireCreateUser(samRequestContext)(x => complete(x.copy(id = WorkbenchUserId("")).toString))} ~> check {
@@ -198,7 +197,7 @@ class StandardUserInfoDirectivesSpec extends AnyFlatSpec with PropertyBasedTesti
     val idpToken = "opaque_token"
     val headers = createRequiredHeaders(Right(azureB2CId), email, accessToken, Option(idpToken))
     services.maybeGoogleOpaqueTokenResolver.foreach { r =>
-      when(r.getUserStatusInfo(OAuth2BearerToken(idpToken))).thenReturn(IO.pure(None))
+      when(r.getWorkbenchUser(OAuth2BearerToken(idpToken), samRequestContext)).thenReturn(IO.pure(None))
     }
     Get("/").withHeaders(headers) ~>
       handleExceptions(myExceptionHandler){services.requireCreateUser(samRequestContext)(x => complete(x.copy(id = WorkbenchUserId("")).toString))} ~> check {

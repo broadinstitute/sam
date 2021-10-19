@@ -123,7 +123,7 @@ object Boot extends IOApp with LazyLogging {
 
       blockingEc <- ExecutionContexts.fixedThreadPool[IO](24)
 
-      identityConcentrator <- googleOpaqueTokenResolverResource(appConfig)
+      googleOpaqueTokenResolver <- googleOpaqueTokenResolverResource(appConfig, foregroundDirectoryDAO)
 
       cloudExtensionsInitializer <- cloudExtensionsInitializerResource(
         appConfig,
@@ -134,7 +134,7 @@ object Boot extends IOApp with LazyLogging {
         backgroundAccessPolicyDAO,
         backgroundLdapExecutionContext,
         blockingEc)
-    } yield createAppDepenciesWithSamRoutes(appConfig, cloudExtensionsInitializer, foregroundAccessPolicyDAO, foregroundDirectoryDAO, registrationDAO, identityConcentrator)
+    } yield createAppDepenciesWithSamRoutes(appConfig, cloudExtensionsInitializer, foregroundAccessPolicyDAO, foregroundDirectoryDAO, registrationDAO, googleOpaqueTokenResolver)
 
   private def cloudExtensionsInitializerResource(
       appConfig: AppConfig,
@@ -183,14 +183,14 @@ object Boot extends IOApp with LazyLogging {
       case None => cats.effect.Resource.pure[IO, CloudExtensionsInitializer](NoExtensionsInitializer)
     }
 
-  private def googleOpaqueTokenResolverResource(appConfig: AppConfig): effect.Resource[IO, Option[GoogleOpaqueTokenResolver]] =
+  private def googleOpaqueTokenResolverResource(appConfig: AppConfig, directoryDAO: DirectoryDAO): effect.Resource[IO, Option[GoogleOpaqueTokenResolver]] =
     appConfig.googleOpaqueTokenResolverConfig match {
-      case Some(GoogleOpaqueTokenResolverConfig(samBaseUrl, threadPoolSize)) =>
+      case Some(GoogleOpaqueTokenResolverConfig(googleTokenInfoUrl, threadPoolSize)) =>
         for {
           googleOpaqueTokenResolverEc <- ExecutionContexts.fixedThreadPool[IO](threadPoolSize)
           httpClient <- BlazeClientBuilder.apply[IO](googleOpaqueTokenResolverEc).resource
         } yield {
-          Option(new StandardGoogleOpaqueTokenResolver(samBaseUrl, httpClient))
+          Option(new StandardGoogleOpaqueTokenResolver(directoryDAO, googleTokenInfoUrl, httpClient))
         }
       case _ => cats.effect.Resource.pure[IO, Option[GoogleOpaqueTokenResolver]](None)
     }
