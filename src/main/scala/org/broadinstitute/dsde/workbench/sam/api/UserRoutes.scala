@@ -27,14 +27,14 @@ trait UserRoutes extends UserInfoDirectives with SamRequestContextDirectives {
         pathEndOrSingleSlash {
           post {
             entity(as[TermsOfServiceAcceptance]) { tos =>
-              withTermsOfServiceAcceptance(tos) {
+//              withTermsOfServiceAcceptance(tos) {
                 withSamRequestContext { samRequestContext =>
                   requireCreateUser(samRequestContext) { createUser =>
                     complete {
                       userService.createUser(createUser, samRequestContext).map(userStatus => StatusCodes.Created -> userStatus)
                     }
                   }
-                }
+//                }
               }
             }
           } ~ withSamRequestContext { samRequestContext =>
@@ -60,7 +60,7 @@ trait UserRoutes extends UserInfoDirectives with SamRequestContextDirectives {
           pathEndOrSingleSlash {
             post {
               entity(as[TermsOfServiceAcceptance]) { tos =>
-                withTermsOfServiceAcceptance(tos) {
+//                withTermsOfServiceAcceptance(tos) {
                   withSamRequestContext { samRequestContext =>
                     requireCreateUser(samRequestContext) { createUser =>
                       complete {
@@ -68,7 +68,7 @@ trait UserRoutes extends UserInfoDirectives with SamRequestContextDirectives {
                       }
                     }
                   }
-                }
+//                }
               }
             }
           } ~ withSamRequestContext { samRequestContext =>
