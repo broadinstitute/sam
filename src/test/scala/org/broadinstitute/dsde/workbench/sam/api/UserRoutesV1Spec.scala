@@ -38,8 +38,9 @@ class UserRoutesV1Spec extends UserRoutesSpecHelper{
     }
   }
 
-  it should "create a user if ToS is enabled and the user specifies the ToS parameter correctly" in withTosEnabledRoutes { samRoutes =>
-    Post("/register/user/v1?tos=app.terra.bio/#terms-of-service") ~> samRoutes.route ~> check {
+  it should "create a user if ToS is enabled and the user specifies the ToS body correctly" in withTosEnabledRoutes { samRoutes =>
+    val tos = TermsOfServiceAcceptance("app.terra.bio/#terms-of-service")
+    Post("/register/user/v1", tos) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
       val res = responseAs[UserStatus]
       res.userInfo.userSubjectId.value.length shouldBe 21
@@ -47,19 +48,20 @@ class UserRoutesV1Spec extends UserRoutesSpecHelper{
       res.enabled shouldBe Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true)
     }
 
-    Post("/register/user/v1?tos=app.terra.bio/#terms-of-service") ~> samRoutes.route ~> check {
+    Post("/register/user/v1", tos) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Conflict
     }
   }
 
-  it should "forbid the registration if ToS is enabled and the user doesn't specify a ToS parameter" in withTosEnabledRoutes { samRoutes =>
+  it should "forbid the registration if ToS is enabled and the user doesn't specify a ToS body" in withTosEnabledRoutes { samRoutes =>
     Post("/register/user/v1") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Forbidden
     }
   }
 
   it should "forbid the registration if ToS is enabled and the user doesn't specify the correct ToS url" in withTosEnabledRoutes { samRoutes =>
-    Post("/register/user/v1?tos=onemillionpats.com") ~> samRoutes.route ~> check {
+    val tos = TermsOfServiceAcceptance("onemillionpats.com")
+    Post("/register/user/v1", tos) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Forbidden
     }
   }
