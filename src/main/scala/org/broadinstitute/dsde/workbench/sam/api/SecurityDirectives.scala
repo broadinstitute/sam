@@ -1,14 +1,13 @@
 package org.broadinstitute.dsde.workbench.sam.api
 
 import akka.http.scaladsl.model.StatusCodes
-import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directives.onSuccess
 import akka.http.scaladsl.server.{Directive0, Directives}
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchExceptionWithErrorReport, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.ImplicitConversions.ioOnSuccessMagnet
 import org.broadinstitute.dsde.workbench.sam._
-import org.broadinstitute.dsde.workbench.sam.model.{FullyQualifiedResourceId, ResourceAction, ResourceType, SamResourceActions, SamResourceTypes}
+import org.broadinstitute.dsde.workbench.sam.model.{FullyQualifiedResourceId, ResourceAction, ResourceType, SamResourceActions}
 import org.broadinstitute.dsde.workbench.sam.service.{PolicyEvaluatorService, ResourceService}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
@@ -78,33 +77,18 @@ trait SecurityDirectives {
     }
   }
 
-  def failUnlessUserHasPermission(route: server.Route, resource: FullyQualifiedResourceId, requestedActions: Set[ResourceAction], userId: WorkbenchUserId, samRequestContext: SamRequestContext): server.Route = {
-    onSuccess(policyEvaluatorService.hasPermissionOneOf(resource, requestedActions, userId, samRequestContext)) { hasPermission =>
-      if (hasPermission) {
-        route
-      } else {
-        val forbiddenErrorMessage = s"You may not perform any of ${requestedActions.mkString("[", ", ", "]").toUpperCase} on ${resource.resourceTypeName.value}/${resource.resourceId.value}"
-        determineErrorMessage(resource, userId, forbiddenErrorMessage, samRequestContext)
-      }
-    }
-  }
-
 
   def requireOneOfAction(resource: FullyQualifiedResourceId, requestedActions: Set[ResourceAction], userId: WorkbenchUserId, samRequestContext: SamRequestContext): Directive0 =
     Directives.mapInnerRoute { innerRoute =>
-      failUnlessUserHasPermission(innerRoute, resource, requestedActions, userId, samRequestContext)
-    }
-
-  def requireOneOfActionIfParentIsWorkspace(resource: FullyQualifiedResourceId, requestedActions: Set[ResourceAction], userId: WorkbenchUserId, samRequestContext: SamRequestContext): Directive0 = Directives.mapInnerRoute { innerRoute =>
-    onSuccess(resourceService.getResourceParent(resource, samRequestContext)) {
-      case Some(parent) => if (parent.resourceTypeName == SamResourceTypes.workspaceName) {
-        failUnlessUserHasPermission(innerRoute, resource, requestedActions, userId, samRequestContext)
-      } else {
-        innerRoute
+      onSuccess(policyEvaluatorService.hasPermissionOneOf(resource, requestedActions, userId, samRequestContext)) { hasPermission =>
+        if (hasPermission) {
+          innerRoute
+        } else {
+          val forbiddenErrorMessage = s"You may not perform any of ${requestedActions.mkString("[", ", ", "]").toUpperCase} on ${resource.resourceTypeName.value}/${resource.resourceId.value}"
+          determineErrorMessage(resource, userId, forbiddenErrorMessage, samRequestContext)
+        }
       }
-      case None => innerRoute
     }
-  }
 
   /**
     * in the case where we don't have the required action, we need to figure out if we should return
