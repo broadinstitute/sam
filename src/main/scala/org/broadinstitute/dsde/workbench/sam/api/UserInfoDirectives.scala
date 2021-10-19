@@ -10,8 +10,6 @@ import org.broadinstitute.dsde.workbench.sam.config.TermsOfServiceConfig
 import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model.TermsOfServiceAcceptance
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
-import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
-import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 
 /**
   * Directives to get user information.
@@ -33,16 +31,14 @@ trait UserInfoDirectives {
       }
     }
 
-  def withTermsOfServiceAcceptance: Directive0 = {
+  def withTermsOfServiceAcceptance(tos: TermsOfServiceAcceptance): Directive0 = {
     val failDirective = Directives.failWith(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden, s"You must accept the Terms of Service in order to register. See ${termsOfServiceConfig.url}")))
 
     Directives.mapInnerRoute { r =>
-      entity(as[TermsOfServiceAcceptance]) { tos =>
-        if (!termsOfServiceConfig.enabled || tos.url.equalsIgnoreCase(termsOfServiceConfig.url))
-          r
-        else
-          failDirective
-      }
+      if (!termsOfServiceConfig.enabled || tos.url.equalsIgnoreCase(termsOfServiceConfig.url))
+        r
+      else
+        failDirective
     }
   }
 
