@@ -22,7 +22,6 @@ final case class AppConfig(
                             schemaLockConfig: SchemaLockConfig,
                             distributedLockConfig: DistributedLockConfig,
                             swaggerConfig: SwaggerConfig,
-                            termsOfServiceConfig: TermsOfServiceConfig,
                             googleConfig: Option[GoogleConfig],
                             resourceTypes: Set[ResourceType],
                             liquibaseConfig: LiquibaseConfig,
