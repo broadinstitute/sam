@@ -64,11 +64,12 @@ class StandardGoogleOpaqueTokenResolver(directoryDAO: DirectoryDAO, googleTokenI
   private def lookupUser(maybeTokenInfoResponse: Option[TokenInfoResponse], samRequestContext: SamRequestContext): IO[Option[GoogleTokenInfo]] = {
     maybeTokenInfoResponse.map {
       case TokenInfoResponse(googleSubjectId) =>
-        directoryDAO.loadSubjectFromGoogleSubjectId(googleSubjectId, samRequestContext).map(_.flatMap {
-          case userId: WorkbenchUserId => Option(GoogleTokenInfo(Option(userId), googleSubjectId))
-          case PetServiceAccountId(userId, _) => Option(GoogleTokenInfo(Option(userId), googleSubjectId))
-          case other => throw new WorkbenchException(s"unexpected workbench identity [$other] associated to access token")
-        })
+        directoryDAO.loadSubjectFromGoogleSubjectId(googleSubjectId, samRequestContext).map {
+          case Some(userId: WorkbenchUserId) => Option(GoogleTokenInfo(Option(userId), googleSubjectId))
+          case Some(PetServiceAccountId(userId, _)) => Option(GoogleTokenInfo(Option(userId), googleSubjectId))
+          case Some(unexpected) => throw new WorkbenchException(s"unexpected workbench identity [$unexpected] associated to access token")
+          case None => Option(GoogleTokenInfo(None, googleSubjectId))
+        }
     }.getOrElse(IO.none)
   }
 }

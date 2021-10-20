@@ -59,7 +59,8 @@ trait StandardUserInfoDirectives extends UserInfoDirectives with LazyLogging wit
   private def populateGoogleIdAndThrowIfUserExists(samRequestContext: SamRequestContext, accessToken: OAuth2BearerToken, googleOpaqueTokenResolver: GoogleOpaqueTokenResolver, azureB2CId: AzureB2CId, createWorkbenchUser: CreateWorkbenchUser): Directive1[CreateWorkbenchUser] = {
     onSuccess {
       googleOpaqueTokenResolver.getWorkbenchUser(accessToken, samRequestContext).flatMap {
-        case None => IO.pure(createWorkbenchUser) // access token not valid
+        case None =>
+          IO.pure(createWorkbenchUser) // access token not valid
         case Some(GoogleTokenInfo(None, googleSubjectId)) => // access token valid but not already a user
           IO.pure(createWorkbenchUser.copy(googleSubjectId = Option(googleSubjectId)))
         case Some(GoogleTokenInfo(Some(_), _)) => // already a user

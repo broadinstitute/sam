@@ -96,6 +96,8 @@ object Dependencies {
   val opencensusStackDriverExporter: ModuleID = "io.opencensus" % "opencensus-exporter-trace-stackdriver" % "0.25.0" // excludeAll(excludIoGrpc, excludeCatsEffect)
   val opencensusLoggingExporter: ModuleID = "io.opencensus" % "opencensus-exporter-trace-logging"     % "0.25.0" // excludeAll(excludIoGrpc, excludeCatsEffect)
 
+  val mockServer: ModuleID = "org.mock-server" % "mockserver-netty" % "5.11.2" % "test"
+
   val openCensusDependencies = Seq(
     opencensusScalaCode,
     opencensusAkkaHttp,
@@ -158,6 +160,8 @@ object Dependencies {
 
     http4s,
     http4sClient,
-    http4sCirce
+    http4sCirce,
+
+    mockServer
   ) ++ openCensusDependencies
 }

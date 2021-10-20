@@ -3,10 +3,10 @@ package org.broadinstitute.dsde.workbench.sam
 import java.net.URI
 import java.time.Instant
 import java.util.concurrent.Executors
-
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import akka.stream.Materializer
+import cats.effect
 import cats.effect.IO
 import cats.kernel.Eq
 import com.google.cloud.firestore.{DocumentSnapshot, Firestore, Transaction}
@@ -30,6 +30,7 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
+import org.mockserver.integration.ClientAndServer
 import org.scalatest.concurrent.PatienceConfiguration.Timeout
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 import org.scalatest.prop.Configuration
@@ -57,6 +58,8 @@ trait TestSupport{
   val samRequestContext = SamRequestContext(None)
 
   def dummyResourceType(name: ResourceTypeName) = ResourceType(name, Set.empty, Set(ResourceRole(ResourceRoleName("owner"), Set.empty)), ResourceRoleName("owner"))
+
+  val mockServerResource: effect.Resource[IO, ClientAndServer] = effect.Resource.make(IO(ClientAndServer.startClientAndServer()))(client => IO(client.stop))
 }
 
 trait PropertyBasedTesting extends ScalaCheckPropertyChecks with Configuration with Matchers {
