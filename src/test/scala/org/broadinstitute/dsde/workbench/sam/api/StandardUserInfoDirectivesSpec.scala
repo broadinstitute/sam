@@ -15,7 +15,7 @@ import org.broadinstitute.dsde.workbench.sam.TestSupport.{eqWorkbenchExceptionEr
 import org.broadinstitute.dsde.workbench.sam.api.SamRoutes.myExceptionHandler
 import org.broadinstitute.dsde.workbench.sam.api.StandardUserInfoDirectives._
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, MockDirectoryDAO}
-import org.broadinstitute.dsde.workbench.sam.google.GoogleOpaqueTokenResolver
+import org.broadinstitute.dsde.workbench.sam.google.{GoogleOpaqueTokenResolver, GoogleTokenInfo}
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
 import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, UserService}
 import org.mockito.Mockito._
@@ -130,7 +130,7 @@ class StandardUserInfoDirectivesSpec extends AnyFlatSpec with PropertyBasedTesti
         val googleOpaqueTokenResolver: GoogleOpaqueTokenResolver = mock[GoogleOpaqueTokenResolver](RETURNS_SMART_NULLS)
         val idpToken = OAuth2BearerToken("opaque_token")
         val uid = genWorkbenchUserId(System.currentTimeMillis())
-        when(googleOpaqueTokenResolver.getWorkbenchUser(idpToken, samRequestContext)).thenReturn(IO.pure(Option(WorkbenchUser(uid, Option(googleSubjectId), email, None))))
+        when(googleOpaqueTokenResolver.getWorkbenchUser(idpToken, samRequestContext)).thenReturn(IO.pure(Option(GoogleTokenInfo(Option(uid), googleSubjectId))))
         val oidcHeaders = OIDCHeaders(token, Right(azureB2CId), 10L, email, Option(idpToken))
         val workbenchUser = WorkbenchUser(uid, Option(googleSubjectId), email, None)
         directoryDAO.createUser(workbenchUser, samRequestContext).unsafeRunSync()
@@ -184,11 +184,25 @@ class StandardUserInfoDirectivesSpec extends AnyFlatSpec with PropertyBasedTesti
     val idpToken = "opaque_token"
     val headers = createRequiredHeaders(Right(azureB2CId), email, accessToken, Option(idpToken))
     services.maybeGoogleOpaqueTokenResolver.foreach { r =>
-      when(r.getWorkbenchUser(OAuth2BearerToken(idpToken), samRequestContext)).thenReturn(IO.pure(Option(WorkbenchUser(genWorkbenchUserId(System.currentTimeMillis()), Option(googleSubjectId), email, None))))
+      when(r.getWorkbenchUser(OAuth2BearerToken(idpToken), samRequestContext)).thenReturn(IO.pure(Option(GoogleTokenInfo(Option(genWorkbenchUserId(System.currentTimeMillis())), googleSubjectId))))
     }
     Get("/").withHeaders(headers) ~>
       handleExceptions(myExceptionHandler){services.requireCreateUser(samRequestContext)(x => complete(x.copy(id = WorkbenchUserId("")).toString))} ~> check {
       status shouldBe StatusCodes.Conflict
+    }
+  }
+
+  it should "populate google id if idp access token does not match an existing user" in forAll(genAzureB2CId, genNonPetEmail, genOAuth2BearerToken, genGoogleSubjectId) { (azureB2CId, email, accessToken, googleSubjectId) =>
+    val services = directives
+    val idpToken = "opaque_token"
+    val headers = createRequiredHeaders(Right(azureB2CId), email, accessToken, Option(idpToken))
+    services.maybeGoogleOpaqueTokenResolver.foreach { r =>
+      when(r.getWorkbenchUser(OAuth2BearerToken(idpToken), samRequestContext)).thenReturn(IO.pure(Option(GoogleTokenInfo(None, googleSubjectId))))
+    }
+    Get("/").withHeaders(headers) ~>
+      handleExceptions(myExceptionHandler){services.requireCreateUser(samRequestContext)(x => complete(x.copy(id = WorkbenchUserId("")).toString))} ~> check {
+      status shouldBe StatusCodes.OK
+      responseAs[String] shouldEqual CreateWorkbenchUser(WorkbenchUserId(""), Option(googleSubjectId), email, Option(azureB2CId)).toString
     }
   }
 
