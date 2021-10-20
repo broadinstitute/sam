@@ -27,26 +27,24 @@ trait UserRoutes extends UserInfoDirectives with SamRequestContextDirectives {
         pathEndOrSingleSlash {
           post {
             withSamRequestContext { samRequestContext =>
-              entity(as[TermsOfServiceAcceptance]) { tos =>
-                requireCreateUser(samRequestContext) { createUser =>
-                  complete {
-                    userService.createUser(createUser, samRequestContext).map(userStatus => StatusCodes.Created -> userStatus)
-                  }
+              requireCreateUser(samRequestContext) { createUser =>
+                complete {
+                  userService.createUser(createUser, samRequestContext).map(userStatus => StatusCodes.Created -> userStatus)
                 }
               }
             }
-          }
-        } ~ withSamRequestContext { samRequestContext =>
-          requireUserInfo(samRequestContext) { user =>
-            get {
-              parameter("userDetailsOnly".?) { userDetailsOnly =>
-                complete {
-                  userService.getUserStatus(user.userId, userDetailsOnly.exists(_.equalsIgnoreCase("true")), samRequestContext).map { statusOption =>
-                    statusOption
-                      .map { status =>
-                        StatusCodes.OK -> Option(status)
-                      }
-                      .getOrElse(StatusCodes.NotFound -> None)
+          } ~ withSamRequestContext { samRequestContext =>
+            requireUserInfo(samRequestContext) { user =>
+              get {
+                parameter("userDetailsOnly".?) { userDetailsOnly =>
+                  complete {
+                    userService.getUserStatus(user.userId, userDetailsOnly.exists(_.equalsIgnoreCase("true")), samRequestContext).map { statusOption =>
+                      statusOption
+                        .map { status =>
+                          StatusCodes.OK -> Option(status)
+                        }
+                        .getOrElse(StatusCodes.NotFound -> None)
+                    }
                   }
                 }
               }
