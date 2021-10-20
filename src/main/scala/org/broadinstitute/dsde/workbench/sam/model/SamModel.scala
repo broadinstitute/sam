@@ -32,7 +32,7 @@ object SamJsonSupport {
 
   implicit val UserIdInfoFormat = jsonFormat3(UserIdInfo.apply)
 
-  implicit val TermsOfServiceAcceptanceFormat = jsonFormat1(TermsOfServiceAcceptance.apply)
+  implicit val TermsOfServiceAcceptanceFormat = ValueObjectFormat(TermsOfServiceAcceptance.apply)
 
   implicit val UserStatusDiagnosticsFormat = jsonFormat3(UserStatusDiagnostics.apply)
 
@@ -108,7 +108,7 @@ object SamResourceTypes {
 @Lenses final case class UserStatus(userInfo: UserStatusDetails, enabled: Map[String, Boolean])
 @Lenses final case class UserStatusInfo(userSubjectId: String, userEmail: String, enabled: Boolean)
 @Lenses final case class UserStatusDiagnostics(enabled: Boolean, inAllUsersGroup: Boolean, inGoogleProxyGroup: Boolean)
-@Lenses final case class TermsOfServiceAcceptance(url: String)
+@Lenses final case class TermsOfServiceAcceptance(value: String) extends ValueObject
 
 @Lenses final case class ResourceActionPattern(value: String, description: String, authDomainConstrainable: Boolean) {
   def matches(other: ResourceAction) = value.r.pattern.matcher(other.value).matches()

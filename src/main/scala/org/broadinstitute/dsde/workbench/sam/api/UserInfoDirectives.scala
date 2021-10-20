@@ -35,7 +35,7 @@ trait UserInfoDirectives {
 //    val failDirective = Directives.failWith(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden, s"You must accept the Terms of Service in order to register. See ${termsOfServiceConfig.url}")))
 //
 //    Directives.mapInnerRoute { r =>
-//      if (!termsOfServiceConfig.enabled || tos.url.equalsIgnoreCase(termsOfServiceConfig.url))
+//      if (!termsOfServiceConfig.enabled || tos.value.equalsIgnoreCase(termsOfServiceConfig.url))
 //        r
 //      else
 //        failDirective
