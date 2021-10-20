@@ -26,9 +26,9 @@ trait UserRoutes extends UserInfoDirectives with SamRequestContextDirectives {
       (pathPrefix("v1") | pathEndOrSingleSlash) {
         pathEndOrSingleSlash {
           post {
-            entity(as[TermsOfServiceAcceptance]) { tos =>
 //              withTermsOfServiceAcceptance(tos) {
                 withSamRequestContext { samRequestContext =>
+                  entity(as[TermsOfServiceAcceptance]) { tos =>
                   requireCreateUser(samRequestContext) { createUser =>
                     complete {
                       userService.createUser(createUser, samRequestContext).map(userStatus => StatusCodes.Created -> userStatus)
@@ -59,9 +59,9 @@ trait UserRoutes extends UserInfoDirectives with SamRequestContextDirectives {
         pathPrefix("self") {
           pathEndOrSingleSlash {
             post {
-              entity(as[TermsOfServiceAcceptance]) { tos =>
 //                withTermsOfServiceAcceptance(tos) {
                   withSamRequestContext { samRequestContext =>
+                    entity(as[TermsOfServiceAcceptance]) { tos =>
                     requireCreateUser(samRequestContext) { createUser =>
                       complete {
                         userService.createUser(createUser, samRequestContext).map(userStatus => StatusCodes.Created -> userStatus)
