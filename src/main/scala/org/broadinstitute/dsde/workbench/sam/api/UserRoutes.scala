@@ -5,6 +5,7 @@ import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directives._
+import akka.http.scaladsl.server.Route
 import org.broadinstitute.dsde.workbench.model.google.GoogleProject
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
@@ -25,17 +26,7 @@ trait UserRoutes extends UserInfoDirectives with SamRequestContextDirectives {
     pathPrefix("user") {
       (pathPrefix("v1") | pathEndOrSingleSlash) {
         pathEndOrSingleSlash {
-          post {
-            withSamRequestContext { samRequestContext =>
-              entity(as[TermsOfServiceAcceptance]) { tos =>
-                requireCreateUser(samRequestContext) { createUser =>
-                  complete {
-                    userService.createUser(createUser, samRequestContext).map(userStatus => StatusCodes.Created -> userStatus)
-                  }
-                }
-              }
-            }
-          } ~ withSamRequestContext { samRequestContext =>
+          handleCreateUser() ~ withSamRequestContext { samRequestContext =>
             requireUserInfo(samRequestContext) { user =>
               get {
                 parameter("userDetailsOnly".?) { userDetailsOnly =>
@@ -56,17 +47,7 @@ trait UserRoutes extends UserInfoDirectives with SamRequestContextDirectives {
       } ~ pathPrefix("v2") {
         pathPrefix("self") {
           pathEndOrSingleSlash {
-            post {
-              withSamRequestContext { samRequestContext =>
-                entity(as[TermsOfServiceAcceptance]) { tos =>
-                  requireCreateUser(samRequestContext) { createUser =>
-                    complete {
-                      userService.createUser(createUser, samRequestContext).map(userStatus => StatusCodes.Created -> userStatus)
-                    }
-                  }
-                }
-              }
-            }
+            handleCreateUser()
           } ~ withSamRequestContext { samRequestContext =>
             requireUserInfo(samRequestContext) { user =>
               path("info") {
@@ -217,6 +198,21 @@ trait UserRoutes extends UserInfoDirectives with SamRequestContextDirectives {
       }
     }
   }
+
+  private def handleCreateUser(): Route = {
+    post {
+      withSamRequestContext { samRequestContext =>
+        entity(as[TermsOfServiceAcceptance]) { tos =>
+          requireCreateUser(samRequestContext) { createUser =>
+            complete {
+              userService.createUser(createUser, samRequestContext).map(userStatus => StatusCodes.Created -> userStatus)
+            }
+          }
+        }
+      }
+    }
+  }
+
 }
 
 final case class InviteUser(inviteeId: WorkbenchUserId, inviteeEmail: WorkbenchEmail)
