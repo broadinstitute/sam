@@ -2,10 +2,11 @@ package org.broadinstitute.dsde.workbench.sam
 package service
 
 import java.security.SecureRandom
-
 import akka.http.scaladsl.model.StatusCodes
 import cats.effect.{ContextShift, IO}
+import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
+
 import javax.naming.NameNotFoundException
 import org.apache.commons.codec.binary.Hex
 import org.broadinstitute.dsde.workbench.model._
@@ -46,14 +47,10 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
     } yield UserStatusDetails(createdUser.id, createdUser.email)
 
   /**
-    * If googleSubjectId exists in ldap, return 409; else if email also exists, we lookup pre-created user record and update
-    * its googleSubjectId field; otherwise, we create a new user
-    *
-    * GoogleSubjectId    Email
-    *      no             no      ---> We've never seen this user before, create a new user
-    *      no             yes      ---> Someone invited this user previous and we have a record for this user already. We just need to update GoogleSubjetId field for this user.
-    *      yes            skip    ---> User exists. Do nothing.
-    *      yes            skip    ---> User exists. Do nothing.
+    * First lookup user by either googleSubjectId or azureB2DId, whichever is populated. If the user exists
+    * throw a conflict error. If the user does not exist look them up by email. If the user email exists
+    * then this is an invited user, update their googleSubjectId and/or azureB2CId. If the email does not exist,
+    * this is a new user, create them.
     */
   protected[service] def registerUser(user: CreateWorkbenchUser, samRequestContext: SamRequestContext): IO[WorkbenchUser] =
     for {
@@ -71,16 +68,14 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
               case Some(uid: WorkbenchUserId) =>
                 for {
                   groups <- directoryDAO.listUserDirectMemberships(uid, samRequestContext)
-                  _ <- user.googleSubjectId match {
-                    case Some(googleSubjectId) => for {
+                  _ <- user.googleSubjectId.traverse { googleSubjectId =>
+                    for {
                       _ <- directoryDAO.setGoogleSubjectId(uid, googleSubjectId, samRequestContext)
                       _ <- registrationDAO.setGoogleSubjectId(uid, googleSubjectId, samRequestContext)
                     } yield ()
-                    case None => IO.unit
                   }
-                  _ <- user.azureB2CId match {
-                    case Some(azureB2CId) => directoryDAO.setUserAzureB2CId(uid, azureB2CId, samRequestContext)
-                    case None => IO.unit
+                  _ <- user.azureB2CId.traverse { azureB2CId =>
+                    directoryDAO.setUserAzureB2CId(uid, azureB2CId, samRequestContext)
                   }
                   _ <- IO.fromFuture(IO(cloudExtensions.onGroupUpdate(groups, samRequestContext)))
                 } yield WorkbenchUser(uid, user.googleSubjectId, user.email, user.azureB2CId)

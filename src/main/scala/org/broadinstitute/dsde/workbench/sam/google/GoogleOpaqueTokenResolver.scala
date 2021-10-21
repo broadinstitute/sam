@@ -4,7 +4,7 @@ import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import cats.effect.{ContextShift, IO}
 import com.typesafe.scalalogging.LazyLogging
 import io.circe.Decoder
-import org.broadinstitute.dsde.workbench.model.{GoogleSubjectId, PetServiceAccountId, WorkbenchException, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.model.{GoogleSubjectId, WorkbenchException, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.util.{OpenCensusIOUtils, SamRequestContext}
 import org.http4s.Method._
@@ -66,7 +66,6 @@ class StandardGoogleOpaqueTokenResolver(directoryDAO: DirectoryDAO, googleTokenI
       case TokenInfoResponse(googleSubjectId) =>
         directoryDAO.loadSubjectFromGoogleSubjectId(googleSubjectId, samRequestContext).map {
           case Some(userId: WorkbenchUserId) => Option(GoogleTokenInfo(Option(userId), googleSubjectId))
-          case Some(PetServiceAccountId(userId, _)) => Option(GoogleTokenInfo(Option(userId), googleSubjectId))
           case Some(unexpected) => throw new WorkbenchException(s"unexpected workbench identity [$unexpected] associated to access token")
           case None => Option(GoogleTokenInfo(None, googleSubjectId))
         }
