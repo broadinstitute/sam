@@ -8,7 +8,6 @@ import akka.http.scaladsl.server.Directives._
 import org.broadinstitute.dsde.workbench.model.google.GoogleProject
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
-import org.broadinstitute.dsde.workbench.sam.model.TermsOfServiceAcceptance
 import org.broadinstitute.dsde.workbench.sam.service.UserService
 import org.broadinstitute.dsde.workbench.sam.service.UserService.genWorkbenchUserId
 
@@ -26,10 +25,12 @@ trait UserRoutes extends UserInfoDirectives with SamRequestContextDirectives {
       (pathPrefix("v1") | pathEndOrSingleSlash) {
         pathEndOrSingleSlash {
           post {
-            withSamRequestContext { samRequestContext =>
-              requireCreateUser(samRequestContext) { createUser =>
-                complete {
-                  userService.createUser(createUser, samRequestContext).map(userStatus => StatusCodes.Created -> userStatus)
+            withTermsOfServiceAcceptance {
+              withSamRequestContext { samRequestContext =>
+                requireCreateUser(samRequestContext) { createUser =>
+                  complete {
+                    userService.createUser(createUser, samRequestContext).map(userStatus => StatusCodes.Created -> userStatus)
+                  }
                 }
               }
             }
@@ -55,8 +56,8 @@ trait UserRoutes extends UserInfoDirectives with SamRequestContextDirectives {
         pathPrefix("self") {
           pathEndOrSingleSlash {
             post {
-              withSamRequestContext { samRequestContext =>
-                entity(as[TermsOfServiceAcceptance]) { tos =>
+              withTermsOfServiceAcceptance {
+                withSamRequestContext { samRequestContext =>
                   requireCreateUser(samRequestContext) { createUser =>
                     complete {
                       userService.createUser(createUser, samRequestContext).map(userStatus => StatusCodes.Created -> userStatus)
