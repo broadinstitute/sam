@@ -1,5 +1,6 @@
 package org.broadinstitute.dsde.workbench.sam.api
 
+import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.{Directive0, Directive1, Directives}
@@ -8,7 +9,8 @@ import org.broadinstitute.dsde.workbench.sam.service.CloudExtensions
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.config.TermsOfServiceConfig
 import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
-//import org.broadinstitute.dsde.workbench.sam.model.TermsOfServiceAcceptance
+import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
+import org.broadinstitute.dsde.workbench.sam.model.TermsOfServiceAcceptance
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 /**
@@ -30,16 +32,28 @@ trait UserInfoDirectives {
         else r
       }
     }
-//
-//  def withTermsOfServiceAcceptance(tos: TermsOfServiceAcceptance): Directive0 = {
-//    val failDirective = Directives.failWith(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden, s"You must accept the Terms of Service in order to register. See ${termsOfServiceConfig.url}")))
-//
-//    Directives.mapInnerRoute { r =>
-//      if (!termsOfServiceConfig.enabled || tos.value.equalsIgnoreCase(termsOfServiceConfig.url))
-//        r
-//      else
-//        failDirective
-//    }
-//  }
+
+  def withTermsOfServiceAcceptance: Directive0 = {
+    val failDirective = Directives.failWith(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden, s"You must accept the Terms of Service in order to register. See ${termsOfServiceConfig.url}")))
+
+    Directives.mapInnerRoute { r =>
+      optionalEntity { tos: Option[TermsOfServiceAcceptance] =>
+        if (!termsOfServiceConfig.enabled || tos.contains(TermsOfServiceAcceptance(termsOfServiceConfig.url)))
+          r
+        else
+          failDirective
+      }
+    }
+  }
+
+  def optionalEntity: Directive1[Option[TermsOfServiceAcceptance]] = {
+    entity(as[String]).flatMap { stringEntity =>
+      if(stringEntity == null || stringEntity.isEmpty) {
+        provide(Option.empty[TermsOfServiceAcceptance])
+      } else {
+        entity(as[TermsOfServiceAcceptance]).flatMap(e => provide(Some(e)))
+      }
+    }
+  }
 
 }
