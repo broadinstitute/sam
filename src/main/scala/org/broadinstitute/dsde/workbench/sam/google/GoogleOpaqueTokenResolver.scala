@@ -21,10 +21,10 @@ trait GoogleOpaqueTokenResolver {
   /**
     * @return there are 3 return scenarios,
     *         1) token is not a valid google token => None
-    *         2) token is valid and matches a user or pet => Some(Some(userId), googleSubjectId)
-    *         3) token is valid but does not match a user or pet => Some(None, googleSubjectId)
+    *         2) token is valid and matches a user or pet => Some(GoogleTokenInfo(Some(userId), googleSubjectId))
+    *         3) token is valid but does not match a user or pet => Some(GoogleTokenInfo(None, googleSubjectId))
     */
-  def getWorkbenchUser(accessToken: OAuth2BearerToken, samRequestContext: SamRequestContext): IO[Option[GoogleTokenInfo]]
+  def getGoogleTokenInfo(accessToken: OAuth2BearerToken, samRequestContext: SamRequestContext): IO[Option[GoogleTokenInfo]]
 }
 
 /**
@@ -40,7 +40,7 @@ class StandardGoogleOpaqueTokenResolver(directoryDAO: DirectoryDAO, googleTokenI
   }
   implicit val tokenInfoResponseEntityDecoder: EntityDecoder[IO, TokenInfoResponse] = jsonOf[IO, TokenInfoResponse]
 
-  override def getWorkbenchUser(accessToken: OAuth2BearerToken, samRequestContext: SamRequestContext): IO[Option[GoogleTokenInfo]] = {
+  override def getGoogleTokenInfo(accessToken: OAuth2BearerToken, samRequestContext: SamRequestContext): IO[Option[GoogleTokenInfo]] = {
     for {
       request <- GET(
         Uri.unsafeFromString(s"$googleTokenInfoUrl?access_token=${accessToken.token}&token_type_hint=access_token"),
@@ -74,4 +74,10 @@ class StandardGoogleOpaqueTokenResolver(directoryDAO: DirectoryDAO, googleTokenI
 }
 
 case class TokenInfoResponse(sub: GoogleSubjectId)
+
+/**
+  * Result from authenticating opaque google token and looking up resulting google subject id in sam
+  * @param userId Some if the google subject id represents an existing user, None otherwise
+  * @param googleSubjectId
+  */
 case class GoogleTokenInfo(userId: Option[WorkbenchUserId], googleSubjectId: GoogleSubjectId)

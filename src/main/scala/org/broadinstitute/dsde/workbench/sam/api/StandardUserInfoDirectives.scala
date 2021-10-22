@@ -58,7 +58,7 @@ trait StandardUserInfoDirectives extends UserInfoDirectives with LazyLogging wit
     */
   private def populateGoogleIdAndThrowIfUserExists(samRequestContext: SamRequestContext, accessToken: OAuth2BearerToken, googleOpaqueTokenResolver: GoogleOpaqueTokenResolver, azureB2CId: AzureB2CId, createWorkbenchUser: CreateWorkbenchUser): Directive1[CreateWorkbenchUser] = {
     onSuccess {
-      googleOpaqueTokenResolver.getWorkbenchUser(accessToken, samRequestContext).flatMap {
+      googleOpaqueTokenResolver.getGoogleTokenInfo(accessToken, samRequestContext).flatMap {
         case None =>
           IO.pure(createWorkbenchUser) // access token not valid
         case Some(GoogleTokenInfo(None, googleSubjectId)) => // access token valid but not already a user
@@ -139,8 +139,8 @@ object StandardUserInfoDirectives {
   private def updateUserAzureB2CId(azureB2CId: AzureB2CId, maybeIdpToken: Option[OAuth2BearerToken], directoryDAO: DirectoryDAO, maybeGoogleOpaqueTokenResolver: Option[GoogleOpaqueTokenResolver], samRequestContext: SamRequestContext) = {
     (maybeIdpToken, maybeGoogleOpaqueTokenResolver) match {
       case (Some(opaqueToken), Some(googleOpaqueTokenResolver)) => for {
-        maybeExistingUser <- googleOpaqueTokenResolver.getWorkbenchUser(opaqueToken, samRequestContext)
-        _ <- maybeExistingUser match {
+        maybeGoogleTokenInfo <- googleOpaqueTokenResolver.getGoogleTokenInfo(opaqueToken, samRequestContext)
+        _ <- maybeGoogleTokenInfo match {
           case Some(GoogleTokenInfo(Some(userId), _)) => directoryDAO.setUserAzureB2CId(userId, azureB2CId, samRequestContext)
           case _ => IO.unit
         }
