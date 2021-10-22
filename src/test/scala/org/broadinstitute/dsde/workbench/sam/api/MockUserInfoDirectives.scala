@@ -4,7 +4,7 @@ package api
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import akka.http.scaladsl.server.Directive1
 import akka.http.scaladsl.server.Directives._
-import org.broadinstitute.dsde.workbench.model.{UserInfo, WorkbenchEmail, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.model.{UserInfo, WorkbenchEmail, WorkbenchUser, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 /**
@@ -12,7 +12,7 @@ import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
   */
 trait MockUserInfoDirectives extends UserInfoDirectives {
   val userInfo: UserInfo
-  val createWorkbenchUser: Option[CreateWorkbenchUser] = None
+  val workbenchUser: Option[WorkbenchUser] = None
 
   val petSAdomain = "\\S+@\\S+\\.iam\\.gserviceaccount\\.com".r
 
@@ -25,8 +25,8 @@ trait MockUserInfoDirectives extends UserInfoDirectives {
     userInfo
   )
 
-  override def requireCreateUser(samRequestContext: SamRequestContext): Directive1[CreateWorkbenchUser] = createWorkbenchUser match {
-    case None => failWith(new Exception("createWorkbenchUser not specified"))
+  override def requireCreateUser(samRequestContext: SamRequestContext): Directive1[WorkbenchUser] = workbenchUser match {
+    case None => failWith(new Exception("workbenchUser not specified"))
     case Some(u) => provide(u)
   }
 }

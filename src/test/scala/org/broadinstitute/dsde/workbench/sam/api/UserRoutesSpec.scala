@@ -174,7 +174,7 @@ trait UserRoutesSpecHelper extends AnyFlatSpec with Matchers with ScalatestRoute
     }
     val (_, _, routes) = createTestUser(cloudExtensions = Some(cloudExtensions), googleDirectoryDAO = Some(googDirectoryDAO), userEmail = adminUserEmail)
     val userId = genWorkbenchUserId(System.currentTimeMillis())
-    val userStatus = runAndWait(routes.userService.createUser(CreateWorkbenchUser(userId, GoogleSubjectId(userId.value), defaultUserEmail, None), samRequestContext))
+    val userStatus = runAndWait(routes.userService.createUser(WorkbenchUser(userId, Option(GoogleSubjectId(userId.value)), defaultUserEmail, None), samRequestContext))
     (WorkbenchUser(userStatus.userInfo.userSubjectId, Some(GoogleSubjectId(userStatus.userInfo.userSubjectId.value)), userStatus.userInfo.userEmail, None), routes)
   }
 
@@ -217,7 +217,7 @@ trait UserRoutesSpecHelper extends AnyFlatSpec with Matchers with ScalatestRoute
     val registrationDAO = new MockRegistrationDAO()
 
     val samRoutes = new TestSamRoutes(null, null, new UserService(directoryDAO, NoExtensions, registrationDAO, Seq.empty), new StatusService(directoryDAO, registrationDAO, NoExtensions, TestSupport.dbRef), null, UserInfo(OAuth2BearerToken(""), defaultUserId, defaultUserEmail, 0), directoryDAO,
-      createWorkbenchUser = Option(CreateWorkbenchUser(UserService.genWorkbenchUserId(System.currentTimeMillis()), TestSupport.genGoogleSubjectId(), defaultUserEmail, None)))
+      workbenchUser = Option(WorkbenchUser(UserService.genWorkbenchUserId(System.currentTimeMillis()), TestSupport.genGoogleSubjectId(), defaultUserEmail, None)))
 
     testCode(samRoutes)
   }

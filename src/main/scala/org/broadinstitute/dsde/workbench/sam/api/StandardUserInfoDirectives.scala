@@ -30,13 +30,13 @@ trait StandardUserInfoDirectives extends UserInfoDirectives with LazyLogging wit
     }
   }
 
-  def requireCreateUser(samRequestContext: SamRequestContext): Directive1[CreateWorkbenchUser] =
-    requireOidcHeaders.flatMap(buildCreateWorkbenchUser(_, samRequestContext))
+  def requireCreateUser(samRequestContext: SamRequestContext): Directive1[WorkbenchUser] =
+    requireOidcHeaders.flatMap(buildWorkbenchUser(_, samRequestContext))
 
-  private def buildCreateWorkbenchUser(oidcHeaders: OIDCHeaders, samRequestContext: SamRequestContext): Directive1[CreateWorkbenchUser] = {
+  private def buildWorkbenchUser(oidcHeaders: OIDCHeaders, samRequestContext: SamRequestContext): Directive1[WorkbenchUser] = {
     val googleSubjectId = oidcHeaders.externalId.left.toOption
     val azureB2CId = oidcHeaders.externalId.toOption // .right is missing (compared to .left above) since Either is Right biased
-    val createWorkbenchUser = CreateWorkbenchUser(
+    val workbenchUser = WorkbenchUser(
       genWorkbenchUserId(System.currentTimeMillis()),
       googleSubjectId,
       oidcHeaders.email,
@@ -44,8 +44,8 @@ trait StandardUserInfoDirectives extends UserInfoDirectives with LazyLogging wit
 
     (oidcHeaders.externalId, oidcHeaders.idpAccessToken, maybeGoogleOpaqueTokenResolver) match {
       case (Right(azureB2CId), Some(accessToken), Some(googleOpaqueTokenResolver)) =>
-        populateGoogleIdAndThrowIfUserExists(samRequestContext, accessToken, googleOpaqueTokenResolver, azureB2CId, createWorkbenchUser)
-      case _ => provide(createWorkbenchUser)
+        populateGoogleIdAndThrowIfUserExists(samRequestContext, accessToken, googleOpaqueTokenResolver, azureB2CId, workbenchUser)
+      case _ => provide(workbenchUser)
     }
   }
 
@@ -56,13 +56,13 @@ trait StandardUserInfoDirectives extends UserInfoDirectives with LazyLogging wit
     * @param oidcHeaders
     * @return
     */
-  private def populateGoogleIdAndThrowIfUserExists(samRequestContext: SamRequestContext, accessToken: OAuth2BearerToken, googleOpaqueTokenResolver: GoogleOpaqueTokenResolver, azureB2CId: AzureB2CId, createWorkbenchUser: CreateWorkbenchUser): Directive1[CreateWorkbenchUser] = {
+  private def populateGoogleIdAndThrowIfUserExists(samRequestContext: SamRequestContext, accessToken: OAuth2BearerToken, googleOpaqueTokenResolver: GoogleOpaqueTokenResolver, azureB2CId: AzureB2CId, workbenchUser: WorkbenchUser): Directive1[WorkbenchUser] = {
     onSuccess {
       googleOpaqueTokenResolver.getGoogleTokenInfo(accessToken, samRequestContext).flatMap {
         case None =>
-          IO.pure(createWorkbenchUser) // access token not valid
+          IO.pure(workbenchUser) // access token not valid
         case Some(GoogleTokenInfo(None, googleSubjectId)) => // access token valid but not already a user
-          IO.pure(createWorkbenchUser.copy(googleSubjectId = Option(googleSubjectId)))
+          IO.pure(workbenchUser.copy(googleSubjectId = Option(googleSubjectId)))
         case Some(GoogleTokenInfo(Some(_), _)) => // already a user
           IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"user $azureB2CId already exists")))
       }.unsafeToFuture()
@@ -163,14 +163,6 @@ object StandardUserInfoDirectives {
           IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"google subject Id $googleSubjectId not found in sam")))
       }
     } yield userInfo
-}
-
-final case class CreateWorkbenchUser(id: WorkbenchUserId, googleSubjectId: Option[GoogleSubjectId], email: WorkbenchEmail, azureB2CId: Option[AzureB2CId])
-
-object CreateWorkbenchUser {
-  def apply(id: WorkbenchUserId, googleSubjectId: GoogleSubjectId, email: WorkbenchEmail, azureB2CId: Option[AzureB2CId]): CreateWorkbenchUser = {
-    CreateWorkbenchUser(id, Option(googleSubjectId), email, azureB2CId)
-  }
 }
 
 final case class OIDCHeaders(token: OAuth2BearerToken, externalId: Either[GoogleSubjectId, AzureB2CId], expiresIn: Long, email: WorkbenchEmail, idpAccessToken: Option[OAuth2BearerToken])

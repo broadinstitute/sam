@@ -214,7 +214,7 @@ class StandardUserInfoDirectivesSpec extends AnyFlatSpec with PropertyBasedTesti
     Get("/").withHeaders(headers) ~>
       handleExceptions(myExceptionHandler){services.requireCreateUser(samRequestContext)(x => complete(x.copy(id = WorkbenchUserId("")).toString))} ~> check {
       status shouldBe StatusCodes.OK
-      responseAs[String] shouldEqual CreateWorkbenchUser(WorkbenchUserId(""), externalId.left.toOption, email, externalId.toOption).toString
+      responseAs[String] shouldEqual WorkbenchUser(WorkbenchUserId(""), externalId.left.toOption, email, externalId.toOption).toString
     }
   }
 
@@ -258,7 +258,7 @@ class StandardUserInfoDirectivesSpec extends AnyFlatSpec with PropertyBasedTesti
         Get("/").withHeaders(headers) ~>
           handleExceptions(myExceptionHandler){services.requireCreateUser(samRequestContext)(x => complete(x.copy(id = WorkbenchUserId("")).toString))} ~> check {
           status shouldBe StatusCodes.OK
-          responseAs[String] shouldEqual CreateWorkbenchUser(WorkbenchUserId(""), Option(googleSubjectId), email, Option(azureB2CId)).toString
+          responseAs[String] shouldEqual WorkbenchUser(WorkbenchUserId(""), Option(googleSubjectId), email, Option(azureB2CId)).toString
         }
       }
     }.unsafeRunSync()
@@ -275,7 +275,7 @@ class StandardUserInfoDirectivesSpec extends AnyFlatSpec with PropertyBasedTesti
             services.requireCreateUser(samRequestContext)(x => complete(x.copy(id = WorkbenchUserId("")).toString))
           } ~> check {
           status shouldBe StatusCodes.OK
-          responseAs[String] shouldEqual CreateWorkbenchUser(WorkbenchUserId(""), None, email, Option(azureB2CId)).toString
+          responseAs[String] shouldEqual WorkbenchUser(WorkbenchUserId(""), None, email, Option(azureB2CId)).toString
         }
       }
     }.unsafeRunSync()

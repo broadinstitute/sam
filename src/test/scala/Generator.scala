@@ -4,7 +4,7 @@ import akka.http.scaladsl.model.headers.{OAuth2BearerToken, RawHeader}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.sam.api.StandardUserInfoDirectives._
-import org.broadinstitute.dsde.workbench.sam.api.{CreateWorkbenchUser, InviteUser}
+import org.broadinstitute.dsde.workbench.sam.api.InviteUser
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
 import org.scalacheck._
@@ -44,24 +44,17 @@ object Generator {
     expires <- Gen.calendar.map(_.getTimeInMillis)
   } yield UserInfo(token, genWorkbenchUserId(System.currentTimeMillis()), email, expires)
 
-  val genCreateWorkbenchUserGoogle = for{
+  val genWorkbenchUserGoogle = for{
     email <- genNonPetEmail
     googleSubjectId <- genGoogleSubjectId
     userId = genWorkbenchUserId(System.currentTimeMillis())
-  }yield CreateWorkbenchUser(userId, Option(googleSubjectId), email, None)
+  }yield WorkbenchUser(userId, Option(googleSubjectId), email, None)
 
-  val genCreateWorkbenchUserAzure = for {
+  val genWorkbenchUserAzure = for {
     email <- genNonPetEmail
     azureB2CId <- genAzureB2CId
     userId = genWorkbenchUserId(System.currentTimeMillis())
-  } yield CreateWorkbenchUser(userId, None, email, Option(azureB2CId))
-
-  val genWorkbenchUser = for{
-    email <- genNonPetEmail
-    userId = genWorkbenchUserId(System.currentTimeMillis())
-    googleSubjectId <- Gen.option(genGoogleSubjectId)
-    azureB2CId <- Gen.option(genAzureB2CId)
-  } yield WorkbenchUser(userId, googleSubjectId, email, azureB2CId)
+  } yield WorkbenchUser(userId, None, email, Option(azureB2CId))
 
   val genInviteUser = for{
     email <- genNonPetEmail
@@ -117,7 +110,7 @@ object Generator {
 
   implicit val arbNonPetEmail: Arbitrary[WorkbenchEmail] = Arbitrary(genNonPetEmail)
   implicit val arbOAuth2BearerToken: Arbitrary[OAuth2BearerToken] = Arbitrary(genOAuth2BearerToken)
-  implicit val arbCreateWorkbenchUser: Arbitrary[CreateWorkbenchUser] = Arbitrary(genCreateWorkbenchUserGoogle)
+  implicit val arbWorkbenchUser: Arbitrary[WorkbenchUser] = Arbitrary(genWorkbenchUserGoogle)
   implicit val arbPolicy: Arbitrary[AccessPolicy] = Arbitrary(genPolicy)
   implicit val arbResource: Arbitrary[Resource] = Arbitrary(genResource)
   implicit val arbGoogleSubjectId: Arbitrary[GoogleSubjectId] = Arbitrary(genGoogleSubjectId)

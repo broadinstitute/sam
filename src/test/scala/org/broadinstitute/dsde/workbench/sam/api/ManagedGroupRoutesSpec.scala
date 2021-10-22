@@ -71,7 +71,7 @@ class ManagedGroupRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRou
 
   // Makes an anonymous object for a user acting on the same data as the user specified in samRoutes
   def makeOtherUser(samRoutes: TestSamRoutes, userInfo: UserInfo = defaultNewUser) = new {
-    runAndWait(samRoutes.userService.createUser(CreateWorkbenchUser(userInfo.userId, defaultGoogleSubjectId, userInfo.userEmail, None), samRequestContext))
+    runAndWait(samRoutes.userService.createUser(WorkbenchUser(userInfo.userId, defaultGoogleSubjectId, userInfo.userEmail, None), samRequestContext))
     val email = userInfo.userEmail
     val routes = new TestSamRoutes(samRoutes.resourceService, samRoutes.policyEvaluatorService, samRoutes.userService, samRoutes.statusService, samRoutes.managedGroupService, userInfo, samRoutes.mockDirectoryDao)
   }
@@ -110,7 +110,7 @@ class ManagedGroupRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRou
     assertCreateGroup(samRoutes)
     assertGetGroup(samRoutes)
 
-    runAndWait(samRoutes.userService.createUser(CreateWorkbenchUser(newGuy.userId, defaultGoogleSubjectId, newGuy.userEmail, None), samRequestContext))
+    runAndWait(samRoutes.userService.createUser(WorkbenchUser(newGuy.userId, defaultGoogleSubjectId, newGuy.userEmail, None), samRequestContext))
 
     setGroupMembers(samRoutes, Set(newGuyEmail), expectedStatus = StatusCodes.Created)
 

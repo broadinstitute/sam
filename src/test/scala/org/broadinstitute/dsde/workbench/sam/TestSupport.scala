@@ -145,7 +145,7 @@ object TestSupport extends TestSupport {
         case _ => null
       }
       override val userInfo: UserInfo = uInfo
-      override val createWorkbenchUser: Option[CreateWorkbenchUser] = Option(CreateWorkbenchUser(uInfo.userId, Option(GoogleSubjectId(uInfo.userId.value)), uInfo.userEmail, Option(AzureB2CId(uInfo.userId.value))))
+      override val workbenchUser: Option[WorkbenchUser] = Option(WorkbenchUser(uInfo.userId, Option(GoogleSubjectId(uInfo.userId.value)), uInfo.userEmail, Option(AzureB2CId(uInfo.userId.value))))
   }
 
   def genSamRoutesWithDefault(implicit system: ActorSystem, materializer: Materializer): SamRoutes = genSamRoutes(genSamDependencies(), UserInfo(OAuth2BearerToken(""), genWorkbenchUserId(System.currentTimeMillis()), defaultUserEmail, 3600))

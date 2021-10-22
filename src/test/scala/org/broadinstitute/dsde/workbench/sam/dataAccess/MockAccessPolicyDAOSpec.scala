@@ -6,7 +6,6 @@ import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
-import org.broadinstitute.dsde.workbench.sam.api.CreateWorkbenchUser
 import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
@@ -88,7 +87,7 @@ class MockAccessPolicyDAOSpec extends AnyFlatSpec with Matchers with TestSupport
     val real = realServicesFixture
     val mock = mockServicesFixture
 
-    val dummyUser = CreateWorkbenchUser(dummyUserInfo.userId, GoogleSubjectId(dummyUserInfo.userId.value), dummyUserInfo.userEmail, None)
+    val dummyUser = WorkbenchUser(dummyUserInfo.userId, Option(GoogleSubjectId(dummyUserInfo.userId.value)), dummyUserInfo.userEmail, None)
     runAndWait(real.userService.createUser(dummyUser, samRequestContext))
     runAndWait(mock.userService.createUser(dummyUser, samRequestContext))
 

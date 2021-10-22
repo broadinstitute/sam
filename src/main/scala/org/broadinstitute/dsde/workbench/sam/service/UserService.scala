@@ -10,7 +10,7 @@ import com.typesafe.scalalogging.LazyLogging
 import javax.naming.NameNotFoundException
 import org.apache.commons.codec.binary.Hex
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.api.{CreateWorkbenchUser, InviteUser}
+import org.broadinstitute.dsde.workbench.sam.api.InviteUser
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, RegistrationDAO}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
@@ -23,7 +23,7 @@ import scala.util.matching.Regex
   */
 class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExtensions, val registrationDAO: RegistrationDAO, blockedEmailDomains: Seq[String])(implicit val executionContext: ExecutionContext, contextShift: ContextShift[IO]) extends LazyLogging {
 
-  def createUser(user: CreateWorkbenchUser, samRequestContext: SamRequestContext): Future[UserStatus] = {
+  def createUser(user: WorkbenchUser, samRequestContext: SamRequestContext): Future[UserStatus] = {
     for {
       _ <- UserService.validateEmailAddress(user.email, blockedEmailDomains).unsafeToFuture()
       allUsersGroup <- cloudExtensions.getOrCreateAllUsersGroup(directoryDAO, samRequestContext)
@@ -52,11 +52,11 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
     * then this is an invited user, update their googleSubjectId and/or azureB2CId. If the email does not exist,
     * this is a new user, create them.
     */
-  protected[service] def registerUser(user: CreateWorkbenchUser, samRequestContext: SamRequestContext): IO[WorkbenchUser] =
+  protected[service] def registerUser(user: WorkbenchUser, samRequestContext: SamRequestContext): IO[WorkbenchUser] =
     for {
       existingSubject <- user match {
-        case CreateWorkbenchUser(_, Some(googleSubjectId), _, _) => directoryDAO.loadSubjectFromGoogleSubjectId(googleSubjectId, samRequestContext)
-        case CreateWorkbenchUser(_, _, _, Some(azureB2CId)) => directoryDAO.loadUserByAzureB2CId(azureB2CId, samRequestContext).map(_.map(_.id))
+        case WorkbenchUser(_, Some(googleSubjectId), _, _) => directoryDAO.loadSubjectFromGoogleSubjectId(googleSubjectId, samRequestContext)
+        case WorkbenchUser(_, _, _, Some(azureB2CId)) => directoryDAO.loadUserByAzureB2CId(azureB2CId, samRequestContext).map(_.map(_.id))
         case _ => IO.raiseError(new WorkbenchException("cannot create user when neither google subject id nor azure b2c id exists"))
       }
       user <- existingSubject match {

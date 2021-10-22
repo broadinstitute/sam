@@ -22,7 +22,6 @@ import org.broadinstitute.dsde.workbench.google2.mock.FakeGoogleStorageInterpret
 import org.broadinstitute.dsde.workbench.model.Notifications.NotificationFormat
 import org.broadinstitute.dsde.workbench.model.google.GoogleProject
 import org.broadinstitute.dsde.workbench.model.{WorkbenchExceptionWithErrorReport, _}
-import org.broadinstitute.dsde.workbench.sam.api.CreateWorkbenchUser
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, LdapRegistrationDAO, LoadResourceAuthDomainResult, MockAccessPolicyDAO, MockDirectoryDAO, MockRegistrationDAO, PostgresAccessPolicyDAO, PostgresDirectoryDAO, RegistrationDAO}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
@@ -285,7 +284,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
   }
 
   "GoogleExtension" should "get a pet service account for a user" in {
-    val (dirDAO: DirectoryDAO, _: RegistrationDAO, mockGoogleIamDAO: MockGoogleIamDAO, mockGoogleDirectoryDAO: MockGoogleDirectoryDAO, googleExtensions: GoogleExtensions, service: UserService, defaultUserId: WorkbenchUserId, defaultUserEmail: WorkbenchEmail, defaultUserProxyEmail: WorkbenchEmail, createDefaultUser: CreateWorkbenchUser) = initPetTest
+    val (dirDAO: DirectoryDAO, _: RegistrationDAO, mockGoogleIamDAO: MockGoogleIamDAO, mockGoogleDirectoryDAO: MockGoogleDirectoryDAO, googleExtensions: GoogleExtensions, service: UserService, defaultUserId: WorkbenchUserId, defaultUserEmail: WorkbenchEmail, defaultUserProxyEmail: WorkbenchEmail, createDefaultUser: WorkbenchUser) = initPetTest
 
     // create a user
     val newUser = service.createUser(createDefaultUser, samRequestContext).futureValue
@@ -334,7 +333,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
 
   }
 
-  private def initPetTest: (DirectoryDAO, RegistrationDAO, MockGoogleIamDAO, MockGoogleDirectoryDAO, GoogleExtensions, UserService, WorkbenchUserId, WorkbenchEmail, WorkbenchEmail, CreateWorkbenchUser) = {
+  private def initPetTest: (DirectoryDAO, RegistrationDAO, MockGoogleIamDAO, MockGoogleDirectoryDAO, GoogleExtensions, UserService, WorkbenchUserId, WorkbenchEmail, WorkbenchEmail, WorkbenchUser) = {
     val dirDAO = newDirectoryDAO()
     val regDAO = newRegistrationDAO()
 
@@ -351,7 +350,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
     val defaultUserEmail = WorkbenchEmail("newuser@new.com")
     val defaultUserProxyEmail = WorkbenchEmail(s"PROXY_newuser123@${googleServicesConfig.appsDomain}")
 
-    val defaultUser = CreateWorkbenchUser(defaultUserId, GoogleSubjectId(defaultUserId.value), defaultUserEmail, None)
+    val defaultUser = WorkbenchUser(defaultUserId, Option(GoogleSubjectId(defaultUserId.value)), defaultUserEmail, None)
     (dirDAO, regDAO, mockGoogleIamDAO, mockGoogleDirectoryDAO, googleExtensions, service, defaultUserId, defaultUserEmail, defaultUserProxyEmail, defaultUser)
   }
 
@@ -360,7 +359,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
   protected def newAccessPolicyDAO(): AccessPolicyDAO = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.dbRef)
 
   it should "attach existing service account to pet" in {
-    val (dirDAO: DirectoryDAO, _: RegistrationDAO, mockGoogleIamDAO: MockGoogleIamDAO, mockGoogleDirectoryDAO: MockGoogleDirectoryDAO, googleExtensions: GoogleExtensions, service: UserService, defaultUserId: WorkbenchUserId, defaultUserEmail: WorkbenchEmail, defaultUserProxyEmail: WorkbenchEmail, createDefaultUser: CreateWorkbenchUser) = initPetTest
+    val (dirDAO: DirectoryDAO, _: RegistrationDAO, mockGoogleIamDAO: MockGoogleIamDAO, mockGoogleDirectoryDAO: MockGoogleDirectoryDAO, googleExtensions: GoogleExtensions, service: UserService, defaultUserId: WorkbenchUserId, defaultUserEmail: WorkbenchEmail, defaultUserProxyEmail: WorkbenchEmail, createDefaultUser: WorkbenchUser) = initPetTest
     val googleProject = GoogleProject("testproject")
 
     val defaultUser = WorkbenchUser(createDefaultUser.id, None, createDefaultUser.email, None)
@@ -378,7 +377,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
   }
 
   it should "recreate service account when missing for pet" in {
-    val (dirDAO: DirectoryDAO, regDAO: RegistrationDAO, mockGoogleIamDAO: MockGoogleIamDAO, mockGoogleDirectoryDAO: MockGoogleDirectoryDAO, googleExtensions: GoogleExtensions, service: UserService, defaultUserId: WorkbenchUserId, defaultUserEmail: WorkbenchEmail, defaultUserProxyEmail: WorkbenchEmail, createDefaultUser: CreateWorkbenchUser) = initPetTest
+    val (dirDAO: DirectoryDAO, regDAO: RegistrationDAO, mockGoogleIamDAO: MockGoogleIamDAO, mockGoogleDirectoryDAO: MockGoogleDirectoryDAO, googleExtensions: GoogleExtensions, service: UserService, defaultUserId: WorkbenchUserId, defaultUserEmail: WorkbenchEmail, defaultUserProxyEmail: WorkbenchEmail, createDefaultUser: WorkbenchUser) = initPetTest
 
     // create a user
     val newUser = service.createUser(createDefaultUser, samRequestContext).futureValue
@@ -746,7 +745,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
     implicit val patienceConfig = PatienceConfig(1 second)
     val (googleExtensions, service) = setupGoogleKeyCacheTests
 
-    val createDefaultUser = Generator.genCreateWorkbenchUserGoogle.sample.get
+    val createDefaultUser = Generator.genWorkbenchUserGoogle.sample.get
     val defaultUser = WorkbenchUser(createDefaultUser.id,  createDefaultUser.googleSubjectId, createDefaultUser.email, createDefaultUser.azureB2CId)
 
     // create a user
@@ -770,7 +769,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
 
     val defaultUserId = WorkbenchUserId("newuser")
     val defaultUserEmail = WorkbenchEmail("newuser@new.com")
-    val createDefaultUser = CreateWorkbenchUser(defaultUserId, GoogleSubjectId(defaultUserId.value), defaultUserEmail, None)
+    val createDefaultUser = WorkbenchUser(defaultUserId, Option(GoogleSubjectId(defaultUserId.value)), defaultUserEmail, None)
     val defaultUser = WorkbenchUser(defaultUserId, None, defaultUserEmail, None)
 
     // create a user
@@ -802,7 +801,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
     implicit val patienceConfig = PatienceConfig(1 second)
     val (googleExtensions, service) = setupGoogleKeyCacheTests
 
-    val createDefaultUser = Generator.genCreateWorkbenchUserGoogle.sample.get
+    val createDefaultUser = Generator.genWorkbenchUserGoogle.sample.get
     val defaultUser = WorkbenchUser(createDefaultUser.id,  createDefaultUser.googleSubjectId, createDefaultUser.email, createDefaultUser.azureB2CId)
 
     // create a user
