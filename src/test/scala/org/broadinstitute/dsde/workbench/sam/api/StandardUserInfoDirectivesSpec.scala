@@ -81,7 +81,7 @@ class StandardUserInfoDirectivesSpec extends AnyFlatSpec with PropertyBasedTesti
         val directoryDAO = new MockDirectoryDAO()
         val oidcHeaders = OIDCHeaders(token, externalId, 10L, email, None)
         val res = getUserInfo(directoryDAO, None, oidcHeaders, samRequestContext).attempt.unsafeRunSync().swap.toOption.get.asInstanceOf[WorkbenchExceptionWithErrorReport]
-        res.errorReport.statusCode shouldBe Option(StatusCodes.NotFound)
+        res.errorReport.statusCode shouldBe Option(StatusCodes.Forbidden)
     }
   }
 
@@ -121,7 +121,7 @@ class StandardUserInfoDirectivesSpec extends AnyFlatSpec with PropertyBasedTesti
         val workbenchUser = WorkbenchUser(uid, Option(googleSubjectId), email, None)
         directoryDAO.createUser(workbenchUser, samRequestContext).unsafeRunSync()
         val res = getUserInfo(directoryDAO, Option(googleOpaqueTokenResolver), oidcHeaders, samRequestContext).attempt.unsafeRunSync().swap.toOption.get.asInstanceOf[WorkbenchExceptionWithErrorReport]
-        res.errorReport.statusCode shouldBe Option(StatusCodes.NotFound)
+        res.errorReport.statusCode shouldBe Option(StatusCodes.Forbidden)
     }
   }
 

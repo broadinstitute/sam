@@ -64,7 +64,7 @@ trait StandardUserInfoDirectives extends UserInfoDirectives with LazyLogging wit
         case Some(GoogleTokenInfo(None, googleSubjectId)) => // access token valid but not already a user
           IO.pure(workbenchUser.copy(googleSubjectId = Option(googleSubjectId)))
         case Some(GoogleTokenInfo(Some(_), _)) => // already a user
-          IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"user $azureB2CId already exists")))
+          IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"user ${workbenchUser.email} already exists")))
       }.unsafeToFuture()
     }
   }
@@ -111,18 +111,18 @@ object StandardUserInfoDirectives {
 
   def getUserInfo(directoryDAO: DirectoryDAO, maybeGoogleOpaqueTokenResolver: Option[GoogleOpaqueTokenResolver], oidcHeaders: OIDCHeaders, samRequestContext: SamRequestContext): IO[UserInfo] = {
     oidcHeaders match {
-      case OIDCHeaders(token, Left(googleSubjectId), _, saEmail@WorkbenchEmail(SAdomain(_)), _) =>
+      case OIDCHeaders(_, Left(googleSubjectId), _, saEmail@WorkbenchEmail(SAdomain(_)), _) =>
         // If it's a PET account, we treat it as its owner
         directoryDAO.getUserFromPetServiceAccount(ServiceAccountSubjectId(googleSubjectId.value), samRequestContext).flatMap {
           case Some(pet) => IO.pure(UserInfo(oidcHeaders.token, pet.id, pet.email, oidcHeaders.expiresIn))
-          case None => lookUpByGoogleSubjectId(googleSubjectId, directoryDAO, samRequestContext).map(uid => UserInfo(token, uid, saEmail, oidcHeaders.expiresIn))
+          case None => lookUpByGoogleSubjectId(googleSubjectId, directoryDAO, samRequestContext).map(uid => UserInfo(oidcHeaders.token, uid, saEmail, oidcHeaders.expiresIn))
         }
 
-      case OIDCHeaders(token, Left(googleSubjectId), expiresIn, email, _) =>
-        lookUpByGoogleSubjectId(googleSubjectId, directoryDAO, samRequestContext).map(uid => UserInfo(token, uid, email, expiresIn))
+      case OIDCHeaders(_, Left(googleSubjectId), _, _, _) =>
+        lookUpByGoogleSubjectId(googleSubjectId, directoryDAO, samRequestContext).map(uid => UserInfo(oidcHeaders.token, uid, oidcHeaders.email, oidcHeaders.expiresIn))
 
-      case OIDCHeaders(token, Right(azureB2CId), expiresIn, email, maybeIdpToken) =>
-        loadUserMaybeUpdateAzureB2CId(azureB2CId, maybeIdpToken, directoryDAO, maybeGoogleOpaqueTokenResolver, samRequestContext).map(user => UserInfo(token, user.id, email, expiresIn))
+      case OIDCHeaders(_, Right(azureB2CId), _, _, _) =>
+        loadUserMaybeUpdateAzureB2CId(azureB2CId, oidcHeaders.idpAccessToken, directoryDAO, maybeGoogleOpaqueTokenResolver, samRequestContext).map(user => UserInfo(oidcHeaders.token, user.id, oidcHeaders.email, oidcHeaders.expiresIn))
     }
   }
 
@@ -133,7 +133,7 @@ object StandardUserInfoDirectives {
         case None => updateUserAzureB2CId(azureB2CId, maybeIdpToken, directoryDAO, maybeGoogleOpaqueTokenResolver, samRequestContext)
         case _ => IO.pure(maybeUser)
       }
-    } yield maybeUserAgain.getOrElse(throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"user Id $azureB2CId not found in sam")))
+    } yield maybeUserAgain.getOrElse(throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden, s"user Id $azureB2CId not found in sam")))
   }
 
   private def updateUserAzureB2CId(azureB2CId: AzureB2CId, maybeIdpToken: Option[OAuth2BearerToken], directoryDAO: DirectoryDAO, maybeGoogleOpaqueTokenResolver: Option[GoogleOpaqueTokenResolver], samRequestContext: SamRequestContext) = {

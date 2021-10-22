@@ -291,15 +291,19 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
   it should "return conflict when there's an existing subject for a given googleSubjectId" in{
     val user = genWorkbenchUserGoogle.sample.get
     dirDAO.createUser(WorkbenchUser(user.id,  user.googleSubjectId, user.email, user.azureB2CId), samRequestContext).unsafeRunSync()
-    val res = service.registerUser(user, samRequestContext).attempt.unsafeRunSync().swap.toOption.get.asInstanceOf[WorkbenchExceptionWithErrorReport]
-    Eq[WorkbenchExceptionWithErrorReport].eqv(res, new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"user ${user} already exists"))) shouldBe true
+    val exception = intercept[WorkbenchExceptionWithErrorReport] {
+      service.registerUser(user, samRequestContext).unsafeRunSync()
+    }
+    exception.errorReport shouldEqual ErrorReport(StatusCodes.Conflict, s"user ${user.email} already exists")
   }
 
   it should "return conflict when there's an existing subject for a given azureB2CId" in{
     val user = genWorkbenchUserAzure.sample.get
     dirDAO.createUser(WorkbenchUser(user.id,  user.googleSubjectId, user.email, user.azureB2CId), samRequestContext).unsafeRunSync()
-    val res = service.registerUser(user, samRequestContext).attempt.unsafeRunSync().swap.toOption.get.asInstanceOf[WorkbenchExceptionWithErrorReport]
-    Eq[WorkbenchExceptionWithErrorReport].eqv(res, new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"user ${user} already exists"))) shouldBe true
+    val exception = intercept[WorkbenchExceptionWithErrorReport] {
+      service.registerUser(user, samRequestContext).unsafeRunSync()
+    }
+    exception.errorReport shouldEqual ErrorReport(StatusCodes.Conflict, s"user ${user.email} already exists")
   }
 
   "UserService inviteUser" should "create a new user" in{
