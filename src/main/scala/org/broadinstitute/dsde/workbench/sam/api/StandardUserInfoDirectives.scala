@@ -133,7 +133,7 @@ object StandardUserInfoDirectives {
         case None => updateUserAzureB2CId(azureB2CId, maybeIdpToken, directoryDAO, maybeGoogleOpaqueTokenResolver, samRequestContext)
         case _ => IO.pure(maybeUser)
       }
-    } yield maybeUserAgain.getOrElse(throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden, s"user Id $azureB2CId not found in sam")))
+    } yield maybeUserAgain.getOrElse(throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden, s"Azure Id $azureB2CId not found in sam")))
   }
 
   private def updateUserAzureB2CId(azureB2CId: AzureB2CId, maybeIdpToken: Option[OAuth2BearerToken], directoryDAO: DirectoryDAO, maybeGoogleOpaqueTokenResolver: Option[GoogleOpaqueTokenResolver], samRequestContext: SamRequestContext) = {
@@ -160,7 +160,7 @@ object StandardUserInfoDirectives {
         case Some(_) =>
           IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"subjectId $googleSubjectId is not a WorkbenchUser")))
         case None =>
-          IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"google subject Id $googleSubjectId not found in sam")))
+          IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden, s"Google Id $googleSubjectId not found in sam")))
       }
     } yield userInfo
 }

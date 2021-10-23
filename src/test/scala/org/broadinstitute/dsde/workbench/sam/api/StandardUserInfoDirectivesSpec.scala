@@ -91,7 +91,7 @@ class StandardUserInfoDirectivesSpec extends AnyFlatSpec with PropertyBasedTesti
         val directoryDAO = new MockDirectoryDAO()
         val oidcHeaders = OIDCHeaders(token, Left(googleSubjectId), 10L, email, None)
         val res = getUserInfo(directoryDAO, None, oidcHeaders, samRequestContext).attempt.unsafeRunSync().swap.toOption.get.asInstanceOf[WorkbenchExceptionWithErrorReport]
-        res.errorReport.statusCode shouldBe Option(StatusCodes.NotFound)
+        res.errorReport.statusCode shouldBe Option(StatusCodes.Forbidden)
     }
   }
 
