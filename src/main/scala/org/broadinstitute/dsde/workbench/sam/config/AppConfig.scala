@@ -25,7 +25,6 @@ final case class AppConfig(
                             googleConfig: Option[GoogleConfig],
                             resourceTypes: Set[ResourceType],
                             liquibaseConfig: LiquibaseConfig,
-                            googleOpaqueTokenResolverConfig: Option[GoogleOpaqueTokenResolverConfig],
                             blockedEmailDomains: Seq[String],
                             termsOfServiceConfig: TermsOfServiceConfig)
 
@@ -134,13 +133,6 @@ object AppConfig {
     )
   }
 
-  implicit val googleOpaqueTokenResolverConfigReader: ValueReader[GoogleOpaqueTokenResolverConfig] = ValueReader.relative { config =>
-    GoogleOpaqueTokenResolverConfig(
-      config.getString("googleTokenInfoUrl"),
-      config.getInt("threadPoolSize")
-    )
-  }
-
   implicit val termsOfServiceConfigReader: ValueReader[TermsOfServiceConfig] = ValueReader.relative { config =>
     TermsOfServiceConfig(
       config.getBoolean("enabled"),
@@ -167,12 +159,11 @@ object AppConfig {
     val emailDomain = config.as[Option[String]]("emailDomain").getOrElse(config.getString("googleServices.appsDomain"))
     val resourceTypes = config.as[Map[String, ResourceType]]("resourceTypes").values.toSet
     val liquibaseConfig = config.as[LiquibaseConfig]("liquibase")
-    val googleOpaqueTokenResolverConfig = config.as[Option[GoogleOpaqueTokenResolverConfig]]("googleOpaqueTokenResolver")
 
     val blockedEmailDomains = config.as[Option[Seq[String]]]("blockedEmailDomains").getOrElse(Seq.empty)
 
     val termsOfServiceConfig = config.as[TermsOfServiceConfig]("termsOfService")
 
-    AppConfig(emailDomain, directoryConfig, schemaLockConfig, distributedLockConfig, swaggerConfig, googleConfigOption, resourceTypes, liquibaseConfig, googleOpaqueTokenResolverConfig, blockedEmailDomains, termsOfServiceConfig)
+    AppConfig(emailDomain, directoryConfig, schemaLockConfig, distributedLockConfig, swaggerConfig, googleConfigOption, resourceTypes, liquibaseConfig, blockedEmailDomains, termsOfServiceConfig)
   }
 }

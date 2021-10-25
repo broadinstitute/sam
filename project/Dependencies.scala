@@ -27,7 +27,6 @@ object Dependencies {
   val excludeWorkbenchMetrics = ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-metrics_2.12")
   val excludeWorkbenchGoogle =  ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-google_2.12")
 
-  val circeGeneric: ModuleID = "io.circe" %% "circe-generic" % "0.14.1"
   val jacksonAnnotations: ModuleID = "com.fasterxml.jackson.core" % "jackson-annotations" % jacksonV
   val jacksonDatabind: ModuleID =    "com.fasterxml.jackson.core" % "jackson-databind"    % jacksonV
   val jacksonCore: ModuleID =        "com.fasterxml.jackson.core" % "jackson-core"        % jacksonV
@@ -47,10 +46,6 @@ object Dependencies {
   val akkaTestKit: ModuleID =       "com.typesafe.akka"   %%  "akka-testkit"         % akkaV     % "test"
   val akkaHttpTestKit: ModuleID =   "com.typesafe.akka"   %%  "akka-http-testkit"    % akkaHttpV % "test"
   val scalaCheck: ModuleID =        "org.scalacheck"      %%  "scalacheck"           % scalaCheckV % "test"
-
-  val http4s: ModuleID = "org.http4s" %% "http4s-dsl" % http4sVersion
-  val http4sClient: ModuleID = "org.http4s" %% "http4s-blaze-client" % http4sVersion
-  val http4sCirce: ModuleID = "org.http4s" %% "http4s-circe" % http4sVersion
 
   val excludIoGrpc =  ExclusionRule(organization = "io.grpc", name = "grpc-core")
   val ioGrpc: ModuleID = "io.grpc" % "grpc-core" % "1.34.0"
@@ -95,8 +90,6 @@ object Dependencies {
   val opencensusAkkaHttp: ModuleID = "com.github.sebruck" %% "opencensus-scala-akka-http" % "0.7.2" excludeAll(excludeAkkaProtobufV3, excludeAkkaStream)// excludeAll(excludIoGrpc, excludeCatsEffect)
   val opencensusStackDriverExporter: ModuleID = "io.opencensus" % "opencensus-exporter-trace-stackdriver" % "0.25.0" // excludeAll(excludIoGrpc, excludeCatsEffect)
   val opencensusLoggingExporter: ModuleID = "io.opencensus" % "opencensus-exporter-trace-logging"     % "0.25.0" // excludeAll(excludIoGrpc, excludeCatsEffect)
-
-  val mockServer: ModuleID = "org.mock-server" % "mockserver-netty" % "5.11.2" % "test"
 
   val openCensusDependencies = Seq(
     opencensusScalaCode,
@@ -155,13 +148,6 @@ object Dependencies {
     scalikeCore,
     scalikeCoreConfig,
     scalikeCoreTest,
-    postgres,
-    circeGeneric,
-
-    http4s,
-    http4sClient,
-    http4sCirce,
-
-    mockServer
+    postgres
   ) ++ openCensusDependencies
 }

@@ -23,7 +23,7 @@ import org.broadinstitute.dsde.workbench.google2.util.DistributedLock
 import org.broadinstitute.dsde.workbench.google2.{GoogleFirestoreInterpreter, GoogleStorageInterpreter, GoogleStorageService}
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException}
 import org.broadinstitute.dsde.workbench.sam.api.{SamRoutes, StandardUserInfoDirectives}
-import org.broadinstitute.dsde.workbench.sam.config.{AppConfig, GoogleConfig, GoogleOpaqueTokenResolverConfig}
+import org.broadinstitute.dsde.workbench.sam.config.{AppConfig, GoogleConfig}
 import org.broadinstitute.dsde.workbench.sam.dataAccess._
 import org.broadinstitute.dsde.workbench.sam.db.DatabaseNames.DatabaseName
 import org.broadinstitute.dsde.workbench.sam.db.{DatabaseNames, DbReference}
@@ -33,7 +33,6 @@ import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.util.DelegatePool
 import org.broadinstitute.dsde.workbench.util2.ExecutionContexts
-import org.http4s.client.blaze.BlazeClientBuilder
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -123,8 +122,6 @@ object Boot extends IOApp with LazyLogging {
 
       blockingEc <- ExecutionContexts.fixedThreadPool[IO](24)
 
-      googleOpaqueTokenResolver <- googleOpaqueTokenResolverResource(appConfig, foregroundDirectoryDAO)
-
       cloudExtensionsInitializer <- cloudExtensionsInitializerResource(
         appConfig,
         foregroundDirectoryDAO,
@@ -134,7 +131,7 @@ object Boot extends IOApp with LazyLogging {
         backgroundAccessPolicyDAO,
         backgroundLdapExecutionContext,
         blockingEc)
-    } yield createAppDepenciesWithSamRoutes(appConfig, cloudExtensionsInitializer, foregroundAccessPolicyDAO, foregroundDirectoryDAO, registrationDAO, googleOpaqueTokenResolver)
+    } yield createAppDepenciesWithSamRoutes(appConfig, cloudExtensionsInitializer, foregroundAccessPolicyDAO, foregroundDirectoryDAO, registrationDAO)
 
   private def cloudExtensionsInitializerResource(
       appConfig: AppConfig,
@@ -181,18 +178,6 @@ object Boot extends IOApp with LazyLogging {
           new GoogleExtensionsInitializer(cloudExtension, googleGroupSynchronizer)
         }
       case None => cats.effect.Resource.pure[IO, CloudExtensionsInitializer](NoExtensionsInitializer)
-    }
-
-  private def googleOpaqueTokenResolverResource(appConfig: AppConfig, directoryDAO: DirectoryDAO): effect.Resource[IO, Option[GoogleOpaqueTokenResolver]] =
-    appConfig.googleOpaqueTokenResolverConfig match {
-      case Some(GoogleOpaqueTokenResolverConfig(googleTokenInfoUrl, threadPoolSize)) =>
-        for {
-          googleOpaqueTokenResolverEc <- ExecutionContexts.fixedThreadPool[IO](threadPoolSize)
-          httpClient <- BlazeClientBuilder.apply[IO](googleOpaqueTokenResolverEc).resource
-        } yield {
-          Option(new StandardGoogleOpaqueTokenResolver(directoryDAO, googleTokenInfoUrl, httpClient))
-        }
-      case _ => cats.effect.Resource.pure[IO, Option[GoogleOpaqueTokenResolver]](None)
     }
 
   private def createDAOs(appConfig: AppConfig,
@@ -318,8 +303,7 @@ object Boot extends IOApp with LazyLogging {
       cloudExtensionsInitializer: CloudExtensionsInitializer,
       accessPolicyDAO: AccessPolicyDAO,
       directoryDAO: DirectoryDAO,
-      registrationDAO: RegistrationDAO,
-      googleOpaqueTokenResolver: Option[GoogleOpaqueTokenResolver])(implicit actorSystem: ActorSystem): AppDependencies = {
+      registrationDAO: RegistrationDAO)(implicit actorSystem: ActorSystem): AppDependencies = {
     val resourceTypeMap = config.resourceTypes.map(rt => rt.name -> rt).toMap
     val policyEvaluatorService = PolicyEvaluatorService(config.emailDomain, resourceTypeMap, accessPolicyDAO, directoryDAO)
     val resourceService = new ResourceService(resourceTypeMap, policyEvaluatorService, accessPolicyDAO, directoryDAO, cloudExtensionsInitializer.cloudExtensions, config.emailDomain)
@@ -337,14 +321,11 @@ object Boot extends IOApp with LazyLogging {
           val googleExtensions = googleExt
           val cloudExtensions = googleExt
           val googleGroupSynchronizer = synchronizer
-          override val maybeGoogleOpaqueTokenResolver = googleOpaqueTokenResolver
         }
         AppDependencies(routes, samApplication, cloudExtensionsInitializer, directoryDAO, accessPolicyDAO, policyEvaluatorService)
       case _ =>
         val routes = new SamRoutes(resourceService, userService, statusService, managedGroupService, config.swaggerConfig, directoryDAO, policyEvaluatorService, config.liquibaseConfig)
-        with StandardUserInfoDirectives with NoExtensionRoutes {
-          override val maybeGoogleOpaqueTokenResolver = googleOpaqueTokenResolver
-        }
+          with StandardUserInfoDirectives with NoExtensionRoutes
         AppDependencies(routes, samApplication, NoExtensionsInitializer, directoryDAO, accessPolicyDAO, policyEvaluatorService)
     }
   }
