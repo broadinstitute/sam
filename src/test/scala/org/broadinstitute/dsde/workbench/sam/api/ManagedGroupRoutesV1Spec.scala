@@ -80,6 +80,7 @@ class ManagedGroupRoutesV1Spec extends AnyFlatSpec with ScalaFutures with Matche
     assertGetGroup(defaultRoutes)
 
     val theDude = UserInfo(OAuth2BearerToken("tokenDude"), WorkbenchUserId("ElDudarino"), WorkbenchEmail("ElDudarino@example.com"), 0)
+    defaultRoutes.directoryDAO.createUser(WorkbenchUser(theDude.userId, None, theDude.userEmail, None), samRequestContext).unsafeRunSync()
     val dudesRoutes = new TestSamRoutes(defaultRoutes.resourceService, defaultRoutes.policyEvaluatorService, defaultRoutes.userService, defaultRoutes.statusService, defaultRoutes.managedGroupService, theDude, defaultRoutes.directoryDAO)
     body(dudesRoutes)
   }
@@ -120,6 +121,7 @@ class ManagedGroupRoutesV1Spec extends AnyFlatSpec with ScalaFutures with Matche
 
     val newGuyEmail = WorkbenchEmail("newGuy@organization.org")
     val newGuy = UserInfo(OAuth2BearerToken("newToken"), WorkbenchUserId("NewGuy"), newGuyEmail, 0)
+    samRoutes.directoryDAO.createUser(WorkbenchUser(newGuy.userId, None, newGuyEmail, None), samRequestContext).unsafeRunSync()
     val newGuyRoutes = new TestSamRoutes(samRoutes.resourceService, samRoutes.policyEvaluatorService, samRoutes.userService, samRoutes.statusService, samRoutes.managedGroupService, newGuy, samRoutes.mockDirectoryDao)
 
 
