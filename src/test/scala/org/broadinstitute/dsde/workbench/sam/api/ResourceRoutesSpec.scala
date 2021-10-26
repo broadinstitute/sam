@@ -11,7 +11,6 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{MockAccessPolicyDAO, MockDirectoryDAO, MockRegistrationDAO}
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.service.UserService.genRandom
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.scalatest.AppendedClues
 import spray.json.DefaultJsonProtocol._
@@ -27,14 +26,14 @@ import org.scalatest.matchers.should.Matchers
 class ResourceRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTest with TestSupport with AppendedClues {
 
   val defaultUserInfo = UserInfo(OAuth2BearerToken("accessToken"), WorkbenchUserId("user1"), WorkbenchEmail("user1@example.com"), 0)
-  def defaultGoogleSubjectId = GoogleSubjectId(genRandom(System.currentTimeMillis()))
+  def defaultGoogleSubjectId = Generator.genGoogleSubjectId.sample
 
   private val config = TestSupport.config
   private val resourceTypes = TestSupport.appConfig.resourceTypes
   private val resourceTypeMap = resourceTypes.map(rt => rt.name -> rt).toMap
   private val managedGroupResourceType = resourceTypeMap.getOrElse(ResourceTypeName("managed-group"), throw new Error("Failed to load managed-group resource type from reference.conf"))
 
-  private val defaultTestUser = CreateWorkbenchUser(WorkbenchUserId("testuser"), defaultGoogleSubjectId, WorkbenchEmail("testuser@foo.com"), None)
+  private val defaultTestUser = WorkbenchUser(WorkbenchUserId("testuser"), defaultGoogleSubjectId, WorkbenchEmail("testuser@foo.com"), None)
 
   private object SamResourceActionPatterns {
     val readPolicies = ResourceActionPattern("read_policies", "", false)
@@ -58,7 +57,7 @@ class ResourceRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTe
     val mockStatusService = new StatusService(directoryDAO, registrationDAO, NoExtensions, TestSupport.dbRef)
     val mockManagedGroupService = new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, accessPolicyDAO, directoryDAO, NoExtensions, emailDomain)
 
-    mockUserService.createUser(CreateWorkbenchUser(defaultUserInfo.userId, defaultGoogleSubjectId, defaultUserInfo.userEmail, None), samRequestContext)
+    mockUserService.createUser(WorkbenchUser(defaultUserInfo.userId, defaultGoogleSubjectId, defaultUserInfo.userEmail, None), samRequestContext)
 
     new TestSamRoutes(mockResourceService, policyEvaluatorService, mockUserService, mockStatusService, mockManagedGroupService, userInfo, directoryDAO)
   }
@@ -74,7 +73,7 @@ class ResourceRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTe
 
   "GET /api/resource/{resourceType}/{resourceId}/action/{action}/userEmail/{userEmail}" should "200 if caller have read_policies permission" in {
     // Create a user called userWithEmail and has can_compute on the resource.
-    val userWithEmail = CreateWorkbenchUser(WorkbenchUserId("user1"), defaultGoogleSubjectId, WorkbenchEmail("user1@foo.com"), None)
+    val userWithEmail = Generator.genWorkbenchUserGoogle.sample.get
     val members = AccessPolicyMembership(Set(userWithEmail.email), Set(ResourceAction("can_compute")), Set.empty)
     val resourceType = ResourceType(
       ResourceTypeName("rt"),
@@ -98,7 +97,7 @@ class ResourceRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTe
 
   "GET /api/resource/{resourceType}/{resourceId}/action/{action}/userEmail/{userEmail}" should "200 if caller have testActionAccess::can_compute permission" in {
     // Create a user called userWithEmail and has can_compute on the resource.
-    val userWithEmail = CreateWorkbenchUser(WorkbenchUserId("user1"), defaultGoogleSubjectId, WorkbenchEmail("user1@foo.com"), None)
+    val userWithEmail = Generator.genWorkbenchUserGoogle.sample.get
     val members = AccessPolicyMembership(Set(userWithEmail.email), Set(ResourceAction("can_compute")), Set.empty)
     val resourceType = ResourceType(
       ResourceTypeName("rt"),
@@ -127,7 +126,7 @@ class ResourceRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTe
 
   "GET /api/resource/{resourceType}/{resourceId}/action/{action}/userEmail/{userEmail}" should "return false if user doesn't have permission or doesn't exist" in {
     // Create a user called userWithEmail but doesn't have can_compute on the resource.
-    val userWithEmail = CreateWorkbenchUser(WorkbenchUserId("user1"), defaultGoogleSubjectId, WorkbenchEmail("user1@foo.com"), None)
+    val userWithEmail = Generator.genWorkbenchUserGoogle.sample.get
     val members = AccessPolicyMembership(Set(userWithEmail.email), Set(ResourceAction("read_policies")), Set.empty)
 
     // The owner role has read_policies
@@ -160,7 +159,7 @@ class ResourceRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTe
 
   "GET /api/resource/{resourceType}/{resourceId}/action/{action}/userEmail/{userEmail}" should "return 403 if caller doesn't have permission" in {
     // Create a user called userWithEmail and have can_compute on the resource.
-    val userWithEmail = CreateWorkbenchUser(WorkbenchUserId("user1"), defaultGoogleSubjectId, WorkbenchEmail("user1@foo.com"), None)
+    val userWithEmail = Generator.genWorkbenchUserGoogle.sample.get
     val members = AccessPolicyMembership(Set(userWithEmail.email), Set(ResourceAction("read_policies")), Set.empty)
 
     // The owner role only have alert_policies
@@ -271,7 +270,7 @@ class ResourceRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTe
 
     val authDomainId = ResourceId("myAuthDomain")
     val otherUser = UserInfo(OAuth2BearerToken("magicString"), WorkbenchUserId("bugsBunny"), WorkbenchEmail("bugsford_bunnington@example.com"), 0)
-    runAndWait(samRoutes.userService.createUser(CreateWorkbenchUser(otherUser.userId, defaultGoogleSubjectId, otherUser.userEmail, None), samRequestContext))
+    runAndWait(samRoutes.userService.createUser(WorkbenchUser(otherUser.userId, defaultGoogleSubjectId, otherUser.userEmail, None), samRequestContext))
     runAndWait(samRoutes.managedGroupService.createManagedGroup(authDomainId, otherUser, samRequestContext = samRequestContext))
     val authDomain = Set(WorkbenchGroupName(authDomainId.value))
 
@@ -341,7 +340,7 @@ class ResourceRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTe
   private def responsePayloadClue(str: String): String = s" -> Here is the response payload: $str"
 
   private def createUserResourcePolicy(members: AccessPolicyMembership, resourceType: ResourceType, samRoutes: TestSamRoutes, resourceId: ResourceId, policyName: AccessPolicyName): Unit = {
-    val user = CreateWorkbenchUser(samRoutes.userInfo.userId, defaultGoogleSubjectId, samRoutes.userInfo.userEmail, None)
+    val user = WorkbenchUser(samRoutes.userInfo.userId, defaultGoogleSubjectId, samRoutes.userInfo.userEmail, None)
     findOrCreateUser(user, samRoutes.userService)
 
     Post(s"/api/resource/${resourceType.name}/${resourceId.value}") ~> samRoutes.route ~> check {
@@ -354,7 +353,7 @@ class ResourceRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTe
     }
   }
 
-  private def findOrCreateUser(user: CreateWorkbenchUser, userService: UserService): UserStatus = {
+  private def findOrCreateUser(user: WorkbenchUser, userService: UserService): UserStatus = {
     runAndWait(userService.getUserStatus(user.id, samRequestContext = samRequestContext)) match {
       case Some(userStatus) => userStatus
       case None => runAndWait(userService.createUser(user, samRequestContext))
@@ -697,7 +696,7 @@ class ResourceRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTe
     val samRoutes = createSamRoutes(Map(resourceType.name -> resourceType))
 
     samRoutes.resourceService.createResourceType(resourceType, samRequestContext).unsafeRunSync()
-    runAndWait(samRoutes.userService.createUser(CreateWorkbenchUser(WorkbenchUserId(""), defaultGoogleSubjectId, WorkbenchEmail("user2@example.com"), None), samRequestContext))
+    runAndWait(samRoutes.userService.createUser(WorkbenchUser(WorkbenchUserId(""), defaultGoogleSubjectId, WorkbenchEmail("user2@example.com"), None), samRequestContext))
     runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), UserInfo(OAuth2BearerToken("accessToken"), WorkbenchUserId("user2"), WorkbenchEmail("user2@example.com"), 0), samRequestContext))
 
     //Verify resource exists by checking for conflict on recreate
@@ -792,7 +791,7 @@ class ResourceRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTe
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
     val testUser = UserInfo(OAuth2BearerToken("token"), WorkbenchUserId("testuser"), WorkbenchEmail("testuser@foo.com"), 0)
 
-    runAndWait(samRoutes.userService.createUser(CreateWorkbenchUser(testUser.userId, defaultGoogleSubjectId, testUser.userEmail, None), samRequestContext))
+    runAndWait(samRoutes.userService.createUser(WorkbenchUser(testUser.userId, defaultGoogleSubjectId, testUser.userEmail, None), samRequestContext))
 
     runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), testUser, samRequestContext))
 
@@ -870,7 +869,7 @@ class ResourceRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTe
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
     val testUser = UserInfo(OAuth2BearerToken("token"), WorkbenchUserId("testuser"), WorkbenchEmail("testuser@foo.com"), 0)
 
-    runAndWait(samRoutes.userService.createUser(CreateWorkbenchUser(testUser.userId, defaultGoogleSubjectId, testUser.userEmail, None), samRequestContext))
+    runAndWait(samRoutes.userService.createUser(WorkbenchUser(testUser.userId, defaultGoogleSubjectId, testUser.userEmail, None), samRequestContext))
 
     runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), testUser, samRequestContext))
 

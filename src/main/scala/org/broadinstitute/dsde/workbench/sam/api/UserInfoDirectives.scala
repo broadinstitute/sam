@@ -18,7 +18,7 @@ trait UserInfoDirectives {
 
   def requireUserInfo(samRequestContext: SamRequestContext): Directive1[UserInfo]
 
-  def requireCreateUser(samRequestContext: SamRequestContext): Directive1[CreateWorkbenchUser]
+  def requireCreateUser(samRequestContext: SamRequestContext): Directive1[WorkbenchUser]
 
   def asWorkbenchAdmin(userInfo: UserInfo): Directive0 =
     Directives.mapInnerRoute { r =>

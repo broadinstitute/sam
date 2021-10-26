@@ -13,7 +13,7 @@ object Dependencies {
 
   val workbenchUtilV   = "0.6-74c9fc2"
   val workbenchUtil2V   = "0.1-74c9fc2"
-  val workbenchModelV  = "0.14-74c9fc2"
+  val workbenchModelV  = "0.15-f9f0d4c"
   val workbenchGoogleV = "0.21-51d7fff"
   val workbenchGoogle2V = "0.21-9d25534"
   val workbenchNotificationsV = "0.3-d74ff96"
@@ -27,8 +27,6 @@ object Dependencies {
   val excludeWorkbenchMetrics = ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-metrics_2.12")
   val excludeWorkbenchGoogle =  ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-google_2.12")
 
-  val jwtSpray: ModuleID = "com.pauldijou" %% "jwt-spray-json" % "4.1.0"
-  val jwtCirce: ModuleID = "com.pauldijou" %% "jwt-circe" % "4.1.0"
   val jacksonAnnotations: ModuleID = "com.fasterxml.jackson.core" % "jackson-annotations" % jacksonV
   val jacksonDatabind: ModuleID =    "com.fasterxml.jackson.core" % "jackson-databind"    % jacksonV
   val jacksonCore: ModuleID =        "com.fasterxml.jackson.core" % "jackson-core"        % jacksonV
@@ -37,7 +35,7 @@ object Dependencies {
   val logbackClassic: ModuleID = "ch.qos.logback"             %  "logback-classic" % "1.2.3"
   val ravenLogback: ModuleID =   "com.getsentry.raven"        %  "raven-logback"   % "7.8.6"
   val scalaLogging: ModuleID =   "com.typesafe.scala-logging" %% "scala-logging"   % scalaLoggingV
-  val swaggerUi: ModuleID =      "org.webjars"                %  "swagger-ui"      % "3.25.0"
+  val swaggerUi: ModuleID =      "org.webjars"                %  "swagger-ui"      % "3.52.3"
   val ficus: ModuleID =          "com.iheart"                 %% "ficus"           % "1.5.0"
 
   val akkaActor: ModuleID =         "com.typesafe.akka"   %%  "akka-actor"           % akkaV
@@ -48,10 +46,6 @@ object Dependencies {
   val akkaTestKit: ModuleID =       "com.typesafe.akka"   %%  "akka-testkit"         % akkaV     % "test"
   val akkaHttpTestKit: ModuleID =   "com.typesafe.akka"   %%  "akka-http-testkit"    % akkaHttpV % "test"
   val scalaCheck: ModuleID =        "org.scalacheck"      %%  "scalacheck"           % scalaCheckV % "test"
-
-  val http4s: ModuleID = "org.http4s" %% "http4s-dsl" % http4sVersion
-  val http4sClient: ModuleID = "org.http4s" %% "http4s-blaze-client" % http4sVersion
-  val http4sCirce: ModuleID = "org.http4s" %% "http4s-circe" % http4sVersion
 
   val excludIoGrpc =  ExclusionRule(organization = "io.grpc", name = "grpc-core")
   val ioGrpc: ModuleID = "io.grpc" % "grpc-core" % "1.34.0"
@@ -154,12 +148,6 @@ object Dependencies {
     scalikeCore,
     scalikeCoreConfig,
     scalikeCoreTest,
-    postgres,
-    jwtSpray,
-    jwtCirce,
-
-    http4s,
-    http4sClient,
-    http4sCirce
+    postgres
   ) ++ openCensusDependencies
 }

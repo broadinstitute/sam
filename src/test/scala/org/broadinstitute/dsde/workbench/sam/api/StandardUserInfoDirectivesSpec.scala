@@ -1,115 +1,91 @@
 package org.broadinstitute.dsde.workbench.sam
 package api
 
-import java.time.Instant
-
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.headers.{OAuth2BearerToken, RawHeader}
 import akka.http.scaladsl.server.Directives.{complete, handleExceptions}
 import akka.http.scaladsl.server.MissingHeaderRejection
 import akka.http.scaladsl.testkit.ScalatestRouteTest
-import cats.effect.IO
 import cats.kernel.Eq
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountDisplayName, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.sam.Generator._
-import org.broadinstitute.dsde.workbench.sam.TestSupport.{eqWorkbenchExceptionErrorReport, genIdentityConcentratorId, samRequestContext}
+import org.broadinstitute.dsde.workbench.sam.TestSupport.eqWorkbenchExceptionErrorReport
 import org.broadinstitute.dsde.workbench.sam.api.SamRoutes.myExceptionHandler
 import org.broadinstitute.dsde.workbench.sam.api.StandardUserInfoDirectives._
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, MockDirectoryDAO}
-import org.broadinstitute.dsde.workbench.sam.identityConcentrator.IdentityConcentratorService
-import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, UserService}
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
-import pdi.jwt.JwtSprayJson
-import org.mockito.ArgumentMatchers._
-import org.mockito.Mockito._
-import org.scalatestplus.mockito.MockitoSugar
+import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, UserService}
 import org.scalatest.concurrent.ScalaFutures
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatestplus.mockito.MockitoSugar
 
 import scala.concurrent.ExecutionContext
-import org.scalatest.flatspec.AnyFlatSpec
 
-class StandardUserInfoDirectivesSpec extends AnyFlatSpec with PropertyBasedTesting with ScalatestRouteTest with ScalaFutures with MockitoSugar {
-  def directives: StandardUserInfoDirectives = new StandardUserInfoDirectives {
+class StandardUserInfoDirectivesSpec extends AnyFlatSpec with PropertyBasedTesting with ScalatestRouteTest with ScalaFutures with MockitoSugar with TestSupport {
+  def directives(dirDAO: DirectoryDAO = new MockDirectoryDAO()): StandardUserInfoDirectives = new StandardUserInfoDirectives {
     override implicit val executionContext: ExecutionContext = null
-    override val directoryDAO: DirectoryDAO = new MockDirectoryDAO()
+    override val directoryDAO: DirectoryDAO = dirDAO
     override val cloudExtensions: CloudExtensions = null
-    override val identityConcentratorService: Option[IdentityConcentratorService] = Option(mock[IdentityConcentratorService](RETURNS_SMART_NULLS))
     override val userService: UserService = null
   }
 
-  def genAuthorizationHeader(id: Option[IdentityConcentratorId] = None): RawHeader = {
-    RawHeader(authorizationHeader, genJwtBearerToken(id).toString())
-  }
-
-
-  private def genJwtBearerToken(id: Option[IdentityConcentratorId]) = {
-    import spray.json._
-    import org.broadinstitute.dsde.workbench.sam.api.StandardUserInfoDirectives.jwtPayloadFormat
-    OAuth2BearerToken(JwtSprayJson.encode(JwtUserInfo(id.getOrElse(genIdentityConcentratorId()), Instant.now().getEpochSecond + 3600).toJson.asJsObject))
-  }
-
-  "isServiceAccount" should "be able to tell whether an email is a PET email" in {
-    forAll(genPetEmail, genNonPetEmail){
-      (petEmail: WorkbenchEmail, nonPetEmail: WorkbenchEmail) =>
-        isServiceAccount(petEmail) shouldBe(true)
-        isServiceAccount(nonPetEmail) shouldBe(false)
-    }
-  }
-
   "getUserInfo" should "be able to get a UserInfo object for regular user" in {
-    forAll{
-      (token: OAuth2BearerToken, email: WorkbenchEmail) =>
-      val directoryDAO = new MockDirectoryDAO()
-      val googleSubjectId = GoogleSubjectId(genRandom(System.currentTimeMillis()))
-      val uid = genWorkbenchUserId(System.currentTimeMillis())
-      directoryDAO.createUser(WorkbenchUser(uid, Some(googleSubjectId), email, None), samRequestContext).unsafeRunSync()
-      val res = getUserInfo(token, googleSubjectId, email, 10L, directoryDAO, samRequestContext).unsafeRunSync()
-      res should be (UserInfo(token, uid, email, 10L))
+    forAll(minSuccessful(20)) {
+      (token: OAuth2BearerToken, email: WorkbenchEmail, externalId: Either[GoogleSubjectId, AzureB2CId]) =>
+        val directoryDAO = new MockDirectoryDAO()
+        val uid = genWorkbenchUserId(System.currentTimeMillis())
+        val oidcHeaders = OIDCHeaders(token, externalId, 10L, email, None)
+        directoryDAO.createUser(WorkbenchUser(uid, externalId.left.toOption, email, externalId.toOption), samRequestContext).unsafeRunSync()
+        val res = getUserInfo(directoryDAO, oidcHeaders, samRequestContext).unsafeRunSync()
+        res should be (UserInfo(token, uid, email, 10L))
     }
   }
 
   it should "be able to get a UserInfo object for service account if it is a PET" in {
-    forAll(genServiceAccountSubjectId, genGoogleSubjectId, genOAuth2BearerToken, genPetEmail){
+    // note that pets can only have google subject ids, not azure b2c ids
+    forAll(genServiceAccountSubjectId, genGoogleSubjectId, genOAuth2BearerToken, genPetEmail) {
       (serviceSubjectId: ServiceAccountSubjectId, googleSubjectId: GoogleSubjectId, token: OAuth2BearerToken, email: WorkbenchEmail) =>
       val directoryDAO = new MockDirectoryDAO()
       val uid = genWorkbenchUserId(System.currentTimeMillis())
-      directoryDAO.createUser(WorkbenchUser(uid, Some(googleSubjectId), email, None), samRequestContext).unsafeRunSync()
+      directoryDAO.createUser(WorkbenchUser(uid, Option(googleSubjectId), email, None), samRequestContext).unsafeRunSync()
       directoryDAO.createPetServiceAccount(PetServiceAccount(PetServiceAccountId(uid, GoogleProject("")), ServiceAccount(serviceSubjectId, email, ServiceAccountDisplayName(""))), samRequestContext).unsafeRunSync()
-      val res = getUserInfo(token, googleSubjectId, email, 10L, directoryDAO, samRequestContext).unsafeRunSync()
+      val oidcHeaders = OIDCHeaders(token, Left(GoogleSubjectId(serviceSubjectId.value)), 10L, email, None)
+      val res = getUserInfo(directoryDAO, oidcHeaders, samRequestContext).unsafeRunSync()
       res should be (UserInfo(token, uid, email, 10L))
     }
   }
 
   it should "be able to get a UserInfo object for service account if it is a not PET" in {
-    forAll(genServiceAccountSubjectId, genOAuth2BearerToken, genPetEmail){
+    forAll(genServiceAccountSubjectId, genOAuth2BearerToken, genPetEmail) {
       (serviceSubjectId: ServiceAccountSubjectId, token: OAuth2BearerToken, email: WorkbenchEmail) =>
       val directoryDAO = new MockDirectoryDAO()
       val gSid = GoogleSubjectId(serviceSubjectId.value)
       val uid = genWorkbenchUserId(System.currentTimeMillis())
+      val oidcHeaders = OIDCHeaders(token, Left(gSid), 10L, email, None)
       directoryDAO.createUser(WorkbenchUser(uid, Some(gSid), email, None), samRequestContext).unsafeRunSync()
-      val res = getUserInfo(token, gSid, email, 10L, directoryDAO, samRequestContext).unsafeRunSync()
+      val res = getUserInfo(directoryDAO, oidcHeaders, samRequestContext).unsafeRunSync()
       res should be (UserInfo(token, uid, email, 10L))
     }
   }
 
-  it should "fail if provided googleSubjectId doesn't exist in sam" in {
-    forAll{
-      (token: OAuth2BearerToken, email: WorkbenchEmail) =>
+  it should "fail if provided externalId doesn't exist in sam" in {
+    forAll {
+      (token: OAuth2BearerToken, email: WorkbenchEmail, externalId: Either[GoogleSubjectId, AzureB2CId]) =>
         val directoryDAO = new MockDirectoryDAO()
-        val googleSubjectId = GoogleSubjectId(genRandom(System.currentTimeMillis()))
-        val res = getUserInfo(token, googleSubjectId, email, 10L, directoryDAO, samRequestContext).attempt.unsafeRunSync().swap.toOption.get.asInstanceOf[WorkbenchExceptionWithErrorReport]
-        Eq[WorkbenchExceptionWithErrorReport].eqv(res, new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"google subject Id $googleSubjectId not found in sam"))) shouldBe(true)
+        val oidcHeaders = OIDCHeaders(token, externalId, 10L, email, None)
+        val res = getUserInfo(directoryDAO, oidcHeaders, samRequestContext).attempt.unsafeRunSync().swap.toOption.get.asInstanceOf[WorkbenchExceptionWithErrorReport]
+        res.errorReport.statusCode shouldBe Option(StatusCodes.Forbidden)
     }
   }
 
   it should "fail if PET account is not found" in {
-    forAll(genOAuth2BearerToken, genPetEmail){
-      (token: OAuth2BearerToken, email: WorkbenchEmail) =>
+    forAll(genOAuth2BearerToken, genPetEmail, genGoogleSubjectId){
+      (token: OAuth2BearerToken, email: WorkbenchEmail, googleSubjectId: GoogleSubjectId) =>
         val directoryDAO = new MockDirectoryDAO()
-        val googleSubjectId = GoogleSubjectId(genRandom(System.currentTimeMillis()))
-        val res = getUserInfo(token, googleSubjectId, email, 10L, directoryDAO, samRequestContext).attempt.unsafeRunSync().swap.toOption.get.asInstanceOf[WorkbenchExceptionWithErrorReport]
-        Eq[WorkbenchExceptionWithErrorReport].eqv(res, new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"google subject Id $googleSubjectId not found in sam"))) shouldBe(true)
+        val oidcHeaders = OIDCHeaders(token, Left(googleSubjectId), 10L, email, None)
+        val res = getUserInfo(directoryDAO, oidcHeaders, samRequestContext).attempt.unsafeRunSync().swap.toOption.get.asInstanceOf[WorkbenchExceptionWithErrorReport]
+        res.errorReport.statusCode shouldBe Option(StatusCodes.Forbidden)
     }
   }
 
@@ -118,136 +94,46 @@ class StandardUserInfoDirectivesSpec extends AnyFlatSpec with PropertyBasedTesti
       (serviceSubjectId: ServiceAccountSubjectId, token: OAuth2BearerToken, email: WorkbenchEmail) =>
         val directoryDAO = new MockDirectoryDAO()
         val gSid = GoogleSubjectId(serviceSubjectId.value)
+        val oidcHeaders = OIDCHeaders(token, Left(gSid), 10L, email, None)
         val uid = genWorkbenchUserId(System.currentTimeMillis())
         directoryDAO.createPetServiceAccount(PetServiceAccount(PetServiceAccountId(uid, GoogleProject("")), ServiceAccount(serviceSubjectId, email, ServiceAccountDisplayName(""))), samRequestContext).unsafeRunSync()
-        val res = getUserInfo(token, gSid, email, 10L, directoryDAO, samRequestContext).attempt.unsafeRunSync().swap.toOption.get.asInstanceOf[WorkbenchExceptionWithErrorReport]
+        val res = getUserInfo(directoryDAO, oidcHeaders, samRequestContext).attempt.unsafeRunSync().swap.toOption.get.asInstanceOf[WorkbenchExceptionWithErrorReport]
 
         Eq[WorkbenchExceptionWithErrorReport].eqv(res, new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"subjectId $gSid is not a WorkbenchUser"))) shouldBe(true)
     }
   }
 
-  "getUserInfoFromJwt" should "get user info for valid jwt" in {
-    val directoryDAO = new MockDirectoryDAO()
-    val googleSubjectId = GoogleSubjectId(genRandom(System.currentTimeMillis()))
-    val uid = genWorkbenchUserId(System.currentTimeMillis())
-    val identityConcentratorId = TestSupport.genIdentityConcentratorId()
-    val email = genNonPetEmail.sample.get
-    directoryDAO.createUser(WorkbenchUser(uid, Some(googleSubjectId), email, Option(identityConcentratorId)), samRequestContext).unsafeRunSync()
-    val userInfo = getUserInfoFromJwt(validJwtUserInfo(identityConcentratorId), OAuth2BearerToken(""), directoryDAO, mock[IdentityConcentratorService](RETURNS_SMART_NULLS), samRequestContext).unsafeRunSync()
-    assert(userInfo.tokenExpiresIn <= 0)
-    assert(userInfo.tokenExpiresIn > -30)
-    userInfo.copy(tokenExpiresIn = 0) shouldEqual UserInfo(OAuth2BearerToken(""), uid, email, 0)
-  }
-
-  it should "update existing user with ic id" in {
-    val directoryDAO = new MockDirectoryDAO()
-    val googleSubjectId = GoogleSubjectId(genRandom(System.currentTimeMillis()))
-    val uid = genWorkbenchUserId(System.currentTimeMillis())
-    val identityConcentratorId = TestSupport.genIdentityConcentratorId()
-    val email = genNonPetEmail.sample.get
-
-    directoryDAO.createUser(WorkbenchUser(uid, Some(googleSubjectId), email, None), samRequestContext).unsafeRunSync()
-
-    val icService = mock[IdentityConcentratorService](RETURNS_SMART_NULLS)
-    val bearerToken = OAuth2BearerToken("shhhh, secret")
-    when(icService.getGoogleIdentities(bearerToken)).thenReturn(IO.pure(Seq((googleSubjectId, email))))
-    getUserInfoFromJwt(validJwtUserInfo(identityConcentratorId), bearerToken, directoryDAO, icService, samRequestContext).unsafeRunSync()
-
-    directoryDAO.loadUser(uid, samRequestContext).unsafeRunSync().flatMap(_.identityConcentratorId) shouldBe Some(identityConcentratorId)
-  }
-
-  it should "500 when user is linked to more than 1 google account" in {
-    val directoryDAO = new MockDirectoryDAO()
-    val identityConcentratorId = TestSupport.genIdentityConcentratorId()
-    val icService = mock[IdentityConcentratorService](RETURNS_SMART_NULLS)
-    val bearerToken = OAuth2BearerToken("shhhh, secret")
-
-    when(icService.getGoogleIdentities(bearerToken)).thenReturn(IO.pure(Seq(
-      (GoogleSubjectId(genRandom(System.currentTimeMillis())), genNonPetEmail.sample.get),
-      (GoogleSubjectId(genRandom(System.currentTimeMillis())), genNonPetEmail.sample.get))))
-
-    val expectedError = intercept[WorkbenchExceptionWithErrorReport] {
-      getUserInfoFromJwt(validJwtUserInfo(identityConcentratorId), bearerToken, directoryDAO, icService, samRequestContext).unsafeRunSync()
-    }
-
-    expectedError.errorReport.statusCode shouldBe Some(StatusCodes.InternalServerError)
-  }
-
-  private def validJwtUserInfo(identityConcentratorId: IdentityConcentratorId) = JwtUserInfo(identityConcentratorId, Instant.now().getEpochSecond)
-
-  it should "404 for valid jwt but user does not exist in sam db" in {
-    val directoryDAO = new MockDirectoryDAO()
-    val t = intercept[WorkbenchExceptionWithErrorReport] {
-      val identityConcentratorService = mock[IdentityConcentratorService](RETURNS_SMART_NULLS)
-      when(identityConcentratorService.getGoogleIdentities(any[OAuth2BearerToken])).thenReturn(IO.pure(Seq((GoogleSubjectId(""), WorkbenchEmail("")))))
-      getUserInfoFromJwt(validJwtUserInfo(TestSupport.genIdentityConcentratorId()), OAuth2BearerToken(""), directoryDAO, identityConcentratorService, samRequestContext).unsafeRunSync()
-    }
-    withClue(t.errorReport) {
-      t.errorReport.statusCode shouldBe Some(StatusCodes.NotFound)
+  it should "fail if azureB2CId does not exist and google subject id is not for current user" in {
+    forAll(genGoogleSubjectId, genAzureB2CId, genOAuth2BearerToken, genGoogleSubjectId, genPetEmail) {
+      (googleSubjectId: GoogleSubjectId, azureB2CId: AzureB2CId, token: OAuth2BearerToken, otherGoogleSubjectId: GoogleSubjectId, email: WorkbenchEmail) =>
+        val directoryDAO = new MockDirectoryDAO()
+        val uid = genWorkbenchUserId(System.currentTimeMillis())
+        val oidcHeaders = OIDCHeaders(token, Right(azureB2CId), 10L, email, Option(otherGoogleSubjectId))
+        val workbenchUser = WorkbenchUser(uid, Option(googleSubjectId), email, None)
+        directoryDAO.createUser(workbenchUser, samRequestContext).unsafeRunSync()
+        val res = getUserInfo(directoryDAO, oidcHeaders, samRequestContext).attempt.unsafeRunSync().swap.toOption.get.asInstanceOf[WorkbenchExceptionWithErrorReport]
+        res.errorReport.statusCode shouldBe Option(StatusCodes.Forbidden)
     }
   }
 
-  it should "500 for valid jwt but no linked accounts in ic" in {
-    val directoryDAO = new MockDirectoryDAO()
-    val t = intercept[WorkbenchExceptionWithErrorReport] {
-      val identityConcentratorService = mock[IdentityConcentratorService](RETURNS_SMART_NULLS)
-      when(identityConcentratorService.getGoogleIdentities(any[OAuth2BearerToken])).thenReturn(IO.pure(Seq.empty))
-      getUserInfoFromJwt(validJwtUserInfo(TestSupport.genIdentityConcentratorId()), OAuth2BearerToken(""), directoryDAO, identityConcentratorService, samRequestContext).unsafeRunSync()
+  it should "update existing user with azureB2CId" in {
+    forAll(genGoogleSubjectId, genAzureB2CId, genOAuth2BearerToken, genPetEmail) {
+      (googleSubjectId: GoogleSubjectId, azureB2CId: AzureB2CId, token: OAuth2BearerToken, email: WorkbenchEmail) =>
+        val directoryDAO = new MockDirectoryDAO()
+        val uid = genWorkbenchUserId(System.currentTimeMillis())
+        val oidcHeaders = OIDCHeaders(token, Right(azureB2CId), 10L, email, Option(googleSubjectId))
+        val workbenchUser = WorkbenchUser(uid, Option(googleSubjectId), email, None)
+        directoryDAO.createUser(workbenchUser, samRequestContext).unsafeRunSync()
+        val res = getUserInfo(directoryDAO, oidcHeaders, samRequestContext).unsafeRunSync()
+        res should be (UserInfo(token, uid, email, 10L))
+        directoryDAO.loadUser(uid, samRequestContext).unsafeRunSync() shouldBe Option(workbenchUser.copy(azureB2CId = Option(azureB2CId)))
     }
-    withClue(t.errorReport) {
-      t.errorReport.statusCode shouldBe Some(StatusCodes.InternalServerError)
-    }
-  }
-
-  "newCreateWorkbenchUserFromJwt" should "create new CreateWorkbenchUser" in {
-    val googleSubjectId = GoogleSubjectId(genRandom(System.currentTimeMillis()))
-    val identityConcentratorId = TestSupport.genIdentityConcentratorId()
-    val email = genNonPetEmail.sample.get
-
-    val icService = mock[IdentityConcentratorService](RETURNS_SMART_NULLS)
-    val bearerToken = OAuth2BearerToken("shhhh, secret")
-    when(icService.getGoogleIdentities(bearerToken)).thenReturn(IO.pure(Seq((googleSubjectId, email))))
-    val createUser = newCreateWorkbenchUserFromJwt(validJwtUserInfo(identityConcentratorId), bearerToken, icService).unsafeRunSync()
-
-    createUser.identityConcentratorId shouldBe Some(identityConcentratorId)
-    createUser.googleSubjectId shouldBe googleSubjectId
-    createUser.email shouldBe email
-  }
-
-  it should "500 for 0 google accounts" in {
-    val identityConcentratorId = TestSupport.genIdentityConcentratorId()
-
-    val icService = mock[IdentityConcentratorService](RETURNS_SMART_NULLS)
-    val bearerToken = OAuth2BearerToken("shhhh, secret")
-    when(icService.getGoogleIdentities(bearerToken)).thenReturn(IO.pure(Seq.empty))
-    val t = intercept[WorkbenchExceptionWithErrorReport] {
-      newCreateWorkbenchUserFromJwt(validJwtUserInfo(identityConcentratorId), bearerToken, icService).unsafeRunSync()
-    }
-
-    t.errorReport.statusCode shouldBe Some(StatusCodes.InternalServerError)
-  }
-
-  it should "500 for more than 1 google account" in {
-    val identityConcentratorId = TestSupport.genIdentityConcentratorId()
-
-    val icService = mock[IdentityConcentratorService](RETURNS_SMART_NULLS)
-    val bearerToken = OAuth2BearerToken("shhhh, secret")
-    when(icService.getGoogleIdentities(bearerToken)).thenReturn(IO.pure(Seq(
-      (GoogleSubjectId(genRandom(System.currentTimeMillis())), genNonPetEmail.sample.get),
-      (GoogleSubjectId(genRandom(System.currentTimeMillis())), genNonPetEmail.sample.get))))
-
-    val t = intercept[WorkbenchExceptionWithErrorReport] {
-      newCreateWorkbenchUserFromJwt(validJwtUserInfo(identityConcentratorId), bearerToken, icService).unsafeRunSync()
-    }
-
-    t.errorReport.statusCode shouldBe Some(StatusCodes.InternalServerError)
-
   }
 
   "requireUserInfo" should "fail if expiresIn is in illegal format" in {
-    forAll(genUserInfoHeadersWithInvalidExpiresIn){
+    forAll(genUserInfoHeadersWithInvalidExpiresIn) {
       headers: List[RawHeader] =>
-        Get("/").withHeaders(headers) ~> handleExceptions(myExceptionHandler){directives.requireUserInfo(samRequestContext)(x => complete(x.toString))} ~> check {
+        Get("/").withHeaders(headers) ~> handleExceptions(myExceptionHandler){directives().requireUserInfo(samRequestContext)(x => complete(x.toString))} ~> check {
           val res = responseAs[String]
           status shouldBe StatusCodes.BadRequest
           responseAs[String].contains(s"expiresIn ${headers.find(_.name == expiresInHeader).get.value} can't be converted to Long") shouldBe(true)
@@ -255,193 +141,86 @@ class StandardUserInfoDirectivesSpec extends AnyFlatSpec with PropertyBasedTesti
     }
   }
 
-  it should "accept request with oidc headers" in {
-    val user = genWorkbenchUser.sample.get
-    val services = directives
-    val accessToken = OAuth2BearerToken("not jwt")
-    val headers = List(
-      RawHeader(emailHeader, user.email.value),
-      RawHeader(googleSubjectIdHeader, user.googleSubjectId.get.value),
-      RawHeader(accessTokenHeader, accessToken.token),
-      RawHeader(authorizationHeader, accessToken.toString()),
-      RawHeader(expiresInHeader, (System.currentTimeMillis() + 1000).toString)
-    )
-    services.directoryDAO.createUser(user, samRequestContext).unsafeRunSync()
+  it should "accept request with oidc headers" in forAll(genExternalId, genNonPetEmail, genOAuth2BearerToken, minSuccessful(20)) { (externalId, email, accessToken) =>
+    val services = directives()
+    val expiresIn = System.currentTimeMillis() + 1000
+    val headers = createRequiredHeaders(externalId, email, accessToken, expiresInString = expiresIn.toString)
+    val user = services.directoryDAO.createUser(WorkbenchUser(genWorkbenchUserId(System.currentTimeMillis()), externalId.left.toOption, email = email, azureB2CId = externalId.toOption), samRequestContext).unsafeRunSync()
     Get("/").withHeaders(headers) ~>
-      handleExceptions(myExceptionHandler){services.requireUserInfo(samRequestContext)(x => complete(x.copy(tokenExpiresIn = 0).toString))} ~> check {
+      handleExceptions(myExceptionHandler){services.requireUserInfo(samRequestContext)(x => complete(x.toString))} ~> check {
       status shouldBe StatusCodes.OK
-      responseAs[String] shouldEqual UserInfo(accessToken, user.id, user.email, 0).toString
-    }
-  }
-
-  it should "MissingHeaderRejection when not jwt but no oidc headers given" in {
-    val services = directives
-    val accessToken = OAuth2BearerToken("not jwt")
-    val headers = List(
-      RawHeader(authorizationHeader, accessToken.toString())
-    )
-
-    Get("/").withHeaders(headers) ~>
-      handleExceptions(myExceptionHandler){services.requireUserInfo(samRequestContext)(x => complete(x.copy(tokenExpiresIn = 0).toString))} ~> check {
-      assert(rejection.isInstanceOf[MissingHeaderRejection])
-    }
-  }
-
-  it should "401 when parsable yet invalid jwt and oidc headers given" in {
-    val user = genWorkbenchUser.sample.get
-    val services = directives
-    val accessToken = OAuth2BearerToken(JwtSprayJson.encode("""{"foo": "bar"}"""))
-    val headers = List(
-      RawHeader(emailHeader, user.email.value),
-      RawHeader(googleSubjectIdHeader, user.googleSubjectId.get.value),
-      RawHeader(accessTokenHeader, accessToken.token),
-      RawHeader(authorizationHeader, accessToken.toString()),
-      RawHeader(expiresInHeader, (System.currentTimeMillis() + 1000).toString)
-    )
-    services.directoryDAO.createUser(user, samRequestContext).unsafeRunSync()
-    Get("/").withHeaders(headers) ~>
-      handleExceptions(myExceptionHandler){services.requireUserInfo(samRequestContext)(x => complete(x.copy(tokenExpiresIn = 0).toString))} ~> check {
-      status shouldBe StatusCodes.Unauthorized
-    }
-  }
-
-  it should "use info from jwt instead of oidc headers" in {
-    val services = directives
-    val userGood = genWorkbenchUser.sample.get
-    val userBad = genWorkbenchUser.sample.get
-
-    val headers = List(
-      RawHeader(emailHeader, userBad.email.value),
-      RawHeader(googleSubjectIdHeader, userBad.googleSubjectId.get.value),
-      RawHeader(accessTokenHeader, ""),
-      genAuthorizationHeader(Option(userGood.identityConcentratorId.get)),
-      RawHeader(expiresInHeader, (System.currentTimeMillis() + 1000).toString)
-    )
-
-    services.directoryDAO.createUser(userGood, samRequestContext).unsafeRunSync()
-    services.directoryDAO.createUser(userBad, samRequestContext).unsafeRunSync()
-
-    Get("/").withHeaders(headers) ~>
-      handleExceptions(myExceptionHandler){services.requireUserInfo(samRequestContext)(x => complete(x.userId.value))} ~> check {
-      withClue(responseAs[String]) {
-        status shouldBe StatusCodes.OK
-      }
-      responseAs[String] shouldEqual userGood.id.value
-    }
-  }
-
-  it should "accept request with only jwt header" in {
-    val user = genWorkbenchUser.sample.get
-    val services = directives
-    val authHeader = genAuthorizationHeader(user.identityConcentratorId)
-    services.directoryDAO.createUser(user, samRequestContext).unsafeRunSync()
-    Get("/").withHeaders(authHeader) ~>
-      handleExceptions(myExceptionHandler){services.requireUserInfo(samRequestContext)(x => complete(x.userId.value))} ~> check {
-      withClue(responseAs[String]) {
-        status shouldBe StatusCodes.OK
-      }
-      responseAs[String] shouldEqual user.id.value
+      responseAs[String] shouldEqual UserInfo(accessToken, user.id, user.email, expiresIn).toString
     }
   }
 
   it should "fail if required headers are missing" in {
-    Get("/") ~> handleExceptions(myExceptionHandler){directives.requireUserInfo(samRequestContext)(x => complete(x.toString))} ~> check {
-      rejection shouldBe MissingHeaderRejection(authorizationHeader)
+    Get("/") ~> handleExceptions(myExceptionHandler){directives().requireUserInfo(samRequestContext)(x => complete(x.toString))} ~> check {
+      rejection shouldBe MissingHeaderRejection(accessTokenHeader)
     }
   }
 
-  "requireCreateUser" should "accept request with oidc headers" in {
-    val user = genWorkbenchUser.sample.get
-    val services = directives
-    val accessToken = OAuth2BearerToken("not jwt")
-    val headers = List(
-      RawHeader(emailHeader, user.email.value),
-      RawHeader(googleSubjectIdHeader, user.googleSubjectId.get.value),
-      RawHeader(accessTokenHeader, accessToken.token),
-      RawHeader(authorizationHeader, accessToken.toString()),
-      RawHeader(expiresInHeader, (System.currentTimeMillis() + 1000).toString)
-    )
+  it should "populate google id if google id from azure matches existing user" in forAll(genAzureB2CId, genNonPetEmail, genOAuth2BearerToken, genGoogleSubjectId) { (azureB2CId, email, accessToken, googleSubjectId) =>
+    val services = directives(new MockDirectoryDAO())
+    val expiresIn = System.currentTimeMillis() + 1000
+    val headers = createRequiredHeaders(Right(azureB2CId), email, accessToken, Option(googleSubjectId), expiresInString = expiresIn.toString)
+    val existingUser = services.directoryDAO.createUser(WorkbenchUser(genWorkbenchUserId(System.currentTimeMillis()), Option(googleSubjectId), email, None), samRequestContext).unsafeRunSync()
+    Get("/").withHeaders(headers) ~>
+      handleExceptions(myExceptionHandler) {
+        services.requireUserInfo(samRequestContext)(x => complete(x.toString))
+      } ~> check {
+      status shouldBe StatusCodes.OK
+      responseAs[String] shouldEqual UserInfo(accessToken, existingUser.id, existingUser.email, expiresIn).toString
+      services.directoryDAO.loadUser(existingUser.id, samRequestContext).unsafeRunSync() shouldEqual Some(existingUser.copy(azureB2CId = Option(azureB2CId)))
+    }
+  }
+
+  it should "pass if google id from azure does not exist" in forAll(genAzureB2CId, genNonPetEmail, genOAuth2BearerToken, genGoogleSubjectId) { (azureB2CId, email, accessToken, googleSubjectId) =>
+    val services = directives(new MockDirectoryDAO())
+    services.directoryDAO.createUser(WorkbenchUser(genWorkbenchUserId(System.currentTimeMillis()), None, email, Option(azureB2CId)), samRequestContext).unsafeRunSync()
+    val headers = createRequiredHeaders(Right(azureB2CId), email, accessToken, Option(googleSubjectId))
+    Get("/").withHeaders(headers) ~>
+      handleExceptions(myExceptionHandler) {
+        services.requireUserInfo(samRequestContext)(x => complete(x.toString))
+      } ~> check {
+      status shouldBe StatusCodes.OK
+    }
+  }
+
+  "requireCreateUser" should "accept request with oidc headers" in forAll(genExternalId, genNonPetEmail, genOAuth2BearerToken, minSuccessful(20)) { (externalId, email, accessToken) =>
+    val services = directives()
+    val headers = createRequiredHeaders(externalId, email, accessToken)
     Get("/").withHeaders(headers) ~>
       handleExceptions(myExceptionHandler){services.requireCreateUser(samRequestContext)(x => complete(x.copy(id = WorkbenchUserId("")).toString))} ~> check {
       status shouldBe StatusCodes.OK
-      responseAs[String] shouldEqual CreateWorkbenchUser(WorkbenchUserId(""), user.googleSubjectId.get, user.email, None).toString
+      responseAs[String] shouldEqual WorkbenchUser(WorkbenchUserId(""), externalId.left.toOption, email, externalId.toOption).toString
     }
   }
 
-  it should "MissingHeaderRejection when not jwt but no oidc headers given" in {
-    val services = directives
-    val accessToken = OAuth2BearerToken("not jwt")
-    val headers = List(
-      RawHeader(authorizationHeader, accessToken.toString())
-    )
-
+  it should "populate google id from azure" in forAll(genAzureB2CId, genNonPetEmail, genOAuth2BearerToken, genGoogleSubjectId) { (azureB2CId, email, accessToken, googleSubjectId) =>
+    val services = directives()
+    val headers = createRequiredHeaders(Right(azureB2CId), email, accessToken, Option(googleSubjectId))
     Get("/").withHeaders(headers) ~>
-      handleExceptions(myExceptionHandler){services.requireCreateUser(samRequestContext)(x => complete(x.toString))} ~> check {
-      assert(rejection.isInstanceOf[MissingHeaderRejection])
-    }
-  }
-
-  it should "401 when parsable yet invalid jwt and oidc headers given" in {
-    val user = genWorkbenchUser.sample.get
-    val services = directives
-    val accessToken = OAuth2BearerToken(JwtSprayJson.encode("""{"foo": "bar"}"""))
-    val headers = List(
-      RawHeader(emailHeader, user.email.value),
-      RawHeader(googleSubjectIdHeader, user.googleSubjectId.get.value),
-      RawHeader(authorizationHeader, accessToken.toString())
-    )
-    Get("/").withHeaders(headers) ~>
-      handleExceptions(myExceptionHandler){services.requireCreateUser(samRequestContext)(x => complete(x.toString))} ~> check {
-      status shouldBe StatusCodes.Unauthorized
-    }
-  }
-
-  it should "use info from jwt instead of oidc headers" in {
-    val services = directives
-    val userGood = genWorkbenchUser.sample.get
-    val userBad = genWorkbenchUser.sample.get
-
-    val headers = List(
-      RawHeader(emailHeader, userBad.email.value),
-      RawHeader(googleSubjectIdHeader, userBad.googleSubjectId.get.value),
-      genAuthorizationHeader(Option(userGood.identityConcentratorId.get))
-    )
-
-    services.identityConcentratorService.map { icService =>
-      when(icService.getGoogleIdentities(genJwtBearerToken(userGood.identityConcentratorId))).thenReturn(IO.pure(Seq((userGood.googleSubjectId.get, userGood.email))))
-      when(icService.getGoogleIdentities(genJwtBearerToken(userBad.identityConcentratorId))).thenReturn(IO.pure(Seq((userBad.googleSubjectId.get, userBad.email))))
-    }
-
-    Get("/").withHeaders(headers) ~>
-      handleExceptions(myExceptionHandler){services.requireCreateUser(samRequestContext)(x => complete(x.copy(id = WorkbenchUserId("")).toString))} ~> check {
-      withClue(responseAs[String]) {
-        status shouldBe StatusCodes.OK
-      }
-      responseAs[String] shouldEqual CreateWorkbenchUser(WorkbenchUserId(""), userGood.googleSubjectId.get, userGood.email, userGood.identityConcentratorId).toString
-    }
-  }
-
-  it should "accept request with only jwt header" in {
-    val user = genWorkbenchUser.sample.get
-    val services = directives
-    val authHeader = genAuthorizationHeader(user.identityConcentratorId)
-
-    services.identityConcentratorService.map { icService =>
-      when(icService.getGoogleIdentities(genJwtBearerToken(user.identityConcentratorId))).thenReturn(IO.pure(Seq((user.googleSubjectId.get, user.email))))
-    }
-
-    Get("/").withHeaders(authHeader) ~>
-      handleExceptions(myExceptionHandler){services.requireCreateUser(samRequestContext)(x => complete(x.identityConcentratorId.toString))} ~> check {
-      withClue(responseAs[String]) {
-        status shouldBe StatusCodes.OK
-      }
-      responseAs[String] shouldEqual user.identityConcentratorId.toString
+      handleExceptions(myExceptionHandler) {
+        services.requireCreateUser(samRequestContext)(x => complete(x.copy(id = WorkbenchUserId("")).toString))
+      } ~> check {
+      status shouldBe StatusCodes.OK
+      responseAs[String] shouldEqual WorkbenchUser(WorkbenchUserId(""), Option(googleSubjectId), email, Option(azureB2CId)).toString
     }
   }
 
   it should "fail if required headers are missing" in {
-    Get("/") ~> handleExceptions(myExceptionHandler){directives.requireCreateUser(samRequestContext)(x => complete(x.toString))} ~> check {
-      rejection shouldBe MissingHeaderRejection(authorizationHeader)
+    Get("/") ~> handleExceptions(myExceptionHandler){directives().requireCreateUser(samRequestContext)(x => complete(x.toString))} ~> check {
+      rejection shouldBe MissingHeaderRejection(accessTokenHeader)
     }
   }
+
+  private def createRequiredHeaders(externalId: Either[GoogleSubjectId, AzureB2CId], email: WorkbenchEmail, accessToken: OAuth2BearerToken, googleIdFromAzure: Option[GoogleSubjectId] = None, expiresInString: String = (System.currentTimeMillis() + 1000).toString): List[RawHeader] = {
+    List(
+      RawHeader(emailHeader, email.value),
+      RawHeader(userIdHeader, externalId.fold(_.value, _.value)),
+      RawHeader(accessTokenHeader, accessToken.token),
+      RawHeader(expiresInHeader, expiresInString)
+    ) ++ googleIdFromAzure.map(gid => RawHeader(googleIdFromAzureHeader, gid.value))
+  }
+
 }

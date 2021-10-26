@@ -4,9 +4,8 @@ import akka.http.scaladsl.model.headers.{OAuth2BearerToken, RawHeader}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.sam.api.StandardUserInfoDirectives._
-import org.broadinstitute.dsde.workbench.sam.api.{CreateWorkbenchUser, InviteUser}
+import org.broadinstitute.dsde.workbench.sam.api.InviteUser
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.service.UserService
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
 import org.scalacheck._
 import SamResourceActions._
@@ -14,18 +13,20 @@ import SamResourceActions._
 object Generator {
   val genNonPetEmail: Gen[WorkbenchEmail] = Gen.alphaStr.map(x => WorkbenchEmail(s"t$x@gmail.com"))
   val genPetEmail: Gen[WorkbenchEmail] = Gen.alphaStr.map(x => WorkbenchEmail(s"t$x@test.iam.gserviceaccount.com"))
-  val genGoogleSubjectId: Gen[GoogleSubjectId] = Gen.const(GoogleSubjectId(UserService.genRandom(System.currentTimeMillis())))
+  val genGoogleSubjectId: Gen[GoogleSubjectId] = Gen.stringOfN(20, Gen.numChar).map(id => GoogleSubjectId("1" + id))
+  val genAzureB2CId: Gen[AzureB2CId] = Gen.uuid.map(uuid => AzureB2CId(uuid.toString))
+  val genExternalId: Gen[Either[GoogleSubjectId, AzureB2CId]] = Gen.either(genGoogleSubjectId, genAzureB2CId)
   val genServiceAccountSubjectId: Gen[ServiceAccountSubjectId] = genGoogleSubjectId.map(x => ServiceAccountSubjectId(x.value))
   val genOAuth2BearerToken: Gen[OAuth2BearerToken] = Gen.alphaStr.map(x => OAuth2BearerToken("s"+x))
 
   val genHeadersWithoutExpiresIn: Gen[List[RawHeader]] = for{
     email <- genNonPetEmail
     accessToken <- genOAuth2BearerToken
+    externalId <- genExternalId
   } yield List(
     RawHeader(emailHeader, email.value),
-    RawHeader(googleSubjectIdHeader, genRandom(System.currentTimeMillis())),
-    RawHeader(accessTokenHeader, accessToken.value),
-    RawHeader(authorizationHeader, accessToken.toString())
+    RawHeader(userIdHeader, externalId.fold(_.value, _.value)),
+    RawHeader(accessTokenHeader, accessToken.value)
   )
 
   val genUserInfoHeadersWithInvalidExpiresIn: Gen[List[RawHeader]] = for{
@@ -43,17 +44,17 @@ object Generator {
     expires <- Gen.calendar.map(_.getTimeInMillis)
   } yield UserInfo(token, genWorkbenchUserId(System.currentTimeMillis()), email, expires)
 
-  val genCreateWorkbenchUser = for{
+  val genWorkbenchUserGoogle = for{
     email <- genNonPetEmail
+    googleSubjectId <- genGoogleSubjectId
     userId = genWorkbenchUserId(System.currentTimeMillis())
-  }yield CreateWorkbenchUser(userId, GoogleSubjectId(userId.value), email, None)
+  }yield WorkbenchUser(userId, Option(googleSubjectId), email, None)
 
-  val genWorkbenchUser = for{
+  val genWorkbenchUserAzure = for {
     email <- genNonPetEmail
+    azureB2CId <- genAzureB2CId
     userId = genWorkbenchUserId(System.currentTimeMillis())
-    googleSubjectId <- Gen.const(Option(GoogleSubjectId(userId.value)))
-    identityConcentratorId <- Gen.const(Option(IdentityConcentratorId(userId.value)))
-  } yield WorkbenchUser(userId, googleSubjectId, email, identityConcentratorId)
+  } yield WorkbenchUser(userId, None, email, Option(azureB2CId))
 
   val genInviteUser = for{
     email <- genNonPetEmail
@@ -109,7 +110,9 @@ object Generator {
 
   implicit val arbNonPetEmail: Arbitrary[WorkbenchEmail] = Arbitrary(genNonPetEmail)
   implicit val arbOAuth2BearerToken: Arbitrary[OAuth2BearerToken] = Arbitrary(genOAuth2BearerToken)
-  implicit val arbCreateWorkbenchUser: Arbitrary[CreateWorkbenchUser] = Arbitrary(genCreateWorkbenchUser)
+  implicit val arbWorkbenchUser: Arbitrary[WorkbenchUser] = Arbitrary(genWorkbenchUserGoogle)
   implicit val arbPolicy: Arbitrary[AccessPolicy] = Arbitrary(genPolicy)
   implicit val arbResource: Arbitrary[Resource] = Arbitrary(genResource)
+  implicit val arbGoogleSubjectId: Arbitrary[GoogleSubjectId] = Arbitrary(genGoogleSubjectId)
+  implicit val arbAzureB2CId: Arbitrary[AzureB2CId] = Arbitrary(genAzureB2CId)
 }

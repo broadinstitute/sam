@@ -10,7 +10,7 @@ import org.broadinstitute.dsde.workbench.sam.config.SwaggerConfig
   * Created by dvoet on 7/18/17.
   */
 trait SwaggerRoutes {
-  private val swaggerUiPath = "META-INF/resources/webjars/swagger-ui/3.25.0"
+  private val swaggerUiPath = "META-INF/resources/webjars/swagger-ui/3.52.3"
 
   val swaggerConfig: SwaggerConfig
 

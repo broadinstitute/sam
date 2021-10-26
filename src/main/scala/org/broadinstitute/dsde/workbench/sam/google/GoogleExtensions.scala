@@ -24,7 +24,6 @@ import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport.Work
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google._
 import org.broadinstitute.dsde.workbench.sam._
-import org.broadinstitute.dsde.workbench.sam.api.CreateWorkbenchUser
 import org.broadinstitute.dsde.workbench.sam.config.{GoogleServicesConfig, PetServiceAccountConfig}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, RegistrationDAO}
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
@@ -120,9 +119,9 @@ class GoogleExtensions(
       }
       _ <- IO.fromFuture(
         IO(
-          samApplication.userService.createUser(CreateWorkbenchUser(
+          samApplication.userService.createUser(WorkbenchUser(
             serviceAccountUserInfo.userId,
-            GoogleSubjectId(googleServicesConfig.serviceAccountClientId),
+            Option(GoogleSubjectId(googleServicesConfig.serviceAccountClientId)),
             serviceAccountUserInfo.userEmail,
             None), samRequestContext) recover {
             case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode == Option(StatusCodes.Conflict) =>

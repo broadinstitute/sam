@@ -285,15 +285,14 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     IO(listGroupUsers(groupName, Set.empty))
   }
 
-  override def loadUserByIdentityConcentratorId(userId: IdentityConcentratorId, samRequestContext: SamRequestContext)
-      : IO[Option[WorkbenchUser]] = IO.pure(users.values.find(_.identityConcentratorId.contains(userId)))
+  override def loadUserByAzureB2CId(userId: AzureB2CId, samRequestContext: SamRequestContext)
+      : IO[Option[WorkbenchUser]] = IO.pure(users.values.find(_.azureB2CId.contains(userId)))
 
-  override def setUserIdentityConcentratorId(googleSubjectId: GoogleSubjectId, icId: IdentityConcentratorId, samRequestContext: SamRequestContext): IO[Int] = IO {
+  override def setUserAzureB2CId(userId: WorkbenchUserId, b2CId: AzureB2CId, samRequestContext: SamRequestContext): IO[Int] = IO {
     val result = for {
-      userId <- usersWithGoogleSubjectIds.get(googleSubjectId)
-      user <- users.get(userId.asInstanceOf[WorkbenchUserId])
+      user <- users.get(userId)
     } yield {
-      users += user.id -> user.copy(identityConcentratorId = Option(icId))
+      users += user.id -> user.copy(azureB2CId = Option(b2CId))
       1
     }
     result.getOrElse(0)

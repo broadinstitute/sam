@@ -7,159 +7,121 @@ import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server._
 import akka.http.scaladsl.server.directives.OnSuccessMagnet._
 import cats.effect.IO
+import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model.google.ServiceAccountSubjectId
-import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, _}
+import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.api.StandardUserInfoDirectives._
+import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
+import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import scala.concurrent.ExecutionContext
-import scala.util.{Failure, Success, Try}
-import pdi.jwt.{JwtOptions, JwtSprayJson}
-import spray.json._
-import java.time.Instant
-
-import com.typesafe.scalalogging.LazyLogging
-import org.broadinstitute.dsde.workbench.sam.identityConcentrator.IdentityConcentratorService
-
+import scala.util.Try
 import scala.util.matching.Regex
-import DefaultJsonProtocol._
-import WorkbenchIdentityJsonSupport.identityConcentratorIdFormat
-import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
-import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 trait StandardUserInfoDirectives extends UserInfoDirectives with LazyLogging with SamRequestContextDirectives {
   implicit val executionContext: ExecutionContext
-  val identityConcentratorService: Option[IdentityConcentratorService] = None
 
-  def requireUserInfo(samRequestContext: SamRequestContext): Directive1[UserInfo] = handleAuthHeaders(requireUserInfoFromJwt, requireUserInfoFromOIDC, samRequestContext)
-  def requireCreateUser(samRequestContext: SamRequestContext): Directive1[CreateWorkbenchUser] = handleAuthHeaders(requireCreateUserInfoFromJwt, requireCreateUserInfoFromOIDC, samRequestContext)
+  def requireUserInfo(samRequestContext: SamRequestContext): Directive1[UserInfo] = requireOidcHeaders.flatMap { oidcHeaders =>
+    onSuccess {
+      getUserInfo(directoryDAO, oidcHeaders, samRequestContext).unsafeToFuture()
+    }
+  }
+
+  def requireCreateUser(samRequestContext: SamRequestContext): Directive1[WorkbenchUser] = requireOidcHeaders.map(buildWorkbenchUser)
+
+  private def buildWorkbenchUser(oidcHeaders: OIDCHeaders): WorkbenchUser = {
+    // google id can either be in the external id or google id from azure headers, favor the external id as the source
+    val googleSubjectId = (oidcHeaders.externalId.left.toOption ++ oidcHeaders.googleSubjectIdFromAzure).headOption
+    val azureB2CId = oidcHeaders.externalId.toOption // .right is missing (compared to .left above) since Either is Right biased
+
+    WorkbenchUser(
+      genWorkbenchUserId(System.currentTimeMillis()),
+      googleSubjectId,
+      oidcHeaders.email,
+      azureB2CId)
+  }
 
   /**
-    * Utility function that knows how to handle the request based on whether or not JWT is present.
-    *
-    * @param fromJwt function to call when jwt is present
-    * @param fromOIDC function to call when jwt is not present
-    * @tparam T type this request returns
-    * @return
+    * Utility function that knows how to convert all the various headers into OIDCHeaders
     */
-  private def handleAuthHeaders[T](fromJwt: (JwtUserInfo, OAuth2BearerToken, IdentityConcentratorService, SamRequestContext) => Directive1[T], fromOIDC: (OIDCHeaders, SamRequestContext) => Directive1[T], samRequestContext: SamRequestContext): Directive1[T] =
-    withChildTraceSpan("handleAuthHeaders", samRequestContext).flatMap { samRequestContext =>
-      (headerValueByName(authorizationHeader) &
-        provide(identityConcentratorService)) tflatMap {
-        // order of these cases is important: if the authorization header is a valid jwt we must ignore
-        // any OIDC headers otherwise we may be vulnerable to a malicious user specifying a valid JWT
-        // but different user information in the OIDC headers
-        case (JwtAuthorizationHeader(Success(jwtUserInfo), bearerToken), Some(icService)) =>
-          withChildTraceSpan("JWT-request", samRequestContext).flatMap { samRequestContext =>
-            fromJwt(jwtUserInfo, bearerToken, icService, samRequestContext)
-          }
+  private def requireOidcHeaders: Directive1[OIDCHeaders] = {
+    (headerValueByName(accessTokenHeader).as(OAuth2BearerToken) &
+      externalIdFromHeaders &
+      expiresInFromHeader &
+      headerValueByName(emailHeader).as(WorkbenchEmail) &
+      optionalHeaderValueByName(googleIdFromAzureHeader).map(_.map(GoogleSubjectId))).as(OIDCHeaders)
+  }
 
-        case (JwtAuthorizationHeader(Failure(regrets), _), _) =>
-          failWith(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Unauthorized, "could not parse authorization header, jwt missing required fields", regrets)))
+  private def expiresInFromHeader: Directive1[Long] = {
+    // gets expiresInHeader as a string and converts it to Long raising an exception if it can't
+    optionalHeaderValueByName(expiresInHeader).flatMap {
+      case Some(expiresInString) =>
+        Try(expiresInString.toLong).fold(
+          t => failWith(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"expiresIn $expiresInString can't be converted to Long", t))).toDirective,
+          expiresInLong => provide(expiresInLong)
+        )
 
-        case (JwtAuthorizationHeader(_, _), None) =>
-          logger.error("requireUserInfo with JWT attempted but Identity Concentrator not configured")
-          failWith(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.InternalServerError, "Identity Concentrator not configured")))
-
-        case _ =>
-          // request coming through Apache proxy with OIDC headers
-          withChildTraceSpan("OIDC-request", samRequestContext).flatMap { samRequestContext =>
-            (headerValueByName(accessTokenHeader).as(OAuth2BearerToken) &
-              headerValueByName(googleSubjectIdHeader).as(GoogleSubjectId) &
-              headerValueByName(expiresInHeader) &
-              headerValueByName(emailHeader).as(WorkbenchEmail)).as(OIDCHeaders).flatMap(fromOIDC(_, samRequestContext))
-          }
-      }
+      case None => provide(0)
     }
+  }
 
-  private def requireUserInfoFromJwt(jwtUserInfo: JwtUserInfo, bearerToken: OAuth2BearerToken, icService: IdentityConcentratorService, samRequestContext: SamRequestContext): Directive1[UserInfo] =
-    onSuccess {
-      getUserInfoFromJwt(jwtUserInfo, bearerToken, directoryDAO, icService, samRequestContext).unsafeToFuture()
-    }
-
-  private def requireUserInfoFromOIDC(oidcHeaders: OIDCHeaders, samRequestContext: SamRequestContext): Directive1[UserInfo] =
-    onSuccess {
-      getUserInfoFromOidcHeaders(directoryDAO, oidcHeaders, samRequestContext).unsafeToFuture()
-    }
-
-  private def requireCreateUserInfoFromJwt(jwtUserInfo: JwtUserInfo, bearerToken: OAuth2BearerToken, icService: IdentityConcentratorService, samRequestContext: SamRequestContext): Directive1[CreateWorkbenchUser] =
-    onSuccess {
-      newCreateWorkbenchUserFromJwt(jwtUserInfo, bearerToken, icService).unsafeToFuture()
-    }
-
-  private def requireCreateUserInfoFromOIDC(oidcHeaders: OIDCHeaders, samRequestContext: SamRequestContext): Directive1[CreateWorkbenchUser] =
-    provide(CreateWorkbenchUser(genWorkbenchUserId(System.currentTimeMillis()), oidcHeaders.googleSubjectId, oidcHeaders.email, None))
+  private def externalIdFromHeaders: Directive1[Either[GoogleSubjectId, AzureB2CId]] = headerValueByName(userIdHeader).map { idString =>
+    Try(BigInt(idString)).fold(
+      _ => Right(AzureB2CId(idString)),    // could not parse id as a Long, treat id as b2c id which are uuids
+      _ => Left(GoogleSubjectId(idString)) // id is a number which is what google subject ids look like
+    )
+  }
 }
 
 object StandardUserInfoDirectives {
-  val SAdomain: Regex = "\\S+@\\S+\\.iam\\.gserviceaccount\\.com".r
+  val SAdomain: Regex = "(\\S+@\\S+\\.iam\\.gserviceaccount\\.com$)".r
   val accessTokenHeader = "OIDC_access_token"
   val expiresInHeader = "OIDC_CLAIM_expires_in"
   val emailHeader = "OIDC_CLAIM_email"
-  val googleSubjectIdHeader = "OIDC_CLAIM_user_id"
-  val authorizationHeader = "Authorization"
+  val userIdHeader = "OIDC_CLAIM_user_id"
+  val googleIdFromAzureHeader = "OAUTH2_CLAIM_google_id"
 
-  implicit val jwtPayloadFormat: JsonFormat[JwtUserInfo] = jsonFormat2(JwtUserInfo)
+  def getUserInfo(directoryDAO: DirectoryDAO, oidcHeaders: OIDCHeaders, samRequestContext: SamRequestContext): IO[UserInfo] = {
+    oidcHeaders match {
+      case OIDCHeaders(_, Left(googleSubjectId), _, saEmail@WorkbenchEmail(SAdomain(_)), _) =>
+        // If it's a PET account, we treat it as its owner
+        directoryDAO.getUserFromPetServiceAccount(ServiceAccountSubjectId(googleSubjectId.value), samRequestContext).flatMap {
+          case Some(pet) => IO.pure(UserInfo(oidcHeaders.token, pet.id, pet.email, oidcHeaders.expiresIn))
+          case None => lookUpByGoogleSubjectId(googleSubjectId, directoryDAO, samRequestContext).map(uid => UserInfo(oidcHeaders.token, uid, saEmail, oidcHeaders.expiresIn))
+        }
 
-  def isServiceAccount(email: WorkbenchEmail): Boolean =
-    SAdomain.pattern.matcher(email.value).matches
+      case OIDCHeaders(_, Left(googleSubjectId), _, _, _) =>
+        lookUpByGoogleSubjectId(googleSubjectId, directoryDAO, samRequestContext).map(uid => UserInfo(oidcHeaders.token, uid, oidcHeaders.email, oidcHeaders.expiresIn))
 
-  def getUserInfoFromOidcHeaders(directoryDAO: DirectoryDAO, oidcHeaders: OIDCHeaders, samRequestContext: SamRequestContext): IO[UserInfo] =
-    Try(oidcHeaders.expiresIn.toLong).fold(
-      t => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"expiresIn ${oidcHeaders.expiresIn} can't be converted to Long because  of $t"))),
-      expiresInLong => getUserInfo(oidcHeaders.token, oidcHeaders.googleSubjectId, oidcHeaders.email, expiresInLong, directoryDAO, samRequestContext)
-    )
-
-  def getUserInfo(token: OAuth2BearerToken, googleSubjectId: GoogleSubjectId, email: WorkbenchEmail, expiresIn: Long, directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext): IO[UserInfo] =
-    if (isServiceAccount(email)) {
-      // If it's a PET account, we treat it as its owner
-      directoryDAO.getUserFromPetServiceAccount(ServiceAccountSubjectId(googleSubjectId.value), samRequestContext).flatMap {
-        case Some(pet) => IO.pure(UserInfo(token, pet.id, pet.email, expiresIn.toLong))
-        case None => lookUpByGoogleSubjectId(googleSubjectId, directoryDAO, samRequestContext).map(uid => UserInfo(token, uid, email, expiresIn))
-      }
-    } else {
-      lookUpByGoogleSubjectId(googleSubjectId, directoryDAO, samRequestContext).map(uid => UserInfo(token, uid, email, expiresIn))
+      case OIDCHeaders(_, Right(azureB2CId), _, _, _) =>
+        loadUserMaybeUpdateAzureB2CId(azureB2CId, oidcHeaders.googleSubjectIdFromAzure, directoryDAO, samRequestContext).map(user => UserInfo(oidcHeaders.token, user.id, oidcHeaders.email, oidcHeaders.expiresIn))
     }
-
-  def getUserInfoFromJwt(jwtUserInfo: JwtUserInfo, bearerToken: OAuth2BearerToken, directoryDAO: DirectoryDAO, identityConcentratorService: IdentityConcentratorService, samRequestContext: SamRequestContext): IO[UserInfo] = {
-    for {
-      maybeUser <- loadUserMaybeUpdateIdentityConcentratorId(jwtUserInfo, bearerToken, directoryDAO, identityConcentratorService, samRequestContext)
-      user <- maybeUser match {
-        case Some(user) => IO.pure(UserInfo(bearerToken, user.id, user.email, jwtUserInfo.exp - Instant.now().getEpochSecond))
-        case None =>
-          IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Identity Concentrator Id ${jwtUserInfo.sub} not found in sam")))
-      }
-    } yield user
   }
 
-  private def loadUserMaybeUpdateIdentityConcentratorId(jwtUserInfo: JwtUserInfo, bearerToken: OAuth2BearerToken, directoryDAO: DirectoryDAO, identityConcentratorService: IdentityConcentratorService, samRequestContext: SamRequestContext): IO[Option[WorkbenchUser]] = {
+  private def loadUserMaybeUpdateAzureB2CId(azureB2CId: AzureB2CId, maybeGoogleSubjectId: Option[GoogleSubjectId], directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext) = {
     for {
-      maybeUser <- directoryDAO.loadUserByIdentityConcentratorId(jwtUserInfo.sub, samRequestContext)
-      maybeUserAgain <- maybeUser match {
-        case None => updateUserIdentityConcentratorId(jwtUserInfo, bearerToken, directoryDAO, identityConcentratorService, samRequestContext)
+      maybeUser <- directoryDAO.loadUserByAzureB2CId(azureB2CId, samRequestContext)
+      maybeUserAgain <- (maybeUser, maybeGoogleSubjectId) match {
+        case (None, Some(googleSubjectId)) =>
+          updateUserAzureB2CId(azureB2CId, googleSubjectId, directoryDAO, samRequestContext)
         case _ => IO.pure(maybeUser)
       }
-    } yield maybeUserAgain
+    } yield maybeUserAgain.getOrElse(throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden, s"Azure Id $azureB2CId not found in sam")))
   }
 
-  private def updateUserIdentityConcentratorId(jwtUserInfo: JwtUserInfo, bearerToken: OAuth2BearerToken, directoryDAO: DirectoryDAO, identityConcentratorService: IdentityConcentratorService, samRequestContext: SamRequestContext): IO[Option[WorkbenchUser]] = {
+  private def updateUserAzureB2CId(azureB2CId: AzureB2CId, googleSubjectId: GoogleSubjectId, directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext) = {
     for {
-      googleIdentities <- identityConcentratorService.getGoogleIdentities(bearerToken)
-      (googleSubjectId, _) <- singleGoogleIdentity(jwtUserInfo.sub, googleIdentities)
-      _ <- directoryDAO.setUserIdentityConcentratorId(googleSubjectId, jwtUserInfo.sub, samRequestContext)
-      maybeUser <- directoryDAO.loadUserByIdentityConcentratorId(jwtUserInfo.sub, samRequestContext)
-    } yield maybeUser
-  }
-
-  def singleGoogleIdentity(identityConcentratorId: IdentityConcentratorId, googleIdentities: Seq[(GoogleSubjectId, WorkbenchEmail)]): IO[(GoogleSubjectId, WorkbenchEmail)] =
-    googleIdentities match {
-      case Seq() =>
-        IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.InternalServerError, s"no linked google identities for $identityConcentratorId")))
-      case Seq(singleIdentity) => IO.pure(singleIdentity)
-      case _ =>
-        IO.raiseError(new WorkbenchExceptionWithErrorReport(
-          ErrorReport(StatusCodes.InternalServerError, s"too many linked google identities for $identityConcentratorId: ${googleIdentities.mkString("'")}")))
+      maybeSubject <- directoryDAO.loadSubjectFromGoogleSubjectId(googleSubjectId, samRequestContext)
+      _ <- maybeSubject match {
+        case Some(userId: WorkbenchUserId) => directoryDAO.setUserAzureB2CId(userId, azureB2CId, samRequestContext)
+        case _ => IO.unit
+      }
+      maybeUser <- directoryDAO.loadUserByAzureB2CId(azureB2CId, samRequestContext)
+    } yield {
+      maybeUser
     }
+  }
 
   private def lookUpByGoogleSubjectId(googleSubjectId: GoogleSubjectId, directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext): IO[WorkbenchUserId] =
     for {
@@ -169,60 +131,9 @@ object StandardUserInfoDirectives {
         case Some(_) =>
           IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"subjectId $googleSubjectId is not a WorkbenchUser")))
         case None =>
-          IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"google subject Id $googleSubjectId not found in sam")))
+          IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden, s"Google Id $googleSubjectId not found in sam")))
       }
     } yield userInfo
-
-  def newCreateWorkbenchUserFromJwt(jwtUserInfo: JwtUserInfo, bearerToken: OAuth2BearerToken, icService: IdentityConcentratorService): IO[CreateWorkbenchUser] =
-    for {
-      googleIdentities <- icService.getGoogleIdentities(bearerToken)
-      (googleSubjectId, email) <- singleGoogleIdentity(jwtUserInfo.sub, googleIdentities)
-    } yield CreateWorkbenchUser(genWorkbenchUserId(System.currentTimeMillis()), googleSubjectId, email, Option(jwtUserInfo.sub))
 }
 
-final case class CreateWorkbenchUser(id: WorkbenchUserId, googleSubjectId: GoogleSubjectId, email: WorkbenchEmail, identityConcentratorId: Option[IdentityConcentratorId])
-
-final case class JwtUserInfo(sub: IdentityConcentratorId, exp: Long)
-
-final case class OIDCHeaders(token: OAuth2BearerToken, googleSubjectId: GoogleSubjectId, expiresIn: String, email: WorkbenchEmail)
-
-object JwtAuthorizationHeader extends LazyLogging {
-  /**
-    * Pattern matcher for JWT authorization header. Expected cases:
-    * - not a jwt or bearer token: return None
-    * - is a jwt but missing required fields: return Some(Failure, OAuth2BearerToken)
-    * - is a jwt that is parsable to JwtUserInfo: return Some(Success(JwtUserInfo), OAuth2BearerToken)
-    *
-    * @param authorizationHeader unprocessed value of the Authorization http header
-    * @return None if the header is not a bearer token or is not a parsable JWT.
-    * Otherwise it will Try to parse the JWT payload to a JwtUserInfo and an OAuth2BearerToken.
-    */
-  def unapply(authorizationHeader: String): Option[(Try[JwtUserInfo], OAuth2BearerToken)] = {
-    for {
-      bearerToken <- getBearerTokenFromAuthHeader(authorizationHeader)
-      jwtJson <- parseJwtBearerToken(bearerToken)
-    } yield (Try(jwtJson.convertTo[JwtUserInfo]), bearerToken)
-  }
-
-  private def getBearerTokenFromAuthHeader(authorizationHeader: String): Option[OAuth2BearerToken] = {
-    val bearerPrefix = "bearer "
-    // need to be case insensitive when looking for the 'bearer' prefix so can't use stripPrefix
-    if (authorizationHeader.toLowerCase.startsWith(bearerPrefix)) {
-      Option(OAuth2BearerToken(authorizationHeader.drop(bearerPrefix.length)))
-    } else {
-      logger.debug("authorization header not a bearer token")
-      None
-    }
-  }
-
-  private def parseJwtBearerToken(bearerToken: OAuth2BearerToken): Option[JsObject] = {
-    // Assumption: JWT is already validated
-    JwtSprayJson.decodeJson(bearerToken.token, JwtOptions(signature = false, expiration = false)) match {
-      case Failure(t) =>
-        logger.debug("could not parse authorization header, invalid jwt", t)
-        None
-
-      case Success(json) => Option(json)
-    }
-  }
-}
+final case class OIDCHeaders(token: OAuth2BearerToken, externalId: Either[GoogleSubjectId, AzureB2CId], expiresIn: Long, email: WorkbenchEmail, googleSubjectIdFromAzure: Option[GoogleSubjectId])
