@@ -37,6 +37,13 @@ class TosService (val directoryDao: DirectoryDAO, val appsDomain: String) extend
     directoryDao.loadGroup(WorkbenchGroupName(getGroupName(currentVersion)), SamRequestContext(None))
   }
 
+  def getTosStatus(currentVersion: Int, user: WorkbenchSubject): IO[Boolean] = {
+    for {
+      group <- directoryDao.loadGroup(WorkbenchGroupName(getGroupName(currentVersion)), SamRequestContext(None))
+      isGroupMember <- directoryDao.isGroupMember(group.id, user, SamRequestContext(None))
+    } yield isGroupMember
+  }
+
   /**
     * Get the terms of service text and send it to the caller
     * @return terms of service text

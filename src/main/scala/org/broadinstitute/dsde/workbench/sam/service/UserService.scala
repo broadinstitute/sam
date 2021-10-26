@@ -126,9 +126,10 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
             googleStatus <- cloudExtensions.getUserStatus(user)
             allUsersGroup <- cloudExtensions.getOrCreateAllUsersGroup(directoryDAO, samRequestContext)
             allUsersStatus <- directoryDAO.isGroupMember(allUsersGroup.id, user.id, samRequestContext).unsafeToFuture() recover { case _: NameNotFoundException => false }
+            tosAcceptedStatus <- tosService.getTosStatus(currentVersion, user.id)
             ldapStatus <- registrationDAO.isEnabled(user.id, samRequestContext).unsafeToFuture()
           } yield {
-            Option(UserStatus(UserStatusDetails(user.id, user.email), Map("ldap" -> ldapStatus, "allUsersGroup" -> allUsersStatus, "google" -> googleStatus)))
+            Option(UserStatus(UserStatusDetails(user.id, user.email), Map("ldap" -> ldapStatus, "allUsersGroup" -> allUsersStatus, "google" -> googleStatus), tosAcceptedStatus))
           }
       case None => Future.successful(None)
     }
