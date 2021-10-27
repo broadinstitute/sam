@@ -78,13 +78,18 @@ class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with Sca
 
       registerAsNewUser(WorkbenchEmail(tempUser.email))(tempAuthToken)
 
-      val tempUserInfo = Sam.user.status()(tempAuthToken).get.userInfo
-      tempUserInfo.userEmail shouldBe tempUser.email
+      Sam.user.status()(tempAuthToken).match {
+        case Some(user) => user.userInfo.userEmail shouldBe tempUser.email
+        case None => throw new Exception(s"User ${tempUser.email} failed to be registered as a new user")
+      }
 
       // OK to re-register
 
       registerAsNewUser(WorkbenchEmail(tempUser.email))(tempAuthToken)
-      Sam.user.status()(tempAuthToken).get.userInfo.userEmail shouldBe tempUser.email
+      Sam.user.status()(tempAuthToken).match {
+        case Some(user) => user.userInfo.userEmail shouldBe tempUser.email
+        case None => throw new Exception(s"User ${tempUser.email} failed to be registered as a new user")
+      }
 
       removeUser(tempUserInfo.userSubjectId)
       Sam.user.status()(tempAuthToken) shouldBe None
