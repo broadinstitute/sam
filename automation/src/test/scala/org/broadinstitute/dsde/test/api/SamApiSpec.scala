@@ -1,8 +1,6 @@
 package org.broadinstitute.dsde.test.api
 
 
-import java.util.UUID
-
 import akka.actor.ActorSystem
 import akka.testkit.TestKitBase
 import org.broadinstitute.dsde.workbench.auth.{AuthToken, AuthTokenScopes, ServiceAccountAuthTokenFromJson, ServiceAccountAuthTokenFromPem}
@@ -12,23 +10,43 @@ import org.broadinstitute.dsde.workbench.fixture.BillingFixtures
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccountName}
 import org.broadinstitute.dsde.workbench.service.SamModel._
+import org.broadinstitute.dsde.workbench.service._
 import org.broadinstitute.dsde.workbench.service.test.CleanUp
-import org.broadinstitute.dsde.workbench.service.{Orchestration, Sam, Thurloe, _}
+import org.broadinstitute.dsde.workbench.service.util.Tags
 import org.broadinstitute.dsde.workbench.test.SamConfig
 import org.scalatest.concurrent.{Eventually, ScalaFutures}
-import org.scalatest.time.{Seconds, Span}
-import org.broadinstitute.dsde.workbench.service.util.Tags
-
-import scala.concurrent.Await
-import scala.concurrent.duration.{Duration, _}
 import org.scalatest.freespec.AnyFreeSpec
 import org.scalatest.matchers.should.Matchers
+import org.scalatest.tagobjects.Retryable
+import org.scalatest.time.{Seconds, Span}
+import org.scalatest.{Canceled, Failed, Outcome, Retries}
 
-class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with ScalaFutures with CleanUp with Eventually with TestKitBase {
+import java.util.UUID
+import scala.concurrent.Await
+import scala.concurrent.duration.{Duration, _}
+
+class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with ScalaFutures with CleanUp with Eventually with TestKitBase with Retries {
   implicit override val patienceConfig: PatienceConfig = PatienceConfig(timeout = scaled(Span(5, Seconds)))
   implicit lazy val system = ActorSystem()
 
   val gcsConfig = SamConfig.GCS
+
+  val retries = 4
+
+  // We are intentionally not using trait `FailedTestRetryable` from WorkbenchLibs here because that trait only retries
+  // failures (not cancels) and if it succeeds on a retry, it will only put the test into a Canceled state instead of a
+  // passing state, which for our purposes here, is what we want.
+  override def withFixture(test: NoArgTest): Outcome = {
+    if (isRetryable(test)) withFixture(test, retries) else super.withFixture(test)
+  }
+
+  def withFixture(test: NoArgTest, count: Int): Outcome = {
+    val outcome = super.withFixture(test)
+    outcome match {
+      case Failed(_) | Canceled(_) => if (count == 1) super.withFixture(test) else withFixture(test, count - 1)
+      case other => other
+    }
+  }
 
   def registerAsNewUser(email: WorkbenchEmail)(implicit authToken: AuthToken): Unit = {
     val newUserProfile = Orchestration.profile.BasicProfile (
@@ -56,7 +74,14 @@ class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with Sca
   }
 
   "Sam User apis" - {
-    "should be idempotent for user registration and removal" in {
+    "should be idempotent for user registration and removal" taggedAs(Retryable) in {
+      // This test is tagged as Retryable because it is sometimes flaky when run in swatomation pipeline.  We believe
+      // this is due to multiple tests running at the same time that can modify the state of the data under test that
+      // is shared between these tests.  This is obviously a bad thing.  Ideally, tests and their data should be
+      // isolated from one another. The problem with this test is that it is using a shared user from the `UserPool` and
+      // we believe when the user being used in this test is sometimes used by other tests, and it can mess up the setup
+      // state from this test, ultimately causing it to fail.  The fix for this test would be to have it be able to get
+      // or create a brand new user that is only used for this test and no others.
 
       // use a temp user because they should not be registered.  Remove them after!
 
