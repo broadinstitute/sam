@@ -1,15 +1,13 @@
 package org.broadinstitute.dsde.workbench.sam
 package service
 
-import java.net.URI
-import java.util.UUID
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import cats.kernel.Eq
 import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.Generator.{arbNonPetEmail => _, _}
-import org.broadinstitute.dsde.workbench.sam.TestSupport.eqWorkbenchExceptionErrorReport
+import org.broadinstitute.dsde.workbench.sam.TestSupport.{appConfig, eqWorkbenchExceptionErrorReport}
 import org.broadinstitute.dsde.workbench.sam.api.{CreateWorkbenchUser, InviteUser}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, LdapRegistrationDAO, PostgresDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
@@ -21,14 +19,16 @@ import org.mockito.ArgumentMatchers._
 import org.mockito.Mockito._
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalatest.concurrent.ScalaFutures
-import org.scalatestplus.mockito.MockitoSugar
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
+import org.scalatestplus.mockito.MockitoSugar
 
+import java.net.URI
+import java.util.UUID
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
-import org.scalatest.flatspec.AnyFlatSpec
-import org.scalatest.matchers.should.Matchers
 
 /**
   * Created by rtitle on 10/6/17.
@@ -55,6 +55,7 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
   lazy val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
   var service: UserService = _
+  var tosService: TosService = _
   var googleExtensions: GoogleExtensions = _
   val blockedDomain = "blocked.domain.com"
 
@@ -76,7 +77,8 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     when(googleExtensions.onUserEnable(any[WorkbenchUser], any[SamRequestContext])).thenReturn(Future.successful(()))
     when(googleExtensions.onGroupUpdate(any[Seq[WorkbenchGroupIdentity]], any[SamRequestContext])).thenReturn(Future.successful(()))
 
-    service = new UserService(dirDAO, googleExtensions, registrationDAO, Seq(blockedDomain))
+    tosService = new TosService(dirDAO, appConfig.googleConfig.get.googleServicesConfig.appsDomain)
+    service = new UserService(dirDAO, googleExtensions, registrationDAO, Seq(blockedDomain), tosService)
   }
 
   protected def clearDatabase(): Unit = {
@@ -101,6 +103,23 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     registrationDAO.isEnabled(defaultUserId, samRequestContext).unsafeRunSync() shouldBe true
     dirDAO.loadGroup(service.cloudExtensions.allUsersGroupName, samRequestContext).unsafeRunSync() shouldBe
       Some(BasicWorkbenchGroup(service.cloudExtensions.allUsersGroupName, Set(defaultUserId), service.cloudExtensions.getOrCreateAllUsersGroup(dirDAO, samRequestContext).futureValue.email))
+  }
+
+  it should "create user and add user to ToS group" in {
+    val tosVersion = 1
+    tosService.createNewGroupIfNeeded(tosVersion, true).unsafeToFuture()
+    val user = service.createUser(defaultUser, samRequestContext, true, tosVersion).futureValue
+    user.enabled("allUsersGroup") shouldBe true
+    val userGroups = dirDAO.listUsersGroups(defaultUserId, samRequestContext).unsafeRunSync()
+    userGroups should contain (WorkbenchGroupName(tosService.getGroupName(tosVersion)))
+    userGroups should have size 2
+  }
+
+  it should "not add user to ToS when tos is not enabled" in {
+    val user = service.createUser(defaultUser, samRequestContext).futureValue
+    user.enabled("allUsersGroup") shouldBe true
+    val userGroups = dirDAO.listUsersGroups(defaultUserId, samRequestContext).unsafeRunSync()
+    userGroups should have size 1
   }
 
   it should "reject blocked domain" in {

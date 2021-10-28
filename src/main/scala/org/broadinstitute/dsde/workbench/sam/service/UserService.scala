@@ -2,10 +2,10 @@ package org.broadinstitute.dsde.workbench.sam
 package service
 
 import java.security.SecureRandom
-
 import akka.http.scaladsl.model.StatusCodes
 import cats.effect.{ContextShift, IO}
 import com.typesafe.scalalogging.LazyLogging
+
 import javax.naming.NameNotFoundException
 import org.apache.commons.codec.binary.Hex
 import org.broadinstitute.dsde.workbench.model._
@@ -20,15 +20,17 @@ import scala.util.matching.Regex
 /**
   * Created by dvoet on 7/14/17.
   */
-class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExtensions, val registrationDAO: RegistrationDAO, blockedEmailDomains: Seq[String])(implicit val executionContext: ExecutionContext, contextShift: ContextShift[IO]) extends LazyLogging {
+class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExtensions,
+                  val registrationDAO: RegistrationDAO, blockedEmailDomains: Seq[String], tosService: TosService)(implicit val executionContext: ExecutionContext, contextShift: ContextShift[IO]) extends LazyLogging {
 
-  def createUser(user: CreateWorkbenchUser, samRequestContext: SamRequestContext): Future[UserStatus] = {
+  def createUser(user: CreateWorkbenchUser, samRequestContext: SamRequestContext, tosEnforcementEnabled: Boolean = false, tosVersion: Int = 0): Future[UserStatus] = {
     for {
       _ <- UserService.validateEmailAddress(user.email, blockedEmailDomains).unsafeToFuture()
       allUsersGroup <- cloudExtensions.getOrCreateAllUsersGroup(directoryDAO, samRequestContext)
       createdUser <- registerUser(user, samRequestContext).unsafeToFuture()
       _ <- enableUserInternal(createdUser, samRequestContext)
       _ <- directoryDAO.addGroupMember(allUsersGroup.id, createdUser.id, samRequestContext).unsafeToFuture()
+      _ <- if (tosEnforcementEnabled) directoryDAO.addGroupMember(tosService.getTosGroup(tosVersion).unsafeRunSync().get.id, createdUser.id, samRequestContext).unsafeToFuture() else Future.successful(IO.pure(true))
       userStatus <- getUserStatus(createdUser.id, samRequestContext = samRequestContext)
       res <- userStatus.toRight(new WorkbenchException("getUserStatus returned None after user was created")).fold(Future.failed, Future.successful)
     } yield res
