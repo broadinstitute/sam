@@ -47,7 +47,7 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
     */
   override def upsertResourceTypes(resourceTypes: Set[ResourceType], samRequestContext: SamRequestContext): IO[Set[ResourceTypeName]] = {
     val result = if (resourceTypes.nonEmpty) {
-      writeTransaction("upsertResourceTypes", samRequestContext) { implicit session =>
+      serializableWriteTransaction("upsertResourceTypes", samRequestContext) { implicit session =>
         samsql"lock table ${ResourceTypeTable.table} IN EXCLUSIVE MODE".execute().apply()
 
         val existingResourceTypes = loadResourceTypesInSession(resourceTypes.map(_.name))
@@ -602,7 +602,7 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
     val ad = AuthDomainTable.syntax("ad")
     val rt = ResourceTypeTable.syntax("rt")
 
-    writeTransaction("removeAuthDomainFromResource", samRequestContext)({ implicit session =>
+    serializableWriteTransaction("removeAuthDomainFromResource", samRequestContext)({ implicit session =>
       samsql"""delete from ${AuthDomainTable as ad}
               where ${ad.resourceId} =
               (select ${r.id} from ${ResourceTable as r}

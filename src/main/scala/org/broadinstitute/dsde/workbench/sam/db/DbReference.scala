@@ -100,7 +100,7 @@ case class DbReference(dbName: DatabaseName, dbExecutionContext: ExecutionContex
   }
 
   def inLocalTransaction[A](f: DBSession => A): A =
-    inLocalTransactionWithIsolationLevel(IsolationLevel.Default)(f)
+    inLocalTransactionWithIsolationLevel(IsolationLevel.ReadCommitted)(f)
 
   def inLocalTransactionWithIsolationLevel[A](isolationLevel: IsolationLevel)(f: DBSession => A): A = {
     NamedDB(dbName.name).isolationLevel(isolationLevel).localTx[A] { implicit session =>
