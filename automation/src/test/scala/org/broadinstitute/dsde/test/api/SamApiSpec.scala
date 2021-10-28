@@ -1,4 +1,4 @@
-package org.broadinstitute.dsde.workbench.test.api
+package org.broadinstitute.dsde.test.api
 
 
 import java.util.UUID
@@ -55,7 +55,7 @@ class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with Sca
     Thurloe.keyValuePairs.deleteAll(subjectId)
   }
 
-  "Sam test utilities" - {
+  "Sam User apis" - {
     "should be idempotent for user registration and removal" in {
 
       // use a temp user because they should not be registered.  Remove them after!
@@ -86,17 +86,19 @@ class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with Sca
       // OK to re-register
 
       registerAsNewUser(WorkbenchEmail(tempUser.email))(tempAuthToken)
-      Sam.user.status()(tempAuthToken).match {
-        case Some(user) => user.userInfo.userEmail shouldBe tempUser.email
+      val userStatus = Sam.user.status()(tempAuthToken).match {
+        case Some(userStatus) => userStatus
         case None => throw new Exception(s"User ${tempUser.email} failed to be registered as a new user")
       }
 
-      removeUser(tempUserInfo.userSubjectId)
+      userStatus.userInfo.userEmail shouldBe tempUser.email
+
+      removeUser(userStatus.userInfo.userSubjectId)
       Sam.user.status()(tempAuthToken) shouldBe None
 
       // OK to re-remove
 
-      removeUser(tempUserInfo.userSubjectId)
+      removeUser(userStatus.userInfo.userSubjectId)
       Sam.user.status()(tempAuthToken) shouldBe None
     }
   }
