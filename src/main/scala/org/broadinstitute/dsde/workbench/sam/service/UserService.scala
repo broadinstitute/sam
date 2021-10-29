@@ -120,16 +120,16 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
     directoryDAO.loadUser(userId, samRequestContext).unsafeToFuture().flatMap {
       case Some(user) =>
         if(userDetailsOnly)
-          Future.successful(Option(UserStatus(UserStatusDetails(user.id, user.email), Map.empty)))
+          Future.successful(Option(UserStatus(UserStatusDetails(user.id, user.email), Map.empty, None)))
         else
           for {
             googleStatus <- cloudExtensions.getUserStatus(user)
             allUsersGroup <- cloudExtensions.getOrCreateAllUsersGroup(directoryDAO, samRequestContext)
             allUsersStatus <- directoryDAO.isGroupMember(allUsersGroup.id, user.id, samRequestContext).unsafeToFuture() recover { case _: NameNotFoundException => false }
-            tosAcceptedStatus <- tosService.getTosStatus(currentVersion, user.id)
+            tosAcceptedStatus <- tosService.getTosStatus(user.id).unsafeToFuture()
             ldapStatus <- registrationDAO.isEnabled(user.id, samRequestContext).unsafeToFuture()
           } yield {
-            Option(UserStatus(UserStatusDetails(user.id, user.email), Map("ldap" -> ldapStatus, "allUsersGroup" -> allUsersStatus, "google" -> googleStatus), tosAcceptedStatus))
+            Option(UserStatus(UserStatusDetails(user.id, user.email), Map("ldap" -> ldapStatus, "allUsersGroup" -> allUsersStatus, "google" -> googleStatus), Option(tosAcceptedStatus)))
           }
       case None => Future.successful(None)
     }
@@ -137,9 +137,10 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
   def getUserStatusInfo(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[UserStatusInfo]] =
     directoryDAO.loadUser(userId, samRequestContext).flatMap {
       case Some(user) =>
-        registrationDAO.isEnabled(user.id, samRequestContext).flatMap { ldapStatus =>
-          IO.pure(Option(UserStatusInfo(user.id.value, user.email.value, ldapStatus)))
-        }
+        for {
+          enabledStatus <- registrationDAO.isEnabled(user.id, samRequestContext)
+          tosAcceptedStatus <- tosService.getTosStatus(user.id)
+        } yield Option(UserStatusInfo(user.id.value, user.email.value, enabledStatus, tosAcceptedStatus))
       case None => IO.pure(None)
     }
 
