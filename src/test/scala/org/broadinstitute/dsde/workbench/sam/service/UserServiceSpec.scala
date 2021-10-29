@@ -55,6 +55,7 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
   lazy val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
   var service: UserService = _
+  var tos: TosService = _
   var googleExtensions: GoogleExtensions = _
   val blockedDomain = "blocked.domain.com"
 
@@ -76,7 +77,8 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     when(googleExtensions.onUserEnable(any[WorkbenchUser], any[SamRequestContext])).thenReturn(Future.successful(()))
     when(googleExtensions.onGroupUpdate(any[Seq[WorkbenchGroupIdentity]], any[SamRequestContext])).thenReturn(Future.successful(()))
 
-    service = new UserService(dirDAO, googleExtensions, registrationDAO, Seq(blockedDomain), new TosService(dirDAO, appConfig.googleConfig.get.googleServicesConfig.appsDomain))
+    tos = new TosService(dirDAO, appConfig.googleConfig.get.googleServicesConfig.appsDomain)
+    service = new UserService(dirDAO, googleExtensions, registrationDAO, Seq(blockedDomain), tos)
   }
 
   protected def clearDatabase(): Unit = {
@@ -107,6 +109,23 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     intercept[WorkbenchExceptionWithErrorReport] {
       runAndWait(service.createUser(defaultUser.copy(email = WorkbenchEmail(s"user@$blockedDomain")), samRequestContext))
     }.errorReport.statusCode shouldBe Some(StatusCodes.BadRequest)
+  }
+
+  it should "create user and add user to ToS group" in {
+    val tosVersion = 1
+    tos.createNewGroupIfNeeded(tosVersion, true).unsafeToFuture()
+    val user = service.createUser(defaultUser, samRequestContext, true, tosVersion).futureValue
+    user.enabled("allUsersGroup") shouldBe true
+    val userGroups = dirDAO.listUsersGroups(defaultUserId, samRequestContext).unsafeRunSync()
+    userGroups should contain (WorkbenchGroupName(tos.getGroupName(tosVersion)))
+    userGroups should have size 2
+  }
+
+  it should "not add user to ToS when tos is not enabled" in {
+    val user = service.createUser(defaultUser, samRequestContext).futureValue
+    user.enabled("allUsersGroup") shouldBe true
+    val userGroups = dirDAO.listUsersGroups(defaultUserId, samRequestContext).unsafeRunSync()
+    userGroups should have size 1
   }
 
   it should "get user status" in {
