@@ -5,6 +5,7 @@ import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import org.broadinstitute.dsde.workbench.model._
+import org.broadinstitute.dsde.workbench.model.ErrorReportJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.Generator.genInviteUser
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{MockDirectoryDAO, MockRegistrationDAO}
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
@@ -35,6 +36,44 @@ class UserRoutesV1Spec extends UserRoutesSpecHelper{
 
     Post("/register/user/v1/") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Conflict
+    }
+  }
+
+  it should "create a user if ToS is enabled and the user specifies the ToS body correctly" in withTosEnabledRoutes { samRoutes =>
+    val tos = TermsOfServiceAcceptance("app.terra.bio/#terms-of-service")
+    Post("/register/user/v1", tos) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Created
+      val res = responseAs[UserStatus]
+      res.userInfo.userSubjectId.value.length shouldBe 21
+      res.userInfo.userEmail shouldBe defaultUserEmail
+      res.enabled shouldBe Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true)
+    }
+
+    Post("/register/user/v1", tos) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Conflict
+    }
+  }
+
+  it should "forbid the registration if ToS is enabled and the user doesn't specify a ToS body" in withTosEnabledRoutes { samRoutes =>
+    Post("/register/user/v1") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Forbidden
+      responseAs[ErrorReport].message should startWith("You must accept the Terms of Service in order to register.")
+    }
+  }
+
+  it should "forbid the registration if ToS is enabled and the user doesn't specify the correct ToS url" in withTosEnabledRoutes { samRoutes =>
+    val tos = TermsOfServiceAcceptance("onemillionpats.com")
+    Post("/register/user/v1", tos) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Forbidden
+      responseAs[ErrorReport].message should startWith("You must accept the Terms of Service in order to register.")
+    }
+  }
+
+  it should "forbid the registration if ToS is enabled and the user specifies a differently shaped payload" in withTosEnabledRoutes { samRoutes =>
+    val badPayload = UserStatusInfo("doesntmatter", "foobar", true)
+    Post("/register/user/v1", badPayload) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Forbidden
+      responseAs[ErrorReport].message should startWith("You must accept the Terms of Service in order to register.")
     }
   }
 

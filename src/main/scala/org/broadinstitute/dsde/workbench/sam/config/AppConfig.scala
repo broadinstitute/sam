@@ -136,7 +136,8 @@ object AppConfig {
   implicit val termsOfServiceConfigReader: ValueReader[TermsOfServiceConfig] = ValueReader.relative { config =>
     TermsOfServiceConfig(
       config.getBoolean("enabled"),
-      config.getInt("version")
+      config.getInt("version"),
+      config.getString("url")
     )
   }
 
@@ -153,6 +154,7 @@ object AppConfig {
     val schemaLockConfig = config.as[SchemaLockConfig]("schemaLock")
     val distributedLockConfig = config.as[DistributedLockConfig]("distributedLock")
     val swaggerConfig = config.as[SwaggerConfig]("swagger")
+    val termsOfServiceConfig = config.as[TermsOfServiceConfig]("termsOfService")
     // TODO - https://broadinstitute.atlassian.net/browse/GAWB-3603
     // This should JUST get the value from "emailDomain", but for now we're keeping the backwards compatibility code to
     // fall back to getting the "googleServices.appsDomain"
@@ -161,8 +163,6 @@ object AppConfig {
     val liquibaseConfig = config.as[LiquibaseConfig]("liquibase")
 
     val blockedEmailDomains = config.as[Option[Seq[String]]]("blockedEmailDomains").getOrElse(Seq.empty)
-
-    val termsOfServiceConfig = config.as[TermsOfServiceConfig]("termsOfService")
 
     AppConfig(emailDomain, directoryConfig, schemaLockConfig, distributedLockConfig, swaggerConfig, googleConfigOption, resourceTypes, liquibaseConfig, blockedEmailDomains, termsOfServiceConfig)
   }
