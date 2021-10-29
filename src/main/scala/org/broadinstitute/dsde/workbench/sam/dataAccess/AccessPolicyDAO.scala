@@ -24,6 +24,8 @@ trait AccessPolicyDAO {
 
   def listResourcesConstrainedByGroup(groupId: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[Set[Resource]]
 
+  def listSyncedAccessPolicyIdsOnResourcesConstrainedByGroup(groupId: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[Set[FullyQualifiedPolicyId]]
+
   def removeAuthDomainFromResource(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit]
 
   def createPolicy(policy: AccessPolicy, samRequestContext: SamRequestContext): IO[AccessPolicy]

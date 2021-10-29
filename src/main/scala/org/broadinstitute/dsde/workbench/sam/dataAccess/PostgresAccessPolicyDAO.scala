@@ -597,6 +597,48 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
     })
   }
 
+  override def listSyncedAccessPolicyIdsOnResourcesConstrainedByGroup(groupId: WorkbenchGroupIdentity,
+                                                                      samRequestContext: SamRequestContext): IO[Set[FullyQualifiedPolicyId]] = {
+    readOnlyTransaction("listSyncedAccessPolicyIdsOnResourcesConstrainedByGroup", samRequestContext)({ implicit session =>
+      val r = ResourceTable.syntax("r")
+      val ad = AuthDomainTable.syntax("ad")
+      val g = GroupTable.syntax("g")
+      val rt = ResourceTypeTable.syntax("rt")
+      val p = PolicyTable.syntax("p")
+
+      val constrainedResourcesPKs = groupId match {
+        case group: WorkbenchGroupName =>
+          samsqls"""select ${ad.result.resourceId}
+           from ${AuthDomainTable as ad}
+           join ${GroupTable as g} on ${g.id} = ${ad.groupId}
+           where ${g.name} = ${group}"""
+        case policy: FullyQualifiedPolicyId =>
+          samsqls"""select ${ad.result.resourceId}
+           from ${AuthDomainTable as ad}
+           join ${PolicyTable as p} on ${ad.groupId} = ${p.groupId}
+           join ${ResourceTable as r} on ${p.resourceId} = ${r.id}
+           join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
+           where ${policy.accessPolicyName} = ${p.name}
+           and ${policy.resource.resourceId} = ${r.name}
+           and ${policy.resource.resourceTypeName} = ${rt.name}"""
+      }
+
+      samsql"""
+          select ${rt.result.name}, ${r.result.name}, ${p.result.name}
+           from ${ResourceTable as r}
+           join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
+           join ${PolicyTable as p} on ${r.id} = ${p.resourceId}
+           join ${GroupTable as g} on ${p.groupId} = ${g.id}
+           where ${r.id} in (${constrainedResourcesPKs})
+           and ${g.synchronizedDate} is not null"""
+          .map(rs =>
+            FullyQualifiedPolicyId(
+              FullyQualifiedResourceId(ResourceTypeName(rt.resultName.name), ResourceId(r.resultName.name)),
+              AccessPolicyName(p.resultName.name)))
+        .list().apply().toSet
+    })
+  }
+
   override def removeAuthDomainFromResource(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] = {
     val r = ResourceTable.syntax("r")
     val ad = AuthDomainTable.syntax("ad")
