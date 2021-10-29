@@ -2,7 +2,6 @@ package org.broadinstitute.dsde.workbench.sam.google
 
 import java.net.URI
 import java.util.{Date, GregorianCalendar, UUID}
-
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
@@ -22,6 +21,7 @@ import org.broadinstitute.dsde.workbench.google2.mock.FakeGoogleStorageInterpret
 import org.broadinstitute.dsde.workbench.model.Notifications.NotificationFormat
 import org.broadinstitute.dsde.workbench.model.google.GoogleProject
 import org.broadinstitute.dsde.workbench.model.{WorkbenchExceptionWithErrorReport, _}
+import org.broadinstitute.dsde.workbench.sam.TestSupport.appConfig
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, LdapRegistrationDAO, LoadResourceAuthDomainResult, MockAccessPolicyDAO, MockDirectoryDAO, MockRegistrationDAO, PostgresAccessPolicyDAO, PostgresDirectoryDAO, RegistrationDAO}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
@@ -41,6 +41,7 @@ import scala.concurrent.duration._
 import scala.util.{Success, Try}
 import org.scalatest.flatspec.AnyFlatSpecLike
 import org.scalatest.matchers.should.Matchers
+
 import java.util.concurrent.ConcurrentLinkedQueue
 
 class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with AnyFlatSpecLike with Matchers with TestSupport with MockitoSugar with ScalaFutures with BeforeAndAfterAll with PrivateMethodTester {
@@ -344,7 +345,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
     val mockGoogleProjectDAO = new MockGoogleProjectDAO
 
     val googleExtensions = new GoogleExtensions(TestSupport.fakeDistributedLock, dirDAO, newRegistrationDAO(), null, mockGoogleDirectoryDAO, null, null, null, mockGoogleIamDAO, null, mockGoogleProjectDAO, null, null, null, googleServicesConfig, petServiceAccountConfig, configResourceTypes)
-    val service = new UserService(dirDAO, googleExtensions, googleExtensions.registrationDAO, Seq.empty)
+    val service = new UserService(dirDAO, googleExtensions, googleExtensions.registrationDAO, Seq.empty, new TosService(mockGoogleDirectoryDAO, appConfig.googleConfig.get.googleServicesConfig.appsDomain))
 
     val defaultUserId = WorkbenchUserId("newuser123")
     val defaultUserEmail = WorkbenchEmail("newuser@new.com")

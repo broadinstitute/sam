@@ -9,7 +9,7 @@ import cats.kernel.Eq
 import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.Generator.{arbNonPetEmail => _, _}
-import org.broadinstitute.dsde.workbench.sam.TestSupport.eqWorkbenchExceptionErrorReport
+import org.broadinstitute.dsde.workbench.sam.TestSupport.{appConfig, eqWorkbenchExceptionErrorReport}
 import org.broadinstitute.dsde.workbench.sam.api.InviteUser
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, LdapRegistrationDAO, PostgresDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
@@ -76,7 +76,7 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     when(googleExtensions.onUserEnable(any[WorkbenchUser], any[SamRequestContext])).thenReturn(Future.successful(()))
     when(googleExtensions.onGroupUpdate(any[Seq[WorkbenchGroupIdentity]], any[SamRequestContext])).thenReturn(Future.successful(()))
 
-    service = new UserService(dirDAO, googleExtensions, registrationDAO, Seq(blockedDomain))
+    service = new UserService(dirDAO, googleExtensions, registrationDAO, Seq(blockedDomain), new TosService(dirDAO, appConfig.googleConfig.get.googleServicesConfig.appsDomain))
   }
 
   protected def clearDatabase(): Unit = {
