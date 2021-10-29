@@ -66,7 +66,7 @@ class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with Sca
       // Register user if the user is not registered
       Sam.user.status()(tempAuthToken) match {
         case Some(user) => {
-          logger.info(s"User ${user.userInfo.userEmail} was already registered.)
+          logger.info(s"User ${user.userInfo.userEmail} was already registered.")
         }
         case None => {
           logger.info (s"User ${tempUser.email} does not yet exist! Registering user.")
