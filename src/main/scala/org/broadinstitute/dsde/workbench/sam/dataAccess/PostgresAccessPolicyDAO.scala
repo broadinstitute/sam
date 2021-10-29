@@ -555,48 +555,6 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
     })
   }
 
-  override def listResourcesConstrainedByGroup(groupId: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[Set[Resource]] = {
-    readOnlyTransaction("listResourcesConstrainedByGroup", samRequestContext)({ implicit session =>
-      val r = ResourceTable.syntax("r")
-      val ad = AuthDomainTable.syntax("ad")
-      val g = GroupTable.syntax("g")
-      val rt = ResourceTypeTable.syntax("rt")
-      val p = PolicyTable.syntax("p")
-
-      val constrainedResourcesPKs = groupId match {
-        case group: WorkbenchGroupName =>
-          samsqls"""select ${ad.result.resourceId}
-           from ${AuthDomainTable as ad}
-           join ${GroupTable as g} on ${g.id} = ${ad.groupId}
-           where ${g.name} = ${group}"""
-        case policy: FullyQualifiedPolicyId =>
-          samsqls"""select ${ad.result.resourceId}
-           from ${AuthDomainTable as ad}
-           join ${PolicyTable as p} on ${ad.groupId} = ${p.groupId}
-           join ${ResourceTable as r} on ${p.resourceId} = ${r.id}
-           join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
-           where ${policy.accessPolicyName} = ${p.name}
-           and ${policy.resource.resourceId} = ${r.name}
-           and ${policy.resource.resourceTypeName} = ${rt.name}"""
-      }
-
-      val results = samsql"""select ${rt.result.name}, ${r.result.name}, ${g.result.name}
-                      from ${ResourceTable as r}
-                      join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
-                      left join ${AuthDomainTable as ad} on ${r.id} = ${ad.resourceId}
-                      left join ${GroupTable as g} on ${ad.groupId} = ${g.id}
-                      where ${r.id} in (${constrainedResourcesPKs})"""
-        .map(rs => (rs.get[ResourceTypeName](rt.resultName.name), rs.get[ResourceId](r.resultName.name), rs.get[WorkbenchGroupName](g.resultName.name))).list().apply()
-
-      val resultsByResource = results.groupBy(result => (result._1, result._2))
-      resultsByResource.map {
-        case ((resourceTypeName, resourceId), groupedResults) => Resource(resourceTypeName, resourceId, groupedResults.collect {
-          case (_, _, authDomainGroupName) => authDomainGroupName
-        }.toSet)
-      }.toSet
-    })
-  }
-
   override def listSyncedAccessPolicyIdsOnResourcesConstrainedByGroup(groupId: WorkbenchGroupIdentity,
                                                                       samRequestContext: SamRequestContext): IO[Set[FullyQualifiedPolicyId]] = {
     readOnlyTransaction("listSyncedAccessPolicyIdsOnResourcesConstrainedByGroup", samRequestContext)({ implicit session =>
@@ -633,8 +591,8 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
            and ${g.synchronizedDate} is not null"""
           .map(rs =>
             FullyQualifiedPolicyId(
-              FullyQualifiedResourceId(ResourceTypeName(rt.resultName.name), ResourceId(r.resultName.name)),
-              AccessPolicyName(p.resultName.name)))
+              FullyQualifiedResourceId(rs.get[ResourceTypeName](rt.resultName.name), rs.get[ResourceId](r.resultName.name)),
+              rs.get[AccessPolicyName](p.resultName.name)))
         .list().apply().toSet
     })
   }

@@ -94,7 +94,7 @@ class MockAccessPolicyDAO(private val resourceTypes: mutable.Map[ResourceTypeNam
     resourceToRemoveOpt.map( resourceToRemove => resources += resource -> resourceToRemove.copy(authDomain = Set.empty))
   }
 
-  override def listResourcesConstrainedByGroup(groupId: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[Set[Resource]] = IO.pure(Set.empty)
+  override def listSyncedAccessPolicyIdsOnResourcesConstrainedByGroup(groupId: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[Set[FullyQualifiedPolicyId]] = ???
 
   override def createPolicy(policy: AccessPolicy, samRequestContext: SamRequestContext): IO[AccessPolicy] = IO {
     policies += policy.id -> policy
