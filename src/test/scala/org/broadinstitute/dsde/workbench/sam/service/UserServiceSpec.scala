@@ -113,17 +113,15 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
 
   it should "create user and add user to ToS group" in {
     val tosVersion = 1
-    tos.createNewGroupIfNeeded(tosVersion, true).unsafeToFuture()
-    val user = service.createUser(defaultUser, samRequestContext, true, tosVersion).futureValue
-    user.enabled("allUsersGroup") shouldBe true
+    tos.createNewGroupIfNeeded(tosVersion, true).unsafeRunSync()
+    service.createUser(defaultUser, samRequestContext, true, tosVersion).futureValue
     val userGroups = dirDAO.listUsersGroups(defaultUserId, samRequestContext).unsafeRunSync()
     userGroups should contain (WorkbenchGroupName(tos.getGroupName(tosVersion)))
     userGroups should have size 2
   }
 
   it should "not add user to ToS when tos is not enabled" in {
-    val user = service.createUser(defaultUser, samRequestContext).futureValue
-    user.enabled("allUsersGroup") shouldBe true
+    service.createUser(defaultUser, samRequestContext).futureValue
     val userGroups = dirDAO.listUsersGroups(defaultUserId, samRequestContext).unsafeRunSync()
     userGroups should have size 1
   }
