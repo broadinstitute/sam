@@ -70,7 +70,7 @@ class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with Sca
         }
         case None => {
           logger.info (s"User ${tempUser.email} does not yet exist! Registering user.")
-          registerAsNewUser(WorkbenchEmail(tempUser.email))(tempAuthToken)
+          Sam.user.registerSelf()(tempAuthToken)
           val tempUserInfo = Sam.user.status()(tempAuthToken).get.userInfo
           tempUserInfo.userEmail shouldBe tempUser.email
         }
