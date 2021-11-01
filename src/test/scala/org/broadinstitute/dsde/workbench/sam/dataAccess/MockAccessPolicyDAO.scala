@@ -94,7 +94,22 @@ class MockAccessPolicyDAO(private val resourceTypes: mutable.Map[ResourceTypeNam
     resourceToRemoveOpt.map( resourceToRemove => resources += resource -> resourceToRemove.copy(authDomain = Set.empty))
   }
 
-  override def listSyncedAccessPolicyIdsOnResourcesConstrainedByGroup(groupId: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[Set[FullyQualifiedPolicyId]] = ???
+  override def listSyncedAccessPolicyIdsOnResourcesConstrainedByGroup(groupId: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[Set[FullyQualifiedPolicyId]] = IO {
+    val groupName: WorkbenchGroupName = groupId match {
+      case basicGroupName: WorkbenchGroupName => basicGroupName
+      // In real life, policies have a group that can be used to constrain other resources -- if we need the group name
+      // of a policy, we can simply look it up in Postgres. In tests, our policies don't have actual groups backing them
+      // which means we can't know the name of a policy's group with absolute certainty. If you want to write a test
+      // that uses this method and constrains a resource with a policy, use this naming convention
+      case policyId: FullyQualifiedPolicyId => WorkbenchGroupName(policyId.toString)
+      case _ => throw new WorkbenchException("Wrong kind of group! I recommend trying a WorkbenchGroupName instead")
+    }
+
+    (for {
+      constrainedResource <- resources.values if constrainedResource.authDomain.contains(groupName)
+      constrainedPolicy <- constrainedResource.accessPolicies
+    } yield constrainedPolicy.id).toSet
+  }
 
   override def createPolicy(policy: AccessPolicy, samRequestContext: SamRequestContext): IO[AccessPolicy] = IO {
     policies += policy.id -> policy
