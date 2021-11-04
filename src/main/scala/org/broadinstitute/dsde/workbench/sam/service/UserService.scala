@@ -30,7 +30,11 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
       createdUser <- registerUser(user, samRequestContext).unsafeToFuture()
       _ <- enableUserInternal(createdUser, samRequestContext)
       _ <- directoryDAO.addGroupMember(allUsersGroup.id, createdUser.id, samRequestContext).unsafeToFuture()
-      _ <- if (tosEnforcementEnabled) directoryDAO.addGroupMember(tosService.getTosGroup(tosVersion).unsafeRunSync().get.id, createdUser.id, samRequestContext).unsafeToFuture() else Future.successful(IO.pure(true))
+      tosGroupOpt <- if (tosEnforcementEnabled) tosService.getTosGroup(tosVersion).unsafeToFuture() else Future.successful(None)
+      _ <- (tosEnforcementEnabled, tosGroupOpt) match {
+        case (true, Some(tosGroup)) => directoryDAO.addGroupMember(tosGroup.id, createdUser.id, samRequestContext).unsafeToFuture()
+        case _ => Future.successful(true)
+      }
       userStatus <- getUserStatus(createdUser.id, samRequestContext = samRequestContext)
       res <- userStatus.toRight(new WorkbenchException("getUserStatus returned None after user was created")).fold(Future.failed, Future.successful)
     } yield res
