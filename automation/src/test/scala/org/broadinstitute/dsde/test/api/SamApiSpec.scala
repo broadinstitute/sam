@@ -64,17 +64,19 @@ class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with Sca
       val tempAuthToken: AuthToken = tempUser.makeAuthToken()
 
       // Register user if the user is not registered
-      Sam.user.status()(tempAuthToken) match {
+      val tempUserInfo = Sam.user.status()(tempAuthToken) match {
         case Some(user) => {
           logger.info(s"User ${user.userInfo.userEmail} was already registered.")
+          user.userInfo
         }
         case None => {
           logger.info (s"User ${tempUser.email} does not yet exist! Registering user.")
           Sam.user.registerSelf()(tempAuthToken)
-          val tempUserInfo = Sam.user.status()(tempAuthToken).get.userInfo
-          tempUserInfo.userEmail shouldBe tempUser.email
+          Sam.user.status()(tempAuthToken).userInfo
         }
       }
+
+      tempUserInfo.userEmail shouldBe tempUser.email
 
       // Remove user
 
