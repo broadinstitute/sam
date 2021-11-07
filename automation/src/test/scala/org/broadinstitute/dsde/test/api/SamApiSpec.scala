@@ -72,7 +72,7 @@ class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with Sca
         case None => {
           logger.info (s"User ${tempUser.email} does not yet exist! Registering user.")
           Sam.user.registerSelf()(tempAuthToken)
-          Sam.user.status()(tempAuthToken).userInfo
+          Sam.user.status()(tempAuthToken).get.userInfo
         }
       }
 
