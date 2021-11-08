@@ -77,7 +77,7 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     when(googleExtensions.onUserEnable(any[WorkbenchUser], any[SamRequestContext])).thenReturn(Future.successful(()))
     when(googleExtensions.onGroupUpdate(any[Seq[WorkbenchGroupIdentity]], any[SamRequestContext])).thenReturn(Future.successful(()))
 
-    tos = new TosService(dirDAO, googleServicesConfig.appsDomain)
+    tos = new TosService(dirDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)
     service = new UserService(dirDAO, googleExtensions, registrationDAO, Seq(blockedDomain), tos)
   }
 
@@ -113,7 +113,7 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
 
   it should "create user and add user to ToS group" in {
     val tosVersion = 1
-    tos.createNewGroupIfNeeded(tosVersion, true).unsafeRunSync()
+    tos.createNewGroupIfNeeded(true).unsafeRunSync()
     service.createUser(defaultUser, samRequestContext, true, tosVersion).futureValue
     val userGroups = dirDAO.listUsersGroups(defaultUserId, samRequestContext).unsafeRunSync()
     userGroups should contain (WorkbenchGroupName(tos.getGroupName(tosVersion)))
@@ -152,7 +152,7 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
 
     // get user status info (id, email, ldap)
     val info = service.getUserStatusInfo(defaultUserId, samRequestContext).unsafeRunSync()
-    info shouldBe Some(UserStatusInfo(defaultUserId.value, defaultUserEmail.value, true))
+    info shouldBe Some(UserStatusInfo(defaultUserId.value, defaultUserEmail.value, true, Option(false)))
   }
 
   it should "get user status diagnostics" in {

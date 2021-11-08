@@ -1,16 +1,5 @@
 package org.broadinstitute.dsde.workbench.sam
 
-import java.net.URI
-import java.time.Instant
-import java.util.concurrent.Executors
-import akka.actor.ActorSystem
-import akka.http.scaladsl.model.headers.OAuth2BearerToken
-import akka.stream.Materializer
-import cats.effect.IO
-import cats.kernel.Eq
-import com.google.cloud.firestore.{DocumentSnapshot, Firestore, Transaction}
-import com.typesafe.config.ConfigFactory
-import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
 import org.broadinstitute.dsde.workbench.google2.mock.FakeGoogleStorageInterpreter
 import org.broadinstitute.dsde.workbench.google.mock._
@@ -33,12 +22,6 @@ import org.scalatest.concurrent.PatienceConfiguration.Timeout
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 import org.scalatest.prop.Configuration
 import org.scalatest.time.{Seconds, Span}
-import scalikejdbc.withSQL
-import scalikejdbc.QueryDSL.delete
-
-import scala.concurrent.duration.Duration
-import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.{Await, Awaitable, ExecutionContext}
 import org.scalatest.matchers.should.Matchers
 
 /**
@@ -119,10 +102,10 @@ object TestSupport extends TestSupport {
     val policyEvaluatorService = policyEvaluatorServiceOpt.getOrElse(PolicyEvaluatorService(appConfig.emailDomain, resourceTypes, policyDAO, directoryDAO))
     val mockResourceService = resourceServiceOpt.getOrElse(new ResourceService(resourceTypes, policyEvaluatorService, policyDAO, directoryDAO, googleExt, "example.com"))
     val mockManagedGroupService = new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, policyDAO, directoryDAO, googleExt, "example.com")
-    val tosService = new TosService(directoryDAO, "example.com")
+    val tosService = new TosService(directoryDAO, "example.com", tosConfig)
 
 
-    SamDependencies(mockResourceService, policyEvaluatorService, tosService, new UserService(directoryDAO, googleExt, registrationDAO, Seq.empty, new TosService(directoryDAO, googleServicesConfig.appsDomain)), new StatusService(directoryDAO, registrationDAO, googleExt, dbRef), mockManagedGroupService, directoryDAO, policyDAO, googleExt)
+    SamDependencies(mockResourceService, policyEvaluatorService, tosService, new UserService(directoryDAO, googleExt, registrationDAO, Seq.empty, new TosService(directoryDAO, googleServicesConfig.appsDomain, tosConfig)), new StatusService(directoryDAO, registrationDAO, googleExt, dbRef), mockManagedGroupService, directoryDAO, policyDAO, googleExt)
   }
   val tosConfig = config.as[TermsOfServiceConfig]("termsOfService")
 

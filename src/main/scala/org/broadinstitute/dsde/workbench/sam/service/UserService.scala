@@ -129,7 +129,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
             tosAcceptedStatus <- tosService.getTosStatus(user.id).unsafeToFuture()
             ldapStatus <- registrationDAO.isEnabled(user.id, samRequestContext).unsafeToFuture()
           } yield {
-            Option(UserStatus(UserStatusDetails(user.id, user.email), Map("ldap" -> ldapStatus, "allUsersGroup" -> allUsersStatus, "google" -> googleStatus), Option(tosAcceptedStatus)))
+            Option(UserStatus(UserStatusDetails(user.id, user.email), Map("ldap" -> ldapStatus, "allUsersGroup" -> allUsersStatus, "google" -> googleStatus), tosAcceptedStatus))
           }
       case None => Future.successful(None)
     }

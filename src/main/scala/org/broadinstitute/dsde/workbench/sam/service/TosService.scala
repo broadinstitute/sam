@@ -42,21 +42,23 @@ class TosService (val directoryDao: DirectoryDAO, val appsDomain: String, val to
     getTosGroup(tosConfig.version)
   }
 
-  def getTosGroup(currentVersion: Int): IO[Option[BasicWorkbenchGroup]] = {
-    directoryDao.loadGroup(WorkbenchGroupName(getGroupName(currentVersion)), SamRequestContext(None))
+  def getTosGroup(version: Int): IO[Option[BasicWorkbenchGroup]] = {
+    directoryDao.loadGroup(WorkbenchGroupName(getGroupName(version)), SamRequestContext(None))
   }
 
-  def getTosStatus(user: WorkbenchSubject): IO[Boolean] = {
-    getTosGroup().flatMap {
-      case Some(group) => directoryDao.isGroupMember(group.id, user, SamRequestContext(None))
-      case None => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Terms of Service group ${getGroupName(tosConfig.version)} not found.")))
-    }
+  def getTosStatus(user: WorkbenchSubject): IO[Option[Boolean]] = {
+    if (tosConfig.enabled) {
 
-//    getTosGroup.map(_.getOrElse(
-//      IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Terms of Service group ${getGroupName(tosConfig.version)} not found.")))
-//    )).flatMap ( group =>
-//      directoryDao.isGroupMember(group.id, user, SamRequestContext(None)).unsafeToFuture() recover { case e: NameNotFoundException => false }
-//    )
+
+      getTosGroup().flatMap {
+        case Some(group) => directoryDao.isGroupMember(group.id, user, SamRequestContext(None)).map(Option(_))
+        case None =>
+          createNewGroupIfNeeded(tosConfig.enabled).flatMap {
+            case Some(newGroup) => directoryDao.isGroupMember(newGroup.id, user, SamRequestContext(None)).map(Option(_))
+            case None => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Terms of Service group ${getGroupName(tosConfig.version)} failed to create.")))
+          }
+      }
+    } else IO.none
   }
 
   /**
