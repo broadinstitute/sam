@@ -112,11 +112,10 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
   }
 
   it should "create user and add user to ToS group" in {
-    val tosVersion = 1
     tos.createNewGroupIfNeeded(true).unsafeRunSync()
-    service.createUser(defaultUser, samRequestContext, true, tosVersion).futureValue
+    service.createUser(defaultUser, samRequestContext, true, TestSupport.tosConfig.version).futureValue
     val userGroups = dirDAO.listUsersGroups(defaultUserId, samRequestContext).unsafeRunSync()
-    userGroups should contain (WorkbenchGroupName(tos.getGroupName(tosVersion)))
+    userGroups should contain (WorkbenchGroupName(tos.getGroupName(TestSupport.tosConfig.version)))
     userGroups should have size 2
   }
 
@@ -152,7 +151,7 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
 
     // get user status info (id, email, ldap)
     val info = service.getUserStatusInfo(defaultUserId, samRequestContext).unsafeRunSync()
-    info shouldBe Some(UserStatusInfo(defaultUserId.value, defaultUserEmail.value, true, Option(false)))
+    info shouldBe Some(UserStatusInfo(defaultUserId.value, defaultUserEmail.value, true, None))
   }
 
   it should "get user status diagnostics" in {
