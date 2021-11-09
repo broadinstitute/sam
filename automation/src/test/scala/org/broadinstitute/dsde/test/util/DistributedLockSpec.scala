@@ -1,8 +1,9 @@
 package org.broadinstitute.dsde.workbench.test.util
 
 import java.util.concurrent.TimeUnit
-
-import cats.effect.IO
+import cats.implicits._
+import cats.effect.{Clock, IO}
+import cats.effect.unsafe.implicits.global
 import cats.kernel.Eq
 import cats.syntax.all._
 import org.broadinstitute.dsde.workbench.google2.GoogleFirestoreInterpreter
@@ -10,15 +11,15 @@ import org.broadinstitute.dsde.workbench.google2.util.{DistributedLock, Distribu
 import org.broadinstitute.dsde.workbench.model.WorkbenchException
 import org.broadinstitute.dsde.workbench.test.Generators.genLockPath
 import org.broadinstitute.dsde.workbench.test.SamConfig.GCS
-
+import java.util.concurrent.TimeUnit
 import scala.jdk.CollectionConverters._
 import scala.concurrent.duration._
+import scala.concurrent.duration.FiniteDuration
 import org.scalatest.flatspec.AsyncFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 class DistributedLockSpec extends AsyncFlatSpec with Matchers {
-  implicit val cs = IO.contextShift(scala.concurrent.ExecutionContext.global)
-  implicit val timer = IO.timer(scala.concurrent.ExecutionContext.global)
+
   implicit val eqWorkbenchException: Eq[WorkbenchException] =
     (x: WorkbenchException, y: WorkbenchException) =>
       x.getMessage == y.getMessage
@@ -77,12 +78,11 @@ class DistributedLockSpec extends AsyncFlatSpec with Matchers {
     val lockPathWithPrefix = lockPath.copy(collectionName = collectionNameWithPrefix, expiresIn = 7 seconds)  //fix expiresIn so that we won't be waiting for too long in the unit test
     val res = lockResource.use { lock =>
       for {
-        current <- timer.clock.realTime(TimeUnit.MILLISECONDS)
+        current <- Clock[IO].realTime.map(_.toMillis)
         _ <- lock.acquireLock(lockPathWithPrefix)
         _ <- IO.sleep(2 seconds)
         acquireTime <- lock.withLock(lockPath).use { _ =>
-          timer.clock
-            .realTime(TimeUnit.MILLISECONDS)
+          Clock[IO].realTime.map(_.toMillis)
         }
       } yield {
         acquireTime - current should be > lockPathWithPrefix.expiresIn.toMillis
@@ -99,7 +99,7 @@ class DistributedLockSpec extends AsyncFlatSpec with Matchers {
 
     val res = lockResource.use { lock =>
       for {
-        currentTime <- timer.clock.monotonic(DistributedLock.EXPIRESATTIMEUNIT)
+        currentTime <- Clock[IO].realTime.map(_.toMillis)
         lockData <- lock.withLock(lockPath).use{
           _ =>
             lock.googleFirestoreOps.get(collectionNameWithPrefix, lockPathWithPrefix.document)
@@ -133,13 +133,13 @@ class DistributedLockSpec extends AsyncFlatSpec with Matchers {
 
     val res = lockResource.use { lock =>
       for {
-        current <- timer.clock.realTime(TimeUnit.MILLISECONDS)
+        current <- Clock[IO].realTime.map(_.toMillis)
         _ <- lock.acquireLock(lockPathWithPrefix)
         failed <- lock
           .withLock(lockPath)
           .use(_ => IO.unit)
           .attempt //this will fail to aquire lock
-        endTime <- timer.clock.realTime(TimeUnit.MILLISECONDS)
+        endTime <- Clock[IO].realTime.map(_.toMillis)
       } yield {
         failed.swap.toOption.get.asInstanceOf[WorkbenchException].getMessage should startWith (s"Reached max retry:")
         // validate we actually retried certain amount of time
