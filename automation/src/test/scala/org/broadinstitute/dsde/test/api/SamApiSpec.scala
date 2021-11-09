@@ -104,15 +104,11 @@ class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with Sca
       tempUserInfo.userEmail shouldBe tempUser.email
 
       // Remove user
-
-      userStatus.userInfo.userEmail shouldBe tempUser.email
-
-      removeUser(userStatus.userInfo.userSubjectId)
+      removeUser(tempUserInfo.userSubjectId)
       Sam.user.status()(tempAuthToken) shouldBe None
 
       // OK to re-remove
-
-      removeUser(userStatus.userInfo.userSubjectId)
+      removeUser(tempUserInfo.userSubjectId)
       Sam.user.status()(tempAuthToken) shouldBe None
     }
   }
