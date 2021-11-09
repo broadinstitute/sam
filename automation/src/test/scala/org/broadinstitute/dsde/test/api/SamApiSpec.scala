@@ -73,8 +73,8 @@ class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with Sca
     Thurloe.keyValuePairs.deleteAll(subjectId)
   }
 
-  "Sam User apis" - {
-    "should be idempotent for user registration and removal" taggedAs(Retryable) in {
+  "Sam test utilities" - {
+    "should be idempotent for removal of user's registration" taggedAs(Retryable)  in {
       // This test is tagged as Retryable because it is sometimes flaky when run in swatomation pipeline.  We believe
       // this is due to multiple tests running at the same time that can modify the state of the data under test that
       // is shared between these tests.  This is obviously a bad thing.  Ideally, tests and their data should be
@@ -88,33 +88,22 @@ class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with Sca
       val tempUser: Credentials = UserPool.chooseTemp
       val tempAuthToken: AuthToken = tempUser.makeAuthToken()
 
-      //It's possible that some other bad test leaves this user regsistered.
-      //Clean it up if it exists already...
-      Sam.user.status()(tempAuthToken) match {
+      // Register user if the user is not registered
+      val tempUserInfo = Sam.user.status()(tempAuthToken) match {
         case Some(user) => {
-          logger.info(s"User ${user.userInfo.userEmail} was already registered. Removing before test starts...")
-          removeUser(user.userInfo.userSubjectId)
+          logger.info(s"User ${user.userInfo.userEmail} was already registered.")
+          user.userInfo
         }
-        case None => logger.info(s"User ${tempUser.email} does not yet exist! Proceeding...")
+        case None => {
+          logger.info (s"User ${tempUser.email} does not yet exist! Registering user.")
+          Sam.user.registerSelf()(tempAuthToken)
+          Sam.user.status()(tempAuthToken).get.userInfo
+        }
       }
 
-      //Now assert that it's gone for real
-      Sam.user.status()(tempAuthToken) shouldBe None
+      tempUserInfo.userEmail shouldBe tempUser.email
 
-      registerAsNewUser(WorkbenchEmail(tempUser.email))(tempAuthToken)
-
-      Sam.user.status()(tempAuthToken).match {
-        case Some(user) => user.userInfo.userEmail shouldBe tempUser.email
-        case None => throw new Exception(s"User ${tempUser.email} failed to be registered as a new user")
-      }
-
-      // OK to re-register
-
-      registerAsNewUser(WorkbenchEmail(tempUser.email))(tempAuthToken)
-      val userStatus = Sam.user.status()(tempAuthToken).match {
-        case Some(userStatus) => userStatus
-        case None => throw new Exception(s"User ${tempUser.email} failed to be registered as a new user")
-      }
+      // Remove user
 
       userStatus.userInfo.userEmail shouldBe tempUser.email
 

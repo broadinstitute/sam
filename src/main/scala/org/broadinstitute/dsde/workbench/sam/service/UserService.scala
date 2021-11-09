@@ -21,15 +21,20 @@ import scala.util.matching.Regex
 /**
   * Created by dvoet on 7/14/17.
   */
-class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExtensions, val registrationDAO: RegistrationDAO, blockedEmailDomains: Seq[String])(implicit val executionContext: ExecutionContext, contextShift: ContextShift[IO]) extends LazyLogging {
+class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExtensions, val registrationDAO: RegistrationDAO, blockedEmailDomains: Seq[String], tosService: TosService)(implicit val executionContext: ExecutionContext, contextShift: ContextShift[IO]) extends LazyLogging {
 
-  def createUser(user: WorkbenchUser, samRequestContext: SamRequestContext): Future[UserStatus] = {
+  def createUser(user: WorkbenchUser, samRequestContext: SamRequestContext, tosEnforcementEnabled: Boolean = false, tosVersion: Int = 0): Future[UserStatus] = {
     for {
       _ <- UserService.validateEmailAddress(user.email, blockedEmailDomains).unsafeToFuture()
       allUsersGroup <- cloudExtensions.getOrCreateAllUsersGroup(directoryDAO, samRequestContext)
       createdUser <- registerUser(user, samRequestContext).unsafeToFuture()
       _ <- enableUserInternal(createdUser, samRequestContext)
       _ <- directoryDAO.addGroupMember(allUsersGroup.id, createdUser.id, samRequestContext).unsafeToFuture()
+      tosGroupOpt <- if (tosEnforcementEnabled) tosService.getTosGroup(tosVersion).unsafeToFuture() else Future.successful(None)
+      _ <- (tosEnforcementEnabled, tosGroupOpt) match {
+        case (true, Some(tosGroup)) => directoryDAO.addGroupMember(tosGroup.id, createdUser.id, samRequestContext).unsafeToFuture()
+        case _ => Future.successful(true)
+      }
       userStatus <- getUserStatus(createdUser.id, samRequestContext = samRequestContext)
       res <- userStatus.toRight(new WorkbenchException("getUserStatus returned None after user was created")).fold(Future.failed, Future.successful)
     } yield res

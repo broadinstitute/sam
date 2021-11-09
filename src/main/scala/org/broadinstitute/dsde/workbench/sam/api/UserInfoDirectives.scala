@@ -1,12 +1,17 @@
 package org.broadinstitute.dsde.workbench.sam.api
 
+import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import akka.http.scaladsl.model.StatusCodes
-import akka.http.scaladsl.server.Directives.onSuccess
-import akka.http.scaladsl.server.{Directive0, Directive1, Directives}
+import akka.http.scaladsl.server.Directives._
+import akka.http.scaladsl.server.{Directive0, Directive1, Directives, MalformedRequestContentRejection}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.service.CloudExtensions
 import org.broadinstitute.dsde.workbench.sam._
+import org.broadinstitute.dsde.workbench.sam.api.RejectionHandlers.termsOfServiceRejectionHandler
+import org.broadinstitute.dsde.workbench.sam.config.TermsOfServiceConfig
 import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
+import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
+import org.broadinstitute.dsde.workbench.sam.model.TermsOfServiceAcceptance
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 /**
@@ -15,6 +20,7 @@ import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 trait UserInfoDirectives {
   val directoryDAO: DirectoryDAO
   val cloudExtensions: CloudExtensions
+  val termsOfServiceConfig: TermsOfServiceConfig
 
   def requireUserInfo(samRequestContext: SamRequestContext): Directive1[UserInfo]
 
@@ -27,5 +33,20 @@ trait UserInfoDirectives {
         else r
       }
     }
+
+  def withTermsOfServiceAcceptance: Directive0 = {
+    Directives.mapInnerRoute { r =>
+      if(termsOfServiceConfig.enabled) {
+        handleRejections(termsOfServiceRejectionHandler(termsOfServiceConfig.url)) {
+          requestEntityPresent {
+            entity(as[TermsOfServiceAcceptance]) { tos =>
+              if (tos.value.equalsIgnoreCase(termsOfServiceConfig.url)) r
+              else reject(MalformedRequestContentRejection(s"Invalid ToS acceptance", new WorkbenchException(s"ToS URL did not match ${termsOfServiceConfig.url}")))
+            }
+          }
+        }
+      } else r
+    }
+  }
 
 }
