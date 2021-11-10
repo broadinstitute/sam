@@ -2764,7 +2764,7 @@ paths:
         200:
           description: success
           content:
-            application/json:
+            text/plain:
               schema:
                 type: string
   /version:
