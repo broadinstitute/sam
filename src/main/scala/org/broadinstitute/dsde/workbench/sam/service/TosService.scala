@@ -31,4 +31,5 @@ class TosService (val directoryDao: DirectoryDAO, val appsDomain: String) extend
     directoryDao.loadGroup(WorkbenchGroupName(getGroupName(currentVersion)), SamRequestContext(None))
   }
 
+  def getText: String = "TODO"
 }
