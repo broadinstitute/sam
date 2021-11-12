@@ -1350,6 +1350,56 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
     })
   }
 
+  override def recreateEffectivePolicyTableEntry(resourceTypeName: ResourceTypeName, samRequestContext: SamRequestContext): IO[Unit] = {
+    val resource = ResourceTable.syntax("resource")
+    val resourceRole = ResourceRoleTable.syntax("resourceRole")
+    val resourcePolicy = PolicyTable.syntax("resourcePolicy")
+    val flattenedRole = FlattenedRoleMaterializedView.syntax("flattenedRole")
+    val resourceType = ResourceTypeTable.syntax("resourceType")
+    val policyRole = PolicyRoleTable.syntax("policyRole")
+    val effectivePolicyRoleTable = EffectivePolicyRoleTable.syntax("effPolRole")
+    val effectiveResourcePolicyTable = EffectiveResourcePolicyTable.syntax("effPolRole")
+
+
+    val deleteQuery =
+      samsql"""delete from ${EffectivePolicyRoleTable as effectivePolicyRoleTable}
+               using ${ResourceTable as resource},
+               ${ResourceTypeTable as resourceType}
+               where ${effectivePolicyRoleTable.resourceId} = ${resource.id}
+               and ${resource.resourceTypeId} = ${resourceType.id}
+               and ${resourceType.name} = ${resourceTypeName}
+            """
+
+    val insertQuery =
+      samsql"""insert into ${EffectivePolicyRoleTable.table}(${EffectivePolicyRoleTable.column.effectiveResourcePolicyId}, ${EffectivePolicyRoleTable.column.resourceRoleId})
+               select ${effectiveResourcePolicyTable.id}, ${resourceRole.id} from
+               ${EffectiveResourcePolicyTable as effectiveResourcePolicyTable}
+               join ${PolicyRoleTable as policyRole} on ${effectiveResourcePolicyTable.sourcePolicyId} = ${policyRole.resourcePolicyId}
+               join ${ResourceTable as resource} on ${effectiveResourcePolicyTable.resourceId} = ${resource.id}
+               join ${FlattenedRoleMaterializedView as flattenedRole} on ${policyRole.resourceRoleId} = ${flattenedRole.baseRoleId}
+               join ${ResourceRoleTable as resourceRole} on ${flattenedRole.nestedRoleId} = ${resourceRole.id} and ${resource.resourceTypeId} = ${resourceRole.resourceTypeId}
+               join ${PolicyTable as resourcePolicy} on ${effectiveResourcePolicyTable.sourcePolicyId} = ${resourcePolicy.id}
+               join ${ResourceTypeTable as resourceType} on ${resource.resourceTypeId}
+               where (((${resourcePolicy.resourceId} != ${effectiveResourcePolicyTable.resourceId} and (${policyRole.descendantsOnly} or ${flattenedRole.descendantsOnly}))
+                or not ((${resourcePolicy.resourceId} != ${effectiveResourcePolicyTable.resourceId}) or ${policyRole.descendantsOnly} or ${flattenedRole.descendantsOnly}))
+                and ${resourceType.name} = ${resourceTypeName}
+                on conflict do nothing
+            """
+    insertQuery.update().apply()
+      <sql stripComments="true">
+        insert into SAM_EFFECTIVE_POLICY_ACTION(effective_resource_policy_id, resource_action_id)
+        select ep.id, action.id
+        from SAM_EFFECTIVE_RESOURCE_POLICY ep
+        join SAM_POLICY_ACTION pa on ep.source_policy_id = pa.resource_policy_id
+        join SAM_RESOURCE resource on ep.resource_id = resource.id
+        join SAM_RESOURCE_ACTION action on pa.resource_action_id = action.id and resource.resource_type_id = action.resource_type_id
+        join SAM_RESOURCE_POLICY sourcePolicy on ep.source_policy_id = sourcePolicy.id
+        where pa.descendants_only = (sourcePolicy.resource_id != ep.resource_id)
+        and resource.resource_type_id = action.resource_type_id
+        on conflict do nothing
+      </sql>
+  }
+
   private def setPolicyIsPublicInternal(policyPK: PolicyPK, isPublic: Boolean)(implicit session: DBSession): Int = {
     val p = PolicyTable.syntax("p")
     val policyTableColumn = PolicyTable.column

@@ -74,6 +74,8 @@ trait AccessPolicyDAO {
 
   def listUserResourcesWithRolesAndActions(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Iterable[ResourceIdWithRolesAndActions]]
 
+  def recreateEffectivePolicyTableEntry(resourceTypeName: ResourceTypeName, samRequestContext: SamRequestContext): IO[Unit]
+
   /**
     * Utility function that takes a bunch of ResourceIdWithRolesAndActions, probably more than one for a give
     * resource id, and aggregates all the ones with same resource id together.

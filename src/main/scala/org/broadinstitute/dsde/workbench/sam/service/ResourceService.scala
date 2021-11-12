@@ -51,7 +51,7 @@ class ResourceService(
       case Some(resourceTypeAdmin) =>
         for {
           newOrUpdatedResourceTypeNames <- accessPolicyDAO.upsertResourceTypes(resourceTypes.values.toSet, samRequestContext)
-
+//          Could we recreate the flattened table just for newOrUpdatedResourceTypeNames?
           // ensure a resourceTypeAdmin resource exists for each new/update resource type (except resourceTypeAdmin)
           _ <- newOrUpdatedResourceTypeNames.filterNot(_ == SamResourceTypes.resourceTypeAdminName).toList.traverse { rtName =>
             val policy = ValidatableAccessPolicy(
@@ -68,8 +68,17 @@ class ResourceService(
                 Resource(resourceTypeAdmin.name, ResourceId(rtName.value), Set.empty)
             }
           }
+          _ <- updateEffectivePolicytables(samRequestContext, newOrUpdatedResourceTypeNames)
         } yield resourceTypes.values
     }
+
+  def updateEffectivePolicytables(samRequestContext: SamRequestContext, newOrUpdatedResourceTypeNames: Set[ResourceTypeName]): IO[Set[ResourceTypeName]] = {
+    for {
+      _ <- newOrUpdatedResourceTypeNames.filterNot(_ == SamResourceTypes.resourceTypeAdminName).toList.traverse { rtName =>
+        accessPolicyDAO.recreateEffectivePolicyTableEntry(rtName, samRequestContext)
+      }
+    } yield _
+  }
 
   def createResourceType(resourceType: ResourceType, samRequestContext: SamRequestContext): IO[ResourceType] =
     accessPolicyDAO.createResourceType(resourceType, samRequestContext)
