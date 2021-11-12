@@ -2,8 +2,9 @@ package org.broadinstitute.dsde.workbench.test.api
 
 
 import java.util.UUID
-
 import akka.actor.ActorSystem
+import akka.http.scaladsl.model.StatusCodes
+import akka.http.scaladsl.unmarshalling.Unmarshal
 import akka.testkit.TestKitBase
 import org.broadinstitute.dsde.workbench.auth.{AuthToken, AuthTokenScopes, ServiceAccountAuthTokenFromJson, ServiceAccountAuthTokenFromPem}
 import org.broadinstitute.dsde.workbench.config.{Credentials, UserPool}
@@ -22,6 +23,7 @@ import org.broadinstitute.dsde.workbench.service.util.Tags
 import scala.concurrent.Await
 import scala.concurrent.duration.{Duration, _}
 import org.scalatest.freespec.AnyFreeSpec
+import org.scalatest.matchers.must.Matchers.convertToAnyMustWrapper
 import org.scalatest.matchers.should.Matchers
 
 class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with ScalaFutures with CleanUp with Eventually with TestKitBase {
@@ -97,6 +99,19 @@ class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with Sca
   }
 
   "Sam" - {
+    "should return terms of services" in {
+      val anyUser: Credentials = UserPool.chooseAnyUser
+      val userAuthToken: AuthToken = anyUser.makeAuthToken()
+
+      val response = Sam.getRequest(Sam.url + s"tos/text")(userAuthToken)
+      val textFuture = Unmarshal(response.entity).to[String]
+
+      response.status shouldEqual StatusCodes.OK
+      whenReady(textFuture) { text =>
+        text should include("Terms as of February 12, 2020.")
+      }
+    }
+
     "should give pets the same access as their owners" in {
       val anyUser: Credentials = UserPool.chooseAnyUser
       val userAuthToken: AuthToken = anyUser.makeAuthToken()
