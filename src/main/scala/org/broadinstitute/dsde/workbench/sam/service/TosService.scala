@@ -13,7 +13,7 @@ import java.io.{FileNotFoundException, IOException}
 import scala.io.Source
 
 class TosService (val directoryDao: DirectoryDAO, val appsDomain: String) extends LazyLogging {
-  val pathToTermsOfService = "src/main/resources/termsOFService.md"
+  val pathToTermsOfService = "src/main/resources/termsOfService.md"
 
   def createNewGroupIfNeeded(currentVersion: Int, isEnabled: Boolean): IO[Option[BasicWorkbenchGroup]] = {
     if(isEnabled) {
@@ -46,8 +46,8 @@ class TosService (val directoryDao: DirectoryDAO, val appsDomain: String) extend
       logger.debug("Reading terms of service")
       Source.fromFile(pathToTermsOfService)
     } catch {
-      case _: FileNotFoundException | _: IOException =>
-        throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Terms Of Service text not found"))
+      case e: FileNotFoundException => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, e))
+      case e: IOException => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, e))
     }
     logger.debug("Terms of service file found")
     try {
