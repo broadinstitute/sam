@@ -366,7 +366,7 @@ paths:
       tags:
         - Group
       summary: Get email addresses for members of the policy
-      operationId: GetGroupAdminEmails
+      operationId: GetGroupPolicyEmails
       parameters:
         - name: groupName
           in: path
@@ -404,7 +404,7 @@ paths:
       tags:
         - Group
       summary: Overwrite email addresses of members of the policy
-      operationId: OverwriteGroupAdminEmails
+      operationId: OverwriteGroupPolicyEmails
       parameters:
         - name: groupName
           in: path
