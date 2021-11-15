@@ -75,7 +75,7 @@ class ResourceService(
   def updateEffectivePolicytables(samRequestContext: SamRequestContext, newOrUpdatedResourceTypeNames: Set[ResourceTypeName]): IO[Set[ResourceTypeName]] = {
     for {
       _ <- newOrUpdatedResourceTypeNames.filterNot(_ == SamResourceTypes.resourceTypeAdminName).toList.traverse { rtName =>
-        accessPolicyDAO.recreateEffectivePolicyTableEntry(rtName, samRequestContext)
+        accessPolicyDAO.recreateEffectivePolicyRolesTableEntry(rtName, samRequestContext)
       }
     } yield _
   }

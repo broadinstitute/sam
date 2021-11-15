@@ -17,7 +17,6 @@ The crux of IAM in Sam is a policy. A policy says **who** can **do what** to a *
   * Of the available roles which is the “owner” role - this is used when creating a resource to give the creator ownership access
 
 ## Requirements
-
 ### Guiding Principles
 There are no special/super users in this system. All api calls authenticate as subjects with access rights determined by policies in the same way. In other words, this system should use its own policy mechanisms internally for any authorization needs. (Note that this does leave the problem of bootstrapping, i.e. how is the first user created, which can be achieved by scripts outside the system with direct data store level access.)
 This system can be publicly facing. This does not mean that it will be in all cases but it should be designed with this in mind.
