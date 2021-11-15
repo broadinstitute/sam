@@ -365,7 +365,7 @@ paths:
     get:
       tags:
         - Group
-      summary: Get email addresses for members of the "admin" policy
+      summary: Get email addresses for members of the policy
       operationId: GetGroupAdminEmails
       parameters:
         - name: groupName
@@ -385,7 +385,7 @@ paths:
               - admin
       responses:
         200:
-          description: Email addresses in the "admin" policy
+          description: Email addresses in the policy
           content:
             application/json:
               schema:
@@ -403,7 +403,7 @@ paths:
     put:
       tags:
         - Group
-      summary: Overwrite email addresses of members of the "admin" policy
+      summary: Overwrite email addresses of members of the policy
       operationId: OverwriteGroupAdminEmails
       parameters:
         - name: groupName
