@@ -208,7 +208,7 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
   }
 
   override def updateSynchronizedDate(groupId: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[Unit] = {
-    writeTransaction("updateSynchronizedDate", samRequestContext)({ implicit session =>
+    serializableWriteTransaction("updateSynchronizedDate", samRequestContext)({ implicit session =>
       val g = GroupTable.column
       samsql"update ${GroupTable.table} set ${g.synchronizedDate} = ${Instant.now()} where ${g.id} = (${workbenchGroupIdentityToGroupPK(groupId)})".update().apply()
     })
@@ -385,10 +385,10 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
   }
 
   override def createUser(user: WorkbenchUser, samRequestContext: SamRequestContext): IO[WorkbenchUser] = {
-    writeTransaction("createUser", samRequestContext)({ implicit session =>
+    serializableWriteTransaction("createUser", samRequestContext)({ implicit session =>
       val userColumn = UserTable.column
 
-      val insertUserQuery = samsql"insert into ${UserTable.table} (${userColumn.id}, ${userColumn.email}, ${userColumn.googleSubjectId}, ${userColumn.enabled}, ${userColumn.identityConcentratorId}) values (${user.id}, ${user.email}, ${user.googleSubjectId}, false, ${user.identityConcentratorId})"
+      val insertUserQuery = samsql"insert into ${UserTable.table} (${userColumn.id}, ${userColumn.email}, ${userColumn.googleSubjectId}, ${userColumn.enabled}, ${userColumn.azureB2cId}) values (${user.id}, ${user.email}, ${user.googleSubjectId}, false, ${user.azureB2CId})"
 
       Try {
         insertUserQuery.update().apply()
@@ -410,20 +410,26 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
     })
   }
 
-  override def loadUserByIdentityConcentratorId(userId: IdentityConcentratorId, samRequestContext: SamRequestContext): IO[Option[WorkbenchUser]] = {
-    readOnlyTransaction("loadUserByIdentityConcentratorId", samRequestContext)({ implicit session =>
+  override def loadUserByAzureB2CId(userId: AzureB2CId, samRequestContext: SamRequestContext): IO[Option[WorkbenchUser]] = {
+    readOnlyTransaction("loadUserByAzureB2CId", samRequestContext)({ implicit session =>
       val userTable = UserTable.syntax
 
-      val loadUserQuery = samsql"select ${userTable.resultAll} from ${UserTable as userTable} where ${userTable.identityConcentratorId} = ${userId}"
+      val loadUserQuery = samsql"select ${userTable.resultAll} from ${UserTable as userTable} where ${userTable.azureB2cId} = ${userId}"
       loadUserQuery.map(UserTable(userTable))
         .single().apply().map(UserTable.unmarshalUserRecord)
     })
   }
 
-  override def setUserIdentityConcentratorId(googleSubjectId: GoogleSubjectId, icId: IdentityConcentratorId, samRequestContext: SamRequestContext): IO[Int] = {
-    writeTransaction("setUserIdentityConcentratorId", samRequestContext)({ implicit session =>
+  override def setUserAzureB2CId(userId: WorkbenchUserId, b2cId: AzureB2CId, samRequestContext: SamRequestContext): IO[Int] = {
+    serializableWriteTransaction("setUserAzureB2CId", samRequestContext)({ implicit session =>
       val u = UserTable.column
-      samsql"update ${UserTable.table} set ${u.identityConcentratorId} = $icId where ${u.googleSubjectId} = $googleSubjectId".update().apply()
+      val results = samsql"update ${UserTable.table} set ${u.azureB2cId} = $b2cId where ${u.id} = $userId and ${u.azureB2cId} is null".update().apply()
+
+      if (results != 1) {
+        throw new WorkbenchException(s"Cannot update azureB2cId for user ${userId} because user does not exist or the azureB2cId has already been set for this user")
+      } else {
+        results
+      }
     })
   }
 
@@ -441,7 +447,7 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
 
   // Not worrying about cascading deletion of user's pet SAs because LDAP doesn't delete user's pet SAs automatically
   override def deleteUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit] = {
-    writeTransaction("deleteUser", samRequestContext)({ implicit session =>
+    serializableWriteTransaction("deleteUser", samRequestContext)({ implicit session =>
       val userTable = UserTable.syntax
       samsql"delete from ${UserTable.table} where ${userTable.id} = ${userId}".update().apply()
     })
@@ -575,7 +581,7 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
   override def enableIdentity(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Unit] = {
     subject match {
       case userId: WorkbenchUserId =>
-        writeTransaction("enableIdentity", samRequestContext)({ implicit session =>
+        serializableWriteTransaction("enableIdentity", samRequestContext)({ implicit session =>
         val u = UserTable.column
         samsql"update ${UserTable.table} set ${u.enabled} = true where ${u.id} = ${userId}".update().apply()
       })
@@ -584,7 +590,7 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
   }
 
   override def disableIdentity(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Unit] = {
-    writeTransaction("disableIdentity", samRequestContext)({ implicit session =>
+    serializableWriteTransaction("disableIdentity", samRequestContext)({ implicit session =>
       subject match {
         case userId: WorkbenchUserId =>
           val u = UserTable.column
@@ -627,7 +633,7 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
   }
 
   override def createPetServiceAccount(petServiceAccount: PetServiceAccount, samRequestContext: SamRequestContext): IO[PetServiceAccount] = {
-    writeTransaction("createPetServiceAccount", samRequestContext)({ implicit session =>
+    serializableWriteTransaction("createPetServiceAccount", samRequestContext)({ implicit session =>
       val petServiceAccountColumn = PetServiceAccountTable.column
 
       samsql"""insert into ${PetServiceAccountTable.table} (${petServiceAccountColumn.userId}, ${petServiceAccountColumn.project}, ${petServiceAccountColumn.googleSubjectId}, ${petServiceAccountColumn.email}, ${petServiceAccountColumn.displayName})
@@ -651,7 +657,7 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
   }
 
   override def deletePetServiceAccount(petServiceAccountId: PetServiceAccountId, samRequestContext: SamRequestContext): IO[Unit] = {
-    writeTransaction("deletePetServiceAccount", samRequestContext)({ implicit session =>
+    serializableWriteTransaction("deletePetServiceAccount", samRequestContext)({ implicit session =>
       val petServiceAccountTable = PetServiceAccountTable.syntax
       val deletePetQuery = samsql"delete from ${PetServiceAccountTable.table} where ${petServiceAccountTable.userId} = ${petServiceAccountId.userId} and ${petServiceAccountTable.project} = ${petServiceAccountId.project}"
       if (deletePetQuery.update().apply() != 1) {
@@ -673,7 +679,7 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
   }
 
   override def updatePetServiceAccount(petServiceAccount: PetServiceAccount, samRequestContext: SamRequestContext): IO[PetServiceAccount] = {
-    writeTransaction("updatePetServiceAccount", samRequestContext)({ implicit session =>
+    serializableWriteTransaction("updatePetServiceAccount", samRequestContext)({ implicit session =>
       val petServiceAccountColumn = PetServiceAccountTable.column
       val updatePetQuery = samsql"""update ${PetServiceAccountTable.table} set
         ${petServiceAccountColumn.googleSubjectId} = ${petServiceAccount.serviceAccount.subjectId},
@@ -738,7 +744,7 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
   }
 
   override def setManagedGroupAccessInstructions(groupName: WorkbenchGroupName, accessInstructions: String, samRequestContext: SamRequestContext): IO[Unit] = {
-    writeTransaction("setManagedGroupAccessInstructions", samRequestContext)({ implicit session =>
+    serializableWriteTransaction("setManagedGroupAccessInstructions", samRequestContext)({ implicit session =>
       val groupPKQuery = workbenchGroupIdentityToGroupPK(groupName)
       val accessInstructionsColumn = AccessInstructionsTable.column
 
@@ -754,7 +760,7 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
   }
 
   override def setGoogleSubjectId(userId: WorkbenchUserId, googleSubjectId: GoogleSubjectId, samRequestContext: SamRequestContext): IO[Unit] = {
-    writeTransaction("setGoogleSubjectId", samRequestContext)({ implicit session =>
+    serializableWriteTransaction("setGoogleSubjectId", samRequestContext)({ implicit session =>
       val u = UserTable.column
       val updateGoogleSubjectIdQuery =
         samsql"""update ${UserTable.table} set ${u.googleSubjectId} = ${googleSubjectId}

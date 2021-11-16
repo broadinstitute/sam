@@ -8,7 +8,7 @@ final case class UserRecord(id: WorkbenchUserId,
                             email: WorkbenchEmail,
                             googleSubjectId: Option[GoogleSubjectId],
                             enabled: Boolean,
-                            identityConcentratorId: Option[IdentityConcentratorId])
+                            azureB2cId: Option[AzureB2CId])
 
 object UserTable extends SQLSyntaxSupportWithDefaultSamDB[UserRecord] {
   override def tableName: String = "SAM_USER"
@@ -19,12 +19,12 @@ object UserTable extends SQLSyntaxSupportWithDefaultSamDB[UserRecord] {
     rs.get(e.email),
     rs.stringOpt(e.googleSubjectId).map(GoogleSubjectId),
     rs.get(e.enabled),
-    rs.stringOpt(e.identityConcentratorId).map(IdentityConcentratorId)
+    rs.stringOpt(e.azureB2cId).map(AzureB2CId)
   )
 
   def apply(o: SyntaxProvider[UserRecord])(rs: WrappedResultSet): UserRecord = apply(o.resultName)(rs)
 
   def unmarshalUserRecord(userRecord: UserRecord): WorkbenchUser = {
-    WorkbenchUser(userRecord.id, userRecord.googleSubjectId, userRecord.email, userRecord.identityConcentratorId)
+    WorkbenchUser(userRecord.id, userRecord.googleSubjectId, userRecord.email, userRecord.azureB2cId)
   }
 }

@@ -3,7 +3,6 @@ package org.broadinstitute.dsde.workbench.sam
 import java.net.URI
 import java.time.Instant
 import java.util.concurrent.Executors
-
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import akka.stream.Materializer
@@ -82,8 +81,8 @@ object TestSupport extends TestSupport {
 
   val fakeDistributedLock = DistributedLock[IO]("", appConfig.distributedLockConfig, FakeGoogleFirestore)
   def proxyEmail(workbenchUserId: WorkbenchUserId) = WorkbenchEmail(s"PROXY_$workbenchUserId@${googleServicesConfig.appsDomain}")
-  def genGoogleSubjectId(): GoogleSubjectId = GoogleSubjectId(genRandom(System.currentTimeMillis()))
-  def genIdentityConcentratorId(): IdentityConcentratorId = IdentityConcentratorId(genRandom(System.currentTimeMillis()))
+  def genGoogleSubjectId(): Option[GoogleSubjectId] = Option(GoogleSubjectId(genRandom(System.currentTimeMillis())))
+  def genAzureB2CId(): AzureB2CId = AzureB2CId(genRandom(System.currentTimeMillis()))
 
   def genSamDependencies(resourceTypes: Map[ResourceTypeName, ResourceType] = Map.empty, googIamDAO: Option[GoogleIamDAO] = None, googleServicesConfig: GoogleServicesConfig = googleServicesConfig, cloudExtensions: Option[CloudExtensions] = None, googleDirectoryDAO: Option[GoogleDirectoryDAO] = None, policyAccessDAO: Option[AccessPolicyDAO] = None)(implicit system: ActorSystem) = {
     val googleDirectoryDAO = new MockGoogleDirectoryDAO()
@@ -122,10 +121,12 @@ object TestSupport extends TestSupport {
     val mockManagedGroupService = new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, policyDAO, directoryDAO, googleExt, "example.com")
     val tosService = new TosService(directoryDAO, "example.com")
 
-    SamDependencies(mockResourceService, policyEvaluatorService, tosService, new UserService(directoryDAO, googleExt, registrationDAO, Seq.empty), new StatusService(directoryDAO, registrationDAO, googleExt, dbRef), mockManagedGroupService, directoryDAO, policyDAO, googleExt)
-  }
 
-  def genSamRoutes(samDependencies: SamDependencies, uInfo: UserInfo)(implicit system: ActorSystem, materializer: Materializer): SamRoutes = new SamRoutes(samDependencies.resourceService, samDependencies.userService, samDependencies.statusService, samDependencies.managedGroupService, null, samDependencies.directoryDAO, samDependencies.policyEvaluatorService, samDependencies.tosService, LiquibaseConfig("", false))
+    SamDependencies(mockResourceService, policyEvaluatorService, tosService, new UserService(directoryDAO, googleExt, registrationDAO, Seq.empty, new TosService(directoryDAO, googleServicesConfig.appsDomain)), new StatusService(directoryDAO, registrationDAO, googleExt, dbRef), mockManagedGroupService, directoryDAO, policyDAO, googleExt)
+  }
+  val tosConfig = config.as[TermsOfServiceConfig]("termsOfService")
+
+  def genSamRoutes(samDependencies: SamDependencies, uInfo: UserInfo)(implicit system: ActorSystem, materializer: Materializer): SamRoutes = new SamRoutes(samDependencies.resourceService, samDependencies.userService, samDependencies.statusService, samDependencies.managedGroupService, null, tosConfig, samDependencies.directoryDAO, samDependencies.policyEvaluatorService, samDependencies.tosService, LiquibaseConfig("", false))
     with MockUserInfoDirectives
     with GoogleExtensionRoutes {
       override val cloudExtensions: CloudExtensions = samDependencies.cloudExtensions
@@ -143,7 +144,7 @@ object TestSupport extends TestSupport {
         case _ => null
       }
       override val userInfo: UserInfo = uInfo
-      override val createWorkbenchUser: Option[CreateWorkbenchUser] = Option(CreateWorkbenchUser(uInfo.userId, GoogleSubjectId(uInfo.userId.value), uInfo.userEmail, Option(IdentityConcentratorId(uInfo.userId.value))))
+      override val workbenchUser: Option[WorkbenchUser] = Option(WorkbenchUser(uInfo.userId, Option(GoogleSubjectId(uInfo.userId.value)), uInfo.userEmail, Option(AzureB2CId(uInfo.userId.value))))
   }
 
   def genSamRoutesWithDefault(implicit system: ActorSystem, materializer: Materializer): SamRoutes = genSamRoutes(genSamDependencies(), UserInfo(OAuth2BearerToken(""), genWorkbenchUserId(System.currentTimeMillis()), defaultUserEmail, 3600))

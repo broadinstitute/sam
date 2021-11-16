@@ -16,7 +16,7 @@ import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchExceptionWithErrorReport}
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.api.SamRoutes._
-import org.broadinstitute.dsde.workbench.sam.config.{LiquibaseConfig, SwaggerConfig}
+import org.broadinstitute.dsde.workbench.sam.config.{LiquibaseConfig, SwaggerConfig, TermsOfServiceConfig}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.service._
 
@@ -31,6 +31,7 @@ abstract class SamRoutes(
     val statusService: StatusService,
     val managedGroupService: ManagedGroupService,
     val swaggerConfig: SwaggerConfig,
+    val termsOfServiceConfig: TermsOfServiceConfig,
     val directoryDAO: DirectoryDAO,
     val policyEvaluatorService: PolicyEvaluatorService,
     val tosService: TosService,

@@ -58,35 +58,29 @@ class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with Sca
   }
 
   "Sam test utilities" - {
-    "should be idempotent for user registration and removal" in {
+    "should be idempotent for removal of user's registration" in {
 
       // use a temp user because they should not be registered.  Remove them after!
 
       val tempUser: Credentials = UserPool.chooseTemp
       val tempAuthToken: AuthToken = tempUser.makeAuthToken()
 
-      //It's possible that some other bad test leaves this user regsistered.
-      //Clean it up if it exists already...
-      Sam.user.status()(tempAuthToken) match {
+      // Register user if the user is not registered
+      val tempUserInfo = Sam.user.status()(tempAuthToken) match {
         case Some(user) => {
-          logger.info(s"User ${user.userInfo.userEmail} was already registered. Removing before test starts...")
-          removeUser(user.userInfo.userSubjectId)
+          logger.info(s"User ${user.userInfo.userEmail} was already registered.")
+          user.userInfo
         }
-        case None => logger.info(s"User ${tempUser.email} does not yet exist! Proceeding...")
+        case None => {
+          logger.info (s"User ${tempUser.email} does not yet exist! Registering user.")
+          Sam.user.registerSelf()(tempAuthToken)
+          Sam.user.status()(tempAuthToken).get.userInfo
+        }
       }
 
-      //Now assert that it's gone for real
-      Sam.user.status()(tempAuthToken) shouldBe None
-
-      registerAsNewUser(WorkbenchEmail(tempUser.email))(tempAuthToken)
-
-      val tempUserInfo = Sam.user.status()(tempAuthToken).get.userInfo
       tempUserInfo.userEmail shouldBe tempUser.email
 
-      // OK to re-register
-
-      registerAsNewUser(WorkbenchEmail(tempUser.email))(tempAuthToken)
-      Sam.user.status()(tempAuthToken).get.userInfo.userEmail shouldBe tempUser.email
+      // Remove user
 
       removeUser(tempUserInfo.userSubjectId)
       Sam.user.status()(tempAuthToken) shouldBe None

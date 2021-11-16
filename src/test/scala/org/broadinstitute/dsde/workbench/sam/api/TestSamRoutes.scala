@@ -9,10 +9,10 @@ import cats.effect.{ContextShift, IO}
 import org.broadinstitute.dsde.workbench.google.mock.MockGoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
-import org.broadinstitute.dsde.workbench.sam.TestSupport.samRequestContext
-import org.broadinstitute.dsde.workbench.sam.config.{LiquibaseConfig, SwaggerConfig}
-import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, MockAccessPolicyDAO, MockDirectoryDAO, MockRegistrationDAO}
-import org.broadinstitute.dsde.workbench.sam.model.{ResourceActionPattern, ResourceRole, ResourceRoleName, ResourceType, ResourceTypeName, SamResourceActions}
+import org.broadinstitute.dsde.workbench.sam.TestSupport.{googleServicesConfig, samRequestContext}
+import org.broadinstitute.dsde.workbench.sam.config.{LiquibaseConfig, SwaggerConfig, TermsOfServiceConfig}
+import org.broadinstitute.dsde.workbench.sam.dataAccess._
+import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.scalatest.concurrent.ScalaFutures
 
@@ -23,15 +23,21 @@ import scala.concurrent.ExecutionContext
 /**
   * Created by dvoet on 7/14/17.
   */
-class TestSamRoutes(resourceService: ResourceService, policyEvaluatorService: PolicyEvaluatorService, userService: UserService, statusService: StatusService, managedGroupService: ManagedGroupService, val userInfo: UserInfo, directoryDAO: DirectoryDAO, val cloudExtensions: CloudExtensions = NoExtensions, override val createWorkbenchUser: Option[CreateWorkbenchUser] = None, tosService: TosService = null)(implicit override val system: ActorSystem, override val materializer: Materializer, override val executionContext: ExecutionContext)
-  extends SamRoutes(resourceService, userService, statusService, managedGroupService, SwaggerConfig("", ""), directoryDAO, policyEvaluatorService, tosService, LiquibaseConfig("", false)) with MockUserInfoDirectives with ExtensionRoutes with ScalaFutures {
+class TestSamRoutes(resourceService: ResourceService, policyEvaluatorService: PolicyEvaluatorService, userService: UserService, statusService: StatusService, managedGroupService: ManagedGroupService, val userInfo: UserInfo, directoryDAO: DirectoryDAO, val cloudExtensions: CloudExtensions = NoExtensions, override val workbenchUser: Option[WorkbenchUser] = None, tosService: TosService = null)(implicit override val system: ActorSystem, override val materializer: Materializer, override val executionContext: ExecutionContext)
+  extends SamRoutes(resourceService, userService, statusService, managedGroupService, SwaggerConfig("", ""), TermsOfServiceConfig(false, 0, "app.terra.bio/#terms-of-service"), directoryDAO, policyEvaluatorService, tosService, LiquibaseConfig("", false)) with MockUserInfoDirectives with ExtensionRoutes with ScalaFutures {
+  def extensionRoutes: server.Route = reject
+  def mockDirectoryDao: DirectoryDAO = directoryDAO
+}
+
+class TestSamTosEnabledRoutes(resourceService: ResourceService, policyEvaluatorService: PolicyEvaluatorService, userService: UserService, statusService: StatusService, managedGroupService: ManagedGroupService, val userInfo: UserInfo, directoryDAO: DirectoryDAO, val cloudExtensions: CloudExtensions = NoExtensions, override val workbenchUser: Option[WorkbenchUser] = None, tosService: TosService = null)(implicit override val system: ActorSystem, override val materializer: Materializer, override val executionContext: ExecutionContext)
+  extends SamRoutes(resourceService, userService, statusService, managedGroupService, SwaggerConfig("", ""), TermsOfServiceConfig(true, 0, "app.terra.bio/#terms-of-service"), directoryDAO, policyEvaluatorService, tosService, LiquibaseConfig("", false)) with MockUserInfoDirectives with ExtensionRoutes with ScalaFutures {
   def extensionRoutes: server.Route = reject
   def mockDirectoryDao: DirectoryDAO = directoryDAO
 }
 
 object TestSamRoutes {
   val defaultUserInfo = UserInfo(OAuth2BearerToken("accessToken"), WorkbenchUserId("user1"), WorkbenchEmail("user1@example.com"), 0)
-  val defaultGoogleSubjectId = GoogleSubjectId("user1")
+  val defaultGoogleSubjectId = Option(GoogleSubjectId("user1"))
 
   object SamResourceActionPatterns {
     val readPolicies = ResourceActionPattern("read_policies", "", false)
@@ -80,10 +86,10 @@ object TestSamRoutes {
     val emailDomain = "example.com"
     val policyEvaluatorService = PolicyEvaluatorService(emailDomain, resourceTypesWithAdmin, policyDAO, directoryDAO)
     val mockResourceService = new ResourceService(resourceTypesWithAdmin, policyEvaluatorService, policyDAO, directoryDAO, NoExtensions, emailDomain)
-    val mockUserService = new UserService(directoryDAO, NoExtensions, registrationDAO, Seq.empty)
+    val mockUserService = new UserService(directoryDAO, NoExtensions, registrationDAO, Seq.empty, new TosService(directoryDAO, googleServicesConfig.appsDomain))
     val mockTosService = new TosService(directoryDAO, emailDomain)
     val mockManagedGroupService = new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypesWithAdmin, policyDAO, directoryDAO, NoExtensions, emailDomain)
-    TestSupport.runAndWait(mockUserService.createUser(CreateWorkbenchUser(userInfo.userId, defaultGoogleSubjectId, userInfo.userEmail, None), samRequestContext))
+    TestSupport.runAndWait(mockUserService.createUser(WorkbenchUser(userInfo.userId, defaultGoogleSubjectId, userInfo.userEmail, None), samRequestContext))
     val allUsersGroup = TestSupport.runAndWait(NoExtensions.getOrCreateAllUsersGroup(directoryDAO, samRequestContext))
     TestSupport.runAndWait(googleDirectoryDAO.createGroup(allUsersGroup.id.toString, allUsersGroup.email))
     mockResourceService.initResourceTypes(samRequestContext).unsafeRunSync()

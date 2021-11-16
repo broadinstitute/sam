@@ -25,7 +25,6 @@ final case class AppConfig(
                             googleConfig: Option[GoogleConfig],
                             resourceTypes: Set[ResourceType],
                             liquibaseConfig: LiquibaseConfig,
-                            identityConcentratorConfig: Option[IdentityConcentratorConfig],
                             blockedEmailDomains: Seq[String],
                             termsOfServiceConfig: TermsOfServiceConfig)
 
@@ -134,17 +133,11 @@ object AppConfig {
     )
   }
 
-  implicit val identityConcentratorConfigReader: ValueReader[IdentityConcentratorConfig] = ValueReader.relative { config =>
-    IdentityConcentratorConfig(
-      config.getString("baseUrl"),
-      config.getInt("threadPoolSize")
-    )
-  }
-
   implicit val termsOfServiceConfigReader: ValueReader[TermsOfServiceConfig] = ValueReader.relative { config =>
     TermsOfServiceConfig(
       config.getBoolean("enabled"),
-      config.getInt("version")
+      config.getInt("version"),
+      config.getString("url")
     )
   }
 
@@ -161,18 +154,16 @@ object AppConfig {
     val schemaLockConfig = config.as[SchemaLockConfig]("schemaLock")
     val distributedLockConfig = config.as[DistributedLockConfig]("distributedLock")
     val swaggerConfig = config.as[SwaggerConfig]("swagger")
+    val termsOfServiceConfig = config.as[TermsOfServiceConfig]("termsOfService")
     // TODO - https://broadinstitute.atlassian.net/browse/GAWB-3603
     // This should JUST get the value from "emailDomain", but for now we're keeping the backwards compatibility code to
     // fall back to getting the "googleServices.appsDomain"
     val emailDomain = config.as[Option[String]]("emailDomain").getOrElse(config.getString("googleServices.appsDomain"))
     val resourceTypes = config.as[Map[String, ResourceType]]("resourceTypes").values.toSet
     val liquibaseConfig = config.as[LiquibaseConfig]("liquibase")
-    val identityConcentratorConfig = config.as[Option[IdentityConcentratorConfig]]("identityConcentrator")
 
     val blockedEmailDomains = config.as[Option[Seq[String]]]("blockedEmailDomains").getOrElse(Seq.empty)
 
-    val termsOfServiceConfig = config.as[TermsOfServiceConfig]("termsOfService")
-
-    AppConfig(emailDomain, directoryConfig, schemaLockConfig, distributedLockConfig, swaggerConfig, googleConfigOption, resourceTypes, liquibaseConfig, identityConcentratorConfig, blockedEmailDomains, termsOfServiceConfig)
+    AppConfig(emailDomain, directoryConfig, schemaLockConfig, distributedLockConfig, swaggerConfig, googleConfigOption, resourceTypes, liquibaseConfig, blockedEmailDomains, termsOfServiceConfig)
   }
 }

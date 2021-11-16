@@ -7,7 +7,7 @@ import akka.http.scaladsl.testkit.ScalatestRouteTest
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model.ErrorReportJsonSupport._
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.TestSupport.{configResourceTypes, genGoogleSubjectId}
+import org.broadinstitute.dsde.workbench.sam.TestSupport.{configResourceTypes, genGoogleSubjectId, googleServicesConfig}
 import org.broadinstitute.dsde.workbench.sam.api.TestSamRoutes.SamResourceActionPatterns
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{MockAccessPolicyDAO, MockDirectoryDAO, MockRegistrationDAO}
 import org.broadinstitute.dsde.workbench.sam.model.RootPrimitiveJsonSupport._
@@ -19,14 +19,14 @@ import org.broadinstitute.dsde.workbench.sam.{TestSupport, model}
 import org.mockito.ArgumentMatcher
 import org.mockito.ArgumentMatchers.{any, argThat, eq => mockitoEq}
 import org.mockito.Mockito._
-import org.scalatestplus.mockito.MockitoSugar
 import org.scalatest.AppendedClues
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
+import org.scalatestplus.mockito.MockitoSugar
 import spray.json.DefaultJsonProtocol._
 import spray.json.{JsBoolean, JsValue}
 
 import scala.concurrent.Future
-import org.scalatest.flatspec.AnyFlatSpec
-import org.scalatest.matchers.should.Matchers
 
 class ResourceRoutesV2Spec extends AnyFlatSpec with Matchers with TestSupport with ScalatestRouteTest with AppendedClues with MockitoSugar {
 
@@ -53,18 +53,18 @@ class ResourceRoutesV2Spec extends AnyFlatSpec with Matchers with TestSupport wi
     resourceTypes.map { case (resourceTypeName, resourceType) =>
       when(mockResourceService.getResourceType(resourceTypeName)).thenReturn(IO(Option(resourceType)))
     }
-    val mockUserService = new UserService(directoryDAO, NoExtensions, registrationDAO, Seq.empty)
+    val mockUserService = new UserService(directoryDAO, NoExtensions, registrationDAO, Seq.empty, new TosService(directoryDAO, googleServicesConfig.appsDomain))
     val mockStatusService = new StatusService(directoryDAO, registrationDAO, NoExtensions, TestSupport.dbRef)
     val mockManagedGroupService = new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, accessPolicyDAO, directoryDAO, NoExtensions, emailDomain)
 
-    mockUserService.createUser(CreateWorkbenchUser(defaultUserInfo.userId, genGoogleSubjectId(), defaultUserInfo.userEmail, None), samRequestContext)
+    mockUserService.createUser(WorkbenchUser(defaultUserInfo.userId, genGoogleSubjectId(), defaultUserInfo.userEmail, None), samRequestContext)
 
     new TestSamRoutes(mockResourceService, policyEvaluatorService, mockUserService, mockStatusService, mockManagedGroupService, userInfo, directoryDAO)
   }
 
   private val managedGroupResourceType = configResourceTypes.getOrElse(ResourceTypeName("managed-group"), throw new Error("Failed to load managed-group resource type from reference.conf"))
 
-  private val defaultTestUser =  CreateWorkbenchUser(WorkbenchUserId("testuser"), genGoogleSubjectId(), WorkbenchEmail("testuser@foo.com"), None)
+  private val defaultTestUser =  WorkbenchUser(WorkbenchUserId("testuser"), genGoogleSubjectId(), WorkbenchEmail("testuser@foo.com"), None)
 
   "GET /api/resources/v2/{resourceType}/{resourceId}/actions/{action}" should "404 for unknown resource type" in {
     val samRoutes = TestSamRoutes(Map.empty)
@@ -249,7 +249,7 @@ class ResourceRoutesV2Spec extends AnyFlatSpec with Matchers with TestSupport wi
 
     val authDomainId = ResourceId("myAuthDomain")
     val otherUser = UserInfo(OAuth2BearerToken("magicString"), WorkbenchUserId("bugsBunny"), WorkbenchEmail("bugsford_bunnington@example.com"), 0)
-    runAndWait(samRoutes.userService.createUser(CreateWorkbenchUser(otherUser.userId, genGoogleSubjectId(), otherUser.userEmail, None), samRequestContext))
+    runAndWait(samRoutes.userService.createUser(WorkbenchUser(otherUser.userId, genGoogleSubjectId(), otherUser.userEmail, None), samRequestContext))
     runAndWait(samRoutes.managedGroupService.createManagedGroup(authDomainId, otherUser, samRequestContext = samRequestContext))
     val authDomain = Set(WorkbenchGroupName(authDomainId.value))
 
@@ -323,7 +323,7 @@ class ResourceRoutesV2Spec extends AnyFlatSpec with Matchers with TestSupport wi
   private def responsePayloadClue(str: String): String = s" -> Here is the response payload: $str"
 
   private def createUserResourcePolicy(members: AccessPolicyMembership, resourceType: ResourceType, samRoutes: TestSamRoutes, resourceId: ResourceId, policyName: AccessPolicyName): Unit = {
-    val user = CreateWorkbenchUser(samRoutes.userInfo.userId, genGoogleSubjectId(), samRoutes.userInfo.userEmail, None)
+    val user = WorkbenchUser(samRoutes.userInfo.userId, genGoogleSubjectId(), samRoutes.userInfo.userEmail, None)
     findOrCreateUser(user, samRoutes.userService)
 
     Post(s"/api/resources/v2/${resourceType.name}/${resourceId.value}") ~> samRoutes.route ~> check {
@@ -336,7 +336,7 @@ class ResourceRoutesV2Spec extends AnyFlatSpec with Matchers with TestSupport wi
     }
   }
 
-  private def findOrCreateUser(user: CreateWorkbenchUser, userService: UserService): UserStatus = {
+  private def findOrCreateUser(user: WorkbenchUser, userService: UserService): UserStatus = {
     runAndWait(userService.getUserStatus(user.id, samRequestContext = samRequestContext)) match {
       case Some(userStatus) => userStatus
       case None => runAndWait(userService.createUser(user, samRequestContext))
@@ -397,7 +397,7 @@ class ResourceRoutesV2Spec extends AnyFlatSpec with Matchers with TestSupport wi
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
 
     samRoutes.resourceService.createResourceType(resourceType, samRequestContext).unsafeRunSync()
-    runAndWait(samRoutes.userService.createUser(CreateWorkbenchUser(WorkbenchUserId("user2"), genGoogleSubjectId(), WorkbenchEmail("user2@example.com"), None), samRequestContext))
+    runAndWait(samRoutes.userService.createUser(WorkbenchUser(WorkbenchUserId("user2"), genGoogleSubjectId(), WorkbenchEmail("user2@example.com"), None), samRequestContext))
     runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), UserInfo(OAuth2BearerToken("accessToken"), WorkbenchUserId("user2"), WorkbenchEmail("user2@example.com"), 0), samRequestContext))
 
     //Verify resource exists by checking for conflict on recreate
@@ -530,7 +530,7 @@ class ResourceRoutesV2Spec extends AnyFlatSpec with Matchers with TestSupport wi
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
     val testUser = UserInfo(OAuth2BearerToken("token"), WorkbenchUserId("testuser"), WorkbenchEmail("testuser@foo.com"), 0)
 
-    runAndWait(samRoutes.userService.createUser(CreateWorkbenchUser(testUser.userId, genGoogleSubjectId(), testUser.userEmail, None), samRequestContext))
+    runAndWait(samRoutes.userService.createUser(WorkbenchUser(testUser.userId, genGoogleSubjectId(), testUser.userEmail, None), samRequestContext))
 
     runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), testUser, samRequestContext))
 
@@ -608,7 +608,7 @@ class ResourceRoutesV2Spec extends AnyFlatSpec with Matchers with TestSupport wi
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
     val testUser = UserInfo(OAuth2BearerToken("token"), WorkbenchUserId("testuser"), WorkbenchEmail("testuser@foo.com"), 0)
 
-    runAndWait(samRoutes.userService.createUser(CreateWorkbenchUser(testUser.userId, genGoogleSubjectId(), testUser.userEmail, None), samRequestContext))
+    runAndWait(samRoutes.userService.createUser(WorkbenchUser(testUser.userId, genGoogleSubjectId(), testUser.userEmail, None), samRequestContext))
 
     runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), testUser, samRequestContext))
 

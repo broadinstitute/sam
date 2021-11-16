@@ -94,7 +94,7 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
 
   before {
     clearDatabase()
-    dirDAO.createUser(WorkbenchUser(dummyUserInfo.userId, Some(TestSupport.genGoogleSubjectId()), dummyUserInfo.userEmail, Some(TestSupport.genIdentityConcentratorId())), samRequestContext).unsafeRunSync()
+    dirDAO.createUser(WorkbenchUser(dummyUserInfo.userId, TestSupport.genGoogleSubjectId(), dummyUserInfo.userEmail, Some(TestSupport.genAzureB2CId())), samRequestContext).unsafeRunSync()
   }
 
   protected def clearDatabase(): Unit = TestSupport.truncateAll
@@ -1126,8 +1126,8 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
     val resourceOwnerUserInfo = UserInfo(OAuth2BearerToken("token"), WorkbenchUserId("user1"), WorkbenchEmail("user1@company.com"), 0)
     val managedGroupOwnerUserInfo = UserInfo(OAuth2BearerToken("token"), WorkbenchUserId("user2"), WorkbenchEmail("user2@company.com"), 0)
 
-    dirDAO.createUser(WorkbenchUser(resourceOwnerUserInfo.userId, Some(TestSupport.genGoogleSubjectId()), resourceOwnerUserInfo.userEmail, Some(TestSupport.genIdentityConcentratorId())), samRequestContext).unsafeRunSync()
-    dirDAO.createUser(WorkbenchUser(managedGroupOwnerUserInfo.userId, Some(TestSupport.genGoogleSubjectId()), managedGroupOwnerUserInfo.userEmail, Some(TestSupport.genIdentityConcentratorId())), samRequestContext).unsafeRunSync()
+    dirDAO.createUser(WorkbenchUser(resourceOwnerUserInfo.userId, TestSupport.genGoogleSubjectId(), resourceOwnerUserInfo.userEmail, Some(TestSupport.genAzureB2CId())), samRequestContext).unsafeRunSync()
+    dirDAO.createUser(WorkbenchUser(managedGroupOwnerUserInfo.userId, TestSupport.genGoogleSubjectId(), managedGroupOwnerUserInfo.userEmail, Some(TestSupport.genAzureB2CId())), samRequestContext).unsafeRunSync()
 
     val resourceOwner = dirDAO.loadUser(resourceOwnerUserInfo.userId, samRequestContext).unsafeRunSync().map { user => UserIdInfo(user.id, user.email, user.googleSubjectId) }.get
     val managedGroupOwner = dirDAO.loadUser(managedGroupOwnerUserInfo.userId, samRequestContext).unsafeRunSync().map { user => UserIdInfo(user.id, user.email, user.googleSubjectId) }.get

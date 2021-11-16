@@ -5,11 +5,13 @@ import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directives._
+import akka.http.scaladsl.server.{Directive0, ExceptionHandler}
 import org.broadinstitute.dsde.workbench.model.google.GoogleProject
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.service.UserService
 import org.broadinstitute.dsde.workbench.sam.service.UserService.genWorkbenchUserId
+
 import scala.concurrent.ExecutionContext
 
 /**
@@ -19,20 +21,35 @@ trait UserRoutes extends UserInfoDirectives with SamRequestContextDirectives {
   implicit val executionContext: ExecutionContext
   val userService: UserService
 
+  /**
+    * Changes a 403 error to a 404 error. Used when `UserInfoDirectives` throws a 403 in the case where
+    * a user is not found. In most routes that is appropriate but in the user routes it should be a 404.
+    */
+  private val changeForbiddenToNotFound: Directive0 = {
+    import org.broadinstitute.dsde.workbench.model.ErrorReportJsonSupport._
+
+    handleExceptions(ExceptionHandler {
+      case withErrorReport: WorkbenchExceptionWithErrorReport if withErrorReport.errorReport.statusCode.contains(StatusCodes.Forbidden) =>
+        complete((StatusCodes.NotFound, withErrorReport.errorReport.copy(statusCode = Option(StatusCodes.NotFound))))
+    })
+  }
+
   def userRoutes: server.Route =
     pathPrefix("user") {
       (pathPrefix("v1") | pathEndOrSingleSlash) {
         pathEndOrSingleSlash {
           post {
-            withSamRequestContext { samRequestContext =>
-              requireCreateUser(samRequestContext) { createUser =>
-                complete {
-                  userService.createUser(createUser, samRequestContext).map(userStatus => StatusCodes.Created -> userStatus)
+            withTermsOfServiceAcceptance {
+              withSamRequestContext { samRequestContext =>
+                requireCreateUser(samRequestContext) { createUser =>
+                  complete {
+                    userService.createUser(createUser, samRequestContext).map(userStatus => StatusCodes.Created -> userStatus)
+                  }
                 }
               }
             }
           } ~ withSamRequestContext { samRequestContext =>
-            requireUserInfo(samRequestContext) { user =>
+            (changeForbiddenToNotFound & requireUserInfo(samRequestContext)) { user =>
               get {
                 parameter("userDetailsOnly".?) { userDetailsOnly =>
                   complete {
@@ -53,16 +70,18 @@ trait UserRoutes extends UserInfoDirectives with SamRequestContextDirectives {
         pathPrefix("self") {
           pathEndOrSingleSlash {
             post {
-              withSamRequestContext { samRequestContext =>
-                requireCreateUser(samRequestContext) { createUser =>
-                  complete {
-                    userService.createUser(createUser, samRequestContext).map(userStatus => StatusCodes.Created -> userStatus)
+              withTermsOfServiceAcceptance {
+                withSamRequestContext { samRequestContext =>
+                  requireCreateUser(samRequestContext) { createUser =>
+                    complete {
+                      userService.createUser(createUser, samRequestContext).map(userStatus => StatusCodes.Created -> userStatus)
+                    }
                   }
                 }
               }
             }
           } ~ withSamRequestContext { samRequestContext =>
-            requireUserInfo(samRequestContext) { user =>
+            (changeForbiddenToNotFound & requireUserInfo(samRequestContext)) { user =>
               path("info") {
                 get {
                   complete {

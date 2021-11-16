@@ -24,7 +24,6 @@ import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport.Work
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google._
 import org.broadinstitute.dsde.workbench.sam._
-import org.broadinstitute.dsde.workbench.sam.api.CreateWorkbenchUser
 import org.broadinstitute.dsde.workbench.sam.config.{GoogleServicesConfig, PetServiceAccountConfig}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, RegistrationDAO}
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
@@ -120,9 +119,9 @@ class GoogleExtensions(
       }
       _ <- IO.fromFuture(
         IO(
-          samApplication.userService.createUser(CreateWorkbenchUser(
+          samApplication.userService.createUser(WorkbenchUser(
             serviceAccountUserInfo.userId,
-            GoogleSubjectId(googleServicesConfig.serviceAccountClientId),
+            Option(GoogleSubjectId(googleServicesConfig.serviceAccountClientId)),
             serviceAccountUserInfo.userEmail,
             None), samRequestContext) recover {
             case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode == Option(StatusCodes.Conflict) =>
@@ -225,28 +224,19 @@ class GoogleExtensions(
 
       // get all the ids of the group and its ancestors
       managedGroupIds = (ancestorGroupsOfManagedGroups + groupIdentity).collect {
-        case FullyQualifiedPolicyId(FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, id), ManagedGroupService.adminPolicyName | ManagedGroupService.memberPolicyName) => id
+        case FullyQualifiedPolicyId(FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, id), ManagedGroupService.adminPolicyName | ManagedGroupService.memberPolicyName) => WorkbenchGroupName(id.value)
       }
 
       // get all access policies on any resource that is constrained by the groups
-      constrainedResourceAccessPolicies <- managedGroupIds.toList.traverse(id => getAccessPoliciesOnResourcesConstrainedByGroup(id, samRequestContext))
+      constrainedResourceAccessPolicyIds <- managedGroupIds.toList.traverse(
+        accessPolicyDAO.listSyncedAccessPolicyIdsOnResourcesConstrainedByGroup(_, samRequestContext))
 
       // return messages for all the affected access policies and the original group we started with
-    } yield constrainedResourceAccessPolicies.flatten.map(accessPolicy => accessPolicy.id.toJson.compactPrint)
+    } yield constrainedResourceAccessPolicyIds.flatten.map(accessPolicyId => accessPolicyId.toJson.compactPrint)
   }
 
   private def publishMessages(messages: Seq[String]): Future[Unit] = {
     googleGroupSyncPubSubDAO.publishMessages(googleServicesConfig.groupSyncPubSubConfig.topic, messages)
-  }
-
-
-  private def getAccessPoliciesOnResourcesConstrainedByGroup(groupId: ResourceId, samRequestContext: SamRequestContext): IO[List[AccessPolicy]] = {
-    for {
-      resources <- accessPolicyDAO.listResourcesConstrainedByGroup(WorkbenchGroupName(groupId.value), samRequestContext)
-      policies <- resources.toList.traverse { resource =>
-        accessPolicyDAO.listAccessPolicies(resource.fullyQualifiedId, samRequestContext)
-      }
-    } yield policies.flatten
   }
 
   override def onUserCreate(user: WorkbenchUser, samRequestContext: SamRequestContext): Future[Unit] = {

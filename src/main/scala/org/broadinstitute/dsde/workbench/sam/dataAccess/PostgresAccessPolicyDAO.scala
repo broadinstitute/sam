@@ -47,7 +47,7 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
     */
   override def upsertResourceTypes(resourceTypes: Set[ResourceType], samRequestContext: SamRequestContext): IO[Set[ResourceTypeName]] = {
     val result = if (resourceTypes.nonEmpty) {
-      writeTransaction("upsertResourceTypes", samRequestContext) { implicit session =>
+      serializableWriteTransaction("upsertResourceTypes", samRequestContext) { implicit session =>
         samsql"lock table ${ResourceTypeTable.table} IN EXCLUSIVE MODE".execute().apply()
 
         val existingResourceTypes = loadResourceTypesInSession(resourceTypes.map(_.name))
@@ -555,8 +555,9 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
     })
   }
 
-  override def listResourcesConstrainedByGroup(groupId: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[Set[Resource]] = {
-    readOnlyTransaction("listResourcesConstrainedByGroup", samRequestContext)({ implicit session =>
+  override def listSyncedAccessPolicyIdsOnResourcesConstrainedByGroup(groupId: WorkbenchGroupIdentity,
+                                                                      samRequestContext: SamRequestContext): IO[Set[FullyQualifiedPolicyId]] = {
+    readOnlyTransaction("listSyncedAccessPolicyIdsOnResourcesConstrainedByGroup", samRequestContext)({ implicit session =>
       val r = ResourceTable.syntax("r")
       val ad = AuthDomainTable.syntax("ad")
       val g = GroupTable.syntax("g")
@@ -580,20 +581,19 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
            and ${policy.resource.resourceTypeName} = ${rt.name}"""
       }
 
-      val results = samsql"""select ${rt.result.name}, ${r.result.name}, ${g.result.name}
-                      from ${ResourceTable as r}
-                      join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
-                      left join ${AuthDomainTable as ad} on ${r.id} = ${ad.resourceId}
-                      left join ${GroupTable as g} on ${ad.groupId} = ${g.id}
-                      where ${r.id} in (${constrainedResourcesPKs})"""
-        .map(rs => (rs.get[ResourceTypeName](rt.resultName.name), rs.get[ResourceId](r.resultName.name), rs.get[WorkbenchGroupName](g.resultName.name))).list().apply()
-
-      val resultsByResource = results.groupBy(result => (result._1, result._2))
-      resultsByResource.map {
-        case ((resourceTypeName, resourceId), groupedResults) => Resource(resourceTypeName, resourceId, groupedResults.collect {
-          case (_, _, authDomainGroupName) => authDomainGroupName
-        }.toSet)
-      }.toSet
+      samsql"""
+          select ${rt.result.name}, ${r.result.name}, ${p.result.name}
+           from ${ResourceTable as r}
+           join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
+           join ${PolicyTable as p} on ${r.id} = ${p.resourceId}
+           join ${GroupTable as g} on ${p.groupId} = ${g.id}
+           where ${r.id} in (${constrainedResourcesPKs})
+           and ${g.synchronizedDate} is not null"""
+          .map(rs =>
+            FullyQualifiedPolicyId(
+              FullyQualifiedResourceId(rs.get[ResourceTypeName](rt.resultName.name), rs.get[ResourceId](r.resultName.name)),
+              rs.get[AccessPolicyName](p.resultName.name)))
+        .list().apply().toSet
     })
   }
 
@@ -602,7 +602,7 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
     val ad = AuthDomainTable.syntax("ad")
     val rt = ResourceTypeTable.syntax("rt")
 
-    writeTransaction("removeAuthDomainFromResource", samRequestContext)({ implicit session =>
+    serializableWriteTransaction("removeAuthDomainFromResource", samRequestContext)({ implicit session =>
       samsql"""delete from ${AuthDomainTable as ad}
               where ${ad.resourceId} =
               (select ${r.id} from ${ResourceTable as r}

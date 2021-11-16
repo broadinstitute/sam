@@ -13,18 +13,6 @@ trait DatabaseSupport {
   protected val writeDbRef: DbReference
   protected val readDbRef: DbReference
 
-  /**
-    * Executes postgres query.
-    *
-    * @param dbQueryName name of the database query. Used to identify the name of the tracing span.
-    * @param samRequestContext context of the request. If it contains a parentSpan, then a child span will be
-    *                          created under the parent span.
-    */
-  protected def writeTransaction[A](dbQueryName: String, samRequestContext: SamRequestContext)(databaseFunction: DBSession => A)(implicit cs: ContextShift[IO]): IO[A] = {
-    val databaseIO = IO(writeDbRef.inLocalTransaction(databaseFunction))
-    writeDbRef.runDatabaseIO(dbQueryName, samRequestContext, databaseIO, cs)
-  }
-
   protected def readOnlyTransaction[A](dbQueryName: String, samRequestContext: SamRequestContext)(databaseFunction: DBSession => A)(implicit cs: ContextShift[IO]): IO[A] = {
     val databaseIO = IO(readDbRef.readOnly(databaseFunction))
     readDbRef.runDatabaseIO(dbQueryName, samRequestContext, databaseIO, cs)

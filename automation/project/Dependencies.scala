@@ -7,9 +7,9 @@ object Dependencies {
   val akkaV = "2.6.10"
   val akkaHttpV = "10.2.2"
 
-  val workbenchGoogleV = "0.21-74c9fc2"
-  val workbenchGoogle2V = "0.18-74c9fc2"
-  val workbenchServiceTestV = "0.18-74c9fc2"
+  val workbenchGoogleV = "0.21-ae11b9f"
+  val workbenchGoogle2V = "0.23-7ddf186"
+  val workbenchServiceTestV = "0.21-6fdd209"
 
   val excludeWorkbenchModel = ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-model_" + scalaV)
 
@@ -26,6 +26,7 @@ object Dependencies {
     "com.fasterxml.jackson.core" % "jackson-core" % jacksonV,
     "com.fasterxml.jackson.module" % ("jackson-module-scala_" + scalaV) % jacksonV,
     "ch.qos.logback" % "logback-classic" % "1.2.3",
+    "net.logstash.logback" % "logstash-logback-encoder" % "6.6",
     "com.google.apis" % "google-api-services-oauth2" % "v1-rev112-1.20.0" excludeAll (
       ExclusionRule("com.google.guava", "guava-jdk5"),
       ExclusionRule("org.apache.httpcomponents", "httpclient")

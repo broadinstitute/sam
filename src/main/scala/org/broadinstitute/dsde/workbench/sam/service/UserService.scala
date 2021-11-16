@@ -2,14 +2,15 @@ package org.broadinstitute.dsde.workbench.sam
 package service
 
 import java.security.SecureRandom
-
 import akka.http.scaladsl.model.StatusCodes
 import cats.effect.{ContextShift, IO}
+import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
+
 import javax.naming.NameNotFoundException
 import org.apache.commons.codec.binary.Hex
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.api.{CreateWorkbenchUser, InviteUser}
+import org.broadinstitute.dsde.workbench.sam.api.InviteUser
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, RegistrationDAO}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
@@ -20,15 +21,20 @@ import scala.util.matching.Regex
 /**
   * Created by dvoet on 7/14/17.
   */
-class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExtensions, val registrationDAO: RegistrationDAO, blockedEmailDomains: Seq[String])(implicit val executionContext: ExecutionContext, contextShift: ContextShift[IO]) extends LazyLogging {
+class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExtensions, val registrationDAO: RegistrationDAO, blockedEmailDomains: Seq[String], tosService: TosService)(implicit val executionContext: ExecutionContext, contextShift: ContextShift[IO]) extends LazyLogging {
 
-  def createUser(user: CreateWorkbenchUser, samRequestContext: SamRequestContext): Future[UserStatus] = {
+  def createUser(user: WorkbenchUser, samRequestContext: SamRequestContext, tosEnforcementEnabled: Boolean = false, tosVersion: Int = 0): Future[UserStatus] = {
     for {
       _ <- UserService.validateEmailAddress(user.email, blockedEmailDomains).unsafeToFuture()
       allUsersGroup <- cloudExtensions.getOrCreateAllUsersGroup(directoryDAO, samRequestContext)
       createdUser <- registerUser(user, samRequestContext).unsafeToFuture()
       _ <- enableUserInternal(createdUser, samRequestContext)
       _ <- directoryDAO.addGroupMember(allUsersGroup.id, createdUser.id, samRequestContext).unsafeToFuture()
+      tosGroupOpt <- if (tosEnforcementEnabled) tosService.getTosGroup(tosVersion).unsafeToFuture() else Future.successful(None)
+      _ <- (tosEnforcementEnabled, tosGroupOpt) match {
+        case (true, Some(tosGroup)) => directoryDAO.addGroupMember(tosGroup.id, createdUser.id, samRequestContext).unsafeToFuture()
+        case _ => Future.successful(true)
+      }
       userStatus <- getUserStatus(createdUser.id, samRequestContext = samRequestContext)
       res <- userStatus.toRight(new WorkbenchException("getUserStatus returned None after user was created")).fold(Future.failed, Future.successful)
     } yield res
@@ -46,43 +52,60 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
     } yield UserStatusDetails(createdUser.id, createdUser.email)
 
   /**
-    * If googleSubjectId exists in ldap, return 409; else if email also exists, we lookup pre-created user record and update
-    * its googleSubjectId field; otherwise, we create a new user
-    *
-    * GoogleSubjectId    Email
-    *      no             no      ---> We've never seen this user before, create a new user
-    *      no             yes      ---> Someone invited this user previous and we have a record for this user already. We just need to update GoogleSubjetId field for this user.
-    *      yes            skip    ---> User exists. Do nothing.
-    *      yes            skip    ---> User exists. Do nothing.
+    * First lookup user by either googleSubjectId or azureB2DId, whichever is populated. If the user exists
+    * throw a conflict error. If the user does not exist look them up by email. If the user email exists
+    * then this is an invited user, update their googleSubjectId and/or azureB2CId. If the email does not exist,
+    * this is a new user, create them.
     */
-  protected[service] def registerUser(user: CreateWorkbenchUser, samRequestContext: SamRequestContext): IO[WorkbenchUser] =
+  protected[service] def registerUser(user: WorkbenchUser, samRequestContext: SamRequestContext): IO[WorkbenchUser] =
     for {
-      existingSubFromGoogleSubjectId <- directoryDAO.loadSubjectFromGoogleSubjectId(user.googleSubjectId, samRequestContext)
-      user <- existingSubFromGoogleSubjectId match {
-        case Some(_) => IO.raiseError[WorkbenchUser](new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"user ${user} already exists")))
+      _ <- validateNewWorkbenchUser(user, samRequestContext)
+      subjectWithEmail <- directoryDAO.loadSubjectFromEmail(user.email, samRequestContext)
+      updated <- subjectWithEmail match {
+        case Some(uid: WorkbenchUserId) =>
+          acceptInvitedUser(user, samRequestContext, uid)
+
         case None =>
-          for {
-            subjectFromEmail <- directoryDAO.loadSubjectFromEmail(user.email, samRequestContext)
-            updated <- subjectFromEmail match {
-              case Some(uid: WorkbenchUserId) =>
-                for {
-                  groups <- directoryDAO.listUserDirectMemberships(uid, samRequestContext)
-                  _ <- directoryDAO.setGoogleSubjectId(uid, user.googleSubjectId, samRequestContext)
-                  _ <- registrationDAO.setGoogleSubjectId(uid, user.googleSubjectId, samRequestContext)
-                  _ <- IO.fromFuture(IO(cloudExtensions.onGroupUpdate(groups, samRequestContext)))
-                } yield WorkbenchUser(uid, Some(user.googleSubjectId), user.email, user.identityConcentratorId)
+          createUserInternal(WorkbenchUser(user.id, user.googleSubjectId, user.email, user.azureB2CId), samRequestContext)
 
-              case Some(_) =>
-                //We don't support inviting a group account or pet service account
-                IO.raiseError[WorkbenchUser](
-                  new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"$user is not a regular user. Please use a different endpoint")))
-              case None =>
-                createUserInternal(WorkbenchUser(WorkbenchUserId(user.googleSubjectId.value), Some(user.googleSubjectId), user.email, user.identityConcentratorId), samRequestContext) //For completely new users, we still use googleSubjectId as their userId
+        case Some(_) =>
+          //We don't support inviting a group account or pet service account
+          IO.raiseError[WorkbenchUser](
+            new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"$user is not a regular user. Please use a different endpoint")))
 
-            }
-          } yield updated
       }
-    } yield user
+    } yield updated
+
+  private def acceptInvitedUser(user: WorkbenchUser, samRequestContext: SamRequestContext, uid: WorkbenchUserId) = {
+    for {
+      groups <- directoryDAO.listUserDirectMemberships(uid, samRequestContext)
+      _ <- user.googleSubjectId.traverse { googleSubjectId =>
+        for {
+          _ <- directoryDAO.setGoogleSubjectId(uid, googleSubjectId, samRequestContext)
+          _ <- registrationDAO.setGoogleSubjectId(uid, googleSubjectId, samRequestContext)
+        } yield ()
+      }
+      _ <- user.azureB2CId.traverse { azureB2CId =>
+        directoryDAO.setUserAzureB2CId(uid, azureB2CId, samRequestContext)
+      }
+      _ <- IO.fromFuture(IO(cloudExtensions.onGroupUpdate(groups, samRequestContext)))
+    } yield WorkbenchUser(uid, user.googleSubjectId, user.email, user.azureB2CId)
+  }
+
+  private def validateNewWorkbenchUser(newWorkbenchUser: WorkbenchUser, samRequestContext: SamRequestContext): IO[Unit] = {
+    for {
+      existingUser <- newWorkbenchUser match {
+        case WorkbenchUser(_, Some(googleSubjectId), _, _) => directoryDAO.loadSubjectFromGoogleSubjectId(googleSubjectId, samRequestContext)
+        case WorkbenchUser(_, _, _, Some(azureB2CId)) => directoryDAO.loadUserByAzureB2CId(azureB2CId, samRequestContext).map(_.map(_.id))
+        case _ => IO.raiseError(new WorkbenchException("cannot create user when neither google subject id nor azure b2c id exists"))
+      }
+
+      _ <- existingUser match {
+        case Some(_) => IO.raiseError[WorkbenchUser](new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"user ${newWorkbenchUser.email} already exists")))
+        case None => IO.unit
+      }
+    } yield ()
+  }
 
   private def createUserInternal(user: WorkbenchUser, samRequestContext: SamRequestContext) = {
     for {

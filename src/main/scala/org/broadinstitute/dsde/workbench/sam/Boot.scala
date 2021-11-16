@@ -2,7 +2,6 @@ package org.broadinstitute.dsde.workbench.sam
 
 import java.io.File
 import java.net.URI
-
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import cats.data.NonEmptyList
@@ -14,6 +13,7 @@ import com.typesafe.scalalogging.LazyLogging
 import com.unboundid.ldap.sdk._
 import org.typelevel.log4cats.StructuredLogger
 import org.typelevel.log4cats.slf4j.Slf4jLogger
+
 import javax.net.SocketFactory
 import javax.net.ssl.SSLContext
 import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
@@ -23,18 +23,16 @@ import org.broadinstitute.dsde.workbench.google2.util.DistributedLock
 import org.broadinstitute.dsde.workbench.google2.{GoogleFirestoreInterpreter, GoogleStorageInterpreter, GoogleStorageService}
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException}
 import org.broadinstitute.dsde.workbench.sam.api.{SamRoutes, StandardUserInfoDirectives}
-import org.broadinstitute.dsde.workbench.sam.config.{AppConfig, GoogleConfig, IdentityConcentratorConfig}
+import org.broadinstitute.dsde.workbench.sam.config.{AppConfig, GoogleConfig}
 import org.broadinstitute.dsde.workbench.sam.dataAccess._
 import org.broadinstitute.dsde.workbench.sam.db.DatabaseNames.DatabaseName
 import org.broadinstitute.dsde.workbench.sam.db.{DatabaseNames, DbReference}
 import org.broadinstitute.dsde.workbench.sam.google._
-import org.broadinstitute.dsde.workbench.sam.identityConcentrator.{IdentityConcentratorService, StandardIdentityConcentratorApi}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.util.DelegatePool
 import org.broadinstitute.dsde.workbench.util2.ExecutionContexts
-import org.http4s.client.blaze.BlazeClientBuilder
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -124,8 +122,6 @@ object Boot extends IOApp with LazyLogging {
 
       blockingEc <- ExecutionContexts.fixedThreadPool[IO](24)
 
-      identityConcentrator <- identityConcentratorResource(appConfig)
-
       cloudExtensionsInitializer <- cloudExtensionsInitializerResource(
         appConfig,
         foregroundDirectoryDAO,
@@ -135,7 +131,7 @@ object Boot extends IOApp with LazyLogging {
         backgroundAccessPolicyDAO,
         backgroundLdapExecutionContext,
         blockingEc)
-    } yield createAppDepenciesWithSamRoutes(appConfig, cloudExtensionsInitializer, foregroundAccessPolicyDAO, foregroundDirectoryDAO, registrationDAO, identityConcentrator)
+    } yield createAppDepenciesWithSamRoutes(appConfig, cloudExtensionsInitializer, foregroundAccessPolicyDAO, foregroundDirectoryDAO, registrationDAO)
 
   private def cloudExtensionsInitializerResource(
       appConfig: AppConfig,
@@ -182,18 +178,6 @@ object Boot extends IOApp with LazyLogging {
           new GoogleExtensionsInitializer(cloudExtension, googleGroupSynchronizer)
         }
       case None => cats.effect.Resource.pure[IO, CloudExtensionsInitializer](NoExtensionsInitializer)
-    }
-
-  private def identityConcentratorResource(appConfig: AppConfig): effect.Resource[IO, Option[IdentityConcentratorService]] =
-    appConfig.identityConcentratorConfig match {
-      case Some(IdentityConcentratorConfig(baseUrl, threadPoolSize)) =>
-        for {
-          identityConcentratorEc <- ExecutionContexts.fixedThreadPool[IO](threadPoolSize)
-          httpClient <- BlazeClientBuilder.apply[IO](identityConcentratorEc).resource
-        } yield {
-          Option(new IdentityConcentratorService(new StandardIdentityConcentratorApi(baseUrl, httpClient)))
-        }
-      case _ => cats.effect.Resource.pure[IO, Option[IdentityConcentratorService]](None)
     }
 
   private def createDAOs(appConfig: AppConfig,
@@ -319,13 +303,12 @@ object Boot extends IOApp with LazyLogging {
       cloudExtensionsInitializer: CloudExtensionsInitializer,
       accessPolicyDAO: AccessPolicyDAO,
       directoryDAO: DirectoryDAO,
-      registrationDAO: RegistrationDAO,
-      identityConcentrator: Option[IdentityConcentratorService])(implicit actorSystem: ActorSystem): AppDependencies = {
+      registrationDAO: RegistrationDAO)(implicit actorSystem: ActorSystem): AppDependencies = {
     val resourceTypeMap = config.resourceTypes.map(rt => rt.name -> rt).toMap
     val policyEvaluatorService = PolicyEvaluatorService(config.emailDomain, resourceTypeMap, accessPolicyDAO, directoryDAO)
     val resourceService = new ResourceService(resourceTypeMap, policyEvaluatorService, accessPolicyDAO, directoryDAO, cloudExtensionsInitializer.cloudExtensions, config.emailDomain)
-    val userService = new UserService(directoryDAO, cloudExtensionsInitializer.cloudExtensions, registrationDAO, config.blockedEmailDomains)
     val tosService = new TosService(directoryDAO, config.googleConfig.get.googleServicesConfig.appsDomain)
+    val userService = new UserService(directoryDAO, cloudExtensionsInitializer.cloudExtensions, registrationDAO, config.blockedEmailDomains, tosService)
     val statusService = new StatusService(directoryDAO, registrationDAO, cloudExtensionsInitializer.cloudExtensions, DbReference(DatabaseNames.Read, implicitly), 10 seconds)
     val managedGroupService =
       new ManagedGroupService(resourceService, policyEvaluatorService, resourceTypeMap, accessPolicyDAO, directoryDAO, cloudExtensionsInitializer.cloudExtensions, config.emailDomain)
@@ -333,19 +316,16 @@ object Boot extends IOApp with LazyLogging {
 
     cloudExtensionsInitializer match {
       case GoogleExtensionsInitializer(googleExt, synchronizer) =>
-        val routes = new SamRoutes(resourceService, userService, statusService, managedGroupService, config.swaggerConfig, directoryDAO, policyEvaluatorService, tosService, config.liquibaseConfig)
+        val routes = new SamRoutes(resourceService, userService, statusService, managedGroupService, config.swaggerConfig, config.termsOfServiceConfig, directoryDAO, policyEvaluatorService, tosService, config.liquibaseConfig)
         with StandardUserInfoDirectives with GoogleExtensionRoutes {
           val googleExtensions = googleExt
           val cloudExtensions = googleExt
           val googleGroupSynchronizer = synchronizer
-          override val identityConcentratorService = identityConcentrator
         }
         AppDependencies(routes, samApplication, cloudExtensionsInitializer, directoryDAO, accessPolicyDAO, policyEvaluatorService)
       case _ =>
-        val routes = new SamRoutes(resourceService, userService, statusService, managedGroupService, config.swaggerConfig, directoryDAO, policyEvaluatorService, tosService, config.liquibaseConfig)
-        with StandardUserInfoDirectives with NoExtensionRoutes {
-          override val identityConcentratorService = identityConcentrator
-        }
+        val routes = new SamRoutes(resourceService, userService, statusService, managedGroupService, config.swaggerConfig, config.termsOfServiceConfig, directoryDAO, policyEvaluatorService, tosService, config.liquibaseConfig)
+        with StandardUserInfoDirectives with NoExtensionRoutes
         AppDependencies(routes, samApplication, NoExtensionsInitializer, directoryDAO, accessPolicyDAO, policyEvaluatorService)
     }
   }
