@@ -2754,7 +2754,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SystemStatus'
-  /register/tos/text:
+  /tos/text:
     get:
       tags:
         - Terms of Service

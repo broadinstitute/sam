@@ -103,7 +103,7 @@ class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with Sca
       val anyUser: Credentials = UserPool.chooseAnyUser
       val userAuthToken: AuthToken = anyUser.makeAuthToken()
 
-      val response = Sam.getRequest(Sam.url + s"register/tos/text")(userAuthToken)
+      val response = Sam.getRequest(Sam.url + s"tos/text")(userAuthToken)
       val textFuture = Unmarshal(response.entity).to[String]
 
       response.status shouldEqual StatusCodes.OK
