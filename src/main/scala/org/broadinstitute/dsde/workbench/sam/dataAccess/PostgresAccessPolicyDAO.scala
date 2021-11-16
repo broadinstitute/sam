@@ -1350,7 +1350,7 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
     })
   }
 
-  override def recreateEffectivePolicyRolesTableEntry(resourceTypeName: ResourceTypeName, samRequestContext: SamRequestContext)(implicit session: DBSession): IO[Unit] = {
+  override def recreateEffectivePolicyRolesTableEntry(resourceTypeName: ResourceTypeName, samRequestContext: SamRequestContext): IO[Unit] = {
     val resource = ResourceTable.syntax("resource")
     val resourceRole = ResourceRoleTable.syntax("resourceRole")
     val resourcePolicy = PolicyTable.syntax("resourcePolicy")
@@ -1361,42 +1361,44 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
     val effectivePolicyRoleTable = EffectivePolicyRoleTable.syntax("effectivePolicyRoleTable")
     val effectiveResourcePolicyTable = EffectiveResourcePolicyTable.syntax("effectiveResourcePolicyTable")
 
-
-    samsql"""delete from ${EffectivePolicyRoleTable as effectivePolicyRoleTable}
-             using ${EffectiveResourcePolicyTable as effectiveResourcePolicyTable},
-             ${ResourceRoleTable as resourceRole},
-             ${ResourceTable as resource},
-             ${ResourceTypeTable as resourceTypeOne}
-             ${ResourceTypeTable as resourceTypeTwo}
-             where ${effectivePolicyRoleTable.effectiveResourcePolicyId} = ${effectiveResourcePolicyTable.id}
-             and${effectiveResourcePolicyTable.resourceId} = ${resource.id}
-             and ${resource.resourceTypeId} = ${resourceTypeOne.id}
-             and ${effectivePolicyRoleTable.resourceRoleId} = ${resourceRole.id}
-             and ${resourceRole.resourceTypeId} = ${resourceTypeTwo.id}
-             and (${resourceTypeOne.name} = ${resourceTypeName}
-             or ${resourceTypeTwo.name} = ${resourceTypeName})
-          """.update().apply()
-
-    samsql"""insert into ${EffectivePolicyRoleTable.table}(${EffectivePolicyRoleTable.column.effectiveResourcePolicyId}, ${EffectivePolicyRoleTable.column.resourceRoleId})
-             select ${effectiveResourcePolicyTable.id}, ${resourceRole.id} from
-             ${EffectiveResourcePolicyTable as effectiveResourcePolicyTable}
-             join ${PolicyRoleTable as policyRole} on ${effectiveResourcePolicyTable.sourcePolicyId} = ${policyRole.resourcePolicyId}
-             join ${ResourceTable as resource} on ${effectiveResourcePolicyTable.resourceId} = ${resource.id}
-             join ${FlattenedRoleMaterializedView as flattenedRole} on ${policyRole.resourceRoleId} = ${flattenedRole.baseRoleId}
-             join ${ResourceRoleTable as resourceRole} on ${flattenedRole.nestedRoleId} = ${resourceRole.id} and ${resource.resourceTypeId} = ${resourceRole.resourceTypeId}
-             join ${PolicyTable as resourcePolicy} on ${effectiveResourcePolicyTable.sourcePolicyId} = ${resourcePolicy.id}
-             join ${ResourceTypeTable as resourceTypeOne} on ${resource.resourceTypeId} = ${resourceTypeOne.id}
-             join ${ResourceTypeTable as resourceTypeTwo} on ${resourceRole.resourceTypeId} = ${resourceTypeTwo.id}
-             where (((${resourcePolicy.resourceId} != ${effectiveResourcePolicyTable.resourceId} and (${policyRole.descendantsOnly} or ${flattenedRole.descendantsOnly}))
-              or not ((${resourcePolicy.resourceId} != ${effectiveResourcePolicyTable.resourceId}) or ${policyRole.descendantsOnly} or ${flattenedRole.descendantsOnly}))
-              and (${resourceTypeOne.name} = ${resourceTypeName}
+    serializableWriteTransaction("recreateEffectivePolicyRolesTableEntry", samRequestContext)({ implicit session =>
+      samsql"""delete from ${EffectivePolicyRoleTable as effectivePolicyRoleTable}
+               using ${EffectiveResourcePolicyTable as effectiveResourcePolicyTable},
+               ${ResourceRoleTable as resourceRole},
+               ${ResourceTable as resource},
+               ${ResourceTypeTable as resourceTypeOne},
+               ${ResourceTypeTable as resourceTypeTwo}
+               where ${effectivePolicyRoleTable.effectiveResourcePolicyId} = ${effectiveResourcePolicyTable.id}
+               and ${effectiveResourcePolicyTable.resourceId} = ${resource.id}
+               and ${resource.resourceTypeId} = ${resourceTypeOne.id}
+               and ${effectivePolicyRoleTable.resourceRoleId} = ${resourceRole.id}
+               and ${resourceRole.resourceTypeId} = ${resourceTypeTwo.id}
+               and (${resourceTypeOne.name} = ${resourceTypeName}
                or ${resourceTypeTwo.name} = ${resourceTypeName})
-              on conflict do nothing
-          """.update().apply()
+            """.update().apply()
+      val foo = "bar"
+
+      samsql"""insert into ${EffectivePolicyRoleTable.table}(${EffectivePolicyRoleTable.column.effectiveResourcePolicyId}, ${EffectivePolicyRoleTable.column.resourceRoleId})
+               select ${effectiveResourcePolicyTable.id}, ${resourceRole.id} from
+               ${EffectiveResourcePolicyTable as effectiveResourcePolicyTable}
+               join ${PolicyRoleTable as policyRole} on ${effectiveResourcePolicyTable.sourcePolicyId} = ${policyRole.resourcePolicyId}
+               join ${ResourceTable as resource} on ${effectiveResourcePolicyTable.resourceId} = ${resource.id}
+               join ${FlattenedRoleMaterializedView as flattenedRole} on ${policyRole.resourceRoleId} = ${flattenedRole.baseRoleId}
+               join ${ResourceRoleTable as resourceRole} on ${flattenedRole.nestedRoleId} = ${resourceRole.id} and ${resource.resourceTypeId} = ${resourceRole.resourceTypeId}
+               join ${PolicyTable as resourcePolicy} on ${effectiveResourcePolicyTable.sourcePolicyId} = ${resourcePolicy.id}
+               join ${ResourceTypeTable as resourceTypeOne} on ${resource.resourceTypeId} = ${resourceTypeOne.id}
+               join ${ResourceTypeTable as resourceTypeTwo} on ${resourceRole.resourceTypeId} = ${resourceTypeTwo.id}
+               where (((${resourcePolicy.resourceId} != ${effectiveResourcePolicyTable.resourceId} and (${policyRole.descendantsOnly} or ${flattenedRole.descendantsOnly}))
+                or not ((${resourcePolicy.resourceId} != ${effectiveResourcePolicyTable.resourceId}) or ${policyRole.descendantsOnly} or ${flattenedRole.descendantsOnly}))
+                and (${resourceTypeOne.name} = ${resourceTypeName}
+                 or ${resourceTypeTwo.name} = ${resourceTypeName})
+                on conflict do nothing
+            """.update().apply()
+    })
 
   }
 
-  override def recreateEffectivePolicyActionsTableEntry(resourceTypeName: ResourceTypeName, samRequestContext: SamRequestContext)(implicit session: DBSession): IO[Unit] = {
+  override def recreateEffectivePolicyActionsTableEntry(resourceTypeName: ResourceTypeName, samRequestContext: SamRequestContext): IO[Unit] = {
     val effectivePolicyActionTable = EffectivePolicyActionTable.syntax("effectivePolicyActionTable")
     val effectiveResourcePolicyTable = EffectiveResourcePolicyTable.syntax("effectiveResourcePolicyTable")
     val policyActionTable = PolicyActionTable.syntax("policyActionTable")
@@ -1406,15 +1408,15 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
     val resourceTypeOne = ResourceTypeTable.syntax("resourceTypeOne")
     val resourceTypeTwo = ResourceTypeTable.syntax("resourceTypeTwo")
 
-
-    samsql"""delete from ${EffectivePolicyActionTable as effectivePolicyActionTable}
+    serializableWriteTransaction("recreateEffectivePolicyRolesTableEntry", samRequestContext)({ implicit session =>
+      samsql"""delete from ${EffectivePolicyActionTable as effectivePolicyActionTable}
              using ${EffectiveResourcePolicyTable as effectiveResourcePolicyTable},
              ${ResourceActionTable as resourceAction},
              ${ResourceTable as resource},
-             ${ResourceTypeTable as resourceTypeOne}
+             ${ResourceTypeTable as resourceTypeOne},
              ${ResourceTypeTable as resourceTypeTwo}
              where ${effectivePolicyActionTable.effectiveResourcePolicyId} = ${effectiveResourcePolicyTable.id}
-             and${effectiveResourcePolicyTable.resourceId} = ${resource.id}
+             and ${effectiveResourcePolicyTable.resourceId} = ${resource.id}
              and ${resource.resourceTypeId} = ${resourceTypeOne.id}
              and ${effectivePolicyActionTable.resourceActionId} = ${resourceAction.id}
              and ${resourceAction.resourceTypeId} = ${resourceTypeTwo.id}
@@ -1422,7 +1424,9 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
              or ${resourceTypeTwo.name} = ${resourceTypeName})
           """.update().apply()
 
-    samsql"""insert into ${EffectivePolicyActionTable.table}(${EffectivePolicyActionTable.column.effectiveResourcePolicyId}, ${EffectivePolicyActionTable.column.resourceActionId})
+      val foo = "bar"
+
+      samsql"""insert into ${EffectivePolicyActionTable.table}(${EffectivePolicyActionTable.column.effectiveResourcePolicyId}, ${EffectivePolicyActionTable.column.resourceActionId})
             select ${effectiveResourcePolicyTable.id}, ${resourceAction.id}
             from ${EffectiveResourcePolicyTable as effectiveResourcePolicyTable}
             join ${PolicyActionTable as policyActionTable} on ${effectiveResourcePolicyTable.sourcePolicyId} = ${policyActionTable.resourcePolicyId}
@@ -1435,6 +1439,7 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
             and ${resourceTypeOne.name} = ${resourceTypeName}
             on conflict do nothing
           """.update().apply()
+    })
   }
 
     private def setPolicyIsPublicInternal(policyPK: PolicyPK, isPublic: Boolean)(implicit session: DBSession): Int = {

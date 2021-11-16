@@ -190,6 +190,15 @@ You need to set some default VM parameters for ScalaTest run configurations. In 
 ```
 Then you can run unit tests within IntelliJ by clicking the green play button on a unit test.
 
+##### Connecting to your local Postgres
+In order to connect to your local postgres, open up the database tab, select the plus button at the top, data source, and click postgres.
+
+From there, set the:
+1. Host: `localhost`
+2. Port: `5432`
+3. User: Check `src/test/resources/reference.conf`
+4. Password: Check `src/test/resources/reference.conf`
+
 #### Cleaning up after tests
 ```
 #Stop your local opendj:

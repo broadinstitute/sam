@@ -250,4 +250,8 @@ class MockAccessPolicyDAO(private val resourceTypes: mutable.Map[ResourceTypeNam
 
     aggregateByResource(forEachPolicy)
   }
+
+  def recreateEffectivePolicyActionsTableEntry(resourceTypeName: ResourceTypeName, samRequestContext: SamRequestContext): IO[Unit] = IO.pure(None)
+
+  def recreateEffectivePolicyRolesTableEntry(resourceTypeName: ResourceTypeName, samRequestContext: SamRequestContext): IO[Unit] = IO.pure(None)
 }

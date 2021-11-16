@@ -68,16 +68,17 @@ class ResourceService(
                 Resource(resourceTypeAdmin.name, ResourceId(rtName.value), Set.empty)
             }
           }
-          _ <- updateEffectivePolicytables(samRequestContext, newOrUpdatedResourceTypeNames)
+          _ <- updateEffectivePolicyTables(samRequestContext, newOrUpdatedResourceTypeNames)
         } yield resourceTypes.values
     }
 
-  def updateEffectivePolicytables(samRequestContext: SamRequestContext, newOrUpdatedResourceTypeNames: Set[ResourceTypeName]): IO[Set[ResourceTypeName]] = {
+  def updateEffectivePolicyTables(samRequestContext: SamRequestContext, newOrUpdatedResourceTypeNames: Set[ResourceTypeName]): IO[List[Unit]] = {
     for {
-      _ <- newOrUpdatedResourceTypeNames.filterNot(_ == SamResourceTypes.resourceTypeAdminName).toList.traverse { rtName =>
+      response <- newOrUpdatedResourceTypeNames.filterNot(_ == SamResourceTypes.resourceTypeAdminName).toList.traverse { rtName => {
         accessPolicyDAO.recreateEffectivePolicyRolesTableEntry(rtName, samRequestContext)
-      }
-    } yield _
+        accessPolicyDAO.recreateEffectivePolicyActionsTableEntry(rtName, samRequestContext)
+      }}
+    } yield response
   }
 
   def createResourceType(resourceType: ResourceType, samRequestContext: SamRequestContext): IO[ResourceType] =
