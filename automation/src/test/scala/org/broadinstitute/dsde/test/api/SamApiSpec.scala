@@ -93,11 +93,24 @@ class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with Sca
   }
 
   "Sam" - {
-    "should return terms of services" in {
+    "should return terms of services with auth token" in {
       val anyUser: Credentials = UserPool.chooseAnyUser
       val userAuthToken: AuthToken = anyUser.makeAuthToken()
 
       val response = Sam.getRequest(Sam.url + s"tos/text")(userAuthToken)
+      val textFuture = Unmarshal(response.entity).to[String]
+
+      response.status shouldEqual StatusCodes.OK
+      whenReady(textFuture) { text =>
+        text should include("Terms as of February 12, 2020.")
+      }
+    }
+
+    "should return terms of services with no auth token" in {
+      val anyUser: Credentials = UserPool.chooseAnyUser
+      val userAuthToken: AuthToken = anyUser.makeAuthToken()
+
+      val response = Sam.getRequest(Sam.url + s"tos/text")(null)
       val textFuture = Unmarshal(response.entity).to[String]
 
       response.status shouldEqual StatusCodes.OK
