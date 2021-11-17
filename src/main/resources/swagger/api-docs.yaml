@@ -2754,6 +2754,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SystemStatus'
+  /tos/text:
+    get:
+      tags:
+        - Terms of Service
+      summary: gets terms of service text
+      operationId: getTermsOfServiceText
+      responses:
+        200:
+          description: success
+          content:
+            text/plain:
+              schema:
+                type: string
   /version:
     get:
       tags:

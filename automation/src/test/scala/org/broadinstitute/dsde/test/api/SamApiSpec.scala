@@ -2,8 +2,10 @@ package org.broadinstitute.dsde.workbench.test.api
 
 
 import java.util.UUID
-
 import akka.actor.ActorSystem
+import akka.http.scaladsl.model.HttpMethods.GET
+import akka.http.scaladsl.model.{HttpRequest, StatusCodes}
+import akka.http.scaladsl.unmarshalling.Unmarshal
 import akka.testkit.TestKitBase
 import org.broadinstitute.dsde.workbench.auth.{AuthToken, AuthTokenScopes, ServiceAccountAuthTokenFromJson, ServiceAccountAuthTokenFromPem}
 import org.broadinstitute.dsde.workbench.config.{Credentials, UserPool}
@@ -11,6 +13,7 @@ import org.broadinstitute.dsde.workbench.dao.Google.{googleDirectoryDAO, googleI
 import org.broadinstitute.dsde.workbench.fixture.BillingFixtures
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccountName}
+import org.broadinstitute.dsde.workbench.service.Sam.sendRequest
 import org.broadinstitute.dsde.workbench.service.SamModel._
 import org.broadinstitute.dsde.workbench.service.test.CleanUp
 import org.broadinstitute.dsde.workbench.service.{Orchestration, Sam, Thurloe, _}
@@ -91,6 +94,31 @@ class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with Sca
   }
 
   "Sam" - {
+    "should return terms of services with auth token" in {
+      val anyUser: Credentials = UserPool.chooseAnyUser
+      val userAuthToken: AuthToken = anyUser.makeAuthToken()
+
+      val response = Sam.getRequest(Sam.url + s"tos/text")(userAuthToken)
+      val textFuture = Unmarshal(response.entity).to[String]
+
+      response.status shouldEqual StatusCodes.OK
+      whenReady(textFuture) { text =>
+        text should include("Terms as of February 12, 2020.")
+      }
+    }
+
+    "should return terms of services with no auth token" in {
+      val req = HttpRequest(GET, Sam.url + s"tos/text")
+      val response = sendRequest(req)
+
+      val textFuture = Unmarshal(response.entity).to[String]
+
+      response.status shouldEqual StatusCodes.OK
+      whenReady(textFuture) { text =>
+        text should include("Terms as of February 12, 2020.")
+      }
+    }
+
     "should give pets the same access as their owners" in {
       val anyUser: Credentials = UserPool.chooseAnyUser
       val userAuthToken: AuthToken = anyUser.makeAuthToken()

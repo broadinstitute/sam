@@ -402,8 +402,6 @@ class ManagedGroupRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRou
 
     val newGuyEmail = WorkbenchEmail("newGuy@organization.org")
     val newGuy = UserInfo(OAuth2BearerToken("newToken"), WorkbenchUserId("NewGuy"), newGuyEmail, 0)
-    val newGuyRoutes = new TestSamRoutes(samRoutes.resourceService, samRoutes.policyEvaluatorService, samRoutes.userService, samRoutes.statusService, samRoutes.managedGroupService, newGuy, samRoutes.mockDirectoryDao)
-
 
     val members = Set(newGuyEmail)
     Put(s"/api/group/$groupId/admin", members) ~> samRoutes.route ~> check {

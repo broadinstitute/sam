@@ -34,6 +34,7 @@ abstract class SamRoutes(
     val termsOfServiceConfig: TermsOfServiceConfig,
     val directoryDAO: DirectoryDAO,
     val policyEvaluatorService: PolicyEvaluatorService,
+    val tosService: TosService,
     val liquibaseConfig: LiquibaseConfig)(
     implicit val system: ActorSystem,
     val materializer: Materializer,
@@ -43,12 +44,14 @@ abstract class SamRoutes(
     with UserRoutes
     with SwaggerRoutes
     with StatusRoutes
+    with TermsOfServiceRoutes
     with ExtensionRoutes
     with ManagedGroupRoutes {
 
   def route: server.Route = (logRequestResult & handleExceptions(myExceptionHandler)) {
     swaggerRoutes ~
       statusRoutes ~
+      termsOfServiceRoutes ~
       withExecutionContext(ExecutionContext.global) {
         pathPrefix("register") { userRoutes } ~
         pathPrefix("api") { resourceRoutes ~ adminUserRoutes ~ extensionRoutes ~ groupRoutes ~ apiUserRoutes }
