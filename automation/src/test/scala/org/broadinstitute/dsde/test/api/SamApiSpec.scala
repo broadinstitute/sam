@@ -63,25 +63,23 @@ class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with Sca
   }
 
   // TODO: remove this once sendRequest is public in workbench lib: [workbench-libs/pull/818]
-  private def sendRequest(httpRequest: HttpRequest): HttpResponse = {
-    // Send an http request with retries
-    def sendRequest(httpRequest: HttpRequest): HttpResponse = {
-      val responseFuture = retryExponentially() { () =>
-        Http().singleRequest(request = httpRequest).map { response =>
-          logRequestResponse(httpRequest, response)
-          // retry any 401 or 500 errors - this is because we have seen the proxy get backend errors
-          // from google querying for token info which causes a 401 if it is at the level if the
-          // service being directly called or a 500 if it happens at a lower level service
-          if (response.status == StatusCodes.Unauthorized || response.status == StatusCodes.InternalServerError) {
-            throw RestException(extractResponseString(response))
-          } else {
-            response
-          }
-        }(system.dispatcher)
+  def sendRequest(httpRequest: HttpRequest): HttpResponse = {
+    val responseFuture = retryExponentially() { () =>
+      Http().singleRequest(request = httpRequest).map { response =>
+        logRequestResponse(httpRequest, response)
+        // retry any 401 or 500 errors - this is because we have seen the proxy get backend errors
+        // from google querying for token info which causes a 401 if it is at the level if the
+        // service being directly called or a 500 if it happens at a lower level service
+        if (response.status == StatusCodes.Unauthorized || response.status == StatusCodes.InternalServerError) {
+          throw RestException(extractResponseString(response))
+        } else {
+          response
+        }
       }(system.dispatcher)
-      val defaultResponse = (emptyList(), HttpResponse())
-      Await.result(responseFuture, 5.minutes).getOrElse(defaultResponse)._2
-    }
+    }(system.dispatcher)
+    val defaultResponse = (emptyList(), HttpResponse())
+    Await.result(responseFuture, 5.minutes).getOrElse(defaultResponse)._2
+  }
 
   "Sam test utilities" - {
     "should be idempotent for removal of user's registration" in {
