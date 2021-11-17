@@ -3,7 +3,10 @@ package org.broadinstitute.dsde.workbench.test.api
 
 import java.util.UUID
 import akka.actor.ActorSystem
-import akka.http.scaladsl.model.StatusCodes
+import akka.http.scaladsl.Http
+import akka.http.scaladsl.model.HttpMethods.GET
+import akka.http.scaladsl.model.StatusCodes.OK
+import akka.http.scaladsl.model.{HttpRequest, HttpResponse, StatusCodes}
 import akka.http.scaladsl.unmarshalling.Unmarshal
 import akka.testkit.TestKitBase
 import org.broadinstitute.dsde.workbench.auth.{AuthToken, AuthTokenScopes, ServiceAccountAuthTokenFromJson, ServiceAccountAuthTokenFromPem}
@@ -12,6 +15,7 @@ import org.broadinstitute.dsde.workbench.dao.Google.{googleDirectoryDAO, googleI
 import org.broadinstitute.dsde.workbench.fixture.BillingFixtures
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccountName}
+import org.broadinstitute.dsde.workbench.service.Sam.{extractResponseString, logRequestResponse, retryExponentially}
 import org.broadinstitute.dsde.workbench.service.SamModel._
 import org.broadinstitute.dsde.workbench.service.test.CleanUp
 import org.broadinstitute.dsde.workbench.service.{Orchestration, Sam, Thurloe, _}
@@ -23,8 +27,9 @@ import org.broadinstitute.dsde.workbench.service.util.Tags
 import scala.concurrent.Await
 import scala.concurrent.duration.{Duration, _}
 import org.scalatest.freespec.AnyFreeSpec
-import org.scalatest.matchers.must.Matchers.convertToAnyMustWrapper
 import org.scalatest.matchers.should.Matchers
+
+import java.util.Collections.emptyList
 
 class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with ScalaFutures with CleanUp with Eventually with TestKitBase {
   implicit override val patienceConfig: PatienceConfig = PatienceConfig(timeout = scaled(Span(5, Seconds)))
@@ -56,6 +61,27 @@ class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with Sca
     }
     Thurloe.keyValuePairs.deleteAll(subjectId)
   }
+
+  // TODO: remove this once sendRequest is public in workbench lib: [workbench-libs/pull/818]
+  private def sendRequest(httpRequest: HttpRequest): HttpResponse = {
+    // Send an http request with retries
+    def sendRequest(httpRequest: HttpRequest): HttpResponse = {
+      val responseFuture = retryExponentially() { () =>
+        Http().singleRequest(request = httpRequest).map { response =>
+          logRequestResponse(httpRequest, response)
+          // retry any 401 or 500 errors - this is because we have seen the proxy get backend errors
+          // from google querying for token info which causes a 401 if it is at the level if the
+          // service being directly called or a 500 if it happens at a lower level service
+          if (response.status == StatusCodes.Unauthorized || response.status == StatusCodes.InternalServerError) {
+            throw RestException(extractResponseString(response))
+          } else {
+            response
+          }
+        }(system.dispatcher)
+      }(system.dispatcher)
+      val defaultResponse = (emptyList(), HttpResponse())
+      Await.result(responseFuture, 5.minutes).getOrElse(defaultResponse)._2
+    }
 
   "Sam test utilities" - {
     "should be idempotent for removal of user's registration" in {
@@ -107,10 +133,9 @@ class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with Sca
     }
 
     "should return terms of services with no auth token" in {
-      val anyUser: Credentials = UserPool.chooseAnyUser
-      val userAuthToken: AuthToken = anyUser.makeAuthToken()
+      val req = HttpRequest(GET, Sam.url + s"tos/text")
+      val response = sendRequest(req)
 
-      val response = Sam.getRequest(Sam.url + s"tos/text")(null)
       val textFuture = Unmarshal(response.entity).to[String]
 
       response.status shouldEqual StatusCodes.OK
