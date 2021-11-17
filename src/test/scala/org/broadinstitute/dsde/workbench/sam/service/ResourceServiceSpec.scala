@@ -1092,7 +1092,7 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
     }
   }
 
-  it should "update effective resource tables if changes are made to resources" in {
+  "THIS SHOULD BE IT" should "update effective resource tables if descendant permissions are removed" in {
     val adminResType = ResourceType(SamResourceTypes.resourceTypeAdminName,
       Set(SamResourceActionPatterns.alterPolicies, SamResourceActionPatterns.readPolicies),
       Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.alterPolicies, SamResourceActions.readPolicies))),
@@ -1101,7 +1101,6 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
     val parentResourceId = FullyQualifiedResourceId(descendantResourceTypeParent.name, ResourceId(UUID.randomUUID().toString))
     val parentOwnerPolicy = FullyQualifiedPolicyId(parentResourceId, AccessPolicyName("owner"))
     val childResourceId = FullyQualifiedResourceId(descendantResourceTypeChild.name, ResourceId(UUID.randomUUID().toString))
-    val childOwnerPolicy = FullyQualifiedPolicyId(parentResourceId, AccessPolicyName("owner"))
 
     val service = new ResourceService(Map(adminResType.name -> adminResType, descendantResourceTypeParent.name -> descendantResourceTypeParent, descendantResourceTypeChild.name -> descendantResourceTypeChild), policyEvaluatorService, policyDAO, dirDAO, NoExtensions, emailDomain)
 
@@ -1117,6 +1116,8 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
 
     runAndWait(service.addSubjectToPolicy(parentOwnerPolicy, user1.userSubjectId, samRequestContext))
     runAndWait(policyEvaluatorService.hasPermission(childResource.fullyQualifiedId, ResourceAction("view"), user1.userSubjectId, samRequestContext)) shouldBe true
+    runAndWait(policyEvaluatorService.hasPermission(parentResource.fullyQualifiedId, ResourceAction("view"), user1.userSubjectId, samRequestContext)) shouldBe true
+
 
     val overriddenParentResourceType = descendantResourceTypeParent.copy(roles = Set(
       descendantResourceTypeParentOwnerRole.copy(descendantRoles = Map.empty),
@@ -1127,6 +1128,46 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
     newInit should contain theSameElementsAs(Set(adminResType, overriddenParentResourceType, descendantResourceTypeChild))
 
     runAndWait(policyEvaluatorService.hasPermission(childResource.fullyQualifiedId, ResourceAction("view"), user1.userSubjectId, samRequestContext)) shouldBe false
+    runAndWait(policyEvaluatorService.hasPermission(parentResource.fullyQualifiedId, ResourceAction("view"), user1.userSubjectId, samRequestContext)) shouldBe true
+  }
+
+  it should "update effective resource tables if descendant permissions are added" in {
+    val adminResType = ResourceType(SamResourceTypes.resourceTypeAdminName,
+      Set(SamResourceActionPatterns.alterPolicies, SamResourceActionPatterns.readPolicies),
+      Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.alterPolicies, SamResourceActions.readPolicies))),
+      ResourceRoleName("owner"))
+
+    val parentResourceId = FullyQualifiedResourceId(descendantResourceTypeParent.name, ResourceId(UUID.randomUUID().toString))
+    val parentOwnerPolicy = FullyQualifiedPolicyId(parentResourceId, AccessPolicyName("owner"))
+    val childResourceId = FullyQualifiedResourceId(descendantResourceTypeChild.name, ResourceId(UUID.randomUUID().toString))
+
+    val overriddenParentResourceType = descendantResourceTypeParent.copy(roles = Set(
+      descendantResourceTypeParentOwnerRole.copy(descendantRoles = Map.empty),
+      descendantResourceTypeParentOtherRole
+    ))
+    val newService = new ResourceService(Map(adminResType.name -> adminResType, descendantResourceTypeParent.name -> overriddenParentResourceType, descendantResourceTypeChild.name -> descendantResourceTypeChild), policyEvaluatorService, policyDAO, dirDAO, NoExtensions, emailDomain)
+    val newInit = newService.initResourceTypes().unsafeRunSync()
+    newInit should contain theSameElementsAs(Set(adminResType, overriddenParentResourceType, descendantResourceTypeChild))
+
+
+    val parentResource = runAndWait(newService.createResource(descendantResourceTypeParent, parentResourceId.resourceId, dummyUserInfo, samRequestContext))
+    val childResource = runAndWait(newService.createResource(descendantResourceTypeChild, childResourceId.resourceId, dummyUserInfo, samRequestContext))
+
+    val user1 = UserIdInfo(WorkbenchUserId("user1"), WorkbenchEmail("user1@fake.com"), None)
+    dirDAO.createUser(WorkbenchUser(user1.userSubjectId, None, user1.userEmail, None), samRequestContext).unsafeRunSync()
+
+    runAndWait(newService.setResourceParent(childResource.fullyQualifiedId, parentResource.fullyQualifiedId, samRequestContext))
+    runAndWait(newService.addSubjectToPolicy(parentOwnerPolicy, user1.userSubjectId, samRequestContext))
+
+    runAndWait(policyEvaluatorService.hasPermission(childResource.fullyQualifiedId, ResourceAction("view"), user1.userSubjectId, samRequestContext)) shouldBe false
+
+    val service = new ResourceService(Map(adminResType.name -> adminResType, descendantResourceTypeParent.name -> descendantResourceTypeParent, descendantResourceTypeChild.name -> descendantResourceTypeChild), policyEvaluatorService, policyDAO, dirDAO, NoExtensions, emailDomain)
+
+    val init = service.initResourceTypes().unsafeRunSync()
+    init should contain theSameElementsAs(Set(adminResType, descendantResourceTypeParent, descendantResourceTypeChild))
+
+    runAndWait(policyEvaluatorService.hasPermission(childResource.fullyQualifiedId, ResourceAction("view"), user1.userSubjectId, samRequestContext)) shouldBe true
+
   }
 
   "listAllFlattenedResourceUsers" should "return a flattened list of all of the users in any of a resource's policies" in {
