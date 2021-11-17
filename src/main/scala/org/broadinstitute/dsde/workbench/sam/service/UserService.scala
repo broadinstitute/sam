@@ -113,10 +113,11 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
   def getSubjectFromEmail(email: WorkbenchEmail, samRequestContext: SamRequestContext): Future[Option[WorkbenchSubject]] = directoryDAO.loadSubjectFromEmail(email, samRequestContext).unsafeToFuture()
 
   def getUserStatus(userId: WorkbenchUserId, userDetailsOnly: Boolean = false, samRequestContext: SamRequestContext): Future[Option[UserStatus]] = {
-    val result = directoryDAO.loadUser(userId, samRequestContext).unsafeToFuture().flatMap {
+    directoryDAO.loadUser(userId, samRequestContext).unsafeToFuture().flatMap {
       case Some(user) =>
-        if (userDetailsOnly) Future.successful(Option(UserStatus(UserStatusDetails(user.id, user.email), Map.empty)))
-        else {
+        if (userDetailsOnly)
+          Future.successful(Option(UserStatus(UserStatusDetails(user.id, user.email), Map.empty)))
+        else
           for {
             googleStatus <- cloudExtensions.getUserStatus(user)
             allUsersGroup <- cloudExtensions.getOrCreateAllUsersGroup(directoryDAO, samRequestContext)
@@ -134,11 +135,8 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
             val res = Option(UserStatus(UserStatusDetails(user.id, user.email), enabledStatuses))
             res
           }
-        }
       case None => Future.successful(None)
     }
-    logger.info("RESULT: " + result.toString)
-    result
   }
 
   def getUserStatusInfo(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[UserStatusInfo]] =

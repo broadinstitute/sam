@@ -53,9 +53,7 @@ trait UserRoutes extends UserInfoDirectives with SamRequestContextDirectives {
               get {
                 parameter("userDetailsOnly".?) { userDetailsOnly =>
                   complete {
-                    println("USER DETAILS: " + user.toString)
                     userService.getUserStatus(user.userId, userDetailsOnly.exists(_.equalsIgnoreCase("true")), samRequestContext).map { statusOption =>
-                      println("SAM ROUTES STATUS OPTION: " + statusOption)
                       statusOption
                         .map { status =>
                           StatusCodes.OK -> Option(status)
