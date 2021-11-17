@@ -47,7 +47,7 @@ class UserRoutesV2Spec extends UserRoutesSpecHelper {
       val res = responseAs[UserStatus]
       res.userInfo.userSubjectId.value.length shouldBe 21
       res.userInfo.userEmail shouldBe defaultUserEmail
-      res.enabled shouldBe Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true)
+      res.enabled shouldBe Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> true)
     }
 
     Post("/register/user/v2/self", tos) ~> samRoutes.route ~> check {
@@ -78,6 +78,16 @@ class UserRoutesV2Spec extends UserRoutesSpecHelper {
     }
   }
 
+  it should "get user's registration status after accepting the tos" in {
+    val (user, _, routes) = createTestUser(tosEnabled = true, tosAccepted = true)
+
+    Get("/register/user/v2/self/info") ~> routes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      val res = responseAs[UserStatusInfo]
+      res.tosAccepted shouldBe Some(true)
+    }
+  }
+
   "GET /register/user/v2/self/info" should "get the status of an enabled user" in withDefaultRoutes { samRoutes =>
     val googleSubjectId = GoogleSubjectId(genRandom(System.currentTimeMillis()))
     Get("/register/user/v2/self/info") ~> samRoutes.route ~> check {
@@ -99,7 +109,17 @@ class UserRoutesV2Spec extends UserRoutesSpecHelper {
 
     Get("/register/user/v2/self/diagnostics") ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK
-      responseAs[UserStatusDiagnostics] shouldEqual UserStatusDiagnostics(true, true, true)
+      responseAs[UserStatusDiagnostics] shouldEqual UserStatusDiagnostics(true, true, true, None)
+    }
+  }
+
+  it should "get user's diagnostics after accepting the tos" in {
+    val (user, _, routes) = createTestUser(tosEnabled = true, tosAccepted = true)
+
+    Get("/register/user/v2/self/diagnostics") ~> routes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      val res = responseAs[UserStatusDiagnostics]
+      res.tosAccepted shouldBe Some(true)
     }
   }
 }

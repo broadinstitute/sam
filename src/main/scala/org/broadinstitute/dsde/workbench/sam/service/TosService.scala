@@ -20,15 +20,14 @@ import scala.io.Source
 class TosService (val directoryDao: DirectoryDAO, val appsDomain: String, val tosConfig: TermsOfServiceConfig)(implicit val executionContext: ExecutionContext) extends LazyLogging {
   val termsOfServiceFile = "termsOfService.md"
 
-  def createNewGroupIfNeeded(isEnabled: Boolean): IO[Option[BasicWorkbenchGroup]] = {
-    if(isEnabled) {
+  def createNewGroupIfNeeded(): IO[Option[BasicWorkbenchGroup]] = {
+    if(tosConfig.enabled) {
       getTosGroup().flatMap {
-        case Some(_) =>
-          IO.none
         case None =>
           logger.info("creating new ToS group")
           directoryDao.createGroup(BasicWorkbenchGroup(WorkbenchGroupName(getGroupName(tosConfig.version)),
             Set.empty, WorkbenchEmail(s"GROUP_${getGroupName(tosConfig.version)}@${appsDomain}")), samRequestContext = SamRequestContext(None)).map(Option(_))
+        case group => IO.pure(group)
       }
     } else
       IO.none
@@ -39,24 +38,23 @@ class TosService (val directoryDao: DirectoryDAO, val appsDomain: String, val to
   }
 
   def getTosGroup(): IO[Option[BasicWorkbenchGroup]] = {
-    getTosGroup(tosConfig.version)
+    directoryDao.loadGroup(WorkbenchGroupName(getGroupName(tosConfig.version)), SamRequestContext(None))
   }
 
-  def getTosGroup(version: Int): IO[Option[BasicWorkbenchGroup]] = {
-    directoryDao.loadGroup(WorkbenchGroupName(getGroupName(version)), SamRequestContext(None))
+  def acceptTosStatus(user: WorkbenchSubject): IO[Boolean] = {
+    if (tosConfig.enabled) {
+      createNewGroupIfNeeded().flatMap {
+        case Some(group) => directoryDao.addGroupMember(group.id, user, SamRequestContext(None))
+        case None => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Terms of Service group ${getGroupName(tosConfig.version)} failed to create.")))
+      }
+    } else IO.pure(false)
   }
 
   def getTosStatus(user: WorkbenchSubject): IO[Option[Boolean]] = {
     if (tosConfig.enabled) {
-
-
-      getTosGroup().flatMap {
+      createNewGroupIfNeeded().flatMap {
         case Some(group) => directoryDao.isGroupMember(group.id, user, SamRequestContext(None)).map(Option(_))
-        case None =>
-          createNewGroupIfNeeded(tosConfig.enabled).flatMap {
-            case Some(newGroup) => directoryDao.isGroupMember(newGroup.id, user, SamRequestContext(None)).map(Option(_))
-            case None => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Terms of Service group ${getGroupName(tosConfig.version)} failed to create.")))
-          }
+        case None => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Terms of Service group ${getGroupName(tosConfig.version)} not found.")))
       }
     } else IO.none
   }

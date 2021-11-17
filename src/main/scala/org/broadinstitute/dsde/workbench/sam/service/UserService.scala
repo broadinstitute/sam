@@ -23,19 +23,15 @@ import scala.util.matching.Regex
   */
 class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExtensions, val registrationDAO: RegistrationDAO, blockedEmailDomains: Seq[String], tosService: TosService)(implicit val executionContext: ExecutionContext, contextShift: ContextShift[IO]) extends LazyLogging {
 
-  def createUser(user: WorkbenchUser, samRequestContext: SamRequestContext, tosEnforcementEnabled: Boolean = false, tosVersion: Int = 0): Future[UserStatus] = {
+  def createUser(user: WorkbenchUser, samRequestContext: SamRequestContext): Future[UserStatus] = {
     for {
       _ <- UserService.validateEmailAddress(user.email, blockedEmailDomains).unsafeToFuture()
       allUsersGroup <- cloudExtensions.getOrCreateAllUsersGroup(directoryDAO, samRequestContext)
       createdUser <- registerUser(user, samRequestContext).unsafeToFuture()
       _ <- enableUserInternal(createdUser, samRequestContext)
       _ <- directoryDAO.addGroupMember(allUsersGroup.id, createdUser.id, samRequestContext).unsafeToFuture()
-      tosGroupOpt <- if (tosEnforcementEnabled) tosService.getTosGroup(tosVersion).unsafeToFuture() else Future.successful(None)
-      _ <- (tosEnforcementEnabled, tosGroupOpt) match {
-        case (true, Some(tosGroup)) => directoryDAO.addGroupMember(tosGroup.id, createdUser.id, samRequestContext).unsafeToFuture()
-        case _ => Future.successful(true)
-      }
-      userStatus <- getUserStatus(createdUser.id, samRequestContext = samRequestContext)
+      _ <- tosService.acceptTosStatus(createdUser.id).unsafeToFuture()
+      userStatus <- getUserStatus(createdUser.id, false, samRequestContext)
       res <- userStatus.toRight(new WorkbenchException("getUserStatus returned None after user was created")).fold(Future.failed, Future.successful)
     } yield res
   }
@@ -116,23 +112,34 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
   }
   def getSubjectFromEmail(email: WorkbenchEmail, samRequestContext: SamRequestContext): Future[Option[WorkbenchSubject]] = directoryDAO.loadSubjectFromEmail(email, samRequestContext).unsafeToFuture()
 
-  def getUserStatus(userId: WorkbenchUserId, userDetailsOnly: Boolean = false, samRequestContext: SamRequestContext): Future[Option[UserStatus]] =
-    directoryDAO.loadUser(userId, samRequestContext).unsafeToFuture().flatMap {
+  def getUserStatus(userId: WorkbenchUserId, userDetailsOnly: Boolean = false, samRequestContext: SamRequestContext): Future[Option[UserStatus]] = {
+    val result = directoryDAO.loadUser(userId, samRequestContext).unsafeToFuture().flatMap {
       case Some(user) =>
-        if(userDetailsOnly)
-          Future.successful(Option(UserStatus(UserStatusDetails(user.id, user.email), Map.empty, None)))
-        else
+        if (userDetailsOnly) Future.successful(Option(UserStatus(UserStatusDetails(user.id, user.email), Map.empty)))
+        else {
           for {
             googleStatus <- cloudExtensions.getUserStatus(user)
             allUsersGroup <- cloudExtensions.getOrCreateAllUsersGroup(directoryDAO, samRequestContext)
             allUsersStatus <- directoryDAO.isGroupMember(allUsersGroup.id, user.id, samRequestContext).unsafeToFuture() recover { case _: NameNotFoundException => false }
-            tosAcceptedStatus <- tosService.getTosStatus(user.id).unsafeToFuture()
+            tosAcceptedStatus <- {
+              tosService.getTosStatus(user.id).unsafeToFuture()
+            }
             ldapStatus <- registrationDAO.isEnabled(user.id, samRequestContext).unsafeToFuture()
           } yield {
-            Option(UserStatus(UserStatusDetails(user.id, user.email), Map("ldap" -> ldapStatus, "allUsersGroup" -> allUsersStatus, "google" -> googleStatus), tosAcceptedStatus))
+            val enabledMap = Map("ldap" -> ldapStatus, "allUsersGroup" -> allUsersStatus, "google" -> googleStatus)
+            val enabledStatuses = tosAcceptedStatus match {
+              case Some(status) => enabledMap + ("tosAccepted" -> status)
+              case None => enabledMap
+            }
+            val res = Option(UserStatus(UserStatusDetails(user.id, user.email), enabledStatuses))
+            res
           }
+        }
       case None => Future.successful(None)
     }
+    logger.info("RESULT: " + result.toString)
+    result
+  }
 
   def getUserStatusInfo(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[UserStatusInfo]] =
     directoryDAO.loadUser(userId, samRequestContext).flatMap {
@@ -149,6 +156,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
       case Some(user) => {
         // pulled out of for comprehension to allow concurrent execution
         val ldapStatus = registrationDAO.isEnabled(user.id, samRequestContext).unsafeToFuture()
+        val tosAcceptedStatus = tosService.getTosStatus(user.id).unsafeToFuture()
         val allUsersStatus = cloudExtensions.getOrCreateAllUsersGroup(directoryDAO, samRequestContext).flatMap { allUsersGroup =>
           directoryDAO.isGroupMember(allUsersGroup.id, user.id, samRequestContext).unsafeToFuture() recover { case e: NameNotFoundException => false }
         }
@@ -157,8 +165,9 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
         for {
           ldap <- ldapStatus
           allUsers <- allUsersStatus
+          tosAccepted <- tosAcceptedStatus
           google <- googleStatus
-        } yield Option(UserStatusDiagnostics(ldap, allUsers, google))
+        } yield Option(UserStatusDiagnostics(ldap, allUsers, google, tosAccepted))
       }
       case None => Future.successful(None)
     }

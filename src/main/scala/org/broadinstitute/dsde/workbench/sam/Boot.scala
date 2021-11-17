@@ -75,7 +75,7 @@ object Boot extends IOApp with LazyLogging {
           case t: Throwable => IO(logger.error("FATAL - failure starting http server", t)) *> IO.raiseError(t)
         }
 
-        _ <- dependencies.samApplication.tosService.createNewGroupIfNeeded(tosCheckEnabled)
+        _ <- dependencies.samApplication.tosService.createNewGroupIfNeeded()
 
         _ <- dependencies.policyEvaluatorService.initPolicy()
 

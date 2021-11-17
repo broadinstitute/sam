@@ -26,7 +26,7 @@ class UserRoutesV1Spec extends UserRoutesSpecHelper{
     testCode(samRoutes, SARoutes)
   }
 
-  "POST /register/user/v1/" should "create user" in withDefaultRoutes{samRoutes =>
+  "POST /register/user/v1/" should "create user" in withDefaultRoutes { samRoutes =>
     Post("/register/user/v1/") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
       val res = responseAs[UserStatus]
@@ -47,7 +47,7 @@ class UserRoutesV1Spec extends UserRoutesSpecHelper{
       val res = responseAs[UserStatus]
       res.userInfo.userSubjectId.value.length shouldBe 21
       res.userInfo.userEmail shouldBe defaultUserEmail
-      res.enabled shouldBe Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true)
+      res.enabled shouldBe Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> true)
     }
 
     Post("/register/user/v1", tos) ~> samRoutes.route ~> check {
@@ -75,6 +75,16 @@ class UserRoutesV1Spec extends UserRoutesSpecHelper{
     Post("/register/user/v1", badPayload) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Forbidden
       responseAs[ErrorReport].message should startWith("You must accept the Terms of Service in order to register.")
+    }
+  }
+
+  it should "get user's registration status after accepting the tos" in {
+    val (user, _, routes) = createTestUser(tosEnabled = true, tosAccepted = true)
+
+    Get("/register/user/v1") ~> routes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      val res = responseAs[UserStatus]
+      res.enabled shouldBe Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> true)
     }
   }
 
