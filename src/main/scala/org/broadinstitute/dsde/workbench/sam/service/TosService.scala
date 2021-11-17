@@ -44,7 +44,6 @@ class TosService (val directoryDao: DirectoryDAO, val appsDomain: String) extend
   def getText: String = {
     val tosFileStream = try {
       logger.debug("Reading terms of service")
-      logger.info(System.getProperty("user.dir"))
       Source.fromResource(termsOfServiceFile)
     } catch {
       case e: FileNotFoundException =>
