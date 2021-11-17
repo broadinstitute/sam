@@ -56,6 +56,8 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
 
   var service: UserService = _
   var tos: TosService = _
+  var serviceTosEnabled: UserService = _
+  var tosServiceEnabled: TosService = _
   var googleExtensions: GoogleExtensions = _
   val blockedDomain = "blocked.domain.com"
 
@@ -79,6 +81,9 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
 
     tos = new TosService(dirDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)
     service = new UserService(dirDAO, googleExtensions, registrationDAO, Seq(blockedDomain), tos)
+
+    tosServiceEnabled = new TosService(dirDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig.copy(enabled = true))
+    serviceTosEnabled = new UserService(dirDAO, googleExtensions, registrationDAO, Seq(blockedDomain), tosServiceEnabled)
   }
 
   protected def clearDatabase(): Unit = {
@@ -112,9 +117,8 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
   }
 
   it should "create user and add user to ToS group" in {
-    val tosVersion = 1
-    tos.createNewGroupIfNeeded().unsafeRunSync()
-    service.createUser(defaultUser, samRequestContext).futureValue
+    tosServiceEnabled.createNewGroupIfNeeded().unsafeRunSync()
+    serviceTosEnabled.createUser(defaultUser, samRequestContext).futureValue
     val userGroups = dirDAO.listUsersGroups(defaultUserId, samRequestContext).unsafeRunSync()
     userGroups should contain (WorkbenchGroupName(tos.getGroupName(TestSupport.tosConfig.version)))
     userGroups should have size 2
