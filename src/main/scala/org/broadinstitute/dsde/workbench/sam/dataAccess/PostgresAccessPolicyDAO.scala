@@ -1400,53 +1400,6 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
                 on conflict do nothing
             """.update().apply()
     })
-
-  }
-
-  override def recreateEffectivePolicyActionsTableEntry(resourceTypeName: ResourceTypeName, samRequestContext: SamRequestContext): IO[Unit] = {
-    val effectivePolicyActionTable = EffectivePolicyActionTable.syntax("effectivePolicyActionTable")
-    val effectiveResourcePolicyTable = EffectiveResourcePolicyTable.syntax("effectiveResourcePolicyTable")
-    val policyActionTable = PolicyActionTable.syntax("policyActionTable")
-    val resource = ResourceTable.syntax("resource")
-    val resourceAction = ResourceActionTable.syntax("resourceAction")
-    val policy = PolicyTable.syntax("policy")
-    val resourceTypeOne = ResourceTypeTable.syntax("resourceTypeOne")
-    val resourceTypeTwo = ResourceTypeTable.syntax("resourceTypeTwo")
-
-    serializableWriteTransaction("recreateEffectivePolicyRolesTableEntry", samRequestContext)({ implicit session =>
-      samsql"""delete from ${EffectivePolicyActionTable as effectivePolicyActionTable}
-             using ${EffectiveResourcePolicyTable as effectiveResourcePolicyTable},
-             ${PolicyTable as policy},
-             ${ResourceActionTable as resourceAction},
-             ${ResourceTable as resource},
-             ${ResourceTypeTable as resourceTypeOne},
-             ${ResourceTypeTable as resourceTypeTwo}
-             where ${effectivePolicyActionTable.effectiveResourcePolicyId} = ${effectiveResourcePolicyTable.id}
-             and ${effectiveResourcePolicyTable.sourcePolicyId} = ${policy.id}
-             and ${policy.resourceId} = ${resource.id}
-             and ${resource.resourceTypeId} = ${resourceTypeOne.id}
-             and ${effectivePolicyActionTable.resourceActionId} = ${resourceAction.id}
-             and ${resourceAction.resourceTypeId} = ${resourceTypeTwo.id}
-             and (${resourceTypeOne.name} = ${resourceTypeName}
-             or ${resourceTypeTwo.name} = ${resourceTypeName})
-          """.update().apply()
-
-      val foo = "bar"
-
-      samsql"""insert into ${EffectivePolicyActionTable.table}(${EffectivePolicyActionTable.column.effectiveResourcePolicyId}, ${EffectivePolicyActionTable.column.resourceActionId})
-            select ${effectiveResourcePolicyTable.id}, ${resourceAction.id}
-            from ${EffectiveResourcePolicyTable as effectiveResourcePolicyTable}
-            join ${PolicyActionTable as policyActionTable} on ${effectiveResourcePolicyTable.sourcePolicyId} = ${policyActionTable.resourcePolicyId}
-            join ${ResourceTable as resource} on ${effectiveResourcePolicyTable.resourceId} = ${resource.id}
-            join ${ResourceActionTable as resourceAction} on ${policyActionTable.resourceActionId} = ${resourceAction.id} and ${resource.resourceTypeId} = ${resourceAction.resourceTypeId}
-            join ${PolicyTable as policy} on ${effectiveResourcePolicyTable.sourcePolicyId} = ${policy.id}
-            join ${ResourceTypeTable as resourceTypeOne} on ${resource.resourceTypeId} = ${resourceTypeOne.id}
-            where ${policyActionTable.descendantsOnly} = (${policy.resourceId} != ${effectiveResourcePolicyTable.resourceId})
-            and ${resource.resourceTypeId} = ${resourceAction.resourceTypeId}
-            and ${resourceTypeOne.name} = ${resourceTypeName}
-            on conflict do nothing
-          """.update().apply()
-    })
   }
 
     private def setPolicyIsPublicInternal(policyPK: PolicyPK, isPublic: Boolean)(implicit session: DBSession): Int = {

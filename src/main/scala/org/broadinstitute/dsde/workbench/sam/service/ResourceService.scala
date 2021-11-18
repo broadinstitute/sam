@@ -77,7 +77,6 @@ class ResourceService(
       response <- newOrUpdatedResourceTypeNames.filterNot(_ == SamResourceTypes.resourceTypeAdminName).toList.traverse { rtName => {
         for {
           _ <- accessPolicyDAO.recreateEffectivePolicyRolesTableEntry(rtName, samRequestContext)
-          _ <- accessPolicyDAO.recreateEffectivePolicyActionsTableEntry(rtName, samRequestContext)
         } yield()
       }}
     } yield response
