@@ -1355,8 +1355,8 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
     val policyResource = ResourceTable.syntax("policyResource")
     val resourceRole = ResourceRoleTable.syntax("resourceRole")
     val flattenedRole = FlattenedRoleMaterializedView.syntax("flattenedRole")
-    val resourceTypeOne = ResourceTypeTable.syntax("resourceTypeOne")
-    val resourceTypeTwo = ResourceTypeTable.syntax("resourceTypeTwo")
+    val policyResourceType = ResourceTypeTable.syntax("policyResourceType")
+    val roleResourceType = ResourceTypeTable.syntax("roleResourceType")
     val policy = PolicyTable.syntax("policy")
     val policyRole = PolicyRoleTable.syntax("policyRole")
     val effectivePolicyRole = EffectivePolicyRoleTable.syntax("effectivePolicyRole")
@@ -1367,20 +1367,20 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
 
       samsql"""delete from ${EffectivePolicyRoleTable as effectivePolicyRole}
                using ${EffectiveResourcePolicyTable as effectiveResourcePolicy},
-               ${ResourceRoleTable as resourceRole},
                ${PolicyTable as policy},
                ${ResourceTable as policyResource},
-               ${ResourceTypeTable as resourceTypeOne},
-               ${ResourceTypeTable as resourceTypeTwo}
+               ${ResourceTypeTable as policyResourceType},
+               ${ResourceRoleTable as resourceRole},
+               ${ResourceTypeTable as roleResourceType}
                where ${effectivePolicyRole.effectiveResourcePolicyId} = ${effectiveResourcePolicy.id}
-               and ${effectivePolicyRole.resourceRoleId} = ${resourceRole.id}
                and ${effectiveResourcePolicy.sourcePolicyId} = ${policy.id}
                and ${policy.resourceId} = ${policyResource.id}
-               and ${policyResource.resourceTypeId} = ${resourceTypeOne.id}
-               and ${resourceRole.resourceTypeId} = ${resourceTypeTwo.id}
+               and ${policyResource.resourceTypeId} = ${policyResourceType.id}
+               and ${effectivePolicyRole.resourceRoleId} = ${resourceRole.id}
+               and ${resourceRole.resourceTypeId} = ${roleResourceType.id}
                and (
-                 ${resourceTypeOne.name} = ${resourceTypeName}
-                 or ${resourceTypeTwo.name} = ${resourceTypeName}
+                 ${policyResourceType.name} = ${resourceTypeName}
+                 or ${roleResourceType.name} = ${resourceTypeName}
                )
             """.update().apply()
 
@@ -1393,12 +1393,12 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
                join ${ResourceRoleTable as resourceRole} on ${flattenedRole.nestedRoleId} = ${resourceRole.id} and ${resource.resourceTypeId} = ${resourceRole.resourceTypeId}
                join ${PolicyTable as policy} on ${effectiveResourcePolicy.sourcePolicyId} = ${policy.id}
                join ${ResourceTable as policyResource} on ${policy.resourceId} = ${policyResource.id}
-               join ${ResourceTypeTable as resourceTypeOne} on ${policyResource.resourceTypeId} = ${resourceTypeOne.id}
-               join ${ResourceTypeTable as resourceTypeTwo} on ${resourceRole.resourceTypeId} = ${resourceTypeTwo.id}
+               join ${ResourceTypeTable as policyResourceType} on ${policyResource.resourceTypeId} = ${policyResourceType.id}
+               join ${ResourceTypeTable as roleResourceType} on ${resourceRole.resourceTypeId} = ${roleResourceType.id}
                where (((${policy.resourceId} != ${effectiveResourcePolicy.resourceId} and (${policyRole.descendantsOnly} or ${flattenedRole.descendantsOnly}))
                 or not ((${policy.resourceId} != ${effectiveResourcePolicy.resourceId}) or ${policyRole.descendantsOnly} or ${flattenedRole.descendantsOnly}))
-                and (${resourceTypeOne.name} = ${resourceTypeName}
-                 or ${resourceTypeTwo.name} = ${resourceTypeName}))
+                and (${policyResourceType.name} = ${resourceTypeName}
+                 or ${roleResourceType.name} = ${resourceTypeName}))
                 on conflict do nothing
             """.update().apply()
     })
