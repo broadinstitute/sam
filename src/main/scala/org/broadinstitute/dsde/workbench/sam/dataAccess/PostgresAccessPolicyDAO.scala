@@ -1363,6 +1363,8 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
     val effectiveResourcePolicy = EffectiveResourcePolicyTable.syntax("effectiveResourcePolicy")
 
     serializableWriteTransaction("recreateEffectivePolicyRolesTableEntry", samRequestContext)({ implicit session =>
+      samsql"lock table ${ResourceTypeTable.table} IN EXCLUSIVE MODE".execute().apply()
+
       samsql"""delete from ${EffectivePolicyRoleTable as effectivePolicyRole}
                using ${EffectiveResourcePolicyTable as effectiveResourcePolicy},
                ${ResourceRoleTable as resourceRole},
