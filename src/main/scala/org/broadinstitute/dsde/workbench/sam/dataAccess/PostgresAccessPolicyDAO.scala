@@ -65,7 +65,7 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
           insertActions(resourceTypes, resourceTypeNameToPKs)
           upsertRoleActions(resourceTypes, resourceTypeNameToPKs)
           upsertNestedRoles(resourceTypes, resourceTypeNameToPKs)
-          recreateEffectivePolicyRolesTableEntry(changedResourceTypeNames, samRequestContext)
+          recreateEffectivePolicyRolesTableEntry(changedResourceTypeNames)
           logger.info(s"upsertResourceTypes: completed updates to resource types [$changedResourceTypeNames]")
         }
         changedResourceTypeNames
@@ -1351,7 +1351,7 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
     })
   }
 
-  private def recreateEffectivePolicyRolesTableEntry(resourceTypeNames: Set[ResourceTypeName], samRequestContext: SamRequestContext)(implicit session: DBSession) : Int = {
+  private def recreateEffectivePolicyRolesTableEntry(resourceTypeNames: Set[ResourceTypeName])(implicit session: DBSession) : Int = {
     val resource = ResourceTable.syntax("resource")
     val policyResource = ResourceTable.syntax("policyResource")
     val resourceRole = ResourceRoleTable.syntax("resourceRole")
