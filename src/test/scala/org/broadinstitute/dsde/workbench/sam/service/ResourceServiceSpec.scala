@@ -48,12 +48,23 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
   lazy val policyDAO: AccessPolicyDAO = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.dbRef)
   val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
+  private val ownerRoleName = ResourceRoleName("owner")
+
   private val dummyUserInfo = UserInfo(OAuth2BearerToken("token"), WorkbenchUserId("userid"), WorkbenchEmail("user@company.com"), 0)
 
   private val defaultResourceTypeActions = Set(ResourceAction("alter_policies"), ResourceAction("delete"), ResourceAction("read_policies"), ResourceAction("view"), ResourceAction("non_owner_action"))
   private val defaultResourceTypeActionPatterns = Set(SamResourceActionPatterns.alterPolicies, SamResourceActionPatterns.delete, SamResourceActionPatterns.readPolicies, ResourceActionPattern("view", "", false), ResourceActionPattern("non_owner_action", "", false))
-  private val defaultResourceType = ResourceType(ResourceTypeName(UUID.randomUUID().toString), defaultResourceTypeActionPatterns, Set(ResourceRole(ResourceRoleName("owner"), defaultResourceTypeActions - ResourceAction("non_owner_action")), ResourceRole(ResourceRoleName("other"), Set(ResourceAction("view"), ResourceAction("non_owner_action")))), ResourceRoleName("owner"))
-  private val otherResourceType = ResourceType(ResourceTypeName(UUID.randomUUID().toString), defaultResourceTypeActionPatterns, Set(ResourceRole(ResourceRoleName("owner"), defaultResourceTypeActions - ResourceAction("non_owner_action")), ResourceRole(ResourceRoleName("other"), Set(ResourceAction("view"), ResourceAction("non_owner_action")))), ResourceRoleName("owner"))
+  private val defaultResourceType = ResourceType(ResourceTypeName(UUID.randomUUID().toString), defaultResourceTypeActionPatterns, Set(ResourceRole(ownerRoleName, defaultResourceTypeActions - ResourceAction("non_owner_action")), ResourceRole(ResourceRoleName("other"), Set(ResourceAction("view"), ResourceAction("non_owner_action")))), ownerRoleName)
+  private val otherResourceType = ResourceType(ResourceTypeName(UUID.randomUUID().toString), defaultResourceTypeActionPatterns, Set(ResourceRole(ownerRoleName, defaultResourceTypeActions - ResourceAction("non_owner_action")), ResourceRole(ResourceRoleName("other"), Set(ResourceAction("view"), ResourceAction("non_owner_action")))), ownerRoleName)
+  private val childResourceTypeName = ResourceTypeName("child-resource-type")
+  private val childResourceTypeOwnerRole = ResourceRole(ownerRoleName, defaultResourceTypeActions - ResourceAction("non_owner_action"))
+  private val childResourceTypeOtherRole = ResourceRole(ResourceRoleName("other"), Set(ResourceAction("view"), ResourceAction("non_owner_action")))
+  private val childResourceType = ResourceType(childResourceTypeName, defaultResourceTypeActionPatterns, Set(childResourceTypeOwnerRole, childResourceTypeOtherRole), childResourceTypeOwnerRole.roleName)
+  private val parentResourceTypeOwnerRole = ResourceRole(ownerRoleName, defaultResourceTypeActions - ResourceAction("non_owner_action"), Set(), Map(childResourceTypeName -> Set(childResourceTypeOwnerRole.roleName)))
+  private val parentResourceTypeOtherRole = ResourceRole(ResourceRoleName("other"), Set(ResourceAction("view"), ResourceAction("non_owner_action")))
+  private val parentResourceTypeRoles = Set(parentResourceTypeOwnerRole, parentResourceTypeOtherRole)
+  private val parentResourceType = ResourceType(ResourceTypeName("parent-resource-type"), defaultResourceTypeActionPatterns, parentResourceTypeRoles, ownerRoleName)
+  val otherParentResourceType: ResourceType = parentResourceType.copy(name = ResourceTypeName("parent-resource-type-2"))
 
   private val constrainableActionPatterns = Set(ResourceActionPattern("constrainable_view", "Can be constrained by an auth domain", true))
   private val constrainableViewAction = ResourceAction("constrainable_view")
@@ -70,8 +81,9 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
   private val managedGroupResourceType = realResourceTypeMap.getOrElse(ResourceTypeName("managed-group"), throw new Error("Failed to load managed-group resource type from reference.conf"))
 
   private val emailDomain = "example.com"
-  private val policyEvaluatorService = PolicyEvaluatorService(emailDomain, Map(defaultResourceType.name -> defaultResourceType, otherResourceType.name -> otherResourceType, managedGroupResourceType.name -> managedGroupResourceType), policyDAO, dirDAO)
-  private val service = new ResourceService(Map(defaultResourceType.name -> defaultResourceType, otherResourceType.name -> otherResourceType, managedGroupResourceType.name -> managedGroupResourceType), policyEvaluatorService, policyDAO, dirDAO, NoExtensions, emailDomain)
+  private val resourceTypes = Map(defaultResourceType.name -> defaultResourceType, otherResourceType.name -> otherResourceType, parentResourceType.name -> parentResourceType, childResourceType.name -> childResourceType, managedGroupResourceType.name -> managedGroupResourceType, otherParentResourceType.name -> otherParentResourceType)
+  private val policyEvaluatorService = PolicyEvaluatorService(emailDomain, resourceTypes, policyDAO, dirDAO)
+  private val service = new ResourceService(resourceTypes, policyEvaluatorService, policyDAO, dirDAO, NoExtensions, emailDomain)
   private val constrainableResourceTypes = Map(constrainableResourceType.name -> constrainableResourceType, managedGroupResourceType.name -> managedGroupResourceType)
   private val constrainablePolicyEvaluatorService = PolicyEvaluatorService(emailDomain, constrainableResourceTypes, policyDAO, dirDAO)
   private val constrainableService = new ResourceService(constrainableResourceTypes, constrainablePolicyEvaluatorService, policyDAO, dirDAO, NoExtensions, emailDomain)
@@ -121,7 +133,6 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
   it should "read included and descendant roles" in {
     val testResourceTypes = TestSupport.config.as[Map[String, ResourceType]]("testStuff.resourceTypes").values.toSet
     val testType = testResourceTypes.find(_.name == ResourceTypeName("testType")).getOrElse(fail("Missing test resource type, please check src/test/resources/reference.conf"))
-    val ownerRoleName = ResourceRoleName("owner")
     val nonOwnerRoleName = ResourceRoleName("nonOwner")
     val expectedRoles = Set(
       ResourceRole(ownerRoleName,
@@ -216,7 +227,7 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
     policyDAO.createPolicy(AccessPolicy(
       FullyQualifiedPolicyId(policies2.fullyQualifiedId, AccessPolicyName(otherRoleName.value)), Set(dummyUserInfo.userId), WorkbenchEmail("a@b.c"), Set(otherRoleName), Set.empty, Set.empty, public = false), samRequestContext).unsafeRunSync()
 
-    assertResult(defaultResourceType.roles.filter(_.roleName.equals(ResourceRoleName("owner"))).head.actions) {
+    assertResult(defaultResourceType.roles.filter(_.roleName.equals(ownerRoleName)).head.actions) {
       service.policyEvaluatorService.listUserResourceActions(FullyQualifiedResourceId(defaultResourceType.name, resourceName1), dummyUserInfo.userId, samRequestContext = samRequestContext).unsafeRunSync()
     }
 
@@ -448,7 +459,7 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
     val managedGroupName = "fooGroup"
     runAndWait(managedGroupService.createManagedGroup(ResourceId(managedGroupName), dummyUserInfo, samRequestContext = samRequestContext))
 
-    val policyMembership = AccessPolicyMembership(Set(dummyUserInfo.userEmail), Set(ResourceAction("view")), Set(ResourceRoleName("owner")), None)
+    val policyMembership = AccessPolicyMembership(Set(dummyUserInfo.userEmail), Set(ResourceAction("view")), Set(ownerRoleName), None)
     val policyName = AccessPolicyName("foo")
 
     val authDomain = Set(WorkbenchGroupName(managedGroupName))
@@ -466,7 +477,7 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
 
     val roles = runAndWait(service.listUserResourceRoles(resource, dummyUserInfo, samRequestContext))
 
-    roles shouldEqual Set(ResourceRoleName("owner"))
+    roles shouldEqual Set(ownerRoleName)
   }
 
   it should "return an empty set when the resource doesn't exist" in {
@@ -663,7 +674,7 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
   }
 
   it should "succeed with a regex action" in {
-    val rt = ResourceType(ResourceTypeName(UUID.randomUUID().toString), Set(ResourceActionPattern("foo-.+-bar", "", false)), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("foo-biz-bar")))), ResourceRoleName("owner")
+    val rt = ResourceType(ResourceTypeName(UUID.randomUUID().toString), Set(ResourceActionPattern("foo-.+-bar", "", false)), Set(ResourceRole(ownerRoleName, Set(ResourceAction("foo-biz-bar")))), ownerRoleName
     )
     val resource = FullyQualifiedResourceId(rt.name, ResourceId("my-resource"))
 
@@ -703,7 +714,7 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
   }
 
   it should "fail when given an invalid regex action" in {
-    val rt = ResourceType(ResourceTypeName(UUID.randomUUID().toString), Set(ResourceActionPattern("foo-.+-bar", "", false)), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("foo-biz-bar")))), ResourceRoleName("owner")
+    val rt = ResourceType(ResourceTypeName(UUID.randomUUID().toString), Set(ResourceActionPattern("foo-.+-bar", "", false)), Set(ResourceRole(ownerRoleName, Set(ResourceAction("foo-biz-bar")))), ownerRoleName
     )
     val resource = FullyQualifiedResourceId(rt.name, ResourceId("my-resource"))
 
@@ -898,7 +909,7 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
 
   "validatePolicy" should "succeed with a correct policy" in {
     val emailToMaybeSubject = Map(dummyUserInfo.userEmail -> Option(dummyUserInfo.userId.asInstanceOf[WorkbenchSubject]))
-    val policy = service.ValidatableAccessPolicy(AccessPolicyName("a"), emailToMaybeSubject, Set(ResourceRoleName("owner")), Set(ResourceAction("alter_policies")), Set())
+    val policy = service.ValidatableAccessPolicy(AccessPolicyName("a"), emailToMaybeSubject, Set(ownerRoleName), Set(ResourceAction("alter_policies")), Set())
     runAndWait(service.validatePolicy(defaultResourceType, policy)) shouldBe empty
   }
 
@@ -916,7 +927,7 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
   }
 
   "validateRoles" should "succeed with role included in listed roles" in {
-    service.validateRoles(defaultResourceType, Set(ResourceRoleName("owner"))) shouldBe empty
+    service.validateRoles(defaultResourceType, Set(ownerRoleName)) shouldBe empty
   }
 
   "validateActions" should "fail if action is not in listed actions" in {
@@ -1045,8 +1056,8 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
   "initResourceTypes" should "do the happy path" in {
     val adminResType = ResourceType(SamResourceTypes.resourceTypeAdminName,
       Set(SamResourceActionPatterns.alterPolicies, SamResourceActionPatterns.readPolicies),
-      Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.alterPolicies, SamResourceActions.readPolicies))),
-      ResourceRoleName("owner"))
+      Set(ResourceRole(ownerRoleName, Set(SamResourceActions.alterPolicies, SamResourceActions.readPolicies))),
+      ownerRoleName)
 
     val service = new ResourceService(Map(adminResType.name -> adminResType, defaultResourceType.name -> defaultResourceType), policyEvaluatorService, policyDAO, dirDAO, NoExtensions, emailDomain)
 
@@ -1060,19 +1071,19 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
     val resourceAndPolicyName = FullyQualifiedPolicyId(
       FullyQualifiedResourceId(adminResType.name, ResourceId(defaultResourceType.name.value)), AccessPolicyName("owner"))
     val policy = policyDAO.loadPolicy(resourceAndPolicyName, samRequestContext).unsafeRunSync()
-    policy.map(_.copy(email = WorkbenchEmail(""))) should equal(Some(AccessPolicy(resourceAndPolicyName, Set.empty, WorkbenchEmail(""), Set(ResourceRoleName("owner")), Set.empty, Set.empty, public = false)))
+    policy.map(_.copy(email = WorkbenchEmail(""))) should equal(Some(AccessPolicy(resourceAndPolicyName, Set.empty, WorkbenchEmail(""), Set(ownerRoleName), Set.empty, Set.empty, public = false)))
 
     // add a user to the policy and verify
     policyDAO.overwritePolicy(policy.get.copy(members = Set(dummyUserInfo.userId)), samRequestContext).unsafeRunSync()
     val policy2 = policyDAO.loadPolicy(resourceAndPolicyName, samRequestContext).unsafeRunSync()
-    policy2.map(_.copy(email = WorkbenchEmail(""))) should equal(Some(AccessPolicy(resourceAndPolicyName, Set(dummyUserInfo.userId), WorkbenchEmail(""), Set(ResourceRoleName("owner")), Set.empty, Set.empty, public = false)))
+    policy2.map(_.copy(email = WorkbenchEmail(""))) should equal(Some(AccessPolicy(resourceAndPolicyName, Set(dummyUserInfo.userId), WorkbenchEmail(""), Set(ownerRoleName), Set.empty, Set.empty, public = false)))
 
     // call it again to ensure it does not fail
     service.initResourceTypes().unsafeRunSync()
 
     // verify the policy has not changed
     val policy3 = policyDAO.loadPolicy(resourceAndPolicyName, samRequestContext).unsafeRunSync()
-    policy3.map(_.copy(email = WorkbenchEmail(""))) should equal(Some(AccessPolicy(resourceAndPolicyName, Set(dummyUserInfo.userId), WorkbenchEmail(""), Set(ResourceRoleName("owner")), Set.empty, Set.empty, public = false)))
+    policy3.map(_.copy(email = WorkbenchEmail(""))) should equal(Some(AccessPolicy(resourceAndPolicyName, Set(dummyUserInfo.userId), WorkbenchEmail(""), Set(ownerRoleName), Set.empty, Set.empty, public = false)))
   }
 
   it should "fail if resourceTypeAdmin not defined" in {
@@ -1081,6 +1092,129 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
     intercept[WorkbenchException] {
       service.initResourceTypes().unsafeRunSync()
     }
+  }
+
+  it should "update effective resource tables if descendant permissions are removed" in {
+    val adminResType = ResourceType(SamResourceTypes.resourceTypeAdminName,
+      Set(SamResourceActionPatterns.alterPolicies, SamResourceActionPatterns.readPolicies),
+      Set(ResourceRole(ownerRoleName, Set(SamResourceActions.alterPolicies, SamResourceActions.readPolicies))),
+      ownerRoleName)
+
+    val parentResourceId = FullyQualifiedResourceId(parentResourceType.name, ResourceId(UUID.randomUUID().toString))
+    val parentOwnerPolicy = FullyQualifiedPolicyId(parentResourceId, AccessPolicyName("owner"))
+    val childResourceId = FullyQualifiedResourceId(childResourceType.name, ResourceId(UUID.randomUUID().toString))
+
+    val service = new ResourceService(Map(adminResType.name -> adminResType, parentResourceType.name -> parentResourceType, childResourceType.name -> childResourceType), policyEvaluatorService, policyDAO, dirDAO, NoExtensions, emailDomain)
+
+    val init = service.initResourceTypes().unsafeRunSync()
+    init should contain theSameElementsAs(Set(adminResType, parentResourceType, childResourceType))
+
+    val parentResource = runAndWait(service.createResource(parentResourceType, parentResourceId.resourceId, dummyUserInfo, samRequestContext))
+    val childResource = runAndWait(service.createResource(childResourceType, childResourceId.resourceId, dummyUserInfo, samRequestContext))
+    runAndWait(service.setResourceParent(childResource.fullyQualifiedId, parentResource.fullyQualifiedId, samRequestContext))
+
+    val user1 = UserIdInfo(WorkbenchUserId("user1"), WorkbenchEmail("user1@fake.com"), None)
+    dirDAO.createUser(WorkbenchUser(user1.userSubjectId, None, user1.userEmail, None), samRequestContext).unsafeRunSync()
+
+    runAndWait(service.addSubjectToPolicy(parentOwnerPolicy, user1.userSubjectId, samRequestContext))
+    runAndWait(policyEvaluatorService.hasPermission(childResource.fullyQualifiedId, ResourceAction("view"), user1.userSubjectId, samRequestContext)) shouldBe true
+    runAndWait(policyEvaluatorService.hasPermission(parentResource.fullyQualifiedId, ResourceAction("view"), user1.userSubjectId, samRequestContext)) shouldBe true
+
+
+    val overriddenParentResourceType = parentResourceType.copy(roles = Set(
+      parentResourceTypeOwnerRole.copy(descendantRoles = Map.empty),
+      parentResourceTypeOtherRole
+    ))
+    val newService = new ResourceService(Map(adminResType.name -> adminResType, parentResourceType.name -> overriddenParentResourceType, childResourceType.name -> childResourceType), policyEvaluatorService, policyDAO, dirDAO, NoExtensions, emailDomain)
+    val newInit = newService.initResourceTypes().unsafeRunSync()
+    newInit should contain theSameElementsAs(Set(adminResType, overriddenParentResourceType, childResourceType))
+
+    runAndWait(policyEvaluatorService.hasPermission(childResource.fullyQualifiedId, ResourceAction("view"), user1.userSubjectId, samRequestContext)) shouldBe false
+    runAndWait(policyEvaluatorService.hasPermission(parentResource.fullyQualifiedId, ResourceAction("view"), user1.userSubjectId, samRequestContext)) shouldBe true
+  }
+
+  it should "update effective resource tables if descendant permissions are added" in {
+    val adminResType = ResourceType(SamResourceTypes.resourceTypeAdminName,
+      Set(SamResourceActionPatterns.alterPolicies, SamResourceActionPatterns.readPolicies),
+      Set(ResourceRole(ownerRoleName, Set(SamResourceActions.alterPolicies, SamResourceActions.readPolicies))),
+      ownerRoleName)
+
+    val parentResourceId = FullyQualifiedResourceId(parentResourceType.name, ResourceId(UUID.randomUUID().toString))
+    val parentOwnerPolicy = FullyQualifiedPolicyId(parentResourceId, AccessPolicyName("owner"))
+    val childResourceId = FullyQualifiedResourceId(childResourceType.name, ResourceId(UUID.randomUUID().toString))
+
+    val overriddenParentResourceType = parentResourceType.copy(roles = Set(
+      parentResourceTypeOwnerRole.copy(descendantRoles = Map.empty),
+      parentResourceTypeOtherRole
+    ))
+    val newService = new ResourceService(Map(adminResType.name -> adminResType, parentResourceType.name -> overriddenParentResourceType, childResourceType.name -> childResourceType), policyEvaluatorService, policyDAO, dirDAO, NoExtensions, emailDomain)
+    val newInit = newService.initResourceTypes().unsafeRunSync()
+    newInit should contain theSameElementsAs(Set(adminResType, overriddenParentResourceType, childResourceType))
+
+
+    val parentResource = runAndWait(newService.createResource(parentResourceType, parentResourceId.resourceId, dummyUserInfo, samRequestContext))
+    val childResource = runAndWait(newService.createResource(childResourceType, childResourceId.resourceId, dummyUserInfo, samRequestContext))
+
+    val user1 = UserIdInfo(WorkbenchUserId("user1"), WorkbenchEmail("user1@fake.com"), None)
+    dirDAO.createUser(WorkbenchUser(user1.userSubjectId, None, user1.userEmail, None), samRequestContext).unsafeRunSync()
+
+    runAndWait(newService.setResourceParent(childResource.fullyQualifiedId, parentResource.fullyQualifiedId, samRequestContext))
+    runAndWait(newService.addSubjectToPolicy(parentOwnerPolicy, user1.userSubjectId, samRequestContext))
+
+    runAndWait(policyEvaluatorService.hasPermission(childResource.fullyQualifiedId, ResourceAction("view"), user1.userSubjectId, samRequestContext)) shouldBe false
+
+    val service = new ResourceService(Map(adminResType.name -> adminResType, parentResourceType.name -> parentResourceType, childResourceType.name -> childResourceType), policyEvaluatorService, policyDAO, dirDAO, NoExtensions, emailDomain)
+
+    val init = service.initResourceTypes().unsafeRunSync()
+    init should contain theSameElementsAs(Set(adminResType, parentResourceType, childResourceType))
+
+    runAndWait(policyEvaluatorService.hasPermission(childResource.fullyQualifiedId, ResourceAction("view"), user1.userSubjectId, samRequestContext)) shouldBe true
+  }
+
+  it should "leave other effective resource relationships intact if descendant permissions are added" in {
+    val adminResType = ResourceType(SamResourceTypes.resourceTypeAdminName,
+      Set(SamResourceActionPatterns.alterPolicies, SamResourceActionPatterns.readPolicies),
+      Set(ResourceRole(ownerRoleName, Set(SamResourceActions.alterPolicies, SamResourceActions.readPolicies))),
+      ownerRoleName)
+
+    val parentResourceId = FullyQualifiedResourceId(parentResourceType.name, ResourceId(UUID.randomUUID().toString))
+    val otherParentResourceId = FullyQualifiedResourceId(otherParentResourceType.name, ResourceId(UUID.randomUUID().toString))
+    val otherParentOwnerPolicy = FullyQualifiedPolicyId(otherParentResourceId, AccessPolicyName("owner"))
+    val childResourceId = FullyQualifiedResourceId(childResourceType.name, ResourceId(UUID.randomUUID().toString))
+    val otherChildResourceId = FullyQualifiedResourceId(childResourceType.name, ResourceId(UUID.randomUUID().toString))
+
+    val service = new ResourceService(Map(adminResType.name -> adminResType, parentResourceType.name -> parentResourceType, childResourceType.name -> childResourceType, otherParentResourceType.name -> otherParentResourceType), policyEvaluatorService, policyDAO, dirDAO, NoExtensions, emailDomain)
+
+    val init = service.initResourceTypes().unsafeRunSync()
+    init should contain theSameElementsAs(Set(adminResType, parentResourceType, childResourceType, otherParentResourceType))
+
+    val parentResource = runAndWait(service.createResource(parentResourceType, parentResourceId.resourceId, dummyUserInfo, samRequestContext))
+    val childResource = runAndWait(service.createResource(childResourceType, childResourceId.resourceId, dummyUserInfo, samRequestContext))
+    val otherParentResource = runAndWait(service.createResource(otherParentResourceType, otherParentResourceId.resourceId, dummyUserInfo, samRequestContext))
+    val otherChildResource = runAndWait(service.createResource(childResourceType, otherChildResourceId.resourceId, dummyUserInfo, samRequestContext))
+    runAndWait(service.setResourceParent(childResource.fullyQualifiedId, parentResource.fullyQualifiedId, samRequestContext))
+    runAndWait(service.setResourceParent(otherChildResource.fullyQualifiedId, otherParentResource.fullyQualifiedId, samRequestContext))
+
+    val user1 = UserIdInfo(WorkbenchUserId("user1"), WorkbenchEmail("user1@fake.com"), None)
+    dirDAO.createUser(WorkbenchUser(user1.userSubjectId, None, user1.userEmail, None), samRequestContext).unsafeRunSync()
+
+    runAndWait(service.addSubjectToPolicy(otherParentOwnerPolicy, user1.userSubjectId, samRequestContext))
+    runAndWait(policyEvaluatorService.hasPermission(otherChildResource.fullyQualifiedId, ResourceAction("view"), user1.userSubjectId, samRequestContext)) shouldBe true
+    runAndWait(policyEvaluatorService.hasPermission(otherParentResource.fullyQualifiedId, ResourceAction("view"), user1.userSubjectId, samRequestContext)) shouldBe true
+    runAndWait(policyEvaluatorService.hasPermission(childResource.fullyQualifiedId, ResourceAction("view"), user1.userSubjectId, samRequestContext)) shouldBe false
+
+
+    val overriddenParentResourceType = parentResourceType.copy(roles = Set(
+      parentResourceTypeOwnerRole.copy(descendantRoles = Map.empty),
+      parentResourceTypeOtherRole
+    ))
+    val newService = new ResourceService(Map(adminResType.name -> adminResType, parentResourceType.name -> overriddenParentResourceType, childResourceType.name -> childResourceType, otherParentResourceType.name -> otherParentResourceType), policyEvaluatorService, policyDAO, dirDAO, NoExtensions, emailDomain)
+    val newInit = newService.initResourceTypes().unsafeRunSync()
+    newInit should contain theSameElementsAs(Set(adminResType, overriddenParentResourceType, childResourceType, otherParentResourceType))
+
+    runAndWait(policyEvaluatorService.hasPermission(otherChildResource.fullyQualifiedId, ResourceAction("view"), user1.userSubjectId, samRequestContext)) shouldBe true
+    runAndWait(policyEvaluatorService.hasPermission(otherParentResource.fullyQualifiedId, ResourceAction("view"), user1.userSubjectId, samRequestContext)) shouldBe true
+    runAndWait(policyEvaluatorService.hasPermission(childResource.fullyQualifiedId, ResourceAction("view"), user1.userSubjectId, samRequestContext)) shouldBe false
   }
 
   "listAllFlattenedResourceUsers" should "return a flattened list of all of the users in any of a resource's policies" in {
