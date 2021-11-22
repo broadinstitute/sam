@@ -65,10 +65,8 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
           insertActions(resourceTypes, resourceTypeNameToPKs)
           upsertRoleActions(resourceTypes, resourceTypeNameToPKs)
           upsertNestedRoles(resourceTypes, resourceTypeNameToPKs)
+          recreateEffectivePolicyRolesTableEntry(changedResourceTypeNames, samRequestContext)
           logger.info(s"upsertResourceTypes: completed updates to resource types [$changedResourceTypeNames]")
-          changedResourceTypeNames.map { rtName => {
-            recreateEffectivePolicyRolesTableEntry(rtName, samRequestContext)
-          }}
         }
         changedResourceTypeNames
       }
@@ -1353,7 +1351,7 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
     })
   }
 
-  private def recreateEffectivePolicyRolesTableEntry(resourceTypeName: ResourceTypeName, samRequestContext: SamRequestContext)(implicit session: DBSession) : Int = {
+  private def recreateEffectivePolicyRolesTableEntry(resourceTypeNames: Set[ResourceTypeName], samRequestContext: SamRequestContext)(implicit session: DBSession) : Int = {
     val resource = ResourceTable.syntax("resource")
     val policyResource = ResourceTable.syntax("policyResource")
     val resourceRole = ResourceRoleTable.syntax("resourceRole")
@@ -1379,8 +1377,8 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
              and ${effectivePolicyRole.resourceRoleId} = ${resourceRole.id}
              and ${resourceRole.resourceTypeId} = ${roleResourceType.id}
              and (
-               ${policyResourceType.name} = ${resourceTypeName}
-               or ${roleResourceType.name} = ${resourceTypeName}
+               ${policyResourceType.name} IN (${resourceTypeNames})
+               or ${roleResourceType.name} IN (${resourceTypeNames})
              )
           """.update().apply()
 
@@ -1397,8 +1395,8 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
              join ${ResourceTypeTable as roleResourceType} on ${resourceRole.resourceTypeId} = ${roleResourceType.id}
              where (((${policy.resourceId} != ${effectiveResourcePolicy.resourceId} and (${policyRole.descendantsOnly} or ${flattenedRole.descendantsOnly}))
               or not ((${policy.resourceId} != ${effectiveResourcePolicy.resourceId}) or ${policyRole.descendantsOnly} or ${flattenedRole.descendantsOnly}))
-              and (${policyResourceType.name} = ${resourceTypeName}
-               or ${roleResourceType.name} = ${resourceTypeName}))
+              and (${policyResourceType.name} IN (${resourceTypeNames})
+               or ${roleResourceType.name} IN (${resourceTypeNames})))
               on conflict do nothing
           """.update().apply()
   }
