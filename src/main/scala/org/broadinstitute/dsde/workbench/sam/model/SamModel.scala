@@ -91,6 +91,7 @@ object SamResourceActions {
   val addChild = ResourceAction("add_child")
   val removeChild = ResourceAction("remove_child")
   val listChildren = ResourceAction("list_children")
+  val createPet = ResourceAction("create-pet")
 
   def sharePolicy(policy: AccessPolicyName) = ResourceAction(s"share_policy::${policy.value}")
   def readPolicy(policy: AccessPolicyName) = ResourceAction(s"read_policy::${policy.value}")
@@ -101,6 +102,8 @@ object SamResourceActions {
 
 object SamResourceTypes {
   val resourceTypeAdminName = ResourceTypeName("resource_type_admin")
+  val workspaceName = ResourceTypeName("workspace")
+  val googleProjectName = ResourceTypeName("google-project")
 }
 
 @Lenses final case class UserStatusDetails(userSubjectId: WorkbenchUserId, userEmail: WorkbenchEmail) //for backwards compatibility to old API

@@ -84,7 +84,7 @@ object TestSupport extends TestSupport {
   def genGoogleSubjectId(): Option[GoogleSubjectId] = Option(GoogleSubjectId(genRandom(System.currentTimeMillis())))
   def genAzureB2CId(): AzureB2CId = AzureB2CId(genRandom(System.currentTimeMillis()))
 
-  def genSamDependencies(resourceTypes: Map[ResourceTypeName, ResourceType] = Map.empty, googIamDAO: Option[GoogleIamDAO] = None, googleServicesConfig: GoogleServicesConfig = googleServicesConfig, cloudExtensions: Option[CloudExtensions] = None, googleDirectoryDAO: Option[GoogleDirectoryDAO] = None, policyAccessDAO: Option[AccessPolicyDAO] = None)(implicit system: ActorSystem) = {
+  def genSamDependencies(resourceTypes: Map[ResourceTypeName, ResourceType] = Map.empty, googIamDAO: Option[GoogleIamDAO] = None, googleServicesConfig: GoogleServicesConfig = googleServicesConfig, cloudExtensions: Option[CloudExtensions] = None, googleDirectoryDAO: Option[GoogleDirectoryDAO] = None, policyAccessDAO: Option[AccessPolicyDAO] = None, policyEvaluatorServiceOpt: Option[PolicyEvaluatorService] = None, resourceServiceOpt: Option[ResourceService] = None)(implicit system: ActorSystem) = {
     val googleDirectoryDAO = new MockGoogleDirectoryDAO()
     val directoryDAO = new MockDirectoryDAO()
     val registrationDAO = new MockRegistrationDAO()
@@ -116,8 +116,8 @@ object TestSupport extends TestSupport {
       googleServicesConfig,
       petServiceAccountConfig,
       resourceTypes))
-    val policyEvaluatorService = PolicyEvaluatorService(appConfig.emailDomain, resourceTypes, policyDAO, directoryDAO)
-    val mockResourceService = new ResourceService(resourceTypes, policyEvaluatorService, policyDAO, directoryDAO, googleExt, "example.com")
+    val policyEvaluatorService = policyEvaluatorServiceOpt.getOrElse(PolicyEvaluatorService(appConfig.emailDomain, resourceTypes, policyDAO, directoryDAO))
+    val mockResourceService = resourceServiceOpt.getOrElse(new ResourceService(resourceTypes, policyEvaluatorService, policyDAO, directoryDAO, googleExt, "example.com"))
     val mockManagedGroupService = new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, policyDAO, directoryDAO, googleExt, "example.com")
     val tosService = new TosService(directoryDAO, "example.com")
 
