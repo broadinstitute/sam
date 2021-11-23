@@ -1,4 +1,4 @@
-package org.broadinstitute.dsde.workbench.sam
+package org.broadinstitute.dsde.workbench.sam.service
 
 import akka.http.scaladsl.model.StatusCodes
 import cats.effect.IO
