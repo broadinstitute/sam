@@ -55,10 +55,13 @@ class UserRoutesV1Spec extends UserRoutesSpecHelper{
     }
   }
 
-  it should "forbid the registration if ToS is enabled and the user doesn't specify a ToS body" in withTosEnabledRoutes { samRoutes =>
+  it should "create the user if ToS is enabled and the user doesn't specify a ToS body" in withTosEnabledRoutes { samRoutes =>
     Post("/register/user/v1") ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.Forbidden
-      responseAs[ErrorReport].message should startWith("You must accept the Terms of Service in order to register.")
+      status shouldEqual StatusCodes.Created
+      val res = responseAs[UserStatus]
+      res.userInfo.userSubjectId.value.length shouldBe 21
+      res.userInfo.userEmail shouldBe defaultUserEmail
+      res.enabled shouldBe Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> false)
     }
   }
 
@@ -70,11 +73,15 @@ class UserRoutesV1Spec extends UserRoutesSpecHelper{
     }
   }
 
-  it should "forbid the registration if ToS is enabled and the user specifies a differently shaped payload" in withTosEnabledRoutes { samRoutes =>
+  it should "create the user if ToS is enabled and the user specifies a differently shaped payload" in withTosEnabledRoutes { samRoutes =>
     val badPayload = UserStatusInfo("doesntmatter", "foobar", true, None)
     Post("/register/user/v1", badPayload) ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.Forbidden
-      responseAs[ErrorReport].message should startWith("You must accept the Terms of Service in order to register.")
+      status shouldEqual StatusCodes.Created
+      val res = responseAs[UserStatus]
+      res.userInfo.userSubjectId.value.length shouldBe 21
+      res.userInfo.userEmail shouldBe defaultUserEmail
+      res.enabled shouldBe Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> false)
+
     }
   }
 

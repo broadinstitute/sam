@@ -24,13 +24,17 @@ import scala.util.matching.Regex
 class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExtensions, val registrationDAO: RegistrationDAO, blockedEmailDomains: Seq[String], tosService: TosService)(implicit val executionContext: ExecutionContext, contextShift: ContextShift[IO]) extends LazyLogging {
 
   def createUser(user: WorkbenchUser, samRequestContext: SamRequestContext): Future[UserStatus] = {
+    createUser(user, false, samRequestContext)
+  }
+
+  def createUser(user: WorkbenchUser, acceptTos: Boolean, samRequestContext: SamRequestContext): Future[UserStatus] = {
     for {
       _ <- UserService.validateEmailAddress(user.email, blockedEmailDomains).unsafeToFuture()
       allUsersGroup <- cloudExtensions.getOrCreateAllUsersGroup(directoryDAO, samRequestContext)
       createdUser <- registerUser(user, samRequestContext).unsafeToFuture()
       _ <- enableUserInternal(createdUser, samRequestContext)
       _ <- directoryDAO.addGroupMember(allUsersGroup.id, createdUser.id, samRequestContext).unsafeToFuture()
-      _ <- tosService.acceptTosStatus(createdUser.id).unsafeToFuture()
+      _ <- if (acceptTos) tosService.acceptTosStatus(createdUser.id).unsafeToFuture() else Future.successful(None)
       userStatus <- getUserStatus(createdUser.id, false, samRequestContext)
       res <- userStatus.toRight(new WorkbenchException("getUserStatus returned None after user was created")).fold(Future.failed, Future.successful)
     } yield res
