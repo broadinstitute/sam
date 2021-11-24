@@ -198,7 +198,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
       case _ => Future.successful(None)
     }
 
-  def enableUser(userId: WorkbenchUserId, userInfo: UserInfo, samRequestContext: SamRequestContext): Future[Option[UserStatus]] =
+  def enableUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): Future[Option[UserStatus]] =
     directoryDAO.loadUser(userId, samRequestContext).unsafeToFuture().flatMap {
       case Some(user) =>
         for {
@@ -211,9 +211,17 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
   private def enableUserInternal(user: WorkbenchUser, samRequestContext: SamRequestContext): Future[Unit] = {
     for {
       _ <- directoryDAO.enableIdentity(user.id, samRequestContext).unsafeToFuture()
-      _ <- registrationDAO.enableIdentity(user.id, samRequestContext).unsafeToFuture()
+      _ <- enableIdentityIfTosAccepted(user.id, samRequestContext).unsafeToFuture()
       _ <- cloudExtensions.onUserEnable(user, samRequestContext)
     } yield ()
+  }
+
+  private def enableIdentityIfTosAccepted(userId: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Unit] = {
+    tosService.getTosStatus(userId)
+      .flatMap {
+        case Some(true) => registrationDAO.enableIdentity(userId, samRequestContext)
+        case None => IO.unit
+      }
   }
 
   def disableUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): Future[Option[UserStatus]] =
