@@ -219,8 +219,9 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
   private def enableIdentityIfTosAccepted(userId: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Unit] = {
     tosService.getTosStatus(userId)
       .flatMap {
-        case Some(true) => registrationDAO.enableIdentity(userId, samRequestContext)
-        case None => IO.unit
+        // If the user has accepted TOS or TOS is disabled, then enable the user in LDAP
+        case Some(true) | None => registrationDAO.enableIdentity(userId, samRequestContext)
+        case _ =>  IO.unit
       }
   }
 

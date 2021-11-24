@@ -86,7 +86,6 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
               rs.stringOpt(rt.resultName.name).map(ResourceTypeName(_)))
           }.list().apply()
       })
-      if (results.isEmpty)
     } yield {
       if (results.isEmpty) {
         None
