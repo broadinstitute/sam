@@ -14,8 +14,7 @@ class TermsOfServiceRouteSpec extends AnyFlatSpec with Matchers with ScalatestRo
     eventually {
       Get("/tos/text") ~> samRoutes.route ~> check {
         status shouldEqual StatusCodes.OK
-        responseAs[String] should include("Your access to systems and networks owned by The Broad Institute")
-        responseAs[String] should include("Terms as of February 12, 2020.")
+        responseAs[String].isEmpty shouldBe false
       }
     }
   }
