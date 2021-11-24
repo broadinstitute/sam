@@ -49,6 +49,12 @@ class TosService (val directoryDao: DirectoryDAO, val appsDomain: String, val to
       }
     } else IO.pure(None)
 
+  /**
+    * Check if Terms of service is enabled and if the user has accepted the latest version
+    * @return IO[Some(true)] if ToS is enabled and the user has accepted
+    *         IO[Some(false)] if ToS is enabled and the user hasn't accepted
+    *         IO.none/IO[None]/IO.raiseError() in other cases
+    */
   def getTosStatus(user: WorkbenchSubject): IO[Option[Boolean]] = {
     if (tosConfig.enabled) {
       getTosGroup().flatMap {

@@ -7,7 +7,7 @@ import cats.kernel.Eq
 import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.Generator.{arbNonPetEmail => _, _}
-import org.broadinstitute.dsde.workbench.sam.TestSupport.{eqWorkbenchExceptionErrorReport, googleServicesConfig}
+import org.broadinstitute.dsde.workbench.sam.TestSupport.{eqWorkbenchExceptionErrorReport, googleServicesConfig, tosConfig}
 import org.broadinstitute.dsde.workbench.sam.api.InviteUser
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, LdapRegistrationDAO, PostgresDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
@@ -196,6 +196,36 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
 
     // check ldap
     dirDAO.isEnabled(defaultUserId, samRequestContext).unsafeRunSync() shouldBe false
+    registrationDAO.isEnabled(defaultUserId, samRequestContext).unsafeRunSync() shouldBe false
+  }
+
+  it should "enable a user without accepting Terms of Service and LDAP should remain disabled" in {
+    // create a user
+    val newUser = service.createUser(defaultUser, samRequestContext).futureValue
+    newUser shouldBe UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
+
+    // it should be enabled
+    dirDAO.isEnabled(defaultUserId, samRequestContext).unsafeRunSync() shouldBe true
+    registrationDAO.isEnabled(defaultUserId, samRequestContext).unsafeRunSync() shouldBe true
+
+    // update the terms of service version
+    val newTosConfig = tosConfig.copy(version = tosConfig.version + 1)
+    val newTos = new TosService(dirDAO, googleServicesConfig.appsDomain, newTosConfig)
+    val userServiceWithNewTos =  new UserService(dirDAO, googleExtensions, registrationDAO, Seq(blockedDomain), newTos)
+
+    // disable the user and re-enable the user without accepting the new ToS
+    userServiceWithNewTos.disableUser(defaultUserId, samRequestContext).futureValue
+    val response = userServiceWithNewTos.enableUser(defaultUserId, samRequestContext).futureValue
+    response shouldBe Some(UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> false, "allUsersGroup" -> true, "google" -> true)))
+
+    // User should be enabled in SAM
+    dirDAO.isEnabled(defaultUserId, samRequestContext).unsafeRunSync() shouldBe true
+
+    // User should not be in latest ToS group
+    val userGroups = dirDAO.listUsersGroups(defaultUserId, samRequestContext).unsafeRunSync()
+    userGroups shouldNot contain (WorkbenchGroupName(newTos.getGroupName(newTosConfig.version)))
+
+    // User should not be enabled in LDAP
     registrationDAO.isEnabled(defaultUserId, samRequestContext).unsafeRunSync() shouldBe false
   }
 
