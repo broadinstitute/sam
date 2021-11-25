@@ -24,28 +24,27 @@ class TosService (val directoryDao: DirectoryDAO, val appsDomain: String, val to
     if(tosConfig.enabled) {
       getTosGroup().flatMap {
         case None =>
-          logger.info("creating new ToS group")
-          directoryDao.createGroup(BasicWorkbenchGroup(WorkbenchGroupName(getGroupName(tosConfig.version)),
-            Set.empty, WorkbenchEmail(s"GROUP_${getGroupName(tosConfig.version)}@${appsDomain}")), samRequestContext = SamRequestContext(None)).map(Option(_))
+          logger.info(s"creating new ToS group ${getGroupName()}")
+          directoryDao.createGroup(BasicWorkbenchGroup(WorkbenchGroupName(getGroupName()),
+            Set.empty, WorkbenchEmail(s"GROUP_${getGroupName()}@${appsDomain}")), samRequestContext = SamRequestContext(None)).map(Option(_))
         case group => IO.pure(group)
       }
-    } else
-      IO.none
+    } else IO.none
   }
 
-  def getGroupName(currentVersion: Int): String = {
+  def getGroupName(currentVersion:Int = tosConfig.version): String = {
     s"tos_accepted_${currentVersion}"
   }
 
   def getTosGroup(): IO[Option[BasicWorkbenchGroup]] = {
-    directoryDao.loadGroup(WorkbenchGroupName(getGroupName(tosConfig.version)), SamRequestContext(None))
+    directoryDao.loadGroup(WorkbenchGroupName(getGroupName()), SamRequestContext(None))
   }
 
   def acceptTosStatus(user: WorkbenchSubject): IO[Option[Boolean]] =
     if (tosConfig.enabled) {
       createNewGroupIfNeeded().flatMap {
         case Some(group) => directoryDao.addGroupMember(group.id, user, SamRequestContext(None)).map(Option(_))
-        case None => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Terms of Service group ${getGroupName(tosConfig.version)} failed to create.")))
+        case None => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Terms of Service group ${getGroupName()} failed to create.")))
       }
     } else IO.pure(None)
 

@@ -182,7 +182,13 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     service.enableUser(defaultUserId, samRequestContext).futureValue shouldBe None
     service.disableUser(defaultUserId, samRequestContext).futureValue shouldBe None
 
-    createNewEnabledUser()
+    // create a user
+    val newUser = service.createUser(defaultUser, samRequestContext).futureValue
+    newUser shouldBe UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
+
+    // it should be enabled
+    dirDAO.isEnabled(defaultUserId, samRequestContext).unsafeRunSync() shouldBe true
+    registrationDAO.isEnabled(defaultUserId, samRequestContext).unsafeRunSync() shouldBe true
 
     // disable the user
     val response = service.disableUser(defaultUserId, samRequestContext).futureValue
@@ -191,6 +197,14 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     // check ldap
     dirDAO.isEnabled(defaultUserId, samRequestContext).unsafeRunSync() shouldBe false
     registrationDAO.isEnabled(defaultUserId, samRequestContext).unsafeRunSync() shouldBe false
+  }
+
+  it should "enable a user in LDAP if they accept the latest Terms of Service" in {
+    createNewEnabledUser()
+    updateTosVersionThenEnableUser(userAcceptsNewTos = true)
+
+    // User should be enabled in LDAP
+    registrationDAO.isEnabled(defaultUserId, samRequestContext).unsafeRunSync() shouldBe true
   }
 
   it should "not enable a user in LDAP when they don't accept the latest Terms of Service" in {
@@ -205,25 +219,29 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     createNewEnabledUser()
     updateTosVersionThenEnableUser(tosEnabled = false)
 
-    // User should not be enabled in LDAP
+    // User should be enabled in LDAP
     registrationDAO.isEnabled(defaultUserId, samRequestContext).unsafeRunSync() shouldBe true
   }
 
   private def createNewEnabledUser(): Unit = {
     // create a user
-    val newUser = service.createUser(defaultUser, samRequestContext).futureValue
-    newUser shouldBe UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
+    val newUser = serviceTosEnabled.createUser(defaultUser, samRequestContext).futureValue
+    newUser shouldBe UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> true))
 
     // it should be enabled
     dirDAO.isEnabled(defaultUserId, samRequestContext).unsafeRunSync() shouldBe true
     registrationDAO.isEnabled(defaultUserId, samRequestContext).unsafeRunSync() shouldBe true
   }
 
-  private def updateTosVersionThenEnableUser(tosEnabled: Boolean = true): Unit = {
+  private def updateTosVersionThenEnableUser(tosEnabled: Boolean = true, userAcceptsNewTos: Boolean = false): Unit = {
     // update the terms of service version
     val newTosConfig = tosConfig.copy(enabled = tosEnabled, version = tosConfig.version + 1)
     val newTos = new TosService(dirDAO, googleServicesConfig.appsDomain, newTosConfig)
     val userServiceWithNewTos =  new UserService(dirDAO, googleExtensions, registrationDAO, Seq(blockedDomain), newTos)
+
+    if (userAcceptsNewTos) {
+      newTos.acceptTosStatus(defaultUserId).unsafeToFuture().futureValue
+    }
 
     // disable the user and re-enable the user without accepting the new ToS
     userServiceWithNewTos.disableUser(defaultUserId, samRequestContext).futureValue
@@ -235,7 +253,7 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     // User should not be in latest ToS group
     val tosGroup = WorkbenchGroupName(newTos.getGroupName(newTosConfig.version))
     val userGroups = dirDAO.listUsersGroups(defaultUserId, samRequestContext).unsafeRunSync()
-    userGroups shouldNot contain (tosGroup)
+    userGroups.contains(tosGroup) shouldEqual userAcceptsNewTos
   }
 
   it should "delete a user" in {
