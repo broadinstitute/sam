@@ -300,6 +300,12 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
               and ${resourceRoleColumn.resourceTypeId} in (${resourceTypeNameToPKs.values})"""
         .update().apply()
 
+      samsql"""update ${ResourceRoleTable.table}
+              set ${resourceRoleColumn.deprecated} = false
+              where (${resourceRoleColumn.resourceTypeId}, ${resourceRoleColumn.role}) in ($roleValues)
+              or ${resourceRoleColumn.resourceTypeId} not in (${resourceTypeNameToPKs.values})"""
+        .update().apply()
+
       val insertRolesQuery =
         samsql"""insert into ${ResourceRoleTable.table}(${resourceRoleColumn.resourceTypeId}, ${resourceRoleColumn.role})
                values ${roleValues}
