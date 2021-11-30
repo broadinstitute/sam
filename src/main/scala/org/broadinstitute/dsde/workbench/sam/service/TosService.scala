@@ -57,9 +57,8 @@ class TosService (val directoryDao: DirectoryDAO, val appsDomain: String, val to
   def getTosStatus(user: WorkbenchSubject): IO[Option[Boolean]] = {
     if (tosConfig.enabled) {
       getTosGroup().flatMap {
-        case
-          Some(group) => directoryDao.isGroupMember(group.id, user, SamRequestContext(None)).map(Option(_))
-        case None => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Terms of Service group ${getGroupName(tosConfig.version)} not found.")))
+        case Some(group) => directoryDao.isGroupMember(group.id, user, SamRequestContext(None)).map(Option(_))
+        case None => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Terms of Service group ${getGroupName()} not found.")))
       }
     } else IO.none
   }
