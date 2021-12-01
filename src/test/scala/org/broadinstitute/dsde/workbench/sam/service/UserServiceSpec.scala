@@ -225,7 +225,7 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
 
   private def createNewEnabledUser(): Unit = {
     // create a user
-    val newUser = serviceTosEnabled.createUser(defaultUser, samRequestContext).futureValue
+    val newUser = serviceTosEnabled.createUser(defaultUser, acceptTos = true, samRequestContext).futureValue
     newUser shouldBe UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> true))
 
     // it should be enabled

@@ -55,7 +55,7 @@ class UserRoutesV1Spec extends UserRoutesSpecHelper{
   }
 
   it should "forbid the registration if ToS is enabled and the user doesn't specify the correct ToS url" in {
-    val (user, _, routes) = createTestUser(tosEnabled = true, tosAccepted = false)
+    val (_, _, routes) = createTestUser(tosEnabled = true, tosAccepted = false)
 
     val tos = TermsOfServiceAcceptance("onemillionpats.com")
     Post("/api/users/v1/tos/accept", tos) ~> routes.route ~> check {
