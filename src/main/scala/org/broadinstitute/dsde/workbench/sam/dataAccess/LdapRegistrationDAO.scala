@@ -93,6 +93,14 @@ class LdapRegistrationDAO(
     }
   }
 
+  //To be used only in the event of the ToS version being bumped
+  override def disableAllIdentities(samRequestContext: SamRequestContext): IO[Unit] = {
+    executeLdap(IO(ldapConnectionPool.modify(directoryConfig.enabledUsersGroupDn, new Modification(ModificationType.DELETE, Attr.member))).void, "disableAllIdentities", samRequestContext).map { x =>
+      println(s"Emptying ${directoryConfig.enabledUsersGroupDn}")
+      x
+    }
+  }
+
   override def isEnabled(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean] =
     for {
       entry <- executeLdap(IO(ldapConnectionPool.getEntry(directoryConfig.enabledUsersGroupDn, Attr.member)), "isEnabled", samRequestContext)

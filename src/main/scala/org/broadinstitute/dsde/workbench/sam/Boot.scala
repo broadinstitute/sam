@@ -31,6 +31,7 @@ import org.broadinstitute.dsde.workbench.sam.google._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.broadinstitute.dsde.workbench.sam.service._
+import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.util.DelegatePool
 import org.broadinstitute.dsde.workbench.util2.ExecutionContexts
 
@@ -75,7 +76,13 @@ object Boot extends IOApp with LazyLogging {
           case t: Throwable => IO(logger.error("FATAL - failure starting http server", t)) *> IO.raiseError(t)
         }
 
-        _ <- dependencies.samApplication.tosService.createNewGroupIfNeeded(appConfig.termsOfServiceConfig.version, tosCheckEnabled)
+        result <- dependencies.samApplication.tosService.createNewGroupIfNeeded(appConfig.termsOfServiceConfig.version, tosCheckEnabled)
+
+        //If the result of the above createNewGroupIfNeeded returns a group, it means that a new group was created and thus the ToS version was updated
+        //We will empty the enabledUsers group as all users will need to accept the new ToS
+        //Also, as a matter of overabundant caution, make sure to only do this if ToS is enabled for this instance of Sam
+        //TODO: possibly skip this the very first time ToS is turned on for our Terra Sam instances?
+        _ <- if(result.nonEmpty && appConfig.termsOfServiceConfig.enabled) dependencies.registrationDAO.disableAllIdentities(SamRequestContext(None)) else IO.unit
 
         _ <- dependencies.policyEvaluatorService.initPolicy()
 
@@ -322,11 +329,11 @@ object Boot extends IOApp with LazyLogging {
           val cloudExtensions = googleExt
           val googleGroupSynchronizer = synchronizer
         }
-        AppDependencies(routes, samApplication, cloudExtensionsInitializer, directoryDAO, accessPolicyDAO, policyEvaluatorService)
+        AppDependencies(routes, samApplication, cloudExtensionsInitializer, directoryDAO, accessPolicyDAO, registrationDAO, policyEvaluatorService)
       case _ =>
         val routes = new SamRoutes(resourceService, userService, statusService, managedGroupService, config.swaggerConfig, config.termsOfServiceConfig, directoryDAO, policyEvaluatorService, tosService, config.liquibaseConfig)
         with StandardUserInfoDirectives with NoExtensionRoutes
-        AppDependencies(routes, samApplication, NoExtensionsInitializer, directoryDAO, accessPolicyDAO, policyEvaluatorService)
+        AppDependencies(routes, samApplication, NoExtensionsInitializer, directoryDAO, accessPolicyDAO, registrationDAO, policyEvaluatorService)
     }
   }
 }
@@ -337,4 +344,5 @@ final case class AppDependencies(
     cloudExtensionsInitializer: CloudExtensionsInitializer,
     directoryDAO: DirectoryDAO,
     accessPolicyDAO: AccessPolicyDAO,
+    registrationDAO: RegistrationDAO,
     policyEvaluatorService: PolicyEvaluatorService)

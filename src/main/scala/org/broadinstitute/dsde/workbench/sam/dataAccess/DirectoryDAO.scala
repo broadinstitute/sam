@@ -54,6 +54,7 @@ trait DirectoryDAO extends RegistrationDAO {
 
   def enableIdentity(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Unit]
   def disableIdentity(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Unit]
+  def disableAllIdentities(samRequestContext: SamRequestContext): IO[Unit]
   def isEnabled(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean]
 
   def getUserFromPetServiceAccount(petSA: ServiceAccountSubjectId, samRequestContext: SamRequestContext): IO[Option[WorkbenchUser]]
