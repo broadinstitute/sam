@@ -123,7 +123,7 @@ class GoogleExtensions(
             serviceAccountUserInfo.userId,
             Option(GoogleSubjectId(googleServicesConfig.serviceAccountClientId)),
             serviceAccountUserInfo.userEmail,
-            None), false, samRequestContext) recover {
+            None), samRequestContext) recover {
             case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode == Option(StatusCodes.Conflict) =>
           }))
 

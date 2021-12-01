@@ -24,21 +24,17 @@ import scala.util.matching.Regex
 class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExtensions, val registrationDAO: RegistrationDAO, blockedEmailDomains: Seq[String], tosService: TosService)(implicit val executionContext: ExecutionContext, contextShift: ContextShift[IO]) extends LazyLogging {
 
   def createUser(user: WorkbenchUser, samRequestContext: SamRequestContext): Future[UserStatus] = {
-    createUser(user, false, samRequestContext)
-  }
-
-  def createUser(user: WorkbenchUser, acceptTos: Boolean, samRequestContext: SamRequestContext): Future[UserStatus] = {
     for {
       _ <- UserService.validateEmailAddress(user.email, blockedEmailDomains).unsafeToFuture()
       allUsersGroup <- cloudExtensions.getOrCreateAllUsersGroup(directoryDAO, samRequestContext)
       createdUser <- registerUser(user, samRequestContext).unsafeToFuture()
       _ <- enableUserInternal(createdUser, samRequestContext)
       _ <- directoryDAO.addGroupMember(allUsersGroup.id, createdUser.id, samRequestContext).unsafeToFuture()
-      _ <- if (acceptTos) tosService.acceptTosStatus(createdUser.id).unsafeToFuture() else Future.successful(None)
-      userStatus <- getUserStatus(createdUser.id, false, samRequestContext)
+      userStatus <- getUserStatus(createdUser.id, samRequestContext = samRequestContext)
       res <- userStatus.toRight(new WorkbenchException("getUserStatus returned None after user was created")).fold(Future.failed, Future.successful)
     } yield res
   }
+
 
   def inviteUser(invitee: InviteUser, samRequestContext: SamRequestContext): IO[UserStatusDetails] =
     for {
@@ -141,13 +137,23 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
     }
   }
 
-  def getUserStatusInfo(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[UserStatusInfo]] =
+  def acceptTermsOfService(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[UserStatus]] = {
     directoryDAO.loadUser(userId, samRequestContext).flatMap {
       case Some(user) =>
         for {
-          enabledStatus <- registrationDAO.isEnabled(user.id, samRequestContext)
-          tosAcceptedStatus <- tosService.getTosStatus(user.id)
-        } yield Option(UserStatusInfo(user.id.value, user.email.value, enabledStatus, tosAcceptedStatus))
+          _ <- tosService.acceptTosStatus(userId)
+          status <- IO.fromFuture(IO(getUserStatus(userId, false, samRequestContext)))
+        } yield status
+      case None => IO.pure(None)
+    }
+  }
+
+  def getUserStatusInfo(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[UserStatusInfo]] =
+    directoryDAO.loadUser(userId, samRequestContext).flatMap {
+      case Some(user) =>
+        registrationDAO.isEnabled(user.id, samRequestContext).flatMap { ldapStatus =>
+          IO.pure(Option(UserStatusInfo(user.id.value, user.email.value, ldapStatus)))
+        }
       case None => IO.pure(None)
     }
 

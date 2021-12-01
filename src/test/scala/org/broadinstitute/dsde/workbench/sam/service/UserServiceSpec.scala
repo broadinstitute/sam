@@ -116,12 +116,17 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     }.errorReport.statusCode shouldBe Some(StatusCodes.BadRequest)
   }
 
-  it should "create user and add user to ToS group" in {
+  it should "create add a user to ToS group" in {
     tosServiceEnabled.createNewGroupIfNeeded().unsafeRunSync()
-    serviceTosEnabled.createUser(defaultUser, true, samRequestContext).futureValue
+    serviceTosEnabled.createUser(defaultUser, samRequestContext).futureValue
     val userGroups = dirDAO.listUsersGroups(defaultUserId, samRequestContext).unsafeRunSync()
-    userGroups should contain (WorkbenchGroupName(tos.getGroupName(TestSupport.tosConfig.version)))
-    userGroups should have size 2
+    userGroups shouldNot contain (WorkbenchGroupName(tos.getGroupName(TestSupport.tosConfig.version)))
+    userGroups should have size 1
+
+    serviceTosEnabled.acceptTermsOfService(defaultUser.id, samRequestContext).unsafeRunSync()
+    val newUserGroups = dirDAO.listUsersGroups(defaultUserId, samRequestContext).unsafeRunSync()
+    newUserGroups should contain (WorkbenchGroupName(tos.getGroupName(TestSupport.tosConfig.version)))
+    newUserGroups should have size 2
   }
 
   it should "not add user to ToS when tos is not enabled" in {
@@ -156,7 +161,7 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
 
     // get user status info (id, email, ldap)
     val info = service.getUserStatusInfo(defaultUserId, samRequestContext).unsafeRunSync()
-    info shouldBe Some(UserStatusInfo(defaultUserId.value, defaultUserEmail.value, true, None))
+    info shouldBe Some(UserStatusInfo(defaultUserId.value, defaultUserEmail.value, true))
   }
 
   it should "get user status diagnostics" in {

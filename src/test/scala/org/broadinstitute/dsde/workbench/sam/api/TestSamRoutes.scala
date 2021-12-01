@@ -29,7 +29,7 @@ class TestSamRoutes(resourceService: ResourceService, policyEvaluatorService: Po
   def mockDirectoryDao: DirectoryDAO = directoryDAO
 }
 
-class TestSamTosEnabledRoutes(resourceService: ResourceService, policyEvaluatorService: PolicyEvaluatorService, userService: UserService, statusService: StatusService, managedGroupService: ManagedGroupService, val userInfo: UserInfo, directoryDAO: DirectoryDAO, val cloudExtensions: CloudExtensions = NoExtensions, override val workbenchUser: Option[WorkbenchUser] = None, tosService: TosService = null)(implicit override val system: ActorSystem, override val materializer: Materializer, override val executionContext: ExecutionContext)
+class TestSamTosEnabledRoutes(resourceService: ResourceService, policyEvaluatorService: PolicyEvaluatorService, userService: UserService, statusService: StatusService, managedGroupService: ManagedGroupService, val userInfo: UserInfo, directoryDAO: DirectoryDAO, val cloudExtensions: CloudExtensions = NoExtensions, override val workbenchUser: Option[WorkbenchUser] = None, tosService: TosService)(implicit override val system: ActorSystem, override val materializer: Materializer, override val executionContext: ExecutionContext)
   extends SamRoutes(resourceService, userService, statusService, managedGroupService, SwaggerConfig("", ""), TermsOfServiceConfig(true, 0, "app.terra.bio/#terms-of-service"), directoryDAO, policyEvaluatorService, tosService, LiquibaseConfig("", false)) with MockUserInfoDirectives with ExtensionRoutes with ScalaFutures {
   def extensionRoutes: server.Route = reject
   def mockDirectoryDao: DirectoryDAO = directoryDAO

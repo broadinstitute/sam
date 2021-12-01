@@ -65,7 +65,7 @@ class TosServiceSpec extends AnyFlatSpec with TestSupport with BeforeAndAfterAll
     assert(group.isDefined, "createGroupIfNeeded() should create the group initially")
     dirDAO.createUser(defaultUser, samRequestContext).unsafeRunSync()
     val acceptTosStatusResult = tosServiceEnabled.acceptTosStatus(defaultUser.id).unsafeRunSync()
-    assert(acceptTosStatusResult, s"acceptTosStatus(${defaultUser.id}) should accept the tos for the user")
+    assert(acceptTosStatusResult.get, s"acceptTosStatus(${defaultUser.id}) should accept the tos for the user")
     val getTosStatusResult = tosServiceEnabled.getTosStatus(defaultUser.id).unsafeRunSync()
     assert(getTosStatusResult.get, s"getTosStatus(${defaultUser.id}) should get the tos for the user")
   }

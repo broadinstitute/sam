@@ -5,7 +5,6 @@ package api
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
-import org.broadinstitute.dsde.workbench.model.ErrorReportJsonSupport._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport.googleServicesConfig
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{MockDirectoryDAO, MockRegistrationDAO}
@@ -40,60 +39,6 @@ class UserRoutesV2Spec extends UserRoutesSpecHelper {
     }
   }
 
-  it should "create a user if ToS is enabled and the user specifies the ToS parameter correctly" in withTosEnabledRoutes { samRoutes =>
-    val tos = TermsOfServiceAcceptance("app.terra.bio/#terms-of-service")
-    Post("/register/user/v2/self", tos) ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.Created
-      val res = responseAs[UserStatus]
-      res.userInfo.userSubjectId.value.length shouldBe 21
-      res.userInfo.userEmail shouldBe defaultUserEmail
-      res.enabled shouldBe Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> true)
-    }
-
-    Post("/register/user/v2/self", tos) ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.Conflict
-    }
-  }
-
-  it should "create the user if ToS is enabled and the user doesn't specify a ToS parameter" in withTosEnabledRoutes { samRoutes =>
-    Post("/register/user/v2/self") ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.Created
-      val res = responseAs[UserStatus]
-      res.userInfo.userSubjectId.value.length shouldBe 21
-      res.userInfo.userEmail shouldBe defaultUserEmail
-      res.enabled shouldBe Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> false)
-    }
-  }
-
-  it should "forbid the registration if ToS is enabled and the user doesn't specify the correct ToS url" in withTosEnabledRoutes { samRoutes =>
-    val tos = TermsOfServiceAcceptance("onemillionpats.com")
-    Post("/register/user/v2/self", tos) ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.Forbidden
-      responseAs[ErrorReport].message should startWith("You must accept the Terms of Service in order to register.")
-    }
-  }
-
-  it should "create the user if ToS is enabled and the user specifies a differently shaped payload" in withTosEnabledRoutes { samRoutes =>
-    val badPayload = UserStatusInfo("doesntmatter", "foobar", true, None)
-    Post("/register/user/v2/self", badPayload) ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.Created
-      val res = responseAs[UserStatus]
-      res.userInfo.userSubjectId.value.length shouldBe 21
-      res.userInfo.userEmail shouldBe defaultUserEmail
-      res.enabled shouldBe Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> false)
-    }
-  }
-
-  it should "get user's registration status after accepting the tos" in {
-    val (user, _, routes) = createTestUser(tosEnabled = true, tosAccepted = true)
-
-    Get("/register/user/v2/self/info") ~> routes.route ~> check {
-      status shouldEqual StatusCodes.OK
-      val res = responseAs[UserStatusInfo]
-      res.tosAccepted shouldBe Some(true)
-    }
-  }
-
   "GET /register/user/v2/self/info" should "get the status of an enabled user" in withDefaultRoutes { samRoutes =>
     val googleSubjectId = GoogleSubjectId(genRandom(System.currentTimeMillis()))
     Get("/register/user/v2/self/info") ~> samRoutes.route ~> check {
@@ -102,7 +47,7 @@ class UserRoutesV2Spec extends UserRoutesSpecHelper {
     val (user, samDep, routes) = createTestUser(googSubjectId = Some(googleSubjectId))
     Get("/register/user/v2/self/info") ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK
-      responseAs[UserStatusInfo] shouldEqual UserStatusInfo(user.id.value, user.email.value, true, None)
+      responseAs[UserStatusInfo] shouldEqual UserStatusInfo(user.id.value, user.email.value, true)
     }
   }
 
@@ -111,11 +56,11 @@ class UserRoutesV2Spec extends UserRoutesSpecHelper {
     Get("/register/user/v2/self/diagnostics") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
-    val (user, samDep, routes) = createTestUser(googSubjectId = Some(googleSubjectId))
+    val (user, samDep, routes) = createTestUser(googSubjectId = Some(googleSubjectId), tosEnabled = true, tosAccepted = true)
 
     Get("/register/user/v2/self/diagnostics") ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK
-      responseAs[UserStatusDiagnostics] shouldEqual UserStatusDiagnostics(true, true, true, None)
+      responseAs[UserStatusDiagnostics] shouldEqual UserStatusDiagnostics(true, true, true, Option(true))
     }
   }
 

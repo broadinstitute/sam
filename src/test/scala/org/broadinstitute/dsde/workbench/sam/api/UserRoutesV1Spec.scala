@@ -17,6 +17,7 @@ import org.broadinstitute.dsde.workbench.sam.service.{NoExtensions, StatusServic
   * Created by dvoet on 6/7/17.
   */
 class UserRoutesV1Spec extends UserRoutesSpecHelper{
+
   def withSARoutes[T](testCode: (TestSamRoutes, TestSamRoutes) => T): T = {
     val directoryDAO = new MockDirectoryDAO()
     val registrationDAO = new MockRegistrationDAO()
@@ -40,48 +41,27 @@ class UserRoutesV1Spec extends UserRoutesSpecHelper{
     }
   }
 
-  it should "create a user if ToS is enabled and the user specifies the ToS body correctly" in withTosEnabledRoutes { samRoutes =>
+  it should "create a user and accept the tos when the user specifies the ToS body correctly" in {
+    val (user, _, routes) = createTestUser(tosEnabled = true, tosAccepted = false)
     val tos = TermsOfServiceAcceptance("app.terra.bio/#terms-of-service")
-    Post("/register/user/v1", tos) ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.Created
+    //routes.tosService.createNewGroupIfNeeded().unsafeRunSync()
+
+    Post("/api/users/v1/tos/accept", tos) ~> routes.route ~> check {
+      status shouldEqual StatusCodes.OK
       val res = responseAs[UserStatus]
       res.userInfo.userSubjectId.value.length shouldBe 21
       res.userInfo.userEmail shouldBe defaultUserEmail
       res.enabled shouldBe Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> true)
     }
-
-    Post("/register/user/v1", tos) ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.Conflict
-    }
   }
 
-  it should "create the user if ToS is enabled and the user doesn't specify a ToS body" in withTosEnabledRoutes { samRoutes =>
-    Post("/register/user/v1") ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.Created
-      val res = responseAs[UserStatus]
-      res.userInfo.userSubjectId.value.length shouldBe 21
-      res.userInfo.userEmail shouldBe defaultUserEmail
-      res.enabled shouldBe Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> false)
-    }
-  }
+  it should "forbid the registration if ToS is enabled and the user doesn't specify the correct ToS url" in {
+    val (user, _, routes) = createTestUser(tosEnabled = true, tosAccepted = false)
 
-  it should "forbid the registration if ToS is enabled and the user doesn't specify the correct ToS url" in withTosEnabledRoutes { samRoutes =>
     val tos = TermsOfServiceAcceptance("onemillionpats.com")
-    Post("/register/user/v1", tos) ~> samRoutes.route ~> check {
+    Post("/api/users/v1/tos/accept", tos) ~> routes.route ~> check {
       status shouldEqual StatusCodes.Forbidden
       responseAs[ErrorReport].message should startWith("You must accept the Terms of Service in order to register.")
-    }
-  }
-
-  it should "create the user if ToS is enabled and the user specifies a differently shaped payload" in withTosEnabledRoutes { samRoutes =>
-    val badPayload = UserStatusInfo("doesntmatter", "foobar", true, None)
-    Post("/register/user/v1", badPayload) ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.Created
-      val res = responseAs[UserStatus]
-      res.userInfo.userSubjectId.value.length shouldBe 21
-      res.userInfo.userEmail shouldBe defaultUserEmail
-      res.enabled shouldBe Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> false)
-
     }
   }
 
@@ -95,7 +75,7 @@ class UserRoutesV1Spec extends UserRoutesSpecHelper{
     }
   }
 
-  "POST /api/users/v1/invite/{invitee's email}" should "create user" in{
+  "POST /api/users/v1/invite/{invitee's email}" should "create user" in {
     val invitee = genInviteUser.sample.get
 
     val (user, _, routes) = createTestUser() //create a valid user that can invite someone
