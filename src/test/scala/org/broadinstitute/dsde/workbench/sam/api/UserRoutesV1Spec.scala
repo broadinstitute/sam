@@ -44,7 +44,6 @@ class UserRoutesV1Spec extends UserRoutesSpecHelper{
   it should "create a user and accept the tos when the user specifies the ToS body correctly" in {
     val (user, _, routes) = createTestUser(tosEnabled = true, tosAccepted = false)
     val tos = TermsOfServiceAcceptance("app.terra.bio/#terms-of-service")
-    //routes.tosService.createNewGroupIfNeeded().unsafeRunSync()
 
     Post("/api/users/v1/tos/accept", tos) ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK

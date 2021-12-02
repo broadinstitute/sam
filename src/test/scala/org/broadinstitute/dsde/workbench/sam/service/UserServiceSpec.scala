@@ -212,6 +212,39 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     registrationDAO.loadUser(defaultUserId, samRequestContext).unsafeRunSync() shouldBe None
   }
 
+  it should "accept the tos" in {
+    tosServiceEnabled.createNewGroupIfNeeded().unsafeRunSync()
+
+    // create a user
+    val newUser = serviceTosEnabled.createUser(defaultUser, samRequestContext).futureValue
+    newUser shouldBe UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> false))
+
+    serviceTosEnabled.acceptTermsOfService(defaultUser.id, samRequestContext).unsafeRunSync()
+
+    val status = serviceTosEnabled.getUserStatus(defaultUserId, samRequestContext = samRequestContext).futureValue
+    status shouldBe Some(UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> true)))
+  }
+
+  it should "not accept the tos for users who do not exist" in {
+    tosServiceEnabled.createNewGroupIfNeeded().unsafeRunSync()
+    val res = intercept[WorkbenchExceptionWithErrorReport] {
+      serviceTosEnabled.acceptTermsOfService(genWorkbenchUserId(System.currentTimeMillis()), samRequestContext).unsafeRunSync()
+    }
+    res.errorReport.statusCode shouldBe Some(StatusCodes.NotFound)
+  }
+
+  it should "not accept the tos for users when the terms of service is not enabled" in {
+    // create a user
+    val newUser = service.createUser(defaultUser, samRequestContext).futureValue
+    newUser shouldBe UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
+
+    service.acceptTermsOfService(defaultUser.id, samRequestContext).unsafeRunSync()
+
+    val status = service.getUserStatus(defaultUserId, samRequestContext = samRequestContext).futureValue
+    status shouldBe Some(UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true)))
+
+  }
+
   it should "generate unique identifier properly" in {
     val current = 1534253386722L
     val res = genWorkbenchUserId(current).value

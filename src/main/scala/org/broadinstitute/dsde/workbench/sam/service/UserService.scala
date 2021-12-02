@@ -139,12 +139,12 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
 
   def acceptTermsOfService(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[UserStatus]] = {
     directoryDAO.loadUser(userId, samRequestContext).flatMap {
-      case Some(user) =>
+      case Some(_) =>
         for {
           _ <- tosService.acceptTosStatus(userId)
           status <- IO.fromFuture(IO(getUserStatus(userId, false, samRequestContext)))
         } yield status
-      case None => IO.pure(None)
+      case None => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Could not accept the Terms of Service. User not found.")))
     }
   }
 

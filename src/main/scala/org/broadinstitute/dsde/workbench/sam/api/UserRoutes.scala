@@ -198,19 +198,17 @@ trait UserRoutes extends UserInfoDirectives with SamRequestContextDirectives {
     pathPrefix("v1") {
       withSamRequestContext { samRequestContext =>
         requireUserInfo(samRequestContext) { userInfo =>
-          pathPrefix("tos") {
-            pathPrefix("accept") {
-              pathEndOrSingleSlash {
-                post {
-                  withTermsOfServiceAcceptance {
-                    complete {
-                      userService.acceptTermsOfService(userInfo.userId, samRequestContext).map { statusOption =>
-                        statusOption
-                          .map { status =>
-                            StatusCodes.OK -> Option(status)
-                          }
-                          .getOrElse(StatusCodes.NotFound -> None)
-                      }
+          pathPrefix("tos" / "accept") {
+            pathEndOrSingleSlash {
+              post {
+                withTermsOfServiceAcceptance {
+                  complete {
+                    userService.acceptTermsOfService(userInfo.userId, samRequestContext).map { statusOption =>
+                      statusOption
+                        .map { status =>
+                          StatusCodes.OK -> Option(status)
+                        }
+                        .getOrElse(StatusCodes.NotFound -> None)
                     }
                   }
                 }
