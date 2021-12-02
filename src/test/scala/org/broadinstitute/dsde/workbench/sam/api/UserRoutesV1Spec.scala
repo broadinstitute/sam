@@ -50,7 +50,7 @@ class UserRoutesV1Spec extends UserRoutesSpecHelper{
       val res = responseAs[UserStatus]
       res.userInfo.userSubjectId.value.length shouldBe 21
       res.userInfo.userEmail shouldBe defaultUserEmail
-      res.enabled shouldBe Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> true)
+      res.enabled shouldBe Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> true, "adminEnabled" -> true)
     }
   }
 
@@ -70,7 +70,7 @@ class UserRoutesV1Spec extends UserRoutesSpecHelper{
     Get("/register/user/v1") ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK
       val res = responseAs[UserStatus]
-      res.enabled shouldBe Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> true)
+      res.enabled shouldBe Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> true, "adminEnabled" -> true)
     }
   }
 
