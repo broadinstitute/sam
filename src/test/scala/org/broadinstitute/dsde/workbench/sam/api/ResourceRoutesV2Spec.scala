@@ -53,7 +53,7 @@ class ResourceRoutesV2Spec extends AnyFlatSpec with Matchers with TestSupport wi
     resourceTypes.map { case (resourceTypeName, resourceType) =>
       when(mockResourceService.getResourceType(resourceTypeName)).thenReturn(IO(Option(resourceType)))
     }
-    val mockUserService = new UserService(directoryDAO, NoExtensions, registrationDAO, Seq.empty, new TosService(directoryDAO, googleServicesConfig.appsDomain))
+    val mockUserService = new UserService(directoryDAO, NoExtensions, registrationDAO, Seq.empty, new TosService(directoryDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig))
     val mockStatusService = new StatusService(directoryDAO, registrationDAO, NoExtensions, TestSupport.dbRef)
     val mockManagedGroupService = new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, accessPolicyDAO, directoryDAO, NoExtensions, emailDomain)
 

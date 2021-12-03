@@ -17,16 +17,17 @@ import org.broadinstitute.dsde.workbench.sam.service.{NoExtensions, StatusServic
   * Created by dvoet on 6/7/17.
   */
 class UserRoutesV1Spec extends UserRoutesSpecHelper{
+
   def withSARoutes[T](testCode: (TestSamRoutes, TestSamRoutes) => T): T = {
     val directoryDAO = new MockDirectoryDAO()
     val registrationDAO = new MockRegistrationDAO()
 
-    val samRoutes = new TestSamRoutes(null, null, new UserService(directoryDAO, NoExtensions, registrationDAO, Seq.empty, new TosService(directoryDAO, googleServicesConfig.appsDomain)), new StatusService(directoryDAO, registrationDAO, NoExtensions, TestSupport.dbRef), null, UserInfo(OAuth2BearerToken(""), defaultUserId, defaultUserEmail, 0), directoryDAO, NoExtensions)
-    val SARoutes = new TestSamRoutes(null, null, new UserService(directoryDAO, NoExtensions, registrationDAO, Seq.empty, new TosService(directoryDAO, googleServicesConfig.appsDomain)), new StatusService(directoryDAO, registrationDAO, NoExtensions, TestSupport.dbRef), null, UserInfo(OAuth2BearerToken(""), petSAUserId, petSAEmail, 0), directoryDAO, NoExtensions)
+    val samRoutes = new TestSamRoutes(null, null, new UserService(directoryDAO, NoExtensions, registrationDAO, Seq.empty, new TosService(directoryDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)), new StatusService(directoryDAO, registrationDAO, NoExtensions, TestSupport.dbRef), null, UserInfo(OAuth2BearerToken(""), defaultUserId, defaultUserEmail, 0), directoryDAO, NoExtensions)
+    val SARoutes = new TestSamRoutes(null, null, new UserService(directoryDAO, NoExtensions, registrationDAO, Seq.empty, new TosService(directoryDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)), new StatusService(directoryDAO, registrationDAO, NoExtensions, TestSupport.dbRef), null, UserInfo(OAuth2BearerToken(""), petSAUserId, petSAEmail, 0), directoryDAO, NoExtensions)
     testCode(samRoutes, SARoutes)
   }
 
-  "POST /register/user/v1/" should "create user" in withDefaultRoutes{samRoutes =>
+  "POST /register/user/v1/" should "create user" in withDefaultRoutes { samRoutes =>
     Post("/register/user/v1/") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
       val res = responseAs[UserStatus]
@@ -40,45 +41,40 @@ class UserRoutesV1Spec extends UserRoutesSpecHelper{
     }
   }
 
-  it should "create a user if ToS is enabled and the user specifies the ToS body correctly" in withTosEnabledRoutes { samRoutes =>
+  it should "create a user and accept the tos when the user specifies the ToS body correctly" in {
+    val (user, _, routes) = createTestUser(tosEnabled = true, tosAccepted = false)
     val tos = TermsOfServiceAcceptance("app.terra.bio/#terms-of-service")
-    Post("/register/user/v1", tos) ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.Created
+
+    Post("/api/users/v1/tos/accept", tos) ~> routes.route ~> check {
+      status shouldEqual StatusCodes.OK
       val res = responseAs[UserStatus]
       res.userInfo.userSubjectId.value.length shouldBe 21
       res.userInfo.userEmail shouldBe defaultUserEmail
-      res.enabled shouldBe Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true)
-    }
-
-    Post("/register/user/v1", tos) ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.Conflict
+      res.enabled shouldBe Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> true)
     }
   }
 
-  it should "forbid the registration if ToS is enabled and the user doesn't specify a ToS body" in withTosEnabledRoutes { samRoutes =>
-    Post("/register/user/v1") ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.Forbidden
-      responseAs[ErrorReport].message should startWith("You must accept the Terms of Service in order to register.")
-    }
-  }
+  it should "forbid the registration if ToS is enabled and the user doesn't specify the correct ToS url" in {
+    val (user, _, routes) = createTestUser(tosEnabled = true, tosAccepted = false)
 
-  it should "forbid the registration if ToS is enabled and the user doesn't specify the correct ToS url" in withTosEnabledRoutes { samRoutes =>
     val tos = TermsOfServiceAcceptance("onemillionpats.com")
-    Post("/register/user/v1", tos) ~> samRoutes.route ~> check {
+    Post("/api/users/v1/tos/accept", tos) ~> routes.route ~> check {
       status shouldEqual StatusCodes.Forbidden
       responseAs[ErrorReport].message should startWith("You must accept the Terms of Service in order to register.")
     }
   }
 
-  it should "forbid the registration if ToS is enabled and the user specifies a differently shaped payload" in withTosEnabledRoutes { samRoutes =>
-    val badPayload = UserStatusInfo("doesntmatter", "foobar", true)
-    Post("/register/user/v1", badPayload) ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.Forbidden
-      responseAs[ErrorReport].message should startWith("You must accept the Terms of Service in order to register.")
+  it should "get user's registration status after accepting the tos" in {
+    val (user, _, routes) = createTestUser(tosEnabled = true, tosAccepted = true)
+
+    Get("/register/user/v1") ~> routes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      val res = responseAs[UserStatus]
+      res.enabled shouldBe Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> true)
     }
   }
 
-  "POST /api/users/v1/invite/{invitee's email}" should "create user" in{
+  "POST /api/users/v1/invite/{invitee's email}" should "create user" in {
     val invitee = genInviteUser.sample.get
 
     val (user, _, routes) = createTestUser() //create a valid user that can invite someone

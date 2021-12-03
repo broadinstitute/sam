@@ -84,7 +84,7 @@ object TestSupport extends TestSupport {
   def genGoogleSubjectId(): Option[GoogleSubjectId] = Option(GoogleSubjectId(genRandom(System.currentTimeMillis())))
   def genAzureB2CId(): AzureB2CId = AzureB2CId(genRandom(System.currentTimeMillis()))
 
-  def genSamDependencies(resourceTypes: Map[ResourceTypeName, ResourceType] = Map.empty, googIamDAO: Option[GoogleIamDAO] = None, googleServicesConfig: GoogleServicesConfig = googleServicesConfig, cloudExtensions: Option[CloudExtensions] = None, googleDirectoryDAO: Option[GoogleDirectoryDAO] = None, policyAccessDAO: Option[AccessPolicyDAO] = None, policyEvaluatorServiceOpt: Option[PolicyEvaluatorService] = None, resourceServiceOpt: Option[ResourceService] = None)(implicit system: ActorSystem) = {
+  def genSamDependencies(resourceTypes: Map[ResourceTypeName, ResourceType] = Map.empty, googIamDAO: Option[GoogleIamDAO] = None, googleServicesConfig: GoogleServicesConfig = googleServicesConfig, cloudExtensions: Option[CloudExtensions] = None, googleDirectoryDAO: Option[GoogleDirectoryDAO] = None, policyAccessDAO: Option[AccessPolicyDAO] = None, policyEvaluatorServiceOpt: Option[PolicyEvaluatorService] = None, resourceServiceOpt: Option[ResourceService] = None, tosEnabled: Boolean = false)(implicit system: ActorSystem) = {
     val googleDirectoryDAO = new MockGoogleDirectoryDAO()
     val directoryDAO = new MockDirectoryDAO()
     val registrationDAO = new MockRegistrationDAO()
@@ -119,14 +119,15 @@ object TestSupport extends TestSupport {
     val policyEvaluatorService = policyEvaluatorServiceOpt.getOrElse(PolicyEvaluatorService(appConfig.emailDomain, resourceTypes, policyDAO, directoryDAO))
     val mockResourceService = resourceServiceOpt.getOrElse(new ResourceService(resourceTypes, policyEvaluatorService, policyDAO, directoryDAO, googleExt, "example.com"))
     val mockManagedGroupService = new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, policyDAO, directoryDAO, googleExt, "example.com")
-    val tosService = new TosService(directoryDAO, "example.com")
+    val tosService = new TosService(directoryDAO, googleServicesConfig.appsDomain, tosConfig.copy(enabled = tosEnabled))
 
+    SamDependencies(mockResourceService, policyEvaluatorService, tosService, new UserService(directoryDAO, googleExt, registrationDAO, Seq.empty, tosService), new StatusService(directoryDAO, registrationDAO, googleExt, dbRef), mockManagedGroupService, directoryDAO, policyDAO, googleExt)
 
-    SamDependencies(mockResourceService, policyEvaluatorService, tosService, new UserService(directoryDAO, googleExt, registrationDAO, Seq.empty, new TosService(directoryDAO, googleServicesConfig.appsDomain)), new StatusService(directoryDAO, registrationDAO, googleExt, dbRef), mockManagedGroupService, directoryDAO, policyDAO, googleExt)
   }
+
   val tosConfig = config.as[TermsOfServiceConfig]("termsOfService")
 
-  def genSamRoutes(samDependencies: SamDependencies, uInfo: UserInfo)(implicit system: ActorSystem, materializer: Materializer): SamRoutes = new SamRoutes(samDependencies.resourceService, samDependencies.userService, samDependencies.statusService, samDependencies.managedGroupService, null, tosConfig, samDependencies.directoryDAO, samDependencies.policyEvaluatorService, samDependencies.tosService, LiquibaseConfig("", false))
+  def genSamRoutes(samDependencies: SamDependencies, uInfo: UserInfo)(implicit system: ActorSystem, materializer: Materializer): SamRoutes = new SamRoutes(samDependencies.resourceService, samDependencies.userService, samDependencies.statusService, samDependencies.managedGroupService, null, samDependencies.tosService.tosConfig, samDependencies.directoryDAO, samDependencies.policyEvaluatorService, samDependencies.tosService, LiquibaseConfig("", false))
     with MockUserInfoDirectives
     with GoogleExtensionRoutes {
       override val cloudExtensions: CloudExtensions = samDependencies.cloudExtensions

@@ -39,12 +39,10 @@ trait UserRoutes extends UserInfoDirectives with SamRequestContextDirectives {
       (pathPrefix("v1") | pathEndOrSingleSlash) {
         pathEndOrSingleSlash {
           post {
-            withTermsOfServiceAcceptance {
-              withSamRequestContext { samRequestContext =>
-                requireCreateUser(samRequestContext) { createUser =>
-                  complete {
-                    userService.createUser(createUser, samRequestContext).map(userStatus => StatusCodes.Created -> userStatus)
-                  }
+            withSamRequestContext { samRequestContext =>
+              requireCreateUser(samRequestContext) { createUser =>
+                complete {
+                  userService.createUser(createUser, samRequestContext).map(userStatus => StatusCodes.Created -> userStatus)
                 }
               }
             }
@@ -70,12 +68,10 @@ trait UserRoutes extends UserInfoDirectives with SamRequestContextDirectives {
         pathPrefix("self") {
           pathEndOrSingleSlash {
             post {
-              withTermsOfServiceAcceptance {
-                withSamRequestContext { samRequestContext =>
-                  requireCreateUser(samRequestContext) { createUser =>
-                    complete {
-                      userService.createUser(createUser, samRequestContext).map(userStatus => StatusCodes.Created -> userStatus)
-                    }
+              withSamRequestContext { samRequestContext =>
+                requireCreateUser(samRequestContext) { createUser =>
+                  complete {
+                    userService.createUser(createUser, samRequestContext).map(userStatus => StatusCodes.Created -> userStatus)
                   }
                 }
               }
@@ -202,6 +198,23 @@ trait UserRoutes extends UserInfoDirectives with SamRequestContextDirectives {
     pathPrefix("v1") {
       withSamRequestContext { samRequestContext =>
         requireUserInfo(samRequestContext) { userInfo =>
+          pathPrefix("tos" / "accept") {
+            pathEndOrSingleSlash {
+              post {
+                withTermsOfServiceAcceptance {
+                  complete {
+                    userService.acceptTermsOfService(userInfo.userId, samRequestContext).map { statusOption =>
+                      statusOption
+                        .map { status =>
+                          StatusCodes.OK -> Option(status)
+                        }
+                        .getOrElse(StatusCodes.NotFound -> None)
+                    }
+                  }
+                }
+              }
+            }
+          } ~
           get {
             path(Segment) { email =>
               pathEnd {

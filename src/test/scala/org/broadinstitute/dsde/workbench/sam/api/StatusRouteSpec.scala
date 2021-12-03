@@ -57,7 +57,7 @@ class StatusRouteSpec extends AnyFlatSpec with Matchers with ScalatestRouteTest 
 
     val emailDomain = "example.com"
     val mockResourceService = new ResourceService(Map.empty, null, policyDAO, directoryDAO, NoExtensions, emailDomain)
-    val mockUserService = new UserService(directoryDAO, NoExtensions, registrationDAO, Seq.empty, new TosService(directoryDAO, googleServicesConfig.appsDomain))
+    val mockUserService = new UserService(directoryDAO, NoExtensions, registrationDAO, Seq.empty, new TosService(directoryDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig))
     val mockStatusService = new StatusService(directoryDAO, registrationDAO, NoExtensions, TestSupport.dbRef)
     val mockManagedGroupService = new ManagedGroupService(mockResourceService, null, Map.empty, policyDAO, directoryDAO, NoExtensions, emailDomain)
     val policyEvaluatorService = PolicyEvaluatorService(emailDomain, Map.empty, policyDAO, directoryDAO)
