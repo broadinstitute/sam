@@ -42,7 +42,7 @@ class UserRoutesV1Spec extends UserRoutesSpecHelper{
   }
 
   it should "create a user and accept the tos when the user specifies the ToS body correctly" in {
-    val (user, _, routes) = createTestUser(tosEnabled = true, tosAccepted = false)
+    val (_, _, routes) = createTestUser(tosEnabled = true, tosAccepted = false)
     val tos = TermsOfServiceAcceptance("app.terra.bio/#terms-of-service")
 
     Post("/api/users/v1/tos/accept", tos) ~> routes.route ~> check {
@@ -50,7 +50,7 @@ class UserRoutesV1Spec extends UserRoutesSpecHelper{
       val res = responseAs[UserStatus]
       res.userInfo.userSubjectId.value.length shouldBe 21
       res.userInfo.userEmail shouldBe defaultUserEmail
-      res.enabled shouldBe Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> true, "adminEnabled" -> true)
+      res.enabled shouldBe Map("ldap" -> false, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> true, "adminEnabled" -> true)
     }
   }
 
@@ -70,7 +70,7 @@ class UserRoutesV1Spec extends UserRoutesSpecHelper{
     Get("/register/user/v1") ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK
       val res = responseAs[UserStatus]
-      res.enabled shouldBe Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> true, "adminEnabled" -> true)
+      res.enabled shouldBe Map("ldap" -> false, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> true, "adminEnabled" -> true)
     }
   }
 

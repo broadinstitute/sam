@@ -128,7 +128,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
           } yield {
             val enabledMap = Map("ldap" -> ldapStatus, "allUsersGroup" -> allUsersStatus, "google" -> googleStatus)
             val enabledStatuses = tosAcceptedStatus match {
-              case Some(status) => enabledMap + ("tosAccepted" -> status, "adminEnabled" -> adminEnabled)
+              case Some(status) => enabledMap + ("tosAccepted" -> status) + ("adminEnabled" -> adminEnabled)
               case None => enabledMap
             }
             val res = Option(UserStatus(UserStatusDetails(user.id, user.email), enabledStatuses))
