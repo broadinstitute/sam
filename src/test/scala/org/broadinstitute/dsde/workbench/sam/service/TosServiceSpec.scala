@@ -57,6 +57,16 @@ class TosServiceSpec extends AnyFlatSpec with TestSupport with BeforeAndAfterAll
     assert(tosServiceEnabled.resetTermsOfServiceGroups().unsafeRunSync().isDefined, "createNewGroupIfNeeded() should return the same response when called again")
   }
 
+  it should "empty the enabledUsers group when creating a new ToS Postgres group" in {
+    assert(tosServiceEnabled.getTosGroup().unsafeRunSync().isEmpty, "ToS Group should not exist at the start")
+    assert(tosServiceEnabled.resetTermsOfServiceGroups().unsafeRunSync().isDefined, "createGroupIfNeeded() should create the group initially")
+    val maybeGroup = tosServiceEnabled.getTosGroup().unsafeRunSync()
+    assert(maybeGroup.isDefined, "ToS Group should exist after above call")
+    assert(maybeGroup.get.id.value == "tos_accepted_0")
+    assert(maybeGroup.get.email.value == "GROUP_tos_accepted_0@example.com")
+    assert(tosServiceEnabled.resetTermsOfServiceGroups().unsafeRunSync().isDefined, "createNewGroupIfNeeded() should return the same response when called again")
+  }
+
   it should "do nothing if ToS check is not enabled" in {
     assert(tosServiceDisabled.resetTermsOfServiceGroups() == IO.none)
   }
