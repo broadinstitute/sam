@@ -15,6 +15,11 @@ security:
       - openid
       - email
       - profile
+  # Uncomment when Azure B2C is ready to roll out
+  #- b2coauth:
+  #    - openid
+  #    - email
+  #    - profile
 paths:
   /api/admin/user/{userId}:
     get:
@@ -3305,3 +3310,14 @@ components:
             openid: open id authorization
             email: email authorization
             profile: profile authorization
+    # Uncomment when Azure B2C is ready to roll out
+    #b2coauth:
+    #  type: oauth2
+    #  x-tokenName: id_token
+    #  flows:
+    #    implicit:
+    #      authorizationUrl: https://tdrb2ctest.b2clogin.com/tdrb2ctest.onmicrosoft.com/oauth2/v2.0/authorize?p=B2C_1A_SIGNUP_SIGNIN
+    #      scopes:
+    #        openid: open id authorization
+    #        email: email authorization
+    #        profile: profile authorization

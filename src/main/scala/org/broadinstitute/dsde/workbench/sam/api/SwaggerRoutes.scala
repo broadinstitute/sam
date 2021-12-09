@@ -19,7 +19,7 @@ import scala.util.{Failure, Success, Try}
   * Created by dvoet on 7/18/17.
   */
 trait SwaggerRoutes extends LazyLogging {
-  private val swaggerUiPath = "META-INF/resources/webjars/swagger-ui/3.52.3"
+  private val swaggerUiPath = "META-INF/resources/webjars/swagger-ui/4.1.2"
 
   val swaggerConfig: SwaggerConfig
 
@@ -47,6 +47,9 @@ trait SwaggerRoutes extends LazyLogging {
         get {
           complete(HttpEntity(ContentTypes.`application/octet-stream`, swaggerContents.getBytes))
         }
+      } ~
+      path("swagger-ui-bundle.js") {
+        serveSwaggerUiBundle
       } ~
       // We have to be explicit about the paths here since we're matching at the root URL and we don't
       // want to catch all paths lest we circumvent Spray's not-found and method-not-allowed error
@@ -87,6 +90,22 @@ trait SwaggerRoutes extends LazyLogging {
       })
     } {
       getFromResource(s"$swaggerUiPath/index.html")
+    }
+  }
+
+  // Make Swagger UI respect the x-tokenName security scheme extension.
+  // We have to string replace it's unfortunately hard-coded in Swagger UI. See:
+  // https://github.com/swagger-api/swagger-ui/blob/cc408812fc927e265da158bf68239530740ab4cc/src/core/oauth2-authorize.js#L25
+  private val serveSwaggerUiBundle: server.Route = {
+    mapResponseEntity { entityFromJar =>
+      entityFromJar.transformDataBytes(Flow.fromFunction { original =>
+        ByteString(
+          original.utf8String
+            .replace(""""response_type=token"""",
+              """(t.name === "b2coauth" ? "response_type=id_token&nonce=defaultNonce&prompt=login" : "response_type=token")"""))
+      })
+    } {
+      getFromResource(s"$swaggerUiPath/swagger-ui-bundle.js")
     }
   }
 
