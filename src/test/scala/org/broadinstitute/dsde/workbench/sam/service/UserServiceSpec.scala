@@ -7,7 +7,7 @@ import cats.kernel.Eq
 import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.Generator.{arbNonPetEmail => _, _}
-import org.broadinstitute.dsde.workbench.sam.TestSupport.{eqWorkbenchExceptionErrorReport, googleServicesConfig}
+import org.broadinstitute.dsde.workbench.sam.TestSupport.{eqWorkbenchExceptionErrorReport, googleServicesConfig, tosConfig}
 import org.broadinstitute.dsde.workbench.sam.api.InviteUser
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, LdapRegistrationDAO, PostgresDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
@@ -161,7 +161,7 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
 
     // get user status info (id, email, ldap)
     val info = service.getUserStatusInfo(defaultUserId, samRequestContext).unsafeRunSync()
-    info shouldBe Some(UserStatusInfo(defaultUserId.value, defaultUserEmail.value, true))
+    info shouldBe Some(UserStatusInfo(defaultUserId.value, defaultUserEmail.value, true, true))
   }
 
   it should "get user status diagnostics" in {
@@ -174,12 +174,12 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
 
     // get user status diagnostics (ldap, usersGroups, googleGroups
     val diagnostics = service.getUserStatusDiagnostics(defaultUserId, samRequestContext).futureValue
-    diagnostics shouldBe Some(UserStatusDiagnostics(true, true, true, None))
+    diagnostics shouldBe Some(UserStatusDiagnostics(true, true, true, None, true))
   }
 
   it should "enable/disable user" in {
     // user doesn't exist yet
-    service.enableUser(defaultUserId, userInfo, samRequestContext).futureValue shouldBe None
+    service.enableUser(defaultUserId, samRequestContext).futureValue shouldBe None
     service.disableUser(defaultUserId, samRequestContext).futureValue shouldBe None
 
     // create a user
@@ -197,6 +197,66 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     // check ldap
     dirDAO.isEnabled(defaultUserId, samRequestContext).unsafeRunSync() shouldBe false
     registrationDAO.isEnabled(defaultUserId, samRequestContext).unsafeRunSync() shouldBe false
+  }
+
+  it should "enable a user in LDAP if they accept the latest Terms of Service" in {
+    createNewEnabledUser()
+    updateTosVersionThenEnableUser(userAcceptsNewTos = true)
+
+    // User should be enabled in LDAP
+    registrationDAO.isEnabled(defaultUserId, samRequestContext).unsafeRunSync() shouldBe true
+  }
+
+  it should "not enable a user in LDAP when they don't accept the latest Terms of Service" in {
+    createNewEnabledUser()
+    updateTosVersionThenEnableUser()
+
+    // User should not be enabled in LDAP
+    registrationDAO.isEnabled(defaultUserId, samRequestContext).unsafeRunSync() shouldBe false
+  }
+
+  it should "enable a user in LDAP when TOS is disabled" in {
+    createNewEnabledUser()
+    updateTosVersionThenEnableUser(tosEnabled = false)
+
+    // User should be enabled in LDAP
+    registrationDAO.isEnabled(defaultUserId, samRequestContext).unsafeRunSync() shouldBe true
+  }
+
+  private def createNewEnabledUser(): Unit = {
+    // create a user
+    tosServiceEnabled.createNewGroupIfNeeded().unsafeRunSync()
+    val newUser = serviceTosEnabled.createUser(defaultUser, samRequestContext).futureValue
+    newUser shouldBe UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> false, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> false, "adminEnabled" -> true))
+    serviceTosEnabled.acceptTermsOfService(defaultUserId, samRequestContext).unsafeToFuture().futureValue
+
+    // it should be enabled
+    dirDAO.isEnabled(defaultUserId, samRequestContext).unsafeRunSync() shouldBe true
+    registrationDAO.isEnabled(defaultUserId, samRequestContext).unsafeRunSync() shouldBe false
+  }
+
+  private def updateTosVersionThenEnableUser(tosEnabled: Boolean = true, userAcceptsNewTos: Boolean = false): Unit = {
+    // update the terms of service version
+    val newTosConfig = tosConfig.copy(enabled = tosEnabled, version = tosConfig.version + 1)
+    val newTos = new TosService(dirDAO, googleServicesConfig.appsDomain, newTosConfig)
+    val userServiceWithNewTos =  new UserService(dirDAO, googleExtensions, registrationDAO, Seq(blockedDomain), newTos)
+    newTos.createNewGroupIfNeeded().unsafeRunSync()
+
+    if (userAcceptsNewTos) {
+      userServiceWithNewTos.acceptTermsOfService(defaultUserId, samRequestContext).unsafeToFuture().futureValue
+    }
+
+    // disable the user and re-enable the user
+    userServiceWithNewTos.disableUser(defaultUserId, samRequestContext).futureValue
+    userServiceWithNewTos.enableUser(defaultUserId, samRequestContext).futureValue
+
+    // User should be enabled in SAM
+    dirDAO.isEnabled(defaultUserId, samRequestContext).unsafeRunSync() shouldBe true
+
+    // User should only be enabled in ToS if they accepted latest ToS
+    val tosGroup = WorkbenchGroupName(newTos.getGroupName())
+    val userGroups = dirDAO.listUsersGroups(defaultUserId, samRequestContext).unsafeRunSync()
+    userGroups.contains(tosGroup) shouldEqual userAcceptsNewTos
   }
 
   it should "delete a user" in {
@@ -217,12 +277,12 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
 
     // create a user
     val newUser = serviceTosEnabled.createUser(defaultUser, samRequestContext).futureValue
-    newUser shouldBe UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> false))
+    newUser shouldBe UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> false, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> false, "adminEnabled" -> true))
 
     serviceTosEnabled.acceptTermsOfService(defaultUser.id, samRequestContext).unsafeRunSync()
 
     val status = serviceTosEnabled.getUserStatus(defaultUserId, samRequestContext = samRequestContext).futureValue
-    status shouldBe Some(UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> true)))
+    status shouldBe Some(UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> false, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> true, "adminEnabled" -> true)))
   }
 
   it should "not accept the tos for users who do not exist" in {

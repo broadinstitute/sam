@@ -47,7 +47,7 @@ class UserRoutesV2Spec extends UserRoutesSpecHelper {
     val (user, samDep, routes) = createTestUser(googSubjectId = Some(googleSubjectId))
     Get("/register/user/v2/self/info") ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK
-      responseAs[UserStatusInfo] shouldEqual UserStatusInfo(user.id.value, user.email.value, true)
+      responseAs[UserStatusInfo] shouldEqual UserStatusInfo(user.id.value, user.email.value, true, true)
     }
   }
 
@@ -60,7 +60,7 @@ class UserRoutesV2Spec extends UserRoutesSpecHelper {
 
     Get("/register/user/v2/self/diagnostics") ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK
-      responseAs[UserStatusDiagnostics] shouldEqual UserStatusDiagnostics(true, true, true, Option(true))
+      responseAs[UserStatusDiagnostics] shouldEqual UserStatusDiagnostics(false, true, true, Option(true), true)
     }
   }
 
