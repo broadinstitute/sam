@@ -191,9 +191,9 @@ trait UserRoutesSpecHelper extends AnyFlatSpec with Matchers with ScalatestRoute
       status shouldEqual StatusCodes.Created
       val res = responseAs[UserStatus]
       res.userInfo.userEmail shouldBe userEmail
-      val enabledBaseArray = Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true)
+      val enabledBaseArray = Map("ldap" -> !tosEnabled, "allUsersGroup" -> true, "google" -> true)
 
-      if (tosEnabled) res.enabled shouldBe  enabledBaseArray + ("tosAccepted" -> false)
+      if (tosEnabled) res.enabled shouldBe  enabledBaseArray + ("tosAccepted" -> false) + ("adminEnabled" -> true)
       else res.enabled shouldBe enabledBaseArray
 
       WorkbenchUser(res.userInfo.userSubjectId, Some(GoogleSubjectId(res.userInfo.userSubjectId.value)), res.userInfo.userEmail, azureB2CId)
@@ -204,8 +204,8 @@ trait UserRoutesSpecHelper extends AnyFlatSpec with Matchers with ScalatestRoute
         status shouldEqual StatusCodes.OK
         val res = responseAs[UserStatus]
         res.userInfo.userEmail shouldBe userEmail
-        val enabledBaseArray = Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true)
-        res.enabled shouldBe enabledBaseArray + ("tosAccepted" -> true)
+        val enabledBaseArray = Map("ldap" -> false, "allUsersGroup" -> true, "google" -> true)
+        res.enabled shouldBe enabledBaseArray + ("tosAccepted" -> true) + ("adminEnabled" -> true)
 
         WorkbenchUser(res.userInfo.userSubjectId, Some(GoogleSubjectId(res.userInfo.userSubjectId.value)), res.userInfo.userEmail, azureB2CId)
       }
