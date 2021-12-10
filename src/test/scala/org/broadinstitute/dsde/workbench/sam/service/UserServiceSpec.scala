@@ -232,7 +232,7 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
 
     // it should be enabled
     dirDAO.isEnabled(defaultUserId, samRequestContext).unsafeRunSync() shouldBe true
-    registrationDAO.isEnabled(defaultUserId, samRequestContext).unsafeRunSync() shouldBe false
+    registrationDAO.isEnabled(defaultUserId, samRequestContext).unsafeRunSync() shouldBe true
   }
 
   private def updateTosVersionThenEnableUser(tosEnabled: Boolean = true, userAcceptsNewTos: Boolean = false): Unit = {
@@ -282,7 +282,7 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     serviceTosEnabled.acceptTermsOfService(defaultUser.id, samRequestContext).unsafeRunSync()
 
     val status = serviceTosEnabled.getUserStatus(defaultUserId, samRequestContext = samRequestContext).futureValue
-    status shouldBe Some(UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> false, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> true, "adminEnabled" -> true)))
+    status shouldBe Some(UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> true, "adminEnabled" -> true)))
   }
 
   it should "not accept the tos for users who do not exist" in {
