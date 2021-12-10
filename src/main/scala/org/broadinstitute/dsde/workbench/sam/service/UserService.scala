@@ -143,6 +143,8 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
       case Some(_) =>
         for {
           _ <- tosService.acceptTosStatus(userId)
+          enabled <- directoryDAO.isEnabled(userId, samRequestContext) 
+          _ <- if (enabled) registrationDAO.enableIdentity(userId, samRequestContext) else IO.none
           status <- IO.fromFuture(IO(getUserStatus(userId, false, samRequestContext)))
         } yield status
       case None => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Could not accept the Terms of Service. User not found.")))

@@ -60,7 +60,7 @@ class UserRoutesV2Spec extends UserRoutesSpecHelper {
 
     Get("/register/user/v2/self/diagnostics") ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK
-      responseAs[UserStatusDiagnostics] shouldEqual UserStatusDiagnostics(false, true, true, Option(true), true)
+      responseAs[UserStatusDiagnostics] shouldEqual UserStatusDiagnostics(true, true, true, Option(true), true)
     }
   }
 
