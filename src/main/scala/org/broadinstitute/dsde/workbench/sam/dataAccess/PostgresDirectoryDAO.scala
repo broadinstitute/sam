@@ -39,6 +39,10 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
     })
   }
 
+  override def createEnabledUsersGroup(samRequestContext: SamRequestContext): IO[Unit] = {
+    IO.unit
+  }
+
   private def insertGroup(group: BasicWorkbenchGroup)(implicit session: DBSession): GroupPK = {
     val groupTableColumn = GroupTable.column
     val insertGroupQuery = samsql"""insert into ${GroupTable.table} (${groupTableColumn.name}, ${groupTableColumn.email}, ${groupTableColumn.updatedDate}, ${groupTableColumn.synchronizedDate})
@@ -598,6 +602,10 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
         case _ => // other types of WorkbenchSubjects cannot be disabled
       }
     })
+  }
+
+  override def disableAllIdentities(samRequestContext: SamRequestContext): IO[Unit] = {
+    IO.unit //no-op for now. throw exception maybe?
   }
 
   override def isEnabled(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean] = {

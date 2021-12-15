@@ -93,6 +93,13 @@ class LdapRegistrationDAO(
     }
   }
 
+  //To be used only in the event of the ToS version being bumped
+  override def disableAllIdentities(samRequestContext: SamRequestContext): IO[Unit] = {
+    executeLdap(IO(ldapConnectionPool.modify(directoryConfig.enabledUsersGroupDn, new Modification(ModificationType.DELETE, Attr.member))).void, "disableAllIdentities", samRequestContext).recover {
+      case ldape: LDAPException if ldape.getResultCode == ResultCode.NO_SUCH_ATTRIBUTE => //if the attr is missing, then there's already no members
+    }
+  }
+
   override def isEnabled(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean] =
     for {
       entry <- executeLdap(IO(ldapConnectionPool.getEntry(directoryConfig.enabledUsersGroupDn, Attr.member)), "isEnabled", samRequestContext)
@@ -103,6 +110,18 @@ class LdapRegistrationDAO(
       } yield members.contains(subjectDn(subject))
       result.getOrElse(false)
     }
+
+  override def createEnabledUsersGroup(samRequestContext: SamRequestContext): IO[Unit] = {
+    val objectClassAttr = new Attribute("objectclass", Seq("top", "groupofnames").asJava)
+//    val memberAttr = new Attribute(Attr.member)
+
+    executeLdap(IO(ldapConnectionPool.add(directoryConfig.enabledUsersGroupDn, Seq(objectClassAttr).asJava)), "createEnabledUsersGroup", samRequestContext)
+      .handleErrorWith {
+        case ldape: LDAPException if ldape.getResultCode == ResultCode.ENTRY_ALREADY_EXISTS =>
+          IO.unit
+      }
+      .map(_ => ())
+  }
 
   override def createPetServiceAccount(petServiceAccount: PetServiceAccount, samRequestContext: SamRequestContext): IO[PetServiceAccount] = {
     val attributes = createPetServiceAccountAttributes(petServiceAccount) ++

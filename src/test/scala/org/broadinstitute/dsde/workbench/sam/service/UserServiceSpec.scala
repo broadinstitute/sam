@@ -79,10 +79,10 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     when(googleExtensions.onUserEnable(any[WorkbenchUser], any[SamRequestContext])).thenReturn(Future.successful(()))
     when(googleExtensions.onGroupUpdate(any[Seq[WorkbenchGroupIdentity]], any[SamRequestContext])).thenReturn(Future.successful(()))
 
-    tos = new TosService(dirDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)
+    tos = new TosService(dirDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)
     service = new UserService(dirDAO, googleExtensions, registrationDAO, Seq(blockedDomain), tos)
 
-    tosServiceEnabled = new TosService(dirDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig.copy(enabled = true))
+    tosServiceEnabled = new TosService(dirDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig.copy(enabled = true))
     serviceTosEnabled = new UserService(dirDAO, googleExtensions, registrationDAO, Seq(blockedDomain), tosServiceEnabled)
   }
 
@@ -117,7 +117,7 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
   }
 
   it should "create add a user to ToS group" in {
-    tosServiceEnabled.createNewGroupIfNeeded().unsafeRunSync()
+    tosServiceEnabled.resetTermsOfServiceGroups().unsafeRunSync()
     serviceTosEnabled.createUser(defaultUser, samRequestContext).futureValue
     val userGroups = dirDAO.listUsersGroups(defaultUserId, samRequestContext).unsafeRunSync()
     userGroups shouldNot contain (WorkbenchGroupName(tos.getGroupName(TestSupport.tosConfig.version)))
@@ -273,7 +273,7 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
   }
 
   it should "accept the tos" in {
-    tosServiceEnabled.createNewGroupIfNeeded().unsafeRunSync()
+    tosServiceEnabled.resetTermsOfServiceGroups().unsafeRunSync()
 
     // create a user
     val newUser = serviceTosEnabled.createUser(defaultUser, samRequestContext).futureValue
@@ -286,7 +286,7 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
   }
 
   it should "not accept the tos for users who do not exist" in {
-    tosServiceEnabled.createNewGroupIfNeeded().unsafeRunSync()
+    tosServiceEnabled.resetTermsOfServiceGroups().unsafeRunSync()
     val res = intercept[WorkbenchExceptionWithErrorReport] {
       serviceTosEnabled.acceptTermsOfService(genWorkbenchUserId(System.currentTimeMillis()), samRequestContext).unsafeRunSync()
     }
