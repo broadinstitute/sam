@@ -32,6 +32,8 @@ class TosServiceSpec extends AnyFlatSpec with TestSupport with BeforeAndAfterAll
   private val tosServiceEnabled = new TosService(dirDAO, regDAO, "example.com", TestSupport.tosConfig.copy(enabled = true))
   private val tosServiceDisabled = new TosService(dirDAO, regDAO, "example.com", TestSupport.tosConfig.copy(enabled = false))
   private val tosServiceEnabledV2 = new TosService(dirDAO, regDAO, "example.com", TestSupport.tosConfig.copy(enabled = true, version = 2))
+  private val userServiceTosEnabled = new UserService(dirDAO, NoExtensions, regDAO, Seq.empty, tosServiceEnabled)
+  private val userServiceTosEnabledV2 = new UserService(dirDAO, NoExtensions, regDAO, Seq.empty, tosServiceEnabledV2)
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()
@@ -87,48 +89,63 @@ class TosServiceSpec extends AnyFlatSpec with TestSupport with BeforeAndAfterAll
     dirDAO.enableIdentity(defaultUser.id, samRequestContext).unsafeRunSync()
 
     //As the above user, accept the ToS
-    val acceptTosStatusResult = tosServiceEnabled.acceptTosStatus(defaultUser.id).unsafeRunSync()
-    assert(acceptTosStatusResult.get, s"acceptTosStatus(${defaultUser.id}) should accept the tos for the user")
+    userServiceTosEnabled.acceptTermsOfService(defaultUser.id, samRequestContext).unsafeRunSync()
 
     //Check if the user has accepted ToS
-    val isEnabled = dirDAO.isEnabled(defaultUser.id, samRequestContext).unsafeRunSync()
-    assert(isEnabled, "dirDAO.isEnabled (first check) should have returned true")
+    val isEnabledViaToS = dirDAO.isEnabled(defaultUser.id, samRequestContext).unsafeRunSync()
+    assert(isEnabledViaToS, "dirDAO.isEnabled (first check) should have returned true")
+
+    //Check if the user is enabled in LDAP
+    val isEnabledLdap = regDAO.isEnabled(defaultUser.id, samRequestContext).unsafeRunSync()
+    assert(isEnabledLdap, "regDAO.isEnabled (first check) should have returned true")
 
     //Bump the ToS version and reset the ToS groups
     val group2 = tosServiceEnabledV2.resetTermsOfServiceGroups().unsafeRunSync()
     assert(group2.isDefined, "createGroupIfNeeded() should re-create the group")
 
     //Ensure that the user is now disabled, because they haven't accepted the new ToS version
-    val isEnabledV2 = regDAO.isEnabled(defaultUser.id, samRequestContext).unsafeRunSync()
-    assertResult(expected = false, "regDAO.isEnabled (second check) should have returned false")(actual = isEnabledV2)
+    val isEnabledLdapV2 = regDAO.isEnabled(defaultUser.id, samRequestContext).unsafeRunSync()
+    assertResult(expected = false, "regDAO.isEnabled (second check) should have returned false")(actual = isEnabledLdapV2)
+
+    //Lastly, let's make sure the user can get re-enabled when accepting the new ToS version
+    userServiceTosEnabledV2.acceptTermsOfService(defaultUser.id, samRequestContext).unsafeRunSync()
+
+    //Ensure that the user is now disabled, because they haven't accepted the new ToS version
+    val isEnabledLdapV2PostAccept = regDAO.isEnabled(defaultUser.id, samRequestContext).unsafeRunSync()
+    assertResult(expected = true, "regDAO.isEnabled (second check) should have returned false")(actual = isEnabledLdapV2PostAccept)
   }
 
   it should "not empty the enabledUsers group in OpenDJ when the ToS version remains the same" in {
-    //call resetToSGroups with original ToSservice
-    //create user in system, check that they're enabled
-    //call resetToSGroups with v2 TosService
-    //check that they're still enabled
-
+    //Ensure that the enabled-users group exists in LDAP
     regDAO.createEnabledUsersGroup(samRequestContext).unsafeRunSync()
 
+    //Reset the ToS groups (this will empty the enabled-users group, but it should already be empty)
     val group = tosServiceEnabled.resetTermsOfServiceGroups().unsafeRunSync()
     assert(group.isDefined, "createGroupIfNeeded() should create the group initially")
 
+    //Create the user in the system
     dirDAO.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
-    val acceptTosStatusResult = tosServiceEnabled.acceptTosStatus(defaultUser.id).unsafeRunSync()
-    assert(acceptTosStatusResult.get, s"acceptTosStatus(${defaultUser.id}) should accept the tos for the user")
+    //Enable in Postgres
+    dirDAO.enableIdentity(defaultUser.id, samRequestContext).unsafeRunSync()
 
-    val z = regDAO.isEnabled(defaultUser.id, samRequestContext).unsafeRunSync()
-    assert(z, "regDAO.isEnabled (first check) should have returned true")
+    //As the above user, accept the ToS
+    userServiceTosEnabled.acceptTermsOfService(defaultUser.id, samRequestContext).unsafeRunSync()
 
-    val group2 = tosServiceEnabledV2.resetTermsOfServiceGroups().unsafeRunSync()
-    assert(group2.isDefined, "createGroupIfNeeded() should re-create the group")
+    //Check if the user has accepted ToS
+    val isEnabledViaToS = dirDAO.isEnabled(defaultUser.id, samRequestContext).unsafeRunSync()
+    assert(isEnabledViaToS, "dirDAO.isEnabled (first check) should have returned true")
 
-    val z1 = regDAO.isEnabled(defaultUser.id, samRequestContext).unsafeRunSync()
-    assertResult(false, "regDAO.isEnabled (second check) should have returned false")(z1)
+    //Check if the user is enabled in LDAP
+    val isEnabledLdap = regDAO.isEnabled(defaultUser.id, samRequestContext).unsafeRunSync()
+    assert(isEnabledLdap, "regDAO.isEnabled (first check) should have returned true")
+
+    //Reset the ToS groups, which should be a no-op since the version remains the same
+    val group2 = tosServiceEnabled.resetTermsOfServiceGroups().unsafeRunSync()
+
+    //Ensure that the user is NOT disabled, because we haven't changed the ToS version
+    val isEnabledLdapPostReset = regDAO.isEnabled(defaultUser.id, samRequestContext).unsafeRunSync()
+    assertResult(expected = true, "regDAO.isEnabled (second check) should have returned false")(actual = isEnabledLdapPostReset)
   }
-
-
 
 }

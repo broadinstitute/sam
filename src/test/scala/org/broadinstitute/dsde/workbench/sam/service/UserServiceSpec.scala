@@ -225,7 +225,7 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
 
   private def createNewEnabledUser(): Unit = {
     // create a user
-    tosServiceEnabled.createNewGroupIfNeeded().unsafeRunSync()
+    tosServiceEnabled.resetTermsOfServiceGroups().unsafeRunSync()
     val newUser = serviceTosEnabled.createUser(defaultUser, samRequestContext).futureValue
     newUser shouldBe UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> false, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> false, "adminEnabled" -> true))
     serviceTosEnabled.acceptTermsOfService(defaultUserId, samRequestContext).unsafeToFuture().futureValue
@@ -238,9 +238,9 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
   private def updateTosVersionThenEnableUser(tosEnabled: Boolean = true, userAcceptsNewTos: Boolean = false): Unit = {
     // update the terms of service version
     val newTosConfig = tosConfig.copy(enabled = tosEnabled, version = tosConfig.version + 1)
-    val newTos = new TosService(dirDAO, googleServicesConfig.appsDomain, newTosConfig)
+    val newTos = new TosService(dirDAO, registrationDAO, googleServicesConfig.appsDomain, newTosConfig)
     val userServiceWithNewTos =  new UserService(dirDAO, googleExtensions, registrationDAO, Seq(blockedDomain), newTos)
-    newTos.createNewGroupIfNeeded().unsafeRunSync()
+    newTos.resetTermsOfServiceGroups().unsafeRunSync()
 
     if (userAcceptsNewTos) {
       userServiceWithNewTos.acceptTermsOfService(defaultUserId, samRequestContext).unsafeToFuture().futureValue
@@ -304,6 +304,8 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     status shouldBe Some(UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true)))
 
   }
+
+
 
   it should "generate unique identifier properly" in {
     val current = 1534253386722L
