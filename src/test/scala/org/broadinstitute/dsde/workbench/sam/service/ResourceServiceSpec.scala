@@ -599,6 +599,7 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
     runAndWait(resourceService.overwritePolicy(defaultResourceType, policyId.accessPolicyName, policyId.resource, AccessPolicyMembership(Set.empty, Set.empty, Set.empty), samRequestContext))
 
     verify(mockCloudExtensions, Mockito.after(500).never).onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])
+  }
 
   "overwriteAdminPolicy" should "succeed with a valid request" in {
     val resourceTypeAdmin = defaultResourceType.copy(name = ResourceTypeName("resource_type_admin"))

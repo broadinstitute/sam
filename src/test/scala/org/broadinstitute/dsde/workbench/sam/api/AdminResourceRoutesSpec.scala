@@ -5,9 +5,9 @@ import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import akka.http.scaladsl.testkit.ScalatestRouteTest
 import cats.effect.IO
-import org.broadinstitute.dsde.workbench.model.{ErrorReport, ErrorReportSource, UserInfo, WorkbenchEmail, WorkbenchExceptionWithErrorReport, WorkbenchSubject, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.model.{ErrorReport, ErrorReportSource, UserInfo, WorkbenchEmail, WorkbenchExceptionWithErrorReport, WorkbenchSubject, WorkbenchUser, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.{TestSupport, model}
-import org.broadinstitute.dsde.workbench.sam.TestSupport.genGoogleSubjectId
+import org.broadinstitute.dsde.workbench.sam.TestSupport.{genGoogleSubjectId, googleServicesConfig}
 import org.broadinstitute.dsde.workbench.sam.api.TestSamRoutes.SamResourceActionPatterns
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{MockAccessPolicyDAO, MockDirectoryDAO, MockRegistrationDAO}
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
@@ -30,9 +30,9 @@ class AdminResourceRoutesSpec extends AnyFlatSpec with Matchers with TestSupport
 
   val defaultUserInfo = UserInfo(OAuth2BearerToken("accessToken"), WorkbenchUserId("user1"), WorkbenchEmail("user1@example.com"), 0)
 
-  private val defaultTestUser =  CreateWorkbenchUser(WorkbenchUserId("testuser"), genGoogleSubjectId(), WorkbenchEmail("testuser@foo.com"), None)
+  private val defaultTestUser =  WorkbenchUser(WorkbenchUserId("testuser"), genGoogleSubjectId(), WorkbenchEmail("testuser@foo.com"), None)
 
-  private val defaultTestUserTwo =  CreateWorkbenchUser(WorkbenchUserId("testuser2"), genGoogleSubjectId(), WorkbenchEmail("testuser2@foo.com"), None)
+  private val defaultTestUserTwo =  WorkbenchUser(WorkbenchUserId("testuser2"), genGoogleSubjectId(), WorkbenchEmail("testuser2@foo.com"), None)
 
   val defaultResourceType = ResourceType(
     ResourceTypeName("rt"),
@@ -69,11 +69,11 @@ class AdminResourceRoutesSpec extends AnyFlatSpec with Matchers with TestSupport
 
     val cloudExtensions = new SamSuperAdminExtensions(isSamSuperAdmin)
 
-    val mockUserService = new UserService(directoryDAO, cloudExtensions, registrationDAO, Seq.empty)
+    val mockUserService = new UserService(directoryDAO, cloudExtensions, registrationDAO, Seq.empty, new TosService(directoryDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig))
     val mockStatusService = new StatusService(directoryDAO, registrationDAO, cloudExtensions, TestSupport.dbRef)
     val mockManagedGroupService = new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, accessPolicyDAO, directoryDAO, cloudExtensions, emailDomain)
 
-    mockUserService.createUser(CreateWorkbenchUser(defaultUserInfo.userId, genGoogleSubjectId(), defaultUserInfo.userEmail, None), samRequestContext)
+    mockUserService.createUser(WorkbenchUser(defaultUserInfo.userId, genGoogleSubjectId(), defaultUserInfo.userEmail, None), samRequestContext)
 
     new TestSamRoutes(mockResourceService, policyEvaluatorService, mockUserService, mockStatusService, mockManagedGroupService, userInfo, directoryDAO, cloudExtensions)
   }
