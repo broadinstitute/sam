@@ -47,8 +47,7 @@ trait AdminResourceRoutes extends UserInfoDirectives with SecurityDirectives wit
                             pathEndOrSingleSlash {
                               put {
                                 entity(as[AccessPolicyMembership]) { membershipUpdate =>
-                                  logger.info(s"IP: ${ip.toOption.map(_.getHostAddress)} OR ${ip.toIP.map(_.ip.getHostAddress).getOrElse("toIP doesn't know")} OR $ip")
-                                  logger.info(s"${LocalDateTime.now()} - ip - ${userInfo.userEmail.value} - lots of details about the difference b/w this policy and the existing policy")
+                                  logger.info(s"${LocalDateTime.now()} - $ip - ${userInfo.userEmail.value} - lots of details about the difference b/w this policy and the existing policy")
                                   complete(resourceService.overwriteAdminPolicy(resourceTypeAdmin, policyId.accessPolicyName, policyId.resource, membershipUpdate, samRequestContext).map(_ => StatusCodes.Created))
                                 }
                               } ~
