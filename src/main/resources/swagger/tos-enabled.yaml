@@ -1,0 +1,135 @@
+
+paths:
+  /register/user/v1:
+    post:
+      tags:
+        - Users
+      summary: create current user in the system using login credentials
+      operationId: createUser
+      requestBody:
+        description: The link to the Terra Terms of Service, to signify acceptance
+        content:
+          'application/json':
+            schema:
+              type: string
+      responses:
+        201:
+          description: user successfully created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserStatus'
+        409:
+          description: user already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+  /register/user/v2/self:
+    post:
+      tags:
+        - Users
+      summary: create current user in the system using login credentials
+      operationId: createUserV2
+      requestBody:
+        description: The link to the Terra Terms of Service, to signify acceptance
+        content:
+          'application/json':
+            schema:
+              type: string
+      responses:
+        201:
+          description: user successfully created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserStatus'
+        409:
+          description: user already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+
+
+components:
+  schemas:
+    Enabled:
+      required:
+        - allUsersGroup
+        - google
+        - ldap
+      type: object
+      properties:
+        ldap:
+          type: boolean
+          description: true if the user is enabled in ldap
+        allUsersGroup:
+          type: boolean
+          description: true if the user is in the all users group
+        google:
+          type: boolean
+          description: true if the user is in their proxy group
+        tosAccepted:
+          type: boolean
+          description: true if the user has accepted the ToS
+        adminEnabled:
+          type: boolean
+          description: true if the overall status of the user is enabled
+      description: the status of the user's account
+    UserStatus:
+      required:
+        - enabled
+        - userInfo
+      type: object
+      properties:
+        userInfo:
+          $ref: '#/components/schemas/UserInfo'
+        enabled:
+          $ref: '#/components/schemas/Enabled'
+      description: ""
+    UserStatusInfo:
+      required:
+        - enabled
+        - userEmail
+        - userSubjectId
+        - adminEnabled
+      type: object
+      properties:
+        userSubjectId:
+          type: string
+          description: user id
+        userEmail:
+          type: string
+          description: user email
+        enabled:
+          type: boolean
+          description: true if the user is enabled in ldap
+        adminEnabled:
+          type: boolean
+          description: true if user is enabled in Sam DB
+      description: ""
+    UserStatusDiagnostics:
+      required:
+        - enabled
+        - inAllUsersGroup
+        - inGoogleProxyGroup
+        - adminEnabled
+      type: object
+      properties:
+        enabled:
+          type: boolean
+          description: true if the user is enabled in ldap
+        inAllUsersGroup:
+          type: boolean
+          description: true if the user is in the all users group
+        inGoogleProxyGroup:
+          type: boolean
+          description: true if the user is in their proxy group
+        tosAccepted:
+          type: boolean
+          description: true if the user has accepted the ToS
+        adminEnabled:
+          type: boolean
+          description: true if user is enabled in Sam DB
+      description: ""
