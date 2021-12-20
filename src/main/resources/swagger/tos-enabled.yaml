@@ -75,7 +75,7 @@ components:
           description: true if the user has accepted the ToS
         adminEnabled:
           type: boolean
-          description: true if the overall status of the user is enabled
+          description: true if user is enabled in Sam DB
       description: the status of the user's account
     UserStatus:
       required:
