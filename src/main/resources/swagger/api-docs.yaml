@@ -15,7 +15,6 @@ security:
       - openid
       - email
       - profile
-  # Uncomment when Azure B2C is ready to roll out
   - b2coauth:
       - openid
       - email
@@ -3310,7 +3309,6 @@ components:
             openid: open id authorization
             email: email authorization
             profile: profile authorization
-    # Uncomment when Azure B2C is ready to roll out
     b2coauth:
       type: oauth2
       x-tokenName: id_token

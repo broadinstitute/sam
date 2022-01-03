@@ -77,7 +77,7 @@ trait SwaggerRoutes extends LazyLogging {
             .replace("""url: "https://petstore.swagger.io/v2/swagger.json"""", "url: '/api-docs.yaml'")
             .replace("""layout: "StandaloneLayout"""", s"""layout: "StandaloneLayout", $swaggerOptions""")
             .replace("window.ui = ui", s"""ui.initOAuth({
-                                          |        clientId: "${swaggerConfig.googleClientId}",
+                                          |        clientId: "${swaggerConfig.clientId}",
                                           |        clientSecret: "${swaggerConfig.realm}",
                                           |        realm: "${swaggerConfig.realm}",
                                           |        appName: "${swaggerConfig.realm}",
