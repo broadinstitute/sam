@@ -116,7 +116,10 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     }.errorReport.statusCode shouldBe Some(StatusCodes.BadRequest)
   }
 
-  it should "create add a user to ToS group" in {
+  it should "create and add a user to ToS group" in {
+    //Ensure that the enabled-users group exists in LDAP
+    registrationDAO.createEnabledUsersGroup(samRequestContext).unsafeRunSync()
+
     tosServiceEnabled.resetTermsOfServiceGroups().unsafeRunSync()
     serviceTosEnabled.createUser(defaultUser, samRequestContext).futureValue
     val userGroups = dirDAO.listUsersGroups(defaultUserId, samRequestContext).unsafeRunSync()
