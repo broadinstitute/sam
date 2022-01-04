@@ -51,6 +51,9 @@ class TosServiceSpec extends AnyFlatSpec with TestSupport with BeforeAndAfterAll
   }
 
   it should "create the group once" in {
+    //Ensure that the enabled-users group exists in LDAP
+    regDAO.createEnabledUsersGroup(samRequestContext).unsafeRunSync()
+
     assert(tosServiceEnabled.getTosGroup().unsafeRunSync().isEmpty, "ToS Group should not exist at the start")
     assert(tosServiceEnabled.resetTermsOfServiceGroups().unsafeRunSync().isDefined, "createGroupIfNeeded() should create the group initially")
     val maybeGroup = tosServiceEnabled.getTosGroup().unsafeRunSync()
@@ -65,6 +68,9 @@ class TosServiceSpec extends AnyFlatSpec with TestSupport with BeforeAndAfterAll
   }
 
   it should "accept and get the ToS for a user" in {
+    //Ensure that the enabled-users group exists in LDAP
+    regDAO.createEnabledUsersGroup(samRequestContext).unsafeRunSync()
+
     val group = tosServiceEnabled.resetTermsOfServiceGroups().unsafeRunSync()
     assert(group.isDefined, "createGroupIfNeeded() should create the group initially")
     dirDAO.createUser(defaultUser, samRequestContext).unsafeRunSync()
