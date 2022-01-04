@@ -113,7 +113,6 @@ class LdapRegistrationDAO(
 
   override def createEnabledUsersGroup(samRequestContext: SamRequestContext): IO[Unit] = {
     val objectClassAttr = new Attribute("objectclass", Seq("top", "groupofnames").asJava)
-//    val memberAttr = new Attribute(Attr.member)
 
     executeLdap(IO(ldapConnectionPool.add(directoryConfig.enabledUsersGroupDn, Seq(objectClassAttr).asJava)), "createEnabledUsersGroup", samRequestContext)
       .handleErrorWith {

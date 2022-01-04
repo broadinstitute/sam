@@ -323,8 +323,6 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
 
   }
 
-
-
   it should "generate unique identifier properly" in {
     val current = 1534253386722L
     val res = genWorkbenchUserId(current).value

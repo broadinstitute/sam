@@ -19,21 +19,12 @@ class TosService (val directoryDao: DirectoryDAO, val registrationDao: Registrat
   val termsOfServiceFile = "termsOfService.md"
 
   def resetTermsOfServiceGroups(): IO[Option[BasicWorkbenchGroup]] = {
-    println(tosConfig)
     if(tosConfig.enabled) {
       getTosGroup().flatMap {
         case None =>
-//<<<<<<< HEAD
-//          logger.info(s"creating new ToS group ${getGroupName()}")
-//          directoryDao.createGroup(BasicWorkbenchGroup(WorkbenchGroupName(getGroupName()),
-//            Set.empty, WorkbenchEmail(s"GROUP_${getGroupName()}@${appsDomain}")), samRequestContext = SamRequestContext(None)).map(Option(_))
-//=======
-          logger.info("creating new ToS group")
-          println(s"creating new ToS group ${tosConfig.version}")
+          logger.info(s"creating new ToS group ${getGroupName()}")
           val groupEmail = WorkbenchEmail(s"GROUP_${getGroupName(tosConfig.version)}@$appsDomain")
           directoryDao.createGroup(BasicWorkbenchGroup(WorkbenchGroupName(getGroupName(tosConfig.version)), Set.empty, groupEmail), None, SamRequestContext(None)).flatMap { createdGroup =>
-            logger.info("emptying enabledUsers LDAP group because ToS version has changed")
-            println(createdGroup)
             registrationDao.disableAllIdentities(SamRequestContext(None)).map { _ => Option(createdGroup)}
           }
         case group => IO.pure(group)
