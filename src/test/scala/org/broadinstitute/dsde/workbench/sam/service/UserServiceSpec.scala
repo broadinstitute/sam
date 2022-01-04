@@ -200,6 +200,9 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
   }
 
   it should "enable a user in LDAP if they accept the latest Terms of Service" in {
+    //Ensure that the enabled-users group exists in LDAP
+    registrationDAO.createEnabledUsersGroup(samRequestContext).unsafeRunSync()
+
     createNewEnabledUser()
     updateTosVersionThenEnableUser(userAcceptsNewTos = true)
 
@@ -208,6 +211,9 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
   }
 
   it should "not enable a user in LDAP when they don't accept the latest Terms of Service" in {
+    //Ensure that the enabled-users group exists in LDAP
+    registrationDAO.createEnabledUsersGroup(samRequestContext).unsafeRunSync()
+
     createNewEnabledUser()
     updateTosVersionThenEnableUser()
 
@@ -216,6 +222,9 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
   }
 
   it should "enable a user in LDAP when TOS is disabled" in {
+    //Ensure that the enabled-users group exists in LDAP
+    registrationDAO.createEnabledUsersGroup(samRequestContext).unsafeRunSync()
+
     createNewEnabledUser()
     updateTosVersionThenEnableUser(tosEnabled = false)
 
@@ -273,6 +282,9 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
   }
 
   it should "accept the tos" in {
+    //Ensure that the enabled-users group exists in LDAP
+    registrationDAO.createEnabledUsersGroup(samRequestContext).unsafeRunSync()
+
     tosServiceEnabled.resetTermsOfServiceGroups().unsafeRunSync()
 
     // create a user
@@ -286,6 +298,9 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
   }
 
   it should "not accept the tos for users who do not exist" in {
+    //Ensure that the enabled-users group exists in LDAP
+    registrationDAO.createEnabledUsersGroup(samRequestContext).unsafeRunSync()
+
     tosServiceEnabled.resetTermsOfServiceGroups().unsafeRunSync()
     val res = intercept[WorkbenchExceptionWithErrorReport] {
       serviceTosEnabled.acceptTermsOfService(genWorkbenchUserId(System.currentTimeMillis()), samRequestContext).unsafeRunSync()
