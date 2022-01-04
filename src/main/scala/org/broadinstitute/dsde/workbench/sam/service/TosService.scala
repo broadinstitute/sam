@@ -18,7 +18,7 @@ import scala.io.Source
 class TosService (val directoryDao: DirectoryDAO, val registrationDao: RegistrationDAO, val appsDomain: String, val tosConfig: TermsOfServiceConfig)(implicit val executionContext: ExecutionContext) extends LazyLogging {
   val termsOfServiceFile = "termsOfService.md"
 
-  def resetTermsOfServiceGroups(): IO[Option[BasicWorkbenchGroup]] = {
+  def resetTermsOfServiceGroupsIfNeeded(): IO[Option[BasicWorkbenchGroup]] = {
     if(tosConfig.enabled) {
       getTosGroup().flatMap {
         case None =>
@@ -42,7 +42,7 @@ class TosService (val directoryDao: DirectoryDAO, val registrationDao: Registrat
 
   def acceptTosStatus(user: WorkbenchSubject): IO[Option[Boolean]] =
     if (tosConfig.enabled) {
-      resetTermsOfServiceGroups().flatMap {
+      resetTermsOfServiceGroupsIfNeeded().flatMap {
         case Some(group) => directoryDao.addGroupMember(group.id, user, SamRequestContext(None)).map(Option(_))
         case None => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Terms of Service group ${getGroupName()} failed to create.")))
       }
