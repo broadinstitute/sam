@@ -24,7 +24,7 @@ object JndiSchemaDAO {
     * This is the version of the schema reflected by this code. Update this when adding code that updates the schema.
     * If schemaVersion is not updated your changes may not be applied.
     */
-  val schemaVersion = 3
+  val schemaVersion = 4
 
   object Attr {
     val resourceId = "resourceId"
@@ -47,11 +47,11 @@ object JndiSchemaDAO {
     val sn = "sn"
     val uid = "uid"
     val googleSubjectId = "googleSubjectId"
-    val azureB2CId = "azureB2CId"
     val project = "project"
     val proxyEmail = "proxyEmail"
     val authDomain = "authDomain"
     val public = "public"
+    val azureB2CId = "azureB2CId"
   }
 
   object ObjectClass {
@@ -254,6 +254,7 @@ class JndiSchemaDAO(
 
     createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.30", Attr.proxyEmail, "proxy group email", true)
     createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.34", Attr.googleSubjectId, "google subject Id", true)
+    createAttributeDefinition(schema, "1.3.6.1.4.1.18060.0.4.3.2.38", Attr.azureB2CId, "azure b2c id", true)
 
     val attrs = new BasicAttributes(true) // Ignore case
     attrs.put("NUMERICOID", "1.3.6.1.4.1.18060.0.4.3.2.300")
@@ -269,6 +270,7 @@ class JndiSchemaDAO(
     val may = new BasicAttribute("MAY")
     may.add(Attr.proxyEmail)
     may.add(Attr.googleSubjectId)
+    may.add(Attr.azureB2CId)
 
     attrs.put(may)
 
@@ -329,6 +331,7 @@ class JndiSchemaDAO(
     Try { schema.destroySubcontext("ClassDefinition/" + ObjectClass.workbenchPerson) }
     Try { schema.destroySubcontext("AttributeDefinition/" + Attr.proxyEmail) }
     Try { schema.destroySubcontext("AttributeDefinition/" + Attr.googleSubjectId) }
+    Try { schema.destroySubcontext("AttributeDefinition/" + Attr.azureB2CId) }
   }
 
   private def removeWorkbenchGroupSchema(): Future[Unit] = withContext { ctx =>
