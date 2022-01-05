@@ -104,6 +104,7 @@ class LdapRegistrationDAO(
     }).map { identityResults => identityResults.collect { case Right(user) => subjectDn(user.id) }}
 
     humanIdentityDnsToDisableIO.map { humanIdentityDnsToDisable =>
+      println(humanIdentityDnsToDisable)
       executeLdap(IO(ldapConnectionPool.modify(directoryConfig.enabledUsersGroupDn, new Modification(ModificationType.DELETE, Attr.member, humanIdentityDnsToDisable:_*))).void, "disableAllHumanIdentities", samRequestContext).map { y =>
       }.recover {
         case ldape: LDAPException if ldape.getResultCode == ResultCode.NO_SUCH_ATTRIBUTE => //if the attr or member is already missing, then that's fine

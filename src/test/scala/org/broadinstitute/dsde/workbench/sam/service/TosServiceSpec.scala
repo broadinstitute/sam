@@ -11,7 +11,9 @@ import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
 import org.scalatest.flatspec.AnyFlatSpec
 
 import java.net.URI
+import scala.concurrent.Await
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.duration.Duration
 
 class TosServiceSpec extends AnyFlatSpec with TestSupport with BeforeAndAfterAll with BeforeAndAfter {
 
@@ -168,24 +170,17 @@ class TosServiceSpec extends AnyFlatSpec with TestSupport with BeforeAndAfterAll
     assert(group.isDefined, "resetTermsOfServiceGroupsIfNeeded() should create the group initially")
 
     //Create the users in the system
-    dirDAO.createUser(defaultUser, samRequestContext).unsafeRunSync()
-    dirDAO.createUser(serviceAccountUser, samRequestContext).unsafeRunSync()
-
-    //Enable in Postgres
-    dirDAO.enableIdentity(defaultUser.id, samRequestContext).unsafeRunSync()
-    dirDAO.enableIdentity(serviceAccountUser.id, samRequestContext).unsafeRunSync()
+    Await.result(userServiceTosEnabled.createUser(defaultUser, samRequestContext), Duration.Inf)
+    Await.result(userServiceTosEnabled.createUser(serviceAccountUser, samRequestContext), Duration.Inf)
 
     //As the above user, accept the ToS
     userServiceTosEnabled.acceptTermsOfService(defaultUser.id, samRequestContext).unsafeRunSync()
 
-    //SAs don't need to accept the ToS, so just enable that user directly in LDAP
-    regDAO.enableIdentity(serviceAccountUser.id, samRequestContext).unsafeRunSync()
-
-    //Check if the user has accepted ToS
+    //Check if the user has accepted ToS and is enabled in Postgres
     val isEnabledViaToS = dirDAO.isEnabled(defaultUser.id, samRequestContext).unsafeRunSync()
     assert(isEnabledViaToS, "dirDAO.isEnabled (first check) should have returned true [User]")
 
-    //Check if the SA has accepted ToS
+    //Check if the SA is enabled
     val isSAEnabledViaToS = dirDAO.isEnabled(serviceAccountUser.id, samRequestContext).unsafeRunSync()
     assert(isSAEnabledViaToS, "dirDAO.isEnabled (first check) should have returned true [SA]")
 
@@ -205,9 +200,9 @@ class TosServiceSpec extends AnyFlatSpec with TestSupport with BeforeAndAfterAll
     val isEnabledLdapV2 = regDAO.isEnabled(defaultUser.id, samRequestContext).unsafeRunSync()
     assertResult(expected = false, "regDAO.isEnabled (second check) should have returned false [User]")(actual = isEnabledLdapV2)
 
-    //Ensure that the SA is still enabled
+    //Ensure that the SA is still enabled, because we don't disable SAs when the ToS version changes
     val isSAEnabledLdapV2 = regDAO.isEnabled(serviceAccountUser.id, samRequestContext).unsafeRunSync()
-    assertResult(expected = false, "regDAO.isEnabled (second check) should have returned true [SA]")(actual = isSAEnabledLdapV2)
+    assertResult(expected = true, "regDAO.isEnabled (second check) should have returned true [SA]")(actual = isSAEnabledLdapV2)
   }
 
 }
