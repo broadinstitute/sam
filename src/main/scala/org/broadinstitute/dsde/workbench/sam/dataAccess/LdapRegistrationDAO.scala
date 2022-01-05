@@ -94,9 +94,19 @@ class LdapRegistrationDAO(
   }
 
   //To be used only in the event of the ToS version being bumped
-  override def disableAllIdentities(samRequestContext: SamRequestContext): IO[Unit] = {
-    executeLdap(IO(ldapConnectionPool.modify(directoryConfig.enabledUsersGroupDn, new Modification(ModificationType.DELETE, Attr.member))).void, "disableAllIdentities", samRequestContext).recover {
-      case ldape: LDAPException if ldape.getResultCode == ResultCode.NO_SUCH_ATTRIBUTE => //if the attr is missing, then there's already no members
+  override def disableAllHumanIdentities(samRequestContext: SamRequestContext): IO[Unit] = {
+    val humanIdentitySearchResult = executeLdap(IO(ldapConnectionPool.search(peopleOu, SearchScope.SUB, "(!(mail=*.iam.gserviceaccount.com))")), "getAllIdentitiesToDisable", samRequestContext) map { results =>
+      results.getSearchEntries.asScala.toList.map { result =>
+        unmarshalUser(result)
+      }
+    }
+
+    humanIdentitySearchResult.map { identityResults =>
+      val humanIdentitiesToDisable = identityResults.collect { case Right(user) => userDn(user.id) }
+
+      executeLdap(IO(ldapConnectionPool.modify(directoryConfig.enabledUsersGroupDn, new Modification(ModificationType.DELETE, Attr.member, humanIdentitiesToDisable:_*))).void, "disableAllHumanIdentities", samRequestContext).recover {
+        case ldape: LDAPException if ldape.getResultCode == ResultCode.NO_SUCH_ATTRIBUTE => //if the attr is somehow missing, then there's no members available to delete anyway
+      }
     }
   }
 

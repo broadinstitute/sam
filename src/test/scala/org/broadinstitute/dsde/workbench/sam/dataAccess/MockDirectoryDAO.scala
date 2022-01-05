@@ -163,7 +163,7 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     enabledUsers -= subject
   }
 
-  override def disableAllIdentities(samRequestContext: SamRequestContext): IO[Unit] = IO {
+  override def disableAllHumanIdentities(samRequestContext: SamRequestContext): IO[Unit] = IO {
     enabledUsers --= enabledUsers.keys
   }
 

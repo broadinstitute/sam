@@ -18,7 +18,7 @@ trait RegistrationDAO {
   def deleteUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit]
   def enableIdentity(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Unit]
   def disableIdentity(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Unit]
-  def disableAllIdentities(samRequestContext: SamRequestContext): IO[Unit]
+  def disableAllHumanIdentities(samRequestContext: SamRequestContext): IO[Unit]
   def isEnabled(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean]
   def createEnabledUsersGroup(samRequestContext: SamRequestContext): IO[Unit]
   def createPetServiceAccount(petServiceAccount: PetServiceAccount, samRequestContext: SamRequestContext): IO[PetServiceAccount]
