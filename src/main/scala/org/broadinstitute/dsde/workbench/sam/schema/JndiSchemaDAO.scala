@@ -47,6 +47,7 @@ object JndiSchemaDAO {
     val sn = "sn"
     val uid = "uid"
     val googleSubjectId = "googleSubjectId"
+    val azureB2CId = "azureB2CId"
     val project = "project"
     val proxyEmail = "proxyEmail"
     val authDomain = "authDomain"

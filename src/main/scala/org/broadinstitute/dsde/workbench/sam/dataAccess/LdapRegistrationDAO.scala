@@ -51,7 +51,10 @@ class LdapRegistrationDAO(
       new Attribute(Attr.cn, user.id.value),
       new Attribute(Attr.uid, user.id.value),
       new Attribute("objectclass", Seq("top", "workbenchPerson").asJava)
-    ) ++ user.googleSubjectId.map(gsid => List(new Attribute(Attr.googleSubjectId, gsid.value))).getOrElse(List.empty)
+    ) ++ List(
+      user.googleSubjectId.map(gsid => new Attribute(Attr.googleSubjectId, gsid.value)),
+      user.azureB2CId.map(b2cId => new Attribute(Attr.azureB2CId, b2cId.value))
+    ).flatten
 
     executeLdap(IO(ldapConnectionPool.add(userDn(user.id), attrs: _*)), "createUser", samRequestContext).adaptError {
       case ldape: LDAPException if ldape.getResultCode == ResultCode.ENTRY_ALREADY_EXISTS =>
