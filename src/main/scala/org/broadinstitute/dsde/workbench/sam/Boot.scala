@@ -71,15 +71,25 @@ object Boot extends IOApp with LazyLogging {
             IO(logger.error("FATAL - could not init ldap schema", t)) *> IO.raiseError(t)
         }
 
+        _ <- IO(logger.info(">> Initted schema DAO"))
+
         _ <- dependencies.samApplication.resourceService.initResourceTypes().onError {
           case t: Throwable => IO(logger.error("FATAL - failure starting http server", t)) *> IO.raiseError(t)
         }
 
+        _ <- IO(logger.info(">> Initted resource types"))
+
         _ <- dependencies.samApplication.tosService.createNewGroupIfNeeded()
+
+        _ <- IO(logger.info(">> Created new group"))
 
         _ <- dependencies.policyEvaluatorService.initPolicy()
 
+        _ <- IO(logger.info(">> Initted policy"))
+
         _ <- dependencies.cloudExtensionsInitializer.onBoot(dependencies.samApplication)
+
+        _ <- IO(logger.info(">> Initted cloud extensions"))
 
         binding <- IO.fromFuture(IO(Http().newServerAt("0.0.0.0", 8080).bind(dependencies.samRoutes.route))).onError {
           case t: Throwable => IO(logger.error("FATAL - failure starting http server", t)) *> IO.raiseError(t)
