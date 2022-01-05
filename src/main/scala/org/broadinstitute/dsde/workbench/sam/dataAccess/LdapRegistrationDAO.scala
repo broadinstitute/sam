@@ -95,18 +95,19 @@ class LdapRegistrationDAO(
 
   //To be used only in the event of the ToS version being bumped
   override def disableAllHumanIdentities(samRequestContext: SamRequestContext): IO[Unit] = {
-    val humanIdentitySearchResult = executeLdap(IO(ldapConnectionPool.search(peopleOu, SearchScope.SUB, "(!(mail=*.iam.gserviceaccount.com))")), "getAllIdentitiesToDisable", samRequestContext) map { results =>
+    //The iam.gserviceaccount.com filter is in place to ensure that only human identities are disabled. Service Accounts (both regular SAs and Pet SAs) are
+    // currently exempt for ToS-enforcement, thus, they're ignored when disabling identities
+    val humanIdentityDnsToDisableIO = (executeLdap(IO(ldapConnectionPool.search(peopleOu, SearchScope.SUB, "(!(mail=*.iam.gserviceaccount.com))")), "getAllIdentitiesToDisable", samRequestContext) map { results =>
       results.getSearchEntries.asScala.toList.map { result =>
         unmarshalUser(result)
       }
-    }
+    }).map { identityResults => identityResults.collect { case Right(user) => subjectDn(user.id) }}
 
-    humanIdentitySearchResult.map { identityResults =>
-      val humanIdentitiesToDisable = identityResults.collect { case Right(user) => userDn(user.id) }
-
-      executeLdap(IO(ldapConnectionPool.modify(directoryConfig.enabledUsersGroupDn, new Modification(ModificationType.DELETE, Attr.member, humanIdentitiesToDisable:_*))).void, "disableAllHumanIdentities", samRequestContext).recover {
-        case ldape: LDAPException if ldape.getResultCode == ResultCode.NO_SUCH_ATTRIBUTE => //if the attr is somehow missing, then there's no members available to delete anyway
-      }
+    humanIdentityDnsToDisableIO.map { humanIdentityDnsToDisable =>
+      executeLdap(IO(ldapConnectionPool.modify(directoryConfig.enabledUsersGroupDn, new Modification(ModificationType.DELETE, Attr.member, humanIdentityDnsToDisable:_*))).void, "disableAllHumanIdentities", samRequestContext).map { y =>
+      }.recover {
+        case ldape: LDAPException if ldape.getResultCode == ResultCode.NO_SUCH_ATTRIBUTE => //if the attr or member is already missing, then that's fine
+      }.unsafeRunSync()
     }
   }
 
