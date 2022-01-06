@@ -24,7 +24,7 @@ import scala.util.matching.Regex
 class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExtensions, val registrationDAO: RegistrationDAO, blockedEmailDomains: Seq[String], tosService: TosService)(implicit val executionContext: ExecutionContext, contextShift: ContextShift[IO]) extends LazyLogging {
 
   def createUser(user: WorkbenchUser, samRequestContext: SamRequestContext): Future[UserStatus] = {
-    println(user)
+    println(s"REGISTERING_DEBUG: " + user)
     for {
       _ <- UserService.validateEmailAddress(user.email, blockedEmailDomains).unsafeToFuture()
       allUsersGroup <- cloudExtensions.getOrCreateAllUsersGroup(directoryDAO, samRequestContext)
