@@ -106,9 +106,9 @@ class LdapRegistrationDAO(
     val enabledIdentityDnsIO = executeLdap(IO(getAttributes(ldapConnectionPool.getEntry(directoryConfig.enabledUsersGroupDn, Attr.member), Attr.member)), "getAllIdentitiesEnabled", samRequestContext).map(_.toList)
 
     for {
-      humanIdentityDns <- humanIdentityDnsIO
-      enabledIdentityDns <- enabledIdentityDnsIO
-      humanIdentityDnsToDisable = humanIdentityDns intersect enabledIdentityDns
+      humanIdentityDns <- humanIdentityDnsIO //this retrieves all humans registered in the system (looking under the peopleOu)
+      enabledIdentityDns <- enabledIdentityDnsIO //this retrieves all enabled identities in the system (looking in enabledUsersGroupDn)
+      humanIdentityDnsToDisable = humanIdentityDns intersect enabledIdentityDns //intersecting them gives the list of all human identities who are enabled (AKA filtering out humans who are disabled in the system)
       result <- executeLdap(IO(ldapConnectionPool.modify(directoryConfig.enabledUsersGroupDn, new Modification(ModificationType.DELETE, Attr.member, humanIdentityDnsToDisable:_*))).void, "disableAllHumanIdentities", samRequestContext).recover {
         case ldape: LDAPException if ldape.getResultCode == ResultCode.NO_SUCH_ATTRIBUTE => //if the attr or member is already missing, then that's fine
       }
