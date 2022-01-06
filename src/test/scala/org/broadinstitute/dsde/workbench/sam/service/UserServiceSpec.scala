@@ -323,6 +323,21 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
 
   }
 
+  it should "immediately enable an SA when registering, without accepting the ToS" in {
+    val serviceAccountUserId = genWorkbenchUserId(System.currentTimeMillis())
+    val serviceAccountUserSubjectId = GoogleSubjectId(serviceAccountUserId.value)
+    val serviceAccountUserEmail = WorkbenchEmail("fake@fake.iam.gserviceaccount.com")
+    val serviceAccountUser = WorkbenchUser(serviceAccountUserId, Option(serviceAccountUserSubjectId), serviceAccountUserEmail, None)
+
+    //Ensure that the enabled-users group exists in LDAP
+    registrationDAO.createEnabledUsersGroup(samRequestContext).unsafeRunSync()
+
+    tosServiceEnabled.resetTermsOfServiceGroupsIfNeeded().unsafeRunSync()
+
+    val newSA = serviceTosEnabled.createUser(serviceAccountUser, samRequestContext).futureValue
+    newSA shouldBe UserStatus(UserStatusDetails(serviceAccountUserId, serviceAccountUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> false, "adminEnabled" -> true))
+  }
+
   it should "generate unique identifier properly" in {
     val current = 1534253386722L
     val res = genWorkbenchUserId(current).value
