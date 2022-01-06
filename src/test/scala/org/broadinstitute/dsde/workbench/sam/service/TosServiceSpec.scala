@@ -30,7 +30,7 @@ class TosServiceSpec extends AnyFlatSpec with TestSupport with BeforeAndAfterAll
   val defaultUserEmail = WorkbenchEmail("fake@tosServiceSpec.com")
   val defaultUser = WorkbenchUser(defaultUserId, Option(defaultGoogleSubjectId), defaultUserEmail, None)
 
-  val serviceAccountUserId = genWorkbenchUserId(System.currentTimeMillis() + 1) //there's a tendency on CircleCI for this to happen in the same millisecond as the other user above, causing duplicate errors
+  val serviceAccountUserId = genWorkbenchUserId(System.currentTimeMillis() + 1234) //there's a tendency on CircleCI for this to happen in the same millisecond as the other user above, causing duplicate errors
   val serviceAccountUserSubjectId = GoogleSubjectId(serviceAccountUserId.value)
   val serviceAccountUserEmail = WorkbenchEmail("fake@fake.iam.gserviceaccount.com")
   val serviceAccountUser = WorkbenchUser(serviceAccountUserId, Option(serviceAccountUserSubjectId), serviceAccountUserEmail, None)
