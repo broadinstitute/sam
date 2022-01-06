@@ -166,6 +166,10 @@ class TosServiceSpec extends AnyFlatSpec with TestSupport with BeforeAndAfterAll
     val group = tosServiceEnabled.resetTermsOfServiceGroupsIfNeeded().unsafeRunSync()
     assert(group.isDefined, "resetTermsOfServiceGroupsIfNeeded() should create the group initially")
 
+    println("DEBUGMESSAGEHERE:")
+    println(defaultUser)
+    println(serviceAccountUser)
+
     //Create the users in the system
     Await.result(userServiceTosEnabled.createUser(defaultUser, samRequestContext), Duration.Inf)
     Await.result(userServiceTosEnabled.createUser(serviceAccountUser, samRequestContext), Duration.Inf)
