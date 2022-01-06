@@ -97,19 +97,22 @@ class LdapRegistrationDAO(
   override def disableAllHumanIdentities(samRequestContext: SamRequestContext): IO[Unit] = {
     //The iam.gserviceaccount.com filter is in place to ensure that only human identities are disabled. Service Accounts (both regular SAs and Pet SAs) are
     // currently exempt for ToS-enforcement, thus, they're ignored when disabling identities
-    val humanIdentityDnsToDisableIO = (executeLdap(IO(ldapConnectionPool.search(peopleOu, SearchScope.SUB, "(!(mail=*.iam.gserviceaccount.com))")), "getAllIdentitiesToDisable", samRequestContext) map { results =>
+    val humanIdentityDnsIO = (executeLdap(IO(ldapConnectionPool.search(peopleOu, SearchScope.SUB, "(!(mail=*.iam.gserviceaccount.com))")), "getAllIdentitiesToDisable", samRequestContext) map { results =>
       results.getSearchEntries.asScala.toList.map { result =>
         unmarshalUser(result)
       }
     }).map { identityResults => identityResults.collect { case Right(user) => subjectDn(user.id) }}
 
-    humanIdentityDnsToDisableIO.map { humanIdentityDnsToDisable =>
-      println(humanIdentityDnsToDisable)
-      executeLdap(IO(ldapConnectionPool.modify(directoryConfig.enabledUsersGroupDn, new Modification(ModificationType.DELETE, Attr.member, humanIdentityDnsToDisable:_*))).void, "disableAllHumanIdentities", samRequestContext).map { y =>
-      }.recover {
+    val enabledIdentityDnsIO = executeLdap(IO(getAttributes(ldapConnectionPool.getEntry(directoryConfig.enabledUsersGroupDn, Attr.member), Attr.member)), "getAllIdentitiesEnabled", samRequestContext).map(_.toList)
+
+    for {
+      humanIdentityDns <- humanIdentityDnsIO
+      enabledIdentityDns <- enabledIdentityDnsIO
+      humanIdentityDnsToDisable = humanIdentityDns intersect enabledIdentityDns
+      result <- executeLdap(IO(ldapConnectionPool.modify(directoryConfig.enabledUsersGroupDn, new Modification(ModificationType.DELETE, Attr.member, humanIdentityDnsToDisable:_*))).void, "disableAllHumanIdentities", samRequestContext).recover {
         case ldape: LDAPException if ldape.getResultCode == ResultCode.NO_SUCH_ATTRIBUTE => //if the attr or member is already missing, then that's fine
-      }.unsafeRunSync()
-    }
+      }
+    } yield result
   }
 
   override def isEnabled(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean] =

@@ -96,10 +96,7 @@ class TosServiceSpec extends AnyFlatSpec with TestSupport with BeforeAndAfterAll
     assert(group.isDefined, "resetTermsOfServiceGroupsIfNeeded() should create the group initially")
 
     //Create the user in the system
-    dirDAO.createUser(defaultUser, samRequestContext).unsafeRunSync()
-
-    //Enable in Postgres
-    dirDAO.enableIdentity(defaultUser.id, samRequestContext).unsafeRunSync()
+    Await.result(userServiceTosEnabled.createUser(defaultUser, samRequestContext), Duration.Inf)
 
     //As the above user, accept the ToS
     userServiceTosEnabled.acceptTermsOfService(defaultUser.id, samRequestContext).unsafeRunSync()
