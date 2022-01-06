@@ -1,5 +1,6 @@
 package org.broadinstitute.dsde.workbench.sam.service
 
+import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import cats.effect.IO
 import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import org.broadinstitute.dsde.workbench.model._
@@ -24,6 +25,9 @@ class TosServiceSpec extends AnyFlatSpec with TestSupport with BeforeAndAfterAll
   lazy val dirDAO: DirectoryDAO = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.dbRef)
   val regDAO = new LdapRegistrationDAO(connectionPool, directoryConfig, global)
   lazy val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
+
+  private[service] val dummyUserInfo =
+    UserInfo(OAuth2BearerToken("token"), WorkbenchUserId("userid"), WorkbenchEmail("user@company.com"), 0)
 
   val defaultUserId = genWorkbenchUserId(System.currentTimeMillis())
   val defaultGoogleSubjectId = GoogleSubjectId(defaultUserId.value)
@@ -123,6 +127,9 @@ class TosServiceSpec extends AnyFlatSpec with TestSupport with BeforeAndAfterAll
     //Ensure that the user is now disabled, because they haven't accepted the new ToS version
     val isEnabledLdapV2PostAccept = regDAO.isEnabled(defaultUser.id, samRequestContext).unsafeRunSync()
     assertResult(expected = true, "regDAO.isEnabled (second check) should have returned false")(actual = isEnabledLdapV2PostAccept)
+
+    //Delete the user from the system
+    Await.result(userServiceTosEnabled.deleteUser(defaultUser.id, dummyUserInfo, samRequestContext), Duration.Inf)
   }
 
   it should "not empty the enabledUsers group in OpenDJ when the ToS version remains the same" in {
@@ -166,10 +173,6 @@ class TosServiceSpec extends AnyFlatSpec with TestSupport with BeforeAndAfterAll
     val group = tosServiceEnabled.resetTermsOfServiceGroupsIfNeeded().unsafeRunSync()
     assert(group.isDefined, "resetTermsOfServiceGroupsIfNeeded() should create the group initially")
 
-    println("DEBUGMESSAGEHERE:")
-    println(defaultUser)
-    println(serviceAccountUser)
-
     //Create the users in the system
     Await.result(userServiceTosEnabled.createUser(defaultUser, samRequestContext), Duration.Inf)
     Await.result(userServiceTosEnabled.createUser(serviceAccountUser, samRequestContext), Duration.Inf)
@@ -204,6 +207,12 @@ class TosServiceSpec extends AnyFlatSpec with TestSupport with BeforeAndAfterAll
     //Ensure that the SA is still enabled, because we don't disable SAs when the ToS version changes
     val isSAEnabledLdapV2 = regDAO.isEnabled(serviceAccountUser.id, samRequestContext).unsafeRunSync()
     assertResult(expected = true, "regDAO.isEnabled (second check) should have returned true [SA]")(actual = isSAEnabledLdapV2)
+
+    //Delete the user from the system
+    Await.result(userServiceTosEnabled.deleteUser(defaultUser.id, dummyUserInfo, samRequestContext), Duration.Inf)
+
+    //Delete the SA from the system
+    Await.result(userServiceTosEnabled.deleteUser(serviceAccountUser.id, dummyUserInfo, samRequestContext), Duration.Inf)
   }
 
 }
