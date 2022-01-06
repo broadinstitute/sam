@@ -9,7 +9,7 @@ import org.broadinstitute.dsde.workbench.sam.service.CloudExtensions
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.api.RejectionHandlers.{MethodDisabled, termsOfServiceRejectionHandler}
 import org.broadinstitute.dsde.workbench.sam.config.TermsOfServiceConfig
-import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, RegistrationDAO}
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.TermsOfServiceAcceptance
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
@@ -20,6 +20,7 @@ import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
   */
 trait UserInfoDirectives {
   val directoryDAO: DirectoryDAO
+  val registrationDAO: RegistrationDAO
   val cloudExtensions: CloudExtensions
   val termsOfServiceConfig: TermsOfServiceConfig
 

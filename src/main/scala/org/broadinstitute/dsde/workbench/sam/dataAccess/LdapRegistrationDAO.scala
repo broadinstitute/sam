@@ -176,4 +176,8 @@ class LdapRegistrationDAO(
     }
     ldapIsHealthy
   }
+
+  override def setUserAzureB2CId(userId: WorkbenchUserId, b2CId: AzureB2CId, samRequestContext: SamRequestContext): IO[Unit] =
+    executeLdap(IO(ldapConnectionPool.modify(userDn(userId), new Modification(ModificationType.ADD, Attr.azureB2CId, b2CId.value))), "setUserAzureB2CId", samRequestContext)
+
 }

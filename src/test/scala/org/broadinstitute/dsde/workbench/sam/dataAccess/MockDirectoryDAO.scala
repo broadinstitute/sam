@@ -288,14 +288,12 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
   override def loadUserByAzureB2CId(userId: AzureB2CId, samRequestContext: SamRequestContext)
       : IO[Option[WorkbenchUser]] = IO.pure(users.values.find(_.azureB2CId.contains(userId)))
 
-  override def setUserAzureB2CId(userId: WorkbenchUserId, b2CId: AzureB2CId, samRequestContext: SamRequestContext): IO[Int] = IO {
-    val result = for {
+  override def setUserAzureB2CId(userId: WorkbenchUserId, b2CId: AzureB2CId, samRequestContext: SamRequestContext): IO[Unit] = IO {
+    for {
       user <- users.get(userId)
     } yield {
       users += user.id -> user.copy(azureB2CId = Option(b2CId))
-      1
     }
-    result.getOrElse(0)
   }
 
   override def checkStatus(samRequestContext: SamRequestContext): Boolean = true
