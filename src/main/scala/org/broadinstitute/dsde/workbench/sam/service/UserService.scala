@@ -217,17 +217,26 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
   private def enableUserInternal(user: WorkbenchUser, samRequestContext: SamRequestContext): Future[Unit] = {
     for {
       _ <- directoryDAO.enableIdentity(user.id, samRequestContext).unsafeToFuture()
-      _ <- enableIdentityIfTosAccepted(user.id, samRequestContext).unsafeToFuture()
+      _ <- enableIdentityIfTosAccepted(user, samRequestContext).unsafeToFuture()
       _ <- cloudExtensions.onUserEnable(user, samRequestContext)
     } yield ()
   }
 
-  private def enableIdentityIfTosAccepted(userId: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Unit] = {
-    tosService.getTosStatus(userId)
+  val serviceAccountDomain = "\\S+@\\S+\\.iam\\.gserviceaccount\\.com".r
+
+  private def isServiceAccount(email: String) = {
+    serviceAccountDomain.pattern.matcher(email).matches
+  }
+
+  private def enableIdentityIfTosAccepted(user: WorkbenchUser, samRequestContext: SamRequestContext): IO[Unit] = {
+    tosService.getTosStatus(user.id)
       .flatMap {
         // If the user has accepted TOS or TOS is disabled, then enable the user in LDAP
-        case Some(true) | None => registrationDAO.enableIdentity(userId, samRequestContext)
-        case _ =>  IO.unit
+        // If the user is an SA, it's also acceptable to enable them in LDAP
+        case Some(true) | None => registrationDAO.enableIdentity(user.id, samRequestContext)
+        case _ =>
+          if(isServiceAccount(user.email.value)) registrationDAO.enableIdentity(user.id, samRequestContext)
+          else IO.unit
       }
   }
 

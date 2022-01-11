@@ -3,30 +3,30 @@ package org.broadinstitute.dsde.workbench.sam.service
 import akka.http.scaladsl.model.StatusCodes
 import cats.effect.IO
 import com.typesafe.scalalogging.LazyLogging
-
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchEmail, WorkbenchExceptionWithErrorReport, WorkbenchGroupName, WorkbenchSubject}
-import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, RegistrationDAO}
 import org.broadinstitute.dsde.workbench.sam.errorReportSource
 import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.sam.config.TermsOfServiceConfig
 
 import scala.concurrent.ExecutionContext
-
 import java.io.{FileNotFoundException, IOException}
 import scala.io.Source
 
 
-class TosService (val directoryDao: DirectoryDAO, val appsDomain: String, val tosConfig: TermsOfServiceConfig)(implicit val executionContext: ExecutionContext) extends LazyLogging {
+class TosService (val directoryDao: DirectoryDAO, val registrationDao: RegistrationDAO, val appsDomain: String, val tosConfig: TermsOfServiceConfig)(implicit val executionContext: ExecutionContext) extends LazyLogging {
   val termsOfServiceFile = "termsOfService.md"
 
-  def createNewGroupIfNeeded(): IO[Option[BasicWorkbenchGroup]] = {
+  def resetTermsOfServiceGroupsIfNeeded(): IO[Option[BasicWorkbenchGroup]] = {
     if(tosConfig.enabled) {
       getTosGroup().flatMap {
         case None =>
           logger.info(s"creating new ToS group ${getGroupName()}")
-          directoryDao.createGroup(BasicWorkbenchGroup(WorkbenchGroupName(getGroupName()),
-            Set.empty, WorkbenchEmail(s"GROUP_${getGroupName()}@${appsDomain}")), samRequestContext = SamRequestContext(None)).map(Option(_))
+          val groupEmail = WorkbenchEmail(s"GROUP_${getGroupName(tosConfig.version)}@$appsDomain")
+          directoryDao.createGroup(BasicWorkbenchGroup(WorkbenchGroupName(getGroupName(tosConfig.version)), Set.empty, groupEmail), None, SamRequestContext(None)).flatMap { createdGroup =>
+            registrationDao.disableAllHumanIdentities(SamRequestContext(None)).map { _ => Option(createdGroup)}
+          }
         case group => IO.pure(group)
       }
     } else IO.none
@@ -42,7 +42,7 @@ class TosService (val directoryDao: DirectoryDAO, val appsDomain: String, val to
 
   def acceptTosStatus(user: WorkbenchSubject): IO[Option[Boolean]] =
     if (tosConfig.enabled) {
-      createNewGroupIfNeeded().flatMap {
+      resetTermsOfServiceGroupsIfNeeded().flatMap {
         case Some(group) => directoryDao.addGroupMember(group.id, user, SamRequestContext(None)).map(Option(_))
         case None => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Terms of Service group ${getGroupName()} failed to create.")))
       }

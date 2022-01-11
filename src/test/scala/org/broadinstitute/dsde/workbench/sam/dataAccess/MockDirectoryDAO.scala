@@ -46,6 +46,8 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
       IO.pure(group)
     }
 
+  override def createEnabledUsersGroup(samRequestContext: SamRequestContext): IO[Unit] = IO.unit
+
   override def loadGroup(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Option[BasicWorkbenchGroup]] = IO {
     groups.get(groupName).map(_.asInstanceOf[BasicWorkbenchGroup])
   }
@@ -159,6 +161,10 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
 
   override def disableIdentity(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Unit] = IO {
     enabledUsers -= subject
+  }
+
+  override def disableAllHumanIdentities(samRequestContext: SamRequestContext): IO[Unit] = IO {
+    enabledUsers --= enabledUsers.keys
   }
 
   override def isEnabled(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean] = IO {

@@ -88,8 +88,8 @@ object TestSamRoutes {
     val emailDomain = "example.com"
     val policyEvaluatorService = PolicyEvaluatorService(emailDomain, resourceTypesWithAdmin, policyDAO, directoryDAO)
     val mockResourceService = new ResourceService(resourceTypesWithAdmin, policyEvaluatorService, policyDAO, directoryDAO, NoExtensions, emailDomain)
-    val mockUserService = new UserService(directoryDAO, NoExtensions, registrationDAO, Seq.empty, new TosService(directoryDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig))
-    val mockTosService = new TosService(directoryDAO, emailDomain, TestSupport.tosConfig)
+    val mockUserService = new UserService(directoryDAO, NoExtensions, registrationDAO, Seq.empty, new TosService(directoryDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig))
+    val mockTosService = new TosService(directoryDAO,registrationDAO, emailDomain, TestSupport.tosConfig)
     val mockManagedGroupService = new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypesWithAdmin, policyDAO, directoryDAO, NoExtensions, emailDomain)
     TestSupport.runAndWait(mockUserService.createUser(WorkbenchUser(userInfo.userId, defaultGoogleSubjectId, userInfo.userEmail, None), samRequestContext))
     val allUsersGroup = TestSupport.runAndWait(NoExtensions.getOrCreateAllUsersGroup(directoryDAO, samRequestContext))

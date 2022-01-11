@@ -96,6 +96,28 @@ class LdapRegistrationDAO(
     }
   }
 
+  //To be used only in the event of the ToS version being bumped
+  override def disableAllHumanIdentities(samRequestContext: SamRequestContext): IO[Unit] = {
+    //The iam.gserviceaccount.com filter is in place to ensure that only human identities are disabled. Service Accounts (both regular SAs and Pet SAs) are
+    // currently exempt for ToS-enforcement, thus, they're ignored when disabling identities
+    val humanIdentityDnsIO = (executeLdap(IO(ldapConnectionPool.search(peopleOu, SearchScope.SUB, "(!(mail=*.iam.gserviceaccount.com))")), "getAllIdentitiesToDisable", samRequestContext) map { results =>
+      results.getSearchEntries.asScala.toList.map { result =>
+        unmarshalUser(result)
+      }
+    }).map { identityResults => identityResults.collect { case Right(user) => subjectDn(user.id) }}
+
+    val enabledIdentityDnsIO = executeLdap(IO(getAttributes(ldapConnectionPool.getEntry(directoryConfig.enabledUsersGroupDn, Attr.member), Attr.member)), "getAllIdentitiesEnabled", samRequestContext).map(_.toList)
+
+    for {
+      humanIdentityDns <- humanIdentityDnsIO //this retrieves all humans registered in the system (looking under the peopleOu)
+      enabledIdentityDns <- enabledIdentityDnsIO //this retrieves all enabled identities in the system (looking in enabledUsersGroupDn)
+      humanIdentityDnsToDisable = humanIdentityDns intersect enabledIdentityDns //intersecting them gives the list of all human identities who are enabled (AKA filtering out humans who are disabled in the system)
+      result <- executeLdap(IO(ldapConnectionPool.modify(directoryConfig.enabledUsersGroupDn, new Modification(ModificationType.DELETE, Attr.member, humanIdentityDnsToDisable:_*))).void, "disableAllHumanIdentities", samRequestContext).recover {
+        case ldape: LDAPException if ldape.getResultCode == ResultCode.NO_SUCH_ATTRIBUTE => //if the attr or member is already missing, then that's fine
+      }
+    } yield result
+  }
+
   override def isEnabled(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean] =
     for {
       entry <- executeLdap(IO(ldapConnectionPool.getEntry(directoryConfig.enabledUsersGroupDn, Attr.member)), "isEnabled", samRequestContext)
@@ -106,6 +128,17 @@ class LdapRegistrationDAO(
       } yield members.contains(subjectDn(subject))
       result.getOrElse(false)
     }
+
+  override def createEnabledUsersGroup(samRequestContext: SamRequestContext): IO[Unit] = {
+    val objectClassAttr = new Attribute("objectclass", Seq("top", "groupofnames").asJava)
+
+    executeLdap(IO(ldapConnectionPool.add(directoryConfig.enabledUsersGroupDn, Seq(objectClassAttr).asJava)), "createEnabledUsersGroup", samRequestContext)
+      .handleErrorWith {
+        case ldape: LDAPException if ldape.getResultCode == ResultCode.ENTRY_ALREADY_EXISTS =>
+          IO.unit
+      }
+      .map(_ => ())
+  }
 
   override def createPetServiceAccount(petServiceAccount: PetServiceAccount, samRequestContext: SamRequestContext): IO[PetServiceAccount] = {
     val attributes = createPetServiceAccountAttributes(petServiceAccount) ++

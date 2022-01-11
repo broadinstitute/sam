@@ -79,10 +79,10 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     when(googleExtensions.onUserEnable(any[WorkbenchUser], any[SamRequestContext])).thenReturn(Future.successful(()))
     when(googleExtensions.onGroupUpdate(any[Seq[WorkbenchGroupIdentity]], any[SamRequestContext])).thenReturn(Future.successful(()))
 
-    tos = new TosService(dirDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)
+    tos = new TosService(dirDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)
     service = new UserService(dirDAO, googleExtensions, registrationDAO, Seq(blockedDomain), tos)
 
-    tosServiceEnabled = new TosService(dirDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig.copy(enabled = true))
+    tosServiceEnabled = new TosService(dirDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig.copy(enabled = true))
     serviceTosEnabled = new UserService(dirDAO, googleExtensions, registrationDAO, Seq(blockedDomain), tosServiceEnabled)
   }
 
@@ -116,8 +116,11 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     }.errorReport.statusCode shouldBe Some(StatusCodes.BadRequest)
   }
 
-  it should "create add a user to ToS group" in {
-    tosServiceEnabled.createNewGroupIfNeeded().unsafeRunSync()
+  it should "create and add a user to ToS group" in {
+    //Ensure that the enabled-users group exists in LDAP
+    registrationDAO.createEnabledUsersGroup(samRequestContext).unsafeRunSync()
+
+    tosServiceEnabled.resetTermsOfServiceGroupsIfNeeded().unsafeRunSync()
     serviceTosEnabled.createUser(defaultUser, samRequestContext).futureValue
     val userGroups = dirDAO.listUsersGroups(defaultUserId, samRequestContext).unsafeRunSync()
     userGroups shouldNot contain (WorkbenchGroupName(tos.getGroupName(TestSupport.tosConfig.version)))
@@ -200,6 +203,9 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
   }
 
   it should "enable a user in LDAP if they accept the latest Terms of Service" in {
+    //Ensure that the enabled-users group exists in LDAP
+    registrationDAO.createEnabledUsersGroup(samRequestContext).unsafeRunSync()
+
     createNewEnabledUser()
     updateTosVersionThenEnableUser(userAcceptsNewTos = true)
 
@@ -208,6 +214,9 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
   }
 
   it should "not enable a user in LDAP when they don't accept the latest Terms of Service" in {
+    //Ensure that the enabled-users group exists in LDAP
+    registrationDAO.createEnabledUsersGroup(samRequestContext).unsafeRunSync()
+
     createNewEnabledUser()
     updateTosVersionThenEnableUser()
 
@@ -216,6 +225,9 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
   }
 
   it should "enable a user in LDAP when TOS is disabled" in {
+    //Ensure that the enabled-users group exists in LDAP
+    registrationDAO.createEnabledUsersGroup(samRequestContext).unsafeRunSync()
+
     createNewEnabledUser()
     updateTosVersionThenEnableUser(tosEnabled = false)
 
@@ -225,7 +237,7 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
 
   private def createNewEnabledUser(): Unit = {
     // create a user
-    tosServiceEnabled.createNewGroupIfNeeded().unsafeRunSync()
+    tosServiceEnabled.resetTermsOfServiceGroupsIfNeeded().unsafeRunSync()
     val newUser = serviceTosEnabled.createUser(defaultUser, samRequestContext).futureValue
     newUser shouldBe UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> false, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> false, "adminEnabled" -> true))
     serviceTosEnabled.acceptTermsOfService(defaultUserId, samRequestContext).unsafeToFuture().futureValue
@@ -238,9 +250,9 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
   private def updateTosVersionThenEnableUser(tosEnabled: Boolean = true, userAcceptsNewTos: Boolean = false): Unit = {
     // update the terms of service version
     val newTosConfig = tosConfig.copy(enabled = tosEnabled, version = tosConfig.version + 1)
-    val newTos = new TosService(dirDAO, googleServicesConfig.appsDomain, newTosConfig)
+    val newTos = new TosService(dirDAO, registrationDAO, googleServicesConfig.appsDomain, newTosConfig)
     val userServiceWithNewTos =  new UserService(dirDAO, googleExtensions, registrationDAO, Seq(blockedDomain), newTos)
-    newTos.createNewGroupIfNeeded().unsafeRunSync()
+    newTos.resetTermsOfServiceGroupsIfNeeded().unsafeRunSync()
 
     if (userAcceptsNewTos) {
       userServiceWithNewTos.acceptTermsOfService(defaultUserId, samRequestContext).unsafeToFuture().futureValue
@@ -273,7 +285,10 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
   }
 
   it should "accept the tos" in {
-    tosServiceEnabled.createNewGroupIfNeeded().unsafeRunSync()
+    //Ensure that the enabled-users group exists in LDAP
+    registrationDAO.createEnabledUsersGroup(samRequestContext).unsafeRunSync()
+
+    tosServiceEnabled.resetTermsOfServiceGroupsIfNeeded().unsafeRunSync()
 
     // create a user
     val newUser = serviceTosEnabled.createUser(defaultUser, samRequestContext).futureValue
@@ -286,7 +301,10 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
   }
 
   it should "not accept the tos for users who do not exist" in {
-    tosServiceEnabled.createNewGroupIfNeeded().unsafeRunSync()
+    //Ensure that the enabled-users group exists in LDAP
+    registrationDAO.createEnabledUsersGroup(samRequestContext).unsafeRunSync()
+
+    tosServiceEnabled.resetTermsOfServiceGroupsIfNeeded().unsafeRunSync()
     val res = intercept[WorkbenchExceptionWithErrorReport] {
       serviceTosEnabled.acceptTermsOfService(genWorkbenchUserId(System.currentTimeMillis()), samRequestContext).unsafeRunSync()
     }
@@ -303,6 +321,21 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     val status = service.getUserStatus(defaultUserId, samRequestContext = samRequestContext).futureValue
     status shouldBe Some(UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true)))
 
+  }
+
+  it should "immediately enable an SA when registering, without accepting the ToS" in {
+    val serviceAccountUserId = genWorkbenchUserId(System.currentTimeMillis())
+    val serviceAccountUserSubjectId = GoogleSubjectId(serviceAccountUserId.value)
+    val serviceAccountUserEmail = WorkbenchEmail("fake@fake.iam.gserviceaccount.com")
+    val serviceAccountUser = WorkbenchUser(serviceAccountUserId, Option(serviceAccountUserSubjectId), serviceAccountUserEmail, None)
+
+    //Ensure that the enabled-users group exists in LDAP
+    registrationDAO.createEnabledUsersGroup(samRequestContext).unsafeRunSync()
+
+    tosServiceEnabled.resetTermsOfServiceGroupsIfNeeded().unsafeRunSync()
+
+    val newSA = serviceTosEnabled.createUser(serviceAccountUser, samRequestContext).futureValue
+    newSA shouldBe UserStatus(UserStatusDetails(serviceAccountUserId, serviceAccountUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> false, "adminEnabled" -> true))
   }
 
   it should "generate unique identifier properly" in {
