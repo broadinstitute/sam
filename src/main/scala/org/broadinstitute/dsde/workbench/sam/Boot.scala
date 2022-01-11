@@ -75,7 +75,7 @@ object Boot extends IOApp with LazyLogging {
           case t: Throwable => IO(logger.error("FATAL - failure starting http server", t)) *> IO.raiseError(t)
         }
 
-        _ <- dependencies.samApplication.tosService.createNewGroupIfNeeded()
+        _ <- dependencies.samApplication.tosService.resetTermsOfServiceGroupsIfNeeded()
 
         _ <- dependencies.policyEvaluatorService.initPolicy()
 
@@ -307,7 +307,7 @@ object Boot extends IOApp with LazyLogging {
     val resourceTypeMap = config.resourceTypes.map(rt => rt.name -> rt).toMap
     val policyEvaluatorService = PolicyEvaluatorService(config.emailDomain, resourceTypeMap, accessPolicyDAO, directoryDAO)
     val resourceService = new ResourceService(resourceTypeMap, policyEvaluatorService, accessPolicyDAO, directoryDAO, cloudExtensionsInitializer.cloudExtensions, config.emailDomain)
-    val tosService = new TosService(directoryDAO, config.googleConfig.get.googleServicesConfig.appsDomain, config.termsOfServiceConfig)
+    val tosService = new TosService(directoryDAO, registrationDAO, config.googleConfig.get.googleServicesConfig.appsDomain, config.termsOfServiceConfig)
     val userService = new UserService(directoryDAO, cloudExtensionsInitializer.cloudExtensions, registrationDAO, config.blockedEmailDomains, tosService)
     val statusService = new StatusService(directoryDAO, registrationDAO, cloudExtensionsInitializer.cloudExtensions, DbReference(DatabaseNames.Read, implicitly), 10 seconds)
     val managedGroupService =
