@@ -2,7 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.dataAccess
 import akka.http.scaladsl.model.StatusCodes
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.google.errorReportSource
-import org.broadinstitute.dsde.workbench.model.{ErrorReport, GoogleSubjectId, PetServiceAccount, PetServiceAccountId, WorkbenchEmail, WorkbenchExceptionWithErrorReport, WorkbenchSubject, WorkbenchUser, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.model.{AzureB2CId, ErrorReport, GoogleSubjectId, PetServiceAccount, PetServiceAccountId, WorkbenchEmail, WorkbenchExceptionWithErrorReport, WorkbenchSubject, WorkbenchUser, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.ConnectionType.ConnectionType
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
@@ -80,4 +80,12 @@ class MockRegistrationDAO extends RegistrationDAO {
   }
 
   override def checkStatus(samRequestContext: SamRequestContext): Boolean = true
+
+  override def setUserAzureB2CId(userId: WorkbenchUserId, b2CId: AzureB2CId, samRequestContext: SamRequestContext): IO[Unit] = IO {
+    for {
+      user <- users.get(userId)
+    } yield {
+      users += user.id -> user.copy(azureB2CId = Option(b2CId))
+    }
+  }
 }
