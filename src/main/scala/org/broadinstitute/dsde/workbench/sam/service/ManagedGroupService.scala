@@ -230,7 +230,7 @@ object ManagedGroupService {
       case `adminNotifierValue` => ManagedGroupService.adminNotifierPolicyName
       case _ =>
         throw new WorkbenchExceptionWithErrorReport(
-          ErrorReport(StatusCodes.NotFound, "Policy name for managed groups must be one of: [\"admins\", \"members\"]"))
+          ErrorReport(StatusCodes.NotFound, "Policy name for managed groups must be one of: [\"admin\", \"member\"]"))
     }
 
   def getRoleName(roleName: String): MangedGroupRoleName =
