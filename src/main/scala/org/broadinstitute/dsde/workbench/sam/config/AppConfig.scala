@@ -136,6 +136,7 @@ object AppConfig {
   implicit val termsOfServiceConfigReader: ValueReader[TermsOfServiceConfig] = ValueReader.relative { config =>
     TermsOfServiceConfig(
       config.getBoolean("enabled"),
+      config.getBoolean("enforced"),
       config.getInt("version"),
       config.getString("url")
     )

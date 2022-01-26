@@ -3,8 +3,8 @@ package org.broadinstitute.dsde.workbench.sam.service
 import akka.http.scaladsl.model.StatusCodes
 import cats.effect.IO
 import com.typesafe.scalalogging.LazyLogging
-import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchEmail, WorkbenchExceptionWithErrorReport, WorkbenchGroupName, WorkbenchSubject}
-import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, RegistrationDAO}
+import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchEmail, WorkbenchException, WorkbenchExceptionWithErrorReport, WorkbenchGroupName, WorkbenchSubject}
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, DirectorySubjectNameSupport, RegistrationDAO}
 import org.broadinstitute.dsde.workbench.sam.errorReportSource
 import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
@@ -15,22 +15,119 @@ import java.io.{FileNotFoundException, IOException}
 import scala.io.Source
 
 
-class TosService (val directoryDao: DirectoryDAO, val registrationDao: RegistrationDAO, val appsDomain: String, val tosConfig: TermsOfServiceConfig)(implicit val executionContext: ExecutionContext) extends LazyLogging {
+class TosService (val directoryDao: DirectoryDAO, val registrationDao: RegistrationDAO, val appsDomain: String, val tosConfig: TermsOfServiceConfig)(implicit val executionContext: ExecutionContext) extends LazyLogging with DirectorySubjectNameSupport {
   val termsOfServiceFile = "termsOfService.md"
 
+  private def createTosGroupIfNeeded: IO[Option[BasicWorkbenchGroup]] = {
+    val currentGroupEmail = WorkbenchEmail(s"GROUP_${getGroupName(tosConfig.version)}@$appsDomain")
+    getTosGroup() flatMap {
+      case Some(group) => IO.none
+      case None => directoryDao.createGroup(BasicWorkbenchGroup(WorkbenchGroupName(getGroupName(tosConfig.version)), Set.empty, currentGroupEmail), None, SamRequestContext(None)).map { Option(_) }
+    }
+  }
+
+  private def disableAllHumanIdentities: IO[Unit] = {
+    if(!tosConfig.allowPreaccept) registrationDao.disableAllHumanIdentities(SamRequestContext(None))
+    else IO.unit
+  }
+
+  private def disableAllHumanIdentitiesUnlessPreaccepted: IO[Unit] = {
+    if(tosConfig.allowPreaccept) directoryDao.loadGroup(WorkbenchGroupName(getGroupName(tosConfig.version)), SamRequestContext(None)).map {
+      case Some(group) =>
+        val x = group.members.map(subjectDn)
+        registrationDao.disableAllHumanIdentities(SamRequestContext(None), x)
+      case None => IO.unit //this case shouldn't be possible
+    } else IO.unit
+  }
+
   def resetTermsOfServiceGroupsIfNeeded(): IO[Option[BasicWorkbenchGroup]] = {
+
+
+
+
+
+
+
+
     if(tosConfig.enabled) {
-      getTosGroup().flatMap {
-        case None =>
-          logger.info(s"creating new ToS group ${getGroupName()}")
-          val groupEmail = WorkbenchEmail(s"GROUP_${getGroupName(tosConfig.version)}@$appsDomain")
-          directoryDao.createGroup(BasicWorkbenchGroup(WorkbenchGroupName(getGroupName(tosConfig.version)), Set.empty, groupEmail), None, SamRequestContext(None)).flatMap { createdGroup =>
-            registrationDao.disableAllHumanIdentities(SamRequestContext(None)).map { _ => Option(createdGroup)}
+      if(!tosConfig.enforced && tosConfig.version == 1) {
+        getTosGroup().flatMap {
+          case None =>
+            logger.info(s"creating new ToS group ${getGroupName()}")
+            val groupEmail = WorkbenchEmail(s"GROUP_${getGroupName(tosConfig.version)}@$appsDomain")
+            directoryDao.createGroup(BasicWorkbenchGroup(WorkbenchGroupName(getGroupName(tosConfig.version)), Set.empty, groupEmail), None, SamRequestContext(None))
+          case group => IO.pure(group)
+        }
+      } else if(tosConfig.enforced && tosConfig.version == 1) {
+          getTosGroup().flatMap {
+            case None =>
+              logger.info(s"creating new ToS group ${getGroupName()}")
+              val groupEmail = WorkbenchEmail(s"GROUP_${getGroupName(tosConfig.version)}@$appsDomain")
+              directoryDao.createGroup(BasicWorkbenchGroup(WorkbenchGroupName(getGroupName(tosConfig.version)), Set.empty, groupEmail), None, SamRequestContext(None))
+            case group => IO.pure(group)
           }
-        case group => IO.pure(group)
+        }
+    } else IO.none
+
+
+
+    getTosGroup() flatMap {
+
+      val currentGroupEmail = WorkbenchEmail(s"GROUP_${getGroupName(tosConfig.version)}@$appsDomain")
+
+      //In the allowPreaccept stage, the Postgres group may not exist if it's the first time Sam is booting, but may exist for subsequent boots.
+      //During the allowPreaccept stage, we will not touch any LDAP membership
+
+
+
+
+
+
+
+
+
+    }
+
+
+
+
+
+    if(tosConfig.enabled) {
+      val currentGroupEmail = WorkbenchEmail(s"GROUP_${getGroupName(tosConfig.version)}@$appsDomain")
+      getTosGroup() flatMap {
+        case Some(group) => IO.none
+        case None if !tosConfig.enforced && tosConfig.version == 1 => {
+          directoryDao.createGroup(BasicWorkbenchGroup(WorkbenchGroupName(getGroupName(tosConfig.version)), Set.empty, currentGroupEmail), None, SamRequestContext(None)).map { Option(_) }
+        }
+        case None if tosConfig.enforced && tosConfig.version == 1 => {
+          directoryDao.createGroup(BasicWorkbenchGroup(WorkbenchGroupName(getGroupName(tosConfig.version)), Set.empty, currentGroupEmail), None, SamRequestContext(None)).map { Option(_) }
+        }
+        case None if tosConfig.version != 1 => {
+          directoryDao.createGroup(BasicWorkbenchGroup(WorkbenchGroupName(getGroupName(tosConfig.version)), Set.empty, currentGroupEmail), None, SamRequestContext(None)).flatMap { createdGroup =>
+            if(tosConfig.enforced) registrationDao.disableAllHumanIdentities(SamRequestContext(None)).map { _ => Option(createdGroup)}
+            else IO.pure(Option(createdGroup))
+          }
+        }
       }
     } else IO.none
+
+
+
+
+//    if(tosConfig.enabled) {
+//      getTosGroup().flatMap {
+//        case None =>
+//          logger.info(s"creating new ToS group ${getGroupName()}")
+//          val groupEmail = WorkbenchEmail(s"GROUP_${getGroupName(tosConfig.version)}@$appsDomain")
+//          directoryDao.createGroup(BasicWorkbenchGroup(WorkbenchGroupName(getGroupName(tosConfig.version)), Set.empty, groupEmail), None, SamRequestContext(None)).flatMap { createdGroup =>
+//            if(tosConfig.enforced) registrationDao.disableAllHumanIdentities(SamRequestContext(None)).map { _ => Option(createdGroup)}
+//            else IO.pure(Option(createdGroup))
+//          }
+//        case group => IO.pure(group)
+//      }
+//    } else IO.none
   }
+
 
   def getGroupName(currentVersion:Int = tosConfig.version): String = {
     s"tos_accepted_${currentVersion}"
