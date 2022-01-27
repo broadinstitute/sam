@@ -63,6 +63,26 @@ trait UserRoutes extends UserInfoDirectives with SamRequestContextDirectives {
               }
             }
           }
+        } ~ withSamRequestContext { samRequestContext =>
+          pathPrefix("termsofservice") {
+            pathEndOrSingleSlash {
+              post {
+                requireUserInfo(samRequestContext) { userInfo =>
+                  withTermsOfServiceAcceptance {
+                    complete {
+                      userService.acceptTermsOfService(userInfo.userId, samRequestContext).map { statusOption =>
+                        statusOption
+                          .map { status =>
+                            StatusCodes.OK -> Option(status)
+                          }
+                          .getOrElse(StatusCodes.NotFound -> None)
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
         }
       } ~ pathPrefix("v2") {
         pathPrefix("self") {
@@ -198,23 +218,6 @@ trait UserRoutes extends UserInfoDirectives with SamRequestContextDirectives {
     pathPrefix("v1") {
       withSamRequestContext { samRequestContext =>
         requireUserInfo(samRequestContext) { userInfo =>
-          pathPrefix("tos" / "accept") {
-            pathEndOrSingleSlash {
-              post {
-                withTermsOfServiceAcceptance {
-                  complete {
-                    userService.acceptTermsOfService(userInfo.userId, samRequestContext).map { statusOption =>
-                      statusOption
-                        .map { status =>
-                          StatusCodes.OK -> Option(status)
-                        }
-                        .getOrElse(StatusCodes.NotFound -> None)
-                    }
-                  }
-                }
-              }
-            }
-          } ~
           get {
             path(Segment) { email =>
               pathEnd {

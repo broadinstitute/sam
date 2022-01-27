@@ -200,7 +200,7 @@ trait UserRoutesSpecHelper extends AnyFlatSpec with Matchers with ScalatestRoute
     }
 
     if (tosEnabled && tosAccepted) {
-      Post("/api/users/v1/tos/accept", TermsOfServiceAcceptance("app.terra.bio/#terms-of-service")) ~> routes.route ~> check {
+      Post("/register/user/v1/termsofservice", TermsOfServiceAcceptance("app.terra.bio/#terms-of-service")) ~> routes.route ~> check {
         status shouldEqual StatusCodes.OK
         val res = responseAs[UserStatus]
         res.userInfo.userEmail shouldBe userEmail
