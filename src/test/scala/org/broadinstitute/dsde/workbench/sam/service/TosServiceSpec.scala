@@ -40,9 +40,9 @@ class TosServiceSpec extends AnyFlatSpec with TestSupport with BeforeAndAfterAll
   val serviceAccountUser = WorkbenchUser(serviceAccountUserId, Option(serviceAccountUserSubjectId), serviceAccountUserEmail, None)
 
 
-  private val tosServiceEnabled = new TosService(dirDAO, regDAO, "example.com", TestSupport.tosConfig.copy(enabled = true))
+  private val tosServiceEnabled = new TosService(dirDAO, regDAO, "example.com", TestSupport.tosConfig.copy(enabled = true, enforced = true))
   private val tosServiceDisabled = new TosService(dirDAO, regDAO, "example.com", TestSupport.tosConfig.copy(enabled = false))
-  private val tosServiceEnabledV2 = new TosService(dirDAO, regDAO, "example.com", TestSupport.tosConfig.copy(enabled = true, version = 2))
+  private val tosServiceEnabledV2 = new TosService(dirDAO, regDAO, "example.com", TestSupport.tosConfig.copy(enabled = true, enforced = true, version = 2))
   private val userServiceTosEnabled = new UserService(dirDAO, NoExtensions, regDAO, Seq.empty, tosServiceEnabled)
   private val userServiceTosEnabledV2 = new UserService(dirDAO, NoExtensions, regDAO, Seq.empty, tosServiceEnabledV2)
 
