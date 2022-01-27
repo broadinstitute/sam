@@ -45,7 +45,7 @@ class UserRoutesV1Spec extends UserRoutesSpecHelper{
     val (_, _, routes) = createTestUser(tosEnabled = true, tosAccepted = false)
     val tos = TermsOfServiceAcceptance("app.terra.bio/#terms-of-service")
 
-    Post("/api/users/v1/tos/accept", tos) ~> routes.route ~> check {
+    Post("/register/user/v1/termsofservice", tos) ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK
       val res = responseAs[UserStatus]
       res.userInfo.userSubjectId.value.length shouldBe 21
@@ -58,7 +58,7 @@ class UserRoutesV1Spec extends UserRoutesSpecHelper{
     val (_, _, routes) = createTestUser(tosEnabled = true, tosAccepted = false)
 
     val tos = TermsOfServiceAcceptance("onemillionpats.com")
-    Post("/api/users/v1/tos/accept", tos) ~> routes.route ~> check {
+    Post("/register/user/v1/termsofservice", tos) ~> routes.route ~> check {
       status shouldEqual StatusCodes.Forbidden
       responseAs[ErrorReport].message should startWith("You must accept the Terms of Service in order to register.")
     }
