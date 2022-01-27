@@ -18,31 +18,10 @@ import scala.io.Source
 class TosService (val directoryDao: DirectoryDAO, val registrationDao: RegistrationDAO, val appsDomain: String, val tosConfig: TermsOfServiceConfig)(implicit val executionContext: ExecutionContext) extends LazyLogging {
   val termsOfServiceFile = "termsOfService.md"
 
-//  private def createTosGroupIfNeeded: IO[Option[BasicWorkbenchGroup]] = {
-//    val currentGroupEmail = WorkbenchEmail(s"GROUP_${getGroupName(tosConfig.version)}@$appsDomain")
-//    getTosGroup() flatMap {
-//      case Some(group) => IO.none
-//      case None => directoryDao.createGroup(BasicWorkbenchGroup(WorkbenchGroupName(getGroupName(tosConfig.version)), Set.empty, currentGroupEmail), None, SamRequestContext(None)).map { Option(_) }
-//    }
-//  }
-//
-//  private def disableAllHumanIdentities: IO[Unit] = {
-//    if(!tosConfig.allowPreaccept) registrationDao.disableAllHumanIdentities(SamRequestContext(None))
-//    else IO.unit
-//  }
-//
-//  private def disableAllHumanIdentitiesUnlessPreaccepted: IO[Unit] = {
-//    if(tosConfig.allowPreaccept) directoryDao.loadGroup(WorkbenchGroupName(getGroupName(tosConfig.version)), SamRequestContext(None)).map {
-//      case Some(group) =>
-//        val x = group.members.map(subjectDn)
-//        registrationDao.disableAllHumanIdentities(SamRequestContext(None), x)
-//      case None => IO.unit //this case shouldn't be possible
-//    } else IO.unit
-//  }
-
   def resetTermsOfServiceGroupsIfNeeded(): IO[Option[BasicWorkbenchGroup]] = {
 
     if(tosConfig.enabled) {
+      //this is kinda gnarly, but i'd rather leave the if else totally separate to easy in later code-cleanup after this if branch is defunct
       if(tosConfig.version == 1) {
         getTosGroup().flatMap {
           case None =>
@@ -74,83 +53,6 @@ class TosService (val directoryDao: DirectoryDAO, val registrationDao: Registrat
         }
       }
     } else IO.none
-
-
-
-
-
-//    if(tosConfig.enabled) {
-//      if(!tosConfig.enforced && tosConfig.version == 1) {
-//        getTosGroup().flatMap {
-//          case None =>
-//            logger.info(s"creating new ToS group ${getGroupName()}")
-//            val groupEmail = WorkbenchEmail(s"GROUP_${getGroupName(tosConfig.version)}@$appsDomain")
-//            directoryDao.createGroup(BasicWorkbenchGroup(WorkbenchGroupName(getGroupName(tosConfig.version)), Set.empty, groupEmail), None, SamRequestContext(None)).map { x => Option(x) }
-//          case group => IO.pure(group)
-//        }
-//      } else if(tosConfig.enforced && tosConfig.version == 1) {
-//          getTosGroup().flatMap {
-//            case None =>
-//              //this case can be merged with the above identical case
-//              logger.info(s"creating new ToS group ${getGroupName()}")
-//              val groupEmail = WorkbenchEmail(s"GROUP_${getGroupName(tosConfig.version)}@$appsDomain")
-//              directoryDao.createGroup(BasicWorkbenchGroup(WorkbenchGroupName(getGroupName(tosConfig.version)), Set.empty, groupEmail), None, SamRequestContext(None)).map { x => Option(x) }
-//            case group => IO.pure(group)
-//          }.flatMap { createdGroup =>
-//            directoryDao.loadGroup(WorkbenchGroupName(getGroupName(tosConfig.version)), SamRequestContext(None)).map{case Some(group) => group.members.map(subjectDn)}.flatMap { exemptedUsers =>
-//              registrationDao.disableAllHumanIdentities(SamRequestContext(None), exemptedUsers).map { _ => createdGroup }
-//            }
-//          }
-//        } else {
-//          getTosGroup().flatMap {
-//            case None =>
-//              logger.info(s"creating new ToS group ${getGroupName()}")
-//              val groupEmail = WorkbenchEmail(s"GROUP_${getGroupName(tosConfig.version)}@$appsDomain")
-//              directoryDao.createGroup(BasicWorkbenchGroup(WorkbenchGroupName(getGroupName(tosConfig.version)), Set.empty, groupEmail), None, SamRequestContext(None)).flatMap { createdGroup =>
-//                if(tosConfig.enforced) registrationDao.disableAllHumanIdentities(SamRequestContext(None)).map { _ => Option(createdGroup)}
-//                else IO.pure(Option(createdGroup))
-//              }
-//            case group => IO.pure(group)
-//          }
-//      }
-//    } else IO.none
-
-
-//
-//    if(tosConfig.enabled) {
-//      val currentGroupEmail = WorkbenchEmail(s"GROUP_${getGroupName(tosConfig.version)}@$appsDomain")
-//      getTosGroup() flatMap {
-//        case Some(group) => IO.none
-//        case None if !tosConfig.enforced && tosConfig.version == 1 => {
-//          directoryDao.createGroup(BasicWorkbenchGroup(WorkbenchGroupName(getGroupName(tosConfig.version)), Set.empty, currentGroupEmail), None, SamRequestContext(None)).map { Option(_) }
-//        }
-//        case None if tosConfig.enforced && tosConfig.version == 1 => {
-//          directoryDao.createGroup(BasicWorkbenchGroup(WorkbenchGroupName(getGroupName(tosConfig.version)), Set.empty, currentGroupEmail), None, SamRequestContext(None)).map { Option(_) }
-//        }
-//        case None if tosConfig.version != 1 => {
-//          directoryDao.createGroup(BasicWorkbenchGroup(WorkbenchGroupName(getGroupName(tosConfig.version)), Set.empty, currentGroupEmail), None, SamRequestContext(None)).flatMap { createdGroup =>
-//            if(tosConfig.enforced) registrationDao.disableAllHumanIdentities(SamRequestContext(None)).map { _ => Option(createdGroup)}
-//            else IO.pure(Option(createdGroup))
-//          }
-//        }
-//      }
-//    } else IO.none
-
-
-
-
-//    if(tosConfig.enabled) {
-//      getTosGroup().flatMap {
-//        case None =>
-//          logger.info(s"creating new ToS group ${getGroupName()}")
-//          val groupEmail = WorkbenchEmail(s"GROUP_${getGroupName(tosConfig.version)}@$appsDomain")
-//          directoryDao.createGroup(BasicWorkbenchGroup(WorkbenchGroupName(getGroupName(tosConfig.version)), Set.empty, groupEmail), None, SamRequestContext(None)).flatMap { createdGroup =>
-//            if(tosConfig.enforced) registrationDao.disableAllHumanIdentities(SamRequestContext(None)).map { _ => Option(createdGroup)}
-//            else IO.pure(Option(createdGroup))
-//          }
-//        case group => IO.pure(group)
-//      }
-//    } else IO.none
   }
 
 
