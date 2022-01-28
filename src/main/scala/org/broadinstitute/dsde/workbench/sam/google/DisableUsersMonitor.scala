@@ -58,6 +58,7 @@ class DisableUsersMonitorSupervisor(
 
   def init: Future[DisableUsersMonitorSupervisor.Start.type] =
     for {
+      _ <- pubSubDao.createTopic(pubSubTopicName)
       _ <- pubSubDao.createSubscription(pubSubTopicName, pubSubSubscriptionName)
     } yield Start
 
