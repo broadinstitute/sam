@@ -21,7 +21,14 @@ class TosService (val directoryDao: DirectoryDAO, val registrationDao: Registrat
   def resetTermsOfServiceGroupsIfNeeded(): IO[Option[BasicWorkbenchGroup]] = {
 
     if(tosConfig.enabled) {
-      //this is kinda gnarly, but i'd rather leave the if else totally separate to easy in later code-cleanup after this if branch is defunct
+      //This first clause is the special case for the first verison of ToS, where we will allow users to "pre-accept" the ToS
+      //In this version, we care about the distinction of "enforced" versus "unenforced"
+      //In the unenforced case, we must ensure that the Postgres group is created. This will allow users to call the "accept ToS" endpoint
+      //and get added to the group. But at this point in time, the membership of the Postgres group should have no bearing on who is in the
+      //enabledUsers LDAP group. So to summarize, we will create the Postgres group but do nothing to the LDAP group.
+      //In the enforced case, we will now start to modify the membership of the enabledUsers LDAP group. Once enforcement is turned on,
+      //we will calculate who should be a member of the enabledUsers LDAP group by querying the Postgres group for ToS Version 1, and then allowing
+      //them to stay in the enabledUsers LDAP group. We will disable all human users who are not a member of the Postgres group.
       if(tosConfig.version == 1) {
         getTosGroup().flatMap {
           case None =>
@@ -31,9 +38,10 @@ class TosService (val directoryDao: DirectoryDAO, val registrationDao: Registrat
               if(tosConfig.enforced) {
                 directoryDao.loadGroup(WorkbenchGroupName(getGroupName(tosConfig.version)), SamRequestContext(None)).map {
                   case Some(group) => group.members
-                  case None => Set[WorkbenchSubject]()
-                } flatMap { exemptedUsers =>
-                  registrationDao.disableAllHumanIdentities(SamRequestContext(None), exemptedUsers).map { _ => Option(createdGroup) }
+                  case None => Set[WorkbenchSubject]() //this case shouldn't be possible
+                } flatMap { preAcceptedUsers =>
+                  logger.info(s"disabling all human identities, except for ${preAcceptedUsers.size} pre-accepted identities")
+                  registrationDao.disableAllHumanIdentities(SamRequestContext(None), preAcceptedUsers).map { _ => Option(createdGroup) }
                 }
               } else IO.pure(Option(createdGroup))
 
@@ -41,12 +49,17 @@ class TosService (val directoryDao: DirectoryDAO, val registrationDao: Registrat
           case group => IO.pure(group)
         }
       } else {
+        //This else clause is considered the "standard" case. Once ToS version 2 lands, the above clause is defunct
+        //and can be removed entirely to simplify the code base.
         getTosGroup().flatMap {
           case None =>
             logger.info(s"creating new ToS group ${getGroupName()}")
             val groupEmail = WorkbenchEmail(s"GROUP_${getGroupName(tosConfig.version)}@$appsDomain")
             directoryDao.createGroup(BasicWorkbenchGroup(WorkbenchGroupName(getGroupName(tosConfig.version)), Set.empty, groupEmail), None, SamRequestContext(None)).flatMap { createdGroup =>
-              if(tosConfig.enforced) registrationDao.disableAllHumanIdentities(SamRequestContext(None)).map { _ => Option(createdGroup)}
+              if(tosConfig.enforced) {
+                logger.info(s"disabling all human identities. ToS version is now ${tosConfig.version}")
+                registrationDao.disableAllHumanIdentities(SamRequestContext(None)).map { _ => Option(createdGroup)}
+              }
               else IO.pure(Option(createdGroup))
             }
           case group => IO.pure(group)

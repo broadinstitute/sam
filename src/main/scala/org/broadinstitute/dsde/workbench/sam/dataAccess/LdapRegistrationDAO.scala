@@ -93,11 +93,11 @@ class LdapRegistrationDAO(
     }
   }
 
-  //To be used only in the event of the ToS version being bumped
-  override def disableAllHumanIdentities(samRequestContext: SamRequestContext, exemptUsers: Set[WorkbenchSubject] = Set.empty): IO[Unit] = {
+  //To be used only when calculating membership of the enabledUsers group for ToS purposes
+  override def disableAllHumanIdentities(samRequestContext: SamRequestContext, preAcceptedUsers: Set[WorkbenchSubject] = Set.empty): IO[Unit] = {
     //The iam.gserviceaccount.com filter is in place to ensure that only human identities are disabled. Service Accounts (both regular SAs and Pet SAs) are
     // currently exempt for ToS-enforcement, thus, they're ignored when disabling identities
-    val humanIdentityDnsIO = (executeLdap(IO(ldapConnectionPool.search(peopleOu, SearchScope.SUB, "(!(mail=*.iam.gserviceaccount.com))")), "getAllIdentitiesToDisable", samRequestContext) map { results =>
+    val humanIdentityDnsIO = (executeLdap(IO(ldapConnectionPool.search(peopleOu, SearchScope.SUB, "(!(mail=*.iam.gserviceaccount.com))")), "getAllHumanIdentitiesToDisable", samRequestContext) map { results =>
       results.getSearchEntries.asScala.toList.map { result =>
         unmarshalUser(result)
       }
@@ -105,11 +105,13 @@ class LdapRegistrationDAO(
 
     val enabledIdentityDnsIO = executeLdap(IO(getAttributes(ldapConnectionPool.getEntry(directoryConfig.enabledUsersGroupDn, Attr.member), Attr.member)), "getAllIdentitiesEnabled", samRequestContext).map(_.toList)
 
+    val preAcceptedUserDns = preAcceptedUsers.map(subjectDn)
+
     for {
       humanIdentityDns <- humanIdentityDnsIO //this retrieves all humans registered in the system (looking under the peopleOu)
       enabledIdentityDns <- enabledIdentityDnsIO //this retrieves all enabled identities in the system (looking in enabledUsersGroupDn)
-      humanIdentityDnsToDisable = ((humanIdentityDns.toSet intersect enabledIdentityDns.toSet) -- exemptUsers.map(subjectDn)).toList //intersecting them gives the list of all human identities who are enabled (AKA filtering out humans who are disabled in the system)
-      result <- executeLdap(IO(ldapConnectionPool.modify(directoryConfig.enabledUsersGroupDn, new Modification(ModificationType.DELETE, Attr.member, humanIdentityDnsToDisable:_*))).void, "disableAllHumanIdentities", samRequestContext).recover {
+      humanIdentityDnsToDisable = (humanIdentityDns intersect enabledIdentityDns).toSet -- preAcceptedUserDns //intersecting them gives the list of all human identities who are enabled (AKA filtering out humans who are disabled in the system)
+      result <- executeLdap(IO(ldapConnectionPool.modify(directoryConfig.enabledUsersGroupDn, new Modification(ModificationType.DELETE, Attr.member, humanIdentityDnsToDisable.toList:_*))).void, "disableAllHumanIdentities", samRequestContext).recover {
         case ldape: LDAPException if ldape.getResultCode == ResultCode.NO_SUCH_ATTRIBUTE => //if the attr or member is already missing, then that's fine
       }
     } yield result

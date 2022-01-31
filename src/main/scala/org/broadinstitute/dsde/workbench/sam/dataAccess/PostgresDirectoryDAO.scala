@@ -604,7 +604,7 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
     })
   }
 
-  override def disableAllHumanIdentities(samRequestContext: SamRequestContext, exemptUsers: Set[WorkbenchSubject] = Set.empty): IO[Unit] = {
+  override def disableAllHumanIdentities(samRequestContext: SamRequestContext, preAcceptedUsers: Set[WorkbenchSubject] = Set.empty): IO[Unit] = {
     IO.unit //no-op for now. throw exception maybe?
   }
 
