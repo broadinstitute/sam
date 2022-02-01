@@ -43,6 +43,10 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
     IO.unit
   }
 
+  override def deleteEnabledUsersGroup(samRequestContext: SamRequestContext): IO[Unit] = {
+    IO.unit
+  }
+
   private def insertGroup(group: BasicWorkbenchGroup)(implicit session: DBSession): GroupPK = {
     val groupTableColumn = GroupTable.column
     val insertGroupQuery = samsql"""insert into ${GroupTable.table} (${groupTableColumn.name}, ${groupTableColumn.email}, ${groupTableColumn.updatedDate}, ${groupTableColumn.synchronizedDate})

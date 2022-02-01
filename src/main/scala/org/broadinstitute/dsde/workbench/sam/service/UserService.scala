@@ -222,7 +222,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
     } yield ()
   }
 
-  val serviceAccountDomain = "\\S+@\\S+\\.iam\\.gserviceaccount\\.com".r
+  val serviceAccountDomain = "\\S+@\\S+\\.gserviceaccount\\.com".r
 
   private def isServiceAccount(email: String) = {
     serviceAccountDomain.pattern.matcher(email).matches

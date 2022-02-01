@@ -48,11 +48,21 @@ class TosServiceSpec extends AnyFlatSpec with TestSupport with BeforeAndAfterAll
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()
-    runAndWait(schemaDao.init())
     TestSupport.truncateAll
   }
 
   before {
+    clearDatabase()
+    TestSupport.truncateAll
+    runAndWait(regDAO.createEnabledUsersGroup(samRequestContext).unsafeToFuture())
+  }
+
+  protected def clearDatabase(): Unit = {
+    val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
+    runAndWait(schemaDao.clearDatabase())
+    runAndWait(schemaDao.init())
+    runAndWait(schemaDao.createOrgUnits())
+
     TestSupport.truncateAll
   }
 
@@ -62,9 +72,6 @@ class TosServiceSpec extends AnyFlatSpec with TestSupport with BeforeAndAfterAll
   }
 
   it should "create the group once" in {
-    //Ensure that the enabled-users group exists in LDAP
-    regDAO.createEnabledUsersGroup(samRequestContext).unsafeRunSync()
-
     assert(tosServiceEnabled.getTosGroup().unsafeRunSync().isEmpty, "ToS Group should not exist at the start")
     assert(tosServiceEnabled.resetTermsOfServiceGroupsIfNeeded().unsafeRunSync().isDefined, "resetTermsOfServiceGroupsIfNeeded() should create the group initially")
     val maybeGroup = tosServiceEnabled.getTosGroup().unsafeRunSync()
@@ -79,9 +86,6 @@ class TosServiceSpec extends AnyFlatSpec with TestSupport with BeforeAndAfterAll
   }
 
   it should "accept and get the ToS for a user" in {
-    //Ensure that the enabled-users group exists in LDAP
-    regDAO.createEnabledUsersGroup(samRequestContext).unsafeRunSync()
-
     val group = tosServiceEnabled.resetTermsOfServiceGroupsIfNeeded().unsafeRunSync()
     assert(group.isDefined, "resetTermsOfServiceGroupsIfNeeded() should create the group initially")
     dirDAO.createUser(defaultUser, samRequestContext).unsafeRunSync()
@@ -92,9 +96,6 @@ class TosServiceSpec extends AnyFlatSpec with TestSupport with BeforeAndAfterAll
   }
 
   it should "empty the enabledUsers group in OpenDJ when the ToS version changes" in {
-    //Ensure that the enabled-users group exists in LDAP
-    regDAO.createEnabledUsersGroup(samRequestContext).unsafeRunSync()
-
     //Reset the ToS groups (this will empty the enabled-users group, but it should already be empty)
     val group = tosServiceEnabled.resetTermsOfServiceGroupsIfNeeded().unsafeRunSync()
     assert(group.isDefined, "resetTermsOfServiceGroupsIfNeeded() should create the group initially")
@@ -133,9 +134,6 @@ class TosServiceSpec extends AnyFlatSpec with TestSupport with BeforeAndAfterAll
   }
 
   it should "not empty the enabledUsers group in OpenDJ when the ToS version remains the same" in {
-    //Ensure that the enabled-users group exists in LDAP
-    regDAO.createEnabledUsersGroup(samRequestContext).unsafeRunSync()
-
     //Reset the ToS groups (this will empty the enabled-users group, but it should already be empty)
     val group = tosServiceEnabled.resetTermsOfServiceGroupsIfNeeded().unsafeRunSync()
     assert(group.isDefined, "resetTermsOfServiceGroupsIfNeeded() should create the group initially")
@@ -166,9 +164,6 @@ class TosServiceSpec extends AnyFlatSpec with TestSupport with BeforeAndAfterAll
   }
 
   it should "not remove Service Accounts from the enabledUsers group in OpenDJ when the ToS version changes" in {
-    //Ensure that the enabled-users group exists in LDAP
-    regDAO.createEnabledUsersGroup(samRequestContext).unsafeRunSync()
-
     //Reset the ToS groups (this will empty the enabled-users group, but it should already be empty)
     val group = tosServiceEnabled.resetTermsOfServiceGroupsIfNeeded().unsafeRunSync()
     assert(group.isDefined, "resetTermsOfServiceGroupsIfNeeded() should create the group initially")
@@ -207,12 +202,6 @@ class TosServiceSpec extends AnyFlatSpec with TestSupport with BeforeAndAfterAll
     //Ensure that the SA is still enabled, because we don't disable SAs when the ToS version changes
     val isSAEnabledLdapV2 = regDAO.isEnabled(serviceAccountUser.id, samRequestContext).unsafeRunSync()
     assertResult(expected = true, "regDAO.isEnabled (second check) should have returned true [SA]")(actual = isSAEnabledLdapV2)
-
-    //Delete the user from the system
-    Await.result(userServiceTosEnabled.deleteUser(defaultUser.id, dummyUserInfo, samRequestContext), Duration.Inf)
-
-    //Delete the SA from the system
-    Await.result(userServiceTosEnabled.deleteUser(serviceAccountUser.id, dummyUserInfo, samRequestContext), Duration.Inf)
   }
 
 }

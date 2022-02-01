@@ -95,7 +95,7 @@ class LdapRegistrationDAO(
 
   //To be used only in the event of the ToS version being bumped
   override def disableAllHumanIdentities(samRequestContext: SamRequestContext): IO[Unit] = {
-    //The iam.gserviceaccount.com filter is in place to ensure that only human identities are disabled. Service Accounts (both regular SAs and Pet SAs) are
+    //The .gserviceaccount.com filter is in place to ensure that only human identities are disabled. Service Accounts (both regular SAs and Pet SAs) are
     // currently exempt for ToS-enforcement, thus, they're ignored when disabling identities
     val humanIdentityDnsIO = (executeLdap(IO(ldapConnectionPool.search(peopleOu, SearchScope.SUB, "(!(mail=*.gserviceaccount.com))")), "getAllIdentitiesToDisable", samRequestContext) map { results =>
       results.getSearchEntries.asScala.toList.map { result =>
@@ -135,6 +135,15 @@ class LdapRegistrationDAO(
           IO.unit
       }
       .map(_ => ())
+  }
+
+  //To be used by unit tests for cleanup
+  override def deleteEnabledUsersGroup(samRequestContext: SamRequestContext): IO[Unit] = {
+    executeLdap(IO(ldapConnectionPool.delete(directoryConfig.enabledUsersGroupDn)), "deleteEnabledUsersGroup", samRequestContext)
+      .handleErrorWith {
+        case ldape: LDAPException if ldape.getResultCode == ResultCode.NO_SUCH_OBJECT =>
+          IO.unit
+      }.map(_ => ())
   }
 
   override def createPetServiceAccount(petServiceAccount: PetServiceAccount, samRequestContext: SamRequestContext): IO[PetServiceAccount] = {
