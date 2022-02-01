@@ -97,7 +97,7 @@ class LdapRegistrationDAO(
   override def disableAllHumanIdentities(samRequestContext: SamRequestContext): IO[Unit] = {
     //The iam.gserviceaccount.com filter is in place to ensure that only human identities are disabled. Service Accounts (both regular SAs and Pet SAs) are
     // currently exempt for ToS-enforcement, thus, they're ignored when disabling identities
-    val humanIdentityDnsIO = (executeLdap(IO(ldapConnectionPool.search(peopleOu, SearchScope.SUB, "(!(mail=*.iam.gserviceaccount.com))")), "getAllIdentitiesToDisable", samRequestContext) map { results =>
+    val humanIdentityDnsIO = (executeLdap(IO(ldapConnectionPool.search(peopleOu, SearchScope.SUB, "(!(mail=*.gserviceaccount.com))")), "getAllIdentitiesToDisable", samRequestContext) map { results =>
       results.getSearchEntries.asScala.toList.map { result =>
         unmarshalUser(result)
       }
