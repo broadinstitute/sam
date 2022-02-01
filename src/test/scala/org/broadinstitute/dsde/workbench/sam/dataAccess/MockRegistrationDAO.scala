@@ -33,7 +33,6 @@ class MockRegistrationDAO extends RegistrationDAO {
     }
 
   override def createEnabledUsersGroup(samRequestContext: SamRequestContext): IO[Unit] = IO.unit //the enabledUsers group is instantiated with this mock class, so no-op here
-  override def deleteEnabledUsersGroup(samRequestContext: SamRequestContext): IO[Unit] = IO.unit
 
   override def loadUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[WorkbenchUser]] = IO {
     users.get(userId)

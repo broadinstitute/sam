@@ -137,15 +137,6 @@ class LdapRegistrationDAO(
       .map(_ => ())
   }
 
-  //To be used by unit tests for cleanup
-  override def deleteEnabledUsersGroup(samRequestContext: SamRequestContext): IO[Unit] = {
-    executeLdap(IO(ldapConnectionPool.delete(directoryConfig.enabledUsersGroupDn)), "deleteEnabledUsersGroup", samRequestContext)
-      .handleErrorWith {
-        case ldape: LDAPException if ldape.getResultCode == ResultCode.NO_SUCH_OBJECT =>
-          IO.unit
-      }.map(_ => ())
-  }
-
   override def createPetServiceAccount(petServiceAccount: PetServiceAccount, samRequestContext: SamRequestContext): IO[PetServiceAccount] = {
     val attributes = createPetServiceAccountAttributes(petServiceAccount) ++
       Seq(new Attribute("objectclass", Seq("top", ObjectClass.petServiceAccount).asJava), new Attribute(Attr.project, petServiceAccount.id.project.value))

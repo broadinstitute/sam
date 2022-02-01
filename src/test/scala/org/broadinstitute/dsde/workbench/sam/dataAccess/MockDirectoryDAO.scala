@@ -47,7 +47,6 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
     }
 
   override def createEnabledUsersGroup(samRequestContext: SamRequestContext): IO[Unit] = IO.unit
-  override def deleteEnabledUsersGroup(samRequestContext: SamRequestContext): IO[Unit] = IO.unit
 
   override def loadGroup(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Option[BasicWorkbenchGroup]] = IO {
     groups.get(groupName).map(_.asInstanceOf[BasicWorkbenchGroup])
