@@ -36,7 +36,7 @@ class TosServiceSpec extends AnyFlatSpec with TestSupport with BeforeAndAfterAll
 
   val serviceAccountUserId = genWorkbenchUserId(System.currentTimeMillis())
   val serviceAccountUserSubjectId = GoogleSubjectId(serviceAccountUserId.value)
-  val serviceAccountUserEmail = WorkbenchEmail("fake@fake.iam.gserviceaccount.com")
+  val serviceAccountUserEmail = WorkbenchEmail("fake@fake.gserviceaccount.com")
   val serviceAccountUser = WorkbenchUser(serviceAccountUserId, Option(serviceAccountUserSubjectId), serviceAccountUserEmail, None)
 
 
