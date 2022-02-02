@@ -82,6 +82,8 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     tos = new TosService(dirDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)
     service = new UserService(dirDAO, googleExtensions, registrationDAO, Seq(blockedDomain), tos)
 
+    runAndWait(registrationDAO.createEnabledUsersGroup(samRequestContext).unsafeToFuture())
+
     tosServiceEnabled = new TosService(dirDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig.copy(enabled = true))
     serviceTosEnabled = new UserService(dirDAO, googleExtensions, registrationDAO, Seq(blockedDomain), tosServiceEnabled)
   }
@@ -117,9 +119,6 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
   }
 
   it should "create and add a user to ToS group" in {
-    //Ensure that the enabled-users group exists in LDAP
-    registrationDAO.createEnabledUsersGroup(samRequestContext).unsafeRunSync()
-
     tosServiceEnabled.resetTermsOfServiceGroupsIfNeeded().unsafeRunSync()
     serviceTosEnabled.createUser(defaultUser, samRequestContext).futureValue
     val userGroups = dirDAO.listUsersGroups(defaultUserId, samRequestContext).unsafeRunSync()
@@ -203,9 +202,6 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
   }
 
   it should "enable a user in LDAP if they accept the latest Terms of Service" in {
-    //Ensure that the enabled-users group exists in LDAP
-    registrationDAO.createEnabledUsersGroup(samRequestContext).unsafeRunSync()
-
     createNewEnabledUser()
     updateTosVersionThenEnableUser(userAcceptsNewTos = true)
 
@@ -214,9 +210,6 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
   }
 
   it should "not enable a user in LDAP when they don't accept the latest Terms of Service" in {
-    //Ensure that the enabled-users group exists in LDAP
-    registrationDAO.createEnabledUsersGroup(samRequestContext).unsafeRunSync()
-
     createNewEnabledUser()
     updateTosVersionThenEnableUser()
 
@@ -225,9 +218,6 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
   }
 
   it should "enable a user in LDAP when TOS is disabled" in {
-    //Ensure that the enabled-users group exists in LDAP
-    registrationDAO.createEnabledUsersGroup(samRequestContext).unsafeRunSync()
-
     createNewEnabledUser()
     updateTosVersionThenEnableUser(tosEnabled = false)
 
@@ -285,9 +275,6 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
   }
 
   it should "accept the tos" in {
-    //Ensure that the enabled-users group exists in LDAP
-    registrationDAO.createEnabledUsersGroup(samRequestContext).unsafeRunSync()
-
     tosServiceEnabled.resetTermsOfServiceGroupsIfNeeded().unsafeRunSync()
 
     // create a user
@@ -301,9 +288,6 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
   }
 
   it should "not accept the tos for users who do not exist" in {
-    //Ensure that the enabled-users group exists in LDAP
-    registrationDAO.createEnabledUsersGroup(samRequestContext).unsafeRunSync()
-
     tosServiceEnabled.resetTermsOfServiceGroupsIfNeeded().unsafeRunSync()
     val res = intercept[WorkbenchExceptionWithErrorReport] {
       serviceTosEnabled.acceptTermsOfService(genWorkbenchUserId(System.currentTimeMillis()), samRequestContext).unsafeRunSync()
@@ -328,9 +312,6 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     val serviceAccountUserSubjectId = GoogleSubjectId(serviceAccountUserId.value)
     val serviceAccountUserEmail = WorkbenchEmail("fake@fake.iam.gserviceaccount.com")
     val serviceAccountUser = WorkbenchUser(serviceAccountUserId, Option(serviceAccountUserSubjectId), serviceAccountUserEmail, None)
-
-    //Ensure that the enabled-users group exists in LDAP
-    registrationDAO.createEnabledUsersGroup(samRequestContext).unsafeRunSync()
 
     tosServiceEnabled.resetTermsOfServiceGroupsIfNeeded().unsafeRunSync()
 
