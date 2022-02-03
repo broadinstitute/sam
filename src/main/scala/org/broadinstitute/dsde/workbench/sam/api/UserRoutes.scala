@@ -11,6 +11,7 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.service.UserService
 import org.broadinstitute.dsde.workbench.sam.service.UserService.genWorkbenchUserId
+import spray.json.JsBoolean
 
 import scala.concurrent.ExecutionContext
 
@@ -65,6 +66,23 @@ trait UserRoutes extends UserInfoDirectives with SamRequestContextDirectives {
           }
         } ~ withSamRequestContext { samRequestContext =>
           pathPrefix("termsofservice") {
+            pathPrefix("status") {
+              pathEndOrSingleSlash {
+                get {
+                  requireUserInfo(samRequestContext) { userInfo =>
+                    complete {
+                      userService.getTermsOfServiceStatus(userInfo.userId, samRequestContext).map { statusOption =>
+                        statusOption
+                          .map { status =>
+                            StatusCodes.OK -> Option(JsBoolean(status))
+                          }
+                          .getOrElse(StatusCodes.NotFound -> None)
+                      }
+                    }
+                  }
+                }
+              }
+            } ~
             pathEndOrSingleSlash {
               post {
                 requireUserInfo(samRequestContext) { userInfo =>
