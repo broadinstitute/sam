@@ -93,7 +93,7 @@ class UserRoutesV1Spec extends UserRoutesSpecHelper{
     }
   }
 
-  it should "return 200 + true when ToS is enabled and has accepted the ToS" in {
+  it should "return 200 + true when ToS is enabled and the user has accepted the ToS" in {
     val (user, _, routes) = createTestUser(tosEnabled = true, tosAccepted = true)
 
     Get("/register/user/v1/termsofservice/status") ~> routes.route ~> check {
