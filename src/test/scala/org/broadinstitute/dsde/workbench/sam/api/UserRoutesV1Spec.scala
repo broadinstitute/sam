@@ -9,6 +9,7 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.Generator.genInviteUser
 import org.broadinstitute.dsde.workbench.sam.TestSupport.googleServicesConfig
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{MockDirectoryDAO, MockRegistrationDAO}
+import org.broadinstitute.dsde.workbench.sam.model.RootPrimitiveJsonSupport.rootBooleanJsonFormat
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.{NoExtensions, StatusService, TosService, UserService}
@@ -71,6 +72,34 @@ class UserRoutesV1Spec extends UserRoutesSpecHelper{
       status shouldEqual StatusCodes.OK
       val res = responseAs[UserStatus]
       res.enabled shouldBe Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> true, "adminEnabled" -> true)
+    }
+  }
+
+  "GET /register/user/v1/termsofservice/status" should "return 404 when ToS is disabled" in {
+    val (_, _, routes) = createTestUser(tosEnabled = false)
+
+    Get("/register/user/v1/termsofservice/status") ~> routes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
+    }
+  }
+
+  it should "return 200 + false when ToS is enabled but the user hasn't accepted the ToS" in {
+    val (user, _, routes) = createTestUser(tosEnabled = true, tosAccepted = false)
+
+    Get("/register/user/v1/termsofservice/status") ~> routes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      val res = responseAs[Boolean]
+      res shouldBe false
+    }
+  }
+
+  it should "return 200 + true when ToS is enabled and the user has accepted the ToS" in {
+    val (user, _, routes) = createTestUser(tosEnabled = true, tosAccepted = true)
+
+    Get("/register/user/v1/termsofservice/status") ~> routes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      val res = responseAs[Boolean]
+      res shouldBe true
     }
   }
 
