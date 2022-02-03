@@ -66,23 +66,6 @@ trait UserRoutes extends UserInfoDirectives with SamRequestContextDirectives {
           }
         } ~ withSamRequestContext { samRequestContext =>
           pathPrefix("termsofservice") {
-            pathEndOrSingleSlash {
-              post {
-                requireUserInfo(samRequestContext) { userInfo =>
-                  withTermsOfServiceAcceptance {
-                    complete {
-                      userService.acceptTermsOfService(userInfo.userId, samRequestContext).map { statusOption =>
-                        statusOption
-                          .map { status =>
-                            StatusCodes.OK -> Option(status)
-                          }
-                          .getOrElse(StatusCodes.NotFound -> None)
-                      }
-                    }
-                  }
-                }
-              }
-            } ~
             pathPrefix("status") {
               pathEndOrSingleSlash {
                 get {
@@ -94,6 +77,23 @@ trait UserRoutes extends UserInfoDirectives with SamRequestContextDirectives {
                             StatusCodes.OK -> Option(JsBoolean(status))
                           }
                           .getOrElse(StatusCodes.NotImplemented -> None)
+                      }
+                    }
+                  }
+                }
+              }
+            } ~
+            pathEndOrSingleSlash {
+              post {
+                requireUserInfo(samRequestContext) { userInfo =>
+                  withTermsOfServiceAcceptance {
+                    complete {
+                      userService.acceptTermsOfService(userInfo.userId, samRequestContext).map { statusOption =>
+                        statusOption
+                          .map { status =>
+                            StatusCodes.OK -> Option(status)
+                          }
+                          .getOrElse(StatusCodes.NotFound -> None)
                       }
                     }
                   }
