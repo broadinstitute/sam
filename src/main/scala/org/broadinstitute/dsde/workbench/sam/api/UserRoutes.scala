@@ -76,7 +76,7 @@ trait UserRoutes extends UserInfoDirectives with SamRequestContextDirectives {
                           .map { status =>
                             StatusCodes.OK -> Option(JsBoolean(status))
                           }
-                          .getOrElse(StatusCodes.NotImplemented -> None)
+                          .getOrElse(StatusCodes.NotFound -> None)
                       }
                     }
                   }
