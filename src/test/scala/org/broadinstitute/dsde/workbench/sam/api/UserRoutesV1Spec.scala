@@ -78,7 +78,7 @@ class UserRoutesV1Spec extends UserRoutesSpecHelper{
   "GET /register/user/v1/termsofservice/status" should "return 404 when ToS is disabled" in {
     val (_, _, routes) = createTestUser(tosEnabled = false)
 
-    Get("/register/user/v1/termsofservice") ~> routes.route ~> check {
+    Get("/register/user/v1/termsofservice/status") ~> routes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
   }
@@ -86,7 +86,7 @@ class UserRoutesV1Spec extends UserRoutesSpecHelper{
   it should "return 200 + false when ToS is enabled but the user hasn't accepted the ToS" in {
     val (user, _, routes) = createTestUser(tosEnabled = true, tosAccepted = false)
 
-    Get("/register/user/v1/termsofservice") ~> routes.route ~> check {
+    Get("/register/user/v1/termsofservice/status") ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK
       val res = responseAs[Boolean]
       res shouldBe false
@@ -96,7 +96,7 @@ class UserRoutesV1Spec extends UserRoutesSpecHelper{
   it should "return 200 + true when ToS is enabled and has accepted the ToS" in {
     val (user, _, routes) = createTestUser(tosEnabled = true, tosAccepted = true)
 
-    Get("/register/user/v1/termsofservice") ~> routes.route ~> check {
+    Get("/register/user/v1/termsofservice/status") ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK
       val res = responseAs[Boolean]
       res shouldBe true
