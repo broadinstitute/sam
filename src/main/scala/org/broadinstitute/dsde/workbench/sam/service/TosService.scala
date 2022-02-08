@@ -25,7 +25,7 @@ class TosService (val directoryDao: DirectoryDAO, val registrationDao: Registrat
           logger.info(s"creating new ToS group ${getGroupName()}")
           val groupEmail = WorkbenchEmail(s"GROUP_${getGroupName(tosConfig.version)}@$appsDomain")
           directoryDao.createGroup(BasicWorkbenchGroup(WorkbenchGroupName(getGroupName(tosConfig.version)), Set.empty, groupEmail), None, SamRequestContext(None)).flatMap { createdGroup =>
-            if(tosConfig.version <= 1) registrationDao.disableAllHumanIdentities(SamRequestContext(None)).map { _ => Option(createdGroup)}
+            if(tosConfig.version > 0) registrationDao.disableAllHumanIdentities(SamRequestContext(None)).map { _ => Option(createdGroup)} //special clause for v0 ToS, which will be enforced via a migration (see WOR-118)
             else IO.pure(Option(createdGroup))
           }
         case group => IO.pure(group)
