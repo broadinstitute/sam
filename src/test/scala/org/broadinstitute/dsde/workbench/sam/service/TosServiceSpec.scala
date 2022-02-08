@@ -220,9 +220,9 @@ class TosServiceSpec extends AnyFlatSpec with TestSupport with BeforeAndAfterAll
     val isSAEnabledLdap = regDAO.isEnabled(serviceAccountUser.id, samRequestContext).unsafeRunSync()
     assert(isSAEnabledLdap, "regDAO.isEnabled (first check) should have returned true [SA]")
 
-    //Reset the ToS groups (this will empty the enabled-users group, but it should already be empty)
+    //Reset the ToS groups (this shouldn't do anything to the enabledUsers group, which we'll assert elsewhere below)
     val group = tosServiceEnabledV0.resetTermsOfServiceGroupsIfNeeded().unsafeRunSync()
-    assert(group.isDefined, "resetTermsOfServiceGroupsIfNeeded() should create the group initially")
+    assert(group.isDefined, "resetTermsOfServiceGroupsIfNeeded() should create the Postgres group initially")
 
     //Check if the user is enabled in LDAP
     val isEnabledLdapAfter = regDAO.isEnabled(defaultUser.id, samRequestContext).unsafeRunSync()
@@ -237,7 +237,7 @@ class TosServiceSpec extends AnyFlatSpec with TestSupport with BeforeAndAfterAll
     //Create the users in the system with ToS disabled. This simulates the rollout to production
     Await.result(userServiceTosDisabled.createUser(defaultUser, samRequestContext), Duration.Inf)
 
-    //Reset the ToS groups (this will empty the enabled-users group, but it should already be empty)
+    //Reset the ToS groups
     val group = tosServiceEnabledV0.resetTermsOfServiceGroupsIfNeeded().unsafeRunSync()
     assert(group.isDefined, "resetTermsOfServiceGroupsIfNeeded() should create the group initially")
 
