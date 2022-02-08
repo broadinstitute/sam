@@ -239,18 +239,18 @@ class TosServiceSpec extends AnyFlatSpec with TestSupport with BeforeAndAfterAll
 
     //Reset the ToS groups
     val group = tosServiceEnabledV0.resetTermsOfServiceGroupsIfNeeded().unsafeRunSync()
-    assert(group.isDefined, "resetTermsOfServiceGroupsIfNeeded() should create the group initially")
+    assert(group.isDefined, "resetTermsOfServiceGroupsIfNeeded() should create the Postgres group initially")
 
     //Check if the user has accepted ToS and is enabled in Postgres
     val isEnabledViaToS = tosServiceEnabledV0.getTosStatus(defaultUser.id).unsafeRunSync().get
-    assert(!isEnabledViaToS, "dirDAO.isEnabled (first check) should have returned false [User]")
+    assert(!isEnabledViaToS, "tosServiceEnabledV0.getTosStatus (first check) should have returned false [User]")
 
     //As the above user, accept the ToS
     userServiceTosEnabledV0.acceptTermsOfService(defaultUser.id, samRequestContext).unsafeRunSync()
 
     //Check if the user has accepted ToS and is enabled in Postgres
     val isEnabledViaToSAfter = tosServiceEnabledV0.getTosStatus(defaultUser.id).unsafeRunSync().get
-    assert(isEnabledViaToSAfter, "dirDAO.isEnabled (second check) should have returned true [User]")
+    assert(isEnabledViaToSAfter, "tosServiceEnabledV0.getTosStatus (second check) should have returned true [User]")
   }
 
 }
