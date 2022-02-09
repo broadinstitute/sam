@@ -1,3 +1,5 @@
+# Terra Terms of Service
+
 Your access to systems and networks owned by The Broad Institute, Inc.
 ("Broad") is governed by, and subject to the following terms and
 conditions, as well as all Federal laws, including, but not limited to,
@@ -12,7 +14,7 @@ Privacy Act, and applicable State and Federal laws.
 Terra uses cookies to enable sign on and other essential features when
 signed in, and to provide statistics to our development team regarding
 how the site is used. For more information, see our privacy policy.
-[Privacy policy, including privacy policy of uploaded data, is here](/#privacy).
+[Privacy policy, including privacy policy of uploaded data, is here](https://app.terra.bio/#privacy).
 You agree to read and consider before uploading data.
 
 ## Modification of the Agreement
@@ -53,13 +55,13 @@ laws, statutes, rules, and regulations pertaining to your use of Terra.
     computer unattended while logged into the system.
 
 -   Ensure that Web browsers use Secure Socket Layer (SSL) version 3.0
-    (or higher) and Transport Layer Security (TLS) 1.0 (or higher).
+    (or higher) and Transport Layer Security (TLS) 1.2 (or higher).
     SSL and TLS must use a minimum of 256-bit, encryption.
 
 -   Safeguard system resources against waste, loss, abuse, unauthorized
     use or disclosure, and misappropriation.
 
--   Contact the the Broad Institute Operations Center
+-   Contact the Broad Institute Operations Center
     (infosec@broadinstitute.org) if you do not understand any of
     these rules.
 
@@ -90,10 +92,10 @@ laws, statutes, rules, and regulations pertaining to your use of Terra.
 -   Post any material that infringes or violates the
     academic/intellectual rights of others.
 
--   View or use The Cancer Genome Atlas ("TCGA") controlled access data
-    hosted on Terra unless you are authorized through dbGaP.
+-   View or use federal controlled access data hosted on Terra unless you
+    are authorized through dbGaP.
 
--   Share or distribute TCGA controlled access data hosted on Terra with
+-   Share or distribute federal controlled access data hosted on Terra with 
     other users unless they have dbGaP authorization.
 
 -   Use Terra to generate, distribute, publish, or facilitate
@@ -142,8 +144,8 @@ By accepting these Terms of Service, you acknowledge:
     datasets may result in disciplinary action, civil, and/or criminal
     penalties. Unauthorized users of these websites or datasets should
     have no expectation of privacy regarding any communications or
-    data processed by these websites.
-    [A list of US Government websites and datasets can be found here](https://support.terra.bio/hc/en-us/community/posts/360056900812-Government-owned-Websites-and-Datasets-Last-Revised-Feb-5-2020-)
+    data processed by these websites. [A list of US
+    Government websites and datasets can be found here](https://support.terra.bio/hc/en-us/community/posts/360056900812-Government-owned-Websites-and-Datasets-Last-Revised-Feb-5-2020-)
 
 -   By using any of these websites or otherwise accessing these datasets
     through Terra, you expressly consent to monitoring of your actions
@@ -160,20 +162,20 @@ legitimate tasks or assigned duties. If you believe you are being
 granted access that you should not have, you must immediately notify the
 Broad Operations Center at infosec@broadinstitute.org.
 
-## Restricted Use of TCGA Controlled-Access Data
+## Restricted Use of Federal Controlled-Access Data
 
-To access TCGA controlled access data, you must first request to link
+To access federal controlled access data, you must first request to link
 your Terra account to the eRA Commons or NIH identity under which you
 are granted dbGaP authorized access. If you have dbGaP authorized
-access, Terra permits read access to the TCGA controlled-access data
-files.
+access, Terra permits read access to those the federal controlled-access
+data files.
 
 If the NIH or eRA commons identity authentication fails or the
 authenticated identity no longer appears in the NIH-provided whitelist,
-you can no longer access TCGA controlled access data files. It is your
-responsibility to delete any TCGA controlled-access data in your
+you can no longer access federal controlled access data files. It is your
+responsibility to delete any federal controlled-access data in your
 personal workspaces if you lose dbGaP authorized access. You must also
-refrain from distributing TCGA controlled access data to users unless
+refrain from distributing federal controlled access data to users unless
 they have dbGaP authorized access.
 
 ## Termination of Use
@@ -269,4 +271,4 @@ including attorneys' fees and costs, arising out of or relating to your
 uploading, storing, or transferring of PHI without having fully
 implemented the Clinical Features.
 
-Terms as of February 12, 2020.
+Terms as of February 25, 2022.
