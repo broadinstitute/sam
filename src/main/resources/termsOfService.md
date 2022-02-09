@@ -144,8 +144,8 @@ By accepting these Terms of Service, you acknowledge:
     datasets may result in disciplinary action, civil, and/or criminal
     penalties. Unauthorized users of these websites or datasets should
     have no expectation of privacy regarding any communications or
-    data processed by these websites. [A list of US
-    Government websites and datasets can be found here](https://support.terra.bio/hc/en-us/community/posts/360056900812-Government-owned-Websites-and-Datasets-Last-Revised-Feb-5-2020-)
+    data processed by these websites.
+    [A list of US Government websites and datasets can be found here](https://support.terra.bio/hc/en-us/community/posts/360056900812-Government-owned-Websites-and-Datasets-Last-Revised-Feb-5-2020-)
 
 -   By using any of these websites or otherwise accessing these datasets
     through Terra, you expressly consent to monitoring of your actions
