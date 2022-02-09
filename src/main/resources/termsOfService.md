@@ -1,5 +1,3 @@
-# Terra Terms of Service
-
 Your access to systems and networks owned by The Broad Institute, Inc.
 ("Broad") is governed by, and subject to the following terms and
 conditions, as well as all Federal laws, including, but not limited to,
