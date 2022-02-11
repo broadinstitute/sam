@@ -1,7 +1,5 @@
 package org.broadinstitute.dsde.workbench.test.api
 
-
-import java.util.UUID
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.HttpMethods.GET
 import akka.http.scaladsl.model.{HttpRequest, StatusCodes}
@@ -10,31 +8,35 @@ import akka.testkit.TestKitBase
 import org.broadinstitute.dsde.workbench.auth.{AuthToken, AuthTokenScopes, ServiceAccountAuthTokenFromJson, ServiceAccountAuthTokenFromPem}
 import org.broadinstitute.dsde.workbench.config.{Credentials, UserPool}
 import org.broadinstitute.dsde.workbench.dao.Google.{googleDirectoryDAO, googleIamDAO}
-import org.broadinstitute.dsde.workbench.fixture.BillingFixtures
+import org.broadinstitute.dsde.workbench.fixture.BillingFixtures.withCleanBillingProject
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccountName}
 import org.broadinstitute.dsde.workbench.service.Sam.sendRequest
 import org.broadinstitute.dsde.workbench.service.SamModel._
+import org.broadinstitute.dsde.workbench.service._
 import org.broadinstitute.dsde.workbench.service.test.CleanUp
-import org.broadinstitute.dsde.workbench.service.{Orchestration, Sam, Thurloe, _}
+import org.broadinstitute.dsde.workbench.service.util.Tags
 import org.broadinstitute.dsde.workbench.test.SamConfig
 import org.scalatest.concurrent.{Eventually, ScalaFutures}
-import org.scalatest.time.{Seconds, Span}
-import org.broadinstitute.dsde.workbench.service.util.Tags
-
-import scala.concurrent.Await
-import scala.concurrent.duration.{Duration, _}
 import org.scalatest.freespec.AnyFreeSpec
 import org.scalatest.matchers.should.Matchers
+import org.scalatest.time.{Seconds, Span}
 
-class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with ScalaFutures with CleanUp with Eventually with TestKitBase {
+import java.util.UUID
+import scala.concurrent.Await
+import scala.concurrent.duration.{Duration, _}
+
+class SamApiSpec extends AnyFreeSpec with Matchers with ScalaFutures with CleanUp with Eventually with TestKitBase {
+
   implicit override val patienceConfig: PatienceConfig = PatienceConfig(timeout = scaled(Span(5, Seconds)))
   implicit lazy val system = ActorSystem()
 
   val gcsConfig = SamConfig.GCS
 
+  val billingAccountName: String = "billing-account-name"
+
   def registerAsNewUser(email: WorkbenchEmail)(implicit authToken: AuthToken): Unit = {
-    val newUserProfile = Orchestration.profile.BasicProfile (
+    val newUserProfile = Orchestration.profile.BasicProfile(
       firstName = "Generic",
       lastName = "Testerson",
       title = "User",
@@ -73,7 +75,7 @@ class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with Sca
           user.userInfo
         }
         case None => {
-          logger.info (s"User ${tempUser.email} does not yet exist! Registering user.")
+          logger.info(s"User ${tempUser.email} does not yet exist! Registering user.")
           Sam.user.registerSelf()(tempAuthToken)
           Sam.user.status()(tempAuthToken).get.userInfo
         }
@@ -130,7 +132,7 @@ class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with Sca
       val userStatus = Sam.user.status()(userAuthToken).get
 
       // user a brand new billing project to ensure known state for pet (not present)
-      withBrandNewBillingProject("new-pet-test") { projectName =>
+      withCleanBillingProject(billingAccountName, projectNamePrefix = "new-pet-test") { projectName =>
         val petAccountEmail = Sam.user.petServiceAccountEmail(projectName)(userAuthToken)
         petAccountEmail.value should not be userStatus.userInfo.userEmail
         googleIamDAO.findServiceAccount(GoogleProject(projectName), petAccountEmail).futureValue.map(_.email) shouldBe Some(petAccountEmail)
@@ -177,13 +179,13 @@ class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with Sca
 
       val expectedProxyEmail1 = s"$userId1@${gcsConfig.appsDomain}"
 
-      proxyGroup1_1.value should endWith (expectedProxyEmail1)
-      proxyGroup1_2.value should endWith (expectedProxyEmail1)
+      proxyGroup1_1.value should endWith(expectedProxyEmail1)
+      proxyGroup1_2.value should endWith(expectedProxyEmail1)
 
       val expectedProxyEmail2 = s"$userId2@${gcsConfig.appsDomain}"
 
-      proxyGroup2_1.value should endWith (expectedProxyEmail2)
-      proxyGroup2_2.value should endWith (expectedProxyEmail2)
+      proxyGroup2_1.value should endWith(expectedProxyEmail2)
+      proxyGroup2_2.value should endWith(expectedProxyEmail2)
     }
 
     "should retrieve a user's proxy group from a pet service account email as any user" in {
@@ -191,7 +193,7 @@ class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with Sca
       val authToken1: AuthToken = user1.makeAuthToken()
       val authToken2: AuthToken = user2.makeAuthToken()
 
-      withCleanBillingProject(UserPool.chooseProjectOwner, List(user1.email, user2.email)) { project =>
+      withCleanBillingProject(billingAccountName, owners = List(user1.email, user2.email)) { project =>
         val email = WorkbenchEmail(Sam.user.status()(authToken1).get.userInfo.userEmail)
         val username = email.value.split("@").head
         val userId = Sam.user.status()(authToken1).get.userInfo.userSubjectId
@@ -205,14 +207,13 @@ class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with Sca
 
         proxyGroup_1.value should endWith(expectedProxyEmail)
         proxyGroup_2.value should endWith(expectedProxyEmail)
-      }
+      }(UserPool.chooseProjectOwner.makeAuthToken())
     }
-
 
     "should furnish a new service account key and cache it for further retrievals" in {
       val user = UserPool.chooseStudent
 
-      withCleanBillingProject(UserPool.chooseProjectOwner, List(user.email)) { project =>
+      withCleanBillingProject(billingAccountName, owners = List(user.email)) { project =>
         withCleanUp {
           val key1 = Sam.user.petServiceAccountKey(project)(user.makeAuthToken())
           val key2 = Sam.user.petServiceAccountKey(project)(user.makeAuthToken())
@@ -221,13 +222,13 @@ class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with Sca
 
           register cleanUp Sam.user.deletePetServiceAccountKey(project, getFieldFromJson(key1, "private_key_id"))(user.makeAuthToken())
         }
-      }
+      }(UserPool.chooseProjectOwner.makeAuthToken())
     }
 
     "should furnish a new service account key after deleting a cached key" in {
       val user = UserPool.chooseStudent
 
-      withCleanBillingProject(UserPool.chooseProjectOwner, List(user.email)) { project =>
+      withCleanBillingProject(billingAccountName, owners = List(user.email)) { project =>
         withCleanUp {
 
           val key1 = Sam.user.petServiceAccountKey(project)(user.makeAuthToken())
@@ -238,7 +239,7 @@ class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with Sca
 
           key1 shouldNot be(key2)
         }
-      }
+      }(UserPool.chooseProjectOwner.makeAuthToken())
     }
 
     //this is ignored because there is a permission error with GPAlloc that needs to be looked into.
@@ -246,17 +247,18 @@ class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with Sca
     // @mbemis
     "should re-create a pet SA in google even if it still exists in sam" ignore {
       val user = UserPool.chooseStudent
+      implicit val userAuthToken = user.makeAuthToken()
 
       //this must use a GPAlloc'd project to avoid deleting the pet for a shared project, which
       //may have unexpected side effects
-      withCleanBillingProject(user) { projectName =>
+      withCleanBillingProject(billingAccountName) { projectName =>
         withCleanUp {
-          val petSaKeyOriginal = Sam.user.petServiceAccountKey(projectName)(user.makeAuthToken())
+          val petSaKeyOriginal = Sam.user.petServiceAccountKey(projectName)
           val petSaEmailOriginal = getFieldFromJson(petSaKeyOriginal, "client_email")
           val petSaKeyIdOriginal = getFieldFromJson(petSaKeyOriginal, "private_key_id")
           val petSaName = petSaEmailOriginal.split('@').head
 
-          register cleanUp Sam.user.deletePetServiceAccountKey(projectName, petSaKeyIdOriginal)(user.makeAuthToken())
+          register cleanUp Sam.user.deletePetServiceAccountKey(projectName, petSaKeyIdOriginal)
 
           //act as a rogue process and delete the pet SA without telling sam
           Await.result(googleIamDAO.removeServiceAccount(GoogleProject(projectName), ServiceAccountName(petSaName)), Duration.Inf)
@@ -265,7 +267,7 @@ class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with Sca
           val petSaEmailNew = getFieldFromJson(petSaKeyNew, "client_email")
           val petSaKeyIdNew = getFieldFromJson(petSaKeyNew, "private_key_id")
 
-          register cleanUp Sam.user.deletePetServiceAccountKey(projectName, petSaKeyIdNew)(user.makeAuthToken())
+          register cleanUp Sam.user.deletePetServiceAccountKey(projectName, petSaKeyIdNew)
 
           petSaEmailOriginal should equal(petSaEmailNew) //sanity check to make sure the SA is the same
           petSaKeyIdOriginal should not equal petSaKeyIdNew //make sure we were able to generate a new key and that a new one was returned
@@ -276,9 +278,9 @@ class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with Sca
     "should get an access token for a user's own pet service account" in {
       val user = UserPool.chooseStudent
 
-      withCleanBillingProject(UserPool.chooseProjectOwner, List(user.email)) { project =>
+      withCleanBillingProject(billingAccountName, owners = List(user.email)) { project =>
         // get my pet's email
-        val petEmail1 =  Sam.user.petServiceAccountEmail(project)(user.makeAuthToken())
+        val petEmail1 = Sam.user.petServiceAccountEmail(project)(user.makeAuthToken())
 
         val scopes = Set("https://www.googleapis.com/auth/userinfo.email", "https://www.googleapis.com/auth/userinfo.profile")
 
@@ -296,15 +298,16 @@ class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with Sca
 
         // result should be the same
         petEmail2 shouldBe petEmail1
-      }
+      }(UserPool.chooseProjectOwner.makeAuthToken())
     }
 
     "should arbitrarily choose a project to return a pet key for when the user has existing pets" in {
       val user = UserPool.chooseStudent
       val userToken = user.makeAuthToken()
+      val projectOwnerAuthToken = UserPool.chooseProjectOwner.makeAuthToken()
 
-      withCleanBillingProject(UserPool.chooseProjectOwner, List(user.email)) { project1 =>
-        withCleanBillingProject(UserPool.chooseProjectOwner, List(user.email)) { project2 =>
+      withCleanBillingProject(billingAccountName, owners = List(user.email)) { _ =>
+        withCleanBillingProject(billingAccountName, owners = List(user.email)) { _ =>
           // get my pet's email thru the arbitrary key endpoint
           val petEmailArbitrary = getFieldFromJson(Sam.user.arbitraryPetServiceAccountKey()(userToken), "client_email")
 
@@ -313,8 +316,8 @@ class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with Sca
 
           // result should be a pet associated with the user
           assert(petEmailArbitrary.contains(userSubjectId))
-        }
-      }
+        }(projectOwnerAuthToken)
+      }(projectOwnerAuthToken)
     }
 
     "should arbitrarily choose a project to return a pet key for when the user has no existing pets" in {
@@ -332,9 +335,9 @@ class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with Sca
     "should arbitrarily choose a project to return a pet token for when the user has existing pets" in {
       val user = UserPool.chooseStudent
 
-      withCleanBillingProject(UserPool.chooseProjectOwner, List(user.email)) { project =>
+      withCleanBillingProject(billingAccountName, owners = List(user.email)) { project =>
         // get my pet's email
-        val petEmail1 =  Sam.user.petServiceAccountEmail(project)(user.makeAuthToken())
+        val petEmail1 = Sam.user.petServiceAccountEmail(project)(user.makeAuthToken())
 
         val scopes = Set("https://www.googleapis.com/auth/userinfo.email", "https://www.googleapis.com/auth/userinfo.profile")
 
@@ -352,7 +355,7 @@ class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with Sca
 
         // result should be the same
         petEmail2 shouldBe petEmail1
-      }
+      }(UserPool.chooseProjectOwner.makeAuthToken())
     }
 
     "should arbitrarily choose a project to return a pet token for when the user has no existing pets" in {
@@ -382,7 +385,8 @@ class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with Sca
       val adminPolicyName = "admin"
       val Seq(user1: Credentials, user2: Credentials, user3: Credentials) = UserPool.chooseStudents(3)
       val user1AuthToken = user1.makeAuthToken()
-      val Seq(user1Proxy: WorkbenchEmail, user2Proxy: WorkbenchEmail, user3Proxy: WorkbenchEmail) = Seq(user1, user2, user3).map(user => Sam.user.proxyGroup(user.email)(user1AuthToken))
+      val Seq(user1Proxy: WorkbenchEmail, user2Proxy: WorkbenchEmail, user3Proxy: WorkbenchEmail) =
+        Seq(user1, user2, user3).map(user => Sam.user.proxyGroup(user.email)(user1AuthToken))
 
       Sam.user.createGroup(managedGroupId)(user1AuthToken)
       register cleanUp Sam.user.deleteGroup(managedGroupId)(user1AuthToken)
@@ -395,38 +399,50 @@ class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with Sca
 
       // The admin policy should contain only the user that created the group
       awaitAssert(
-        Await.result(googleDirectoryDAO.listGroupMembers(policyEmail.head), 5.minutes)
+        Await
+          .result(googleDirectoryDAO.listGroupMembers(policyEmail.head), 5.minutes)
           .getOrElse(Set.empty) should contain theSameElementsAs Set(user1Proxy.value),
-        5.minutes, 5.seconds)
+        5.minutes,
+        5.seconds
+      )
 
       // Change the membership of the admin policy to include users 1 and 2
       Sam.user.setPolicyMembers(managedGroupId, adminPolicyName, Set(user1.email, user2.email))(user1AuthToken)
       awaitAssert(
-        Await.result(googleDirectoryDAO.listGroupMembers(policyEmail.head), 5.minutes)
+        Await
+          .result(googleDirectoryDAO.listGroupMembers(policyEmail.head), 5.minutes)
           .getOrElse(Set.empty) should contain theSameElementsAs Set(user1Proxy.value, user2Proxy.value),
-        5.minutes, 5.seconds)
+        5.minutes,
+        5.seconds
+      )
 
       // Add user 3 to the admin policy
       Sam.user.addUserToPolicy(managedGroupId, adminPolicyName, user3.email)(user1AuthToken)
       awaitAssert(
-        Await.result(googleDirectoryDAO.listGroupMembers(policyEmail.head), 5.minutes)
+        Await
+          .result(googleDirectoryDAO.listGroupMembers(policyEmail.head), 5.minutes)
           .getOrElse(Set.empty) should contain theSameElementsAs Set(user1Proxy.value, user2Proxy.value, user3Proxy.value),
-        5.minutes, 5.seconds)
+        5.minutes,
+        5.seconds
+      )
 
       // Remove user 2 from the admin policy
       Sam.user.removeUserFromPolicy(managedGroupId, adminPolicyName, user2.email)(user1AuthToken)
       awaitAssert(
-        Await.result(googleDirectoryDAO.listGroupMembers(policyEmail.head), 5.minutes)
+        Await
+          .result(googleDirectoryDAO.listGroupMembers(policyEmail.head), 5.minutes)
           .getOrElse(Set.empty) should contain theSameElementsAs Set(user1Proxy.value, user3Proxy.value),
-        5.minutes, 5.seconds)
+        5.minutes,
+        5.seconds
+      )
     }
 
     "should only synchronize the intersection group for policies constrained by auth domains" taggedAs Tags.ExcludeInAlpha in {
       val authDomainId = UUID.randomUUID.toString
       val Seq(inPolicyUser: Credentials, inAuthDomainUser: Credentials, inBothUser: Credentials) = UserPool.chooseStudents(3)
       val inBothUserAuthToken = inBothUser.makeAuthToken()
-      val Seq(inAuthDomainUserProxy: WorkbenchEmail, inBothUserProxy: WorkbenchEmail) = Seq(inAuthDomainUser, inBothUser).map {
-        user => Sam.user.proxyGroup(user.email)(inBothUserAuthToken)
+      val Seq(inAuthDomainUserProxy: WorkbenchEmail, inBothUserProxy: WorkbenchEmail) = Seq(inAuthDomainUser, inBothUser).map { user =>
+        Sam.user.proxyGroup(user.email)(inBothUserAuthToken)
       }
 
       // Create group that will act as auth domain
@@ -442,15 +458,21 @@ class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with Sca
       assert(authDomainAdminEmail.size == 1)
 
       awaitAssert(
-        Await.result(googleDirectoryDAO.listGroupMembers(authDomainAdminEmail.head), 5.minutes)
+        Await
+          .result(googleDirectoryDAO.listGroupMembers(authDomainAdminEmail.head), 5.minutes)
           .getOrElse(Set.empty) should contain theSameElementsAs Set(inBothUserProxy.value),
-        5.minutes, 5.seconds)
+        5.minutes,
+        5.seconds
+      )
 
       Sam.user.setPolicyMembers(authDomainId, "admin", Set(inAuthDomainUser.email, inBothUser.email))(inBothUserAuthToken)
       awaitAssert(
-        Await.result(googleDirectoryDAO.listGroupMembers(authDomainAdminEmail.head), 5.minutes)
+        Await
+          .result(googleDirectoryDAO.listGroupMembers(authDomainAdminEmail.head), 5.minutes)
           .getOrElse(Set.empty) should contain theSameElementsAs Set(inBothUserProxy.value, inAuthDomainUserProxy.value),
-        5.minutes, 5.seconds)
+        5.minutes,
+        5.seconds
+      )
 
       val resourceTypeName = "workspace"
       val resourceId = UUID.randomUUID.toString
@@ -472,16 +494,19 @@ class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with Sca
 
       // Google should only know about the user that is in both the auth domain group and the constrained policy
       awaitAssert(
-        Await.result(googleDirectoryDAO.listGroupMembers(resourceOwnerEmail.head), 5.minutes)
+        Await
+          .result(googleDirectoryDAO.listGroupMembers(resourceOwnerEmail.head), 5.minutes)
           .getOrElse(Set.empty) should contain theSameElementsAs Set(inBothUserProxy.value),
-        5.minutes, 5.seconds)
+        5.minutes,
+        5.seconds
+      )
     }
 
     "should only synchronize all policy members for constrainable policies without auth domains" taggedAs Tags.ExcludeInAlpha in {
       val Seq(policyUser: Credentials, policyUser1: Credentials, policyUser2: Credentials) = UserPool.chooseStudents(3)
       val policyUser2Token = policyUser2.makeAuthToken()
-      val Seq(policyUser1Proxy: WorkbenchEmail, policyUser2Proxy: WorkbenchEmail) = Seq(policyUser1, policyUser2).map {
-        user => Sam.user.proxyGroup(user.email)(policyUser2Token)
+      val Seq(policyUser1Proxy: WorkbenchEmail, policyUser2Proxy: WorkbenchEmail) = Seq(policyUser1, policyUser2).map { user =>
+        Sam.user.proxyGroup(user.email)(policyUser2Token)
       }
 
       val resourceTypeName = "workspace"
@@ -504,9 +529,12 @@ class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with Sca
 
       // Google should only know about the user that is in both the auth domain group and the constrained policy
       awaitAssert(
-        Await.result(googleDirectoryDAO.listGroupMembers(resourceOwnerEmail.head), 5.minutes)
+        Await
+          .result(googleDirectoryDAO.listGroupMembers(resourceOwnerEmail.head), 5.minutes)
           .getOrElse(Set.empty) should contain theSameElementsAs Set(policyUser1Proxy.value, policyUser2Proxy.value),
-        5.minutes, 5.seconds)
+        5.minutes,
+        5.seconds
+      )
     }
 
     "should synchronize the all users group for public policies" taggedAs Tags.ExcludeInAlpha in {
@@ -528,17 +556,23 @@ class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with Sca
       val adminNotifierPolicy = policies.filter(_.policyName equals adminNotifierPolicyName).last
 
       awaitAssert(
-        Await.result(googleDirectoryDAO.listGroupMembers(adminPolicy.email), 5.minutes)
+        Await
+          .result(googleDirectoryDAO.listGroupMembers(adminPolicy.email), 5.minutes)
           .getOrElse(Set.empty) should contain theSameElementsAs Set(user1Proxy.value),
-        5.minutes, 5.seconds)
+        5.minutes,
+        5.seconds
+      )
 
       Sam.user.syncResourcePolicy(resourceTypeName, resourceId, adminNotifierPolicyName)(user1AuthToken)
       Sam.user.makeResourcePolicyPublic(resourceTypeName, resourceId, adminNotifierPolicyName, true)(user1AuthToken)
 
       awaitAssert(
-        Await.result(googleDirectoryDAO.listGroupMembers(adminNotifierPolicy.email), 5.minutes)
+        Await
+          .result(googleDirectoryDAO.listGroupMembers(adminNotifierPolicy.email), 5.minutes)
           .getOrElse(Set.empty) should contain theSameElementsAs Set(allUsersGroupEmail.value),
-        5.minutes, 5.seconds)
+        5.minutes,
+        5.seconds
+      )
     }
 
     "should not allow pet creation in a project that belongs to an external org" in {
