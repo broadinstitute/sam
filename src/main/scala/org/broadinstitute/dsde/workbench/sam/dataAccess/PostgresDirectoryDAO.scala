@@ -2,9 +2,9 @@ package org.broadinstitute.dsde.workbench.sam.dataAccess
 
 import java.time.Instant
 import java.util.Date
-
 import akka.http.scaladsl.model.StatusCodes
 import cats.effect.{ContextShift, IO, Timer}
+import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.sam._
@@ -21,7 +21,7 @@ import scalikejdbc._
 import scala.concurrent.duration.DurationInt
 import scala.util.{Failure, Try}
 
-class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val readDbRef: DbReference)(implicit val cs: ContextShift[IO], timer: Timer[IO]) extends DirectoryDAO with DatabaseSupport with PostgresGroupDAO {
+class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val readDbRef: DbReference)(implicit val cs: ContextShift[IO], timer: Timer[IO]) extends DirectoryDAO with DatabaseSupport with PostgresGroupDAO with LazyLogging {
 
   override def getConnectionType(): ConnectionType = ConnectionType.Postgres
 
@@ -640,7 +640,7 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
            values (${petServiceAccount.id.userId}, ${petServiceAccount.id.project}, ${petServiceAccount.serviceAccount.subjectId}, ${petServiceAccount.serviceAccount.email}, ${petServiceAccount.serviceAccount.displayName})"""
         .update().apply()
       petServiceAccount
-    })
+    }) <* IO(logger.info(s"inserted pet service account [$petServiceAccount]"))
   }
 
   override def loadPetServiceAccount(petServiceAccountId: PetServiceAccountId, samRequestContext: SamRequestContext): IO[Option[PetServiceAccount]] = {
@@ -663,7 +663,7 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       if (deletePetQuery.update().apply() != 1) {
         throw new WorkbenchException(s"${petServiceAccountId} cannot be deleted because it already does not exist")
       }
-    })
+    }) <* IO(logger.info(s"deleted pet service account [$petServiceAccountId]"))
   }
 
   override def getAllPetServiceAccountsForUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Seq[PetServiceAccount]] = {

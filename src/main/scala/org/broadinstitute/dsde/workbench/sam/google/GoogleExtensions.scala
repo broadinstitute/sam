@@ -315,7 +315,10 @@ class GoogleExtensions(
         case None =>
           for {
             _ <- assertProjectInTerraOrg(project)
-            sa <- IO.fromFuture(IO(googleIamDAO.createServiceAccount(project, petSaName, petSaDisplayName)))
+            sa <- IO.fromFuture(IO(googleIamDAO.createServiceAccount(project, petSaName, petSaDisplayName))).map { sa =>
+              logger.info(s"service account created in google: [$sa]")
+              sa
+            }
             _ <- IO.fromFuture(IO(withProxyEmail(user.id) { proxyEmail =>
               // Add group member by uniqueId instead of email to avoid race condition
               // See: https://broadworkbench.atlassian.net/browse/CA-1005
