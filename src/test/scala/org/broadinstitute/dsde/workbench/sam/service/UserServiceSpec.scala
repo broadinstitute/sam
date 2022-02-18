@@ -57,9 +57,11 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
   var service: UserService = _
   var tos: TosService = _
   var serviceTosEnabled: UserService = _
-  var serviceTosEnabledWithGracePeriod: UserService = _
+  var serviceTosEnabledGracePeriodDisabled: UserService = _
+  var serviceTosEnabledGracePeriodEnabled: UserService = _
   var tosServiceEnabled: TosService = _
-  var tosServiceEnabledWithGracePeriod: TosService = _
+  var tosServiceEnabledGracePeriodDisabled: TosService = _
+  var tosServiceEnabledGracePeriodEnabled: TosService = _
   var googleExtensions: GoogleExtensions = _
   val blockedDomain = "blocked.domain.com"
 
@@ -87,9 +89,11 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     runAndWait(registrationDAO.createEnabledUsersGroup(samRequestContext).unsafeToFuture())
 
     tosServiceEnabled = new TosService(dirDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig.copy(enabled = true))
-    tosServiceEnabledWithGracePeriod = new TosService(dirDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig.copy(enabled = true, enableGracePeriod = true))
+    tosServiceEnabledGracePeriodEnabled = new TosService(dirDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig.copy(enabled = true, enableGracePeriod = true))
+    tosServiceEnabledGracePeriodDisabled = new TosService(dirDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig.copy(enabled = true, enableGracePeriod = false))
     serviceTosEnabled = new UserService(dirDAO, googleExtensions, registrationDAO, Seq(blockedDomain), tosServiceEnabled)
-    serviceTosEnabledWithGracePeriod = new UserService(dirDAO, googleExtensions, registrationDAO, Seq(blockedDomain), tosServiceEnabledWithGracePeriod)
+    serviceTosEnabledGracePeriodEnabled = new UserService(dirDAO, googleExtensions, registrationDAO, Seq(blockedDomain), tosServiceEnabledGracePeriodEnabled)
+    serviceTosEnabledGracePeriodDisabled = new UserService(dirDAO, googleExtensions, registrationDAO, Seq(blockedDomain), tosServiceEnabledGracePeriodDisabled)
   }
 
   protected def clearDatabase(): Unit = {
@@ -142,10 +146,17 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
   }
 
   it should "enable a user immediately if ToS is enabled and the grace period is enabled" in {
-    tosServiceEnabled.resetTermsOfServiceGroupsIfNeeded().unsafeRunSync()
-    serviceTosEnabledWithGracePeriod.createUser(defaultUser, samRequestContext).futureValue
-    val userGroups = dirDAO.listUsersGroups(defaultUserId, samRequestContext).unsafeRunSync()
-    userGroups should have size 2
+    tosServiceEnabledGracePeriodEnabled.resetTermsOfServiceGroupsIfNeeded().unsafeRunSync()
+    serviceTosEnabledGracePeriodEnabled.createUser(defaultUser, samRequestContext).futureValue
+    val isEnabled = registrationDAO.isEnabled(defaultUserId, samRequestContext).unsafeRunSync()
+    isEnabled shouldBe true
+  }
+
+  it should "not enable a user immediately if ToS is enabled and the grace period is disabled" in {
+    tosServiceEnabledGracePeriodDisabled.resetTermsOfServiceGroupsIfNeeded().unsafeRunSync()
+    serviceTosEnabledGracePeriodDisabled.createUser(defaultUser, samRequestContext).futureValue
+    val isEnabled = registrationDAO.isEnabled(defaultUserId, samRequestContext).unsafeRunSync()
+    isEnabled shouldBe false
   }
 
   it should "get user status" in {
