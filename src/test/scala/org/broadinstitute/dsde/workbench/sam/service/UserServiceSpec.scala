@@ -57,7 +57,9 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
   var service: UserService = _
   var tos: TosService = _
   var serviceTosEnabled: UserService = _
+  var serviceTosEnabledWithGracePeriod: UserService = _
   var tosServiceEnabled: TosService = _
+  var tosServiceEnabledWithGracePeriod: TosService = _
   var googleExtensions: GoogleExtensions = _
   val blockedDomain = "blocked.domain.com"
 
@@ -85,7 +87,9 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     runAndWait(registrationDAO.createEnabledUsersGroup(samRequestContext).unsafeToFuture())
 
     tosServiceEnabled = new TosService(dirDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig.copy(enabled = true))
+    tosServiceEnabledWithGracePeriod = new TosService(dirDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig.copy(enabled = true, enableGracePeriod = true))
     serviceTosEnabled = new UserService(dirDAO, googleExtensions, registrationDAO, Seq(blockedDomain), tosServiceEnabled)
+    serviceTosEnabledWithGracePeriod = new UserService(dirDAO, googleExtensions, registrationDAO, Seq(blockedDomain), tosServiceEnabledWithGracePeriod)
   }
 
   protected def clearDatabase(): Unit = {
@@ -135,6 +139,12 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     service.createUser(defaultUser, samRequestContext).futureValue
     val userGroups = dirDAO.listUsersGroups(defaultUserId, samRequestContext).unsafeRunSync()
     userGroups should have size 1
+  }
+
+  it should "enable a user immediately if ToS is enabled and the grace period is enabled" in {
+    serviceTosEnabledWithGracePeriod.createUser(defaultUser, samRequestContext).futureValue
+    val userGroups = dirDAO.listUsersGroups(defaultUserId, samRequestContext).unsafeRunSync()
+    userGroups should have size 2
   }
 
   it should "get user status" in {
