@@ -89,8 +89,8 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     runAndWait(registrationDAO.createEnabledUsersGroup(samRequestContext).unsafeToFuture())
 
     tosServiceEnabled = new TosService(dirDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig.copy(enabled = true))
-    tosServiceEnabledGracePeriodEnabled = new TosService(dirDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig.copy(enabled = true, enableGracePeriod = true))
-    tosServiceEnabledGracePeriodDisabled = new TosService(dirDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig.copy(enabled = true, enableGracePeriod = false))
+    tosServiceEnabledGracePeriodEnabled = new TosService(dirDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig.copy(enabled = true, isGracePeriodEnabled = true))
+    tosServiceEnabledGracePeriodDisabled = new TosService(dirDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig.copy(enabled = true, isGracePeriodEnabled = false))
     serviceTosEnabled = new UserService(dirDAO, googleExtensions, registrationDAO, Seq(blockedDomain), tosServiceEnabled)
     serviceTosEnabledGracePeriodEnabled = new UserService(dirDAO, googleExtensions, registrationDAO, Seq(blockedDomain), tosServiceEnabledGracePeriodEnabled)
     serviceTosEnabledGracePeriodDisabled = new UserService(dirDAO, googleExtensions, registrationDAO, Seq(blockedDomain), tosServiceEnabledGracePeriodDisabled)
