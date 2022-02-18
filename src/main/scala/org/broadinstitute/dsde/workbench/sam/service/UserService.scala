@@ -234,7 +234,6 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
 
   private def enableIdentityIfTosAccepted(user: WorkbenchUser, samRequestContext: SamRequestContext): IO[Unit] = {
     val gracePeriodEnabled = tosService.tosConfig.enableGracePeriod
-    println(gracePeriodEnabled)
     tosService.getTosStatus(user.id)
       .flatMap {
         // If the user has accepted TOS, the grace period is enabled, or TOS is disabled, then enable the user in LDAP
