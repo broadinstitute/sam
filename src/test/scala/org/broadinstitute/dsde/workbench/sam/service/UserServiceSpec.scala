@@ -142,6 +142,7 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
   }
 
   it should "enable a user immediately if ToS is enabled and the grace period is enabled" in {
+    tosServiceEnabled.resetTermsOfServiceGroupsIfNeeded().unsafeRunSync()
     serviceTosEnabledWithGracePeriod.createUser(defaultUser, samRequestContext).futureValue
     val userGroups = dirDAO.listUsersGroups(defaultUserId, samRequestContext).unsafeRunSync()
     userGroups should have size 2
