@@ -569,7 +569,7 @@ class PolicyEvaluatorServiceSpec extends AnyFlatSpec with Matchers with TestSupp
   }
 }
 
-@deprecated("this allows testing of deprecated functions, remove as part of CA-1031", "")
+@deprecated("this allows testing of deprecated functions, remove as part of CA-1783", "")
 class DeprecatedPolicyEvaluatorSpec extends PolicyEvaluatorServiceSpec {
   "listUserAccessPolicies" should "list user's access policies but not others" in {
     val resource1 = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("my-resource1"))
