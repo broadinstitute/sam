@@ -11,10 +11,6 @@ info:
 servers:
   - url: /
 security:
-  - googleoauth:
-      - openid
-      - email
-      - profile
   - b2coauth:
       - openid
       - email
@@ -2534,15 +2530,6 @@ components:
           description: true if the user is in their proxy group
       description: ""
   securitySchemes:
-    googleoauth:
-      type: oauth2
-      flows:
-        implicit:
-          authorizationUrl: https://accounts.google.com/o/oauth2/auth
-          scopes:
-            openid: open id authorization
-            email: email authorization
-            profile: profile authorization
     b2coauth:
       type: oauth2
       x-tokenName: id_token
