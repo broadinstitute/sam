@@ -9,6 +9,7 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.Generator.genInviteUser
 import org.broadinstitute.dsde.workbench.sam.TestSupport.googleServicesConfig
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{MockDirectoryDAO, MockRegistrationDAO}
+import org.broadinstitute.dsde.workbench.sam.model.RootPrimitiveJsonSupport.rootBooleanJsonFormat
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.{NoExtensions, StatusService, TosService, UserService}
@@ -22,8 +23,8 @@ class UserRoutesV1Spec extends UserRoutesSpecHelper{
     val directoryDAO = new MockDirectoryDAO()
     val registrationDAO = new MockRegistrationDAO()
 
-    val samRoutes = new TestSamRoutes(null, null, new UserService(directoryDAO, NoExtensions, registrationDAO, Seq.empty, new TosService(directoryDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)), new StatusService(directoryDAO, registrationDAO, NoExtensions, TestSupport.dbRef), null, UserInfo(OAuth2BearerToken(""), defaultUserId, defaultUserEmail, 0), directoryDAO, registrationDAO, NoExtensions)
-    val SARoutes = new TestSamRoutes(null, null, new UserService(directoryDAO, NoExtensions, registrationDAO, Seq.empty, new TosService(directoryDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)), new StatusService(directoryDAO, registrationDAO, NoExtensions, TestSupport.dbRef), null, UserInfo(OAuth2BearerToken(""), petSAUserId, petSAEmail, 0), directoryDAO, registrationDAO, NoExtensions)
+    val samRoutes = new TestSamRoutes(null, null, new UserService(directoryDAO, NoExtensions, registrationDAO, Seq.empty, new TosService(directoryDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)), new StatusService(directoryDAO, registrationDAO, NoExtensions, TestSupport.dbRef), null, UserInfo(OAuth2BearerToken(""), defaultUserId, defaultUserEmail, 0), directoryDAO, registrationDAO, NoExtensions)
+    val SARoutes = new TestSamRoutes(null, null, new UserService(directoryDAO, NoExtensions, registrationDAO, Seq.empty, new TosService(directoryDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)), new StatusService(directoryDAO, registrationDAO, NoExtensions, TestSupport.dbRef), null, UserInfo(OAuth2BearerToken(""), petSAUserId, petSAEmail, 0), directoryDAO, registrationDAO, NoExtensions)
     testCode(samRoutes, SARoutes)
   }
 
@@ -42,23 +43,23 @@ class UserRoutesV1Spec extends UserRoutesSpecHelper{
   }
 
   it should "create a user and accept the tos when the user specifies the ToS body correctly" in {
-    val (user, _, routes) = createTestUser(tosEnabled = true, tosAccepted = false)
+    val (_, _, routes) = createTestUser(tosEnabled = true, tosAccepted = false)
     val tos = TermsOfServiceAcceptance("app.terra.bio/#terms-of-service")
 
-    Post("/api/users/v1/tos/accept", tos) ~> routes.route ~> check {
+    Post("/register/user/v1/termsofservice", tos) ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK
       val res = responseAs[UserStatus]
       res.userInfo.userSubjectId.value.length shouldBe 21
       res.userInfo.userEmail shouldBe defaultUserEmail
-      res.enabled shouldBe Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> true)
+      res.enabled shouldBe Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> true, "adminEnabled" -> true)
     }
   }
 
   it should "forbid the registration if ToS is enabled and the user doesn't specify the correct ToS url" in {
-    val (user, _, routes) = createTestUser(tosEnabled = true, tosAccepted = false)
+    val (_, _, routes) = createTestUser(tosEnabled = true, tosAccepted = false)
 
     val tos = TermsOfServiceAcceptance("onemillionpats.com")
-    Post("/api/users/v1/tos/accept", tos) ~> routes.route ~> check {
+    Post("/register/user/v1/termsofservice", tos) ~> routes.route ~> check {
       status shouldEqual StatusCodes.Forbidden
       responseAs[ErrorReport].message should startWith("You must accept the Terms of Service in order to register.")
     }
@@ -70,7 +71,35 @@ class UserRoutesV1Spec extends UserRoutesSpecHelper{
     Get("/register/user/v1") ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK
       val res = responseAs[UserStatus]
-      res.enabled shouldBe Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> true)
+      res.enabled shouldBe Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> true, "adminEnabled" -> true)
+    }
+  }
+
+  "GET /register/user/v1/termsofservice/status" should "return 404 when ToS is disabled" in {
+    val (_, _, routes) = createTestUser(tosEnabled = false)
+
+    Get("/register/user/v1/termsofservice/status") ~> routes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
+    }
+  }
+
+  it should "return 200 + false when ToS is enabled but the user hasn't accepted the ToS" in {
+    val (user, _, routes) = createTestUser(tosEnabled = true, tosAccepted = false)
+
+    Get("/register/user/v1/termsofservice/status") ~> routes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      val res = responseAs[Boolean]
+      res shouldBe false
+    }
+  }
+
+  it should "return 200 + true when ToS is enabled and the user has accepted the ToS" in {
+    val (user, _, routes) = createTestUser(tosEnabled = true, tosAccepted = true)
+
+    Get("/register/user/v1/termsofservice/status") ~> routes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      val res = responseAs[Boolean]
+      res shouldBe true
     }
   }
 

@@ -184,28 +184,28 @@ trait UserRoutesSpecHelper extends AnyFlatSpec with Matchers with ScalatestRoute
     val samDependencies = genSamDependencies(cloudExtensions = cloudExtensions, googleDirectoryDAO = googleDirectoryDAO, tosEnabled = tosEnabled)
     val routes = genSamRoutes(samDependencies, userInfo)
 
-    if (tosEnabled) routes.tosService.createNewGroupIfNeeded().unsafeRunSync()
+    if (tosEnabled) routes.tosService.resetTermsOfServiceGroupsIfNeeded().unsafeRunSync()
 
     // create a user
     val user = Post("/register/user/v1/") ~> routes.route ~> check {
       status shouldEqual StatusCodes.Created
       val res = responseAs[UserStatus]
       res.userInfo.userEmail shouldBe userEmail
-      val enabledBaseArray = Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true)
+      val enabledBaseArray = Map("ldap" -> !tosEnabled, "allUsersGroup" -> true, "google" -> true)
 
-      if (tosEnabled) res.enabled shouldBe  enabledBaseArray + ("tosAccepted" -> false)
+      if (tosEnabled) res.enabled shouldBe  enabledBaseArray + ("tosAccepted" -> false) + ("adminEnabled" -> true)
       else res.enabled shouldBe enabledBaseArray
 
       WorkbenchUser(res.userInfo.userSubjectId, Some(GoogleSubjectId(res.userInfo.userSubjectId.value)), res.userInfo.userEmail, azureB2CId)
     }
 
     if (tosEnabled && tosAccepted) {
-      Post("/api/users/v1/tos/accept", TermsOfServiceAcceptance("app.terra.bio/#terms-of-service")) ~> routes.route ~> check {
+      Post("/register/user/v1/termsofservice", TermsOfServiceAcceptance("app.terra.bio/#terms-of-service")) ~> routes.route ~> check {
         status shouldEqual StatusCodes.OK
         val res = responseAs[UserStatus]
         res.userInfo.userEmail shouldBe userEmail
         val enabledBaseArray = Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true)
-        res.enabled shouldBe enabledBaseArray + ("tosAccepted" -> true)
+        res.enabled shouldBe enabledBaseArray + ("tosAccepted" -> true) + ("adminEnabled" -> true)
 
         WorkbenchUser(res.userInfo.userSubjectId, Some(GoogleSubjectId(res.userInfo.userSubjectId.value)), res.userInfo.userEmail, azureB2CId)
       }
@@ -227,8 +227,8 @@ trait UserRoutesSpecHelper extends AnyFlatSpec with Matchers with ScalatestRoute
 
     directoryDAO.createUser(WorkbenchUser(adminUserId, None, adminUserEmail, None), samRequestContext).unsafeRunSync()
 
-    val samRoutes = new TestSamRoutes(null, null, new UserService(directoryDAO, cloudExtensions, registrationDAO, Seq.empty, new TosService(directoryDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)), new StatusService(directoryDAO, registrationDAO, NoExtensions, TestSupport.dbRef), null, UserInfo(OAuth2BearerToken(""), defaultUserId, defaultUserEmail, 0), directoryDAO, registrationDAO, cloudExtensions)
-    val adminRoutes = new TestSamRoutes(null, null, new UserService(directoryDAO, cloudExtensions, registrationDAO, Seq.empty, new TosService(directoryDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)), new StatusService(directoryDAO, registrationDAO, NoExtensions, TestSupport.dbRef), null, UserInfo(OAuth2BearerToken(""), adminUserId, adminUserEmail, 0), directoryDAO, registrationDAO, cloudExtensions)
+    val samRoutes = new TestSamRoutes(null, null, new UserService(directoryDAO, cloudExtensions, registrationDAO, Seq.empty, new TosService(directoryDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)), new StatusService(directoryDAO, registrationDAO, NoExtensions, TestSupport.dbRef), null, UserInfo(OAuth2BearerToken(""), defaultUserId, defaultUserEmail, 0), directoryDAO, registrationDAO, cloudExtensions)
+    val adminRoutes = new TestSamRoutes(null, null, new UserService(directoryDAO, cloudExtensions, registrationDAO, Seq.empty, new TosService(directoryDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)), new StatusService(directoryDAO, registrationDAO, NoExtensions, TestSupport.dbRef), null, UserInfo(OAuth2BearerToken(""), adminUserId, adminUserEmail, 0), directoryDAO, registrationDAO, cloudExtensions)
     testCode(samRoutes, adminRoutes)
   }
 
@@ -236,7 +236,7 @@ trait UserRoutesSpecHelper extends AnyFlatSpec with Matchers with ScalatestRoute
     val directoryDAO = new MockDirectoryDAO()
     val registrationDAO = new MockRegistrationDAO()
 
-    val samRoutes = new TestSamRoutes(null, null, new UserService(directoryDAO, NoExtensions, registrationDAO, Seq.empty, new TosService(directoryDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)), new StatusService(directoryDAO, registrationDAO, NoExtensions, TestSupport.dbRef), null, UserInfo(OAuth2BearerToken(""), defaultUserId, defaultUserEmail, 0), directoryDAO, registrationDAO,
+    val samRoutes = new TestSamRoutes(null, null, new UserService(directoryDAO, NoExtensions, registrationDAO, Seq.empty, new TosService(directoryDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)), new StatusService(directoryDAO, registrationDAO, NoExtensions, TestSupport.dbRef), null, UserInfo(OAuth2BearerToken(""), defaultUserId, defaultUserEmail, 0), directoryDAO, registrationDAO,
       workbenchUser = Option(WorkbenchUser(UserService.genWorkbenchUserId(System.currentTimeMillis()), TestSupport.genGoogleSubjectId(), defaultUserEmail, None)))
 
     testCode(samRoutes)
@@ -246,8 +246,8 @@ trait UserRoutesSpecHelper extends AnyFlatSpec with Matchers with ScalatestRoute
     val directoryDAO = new MockDirectoryDAO()
     val registrationDAO = new MockRegistrationDAO()
 
-    val tosService = new TosService(directoryDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig.copy(enabled = true))
-    tosService.createNewGroupIfNeeded()
+    val tosService = new TosService(directoryDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig.copy(enabled = true))
+    tosService.resetTermsOfServiceGroupsIfNeeded()
 
     val samRoutes = new TestSamTosEnabledRoutes(null, null, new UserService(directoryDAO, NoExtensions, registrationDAO, Seq.empty, tosService), new StatusService(directoryDAO, registrationDAO, NoExtensions, TestSupport.dbRef), null, UserInfo(OAuth2BearerToken(""), defaultUserId, defaultUserEmail, 0), directoryDAO, registrationDAO,
       workbenchUser = Option(WorkbenchUser(UserService.genWorkbenchUserId(System.currentTimeMillis()), TestSupport.genGoogleSubjectId(), defaultUserEmail, None)), tosService = tosService)

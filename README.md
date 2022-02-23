@@ -248,5 +248,5 @@ https://local.broadinstitute.org:50443/status](https://local.broadinstitute.org:
 [Swagger page:
 https://local.broadinstitute.org:50443/#/](https://local.broadinstitute.org:50443/#/)
 
-### [CONTRIBUTING.md](../CONTRIBUTING.md)
+### [CONTRIBUTING.md](CONTRIBUTING.md)
 
