@@ -240,7 +240,11 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
         // Additionally, if the user is an SA, it's also acceptable to enable them in LDAP
         case Some(true) | None => registrationDAO.enableIdentity(user.id, samRequestContext)
         case _ =>
-          if(isServiceAccount(user.email.value) || gracePeriodEnabled) registrationDAO.enableIdentity(user.id, samRequestContext)
+          if(isServiceAccount(user.email.value) || gracePeriodEnabled) {
+            logger.debug(s"Bypassing ToS requirement for user ${user.id} / ${user.email}. " +
+              s"gracePeriod: ${gracePeriodEnabled}, isServiceAccount: ${isServiceAccount(user.email.value)}")
+            registrationDAO.enableIdentity(user.id, samRequestContext)
+          }
           else IO.unit
       }
   }
