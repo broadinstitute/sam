@@ -238,10 +238,20 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
       .flatMap {
         // If the user has accepted TOS, the grace period is enabled, or TOS is disabled, then enable the user in LDAP
         // Additionally, if the user is an SA, it's also acceptable to enable them in LDAP
-        case Some(true) | None => registrationDAO.enableIdentity(user.id, samRequestContext)
+        case Some(true) | None => {
+          logger.info(s"ToS requirement will not be bypassed for user ${user.id} / ${user.email}. termsOfService.enabled: ${tosService.tosConfig.enabled}, gracePeriod: ${gracePeriodEnabled}")
+          registrationDAO.enableIdentity(user.id, samRequestContext)
+        }
         case _ =>
-          if(isServiceAccount(user.email.value) || gracePeriodEnabled) registrationDAO.enableIdentity(user.id, samRequestContext)
-          else IO.unit
+          if(isServiceAccount(user.email.value) || gracePeriodEnabled) {
+            logger.info(s"Bypassing ToS requirement for user ${user.id} / ${user.email}. " +
+              s"gracePeriod: ${gracePeriodEnabled}, isServiceAccount: ${isServiceAccount(user.email.value)}")
+            registrationDAO.enableIdentity(user.id, samRequestContext)
+          }
+          else {
+            logger.info(s"ToS requirement will not be bypassed for user ${user.id} / ${user.email}. termsOfService.enabled: ${tosService.tosConfig.enabled}, gracePeriod: ${gracePeriodEnabled}")
+            IO.unit
+          }
       }
   }
 
