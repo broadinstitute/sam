@@ -6,6 +6,7 @@ import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directives.reject
 import akka.stream.Materializer
 import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import org.broadinstitute.dsde.workbench.google.mock.MockGoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport

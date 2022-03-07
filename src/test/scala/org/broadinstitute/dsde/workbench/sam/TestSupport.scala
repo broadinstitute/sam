@@ -7,6 +7,7 @@ import akka.actor.ActorSystem
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import akka.stream.Materializer
 import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import cats.kernel.Eq
 import com.google.cloud.firestore.{DocumentSnapshot, Firestore, Transaction}
 import com.typesafe.config.ConfigFactory
@@ -37,9 +38,11 @@ import scalikejdbc.withSQL
 import scalikejdbc.QueryDSL.delete
 
 import scala.concurrent.duration.Duration
-import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.ExecutionContext.Implicits.{global => globalEc}
 import scala.concurrent.{Await, Awaitable, ExecutionContext}
 import org.scalatest.matchers.should.Matchers
+
+import java.time.temporal.Temporal
 
 /**
   * Created by dvoet on 6/27/17.
@@ -49,8 +52,7 @@ trait TestSupport{
   def runAndWait[T](f: IO[T]): T = f.unsafeRunSync()
 
   implicit val futureTimeout = Timeout(Span(10, Seconds))
-  implicit val cs = IO.contextShift(scala.concurrent.ExecutionContext.global)
-  implicit val timer = IO.timer(scala.concurrent.ExecutionContext.global)
+//  implicit val timer = Temporal[IO]
   implicit val eqWorkbenchException: Eq[WorkbenchException] = (x: WorkbenchException, y: WorkbenchException) => x.getMessage == y.getMessage
 
   val samRequestContext = SamRequestContext(None)

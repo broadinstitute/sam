@@ -2,6 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.dataAccess
 
 import akka.http.scaladsl.model.StatusCodes
 import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountDisplayName, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.sam.TestSupport
@@ -15,8 +16,6 @@ import java.util.Date
 import scala.concurrent.duration._
 
 class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndAfterEach {
-  implicit val cs = IO.contextShift(scala.concurrent.ExecutionContext.global)
-  implicit val timer = IO.timer(scala.concurrent.ExecutionContext.global)
   val dao = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.dbRef)
   val policyDAO = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.dbRef)
 

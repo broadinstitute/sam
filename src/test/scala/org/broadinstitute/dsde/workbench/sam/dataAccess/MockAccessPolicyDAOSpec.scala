@@ -1,6 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.dataAccess
 
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
+import cats.effect.unsafe.implicits.global
 import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
@@ -16,7 +17,7 @@ import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
 import java.net.URI
 import scala.collection.concurrent.TrieMap
 import scala.collection.mutable
-import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.ExecutionContext.Implicits.{global => globalEc}
 import scala.language.reflectiveCalls
 
 /**

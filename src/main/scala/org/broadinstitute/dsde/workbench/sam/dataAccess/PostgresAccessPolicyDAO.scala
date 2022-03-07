@@ -23,7 +23,7 @@ import scala.collection.concurrent.TrieMap
 import scala.util.{Failure, Try}
 import cats.effect.Temporal
 
-class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected val readDbRef: DbReference)(implicit val cs: ContextShift[IO], timer: Temporal[IO]) extends AccessPolicyDAO with DatabaseSupport with PostgresGroupDAO with EffectivePolicyMutationStatements with LazyLogging {
+class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected val readDbRef: DbReference)(implicit timer: Temporal[IO]) extends AccessPolicyDAO with DatabaseSupport with PostgresGroupDAO with EffectivePolicyMutationStatements with LazyLogging {
 
   /**
     * Cache of resource type name to pk mapping. It is important that this is used in serializable transactions

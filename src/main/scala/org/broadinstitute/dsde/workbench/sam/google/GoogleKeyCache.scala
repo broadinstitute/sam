@@ -32,7 +32,7 @@ class GoogleKeyCache(
                       val googleStorageAlg: GoogleStorageService[IO],
                       val googleKeyCachePubSubDao: GooglePubSubDAO,
                       val googleServicesConfig: GoogleServicesConfig,
-                      val petServiceAccountConfig: PetServiceAccountConfig)(implicit val executionContext: ExecutionContext, cs: ContextShift[IO])
+                      val petServiceAccountConfig: PetServiceAccountConfig)(implicit val executionContext: ExecutionContext)
     extends KeyCache
     with LazyLogging {
   val keyPathPattern = """([^\/]+)\/([^\/]+)\/([^\/]+)""".r

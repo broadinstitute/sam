@@ -16,7 +16,7 @@ trait DatabaseSupport {
 
   protected def readOnlyTransaction[A](dbQueryName: String, samRequestContext: SamRequestContext)(databaseFunction: DBSession => A): IO[A] = {
     val databaseIO = IO(readDbRef.readOnly(databaseFunction))
-    readDbRef.runDatabaseIO(dbQueryName, samRequestContext, databaseIO, cs)
+    readDbRef.runDatabaseIO(dbQueryName, samRequestContext, databaseIO)
   }
 
   /**
@@ -52,7 +52,7 @@ trait DatabaseSupport {
     * of maxTries, doubling the sleep duration between each try.
     */
   private def attemptSerializableTransaction[A](samRequestContext: SamRequestContext, dbQueryName: String, transactionIO: IO[A], maxTries: Int, trialNumber: Int = 1, sleepDuration: FiniteDuration = 10 millis)(implicit timer: Temporal[IO]): IO[A] = {
-    writeDbRef.runDatabaseIO(dbQueryName, samRequestContext, transactionIO, cs, Map("trial" -> AttributeValue.longAttributeValue(trialNumber.longValue()))).handleErrorWith {
+    writeDbRef.runDatabaseIO(dbQueryName, samRequestContext, transactionIO, Map("trial" -> AttributeValue.longAttributeValue(trialNumber.longValue()))).handleErrorWith {
       case psqlE: PSQLException if psqlE.getSQLState == PSQLStateExtensions.SERIALIZATION_FAILURE && trialNumber < maxTries =>
         timer.sleep(addJitter(sleepDuration, sleepDuration/2)) *> attemptSerializableTransaction(samRequestContext, dbQueryName, transactionIO, maxTries, trialNumber+1, sleepDuration)
 

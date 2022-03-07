@@ -5,6 +5,7 @@ import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import akka.http.scaladsl.server.Directive1
 import akka.http.scaladsl.server.Directives._
+import cats.effect.unsafe.implicits.global
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, UserInfo, WorkbenchEmail, WorkbenchExceptionWithErrorReport, WorkbenchUser, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 

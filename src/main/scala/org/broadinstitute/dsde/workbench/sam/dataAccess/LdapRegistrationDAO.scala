@@ -23,7 +23,7 @@ import cats.effect.Temporal
 class LdapRegistrationDAO(
     protected val ldapConnectionPool: LDAPConnectionPool,
     protected val directoryConfig: DirectoryConfig,
-    protected val ecForLdapBlockingIO: ExecutionContext)(implicit val cs: ContextShift[IO], timer: Temporal[IO])
+    protected val ecForLdapBlockingIO: ExecutionContext)(implicit timer: Temporal[IO])
     extends DirectorySubjectNameSupport
       with LdapSupport
       with LazyLogging

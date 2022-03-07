@@ -3,13 +3,13 @@ package org.broadinstitute.dsde.workbench.sam.google
 import java.net.URI
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.{Date, GregorianCalendar, UUID}
-
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import akka.testkit.TestKit
 import cats.data.NonEmptyList
 import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import cats.implicits._
 import com.google.api.client.http.{HttpHeaders, HttpResponseException}
 import com.google.api.services.cloudresourcemanager.model.Ancestor
@@ -38,7 +38,7 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatest.{BeforeAndAfterAll, PrivateMethodTester}
 import org.scalatestplus.mockito.MockitoSugar
 
-import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.ExecutionContext.Implicits.{global => globalEc}
 import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.{Success, Try}
@@ -838,7 +838,6 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
     * the ResourceService and clears the database
     */
   private def initPrivateTest: (DirectoryDAO, RegistrationDAO, GoogleExtensions, ResourceService, ManagedGroupService, ResourceType, ResourceRole, GoogleGroupSynchronizer) = {
-    implicit val cs = IO.contextShift(scala.concurrent.ExecutionContext.global)
     //Note: we intentionally use the Managed Group resource type loaded from reference.conf for the tests here.
     val realResourceTypes = TestSupport.appConfig.resourceTypes
     val realResourceTypeMap = realResourceTypes.map(rt => rt.name -> rt).toMap

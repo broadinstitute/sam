@@ -22,7 +22,7 @@ import scala.concurrent.duration.DurationInt
 import scala.util.{Failure, Try}
 import cats.effect.Temporal
 
-class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val readDbRef: DbReference)(implicit val cs: ContextShift[IO], timer: Temporal[IO]) extends DirectoryDAO with DatabaseSupport with PostgresGroupDAO {
+class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val readDbRef: DbReference)(implicit timer: Temporal[IO]) extends DirectoryDAO with DatabaseSupport with PostgresGroupDAO {
 
   override def getConnectionType(): ConnectionType = ConnectionType.Postgres
 

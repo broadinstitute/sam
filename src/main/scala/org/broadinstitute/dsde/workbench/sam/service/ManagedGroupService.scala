@@ -2,6 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.service
 
 import akka.http.scaladsl.model.StatusCodes
 import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam._
@@ -10,7 +11,7 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.ManagedGroupService.ManagedGroupPolicyName
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
-import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.ExecutionContext.Implicits.{global => globalEc}
 import scala.concurrent.Future
 
 /**
@@ -23,7 +24,7 @@ class ManagedGroupService(
     private val accessPolicyDAO: AccessPolicyDAO,
     private val directoryDAO: DirectoryDAO,
     private val cloudExtensions: CloudExtensions,
-    private val emailDomain: String)(implicit contextShift: ContextShift[IO])
+    private val emailDomain: String)
     extends LazyLogging {
 
   def managedGroupType: ResourceType =
