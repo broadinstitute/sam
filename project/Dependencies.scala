@@ -2,13 +2,13 @@ import sbt._
 
 object Dependencies {
   val akkaV = "2.6.10"
-  val akkaHttpV = "10.2.2"
+  val akkaHttpV = "10.2.6"
   val jacksonV = "2.9.5"
   val scalaLoggingV = "3.9.2"
   val scalaTestV    = "3.2.3"
   val scalaCheckV    = "1.14.0"
   val scalikejdbcVersion    = "3.4.1"
-  val postgresDriverVersion = "42.2.8"
+  val postgresDriverVersion = "42.3.3"
   val http4sVersion = "0.21.13"
 
   val workbenchUtilV   = "0.6-74c9fc2"
@@ -32,7 +32,7 @@ object Dependencies {
   val jacksonCore: ModuleID =        "com.fasterxml.jackson.core" % "jackson-core"        % jacksonV
 
   val logstashLogback: ModuleID = "net.logstash.logback"      % "logstash-logback-encoder" % "6.6"
-  val logbackClassic: ModuleID = "ch.qos.logback"             %  "logback-classic" % "1.2.3"
+  val logbackClassic: ModuleID = "ch.qos.logback"             %  "logback-classic" % "1.2.10"
   val ravenLogback: ModuleID =   "com.getsentry.raven"        %  "raven-logback"   % "7.8.6"
   val scalaLogging: ModuleID =   "com.typesafe.scala-logging" %% "scala-logging"   % scalaLoggingV
   val swaggerUi: ModuleID =      "org.webjars"                %  "swagger-ui"      % "4.1.2"
