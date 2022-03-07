@@ -19,7 +19,7 @@ import scala.util.{Failure, Success, Try}
   * Created by dvoet on 7/18/17.
   */
 trait SwaggerRoutes extends LazyLogging {
-  private val swaggerUiPath = "META-INF/resources/webjars/swagger-ui/4.6.1"
+  private val swaggerUiPath = "META-INF/resources/webjars/swagger-ui-dist/4.6.1"
 
   val swaggerConfig: SwaggerConfig
 
