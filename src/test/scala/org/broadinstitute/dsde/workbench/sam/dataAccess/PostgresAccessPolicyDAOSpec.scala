@@ -2,7 +2,6 @@ package org.broadinstitute.dsde.workbench.sam.dataAccess
 
 import java.util.UUID
 import akka.http.scaladsl.model.StatusCodes
-import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.typesafe.config.ConfigFactory
 import org.broadinstitute.dsde.workbench.model._

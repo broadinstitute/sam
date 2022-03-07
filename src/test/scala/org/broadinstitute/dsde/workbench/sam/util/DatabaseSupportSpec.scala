@@ -14,6 +14,7 @@ import java.util.UUID
 import java.util.concurrent.CyclicBarrier
 import scala.concurrent.Future
 import cats.effect.Temporal
+import cats.effect.unsafe.implicits.global
 
 class DatabaseSupportSpec extends AnyFreeSpec with Matchers with BeforeAndAfterEach with TestSupport {
   implicit val ec = scala.concurrent.ExecutionContext.global

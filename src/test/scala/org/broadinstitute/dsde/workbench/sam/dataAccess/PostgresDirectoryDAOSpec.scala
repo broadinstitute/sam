@@ -1,7 +1,6 @@
 package org.broadinstitute.dsde.workbench.sam.dataAccess
 
 import akka.http.scaladsl.model.StatusCodes
-import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountDisplayName, ServiceAccountSubjectId}

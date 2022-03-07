@@ -2,6 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.service
 
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import cats.effect.IO
+import cats.effect.unsafe.implicits.{global => globalEc}
 import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport

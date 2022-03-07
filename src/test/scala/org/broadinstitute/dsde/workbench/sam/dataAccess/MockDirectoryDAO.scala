@@ -14,7 +14,6 @@ import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import scala.collection.concurrent.TrieMap
 import scala.collection.mutable
-import scala.concurrent.ExecutionContext
 
 /**
   * Created by mbemis on 6/23/17.

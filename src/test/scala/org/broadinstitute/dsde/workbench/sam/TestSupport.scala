@@ -42,7 +42,6 @@ import scala.concurrent.ExecutionContext.Implicits.{global => globalEc}
 import scala.concurrent.{Await, Awaitable, ExecutionContext}
 import org.scalatest.matchers.should.Matchers
 
-import java.time.temporal.Temporal
 
 /**
   * Created by dvoet on 6/27/17.
