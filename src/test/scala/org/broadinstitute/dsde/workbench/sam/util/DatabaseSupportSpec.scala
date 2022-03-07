@@ -1,6 +1,6 @@
 package org.broadinstitute.dsde.workbench.sam.util
 
-import cats.effect.{ContextShift, IO, Timer}
+import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model.WorkbenchUserId
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.db.{DbReference, PSQLStateExtensions}
@@ -13,6 +13,7 @@ import scalikejdbc.DBSession
 import java.util.UUID
 import java.util.concurrent.CyclicBarrier
 import scala.concurrent.Future
+import cats.effect.Temporal
 
 class DatabaseSupportSpec extends AnyFreeSpec with Matchers with BeforeAndAfterEach with TestSupport {
   implicit val ec = scala.concurrent.ExecutionContext.global
@@ -20,7 +21,7 @@ class DatabaseSupportSpec extends AnyFreeSpec with Matchers with BeforeAndAfterE
     override protected val writeDbRef: DbReference = TestSupport.dbRef
     override protected val readDbRef: DbReference = TestSupport.dbRef
 
-    override def serializableWriteTransaction[A](dbQueryName: String, samRequestContext: SamRequestContext, maxTries: Int = 3)(databaseFunction: DBSession => A)(implicit timer: Timer[IO], cs: ContextShift[IO]): IO[A] =
+    override def serializableWriteTransaction[A](dbQueryName: String, samRequestContext: SamRequestContext, maxTries: Int = 3)(databaseFunction: DBSession => A)(implicit timer: Temporal[IO]): IO[A] =
       super.serializableWriteTransaction(dbQueryName, samRequestContext, maxTries)(databaseFunction)
   }
 

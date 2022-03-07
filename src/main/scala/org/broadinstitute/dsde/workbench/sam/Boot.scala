@@ -6,7 +6,7 @@ import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import cats.data.NonEmptyList
 import cats.effect
-import cats.effect.{Blocker, ExitCode, IO, IOApp}
+import cats.effect.{ExitCode, IO, IOApp}
 import cats.implicits._
 import com.typesafe.config.ConfigFactory
 import com.typesafe.scalalogging.LazyLogging

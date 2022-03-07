@@ -1,6 +1,6 @@
 package org.broadinstitute.dsde.workbench.sam.db
 
-import cats.effect.{ContextShift, IO, Resource}
+import cats.effect.{IO, Resource}
 import com.google.common.base.Throwables
 import com.typesafe.scalalogging.LazyLogging
 import io.opencensus.trace.AttributeValue
@@ -108,7 +108,7 @@ case class DbReference(dbName: DatabaseName, dbExecutionContext: ExecutionContex
     }
   }
 
-  def runDatabaseIO[A](dbQueryName: String, samRequestContext: SamRequestContext, databaseIO: IO[A], cs: ContextShift[IO], spanAttributes: Map[String, AttributeValue] = Map.empty): IO[A] = {
+  def runDatabaseIO[A](dbQueryName: String, samRequestContext: SamRequestContext, databaseIO: IO[A], spanAttributes: Map[String, AttributeValue] = Map.empty): IO[A] = {
     val spanName = "postgres-" + dbQueryName
     cs.evalOn(dbExecutionContext)(traceIOWithContext(spanName, samRequestContext) { samCxt =>
       samCxt.parentSpan.foreach(_.putAttributes(spanAttributes.asJava))

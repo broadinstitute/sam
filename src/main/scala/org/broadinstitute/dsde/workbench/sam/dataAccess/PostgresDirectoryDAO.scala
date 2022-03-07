@@ -4,7 +4,7 @@ import java.time.Instant
 import java.util.Date
 
 import akka.http.scaladsl.model.StatusCodes
-import cats.effect.{ContextShift, IO, Timer}
+import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.sam._
@@ -20,8 +20,9 @@ import scalikejdbc._
 
 import scala.concurrent.duration.DurationInt
 import scala.util.{Failure, Try}
+import cats.effect.Temporal
 
-class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val readDbRef: DbReference)(implicit val cs: ContextShift[IO], timer: Timer[IO]) extends DirectoryDAO with DatabaseSupport with PostgresGroupDAO {
+class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val readDbRef: DbReference)(implicit val cs: ContextShift[IO], timer: Temporal[IO]) extends DirectoryDAO with DatabaseSupport with PostgresGroupDAO {
 
   override def getConnectionType(): ConnectionType = ConnectionType.Postgres
 

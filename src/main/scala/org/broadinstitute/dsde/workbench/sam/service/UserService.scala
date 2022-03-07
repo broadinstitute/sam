@@ -3,7 +3,7 @@ package service
 
 import java.security.SecureRandom
 import akka.http.scaladsl.model.StatusCodes
-import cats.effect.{ContextShift, IO}
+import cats.effect.IO
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
 

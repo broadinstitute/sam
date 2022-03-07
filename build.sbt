@@ -21,4 +21,13 @@ sys.env.getOrElse("JAVA_OPTS", "").split(" ").toSeq.map { opt =>
   javaOptions in reStart += opt
 }
 
+inThisBuild(
+  List(
+    semanticdbEnabled := true, // enable SemanticDB
+    semanticdbVersion := scalafixSemanticdb.revision // only required for Scala 2.x
+  )
+)
+
+ThisBuild / scalacOptions += "-P:semanticdb:synthetics:on"
+
 addCompilerPlugin("com.olegpy" %% "better-monadic-for" % "0.3.1")

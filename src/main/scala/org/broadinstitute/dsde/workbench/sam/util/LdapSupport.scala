@@ -1,6 +1,6 @@
 package org.broadinstitute.dsde.workbench.sam.util
 
-import cats.effect.{ContextShift, IO}
+import cats.effect.IO
 import com.unboundid.ldap.sdk._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO.Attr
