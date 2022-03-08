@@ -43,6 +43,31 @@ import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.{Success, Try}
 
+class SamMockGoogleDirectoryDAO extends MockGoogleDirectoryDAO {
+  override def lockedDownGroupSettings = new Groups()
+    .setWhoCanAdd("ALL_OWNERS_CAN_ADD")
+    .setWhoCanJoin("INVITED_CAN_JOIN")
+    .setWhoCanViewMembership("ALL_MANAGERS_CAN_VIEW")
+    .setWhoCanViewGroup("ALL_OWNERS_CAN_VIEW")
+    .setWhoCanInvite("NONE_CAN_INVITE")
+    .setArchiveOnly(
+      "true"
+    ) // .setWhoCanPostMessage("NONE_CAN_POST") setting archive only is the way to set it so no one can post
+    .setWhoCanLeaveGroup("NONE_CAN_LEAVE")
+    .setWhoCanContactOwner("ALL_MANAGERS_CAN_CONTACT")
+    .setWhoCanAddReferences("NONE")
+    .setWhoCanAssignTopics("NONE")
+    .setWhoCanUnassignTopic("NONE")
+    .setWhoCanTakeTopics("NONE")
+    .setWhoCanMarkDuplicate("NONE")
+    .setWhoCanMarkNoResponseNeeded("NONE")
+    .setWhoCanMarkFavoriteReplyOnAnyTopic("NONE")
+    .setWhoCanMarkFavoriteReplyOnOwnTopic("NONE")
+    .setWhoCanUnmarkFavoriteReplyOnAnyTopic("NONE")
+    .setWhoCanEnterFreeFormTags("NONE")
+    .setWhoCanModifyTagsAndCategories("NONE")
+}
+
 class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with AnyFlatSpecLike with Matchers with TestSupport with MockitoSugar with ScalaFutures with BeforeAndAfterAll with PrivateMethodTester {
   def this() = this(ActorSystem("GoogleGroupSyncMonitorSpec"))
 
@@ -340,7 +365,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
     clearDatabase()
 
     val mockGoogleIamDAO = new MockGoogleIamDAO
-    val mockGoogleDirectoryDAO = new MockGoogleDirectoryDAO
+    val mockGoogleDirectoryDAO = new SamMockGoogleDirectoryDAO
     val mockGoogleProjectDAO = new MockGoogleProjectDAO
 
     val googleExtensions = new GoogleExtensions(TestSupport.fakeDistributedLock, dirDAO, newRegistrationDAO(), null, mockGoogleDirectoryDAO, null, null, null, mockGoogleIamDAO, null, mockGoogleProjectDAO, null, null, null, googleServicesConfig, petServiceAccountConfig, configResourceTypes)
@@ -599,6 +624,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
     when(mockGoogleDirectoryDAO.getGoogleGroup(any[WorkbenchEmail])).thenReturn(Future.successful(None))
     when(mockGoogleDirectoryDAO.createGroup(any[String], any[WorkbenchEmail], any[Option[Groups]])).thenReturn(Future.successful(()))
     when(mockGoogleDirectoryDAO.addMemberToGroup(any[WorkbenchEmail], any[WorkbenchEmail])).thenReturn(Future.successful(()))
+    when(mockGoogleDirectoryDAO.lockedDownGroupSettings).thenCallRealMethod()
 
     googleExtensions.onUserCreate(user, samRequestContext).futureValue
 
