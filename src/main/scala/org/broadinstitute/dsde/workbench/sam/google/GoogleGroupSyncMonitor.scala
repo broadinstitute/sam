@@ -61,13 +61,11 @@ class GoogleGroupSyncMonitorSupervisor(
     case Status.Failure(t) => logger.error("error initializing google group sync monitor", t)
   }
 
-  def init = {
-    logger.info(s"Initializing GoogleGroupSyncMonitorActor")
+  def init =
     for {
       _ <- pubSubDao.createTopic(pubSubTopicName)
       _ <- pubSubDao.createSubscription(pubSubTopicName, pubSubSubscriptionName)
     } yield Start
-  }
 
 
 
@@ -128,6 +126,7 @@ class GoogleGroupSyncMonitorActor(
 
   override def receive = {
     case StartMonitorPass =>
+      logger.debug(s"Pulling messages off: $pubSubSubscriptionName")
       // start the process by pulling a message and sending it back to self
       pubSubDao.pullMessages(pubSubSubscriptionName, 1).map(_.headOption) pipeTo self
 

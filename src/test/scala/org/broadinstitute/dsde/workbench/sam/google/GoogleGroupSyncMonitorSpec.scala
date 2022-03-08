@@ -35,7 +35,7 @@ class GoogleGroupSyncMonitorSpec(_system: ActorSystem) extends TestKit(_system) 
   }
 
   "GoogleGroupSyncMonitor" should "handle sync message" in {
-    implicit val patienceConfig = PatienceConfig(timeout = 1 second)
+    implicit val patienceConfig = PatienceConfig(timeout = 1 minute)
     val mockGooglePubSubDAO = new MockGooglePubSubDAO
     val mockGoogleExtensions = mock[GoogleGroupSynchronizer](RETURNS_SMART_NULLS)
 
