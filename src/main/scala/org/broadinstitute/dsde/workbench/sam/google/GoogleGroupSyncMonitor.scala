@@ -61,11 +61,15 @@ class GoogleGroupSyncMonitorSupervisor(
     case Status.Failure(t) => logger.error("error initializing google group sync monitor", t)
   }
 
-  def init =
+  def init = {
+    logger.info(s"Initializing GoogleGroupSyncMonitorActor")
     for {
       _ <- pubSubDao.createTopic(pubSubTopicName)
       _ <- pubSubDao.createSubscription(pubSubTopicName, pubSubSubscriptionName)
     } yield Start
+  }
+
+
 
   def startOne(): Unit = {
     logger.info("starting GoogleGroupSyncMonitorActor")
