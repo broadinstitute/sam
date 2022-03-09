@@ -5,7 +5,8 @@ import java.util.Date
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
-import cats.effect.{Clock, ContextShift, IO}
+import cats.effect.unsafe.implicits.global
+import cats.effect.{Clock, IO}
 import cats.implicits._
 import com.google.api.client.googleapis.json.GoogleJsonResponseException
 import com.google.api.client.http.HttpResponseException
@@ -61,7 +62,7 @@ class GoogleExtensions(
     val googleKms: GoogleKmsService[IO],
     val googleServicesConfig: GoogleServicesConfig,
     val petServiceAccountConfig: PetServiceAccountConfig,
-    val resourceTypes: Map[ResourceTypeName, ResourceType])(implicit val system: ActorSystem, executionContext: ExecutionContext, cs: ContextShift[IO], clock: Clock[IO])
+    val resourceTypes: Map[ResourceTypeName, ResourceType])(implicit val system: ActorSystem, executionContext: ExecutionContext, clock: Clock[IO])
     extends LazyLogging
     with FutureSupport
     with CloudExtensions
@@ -185,7 +186,7 @@ class GoogleExtensions(
    */
   override def onGroupUpdate(groupIdentities: Seq[WorkbenchGroupIdentity], samRequestContext: SamRequestContext): Future[Unit] = {
     for {
-      start <- clock.instantNow
+      start <- clock.monotonic
       // only sync groups that have been synchronized in the past
       previouslySyncedIds <- groupIdentities.toList.traverseFilter { id =>
         directoryDAO.getSynchronizedDate(id, samRequestContext).map(dateOption => dateOption.map(_ => id))
@@ -208,11 +209,11 @@ class GoogleExtensions(
       // publish all the messages
       _ <- IO.fromFuture(IO(publishMessages(messages.flatten)))
 
-      end <- clock.instantNow
+      end <- clock.monotonic
 
     } yield {
-      val duration = end.toEpochMilli - start.toEpochMilli
-      logger.info(s"GoogleExtensions.onGroupUpdate timing (ms)", StructuredArguments.entries(Map("duration" -> duration, "group-ids" -> groupIdentities.map(_.toString).asJava).asJava))
+      val duration = end - start
+      logger.info(s"GoogleExtensions.onGroupUpdate timing (ms)", StructuredArguments.entries(Map("duration" -> duration.toMillis, "group-ids" -> groupIdentities.map(_.toString).asJava).asJava))
     }
   }.unsafeToFuture()
 

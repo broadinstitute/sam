@@ -1,6 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.util
 
-import cats.effect.{ContextShift, IO}
+import cats.effect.IO
+import cats.effect.kernel.Async
 import com.unboundid.ldap.sdk._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO.Attr
@@ -12,7 +13,6 @@ trait LdapSupport {
   protected val ldapConnectionPool: LDAPConnectionPool
   protected val batchSize = 1000
   protected val ecForLdapBlockingIO: ExecutionContext
-  implicit protected val cs: ContextShift[IO]
 
 
   protected def getAttribute(result: Entry, key: String): Option[String] = {
@@ -49,7 +49,8 @@ trait LdapSupport {
     * @param samRequestContext context of the request. If it contains a parentSpan, then a child span will be
     *                          created under the parent span.
     */
-  protected def executeLdap[A](ioa: IO[A], dbQueryName: String, samRequestContext: SamRequestContext): IO[A] = {
-    cs.evalOn(ecForLdapBlockingIO)(traceIOWithContext("ldap-" + dbQueryName, samRequestContext)(_ => ioa))
-  }
+  protected def executeLdap[A](ioa: IO[A], dbQueryName: String, samRequestContext: SamRequestContext): IO[A] =
+    Async[IO].evalOnK(ecForLdapBlockingIO) {
+      traceIOWithContext("ldap-" + dbQueryName, samRequestContext)(_ => ioa)
+    }
 }

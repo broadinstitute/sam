@@ -1,8 +1,8 @@
 package org.broadinstitute.dsde.workbench.sam.service
 
 import java.net.URI
-
 import akka.actor.ActorSystem
+import cats.effect.unsafe.implicits.{global => globalEc}
 import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException}
 import org.broadinstitute.dsde.workbench.sam.TestSupport

@@ -3,13 +3,13 @@ package org.broadinstitute.dsde.workbench.sam.google
 import java.net.URI
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.{Date, GregorianCalendar, UUID}
-
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import akka.testkit.TestKit
 import cats.data.NonEmptyList
 import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import cats.implicits._
 import com.google.api.client.http.{HttpHeaders, HttpResponseException}
 import com.google.api.services.cloudresourcemanager.model.Ancestor
@@ -38,10 +38,36 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatest.{BeforeAndAfterAll, PrivateMethodTester}
 import org.scalatestplus.mockito.MockitoSugar
 
-import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.ExecutionContext.Implicits.{global => globalEc}
 import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.{Success, Try}
+
+// [TODO CA-1803] Remove once MockGoogleDirectoryDAO is updated
+class SamMockGoogleDirectoryDAO extends MockGoogleDirectoryDAO {
+  override def lockedDownGroupSettings = new Groups()
+    .setWhoCanAdd("ALL_OWNERS_CAN_ADD")
+    .setWhoCanJoin("INVITED_CAN_JOIN")
+    .setWhoCanViewMembership("ALL_MANAGERS_CAN_VIEW")
+    .setWhoCanViewGroup("ALL_OWNERS_CAN_VIEW")
+    .setWhoCanInvite("NONE_CAN_INVITE")
+    .setArchiveOnly(
+      "true"
+    ) // .setWhoCanPostMessage("NONE_CAN_POST") setting archive only is the way to set it so no one can post
+    .setWhoCanLeaveGroup("NONE_CAN_LEAVE")
+    .setWhoCanContactOwner("ALL_MANAGERS_CAN_CONTACT")
+    .setWhoCanAddReferences("NONE")
+    .setWhoCanAssignTopics("NONE")
+    .setWhoCanUnassignTopic("NONE")
+    .setWhoCanTakeTopics("NONE")
+    .setWhoCanMarkDuplicate("NONE")
+    .setWhoCanMarkNoResponseNeeded("NONE")
+    .setWhoCanMarkFavoriteReplyOnAnyTopic("NONE")
+    .setWhoCanMarkFavoriteReplyOnOwnTopic("NONE")
+    .setWhoCanUnmarkFavoriteReplyOnAnyTopic("NONE")
+    .setWhoCanEnterFreeFormTags("NONE")
+    .setWhoCanModifyTagsAndCategories("NONE")
+}
 
 class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with AnyFlatSpecLike with Matchers with TestSupport with MockitoSugar with ScalaFutures with BeforeAndAfterAll with PrivateMethodTester {
   def this() = this(ActorSystem("GoogleGroupSyncMonitorSpec"))
@@ -340,7 +366,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
     clearDatabase()
 
     val mockGoogleIamDAO = new MockGoogleIamDAO
-    val mockGoogleDirectoryDAO = new MockGoogleDirectoryDAO
+    val mockGoogleDirectoryDAO = new SamMockGoogleDirectoryDAO
     val mockGoogleProjectDAO = new MockGoogleProjectDAO
 
     val googleExtensions = new GoogleExtensions(TestSupport.fakeDistributedLock, dirDAO, newRegistrationDAO(), null, mockGoogleDirectoryDAO, null, null, null, mockGoogleIamDAO, null, mockGoogleProjectDAO, null, null, null, googleServicesConfig, petServiceAccountConfig, configResourceTypes)
@@ -599,6 +625,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
     when(mockGoogleDirectoryDAO.getGoogleGroup(any[WorkbenchEmail])).thenReturn(Future.successful(None))
     when(mockGoogleDirectoryDAO.createGroup(any[String], any[WorkbenchEmail], any[Option[Groups]])).thenReturn(Future.successful(()))
     when(mockGoogleDirectoryDAO.addMemberToGroup(any[WorkbenchEmail], any[WorkbenchEmail])).thenReturn(Future.successful(()))
+    when(mockGoogleDirectoryDAO.lockedDownGroupSettings).thenCallRealMethod()
 
     googleExtensions.onUserCreate(user, samRequestContext).futureValue
 
@@ -838,7 +865,6 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
     * the ResourceService and clears the database
     */
   private def initPrivateTest: (DirectoryDAO, RegistrationDAO, GoogleExtensions, ResourceService, ManagedGroupService, ResourceType, ResourceRole, GoogleGroupSynchronizer) = {
-    implicit val cs = IO.contextShift(scala.concurrent.ExecutionContext.global)
     //Note: we intentionally use the Managed Group resource type loaded from reference.conf for the tests here.
     val realResourceTypes = TestSupport.appConfig.resourceTypes
     val realResourceTypeMap = realResourceTypes.map(rt => rt.name -> rt).toMap

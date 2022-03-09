@@ -7,7 +7,7 @@ import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import akka.http.scaladsl.model.{StatusCode, StatusCodes}
 import akka.http.scaladsl.testkit.ScalatestRouteTest
 import akka.stream.Materializer
-import cats.effect.{ContextShift, IO}
+import cats.effect.unsafe.implicits.global
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport.samRequestContext
@@ -714,7 +714,7 @@ class ManagedGroupRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRou
 }
 
 object ManagedGroupRoutesSpec{
-  def createSamRoutesWithResource(resourceTypeMap: Map[ResourceTypeName, ResourceType], resource: Resource)(implicit system: ActorSystem, materializer: Materializer, ec: ExecutionContext, contextShift: ContextShift[IO]): TestSamRoutes ={
+  def createSamRoutesWithResource(resourceTypeMap: Map[ResourceTypeName, ResourceType], resource: Resource)(implicit system: ActorSystem, materializer: Materializer, ec: ExecutionContext): TestSamRoutes ={
     val groups = TrieMap.empty[WorkbenchGroupIdentity, WorkbenchGroup]
     val policyDao = new MockAccessPolicyDAO(resourceTypeMap, groups)
     val samRoutes = TestSamRoutes(resourceTypeMap, policyAccessDAO = Some(policyDao), policies = Some(groups))

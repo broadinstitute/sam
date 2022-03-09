@@ -1,7 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.dataAccess
 
 import akka.http.scaladsl.model.StatusCodes
-import cats.effect.{ContextShift, IO, Timer}
+import cats.effect.IO
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
 import com.unboundid.ldap.sdk._
@@ -17,19 +17,20 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Success, Try}
+import cats.effect.Temporal
 
 // use ExecutionContexts.blockingThreadPool for blockingEc
 class LdapRegistrationDAO(
     protected val ldapConnectionPool: LDAPConnectionPool,
     protected val directoryConfig: DirectoryConfig,
-    protected val ecForLdapBlockingIO: ExecutionContext)(implicit val cs: ContextShift[IO], timer: Timer[IO])
+    protected val ecForLdapBlockingIO: ExecutionContext)(implicit timer: Temporal[IO])
     extends DirectorySubjectNameSupport
       with LdapSupport
       with LazyLogging
       with RegistrationDAO {
 
   def retryLdapBusyWithBackoff[A](initialDelay: FiniteDuration, maxRetries: Int)(ioa: IO[A])
-                         (implicit timer: Timer[IO]): IO[A] = {
+                         (implicit timer: Temporal[IO]): IO[A] = {
     ioa.handleErrorWith { error =>
       error match {
         case ldape: LDAPException if maxRetries > 0 && ldape.getResultCode == ResultCode.BUSY =>

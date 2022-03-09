@@ -4,7 +4,7 @@ import java.time.Instant
 
 import akka.http.scaladsl.model.StatusCodes
 import cats.data.NonEmptyList
-import cats.effect.{ContextShift, IO, Timer}
+import cats.effect.IO
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model._
@@ -21,8 +21,9 @@ import scalikejdbc._
 
 import scala.collection.concurrent.TrieMap
 import scala.util.{Failure, Try}
+import cats.effect.Temporal
 
-class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected val readDbRef: DbReference)(implicit val cs: ContextShift[IO], timer: Timer[IO]) extends AccessPolicyDAO with DatabaseSupport with PostgresGroupDAO with EffectivePolicyMutationStatements with LazyLogging {
+class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected val readDbRef: DbReference)(implicit timer: Temporal[IO]) extends AccessPolicyDAO with DatabaseSupport with PostgresGroupDAO with EffectivePolicyMutationStatements with LazyLogging {
 
   /**
     * Cache of resource type name to pk mapping. It is important that this is used in serializable transactions
