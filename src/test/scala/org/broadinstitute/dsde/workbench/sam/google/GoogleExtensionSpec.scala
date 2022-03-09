@@ -43,6 +43,7 @@ import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.{Success, Try}
 
+// [TODO CA-1803] Remove once MockGoogleDirectoryDAO is updated
 class SamMockGoogleDirectoryDAO extends MockGoogleDirectoryDAO {
   override def lockedDownGroupSettings = new Groups()
     .setWhoCanAdd("ALL_OWNERS_CAN_ADD")
