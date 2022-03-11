@@ -43,32 +43,6 @@ import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.{Success, Try}
 
-// [TODO CA-1803] Remove once MockGoogleDirectoryDAO is updated
-class SamMockGoogleDirectoryDAO extends MockGoogleDirectoryDAO {
-  override def lockedDownGroupSettings = new Groups()
-    .setWhoCanAdd("ALL_OWNERS_CAN_ADD")
-    .setWhoCanJoin("INVITED_CAN_JOIN")
-    .setWhoCanViewMembership("ALL_MANAGERS_CAN_VIEW")
-    .setWhoCanViewGroup("ALL_OWNERS_CAN_VIEW")
-    .setWhoCanInvite("NONE_CAN_INVITE")
-    .setArchiveOnly(
-      "true"
-    ) // .setWhoCanPostMessage("NONE_CAN_POST") setting archive only is the way to set it so no one can post
-    .setWhoCanLeaveGroup("NONE_CAN_LEAVE")
-    .setWhoCanContactOwner("ALL_MANAGERS_CAN_CONTACT")
-    .setWhoCanAddReferences("NONE")
-    .setWhoCanAssignTopics("NONE")
-    .setWhoCanUnassignTopic("NONE")
-    .setWhoCanTakeTopics("NONE")
-    .setWhoCanMarkDuplicate("NONE")
-    .setWhoCanMarkNoResponseNeeded("NONE")
-    .setWhoCanMarkFavoriteReplyOnAnyTopic("NONE")
-    .setWhoCanMarkFavoriteReplyOnOwnTopic("NONE")
-    .setWhoCanUnmarkFavoriteReplyOnAnyTopic("NONE")
-    .setWhoCanEnterFreeFormTags("NONE")
-    .setWhoCanModifyTagsAndCategories("NONE")
-}
-
 class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with AnyFlatSpecLike with Matchers with TestSupport with MockitoSugar with ScalaFutures with BeforeAndAfterAll with PrivateMethodTester {
   def this() = this(ActorSystem("GoogleGroupSyncMonitorSpec"))
 
@@ -89,7 +63,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
   lazy val googleServicesConfig = TestSupport.googleServicesConfig
 
   val configResourceTypes = TestSupport.configResourceTypes
-  override implicit val patienceConfig = PatienceConfig(1 second)
+  override implicit val patienceConfig = PatienceConfig(5 seconds)
   "Google group sync" should "add/remove the right emails and handle errors" in {
     // tests that emails only in sam get added to google
     // emails only in google are removed
@@ -366,7 +340,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
     clearDatabase()
 
     val mockGoogleIamDAO = new MockGoogleIamDAO
-    val mockGoogleDirectoryDAO = new SamMockGoogleDirectoryDAO
+    val mockGoogleDirectoryDAO = new MockGoogleDirectoryDAO
     val mockGoogleProjectDAO = new MockGoogleProjectDAO
 
     val googleExtensions = new GoogleExtensions(TestSupport.fakeDistributedLock, dirDAO, newRegistrationDAO(), null, mockGoogleDirectoryDAO, null, null, null, mockGoogleIamDAO, null, mockGoogleProjectDAO, null, null, null, googleServicesConfig, petServiceAccountConfig, configResourceTypes)
