@@ -43,7 +43,7 @@ trait UserInfoDirectives {
           requestEntityPresent {
             entity(as[TermsOfServiceAcceptance]) { tos =>
               if (tos.value.equalsIgnoreCase(termsOfServiceConfig.url)) r
-              else reject(MalformedRequestContentRejection(s"Invalid ToS acceptance", new WorkbenchException(s"ToS URL did not match ${termsOfServiceConfig.url}")))
+              else reject(MalformedRequestContentRejection(s"Invalid ToS acceptance", new WorkbenchException(s"ToS URL [$tos] did not match required URL: [${termsOfServiceConfig.url}]")))
             }
           }
         } else reject(MethodDisabled("Terra Terms of Service is disabled."))
