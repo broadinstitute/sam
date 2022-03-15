@@ -2548,7 +2548,9 @@ components:
       x-tokenName: id_token
       flows:
         implicit:
-          authorizationUrl: https://tdrb2ctest.b2clogin.com/tdrb2ctest.onmicrosoft.com/oauth2/v2.0/authorize?p=B2C_1A_SIGNUP_SIGNIN
+          # This points at the B2C dev environment. See https://broadworkbench.atlassian.net/browse/TOAZ-85
+          # to make this configurable across environments.
+          authorizationUrl: https://terradevb2c.b2clogin.com/terradevb2c.onmicrosoft.com/oauth2/v2.0/authorize?p=B2C_1A_SIGNUP_SIGNIN
           scopes:
             openid: open id authorization
             email: email authorization
