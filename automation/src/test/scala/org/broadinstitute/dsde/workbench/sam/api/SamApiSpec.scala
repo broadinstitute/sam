@@ -1,4 +1,4 @@
-package org.broadinstitute.dsde.workbench.test.api
+package org.broadinstitute.dsde.workbench.sam.api
 
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.HttpMethods.GET
@@ -11,11 +11,11 @@ import org.broadinstitute.dsde.workbench.dao.Google.{googleDirectoryDAO, googleI
 import org.broadinstitute.dsde.workbench.fixture.BillingFixtures
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccountName}
+import org.broadinstitute.dsde.workbench.sam.SamConfig
 import org.broadinstitute.dsde.workbench.service.SamModel._
 import org.broadinstitute.dsde.workbench.service._
 import org.broadinstitute.dsde.workbench.service.test.CleanUp
 import org.broadinstitute.dsde.workbench.service.util.Tags
-import org.broadinstitute.dsde.workbench.test.SamConfig
 import org.scalatest.concurrent.{Eventually, ScalaFutures}
 import org.scalatest.freespec.AnyFreeSpec
 import org.scalatest.matchers.should.Matchers
