@@ -1,13 +1,12 @@
 package org.broadinstitute.dsde.workbench.test.api
 
 
-import java.util.UUID
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.HttpMethods.GET
 import akka.http.scaladsl.model.{HttpRequest, StatusCodes}
 import akka.http.scaladsl.unmarshalling.Unmarshal
 import akka.testkit.TestKitBase
-import org.broadinstitute.dsde.workbench.auth.{AuthToken, AuthTokenScopes, ServiceAccountAuthTokenFromJson, ServiceAccountAuthTokenFromPem}
+import org.broadinstitute.dsde.workbench.auth.{AuthToken, ServiceAccountAuthTokenFromJson, ServiceAccountAuthTokenFromPem}
 import org.broadinstitute.dsde.workbench.config.{Credentials, UserPool}
 import org.broadinstitute.dsde.workbench.dao.Google.{googleDirectoryDAO, googleIamDAO}
 import org.broadinstitute.dsde.workbench.fixture.BillingFixtures
@@ -16,16 +15,17 @@ import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAcc
 import org.broadinstitute.dsde.workbench.service.Sam.sendRequest
 import org.broadinstitute.dsde.workbench.service.SamModel._
 import org.broadinstitute.dsde.workbench.service.test.CleanUp
-import org.broadinstitute.dsde.workbench.service.{Orchestration, Sam, Thurloe, _}
+import org.broadinstitute.dsde.workbench.service.util.Tags
+import org.broadinstitute.dsde.workbench.service._
 import org.broadinstitute.dsde.workbench.test.SamConfig
 import org.scalatest.concurrent.{Eventually, ScalaFutures}
-import org.scalatest.time.{Seconds, Span}
-import org.broadinstitute.dsde.workbench.service.util.Tags
-
-import scala.concurrent.Await
-import scala.concurrent.duration.{Duration, _}
 import org.scalatest.freespec.AnyFreeSpec
 import org.scalatest.matchers.should.Matchers
+import org.scalatest.time.{Seconds, Span}
+
+import java.util.UUID
+import scala.concurrent.Await
+import scala.concurrent.duration.{Duration, _}
 
 class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with ScalaFutures with CleanUp with Eventually with TestKitBase {
   implicit override val patienceConfig: PatienceConfig = PatienceConfig(timeout = scaled(Span(5, Seconds)))
@@ -130,7 +130,7 @@ class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with Sca
       val userStatus = Sam.user.status()(userAuthToken).get
 
       // user a brand new billing project to ensure known state for pet (not present)
-      withBrandNewBillingProject("new-pet-test") { projectName =>
+      withCleanBillingProject(owner, userEmails = List(anyUser.email)) { projectName =>
         val petAccountEmail = Sam.user.petServiceAccountEmail(projectName)(userAuthToken)
         petAccountEmail.value should not be userStatus.userInfo.userEmail
         googleIamDAO.findServiceAccount(GoogleProject(projectName), petAccountEmail).futureValue.map(_.email) shouldBe Some(petAccountEmail)
@@ -144,7 +144,7 @@ class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with Sca
 
         // who is my pet -> who is my user's pet -> it's me
         Sam.user.petServiceAccountEmail(projectName)(petAuthToken) shouldBe petAccountEmail
-      }(owner.makeAuthToken(AuthTokenScopes.billingScopes))
+      }
     }
 
     "should not treat non-pet service accounts as pets" in {
