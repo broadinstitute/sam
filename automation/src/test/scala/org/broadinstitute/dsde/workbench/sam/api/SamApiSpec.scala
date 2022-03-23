@@ -120,14 +120,11 @@ class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with Sca
     "should give pets the same access as their owners" in {
       val anyUser: Credentials = UserPool.chooseAnyUser
       val userAuthToken: AuthToken = anyUser.makeAuthToken()
-
       val owner: Credentials = UserPool.chooseProjectOwner
 
       // set auth tokens explicitly to control which credentials are used
-
       val userStatus = Sam.user.status()(userAuthToken).get
 
-      // user a brand new billing project to ensure known state for pet (not present)
       withCleanBillingProject(owner, userEmails = List(anyUser.email)) { projectName =>
         val petAccountEmail = Sam.user.petServiceAccountEmail(projectName)(userAuthToken)
         petAccountEmail.value should not be userStatus.userInfo.userEmail
@@ -135,9 +132,7 @@ class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with Sca
 
         // first call should create pet.  confirm that a second call to create/retrieve gives the same results
         Sam.user.petServiceAccountEmail(projectName)(userAuthToken) shouldBe petAccountEmail
-
         val petAuthToken = ServiceAccountAuthTokenFromJson(Sam.user.petServiceAccountKey(projectName)(userAuthToken))
-
         Sam.user.status()(petAuthToken) shouldBe Some(userStatus)
 
         // who is my pet -> who is my user's pet -> it's me
