@@ -1,22 +1,19 @@
-package org.broadinstitute.dsde.workbench.test.util
+package org.broadinstitute.dsde.workbench.sam.util
 
-import java.util.concurrent.TimeUnit
-import cats.implicits._
-import cats.effect.{Clock, IO}
 import cats.effect.unsafe.implicits.global
+import cats.effect.{Clock, IO}
+import cats.implicits._
 import cats.kernel.Eq
-import cats.syntax.all._
 import org.broadinstitute.dsde.workbench.google2.GoogleFirestoreInterpreter
 import org.broadinstitute.dsde.workbench.google2.util.{DistributedLock, DistributedLockConfig, FailToObtainLock}
 import org.broadinstitute.dsde.workbench.model.WorkbenchException
-import org.broadinstitute.dsde.workbench.test.Generators.genLockPath
-import org.broadinstitute.dsde.workbench.test.SamConfig.GCS
-import java.util.concurrent.TimeUnit
-import scala.jdk.CollectionConverters._
-import scala.concurrent.duration._
-import scala.concurrent.duration.FiniteDuration
+import org.broadinstitute.dsde.workbench.sam.Generators.genLockPath
+import org.broadinstitute.dsde.workbench.sam.SamConfig.GCS
 import org.scalatest.flatspec.AsyncFlatSpec
 import org.scalatest.matchers.should.Matchers
+
+import scala.concurrent.duration._
+import scala.jdk.CollectionConverters._
 
 class DistributedLockSpec extends AsyncFlatSpec with Matchers {
 

@@ -1,4 +1,4 @@
-package org.broadinstitute.dsde.workbench.test
+package org.broadinstitute.dsde.workbench.sam
 
 import org.broadinstitute.dsde.workbench.config.CommonConfig
 
