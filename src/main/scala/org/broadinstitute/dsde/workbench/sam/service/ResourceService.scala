@@ -88,7 +88,7 @@ class ResourceService(
       .find(_.roleName == resourceType.ownerRoleName)
       .getOrElse(throw new WorkbenchException(s"owner role ${resourceType.ownerRoleName} does not exist in $resourceType"))
     val defaultPolicies: Map[AccessPolicyName, AccessPolicyMembership] = Map(
-      AccessPolicyName(ownerRole.roleName.value) -> AccessPolicyMembership(Set(userInfo.userEmail), Set.empty, Set(ownerRole.roleName), None))
+      AccessPolicyName(ownerRole.roleName.value) -> AccessPolicyMembership(Set(userInfo.userEmail), Set.empty, Set(ownerRole.roleName), None, None))
     createResource(resourceType, resourceId, defaultPolicies, Set.empty, None, userInfo.userId, samRequestContext)
   }
 
@@ -488,7 +488,8 @@ class ResourceService(
         userEmails.toSet[WorkbenchUser].map(_.email) ++ groupEmails.map(_.email) ++ policiesAndEmails.flatMap(_.map(_.policyEmail)),
         policy.actions,
         policy.roles,
-        Option(policy.descendantPermissions))
+        Option(policy.descendantPermissions),
+        Option(policiesAndEmails.flatten.toSet))
   }
 
   def listResourcePolicies(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[LazyList[AccessPolicyResponseEntry]] =

@@ -44,7 +44,9 @@ object SamJsonSupport {
 
   implicit val AccessPolicyDescendantPermissionsFormat = jsonFormat3(AccessPolicyDescendantPermissions.apply)
 
-  implicit val AccessPolicyMembershipFormat = jsonFormat4(AccessPolicyMembership.apply)
+  implicit val PolicyIdAndEmailFormat = jsonFormat4(PolicyIdAndEmail.apply)
+
+  implicit val AccessPolicyMembershipFormat = jsonFormat5(AccessPolicyMembership.apply)
 
   implicit val AccessPolicyResponseEntryFormat = jsonFormat3(AccessPolicyResponseEntry.apply)
 
@@ -55,8 +57,6 @@ object SamJsonSupport {
   implicit val UserResourcesResponseFormat = jsonFormat6(UserResourcesResponse.apply)
 
   implicit val PolicyIdentityFormat = jsonFormat2(FullyQualifiedPolicyId.apply)
-
-  implicit val PolicyIdAndEmailFormat = jsonFormat4(PolicyIdAndEmail.apply)
 
   implicit val ManagedGroupMembershipEntryFormat = jsonFormat3(ManagedGroupMembershipEntry.apply)
 
@@ -220,7 +220,8 @@ consistent "has a" relationship is tracked by this ticket: https://broadworkbenc
 @Lenses final case class AccessPolicyMembership(memberEmails: Set[WorkbenchEmail],
                                                 actions: Set[ResourceAction],
                                                 roles: Set[ResourceRoleName],
-                                                descendantPermissions: Option[Set[AccessPolicyDescendantPermissions]] = Option(Set.empty)) {
+                                                descendantPermissions: Option[Set[AccessPolicyDescendantPermissions]] = Option(Set.empty),
+                                                memberPolicies: Option[Set[PolicyIdAndEmail]] = Option(Set.empty)) {
   def getDescendantPermissions: Set[AccessPolicyDescendantPermissions] = descendantPermissions.getOrElse(Set.empty)
 }
 @Lenses final case class AccessPolicyResponseEntry(policyName: AccessPolicyName, policy: AccessPolicyMembership, email: WorkbenchEmail)
