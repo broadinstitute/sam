@@ -1992,6 +1992,50 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SystemStatus'
+  /register/user/v1/termsofservice:
+    post:
+      tags:
+        - Terms of Service
+      summary: accepts terms of service
+      operationId: acceptTermsOfService
+      requestBody:
+        description: Must equal the (double-quoted) url of the Terra Terms of Service
+        content:
+          'application/json':
+            schema:
+              type: string
+        required: true
+      responses:
+        200:
+          description: terms of service successfully accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserStatus'
+        404:
+          description: user cannot be found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+    delete:
+      tags:
+        - Terms of Service
+      summary: rejects terms of service
+      operationId: rejectTermsOfService
+      responses:
+        200:
+          description: terms of service successfully rejected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserStatus'
+        404:
+          description: user cannot be found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
   /tos/text:
     get:
       tags:
