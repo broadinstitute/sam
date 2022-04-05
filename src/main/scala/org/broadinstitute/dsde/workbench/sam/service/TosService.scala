@@ -49,6 +49,14 @@ class TosService (val directoryDao: DirectoryDAO, val registrationDao: Registrat
       }
     } else IO.pure(None)
 
+  def rejectTosStatus(user: WorkbenchSubject): IO[Option[Boolean]] =
+    if (tosConfig.enabled) {
+      resetTermsOfServiceGroupsIfNeeded().flatMap {
+        case Some(group) => directoryDao.removeGroupMember(group.id, user, SamRequestContext(None)).map(Option(_))
+        case None => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Terms of Service group ${getGroupName()} failed to create.")))
+      }
+    } else IO.pure(None)
+
   /**
     * Check if Terms of service is enabled and if the user has accepted the latest version
     * @return IO[Some(true)] if ToS is enabled and the user has accepted
