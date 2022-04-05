@@ -475,10 +475,17 @@ class ResourceService(
     for {
       userEmails <- directoryDAO.loadUsers(users, samRequestContext)
       groupEmails <- directoryDAO.loadGroups(groups, samRequestContext)
-      policyEmails <- policyMembers.toList.parTraverse((resourceAndPolicyName: FullyQualifiedPolicyId) => accessPolicyDAO.loadPolicy(resourceAndPolicyName, samRequestContext))
+      policiesAndEmails <- policyMembers.toList.parTraverse { (resourceAndPolicyName: FullyQualifiedPolicyId) =>
+        accessPolicyDAO.loadPolicy(resourceAndPolicyName, samRequestContext).map { accessPolicyOption =>
+          accessPolicyOption.map { accessPolicy =>
+            PolicyIdAndEmail(resourceAndPolicyName.accessPolicyName, accessPolicy.email,
+              resourceAndPolicyName.resource.resourceTypeName, resourceAndPolicyName.resource.resourceId)
+          }
+        }
+      }
     } yield
       AccessPolicyMembership(
-        userEmails.toSet[WorkbenchUser].map(_.email) ++ groupEmails.map(_.email) ++ policyEmails.flatMap(_.map(_.email)),
+        userEmails.toSet[WorkbenchUser].map(_.email) ++ groupEmails.map(_.email) ++ policiesAndEmails.flatMap(_.map(_.policyEmail)),
         policy.actions,
         policy.roles,
         Option(policy.descendantPermissions))

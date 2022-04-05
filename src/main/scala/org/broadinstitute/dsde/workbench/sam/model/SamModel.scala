@@ -56,6 +56,8 @@ object SamJsonSupport {
 
   implicit val PolicyIdentityFormat = jsonFormat2(FullyQualifiedPolicyId.apply)
 
+  implicit val PolicyIdAndEmailFormat = jsonFormat4(PolicyIdAndEmail.apply)
+
   implicit val ManagedGroupMembershipEntryFormat = jsonFormat3(ManagedGroupMembershipEntry.apply)
 
   implicit val ManagedGroupAccessInstructionsFormat = ValueObjectFormat(ManagedGroupAccessInstructions.apply)
@@ -190,6 +192,7 @@ object RolesAndActions {
 @Lenses final case class FullyQualifiedPolicyId(resource: FullyQualifiedResourceId, accessPolicyName: AccessPolicyName) extends WorkbenchGroupIdentity {
   override def toString: String = s"${accessPolicyName.value}.${resource.resourceId.value}.${resource.resourceTypeName.value}"
 }
+@Lenses final case class PolicyIdAndEmail(policyName: AccessPolicyName, policyEmail: WorkbenchEmail, resourceTypeName: ResourceTypeName, resourceId: ResourceId)
 @Lenses case class AccessPolicyName(value: String) extends ValueObject
 @Lenses final case class CreateResourceRequest(
                                                 resourceId: ResourceId,
