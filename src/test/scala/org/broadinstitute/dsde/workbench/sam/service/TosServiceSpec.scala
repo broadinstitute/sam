@@ -105,8 +105,6 @@ class TosServiceSpec extends AnyFlatSpec with TestSupport with BeforeAndAfterAll
     assert(rejectTosStatusResult.get, s"rejectTosStatus(${defaultUser.id}) should reject the tos for the user")
     val getTosStatusResultRejected = tosServiceEnabled.getTosStatus(defaultUser.id).unsafeRunSync()
     assertResult(expected = false, s"getTosStatus(${defaultUser.id}) should have returned false")(actual = getTosStatusResultRejected.get)
-    val isEnabledLdap = regDAO.isEnabled(defaultUser.id, samRequestContext).unsafeRunSync()
-    assertResult(expected = false, "regDAO.isEnabled should have returned false")(actual = isEnabledLdap)
   }
 
   it should "empty the enabledUsers group in OpenDJ when the ToS version changes" in {
