@@ -89,30 +89,22 @@ class TosServiceSpec extends AnyFlatSpec with TestSupport with BeforeAndAfterAll
     assert(tosServiceDisabled.resetTermsOfServiceGroupsIfNeeded() == IO.none)
   }
 
-  it should "accept and get the ToS for a user" in {
+  it should "accept, get, and reject the ToS for a user" in {
     val group = tosServiceEnabled.resetTermsOfServiceGroupsIfNeeded().unsafeRunSync()
     assert(group.isDefined, "resetTermsOfServiceGroupsIfNeeded() should create the group initially")
     dirDAO.createUser(defaultUser, samRequestContext).unsafeRunSync()
+
+    // accept and get ToS status
     val acceptTosStatusResult = tosServiceEnabled.acceptTosStatus(defaultUser.id).unsafeRunSync()
     assert(acceptTosStatusResult.get, s"acceptTosStatus(${defaultUser.id}) should accept the tos for the user")
     val getTosStatusResult = tosServiceEnabled.getTosStatus(defaultUser.id).unsafeRunSync()
     assert(getTosStatusResult.get, s"getTosStatus(${defaultUser.id}) should get the tos for the user")
-  }
 
-  it should "allow a user to reject the ToS" in {
-    val group = tosServiceEnabled.resetTermsOfServiceGroupsIfNeeded().unsafeRunSync()
-    assert(group.isDefined, "resetTermsOfServiceGroupsIfNeeded() should create the group initially")
-    dirDAO.createUser(defaultUser, samRequestContext).unsafeRunSync()
-
-    // Returns true if user ToS acceptance succeeded
-    val acceptTosStatusResult = tosServiceEnabled.acceptTosStatus(defaultUser.id).unsafeRunSync()
-    assert(acceptTosStatusResult.get, s"acceptTosStatus(${defaultUser.id}) should accept the tos for the user")
-
-    // Returns true if user ToS rejection succeeded
+    // reject and get ToS status
     val rejectTosStatusResult = tosServiceEnabled.rejectTosStatus(defaultUser.id).unsafeRunSync()
     assert(rejectTosStatusResult.get, s"rejectTosStatus(${defaultUser.id}) should reject the tos for the user")
-
-    // Ensure that the user is now disabled, because they've rejected the ToS
+    val getTosStatusResultRejected = tosServiceEnabled.getTosStatus(defaultUser.id).unsafeRunSync()
+    assertResult(expected = false, s"getTosStatus(${defaultUser.id}) should have returned false")(actual = getTosStatusResultRejected.get)
     val isEnabledLdap = regDAO.isEnabled(defaultUser.id, samRequestContext).unsafeRunSync()
     assertResult(expected = false, "regDAO.isEnabled should have returned false")(actual = isEnabledLdap)
   }
