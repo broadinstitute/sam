@@ -89,14 +89,22 @@ class TosServiceSpec extends AnyFlatSpec with TestSupport with BeforeAndAfterAll
     assert(tosServiceDisabled.resetTermsOfServiceGroupsIfNeeded() == IO.none)
   }
 
-  it should "accept and get the ToS for a user" in {
+  it should "accept, get, and reject the ToS for a user" in {
     val group = tosServiceEnabled.resetTermsOfServiceGroupsIfNeeded().unsafeRunSync()
     assert(group.isDefined, "resetTermsOfServiceGroupsIfNeeded() should create the group initially")
     dirDAO.createUser(defaultUser, samRequestContext).unsafeRunSync()
+
+    // accept and get ToS status
     val acceptTosStatusResult = tosServiceEnabled.acceptTosStatus(defaultUser.id).unsafeRunSync()
     assert(acceptTosStatusResult.get, s"acceptTosStatus(${defaultUser.id}) should accept the tos for the user")
     val getTosStatusResult = tosServiceEnabled.getTosStatus(defaultUser.id).unsafeRunSync()
     assert(getTosStatusResult.get, s"getTosStatus(${defaultUser.id}) should get the tos for the user")
+
+    // reject and get ToS status
+    val rejectTosStatusResult = tosServiceEnabled.rejectTosStatus(defaultUser.id).unsafeRunSync()
+    assert(rejectTosStatusResult.get, s"rejectTosStatus(${defaultUser.id}) should reject the tos for the user")
+    val getTosStatusResultRejected = tosServiceEnabled.getTosStatus(defaultUser.id).unsafeRunSync()
+    assertResult(expected = false, s"getTosStatus(${defaultUser.id}) should have returned false")(actual = getTosStatusResultRejected.get)
   }
 
   it should "empty the enabledUsers group in OpenDJ when the ToS version changes" in {

@@ -98,6 +98,19 @@ trait UserRoutes extends UserInfoDirectives with SamRequestContextDirectives {
                     }
                   }
                 }
+              } ~
+              delete {
+                requireUserInfo(samRequestContext) { userInfo =>
+                  complete {
+                    userService.rejectTermsOfService(userInfo.userId, samRequestContext).map { statusOption =>
+                      statusOption
+                        .map { status =>
+                          StatusCodes.OK -> Option(status)
+                        }
+                        .getOrElse(StatusCodes.NotFound -> None)
+                    }
+                  }
+                }
               }
             }
           }

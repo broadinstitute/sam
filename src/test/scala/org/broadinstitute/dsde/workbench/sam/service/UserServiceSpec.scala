@@ -297,7 +297,7 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     registrationDAO.loadUser(defaultUserId, samRequestContext).unsafeRunSync() shouldBe None
   }
 
-  it should "accept the tos" in {
+  it should "accept the tos and reject the tos" in {
     tosServiceEnabled.resetTermsOfServiceGroupsIfNeeded().unsafeRunSync()
 
     // create a user
@@ -308,6 +308,10 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
 
     val status = serviceTosEnabled.getUserStatus(defaultUserId, samRequestContext = samRequestContext).futureValue
     status shouldBe Some(UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> true, "adminEnabled" -> true)))
+
+    serviceTosEnabled.rejectTermsOfService(defaultUser.id, samRequestContext).unsafeRunSync()
+    val rejectedStatus = serviceTosEnabled.getUserStatus(defaultUserId, samRequestContext = samRequestContext).futureValue
+    rejectedStatus shouldBe Some(UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> false, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> false, "adminEnabled" -> true)))
   }
 
   it should "not accept the tos for users who do not exist" in {
