@@ -14,7 +14,6 @@ import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 trait DirectoryDAO extends RegistrationDAO {
   def createGroup(group: BasicWorkbenchGroup, accessInstructionsOpt: Option[String] = None, samRequestContext: SamRequestContext): IO[BasicWorkbenchGroup]
   def loadGroup(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Option[BasicWorkbenchGroup]]
-  def loadGroups(groupNames: Set[WorkbenchGroupName], samRequestContext: SamRequestContext): IO[LazyList[BasicWorkbenchGroup]]
   def loadGroupEmail(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Option[WorkbenchEmail]]
   def batchLoadGroupEmail(groupNames: Set[WorkbenchGroupName], samRequestContext: SamRequestContext): IO[LazyList[(WorkbenchGroupName, WorkbenchEmail)]]
   def deleteGroup(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Unit]
@@ -35,13 +34,11 @@ trait DirectoryDAO extends RegistrationDAO {
 
   def loadSubjectFromEmail(email: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Option[WorkbenchSubject]]
   def loadSubjectEmail(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Option[WorkbenchEmail]]
-  def loadSubjectEmails(subjects: Set[WorkbenchSubject], samRequestContext: SamRequestContext): IO[LazyList[WorkbenchEmail]]
   def loadSubjectFromGoogleSubjectId(googleSubjectId: GoogleSubjectId, samRequestContext: SamRequestContext): IO[Option[WorkbenchSubject]]
 
   def createUser(user: WorkbenchUser, samRequestContext: SamRequestContext): IO[WorkbenchUser]
   def loadUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[WorkbenchUser]]
   def loadUserByAzureB2CId(userId: AzureB2CId, samRequestContext: SamRequestContext): IO[Option[WorkbenchUser]]
-  def loadUsers(userIds: Set[WorkbenchUserId], samRequestContext: SamRequestContext): IO[LazyList[WorkbenchUser]]
   def deleteUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit]
 
 

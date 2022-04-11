@@ -49,10 +49,6 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
     groups.get(groupName).map(_.asInstanceOf[BasicWorkbenchGroup])
   }
 
-  override def loadGroups(groupNames: Set[WorkbenchGroupName], samRequestContext: SamRequestContext): IO[LazyList[BasicWorkbenchGroup]] = IO {
-    groups.view.filterKeys(groupNames.map(_.asInstanceOf[WorkbenchGroupIdentity])).values.map(_.asInstanceOf[BasicWorkbenchGroup]).to(LazyList)
-  }
-
   override def deleteGroup(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Unit] = {
     listAncestorGroups(groupName, samRequestContext).map { ancestors =>
       if (ancestors.nonEmpty)
@@ -105,10 +101,6 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
 
   override def loadUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[WorkbenchUser]] = IO {
     users.get(userId)
-  }
-
-  override def loadUsers(userIds: Set[WorkbenchUserId], samRequestContext: SamRequestContext): IO[LazyList[WorkbenchUser]] = IO {
-    users.view.filterKeys(userIds).values.to(LazyList)
   }
 
   override def deleteUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit] = IO {
@@ -210,10 +202,6 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
       case id: PetServiceAccountId => petServiceAccountsByUser.get(id).map(_.serviceAccount.email)
     }
   }
-
-  override def loadSubjectEmails(subjects: Set[WorkbenchSubject], samRequestContext: SamRequestContext): IO[LazyList[WorkbenchEmail]] = subjects.to(LazyList).parTraverse { subject =>
-      loadSubjectEmail(subject, samRequestContext).map(_.get)
-    }
 
   override def getSynchronizedDate(groupId: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[Option[Date]] = {
     IO.pure(groupSynchronizedDates.get(groupId))
