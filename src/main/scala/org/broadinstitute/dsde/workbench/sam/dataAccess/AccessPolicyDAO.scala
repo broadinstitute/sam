@@ -74,6 +74,12 @@ trait AccessPolicyDAO {
 
   def listUserResourcesWithRolesAndActions(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Iterable[ResourceIdWithRolesAndActions]]
 
+  def loadDirectMemberUserEmails(policy: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[LazyList[WorkbenchEmail]]
+
+  def loadDirectMemberGroupEmails(policy: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[LazyList[WorkbenchEmail]]
+
+  def loadDirectMemberPolicyIdAndEmails(policy: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[LazyList[PolicyIdAndEmail]]
+
   /**
     * Utility function that takes a bunch of ResourceIdWithRolesAndActions, probably more than one for a give
     * resource id, and aggregates all the ones with same resource id together.

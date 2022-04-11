@@ -468,28 +468,17 @@ class ResourceService(
   }
 
   private[service] def loadAccessPolicyWithEmails(policy: AccessPolicy, samRequestContext: SamRequestContext): IO[AccessPolicyMembership] = {
-    val users = policy.members.collect { case userId: WorkbenchUserId => userId }
-    val groups = policy.members.collect { case groupName: WorkbenchGroupName => groupName }
-    val policyMembers = policy.members.collect { case policyId: FullyQualifiedPolicyId => policyId }
-
     for {
-      userEmails <- directoryDAO.loadUsers(users, samRequestContext)
-      groupEmails <- directoryDAO.loadGroups(groups, samRequestContext)
-      policiesAndEmails <- policyMembers.toList.parTraverse { (resourceAndPolicyName: FullyQualifiedPolicyId) =>
-        accessPolicyDAO.loadPolicy(resourceAndPolicyName, samRequestContext).map { accessPolicyOption =>
-          accessPolicyOption.map { accessPolicy =>
-            PolicyIdAndEmail(resourceAndPolicyName.accessPolicyName, accessPolicy.email,
-              resourceAndPolicyName.resource.resourceTypeName, resourceAndPolicyName.resource.resourceId)
-          }
-        }
-      }
+      userEmails <- accessPolicyDAO.loadDirectMemberUserEmails(policy.id, samRequestContext)
+      groupEmails <- accessPolicyDAO.loadDirectMemberGroupEmails(policy.id, samRequestContext)
+      policiesAndEmails <- accessPolicyDAO.loadDirectMemberPolicyIdAndEmails(policy.id, samRequestContext)
     } yield
       AccessPolicyMembership(
-        userEmails.toSet[WorkbenchUser].map(_.email) ++ groupEmails.map(_.email) ++ policiesAndEmails.flatMap(_.map(_.policyEmail)),
+        userEmails.toSet[WorkbenchEmail] ++ groupEmails ++ policiesAndEmails.map(_.policyEmail),
         policy.actions,
         policy.roles,
         Option(policy.descendantPermissions),
-        Option(policiesAndEmails.flatten.toSet))
+        Option(policiesAndEmails.toSet))
   }
 
   def listResourcePolicies(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[LazyList[AccessPolicyResponseEntry]] =

@@ -731,6 +731,58 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
                values (${policyGroupName}, ${policy.email}, ${Instant.now()})""".updateAndReturnGeneratedKey().apply())
   }
 
+  override def loadDirectMemberUserEmails(policy: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[LazyList[WorkbenchEmail]] = {
+    val u = UserTable.syntax("u")
+    val p = PolicyTable.syntax("p")
+    val gm = GroupMemberTable.syntax("gm")
+
+    readOnlyTransaction("loadDirectMemberUsers", samRequestContext)({ implicit session =>
+      samsql"""select ${u.result.email} from ${PolicyTable as p}
+        join ${GroupMemberTable as gm} on ${gm.groupId} = ${p.groupId}
+        join ${UserTable as u} on ${u.id} = ${gm.memberUserId}
+        where ${p.name} = ${policy.accessPolicyName}
+        and ${p.resourceId} = (${loadResourcePKSubQuery(policy.resource)})"""
+        .map(rs => rs.get[WorkbenchEmail](u.resultName.email)).list().apply().to(LazyList)
+    })
+  }
+
+  override def loadDirectMemberGroupEmails(policy: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[LazyList[WorkbenchEmail]] = {
+    val g = GroupTable.syntax("g")
+    val p = PolicyTable.syntax("p")
+    val gm = GroupMemberTable.syntax("gm")
+
+    readOnlyTransaction("loadDirectMemberGroupEmails", samRequestContext)({ implicit session =>
+      samsql"""select ${g.result.email} from ${PolicyTable as p}
+        join ${GroupMemberTable as gm} on ${gm.groupId} = ${p.groupId}
+        join ${GroupTable as g} on ${g.id} = ${gm.memberGroupId}
+        where ${p.name} = ${policy.accessPolicyName}
+        and ${p.resourceId} = (${loadResourcePKSubQuery(policy.resource)})"""
+        .map(rs => rs.get[WorkbenchEmail](g.resultName.email)).list().apply().to(LazyList)
+    })
+  }
+
+  override def loadDirectMemberPolicyIdAndEmails(policy: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[LazyList[PolicyIdAndEmail]] = {
+    val mp = PolicyTable.syntax("mp") // member policy
+    val mpr = ResourceTable.syntax("mpr") // member policy resource
+    val mprt = ResourceTypeTable.syntax("mprt") // member policy resource type
+    val mpg = GroupTable.syntax("mpg") // member policy group
+
+    val p = PolicyTable.syntax("p")
+    val gm = GroupMemberTable.syntax("gm")
+
+    readOnlyTransaction("loadDirectMemberGroupEmails", samRequestContext)({ implicit session =>
+      samsql"""select ${mp.result.name}, ${mpg.result.email}, ${mpr.result.name}, ${mprt.result.name} from ${PolicyTable as p}
+        join ${GroupMemberTable as gm} on ${gm.groupId} = ${p.groupId}
+        join ${PolicyTable as mp} on ${mp.groupId} = ${gm.memberGroupId}
+        join ${GroupTable as mpg} on ${mpg.id} = ${mp.groupId}
+        join ${ResourceTable as mpr} on ${mpr.id} = ${mp.resourceId}
+        join ${ResourceTypeTable as mprt} on ${mprt.id} = ${mpr.resourceTypeId}
+        where ${p.name} = ${policy.accessPolicyName}
+        and ${p.resourceId} = (${loadResourcePKSubQuery(policy.resource)})"""
+        .map(rs => PolicyIdAndEmail(rs.get[AccessPolicyName](mp.resultName.name), rs.get[WorkbenchEmail](mpg.resultName.email), rs.get[ResourceTypeName](mprt.resultName.name), rs.get[ResourceId](mpr.resultName.name))).list().apply().to(LazyList)
+    })
+  }
+
   // Policies and their roles and actions are set to cascade delete when the associated group is deleted
   override def deletePolicy(policy: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[Unit] = {
     val p = PolicyTable.syntax("p")

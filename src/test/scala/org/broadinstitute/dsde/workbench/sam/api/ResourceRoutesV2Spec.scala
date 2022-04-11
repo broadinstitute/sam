@@ -44,8 +44,8 @@ class ResourceRoutesV2Spec extends AnyFlatSpec with Matchers with TestSupport wi
 
   private def createSamRoutes(resourceTypes: Map[ResourceTypeName, ResourceType] = Map(defaultResourceType.name -> defaultResourceType),
                               userInfo: UserInfo = defaultUserInfo): SamRoutes = {
-    val accessPolicyDAO = new MockAccessPolicyDAO(resourceTypes)
     val directoryDAO = new MockDirectoryDAO()
+    val accessPolicyDAO = new MockAccessPolicyDAO(resourceTypes, directoryDAO)
     val registrationDAO = new MockRegistrationDAO()
     val emailDomain = "example.com"
 

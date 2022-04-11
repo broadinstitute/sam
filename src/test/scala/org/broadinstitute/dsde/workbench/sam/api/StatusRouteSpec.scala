@@ -53,7 +53,7 @@ class StatusRouteSpec extends AnyFlatSpec with Matchers with ScalatestRouteTest 
     connectionPool.close()
     val directoryDAO = new MockDirectoryDAO()
     val registrationDAO = new LdapRegistrationDAO(connectionPool, directoryConfig, TestSupport.blockingEc)
-    val policyDAO = new MockAccessPolicyDAO()
+    val policyDAO = new MockAccessPolicyDAO(directoryDAO)
 
     val emailDomain = "example.com"
     val mockResourceService = new ResourceService(Map.empty, null, policyDAO, directoryDAO, NoExtensions, emailDomain)
