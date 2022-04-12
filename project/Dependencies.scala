@@ -33,7 +33,7 @@ object Dependencies {
 
   val logstashLogback: ModuleID = "net.logstash.logback"      % "logstash-logback-encoder" % "6.6"
   val logbackClassic: ModuleID = "ch.qos.logback"             %  "logback-classic" % "1.2.10"
-  val ravenLogback: ModuleID =   "com.getsentry.raven"        %  "raven-logback"   % "7.8.6"
+  val ravenLogback: ModuleID =   "com.getsentry.raven"        %  "raven-logback"   % "8.0.3"
   val scalaLogging: ModuleID =   "com.typesafe.scala-logging" %% "scala-logging"   % scalaLoggingV
   val swaggerUi: ModuleID =      "org.webjars.npm"                %  "swagger-ui-dist"      % "4.6.1"
   val ficus: ModuleID =          "com.iheart"                 %% "ficus"           % "1.5.0"
