@@ -224,6 +224,8 @@ consistent "has a" relationship is tracked by this ticket: https://broadworkbenc
                                                 memberPolicies: Option[Set[PolicyIdAndEmail]] = Option(Set.empty)) {
   def getDescendantPermissions: Set[AccessPolicyDescendantPermissions] = descendantPermissions.getOrElse(Set.empty)
 }
+// AccessPolicyWithMembership is practically the same as AccessPolicyResponseEntry but the latter is used in api responses
+// and the former is used at the DAO level so it seems better to keep them separate
 @Lenses final case class AccessPolicyWithMembership(policyName: AccessPolicyName, membership: AccessPolicyMembership, email: WorkbenchEmail)
 @Lenses final case class AccessPolicyResponseEntry(policyName: AccessPolicyName, policy: AccessPolicyMembership, email: WorkbenchEmail)
 

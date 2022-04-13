@@ -736,12 +736,12 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
     val p = PolicyTable.syntax("p")
     val gm = GroupMemberTable.syntax("gm")
 
-    samsql"""select ${u.result.id}, ${u.result.email} from ${PolicyTable as p}
+    samsql"""select ${u.resultAll} from ${PolicyTable as p}
         join ${GroupMemberTable as gm} on ${gm.groupId} = ${p.groupId}
         join ${UserTable as u} on ${u.id} = ${gm.memberUserId}
         where ${p.name} = ${policy.accessPolicyName}
         and ${p.resourceId} = (${loadResourcePKSubQuery(policy.resource)})"""
-      .map(rs => (rs.get[WorkbenchUserId](u.resultName.id), rs.get[WorkbenchEmail](u.resultName.email)))
+      .map(UserTable(u))
   }
 
   private def directMemberGroupEmailsQuery(policy: FullyQualifiedPolicyId) = {
@@ -750,13 +750,13 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
     val gm = GroupMemberTable.syntax("gm")
     val op = PolicyTable.syntax("op")
 
-    samsql"""select ${g.result.name}, ${g.result.email} from ${PolicyTable as p}
+    samsql"""select ${g.resultAll} from ${PolicyTable as p}
         join ${GroupMemberTable as gm} on ${gm.groupId} = ${p.groupId}
         join ${GroupTable as g} on ${g.id} = ${gm.memberGroupId}
         where ${p.name} = ${policy.accessPolicyName}
         and ${p.resourceId} = (${loadResourcePKSubQuery(policy.resource)})
         and not exists (select 1 from ${PolicyTable as op} where ${op.groupId} = ${g.id})"""
-      .map(rs => (rs.get[WorkbenchGroupName](g.resultName.name), rs.get[WorkbenchEmail](g.resultName.email)))
+      .map(GroupTable(g))
   }
 
   private def directMemberPolicyIdAndEmailsQuery(policy: FullyQualifiedPolicyId) = {
@@ -989,8 +989,8 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
 
         val policyId = FullyQualifiedPolicyId(resource, policyInfo.name)
         // queries to get all members as WorkbenchSubjects, there are 3 kinds, groups, users and policies
-        val memberGroups = directMemberGroupEmailsQuery(policyId).list().apply().map(_._1).toSet[WorkbenchSubject] // _1 is WorkbenchUser
-        val memberUsers = directMemberUserEmailsQuery(policyId).list().apply().map(_._1).toSet[WorkbenchSubject] // _1 is WorkbenchGroupName
+        val memberGroups = directMemberGroupEmailsQuery(policyId).list().apply().map(_.name).toSet[WorkbenchSubject]
+        val memberUsers = directMemberUserEmailsQuery(policyId).list().apply().map(_.id).toSet[WorkbenchSubject]
         val memberPolicies = directMemberPolicyIdAndEmailsQuery(policyId).list().apply().map(p => FullyQualifiedPolicyId(FullyQualifiedResourceId(p.resourceTypeName, p.resourceId), p.policyName)).toSet[WorkbenchSubject]
 
         AccessPolicy(policyId, memberUsers ++ memberGroups ++ memberPolicies, policyInfo.email, policyRoles, policyActions, policyDescendantPermissions, policyInfo.public)
@@ -1068,21 +1068,13 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
         val policyId = FullyQualifiedPolicyId(resource, policyInfo.name)
         // queries to get all members, there are 3 kinds, groups, users and policies
         // policies have extra information, users and groups are just emails
-        val memberGroups = directMemberGroupEmailsQuery(policyId).list().apply().map(_._2) // _2 is email
-        val memberUsers = directMemberUserEmailsQuery(policyId).list().apply().map(_._2) // _2 is email
+        val memberGroups = directMemberGroupEmailsQuery(policyId).list().apply().map(_.email)
+        val memberUsers = directMemberUserEmailsQuery(policyId).list().apply().map(_.email)
         val memberPolicies = directMemberPolicyIdAndEmailsQuery(policyId).list().apply().toSet
 
         AccessPolicyWithMembership(policyInfo.name, AccessPolicyMembership(memberPolicies.map(_.policyEmail) ++ memberUsers ++ memberGroups, policyActions, policyRoles, Option(policyDescendantPermissions), Option(memberPolicies)), policyInfo.email)
       }.to(LazyList)
     })
-  }
-
-  private def unmarshalPolicyMembers(memberResults: List[MemberResult]): Set[WorkbenchSubject] = {
-    memberResults.collect {
-      case MemberResult(Some(userId), None, None, None, None) => userId
-      case MemberResult(None, Some(groupName), None, None, None) => groupName
-      case MemberResult(None, Some(_), Some(policyName), Some(resourceName), Some(resourceTypeName)) => FullyQualifiedPolicyId(FullyQualifiedResourceId(resourceTypeName, resourceName), policyName)
-    }.toSet
   }
 
   private def unmarshalPolicyPermissions(permissionsResults: List[(RoleResult, ActionResult)]): (Set[ResourceRoleName], Set[ResourceAction], Set[AccessPolicyDescendantPermissions]) = {
@@ -1567,7 +1559,6 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
 }
 
 private final case class PolicyInfo(name: AccessPolicyName, resourceId: ResourceId, resourceTypeName: ResourceTypeName, email: WorkbenchEmail, public: Boolean)
-private final case class MemberResult(userId: Option[WorkbenchUserId], groupName: Option[WorkbenchGroupName], policyName: Option[AccessPolicyName], resourceId: Option[ResourceId], resourceTypeName: Option[ResourceTypeName])
 private final case class RoleResult(resourceTypeName: Option[ResourceTypeName], role: Option[ResourceRoleName], descendantsOnly: Option[Boolean])
 private final case class ActionResult(resourceTypeName: Option[ResourceTypeName], action: Option[ResourceAction], descendantsOnly: Option[Boolean])
 
