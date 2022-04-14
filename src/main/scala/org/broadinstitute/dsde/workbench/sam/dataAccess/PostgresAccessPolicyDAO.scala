@@ -1066,7 +1066,7 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
           left join ${PolicyActionTable as pa} on ${p.id} = ${pa.resourcePolicyId}
           left join ${ResourceActionTable as ra} on ${pa.resourceActionId} = ${ra.id}
           left join ${ResourceTypeTable as part} on ${ra.resourceTypeId} = ${part.id}
-          where ${p.resourceId} = (${loadResourcePKSubQuery(resource.resourceTypeName)})
+          where ${p.resourceId} = (${loadResourcePKSubQuery(resource)})
           ${limitOnePolicyClause(limitOnePolicy, p)}"""
 
     listPoliciesQuery.map(rs =>
