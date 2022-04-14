@@ -217,6 +217,8 @@ consistent "has a" relationship is tracked by this ticket: https://broadworkbenc
     extends WorkbenchGroup
 
 @Lenses final case class AccessPolicyDescendantPermissions(resourceType: ResourceTypeName, actions: Set[ResourceAction], roles: Set[ResourceRoleName])
+// AccessPolicyMembership.memberPolicies is logically read-only; at some point in the future it could be lazy-loaded
+// (via extra queries) based on the contents of memberEmails.
 @Lenses final case class AccessPolicyMembership(memberEmails: Set[WorkbenchEmail],
                                                 actions: Set[ResourceAction],
                                                 roles: Set[ResourceRoleName],
