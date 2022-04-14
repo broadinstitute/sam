@@ -467,45 +467,15 @@ class ResourceService(
     maybeFireNotification.map(_ => groupChanged)
   }
 
-  private[service] def loadAccessPolicyWithEmails(policy: AccessPolicy, samRequestContext: SamRequestContext): IO[AccessPolicyMembership] = {
-    val users = policy.members.collect { case userId: WorkbenchUserId => userId }
-    val groups = policy.members.collect { case groupName: WorkbenchGroupName => groupName }
-    val policyMembers = policy.members.collect { case policyId: FullyQualifiedPolicyId => policyId }
-
-    for {
-      userEmails <- directoryDAO.loadUsers(users, samRequestContext)
-      groupEmails <- directoryDAO.loadGroups(groups, samRequestContext)
-      policiesAndEmails <- policyMembers.toList.parTraverse { (resourceAndPolicyName: FullyQualifiedPolicyId) =>
-        accessPolicyDAO.loadPolicy(resourceAndPolicyName, samRequestContext).map { accessPolicyOption =>
-          accessPolicyOption.map { accessPolicy =>
-            PolicyIdAndEmail(resourceAndPolicyName.accessPolicyName, accessPolicy.email,
-              resourceAndPolicyName.resource.resourceTypeName, resourceAndPolicyName.resource.resourceId)
-          }
-        }
-      }
-    } yield
-      AccessPolicyMembership(
-        userEmails.toSet[WorkbenchUser].map(_.email) ++ groupEmails.map(_.email) ++ policiesAndEmails.flatMap(_.map(_.policyEmail)),
-        policy.actions,
-        policy.roles,
-        Option(policy.descendantPermissions),
-        Option(policiesAndEmails.flatten.toSet))
-  }
-
   def listResourcePolicies(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[LazyList[AccessPolicyResponseEntry]] =
-    accessPolicyDAO.listAccessPolicies(resource, samRequestContext).flatMap { policies =>
-      policies.parTraverse { policy =>
-        loadAccessPolicyWithEmails(policy, samRequestContext).map { membership =>
-          AccessPolicyResponseEntry(policy.id.accessPolicyName, membership, policy.email)
-        }
+    accessPolicyDAO.listAccessPolicyMemberships(resource, samRequestContext).map { policiesWithMembership =>
+      policiesWithMembership.map { policyWithMembership =>
+        AccessPolicyResponseEntry(policyWithMembership.policyName, policyWithMembership.membership, policyWithMembership.email)
       }
     }
 
   def loadResourcePolicy(policyIdentity: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[Option[AccessPolicyMembership]] =
-    for {
-      policy <- accessPolicyDAO.loadPolicy(policyIdentity, samRequestContext)
-      res <- policy.traverse(p => loadAccessPolicyWithEmails(p, samRequestContext))
-    } yield res
+    accessPolicyDAO.loadPolicyMembership(policyIdentity, samRequestContext)
 
   private def makeValidatablePolicies(policies: Map[AccessPolicyName, AccessPolicyMembership], samRequestContext: SamRequestContext): IO[Set[ValidatableAccessPolicy]] =
     policies.toList.traverse {

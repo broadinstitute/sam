@@ -1496,9 +1496,12 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
       }
 
       "lists the access policies for a resource" in {
+        dirDao.createUser(defaultUser, samRequestContext).unsafeRunSync()
+        dirDao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync()
+
         val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
-        val owner = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("owner")), Set.empty, WorkbenchEmail("owner@policy.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), Set.empty, false)
-        val reader = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("reader")), Set.empty, WorkbenchEmail("reader@policy.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), Set.empty, false)
+        val owner = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("owner")), Set(defaultUser.id, defaultGroup.id), WorkbenchEmail("owner@policy.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), Set.empty, false)
+        val reader = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("reader")), Set(owner.id, defaultUser.id), WorkbenchEmail("reader@policy.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), Set.empty, false)
 
         dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         dao.createResource(resource, samRequestContext).unsafeRunSync()
@@ -1506,6 +1509,50 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
         dao.createPolicy(reader, samRequestContext).unsafeRunSync()
 
         dao.listAccessPolicies(resource.fullyQualifiedId, samRequestContext).unsafeRunSync() should contain theSameElementsAs Set(owner, reader)
+      }
+    }
+
+    "listAccessPolicyMemberships" - {
+      "lists the access policy memberships for a resource" in {
+        dirDao.createUser(defaultUser, samRequestContext).unsafeRunSync()
+        dirDao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync()
+
+        val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
+        val owner = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("owner")), Set(defaultUser.id, defaultGroup.id), WorkbenchEmail("owner@policy.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), Set.empty, false)
+        val reader = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("reader")), Set(owner.id, defaultUser.id), WorkbenchEmail("reader@policy.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), Set.empty, false)
+
+        dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
+        dao.createResource(resource, samRequestContext).unsafeRunSync()
+        dao.createPolicy(owner, samRequestContext).unsafeRunSync()
+        dao.createPolicy(reader, samRequestContext).unsafeRunSync()
+
+        val ownerPolicyWithMembership = AccessPolicyWithMembership(owner.id.accessPolicyName, AccessPolicyMembership(Set(defaultUser.email, defaultGroup.email), owner.actions, owner.roles, Option(owner.descendantPermissions), Option(Set.empty)), owner.email)
+        val readerPolicyWithMembership = AccessPolicyWithMembership(reader.id.accessPolicyName, AccessPolicyMembership(Set(owner.email, defaultUser.email), reader.actions, reader.roles, Option(reader.descendantPermissions), Option(Set(PolicyIdAndEmail(owner.id.accessPolicyName, owner.email, owner.id.resource.resourceTypeName, owner.id.resource.resourceId)))), reader.email)
+
+        dao.listAccessPolicyMemberships(resource.fullyQualifiedId, samRequestContext).unsafeRunSync() should contain theSameElementsAs LazyList(ownerPolicyWithMembership, readerPolicyWithMembership)
+      }
+    }
+
+    "loadPolicyMembership" - {
+      "loads an access policy's membership" in {
+        dirDao.createUser(defaultUser, samRequestContext).unsafeRunSync()
+        dirDao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync()
+
+        val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
+        val owner = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("owner")), Set(defaultUser.id, defaultGroup.id), WorkbenchEmail("owner@policy.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), Set.empty, false)
+        val reader = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("reader")), Set(owner.id, defaultUser.id), WorkbenchEmail("reader@policy.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), Set.empty, false)
+
+        dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
+        dao.createResource(resource, samRequestContext).unsafeRunSync()
+        dao.createPolicy(owner, samRequestContext).unsafeRunSync()
+        dao.createPolicy(reader, samRequestContext).unsafeRunSync()
+
+        val ownerPolicyMembership = AccessPolicyMembership(Set(defaultUser.email, defaultGroup.email), owner.actions, owner.roles, Option(owner.descendantPermissions), Option(Set.empty))
+        val readerPolicyMembership = AccessPolicyMembership(Set(owner.email, defaultUser.email), reader.actions, reader.roles, Option(reader.descendantPermissions), Option(Set(PolicyIdAndEmail(owner.id.accessPolicyName, owner.email, owner.id.resource.resourceTypeName, owner.id.resource.resourceId))))
+
+        dao.loadPolicyMembership(reader.id, samRequestContext).unsafeRunSync() shouldBe Option(readerPolicyMembership)
+        dao.loadPolicyMembership(owner.id, samRequestContext).unsafeRunSync() shouldBe Option(ownerPolicyMembership)
+        dao.loadPolicyMembership(reader.id.copy(accessPolicyName = AccessPolicyName("does not exist")), samRequestContext).unsafeRunSync() shouldBe None
       }
     }
 

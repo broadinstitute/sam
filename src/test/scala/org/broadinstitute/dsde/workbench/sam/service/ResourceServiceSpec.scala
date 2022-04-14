@@ -1351,9 +1351,9 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
       newPolicy <- policyDAO.createPolicy(AccessPolicy(
         FullyQualifiedPolicyId(res2.fullyQualifiedId, AccessPolicyName("foo")), Set(testGroup.id, dummyUserInfo.userId, FullyQualifiedPolicyId(res1.fullyQualifiedId, testPolicy.policyName)), WorkbenchEmail("a@b.c"), Set.empty, Set.empty, Set.empty, public = false), samRequestContext)
 
-      membership <- service.loadAccessPolicyWithEmails(newPolicy, samRequestContext)
+      membership <- policyDAO.loadPolicyMembership(newPolicy.id, samRequestContext)
     } yield {
-      membership.memberEmails should contain theSameElementsAs Set(
+      membership.value.memberEmails should contain theSameElementsAs Set(
         testGroup.email,
         dummyUserInfo.userEmail,
         testPolicy.email

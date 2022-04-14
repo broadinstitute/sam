@@ -208,7 +208,7 @@ class ManagedGroupServiceSpec extends AnyFlatSpec with Matchers with TestSupport
   "ManagedGroupService listPolicyMemberEmails" should "return a list of email addresses for the groups admin policy" in {
     val managedGroup = assertMakeGroup()
     managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName, samRequestContext).unsafeRunSync() should contain theSameElementsAs Set(dummyUserInfo.userEmail)
-    managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.memberPolicyName, samRequestContext).unsafeRunSync() shouldEqual LazyList.empty
+    managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.memberPolicyName, samRequestContext).unsafeRunSync() shouldEqual Set.empty
   }
 
   it should "throw an exception if the group does not exist" in {
