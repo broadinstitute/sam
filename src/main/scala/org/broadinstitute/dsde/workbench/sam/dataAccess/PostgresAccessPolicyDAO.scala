@@ -766,7 +766,7 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
     }
   }
 
-  private def directMemberPolicyIdAndEmailsQuery(resource: FullyQualifiedResourceId, limitOnePolicy: Option[AccessPolicyName]) = {
+  private def directMemberPolicyIdentifiersQuery(resource: FullyQualifiedResourceId, limitOnePolicy: Option[AccessPolicyName]) = {
     val mp = PolicyTable.syntax("mp") // member policy
     val mpr = ResourceTable.syntax("mpr") // member policy resource
     val mprt = ResourceTypeTable.syntax("mprt") // member policy resource type
@@ -783,7 +783,7 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
         join ${ResourceTypeTable as mprt} on ${mprt.id} = ${mpr.resourceTypeId}
         where ${p.resourceId} = (${loadResourcePKSubQuery(resource)})
         ${limitOnePolicyClause(limitOnePolicy, p)}"""
-      .map(rs => (rs.get[AccessPolicyName](p.resultName.name), PolicyIdAndEmail(rs.get[AccessPolicyName](mp.resultName.name), rs.get[WorkbenchEmail](mpg.resultName.email), rs.get[ResourceTypeName](mprt.resultName.name), rs.get[ResourceId](mpr.resultName.name))))
+      .map(rs => (rs.get[AccessPolicyName](p.resultName.name), PolicyIdentifiers(rs.get[AccessPolicyName](mp.resultName.name), rs.get[WorkbenchEmail](mpg.resultName.email), rs.get[ResourceTypeName](mprt.resultName.name), rs.get[ResourceId](mpr.resultName.name))))
   }
 
   // Policies and their roles and actions are set to cascade delete when the associated group is deleted
@@ -1020,7 +1020,7 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
                                           Map[PolicyInfo, List[(RoleResult, ActionResult)]],
                                           Map[AccessPolicyName, List[GroupRecord]],
                                           Map[AccessPolicyName, List[UserRecord]],
-                                          Map[AccessPolicyName, List[PolicyIdAndEmail]]) => LazyList[T]): IO[LazyList[T]] = {
+                                          Map[AccessPolicyName, List[PolicyIdentifiers]]) => LazyList[T]): IO[LazyList[T]] = {
     readOnlyTransaction("listPoliciesWithMembers", samRequestContext)({ implicit session =>
       // query to get policies and all associated roles and actions
       val policyInfos = groupByFirstInPair(policyInfoQuery(resource, limitOnePolicy).list().apply())
@@ -1028,7 +1028,7 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
       // queries to get all members, there are 3 kinds, groups, users and policies
       val memberGroupsByPolicy = groupByFirstInPair(directMemberGroupEmailsQuery(resource, limitOnePolicy).list().apply()).withDefault(_ => List.empty)
       val memberUsersByPolicy = groupByFirstInPair(directMemberUserEmailsQuery(resource, limitOnePolicy).list().apply()).withDefault(_ => List.empty)
-      val memberPoliciesByPolicy = groupByFirstInPair(directMemberPolicyIdAndEmailsQuery(resource, limitOnePolicy).list().apply()).withDefault(_ => List.empty)
+      val memberPoliciesByPolicy = groupByFirstInPair(directMemberPolicyIdentifiersQuery(resource, limitOnePolicy).list().apply()).withDefault(_ => List.empty)
 
       // convert query results to desired output
       unmarshaller(policyInfos, memberGroupsByPolicy, memberUsersByPolicy, memberPoliciesByPolicy)

@@ -2082,7 +2082,7 @@ components:
         memberPolicies:
           type: array
           items:
-            $ref: '#/components/schemas/PolicyIdAndEmail'
+            $ref: '#/components/schemas/PolicyIdentifiers'
         actions:
           type: array
           items:
@@ -2260,7 +2260,7 @@ components:
           description: The email address associated with the group
       description: specification of a managed group with an access policy and the
         email associated with the managed group
-    PolicyIdAndEmail:
+    PolicyIdentifiers:
       required:
         - policyName
         - policyEmail

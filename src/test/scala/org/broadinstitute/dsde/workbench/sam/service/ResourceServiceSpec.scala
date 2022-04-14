@@ -556,7 +556,7 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
     val actualMemberPolicies = ownerPolicy.policy.memberPolicies.get
 
     val expectedMemberPolicies = sidePolicies.map { p =>
-      PolicyIdAndEmail(p.policyName, p.email, sideResource.resourceTypeName, sideResource.resourceId)
+      PolicyIdentifiers(p.policyName, p.email, sideResource.resourceTypeName, sideResource.resourceId)
     }
 
     actualMemberPolicies shouldBe expectedMemberPolicies.toSet

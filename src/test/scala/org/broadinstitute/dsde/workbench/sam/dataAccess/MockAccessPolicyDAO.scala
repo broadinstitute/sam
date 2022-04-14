@@ -260,12 +260,12 @@ class MockAccessPolicyDAO(private val resourceTypes: mutable.Map[ResourceTypeNam
     groupNames.traverse { directoryDAO.loadGroup(_, samRequestContext) }.map(_.flatMap(_.map(_.email)))
   }
 
-  private def loadDirectMemberPolicyIdAndEmails(policy: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[LazyList[PolicyIdAndEmail]] = {
+  private def loadDirectMemberPolicyIdentifiers(policy: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[LazyList[PolicyIdentifiers]] = {
     val policyIds = policies.find(_._1 == policy).toList.flatMap { case (_, policyGroup) =>
       policyGroup.members.collect { case policyId: FullyQualifiedPolicyId => policyId }
     }.to(LazyList)
 
-    policyIds.traverse { loadPolicy(_, samRequestContext) }.map(_.flatMap(_.map(p => PolicyIdAndEmail(p.id.accessPolicyName, p.email, p.id.resource.resourceTypeName, p.id.resource.resourceId))))
+    policyIds.traverse { loadPolicy(_, samRequestContext) }.map(_.flatMap(_.map(p => PolicyIdentifiers(p.id.accessPolicyName, p.email, p.id.resource.resourceTypeName, p.id.resource.resourceId))))
   }
 
   override def loadPolicyMembership(policyId: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[Option[AccessPolicyMembership]] = {
@@ -280,7 +280,7 @@ class MockAccessPolicyDAO(private val resourceTypes: mutable.Map[ResourceTypeNam
         for {
           users <- loadDirectMemberUserEmails(policy.id, samRequestContext)
           groups <- loadDirectMemberGroupEmails(policy.id, samRequestContext)
-          subPolicies <- loadDirectMemberPolicyIdAndEmails(policy.id, samRequestContext)
+          subPolicies <- loadDirectMemberPolicyIdentifiers(policy.id, samRequestContext)
         } yield {
           AccessPolicyWithMembership(policy.id.accessPolicyName, AccessPolicyMembership(users.toSet ++ groups ++ subPolicies.map(_.policyEmail), policy.actions, policy.roles, Option(policy.descendantPermissions), Option(subPolicies.toSet)), policy.email)
         }

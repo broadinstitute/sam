@@ -44,7 +44,7 @@ object SamJsonSupport {
 
   implicit val AccessPolicyDescendantPermissionsFormat = jsonFormat3(AccessPolicyDescendantPermissions.apply)
 
-  implicit val PolicyIdAndEmailFormat = jsonFormat4(PolicyIdAndEmail.apply)
+  implicit val PolicyIdentifiersFormat = jsonFormat4(PolicyIdentifiers.apply)
 
   implicit val AccessPolicyMembershipFormat = jsonFormat5(AccessPolicyMembership.apply)
 
@@ -192,7 +192,7 @@ object RolesAndActions {
 @Lenses final case class FullyQualifiedPolicyId(resource: FullyQualifiedResourceId, accessPolicyName: AccessPolicyName) extends WorkbenchGroupIdentity {
   override def toString: String = s"${accessPolicyName.value}.${resource.resourceId.value}.${resource.resourceTypeName.value}"
 }
-@Lenses final case class PolicyIdAndEmail(policyName: AccessPolicyName, policyEmail: WorkbenchEmail, resourceTypeName: ResourceTypeName, resourceId: ResourceId)
+@Lenses final case class PolicyIdentifiers(policyName: AccessPolicyName, policyEmail: WorkbenchEmail, resourceTypeName: ResourceTypeName, resourceId: ResourceId)
 @Lenses case class AccessPolicyName(value: String) extends ValueObject
 @Lenses final case class CreateResourceRequest(
                                                 resourceId: ResourceId,
@@ -221,7 +221,7 @@ consistent "has a" relationship is tracked by this ticket: https://broadworkbenc
                                                 actions: Set[ResourceAction],
                                                 roles: Set[ResourceRoleName],
                                                 descendantPermissions: Option[Set[AccessPolicyDescendantPermissions]] = Option(Set.empty),
-                                                memberPolicies: Option[Set[PolicyIdAndEmail]] = Option(Set.empty)) {
+                                                memberPolicies: Option[Set[PolicyIdentifiers]] = Option(Set.empty)) {
   def getDescendantPermissions: Set[AccessPolicyDescendantPermissions] = descendantPermissions.getOrElse(Set.empty)
 }
 // AccessPolicyWithMembership is practically the same as AccessPolicyResponseEntry but the latter is used in api responses
