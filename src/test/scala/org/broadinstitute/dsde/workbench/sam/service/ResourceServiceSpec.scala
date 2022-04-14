@@ -552,14 +552,12 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
     val actualPolicies = service.listResourcePolicies(resource, samRequestContext).unsafeRunSync()
     actualPolicies.size shouldBe 1
     val ownerPolicy = actualPolicies.head
-    ownerPolicy.policy.memberPolicies shouldBe defined
-    val actualMemberPolicies = ownerPolicy.policy.memberPolicies.get
 
     val expectedMemberPolicies = sidePolicies.map { p =>
       PolicyIdentifiers(p.policyName, p.email, sideResource.resourceTypeName, sideResource.resourceId)
     }
 
-    actualMemberPolicies shouldBe expectedMemberPolicies.toSet
+    ownerPolicy.policy.memberPolicies.value shouldBe expectedMemberPolicies.toSet
 
     // all memberPolicies emails should also be in the memberEmails array
     expectedMemberPolicies.foreach { p =>
