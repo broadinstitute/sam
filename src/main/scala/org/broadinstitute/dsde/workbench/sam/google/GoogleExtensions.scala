@@ -107,6 +107,7 @@ class GoogleExtensions(
       resourceTypes.getOrElse(CloudExtensions.resourceTypeName, throw new Exception(s"${CloudExtensions.resourceTypeName} resource type not found"))
     val ownerGoogleSubjectId = GoogleSubjectId(googleServicesConfig.serviceAccountClientId)
     for {
+      _ <- accessPolicyDAO.upsertResourceTypes(resourceTypes.values.toSet, samRequestContext)
       user <- directoryDAO.loadSubjectFromGoogleSubjectId(ownerGoogleSubjectId, samRequestContext)
 
       subject <- directoryDAO.loadSubjectFromGoogleSubjectId(GoogleSubjectId(googleServicesConfig.serviceAccountClientId), samRequestContext)
