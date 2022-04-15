@@ -40,6 +40,10 @@ class GoogleGroupSynchronizer(directoryDAO: DirectoryDAO,
                               googleExtensions: GoogleExtensions,
                               resourceTypes: Map[ResourceTypeName, ResourceType])(implicit executionContext: ExecutionContext)
   extends LazyLogging with FutureSupport {
+
+  def init(): IO[Set[ResourceTypeName]] =
+    accessPolicyDAO.upsertResourceTypes(resourceTypes.values.toSet, SamRequestContext(None))
+
   def synchronizeGroupMembers(groupId: WorkbenchGroupIdentity, visitedGroups: Set[WorkbenchGroupIdentity] = Set.empty[WorkbenchGroupIdentity], samRequestContext: SamRequestContext): Future[Map[WorkbenchEmail, Seq[SyncReportItem]]] = {
     def toSyncReportItem(operation: String, email: String, result: Try[Unit]) =
       SyncReportItem(
