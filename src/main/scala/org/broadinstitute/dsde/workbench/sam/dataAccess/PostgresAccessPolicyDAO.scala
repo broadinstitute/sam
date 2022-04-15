@@ -1595,7 +1595,7 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
 
     val foundPK = Try(resourceTypePKsByName(resource.resourceTypeName)).toOption
 
-    logger.info(s"####### loadResourcePKSubQuery for type '${resource.resourceTypeName}'; resourceTypePKsByName has [${resourceTypePKsByName.keySet}]. " +
+    logger.info(s"####### loadResourcePKSubQuery for type '${resource.resourceTypeName}' and '${resource.resourceId}; resourceTypePKsByName has [${resourceTypePKsByName.keySet}]. " +
       s"Result is '$foundPK'")
 
     samsqls"select ${r.id} from ${ResourceTable as r} where ${r.name} = ${resource.resourceId} and ${r.resourceTypeId} = ${resourceTypePKsByName(resource.resourceTypeName)}"
