@@ -144,6 +144,7 @@ object Boot extends IOApp with LazyLogging {
       blockingEc: ExecutionContext)(implicit actorSystem: ActorSystem): effect.Resource[IO, CloudExtensionsInitializer] =
     appConfig.googleConfig match {
       case Some(config) =>
+        logger.info(s">>>>>>>>>> during boot, foregroundAccessPolicyDAO is ${foregroundAccessPolicyDAO.hashCode()} and backgroundAccessPolicyDAO is ${backgroundAccessPolicyDAO.hashCode()}")
         for {
           googleFire <- GoogleFirestoreInterpreter.firestore[IO](
             config.googleServicesConfig.serviceAccountCredentialJson.firestoreServiceAccountJsonPath.asString)

@@ -1593,9 +1593,15 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
   private def loadResourcePKSubQuery(resource: FullyQualifiedResourceId): SQLSyntax = {
     val r = ResourceTable.syntax("r")
 
+    // ensure cache is populated
+//    if (resourceTypePKsByName.isEmpty) {
+//      logger.info("loadResourcePKSubQuery found an empty resourceTypePKsByName; reloading now.")
+//      reloadResourceTypePKs(SamRequestContext(None))
+//    }
+
     val foundPK = Try(resourceTypePKsByName(resource.resourceTypeName)).toOption
 
-    logger.info(s"####### loadResourcePKSubQuery for type '${resource.resourceTypeName}' and '${resource.resourceId}; resourceTypePKsByName has [${resourceTypePKsByName.keySet}]. " +
+    logger.info(s"####### loadResourcePKSubQuery in ${this.hashCode()} for type '${resource.resourceTypeName}' and '${resource.resourceId}; resourceTypePKsByName has [${resourceTypePKsByName.keySet}]. " +
       s"Result is '$foundPK'")
 
     samsqls"select ${r.id} from ${ResourceTable as r} where ${r.name} = ${resource.resourceId} and ${r.resourceTypeId} = ${resourceTypePKsByName(resource.resourceTypeName)}"
