@@ -370,9 +370,12 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       val query = samsql"""
               select ${u.id}, ${None}, ${None} from ${UserTable as u}
                 where ${u.googleSubjectId} = ${googleSubjectId}
+                and ${u.enabled}
               union
               select ${None}, ${pet.userId}, ${pet.project} from ${PetServiceAccountTable as pet}
-                where ${pet.googleSubjectId} = ${googleSubjectId}"""
+                join ${UserTable as u} on ${u.id} = ${pet.userId}
+                where ${pet.googleSubjectId} = ${googleSubjectId}
+                and ${u.enabled}"""
 
       val result = query.map(rs =>
         SubjectConglomerate(
@@ -419,7 +422,7 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
     readOnlyTransaction("loadUserByAzureB2CId", samRequestContext)({ implicit session =>
       val userTable = UserTable.syntax
 
-      val loadUserQuery = samsql"select ${userTable.resultAll} from ${UserTable as userTable} where ${userTable.azureB2cId} = ${userId}"
+      val loadUserQuery = samsql"select ${userTable.resultAll} from ${UserTable as userTable} where ${userTable.azureB2cId} = ${userId} and ${userTable.enabled}"
       loadUserQuery.map(UserTable(userTable))
         .single().apply().map(UserTable.unmarshalUserRecord)
     })
@@ -634,7 +637,8 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       val loadUserQuery = samsql"""select ${userTable.resultAll}
                 from ${UserTable as userTable}
                 join ${PetServiceAccountTable as petServiceAccountTable} on ${petServiceAccountTable.userId} = ${userTable.id}
-                where ${petServiceAccountTable.googleSubjectId} = ${petSA}"""
+                where ${petServiceAccountTable.googleSubjectId} = ${petSA}
+                and ${userTable.enabled}"""
 
       val userRecordOpt: Option[UserRecord] = loadUserQuery.map(UserTable(userTable)).single().apply()
       userRecordOpt.map(UserTable.unmarshalUserRecord)
