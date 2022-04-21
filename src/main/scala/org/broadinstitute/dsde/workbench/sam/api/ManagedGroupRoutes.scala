@@ -101,7 +101,7 @@ trait ManagedGroupRoutes extends UserInfoDirectives with SecurityDirectives with
 
   private def handleListEmails(managedGroup: FullyQualifiedResourceId, accessPolicyName: ManagedGroupPolicyName, userInfo: UserInfo, samRequestContext: SamRequestContext): Route =
     requireAction(managedGroup, SamResourceActions.readPolicy(accessPolicyName), userInfo.userId, samRequestContext) {
-      complete(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, accessPolicyName, samRequestContext).map(x => StatusCodes.OK -> x.toSet))
+      complete(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, accessPolicyName, samRequestContext).map(StatusCodes.OK -> _))
     }
 
   private def handleOverwriteEmails(managedGroup: FullyQualifiedResourceId, accessPolicyName: ManagedGroupPolicyName, userInfo: UserInfo, samRequestContext: SamRequestContext): Route =

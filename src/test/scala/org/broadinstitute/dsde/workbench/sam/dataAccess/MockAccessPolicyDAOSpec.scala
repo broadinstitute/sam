@@ -15,8 +15,6 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
 
 import java.net.URI
-import scala.collection.concurrent.TrieMap
-import scala.collection.mutable
 import scala.concurrent.ExecutionContext.Implicits.{global => globalEc}
 import scala.language.reflectiveCalls
 
@@ -41,7 +39,6 @@ class MockAccessPolicyDAOSpec extends AnyFlatSpec with Matchers with TestSupport
   }
 
   def sharedFixtures = new {
-    val groups: mutable.Map[WorkbenchGroupIdentity, WorkbenchGroup] = new TrieMap()
     val accessPolicyNames = Set(ManagedGroupService.adminPolicyName, ManagedGroupService.memberPolicyName, ManagedGroupService.adminNotifierPolicyName)
     val policyActions: Set[ResourceAction] = accessPolicyNames.flatMap(policyName => Set(SamResourceActions.sharePolicy(policyName), SamResourceActions.readPolicy(policyName)))
     val resourceActions: Set[ResourceAction] = Set(ResourceAction("delete"), SamResourceActions.notifyAdmins) union policyActions
@@ -73,9 +70,9 @@ class MockAccessPolicyDAOSpec extends AnyFlatSpec with Matchers with TestSupport
 
   def mockServicesFixture = new {
     val shared = sharedFixtures
-    val mockDirectoryDAO = new MockDirectoryDAO(shared.groups)
+    val mockDirectoryDAO = new MockDirectoryDAO()
     val mockRegistrationDAO = new MockDirectoryDAO()
-    val mockPolicyDAO = new MockAccessPolicyDAO(shared.resourceTypes, shared.groups)
+    val mockPolicyDAO = new MockAccessPolicyDAO(shared.resourceTypes, mockDirectoryDAO)
     val allUsersGroup: WorkbenchGroup = TestSupport.runAndWait(NoExtensions.getOrCreateAllUsersGroup(mockDirectoryDAO, samRequestContext))
 
     val policyEvaluatorService = PolicyEvaluatorService(shared.emailDomain, shared.resourceTypes, mockPolicyDAO, mockDirectoryDAO)
