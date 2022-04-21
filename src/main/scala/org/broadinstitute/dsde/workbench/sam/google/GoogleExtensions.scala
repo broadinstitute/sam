@@ -12,6 +12,7 @@ import com.google.api.client.googleapis.json.GoogleJsonResponseException
 import com.google.api.client.http.HttpResponseException
 import com.google.api.gax.rpc.AlreadyExistsException
 import com.google.auth.oauth2.ServiceAccountCredentials
+import com.google.cloud.iam.credentials.v1.IamCredentialsClient
 import com.google.protobuf.{Duration, Timestamp}
 import com.google.rpc.Code
 import com.typesafe.scalalogging.LazyLogging
@@ -25,6 +26,7 @@ import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport.Work
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google._
 import org.broadinstitute.dsde.workbench.sam._
+import org.broadinstitute.dsde.workbench.sam.api.InviteUser
 import org.broadinstitute.dsde.workbench.sam.config.{GoogleServicesConfig, PetServiceAccountConfig}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, RegistrationDAO}
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
@@ -39,6 +41,7 @@ import spray.json._
 import scala.jdk.CollectionConverters._
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
+import scala.util.Using
 
 object GoogleExtensions {
   val resourceId = ResourceId("google")
@@ -118,6 +121,13 @@ class GoogleExtensions(
               ErrorReport(StatusCodes.Conflict, s"subjectId in configuration ${googleServicesConfig.serviceAccountClientId} is not a valid user")))
         case None => IO.pure(UserInfo(OAuth2BearerToken(""), genWorkbenchUserId(System.currentTimeMillis()), googleServicesConfig.serviceAccountClientEmail, 0))
       }
+
+      _ <- samApplication.userService.inviteUser(InviteUser(
+        serviceAccountUserInfo.userId,
+        serviceAccountUserInfo.userEmail), samRequestContext) handleErrorWith {
+        case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode == Option(StatusCodes.Conflict) => IO.unit
+      }
+
       _ <- IO.fromFuture(
         IO(
           samApplication.userService.createUser(WorkbenchUser(
@@ -394,10 +404,22 @@ class GoogleExtensions(
       key <- googleKeyCache.getKey(pet)
     } yield key
 
-  def getPetServiceAccountToken(user: WorkbenchUser, project: GoogleProject, scopes: Set[String], samRequestContext: SamRequestContext): Future[String] =
-    getPetServiceAccountKey(user, project, samRequestContext).unsafeToFuture().flatMap { key =>
-      getAccessTokenUsingJson(key, scopes)
+  def getServiceAccountToken(pet: PetServiceAccount, scopes: Set[String], duration : Duration): Future[String] = Future {
+    Using(IamCredentialsClient.create()) { client =>
+      client.generateAccessToken(
+        com.google.cloud.iam.credentials.v1.ServiceAccountName.of("-", pet.serviceAccount.email.toString()),
+        List().asJava,
+        scopes.toList.asJava,
+        duration
+      ).getAccessToken
+    }.get
+  }
+
+  def getPetServiceAccountToken(user: WorkbenchUser, project: GoogleProject, scopes: Set[String], samRequestContext: SamRequestContext): Future[String] = {
+    createUserPetServiceAccount(user, project, samRequestContext).unsafeToFuture().flatMap { pet =>
+      getServiceAccountToken(pet, scopes, Duration.newBuilder().setSeconds(3600).build());
     }
+  }
 
   def getArbitraryPetServiceAccountKey(user: WorkbenchUser, samRequestContext: SamRequestContext): Future[String] =
     getDefaultServiceAccountForShellProject(user, samRequestContext)

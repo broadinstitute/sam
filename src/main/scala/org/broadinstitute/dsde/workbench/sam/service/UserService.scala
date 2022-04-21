@@ -52,18 +52,23 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
     * First lookup user by either googleSubjectId or azureB2DId, whichever is populated. If the user exists
     * throw a conflict error. If the user does not exist look them up by email. If the user email exists
     * then this is an invited user, update their googleSubjectId and/or azureB2CId. If the email does not exist,
-    * this is a new user, create them.
+    * this is a new user, create them (if and only if they are an admin).
     */
   protected[service] def registerUser(user: WorkbenchUser, samRequestContext: SamRequestContext): IO[WorkbenchUser] =
     for {
       _ <- validateNewWorkbenchUser(user, samRequestContext)
       subjectWithEmail <- directoryDAO.loadSubjectFromEmail(user.email, samRequestContext)
+      isWorkbenchAdmin <- IO.fromFuture(IO(cloudExtensions.isWorkbenchAdmin(user.email)))
       updated <- subjectWithEmail match {
         case Some(uid: WorkbenchUserId) =>
           acceptInvitedUser(user, samRequestContext, uid)
 
         case None =>
-          createUserInternal(WorkbenchUser(user.id, user.googleSubjectId, user.email, user.azureB2CId), samRequestContext)
+          //Only allow registering users who are admins, or who have already been invited
+          if(isWorkbenchAdmin)
+            createUserInternal(WorkbenchUser(user.id, user.googleSubjectId, user.email, user.azureB2CId), samRequestContext)
+          else
+            IO.raiseError[WorkbenchUser](new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"$user has not been invited. Please request an invite from an admin")))
 
         case Some(_) =>
           //We don't support inviting a group account or pet service account

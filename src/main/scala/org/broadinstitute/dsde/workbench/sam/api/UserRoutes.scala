@@ -263,12 +263,14 @@ trait UserRoutes extends UserInfoDirectives with SamRequestContextDirectives {
             }
           } ~
             pathPrefix("invite") {
-              post {
-                path(Segment) { inviteeEmail =>
-                  complete {
-                    userService
-                      .inviteUser(InviteUser(genWorkbenchUserId(System.currentTimeMillis()), WorkbenchEmail(inviteeEmail.trim)), samRequestContext)
-                      .map(userStatus => StatusCodes.Created -> userStatus)
+              asWorkbenchAdmin(userInfo) {
+                post {
+                  path(Segment) { inviteeEmail =>
+                    complete {
+                      userService
+                        .inviteUser(InviteUser(genWorkbenchUserId(System.currentTimeMillis()), WorkbenchEmail(inviteeEmail.trim)), samRequestContext)
+                        .map(userStatus => StatusCodes.Created -> userStatus)
+                    }
                   }
                 }
               }

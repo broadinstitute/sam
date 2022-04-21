@@ -53,7 +53,8 @@ class GoogleKeyCache(
       ))
 
     googleStorageAlg
-      .insertBucket(googleServicesConfig.serviceAccountClientProject, googleServicesConfig.googleKeyCacheConfig.bucketName)
+      .insertBucket(googleServicesConfig.serviceAccountClientProject, googleServicesConfig.googleKeyCacheConfig.bucketName,
+      None, Map.empty, None, true)
       .recoverWith {
         case t: StorageException if t.getCode == 409 && t.getMessage.contains("You already own this bucket") =>
           fs2.Stream(logger.info(t.getMessage))
