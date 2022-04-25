@@ -542,6 +542,8 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       "get user from pet service account subject ID" in {
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
+        dao.enableIdentity(defaultUser.id, samRequestContext).unsafeRunSync()
+
         dao.createPetServiceAccount(defaultPetSA, samRequestContext).unsafeRunSync()
 
         dao.getUserFromPetServiceAccount(defaultPetSA.serviceAccount.subjectId, samRequestContext).unsafeRunSync() shouldBe Some(defaultUser)
@@ -1089,6 +1091,7 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
 
       "throw an exception when an email refers to more than one subject" in {
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
+        dao.enableIdentity(defaultUser.id, samRequestContext).unsafeRunSync()
         dao.createPetServiceAccount(defaultPetSA.copy(serviceAccount = defaultPetSA.serviceAccount.copy(email = defaultUser.email)), samRequestContext).unsafeRunSync()
 
         assertThrows[WorkbenchException] {
@@ -1101,11 +1104,14 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       "load a user subject from their google subject id" in {
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
+        dao.enableIdentity(defaultUser.id, samRequestContext).unsafeRunSync()
+
         dao.loadSubjectFromGoogleSubjectId(defaultUser.googleSubjectId.get, samRequestContext).unsafeRunSync() shouldBe Some(defaultUser.id)
       }
 
       "load a pet service account subject from its google subject id" in {
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
+        dao.enableIdentity(defaultUser.id, samRequestContext).unsafeRunSync()
         dao.createPetServiceAccount(defaultPetSA, samRequestContext).unsafeRunSync()
 
         dao.loadSubjectFromGoogleSubjectId(GoogleSubjectId(defaultPetSA.serviceAccount.subjectId.value), samRequestContext).unsafeRunSync() shouldBe Some(defaultPetSA.id)

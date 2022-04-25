@@ -451,6 +451,7 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
   it should "return conflict when there's an existing subject for a given googleSubjectId" in{
     val user = genWorkbenchUserGoogle.sample.get
     dirDAO.createUser(WorkbenchUser(user.id,  user.googleSubjectId, user.email, user.azureB2CId), samRequestContext).unsafeRunSync()
+    dirDAO.enableIdentity(user.id, samRequestContext).unsafeRunSync()
     val exception = intercept[WorkbenchExceptionWithErrorReport] {
       service.registerUser(user, samRequestContext).unsafeRunSync()
     }
@@ -460,6 +461,7 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
   it should "return conflict when there's an existing subject for a given azureB2CId" in{
     val user = genWorkbenchUserAzure.sample.get
     dirDAO.createUser(WorkbenchUser(user.id,  user.googleSubjectId, user.email, user.azureB2CId), samRequestContext).unsafeRunSync()
+    dirDAO.enableIdentity(user.id, samRequestContext).unsafeRunSync()
     val exception = intercept[WorkbenchExceptionWithErrorReport] {
       service.registerUser(user, samRequestContext).unsafeRunSync()
     }

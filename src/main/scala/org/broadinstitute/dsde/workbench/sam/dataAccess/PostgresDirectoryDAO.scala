@@ -368,16 +368,19 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
 
       //Only pets and users can have googleSubjectIds so we won't bother checking for the other types of WorkbenchSubjects
       val query = samsql"""
-              select ${u.id}, ${None}, ${None} from ${UserTable as u}
+              select ${u.id}, ${None}, ${None}, ${u.enabled} from ${UserTable as u}
                 where ${u.googleSubjectId} = ${googleSubjectId}
-                and ${u.enabled}
               union
-              select ${None}, ${pet.userId}, ${pet.project} from ${PetServiceAccountTable as pet}
+              select ${None}, ${pet.userId}, ${pet.project}, ${u.enabled} from ${PetServiceAccountTable as pet}
                 join ${UserTable as u} on ${u.id} = ${pet.userId}
-                where ${pet.googleSubjectId} = ${googleSubjectId}
-                and ${u.enabled}"""
+                where ${pet.googleSubjectId} = ${googleSubjectId}"""
 
-      val result = query.map(rs =>
+      val result = query.map(rs => {
+        val enabled = rs.boolean(4)
+        if (!enabled) {
+          throw new DisabledUserException
+        }
+
         SubjectConglomerate(
           rs.stringOpt(1).map(WorkbenchUserId),
           None,
@@ -386,6 +389,7 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
           None,
           None,
           None)
+      }
       ).single().apply()
 
       result.map(unmarshalSubjectConglomerate)
@@ -422,9 +426,13 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
     readOnlyTransaction("loadUserByAzureB2CId", samRequestContext)({ implicit session =>
       val userTable = UserTable.syntax
 
-      val loadUserQuery = samsql"select ${userTable.resultAll} from ${UserTable as userTable} where ${userTable.azureB2cId} = ${userId} and ${userTable.enabled}"
-      loadUserQuery.map(UserTable(userTable))
-        .single().apply().map(UserTable.unmarshalUserRecord)
+      val loadUserQuery = samsql"select ${userTable.resultAll} from ${UserTable as userTable} where ${userTable.azureB2cId} = ${userId}"
+      loadUserQuery.map { rs =>
+        if (!rs.boolean(userTable.resultName.enabled)) {
+          throw new DisabledUserException
+        }
+        UserTable(userTable)(rs)
+      }.single().apply().map(UserTable.unmarshalUserRecord)
     })
   }
 
@@ -637,10 +645,15 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       val loadUserQuery = samsql"""select ${userTable.resultAll}
                 from ${UserTable as userTable}
                 join ${PetServiceAccountTable as petServiceAccountTable} on ${petServiceAccountTable.userId} = ${userTable.id}
-                where ${petServiceAccountTable.googleSubjectId} = ${petSA}
-                and ${userTable.enabled}"""
+                where ${petServiceAccountTable.googleSubjectId} = ${petSA}"""
 
-      val userRecordOpt: Option[UserRecord] = loadUserQuery.map(UserTable(userTable)).single().apply()
+      val userRecordOpt: Option[UserRecord] = loadUserQuery.map { rs =>
+        if (!rs.boolean(userTable.resultName.enabled)) {
+          throw new DisabledUserException
+        }
+
+        UserTable(userTable)(rs)
+      }.single().apply()
       userRecordOpt.map(UserTable.unmarshalUserRecord)
     })
   }
