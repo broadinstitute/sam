@@ -518,8 +518,8 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
   }
 
   it should "create google extension resource on boot" in {
-    val mockAccessPolicyDAO = new MockAccessPolicyDAO()
     val mockDirectoryDAO = new MockDirectoryDAO
+    val mockAccessPolicyDAO = new MockAccessPolicyDAO(mockDirectoryDAO)
     val mockRegistrationDAO = new MockRegistrationDAO
     val mockGoogleDirectoryDAO = new MockGoogleDirectoryDAO
     val mockGoogleKeyCachePubSubDAO = new MockGooglePubSubDAO

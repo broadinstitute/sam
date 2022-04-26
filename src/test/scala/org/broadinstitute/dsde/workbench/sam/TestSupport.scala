@@ -89,7 +89,7 @@ object TestSupport extends TestSupport {
     val directoryDAO = new MockDirectoryDAO()
     val registrationDAO = new MockRegistrationDAO()
     val googleIamDAO = googIamDAO.getOrElse(new MockGoogleIamDAO())
-    val policyDAO = policyAccessDAO.getOrElse(new MockAccessPolicyDAO(resourceTypes))
+    val policyDAO = policyAccessDAO.getOrElse(new MockAccessPolicyDAO(resourceTypes, directoryDAO))
     val notificationPubSubDAO = new MockGooglePubSubDAO()
     val googleGroupSyncPubSubDAO = new MockGooglePubSubDAO()
     val googleDisableUsersPubSubDAO = new MockGooglePubSubDAO()

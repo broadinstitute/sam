@@ -530,6 +530,54 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
     policies should contain theSameElementsAs Set(expectedPolicy)
   }
 
+  it should "include memberPolicies in the policy list where applicable" in {
+    // create a "side" resource; we will use its policy emails as members in the default resource
+    val sideResource = FullyQualifiedResourceId(otherResourceType.name, ResourceId("side-resource"))
+    service.createResourceType(otherResourceType, samRequestContext).unsafeRunSync()
+    runAndWait(service.createResource(otherResourceType, sideResource.resourceId, dummyUserInfo, samRequestContext))
+    val sidePolicies = service.listResourcePolicies(sideResource, samRequestContext).unsafeRunSync()
+
+    // create the default resource
+    val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("my-resource"))
+    service.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
+    runAndWait(service.createResource(defaultResourceType, resource.resourceId, dummyUserInfo, samRequestContext))
+
+    // add "side" policy emails to default resource
+    sidePolicies.foreach { sidePolicy =>
+      dirDAO.loadSubjectFromEmail(sidePolicy.email, samRequestContext).unsafeRunSync().map { subj =>
+        service.addSubjectToPolicy(FullyQualifiedPolicyId(resource, AccessPolicyName(defaultResourceType.ownerRoleName.value)), subj, samRequestContext).unsafeRunSync()
+      }
+    }
+
+    val actualPolicies = service.listResourcePolicies(resource, samRequestContext).unsafeRunSync()
+    actualPolicies.size shouldBe 1
+    val ownerPolicy = actualPolicies.head
+
+    val expectedMemberPolicies = sidePolicies.map { p =>
+      PolicyIdentifiers(p.policyName, p.email, sideResource.resourceTypeName, sideResource.resourceId)
+    }
+
+    ownerPolicy.policy.memberPolicies.value shouldBe expectedMemberPolicies.toSet
+
+    // all memberPolicies emails should also be in the memberEmails array
+    expectedMemberPolicies.foreach { p =>
+      ownerPolicy.policy.memberEmails should contain (p.policyEmail)
+    }
+  }
+
+  it should "not include memberPolicies in the policy list if no member is a policy" in {
+    val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("my-resource"))
+
+    service.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
+    runAndWait(service.createResource(defaultResourceType, resource.resourceId, dummyUserInfo, samRequestContext))
+
+    val actualPolicies = service.listResourcePolicies(resource, samRequestContext).unsafeRunSync()
+    actualPolicies.size shouldBe 1
+    // expect an empty set
+    actualPolicies.head.policy.memberPolicies shouldBe defined
+    actualPolicies.head.policy.memberPolicies.get shouldBe empty
+  }
+
   "overwritePolicy" should "succeed with a valid request" in {
     val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("my-resource"))
 
@@ -1301,9 +1349,9 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
       newPolicy <- policyDAO.createPolicy(AccessPolicy(
         FullyQualifiedPolicyId(res2.fullyQualifiedId, AccessPolicyName("foo")), Set(testGroup.id, dummyUserInfo.userId, FullyQualifiedPolicyId(res1.fullyQualifiedId, testPolicy.policyName)), WorkbenchEmail("a@b.c"), Set.empty, Set.empty, Set.empty, public = false), samRequestContext)
 
-      membership <- service.loadAccessPolicyWithEmails(newPolicy, samRequestContext)
+      membership <- policyDAO.loadPolicyMembership(newPolicy.id, samRequestContext)
     } yield {
-      membership.memberEmails should contain theSameElementsAs Set(
+      membership.value.memberEmails should contain theSameElementsAs Set(
         testGroup.email,
         dummyUserInfo.userEmail,
         testPolicy.email

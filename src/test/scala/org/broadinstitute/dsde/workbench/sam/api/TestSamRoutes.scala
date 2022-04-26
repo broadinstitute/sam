@@ -16,8 +16,6 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.scalatest.concurrent.ScalaFutures
 
-import scala.collection.concurrent.TrieMap
-import scala.collection.mutable
 import scala.concurrent.ExecutionContext
 
 /**
@@ -39,7 +37,6 @@ class TestSamTosEnabledRoutes(resourceService: ResourceService, policyEvaluatorS
 
 object TestSamRoutes {
   val defaultUserInfo = UserInfo(OAuth2BearerToken("accessToken"), WorkbenchUserId("user1"), WorkbenchEmail("user1@example.com"), 0)
-  val defaultGoogleSubjectId = Option(GoogleSubjectId("user1"))
 
   object SamResourceActionPatterns {
     val readPolicies = ResourceActionPattern("read_policies", "", false)
@@ -75,15 +72,14 @@ object TestSamRoutes {
     ResourceRoleName("owner")
   )
 
-  def apply(resourceTypes: Map[ResourceTypeName, ResourceType], userInfo: UserInfo = defaultUserInfo, policyAccessDAO: Option[AccessPolicyDAO] = None, policies: Option[mutable.Map[WorkbenchGroupIdentity, WorkbenchGroup]] = None)(implicit system: ActorSystem, materializer: Materializer, executionContext: ExecutionContext) = {
+  def apply(resourceTypes: Map[ResourceTypeName, ResourceType], userInfo: UserInfo = defaultUserInfo, policyAccessDAO: Option[AccessPolicyDAO] = None, maybeDirectoryDAO: Option[MockDirectoryDAO] = None)(implicit system: ActorSystem, materializer: Materializer, executionContext: ExecutionContext) = {
     val dbRef = TestSupport.dbRef
     val resourceTypesWithAdmin = resourceTypes + (resourceTypeAdmin.name -> resourceTypeAdmin)
     // need to make sure MockDirectoryDAO and MockAccessPolicyDAO share the same groups
-    val groups: mutable.Map[WorkbenchGroupIdentity, WorkbenchGroup] = policies.getOrElse(new TrieMap())
-    val directoryDAO = new MockDirectoryDAO(groups)
+    val directoryDAO = maybeDirectoryDAO.getOrElse(new MockDirectoryDAO())
     val registrationDAO = new MockRegistrationDAO()
     val googleDirectoryDAO = new MockGoogleDirectoryDAO()
-    val policyDAO = policyAccessDAO.getOrElse(new MockAccessPolicyDAO(Map.empty[ResourceTypeName, ResourceType], groups))
+    val policyDAO = policyAccessDAO.getOrElse(new MockAccessPolicyDAO(Map.empty[ResourceTypeName, ResourceType], directoryDAO))
 
     val emailDomain = "example.com"
     val policyEvaluatorService = PolicyEvaluatorService(emailDomain, resourceTypesWithAdmin, policyDAO, directoryDAO)
@@ -91,7 +87,7 @@ object TestSamRoutes {
     val mockUserService = new UserService(directoryDAO, NoExtensions, registrationDAO, Seq.empty, new TosService(directoryDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig))
     val mockTosService = new TosService(directoryDAO,registrationDAO, emailDomain, TestSupport.tosConfig)
     val mockManagedGroupService = new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypesWithAdmin, policyDAO, directoryDAO, NoExtensions, emailDomain)
-    TestSupport.runAndWait(mockUserService.createUser(WorkbenchUser(userInfo.userId, defaultGoogleSubjectId, userInfo.userEmail, None), samRequestContext))
+    TestSupport.runAndWait(mockUserService.createUser(WorkbenchUser(userInfo.userId, TestSupport.genGoogleSubjectId(), userInfo.userEmail, None), samRequestContext))
     val allUsersGroup = TestSupport.runAndWait(NoExtensions.getOrCreateAllUsersGroup(directoryDAO, samRequestContext))
     TestSupport.runAndWait(googleDirectoryDAO.createGroup(allUsersGroup.id.toString, allUsersGroup.email))
     mockResourceService.initResourceTypes(samRequestContext).unsafeRunSync()

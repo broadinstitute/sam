@@ -2123,6 +2123,10 @@ components:
           type: array
           items:
             type: string
+        memberPolicies:
+          type: array
+          items:
+            $ref: '#/components/schemas/PolicyIdentifiers'
         actions:
           type: array
           items:
@@ -2300,6 +2304,26 @@ components:
           description: The email address associated with the group
       description: specification of a managed group with an access policy and the
         email associated with the managed group
+    PolicyIdentifiers:
+      required:
+        - policyName
+        - policyEmail
+        - resourceTypeName
+        - resourceId
+      type: object
+      properties:
+        policyName:
+          type: string
+          description: The name of the policy
+        policyEmail:
+          type: string
+          description: The email of the policy
+        resourceTypeName:
+          type: string
+          description: The type of the resource
+        resourceId:
+          type: string
+          description: The id of the resource
     ResourceAndAccessPolicy:
       required:
         - accessPolicyName

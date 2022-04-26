@@ -624,6 +624,11 @@ case class GoogleExtensionsInitializer(cloudExtensions: GoogleExtensions, google
       )
     )
 
-    cloudExtensions.onBoot(samApplication)
+    for {
+      _ <- googleGroupSynchronizer.init()
+      onBootResult <- cloudExtensions.onBoot(samApplication)
+    } yield {
+      onBootResult
+    }
   }
 }
