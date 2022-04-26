@@ -131,12 +131,12 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     tosServiceEnabled.resetTermsOfServiceGroupsIfNeeded().unsafeRunSync()
     serviceTosEnabled.createUser(defaultUser, samRequestContext).futureValue
     val userGroups = dirDAO.listUsersGroups(defaultUserId, samRequestContext).unsafeRunSync()
-    userGroups shouldNot contain (WorkbenchGroupName(tos.getGroupName(TestSupport.tosConfig.version)))
+    userGroups shouldNot contain (WorkbenchGroupName(tos.getGroupNameString(TestSupport.tosConfig.version)))
     userGroups should have size 1
 
     serviceTosEnabled.acceptTermsOfService(defaultUser.id, samRequestContext).unsafeRunSync()
     val newUserGroups = dirDAO.listUsersGroups(defaultUserId, samRequestContext).unsafeRunSync()
-    newUserGroups should contain (WorkbenchGroupName(tos.getGroupName(TestSupport.tosConfig.version)))
+    newUserGroups should contain (WorkbenchGroupName(tos.getGroupNameString(TestSupport.tosConfig.version)))
     newUserGroups should have size 2
   }
 
@@ -279,7 +279,7 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     dirDAO.isEnabled(defaultUserId, samRequestContext).unsafeRunSync() shouldBe true
 
     // User should only be enabled in ToS if they accepted latest ToS
-    val tosGroup = WorkbenchGroupName(newTos.getGroupName())
+    val tosGroup = WorkbenchGroupName(newTos.getGroupNameString())
     val userGroups = dirDAO.listUsersGroups(defaultUserId, samRequestContext).unsafeRunSync()
     userGroups.contains(tosGroup) shouldEqual userAcceptsNewTos
   }
