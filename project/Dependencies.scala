@@ -60,7 +60,7 @@ object Dependencies {
   val scalaTestScalaCheck = "org.scalatestplus" %% "scalacheck-1-15" % s"${scalaTestV}.0" % Test
   val scalaTestMockito = "org.scalatestplus" %% "mockito-3-4" % s"${scalaTestV}.0" % Test
 
-  val unboundid: ModuleID = "com.unboundid" % "unboundid-ldapsdk" % "4.0.12"
+  val unboundid: ModuleID = "com.unboundid" % "unboundid-ldapsdk" % "4.0.14"
 
   // All of workbench-libs pull in Akka; exclude it since we provide our own Akka dependency.
   // workbench-google pulls in workbench-{util, model, metrics}; exclude them so we can control the library versions individually.
