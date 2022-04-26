@@ -172,11 +172,26 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
     directoryDAO.loadUser(userId, samRequestContext).flatMap {
       case Some(user) =>
         for {
-          tosStatus <- getTermsOfServiceStatus(user.id, samRequestContext)
+          tosStatus <- getTermsOfServiceStatusInternal(user, samRequestContext)
           adminEnabled <- directoryDAO.isEnabled(user.id, samRequestContext)
-        } yield Some(UserStatusInfo(user.id.value, user.email.value, tosStatus.getOrElse(true) && adminEnabled, adminEnabled))
+        } yield {
+          Some(UserStatusInfo(user.id.value, user.email.value, tosStatus && adminEnabled, adminEnabled))
+        }
       case None => IO.pure(None)
     }
+
+  /**
+    * If grace period enabled, don't check ToS, return true
+    * If ToS disabled, return true
+    * Otherwise return true if user has accepted ToS
+    */
+  private def getTermsOfServiceStatusInternal(user: WorkbenchUser, samRequestContext: SamRequestContext) = {
+    if (tosService.tosConfig.isGracePeriodEnabled) {
+      IO.pure(true)
+    } else {
+      getTermsOfServiceStatus(user.id, samRequestContext).map(_.getOrElse(true))
+    }
+  }
 
   def getUserStatusDiagnostics(userId: WorkbenchUserId, samRequestContext: SamRequestContext): Future[Option[UserStatusDiagnostics]] =
     directoryDAO.loadUser(userId, samRequestContext).unsafeToFuture().flatMap {
