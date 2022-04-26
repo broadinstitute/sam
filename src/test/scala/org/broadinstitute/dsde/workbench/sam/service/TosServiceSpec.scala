@@ -71,17 +71,16 @@ class TosServiceSpec extends AnyFlatSpec with TestSupport with BeforeAndAfterAll
   }
 
   it should "generate the expected group name" in {
-    assert(tosServiceEnabled.getGroupName(0) == "tos_accepted_0")
-    assert(tosServiceEnabled.getGroupName(10) == "tos_accepted_10")
+    assert(tosServiceEnabled.getGroupNameString(0) == "tos_accepted_0")
+    assert(tosServiceEnabled.getGroupNameString(10) == "tos_accepted_10")
   }
 
   it should "create the group once" in {
-    assert(tosServiceEnabled.getTosGroup().unsafeRunSync().isEmpty, "ToS Group should not exist at the start")
+    assert(tosServiceEnabled.getTosGroupName().unsafeRunSync().isEmpty, "ToS Group should not exist at the start")
     assert(tosServiceEnabled.resetTermsOfServiceGroupsIfNeeded().unsafeRunSync().isDefined, "resetTermsOfServiceGroupsIfNeeded() should create the group initially")
-    val maybeGroup = tosServiceEnabled.getTosGroup().unsafeRunSync()
+    val maybeGroup = tosServiceEnabled.getTosGroupName().unsafeRunSync()
     assert(maybeGroup.isDefined, "ToS Group should exist after above call")
-    assert(maybeGroup.get.id.value == "tos_accepted_0")
-    assert(maybeGroup.get.email.value == "GROUP_tos_accepted_0@example.com")
+    assert(maybeGroup.get.value == "tos_accepted_0")
     assert(tosServiceEnabled.resetTermsOfServiceGroupsIfNeeded().unsafeRunSync().isDefined, "resetTermsOfServiceGroupsIfNeeded() should return the same response when called again")
   }
 

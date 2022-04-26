@@ -172,9 +172,9 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
     directoryDAO.loadUser(userId, samRequestContext).flatMap {
       case Some(user) =>
         for {
-          ldapStatus <- registrationDAO.isEnabled(user.id, samRequestContext)
+          tosStatus <- getTermsOfServiceStatus(user.id, samRequestContext)
           adminEnabled <- directoryDAO.isEnabled(user.id, samRequestContext)
-        } yield Some(UserStatusInfo(user.id.value, user.email.value, ldapStatus, adminEnabled))
+        } yield Some(UserStatusInfo(user.id.value, user.email.value, tosStatus.getOrElse(true) && adminEnabled, adminEnabled))
       case None => IO.pure(None)
     }
 
