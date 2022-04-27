@@ -32,6 +32,6 @@ jobs:
             git checkout merged-scala-steward-prs 2>/dev/null || git checkout -b merged-scala-steward-prs
             echo "Merging $curBranch"
             git merge -m "merging" --allow-unrelated-histories $curBranch
-          done <<< `gh pr list | grep scala-steward | cut -d$'\t'  -f 1`
+          done <<< `gh pr list | grep Broadbot | cut -d$'\t'  -f 1`
           git push origin merged-scala-steward-prs
           gh pr create --title "[No Ticket] Bump dependencies" --body "Consolidate scala-steward PRs"
