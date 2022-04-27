@@ -4,6 +4,8 @@ import akka.http.scaladsl.marshalling.Marshaller
 import akka.http.scaladsl.server.directives.OnSuccessMagnet
 import akka.http.scaladsl.server.util.Tupler
 import cats.effect.IO
+import cats.effect.unsafe.implicits.global
+
 import scala.concurrent.Future
 
 package object api {

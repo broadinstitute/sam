@@ -14,14 +14,11 @@ import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import scala.collection.concurrent.TrieMap
 import scala.collection.mutable
-import scala.concurrent.ExecutionContext
 
 /**
   * Created by mbemis on 6/23/17.
   */
-class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, WorkbenchGroup] = new TrieMap()) extends DirectoryDAO {
-  implicit val cs = IO.contextShift(ExecutionContext.global)
-
+class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, WorkbenchGroup] = new TrieMap()) extends DirectoryDAO {
   private val groupSynchronizedDates: mutable.Map[WorkbenchGroupIdentity, Date] = new TrieMap()
   private val users: mutable.Map[WorkbenchUserId, WorkbenchUser] = new TrieMap()
   private val userAttributes: mutable.Map[WorkbenchUserId, mutable.Map[String, Any]] = new TrieMap()
@@ -50,10 +47,6 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
 
   override def loadGroup(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Option[BasicWorkbenchGroup]] = IO {
     groups.get(groupName).map(_.asInstanceOf[BasicWorkbenchGroup])
-  }
-
-  override def loadGroups(groupNames: Set[WorkbenchGroupName], samRequestContext: SamRequestContext): IO[LazyList[BasicWorkbenchGroup]] = IO {
-    groups.view.filterKeys(groupNames.map(_.asInstanceOf[WorkbenchGroupIdentity])).values.map(_.asInstanceOf[BasicWorkbenchGroup]).to(LazyList)
   }
 
   override def deleteGroup(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Unit] = {
@@ -108,10 +101,6 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
 
   override def loadUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[WorkbenchUser]] = IO {
     users.get(userId)
-  }
-
-  override def loadUsers(userIds: Set[WorkbenchUserId], samRequestContext: SamRequestContext): IO[LazyList[WorkbenchUser]] = IO {
-    users.view.filterKeys(userIds).values.to(LazyList)
   }
 
   override def deleteUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit] = IO {
@@ -213,10 +202,6 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
       case id: PetServiceAccountId => petServiceAccountsByUser.get(id).map(_.serviceAccount.email)
     }
   }
-
-  override def loadSubjectEmails(subjects: Set[WorkbenchSubject], samRequestContext: SamRequestContext): IO[LazyList[WorkbenchEmail]] = subjects.to(LazyList).parTraverse { subject =>
-      loadSubjectEmail(subject, samRequestContext).map(_.get)
-    }
 
   override def getSynchronizedDate(groupId: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[Option[Date]] = {
     IO.pure(groupSynchronizedDates.get(groupId))

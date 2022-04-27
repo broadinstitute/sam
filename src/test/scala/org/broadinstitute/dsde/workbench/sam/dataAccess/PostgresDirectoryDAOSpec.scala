@@ -1,7 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.dataAccess
 
 import akka.http.scaladsl.model.StatusCodes
-import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountDisplayName, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.sam.TestSupport
@@ -15,8 +15,6 @@ import java.util.Date
 import scala.concurrent.duration._
 
 class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndAfterEach {
-  implicit val cs = IO.contextShift(scala.concurrent.ExecutionContext.global)
-  implicit val timer = IO.timer(scala.concurrent.ExecutionContext.global)
   val dao = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.dbRef)
   val policyDAO = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.dbRef)
 
@@ -175,38 +173,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
         inUseException.errorReport.statusCode shouldEqual Some(StatusCodes.Conflict)
 
         dao.loadGroup(subGroup.id, samRequestContext).unsafeRunSync() shouldEqual Option(subGroup)
-      }
-    }
-
-    "loadGroups" - {
-      "load multiple groups" in {
-        val group1 = BasicWorkbenchGroup(WorkbenchGroupName("group1"), Set.empty, WorkbenchEmail("group1@foo.com"))
-        val group2 = BasicWorkbenchGroup(WorkbenchGroupName("group2"), Set.empty, WorkbenchEmail("group2@foo.com"))
-
-        dao.createGroup(group1, samRequestContext = samRequestContext).unsafeRunSync()
-        dao.createGroup(group2, samRequestContext = samRequestContext).unsafeRunSync()
-
-        dao.loadGroups(Set(group1.id, group2.id), samRequestContext).unsafeRunSync() should contain theSameElementsAs Set(group1, group2)
-      }
-
-      "handle loading nonexistent groups" in {
-        val group1 = BasicWorkbenchGroup(WorkbenchGroupName("group1"), Set.empty, WorkbenchEmail("group1@foo.com"))
-        val group2 = BasicWorkbenchGroup(WorkbenchGroupName("group2"), Set.empty, WorkbenchEmail("group2@foo.com"))
-
-        dao.createGroup(group1, samRequestContext = samRequestContext).unsafeRunSync()
-        dao.createGroup(group2, samRequestContext = samRequestContext).unsafeRunSync()
-
-        dao.loadGroups(Set(group1.id, group2.id, WorkbenchGroupName("fakeGroup")), samRequestContext).unsafeRunSync() should contain theSameElementsAs Set(group1, group2)
-      }
-
-      "should return member policies" in {
-        val group = BasicWorkbenchGroup(WorkbenchGroupName("group"), Set(defaultPolicy.id), WorkbenchEmail("group@example.com"))
-        policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
-        policyDAO.createResource(defaultResource, samRequestContext).unsafeRunSync()
-        policyDAO.createPolicy(defaultPolicy, samRequestContext).unsafeRunSync()
-        dao.createGroup(group, samRequestContext = samRequestContext).unsafeRunSync()
-
-        dao.loadGroups(Set(group.id), samRequestContext).unsafeRunSync() should contain theSameElementsAs Set(group)
       }
     }
 
@@ -472,18 +438,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
         policyDAO.createPolicy(parentPolicy, samRequestContext).unsafeRunSync()
 
         dao.listUsersGroups(defaultUser.id, samRequestContext).unsafeRunSync() should contain theSameElementsAs Set(subPolicy.id, parentPolicy.id)
-      }
-    }
-
-    "loadUsers" - {
-      "load multiple users at once" in {
-        val user1 = defaultUser
-        val user2 = WorkbenchUser(WorkbenchUserId("testUser2"), Option(GoogleSubjectId("testGoogleSubjectId2")), WorkbenchEmail("user2@test.com"), None)
-
-        dao.createUser(user1, samRequestContext).unsafeRunSync() shouldEqual user1
-        dao.createUser(user2, samRequestContext).unsafeRunSync() shouldEqual user2
-
-        dao.loadUsers(Set(user1.id, user2.id), samRequestContext).unsafeRunSync() should contain theSameElementsAs Set(user1, user2)
       }
     }
 
@@ -1112,29 +1066,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
 
         dao.loadSubjectFromGoogleSubjectId(GoogleSubjectId(defaultPetSA.serviceAccount.subjectId.value), samRequestContext).unsafeRunSync() shouldBe Some(defaultPetSA.id)
       }
-    }
-
-    "loadSubjectEmails" - {
-      "two emails that don't exist" in {
-        dao.loadSubjectEmails(Set(defaultUser.id, defaultGroupName), samRequestContext).unsafeRunSync() should contain theSameElementsAs Set.empty
-      }
-
-      "two emails that do exist" in {
-        val secondUser = WorkbenchUser(WorkbenchUserId("secondUser"), Option(GoogleSubjectId("testGoogleSubject2")), WorkbenchEmail("secondUser@foo.com"), None)
-
-        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
-        dao.createUser(secondUser, samRequestContext).unsafeRunSync()
-
-        dao.loadSubjectEmails(Set(defaultUser.id, secondUser.id), samRequestContext).unsafeRunSync() should contain theSameElementsAs Set(defaultUser.email, secondUser.email)
-      }
-
-      "two emails of different types that do exist" in {
-        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
-        dao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync()
-
-        dao.loadSubjectEmails(Set(defaultUser.id, defaultGroupName), samRequestContext).unsafeRunSync() should contain theSameElementsAs Set(defaultUser.email, defaultGroup.email)
-      }
-
     }
 
     "loadSubjectEmail" - {

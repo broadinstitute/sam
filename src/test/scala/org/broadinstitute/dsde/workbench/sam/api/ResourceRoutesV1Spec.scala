@@ -5,12 +5,13 @@ import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import akka.http.scaladsl.testkit.ScalatestRouteTest
+import cats.effect.unsafe.implicits.global
 import org.broadinstitute.dsde.workbench.model.ErrorReportJsonSupport._
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport.{genGoogleSubjectId, _}
 import org.broadinstitute.dsde.workbench.sam.api.TestSamRoutes.SamResourceActionPatterns
-import org.broadinstitute.dsde.workbench.sam.dataAccess.MockAccessPolicyDAO
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{MockAccessPolicyDAO, MockDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
@@ -19,7 +20,6 @@ import spray.json.DefaultJsonProtocol._
 import spray.json.{JsBoolean, JsValue}
 import org.broadinstitute.dsde.workbench.sam.model.RootPrimitiveJsonSupport._
 
-import scala.collection.concurrent.TrieMap
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -593,13 +593,13 @@ class ResourceRoutesV1Spec extends AnyFlatSpec with Matchers with ScalatestRoute
 
   it should "404 when creating a policy on a resource that the user doesnt have permission to see" in {
     val resourceType = ResourceType(ResourceTypeName("rt"), Set(SamResourceActionPatterns.alterPolicies, ResourceActionPattern("can_compute", "", false)), Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.alterPolicies))), ResourceRoleName("owner"))
-    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
-    val groups = TrieMap.empty[WorkbenchGroupIdentity, WorkbenchGroup]
-    val policyDao = new MockAccessPolicyDAO(resourceType, groups)
+    val directoryDAO = new MockDirectoryDAO()
+    val policyDao = new MockAccessPolicyDAO(resourceType, directoryDAO)
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType), policyAccessDAO = Some(policyDao), maybeDirectoryDAO = Some(directoryDAO))
 
     policyDao.createResource(Resource(resourceType.name, ResourceId("foo"), Set.empty), samRequestContext).unsafeRunSync()
 
-    val otherUserSamRoutes = TestSamRoutes(Map(resourceType.name -> resourceType), UserInfo(OAuth2BearerToken("accessToken"), WorkbenchUserId("user2"), WorkbenchEmail("user2@example.com"), 0), policyAccessDAO = Some(policyDao), policies = Some(groups))
+    val otherUserSamRoutes = TestSamRoutes(Map(resourceType.name -> resourceType), UserInfo(OAuth2BearerToken("accessToken"), WorkbenchUserId("user2"), WorkbenchEmail("user2@example.com"), 0), policyAccessDAO = Some(policyDao), maybeDirectoryDAO = Some(directoryDAO))
     val members = AccessPolicyMembership(Set(WorkbenchEmail("foo@bar.baz")), Set(ResourceAction("can_compute")), Set.empty)
 
     //Create a resource
@@ -654,13 +654,13 @@ class ResourceRoutesV1Spec extends AnyFlatSpec with Matchers with ScalatestRoute
 
   it should "404 when listing policies for a resource when user can't see the resource" in {
     val resourceType = ResourceType(ResourceTypeName("rt"), Set(SamResourceActionPatterns.alterPolicies, ResourceActionPattern("can_compute", "", false)), Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.alterPolicies))), ResourceRoleName("owner"))
-    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
-    val groups = TrieMap.empty[WorkbenchGroupIdentity, WorkbenchGroup]
-    val policyDao = new MockAccessPolicyDAO(resourceType, groups)
+    val directoryDAO = new MockDirectoryDAO()
+    val policyDao = new MockAccessPolicyDAO(resourceType, directoryDAO)
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType), policyAccessDAO = Some(policyDao), maybeDirectoryDAO = Some(directoryDAO))
 
     policyDao.createResource(Resource(resourceType.name, ResourceId("foo"), Set.empty), samRequestContext).unsafeRunSync()
 
-    val otherUserSamRoutes = TestSamRoutes(Map(resourceType.name -> resourceType), UserInfo(OAuth2BearerToken("accessToken"), WorkbenchUserId("user2"), WorkbenchEmail("user2@example.com"), 0), policyAccessDAO = Some(policyDao), policies = Some(groups))
+    val otherUserSamRoutes = TestSamRoutes(Map(resourceType.name -> resourceType), UserInfo(OAuth2BearerToken("accessToken"), WorkbenchUserId("user2"), WorkbenchEmail("user2@example.com"), 0), policyAccessDAO = Some(policyDao), maybeDirectoryDAO = Some(directoryDAO))
 
     //Create the resource
     Post(s"/api/resources/v1/${resourceType.name}/foo") ~> samRoutes.route ~> check {

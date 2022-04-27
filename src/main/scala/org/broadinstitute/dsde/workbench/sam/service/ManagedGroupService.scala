@@ -1,7 +1,8 @@
 package org.broadinstitute.dsde.workbench.sam.service
 
 import akka.http.scaladsl.model.StatusCodes
-import cats.effect.{ContextShift, IO}
+import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam._
@@ -10,7 +11,7 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.ManagedGroupService.ManagedGroupPolicyName
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
-import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.ExecutionContext.Implicits.{global => globalEc}
 import scala.concurrent.Future
 
 /**
@@ -23,7 +24,7 @@ class ManagedGroupService(
     private val accessPolicyDAO: AccessPolicyDAO,
     private val directoryDAO: DirectoryDAO,
     private val cloudExtensions: CloudExtensions,
-    private val emailDomain: String)(implicit contextShift: ContextShift[IO])
+    private val emailDomain: String)
     extends LazyLogging {
 
   def managedGroupType: ResourceType =
@@ -34,12 +35,13 @@ class ManagedGroupService(
   def createManagedGroup(groupId: ResourceId, userInfo: UserInfo, accessInstructionsOpt: Option[String] = None, samRequestContext: SamRequestContext): IO[Resource] = {
     def adminRole = managedGroupType.ownerRoleName
 
-    val memberPolicy = ManagedGroupService.memberPolicyName -> AccessPolicyMembership(Set.empty, Set.empty, Set(ManagedGroupService.memberRoleName), None)
-    val adminPolicy = ManagedGroupService.adminPolicyName -> AccessPolicyMembership(Set(userInfo.userEmail), Set.empty, Set(adminRole), None)
+    val memberPolicy = ManagedGroupService.memberPolicyName -> AccessPolicyMembership(Set.empty, Set.empty, Set(ManagedGroupService.memberRoleName), None, None)
+    val adminPolicy = ManagedGroupService.adminPolicyName -> AccessPolicyMembership(Set(userInfo.userEmail), Set.empty, Set(adminRole), None, None)
     val adminNotificationPolicy = ManagedGroupService.adminNotifierPolicyName -> AccessPolicyMembership(
       Set.empty,
       Set.empty,
       Set(ManagedGroupService.adminNotifierRoleName),
+      None,
       None)
 
     validateGroupName(groupId.value)
@@ -118,11 +120,11 @@ class ManagedGroupService(
       }
     }
 
-  def listPolicyMemberEmails(resourceId: ResourceId, policyName: ManagedGroupPolicyName, samRequestContext: SamRequestContext): IO[LazyList[WorkbenchEmail]] = {
+  def listPolicyMemberEmails(resourceId: ResourceId, policyName: ManagedGroupPolicyName, samRequestContext: SamRequestContext): IO[Set[WorkbenchEmail]] = {
     val policyIdentity =
       FullyQualifiedPolicyId(FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, resourceId), policyName)
-    accessPolicyDAO.loadPolicy(policyIdentity, samRequestContext) flatMap {
-      case Some(policy) => directoryDAO.loadSubjectEmails(policy.members, samRequestContext)
+    resourceService.loadResourcePolicy(policyIdentity, samRequestContext) flatMap {
+      case Some(policy) => IO.pure(policy.memberEmails)
       case None =>
         IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Group or policy could not be found: $policyIdentity")))
     }

@@ -3,6 +3,7 @@ package service
 
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
+import cats.effect.unsafe.implicits.{global => globalEc}
 import cats.kernel.Eq
 import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import org.broadinstitute.dsde.workbench.model._
@@ -130,12 +131,12 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     tosServiceEnabled.resetTermsOfServiceGroupsIfNeeded().unsafeRunSync()
     serviceTosEnabled.createUser(defaultUser, samRequestContext).futureValue
     val userGroups = dirDAO.listUsersGroups(defaultUserId, samRequestContext).unsafeRunSync()
-    userGroups shouldNot contain (WorkbenchGroupName(tos.getGroupName(TestSupport.tosConfig.version)))
+    userGroups shouldNot contain (WorkbenchGroupName(tos.getGroupNameString(TestSupport.tosConfig.version)))
     userGroups should have size 1
 
     serviceTosEnabled.acceptTermsOfService(defaultUser.id, samRequestContext).unsafeRunSync()
     val newUserGroups = dirDAO.listUsersGroups(defaultUserId, samRequestContext).unsafeRunSync()
-    newUserGroups should contain (WorkbenchGroupName(tos.getGroupName(TestSupport.tosConfig.version)))
+    newUserGroups should contain (WorkbenchGroupName(tos.getGroupNameString(TestSupport.tosConfig.version)))
     newUserGroups should have size 2
   }
 
@@ -278,7 +279,7 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     dirDAO.isEnabled(defaultUserId, samRequestContext).unsafeRunSync() shouldBe true
 
     // User should only be enabled in ToS if they accepted latest ToS
-    val tosGroup = WorkbenchGroupName(newTos.getGroupName())
+    val tosGroup = WorkbenchGroupName(newTos.getGroupNameString())
     val userGroups = dirDAO.listUsersGroups(defaultUserId, samRequestContext).unsafeRunSync()
     userGroups.contains(tosGroup) shouldEqual userAcceptsNewTos
   }
@@ -296,7 +297,7 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     registrationDAO.loadUser(defaultUserId, samRequestContext).unsafeRunSync() shouldBe None
   }
 
-  it should "accept the tos" in {
+  it should "accept the tos and reject the tos" in {
     tosServiceEnabled.resetTermsOfServiceGroupsIfNeeded().unsafeRunSync()
 
     // create a user
@@ -307,6 +308,10 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
 
     val status = serviceTosEnabled.getUserStatus(defaultUserId, samRequestContext = samRequestContext).futureValue
     status shouldBe Some(UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> true, "adminEnabled" -> true)))
+
+    serviceTosEnabled.rejectTermsOfService(defaultUser.id, samRequestContext).unsafeRunSync()
+    val rejectedStatus = serviceTosEnabled.getUserStatus(defaultUserId, samRequestContext = samRequestContext).futureValue
+    rejectedStatus shouldBe Some(UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> false, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> false, "adminEnabled" -> true)))
   }
 
   it should "not accept the tos for users who do not exist" in {

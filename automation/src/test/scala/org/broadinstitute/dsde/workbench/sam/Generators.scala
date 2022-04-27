@@ -1,4 +1,4 @@
-package org.broadinstitute.dsde.workbench.test
+package org.broadinstitute.dsde.workbench.sam
 
 import org.broadinstitute.dsde.workbench.google2.{CollectionName, Document}
 import org.broadinstitute.dsde.workbench.google2.util.LockPath

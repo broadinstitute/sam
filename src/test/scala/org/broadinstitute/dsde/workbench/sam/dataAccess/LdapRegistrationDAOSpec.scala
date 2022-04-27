@@ -1,5 +1,6 @@
 package org.broadinstitute.dsde.workbench.sam.dataAccess
 
+import cats.effect.unsafe.implicits.global
 import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool, LDAPException}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountDisplayName, ServiceAccountSubjectId}
@@ -13,7 +14,7 @@ import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
 
 import java.net.URI
 import java.util.UUID
-import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.ExecutionContext.Implicits.{global => globalEc}
 
 /**
   * Created by dvoet on 5/30/17.

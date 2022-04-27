@@ -15,32 +15,25 @@ import scala.collection.mutable
 /**
   * Created by dvoet on 7/17/17.
   */
-class MockAccessPolicyDAO(private val resourceTypes: mutable.Map[ResourceTypeName, ResourceType], private val policies: mutable.Map[WorkbenchGroupIdentity, WorkbenchGroup] = new TrieMap()) extends AccessPolicyDAO {
-  def this(resourceTypes: Map[ResourceTypeName, ResourceType], policies: mutable.Map[WorkbenchGroupIdentity, WorkbenchGroup]) = {
-    this(new TrieMap[ResourceTypeName, ResourceType]() ++ resourceTypes, policies)
+class MockAccessPolicyDAO(private val resourceTypes: mutable.Map[ResourceTypeName, ResourceType], private val directoryDAO: MockDirectoryDAO) extends AccessPolicyDAO {
+  def this(resourceTypes: Map[ResourceTypeName, ResourceType], directoryDAO: MockDirectoryDAO) = {
+    this(new TrieMap[ResourceTypeName, ResourceType]() ++ resourceTypes, directoryDAO)
   }
 
-  def this(resourceTypes: Iterable[ResourceType], policies: mutable.Map[WorkbenchGroupIdentity, WorkbenchGroup]) = {
-    this(new TrieMap[ResourceTypeName, ResourceType] ++ resourceTypes.map(rt => rt.name -> rt).toMap, policies)
+  def this(resourceTypes: Iterable[ResourceType], directoryDAO: MockDirectoryDAO) = {
+    this(new TrieMap[ResourceTypeName, ResourceType] ++ resourceTypes.map(rt => rt.name -> rt).toMap, directoryDAO)
   }
 
-  def this(resourceType: ResourceType, policies: mutable.Map[WorkbenchGroupIdentity, WorkbenchGroup]) = {
-    this(Map(resourceType.name -> resourceType), policies)
+  def this(resourceType: ResourceType, directoryDAO: MockDirectoryDAO) = {
+    this(Map(resourceType.name -> resourceType), directoryDAO)
   }
 
-  def this(resourceTypes: Map[ResourceTypeName, ResourceType]) = {
-    this(new TrieMap[ResourceTypeName, ResourceType]() ++ resourceTypes)
-  }
-
-  def this(resourceTypes: Iterable[ResourceType]) = {
-    this(new TrieMap[ResourceTypeName, ResourceType] ++ resourceTypes.map(rt => rt.name -> rt).toMap)
-  }
-
-  def this() = {
-    this(Map.empty[ResourceTypeName, ResourceType])
+  def this(directoryDAO: MockDirectoryDAO) = {
+    this(Map.empty[ResourceTypeName, ResourceType], directoryDAO)
   }
 
   val resources = new TrieMap[FullyQualifiedResourceId, Resource]()
+  val policies = directoryDAO.groups
 
   override def upsertResourceTypes(resourceTypesToInit: Set[ResourceType], samRequestContext: SamRequestContext): IO[Set[ResourceTypeName]] = {
     for {
@@ -249,5 +242,49 @@ class MockAccessPolicyDAO(private val resourceTypes: mutable.Map[ResourceTypeNam
     }
 
     aggregateByResource(forEachPolicy)
+  }
+
+  private def loadDirectMemberUserEmails(policy: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[LazyList[WorkbenchEmail]] = {
+    val userIds = policies.find(_._1 == policy).toList.flatMap { case (_, policyGroup) =>
+      policyGroup.members.collect { case userId: WorkbenchUserId => userId }
+    }.to(LazyList)
+
+    userIds.traverse { directoryDAO.loadUser(_, samRequestContext) }.map(_.flatMap(_.map(_.email)))
+  }
+
+  private def loadDirectMemberGroupEmails(policy: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[LazyList[WorkbenchEmail]] = {
+    val groupNames = policies.find(_._1 == policy).toList.flatMap { case (_, policyGroup) =>
+      policyGroup.members.collect { case groupName: WorkbenchGroupName => groupName }
+    }.to(LazyList)
+
+    groupNames.traverse { directoryDAO.loadGroup(_, samRequestContext) }.map(_.flatMap(_.map(_.email)))
+  }
+
+  private def loadDirectMemberPolicyIdentifiers(policy: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[LazyList[PolicyIdentifiers]] = {
+    val policyIds = policies.find(_._1 == policy).toList.flatMap { case (_, policyGroup) =>
+      policyGroup.members.collect { case policyId: FullyQualifiedPolicyId => policyId }
+    }.to(LazyList)
+
+    policyIds.traverse { loadPolicy(_, samRequestContext) }.map(_.flatMap(_.map(p => PolicyIdentifiers(p.id.accessPolicyName, p.email, p.id.resource.resourceTypeName, p.id.resource.resourceId))))
+  }
+
+  override def loadPolicyMembership(policyId: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[Option[AccessPolicyMembership]] = {
+    listAccessPolicyMemberships(policyId.resource, samRequestContext).map { policyMemberships =>
+      policyMemberships.find(_.policyName == policyId.accessPolicyName).map(_.membership)
+    }
+  }
+
+  override def listAccessPolicyMemberships(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[LazyList[AccessPolicyWithMembership]] = {
+    listAccessPolicies(resource, samRequestContext).flatMap { policies =>
+      policies.traverse { policy =>
+        for {
+          users <- loadDirectMemberUserEmails(policy.id, samRequestContext)
+          groups <- loadDirectMemberGroupEmails(policy.id, samRequestContext)
+          subPolicies <- loadDirectMemberPolicyIdentifiers(policy.id, samRequestContext)
+        } yield {
+          AccessPolicyWithMembership(policy.id.accessPolicyName, AccessPolicyMembership(users.toSet ++ groups ++ subPolicies.map(_.policyEmail), policy.actions, policy.roles, Option(policy.descendantPermissions), Option(subPolicies.toSet)), policy.email)
+        }
+      }
+    }
   }
 }

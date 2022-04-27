@@ -6,6 +6,7 @@ import akka.http.scaladsl.model.headers.{OAuth2BearerToken, RawHeader}
 import akka.http.scaladsl.server.Directives.{complete, handleExceptions}
 import akka.http.scaladsl.server.MissingHeaderRejection
 import akka.http.scaladsl.testkit.ScalatestRouteTest
+import cats.effect.unsafe.implicits.global
 import cats.kernel.Eq
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountDisplayName, ServiceAccountSubjectId}

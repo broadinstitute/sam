@@ -6,7 +6,7 @@ import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import cats.data.NonEmptyList
 import cats.effect
-import cats.effect.{Blocker, ExitCode, IO, IOApp}
+import cats.effect.{ExitCode, IO, IOApp}
 import cats.implicits._
 import com.typesafe.config.ConfigFactory
 import com.typesafe.scalalogging.LazyLogging
@@ -148,9 +148,8 @@ object Boot extends IOApp with LazyLogging {
           googleFire <- GoogleFirestoreInterpreter.firestore[IO](
             config.googleServicesConfig.serviceAccountCredentialJson.firestoreServiceAccountJsonPath.asString)
           googleStorage <- GoogleStorageInterpreter.storage[IO](
-            config.googleServicesConfig.serviceAccountCredentialJson.defaultServiceAccountJsonPath.asString,
-            Blocker.liftExecutionContext(blockingEc),
-            None)
+            config.googleServicesConfig.serviceAccountCredentialJson.defaultServiceAccountJsonPath.asString
+          )
           googleKmsClient <- GoogleKmsInterpreter.client[IO](config.googleServicesConfig.serviceAccountCredentialJson.defaultServiceAccountJsonPath.asString)
         } yield {
           implicit val loggerIO: StructuredLogger[IO] = Slf4jLogger.getLogger[IO]
@@ -160,8 +159,8 @@ object Boot extends IOApp with LazyLogging {
           // Use resourceNamePrefix to avoid collision between different fiab environments (we share same firestore for fiabs)
           val lock =
             DistributedLock[IO](s"sam-${config.googleServicesConfig.resourceNamePrefix.getOrElse("local")}", appConfig.distributedLockConfig, ioFireStore)
-          val newGoogleStorage = GoogleStorageInterpreter[IO](googleStorage, Blocker.liftExecutionContext(blockingEc), None)
-          val googleKmsInterpreter = GoogleKmsInterpreter[IO](googleKmsClient, blockingEc)
+          val newGoogleStorage = GoogleStorageInterpreter[IO](googleStorage, blockerBound = None)
+          val googleKmsInterpreter = GoogleKmsInterpreter[IO](googleKmsClient)
           val resourceTypeMap = appConfig.resourceTypes.map(rt => rt.name -> rt).toMap
           val cloudExtension = createGoogleCloudExt(
             foregroundAccessPolicyDAO,

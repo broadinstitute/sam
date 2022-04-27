@@ -67,6 +67,8 @@ class GoogleGroupSyncMonitorSupervisor(
       _ <- pubSubDao.createSubscription(pubSubTopicName, pubSubSubscriptionName)
     } yield Start
 
+
+
   def startOne(): Unit = {
     logger.info("starting GoogleGroupSyncMonitorActor")
     actorOf(GoogleGroupSyncMonitor.props(pollInterval, pollIntervalJitter, pubSubDao, pubSubSubscriptionName, groupSynchronizer))
@@ -124,6 +126,7 @@ class GoogleGroupSyncMonitorActor(
 
   override def receive = {
     case StartMonitorPass =>
+      logger.debug(s"Pulling messages off: $pubSubSubscriptionName")
       // start the process by pulling a message and sending it back to self
       pubSubDao.pullMessages(pubSubSubscriptionName, 1).map(_.headOption) pipeTo self
 

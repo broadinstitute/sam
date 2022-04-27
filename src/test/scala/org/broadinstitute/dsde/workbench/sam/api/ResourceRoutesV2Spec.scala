@@ -5,6 +5,7 @@ import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import akka.http.scaladsl.testkit.ScalatestRouteTest
 import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import org.broadinstitute.dsde.workbench.model.ErrorReportJsonSupport._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport.{configResourceTypes, genGoogleSubjectId, googleServicesConfig}
@@ -43,8 +44,8 @@ class ResourceRoutesV2Spec extends AnyFlatSpec with Matchers with TestSupport wi
 
   private def createSamRoutes(resourceTypes: Map[ResourceTypeName, ResourceType] = Map(defaultResourceType.name -> defaultResourceType),
                               userInfo: UserInfo = defaultUserInfo): SamRoutes = {
-    val accessPolicyDAO = new MockAccessPolicyDAO(resourceTypes)
     val directoryDAO = new MockDirectoryDAO()
+    val accessPolicyDAO = new MockAccessPolicyDAO(resourceTypes, directoryDAO)
     val registrationDAO = new MockRegistrationDAO()
     val emailDomain = "example.com"
 

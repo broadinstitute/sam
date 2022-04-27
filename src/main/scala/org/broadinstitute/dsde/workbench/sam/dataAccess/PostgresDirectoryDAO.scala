@@ -4,7 +4,7 @@ import java.time.Instant
 import java.util.Date
 
 import akka.http.scaladsl.model.StatusCodes
-import cats.effect.{ContextShift, IO, Timer}
+import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.sam._
@@ -20,8 +20,9 @@ import scalikejdbc._
 
 import scala.concurrent.duration.DurationInt
 import scala.util.{Failure, Try}
+import cats.effect.Temporal
 
-class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val readDbRef: DbReference)(implicit val cs: ContextShift[IO], timer: Timer[IO]) extends DirectoryDAO with DatabaseSupport with PostgresGroupDAO {
+class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val readDbRef: DbReference)(implicit timer: Temporal[IO]) extends DirectoryDAO with DatabaseSupport with PostgresGroupDAO {
 
   override def getConnectionType(): ConnectionType = ConnectionType.Postgres
 
@@ -103,51 +104,6 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
 
         Option(BasicWorkbenchGroup(groupName, members, email))
       }
-    }
-  }
-
-  override def loadGroups(groupNames: Set[WorkbenchGroupName], samRequestContext: SamRequestContext): IO[LazyList[BasicWorkbenchGroup]] = {
-    if (groupNames.isEmpty) {
-      IO.pure(LazyList.empty)
-    } else {
-      for {
-        results <- readOnlyTransaction("loadGroups", samRequestContext)({ implicit session =>
-          val g = GroupTable.syntax("g")
-          val sg = GroupTable.syntax("sg")
-          val gm = GroupMemberTable.syntax("gm")
-          val p = PolicyTable.syntax("p")
-          val r = ResourceTable.syntax("r")
-          val rt = ResourceTypeTable.syntax("rt")
-
-          samsql"""select ${g.result.name}, ${g.result.email}, ${gm.result.memberUserId}, ${sg.result.name}, ${p.result.name}, ${r.result.name}, ${rt.result.name}
-                    from ${GroupTable as g}
-                    left join ${GroupMemberTable as gm} on ${g.id} = ${gm.groupId}
-                    left join ${GroupTable as sg} on ${gm.memberGroupId} = ${sg.id}
-                    left join ${PolicyTable as p} on ${p.groupId} = ${sg.id}
-                    left join ${ResourceTable as r} on ${p.resourceId} = ${r.id}
-                    left join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
-                    where ${g.name} in (${groupNames})"""
-            .map { rs =>
-              (rs.get[WorkbenchGroupName](g.resultName.name),
-                rs.get[WorkbenchEmail](g.resultName.email),
-                rs.stringOpt(gm.resultName.memberUserId).map(WorkbenchUserId),
-                rs.stringOpt(sg.resultName.name).map(WorkbenchGroupName),
-                rs.stringOpt(p.resultName.name).map(AccessPolicyName(_)),
-                rs.stringOpt(r.resultName.name).map(ResourceId(_)),
-                rs.stringOpt(rt.resultName.name).map(ResourceTypeName(_)))
-            }.list().apply()
-        })
-      } yield {
-        results.groupBy(result => (result._1, result._2)).map { case ((groupName, email), results) =>
-          val members: Set[WorkbenchSubject] = results.collect {
-              case (_, _, Some(userId), None, None, None, None) => userId
-              case (_, _, None, Some(subGroupName), None, None, None) => subGroupName
-              case (_, _, None, Some(_), Some(policyName), Some(resourceName), Some(resourceTypeName)) => FullyQualifiedPolicyId(FullyQualifiedResourceId(resourceTypeName, resourceName), policyName)
-          }.toSet
-
-          BasicWorkbenchGroup(groupName, members, email)
-        }
-      }.to(LazyList)
     }
   }
 
@@ -344,22 +300,6 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
     }
   }
 
-  // NOTE: This implementation is a copy/paste of the implementation from LdapDirectoryDAO.  The question was raised
-  // whether this should also handle Pets and Policies.  At this time, we don't know if it should, but for backwards
-  // compatibility with LdapDirectoryDAO, we're going to use the same implementation for now.
-  override def loadSubjectEmails(subjects: Set[WorkbenchSubject], samRequestContext: SamRequestContext): IO[LazyList[WorkbenchEmail]] = {
-    val userSubjects = subjects collect { case userId: WorkbenchUserId => userId }
-    val groupSubjects = subjects collect { case groupName: WorkbenchGroupName => groupName }
-
-    val users = loadUsers(userSubjects, samRequestContext)
-    val groups = loadGroups(groupSubjects, samRequestContext)
-
-    for {
-      userEmails <- users.map(_.map(_.email))
-      groupEmails <- groups.map(_.map(_.email))
-    } yield userEmails ++ groupEmails
-  }
-
   override def loadSubjectFromGoogleSubjectId(googleSubjectId: GoogleSubjectId, samRequestContext: SamRequestContext): IO[Option[WorkbenchSubject]] = {
     readOnlyTransaction("loadSubjectFromGoogleSubjectId", samRequestContext)({ implicit session =>
       val u = UserTable.syntax
@@ -435,18 +375,6 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
         ()
       }
     })
-  }
-
-  override def loadUsers(userIds: Set[WorkbenchUserId], samRequestContext: SamRequestContext): IO[LazyList[WorkbenchUser]] = {
-    if(userIds.nonEmpty) {
-      readOnlyTransaction("loadUsers", samRequestContext)({ implicit session =>
-        val userTable = UserTable.syntax
-
-        val loadUsersQuery = samsql"select ${userTable.resultAll} from ${UserTable as userTable} where ${userTable.id} in (${userIds})"
-        loadUsersQuery.map(UserTable(userTable))
-          .list().apply().map(UserTable.unmarshalUserRecord).to(LazyList)
-      })
-    } else IO.pure(LazyList.empty)
   }
 
   // Not worrying about cascading deletion of user's pet SAs because LDAP doesn't delete user's pet SAs automatically

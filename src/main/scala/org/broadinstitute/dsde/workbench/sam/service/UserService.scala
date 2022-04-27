@@ -3,7 +3,8 @@ package service
 
 import java.security.SecureRandom
 import akka.http.scaladsl.model.StatusCodes
-import cats.effect.{ContextShift, IO}
+import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
 
@@ -21,7 +22,7 @@ import scala.util.matching.Regex
 /**
   * Created by dvoet on 7/14/17.
   */
-class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExtensions, val registrationDAO: RegistrationDAO, blockedEmailDomains: Seq[String], tosService: TosService)(implicit val executionContext: ExecutionContext, contextShift: ContextShift[IO]) extends LazyLogging {
+class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExtensions, val registrationDAO: RegistrationDAO, blockedEmailDomains: Seq[String], tosService: TosService)(implicit val executionContext: ExecutionContext) extends LazyLogging {
 
   def createUser(user: WorkbenchUser, samRequestContext: SamRequestContext): Future[UserStatus] = {
     for {
@@ -143,11 +144,23 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
       case Some(_) =>
         for {
           _ <- tosService.acceptTosStatus(userId)
-          enabled <- directoryDAO.isEnabled(userId, samRequestContext) 
+          enabled <- directoryDAO.isEnabled(userId, samRequestContext)
           _ <- if (enabled) registrationDAO.enableIdentity(userId, samRequestContext) else IO.none
           status <- IO.fromFuture(IO(getUserStatus(userId, false, samRequestContext)))
         } yield status
       case None => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Could not accept the Terms of Service. User not found.")))
+    }
+  }
+
+  def rejectTermsOfService(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[UserStatus]] = {
+    directoryDAO.loadUser(userId, samRequestContext).flatMap {
+      case Some(_) =>
+        for {
+          _ <- tosService.rejectTosStatus(userId)
+          _ <- registrationDAO.disableIdentity(userId, samRequestContext)
+          status <- IO.fromFuture(IO(getUserStatus(userId, false, samRequestContext)))
+        } yield status
+      case None => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Could not reject the Terms of Service. User not found.")))
     }
   }
 
@@ -159,11 +172,26 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
     directoryDAO.loadUser(userId, samRequestContext).flatMap {
       case Some(user) =>
         for {
-          ldapStatus <- registrationDAO.isEnabled(user.id, samRequestContext)
+          tosStatus <- getTermsOfServiceStatusInternal(user, samRequestContext)
           adminEnabled <- directoryDAO.isEnabled(user.id, samRequestContext)
-        } yield Some(UserStatusInfo(user.id.value, user.email.value, ldapStatus, adminEnabled))
+        } yield {
+          Some(UserStatusInfo(user.id.value, user.email.value, tosStatus && adminEnabled, adminEnabled))
+        }
       case None => IO.pure(None)
     }
+
+  /**
+    * If grace period enabled, don't check ToS, return true
+    * If ToS disabled, return true
+    * Otherwise return true if user has accepted ToS
+    */
+  private def getTermsOfServiceStatusInternal(user: WorkbenchUser, samRequestContext: SamRequestContext) = {
+    if (tosService.tosConfig.isGracePeriodEnabled) {
+      IO.pure(true)
+    } else {
+      getTermsOfServiceStatus(user.id, samRequestContext).map(_.getOrElse(true))
+    }
+  }
 
   def getUserStatusDiagnostics(userId: WorkbenchUserId, samRequestContext: SamRequestContext): Future[Option[UserStatusDiagnostics]] =
     directoryDAO.loadUser(userId, samRequestContext).unsafeToFuture().flatMap {

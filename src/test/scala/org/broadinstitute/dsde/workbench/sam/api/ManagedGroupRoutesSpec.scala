@@ -7,12 +7,12 @@ import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import akka.http.scaladsl.model.{StatusCode, StatusCodes}
 import akka.http.scaladsl.testkit.ScalatestRouteTest
 import akka.stream.Materializer
-import cats.effect.{ContextShift, IO}
+import cats.effect.unsafe.implicits.global
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport.samRequestContext
 import org.broadinstitute.dsde.workbench.sam.api.ManagedGroupRoutesSpec._
-import org.broadinstitute.dsde.workbench.sam.dataAccess.MockAccessPolicyDAO
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{MockAccessPolicyDAO, MockDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.ManagedGroupService
@@ -22,7 +22,6 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import spray.json.DefaultJsonProtocol._
 
-import scala.collection.concurrent.TrieMap
 import scala.concurrent.ExecutionContext
 import scala.language.reflectiveCalls
 
@@ -605,9 +604,9 @@ class ManagedGroupRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRou
   }
 
   it should "fail with 404 when the group does not exist" in {
-    val groups = TrieMap.empty[WorkbenchGroupIdentity, WorkbenchGroup]
-    val policyDao = new MockAccessPolicyDAO(resourceTypes, groups)
-    val samRoutes = TestSamRoutes(resourceTypes, policyAccessDAO = Some(policyDao), policies = Some(groups))
+    val directoryDAO = new MockDirectoryDAO()
+    val policyDao = new MockAccessPolicyDAO(resourceTypes, directoryDAO)
+    val samRoutes = TestSamRoutes(resourceTypes, policyAccessDAO = Some(policyDao), maybeDirectoryDAO = Some(directoryDAO))
 
     policyDao.createResource(Resource(ManagedGroupService.managedGroupTypeName, ResourceId("foo"), Set.empty), samRequestContext).unsafeRunSync()
 
@@ -714,10 +713,10 @@ class ManagedGroupRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRou
 }
 
 object ManagedGroupRoutesSpec{
-  def createSamRoutesWithResource(resourceTypeMap: Map[ResourceTypeName, ResourceType], resource: Resource)(implicit system: ActorSystem, materializer: Materializer, ec: ExecutionContext, contextShift: ContextShift[IO]): TestSamRoutes ={
-    val groups = TrieMap.empty[WorkbenchGroupIdentity, WorkbenchGroup]
-    val policyDao = new MockAccessPolicyDAO(resourceTypeMap, groups)
-    val samRoutes = TestSamRoutes(resourceTypeMap, policyAccessDAO = Some(policyDao), policies = Some(groups))
+  def createSamRoutesWithResource(resourceTypeMap: Map[ResourceTypeName, ResourceType], resource: Resource)(implicit system: ActorSystem, materializer: Materializer, ec: ExecutionContext): TestSamRoutes ={
+    val directoryDAO = new MockDirectoryDAO()
+    val policyDao = new MockAccessPolicyDAO(resourceTypeMap, directoryDAO)
+    val samRoutes = TestSamRoutes(resourceTypeMap, policyAccessDAO = Some(policyDao), maybeDirectoryDAO = Some(directoryDAO))
 
     policyDao.createResource(resource, samRequestContext).unsafeRunSync()
     samRoutes

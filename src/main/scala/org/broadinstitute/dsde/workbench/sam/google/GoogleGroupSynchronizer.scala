@@ -2,6 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.google
 
 import akka.http.scaladsl.model.StatusCodes
 import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.google.GoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.model._
@@ -39,6 +40,10 @@ class GoogleGroupSynchronizer(directoryDAO: DirectoryDAO,
                               googleExtensions: GoogleExtensions,
                               resourceTypes: Map[ResourceTypeName, ResourceType])(implicit executionContext: ExecutionContext)
   extends LazyLogging with FutureSupport {
+
+  def init(): IO[Set[ResourceTypeName]] =
+    accessPolicyDAO.upsertResourceTypes(resourceTypes.values.toSet, SamRequestContext(None))
+
   def synchronizeGroupMembers(groupId: WorkbenchGroupIdentity, visitedGroups: Set[WorkbenchGroupIdentity] = Set.empty[WorkbenchGroupIdentity], samRequestContext: SamRequestContext): Future[Map[WorkbenchEmail, Seq[SyncReportItem]]] = {
     def toSyncReportItem(operation: String, email: String, result: Try[Unit]) =
       SyncReportItem(
