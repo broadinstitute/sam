@@ -24,8 +24,14 @@ class TosService (val directoryDao: DirectoryDAO, val registrationDao: Registrat
         case None =>
           logger.info(s"creating new ToS group ${getGroupNameString()}")
           val groupEmail = WorkbenchEmail(s"GROUP_${getGroupNameString(tosConfig.version)}@$appsDomain")
-          directoryDao.createGroup(BasicWorkbenchGroup(WorkbenchGroupName(getGroupNameString(tosConfig.version)), Set.empty, groupEmail), None, samRequestContext).flatMap { createdGroup =>
-            if(tosConfig.version > 0) registrationDao.disableAllHumanIdentities(samRequestContext).map { _ => Option(createdGroup.id)} //special clause for v0 ToS, which will be enforced via a migration (see WOR-118)
+          val tosGroup = BasicWorkbenchGroup(WorkbenchGroupName(getGroupNameString(tosConfig.version)), Set.empty, groupEmail)
+          directoryDao.createGroup(tosGroup, None, samRequestContext).handleError {
+            case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode == Option(StatusCodes.Conflict) => tosGroup
+          }.flatMap { createdGroup =>
+            if(tosConfig.version > 0) registrationDao.disableAllHumanIdentities(samRequestContext).handleError { e =>
+              logger.error(s"Failed to disable all human identities when setting up ${getGroupNameString()}", e)
+              throw e
+            }.map { _ => Option(createdGroup.id)} //special clause for v0 ToS, which will be enforced via a migration (see WOR-118)
             else IO.pure(Option(createdGroup.id))
           }
         case groupName => IO.pure(groupName)
