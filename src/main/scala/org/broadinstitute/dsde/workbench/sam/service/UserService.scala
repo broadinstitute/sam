@@ -123,7 +123,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
             googleStatus <- cloudExtensions.getUserStatus(user)
             allUsersGroup <- cloudExtensions.getOrCreateAllUsersGroup(directoryDAO, samRequestContext)
             allUsersStatus <- directoryDAO.isGroupMember(allUsersGroup.id, user.id, samRequestContext).unsafeToFuture() recover { case _: NameNotFoundException => false }
-            tosAcceptedStatus <- tosService.getTosStatus(user.id).unsafeToFuture()
+            tosAcceptedStatus <- tosService.getTosStatus(user.id, samRequestContext).unsafeToFuture()
             ldapStatus <- registrationDAO.isEnabled(user.id, samRequestContext).unsafeToFuture()
             adminEnabled <- directoryDAO.isEnabled(user.id, samRequestContext).unsafeToFuture()
           } yield {
@@ -143,7 +143,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
     directoryDAO.loadUser(userId, samRequestContext).flatMap {
       case Some(_) =>
         for {
-          _ <- tosService.acceptTosStatus(userId)
+          _ <- tosService.acceptTosStatus(userId, samRequestContext)
           enabled <- directoryDAO.isEnabled(userId, samRequestContext)
           _ <- if (enabled) registrationDAO.enableIdentity(userId, samRequestContext) else IO.none
           status <- IO.fromFuture(IO(getUserStatus(userId, false, samRequestContext)))
@@ -156,7 +156,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
     directoryDAO.loadUser(userId, samRequestContext).flatMap {
       case Some(_) =>
         for {
-          _ <- tosService.rejectTosStatus(userId)
+          _ <- tosService.rejectTosStatus(userId, samRequestContext)
           _ <- registrationDAO.disableIdentity(userId, samRequestContext)
           status <- IO.fromFuture(IO(getUserStatus(userId, false, samRequestContext)))
         } yield status
@@ -165,7 +165,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
   }
 
   def getTermsOfServiceStatus(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[Boolean]] = {
-    tosService.getTosStatus(userId)
+    tosService.getTosStatus(userId, samRequestContext)
   }
 
   def getUserStatusInfo(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[UserStatusInfo]] =
@@ -198,7 +198,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
       case Some(user) => {
         // pulled out of for comprehension to allow concurrent execution
         val ldapStatus = registrationDAO.isEnabled(user.id, samRequestContext).unsafeToFuture()
-        val tosAcceptedStatus = tosService.getTosStatus(user.id).unsafeToFuture()
+        val tosAcceptedStatus = tosService.getTosStatus(user.id, samRequestContext).unsafeToFuture()
         val adminEnabledStatus = directoryDAO.isEnabled(user.id, samRequestContext).unsafeToFuture()
         val allUsersStatus = cloudExtensions.getOrCreateAllUsersGroup(directoryDAO, samRequestContext).flatMap { allUsersGroup =>
           directoryDAO.isGroupMember(allUsersGroup.id, user.id, samRequestContext).unsafeToFuture() recover { case e: NameNotFoundException => false }
@@ -262,7 +262,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
 
   private def enableIdentityIfTosAccepted(user: WorkbenchUser, samRequestContext: SamRequestContext): IO[Unit] = {
     val gracePeriodEnabled = tosService.tosConfig.isGracePeriodEnabled
-    tosService.getTosStatus(user.id)
+    tosService.getTosStatus(user.id, samRequestContext)
       .flatMap {
         // If the user has accepted TOS, the grace period is enabled, or TOS is disabled, then enable the user in LDAP
         // Additionally, if the user is an SA, it's also acceptable to enable them in LDAP

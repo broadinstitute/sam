@@ -128,7 +128,7 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
   }
 
   it should "create and add a user to ToS group" in {
-    tosServiceEnabled.resetTermsOfServiceGroupsIfNeeded().unsafeRunSync()
+    tosServiceEnabled.resetTermsOfServiceGroupsIfNeeded(samRequestContext).unsafeRunSync()
     serviceTosEnabled.createUser(defaultUser, samRequestContext).futureValue
     val userGroups = dirDAO.listUsersGroups(defaultUserId, samRequestContext).unsafeRunSync()
     userGroups shouldNot contain (WorkbenchGroupName(tos.getGroupNameString(TestSupport.tosConfig.version)))
@@ -147,14 +147,14 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
   }
 
   it should "enable a user immediately if ToS is enabled and the grace period is enabled" in {
-    tosServiceEnabledGracePeriodEnabled.resetTermsOfServiceGroupsIfNeeded().unsafeRunSync()
+    tosServiceEnabledGracePeriodEnabled.resetTermsOfServiceGroupsIfNeeded(samRequestContext).unsafeRunSync()
     serviceTosEnabledGracePeriodEnabled.createUser(defaultUser, samRequestContext).futureValue
     val isEnabled = registrationDAO.isEnabled(defaultUserId, samRequestContext).unsafeRunSync()
     isEnabled shouldBe true
   }
 
   it should "not enable a user immediately if ToS is enabled and the grace period is disabled" in {
-    tosServiceEnabledGracePeriodDisabled.resetTermsOfServiceGroupsIfNeeded().unsafeRunSync()
+    tosServiceEnabledGracePeriodDisabled.resetTermsOfServiceGroupsIfNeeded(samRequestContext).unsafeRunSync()
     serviceTosEnabledGracePeriodDisabled.createUser(defaultUser, samRequestContext).futureValue
     val isEnabled = registrationDAO.isEnabled(defaultUserId, samRequestContext).unsafeRunSync()
     isEnabled shouldBe false
@@ -250,7 +250,7 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
 
   private def createNewEnabledUser(): Unit = {
     // create a user
-    tosServiceEnabled.resetTermsOfServiceGroupsIfNeeded().unsafeRunSync()
+    tosServiceEnabled.resetTermsOfServiceGroupsIfNeeded(samRequestContext).unsafeRunSync()
     val newUser = serviceTosEnabled.createUser(defaultUser, samRequestContext).futureValue
     newUser shouldBe UserStatus(UserStatusDetails(defaultUserId, defaultUserEmail), Map("ldap" -> false, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> false, "adminEnabled" -> true))
     serviceTosEnabled.acceptTermsOfService(defaultUserId, samRequestContext).unsafeToFuture().futureValue
@@ -265,7 +265,7 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     val newTosConfig = tosConfig.copy(enabled = tosEnabled, version = tosConfig.version + 1)
     val newTos = new TosService(dirDAO, registrationDAO, googleServicesConfig.appsDomain, newTosConfig)
     val userServiceWithNewTos =  new UserService(dirDAO, googleExtensions, registrationDAO, Seq(blockedDomain), newTos)
-    newTos.resetTermsOfServiceGroupsIfNeeded().unsafeRunSync()
+    newTos.resetTermsOfServiceGroupsIfNeeded(samRequestContext).unsafeRunSync()
 
     if (userAcceptsNewTos) {
       userServiceWithNewTos.acceptTermsOfService(defaultUserId, samRequestContext).unsafeToFuture().futureValue
@@ -298,7 +298,7 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
   }
 
   it should "accept the tos and reject the tos" in {
-    tosServiceEnabled.resetTermsOfServiceGroupsIfNeeded().unsafeRunSync()
+    tosServiceEnabled.resetTermsOfServiceGroupsIfNeeded(samRequestContext).unsafeRunSync()
 
     // create a user
     val newUser = serviceTosEnabled.createUser(defaultUser, samRequestContext).futureValue
@@ -315,7 +315,7 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
   }
 
   it should "not accept the tos for users who do not exist" in {
-    tosServiceEnabled.resetTermsOfServiceGroupsIfNeeded().unsafeRunSync()
+    tosServiceEnabled.resetTermsOfServiceGroupsIfNeeded(samRequestContext).unsafeRunSync()
     val res = intercept[WorkbenchExceptionWithErrorReport] {
       serviceTosEnabled.acceptTermsOfService(genWorkbenchUserId(System.currentTimeMillis()), samRequestContext).unsafeRunSync()
     }
@@ -340,7 +340,7 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     val serviceAccountUserEmail = WorkbenchEmail("fake@fake.iam.gserviceaccount.com")
     val serviceAccountUser = WorkbenchUser(serviceAccountUserId, Option(serviceAccountUserSubjectId), serviceAccountUserEmail, None)
 
-    tosServiceEnabled.resetTermsOfServiceGroupsIfNeeded().unsafeRunSync()
+    tosServiceEnabled.resetTermsOfServiceGroupsIfNeeded(samRequestContext).unsafeRunSync()
 
     val newSA = serviceTosEnabled.createUser(serviceAccountUser, samRequestContext).futureValue
     newSA shouldBe UserStatus(UserStatusDetails(serviceAccountUserId, serviceAccountUserEmail), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> false, "adminEnabled" -> true))
