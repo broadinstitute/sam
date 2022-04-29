@@ -29,6 +29,11 @@ class TosService (val directoryDao: DirectoryDAO, val registrationDao: Registrat
             case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode == Option(StatusCodes.Conflict) => tosGroup
           }.flatMap { createdGroup =>
             if(tosConfig.version > 0) registrationDao.disableAllHumanIdentities(samRequestContext).handleError { e =>
+              // If this call has failed, then human users won't be disabled and they will not be forced to accept the
+              // new ToS version to use Terra which is a compliance issue. Ensuring that human users are disabled is
+              // challenging. Instead, we have set up log-based alerting to notify us of this issue so we can manually
+              // disable human users (https://broadworkbench.atlassian.net/browse/WOR-280). If you must modify this
+              // log message, please modify the alert as well.
               logger.error(s"Failed to disable all human identities when setting up ${getGroupNameString()}", e)
               throw e
             }.map { _ => Option(createdGroup.id)} //special clause for v0 ToS, which will be enforced via a migration (see WOR-118)
