@@ -43,7 +43,6 @@ import java.lang.reflect.Type;
 
 import io.opencensus.trace.SpanContext;
 import io.opencensus.trace.Tracing;
-import io.opencensus.contrib.spring.aop.Traced;
 
 import java.lang.reflect.Type;
 {{^fullJavaUtil}}
@@ -121,7 +120,6 @@ public class {{classname}} {
     {{#isDeprecated}}
     @Deprecated
     {{/isDeprecated}}
-    @Traced
     public{{/vendorExtensions.x-group-parameters}}{{#vendorExtensions.x-group-parameters}}private{{/vendorExtensions.x-group-parameters}} okhttp3.Call {{operationId}}Call({{#allParams}}{{{dataType}}} {{paramName}}, {{/allParams}}final ApiCallback _callback) throws ApiException {
         String basePath = null;
 
@@ -342,9 +340,12 @@ public class {{classname}} {
         return localVarApiClient.executeStream(localVarCall, localVarReturnType);{{/returnType}}
     }
     {{/vendorExtensions.x-streaming}}{{^vendorExtensions.x-streaming}} ApiResponse<{{#returnType}}{{{returnType}}}{{/returnType}}{{^returnType}}Void{{/returnType}}> {{operationId}}WithHttpInfo({{#allParams}}{{#useBeanValidation}}{{>beanValidationQueryParams}}{{/useBeanValidation}}{{{dataType}}} {{paramName}}{{^-last}}, {{/-last}}{{/allParams}}) throws ApiException {
-        okhttp3.Call localVarCall = {{operationId}}ValidateBeforeCall({{#allParams}}{{paramName}}, {{/allParams}}null);
-        {{#returnType}}Type localVarReturnType = new TypeToken<{{{returnType}}}>(){}.getType();
-        return localVarApiClient.execute(localVarCall, localVarReturnType);{{/returnType}}{{^returnType}}return localVarApiClient.execute(localVarCall);{{/returnType}}
+        var span = Tracing.getTracer().spanBuilder("{{package}}.{{classname}}#{{operationId}}");
+        try (var scope = span.startScopedSpan()) {
+            okhttp3.Call localVarCall = {{operationId}}ValidateBeforeCall({{#allParams}}{{paramName}}, {{/allParams}}null);
+            {{#returnType}}Type localVarReturnType = new TypeToken<{{{returnType}}}>(){}.getType();
+            return localVarApiClient.execute(localVarCall, localVarReturnType);{{/returnType}}{{^returnType}}return localVarApiClient.execute(localVarCall);{{/returnType}}
+        }
     }
     {{/vendorExtensions.x-streaming}}
 
