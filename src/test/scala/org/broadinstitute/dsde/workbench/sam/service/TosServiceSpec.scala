@@ -6,13 +6,20 @@ import cats.effect.unsafe.implicits.{global => globalEc}
 import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
-import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, LdapRegistrationDAO, PostgresDirectoryDAO}
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, LdapRegistrationDAO, PostgresDirectoryDAO, RegistrationDAO}
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.broadinstitute.dsde.workbench.sam.service.UserService.genWorkbenchUserId
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
 import org.scalatest.flatspec.AnyFlatSpec
-
 import java.net.URI
+
+import akka.http.scaladsl.model.StatusCodes
+import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
+import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
+import org.mockito.ArgumentMatchers.any
+import org.mockito.Mockito.when
+import org.scalatestplus.mockito.MockitoSugar.mock
+
 import scala.concurrent.Await
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.Duration
@@ -82,6 +89,18 @@ class TosServiceSpec extends AnyFlatSpec with TestSupport with BeforeAndAfterAll
     assert(maybeGroup.isDefined, "ToS Group should exist after above call")
     assert(maybeGroup.get.value == "tos_accepted_0")
     assert(tosServiceEnabled.resetTermsOfServiceGroupsIfNeeded(samRequestContext).unsafeRunSync().isDefined, "resetTermsOfServiceGroupsIfNeeded() should return the same response when called again")
+  }
+
+  it should "tolerate the race condition where the ToS group is created after checking to see if it exists" in {
+    val mockDirDAO = mock[DirectoryDAO]
+    val tosService = new TosService(mockDirDAO, regDAO, "example.com", TestSupport.tosConfig.copy(enabled = true, version = 0))
+
+    when(mockDirDAO.createGroup(any[BasicWorkbenchGroup], any[Option[String]], any[SamRequestContext]))
+      .thenReturn(IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, "group already exists!")(ErrorReportSource("sam")))))
+    when(mockDirDAO.loadGroupEmail(any[WorkbenchGroupName], any[SamRequestContext])).thenReturn(IO(None))
+
+    assert(tosService.getTosGroupName(samRequestContext).unsafeRunSync().isEmpty, "ToS Group should not exist at the start")
+    assert(tosService.resetTermsOfServiceGroupsIfNeeded(samRequestContext).unsafeRunSync().isDefined, "resetTermsOfServiceGroupsIfNeeded() should not fail if the group is created after it tries to load it")
   }
 
   it should "do nothing if ToS check is not enabled" in {
@@ -239,6 +258,18 @@ class TosServiceSpec extends AnyFlatSpec with TestSupport with BeforeAndAfterAll
     //Check if the SA is enabled in LDAP
     val isSAEnabledLdapAfter = regDAO.isEnabled(serviceAccountUser.id, samRequestContext).unsafeRunSync()
     assert(isSAEnabledLdapAfter, "regDAO.isEnabled (second check) should have returned true [SA]")
+  }
+
+  it should "throw when it fails to remove users from the enabledUsers group in OpenDJ" in {
+    val mockRegDAO = mock[RegistrationDAO]
+    val tosService = new TosService(dirDAO, mockRegDAO, "example.com", TestSupport.tosConfig.copy(enabled = true, version = 1))
+
+    when(mockRegDAO.disableAllHumanIdentities(any[SamRequestContext]))
+      .thenReturn(IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport("Couldn't empty enabled-users")(ErrorReportSource("sam")))))
+
+    intercept [WorkbenchExceptionWithErrorReport] {
+      tosService.resetTermsOfServiceGroupsIfNeeded(samRequestContext).unsafeRunSync()
+    }
   }
 
   it should "should allow a user to accept ToS v0" in {
