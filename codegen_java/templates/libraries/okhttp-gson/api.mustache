@@ -41,8 +41,10 @@ import java.lang.reflect.Type;
 {{#imports}}import {{import}};
 {{/imports}}
 
+// begin custom imports
 import io.opencensus.trace.SpanContext;
 import io.opencensus.trace.Tracing;
+// end custom imports
 
 import java.lang.reflect.Type;
 {{^fullJavaUtil}}
@@ -211,12 +213,13 @@ public class {{classname}} {
             localVarHeaderParams.put("Content-Type", localVarContentType);
         }
 
-        // Add tracing headers
+        // begin custom code - Add tracing headers
         SpanContext currentSpanContext = Tracing.getTracer().getCurrentSpan().getContext();
         if (currentSpanContext.isValid()) {
             localVarHeaderParams.put("X-B3-TraceId", currentSpanContext.getTraceId().toLowerBase16());
             localVarHeaderParams.put("X-B3-SpanId", currentSpanContext.getSpanId().toLowerBase16());
         }
+        // end custom code
 
         String[] localVarAuthNames = new String[] { {{#authMethods}}"{{name}}"{{^-last}}, {{/-last}}{{/authMethods}} };
         return localVarApiClient.buildCall(basePath, localVarPath, {{^dynamicOperations}}"{{httpMethod}}"{{/dynamicOperations}}{{#dynamicOperations}}apiOperation.getMethod(){{/dynamicOperations}}, localVarQueryParams, localVarCollectionQueryParams, localVarPostBody, localVarHeaderParams, localVarCookieParams, localVarFormParams, localVarAuthNames, _callback);
@@ -340,12 +343,14 @@ public class {{classname}} {
         return localVarApiClient.executeStream(localVarCall, localVarReturnType);{{/returnType}}
     }
     {{/vendorExtensions.x-streaming}}{{^vendorExtensions.x-streaming}} ApiResponse<{{#returnType}}{{{returnType}}}{{/returnType}}{{^returnType}}Void{{/returnType}}> {{operationId}}WithHttpInfo({{#allParams}}{{#useBeanValidation}}{{>beanValidationQueryParams}}{{/useBeanValidation}}{{{dataType}}} {{paramName}}{{^-last}}, {{/-last}}{{/allParams}}) throws ApiException {
+        // begin custom code - Trace api call (the body of the try block was the original)
         var span = Tracing.getTracer().spanBuilder("{{package}}.{{classname}}#{{operationId}}");
         try (var scope = span.startScopedSpan()) {
             okhttp3.Call localVarCall = {{operationId}}ValidateBeforeCall({{#allParams}}{{paramName}}, {{/allParams}}null);
             {{#returnType}}Type localVarReturnType = new TypeToken<{{{returnType}}}>(){}.getType();
             return localVarApiClient.execute(localVarCall, localVarReturnType);{{/returnType}}{{^returnType}}return localVarApiClient.execute(localVarCall);{{/returnType}}
         }
+        // end custom code
     }
     {{/vendorExtensions.x-streaming}}
 
