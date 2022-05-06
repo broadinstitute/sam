@@ -185,7 +185,7 @@ trait UserRoutesSpecHelper extends AnyFlatSpec with Matchers with ScalatestRoute
     val samDependencies = genSamDependencies(cloudExtensions = cloudExtensions, googleDirectoryDAO = googleDirectoryDAO, tosEnabled = tosEnabled)
     val routes = genSamRoutes(samDependencies, userInfo)
 
-    if (tosEnabled) routes.tosService.resetTermsOfServiceGroupsIfNeeded().unsafeRunSync()
+    if (tosEnabled) routes.tosService.resetTermsOfServiceGroupsIfNeeded(samRequestContext).unsafeRunSync()
 
     // create a user
     val user = Post("/register/user/v1/") ~> routes.route ~> check {
@@ -248,7 +248,7 @@ trait UserRoutesSpecHelper extends AnyFlatSpec with Matchers with ScalatestRoute
     val registrationDAO = new MockRegistrationDAO()
 
     val tosService = new TosService(directoryDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig.copy(enabled = true))
-    tosService.resetTermsOfServiceGroupsIfNeeded()
+    tosService.resetTermsOfServiceGroupsIfNeeded(samRequestContext)
 
     val samRoutes = new TestSamTosEnabledRoutes(null, null, new UserService(directoryDAO, NoExtensions, registrationDAO, Seq.empty, tosService), new StatusService(directoryDAO, registrationDAO, NoExtensions, TestSupport.dbRef), null, UserInfo(OAuth2BearerToken(""), defaultUserId, defaultUserEmail, 0), directoryDAO, registrationDAO,
       workbenchUser = Option(WorkbenchUser(UserService.genWorkbenchUserId(System.currentTimeMillis()), TestSupport.genGoogleSubjectId(), defaultUserEmail, None)), tosService = tosService)

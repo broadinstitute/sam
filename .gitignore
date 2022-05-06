@@ -89,4 +89,4 @@ automation/src/test/resources/
 # OpenAPI codegen
 codegen_java/*
 !codegen_java/project
-!codegen_java/build.sbt
+!codegen_java/templates
