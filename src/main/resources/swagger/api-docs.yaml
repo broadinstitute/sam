@@ -15,7 +15,7 @@ security:
       - openid
       - email
       - profile
-  - b2coauth:
+  - oidc:
       - openid
       - email
       - profile
@@ -2611,14 +2611,12 @@ components:
             openid: open id authorization
             email: email authorization
             profile: profile authorization
-    b2coauth:
+    oidc:
       type: oauth2
-      x-tokenName: id_token
       flows:
-        implicit:
-          # This points at the B2C dev environment. See https://broadworkbench.atlassian.net/browse/TOAZ-85
-          # to make this configurable across environments.
-          authorizationUrl: https://terradevb2c.b2clogin.com/terradevb2c.onmicrosoft.com/oauth2/v2.0/authorize?p=B2C_1A_SIGNUP_SIGNIN
+        authorizationCode:
+          authorizationUrl: /oauth2/authorize
+          tokenUrl: /oauth2/token
           scopes:
             openid: open id authorization
             email: email authorization
