@@ -21,18 +21,20 @@ final case class AppConfig(
                             directoryConfig: DirectoryConfig,
                             schemaLockConfig: SchemaLockConfig,
                             distributedLockConfig: DistributedLockConfig,
-                            swaggerConfig: SwaggerConfig,
                             googleConfig: Option[GoogleConfig],
                             resourceTypes: Set[ResourceType],
                             liquibaseConfig: LiquibaseConfig,
                             blockedEmailDomains: Seq[String],
-                            termsOfServiceConfig: TermsOfServiceConfig)
+                            termsOfServiceConfig: TermsOfServiceConfig,
+                            oidcConfig: OidcConfig)
 
 object AppConfig {
-  implicit val swaggerReader: ValueReader[SwaggerConfig] = ValueReader.relative { config =>
-    SwaggerConfig(
-      config.getString("googleClientId"),
-      config.getString("realm")
+  implicit val oidcReader: ValueReader[OidcConfig] = ValueReader.relative { config =>
+    OidcConfig(
+      config.getString("authorityEndpoint"),
+      config.getString("oidcClientId"),
+      config.as[Option[String]]("oidcClientSecret"),
+      config.as[Option[String]]("legacyGoogleClientId")
     )
   }
 
@@ -154,7 +156,6 @@ object AppConfig {
 
     val schemaLockConfig = config.as[SchemaLockConfig]("schemaLock")
     val distributedLockConfig = config.as[DistributedLockConfig]("distributedLock")
-    val swaggerConfig = config.as[SwaggerConfig]("swagger")
     val termsOfServiceConfig = config.as[TermsOfServiceConfig]("termsOfService")
     // TODO - https://broadinstitute.atlassian.net/browse/GAWB-3603
     // This should JUST get the value from "emailDomain", but for now we're keeping the backwards compatibility code to
@@ -164,7 +165,8 @@ object AppConfig {
     val liquibaseConfig = config.as[LiquibaseConfig]("liquibase")
 
     val blockedEmailDomains = config.as[Option[Seq[String]]]("blockedEmailDomains").getOrElse(Seq.empty)
+    val oidcConfig = config.as[OidcConfig]("oidc")
 
-    AppConfig(emailDomain, directoryConfig, schemaLockConfig, distributedLockConfig, swaggerConfig, googleConfigOption, resourceTypes, liquibaseConfig, blockedEmailDomains, termsOfServiceConfig)
+    AppConfig(emailDomain, directoryConfig, schemaLockConfig, distributedLockConfig, googleConfigOption, resourceTypes, liquibaseConfig, blockedEmailDomains, termsOfServiceConfig, oidcConfig)
   }
 }

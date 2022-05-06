@@ -22,6 +22,7 @@ import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleKmsIn
 import org.broadinstitute.dsde.workbench.google2.util.DistributedLock
 import org.broadinstitute.dsde.workbench.google2.{GoogleFirestoreInterpreter, GoogleStorageInterpreter, GoogleStorageService}
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException}
+import org.broadinstitute.dsde.workbench.oauth2.{ClientId, ClientSecret, OpenIDConnectConfiguration}
 import org.broadinstitute.dsde.workbench.sam.api.{SamRoutes, StandardUserInfoDirectives}
 import org.broadinstitute.dsde.workbench.sam.config.{AppConfig, GoogleConfig}
 import org.broadinstitute.dsde.workbench.sam.dataAccess._
@@ -132,7 +133,15 @@ object Boot extends IOApp with LazyLogging {
         backgroundAccessPolicyDAO,
         backgroundLdapExecutionContext,
         blockingEc)
-    } yield createAppDepenciesWithSamRoutes(appConfig, cloudExtensionsInitializer, foregroundAccessPolicyDAO, foregroundDirectoryDAO, registrationDAO)
+
+      oauth2Config <- cats.effect.Resource.eval(
+        OpenIDConnectConfiguration[IO](
+          appConfig.oidcConfig.authorityEndpoint,
+          ClientId(appConfig.oidcConfig.clientId),
+          oidcClientSecret = appConfig.oidcConfig.clientSecret.map(ClientSecret),
+          extraGoogleClientId = appConfig.oidcConfig.legacyGoogleClientId.map(ClientId))
+      )
+    } yield createAppDepenciesWithSamRoutes(appConfig, cloudExtensionsInitializer, foregroundAccessPolicyDAO, foregroundDirectoryDAO, registrationDAO, oauth2Config)
 
   private def cloudExtensionsInitializerResource(
       appConfig: AppConfig,
@@ -303,7 +312,8 @@ object Boot extends IOApp with LazyLogging {
       cloudExtensionsInitializer: CloudExtensionsInitializer,
       accessPolicyDAO: AccessPolicyDAO,
       directoryDAO: DirectoryDAO,
-      registrationDAO: RegistrationDAO)(implicit actorSystem: ActorSystem): AppDependencies = {
+      registrationDAO: RegistrationDAO,
+      oauth2Config: OpenIDConnectConfiguration)(implicit actorSystem: ActorSystem): AppDependencies = {
     val resourceTypeMap = config.resourceTypes.map(rt => rt.name -> rt).toMap
     val policyEvaluatorService = PolicyEvaluatorService(config.emailDomain, resourceTypeMap, accessPolicyDAO, directoryDAO)
     val resourceService = new ResourceService(resourceTypeMap, policyEvaluatorService, accessPolicyDAO, directoryDAO, cloudExtensionsInitializer.cloudExtensions, config.emailDomain)
@@ -316,7 +326,7 @@ object Boot extends IOApp with LazyLogging {
 
     cloudExtensionsInitializer match {
       case GoogleExtensionsInitializer(googleExt, synchronizer) =>
-        val routes = new SamRoutes(resourceService, userService, statusService, managedGroupService, config.swaggerConfig, config.termsOfServiceConfig, directoryDAO, registrationDAO, policyEvaluatorService, tosService, config.liquibaseConfig)
+        val routes = new SamRoutes(resourceService, userService, statusService, managedGroupService, config.termsOfServiceConfig, directoryDAO, registrationDAO, policyEvaluatorService, tosService, config.liquibaseConfig, oauth2Config)
         with StandardUserInfoDirectives with GoogleExtensionRoutes {
           val googleExtensions = googleExt
           val cloudExtensions = googleExt
@@ -324,7 +334,7 @@ object Boot extends IOApp with LazyLogging {
         }
         AppDependencies(routes, samApplication, cloudExtensionsInitializer, directoryDAO, accessPolicyDAO, policyEvaluatorService)
       case _ =>
-        val routes = new SamRoutes(resourceService, userService, statusService, managedGroupService, config.swaggerConfig, config.termsOfServiceConfig, directoryDAO, registrationDAO, policyEvaluatorService, tosService, config.liquibaseConfig)
+        val routes = new SamRoutes(resourceService, userService, statusService, managedGroupService, config.termsOfServiceConfig, directoryDAO, registrationDAO, policyEvaluatorService, tosService, config.liquibaseConfig, oauth2Config)
         with StandardUserInfoDirectives with NoExtensionRoutes
         AppDependencies(routes, samApplication, NoExtensionsInitializer, directoryDAO, accessPolicyDAO, policyEvaluatorService)
     }

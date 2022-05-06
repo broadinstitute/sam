@@ -8,9 +8,10 @@ import akka.stream.Materializer
 import cats.effect.unsafe.implicits.global
 import org.broadinstitute.dsde.workbench.google.mock.MockGoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.model._
+import org.broadinstitute.dsde.workbench.oauth2.mock.FakeOpenIDConnectConfiguration
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.TestSupport.{googleServicesConfig, samRequestContext}
-import org.broadinstitute.dsde.workbench.sam.config.{LiquibaseConfig, SwaggerConfig, TermsOfServiceConfig}
+import org.broadinstitute.dsde.workbench.sam.config.{LiquibaseConfig, TermsOfServiceConfig}
 import org.broadinstitute.dsde.workbench.sam.dataAccess._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
@@ -22,14 +23,14 @@ import scala.concurrent.ExecutionContext
   * Created by dvoet on 7/14/17.
   */
 class TestSamRoutes(resourceService: ResourceService, policyEvaluatorService: PolicyEvaluatorService, userService: UserService, statusService: StatusService, managedGroupService: ManagedGroupService, val userInfo: UserInfo, directoryDAO: DirectoryDAO, registrationDAO: RegistrationDAO, val cloudExtensions: CloudExtensions = NoExtensions, override val workbenchUser: Option[WorkbenchUser] = None, tosService: TosService = null)(implicit override val system: ActorSystem, override val materializer: Materializer, override val executionContext: ExecutionContext)
-  extends SamRoutes(resourceService, userService, statusService, managedGroupService, SwaggerConfig("", ""), TermsOfServiceConfig(false, false, 0, "app.terra.bio/#terms-of-service"), directoryDAO, registrationDAO, policyEvaluatorService, tosService, LiquibaseConfig("", false)) with MockUserInfoDirectives with ExtensionRoutes with ScalaFutures {
+  extends SamRoutes(resourceService, userService, statusService, managedGroupService, TermsOfServiceConfig(false, false, 0, "app.terra.bio/#terms-of-service"), directoryDAO, registrationDAO, policyEvaluatorService, tosService, LiquibaseConfig("", false), FakeOpenIDConnectConfiguration) with MockUserInfoDirectives with ExtensionRoutes with ScalaFutures {
   def extensionRoutes: server.Route = reject
   def mockDirectoryDao: DirectoryDAO = directoryDAO
   def mockRegistrationDao: RegistrationDAO = registrationDAO
 }
 
 class TestSamTosEnabledRoutes(resourceService: ResourceService, policyEvaluatorService: PolicyEvaluatorService, userService: UserService, statusService: StatusService, managedGroupService: ManagedGroupService, val userInfo: UserInfo, directoryDAO: DirectoryDAO, registrationDAO: RegistrationDAO, val cloudExtensions: CloudExtensions = NoExtensions, override val workbenchUser: Option[WorkbenchUser] = None, tosService: TosService)(implicit override val system: ActorSystem, override val materializer: Materializer, override val executionContext: ExecutionContext)
-  extends SamRoutes(resourceService, userService, statusService, managedGroupService, SwaggerConfig("", ""), TermsOfServiceConfig(true, false, 0, "app.terra.bio/#terms-of-service"), directoryDAO, registrationDAO, policyEvaluatorService, tosService, LiquibaseConfig("", false)) with MockUserInfoDirectives with ExtensionRoutes with ScalaFutures {
+  extends SamRoutes(resourceService, userService, statusService, managedGroupService, TermsOfServiceConfig(true, false, 0, "app.terra.bio/#terms-of-service"), directoryDAO, registrationDAO, policyEvaluatorService, tosService, LiquibaseConfig("", false), FakeOpenIDConnectConfiguration) with MockUserInfoDirectives with ExtensionRoutes with ScalaFutures {
   def extensionRoutes: server.Route = reject
   def mockDirectoryDao: DirectoryDAO = directoryDAO
   def mockRegistrationDao: RegistrationDAO = registrationDAO
