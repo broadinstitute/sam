@@ -139,7 +139,8 @@ object Boot extends IOApp with LazyLogging {
           appConfig.oidcConfig.authorityEndpoint,
           ClientId(appConfig.oidcConfig.clientId),
           oidcClientSecret = appConfig.oidcConfig.clientSecret.map(ClientSecret),
-          extraGoogleClientId = appConfig.oidcConfig.legacyGoogleClientId.map(ClientId))
+          extraGoogleClientId = appConfig.oidcConfig.legacyGoogleClientId.map(ClientId),
+          extraAuthParams = Some("prompt=login"))
       )
     } yield createAppDepenciesWithSamRoutes(appConfig, cloudExtensionsInitializer, foregroundAccessPolicyDAO, foregroundDirectoryDAO, registrationDAO, oauth2Config)
 
